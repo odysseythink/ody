@@ -24,10 +24,6 @@ fn is_first_party_originator_matches_known_values() {
 #[test]
 fn is_first_party_chat_originator_matches_known_values() {
     assert_eq!(is_first_party_chat_originator("ody_atlas"), true);
-    assert_eq!(
-        is_first_party_chat_originator("ody_chatgpt_desktop"),
-        true
-    );
     assert_eq!(is_first_party_chat_originator(DEFAULT_ORIGINATOR), false);
     assert_eq!(is_first_party_chat_originator("ody_vscode"), false);
 }

@@ -540,12 +540,12 @@ fn auto_auth_storage_delete_removes_keyring_and_file() -> anyhow::Result<()> {
 }
 
 #[test]
-fn auth_dot_json_ignores_legacy_chatgpt_tokens_and_bedrock_key() -> anyhow::Result<()> {
+fn auth_dot_json_ignores_unknown_legacy_fields_and_bedrock_key() -> anyhow::Result<()> {
     let ody_home = tempdir()?;
     let auth_file = get_auth_file(ody_home.path());
-    // Legacy auth.json payloads may carry ChatGPT OAuth tokens or a Bedrock API
-    // key. We should still be able to read the file and the unknown fields should
-    // be ignored.
+    // Legacy auth.json payloads may carry unknown fields such as OAuth tokens or a
+    // Bedrock API key. We should still be able to read the file and the unknown
+    // fields should be ignored.
     std::fs::write(
         &auth_file,
         json!({
@@ -562,34 +562,6 @@ fn auth_dot_json_ignores_legacy_chatgpt_tokens_and_bedrock_key() -> anyhow::Resu
                 "api_key": "bedrock-key",
                 "region": "us-east-1"
             }
-        })
-        .to_string(),
-    )?;
-
-    let storage = FileAuthStorage::new(ody_home.path().to_path_buf());
-    let loaded = storage.load()?.context("auth should load")?;
-    assert_eq!(
-        loaded,
-        AuthDotJson {
-            auth_mode: Some(AuthMode::ApiKey),
-            odysseythink_api_key: Some("sk-api-key".to_string()),
-        }
-    );
-    assert_eq!(loaded.resolved_mode(), AuthMode::ApiKey);
-    Ok(())
-}
-
-#[test]
-fn auth_dot_json_chatgpt_mode_with_api_key_resolves_to_api_key() -> anyhow::Result<()> {
-    let ody_home = tempdir()?;
-    let auth_file = get_auth_file(ody_home.path());
-    // Legacy "chatgpt" auth_mode with an API key should resolve to API key auth
-    // because only API key auth is supported now.
-    std::fs::write(
-        &auth_file,
-        json!({
-            "auth_mode": "chatgpt",
-            "OPENAI_API_KEY": "sk-api-key"
         })
         .to_string(),
     )?;

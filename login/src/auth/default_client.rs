@@ -11,7 +11,6 @@ use ody_client::OdyHttpClient;
 pub use ody_client::OdyRequestBuilder;
 use ody_client::build_reqwest_client_for_route;
 use ody_client::build_reqwest_client_with_custom_ca;
-use ody_client::with_chatgpt_cloudflare_cookie_store;
 use ody_terminal_detection::user_agent;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
@@ -132,7 +131,7 @@ pub fn is_first_party_originator(originator_value: &str) -> bool {
 }
 
 pub fn is_first_party_chat_originator(originator_value: &str) -> bool {
-    originator_value == "ody_atlas" || originator_value == "ody_chatgpt_desktop"
+    originator_value == "ody_atlas"
 }
 
 pub fn get_ody_user_agent() -> String {
@@ -215,12 +214,12 @@ pub fn create_client() -> OdyHttpClient {
 pub fn build_reqwest_client() -> reqwest::Client {
     try_build_reqwest_client().unwrap_or_else(|error| {
         tracing::warn!(error = %error, "failed to build default reqwest client");
-        with_chatgpt_cloudflare_cookie_store(reqwest::Client::builder())
+        reqwest::Client::builder()
             .build()
             .unwrap_or_else(|fallback_error| {
                 tracing::warn!(
                     error = %fallback_error,
-                    "failed to build fallback reqwest client with ChatGPT Cloudflare cookie store"
+                    "failed to build fallback reqwest client"
                 );
                 reqwest::Client::new()
             })
@@ -240,7 +239,7 @@ fn default_reqwest_client_builder() -> reqwest::ClientBuilder {
     if is_sandboxed() {
         builder = builder.no_proxy();
     }
-    with_chatgpt_cloudflare_cookie_store(builder)
+    builder
 }
 
 /// Builds the default Ody reqwest client for an auth endpoint.
