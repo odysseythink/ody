@@ -1272,7 +1272,7 @@ fn list_marketplaces_reads_marketplace_display_name() {
         r#"{
   "name": "odysseythink-curated",
   "interface": {
-    "displayName": "ChatGPT Official"
+    "displayName": "Ody Official"
   },
   "plugins": [
     {
@@ -1297,7 +1297,7 @@ fn list_marketplaces_reads_marketplace_display_name() {
     assert_eq!(
         marketplaces[0].interface,
         Some(MarketplaceInterface {
-            display_name: Some("ChatGPT Official".to_string()),
+            display_name: Some("Ody Official".to_string()),
         })
     );
 }
@@ -1612,7 +1612,7 @@ fn list_marketplaces_resolves_plugin_interface_paths_to_absolute() {
       "policy": {
         "installation": "AVAILABLE",
         "authentication": "ON_INSTALL",
-        "products": ["ODY", "CHATGPT", "ATLAS"]
+        "products": ["ODY", "ATLAS"]
       },
       "category": "Design"
     }
@@ -1653,7 +1653,7 @@ fn list_marketplaces_resolves_plugin_interface_paths_to_absolute() {
     );
     assert_eq!(
         marketplaces[0].plugins[0].policy.products,
-        Some(vec![Product::Ody, Product::Chatgpt, Product::Atlas])
+        Some(vec![Product::Ody, Product::Atlas])
     );
     assert_eq!(
         marketplaces[0].plugins[0].interface,
@@ -1898,13 +1898,13 @@ fn find_installable_marketplace_plugin_rejects_disallowed_product() {
   "name": "ody-curated",
   "plugins": [
     {
-      "name": "chatgpt-plugin",
+      "name": "ody-plugin",
       "source": {
         "source": "local",
         "path": "./plugin"
       },
       "policy": {
-        "products": ["CHATGPT"]
+        "products": ["ODY"]
       }
     }
   ]
@@ -1914,14 +1914,14 @@ fn find_installable_marketplace_plugin_rejects_disallowed_product() {
 
     let err = find_installable_marketplace_plugin(
         &AbsolutePathBuf::try_from(repo_root.join(".agents/plugins/marketplace.json")).unwrap(),
-        "chatgpt-plugin",
+        "ody-plugin",
         Some(Product::Atlas),
     )
     .unwrap_err();
 
     assert_eq!(
         err.to_string(),
-        "plugin `chatgpt-plugin` is not available for install in marketplace `ody-curated`"
+        "plugin `ody-plugin` is not available for install in marketplace `ody-curated`"
     );
 }
 

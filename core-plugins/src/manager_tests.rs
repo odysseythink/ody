@@ -148,7 +148,7 @@ fn sorted_effective_mcp_server_names(outcome: &PluginLoadOutcome) -> Vec<String>
 }
 
 #[tokio::test]
-async fn plugin_auth_projection_hides_apps_without_chatgpt_auth() {
+async fn plugin_auth_projection_hides_apps_without_apps_auth() {
     let ody_home = TempDir::new().unwrap();
     write_auth_projection_plugin(ody_home.path(), "sample", /*include_app*/ true);
     write_auth_projection_plugin(ody_home.path(), "docs", /*include_app*/ false);
@@ -176,7 +176,7 @@ async fn plugin_auth_projection_hides_apps_without_chatgpt_auth() {
 }
 
 #[tokio::test]
-async fn plugin_auth_projection_hides_matching_mcp_with_chatgpt_apps_route() {
+async fn plugin_auth_projection_hides_matching_mcp_with_apps_route() {
     let ody_home = TempDir::new().unwrap();
     write_auth_projection_plugin(ody_home.path(), "sample", /*include_app*/ true);
     write_auth_projection_plugin(ody_home.path(), "docs", /*include_app*/ false);
@@ -241,7 +241,7 @@ async fn plugin_auth_projection_hides_dual_surface_mcp_with_agent_identity_apps_
 }
 
 #[tokio::test]
-async fn plugin_auth_projection_keeps_non_conflicting_mcp_with_chatgpt_apps_route() {
+async fn plugin_auth_projection_keeps_non_conflicting_mcp_with_apps_route() {
     let ody_home = TempDir::new().unwrap();
     write_auth_projection_plugin(ody_home.path(), "sample", /*include_app*/ false);
     write_auth_projection_app(ody_home.path(), "sample", "sample_app");
@@ -370,17 +370,17 @@ async fn plugin_auth_projection_reprojects_cached_plugins_when_auth_changes() {
         Some(AuthMode::ApiKey),
     );
 
-    let chatgpt_outcome = manager.plugins_for_config(&config).await;
+    let apps_outcome = manager.plugins_for_config(&config).await;
     assert_eq!(
-        sorted_effective_mcp_server_names(&chatgpt_outcome),
+        sorted_effective_mcp_server_names(&apps_outcome),
         vec!["docs".to_string()]
     );
     assert_eq!(
-        chatgpt_outcome.effective_apps(),
+        apps_outcome.effective_apps(),
         vec![AppConnectorId("connector_sample".to_string())]
     );
     assert_eq!(
-        chatgpt_outcome.capability_summaries(),
+        apps_outcome.capability_summaries(),
         &[
             PluginCapabilitySummary {
                 config_name: "docs@test".to_string(),
@@ -2671,7 +2671,7 @@ plugins = true
         .unwrap(),
     };
 
-    let chatgpt_outcome = PluginsManager::new_with_options(
+    let apps_outcome = PluginsManager::new_with_options(
         tmp.path().to_path_buf(),
         Some(Product::Ody),
         Some(AuthMode::ApiKey),
@@ -2680,11 +2680,11 @@ plugins = true
     .await
     .unwrap();
     assert_eq!(
-        chatgpt_outcome.plugin.mcp_server_names,
+        apps_outcome.plugin.mcp_server_names,
         vec!["other-mcp".to_string()]
     );
     assert_eq!(
-        chatgpt_outcome.plugin.apps,
+        apps_outcome.plugin.apps,
         vec![AppConnectorId("connector_sample".to_string())]
     );
 

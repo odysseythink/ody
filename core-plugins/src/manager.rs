@@ -690,7 +690,7 @@ impl PluginsManager {
         resolved: ResolvedMarketplacePlugin,
     ) -> Result<PluginInstallOutcome, PluginInstallError> {
         let auth_policy = resolved.policy.authentication;
-        // The curated marketplace was previously synced from a remote (chatgpt.com-hosted)
+        // The curated marketplace was previously synced from a remote (legacy externally-hosted)
         // catalog and pinned installs to that sync's sha. Remote catalog syncing has been
         // removed, so curated-marketplace installs now behave like any other marketplace
         // install (no pinned version).

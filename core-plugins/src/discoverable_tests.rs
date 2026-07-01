@@ -157,7 +157,7 @@ source = "/tmp/{marketplace_name}"
     let plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
     let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
     assert!(plugins_manager.set_auth_mode(Some(AuthMode::ApiKey)));
-    let chatgpt_projection = list_discoverable_plugins(
+    let apps_projection = list_discoverable_plugins(
         &plugins_manager,
         discovery_input(plugins.clone(), &[plugin_id.as_str()], &[], &[]),
         /*auth*/ None,
@@ -174,7 +174,7 @@ source = "/tmp/{marketplace_name}"
         mcp_server_names: Vec::new(),
         app_connector_ids: vec!["connector_sample".to_string()],
     };
-    assert_eq!(chatgpt_projection, vec![expected.clone()]);
+    assert_eq!(apps_projection, vec![expected.clone()]);
 
     assert!(plugins_manager.set_auth_mode(Some(AuthMode::ApiKey)));
     let api_key_projection = list_discoverable_plugins(
