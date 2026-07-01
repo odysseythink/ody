@@ -23,11 +23,9 @@ use tracing_subscriber::Layer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-const CHATGPT_LOGIN_REMOVED_MESSAGE: &str =
-    "ChatGPT account login is no longer supported. Use `ody login --with-api-key` instead.";
-const ACCESS_TOKEN_LOGIN_REMOVED_MESSAGE: &str =
-    "Access token login is no longer supported. Use `ody login --with-api-key` instead.";
 const LOGIN_SUCCESS_MESSAGE: &str = "Successfully logged in";
+const LOGIN_NO_CREDENTIAL_FLAG_MESSAGE: &str =
+    "Please run `ody login --with-api-key` and provide an API key.";
 
 /// Installs a small file-backed tracing layer for direct `ody login` flows.
 ///
@@ -97,15 +95,6 @@ fn init_login_file_logging(config: &Config) -> Option<WorkerGuard> {
     Some(guard)
 }
 
-pub async fn run_login_with_chatgpt(cli_config_overrides: CliConfigOverrides) -> ! {
-    let config = load_config_or_exit(cli_config_overrides).await;
-    let _login_log_guard = init_login_file_logging(&config);
-    tracing::info!("starting browser login flow");
-
-    eprintln!("{CHATGPT_LOGIN_REMOVED_MESSAGE}");
-    std::process::exit(1);
-}
-
 pub async fn run_login_with_api_key(
     cli_config_overrides: CliConfigOverrides,
     api_key: String,
@@ -131,15 +120,12 @@ pub async fn run_login_with_api_key(
     }
 }
 
-pub async fn run_login_with_access_token(
-    cli_config_overrides: CliConfigOverrides,
-    _access_token: String,
-) -> ! {
+pub async fn run_login_default(cli_config_overrides: CliConfigOverrides) -> ! {
     let config = load_config_or_exit(cli_config_overrides).await;
     let _login_log_guard = init_login_file_logging(&config);
-    tracing::info!("starting access token login flow");
+    tracing::info!("starting default login flow");
 
-    eprintln!("{ACCESS_TOKEN_LOGIN_REMOVED_MESSAGE}");
+    eprintln!("{LOGIN_NO_CREDENTIAL_FLAG_MESSAGE}");
     std::process::exit(1);
 }
 
@@ -148,14 +134,6 @@ pub fn read_api_key_from_stdin() -> String {
         "--with-api-key expects the API key on stdin. Try piping it, e.g. `printenv OPENAI_API_KEY | ody login --with-api-key`.",
         "Reading API key from stdin...",
         "No API key provided via stdin.",
-    )
-}
-
-pub fn read_access_token_from_stdin() -> String {
-    read_stdin_secret(
-        "--with-access-token expects the access token on stdin. Try piping it, e.g. `printenv ODY_ACCESS_TOKEN | ody login --with-access-token`.",
-        "Reading access token from stdin...",
-        "No access token provided via stdin.",
     )
 }
 
@@ -184,32 +162,6 @@ fn read_stdin_secret(terminal_message: &str, reading_message: &str, empty_messag
     secret
 }
 
-/// ChatGPT device-code login is no longer supported.
-pub async fn run_login_with_device_code(
-    cli_config_overrides: CliConfigOverrides,
-    _issuer_base_url: Option<String>,
-    _client_id: Option<String>,
-) -> ! {
-    let config = load_config_or_exit(cli_config_overrides).await;
-    let _login_log_guard = init_login_file_logging(&config);
-    tracing::info!("starting device code login flow");
-    eprintln!("{CHATGPT_LOGIN_REMOVED_MESSAGE}");
-    std::process::exit(1);
-}
-
-/// ChatGPT device-code (and its browser fallback) login is no longer supported.
-pub async fn run_login_with_device_code_fallback_to_browser(
-    cli_config_overrides: CliConfigOverrides,
-    _issuer_base_url: Option<String>,
-    _client_id: Option<String>,
-) -> ! {
-    let config = load_config_or_exit(cli_config_overrides).await;
-    let _login_log_guard = init_login_file_logging(&config);
-    tracing::info!("starting login flow with device code fallback");
-    eprintln!("{CHATGPT_LOGIN_REMOVED_MESSAGE}");
-    std::process::exit(1);
-}
-
 pub async fn run_login_status(cli_config_overrides: CliConfigOverrides) -> ! {
     let config = load_config_or_exit(cli_config_overrides).await;
     let auth_route_config = config.auth_route_config();
@@ -234,8 +186,8 @@ pub async fn run_login_status(cli_config_overrides: CliConfigOverrides) -> ! {
                 }
             },
             AuthMode::Unauthenticated => {
-                eprintln!("Not logged in");
-                std::process::exit(1);
+                eprintln!("Logged in without authentication");
+                std::process::exit(0);
             }
         },
         Ok(None) => {
@@ -256,8 +208,7 @@ pub async fn run_logout(cli_config_overrides: CliConfigOverrides) -> ! {
         &config.ody_home,
         config.cli_auth_credentials_store_mode,
         config.auth_keyring_backend_kind(),
-    )
-    {
+    ) {
         Ok(true) => {
             eprintln!("Successfully logged out");
             std::process::exit(0);
@@ -305,6 +256,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use super::safe_format_key;
+    use super::LOGIN_NO_CREDENTIAL_FLAG_MESSAGE;
 
     #[test]
     fn formats_long_key() {
@@ -316,5 +268,13 @@ mod tests {
     fn short_key_returns_stars() {
         let key = "sk-proj-12345";
         assert_eq!(safe_format_key(key), "***");
+    }
+
+    #[test]
+    fn login_default_message_is_provider_agnostic() {
+        assert_eq!(
+            LOGIN_NO_CREDENTIAL_FLAG_MESSAGE,
+            "Please run `ody login --with-api-key` and provide an API key."
+        );
     }
 }

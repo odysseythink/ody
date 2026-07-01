@@ -1,11 +1,9 @@
 use std::path::Path;
 
-use anyhow::Context;
 use anyhow::Result;
 use predicates::str::contains;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
-use serde_json::json;
 use tempfile::TempDir;
 
 fn ody_command(ody_home: &Path) -> Result<assert_cmd::Command> {
@@ -48,21 +46,6 @@ fn login_with_api_key_reads_stdin_and_writes_auth_json() -> Result<()> {
     assert_eq!(auth["OPENAI_API_KEY"], "sk-test");
     assert!(auth.get("tokens").is_none());
     assert!(auth.get("agent_identity").is_none());
-
-    Ok(())
-}
-
-#[test]
-fn login_with_access_token_rejects_invalid_jwt() -> Result<()> {
-    let ody_home = TempDir::new()?;
-    write_file_auth_config(ody_home.path())?;
-
-    let mut cmd = ody_command(ody_home.path())?;
-    cmd.args(["login", "--with-access-token"])
-        .write_stdin("not-a-jwt\n")
-        .assert()
-        .failure()
-        .stderr(contains("Access token login is no longer supported"));
 
     Ok(())
 }

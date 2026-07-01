@@ -27,7 +27,6 @@ ody-app-server-protocol = { workspace = true }
 ody-app-server-test-client = { workspace = true }
 ody-arg0 = { workspace = true }
 ody-api = { workspace = true }
-ody-chatgpt = { workspace = true }
 ody-utils-cli = { workspace = true }
 ody-config = { workspace = true }
 ody-core = { workspace = true }
