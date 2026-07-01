@@ -774,7 +774,7 @@ mod tests {
             conversation_id: Some("conversation-1".to_string()),
             app_version: Some("1.2.3".to_string()),
             user_account_id: Some("acct-1".to_string()),
-            auth_mode: Some("Chatgpt".to_string()),
+            auth_mode: Some("OdyAccount".to_string()),
             originator: Some("ody_cli_rs".to_string()),
             user_email: Some("test@example.com".to_string()),
             terminal_type: Some("iTerm.app/3.6.5".to_string()),
@@ -804,7 +804,7 @@ mod tests {
             .expect("expected policy decision audit event");
         assert_eq!(event.field("conversation.id"), Some("conversation-1"));
         assert_eq!(event.field("app.version"), Some("1.2.3"));
-        assert_eq!(event.field("auth_mode"), Some("Chatgpt"));
+        assert_eq!(event.field("auth_mode"), Some("OdyAccount"));
         assert_eq!(event.field("originator"), Some("ody_cli_rs"));
         assert_eq!(event.field("user.account_id"), Some("acct-1"));
         assert_eq!(event.field("user.email"), Some("test@example.com"));
