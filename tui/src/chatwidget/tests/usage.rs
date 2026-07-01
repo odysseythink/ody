@@ -282,29 +282,43 @@ async fn usage_limit_reset_confirmation_uses_monthly_copy_for_monthly_limits_sna
     set_api_key_auth(&mut chat);
     let mut states = Vec::new();
 
+    let mut monthly_free_snapshot = snapshot(/*percent*/ 50.0);
+    monthly_free_snapshot
+        .primary
+        .as_mut()
+        .expect("monthly free snapshot primary window")
+        .window_duration_mins = Some(30 * 24 * 60);
     let free_request_id = chat.show_rate_limit_reset_loading_popup();
     assert!(chat.finish_rate_limit_reset_credits_refresh(
         free_request_id,
-        Vec::new(),
+        vec![monthly_free_snapshot],
         Ok(RateLimitResetCreditsSummary { available_count: 1 }),
     ));
     states.push(format!(
-        "Free:\n{}",
+        "Free with monthly window:\n{}",
         render_bottom_popup(&chat, /*width*/ 80)
     ));
 
     dismiss_popup(&mut chat);
+    let mut monthly_go_snapshot = snapshot(/*percent*/ 50.0);
+    monthly_go_snapshot
+        .primary
+        .as_mut()
+        .expect("monthly go snapshot primary window")
+        .window_duration_mins = Some(30 * 24 * 60);
     let go_request_id = chat.show_rate_limit_reset_loading_popup();
     assert!(chat.finish_rate_limit_reset_credits_refresh(
         go_request_id,
-        Vec::new(),
+        vec![monthly_go_snapshot],
         Ok(RateLimitResetCreditsSummary { available_count: 1 }),
     ));
-    states.push(format!("Go:\n{}", render_bottom_popup(&chat, /*width*/ 80)));
+    states.push(format!(
+        "Go with monthly window:\n{}",
+        render_bottom_popup(&chat, /*width*/ 80)
+    ));
 
     dismiss_popup(&mut chat);
     let mut monthly_business_snapshot = snapshot(/*percent*/ 50.0);
-    monthly_business_snapshot.plan_type = Some(PlanType::Business);
     monthly_business_snapshot
         .primary
         .as_mut()

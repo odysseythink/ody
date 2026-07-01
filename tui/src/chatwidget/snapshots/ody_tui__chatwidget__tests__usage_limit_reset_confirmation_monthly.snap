@@ -2,7 +2,7 @@
 source: tui/src/chatwidget/tests/usage.rs
 expression: "states.join(\"\\n---\\n\")"
 ---
-Free:
+Free with monthly window:
   Usage limit resets
   You have 1 usage limit reset available.
 
@@ -11,7 +11,7 @@ Free:
 
   Press enter to confirm or esc to go back
 ---
-Go:
+Go with monthly window:
   Usage limit resets
   You have 1 usage limit reset available.
 

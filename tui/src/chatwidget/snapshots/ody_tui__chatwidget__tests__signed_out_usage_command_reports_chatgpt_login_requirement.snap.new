@@ -1,0 +1,6 @@
+---
+source: tui/src/chatwidget/tests/slash_commands.rs
+assertion_line: 1237
+expression: rendered
+---
+■ Configure an API key with `ody login <provider>` to use /usage.
