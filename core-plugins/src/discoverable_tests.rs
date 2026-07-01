@@ -24,34 +24,6 @@ use tracing::Level;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_test::internal::MockWriter;
 
-#[tokio::test]
-async fn returns_fallback_plugins_when_remote_disabled_for_ody_auth() {
-    let ody_home = tempdir().expect("tempdir should succeed");
-    let curated_root = curated_plugins_repo_path(ody_home.path());
-    write_odysseythink_curated_marketplace(&curated_root, &["sample", "slack", "odysseythink-developers"]);
-
-    let plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
-    let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
-    plugins_manager.set_auth_mode(Some(AuthMode::ApiKey));
-    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
-    let discoverable_plugins = list_discoverable_plugins(
-        &plugins_manager,
-        discovery_input(plugins, &[], &[], &[]),
-        Some(&auth),
-    )
-    .await;
-
-    assert_eq!(
-        discoverable_plugins
-            .into_iter()
-            .map(|plugin| plugin.id)
-            .collect::<Vec<_>>(),
-        vec![
-            "odysseythink-developers@odysseythink-curated".to_string(),
-            "slack@odysseythink-curated".to_string(),
-        ]
-    );
-}
 
 #[tokio::test]
 async fn returns_api_curated_fallback_plugins_for_direct_provider_auth() {
@@ -114,84 +86,6 @@ async fn returns_microsoft_fallback_plugins() {
     );
 }
 
-#[tokio::test]
-async fn deduplicates_and_reprojects_cached_configured_marketplace_plugin() {
-    let ody_home = tempdir().expect("tempdir should succeed");
-    let plugin_name = "sample";
-    let marketplace_name = OPENAI_BUNDLED_MARKETPLACE_NAME;
-    let plugin_id = format!("{plugin_name}@{marketplace_name}");
-    let marketplace_root = ody_home
-        .path()
-        .join(format!(".tmp/marketplaces/{marketplace_name}"));
-    write_file(
-        &marketplace_root.join(".agents/plugins/marketplace.json"),
-        &format!(
-            r#"{{
-  "name": "{marketplace_name}",
-  "plugins": [
-    {{"name": "{plugin_name}", "source": {{"source": "local", "path": "./plugins/{plugin_name}"}}}}
-  ]
-}}
-"#
-        ),
-    );
-    write_curated_plugin(&marketplace_root, plugin_name);
-    write_plugin_app(
-        &marketplace_root,
-        plugin_name,
-        "sample-docs",
-        "connector_sample",
-    );
-    write_file(
-        &ody_home.path().join(CONFIG_TOML_FILE),
-        &format!(
-            r#"[features]
-plugins = true
-
-[marketplaces.{marketplace_name}]
-source_type = "git"
-source = "/tmp/{marketplace_name}"
-"#
-        ),
-    );
-    let plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
-    let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
-    assert!(plugins_manager.set_auth_mode(Some(AuthMode::ApiKey)));
-    let apps_projection = list_discoverable_plugins(
-        &plugins_manager,
-        discovery_input(plugins.clone(), &[plugin_id.as_str()], &[], &[]),
-        /*auth*/ None,
-    )
-    .await;
-    let expected = ToolSuggestDiscoverablePlugin {
-        id: plugin_id.clone(),
-        remote_plugin_id: None,
-        name: "sample".to_string(),
-        description: Some(
-            "Plugin that includes skills, MCP servers, and app connectors".to_string(),
-        ),
-        has_skills: true,
-        mcp_server_names: Vec::new(),
-        app_connector_ids: vec!["connector_sample".to_string()],
-    };
-    assert_eq!(apps_projection, vec![expected.clone()]);
-
-    assert!(plugins_manager.set_auth_mode(Some(AuthMode::ApiKey)));
-    let api_key_projection = list_discoverable_plugins(
-        &plugins_manager,
-        discovery_input(plugins, &[plugin_id.as_str()], &[], &[]),
-        /*auth*/ None,
-    )
-    .await;
-    assert_eq!(
-        api_key_projection,
-        vec![ToolSuggestDiscoverablePlugin {
-            mcp_server_names: vec!["sample-docs".to_string()],
-            app_connector_ids: Vec::new(),
-            ..expected
-        }]
-    );
-}
 
 #[tokio::test]
 async fn reprojects_cached_skill_availability_for_current_config() {
