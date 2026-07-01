@@ -120,7 +120,6 @@ async fn build_analytics_plugin_test_ody(
     server: &MockServer,
     ody_home: Arc<TempDir>,
 ) -> Result<TestOdy> {
-    let chatgpt_base_url = server.uri();
     let mut builder = test_ody()
         .with_home(ody_home)
         .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
@@ -136,7 +135,6 @@ async fn build_analytics_plugin_test_ody(
 async fn build_apps_enabled_plugin_test_ody(
     server: &MockServer,
     ody_home: Arc<TempDir>,
-    chatgpt_base_url: String,
 ) -> Result<TestOdy> {
     let mut builder = test_ody()
         .with_home(ody_home)
@@ -217,12 +215,7 @@ async fn capability_sections_render_in_developer_message_in_order() -> Result<()
     let ody_home = Arc::new(TempDir::new()?);
     write_plugin_skill_plugin(ody_home.as_ref());
     write_plugin_app_plugin(ody_home.as_ref());
-    let test_ody = build_apps_enabled_plugin_test_ody(
-        &server,
-        Arc::clone(&ody_home),
-        apps_server.chatgpt_base_url,
-    )
-    .await?;
+    let test_ody = build_apps_enabled_plugin_test_ody(&server, Arc::clone(&ody_home)).await?;
     let ody = Arc::clone(&test_ody.ody);
 
     ody
@@ -292,8 +285,7 @@ async fn explicit_plugin_mentions_use_apps_for_chatgpt_dual_surface_plugins() ->
     write_plugin_app_plugin(ody_home.as_ref());
 
     let test_ody =
-        build_apps_enabled_plugin_test_ody(&server, ody_home, apps_server.chatgpt_base_url)
-            .await?;
+        build_apps_enabled_plugin_test_ody(&server, ody_home).await?;
     let ody = Arc::clone(&test_ody.ody);
     wait_for_mcp_server(&ody, ODY_APPS_MCP_SERVER_NAME).await?;
 
@@ -369,8 +361,7 @@ async fn explicit_plugin_mentions_keep_non_conflicting_mcp_for_chatgpt_auth() ->
     write_plugin_app_plugin_with_name(ody_home.as_ref(), "sample_app");
 
     let test_ody =
-        build_apps_enabled_plugin_test_ody(&server, ody_home, apps_server.chatgpt_base_url)
-            .await?;
+        build_apps_enabled_plugin_test_ody(&server, ody_home).await?;
     let ody = Arc::clone(&test_ody.ody);
     wait_for_mcp_server(&ody, "sample").await?;
 

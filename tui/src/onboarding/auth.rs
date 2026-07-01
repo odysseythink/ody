@@ -860,9 +860,8 @@ mod tests {
     use ody_app_server_client::InProcessAppServerClient;
     use ody_app_server_client::InProcessClientStartArgs;
     use ody_arg0::Arg0DispatchPaths;
-    use ody_cloud_config::cloud_config_bundle_loader_for_storage;
-    use ody_config::types::AuthCredentialsStoreMode;
-    use ody_login::AuthKeyringBackendKind;
+
+    use ody_config::CloudConfigBundleLoader;
 
     use pretty_assertions::assert_eq;
     use std::sync::Arc;
@@ -882,15 +881,7 @@ mod tests {
             cli_overrides: Vec::new(),
             loader_overrides: Default::default(),
             strict_config: false,
-            cloud_config_bundle: cloud_config_bundle_loader_for_storage(
-                ody_home_path.clone(),
-                /*enable_ody_api_key_env*/ false,
-                AuthCredentialsStoreMode::File,
-                AuthKeyringBackendKind::default(),
-                "https://chatgpt.com/backend-api/".to_string(),
-                /*auth_route_config*/ None,
-            )
-            .await,
+            cloud_config_bundle: CloudConfigBundleLoader::default(),
             feedback: ody_feedback::OdyFeedback::new(),
             log_db: None,
             state_db: None,

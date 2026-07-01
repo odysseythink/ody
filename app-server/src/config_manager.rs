@@ -91,13 +91,9 @@ impl ConfigManager {
         Ok(())
     }
 
-    pub(crate) fn replace_cloud_config_bundle_loader(
-        &self,
-        auth_manager: Arc<AuthManager>,
-        chatgpt_base_url: String,
-    ) {
-        let loader =
-            cloud_config_bundle_loader(auth_manager, chatgpt_base_url, self.ody_home.clone());
+    pub(crate) fn replace_cloud_config_bundle_loader(&self, auth_manager: Arc<AuthManager>) {
+        let _ = auth_manager;
+        let loader = cloud_config_bundle_loader();
         if let Ok(mut guard) = self.cloud_config_bundle.write() {
             *guard = loader;
         } else {

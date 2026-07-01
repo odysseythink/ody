@@ -29,7 +29,7 @@ async fn code_mode_only_exposes_direct_model_only_mcp_namespaces() -> Result<()>
     )
     .await;
 
-    let mut builder = search_capable_apps_builder(apps_server.chatgpt_base_url.clone())
+    let mut builder = search_capable_apps_builder(apps_server.base_url.clone())
         .with_config(move |config| {
             config
                 .features

@@ -52,7 +52,7 @@ pub const DOCUMENT_EXTRACT_TEXT_RESOURCE_URI: &str =
 
 #[derive(Clone)]
 pub struct AppsTestServer {
-    pub chatgpt_base_url: String,
+    pub base_url: String,
 }
 
 #[derive(Clone, Copy)]
@@ -86,7 +86,7 @@ impl AppsTestServer {
         )
         .await;
         Ok(Self {
-            chatgpt_base_url: server.uri(),
+            base_url: server.uri(),
         })
     }
 
@@ -106,7 +106,7 @@ impl AppsTestServer {
         )
         .await;
         Ok(Self {
-            chatgpt_base_url: server.uri(),
+            base_url: server.uri(),
         })
     }
 
@@ -126,7 +126,7 @@ impl AppsTestServer {
         )
         .await;
         Ok(Self {
-            chatgpt_base_url: server.uri(),
+            base_url: server.uri(),
         })
     }
 
@@ -161,7 +161,7 @@ impl AppsTestServer {
         )
         .await;
         Ok(Self {
-            chatgpt_base_url: server.uri(),
+            base_url: server.uri(),
         })
     }
 }

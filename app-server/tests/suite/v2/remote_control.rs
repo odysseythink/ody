@@ -10,7 +10,7 @@ use app_test_support::DEFAULT_CLIENT_NAME;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
 use app_test_support::write_chatgpt_auth;
-use app_test_support::write_mock_responses_config_toml_with_chatgpt_base_url;
+use app_test_support::write_mock_responses_config_toml_simple;
 use ody_app_server::AppServerRuntimeOptions;
 use ody_app_server::AppServerTransport;
 use ody_app_server::AppServerWebsocketAuthSettings;
@@ -1023,11 +1023,7 @@ struct HttpRequest {
 async fn configured_remote_control_listener(ody_home: &std::path::Path) -> Result<TcpListener> {
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let remote_control_url = format!("http://{}/backend-api/", listener.local_addr()?);
-    write_mock_responses_config_toml_with_chatgpt_base_url(
-        ody_home,
-        &remote_control_url,
-        &remote_control_url,
-    )?;
+    write_mock_responses_config_toml_simple(ody_home, &remote_control_url)?;
     write_chatgpt_auth(
         ody_home,
         ChatGptAuthFixture::new("chatgpt-token")

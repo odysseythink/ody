@@ -188,7 +188,7 @@ async fn ody_apps_file_params_upload_environment_files_before_mcp_tool_call() ->
     let apps_server = AppsTestServer::mount(&server).await?;
     mount_file_upload_mocks(&server, STREAMED_FILE_SIZE as u64).await;
 
-    let mut builder = apps_enabled_builder(apps_server.chatgpt_base_url.clone())
+    let mut builder = apps_enabled_builder(apps_server.base_url.clone())
         .with_workspace_setup(|cwd, fs| async move {
             let report_path = PathUri::from_abs_path(&cwd.join("report.txt"));
             fs.write_file(
@@ -248,7 +248,7 @@ async fn ody_apps_file_params_pass_uploaded_file_to_post_tool_use_hook() -> Resu
     let apps_server = AppsTestServer::mount(&server).await?;
     mount_file_upload_mocks(&server, /*file_size_bytes*/ 11).await;
 
-    let mut builder = apps_enabled_builder(apps_server.chatgpt_base_url.clone())
+    let mut builder = apps_enabled_builder(apps_server.base_url.clone())
         .with_pre_build_hook(move |home| {
             if let Err(error) = write_post_tool_use_hook(home) {
                 panic!("failed to write apps file post tool use hook fixture: {error}");

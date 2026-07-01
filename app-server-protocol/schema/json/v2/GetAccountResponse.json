@@ -18,83 +18,8 @@
           ],
           "title": "ApiKeyAccount",
           "type": "object"
-        },
-        {
-          "properties": {
-            "email": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "planType": {
-              "$ref": "#/definitions/PlanType"
-            },
-            "type": {
-              "enum": [
-                "chatgpt"
-              ],
-              "title": "ChatgptAccountType",
-              "type": "string"
-            }
-          },
-          "required": [
-            "email",
-            "planType",
-            "type"
-          ],
-          "title": "ChatgptAccount",
-          "type": "object"
-        },
-        {
-          "properties": {
-            "credentialSource": {
-              "allOf": [
-                {
-                  "$ref": "#/definitions/AmazonBedrockCredentialSource"
-                }
-              ],
-              "default": "awsManaged"
-            },
-            "type": {
-              "enum": [
-                "amazonBedrock"
-              ],
-              "title": "AmazonBedrockAccountType",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type"
-          ],
-          "title": "AmazonBedrockAccount",
-          "type": "object"
         }
       ]
-    },
-    "AmazonBedrockCredentialSource": {
-      "enum": [
-        "odyManaged",
-        "awsManaged"
-      ],
-      "type": "string"
-    },
-    "PlanType": {
-      "enum": [
-        "free",
-        "go",
-        "plus",
-        "pro",
-        "prolite",
-        "team",
-        "self_serve_business_usage_based",
-        "business",
-        "enterprise_cbp_usage_based",
-        "enterprise",
-        "edu",
-        "unknown"
-      ],
-      "type": "string"
     }
   },
   "properties": {

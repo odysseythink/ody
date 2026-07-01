@@ -12,15 +12,13 @@ use crate::app_server_session::AppServerSession;
 use crate::legacy_core::config::ConfigBuilder;
 use crate::legacy_core::config::ConfigOverrides;
 use crate::legacy_core::config::load_config_toml_with_layer_stack;
-use crate::legacy_core::config::resolve_bootstrap_auth_keyring_backend_kind;
-use crate::legacy_core::config::resolve_bootstrap_auth_route_config;
+
 use crate::legacy_core::config::resolve_oss_provider;
 use crate::legacy_core::config::resolve_profile_v2_config_path;
 use ody_app_server_protocol::Thread as AppServerThread;
 use ody_app_server_protocol::ThreadListParams;
 use ody_app_server_protocol::ThreadSortKey;
 use ody_arg0::Arg0DispatchPaths;
-use ody_cloud_config::cloud_config_bundle_loader_for_storage;
 use ody_config::CloudConfigBundleLoader;
 use ody_config::ConfigLoadOptions;
 use ody_config::LoaderOverrides;
@@ -326,27 +324,7 @@ async fn start_app_server_for_archive_command(
     .await
     .wrap_err("failed to load config.toml")?;
     let config_toml = &bootstrap_config.config_toml;
-    let chatgpt_base_url = config_toml
-        .chatgpt_base_url
-        .clone()
-        .unwrap_or_else(|| "https://chatgpt.com/backend-api/".to_string());
-    let auth_route_config = resolve_bootstrap_auth_route_config(
-        config_toml,
-        bootstrap_config
-            .config_layer_stack
-            .requirements()
-            .feature_requirements
-            .as_ref(),
-    )?;
-    let cloud_config_bundle = cloud_config_bundle_loader_for_storage(
-        ody_home.to_path_buf(),
-        /*enable_ody_api_key_env*/ false,
-        config_toml.cli_auth_credentials_store.unwrap_or_default(),
-        resolve_bootstrap_auth_keyring_backend_kind(&bootstrap_config)?,
-        chatgpt_base_url,
-        auth_route_config,
-    )
-    .await;
+    let cloud_config_bundle = CloudConfigBundleLoader::default();
 
     let model_provider = if cli.oss {
         resolve_oss_provider(cli.oss_provider.as_deref(), config_toml)

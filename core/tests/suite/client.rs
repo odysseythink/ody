@@ -1565,7 +1565,7 @@ async fn includes_apps_guidance_as_developer_message_for_chatgpt_auth() {
     let apps_server = AppsTestServer::mount(&server)
         .await
         .expect("mount apps MCP mock");
-    let apps_base_url = apps_server.chatgpt_base_url.clone();
+    let apps_base_url = apps_server.base_url.clone();
 
     let resp_mock = mount_sse_once(
         &server,
@@ -1627,7 +1627,7 @@ async fn omits_apps_guidance_for_api_key_auth_even_when_feature_enabled() {
     let apps_server = AppsTestServer::mount(&server)
         .await
         .expect("mount apps MCP mock");
-    let apps_base_url = apps_server.chatgpt_base_url.clone();
+    let apps_base_url = apps_server.base_url.clone();
 
     let resp_mock = mount_sse_once(
         &server,
@@ -1684,7 +1684,7 @@ async fn omits_apps_guidance_when_configured_off() {
     let apps_server = AppsTestServer::mount(&server)
         .await
         .expect("mount apps MCP mock");
-    let apps_base_url = apps_server.chatgpt_base_url.clone();
+    let apps_base_url = apps_server.base_url.clone();
 
     let resp_mock = mount_sse_once(
         &server,
@@ -1738,7 +1738,7 @@ async fn omits_apps_guidance_when_orchestrator_mcp_is_disabled() {
     let apps_server = AppsTestServer::mount(&server)
         .await
         .expect("mount apps MCP mock");
-    let apps_base_url = apps_server.chatgpt_base_url.clone();
+    let apps_base_url = apps_server.base_url.clone();
 
     let list_call_id = "list-resources";
     let read_call_id = "read-resource";

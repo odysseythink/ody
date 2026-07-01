@@ -22,7 +22,6 @@ use serde::Serialize;
 use ts_rs::TS;
 
 use crate::protocol::common::AuthMode;
-use crate::protocol::v2::ForcedChatgptWorkspaceIds;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
@@ -205,7 +204,6 @@ pub struct UserSavedConfig {
     pub approval_policy: Option<AskForApproval>,
     pub sandbox_mode: Option<SandboxMode>,
     pub sandbox_settings: Option<SandboxSettings>,
-    pub forced_chatgpt_workspace_id: Option<ForcedChatgptWorkspaceIds>,
     pub forced_login_method: Option<ForcedLoginMethod>,
     pub model: Option<String>,
     pub model_reasoning_effort: Option<ReasoningEffort>,

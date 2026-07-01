@@ -4173,7 +4173,6 @@ async fn auto_compact_counts_encrypted_reasoning_before_last_user() {
     ];
     let compact_mock =
         mount_compact_json_once(&server, serde_json::json!({ "output": compacted_history })).await;
-    let chatgpt_base_url = format!("{}/backend-api", server.uri());
 
     let ody = test_ody()
         .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())

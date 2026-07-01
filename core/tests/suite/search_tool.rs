@@ -135,7 +135,7 @@ async fn search_tool_enabled_by_default_adds_tool_search() -> Result<()> {
     )
     .await;
 
-    let mut builder = configured_builder(apps_server.chatgpt_base_url.clone());
+    let mut builder = configured_builder(apps_server.base_url.clone());
     let test = builder.build(&server).await?;
 
     test.submit_turn_with_approval_and_permission_profile(
@@ -193,7 +193,7 @@ async fn small_app_tool_sets_are_deferred_by_default() -> Result<()> {
     )
     .await;
 
-    let mut builder = configured_builder(apps_server.chatgpt_base_url.clone());
+    let mut builder = configured_builder(apps_server.base_url.clone());
     let test = builder.build(&server).await?;
 
     test.submit_turn_with_approval_and_permission_profile(
@@ -259,7 +259,7 @@ async fn app_only_tools_are_not_visible_or_runnable_by_direct_model_calls() -> R
     )
     .await;
 
-    let mut builder = configured_builder(apps_server.chatgpt_base_url.clone());
+    let mut builder = configured_builder(apps_server.base_url.clone());
     let test = builder.build(&server).await?;
     test.submit_turn_with_approval_and_permission_profile(
         "Try to call the app-only calendar tool.",
@@ -322,7 +322,7 @@ async fn app_search_sources_are_hidden_for_api_key_auth() -> Result<()> {
     let mut builder = test_ody()
         .with_auth(OdyAuth::from_api_key("Test API Key"))
         .with_config(move |config| {
-            configure_search_capable_apps(config, apps_server.chatgpt_base_url.as_str())
+            configure_search_capable_apps(config, apps_server.base_url.as_str())
         });
     let test = builder.build(&server).await?;
 
@@ -364,7 +364,7 @@ async fn search_tool_adds_discovery_instructions_to_tool_description() -> Result
     )
     .await;
 
-    let mut builder = configured_builder(apps_server.chatgpt_base_url.clone());
+    let mut builder = configured_builder(apps_server.base_url.clone());
     let test = builder.build(&server).await?;
 
     test.submit_turn_with_approval_and_permission_profile(
@@ -406,7 +406,7 @@ async fn search_tool_hides_apps_tools_without_search() -> Result<()> {
     )
     .await;
 
-    let mut builder = configured_builder(apps_server.chatgpt_base_url.clone());
+    let mut builder = configured_builder(apps_server.base_url.clone());
     let test = builder.build(&server).await?;
 
     test.submit_turn_with_approval_and_permission_profile(
@@ -442,7 +442,7 @@ async fn explicit_app_mentions_leave_app_tools_deferred() -> Result<()> {
     )
     .await;
 
-    let mut builder = configured_builder(apps_server.chatgpt_base_url.clone());
+    let mut builder = configured_builder(apps_server.base_url.clone());
     let test = builder.build(&server).await?;
 
     test.submit_turn_with_approval_and_permission_profile(
@@ -522,7 +522,7 @@ async fn tool_search_returns_deferred_tools_without_follow_up_tool_injection() -
     )
     .await;
 
-    let mut builder = configured_builder(apps_server.chatgpt_base_url.clone());
+    let mut builder = configured_builder(apps_server.base_url.clone());
     let test = builder.build(&server).await?;
     test.ody
         .submit(Op::UserInput {
@@ -1085,7 +1085,7 @@ async fn tool_search_indexes_only_enabled_non_app_mcp_tools() -> Result<()> {
 
     let rmcp_test_server_bin = stdio_server_bin()?;
     let mut builder =
-        configured_builder(apps_server.chatgpt_base_url.clone()).with_config(move |config| {
+        configured_builder(apps_server.base_url.clone()).with_config(move |config| {
             let mut servers = config.mcp_servers.get().clone();
             servers.insert(
                 "rmcp".to_string(),
@@ -1211,7 +1211,7 @@ async fn tool_search_surfaced_mcp_tool_errors_are_returned_to_model() -> Result<
 
     let rmcp_test_server_bin = stdio_server_bin()?;
     let mut builder =
-        configured_builder(apps_server.chatgpt_base_url.clone()).with_config(move |config| {
+        configured_builder(apps_server.base_url.clone()).with_config(move |config| {
             let mut servers = config.mcp_servers.get().clone();
             servers.insert(
                 "rmcp".to_string(),
@@ -1359,7 +1359,7 @@ async fn tool_search_uses_non_app_mcp_server_instructions_as_namespace_descripti
 
     let rmcp_test_server_bin = stdio_server_bin()?;
     let mut builder =
-        configured_builder(apps_server.chatgpt_base_url.clone()).with_config(move |config| {
+        configured_builder(apps_server.base_url.clone()).with_config(move |config| {
             let mut servers = config.mcp_servers.get().clone();
             servers.insert(
                 "rmcp".to_string(),
@@ -1454,7 +1454,7 @@ async fn tool_search_matches_mcp_tools_by_distinct_name_description_and_schema_t
     )
     .await;
 
-    let mut builder = configured_builder(apps_server.chatgpt_base_url.clone());
+    let mut builder = configured_builder(apps_server.base_url.clone());
     let test = builder.build(&server).await?;
 
     test.submit_turn_with_approval_and_permission_profile(

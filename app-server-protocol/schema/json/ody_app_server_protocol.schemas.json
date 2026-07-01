@@ -102,60 +102,6 @@
       "title": "AttestationGenerateResponse",
       "type": "object"
     },
-    "ChatgptAuthTokensRefreshParams": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "properties": {
-        "previousAccountId": {
-          "description": "Workspace/account identifier that Ody was previously using.\n\nClients that manage multiple accounts/workspaces can use this as a hint to refresh the token for the correct workspace.\n\nThis may be `null` when the prior auth state did not include a workspace identifier (`chatgpt_account_id`).",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "reason": {
-          "$ref": "#/definitions/ChatgptAuthTokensRefreshReason"
-        }
-      },
-      "required": [
-        "reason"
-      ],
-      "title": "ChatgptAuthTokensRefreshParams",
-      "type": "object"
-    },
-    "ChatgptAuthTokensRefreshReason": {
-      "oneOf": [
-        {
-          "description": "Ody attempted a backend request and received `401 Unauthorized`.",
-          "enum": [
-            "unauthorized"
-          ],
-          "type": "string"
-        }
-      ]
-    },
-    "ChatgptAuthTokensRefreshResponse": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "properties": {
-        "accessToken": {
-          "type": "string"
-        },
-        "chatgptAccountId": {
-          "type": "string"
-        },
-        "chatgptPlanType": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "accessToken",
-        "chatgptAccountId"
-      ],
-      "title": "ChatgptAuthTokensRefreshResponse",
-      "type": "object"
-    },
     "ClientInfo": {
       "properties": {
         "name": {
@@ -5633,30 +5579,6 @@
           "type": "object"
         },
         {
-          "properties": {
-            "id": {
-              "$ref": "#/definitions/v2/RequestId"
-            },
-            "method": {
-              "enum": [
-                "account/chatgptAuthTokens/refresh"
-              ],
-              "title": "Account/chatgptAuthTokens/refreshRequestMethod",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/definitions/ChatgptAuthTokensRefreshParams"
-            }
-          },
-          "required": [
-            "id",
-            "method",
-            "params"
-          ],
-          "title": "Account/chatgptAuthTokens/refreshRequest",
-          "type": "object"
-        },
-        {
           "description": "Generate a fresh upstream attestation result on demand.",
           "properties": {
             "id": {
@@ -5895,57 +5817,6 @@
               "type"
             ],
             "title": "ApiKeyAccount",
-            "type": "object"
-          },
-          {
-            "properties": {
-              "email": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "planType": {
-                "$ref": "#/definitions/v2/PlanType"
-              },
-              "type": {
-                "enum": [
-                  "chatgpt"
-                ],
-                "title": "ChatgptAccountType",
-                "type": "string"
-              }
-            },
-            "required": [
-              "email",
-              "planType",
-              "type"
-            ],
-            "title": "ChatgptAccount",
-            "type": "object"
-          },
-          {
-            "properties": {
-              "credentialSource": {
-                "allOf": [
-                  {
-                    "$ref": "#/definitions/v2/AmazonBedrockCredentialSource"
-                  }
-                ],
-                "default": "awsManaged"
-              },
-              "type": {
-                "enum": [
-                  "amazonBedrock"
-                ],
-                "title": "AmazonBedrockAccountType",
-                "type": "string"
-              }
-            },
-            "required": [
-              "type"
-            ],
-            "title": "AmazonBedrockAccount",
             "type": "object"
           }
         ]
@@ -6251,13 +6122,6 @@
         ]
       },
       "AgentPath": {
-        "type": "string"
-      },
-      "AmazonBedrockCredentialSource": {
-        "enum": [
-          "odyManaged",
-          "awsManaged"
-        ],
         "type": "string"
       },
       "AnalyticsConfig": {
@@ -7658,16 +7522,6 @@
             "type": [
               "string",
               "null"
-            ]
-          },
-          "forced_chatgpt_workspace_id": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/v2/ForcedChatgptWorkspaceIds"
-              },
-              {
-                "type": "null"
-              }
             ]
           },
           "forced_login_method": {
@@ -9636,23 +9490,8 @@
         ],
         "type": "object"
       },
-      "ForcedChatgptWorkspaceIds": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          }
-        ],
-        "description": "Backward-compatible API shape for ChatGPT workspace login restrictions."
-      },
       "ForcedLoginMethod": {
         "enum": [
-          "chatgpt",
           "api"
         ],
         "type": "string"
@@ -10125,7 +9964,7 @@
         "$schema": "http://json-schema.org/draft-07/schema#",
         "properties": {
           "refreshToken": {
-            "description": "When `true`, requests a proactive token refresh before returning.\n\nIn managed auth mode this triggers the normal refresh-token flow. In external auth mode this flag is ignored. Clients should refresh tokens themselves and call `account/login/start` with `chatgptAuthTokens`.",
+            "description": "When `true`, requests a proactive token refresh before returning.\n\nThis flag is no longer used; API key auth does not require a refresh flow.",
             "type": "boolean"
           }
         },
@@ -11299,75 +11138,6 @@
             ],
             "title": "ApiKeyv2::LoginAccountParams",
             "type": "object"
-          },
-          {
-            "properties": {
-              "odyStreamlinedLogin": {
-                "type": "boolean"
-              },
-              "type": {
-                "enum": [
-                  "chatgpt"
-                ],
-                "title": "Chatgptv2::LoginAccountParamsType",
-                "type": "string"
-              }
-            },
-            "required": [
-              "type"
-            ],
-            "title": "Chatgptv2::LoginAccountParams",
-            "type": "object"
-          },
-          {
-            "properties": {
-              "type": {
-                "enum": [
-                  "chatgptDeviceCode"
-                ],
-                "title": "ChatgptDeviceCodev2::LoginAccountParamsType",
-                "type": "string"
-              }
-            },
-            "required": [
-              "type"
-            ],
-            "title": "ChatgptDeviceCodev2::LoginAccountParams",
-            "type": "object"
-          },
-          {
-            "description": "[UNSTABLE] FOR OPENAI INTERNAL USE ONLY - DO NOT USE. The access token must contain the same scopes that Ody-managed ChatGPT auth tokens have.",
-            "properties": {
-              "accessToken": {
-                "description": "Access token (JWT) supplied by the client. This token is used for backend API requests and email extraction.",
-                "type": "string"
-              },
-              "chatgptAccountId": {
-                "description": "Workspace/account identifier supplied by the client.",
-                "type": "string"
-              },
-              "chatgptPlanType": {
-                "description": "Optional plan type supplied by the client.\n\nWhen `null`, Ody attempts to derive the plan type from access-token claims. If unavailable, the plan defaults to `unknown`.",
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "type": {
-                "enum": [
-                  "chatgptAuthTokens"
-                ],
-                "title": "ChatgptAuthTokensv2::LoginAccountParamsType",
-                "type": "string"
-              }
-            },
-            "required": [
-              "accessToken",
-              "chatgptAccountId",
-              "type"
-            ],
-            "title": "ChatgptAuthTokensv2::LoginAccountParams",
-            "type": "object"
           }
         ],
         "title": "LoginAccountParams"
@@ -11389,77 +11159,6 @@
               "type"
             ],
             "title": "ApiKeyv2::LoginAccountResponse",
-            "type": "object"
-          },
-          {
-            "properties": {
-              "authUrl": {
-                "description": "URL the client should open in a browser to initiate the OAuth flow.",
-                "type": "string"
-              },
-              "loginId": {
-                "type": "string"
-              },
-              "type": {
-                "enum": [
-                  "chatgpt"
-                ],
-                "title": "Chatgptv2::LoginAccountResponseType",
-                "type": "string"
-              }
-            },
-            "required": [
-              "authUrl",
-              "loginId",
-              "type"
-            ],
-            "title": "Chatgptv2::LoginAccountResponse",
-            "type": "object"
-          },
-          {
-            "properties": {
-              "loginId": {
-                "type": "string"
-              },
-              "type": {
-                "enum": [
-                  "chatgptDeviceCode"
-                ],
-                "title": "ChatgptDeviceCodev2::LoginAccountResponseType",
-                "type": "string"
-              },
-              "userCode": {
-                "description": "One-time code the user must enter after signing in.",
-                "type": "string"
-              },
-              "verificationUrl": {
-                "description": "URL the client should open in a browser to complete device code authorization.",
-                "type": "string"
-              }
-            },
-            "required": [
-              "loginId",
-              "type",
-              "userCode",
-              "verificationUrl"
-            ],
-            "title": "ChatgptDeviceCodev2::LoginAccountResponse",
-            "type": "object"
-          },
-          {
-            "properties": {
-              "type": {
-                "enum": [
-                  "chatgptAuthTokens"
-                ],
-                "title": "ChatgptAuthTokensv2::LoginAccountResponseType",
-                "type": "string"
-              }
-            },
-            "required": [
-              "type"
-            ],
-            "title": "ChatgptAuthTokensv2::LoginAccountResponse",
             "type": "object"
           }
         ],

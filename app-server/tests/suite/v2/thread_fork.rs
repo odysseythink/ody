@@ -451,7 +451,7 @@ async fn thread_fork_tracks_thread_initialized_analytics() -> Result<()> {
     let server = create_mock_responses_server_repeating_assistant("Done").await;
 
     let ody_home = TempDir::new()?;
-    create_config_toml_with_chatgpt_base_url(ody_home.path(), &server.uri(), &server.uri())?;
+    create_config_toml_simple(ody_home.path(), &server.uri())?;
     mount_analytics_capture(&server, ody_home.path()).await?;
 
     let conversation_id = create_fake_rollout(
@@ -607,12 +607,7 @@ async fn thread_fork_surfaces_cloud_config_bundle_load_errors() -> Result<()> {
 
     let ody_home = TempDir::new()?;
     let model_server = create_mock_responses_server_repeating_assistant("Done").await;
-    let chatgpt_base_url = format!("{}/backend-api", server.uri());
-    create_config_toml_with_chatgpt_base_url(
-        ody_home.path(),
-        &model_server.uri(),
-        &chatgpt_base_url,
-    )?;
+    create_config_toml_simple(ody_home.path(), &model_server.uri())?;
     write_chatgpt_auth(
         ody_home.path(),
         ChatGptAuthFixture::new("chatgpt-token")
@@ -968,11 +963,7 @@ stream_max_retries = 0
     )
 }
 
-fn create_config_toml_with_chatgpt_base_url(
-    ody_home: &Path,
-    server_uri: &str,
-    chatgpt_base_url: &str,
-) -> std::io::Result<()> {
+fn create_config_toml_simple(ody_home: &Path, server_uri: &str) -> std::io::Result<()> {
     let config_toml = ody_home.join("config.toml");
     std::fs::write(
         config_toml,
@@ -981,7 +972,6 @@ fn create_config_toml_with_chatgpt_base_url(
 model = "mock-model"
 approval_policy = "never"
 sandbox_mode = "read-only"
-chatgpt_base_url = "{chatgpt_base_url}"
 
 model_provider = "mock_provider"
 

@@ -133,7 +133,7 @@ async fn build_test(
     let mut builder = test_ody()
         .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config({
-            let apps_base_url = apps_server.chatgpt_base_url.clone();
+            let apps_base_url = apps_server.base_url.clone();
             move |config| configure_apps_without_search_tool(config, apps_base_url.as_str())
         });
     builder.build(server).await
@@ -613,7 +613,7 @@ async fn endpoint_mode_with_no_eligible_candidates_exposes_no_suggestion_tools()
     let mut builder = test_ody()
         .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config({
-            let apps_base_url = apps_server.chatgpt_base_url.clone();
+            let apps_base_url = apps_server.base_url.clone();
             move |config| {
                 configure_apps_without_search_tool(config, apps_base_url.as_str());
                 config.tool_suggest.disabled_tools = vec![ToolSuggestDisabledTool::plugin(

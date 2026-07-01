@@ -1,7 +1,7 @@
 use anyhow::Result;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
-use app_test_support::write_mock_responses_config_toml_with_chatgpt_base_url;
+use app_test_support::write_mock_responses_config_toml_simple;
 use ody_app_server_protocol::JSONRPCError;
 use ody_app_server_protocol::JSONRPCErrorError;
 use ody_app_server_protocol::JSONRPCResponse;
@@ -25,11 +25,7 @@ const REMOTE_IMAGE_URL_ERROR: &str =
 #[tokio::test]
 async fn request_handlers_reject_remote_image_urls() -> Result<()> {
     let ody_home = TempDir::new()?;
-    write_mock_responses_config_toml_with_chatgpt_base_url(
-        ody_home.path(),
-        "http://localhost/unused",
-        "http://localhost/unused",
-    )?;
+    write_mock_responses_config_toml_simple(ody_home.path(), "http://localhost/unused")?;
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
 

@@ -7,7 +7,7 @@ use app_test_support::TestAppServer;
 use app_test_support::create_mock_responses_server_repeating_assistant;
 use app_test_support::to_response;
 use app_test_support::write_chatgpt_auth;
-use app_test_support::write_mock_responses_config_toml_with_chatgpt_base_url;
+use app_test_support::write_mock_responses_config_toml_simple;
 use ody_app_server_protocol::JSONRPCResponse;
 use ody_app_server_protocol::PluginListParams;
 use ody_app_server_protocol::PluginListResponse;
@@ -742,11 +742,7 @@ async fn skills_extra_roots_set_updates_process_runtime_roots() -> Result<()> {
 async fn skills_changed_notification_is_emitted_after_skill_change() -> Result<()> {
     let server = create_mock_responses_server_repeating_assistant("Done").await;
     let ody_home = TempDir::new()?;
-    write_mock_responses_config_toml_with_chatgpt_base_url(
-        ody_home.path(),
-        &server.uri(),
-        &server.uri(),
-    )?;
+    write_mock_responses_config_toml_simple(ody_home.path(), &server.uri())?;
     write_skill(&ody_home, "demo")?;
 
     let mut mcp =

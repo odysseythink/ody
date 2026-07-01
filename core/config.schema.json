@@ -395,9 +395,6 @@
         "approvals_reviewer": {
           "$ref": "#/definitions/ApprovalsReviewer"
         },
-        "chatgpt_base_url": {
-          "type": "string"
-        },
         "experimental_compact_prompt_file": {
           "$ref": "#/definitions/AbsolutePathBuf"
         },
@@ -459,12 +456,6 @@
               "$ref": "#/definitions/FeatureToml_for_CodeModeConfigToml"
             },
             "code_mode_only": {
-              "type": "boolean"
-            },
-            "ody_git_commit": {
-              "type": "boolean"
-            },
-            "ody_hooks": {
               "type": "boolean"
             },
             "collab": {
@@ -573,6 +564,12 @@
               "$ref": "#/definitions/FeatureToml_for_NetworkProxyConfigToml"
             },
             "non_prefixed_mcp_tool_names": {
+              "type": "boolean"
+            },
+            "ody_git_commit": {
+              "type": "boolean"
+            },
+            "ody_hooks": {
               "type": "boolean"
             },
             "personality": {
@@ -1036,23 +1033,8 @@
       },
       "type": "object"
     },
-    "ForcedChatgptWorkspaceIds": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        }
-      ],
-      "description": "Backward-compatible shape for ChatGPT workspace login restrictions in config.toml."
-    },
     "ForcedLoginMethod": {
       "enum": [
-        "chatgpt",
         "api"
       ],
       "type": "string"
@@ -2109,6 +2091,62 @@
           "type": "string"
         }
       ]
+    },
+    "OdyCodeOAuthRef": {
+      "additionalProperties": false,
+      "description": "Ody-code compatible OAuth reference.",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "storage": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "storage"
+      ],
+      "type": "object"
+    },
+    "OdyCodeProviderConfig": {
+      "additionalProperties": false,
+      "description": "Ody-code compatible provider configuration.",
+      "properties": {
+        "api_key": {
+          "type": "string"
+        },
+        "base_url": {
+          "type": "string"
+        },
+        "custom_headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "default_model": {
+          "type": "string"
+        },
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "oauth": {
+          "$ref": "#/definitions/OdyCodeOAuthRef"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
     },
     "OrchestratorFeatureToml": {
       "additionalProperties": false,
@@ -4542,6 +4580,13 @@
             "responses"
           ],
           "type": "string"
+        },
+        {
+          "description": "The Chat Completions API exposed at `/v1/chat/completions`. Used by OpenAI-compatible third-party providers such as Kimi, DeepSeek and GLM.",
+          "enum": [
+            "chat"
+          ],
+          "type": "string"
         }
       ]
     },
@@ -4625,10 +4670,6 @@
       "minimum": 0.0,
       "type": "integer"
     },
-    "chatgpt_base_url": {
-      "description": "Base URL for requests to ChatGPT (as opposed to the OpenAI API).",
-      "type": "string"
-    },
     "check_for_update_on_startup": {
       "description": "When `true`, checks for Ody updates on startup and surfaces update prompts. Set to `false` only if your Ody updates are centrally managed. Defaults to `true`.",
       "type": "boolean"
@@ -4654,9 +4695,24 @@
       ],
       "description": "Debugging and reproducibility settings."
     },
+    "default_model": {
+      "default": null,
+      "description": "Ody-code compatible default model in the form `provider_id/model_name`.",
+      "type": "string"
+    },
     "default_permissions": {
       "description": "Default permissions profile to apply. Names starting with `:` refer to built-in profiles; other names are resolved from the `[permissions]` table.",
       "type": "string"
+    },
+    "default_provider": {
+      "default": null,
+      "description": "Ody-code compatible default provider id.",
+      "type": "string"
+    },
+    "default_thinking": {
+      "default": null,
+      "description": "Ody-code compatible default thinking flag.",
+      "type": "boolean"
     },
     "desktop": {
       "additionalProperties": true,
@@ -4772,12 +4828,6 @@
         "code_mode_only": {
           "type": "boolean"
         },
-        "ody_git_commit": {
-          "type": "boolean"
-        },
-        "ody_hooks": {
-          "type": "boolean"
-        },
         "collab": {
           "type": "boolean"
         },
@@ -4884,6 +4934,12 @@
           "$ref": "#/definitions/FeatureToml_for_NetworkProxyConfigToml"
         },
         "non_prefixed_mcp_tool_names": {
+          "type": "boolean"
+        },
+        "ody_git_commit": {
+          "type": "boolean"
+        },
+        "ody_hooks": {
           "type": "boolean"
         },
         "personality": {
@@ -5057,15 +5113,6 @@
         }
       ],
       "description": "Optional URI-based file opener. If set, citations to files in the model output will be hyperlinked using the specified URI scheme."
-    },
-    "forced_chatgpt_workspace_id": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/ForcedChatgptWorkspaceIds"
-        }
-      ],
-      "default": null,
-      "description": "When set, restricts ChatGPT login to one or more workspace identifiers."
     },
     "forced_login_method": {
       "allOf": [
@@ -5356,6 +5403,14 @@
       "additionalProperties": {
         "$ref": "#/definitions/ProjectConfig"
       },
+      "type": "object"
+    },
+    "providers": {
+      "additionalProperties": {
+        "$ref": "#/definitions/OdyCodeProviderConfig"
+      },
+      "default": {},
+      "description": "Ody-code compatible provider entries keyed by provider id. These are translated into `model_providers` on load so that ody-code shaped configs (e.g. `[providers.kimi_gyy]`) work without rewriting.",
       "type": "object"
     },
     "realtime": {

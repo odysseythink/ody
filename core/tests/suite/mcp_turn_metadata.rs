@@ -157,7 +157,7 @@ async fn approved_mcp_tool_call_metadata_records_prior_user_input_request() -> R
     )
     .await;
 
-    let mut builder = search_capable_apps_builder(apps_server.chatgpt_base_url.clone())
+    let mut builder = search_capable_apps_builder(apps_server.base_url.clone())
         .with_config(|config| {
             // Use the opposite global reviewer so this route must come from apps._default.
             config.approvals_reviewer = ApprovalsReviewer::AutoReview;
@@ -276,7 +276,7 @@ async fn apps_default_prompt_with_auto_review_routes_actual_mcp_approval_to_guar
     )
     .await;
 
-    let mut builder = search_capable_apps_builder(apps_server.chatgpt_base_url.clone())
+    let mut builder = search_capable_apps_builder(apps_server.base_url.clone())
         .with_config(|config| {
             // Use the opposite global reviewer so this route must come from apps._default.
             config.approvals_reviewer = ApprovalsReviewer::User;
@@ -391,7 +391,7 @@ async fn mcp_tool_call_metadata_records_prior_request_user_input_tool() -> Resul
     )
     .await;
 
-    let mut builder = search_capable_apps_builder(apps_server.chatgpt_base_url.clone())
+    let mut builder = search_capable_apps_builder(apps_server.base_url.clone())
         .with_config(|config| {
             set_calendar_approval_mode(config, AppToolApproval::Approve);
         });

@@ -491,10 +491,7 @@ pub async fn run_main_with_transport_options(
                 .replace_thread_config_loader(Arc::clone(&discovered_thread_config_loader));
             let auth_manager =
                 AuthManager::shared_from_config(&config, /*enable_ody_api_key_env*/ false).await;
-            // The remote hosted plugin/Apps catalog config field this used to be sourced from
-            // has been removed; `cloud_config_bundle_loader` already ignores its base-url
-            // parameter (it is a permanent no-op stub since M1.2), so pass an empty string.
-            config_manager.replace_cloud_config_bundle_loader(auth_manager, String::new());
+            config_manager.replace_cloud_config_bundle_loader(auth_manager);
         }
         Err(err) => {
             warn!(error = %err, "Failed to preload config for cloud config bundle");

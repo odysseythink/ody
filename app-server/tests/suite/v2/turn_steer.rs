@@ -7,7 +7,7 @@ use app_test_support::create_mock_responses_server_sequence;
 use app_test_support::create_mock_responses_server_sequence_unchecked;
 use app_test_support::create_shell_command_sse_response;
 use app_test_support::to_response;
-use app_test_support::write_mock_responses_config_toml_with_chatgpt_base_url;
+use app_test_support::write_mock_responses_config_toml_simple;
 use ody_app_server::INPUT_TOO_LARGE_ERROR_CODE;
 use ody_app_server::INVALID_PARAMS_ERROR_CODE;
 use ody_app_server_protocol::AdditionalContextEntry;
@@ -43,11 +43,7 @@ async fn turn_steer_requires_active_turn() -> Result<()> {
     std::fs::create_dir(&ody_home)?;
 
     let server = create_mock_responses_server_sequence(vec![]).await;
-    write_mock_responses_config_toml_with_chatgpt_base_url(
-        &ody_home,
-        &server.uri(),
-        &server.uri(),
-    )?;
+    write_mock_responses_config_toml_simple(&ody_home, &server.uri())?;
     mount_analytics_capture(&server, &ody_home).await?;
 
     let mut mcp = TestAppServer::new_without_managed_config(&ody_home).await?;
@@ -129,11 +125,7 @@ async fn turn_steer_rejects_oversized_text_input() -> Result<()> {
             "call_sleep",
         )?])
         .await;
-    write_mock_responses_config_toml_with_chatgpt_base_url(
-        &ody_home,
-        &server.uri(),
-        &server.uri(),
-    )?;
+    write_mock_responses_config_toml_simple(&ody_home, &server.uri())?;
     mount_analytics_capture(&server, &ody_home).await?;
 
     let mut mcp = TestAppServer::new_without_managed_config(&ody_home).await?;
@@ -243,11 +235,7 @@ async fn turn_steer_returns_active_turn_id() -> Result<()> {
         app_test_support::create_final_assistant_message_sse_response("Done")?,
     ])
     .await;
-    write_mock_responses_config_toml_with_chatgpt_base_url(
-        &ody_home,
-        &server.uri(),
-        &server.uri(),
-    )?;
+    write_mock_responses_config_toml_simple(&ody_home, &server.uri())?;
     mount_analytics_capture(&server, &ody_home).await?;
 
     let mut mcp = TestAppServer::new_without_managed_config(&ody_home).await?;
@@ -380,11 +368,7 @@ async fn turn_steer_rejects_context_only_input_without_merging_context() -> Resu
         app_test_support::create_final_assistant_message_sse_response("Done")?,
     ])
     .await;
-    write_mock_responses_config_toml_with_chatgpt_base_url(
-        &ody_home,
-        &server.uri(),
-        &server.uri(),
-    )?;
+    write_mock_responses_config_toml_simple(&ody_home, &server.uri())?;
     mount_analytics_capture(&server, &ody_home).await?;
 
     let mut mcp = TestAppServer::new_without_managed_config(&ody_home).await?;
