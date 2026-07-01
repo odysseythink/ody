@@ -264,10 +264,10 @@ impl NoiseRendezvousEnvironmentConfig {
         base_url: String,
         environment_id: String,
         bearer_token: String,
-        chatgpt_account_id: Option<String>,
+        account_id: Option<String>,
     ) -> Result<Self, ExecServerError> {
         let environment_id = normalize_environment_id(environment_id)?;
-        let auth_provider = static_bearer_auth_provider(bearer_token, chatgpt_account_id)?;
+        let auth_provider = static_bearer_auth_provider(bearer_token, account_id)?;
         let client = EnvironmentRegistryClient::new(base_url, auth_provider)?;
         Ok(Self {
             provider: Arc::new(EnvironmentRegistryNoiseConnectProvider {
@@ -305,7 +305,7 @@ impl NoiseRendezvousConnectProvider for EnvironmentRegistryNoiseConnectProvider 
 #[derive(Clone)]
 struct StaticBearerAuthProvider {
     authorization: HeaderValue,
-    chatgpt_account_id: Option<HeaderValue>,
+    account_id: Option<HeaderValue>,
 }
 
 impl std::fmt::Debug for StaticBearerAuthProvider {
@@ -313,8 +313,8 @@ impl std::fmt::Debug for StaticBearerAuthProvider {
         f.debug_struct("StaticBearerAuthProvider")
             .field("authorization", &"<redacted>")
             .field(
-                "chatgpt_account_id",
-                &self.chatgpt_account_id.as_ref().map(|_| "<redacted>"),
+                "account_id",
+                &self.account_id.as_ref().map(|_| "<redacted>"),
             )
             .finish()
     }
@@ -323,10 +323,10 @@ impl std::fmt::Debug for StaticBearerAuthProvider {
 impl AuthProvider for StaticBearerAuthProvider {
     fn add_auth_headers(&self, headers: &mut HeaderMap) {
         headers.insert(http::header::AUTHORIZATION, self.authorization.clone());
-        if let Some(chatgpt_account_id) = &self.chatgpt_account_id {
+        if let Some(account_id) = &self.account_id {
             headers.insert(
-                HeaderName::from_static("chatgpt-account-id"),
-                chatgpt_account_id.clone(),
+                HeaderName::from_static("x-ody-account-id"),
+                account_id.clone(),
             );
         }
     }
@@ -334,7 +334,7 @@ impl AuthProvider for StaticBearerAuthProvider {
 
 fn static_bearer_auth_provider(
     bearer_token: String,
-    chatgpt_account_id: Option<String>,
+    account_id: Option<String>,
 ) -> Result<SharedAuthProvider, ExecServerError> {
     let bearer_token = bearer_token.trim();
     if bearer_token.is_empty() {
@@ -348,21 +348,21 @@ fn static_bearer_auth_provider(
                 "environment registry bearer token is not a valid HTTP header: {error}"
             ))
         })?;
-    let chatgpt_account_id = chatgpt_account_id
+    let account_id = account_id
         .as_deref()
         .map(str::trim)
         .filter(|account_id| !account_id.is_empty())
         .map(|account_id| {
             HeaderValue::try_from(account_id).map_err(|error| {
                 ExecServerError::EnvironmentRegistryConfig(format!(
-                    "ChatGPT account id is not a valid HTTP header: {error}"
+                    "account id is not a valid HTTP header: {error}"
                 ))
             })
         })
         .transpose()?;
     Ok(Arc::new(StaticBearerAuthProvider {
         authorization,
-        chatgpt_account_id,
+        account_id,
     }))
 }
 
@@ -597,7 +597,7 @@ mod tests {
                 HeaderValue::from_static("Bearer registry-token"),
             );
             let _ = headers.insert(
-                "ChatGPT-Account-ID",
+                "x-ody-account-id",
                 HeaderValue::from_static("workspace-123"),
             );
         }
@@ -616,7 +616,7 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/cloud/environment/environment-requested/register"))
             .and(header("authorization", "Bearer registry-token"))
-            .and(header("chatgpt-account-id", "workspace-123"))
+            .and(header("x-ody-account-id", "workspace-123"))
             .and(body_partial_json(serde_json::json!({
                 "security_profile": NOISE_RELAY_SECURITY_PROFILE,
                 "executor_public_key": executor_public_key.clone(),
@@ -660,7 +660,7 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/cloud/environment/environment-requested/connect"))
             .and(header("authorization", "Bearer registry-token"))
-            .and(header("chatgpt-account-id", "workspace-123"))
+            .and(header("x-ody-account-id", "workspace-123"))
             .and(body_partial_json(serde_json::json!({
                 "harness_public_key": harness_public_key.clone(),
             })))

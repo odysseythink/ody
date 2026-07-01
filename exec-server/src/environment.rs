@@ -36,8 +36,8 @@ pub const ODY_EXEC_SERVER_NOISE_REGISTRY_URL_ENV_VAR: &str =
 pub const ODY_EXEC_SERVER_NOISE_ENVIRONMENT_ID_ENV_VAR: &str =
     "ODY_EXEC_SERVER_NOISE_ENVIRONMENT_ID";
 pub const ODY_EXEC_SERVER_NOISE_AUTH_TOKEN_ENV_VAR: &str = "ODY_EXEC_SERVER_NOISE_AUTH_TOKEN";
-pub const ODY_EXEC_SERVER_NOISE_CHATGPT_ACCOUNT_ID_ENV_VAR: &str =
-    "ODY_EXEC_SERVER_NOISE_CHATGPT_ACCOUNT_ID";
+pub const ODY_EXEC_SERVER_NOISE_ACCOUNT_ID_ENV_VAR: &str =
+    "ODY_EXEC_SERVER_NOISE_ACCOUNT_ID";
 
 /// Owns the execution/filesystem environments available to the Ody runtime.
 ///
@@ -367,7 +367,7 @@ fn noise_environment_config_from_env()
         optional_environment_value(ODY_EXEC_SERVER_NOISE_REGISTRY_URL_ENV_VAR),
         optional_environment_value(ODY_EXEC_SERVER_NOISE_ENVIRONMENT_ID_ENV_VAR),
         optional_environment_value(ODY_EXEC_SERVER_NOISE_AUTH_TOKEN_ENV_VAR),
-        optional_environment_value(ODY_EXEC_SERVER_NOISE_CHATGPT_ACCOUNT_ID_ENV_VAR),
+        optional_environment_value(ODY_EXEC_SERVER_NOISE_ACCOUNT_ID_ENV_VAR),
     )
 }
 
@@ -375,7 +375,7 @@ fn noise_environment_config_from_values(
     registry_url: Option<String>,
     environment_id: Option<String>,
     auth_token: Option<String>,
-    chatgpt_account_id: Option<String>,
+    account_id: Option<String>,
 ) -> Result<Option<NoiseRendezvousEnvironmentConfig>, ExecServerError> {
     let (registry_url, environment_id, auth_token) =
         match (registry_url, environment_id, auth_token) {
@@ -396,7 +396,7 @@ fn noise_environment_config_from_values(
         registry_url,
         environment_id,
         auth_token,
-        chatgpt_account_id,
+        account_id,
     )?;
     Ok(Some(config))
 }
