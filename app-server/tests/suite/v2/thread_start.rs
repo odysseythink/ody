@@ -29,7 +29,6 @@ use ody_config::types::AuthCredentialsStoreMode;
 use ody_core::config::set_project_trust_level;
 use ody_exec_server::LOCAL_FS;
 use ody_git_utils::resolve_root_git_project_for_trust;
-use ody_login::REFRESH_TOKEN_URL_OVERRIDE_ENV_VAR;
 use ody_protocol::config_types::SERVICE_TIER_DEFAULT_REQUEST_VALUE;
 use ody_protocol::config_types::TrustLevel;
 use ody_protocol::odysseythink_models::ReasoningEffort;
@@ -919,15 +918,10 @@ async fn thread_start_surfaces_cloud_config_bundle_load_errors() -> Result<()> {
         AuthCredentialsStoreMode::File,
     )?;
 
-    let refresh_token_url = format!("{}/oauth/token", server.uri());
     let mut mcp = TestAppServer::new_with_env(
         ody_home.path(),
         &[
             ("OPENAI_API_KEY", None),
-            (
-                REFRESH_TOKEN_URL_OVERRIDE_ENV_VAR,
-                Some(refresh_token_url.as_str()),
-            ),
         ],
     )
     .await?;

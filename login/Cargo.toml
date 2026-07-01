@@ -8,8 +8,6 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-base64 = { workspace = true }
-chrono = { workspace = true, features = ["serde"] }
 ody-app-server-protocol = { workspace = true }
 ody-client = { workspace = true }
 ody-config = { workspace = true }
@@ -19,28 +17,22 @@ ody-otel = { workspace = true }
 ody-protocol = { workspace = true }
 ody-secrets = { workspace = true }
 ody-terminal-detection = { workspace = true }
-ody-utils-template = { workspace = true }
 once_cell = { workspace = true }
 os_info = { workspace = true }
 reqwest = { workspace = true, features = ["json", "blocking"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-thiserror = { workspace = true }
 tokio = { workspace = true, features = [
-    "io-std",
     "macros",
-    "process",
     "rt-multi-thread",
-    "signal",
+    "sync",
 ] }
 tracing = { workspace = true }
-url = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
 core_test_support = { workspace = true }
-jsonwebtoken = { workspace = true }
 keyring = { workspace = true }
 pretty_assertions = { workspace = true }
 regex-lite = { workspace = true }

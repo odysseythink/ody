@@ -1196,18 +1196,6 @@ impl AuthManagerConfig for Config {
         Config::auth_keyring_backend_kind(self)
     }
 
-    fn forced_chatgpt_workspace_id(&self) -> Option<Vec<String>> {
-        // ChatGPT OAuth login (and the workspace restriction that applied to it) has been
-        // removed; this restriction can never apply now.
-        None
-    }
-
-    fn chatgpt_base_url(&self) -> String {
-        // No product surface still consults this value: the remote hosted plugin/Apps
-        // catalog and ChatGPT OAuth login paths that used it have been removed.
-        String::new()
-    }
-
     fn auth_route_config(&self) -> Option<AuthRouteConfig> {
         Config::auth_route_config(self)
     }

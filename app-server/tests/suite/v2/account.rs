@@ -16,7 +16,6 @@ use ody_app_server_protocol::ServerNotification;
 use ody_config::types::AuthCredentialsStoreMode;
 use ody_login::AuthKeyringBackendKind;
 use ody_login::login_with_api_key;
-use ody_login::login_with_bedrock_api_key;
 use pretty_assertions::assert_eq;
 use std::path::Path;
 use std::time::Duration;
@@ -417,10 +416,9 @@ async fn get_account_with_managed_bedrock_provider() -> Result<()> {
             ..Default::default()
         },
     )?;
-    login_with_bedrock_api_key(
+    login_with_api_key(
         ody_home.path(),
-        "managed-bedrock-api-key",
-        "us-west-2",
+        "sk-bedrock-test-key",
         AuthCredentialsStoreMode::File,
         AuthKeyringBackendKind::default(),
     )?;

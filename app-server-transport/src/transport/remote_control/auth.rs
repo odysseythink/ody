@@ -1,12 +1,10 @@
 use ody_api::SharedAuthProvider;
 use ody_login::AuthManager;
-use ody_login::UnauthorizedRecovery;
 use std::io;
 use std::io::ErrorKind;
 use std::sync::Arc;
 use tokio::sync::watch;
 use tracing::info;
-use tracing::warn;
 
 pub(super) struct RemoteControlConnectionAuth {
     pub(super) auth_provider: SharedAuthProvider,
@@ -14,80 +12,44 @@ pub(super) struct RemoteControlConnectionAuth {
 }
 
 pub(super) async fn load_remote_control_auth(
-    auth_manager: &Arc<AuthManager>,
+    _auth_manager: &Arc<AuthManager>,
 ) -> io::Result<RemoteControlConnectionAuth> {
-    let mut reloaded = false;
-    let auth = loop {
-        let Some(auth) = auth_manager.auth().await else {
-            if reloaded {
-                return Err(io::Error::new(
-                    ErrorKind::PermissionDenied,
-                    "remote control requires ChatGPT authentication",
-                ));
-            }
-            auth_manager.reload().await;
-            reloaded = true;
-            continue;
-        };
-        if !auth.uses_ody_backend() {
-            break auth;
-        }
-        if auth.get_account_id().is_none() && !reloaded {
-            auth_manager.reload().await;
-            reloaded = true;
-            continue;
-        }
-        break auth;
-    };
+    Err(io::Error::new(
+        ErrorKind::PermissionDenied,
+        "remote control requires ChatGPT authentication; API key auth is not supported",
+    ))
+}
 
-    if !auth.uses_ody_backend() {
-        return Err(io::Error::new(
-            ErrorKind::PermissionDenied,
-            "remote control requires ChatGPT authentication; API key auth is not supported",
-        ));
+/// Placeholder for the removed `UnauthorizedRecovery` state machine.
+///
+/// Remote control enrollment requires ChatGPT backend auth, which has been
+/// removed, so recovery never has any steps.
+pub(super) struct RemoteControlAuthRecovery;
+
+impl RemoteControlAuthRecovery {
+    pub(super) fn has_next(&self) -> bool {
+        false
     }
 
-    Ok(RemoteControlConnectionAuth {
-        auth_provider: ody_model_provider::auth_provider_from_auth(&auth),
-        account_id: auth.get_account_id().ok_or_else(|| {
-            io::Error::new(
-                ErrorKind::WouldBlock,
-                "remote control enrollment is waiting for a ChatGPT account id",
-            )
-        })?,
-    })
+    pub(super) fn mode_name(&self) -> &'static str {
+        "none"
+    }
+
+    pub(super) fn step_name(&self) -> &'static str {
+        "done"
+    }
+
+    pub(super) fn unavailable_reason(&self) -> &'static str {
+        "not_refreshable_auth"
+    }
 }
 
 pub(super) async fn recover_remote_control_auth(
-    auth_recovery: &mut UnauthorizedRecovery,
+    _auth_recovery: &mut RemoteControlAuthRecovery,
     auth_change_rx: &mut watch::Receiver<u64>,
 ) -> bool {
-    if !auth_recovery.has_next() {
-        return false;
-    }
-
-    let mode = auth_recovery.mode_name();
-    let step = auth_recovery.step_name();
-    let auth_change_revision_before_recovery = *auth_change_rx.borrow();
-    match auth_recovery.next().await {
-        Ok(step_result) => {
-            if step_result.auth_state_changed() == Some(true) {
-                mark_recovery_auth_change_seen(
-                    auth_change_rx,
-                    auth_change_revision_before_recovery,
-                );
-            }
-            info!(
-                "remote control auth recovery succeeded: mode={mode}, step={step}, auth_state_changed={:?}",
-                step_result.auth_state_changed()
-            );
-            true
-        }
-        Err(err) => {
-            warn!("remote control auth recovery failed: mode={mode}, step={step}: {err}");
-            false
-        }
-    }
+    let _ = auth_change_rx;
+    false
 }
 
 pub(super) fn mark_recovery_auth_change_seen(

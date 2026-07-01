@@ -570,9 +570,6 @@ pub(crate) async fn load_cli_auth_mode(config: &Config) -> Option<AuthMode> {
     OdyAuth::from_auth_storage(
         &config.ody_home,
         config.cli_auth_credentials_store_mode,
-        // This parameter is unused by `from_auth_storage` (ChatGPT OAuth login has been
-        // removed), and the `Config` field it used to be sourced from is gone too.
-        None,
         config.auth_keyring_backend_kind(),
         auth_route_config.as_ref(),
     )

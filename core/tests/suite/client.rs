@@ -1427,30 +1427,18 @@ async fn prefers_apikey_when_config_prefers_apikey_even_with_chatgpt_tokens() {
 
     // Init session
     let ody_home = TempDir::new().unwrap();
-    // Write auth.json that contains both API key and ChatGPT tokens for a plan that should prefer ChatGPT,
-    // but config will force API key preference.
-    let _jwt = write_auth_json(
-        &ody_home,
-        Some("sk-test-key"),
-        "pro",
-        "Access-123",
-        Some("acc-123"),
-    );
-
-    let mut config = load_default_config_for_test(&ody_home).await;
-    config.model_provider = model_provider;
-
-    let auth = OdyAuth::from_auth_storage(
-        ody_home.path(),
+    // Only API key auth is supported now.
+    let auth_manager = AuthManager::shared(
+        ody_home.path().to_path_buf(),
+        /*enable_ody_api_key_env*/ true,
         AuthCredentialsStoreMode::File,
-        /*chatgpt_base_url*/ None,
         AuthKeyringBackendKind::default(),
         /*auth_route_config*/ None,
     )
-    .await
-    .expect("Failed to load OdyAuth")
-    .expect("No OdyAuth found in ody_home");
-    let auth_manager = ody_core::test_support::auth_manager_from_auth(auth);
+    .await;
+
+    let mut config = load_default_config_for_test(&ody_home).await;
+    config.model_provider = model_provider;
     let installation_id = resolve_installation_id(&config.ody_home)
         .await
         .expect("resolve installation id");

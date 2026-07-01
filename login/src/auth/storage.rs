@@ -1,5 +1,3 @@
-use chrono::DateTime;
-use chrono::Utc;
 use serde::Deserialize;
 use serde::Serialize;
 use sha2::Digest;
@@ -18,8 +16,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use tracing::warn;
 
-use super::BedrockApiKeyAuth;
-use crate::token_data::TokenData;
 use ody_app_server_protocol::AuthMode;
 use ody_config::types::AuthCredentialsStoreMode;
 pub use ody_config::types::AuthKeyringBackendKind;
@@ -40,15 +36,6 @@ pub struct AuthDotJson {
 
     #[serde(rename = "OPENAI_API_KEY")]
     pub odysseythink_api_key: Option<String>,
-
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tokens: Option<TokenData>,
-
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub last_refresh: Option<DateTime<Utc>>,
-
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub bedrock_api_key: Option<BedrockApiKeyAuth>,
 }
 
 impl AuthDotJson {
@@ -196,7 +183,7 @@ impl DirectKeyringAuthStorage {
             Ok(()) => Ok(()),
             Err(error) => {
                 let message = format!(
-                    "failed to write OAuth tokens to keyring: {}",
+                    "failed to write API key auth to keyring: {}",
                     error.message()
                 );
                 warn!("{message}");
@@ -294,7 +281,7 @@ impl AuthStorageBackend for SecretsKeyringAuthStorage {
             .set(&SecretScope::Global, &ODY_AUTH_SECRET_NAME, &serialized)
             .map_err(|err| {
                 let message =
-                    format!("failed to write OAuth tokens to encrypted auth storage: {err}");
+                    format!("failed to write API key auth to encrypted auth storage: {err}");
                 warn!("{message}");
                 std::io::Error::other(message)
             })?;

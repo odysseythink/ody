@@ -165,12 +165,7 @@ async fn list_remote_control_clients_recovers_auth_after_unauthorized() {
         respond_with_json(recovered_request.stream, empty_client_list()).await;
     });
     let ody_home = TempDir::new().expect("temp dir should create");
-    let mut stale_auth = remote_control_auth_dot_json(Some("account_id"));
-    stale_auth
-        .tokens
-        .as_mut()
-        .expect("stale auth should include tokens")
-        .access_token = "stale-token".to_string();
+    let stale_auth = remote_control_auth_dot_json(Some("account_id"));
     save_auth(
         ody_home.path(),
         &stale_auth,
@@ -182,18 +177,11 @@ async fn list_remote_control_clients_recovers_auth_after_unauthorized() {
         ody_home.path().to_path_buf(),
         /*enable_ody_api_key_env*/ false,
         AuthCredentialsStoreMode::File,
-        /*forced_chatgpt_workspace_id*/ None,
-        /*chatgpt_base_url*/ None,
         AuthKeyringBackendKind::default(),
         /*auth_route_config*/ None,
     )
     .await;
-    let mut fresh_auth = remote_control_auth_dot_json(Some("account_id"));
-    fresh_auth
-        .tokens
-        .as_mut()
-        .expect("fresh auth should include tokens")
-        .access_token = "fresh-token".to_string();
+    let fresh_auth = remote_control_auth_dot_json(Some("account_id"));
     save_auth(
         ody_home.path(),
         &fresh_auth,
@@ -251,12 +239,7 @@ async fn list_remote_control_clients_retries_unauthorized_only_once() {
         );
     });
     let ody_home = TempDir::new().expect("temp dir should create");
-    let mut stale_auth = remote_control_auth_dot_json(Some("account_id"));
-    stale_auth
-        .tokens
-        .as_mut()
-        .expect("stale auth should include tokens")
-        .access_token = "stale-token".to_string();
+    let stale_auth = remote_control_auth_dot_json(Some("account_id"));
     save_auth(
         ody_home.path(),
         &stale_auth,
@@ -268,18 +251,11 @@ async fn list_remote_control_clients_retries_unauthorized_only_once() {
         ody_home.path().to_path_buf(),
         /*enable_ody_api_key_env*/ false,
         AuthCredentialsStoreMode::File,
-        /*forced_chatgpt_workspace_id*/ None,
-        /*chatgpt_base_url*/ None,
         AuthKeyringBackendKind::default(),
         /*auth_route_config*/ None,
     )
     .await;
-    let mut fresh_auth = remote_control_auth_dot_json(Some("account_id"));
-    fresh_auth
-        .tokens
-        .as_mut()
-        .expect("fresh auth should include tokens")
-        .access_token = "fresh-token".to_string();
+    let fresh_auth = remote_control_auth_dot_json(Some("account_id"));
     save_auth(
         ody_home.path(),
         &fresh_auth,

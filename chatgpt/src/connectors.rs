@@ -24,27 +24,13 @@ use ody_plugin::AppConnectorId;
 
 const DIRECTORY_CONNECTORS_TIMEOUT: Duration = Duration::from_secs(60);
 
-async fn apps_enabled(config: &Config) -> bool {
-    let auth_manager =
-        AuthManager::shared_from_config(config, /*enable_ody_api_key_env*/ false).await;
-    let auth = auth_manager.auth().await;
-    config
-        .features
-        .apps_enabled_for_auth(auth.as_ref().is_some_and(OdyAuth::uses_ody_backend))
+async fn apps_enabled(_config: &Config) -> bool {
+    // ChatGPT-backed connectors require Ody backend auth, which has been removed.
+    false
 }
 
-async fn connector_auth(config: &Config) -> anyhow::Result<OdyAuth> {
-    let auth_manager =
-        AuthManager::shared_from_config(config, /*enable_ody_api_key_env*/ false).await;
-    let auth = auth_manager
-        .auth()
-        .await
-        .ok_or_else(|| anyhow::anyhow!("ChatGPT auth not available"))?;
-    anyhow::ensure!(
-        auth.uses_ody_backend(),
-        "ChatGPT connectors require Ody backend auth"
-    );
-    Ok(auth)
+async fn connector_auth(_config: &Config) -> anyhow::Result<OdyAuth> {
+    anyhow::bail!("ChatGPT connectors require Ody backend auth")
 }
 
 pub async fn list_connectors(config: &Config) -> anyhow::Result<Vec<AppInfo>> {
@@ -98,7 +84,7 @@ pub async fn list_all_connectors_with_options(
     let cache_context = connector_directory_cache_context(config, &auth);
     let connectors = ody_connectors::list_all_connectors_with_options(
         cache_context,
-        auth.is_workspace_account(),
+        false,
         force_refetch,
         |path| async move {
             chatgpt_get_request_with_timeout::<DirectoryListResponse>(
@@ -118,18 +104,16 @@ pub async fn list_all_connectors_with_options(
 
 fn connector_directory_cache_context(
     config: &Config,
-    auth: &OdyAuth,
+    _auth: &OdyAuth,
 ) -> ConnectorDirectoryCacheContext {
+    // ChatGPT-backed connector metadata is no longer available.
     ConnectorDirectoryCacheContext::new(
         config.ody_home.to_path_buf(),
         ConnectorDirectoryCacheKey::new(
-            // The remote hosted plugin/Apps catalog config field this used to be sourced from
-            // has been removed; this path is unreachable now (see chatgpt_client.rs), kept
-            // only so the crate still compiles.
             String::new(),
-            auth.get_account_id(),
-            auth.get_chatgpt_user_id(),
-            auth.is_workspace_account(),
+            None,
+            None,
+            false,
         ),
     )
 }

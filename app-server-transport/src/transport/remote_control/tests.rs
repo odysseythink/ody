@@ -34,8 +34,7 @@ use ody_login::AuthKeyringBackendKind;
 use ody_login::AuthManager;
 use ody_login::OdyAuth;
 use ody_login::save_auth;
-use ody_login::token_data::TokenData;
-use ody_login::token_data::parse_chatgpt_jwt_claims;
+
 use ody_state::RemoteControlEnrollmentRecord;
 use ody_state::StateRuntime;
 use futures::SinkExt;
@@ -84,41 +83,10 @@ fn remote_control_auth_manager_with_home(ody_home: &TempDir) -> Arc<AuthManager>
     )
 }
 
-fn remote_control_auth_dot_json(account_id: Option<&str>) -> AuthDotJson {
-    #[derive(serde::Serialize)]
-    struct Header {
-        alg: &'static str,
-        typ: &'static str,
-    }
-
-    let header = Header {
-        alg: "none",
-        typ: "JWT",
-    };
-    let payload = serde_json::json!({
-        "email": "user@example.com",
-        "https://api.odysseythink.com/auth": {
-            "chatgpt_user_id": "user-12345",
-            "user_id": "user-12345",
-            "chatgpt_account_id": "account_id"
-        }
-    });
-    let b64 = |bytes: &[u8]| base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes);
-    let header_b64 = b64(&serde_json::to_vec(&header).expect("header should serialize"));
-    let payload_b64 = b64(&serde_json::to_vec(&payload).expect("payload should serialize"));
-    let fake_jwt = format!("{header_b64}.{payload_b64}.sig");
-
+fn remote_control_auth_dot_json(_account_id: Option<&str>) -> AuthDotJson {
     AuthDotJson {
         auth_mode: Some(AuthMode::ApiKey),
         odysseythink_api_key: None,
-        tokens: Some(TokenData {
-            id_token: parse_chatgpt_jwt_claims(&fake_jwt).expect("fake jwt should parse"),
-            access_token: "Access Token".to_string(),
-            refresh_token: "refresh-token".to_string(),
-            account_id: account_id.map(str::to_string),
-        }),
-        last_refresh: Some(chrono::Utc::now()),
-        bedrock_api_key: None,
     }
 }
 
@@ -1036,8 +1004,6 @@ async fn remote_control_start_allows_missing_auth_when_enabled() {
         ody_home.path().to_path_buf(),
         /*enable_ody_api_key_env*/ false,
         AuthCredentialsStoreMode::File,
-        /*forced_chatgpt_workspace_id*/ None,
-        /*chatgpt_base_url*/ None,
         AuthKeyringBackendKind::default(),
         /*auth_route_config*/ None,
     )
@@ -1866,8 +1832,6 @@ async fn remote_control_waits_for_account_id_before_enrolling() {
         ody_home.path().to_path_buf(),
         /*enable_ody_api_key_env*/ false,
         AuthCredentialsStoreMode::File,
-        /*forced_chatgpt_workspace_id*/ None,
-        /*chatgpt_base_url*/ None,
         AuthKeyringBackendKind::default(),
         /*auth_route_config*/ None,
     )
@@ -1963,8 +1927,6 @@ async fn persisted_enable_does_not_follow_auth_to_an_account_without_a_preferenc
         ody_home.path().to_path_buf(),
         /*enable_ody_api_key_env*/ false,
         AuthCredentialsStoreMode::File,
-        /*forced_chatgpt_workspace_id*/ None,
-        /*chatgpt_base_url*/ None,
         AuthKeyringBackendKind::default(),
         /*auth_route_config*/ None,
     )

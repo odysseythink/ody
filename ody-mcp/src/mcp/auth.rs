@@ -140,17 +140,10 @@ where
     let futures = servers.into_iter().map(|(name, server)| {
         let name = name.clone();
         let config = server.configured_config().cloned();
-        let has_runtime_auth = name == ODY_APPS_MCP_SERVER_NAME
-            && auth.is_some_and(OdyAuth::uses_ody_backend)
-            && config.as_ref().is_some_and(|config| {
-                matches!(
-                    &config.transport,
-                    McpServerTransportConfig::StreamableHttp {
-                        bearer_token_env_var: None,
-                        ..
-                    }
-                )
-            });
+        // Runtime auth for the Ody Apps MCP server only existed for Ody backend
+        // auth, which has been removed.
+        let has_runtime_auth = false;
+        let _ = auth;
         async move {
             let auth_status = match config.as_ref() {
                 Some(config) => {

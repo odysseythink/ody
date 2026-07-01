@@ -507,10 +507,12 @@ async fn send_track_events(
     let Some(auth) = auth_manager.auth().await else {
         return;
     };
-    if !auth.uses_ody_backend() {
-        return;
-    }
+    // Analytics events are only emitted for Ody backend auth, which has been
+    // removed along with ChatGPT OAuth.
+    let _ = auth;
+    return;
 
+    #[allow(unreachable_code)]
     for events in track_event_request_batches(events) {
         send_track_events_request(&auth, destination, events).await;
     }

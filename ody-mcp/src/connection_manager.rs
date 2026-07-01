@@ -13,6 +13,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
+use ody_api::SharedAuthProvider;
 use crate::McpAuthStatusEntry;
 use crate::ody_apps::OdyAppsToolsCacheContext;
 use crate::ody_apps::OdyAppsToolsCacheKey;
@@ -154,9 +155,10 @@ impl McpConnectionManager {
         );
         let tool_plugin_provenance = Arc::new(tool_plugin_provenance);
         let startup_submit_id = submit_id.clone();
-        let ody_apps_auth_provider = auth
-            .filter(|auth| auth.uses_ody_backend())
-            .map(ody_model_provider::auth_provider_from_auth);
+        // Ody Apps auth provider only applied for Ody backend auth, which has
+        // been removed along with ChatGPT OAuth.
+        let ody_apps_auth_provider: Option<ody_api::SharedAuthProvider> = None;
+        let _ = auth;
         let mcp_servers = mcp_servers.clone();
         for (server_name, server) in mcp_servers
             .into_iter()

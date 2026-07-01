@@ -8017,10 +8017,7 @@ name = "ody-login"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "base64 0.22.1",
- "chrono",
  "core_test_support",
- "jsonwebtoken",
  "keyring",
  "ody-app-server-protocol",
  "ody-client",
@@ -8031,7 +8028,6 @@ dependencies = [
  "ody-protocol",
  "ody-secrets",
  "ody-terminal-detection",
- "ody-utils-template",
  "once_cell",
  "os_info",
  "pretty_assertions",
@@ -8042,10 +8038,8 @@ dependencies = [
  "serial_test",
  "sha2 0.10.9",
  "tempfile",
- "thiserror 2.0.18",
  "tokio",
  "tracing",
- "url",
  "wiremock",
 ]
 

@@ -1,7 +1,6 @@
 use super::*;
-use crate::token_data::IdTokenInfo;
 use anyhow::Context;
-use base64::Engine;
+use sha2::Digest;
 use ody_secrets::LocalSecretsNamespace;
 use ody_secrets::SecretScope;
 use ody_secrets::SecretsBackendKind;
@@ -21,9 +20,6 @@ async fn file_storage_load_returns_auth_dot_json() -> anyhow::Result<()> {
     let auth_dot_json = AuthDotJson {
         auth_mode: Some(AuthMode::ApiKey),
         odysseythink_api_key: Some("test-key".to_string()),
-        tokens: None,
-        last_refresh: Some(Utc::now()),
-        bedrock_api_key: None,
     };
 
     storage
@@ -42,9 +38,6 @@ async fn file_storage_save_persists_auth_dot_json() -> anyhow::Result<()> {
     let auth_dot_json = AuthDotJson {
         auth_mode: Some(AuthMode::ApiKey),
         odysseythink_api_key: Some("test-key".to_string()),
-        tokens: None,
-        last_refresh: Some(Utc::now()),
-        bedrock_api_key: None,
     };
 
     let file = get_auth_file(ody_home.path());
@@ -65,9 +58,6 @@ fn file_storage_delete_removes_auth_file() -> anyhow::Result<()> {
     let auth_dot_json = AuthDotJson {
         auth_mode: Some(AuthMode::ApiKey),
         odysseythink_api_key: Some("sk-test-key".to_string()),
-        tokens: None,
-        last_refresh: None,
-        bedrock_api_key: None,
     };
     let storage = create_auth_storage(
         dir.path().to_path_buf(),
@@ -94,9 +84,6 @@ fn ephemeral_storage_save_load_delete_is_in_memory_only() -> anyhow::Result<()> 
     let auth_dot_json = AuthDotJson {
         auth_mode: Some(AuthMode::ApiKey),
         odysseythink_api_key: Some("sk-ephemeral".to_string()),
-        tokens: None,
-        last_refresh: Some(Utc::now()),
-        bedrock_api_key: None,
     };
 
     storage.save(&auth_dot_json)?;
@@ -190,44 +177,10 @@ fn encrypted_auth_file(ody_home: &Path) -> PathBuf {
     ody_home.join("secrets").join("ody_auth.age")
 }
 
-fn id_token_with_prefix(prefix: &str) -> IdTokenInfo {
-    #[derive(Serialize)]
-    struct Header {
-        alg: &'static str,
-        typ: &'static str,
-    }
-
-    let header = Header {
-        alg: "none",
-        typ: "JWT",
-    };
-    let payload = json!({
-        "email": format!("{prefix}@example.com"),
-        "https://api.odysseythink.com/auth": {
-            "chatgpt_account_id": format!("{prefix}-account"),
-        },
-    });
-    let encode = |bytes: &[u8]| base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes);
-    let header_b64 = encode(&serde_json::to_vec(&header).expect("serialize header"));
-    let payload_b64 = encode(&serde_json::to_vec(&payload).expect("serialize payload"));
-    let signature_b64 = encode(b"sig");
-    let fake_jwt = format!("{header_b64}.{payload_b64}.{signature_b64}");
-
-    crate::token_data::parse_chatgpt_jwt_claims(&fake_jwt).expect("fake JWT should parse")
-}
-
 fn auth_with_prefix(prefix: &str) -> AuthDotJson {
     AuthDotJson {
         auth_mode: Some(AuthMode::ApiKey),
         odysseythink_api_key: Some(format!("{prefix}-api-key")),
-        tokens: Some(TokenData {
-            id_token: id_token_with_prefix(prefix),
-            access_token: format!("{prefix}-access"),
-            refresh_token: format!("{prefix}-refresh"),
-            account_id: Some(format!("{prefix}-account-id")),
-        }),
-        last_refresh: None,
-        bedrock_api_key: None,
     }
 }
 
@@ -242,9 +195,6 @@ fn secrets_keyring_auth_storage_load_returns_deserialized_auth() -> anyhow::Resu
     let expected = AuthDotJson {
         auth_mode: Some(AuthMode::ApiKey),
         odysseythink_api_key: Some("sk-test".to_string()),
-        tokens: None,
-        last_refresh: None,
-        bedrock_api_key: None,
     };
     seed_secrets_backend_with_auth(&mock_keyring, ody_home.path(), &expected)?;
 
@@ -255,11 +205,18 @@ fn secrets_keyring_auth_storage_load_returns_deserialized_auth() -> anyhow::Resu
 
 #[test]
 fn keyring_auth_storage_compute_store_key_for_home_directory() -> anyhow::Result<()> {
-    let ody_home = PathBuf::from("~/.ody-code");
+    let ody_home = tempdir()?;
+    let canonical = ody_home
+        .path()
+        .canonicalize()
+        .unwrap_or_else(|_| ody_home.path().to_path_buf());
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(canonical.to_string_lossy().as_bytes());
+    let digest = format!("{:x}", hasher.finalize());
+    let expected = format!("cli|{}", &digest[..16]);
 
-    let key = compute_store_key(ody_home.as_path())?;
-
-    assert_eq!(key, "cli|940db7b1d0e4eb40");
+    let key = compute_store_key(ody_home.path())?;
+    assert_eq!(key, expected);
     Ok(())
 }
 
@@ -372,15 +329,7 @@ fn secrets_keyring_auth_storage_save_persists_and_removes_fallback_file() -> any
     std::fs::write(&auth_file, "stale")?;
     let auth = AuthDotJson {
         auth_mode: Some(AuthMode::ApiKey),
-        odysseythink_api_key: None,
-        tokens: Some(TokenData {
-            id_token: Default::default(),
-            access_token: "access".to_string(),
-            refresh_token: "refresh".to_string(),
-            account_id: Some("account".to_string()),
-        }),
-        last_refresh: Some(Utc::now()),
-        bedrock_api_key: None,
+        odysseythink_api_key: Some("sk-api-key".to_string()),
     };
 
     storage.save(&auth)?;
@@ -587,5 +536,73 @@ fn auto_auth_storage_delete_removes_keyring_and_file() -> anyhow::Result<()> {
         !auth_file.exists(),
         "fallback auth.json should be removed after delete"
     );
+    Ok(())
+}
+
+#[test]
+fn auth_dot_json_ignores_legacy_chatgpt_tokens_and_bedrock_key() -> anyhow::Result<()> {
+    let ody_home = tempdir()?;
+    let auth_file = get_auth_file(ody_home.path());
+    // Legacy auth.json payloads may carry ChatGPT OAuth tokens or a Bedrock API
+    // key. We should still be able to read the file and the unknown fields should
+    // be ignored.
+    std::fs::write(
+        &auth_file,
+        json!({
+            "auth_mode": "apikey",
+            "OPENAI_API_KEY": "sk-api-key",
+            "tokens": {
+                "id_token": "x.y.z",
+                "access_token": "at",
+                "refresh_token": "rt",
+                "account_id": "account-id"
+            },
+            "last_refresh": "2024-01-01T00:00:00Z",
+            "bedrock_api_key": {
+                "api_key": "bedrock-key",
+                "region": "us-east-1"
+            }
+        })
+        .to_string(),
+    )?;
+
+    let storage = FileAuthStorage::new(ody_home.path().to_path_buf());
+    let loaded = storage.load()?.context("auth should load")?;
+    assert_eq!(
+        loaded,
+        AuthDotJson {
+            auth_mode: Some(AuthMode::ApiKey),
+            odysseythink_api_key: Some("sk-api-key".to_string()),
+        }
+    );
+    assert_eq!(loaded.resolved_mode(), AuthMode::ApiKey);
+    Ok(())
+}
+
+#[test]
+fn auth_dot_json_chatgpt_mode_with_api_key_resolves_to_api_key() -> anyhow::Result<()> {
+    let ody_home = tempdir()?;
+    let auth_file = get_auth_file(ody_home.path());
+    // Legacy "chatgpt" auth_mode with an API key should resolve to API key auth
+    // because only API key auth is supported now.
+    std::fs::write(
+        &auth_file,
+        json!({
+            "auth_mode": "chatgpt",
+            "OPENAI_API_KEY": "sk-api-key"
+        })
+        .to_string(),
+    )?;
+
+    let storage = FileAuthStorage::new(ody_home.path().to_path_buf());
+    let loaded = storage.load()?.context("auth should load")?;
+    assert_eq!(
+        loaded,
+        AuthDotJson {
+            auth_mode: Some(AuthMode::ApiKey),
+            odysseythink_api_key: Some("sk-api-key".to_string()),
+        }
+    );
+    assert_eq!(loaded.resolved_mode(), AuthMode::ApiKey);
     Ok(())
 }

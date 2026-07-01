@@ -223,8 +223,11 @@ impl ToolPluginProvenance {
     }
 }
 
-pub fn host_owned_ody_apps_enabled(config: &McpConfig, auth: Option<&OdyAuth>) -> bool {
-    config.apps_enabled && auth.is_some_and(OdyAuth::uses_ody_backend)
+pub fn host_owned_ody_apps_enabled(config: &McpConfig, _auth: Option<&OdyAuth>) -> bool {
+    // Ody Apps host-owned integration required Ody backend auth, which has
+    // been removed.
+    let _ = config.apps_enabled;
+    false
 }
 
 pub fn configured_mcp_servers(config: &McpConfig) -> HashMap<String, McpServerConfig> {

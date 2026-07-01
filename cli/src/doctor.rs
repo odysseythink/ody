@@ -45,7 +45,6 @@ use ody_install_context::InstallMethod;
 use ody_install_context::StandalonePlatform;
 use ody_login::AuthDotJson;
 use ody_login::AuthManager;
-use ody_login::ODY_ACCESS_TOKEN_ENV_VAR;
 use ody_login::ODY_API_KEY_ENV_VAR;
 use ody_login::OdyAuth;
 use ody_login::OPENAI_API_KEY_ENV_VAR;
@@ -1175,7 +1174,6 @@ fn auth_check(config: &Config) -> DoctorCheck {
     let env_auth_vars = [
         OPENAI_API_KEY_ENV_VAR,
         ODY_API_KEY_ENV_VAR,
-        ODY_ACCESS_TOKEN_ENV_VAR,
     ]
     .into_iter()
     .filter(|name| env_var_present(name))
@@ -1204,7 +1202,7 @@ fn auth_check(config: &Config) -> DoctorCheck {
         Ok(Some(auth)) => {
             details.push(format!("stored auth mode: {}", stored_auth_mode(&auth)));
             details.push(format!("stored API key: {}", auth.odysseythink_api_key.is_some()));
-            details.push(format!("stored ChatGPT tokens: {}", auth.tokens.is_some()));
+            details.push("stored ChatGPT tokens: false".to_string());
             let auth_issues = stored_auth_issues(&auth, env_var_present);
             details.extend(
                 auth_issues
@@ -2531,9 +2529,6 @@ fn provider_auth_reachability_mode_from_auth(
     if env_var_present(OPENAI_API_KEY_ENV_VAR) || env_var_present(ODY_API_KEY_ENV_VAR) {
         return ProviderAuthReachabilityMode::ApiKey;
     }
-    if env_var_present(ODY_ACCESS_TOKEN_ENV_VAR) {
-        return ProviderAuthReachabilityMode::Chatgpt;
-    }
     match stored_auth.map(stored_auth_mode_value) {
         Some(ody_app_server_protocol::AuthMode::ApiKey) => ProviderAuthReachabilityMode::ApiKey,
         Some(ody_app_server_protocol::AuthMode::Unauthenticated) | None => {
@@ -3432,9 +3427,6 @@ mod tests {
         let auth = AuthDotJson {
             auth_mode: Some(ody_app_server_protocol::AuthMode::ApiKey),
             odysseythink_api_key: None,
-            tokens: None,
-            last_refresh: None,
-            bedrock_api_key: None,
         };
 
         assert_eq!(
@@ -3449,9 +3441,6 @@ mod tests {
         let auth = AuthDotJson {
             auth_mode: None,
             odysseythink_api_key: None,
-            tokens: None,
-            last_refresh: None,
-            bedrock_api_key: None,
         };
 
         assert_eq!(
@@ -3465,9 +3454,6 @@ mod tests {
         let api_key_auth = AuthDotJson {
             auth_mode: Some(ody_app_server_protocol::AuthMode::ApiKey),
             odysseythink_api_key: Some("sk-test".to_string()),
-            tokens: None,
-            last_refresh: None,
-            bedrock_api_key: None,
         };
 
         assert_eq!(

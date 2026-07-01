@@ -132,8 +132,9 @@ impl MemoryStartupContext {
         let auth = auth_manager.auth_cached();
         let auth = auth.as_ref();
         let auth_mode = auth.map(OdyAuth::auth_mode).map(TelemetryAuthMode::from);
-        let account_id = auth.and_then(OdyAuth::get_account_id);
-        let account_email = auth.and_then(OdyAuth::get_account_email);
+        // Ody backend auth metadata (account id/email) is no longer available.
+        let account_id: Option<String> = None;
+        let account_email: Option<String> = None;
         let model = config.model.as_deref().unwrap_or("unknown");
         let auth_env_telemetry = collect_auth_env_telemetry(
             &config.model_provider,

@@ -129,19 +129,10 @@ pub(crate) async fn list_tool_suggest_discoverable_tools_with_auth(
 }
 
 pub async fn list_cached_accessible_connectors_from_mcp_tools(
-    config: &Config,
+    _config: &Config,
 ) -> Option<Vec<AppInfo>> {
-    let auth_manager =
-        AuthManager::shared_from_config(config, /*enable_ody_api_key_env*/ false).await;
-    let auth = auth_manager.auth().await;
-    if !config
-        .features
-        .apps_enabled_for_auth(auth.as_ref().is_some_and(OdyAuth::uses_ody_backend))
-    {
-        return Some(Vec::new());
-    }
-    let cache_key = accessible_connectors_cache_key(config, auth.as_ref());
-    read_cached_accessible_connectors(&cache_key)
+    // ChatGPT-backed connectors require Ody backend auth, which has been removed.
+    Some(Vec::new())
 }
 
 pub(crate) fn refresh_accessible_connectors_cache_from_mcp_tools(
@@ -209,160 +200,27 @@ pub async fn list_accessible_connectors_from_mcp_tools_with_environment_manager(
 
 pub async fn list_accessible_connectors_from_mcp_tools_with_mcp_manager(
     config: &Config,
-    force_refetch: bool,
+    _force_refetch: bool,
     environment_manager: Arc<EnvironmentManager>,
     mcp_manager: Arc<McpManager>,
 ) -> anyhow::Result<AccessibleConnectorsStatus> {
-    let auth_manager =
-        AuthManager::shared_from_config(config, /*enable_ody_api_key_env*/ false).await;
-    let auth = auth_manager.auth().await;
-    if !config
-        .features
-        .apps_enabled_for_auth(auth.as_ref().is_some_and(OdyAuth::uses_ody_backend))
-    {
-        return Ok(AccessibleConnectorsStatus {
-            connectors: Vec::new(),
-            ody_apps_ready: true,
-        });
-    }
-    let cache_key = accessible_connectors_cache_key(config, auth.as_ref());
-    let mcp_config = mcp_manager.runtime_config(config).await;
-    let tool_plugin_provenance = tool_plugin_provenance(&mcp_config);
-    if !force_refetch && let Some(cached_connectors) = read_cached_accessible_connectors(&cache_key)
-    {
-        let cached_connectors = with_app_plugin_sources(cached_connectors, &tool_plugin_provenance);
-        return Ok(AccessibleConnectorsStatus {
-            connectors: cached_connectors,
-            ody_apps_ready: true,
-        });
-    }
-
-    let mut mcp_servers = effective_mcp_servers(&mcp_config, auth.as_ref());
-    mcp_servers.retain(|name, _| name == ODY_APPS_MCP_SERVER_NAME);
-    let host_owned_ody_apps_enabled = host_owned_ody_apps_enabled(&mcp_config, auth.as_ref());
-    if mcp_servers.is_empty() {
-        return Ok(AccessibleConnectorsStatus {
-            connectors: Vec::new(),
-            ody_apps_ready: true,
-        });
-    }
-
-    let auth_status_entries = compute_auth_statuses(
-        mcp_servers.iter(),
-        config.mcp_oauth_credentials_store_mode,
-        config.auth_keyring_backend_kind(),
-        auth.as_ref(),
-    )
-    .await;
-
-    let (tx_event, rx_event) = unbounded();
-    drop(rx_event);
-
-    let cancel_token = CancellationToken::new();
-    let mcp_connection_manager = McpConnectionManager::new(
-        &mcp_servers,
-        config.mcp_oauth_credentials_store_mode,
-        config.auth_keyring_backend_kind(),
-        auth_status_entries,
-        &config.permissions.approval_policy,
-        INITIAL_SUBMIT_ID.to_owned(),
-        tx_event,
-        cancel_token.clone(),
-        PermissionProfile::default(),
-        // Connector discovery is threadless. Use an actually configured env if
-        // one exists, but do not reintroduce the old hidden-local fallback.
-        McpRuntimeContext::new(environment_manager, config.cwd.to_path_buf()),
-        config.ody_home.to_path_buf(),
-        ody_apps_tools_cache_key(auth.as_ref()),
-        host_owned_ody_apps_enabled,
-        mcp_config.prefix_mcp_tool_names,
-        mcp_config.client_elicitation_capability,
-        /*supports_odysseythink_form_elicitation*/ false,
-        ToolPluginProvenance::default(),
-        auth.as_ref(),
-        /*elicitation_reviewer*/ None,
-    )
-    .await;
-
-    let refreshed_tools = if force_refetch {
-        match mcp_connection_manager
-            .hard_refresh_ody_apps_tools_cache()
-            .await
-        {
-            Ok(tools) => Some(tools),
-            Err(err) => {
-                warn!(
-                    "failed to force-refresh tools for MCP server '{ODY_APPS_MCP_SERVER_NAME}', using cached/startup tools: {err:#}"
-                );
-                None
-            }
-        }
-    } else {
-        None
-    };
-    let refreshed_tools_succeeded = refreshed_tools.is_some();
-
-    let mut tools = if let Some(tools) = refreshed_tools {
-        tools
-    } else {
-        mcp_connection_manager.list_all_tools().await
-    };
-    let mut should_reload_tools = false;
-    let ody_apps_ready = if refreshed_tools_succeeded {
-        true
-    } else if let Some(cfg) = mcp_servers.get(ODY_APPS_MCP_SERVER_NAME) {
-        let immediate_ready = mcp_connection_manager
-            .wait_for_server_ready(ODY_APPS_MCP_SERVER_NAME, Duration::ZERO)
-            .await;
-        if immediate_ready {
-            true
-        } else if tools.is_empty() {
-            let timeout = cfg
-                .configured_config()
-                .and_then(|config| config.startup_timeout_sec)
-                .unwrap_or(CONNECTORS_READY_TIMEOUT_ON_EMPTY_TOOLS);
-            let ready = mcp_connection_manager
-                .wait_for_server_ready(ODY_APPS_MCP_SERVER_NAME, timeout)
-                .await;
-            should_reload_tools = ready;
-            ready
-        } else {
-            false
-        }
-    } else {
-        false
-    };
-    if should_reload_tools {
-        tools = mcp_connection_manager.list_all_tools().await;
-    }
-    if ody_apps_ready {
-        cancel_token.cancel();
-    }
-
-    let accessible_connectors = accessible_connectors_for_app_list_from_mcp_tools(&tools);
-    if ody_apps_ready || !accessible_connectors.is_empty() {
-        write_cached_accessible_connectors(cache_key, &accessible_connectors);
-    }
-    let accessible_connectors =
-        with_app_plugin_sources(accessible_connectors, &tool_plugin_provenance);
-    mcp_connection_manager.shutdown().await;
+    // ChatGPT-backed connectors require Ody backend auth, which has been removed.
+    let _ = (config, environment_manager, mcp_manager);
     Ok(AccessibleConnectorsStatus {
-        connectors: accessible_connectors,
-        ody_apps_ready,
+        connectors: Vec::new(),
+        ody_apps_ready: true,
     })
 }
 
 fn accessible_connectors_cache_key(
     _config: &Config,
-    auth: Option<&OdyAuth>,
+    _auth: Option<&OdyAuth>,
 ) -> AccessibleConnectorsCacheKey {
-    let account_id = auth.and_then(OdyAuth::get_account_id);
-    let chatgpt_user_id = auth.and_then(OdyAuth::get_chatgpt_user_id);
-    let is_workspace_account = auth.is_some_and(OdyAuth::is_workspace_account);
+    // ChatGPT-backed connector metadata is no longer available.
     AccessibleConnectorsCacheKey {
-        account_id,
-        chatgpt_user_id,
-        is_workspace_account,
+        account_id: None,
+        chatgpt_user_id: None,
+        is_workspace_account: false,
     }
 }
 
@@ -429,45 +287,12 @@ fn tool_suggest_connector_ids(
 
 #[instrument(level = "trace", skip_all)]
 async fn cached_directory_connectors_for_tool_suggest_with_auth(
-    config: &Config,
-    auth: Option<&OdyAuth>,
+    _config: &Config,
+    _auth: Option<&OdyAuth>,
 ) -> Vec<AppInfo> {
-    if !config.features.enabled(Feature::Apps) {
-        return Vec::new();
-    }
-
-    let loaded_auth;
-    let auth = if let Some(auth) = auth {
-        Some(auth)
-    } else {
-        let auth_manager =
-            AuthManager::shared_from_config(config, /*enable_ody_api_key_env*/ false).await;
-        loaded_auth = auth_manager.auth().await;
-        loaded_auth.as_ref()
-    };
-    let Some(auth) = auth.filter(|auth| auth.uses_ody_backend()) else {
-        return Vec::new();
-    };
-
-    let account_id = match auth.get_account_id() {
-        Some(account_id) if !account_id.is_empty() => account_id,
-        _ => return Vec::new(),
-    };
-    let is_workspace_account = auth.is_workspace_account();
-    let cache_context = ConnectorDirectoryCacheContext::new(
-        config.ody_home.to_path_buf(),
-        ConnectorDirectoryCacheKey::new(
-            // See note in `accessible_connectors_cache_key`: this remote-catalog config field
-            // has been removed and this path is unreachable now that `uses_ody_backend()` is
-            // always false.
-            String::new(),
-            Some(account_id),
-            auth.get_chatgpt_user_id(),
-            is_workspace_account,
-        ),
-    );
-
-    ody_connectors::cached_directory_connectors(&cache_context).unwrap_or_default()
+    // ChatGPT-backed directory connectors require Ody backend auth, which has
+    // been removed.
+    Vec::new()
 }
 
 pub(crate) fn accessible_connectors_from_mcp_tools(mcp_tools: &[ToolInfo]) -> Vec<AppInfo> {

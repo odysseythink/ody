@@ -1171,12 +1171,6 @@ pub async fn run_main(
             auth_credentials_store_mode: config.cli_auth_credentials_store_mode,
             keyring_backend_kind: config.auth_keyring_backend_kind(),
             forced_login_method: config.forced_login_method,
-            // `AuthConfig::forced_chatgpt_workspace_id`/`chatgpt_base_url` are unread by
-            // `enforce_login_restrictions` now that ChatGPT OAuth login and the remote hosted
-            // plugin/Apps catalog have been removed; the corresponding `Config` fields these
-            // used to be sourced from are gone too.
-            forced_chatgpt_workspace_id: None,
-            chatgpt_base_url: None,
             auth_route_config,
         })
         .await

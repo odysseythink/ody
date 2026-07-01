@@ -908,7 +908,7 @@ impl PluginRequestProcessor {
         let apps_needing_auth = self
             .plugin_apps_needing_auth_for_install(
                 &config,
-                auth.as_ref().is_some_and(OdyAuth::is_chatgpt_auth),
+                false,
                 &result.plugin_id.as_key(),
                 &plugin_apps,
             )

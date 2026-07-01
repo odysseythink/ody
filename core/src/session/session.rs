@@ -753,8 +753,9 @@ impl Session {
 
             let auth = auth.as_ref();
             let auth_mode = auth.map(OdyAuth::auth_mode).map(TelemetryAuthMode::from);
-            let account_id = auth.and_then(OdyAuth::get_account_id);
-            let account_email = auth.and_then(OdyAuth::get_account_email);
+            // Ody backend auth metadata (account id/email) is no longer available.
+            let account_id: Option<String> = None;
+            let account_email: Option<String> = None;
             let originator = originator().value;
             let terminal_type = user_agent();
             let session_model = session_configuration.collaboration_mode.model().to_string();
@@ -1135,9 +1136,8 @@ impl Session {
                 sess.send_event_raw(event).await;
             }
 
-            let host_owned_ody_apps_enabled = config
-                .features
-                .apps_enabled_for_auth(auth.as_ref().is_some_and(|auth| auth.uses_ody_backend()));
+            // Host-owned Ody Apps required Ody backend auth, which has been removed.
+            let host_owned_ody_apps_enabled = false;
             let client_elicitation_capability = if config.features.enabled(Feature::AuthElicitation) {
                 ElicitationCapability {
                     form: Some(FormElicitationCapability::default()),

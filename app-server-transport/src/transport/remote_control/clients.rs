@@ -1,3 +1,4 @@
+use super::auth::RemoteControlAuthRecovery;
 use super::auth::RemoteControlConnectionAuth;
 use super::auth::load_remote_control_auth;
 use super::auth::recover_remote_control_auth;
@@ -169,7 +170,7 @@ async fn send_client_management_request(
     request: ClientManagementRequest<'_>,
     action: &str,
 ) -> io::Result<ClientManagementResponse> {
-    let mut auth_recovery = auth_manager.unauthorized_recovery();
+    let mut auth_recovery = RemoteControlAuthRecovery;
     let mut auth_change_rx = auth_manager.auth_change_receiver();
     let auth = load_remote_control_auth(auth_manager).await?;
     let response = send_client_management_request_once(&auth, &request, action).await?;

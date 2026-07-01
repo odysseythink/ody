@@ -162,7 +162,7 @@ impl AccountRequestProcessor {
     }
 
     pub(crate) fn clear_external_auth(&self) {
-        self.auth_manager.clear_external_auth();
+        // External ChatGPT auth is no longer supported; nothing to clear.
         self.thread_manager
             .plugins_manager()
             .set_auth_mode(self.auth_manager.get_api_auth_mode());
@@ -172,7 +172,7 @@ impl AccountRequestProcessor {
         let auth = self.auth_manager.auth_cached();
         AccountUpdatedNotification {
             auth_mode: auth.as_ref().map(OdyAuth::api_auth_mode),
-            plan_type: auth.as_ref().and_then(OdyAuth::account_plan_type),
+            plan_type: None,
         }
     }
 
@@ -335,7 +335,7 @@ impl AccountRequestProcessor {
             }
         }
 
-        match self.auth_manager.logout_with_revoke().await {
+        match self.auth_manager.logout().await {
             Ok(_) => {}
             Err(err) => {
                 return Err(internal_error(format!("logout failed: {err}")));
@@ -380,18 +380,8 @@ impl AccountRequestProcessor {
         Ok(())
     }
 
-    async fn refresh_token_if_requested(&self, do_refresh: bool) -> RefreshTokenRequestOutcome {
-        if self.auth_manager.is_external_chatgpt_auth_active() {
-            return RefreshTokenRequestOutcome::NotAttemptedOrSucceeded;
-        }
-        if do_refresh && let Err(err) = self.auth_manager.refresh_token().await {
-            let failed_reason = err.failed_reason();
-            if failed_reason.is_none() {
-                tracing::warn!("failed to refresh token while getting account: {err}");
-                return RefreshTokenRequestOutcome::FailedTransiently;
-            }
-            return RefreshTokenRequestOutcome::FailedPermanently;
-        }
+    async fn refresh_token_if_requested(&self, _do_refresh: bool) -> RefreshTokenRequestOutcome {
+        // Only API-key auth is supported; there is no refreshable token.
         RefreshTokenRequestOutcome::NotAttemptedOrSucceeded
     }
 
@@ -423,8 +413,7 @@ impl AccountRequestProcessor {
             };
             match auth {
                 Some(auth) => {
-                    let permanent_refresh_failure =
-                        self.auth_manager.refresh_failure_for_auth(&auth).is_some();
+                    let permanent_refresh_failure = false;
                     let auth_mode = auth.api_auth_mode();
                     let (reported_auth_method, token_opt) = if include_token
                         && permanent_refresh_failure

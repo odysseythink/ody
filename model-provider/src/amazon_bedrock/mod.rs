@@ -11,7 +11,6 @@ use ody_api::Provider;
 use ody_api::SharedAuthProvider;
 use ody_login::AuthManager;
 use ody_login::OdyAuth;
-use ody_login::auth::BedrockApiKeyAuth;
 use ody_model_provider_info::AMAZON_BEDROCK_GPT_5_4_MODEL_ID;
 use ody_model_provider_info::ModelProviderAwsAuthInfo;
 use ody_model_provider_info::ModelProviderInfo;
@@ -38,13 +37,12 @@ use mantle::runtime_base_url;
 pub(crate) struct AmazonBedrockModelProvider {
     pub(crate) info: ModelProviderInfo,
     pub(crate) aws: ModelProviderAwsAuthInfo,
-    auth_manager: Option<Arc<AuthManager>>,
 }
 
 impl AmazonBedrockModelProvider {
     pub(crate) fn new(
         provider_info: ModelProviderInfo,
-        auth_manager: Option<Arc<AuthManager>>,
+        _auth_manager: Option<Arc<AuthManager>>,
     ) -> Self {
         let aws = provider_info
             .aws
@@ -56,42 +54,28 @@ impl AmazonBedrockModelProvider {
         Self {
             info: provider_info,
             aws,
-            auth_manager,
         }
     }
 
-    fn managed_auth(&self) -> Option<BedrockApiKeyAuth> {
-        self.auth_manager
-            .as_ref()
-            .and_then(|auth_manager| auth_manager.auth_cached())
-            .and_then(|auth| match auth {
-                OdyAuth::BedrockApiKey(auth) => Some(auth),
-                OdyAuth::ApiKey(_) => None,
-            })
-    }
-
     async fn auth(&self) -> Option<OdyAuth> {
-        self.managed_auth().map(OdyAuth::BedrockApiKey)
+        None
     }
 
     async fn api_provider(&self) -> Result<Provider> {
-        let managed_auth = self.managed_auth();
         let mut api_provider_info = self.info.clone();
         api_provider_info.base_url =
-            Some(runtime_base_url(managed_auth.as_ref(), &self.aws).await?);
+            Some(runtime_base_url(&self.aws).await?);
         api_provider_info.to_api_provider(/*auth_mode*/ None)
     }
 
     async fn runtime_base_url(&self) -> Result<Option<String>> {
-        let managed_auth = self.managed_auth();
         Ok(Some(
-            runtime_base_url(managed_auth.as_ref(), &self.aws).await?,
+            runtime_base_url(&self.aws).await?,
         ))
     }
 
     async fn api_auth(&self) -> Result<SharedAuthProvider> {
-        let managed_auth = self.managed_auth();
-        resolve_provider_auth(managed_auth.as_ref(), &self.aws).await
+        resolve_provider_auth(&self.aws).await
     }
 }
 
@@ -121,8 +105,7 @@ impl ModelProvider for AmazonBedrockModelProvider {
     }
 
     fn auth_manager(&self) -> Option<Arc<AuthManager>> {
-        self.managed_auth()
-            .and_then(|_| self.auth_manager.as_ref().cloned())
+        None
     }
 
     fn auth(&self) -> ModelProviderFuture<'_, Option<OdyAuth>> {
@@ -130,13 +113,10 @@ impl ModelProvider for AmazonBedrockModelProvider {
     }
 
     fn account_state(&self) -> ProviderAccountResult {
-        let credential_source = if self.managed_auth().is_some() {
-            AmazonBedrockCredentialSource::OdyManaged
-        } else {
-            AmazonBedrockCredentialSource::AwsManaged
-        };
         Ok(ProviderAccountState {
-            account: Some(ProviderAccount::AmazonBedrock { credential_source }),
+            account: Some(ProviderAccount::AmazonBedrock {
+                credential_source: AmazonBedrockCredentialSource::AwsManaged,
+            }),
             requires_odysseythink_auth: false,
         })
     }
@@ -175,7 +155,6 @@ mod error_tests;
 
 #[cfg(test)]
 mod tests {
-    use http::HeaderValue;
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -197,59 +176,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn managed_auth_takes_precedence_over_aws_auth() {
-        let managed_auth = BedrockApiKeyAuth {
-            api_key: "managed-bedrock-api-key".to_string(),
-            region: "us-east-1".to_string(),
-        };
-        let auth_manager =
-            AuthManager::from_auth_for_testing(OdyAuth::BedrockApiKey(managed_auth.clone()));
-        let provider = AmazonBedrockModelProvider::new(
-            ModelProviderInfo::create_amazon_bedrock_provider(Some(ModelProviderAwsAuthInfo {
-                profile: Some("aws-profile-that-should-not-be-loaded".to_string()),
-                region: Some("us-west-2".to_string()),
-            })),
-            Some(auth_manager.clone()),
-        );
-
-        assert!(Arc::ptr_eq(
-            &provider
-                .auth_manager()
-                .expect("managed Bedrock auth manager should be exposed"),
-            &auth_manager,
-        ));
-        assert_eq!(
-            provider.auth().await,
-            Some(OdyAuth::BedrockApiKey(managed_auth))
-        );
-        assert_eq!(
-            provider.account_state(),
-            Ok(ProviderAccountState {
-                account: Some(ProviderAccount::AmazonBedrock {
-                    credential_source: AmazonBedrockCredentialSource::OdyManaged,
-                }),
-                requires_odysseythink_auth: false,
-            })
-        );
-        assert_eq!(
-            provider
-                .runtime_base_url()
-                .await
-                .expect("managed Bedrock region should resolve"),
-            Some("https://bedrock-mantle.us-east-1.api.aws/odysseythink/v1".to_string())
-        );
-        assert_eq!(
-            provider
-                .api_auth()
-                .await
-                .expect("managed Bedrock auth should resolve")
-                .to_auth_headers()
-                .get(http::header::AUTHORIZATION),
-            Some(&HeaderValue::from_static("Bearer managed-bedrock-api-key"))
-        );
-    }
-
-    #[tokio::test]
     async fn odysseythink_auth_is_not_exposed_to_bedrock() {
         let provider = AmazonBedrockModelProvider::new(
             ModelProviderInfo::create_amazon_bedrock_provider(/*aws*/ None),
@@ -261,13 +187,13 @@ mod tests {
         assert!(provider.auth_manager().is_none());
         assert_eq!(provider.auth().await, None);
         assert_eq!(
-            provider.account_state(),
-            Ok(ProviderAccountState {
+            provider.account_state().unwrap(),
+            ProviderAccountState {
                 account: Some(ProviderAccount::AmazonBedrock {
                     credential_source: AmazonBedrockCredentialSource::AwsManaged,
                 }),
                 requires_odysseythink_auth: false,
-            })
+            }
         );
     }
 

@@ -7,6 +7,7 @@ mod protocol;
 mod segment;
 mod websocket;
 
+use self::auth::RemoteControlAuthRecovery;
 use self::auth::load_remote_control_auth;
 use self::auth::recover_remote_control_auth;
 use self::desired_state::RemoteControlDesiredState;
@@ -783,7 +784,7 @@ async fn enroll_pairing_server(
     {
         Ok(enrollment) => return Ok(enrollment),
         Err(err) if err.kind() == io::ErrorKind::PermissionDenied => {
-            let mut auth_recovery = auth_manager.unauthorized_recovery();
+            let mut auth_recovery = RemoteControlAuthRecovery;
             let mut auth_change_rx = auth_manager.auth_change_receiver();
             if !recover_remote_control_auth(&mut auth_recovery, &mut auth_change_rx).await {
                 return Err(err);
@@ -829,7 +830,7 @@ async fn refresh_pairing_enrollment(
         if err.kind() != io::ErrorKind::PermissionDenied {
             return Err(err);
         }
-        let mut auth_recovery = auth_manager.unauthorized_recovery();
+        let mut auth_recovery = RemoteControlAuthRecovery;
         let mut auth_change_rx = auth_manager.auth_change_receiver();
         if !recover_remote_control_auth(&mut auth_recovery, &mut auth_change_rx).await {
             return Err(err);

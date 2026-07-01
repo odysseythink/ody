@@ -11,7 +11,7 @@ use ody_app_server_protocol::AuthMode;
 use ody_core::config::Config;
 use ody_login::OdyAuth;
 use ody_login::login_with_api_key;
-use ody_login::logout_with_revoke;
+use ody_login::logout;
 use ody_protocol::config_types::ForcedLoginMethod;
 use ody_utils_cli::CliConfigOverrides;
 use std::fs::OpenOptions;
@@ -225,9 +225,6 @@ pub async fn run_login_status(cli_config_overrides: CliConfigOverrides) -> ! {
     match OdyAuth::from_auth_storage(
         &config.ody_home,
         config.cli_auth_credentials_store_mode,
-        // This parameter is unused by `from_auth_storage` (ChatGPT OAuth login has been
-        // removed), and the `Config` field it used to be sourced from is gone too.
-        None,
         config.auth_keyring_backend_kind(),
         auth_route_config.as_ref(),
     )
@@ -262,15 +259,12 @@ pub async fn run_login_status(cli_config_overrides: CliConfigOverrides) -> ! {
 
 pub async fn run_logout(cli_config_overrides: CliConfigOverrides) -> ! {
     let config = load_config_or_exit(cli_config_overrides).await;
-    let auth_route_config = config.auth_route_config();
 
-    match logout_with_revoke(
+    match logout(
         &config.ody_home,
         config.cli_auth_credentials_store_mode,
         config.auth_keyring_backend_kind(),
-        auth_route_config.as_ref(),
     )
-    .await
     {
         Ok(true) => {
             eprintln!("Successfully logged out");

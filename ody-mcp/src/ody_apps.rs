@@ -28,11 +28,13 @@ pub struct OdyAppsToolsCacheKey {
     pub(crate) is_workspace_account: bool,
 }
 
-pub fn ody_apps_tools_cache_key(auth: Option<&OdyAuth>) -> OdyAppsToolsCacheKey {
+pub fn ody_apps_tools_cache_key(_auth: Option<&OdyAuth>) -> OdyAppsToolsCacheKey {
+    // ChatGPT-backed Ody Apps metadata is no longer available; the cache key
+    // always reflects an unpersonalized, non-workspace state.
     OdyAppsToolsCacheKey {
-        account_id: auth.and_then(OdyAuth::get_account_id),
-        chatgpt_user_id: auth.and_then(OdyAuth::get_chatgpt_user_id),
-        is_workspace_account: auth.is_some_and(OdyAuth::is_workspace_account),
+        account_id: None,
+        chatgpt_user_id: None,
+        is_workspace_account: false,
     }
 }
 

@@ -85,53 +85,10 @@ pub async fn ody_plugins_enabled_for_workspace(
     auth: Option<&OdyAuth>,
     cache: Option<&WorkspaceSettingsCache>,
 ) -> anyhow::Result<bool> {
-    let Some(auth) = auth else {
-        return Ok(true);
-    };
-    if !auth.is_chatgpt_auth() {
-        return Ok(true);
-    }
-
-    if !auth.is_workspace_account() {
-        return Ok(true);
-    }
-
-    let Some(account_id) = auth.get_account_id().filter(|id| !id.is_empty()) else {
-        return Ok(true);
-    };
-
-    let cache_key = WorkspaceSettingsCacheKey {
-        // The remote hosted plugin/Apps catalog config field this used to be sourced from has
-        // been removed; this path already requires ChatGPT workspace auth above, which is
-        // unreachable now, so this is kept only so the crate still compiles.
-        chatgpt_base_url: String::new(),
-        account_id: account_id.clone(),
-    };
-    if let Some(cache) = cache
-        && let Some(enabled) = cache.get_ody_plugins_enabled(&cache_key)
-    {
-        return Ok(enabled);
-    }
-
-    let encoded_account_id = encode_path_segment(&account_id);
-    let settings: WorkspaceSettingsResponse = chatgpt_get_request_with_timeout(
-        config,
-        format!("/accounts/{encoded_account_id}/settings"),
-        Some(WORKSPACE_SETTINGS_TIMEOUT),
-    )
-    .await?;
-
-    let ody_plugins_enabled = settings
-        .beta_settings
-        .get(ODY_PLUGINS_BETA_SETTING)
-        .copied()
-        .unwrap_or(true);
-
-    if let Some(cache) = cache {
-        cache.set_ody_plugins_enabled(cache_key, ody_plugins_enabled);
-    }
-
-    Ok(ody_plugins_enabled)
+    // Workspace settings were only consulted for ChatGPT workspace auth, which
+    // has been removed.
+    let _ = (config, auth, cache);
+    Ok(true)
 }
 
 fn encode_path_segment(value: &str) -> String {

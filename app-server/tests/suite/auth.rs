@@ -16,7 +16,6 @@ use ody_app_server_protocol::JSONRPCResponse;
 use ody_app_server_protocol::LoginAccountResponse;
 use ody_app_server_protocol::RequestId;
 use ody_config::types::AuthCredentialsStoreMode;
-use ody_login::REFRESH_TOKEN_URL_OVERRIDE_ENV_VAR;
 
 use pretty_assertions::assert_eq;
 use std::path::Path;
@@ -374,10 +373,7 @@ async fn get_auth_status_omits_token_after_permanent_refresh_failure() -> Result
         ody_home.path(),
         &[
             ("OPENAI_API_KEY", None),
-            (
-                REFRESH_TOKEN_URL_OVERRIDE_ENV_VAR,
-                Some(refresh_url.as_str()),
-            ),
+
         ],
     )
     .await?;
@@ -435,7 +431,7 @@ async fn get_auth_status_omits_token_after_proactive_refresh_failure() -> Result
             .account_id("acct_123")
             .email("user@example.com")
             .plan_type("pro")
-            .last_refresh(Some(Utc::now() - Duration::days(9))),
+            ,
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -456,10 +452,7 @@ async fn get_auth_status_omits_token_after_proactive_refresh_failure() -> Result
         ody_home.path(),
         &[
             ("OPENAI_API_KEY", None),
-            (
-                REFRESH_TOKEN_URL_OVERRIDE_ENV_VAR,
-                Some(refresh_url.as_str()),
-            ),
+
         ],
     )
     .await?;
@@ -502,7 +495,7 @@ async fn get_auth_status_returns_token_after_proactive_refresh_recovery() -> Res
             .account_id("acct_123")
             .email("user@example.com")
             .plan_type("pro")
-            .last_refresh(Some(Utc::now() - Duration::days(9))),
+            ,
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -523,10 +516,7 @@ async fn get_auth_status_returns_token_after_proactive_refresh_recovery() -> Res
         ody_home.path(),
         &[
             ("OPENAI_API_KEY", None),
-            (
-                REFRESH_TOKEN_URL_OVERRIDE_ENV_VAR,
-                Some(refresh_url.as_str()),
-            ),
+
         ],
     )
     .await?;
@@ -561,7 +551,7 @@ async fn get_auth_status_returns_token_after_proactive_refresh_recovery() -> Res
             .account_id("acct_123")
             .email("user@example.com")
             .plan_type("pro")
-            .last_refresh(Some(Utc::now())),
+            ,
         AuthCredentialsStoreMode::File,
     )?;
 

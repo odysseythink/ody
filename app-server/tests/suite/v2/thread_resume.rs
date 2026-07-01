@@ -54,7 +54,6 @@ use ody_app_server_protocol::TurnStatus;
 use ody_app_server_protocol::UserInput;
 use ody_config::types::AuthCredentialsStoreMode;
 use ody_core::ARCHIVED_SESSIONS_SUBDIR;
-use ody_login::REFRESH_TOKEN_URL_OVERRIDE_ENV_VAR;
 use ody_protocol::ThreadId;
 use ody_protocol::config_types::Personality;
 use ody_protocol::mcp::CallToolResult;
@@ -3455,15 +3454,10 @@ async fn thread_resume_surfaces_cloud_config_bundle_load_errors() -> Result<()> 
         Some("mock_provider"),
         /*git_info*/ None,
     )?;
-    let refresh_token_url = format!("{}/oauth/token", server.uri());
     let mut mcp = TestAppServer::new_with_env(
         ody_home.path(),
         &[
             ("OPENAI_API_KEY", None),
-            (
-                REFRESH_TOKEN_URL_OVERRIDE_ENV_VAR,
-                Some(refresh_token_url.as_str()),
-            ),
         ],
     )
     .await?;

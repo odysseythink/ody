@@ -20,6 +20,7 @@ use ts_rs::TS;
 #[serde(rename_all = "lowercase")]
 pub enum AuthMode {
     /// API key provided by the caller and stored by Ody.
+    #[serde(alias = "chatgpt")]
     ApiKey,
     /// No authentication.
     Unauthenticated,

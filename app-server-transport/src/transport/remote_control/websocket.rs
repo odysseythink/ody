@@ -17,6 +17,7 @@ use super::segment::ClientSegmentReassembler;
 use super::segment::REMOTE_CONTROL_SEGMENT_MAX_BYTES;
 use super::segment::split_server_envelope_for_transport;
 use crate::transport::TransportEvent;
+use crate::transport::remote_control::auth::RemoteControlAuthRecovery;
 use crate::transport::remote_control::auth::RemoteControlConnectionAuth;
 use crate::transport::remote_control::auth::load_remote_control_auth;
 use crate::transport::remote_control::auth::recover_remote_control_auth;
@@ -35,7 +36,6 @@ use ody_app_server_protocol::RemoteControlConnectionStatus;
 use ody_app_server_protocol::RemoteControlStatusChangedNotification;
 use ody_core::util::backoff;
 use ody_login::AuthManager;
-use ody_login::UnauthorizedRecovery;
 use ody_state::StateRuntime;
 use ody_utils_rustls_provider::ensure_rustls_crypto_provider;
 use futures::SinkExt;
@@ -261,7 +261,7 @@ pub(crate) struct RemoteControlWebsocket {
     status_publisher: RemoteControlStatusPublisher,
     shutdown_token: CancellationToken,
     reconnect_attempt: u64,
-    auth_recovery: UnauthorizedRecovery,
+    auth_recovery: RemoteControlAuthRecovery,
     auth_change_rx: watch::Receiver<u64>,
     current_enrollment: CurrentRemoteControlEnrollment,
     pairing_persistence_key: RemoteControlPairingPersistenceKey,
@@ -283,7 +283,7 @@ pub(crate) struct RemoteControlWebsocketConfig {
 
 pub(super) struct RemoteControlAuthContext<'a> {
     auth_manager: &'a Arc<AuthManager>,
-    auth_recovery: &'a mut UnauthorizedRecovery,
+    auth_recovery: &'a mut RemoteControlAuthRecovery,
     auth_change_rx: &'a mut watch::Receiver<u64>,
 }
 
@@ -414,7 +414,7 @@ impl RemoteControlWebsocket {
             &shutdown_token,
         );
         let (outbound_buffer, used_rx) = BoundedOutboundBuffer::new();
-        let auth_recovery = auth_manager.unauthorized_recovery();
+        let auth_recovery = RemoteControlAuthRecovery;
         let auth_change_rx = auth_manager.auth_change_receiver();
 
         let desired_state_rx = desired_state_tx.subscribe();
@@ -754,7 +754,7 @@ impl RemoteControlWebsocket {
                         return ConnectOutcome::Disabled;
                     }
                     self.reconnect_attempt = 0;
-                    self.auth_recovery = self.auth_manager.unauthorized_recovery();
+                    self.auth_recovery = RemoteControlAuthRecovery;
                     self.status_publisher
                         .publish_status(RemoteControlConnectionStatus::Connected);
                     let enrollment = self.current_enrollment.snapshot();
@@ -818,7 +818,7 @@ impl RemoteControlWebsocket {
                             if changed.is_err() {
                                 return ConnectOutcome::Shutdown;
                             }
-                            self.auth_recovery = self.auth_manager.unauthorized_recovery();
+                            self.auth_recovery = RemoteControlAuthRecovery;
                             self.reconnect_attempt = 0;
                             info!("retrying app-server remote control websocket after auth changed");
                         }
@@ -1824,8 +1824,7 @@ mod tests {
     use ody_login::AuthKeyringBackendKind;
     use ody_login::OdyAuth;
     use ody_login::save_auth;
-    use ody_login::token_data::TokenData;
-    use ody_login::token_data::parse_chatgpt_jwt_claims;
+
     use ody_state::StateRuntime;
     use futures::StreamExt;
     use pretty_assertions::assert_eq;
@@ -1998,41 +1997,10 @@ mod tests {
         format!("http://{addr}/backend-api/")
     }
 
-    fn remote_control_auth_dot_json(access_token: &str) -> AuthDotJson {
-        #[derive(serde::Serialize)]
-        struct Header {
-            alg: &'static str,
-            typ: &'static str,
-        }
-
-        let header = Header {
-            alg: "none",
-            typ: "JWT",
-        };
-        let payload = serde_json::json!({
-            "email": "user@example.com",
-            "https://api.odysseythink.com/auth": {
-                "chatgpt_user_id": "user-12345",
-                "user_id": "user-12345",
-                "chatgpt_account_id": "account_id"
-            }
-        });
-        let b64 = |bytes: &[u8]| base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes);
-        let header_b64 = b64(&serde_json::to_vec(&header).expect("header should serialize"));
-        let payload_b64 = b64(&serde_json::to_vec(&payload).expect("payload should serialize"));
-        let fake_jwt = format!("{header_b64}.{payload_b64}.sig");
-
+    fn remote_control_auth_dot_json(_access_token: &str) -> AuthDotJson {
         AuthDotJson {
             auth_mode: Some(AuthMode::ApiKey),
             odysseythink_api_key: None,
-            tokens: Some(TokenData {
-                id_token: parse_chatgpt_jwt_claims(&fake_jwt).expect("fake jwt should parse"),
-                access_token: access_token.to_string(),
-                refresh_token: "refresh-token".to_string(),
-                account_id: Some("account_id".to_string()),
-            }),
-            last_refresh: Some(Utc::now()),
-            bedrock_api_key: None,
         }
     }
 
@@ -2065,7 +2033,7 @@ mod tests {
         let ody_home = TempDir::new().expect("temp dir should create");
         let state_db = remote_control_state_runtime(&ody_home).await;
         let auth_manager = remote_control_auth_manager();
-        let mut auth_recovery = auth_manager.unauthorized_recovery();
+        let mut auth_recovery = RemoteControlAuthRecovery;
         let mut auth_change_rx = auth_manager.auth_change_receiver();
         let current_enrollment = test_current_enrollment(Some(remote_control_enrollment(Some(
             TEST_REMOTE_CONTROL_SERVER_TOKEN,
@@ -2122,7 +2090,7 @@ mod tests {
         let ody_home = TempDir::new().expect("temp dir should create");
         let state_db = remote_control_state_runtime(&ody_home).await;
         let auth_manager = remote_control_auth_manager();
-        let mut auth_recovery = auth_manager.unauthorized_recovery();
+        let mut auth_recovery = RemoteControlAuthRecovery;
         let mut auth_change_rx = auth_manager.auth_change_receiver();
         let current_enrollment = test_current_enrollment(Some(remote_control_enrollment(Some(
             TEST_REMOTE_CONTROL_SERVER_TOKEN,
@@ -2209,13 +2177,11 @@ mod tests {
             ody_home.path().to_path_buf(),
             /*enable_ody_api_key_env*/ false,
             AuthCredentialsStoreMode::File,
-            /*forced_chatgpt_workspace_id*/ None,
-            /*chatgpt_base_url*/ None,
             AuthKeyringBackendKind::default(),
             /*auth_route_config*/ None,
         )
         .await;
-        let mut auth_recovery = auth_manager.unauthorized_recovery();
+        let mut auth_recovery = RemoteControlAuthRecovery;
         let mut auth_change_rx = auth_manager.auth_change_receiver();
         let current_enrollment = test_current_enrollment(/*enrollment*/ None);
         let (status_publisher, status_rx) = remote_control_status_channel();
@@ -2308,13 +2274,11 @@ mod tests {
             ody_home.path().to_path_buf(),
             /*enable_ody_api_key_env*/ false,
             AuthCredentialsStoreMode::File,
-            /*forced_chatgpt_workspace_id*/ None,
-            /*chatgpt_base_url*/ None,
             AuthKeyringBackendKind::default(),
             /*auth_route_config*/ None,
         )
         .await;
-        let mut auth_recovery = auth_manager.unauthorized_recovery();
+        let mut auth_recovery = RemoteControlAuthRecovery;
         let mut auth_change_rx = auth_manager.auth_change_receiver();
         let current_enrollment = test_current_enrollment(Some(remote_control_enrollment(
             /*remote_control_token*/ None,
@@ -2388,7 +2352,7 @@ mod tests {
         let remote_control_target = normalize_remote_control_url("http://127.0.0.1:9/backend-api/")
             .expect("target should parse");
         let auth_manager = remote_control_auth_manager();
-        let mut auth_recovery = auth_manager.unauthorized_recovery();
+        let mut auth_recovery = RemoteControlAuthRecovery;
         let mut auth_change_rx = auth_manager.auth_change_receiver();
         let current_enrollment = test_current_enrollment(Some(remote_control_enrollment(Some(
             TEST_REMOTE_CONTROL_SERVER_TOKEN,
@@ -2432,13 +2396,11 @@ mod tests {
             ody_home.path().to_path_buf(),
             /*enable_ody_api_key_env*/ false,
             AuthCredentialsStoreMode::File,
-            /*forced_chatgpt_workspace_id*/ None,
-            /*chatgpt_base_url*/ None,
             AuthKeyringBackendKind::default(),
             /*auth_route_config*/ None,
         )
         .await;
-        let mut auth_recovery = auth_manager.unauthorized_recovery();
+        let mut auth_recovery = RemoteControlAuthRecovery;
         let mut auth_change_rx = auth_manager.auth_change_receiver();
         let current_enrollment = test_current_enrollment(Some(remote_control_enrollment(Some(
             TEST_REMOTE_CONTROL_SERVER_TOKEN,

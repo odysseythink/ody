@@ -52,28 +52,7 @@ pub struct ProviderAccountState {
     pub requires_odysseythink_auth: bool,
 }
 
-/// Error returned when a provider cannot construct its app-visible account state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ProviderAccountError {
-    UnsupportedBedrockApiKeyAuth,
-}
-
-impl fmt::Display for ProviderAccountError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::UnsupportedBedrockApiKeyAuth => {
-                write!(
-                    f,
-                    "Bedrock API key auth is only supported by the Amazon Bedrock model provider"
-                )
-            }
-        }
-    }
-}
-
-impl std::error::Error for ProviderAccountError {}
-
-pub type ProviderAccountResult = std::result::Result<ProviderAccountState, ProviderAccountError>;
+pub type ProviderAccountResult = ody_protocol::error::Result<ProviderAccountState>;
 
 /// Default model used for automatic approval review when a provider does not
 /// require a backend-specific model ID.
@@ -252,20 +231,8 @@ impl ModelProvider for ConfiguredModelProvider {
         let account = if self.info.requires_odysseythink_auth {
             self.auth_manager
                 .as_ref()
-                .and_then(|auth_manager| {
-                    let auth = auth_manager.auth_cached()?;
-                    if auth_manager.refresh_failure_for_auth(&auth).is_some() {
-                        return None;
-                    }
-                    Some(auth)
-                })
-                .map(|auth| match &auth {
-                    OdyAuth::ApiKey(_) => Ok(ProviderAccount::ApiKey),
-                    OdyAuth::BedrockApiKey(_) => {
-                        Err(ProviderAccountError::UnsupportedBedrockApiKeyAuth)
-                    }
-                })
-                .transpose()?
+                .and_then(|auth_manager| auth_manager.auth_cached())
+                .map(|_| ProviderAccount::ApiKey)
         } else {
             None
         };
@@ -323,34 +290,13 @@ fn provider_id_for_chat_catalog(info: &ModelProviderInfo) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::num::NonZeroU64;
-
-    use ody_login::auth::BedrockApiKeyAuth;
     use ody_model_provider_info::ModelProviderAwsAuthInfo;
     use ody_model_provider_info::WireApi;
     use ody_models_manager::manager::RefreshStrategy;
-    use ody_protocol::config_types::ModelProviderAuthInfo;
     use ody_protocol::odysseythink_models::ModelsResponse;
     use pretty_assertions::assert_eq;
 
     use super::*;
-
-    fn provider_info_with_command_auth() -> ModelProviderInfo {
-        ModelProviderInfo {
-            auth: Some(ModelProviderAuthInfo {
-                command: "print-token".to_string(),
-                args: Vec::new(),
-                timeout_ms: NonZeroU64::new(5_000).expect("timeout should be non-zero"),
-                refresh_interval_ms: 300_000,
-                cwd: std::env::current_dir()
-                    .expect("current dir should be available")
-                    .try_into()
-                    .expect("current dir should be absolute"),
-            }),
-            requires_odysseythink_auth: false,
-            ..ModelProviderInfo::create_odysseythink_provider(/*base_url*/ None)
-        }
-    }
 
     fn test_ody_home() -> std::path::PathBuf {
         std::env::temp_dir().join(format!("ody-model-provider-test-{}", std::process::id()))
@@ -376,13 +322,6 @@ mod tests {
             requires_odysseythink_auth: false,
             supports_websockets: false,
         }
-    }
-
-    fn bedrock_api_key_auth() -> OdyAuth {
-        OdyAuth::BedrockApiKey(BedrockApiKeyAuth {
-            api_key: "bedrock-api-key-test".to_string(),
-            region: "us-east-1".to_string(),
-        })
     }
 
     #[test]
@@ -425,20 +364,6 @@ mod tests {
     }
 
     #[test]
-    fn create_model_provider_builds_command_auth_manager_without_base_manager() {
-        let provider = create_model_provider(
-            provider_info_with_command_auth(),
-            /*auth_manager*/ None,
-        );
-
-        let auth_manager = provider
-            .auth_manager()
-            .expect("command auth provider should have an auth manager");
-
-        assert!(auth_manager.has_external_auth());
-    }
-
-    #[test]
     fn create_model_provider_does_not_use_odysseythink_auth_manager_for_amazon_bedrock_provider() {
         let provider = create_model_provider(
             ModelProviderInfo::create_amazon_bedrock_provider(Some(ModelProviderAwsAuthInfo {
@@ -453,17 +378,6 @@ mod tests {
         assert!(provider.auth_manager().is_none());
     }
 
-    #[tokio::test]
-    async fn create_model_provider_uses_managed_auth_for_amazon_bedrock_provider() {
-        let auth = bedrock_api_key_auth();
-        let provider = create_model_provider(
-            ModelProviderInfo::create_amazon_bedrock_provider(/*aws*/ None),
-            Some(AuthManager::from_auth_for_testing(auth.clone())),
-        );
-
-        assert_eq!(provider.auth().await, Some(auth));
-    }
-
     #[test]
     fn odysseythink_provider_returns_unauthenticated_odysseythink_account_state() {
         let provider = create_model_provider(
@@ -472,11 +386,11 @@ mod tests {
         );
 
         assert_eq!(
-            provider.account_state(),
-            Ok(ProviderAccountState {
+            provider.account_state().unwrap(),
+            ProviderAccountState {
                 account: None,
                 requires_odysseythink_auth: true,
-            })
+            }
         );
     }
 
@@ -490,24 +404,11 @@ mod tests {
         );
 
         assert_eq!(
-            provider.account_state(),
-            Ok(ProviderAccountState {
+            provider.account_state().unwrap(),
+            ProviderAccountState {
                 account: Some(ProviderAccount::ApiKey),
                 requires_odysseythink_auth: true,
-            })
-        );
-    }
-
-    #[test]
-    fn odysseythink_provider_rejects_bedrock_api_key_account_state() {
-        let provider = create_model_provider(
-            ModelProviderInfo::create_odysseythink_provider(/*base_url*/ None),
-            Some(AuthManager::from_auth_for_testing(bedrock_api_key_auth())),
-        );
-
-        assert_eq!(
-            provider.account_state(),
-            Err(ProviderAccountError::UnsupportedBedrockApiKeyAuth)
+            }
         );
     }
 
@@ -525,11 +426,11 @@ mod tests {
         );
 
         assert_eq!(
-            provider.account_state(),
-            Ok(ProviderAccountState {
+            provider.account_state().unwrap(),
+            ProviderAccountState {
                 account: None,
                 requires_odysseythink_auth: false,
-            })
+            }
         );
     }
 
@@ -541,14 +442,14 @@ mod tests {
         );
 
         assert_eq!(
-            provider.account_state(),
-            Ok(ProviderAccountState {
+            provider.account_state().unwrap(),
+            ProviderAccountState {
                 account: Some(ProviderAccount::AmazonBedrock {
                     credential_source:
                         ody_protocol::account::AmazonBedrockCredentialSource::AwsManaged,
                 }),
                 requires_odysseythink_auth: false,
-            })
+            }
         );
     }
 

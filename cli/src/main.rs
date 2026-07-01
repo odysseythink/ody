@@ -1725,7 +1725,8 @@ async fn load_exec_server_remote_auth_provider(
 }
 
 fn is_supported_exec_server_remote_auth(auth: &OdyAuth) -> bool {
-    auth.is_chatgpt_auth() || auth.is_api_key_auth()
+    // Only API-key auth is supported for remote exec-server registration.
+    auth.is_api_key_auth()
 }
 
 fn validate_api_key_remote_host(base_url: &str) -> anyhow::Result<()> {

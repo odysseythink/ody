@@ -5,13 +5,9 @@ use ody_api::SharedAuthProvider;
 use ody_login::AuthManager;
 use ody_login::OdyAuth;
 use ody_model_provider_info::ModelProviderInfo;
-use ody_protocol::error::OdyErr;
 use http::HeaderMap;
 
 use crate::bearer_auth_provider::BearerAuthProvider;
-
-const BEDROCK_API_KEY_UNSUPPORTED_MESSAGE: &str =
-    "Bedrock API key auth is only supported by the Amazon Bedrock model provider";
 
 // Some providers are meant to send no auth headers. Examples include local OSS
 // providers and custom test providers with `requires_odysseythink_auth = false`.
@@ -26,29 +22,22 @@ pub fn unauthenticated_auth_provider() -> SharedAuthProvider {
     Arc::new(UnauthenticatedAuthProvider)
 }
 
-/// Returns the provider-scoped auth manager when this provider uses command-backed auth.
+/// Returns the provider-scoped auth manager when this provider uses custom auth.
 ///
-/// Providers without custom auth continue using the caller-supplied base manager, when present.
+/// External bearer auth has been removed, so custom command-backed auth is no
+/// longer supported through `AuthManager`. Providers continue using the
+/// caller-supplied base manager, when present.
 pub(crate) fn auth_manager_for_provider(
     auth_manager: Option<Arc<AuthManager>>,
-    provider: &ModelProviderInfo,
+    _provider: &ModelProviderInfo,
 ) -> Option<Arc<AuthManager>> {
-    match provider.auth.clone() {
-        Some(config) => Some(AuthManager::external_bearer_only(config)),
-        None => auth_manager,
-    }
+    auth_manager
 }
 
 pub(crate) fn resolve_provider_auth(
     auth: Option<&OdyAuth>,
     provider: &ModelProviderInfo,
 ) -> ody_protocol::error::Result<SharedAuthProvider> {
-    if matches!(auth, Some(OdyAuth::BedrockApiKey(_))) {
-        return Err(OdyErr::UnsupportedOperation(
-            BEDROCK_API_KEY_UNSUPPORTED_MESSAGE.to_string(),
-        ));
-    }
-
     if let Some(auth) = bearer_auth_for_provider(provider)? {
         return Ok(Arc::new(auth));
     }
@@ -76,7 +65,6 @@ fn bearer_auth_for_provider(
 /// Builds request-header auth for a first-party Ody auth snapshot.
 pub fn auth_provider_from_auth(auth: &OdyAuth) -> SharedAuthProvider {
     match auth {
-        OdyAuth::BedrockApiKey(_) => unreachable!("{BEDROCK_API_KEY_UNSUPPORTED_MESSAGE}"),
         OdyAuth::ApiKey(_) => Arc::new(BearerAuthProvider {
             token: auth.get_token().ok(),
         }),
@@ -85,10 +73,9 @@ pub fn auth_provider_from_auth(auth: &OdyAuth) -> SharedAuthProvider {
 
 #[cfg(test)]
 mod tests {
-    use ody_login::auth::BedrockApiKeyAuth;
+    use ody_model_provider_info::ModelProviderInfo;
     use ody_model_provider_info::WireApi;
     use ody_model_provider_info::create_oss_provider_with_base_url;
-    use pretty_assertions::assert_eq;
 
     use super::*;
 
@@ -102,19 +89,14 @@ mod tests {
     }
 
     #[test]
-    fn odysseythink_provider_rejects_bedrock_api_key_auth() {
+    fn api_key_auth_resolves_to_bearer_provider() {
+        let auth = OdyAuth::from_api_key("sk-test");
         let provider = ModelProviderInfo::create_odysseythink_provider(/*base_url*/ None);
-        let auth = OdyAuth::BedrockApiKey(BedrockApiKeyAuth {
-            api_key: "bedrock-api-key-test".to_string(),
-            region: "us-east-1".to_string(),
-        });
-
-        match resolve_provider_auth(Some(&auth), &provider) {
-            Err(OdyErr::UnsupportedOperation(message)) => {
-                assert_eq!(message, BEDROCK_API_KEY_UNSUPPORTED_MESSAGE);
-            }
-            Err(err) => panic!("unexpected auth error: {err:?}"),
-            Ok(_) => panic!("Bedrock API key auth should be rejected"),
-        }
+        let resolved = resolve_provider_auth(Some(&auth), &provider).expect("should resolve");
+        let headers = resolved.to_auth_headers();
+        assert_eq!(
+            headers.get(http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()),
+            Some("Bearer sk-test")
+        );
     }
 }

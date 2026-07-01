@@ -1,8 +1,5 @@
 use ody_core::config::Config;
-use ody_login::AuthManager;
-use ody_login::default_client::create_client;
 
-use anyhow::Context;
 use serde::de::DeserializeOwned;
 use std::time::Duration;
 
@@ -23,54 +20,8 @@ pub(crate) async fn chatgpt_get_request_with_timeout<T: DeserializeOwned>(
     timeout: Option<Duration>,
 ) -> anyhow::Result<T> {
     // The remote hosted plugin/Apps catalog config field this used to be sourced from has been
-    // removed. Every caller of this function requires `uses_ody_backend()` auth below, which
-    // can never be true anymore, so this request path is unreachable in practice; keep the
-    // historical default endpoint here purely so the crate still compiles.
-    let chatgpt_base_url = "https://chatgpt.com/backend-api";
-    let auth_manager =
-        AuthManager::shared_from_config(config, /*enable_ody_api_key_env*/ false).await;
-    let auth = auth_manager
-        .auth()
-        .await
-        .ok_or_else(|| anyhow::anyhow!("ChatGPT auth not available"))?;
-    anyhow::ensure!(
-        auth.uses_ody_backend(),
-        "ChatGPT backend requests require Ody backend auth"
-    );
-    anyhow::ensure!(
-        auth.get_account_id().is_some(),
-        "ChatGPT account ID not available, please re-run `ody login`"
-    );
-
-    // Make direct HTTP request to ChatGPT backend API with the token
-    let client = create_client();
-    let url = format!(
-        "{}/{}",
-        chatgpt_base_url.trim_end_matches('/'),
-        path.trim_start_matches('/')
-    );
-
-    let mut request = client
-        .get(&url)
-        .headers(ody_model_provider::auth_provider_from_auth(&auth).to_auth_headers())
-        .header(OAI_PRODUCT_SKU_HEADER, ODY_PRODUCT_SKU)
-        .header("Content-Type", "application/json");
-
-    if let Some(timeout) = timeout {
-        request = request.timeout(timeout);
-    }
-
-    let response = request.send().await.context("Failed to send request")?;
-
-    if response.status().is_success() {
-        let result: T = response
-            .json()
-            .await
-            .context("Failed to parse JSON response")?;
-        Ok(result)
-    } else {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        anyhow::bail!("Request failed with status {status}: {body}")
-    }
+    // removed. Every caller of this function requires `uses_ody_backend()` auth, which can never
+    // be true anymore, so this request path is unreachable.
+    let _ = (config, path, timeout);
+    anyhow::bail!("ChatGPT backend requests require Ody backend auth")
 }

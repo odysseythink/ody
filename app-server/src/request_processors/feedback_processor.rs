@@ -70,20 +70,7 @@ impl FeedbackRequestProcessor {
             None => None,
         };
 
-        if let Some(chatgpt_user_id) = self
-            .auth_manager
-            .auth_cached()
-            .and_then(|auth| auth.get_chatgpt_user_id())
-        {
-            tracing::info!(target: "feedback_tags", chatgpt_user_id);
-        }
-        if let Some(account_id) = self
-            .auth_manager
-            .auth_cached()
-            .and_then(|auth| auth.get_account_id())
-        {
-            tracing::info!(target: "feedback_tags", account_id);
-        }
+        // ChatGPT account metadata is no longer available; no-op for feedback tags.
         let snapshot = self.feedback.snapshot(conversation_id);
         let thread_id = snapshot.thread_id.clone();
         let (feedback_thread_ids, sqlite_feedback_logs, state_db_ctx) = if include_logs {

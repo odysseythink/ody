@@ -111,74 +111,12 @@ async fn build_uploaded_argument_value(
         }
         None => format!("failed to upload `{file_path}` for `{field_name}`: {error}"),
     };
-    let Some(auth) = auth else {
-        return Err("ChatGPT auth is required to upload files for Ody Apps tools".to_string());
-    };
-    if !auth.uses_ody_backend() {
-        return Err("ChatGPT auth is required to upload files for Ody Apps tools".to_string());
-    }
-    let Some(turn_environment) = turn_context.environments.primary() else {
-        return Err(contextualize_error(
-            "no primary turn environment is available".to_string(),
-        ));
-    };
-    // TODO(anp): Resolve app tool file arguments using the selected environment's native path
-    // convention so uploads can read relative paths from foreign environments.
-    let native_environment_cwd = turn_environment
-        .cwd()
-        .to_abs_path()
-        .map_err(|error| contextualize_error(error.to_string()))?;
-    let resolved_path = native_environment_cwd.join(file_path);
-    let path_uri = PathUri::from_abs_path(&resolved_path);
-    let fs = turn_environment.environment.get_filesystem();
-    let metadata = fs
-        .get_metadata(&path_uri, /*sandbox*/ None)
-        .await
-        .map_err(|error| contextualize_error(error.to_string()))?;
-    if !metadata.is_file {
-        return Err(contextualize_error(format!(
-            "path `{}` is not a file",
-            resolved_path.display()
-        )));
-    }
-    if metadata.size > OPENAI_FILE_UPLOAD_LIMIT_BYTES {
-        return Err(contextualize_error(format!(
-            "file `{}` is too large: {} bytes exceeds the limit of {} bytes",
-            resolved_path.display(),
-            metadata.size,
-            OPENAI_FILE_UPLOAD_LIMIT_BYTES,
-        )));
-    }
-    let contents = fs
-        .read_file_stream(&path_uri, /*sandbox*/ None)
-        .await
-        .map_err(|error| contextualize_error(error.to_string()))?;
-    let file_name = resolved_path
-        .file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or("file")
-        .to_string();
-    let upload_auth = ody_model_provider::auth_provider_from_auth(auth);
-    let uploaded = upload_odysseythink_file(
-        // The remote hosted plugin/Apps catalog config field this used to be sourced from has
-        // been removed; this file-upload endpoint is unrelated to that catalog, so keep using
-        // its historical default endpoint here.
-        "https://chatgpt.com/backend-api",
-        upload_auth.as_ref(),
-        file_name,
-        metadata.size,
-        contents,
-    )
-    .await
-    .map_err(|error| contextualize_error(error.to_string()))?;
-    Ok(serde_json::json!({
-        "download_url": uploaded.download_url,
-        "file_id": uploaded.file_id,
-        "mime_type": uploaded.mime_type,
-        "file_name": uploaded.file_name,
-        "uri": uploaded.uri,
-        "file_size_bytes": uploaded.file_size_bytes,
-    }))
+    // ChatGPT auth is no longer supported; file uploads for Ody Apps tools are
+    // unavailable.
+    let _ = auth;
+    Err(contextualize_error(
+        "ChatGPT auth is required to upload files for Ody Apps tools".to_string(),
+    ))
 }
 
 #[cfg(test)]
