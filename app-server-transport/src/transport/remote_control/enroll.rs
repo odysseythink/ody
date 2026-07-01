@@ -31,7 +31,7 @@ const REMOTE_CONTROL_SERVER_TOKEN_REFRESH_SKEW_SECS: i64 = 30;
 const REQUEST_ID_HEADER: &str = "x-request-id";
 const OAI_REQUEST_ID_HEADER: &str = "x-oai-request-id";
 const CF_RAY_HEADER: &str = "cf-ray";
-pub(super) const REMOTE_CONTROL_ACCOUNT_ID_HEADER: &str = "chatgpt-account-id";
+pub(super) const REMOTE_CONTROL_ACCOUNT_ID_HEADER: &str = "x-ody-account-id";
 pub(super) const REMOTE_CONTROL_INSTALLATION_ID_HEADER: &str = "x-ody-installation-id";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -620,10 +620,10 @@ mod tests {
     async fn persisted_remote_control_enrollment_round_trips_by_target_and_account() {
         let ody_home = TempDir::new().expect("temp dir should create");
         let state_db = remote_control_state_runtime(&ody_home).await;
-        let first_target = normalize_remote_control_url("https://chatgpt.com/remote/control")
+        let first_target = normalize_remote_control_url("https://localhost/remote/control")
             .expect("first target should parse");
         let second_target =
-            normalize_remote_control_url("https://api.chatgpt-staging.com/other/control")
+            normalize_remote_control_url("https://127.0.0.1/other/control")
                 .expect("second target should parse");
         let first_enrollment = RemoteControlEnrollment {
             remote_control_target: first_target.clone(),
@@ -704,10 +704,10 @@ mod tests {
     async fn clearing_persisted_remote_control_enrollment_removes_only_matching_entry() {
         let ody_home = TempDir::new().expect("temp dir should create");
         let state_db = remote_control_state_runtime(&ody_home).await;
-        let first_target = normalize_remote_control_url("https://chatgpt.com/remote/control")
+        let first_target = normalize_remote_control_url("https://localhost/remote/control")
             .expect("first target should parse");
         let second_target =
-            normalize_remote_control_url("https://api.chatgpt-staging.com/other/control")
+            normalize_remote_control_url("https://127.0.0.1/other/control")
                 .expect("second target should parse");
         let first_enrollment = RemoteControlEnrollment {
             remote_control_target: first_target.clone(),

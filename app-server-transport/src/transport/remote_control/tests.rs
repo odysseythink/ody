@@ -1025,7 +1025,7 @@ async fn remote_control_start_allows_missing_auth_when_enabled() {
         RemoteControlStartupMode::EnabledEphemeral,
     )
     .await
-    .expect("remote control should start before ChatGPT auth is available");
+    .expect("remote control should start before account auth is available");
 
     timeout(Duration::from_millis(100), listener.accept())
         .await

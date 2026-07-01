@@ -16,13 +16,13 @@ pub(super) async fn load_remote_control_auth(
 ) -> io::Result<RemoteControlConnectionAuth> {
     Err(io::Error::new(
         ErrorKind::PermissionDenied,
-        "remote control requires ChatGPT authentication; API key auth is not supported",
+        "remote control requires account authentication; API key auth is not supported",
     ))
 }
 
 /// Placeholder for the removed `UnauthorizedRecovery` state machine.
 ///
-/// Remote control enrollment requires ChatGPT backend auth, which has been
+/// Remote control enrollment requires backend account auth, which has been
 /// removed, so recovery never has any steps.
 pub(super) struct RemoteControlAuthRecovery;
 

@@ -2387,7 +2387,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn connect_remote_control_websocket_requires_chatgpt_auth() {
+    async fn connect_remote_control_websocket_requires_account_auth() {
         let remote_control_target = normalize_remote_control_url("http://127.0.0.1:9/backend-api/")
             .expect("target should parse");
         let ody_home = TempDir::new().expect("temp dir should create");
@@ -2437,7 +2437,7 @@ mod tests {
         assert_eq!(err.kind(), ErrorKind::PermissionDenied);
         assert_eq!(
             err.to_string(),
-            "remote control requires ChatGPT authentication"
+            "remote control requires account authentication; API key auth is not supported"
         );
         assert_eq!(*current_enrollment.lock().await, None);
         assert_eq!(
