@@ -3586,8 +3586,6 @@ pub struct RealtimeConversationListVoicesResponseEvent {
 #[serde(rename_all = "lowercase")]
 #[ts(rename_all = "lowercase")]
 pub enum Product {
-    /// Compatibility stub for the removed chat product surface.
-    Chatgpt,
     #[serde(alias = "ODY")]
     Ody,
     #[serde(alias = "ATLAS")]
@@ -3596,7 +3594,6 @@ pub enum Product {
 impl Product {
     pub fn to_app_platform(self) -> &'static str {
         match self {
-            Self::Chatgpt => "chat",
             Self::Ody => "ody",
             Self::Atlas => "atlas",
         }
