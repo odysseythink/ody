@@ -3586,7 +3586,7 @@ pub struct RealtimeConversationListVoicesResponseEvent {
 #[serde(rename_all = "lowercase")]
 #[ts(rename_all = "lowercase")]
 pub enum Product {
-    #[serde(alias = "CHATGPT")]
+    /// Compatibility stub for the removed chat product surface.
     Chatgpt,
     #[serde(alias = "ODY")]
     Ody,
@@ -3605,7 +3605,6 @@ impl Product {
     pub fn from_session_source_name(value: &str) -> Option<Self> {
         let normalized = value.trim().to_ascii_lowercase();
         match normalized.as_str() {
-            "chatgpt" => Some(Self::Chatgpt),
             "ody" => Some(Self::Ody),
             "atlas" => Some(Self::Atlas),
             _ => None,
@@ -4461,10 +4460,6 @@ mod tests {
     #[test]
     fn session_source_restriction_product_maps_custom_sources_to_products() {
         assert_eq!(
-            SessionSource::Custom("chatgpt".to_string()).restriction_product(),
-            Some(Product::Chatgpt)
-        );
-        assert_eq!(
             SessionSource::Custom("ATLAS".to_string()).restriction_product(),
             Some(Product::Atlas)
         );
@@ -4480,14 +4475,6 @@ mod tests {
 
     #[test]
     fn session_source_matches_product_restriction() {
-        assert!(
-            SessionSource::Custom("chatgpt".to_string())
-                .matches_product_restriction(&[Product::Chatgpt])
-        );
-        assert!(
-            !SessionSource::Custom("chatgpt".to_string())
-                .matches_product_restriction(&[Product::Ody])
-        );
         assert!(SessionSource::VSCode.matches_product_restriction(&[Product::Ody]));
         assert!(
             !SessionSource::Custom("atlas-dev".to_string())

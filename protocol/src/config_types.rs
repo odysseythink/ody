@@ -892,7 +892,7 @@ mod tests {
     }
 
     #[test]
-    fn forced_login_method_rejects_chatgpt() {
-        assert!(serde_json::from_str::<ForcedLoginMethod>("\"chatgpt\"").is_err());
+    fn forced_login_method_rejects_unknown_methods() {
+        assert!(serde_json::from_str::<ForcedLoginMethod>("\"legacy\"").is_err());
     }
 }

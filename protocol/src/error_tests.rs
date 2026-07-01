@@ -61,7 +61,7 @@ fn usage_limit_reached_error_formats_plus_plan() {
     };
     assert_eq!(
         err.to_string(),
-        "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/ody/settings/usage to purchase more credits or try again later."
+        "You've hit your usage limit. Upgrade to Pro (https://odysseythink.com/pro), visit https://odysseythink.com/settings/usage to purchase more credits or try again later."
     );
 }
 
@@ -70,7 +70,7 @@ fn usage_limit_reached_error_formats_rate_limit_reached_types() {
     let cases = [
         (
             RateLimitReachedType::RateLimitReached,
-            "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/ody/settings/usage to purchase more credits or try again later.",
+            "You've hit your usage limit. Upgrade to Pro (https://odysseythink.com/pro), visit https://odysseythink.com/settings/usage to purchase more credits or try again later.",
         ),
         (
             RateLimitReachedType::WorkspaceOwnerCreditsDepleted,
@@ -221,7 +221,7 @@ fn usage_limit_reached_error_formats_free_plan() {
     };
     assert_eq!(
         err.to_string(),
-        "You've hit your usage limit. Upgrade to Plus to continue using Ody (https://chatgpt.com/explore/plus), or try again later."
+        "You've hit your usage limit. Upgrade to Plus to continue using Ody (https://odysseythink.com/plus), or try again later."
     );
 }
 
@@ -236,7 +236,7 @@ fn usage_limit_reached_error_formats_go_plan() {
     };
     assert_eq!(
         err.to_string(),
-        "You've hit your usage limit. Upgrade to Plus to continue using Ody (https://chatgpt.com/explore/plus), or try again later."
+        "You've hit your usage limit. Upgrade to Plus to continue using Ody (https://odysseythink.com/plus), or try again later."
     );
 }
 
@@ -349,7 +349,7 @@ fn usage_limit_reached_error_formats_pro_plan_with_reset() {
             rate_limit_reached_type: None,
         };
         let expected = format!(
-            "You've hit your usage limit. Visit https://chatgpt.com/ody/settings/usage to purchase more credits or try again at {expected_time}."
+            "You've hit your usage limit. Visit https://odysseythink.com/settings/usage to purchase more credits or try again at {expected_time}."
         );
         assert_eq!(err.to_string(), expected);
     });
@@ -370,7 +370,7 @@ fn usage_limit_reached_error_hides_upsell_for_non_ody_limit_name() {
                 ..rate_limit_snapshot()
             })),
             promo_message: Some(
-                "Visit https://chatgpt.com/ody/settings/usage to purchase more credits"
+                "Visit https://odysseythink.com/settings/usage to purchase more credits"
                     .to_string(),
             ),
             rate_limit_reached_type: None,
@@ -446,7 +446,7 @@ fn unexpected_status_prefers_error_message_when_present() {
         body: r#"{"error":{"message":"Workspace is not authorized in this region."},"status":401}"#
             .to_string(),
         user_message: None,
-        url: Some("https://chatgpt.com/backend-api/ody/responses".to_string()),
+        url: Some("https://api.odysseythink.com/v1/responses".to_string()),
         cf_ray: None,
         request_id: Some("req-123".to_string()),
         identity_authorization_error: None,
@@ -456,7 +456,7 @@ fn unexpected_status_prefers_error_message_when_present() {
     assert_eq!(
         err.to_string(),
         format!(
-            "unexpected status {status}: Workspace is not authorized in this region., url: https://chatgpt.com/backend-api/ody/responses, request id: req-123"
+            "unexpected status {status}: Workspace is not authorized in this region., url: https://api.odysseythink.com/v1/responses, request id: req-123"
         )
     );
 }
@@ -490,7 +490,7 @@ fn unexpected_status_includes_cf_ray_and_request_id() {
         status: StatusCode::UNAUTHORIZED,
         body: "plain text error".to_string(),
         user_message: None,
-        url: Some("https://chatgpt.com/backend-api/ody/responses".to_string()),
+        url: Some("https://api.odysseythink.com/v1/responses".to_string()),
         cf_ray: Some("9c81f9f18f2fa49d-LHR".to_string()),
         request_id: Some("req-xyz".to_string()),
         identity_authorization_error: None,
@@ -500,7 +500,7 @@ fn unexpected_status_includes_cf_ray_and_request_id() {
     assert_eq!(
         err.to_string(),
         format!(
-            "unexpected status {status}: plain text error, url: https://chatgpt.com/backend-api/ody/responses, cf-ray: 9c81f9f18f2fa49d-LHR, request id: req-xyz"
+            "unexpected status {status}: plain text error, url: https://api.odysseythink.com/v1/responses, cf-ray: 9c81f9f18f2fa49d-LHR, request id: req-xyz"
         )
     );
 }
@@ -511,7 +511,7 @@ fn unexpected_status_includes_identity_auth_details() {
         status: StatusCode::UNAUTHORIZED,
         body: "plain text error".to_string(),
         user_message: None,
-        url: Some("https://chatgpt.com/backend-api/ody/models".to_string()),
+        url: Some("https://api.odysseythink.com/v1/models".to_string()),
         cf_ray: Some("cf-ray-auth-401-test".to_string()),
         request_id: Some("req-auth".to_string()),
         identity_authorization_error: Some("missing_authorization_header".to_string()),
@@ -521,7 +521,7 @@ fn unexpected_status_includes_identity_auth_details() {
     assert_eq!(
         err.to_string(),
         format!(
-            "unexpected status {status}: plain text error, url: https://chatgpt.com/backend-api/ody/models, cf-ray: cf-ray-auth-401-test, request id: req-auth, auth error: missing_authorization_header, auth error code: token_expired"
+            "unexpected status {status}: plain text error, url: https://api.odysseythink.com/v1/models, cf-ray: cf-ray-auth-401-test, request id: req-auth, auth error: missing_authorization_header, auth error code: token_expired"
         )
     );
 }
@@ -540,7 +540,7 @@ fn usage_limit_reached_includes_hours_and_minutes() {
             rate_limit_reached_type: None,
         };
         let expected = format!(
-            "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/ody/settings/usage to purchase more credits or try again at {expected_time}."
+            "You've hit your usage limit. Upgrade to Pro (https://odysseythink.com/pro), visit https://odysseythink.com/settings/usage to purchase more credits or try again at {expected_time}."
         );
         assert_eq!(err.to_string(), expected);
     });
