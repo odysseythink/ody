@@ -112,7 +112,7 @@ fn client_with_receiver() -> (AnalyticsEventsClient, mpsc::Receiver<AnalyticsFac
 fn analytics_destination_uses_explicit_capture_file() {
     let capture_path = unique_capture_path("destination");
     let destination = AnalyticsEventsDestination::from_base_url_and_capture_file(
-        "https://chatgpt.com/backend-api/".to_string(),
+        "https://api.odysseythink.com/v1/".to_string(),
         Some(capture_path.clone()),
     );
 
@@ -142,14 +142,14 @@ fn analytics_destination_uses_explicit_capture_file() {
 #[test]
 fn analytics_destination_uses_http_without_capture_file() {
     let destination = AnalyticsEventsDestination::from_base_url_and_capture_file(
-        "https://chatgpt.com/backend-api/".to_string(),
+        "https://api.odysseythink.com/v1/".to_string(),
         /*capture_file*/ None,
     );
 
     assert_eq!(
         destination,
         AnalyticsEventsDestination::Http {
-            url: "https://chatgpt.com/backend-api/ody/analytics-events/events".to_string()
+            url: "https://api.odysseythink.com/v1/ody/analytics-events/events".to_string()
         }
     );
 }
@@ -158,14 +158,14 @@ fn analytics_destination_uses_http_without_capture_file() {
 #[cfg(not(debug_assertions))]
 fn analytics_destination_ignores_capture_file_in_release() {
     let destination = AnalyticsEventsDestination::from_base_url_and_capture_file(
-        "https://chatgpt.com/backend-api/".to_string(),
+        "https://api.odysseythink.com/v1/".to_string(),
         Some(std::path::PathBuf::from("ignored.jsonl")),
     );
 
     assert_eq!(
         destination,
         AnalyticsEventsDestination::Http {
-            url: "https://chatgpt.com/backend-api/ody/analytics-events/events".to_string()
+            url: "https://api.odysseythink.com/v1/ody/analytics-events/events".to_string()
         }
     );
 }

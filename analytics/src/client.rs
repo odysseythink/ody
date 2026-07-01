@@ -508,7 +508,7 @@ async fn send_track_events(
         return;
     };
     // Analytics events are only emitted for Ody backend auth, which has been
-    // removed along with ChatGPT OAuth.
+    // removed along with the legacy OAuth flow.
     let _ = auth;
     return;
 

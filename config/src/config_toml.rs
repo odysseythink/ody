@@ -1048,8 +1048,8 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn legacy_chatgpt_base_url_is_ignored_as_unknown_key() {
-        let config: ConfigToml = toml::from_str(r#"chatgpt_base_url = "https://example.com""#)
+    fn legacy_base_url_is_ignored_as_unknown_key() {
+        let config: ConfigToml = toml::from_str(r#"legacy_base_url = "https://example.com""#)
             .expect("should ignore unknown key");
         let _ = config;
     }

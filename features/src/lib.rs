@@ -239,8 +239,6 @@ pub enum Feature {
     AutoCompaction,
     /// Enable remote compaction v2 over the normal Responses API.
     RemoteCompactionV2,
-    /// Use Agent Identity for ChatGPT-authenticated sessions.
-    UseAgentIdentity,
     /// Enable workspace dependency support.
     WorkspaceDependencies,
 
@@ -374,8 +372,8 @@ impl Features {
         self.enabled.contains(&f)
     }
 
-    pub fn apps_enabled_for_auth(&self, has_chatgpt_auth: bool) -> bool {
-        self.enabled(Feature::Apps) && has_chatgpt_auth
+    pub fn apps_enabled_for_auth(&self, has_app_auth: bool) -> bool {
+        self.enabled(Feature::Apps) && has_app_auth
     }
 
     pub fn use_legacy_landlock(&self) -> bool {
@@ -1358,12 +1356,6 @@ pub const FEATURES: &[FeatureSpec] = &[
         key: "remote_compaction_v2",
         stage: Stage::Stable,
         default_enabled: true,
-    },
-    FeatureSpec {
-        id: Feature::UseAgentIdentity,
-        key: "use_agent_identity",
-        stage: Stage::UnderDevelopment,
-        default_enabled: false,
     },
     FeatureSpec {
         id: Feature::WorkspaceDependencies,

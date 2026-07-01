@@ -411,13 +411,13 @@ fn enable_fanout_normalization_enables_multi_agent_one_way() {
 }
 
 #[test]
-fn apps_require_feature_flag_and_chatgpt_auth() {
+fn apps_require_feature_flag_and_app_auth() {
     let mut features = Features::with_defaults();
-    assert!(!features.apps_enabled_for_auth(/*has_chatgpt_auth*/ false));
+    assert!(!features.apps_enabled_for_auth(/*has_app_auth*/ false));
 
     features.enable(Feature::Apps);
-    assert!(!features.apps_enabled_for_auth(/*has_chatgpt_auth*/ false));
-    assert!(features.apps_enabled_for_auth(/*has_chatgpt_auth*/ true));
+    assert!(!features.apps_enabled_for_auth(/*has_app_auth*/ false));
+    assert!(features.apps_enabled_for_auth(/*has_app_auth*/ true));
 }
 
 #[test]
