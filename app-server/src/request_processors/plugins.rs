@@ -15,7 +15,6 @@ pub(crate) struct PluginRequestProcessor {
     auth_manager: Arc<AuthManager>,
     thread_manager: Arc<ThreadManager>,
     outgoing: Arc<OutgoingMessageSender>,
-    analytics_events_client: AnalyticsEventsClient,
     config_manager: ConfigManager,
     workspace_settings_cache: Arc<workspace_settings::WorkspaceSettingsCache>,
 }
@@ -206,7 +205,6 @@ impl PluginRequestProcessor {
         auth_manager: Arc<AuthManager>,
         thread_manager: Arc<ThreadManager>,
         outgoing: Arc<OutgoingMessageSender>,
-        analytics_events_client: AnalyticsEventsClient,
         config_manager: ConfigManager,
         workspace_settings_cache: Arc<workspace_settings::WorkspaceSettingsCache>,
     ) -> Self {
@@ -214,7 +212,6 @@ impl PluginRequestProcessor {
             auth_manager,
             thread_manager,
             outgoing,
-            analytics_events_client,
             config_manager,
             workspace_settings_cache,
         }
@@ -908,7 +905,7 @@ impl PluginRequestProcessor {
         let apps_needing_auth = self
             .plugin_apps_needing_auth_for_install(
                 &config,
-                false,
+                auth.as_ref().is_some_and(OdyAuth::is_api_key_auth),
                 &result.plugin_id.as_key(),
                 &plugin_apps,
             )
@@ -937,11 +934,11 @@ impl PluginRequestProcessor {
     async fn plugin_apps_needing_auth_for_install(
         &self,
         config: &Config,
-        is_chatgpt_auth: bool,
+        is_api_key_auth: bool,
         plugin_id: &str,
         plugin_apps: &[ody_plugin::AppConnectorId],
     ) -> Vec<AppSummary> {
-        if plugin_apps.is_empty() || !config.features.apps_enabled_for_auth(is_chatgpt_auth) {
+        if plugin_apps.is_empty() || !config.features.apps_enabled_for_auth(is_api_key_auth) {
             return Vec::new();
         }
 
