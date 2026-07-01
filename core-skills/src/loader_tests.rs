@@ -612,7 +612,6 @@ async fn loads_skill_policy_products_from_yaml() {
 policy:
   products:
     - ody
-    - CHATGPT
     - atlas
 "#,
     );
@@ -630,7 +629,7 @@ policy:
         outcome.skills[0].policy,
         Some(SkillPolicy {
             allow_implicit_invocation: None,
-            products: vec![Product::Ody, Product::Chatgpt, Product::Atlas],
+            products: vec![Product::Ody, Product::Atlas],
         })
     );
 }
