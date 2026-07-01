@@ -124,7 +124,7 @@ pub struct McpConfig {
     pub use_legacy_landlock: bool,
     /// Whether the app MCP integration is enabled by config.
     ///
-    /// ChatGPT auth is checked separately before a materialized host-owned Apps
+    /// Host-owned Apps auth is checked separately before a materialized Apps
     /// server can be used.
     pub apps_enabled: bool,
     /// Whether model-visible MCP tool namespaces should keep the legacy

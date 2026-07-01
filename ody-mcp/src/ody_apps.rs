@@ -1,6 +1,6 @@
 //! Ody Apps support for the host-owned apps MCP server.
 //!
-//! This module owns the pieces that are unique to ChatGPT-hosted app
+//! This module owns the pieces that are unique to host-owned app
 //! connectors: cache scoping by authenticated user, disk cache reads/writes,
 //! connector allow-list filtering, and the normalization that turns app
 //! connector/tool metadata into model-visible MCP callable names.
@@ -24,16 +24,16 @@ use sha1::Sha1;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OdyAppsToolsCacheKey {
     pub(crate) account_id: Option<String>,
-    pub(crate) chatgpt_user_id: Option<String>,
+    pub(crate) user_id: Option<String>,
     pub(crate) is_workspace_account: bool,
 }
 
 pub fn ody_apps_tools_cache_key(_auth: Option<&OdyAuth>) -> OdyAppsToolsCacheKey {
-    // ChatGPT-backed Ody Apps metadata is no longer available; the cache key
+    // Personalized Ody Apps metadata is no longer available; the cache key
     // always reflects an unpersonalized, non-workspace state.
     OdyAppsToolsCacheKey {
         account_id: None,
-        chatgpt_user_id: None,
+        user_id: None,
         is_workspace_account: false,
     }
 }

@@ -79,13 +79,13 @@ fn create_test_tool_with_connector(
 fn create_ody_apps_tools_cache_context(
     ody_home: PathBuf,
     account_id: Option<&str>,
-    chatgpt_user_id: Option<&str>,
+    user_id: Option<&str>,
 ) -> OdyAppsToolsCacheContext {
     OdyAppsToolsCacheContext {
         ody_home,
         user_key: OdyAppsToolsCacheKey {
             account_id: account_id.map(ToOwned::to_owned),
-            chatgpt_user_id: chatgpt_user_id.map(ToOwned::to_owned),
+            user_id: user_id.map(ToOwned::to_owned),
             is_workspace_account: false,
         },
     }
@@ -1292,7 +1292,7 @@ async fn no_local_runtime_fails_local_stdio_but_keeps_local_http_server() {
         ody_home.path().to_path_buf(),
         OdyAppsToolsCacheKey {
             account_id: None,
-            chatgpt_user_id: None,
+            user_id: None,
             is_workspace_account: false,
         },
         /*host_owned_ody_apps_enabled*/ false,

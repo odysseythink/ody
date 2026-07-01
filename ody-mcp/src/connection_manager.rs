@@ -156,7 +156,7 @@ impl McpConnectionManager {
         let tool_plugin_provenance = Arc::new(tool_plugin_provenance);
         let startup_submit_id = submit_id.clone();
         // Ody Apps auth provider only applied for Ody backend auth, which has
-        // been removed along with ChatGPT OAuth.
+        // been removed along with the legacy Ody Apps OAuth flow.
         let ody_apps_auth_provider: Option<ody_api::SharedAuthProvider> = None;
         let _ = auth;
         let mcp_servers = mcp_servers.clone();
