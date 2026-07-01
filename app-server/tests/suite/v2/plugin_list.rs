@@ -62,7 +62,7 @@ fn write_plugins_enabled_config_with_base_url(
     std::fs::write(
         ody_home.join("config.toml"),
         format!(
-            r#"chatgpt_base_url = "{base_url}"
+            r#"legacy_base_url = "{base_url}"
 
 [features]
 plugins = true
@@ -193,7 +193,7 @@ async fn plugin_installed_prefers_remote_curated_conflicts_when_remote_plugin_en
     std::fs::write(
         ody_home.path().join("config.toml"),
         format!(
-            r#"chatgpt_base_url = "{}/backend-api/"
+            r#"legacy_base_url = "{}/backend-api/"
 
 [features]
 plugins = true
@@ -502,8 +502,8 @@ async fn plugin_list_returns_empty_when_workspace_ody_plugins_disabled() -> Resu
 
     Mock::given(method("GET"))
         .and(path("/backend-api/accounts/account-123/settings"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_string(r#"{"beta_settings":{"enable_plugins":false}}"#),
@@ -590,8 +590,8 @@ async fn plugin_list_reuses_cached_workspace_ody_plugins_setting() -> Result<()>
 
     Mock::given(method("GET"))
         .and(path("/backend-api/accounts/account-123/settings"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_string(r#"{"beta_settings":{"enable_plugins":true}}"#),
@@ -912,7 +912,7 @@ async fn plugin_list_includes_install_and_enabled_state_from_config() -> Result<
         r#"{
   "name": "ody-curated",
   "interface": {
-    "displayName": "ChatGPT Official"
+    "displayName": "Legacy Official"
   },
   "plugins": [
     {
@@ -989,7 +989,7 @@ enabled = false
             .interface
             .as_ref()
             .and_then(|interface| interface.display_name.as_deref()),
-        Some("ChatGPT Official")
+        Some("Legacy Official")
     );
     assert_eq!(marketplace.plugins.len(), 3);
     assert_eq!(marketplace.plugins[0].id, "enabled-plugin@ody-curated");
@@ -1715,8 +1715,8 @@ async fn plugin_list_includes_remote_marketplaces_when_remote_plugin_enabled() -
         .and(path("/backend-api/ps/plugins/list"))
         .and(query_param("scope", "GLOBAL"))
         .and(query_param("limit", "200"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .and(header("oai-product-sku", "ody"))
         .respond_with(ResponseTemplate::new(200).set_body_string(global_directory_body))
         .mount(&server)
@@ -1725,8 +1725,8 @@ async fn plugin_list_includes_remote_marketplaces_when_remote_plugin_enabled() -
         .and(path("/backend-api/ps/plugins/list"))
         .and(query_param("scope", "WORKSPACE"))
         .and(query_param("limit", "200"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .and(header("oai-product-sku", "ody"))
         .respond_with(ResponseTemplate::new(200).set_body_string(empty_page_body))
         .mount(&server)
@@ -1734,8 +1734,8 @@ async fn plugin_list_includes_remote_marketplaces_when_remote_plugin_enabled() -
     Mock::given(method("GET"))
         .and(path("/backend-api/ps/plugins/installed"))
         .and(query_param("scope", "GLOBAL"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .and(header("oai-product-sku", "ody"))
         .respond_with(ResponseTemplate::new(200).set_body_string(global_installed_body))
         .mount(&server)
@@ -1743,8 +1743,8 @@ async fn plugin_list_includes_remote_marketplaces_when_remote_plugin_enabled() -
     Mock::given(method("GET"))
         .and(path("/backend-api/ps/plugins/installed"))
         .and(query_param("scope", "WORKSPACE"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .and(header("oai-product-sku", "ody"))
         .respond_with(ResponseTemplate::new(200).set_body_string(empty_page_body))
         .mount(&server)
@@ -2087,8 +2087,8 @@ async fn plugin_list_propagates_explicit_odysseythink_curated_remote_collection_
         .and(query_param("scope", "GLOBAL"))
         .and(query_param("limit", "200"))
         .and(query_param("collection", "vertical"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(500).set_body_string("temporary failure"))
         .mount(&server)
         .await;
@@ -2365,7 +2365,7 @@ async fn plugin_installed_includes_remote_shared_with_me_plugins() -> Result<()>
     std::fs::write(
         ody_home.path().join("config.toml"),
         format!(
-            r#"chatgpt_base_url = "{}/backend-api/"
+            r#"legacy_base_url = "{}/backend-api/"
 
 [features]
 plugins = true
@@ -2465,7 +2465,7 @@ async fn plugin_installed_includes_workspace_directory_without_plugin_sharing() 
     std::fs::write(
         ody_home.path().join("config.toml"),
         format!(
-            r#"chatgpt_base_url = "{}/backend-api/"
+            r#"legacy_base_url = "{}/backend-api/"
 
 [features]
 plugins = true
@@ -2550,7 +2550,7 @@ async fn plugin_installed_includes_created_by_me_when_remote_plugins_enabled() -
     std::fs::write(
         ody_home.path().join("config.toml"),
         format!(
-            r#"chatgpt_base_url = "{}/backend-api/"
+            r#"legacy_base_url = "{}/backend-api/"
 
 [features]
 plugins = true
@@ -2639,7 +2639,7 @@ async fn plugin_installed_starts_remote_installed_bundle_sync() -> Result<()> {
     std::fs::write(
         ody_home.path().join("config.toml"),
         format!(
-            r#"chatgpt_base_url = "{}/backend-api/"
+            r#"legacy_base_url = "{}/backend-api/"
 
 [features]
 plugins = true
@@ -2802,7 +2802,7 @@ async fn plugin_list_fetches_user_plugins_in_created_by_me_remote_marketplace() 
     std::fs::write(
         ody_home.path().join("config.toml"),
         format!(
-            r#"chatgpt_base_url = "{}/backend-api/"
+            r#"legacy_base_url = "{}/backend-api/"
 
 [features]
 plugins = true
@@ -3054,7 +3054,7 @@ async fn plugin_list_fetches_shared_with_me_kind() -> Result<()> {
     assert_eq!(share_context.creator_name.as_deref(), Some("Gavin"));
     assert_eq!(
         share_context.share_url.as_deref(),
-        Some("https://chatgpt.example/plugins/share/share-key-1")
+        Some("https://example.com/plugins/share/share-key-1")
     );
     assert_eq!(share_context.share_principals, None);
     assert_eq!(
@@ -3131,7 +3131,7 @@ async fn plugin_list_omits_shared_with_me_kind_when_plugin_sharing_disabled() ->
     std::fs::write(
         ody_home.path().join("config.toml"),
         format!(
-            r#"chatgpt_base_url = "{}/backend-api/"
+            r#"legacy_base_url = "{}/backend-api/"
 
 [features]
 plugins = true
@@ -3188,7 +3188,7 @@ async fn plugin_list_omits_created_by_me_when_remote_plugins_disabled() -> Resul
     std::fs::write(
         ody_home.path().join("config.toml"),
         format!(
-            r#"chatgpt_base_url = "{}/backend-api/"
+            r#"legacy_base_url = "{}/backend-api/"
 
 [features]
 plugins = true
@@ -3313,8 +3313,8 @@ async fn plugin_list_marks_remote_plugin_disabled_by_admin() -> Result<()> {
             .and(path("/backend-api/ps/plugins/list"))
             .and(query_param("scope", scope))
             .and(query_param("limit", "200"))
-            .and(header("authorization", "Bearer chatgpt-token"))
-            .and(header("chatgpt-account-id", "account-123"))
+            .and(header("authorization", "Bearer api-key-token"))
+            .and(header("x-account-id", "account-123"))
             .respond_with(ResponseTemplate::new(200).set_body_string(body))
             .mount(&server)
             .await;
@@ -3326,8 +3326,8 @@ async fn plugin_list_marks_remote_plugin_disabled_by_admin() -> Result<()> {
         Mock::given(method("GET"))
             .and(path("/backend-api/ps/plugins/installed"))
             .and(query_param("scope", scope))
-            .and(header("authorization", "Bearer chatgpt-token"))
-            .and(header("chatgpt-account-id", "account-123"))
+            .and(header("authorization", "Bearer api-key-token"))
+            .and(header("x-account-id", "account-123"))
             .respond_with(ResponseTemplate::new(200).set_body_string(body))
             .mount(&server)
             .await;
@@ -3353,7 +3353,7 @@ async fn plugin_list_marks_remote_plugin_disabled_by_admin() -> Result<()> {
         .marketplaces
         .into_iter()
         .find(|marketplace| marketplace.name == "odysseythink-curated-remote")
-        .expect("expected ChatGPT remote marketplace");
+        .expect("expected Legacy remote marketplace");
     let plugin = remote_marketplace
         .plugins
         .first()
@@ -3375,7 +3375,7 @@ async fn plugin_list_does_not_fetch_remote_marketplaces_when_plugins_disabled() 
         ody_home.path().join("config.toml"),
         format!(
             r#"
-chatgpt_base_url = "{}/backend-api/"
+legacy_base_url = "{}/backend-api/"
 
 [features]
 plugins = false
@@ -3414,7 +3414,7 @@ remote_plugin = true
 }
 
 #[tokio::test]
-async fn plugin_list_fetches_featured_plugin_ids_without_chatgpt_auth() -> Result<()> {
+async fn plugin_list_fetches_featured_plugin_ids_without_legacy_auth() -> Result<()> {
     let ody_home = TempDir::new()?;
     let server = MockServer::start().await;
     write_plugin_sync_config(ody_home.path(), &format!("{}/backend-api/", server.uri()))?;
@@ -3637,8 +3637,8 @@ async fn mount_remote_plugin_list(server: &MockServer, scope: &str, body: &str) 
         .and(path("/backend-api/ps/plugins/list"))
         .and(query_param("scope", scope))
         .and(query_param("limit", "200"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(200).set_body_string(body))
         .mount(server)
         .await;
@@ -3687,8 +3687,8 @@ async fn mount_odysseythink_curated_remote_collection_plugin_list(server: &MockS
         .and(query_param("scope", "GLOBAL"))
         .and(query_param("limit", "200"))
         .and(query_param("collection", "vertical"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(200).set_body_string(body))
         .mount(server)
         .await;
@@ -3698,8 +3698,8 @@ async fn mount_shared_workspace_plugins(server: &MockServer, body: &str) {
     Mock::given(method("GET"))
         .and(path("/backend-api/ps/plugins/workspace/shared"))
         .and(query_param("limit", "200"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(200).set_body_string(body))
         .mount(server)
         .await;
@@ -3709,8 +3709,8 @@ async fn mount_remote_installed_plugins(server: &MockServer, scope: &str, body: 
     Mock::given(method("GET"))
         .and(path("/backend-api/ps/plugins/installed"))
         .and(query_param("scope", scope))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(200).set_body_string(body))
         .mount(server)
         .await;
@@ -3749,7 +3749,7 @@ fn workspace_remote_plugin_page_body(
       "scope": "WORKSPACE",
       "discoverability": "{discoverability}",
       "creator_account_user_id": "user-gavin__account-123",
-      "share_url": "https://chatgpt.example/plugins/share/share-key-1",
+      "share_url": "https://example.com/plugins/share/share-key-1",
       "installation_policy": "AVAILABLE",
       "authentication_policy": "ON_USE",
       "status": "ENABLED",
@@ -3948,7 +3948,7 @@ fn write_plugin_sync_config(ody_home: &std::path::Path, base_url: &str) -> std::
         ody_home.join("config.toml"),
         format!(
             r#"
-chatgpt_base_url = "{base_url}"
+legacy_base_url = "{base_url}"
 
 [features]
 plugins = true
@@ -3974,7 +3974,7 @@ fn write_remote_plugin_catalog_config(
         ody_home.join("config.toml"),
         format!(
             r#"
-chatgpt_base_url = "{base_url}"
+legacy_base_url = "{base_url}"
 
 [features]
 plugins = true

@@ -1424,6 +1424,6 @@ stream_max_retries = 0
 fn write_analytics_config(ody_home: &std::path::Path, base_url: &str) -> std::io::Result<()> {
     std::fs::write(
         ody_home.join("config.toml"),
-        format!("chatgpt_base_url = \"{base_url}\"\n"),
+        format!("legacy_base_url = \"{base_url}\"\n"),
     )
 }

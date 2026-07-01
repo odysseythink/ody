@@ -708,8 +708,8 @@ async fn thread_resume_returns_rollout_history() -> Result<()> {
 }
 
 #[tokio::test]
-async fn thread_resume_redacts_payloads_for_chatgpt_remote_clients() -> Result<()> {
-    for client_name in ["ody_chatgpt_android_remote", "ody_chatgpt_ios_remote"] {
+async fn thread_resume_redacts_payloads_for_legacy_remote_clients() -> Result<()> {
+    for client_name in ["ody_mobile_remote", "ody_mobile_remote_2"] {
         let remote_resume = resume_redaction_fixture(Some(client_name)).await?;
         let remote_turn = remote_resume
             .thread

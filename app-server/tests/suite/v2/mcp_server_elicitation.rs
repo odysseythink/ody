@@ -765,7 +765,7 @@ impl ServerHandler for ElicitationAppsMcpServer {
 
 async fn start_apps_server(scenario: ElicitationScenario) -> Result<(String, JoinHandle<()>)> {
     let state = Arc::new(AppsServerState {
-        expected_bearer: "Bearer chatgpt-token".to_string(),
+        expected_bearer: "Bearer api-key-token".to_string(),
         expected_account_id: "account-123".to_string(),
     });
 
@@ -804,7 +804,7 @@ async fn list_directory_connectors(
         .and_then(|value| value.to_str().ok())
         .is_some_and(|value| value == state.expected_bearer);
     let account_ok = headers
-        .get("chatgpt-account-id")
+        .get("x-account-id")
         .and_then(|value| value.to_str().ok())
         .is_some_and(|value| value == state.expected_account_id);
     let external_logos_ok = uri
@@ -850,7 +850,7 @@ approval_policy = "untrusted"
 sandbox_mode = "read-only"
 
 model_provider = "mock_provider"
-chatgpt_base_url = "{apps_server_url}"
+legacy_base_url = "{apps_server_url}"
 mcp_oauth_credentials_store = "file"
 
 [features]

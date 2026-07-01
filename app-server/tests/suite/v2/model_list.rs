@@ -76,10 +76,10 @@ fn model_from_preset(preset: &ModelPreset) -> Model {
 }
 
 fn expected_visible_models() -> Vec<Model> {
-    // Filter by supported_in_api to support testing with both ChatGPT and non-ChatGPT auth modes.
+    // Filter by supported_in_api to support testing with both Legacy and non-Legacy auth modes.
     let mut presets = ModelPreset::filter_by_auth(
         ody_core::test_support::all_model_presets().clone(),
-        /*chatgpt_mode*/ false,
+        /*legacy_mode*/ false,
     );
 
     // Mirror `ModelsManager::build_available_models()` default selection after auth filtering.
@@ -159,11 +159,11 @@ async fn list_models_includes_hidden_models() -> Result<()> {
 }
 
 #[tokio::test]
-async fn list_models_uses_chatgpt_remote_catalog_as_source_of_truth() -> Result<()> {
+async fn list_models_uses_legacy_remote_catalog_as_source_of_truth() -> Result<()> {
     let server = MockServer::start().await;
     let remote_model: ModelInfo = serde_json::from_value(json!({
-        "slug": "chatgpt-remote-only",
-        "display_name": "ChatGPT Remote Only",
+        "slug": "legacy-remote-only",
+        "display_name": "Legacy Remote Only",
         "description": "Remote-only model for app-server model/list coverage",
         "default_reasoning_level": "max",
         "supported_reasoning_levels": [
@@ -212,7 +212,7 @@ odysseythink_base_url = "{server_uri}/v1"
     )?;
     write_api_key_auth(
         ody_home.path(),
-        ApiKeyAuthFixture::new("chatgpt-access-token").plan_type("pro"),
+        ApiKeyAuthFixture::new("api-access-token").plan_type("pro"),
         AuthCredentialsStoreMode::File,
     )?;
 

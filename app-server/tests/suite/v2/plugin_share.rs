@@ -66,8 +66,8 @@ async fn plugin_share_save_uploads_local_plugin() -> Result<()> {
 
     Mock::given(method("POST"))
         .and(path("/backend-api/public/plugins/workspace/upload-url"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(201).set_body_json(json!({
             "file_id": "file_123",
             "upload_url": format!("{}/upload/file_123", server.uri()),
@@ -86,15 +86,15 @@ async fn plugin_share_save_uploads_local_plugin() -> Result<()> {
         .await;
     Mock::given(method("POST"))
         .and(path("/backend-api/public/plugins/workspace"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .and(body_json(json!({
             "file_id": "file_123",
             "etag": "\"upload_etag_123\"",
         })))
         .respond_with(ResponseTemplate::new(201).set_body_json(json!({
             "plugin_id": "plugins_123",
-            "share_url": "https://chatgpt.example/plugins/share/share-key-1",
+            "share_url": "https://example.com/plugins/share/share-key-1",
         })))
         .expect(1)
         .mount(&server)
@@ -123,15 +123,15 @@ async fn plugin_share_save_uploads_local_plugin() -> Result<()> {
         response,
         PluginShareSaveResponse {
             remote_plugin_id: "plugins_123".to_string(),
-            share_url: "https://chatgpt.example/plugins/share/share-key-1".to_string(),
+            share_url: "https://example.com/plugins/share/share-key-1".to_string(),
         }
     );
 
     Mock::given(method("GET"))
         .and(path("/backend-api/ps/plugins/workspace/created"))
         .and(query_param("limit", "200"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "plugins": [remote_plugin_json("plugins_123")],
             "pagination": empty_pagination_json(),
@@ -142,8 +142,8 @@ async fn plugin_share_save_uploads_local_plugin() -> Result<()> {
     Mock::given(method("GET"))
         .and(path("/backend-api/ps/plugins/installed"))
         .and(query_param("scope", "WORKSPACE"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "plugins": [installed_remote_plugin_json("plugins_123")],
             "pagination": empty_pagination_json(),
@@ -204,8 +204,8 @@ async fn plugin_share_save_forwards_access_policy() -> Result<()> {
 
     Mock::given(method("POST"))
         .and(path("/backend-api/public/plugins/workspace/upload-url"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(201).set_body_json(json!({
             "file_id": "file_123",
             "upload_url": format!("{}/upload/file_123", server.uri()),
@@ -241,7 +241,7 @@ async fn plugin_share_save_forwards_access_policy() -> Result<()> {
         })))
         .respond_with(ResponseTemplate::new(201).set_body_json(json!({
             "plugin_id": "plugins_123",
-            "share_url": "https://chatgpt.example/plugins/share/share-key-1",
+            "share_url": "https://example.com/plugins/share/share-key-1",
         })))
         .expect(1)
         .mount(&server)
@@ -278,7 +278,7 @@ async fn plugin_share_save_forwards_access_policy() -> Result<()> {
         response,
         PluginShareSaveResponse {
             remote_plugin_id: "plugins_123".to_string(),
-            share_url: "https://chatgpt.example/plugins/share/share-key-1".to_string(),
+            share_url: "https://example.com/plugins/share/share-key-1".to_string(),
         }
     );
     Ok(())
@@ -334,7 +334,7 @@ async fn plugin_share_save_rejects_when_plugin_sharing_disabled() -> Result<()> 
         ody_home.path().join("config.toml"),
         format!(
             r#"
-chatgpt_base_url = "{}/backend-api"
+legacy_base_url = "{}/backend-api"
 
 [features]
 plugins = true
@@ -519,8 +519,8 @@ async fn plugin_share_list_returns_created_workspace_plugins() -> Result<()> {
     Mock::given(method("GET"))
         .and(path("/backend-api/ps/plugins/workspace/created"))
         .and(query_param("limit", "200"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "plugins": [remote_plugin_json("plugins_123")],
             "pagination": empty_pagination_json(),
@@ -531,8 +531,8 @@ async fn plugin_share_list_returns_created_workspace_plugins() -> Result<()> {
     Mock::given(method("GET"))
         .and(path("/backend-api/ps/plugins/installed"))
         .and(query_param("scope", "WORKSPACE"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "plugins": [installed_remote_plugin_json("plugins_123")],
             "pagination": empty_pagination_json(),
@@ -917,8 +917,8 @@ async fn plugin_share_update_targets_updates_share_targets() -> Result<()> {
 
     Mock::given(method("PUT"))
         .and(path("/backend-api/ps/plugins/plugins_123/shares"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .and(body_json(json!({
             "discoverability": "UNLISTED",
             "targets": [
@@ -1024,7 +1024,7 @@ async fn plugin_share_update_targets_rejects_when_plugin_sharing_disabled() -> R
         ody_home.path().join("config.toml"),
         format!(
             r#"
-chatgpt_base_url = "{}/backend-api"
+legacy_base_url = "{}/backend-api"
 
 [features]
 plugins = true
@@ -1081,8 +1081,8 @@ async fn plugin_share_delete_removes_created_workspace_plugin() -> Result<()> {
 
     Mock::given(method("DELETE"))
         .and(path("/backend-api/public/plugins/workspace/plugins_123"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(204))
         .expect(1)
         .mount(&server)
@@ -1111,8 +1111,8 @@ async fn plugin_share_delete_removes_created_workspace_plugin() -> Result<()> {
     Mock::given(method("GET"))
         .and(path("/backend-api/ps/plugins/workspace/created"))
         .and(query_param("limit", "200"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "plugins": [remote_plugin_json("plugins_123")],
             "pagination": empty_pagination_json(),
@@ -1123,8 +1123,8 @@ async fn plugin_share_delete_removes_created_workspace_plugin() -> Result<()> {
     Mock::given(method("GET"))
         .and(path("/backend-api/ps/plugins/installed"))
         .and(query_param("scope", "WORKSPACE"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "plugins": [installed_remote_plugin_json("plugins_123")],
             "pagination": empty_pagination_json(),
@@ -1174,7 +1174,7 @@ fn write_remote_plugin_config(ody_home: &Path, base_url: &str) -> std::io::Resul
         ody_home.join("config.toml"),
         format!(
             r#"
-chatgpt_base_url = "{base_url}"
+legacy_base_url = "{base_url}"
 
 [features]
 plugins = true
@@ -1213,14 +1213,14 @@ async fn mount_remote_plugin_detail_with_bundle(
     Mock::given(method("GET"))
         .and(path(format!("/backend-api/ps/plugins/{remote_plugin_id}")))
         .and(query_param("includeDownloadUrls", "true"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "id": remote_plugin_id,
             "name": plugin_name,
             "scope": scope,
             "discoverability": "PRIVATE",
-            "share_url": "https://chatgpt.example/plugins/share/share-key-1",
+            "share_url": "https://example.com/plugins/share/share-key-1",
             "share_principals": [
                 {
                     "principal_type": "user",
@@ -1251,8 +1251,8 @@ async fn mount_empty_remote_installed_plugins(server: &MockServer, scope: &str) 
     Mock::given(method("GET"))
         .and(path("/backend-api/ps/plugins/installed"))
         .and(query_param("scope", scope))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "plugins": [],
             "pagination": {
@@ -1269,7 +1269,7 @@ fn remote_plugin_json(plugin_id: &str) -> serde_json::Value {
         "name": "demo-plugin",
         "scope": "WORKSPACE",
         "discoverability": "PRIVATE",
-        "share_url": "https://chatgpt.example/plugins/share/share-key-1",
+        "share_url": "https://example.com/plugins/share/share-key-1",
         "share_principals": [
             {
                 "principal_type": "user",
@@ -1344,7 +1344,7 @@ fn expected_share_context(plugin_id: &str) -> PluginShareContext {
         remote_plugin_id: plugin_id.to_string(),
         remote_version: Some("0.1.0".to_string()),
         discoverability: Some(PluginShareDiscoverability::Private),
-        share_url: Some("https://chatgpt.example/plugins/share/share-key-1".to_string()),
+        share_url: Some("https://example.com/plugins/share/share-key-1".to_string()),
         creator_account_user_id: None,
         creator_name: None,
         share_principals: Some(vec![

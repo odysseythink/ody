@@ -109,7 +109,7 @@ async fn experimental_feature_list_marks_apps_and_plugins_disabled_by_workspace_
     std::fs::write(
         ody_home.path().join("config.toml"),
         format!(
-            r#"chatgpt_base_url = "{}/backend-api/"
+            r#"legacy_base_url = "{}/backend-api/"
 "#,
             server.uri()
         ),
@@ -122,8 +122,8 @@ async fn experimental_feature_list_marks_apps_and_plugins_disabled_by_workspace_
     )?;
     Mock::given(method("GET"))
         .and(path("/backend-api/accounts/account-123/settings"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_string(r#"{"beta_settings":{"enable_plugins":false}}"#),

@@ -209,7 +209,7 @@ async fn list_apps_returns_empty_when_workspace_ody_plugins_disabled() -> Result
 }
 
 #[tokio::test]
-async fn list_apps_includes_plugin_apps_for_chatgpt_auth() -> Result<()> {
+async fn list_apps_includes_plugin_apps_for_legacy_auth() -> Result<()> {
     let (server_url, server_handle) =
         start_apps_server_with_delays(Vec::new(), Vec::new(), Duration::ZERO, Duration::ZERO)
             .await?;
@@ -297,7 +297,7 @@ async fn list_apps_uses_thread_feature_flag_when_thread_id_is_provided() -> Resu
         ody_home.path().join("config.toml"),
         format!(
             r#"
-chatgpt_base_url = "{server_url}"
+legacy_base_url = "{server_url}"
 mcp_oauth_credentials_store = "file"
 
 [features]
@@ -443,7 +443,7 @@ async fn list_apps_reports_is_enabled_from_config() -> Result<()> {
         ody_home.path().join("config.toml"),
         format!(
             r#"
-chatgpt_base_url = "{server_url}"
+legacy_base_url = "{server_url}"
 
 [features]
 connectors = true
@@ -599,7 +599,7 @@ async fn list_apps_emits_updates_and_returns_after_both_lists_load() -> Result<(
         branding: None,
         app_metadata: None,
         labels: None,
-        install_url: Some("https://chatgpt.com/apps/beta-app/beta".to_string()),
+        install_url: Some("https://example.com/apps/beta-app/beta".to_string()),
         is_accessible: true,
         is_enabled: true,
         plugin_display_names: Vec::new(),
@@ -619,7 +619,7 @@ async fn list_apps_emits_updates_and_returns_after_both_lists_load() -> Result<(
             branding: None,
             app_metadata: None,
             labels: None,
-            install_url: Some("https://chatgpt.com/apps/beta/beta".to_string()),
+            install_url: Some("https://example.com/apps/beta/beta".to_string()),
             is_accessible: true,
             is_enabled: true,
             plugin_display_names: Vec::new(),
@@ -634,7 +634,7 @@ async fn list_apps_emits_updates_and_returns_after_both_lists_load() -> Result<(
             branding: alpha_branding,
             app_metadata: alpha_app_metadata,
             labels: alpha_labels,
-            install_url: Some("https://chatgpt.com/apps/alpha/alpha".to_string()),
+            install_url: Some("https://example.com/apps/alpha/alpha".to_string()),
             is_accessible: false,
             is_enabled: true,
             plugin_display_names: Vec::new(),
@@ -738,7 +738,7 @@ async fn list_apps_waits_for_accessible_data_before_emitting_directory_updates()
             branding: None,
             app_metadata: None,
             labels: None,
-            install_url: Some("https://chatgpt.com/apps/beta/beta".to_string()),
+            install_url: Some("https://example.com/apps/beta/beta".to_string()),
             is_accessible: true,
             is_enabled: true,
             plugin_display_names: Vec::new(),
@@ -753,7 +753,7 @@ async fn list_apps_waits_for_accessible_data_before_emitting_directory_updates()
             branding: None,
             app_metadata: None,
             labels: None,
-            install_url: Some("https://chatgpt.com/apps/alpha/alpha".to_string()),
+            install_url: Some("https://example.com/apps/alpha/alpha".to_string()),
             is_accessible: false,
             is_enabled: true,
             plugin_display_names: Vec::new(),
@@ -851,7 +851,7 @@ async fn list_apps_does_not_emit_empty_interim_updates() -> Result<()> {
         branding: None,
         app_metadata: None,
         labels: None,
-        install_url: Some("https://chatgpt.com/apps/alpha/alpha".to_string()),
+        install_url: Some("https://example.com/apps/alpha/alpha".to_string()),
         is_accessible: false,
         is_enabled: true,
         plugin_display_names: Vec::new(),
@@ -957,7 +957,7 @@ async fn list_apps_paginates_results() -> Result<()> {
         branding: None,
         app_metadata: None,
         labels: None,
-        install_url: Some("https://chatgpt.com/apps/beta/beta".to_string()),
+        install_url: Some("https://example.com/apps/beta/beta".to_string()),
         is_accessible: true,
         is_enabled: true,
         plugin_display_names: Vec::new(),
@@ -1001,7 +1001,7 @@ async fn list_apps_paginates_results() -> Result<()> {
         branding: None,
         app_metadata: None,
         labels: None,
-        install_url: Some("https://chatgpt.com/apps/alpha/alpha".to_string()),
+        install_url: Some("https://example.com/apps/alpha/alpha".to_string()),
         is_accessible: false,
         is_enabled: true,
         plugin_display_names: Vec::new(),
@@ -1070,7 +1070,7 @@ async fn list_apps_force_refetch_preserves_previous_cache_on_failure() -> Result
 
     write_api_key_auth(
         ody_home.path(),
-        ApiKeyAuthFixture::new("chatgpt-token-invalid")
+        ApiKeyAuthFixture::new("api-key-token-invalid")
             .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
@@ -1190,7 +1190,7 @@ async fn list_apps_force_refetch_patches_updates_from_cached_snapshots() -> Resu
             branding: None,
             app_metadata: None,
             labels: None,
-            install_url: Some("https://chatgpt.com/apps/beta-app/beta".to_string()),
+            install_url: Some("https://example.com/apps/beta-app/beta".to_string()),
             is_accessible: true,
             is_enabled: true,
             plugin_display_names: Vec::new(),
@@ -1211,7 +1211,7 @@ async fn list_apps_force_refetch_patches_updates_from_cached_snapshots() -> Resu
                 branding: None,
                 app_metadata: None,
                 labels: None,
-                install_url: Some("https://chatgpt.com/apps/beta-app/beta".to_string()),
+                install_url: Some("https://example.com/apps/beta-app/beta".to_string()),
                 is_accessible: true,
                 is_enabled: true,
                 plugin_display_names: Vec::new(),
@@ -1226,7 +1226,7 @@ async fn list_apps_force_refetch_patches_updates_from_cached_snapshots() -> Resu
                 branding: None,
                 app_metadata: None,
                 labels: None,
-                install_url: Some("https://chatgpt.com/apps/alpha/alpha".to_string()),
+                install_url: Some("https://example.com/apps/alpha/alpha".to_string()),
                 is_accessible: false,
                 is_enabled: true,
                 plugin_display_names: Vec::new(),
@@ -1286,7 +1286,7 @@ async fn list_apps_force_refetch_patches_updates_from_cached_snapshots() -> Resu
                 branding: None,
                 app_metadata: None,
                 labels: None,
-                install_url: Some("https://chatgpt.com/apps/beta-app/beta".to_string()),
+                install_url: Some("https://example.com/apps/beta-app/beta".to_string()),
                 is_accessible: true,
                 is_enabled: true,
                 plugin_display_names: Vec::new(),
@@ -1301,7 +1301,7 @@ async fn list_apps_force_refetch_patches_updates_from_cached_snapshots() -> Resu
                 branding: None,
                 app_metadata: None,
                 labels: None,
-                install_url: Some("https://chatgpt.com/apps/alpha/alpha".to_string()),
+                install_url: Some("https://example.com/apps/alpha/alpha".to_string()),
                 is_accessible: false,
                 is_enabled: true,
                 plugin_display_names: Vec::new(),
@@ -1329,7 +1329,7 @@ async fn list_apps_force_refetch_patches_updates_from_cached_snapshots() -> Resu
         branding: None,
         app_metadata: None,
         labels: None,
-        install_url: Some("https://chatgpt.com/apps/alpha/alpha".to_string()),
+        install_url: Some("https://example.com/apps/alpha/alpha".to_string()),
         is_accessible: false,
         is_enabled: true,
         plugin_display_names: Vec::new(),
@@ -1500,7 +1500,7 @@ async fn start_apps_server_with_delays_and_control_inner(
     ));
     let tools = Arc::new(StdMutex::new(tools));
     let state = AppsServerState {
-        expected_bearer: "Bearer chatgpt-token".to_string(),
+        expected_bearer: "Bearer api-key-token".to_string(),
         expected_account_id: "account-123".to_string(),
         response: response.clone(),
         directory_delay,
@@ -1553,7 +1553,7 @@ async fn workspace_settings_response(
         .and_then(|value| value.to_str().ok())
         .is_some_and(|value| value == state.expected_bearer);
     let account_ok = headers
-        .get("chatgpt-account-id")
+        .get("x-account-id")
         .and_then(|value| value.to_str().ok())
         .is_some_and(|value| value == state.expected_account_id);
 
@@ -1582,7 +1582,7 @@ async fn list_directory_connectors(
         .and_then(|value| value.to_str().ok())
         .is_some_and(|value| value == state.expected_bearer);
     let account_ok = headers
-        .get("chatgpt-account-id")
+        .get("x-account-id")
         .and_then(|value| value.to_str().ok())
         .is_some_and(|value| value == state.expected_account_id);
     let external_logos_ok = uri
@@ -1630,7 +1630,7 @@ fn write_connectors_config(ody_home: &std::path::Path, base_url: &str) -> std::i
         config_toml,
         format!(
             r#"
-chatgpt_base_url = "{base_url}"
+legacy_base_url = "{base_url}"
 mcp_oauth_credentials_store = "file"
 
 [features]
@@ -1646,7 +1646,7 @@ fn write_connectors_and_plugins_config(ody_home: &Path, base_url: &str) -> std::
         config_toml,
         format!(
             r#"
-chatgpt_base_url = "{base_url}"
+legacy_base_url = "{base_url}"
 mcp_oauth_credentials_store = "file"
 
 [features]

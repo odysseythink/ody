@@ -299,7 +299,7 @@ model = "mock-model"
 approval_policy = "never"
 sandbox_mode = "read-only"
 model_provider = "odysseythink-custom"
-chatgpt_base_url = "{server_uri}"
+legacy_base_url = "{server_uri}"
 
 [features]
 standalone_web_search = true

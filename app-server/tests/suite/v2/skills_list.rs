@@ -67,7 +67,7 @@ fn write_plugins_enabled_config_with_base_url(
     std::fs::write(
         ody_home.join("config.toml"),
         format!(
-            r#"chatgpt_base_url = "{base_url}"
+            r#"legacy_base_url = "{base_url}"
 
 [features]
 plugins = true
@@ -83,7 +83,7 @@ fn write_remote_plugins_enabled_config_with_base_url(
     std::fs::write(
         ody_home.join("config.toml"),
         format!(
-            r#"chatgpt_base_url = "{base_url}"
+            r#"legacy_base_url = "{base_url}"
 
 [features]
 plugins = true
@@ -234,8 +234,8 @@ async fn skills_list_loads_remote_installed_plugin_skills_from_cache() -> Result
             .and(path("/backend-api/ps/plugins/list"))
             .and(query_param("scope", scope))
             .and(query_param("limit", "200"))
-            .and(header("authorization", "Bearer chatgpt-token"))
-            .and(header("chatgpt-account-id", "account-123"))
+            .and(header("authorization", "Bearer api-key-token"))
+            .and(header("x-account-id", "account-123"))
             .respond_with(ResponseTemplate::new(200).set_body_string(body))
             .mount(&server)
             .await;
@@ -272,8 +272,8 @@ async fn skills_list_loads_remote_installed_plugin_skills_from_cache() -> Result
         Mock::given(method("GET"))
             .and(path("/backend-api/ps/plugins/installed"))
             .and(query_param("scope", scope))
-            .and(header("authorization", "Bearer chatgpt-token"))
-            .and(header("chatgpt-account-id", "account-123"))
+            .and(header("authorization", "Bearer api-key-token"))
+            .and(header("x-account-id", "account-123"))
             .respond_with(ResponseTemplate::new(200).set_body_string(body))
             .mount(&server)
             .await;
@@ -353,8 +353,8 @@ async fn skills_list_excludes_plugin_skills_when_workspace_ody_plugins_disabled(
     )?;
     Mock::given(method("GET"))
         .and(path("/backend-api/accounts/account-123/settings"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_string(r#"{"beta_settings":{"enable_plugins":false}}"#),

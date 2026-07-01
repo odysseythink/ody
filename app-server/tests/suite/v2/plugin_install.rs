@@ -341,7 +341,7 @@ async fn plugin_install_uses_remote_apps_needing_auth_response() -> Result<()> {
                 id: "alpha".to_string(),
                 name: "alpha".to_string(),
                 description: None,
-                install_url: Some("https://chatgpt.com/apps/alpha/alpha".to_string()),
+                install_url: Some("https://example.com/apps/alpha/alpha".to_string()),
                 category: Some("Developer Tools".to_string()),
             }],
         }
@@ -676,8 +676,8 @@ async fn plugin_install_rejects_when_workspace_ody_plugins_disabled() -> Result<
 
     Mock::given(method("GET"))
         .and(path("/backend-api/accounts/account-123/settings"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_string(r#"{"beta_settings":{"enable_plugins":false}}"#),
@@ -794,7 +794,7 @@ async fn plugin_install_returns_invalid_request_for_disallowed_product_plugin() 
         "path": "./sample-plugin"
       },
       "policy": {
-        "products": ["CHATGPT"]
+        "products": ["LEGACY"]
       }
     }
   ]
@@ -1163,7 +1163,7 @@ async fn plugin_install_returns_apps_needing_auth() -> Result<()> {
                 id: "alpha".to_string(),
                 name: "Alpha".to_string(),
                 description: Some("Alpha connector".to_string()),
-                install_url: Some("https://chatgpt.com/apps/alpha/alpha".to_string()),
+                install_url: Some("https://example.com/apps/alpha/alpha".to_string()),
                 category: None,
             }],
         }
@@ -1176,7 +1176,7 @@ async fn plugin_install_returns_apps_needing_auth() -> Result<()> {
 }
 
 #[tokio::test]
-async fn plugin_install_skips_mcp_oauth_for_chatgpt_dual_surface_plugin() -> Result<()> {
+async fn plugin_install_skips_mcp_oauth_for_legacy_dual_surface_plugin() -> Result<()> {
     let connectors = vec![AppInfo {
         id: "sample-mcp".to_string(),
         name: "Sample MCP".to_string(),
@@ -1303,7 +1303,7 @@ async fn plugin_install_starts_mcp_oauth_with_formerly_disallowed_plugin_app() -
                 name: "asdk_app_6938a94a61d881918ef32cb999ff937c".to_string(),
                 description: None,
                 install_url: Some(
-                    "https://chatgpt.com/apps/asdk-app-6938a94a61d881918ef32cb999ff937c/asdk_app_6938a94a61d881918ef32cb999ff937c"
+                    "https://example.com/apps/asdk-app-6938a94a61d881918ef32cb999ff937c/asdk_app_6938a94a61d881918ef32cb999ff937c"
                         .to_string(),
                 ),
                 category: None,
@@ -1502,7 +1502,7 @@ async fn plugin_install_starts_remote_mcp_oauth_for_install_response_only_app() 
                 id: "alpha".to_string(),
                 name: "alpha".to_string(),
                 description: None,
-                install_url: Some("https://chatgpt.com/apps/alpha/alpha".to_string()),
+                install_url: Some("https://example.com/apps/alpha/alpha".to_string()),
                 category: None,
             }],
         }
@@ -1554,7 +1554,7 @@ async fn plugin_install_skips_remote_mcp_oauth_for_bundled_same_name_app() -> Re
                 id: "alpha".to_string(),
                 name: "alpha".to_string(),
                 description: None,
-                install_url: Some("https://chatgpt.com/apps/alpha/alpha".to_string()),
+                install_url: Some("https://example.com/apps/alpha/alpha".to_string()),
                 category: None,
             }],
         }
@@ -1637,7 +1637,7 @@ async fn plugin_install_includes_formerly_disallowed_apps_needing_auth() -> Resu
                 id: "alpha".to_string(),
                 name: "Alpha".to_string(),
                 description: Some("Alpha connector".to_string()),
-                install_url: Some("https://chatgpt.com/apps/alpha/alpha".to_string()),
+                install_url: Some("https://example.com/apps/alpha/alpha".to_string()),
                 category: None,
             },
             AppSummary {
@@ -1645,7 +1645,7 @@ async fn plugin_install_includes_formerly_disallowed_apps_needing_auth() -> Resu
                 name: "asdk_app_6938a94a61d881918ef32cb999ff937c".to_string(),
                 description: None,
                 install_url: Some(
-                    "https://chatgpt.com/apps/asdk-app-6938a94a61d881918ef32cb999ff937c/asdk_app_6938a94a61d881918ef32cb999ff937c"
+                    "https://example.com/apps/asdk-app-6938a94a61d881918ef32cb999ff937c/asdk_app_6938a94a61d881918ef32cb999ff937c"
                         .to_string(),
                 ),
                 category: None,
@@ -1867,9 +1867,9 @@ async fn list_directory_connectors(
     let bearer_ok = headers
         .get(AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
-        .is_some_and(|value| value == "Bearer chatgpt-token");
+        .is_some_and(|value| value == "Bearer api-key-token");
     let account_ok = headers
-        .get("chatgpt-account-id")
+        .get("x-account-id")
         .and_then(|value| value.to_str().ok())
         .is_some_and(|value| value == "account-123");
     let external_logos_ok = uri
@@ -1916,7 +1916,7 @@ fn write_connectors_config(ody_home: &std::path::Path, base_url: &str) -> std::i
         ody_home.join("config.toml"),
         format!(
             r#"
-chatgpt_base_url = "{base_url}"
+legacy_base_url = "{base_url}"
 mcp_oauth_credentials_store = "file"
 
 [features]
@@ -1933,7 +1933,7 @@ fn write_plugins_enabled_config_with_base_url(
     std::fs::write(
         ody_home.join("config.toml"),
         format!(
-            r#"chatgpt_base_url = "{base_url}"
+            r#"legacy_base_url = "{base_url}"
 
 [features]
 plugins = true
@@ -1945,7 +1945,7 @@ plugins = true
 fn write_analytics_config(ody_home: &std::path::Path, base_url: &str) -> std::io::Result<()> {
     std::fs::write(
         ody_home.join("config.toml"),
-        format!("chatgpt_base_url = \"{base_url}\"\n"),
+        format!("legacy_base_url = \"{base_url}\"\n"),
     )
 }
 
@@ -1998,7 +1998,7 @@ fn write_remote_plugin_catalog_config(
         ody_home.join("config.toml"),
         format!(
             r#"
-chatgpt_base_url = "{base_url}"
+legacy_base_url = "{base_url}"
 
 [features]
 plugins = true
@@ -2026,7 +2026,7 @@ fn configure_remote_plugin_with_apps_test(
         ody_home.join("config.toml"),
         format!(
             r#"
-chatgpt_base_url = "{}/backend-api/"
+legacy_base_url = "{}/backend-api/"
 
 [features]
 plugins = true
@@ -2196,8 +2196,8 @@ async fn mount_remote_plugin_detail_with_options(
     Mock::given(method("GET"))
         .and(path(format!("/backend-api/ps/plugins/{remote_plugin_id}")))
         .and(query_param("includeDownloadUrls", "true"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(200).set_body_string(detail_body))
         .mount(server)
         .await;
@@ -2207,8 +2207,8 @@ async fn mount_empty_remote_installed_plugins(server: &MockServer) {
     Mock::given(method("GET"))
         .and(path("/backend-api/ps/plugins/installed"))
         .and(query_param("scope", "GLOBAL"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(200).set_body_string(
             r#"{
   "plugins": [],
@@ -2227,8 +2227,8 @@ async fn mount_remote_plugin_install(server: &MockServer, remote_plugin_id: &str
         .and(path(format!(
             "/backend-api/ps/plugins/{remote_plugin_id}/install"
         )))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_string(format!(r#"{{"id":"{remote_plugin_id}","enabled":true}}"#)),
@@ -2247,8 +2247,8 @@ async fn mount_remote_plugin_install_with_apps_needing_auth(
             "/backend-api/ps/plugins/{remote_plugin_id}/install"
         )))
         .and(query_param("includeAppsNeedingAuth", "true"))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "id": remote_plugin_id,
             "enabled": true,
@@ -2278,8 +2278,8 @@ async fn mount_remote_plugin_install_after_cache_write(
         .and(path(format!(
             "/backend-api/ps/plugins/{remote_plugin_id}/install"
         )))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .and(CacheManifestExists { manifest_path })
         .respond_with(
             ResponseTemplate::new(200)

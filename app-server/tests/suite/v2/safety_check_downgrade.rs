@@ -322,7 +322,7 @@ async fn turn_moderation_metadata_emits_typed_notification_v2() -> Result<()> {
             "sequence_number": 1,
             "response_id": "resp-1",
             "metadata": {
-                "odysseythink_chatgpt_moderation_metadata": {
+                "odysseythink_moderation_metadata": {
                     "presentation": "inline"
                 }
             }

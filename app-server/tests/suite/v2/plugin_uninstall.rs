@@ -87,7 +87,7 @@ async fn plugin_uninstall_tracks_analytics_event() -> Result<()> {
     std::fs::write(
         ody_home.path().join("config.toml"),
         format!(
-            "chatgpt_base_url = \"{}\"\n\n[features]\nplugins = true\n\n[plugins.\"sample-plugin@debug\"]\nenabled = true\n",
+            "legacy_base_url = \"{}\"\n\n[features]\nplugins = true\n\n[plugins.\"sample-plugin@debug\"]\nenabled = true\n",
             analytics_server.uri()
         ),
     )?;
@@ -204,8 +204,8 @@ async fn plugin_uninstall_writes_remote_plugin_to_cloud_when_remote_plugin_enabl
         .and(path(format!(
             "/backend-api/ps/plugins/{REMOTE_PLUGIN_ID}/uninstall"
         )))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_string(format!(r#"{{"id":"{REMOTE_PLUGIN_ID}","enabled":false}}"#)),
@@ -274,8 +274,8 @@ async fn plugin_uninstall_uses_detail_scope_for_cache_namespace() -> Result<()> 
         .and(path(format!(
             "/backend-api/ps/plugins/{REMOTE_PLUGIN_ID}/uninstall"
         )))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_string(format!(r#"{{"id":"{REMOTE_PLUGIN_ID}","enabled":false}}"#)),
@@ -351,8 +351,8 @@ async fn plugin_uninstall_accepts_workspace_remote_plugin_id_shape() -> Result<(
         .and(path(format!(
             "/backend-api/ps/plugins/{WORKSPACE_REMOTE_PLUGIN_ID}/uninstall"
         )))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(200).set_body_string(format!(
             r#"{{"id":"{WORKSPACE_REMOTE_PLUGIN_ID}","enabled":false}}"#
         )))
@@ -574,7 +574,7 @@ fn write_remote_plugin_catalog_config(
         ody_home.join("config.toml"),
         format!(
             r#"
-chatgpt_base_url = "{base_url}"
+legacy_base_url = "{base_url}"
 
 [features]
 plugins = true
@@ -635,8 +635,8 @@ async fn mount_remote_plugin_detail_with_name(
 
     Mock::given(method("GET"))
         .and(path(format!("/backend-api/ps/plugins/{remote_plugin_id}")))
-        .and(header("authorization", "Bearer chatgpt-token"))
-        .and(header("chatgpt-account-id", "account-123"))
+        .and(header("authorization", "Bearer api-key-token"))
+        .and(header("x-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(200).set_body_string(detail_body))
         .mount(server)
         .await;

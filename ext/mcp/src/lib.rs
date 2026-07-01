@@ -4,7 +4,7 @@ use ody_extension_api::ExtensionRegistryBuilder;
 mod executor_plugin;
 
 /// Previously wired a `hosted_plugin_runtime` MCP server contributor that pointed at a
-/// ChatGPT/OpenAI-hosted "Apps" plugin runtime endpoint. That remote-hosted-catalog
+/// Remote-hosted "Apps" plugin runtime endpoint. That remote-hosted-catalog
 /// integration has been removed; this function is now a no-op kept so callers do not need
 /// to change their extension-registration sequence.
 pub fn install(_builder: &mut ExtensionRegistryBuilder<Config>) {}

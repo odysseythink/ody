@@ -57,7 +57,7 @@ async fn attestation_generate_round_trip_adds_header_to_responses_websocket_hand
 
     let ody_home = TempDir::new()?;
     write_models_cache(ody_home.path())?;
-    create_chatgpt_websocket_config(
+    create_legacy_websocket_config(
         ody_home.path(),
         &websocket_server.uri().replacen("ws://", "http://", 1),
     )?;
@@ -163,7 +163,7 @@ async fn attestation_generate_round_trip_adds_header_to_responses_websocket_hand
     Ok(())
 }
 
-fn create_chatgpt_websocket_config(ody_home: &Path, server_uri: &str) -> std::io::Result<()> {
+fn create_legacy_websocket_config(ody_home: &Path, server_uri: &str) -> std::io::Result<()> {
     std::fs::write(
         ody_home.join("config.toml"),
         format!(
@@ -175,7 +175,7 @@ sandbox_mode = "read-only"
 model_provider = "mock_provider"
 
 [model_providers.mock_provider]
-name = "Mock ChatGPT provider for test"
+name = "Mock Legacy provider for test"
 base_url = "{server_uri}/v1"
 wire_api = "responses"
 request_max_retries = 0

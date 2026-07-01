@@ -47,14 +47,14 @@ fn create_config_toml(ody_home: &Path, params: CreateConfigTomlParams) -> std::i
         String::new()
     };
     let forced_workspace_line = if let Some(ws) = params.forced_workspace_id {
-        format!("forced_chatgpt_workspace_id = \"{ws}\"\n")
+        format!("forced_workspace_id = \"{ws}\"\n")
     } else if let Some(workspaces) = params.forced_workspace_ids {
         let workspaces = workspaces
             .into_iter()
             .map(|workspace_id| format!("\"{workspace_id}\""))
             .collect::<Vec<_>>()
             .join(", ");
-        format!("forced_chatgpt_workspace_id = [{workspaces}]\n")
+        format!("forced_workspace_id = [{workspaces}]\n")
     } else {
         String::new()
     };

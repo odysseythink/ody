@@ -535,7 +535,7 @@ async fn mcp_resource_read_returns_resource_contents_without_thread() -> Result<
         ody_home.path().join("config.toml"),
         format!(
             r#"
-chatgpt_base_url = "{apps_server_url}"
+legacy_base_url = "{apps_server_url}"
 mcp_oauth_credentials_store = "file"
 
 [features]
@@ -662,7 +662,7 @@ approval_policy = "untrusted"
 sandbox_mode = "read-only"
 
 model_provider = "mock_provider"
-chatgpt_base_url = "{apps_server_url}"
+legacy_base_url = "{apps_server_url}"
 mcp_oauth_credentials_store = "file"
 
 [features]

@@ -175,10 +175,10 @@ async fn personal_access_token_without_email_supports_auth_status_and_account_re
         .and(header("Authorization", "Bearer at-test-token"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "email": null,
-            "chatgpt_user_id": "user-123",
-            "chatgpt_account_id": "account-123",
-            "chatgpt_plan_type": "pro",
-            "chatgpt_account_is_fedramp": false,
+            "user_id": "user-123",
+            "account_id": "account-123",
+            "plan_type": "pro",
+            "account_is_compliant": false,
         })))
         .expect(1..)
         .mount(&server)
@@ -582,9 +582,9 @@ async fn get_auth_status_returns_token_after_proactive_refresh_recovery() -> Res
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn login_api_key_rejected_when_forced_chatgpt() -> Result<()> {
+async fn login_api_key_rejected_when_forced_legacy() -> Result<()> {
     let ody_home = TempDir::new()?;
-    create_config_toml_forced_login(ody_home.path(), "chatgpt")?;
+    create_config_toml_forced_login(ody_home.path(), "legacy")?;
 
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
@@ -601,7 +601,7 @@ async fn login_api_key_rejected_when_forced_chatgpt() -> Result<()> {
 
     assert_eq!(
         err.error.message,
-        "API key login is disabled. Use ChatGPT login instead."
+        "API key login is disabled. Use Legacy login instead."
     );
     Ok(())
 }

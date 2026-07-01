@@ -48,7 +48,6 @@ pub enum ToolDecisionSource {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum TelemetryAuthMode {
     ApiKey,
-    Chatgpt,
 }
 
 impl From<ody_app_server_protocol::AuthMode> for TelemetryAuthMode {

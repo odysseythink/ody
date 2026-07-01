@@ -36,7 +36,7 @@ const INVALID_REQUEST_ERROR_CODE: i64 = -32600;
 const INTERNAL_ERROR_CODE: i64 = -32603;
 
 #[tokio::test]
-async fn consume_rate_limit_reset_credit_requires_chatgpt_auth() -> Result<()> {
+async fn consume_rate_limit_reset_credit_requires_legacy_auth() -> Result<()> {
     let ody_home = TempDir::new()?;
     let mut mcp = initialized_app_server(ody_home.path()).await?;
 
@@ -60,14 +60,14 @@ async fn consume_rate_limit_reset_credit_requires_chatgpt_auth() -> Result<()> {
     assert_eq!(consume_error.error.code, INVALID_REQUEST_ERROR_CODE);
     assert_eq!(
         consume_error.error.message,
-        "chatgpt authentication required for rate limit reset credits"
+        "legacy authentication required for rate limit reset credits"
     );
     Ok(())
 }
 
 #[tokio::test]
 async fn consume_account_rate_limit_reset_credit_maps_backend_outcomes() -> Result<()> {
-    let (ody_home, server) = chatgpt_test_context().await?;
+    let (ody_home, server) = legacy_test_context().await?;
     let cases = [
         (
             "request-reset",
@@ -97,8 +97,8 @@ async fn consume_account_rate_limit_reset_credit_maps_backend_outcomes() -> Resu
     for (idempotency_key, backend_code, _, windows_reset) in cases {
         Mock::given(method("POST"))
             .and(path("/api/ody/rate-limit-reset-credits/consume"))
-            .and(header("authorization", "Bearer chatgpt-token"))
-            .and(header("chatgpt-account-id", "account-123"))
+            .and(header("authorization", "Bearer api-key-token"))
+            .and(header("x-account-id", "account-123"))
             .and(body_json(json!({ "redeem_request_id": idempotency_key })))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "code": backend_code,
@@ -122,7 +122,7 @@ async fn consume_account_rate_limit_reset_credit_maps_backend_outcomes() -> Resu
 
 #[tokio::test]
 async fn consume_account_rate_limit_reset_credit_rejects_empty_idempotency_key() -> Result<()> {
-    let (ody_home, _server) = chatgpt_test_context().await?;
+    let (ody_home, _server) = legacy_test_context().await?;
     let mut mcp = initialized_app_server(ody_home.path()).await?;
 
     let request_id = mcp
@@ -141,7 +141,7 @@ async fn consume_account_rate_limit_reset_credit_rejects_empty_idempotency_key()
 
 #[tokio::test]
 async fn consume_account_rate_limit_reset_credit_surfaces_backend_failure() -> Result<()> {
-    let (ody_home, server) = chatgpt_test_context().await?;
+    let (ody_home, server) = legacy_test_context().await?;
     Mock::given(method("POST"))
         .and(path("/api/ody/rate-limit-reset-credits/consume"))
         .respond_with(ResponseTemplate::new(500).set_body_string("boom"))
@@ -166,7 +166,7 @@ async fn consume_account_rate_limit_reset_credit_surfaces_backend_failure() -> R
 
 #[tokio::test]
 async fn consume_timeout_releases_account_auth_queue() -> Result<()> {
-    let (ody_home, server) = chatgpt_test_context().await?;
+    let (ody_home, server) = legacy_test_context().await?;
     Mock::given(method("POST"))
         .and(path("/api/ody/rate-limit-reset-credits/consume"))
         .respond_with(
@@ -212,7 +212,7 @@ async fn consume_timeout_releases_account_auth_queue() -> Result<()> {
     Ok(())
 }
 
-async fn chatgpt_test_context() -> Result<(TempDir, MockServer)> {
+async fn legacy_test_context() -> Result<(TempDir, MockServer)> {
     let ody_home = TempDir::new()?;
     write_api_key_auth(
         ody_home.path(),
@@ -222,7 +222,7 @@ async fn chatgpt_test_context() -> Result<(TempDir, MockServer)> {
         AuthCredentialsStoreMode::File,
     )?;
     let server = MockServer::start().await;
-    write_chatgpt_base_url(ody_home.path(), &server.uri())?;
+    write_legacy_base_url(ody_home.path(), &server.uri())?;
     Ok((ody_home, server))
 }
 
@@ -279,9 +279,9 @@ async fn login_with_api_key(mcp: &mut TestAppServer, api_key: &str) -> Result<()
     Ok(())
 }
 
-fn write_chatgpt_base_url(ody_home: &Path, base_url: &str) -> std::io::Result<()> {
+fn write_legacy_base_url(ody_home: &Path, base_url: &str) -> std::io::Result<()> {
     std::fs::write(
         ody_home.join("config.toml"),
-        format!("chatgpt_base_url = \"{base_url}\"\n"),
+        format!("legacy_base_url = \"{base_url}\"\n"),
     )
 }
