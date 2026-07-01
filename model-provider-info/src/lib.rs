@@ -34,7 +34,6 @@ const MAX_REQUEST_MAX_RETRIES: u64 = 100;
 
 const OPENAI_PROVIDER_NAME: &str = "OpenAI";
 pub const OPENAI_PROVIDER_ID: &str = "odysseythink";
-pub const CHATGPT_ODY_BASE_URL: &str = "https://chatgpt.com/backend-api/ody";
 const AMAZON_BEDROCK_PROVIDER_NAME: &str = "Amazon Bedrock";
 pub const AMAZON_BEDROCK_PROVIDER_ID: &str = "amazon-bedrock";
 pub const AMAZON_BEDROCK_GPT_5_5_MODEL_ID: &str = "odysseythink.gpt-5.5";
@@ -259,20 +258,8 @@ impl ModelProviderInfo {
         Ok(headers)
     }
 
-    pub fn to_api_provider(&self, auth_mode: Option<AuthMode>) -> OdyResult<ApiProvider> {
-        let default_base_url = if matches!(
-            auth_mode,
-            Some(
-                AuthMode::Chatgpt
-                    | AuthMode::ChatgptAuthTokens
-                    | AuthMode::AgentIdentity
-                    | AuthMode::PersonalAccessToken
-            )
-        ) {
-            CHATGPT_ODY_BASE_URL
-        } else {
-            "https://api.odysseythink.com/v1"
-        };
+    pub fn to_api_provider(&self, _auth_mode: Option<AuthMode>) -> OdyResult<ApiProvider> {
+        let default_base_url = "https://api.odysseythink.com/v1";
         let base_url = self
             .base_url
             .clone()

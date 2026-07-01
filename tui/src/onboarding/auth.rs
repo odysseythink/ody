@@ -844,7 +844,7 @@ impl AuthModeWidget {
     fn handle_existing_chatgpt_login(&mut self) -> bool {
         if matches!(
             self.login_status,
-            LoginStatus::AuthMode(auth_mode) if auth_mode.has_chatgpt_account()
+            LoginStatus::AuthMode(_auth_mode) if false
         ) {
             *self.sign_in_state.write().unwrap() = SignInState::ChatGptSuccess;
             self.request_frame.schedule_frame();
@@ -855,59 +855,22 @@ impl AuthModeWidget {
     }
 
     /// Kicks off the ChatGPT auth flow and keeps the UI state consistent with the attempt.
+    ///
+    /// ChatGPT account login is no longer supported; this immediately shows an error.
     fn start_chatgpt_login(&mut self) {
-        // If we're already authenticated with ChatGPT, don't start a new login –
-        // just proceed to the success message flow.
-        if self.handle_existing_chatgpt_login() {
-            return;
-        }
-
-        self.set_error(/*message*/ None);
-        let request_handle = self.app_server_request_handle.clone();
-        let sign_in_state = self.sign_in_state.clone();
-        let error = self.error.clone();
-        let request_frame = self.request_frame.clone();
-        tokio::spawn(async move {
-            match request_handle
-                .request_typed::<LoginAccountResponse>(ClientRequest::LoginAccount {
-                    request_id: onboarding_request_id(),
-                    params: LoginAccountParams::Chatgpt {
-                        ody_streamlined_login: false,
-                    },
-                })
-                .await
-            {
-                Ok(LoginAccountResponse::Chatgpt { login_id, auth_url }) => {
-                    maybe_open_auth_url_in_browser(&request_handle, &auth_url);
-                    *error.write().unwrap() = None;
-                    *sign_in_state.write().unwrap() =
-                        SignInState::ChatGptContinueInBrowser(ContinueInBrowserState {
-                            login_id,
-                            auth_url,
-                        });
-                }
-                Ok(other) => {
-                    *sign_in_state.write().unwrap() = SignInState::PickMode;
-                    *error.write().unwrap() = Some(format!(
-                        "Unexpected account/login/start response: {other:?}"
-                    ));
-                }
-                Err(err) => {
-                    *sign_in_state.write().unwrap() = SignInState::PickMode;
-                    *error.write().unwrap() = Some(err.to_string());
-                }
-            }
-            request_frame.schedule_frame();
-        });
+        self.set_error(Some(
+            "ChatGPT account login is no longer supported. Use API key login instead.".to_string(),
+        ));
+        *self.sign_in_state.write().unwrap() = SignInState::PickMode;
+        self.request_frame.schedule_frame();
     }
 
     fn start_device_code_login(&mut self) {
-        if self.handle_existing_chatgpt_login() {
-            return;
-        }
-
-        self.set_error(/*message*/ None);
-        headless_chatgpt_login::start_headless_chatgpt_login(self);
+        self.set_error(Some(
+            "ChatGPT account login is no longer supported. Use API key login instead.".to_string(),
+        ));
+        *self.sign_in_state.write().unwrap() = SignInState::PickMode;
+        self.request_frame.schedule_frame();
     }
 
     pub(crate) fn on_account_login_completed(
@@ -1110,8 +1073,8 @@ mod tests {
     #[tokio::test]
     async fn existing_non_oauth_chatgpt_login_counts_as_signed_in() {
         for auth_mode in [
-            AppServerAuthMode::ChatgptAuthTokens,
-            AppServerAuthMode::PersonalAccessToken,
+            AppServerAuthMode::ApiKey,
+            AppServerAuthMode::ApiKey,
         ] {
             let (mut widget, _tmp) = widget_forced_chatgpt().await;
             widget.login_status = LoginStatus::AuthMode(auth_mode);

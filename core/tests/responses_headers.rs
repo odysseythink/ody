@@ -100,7 +100,7 @@ async fn responses_stream_includes_subagent_header_on_review() {
     let config = Arc::new(config);
 
     let thread_id = ThreadId::new();
-    let auth_mode = TelemetryAuthMode::Chatgpt;
+    let auth_mode = TelemetryAuthMode::ApiKey;
     let session_source = SessionSource::SubAgent(SubAgentSource::Review);
     let model_info =
         ody_core::test_support::construct_model_info_offline(model.as_str(), &config);
@@ -232,7 +232,7 @@ async fn responses_stream_includes_subagent_header_on_other() {
     let config = Arc::new(config);
 
     let thread_id = ThreadId::new();
-    let auth_mode = TelemetryAuthMode::Chatgpt;
+    let auth_mode = TelemetryAuthMode::ApiKey;
     let session_source = SessionSource::SubAgent(SubAgentSource::Other("my-task".to_string()));
     let model_info =
         ody_core::test_support::construct_model_info_offline(model.as_str(), &config);

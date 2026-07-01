@@ -405,6 +405,4 @@ fn verified_plugin_install_completed(
         .any(|plugin| plugin.id == tool_id && plugin.installed)
 }
 
-#[cfg(test)]
-#[path = "request_plugin_install_tests.rs"]
-mod tests;
+

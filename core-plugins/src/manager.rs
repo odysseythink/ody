@@ -1420,10 +1420,7 @@ impl PluginsManager {
             self.ody_home.as_path(),
         ));
         let curated_marketplace_path = if include_odysseythink_curated {
-            if matches!(
-                self.auth_mode(),
-                Some(AuthMode::ApiKey | AuthMode::BedrockApiKey)
-            ) {
+            if matches!(self.auth_mode(), Some(AuthMode::ApiKey)) {
                 let api_marketplace_path =
                     curated_plugins_api_marketplace_path(self.ody_home.as_path());
                 api_marketplace_path

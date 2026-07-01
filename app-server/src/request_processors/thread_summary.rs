@@ -13,7 +13,7 @@ pub(crate) async fn read_summary_from_rollout(
     let head = read_head_for_summary(path).await?;
 
     let Some(first) = head.first() else {
-        return Err(IoError::other(format!(
+        return Err(std::io::Error::other(format!(
             "rollout at {} is empty",
             path.display()
         )));
@@ -21,7 +21,7 @@ pub(crate) async fn read_summary_from_rollout(
 
     let session_meta_line =
         serde_json::from_value::<SessionMetaLine>(first.clone()).map_err(|_| {
-            IoError::other(format!(
+            std::io::Error::other(format!(
                 "rollout at {} does not start with session metadata",
                 path.display()
             ))

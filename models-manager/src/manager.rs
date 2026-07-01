@@ -118,10 +118,7 @@ pub trait ModelsManager: fmt::Debug + Send + Sync {
         remote_models.sort_by_key(|model| model.priority);
 
         let mut presets: Vec<ModelPreset> = remote_models.into_iter().map(Into::into).collect();
-        let uses_ody_backend = self
-            .auth_manager()
-            .is_some_and(AuthManager::current_auth_uses_ody_backend);
-        presets = ModelPreset::filter_by_auth(presets, uses_ody_backend);
+        presets = ModelPreset::filter_by_auth(presets, false);
 
         ModelPreset::mark_default_by_picker_visibility(&mut presets);
 
@@ -341,7 +338,7 @@ impl OpenAiModelsManager {
     }
 
     async fn should_refresh_models(&self) -> bool {
-        self.endpoint_client.uses_ody_backend().await || self.endpoint_client.has_command_auth()
+        self.endpoint_client.has_command_auth()
     }
 
     async fn get_etag(&self) -> Option<String> {
@@ -350,22 +347,6 @@ impl OpenAiModelsManager {
 
     /// Replace the cached remote models and rebuild the derived presets list.
     async fn apply_remote_models(&self, models: Vec<ModelInfo>) {
-        // Use the remote models list as the source of truth if it contains at least one
-        // non-hidden model and the user is using ChatGPT auth.
-        let should_use_remote_models_only = !models.is_empty()
-            && models
-                .iter()
-                .any(|model| model.visibility == ModelVisibility::List)
-            && self.auth_manager.as_ref().is_some_and(|auth_manager| {
-                auth_manager
-                    .auth_mode()
-                    .is_some_and(AuthMode::has_chatgpt_account)
-            });
-        if should_use_remote_models_only {
-            *self.remote_models.write().await = models;
-            return;
-        }
-
         let mut existing_models = load_remote_models_from_file().unwrap_or_default();
         for model in models {
             if let Some(existing_index) = existing_models

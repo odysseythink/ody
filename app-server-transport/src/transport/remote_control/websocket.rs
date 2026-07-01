@@ -2023,7 +2023,7 @@ mod tests {
         let fake_jwt = format!("{header_b64}.{payload_b64}.sig");
 
         AuthDotJson {
-            auth_mode: Some(AuthMode::Chatgpt),
+            auth_mode: Some(AuthMode::ApiKey),
             odysseythink_api_key: None,
             tokens: Some(TokenData {
                 id_token: parse_chatgpt_jwt_claims(&fake_jwt).expect("fake jwt should parse"),
@@ -2032,8 +2032,6 @@ mod tests {
                 account_id: Some("account_id".to_string()),
             }),
             last_refresh: Some(Utc::now()),
-            agent_identity: None,
-            personal_access_token: None,
             bedrock_api_key: None,
         }
     }

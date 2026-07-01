@@ -7,7 +7,6 @@
 use serde::Serialize;
 use std::time::Duration;
 
-use ody_app_server_protocol::AuthMode as ApiAuthMode;
 use ody_client::OdyHttpClient;
 
 use super::manager::REFRESH_TOKEN_URL_OVERRIDE_ENV_VAR;
@@ -76,22 +75,8 @@ fn revocable_token(auth_dot_json: &AuthDotJson) -> Option<(&str, RevokeTokenKind
     }
 }
 
-fn managed_chatgpt_tokens(auth_dot_json: &AuthDotJson) -> Option<&TokenData> {
-    if resolved_auth_mode(auth_dot_json) == ApiAuthMode::Chatgpt {
-        auth_dot_json.tokens.as_ref()
-    } else {
-        None
-    }
-}
-
-fn resolved_auth_mode(auth_dot_json: &AuthDotJson) -> ApiAuthMode {
-    if let Some(mode) = auth_dot_json.auth_mode {
-        return mode;
-    }
-    if auth_dot_json.odysseythink_api_key.is_some() {
-        return ApiAuthMode::ApiKey;
-    }
-    ApiAuthMode::Chatgpt
+fn managed_chatgpt_tokens(_auth_dot_json: &AuthDotJson) -> Option<&TokenData> {
+    None
 }
 
 async fn revoke_oauth_token(

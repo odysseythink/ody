@@ -58,13 +58,10 @@ impl AuthDotJson {
         if let Some(mode) = self.auth_mode {
             return mode;
         }
-        if self.bedrock_api_key.is_some() {
-            return AuthMode::BedrockApiKey;
-        }
         if self.odysseythink_api_key.is_some() {
             return AuthMode::ApiKey;
         }
-        AuthMode::Chatgpt
+        AuthMode::Unauthenticated
     }
 }
 

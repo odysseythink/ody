@@ -80,25 +80,14 @@ impl App {
                 return;
             }
             ServerNotification::AccountUpdated(notification) => {
-                let has_ody_backend_auth = matches!(
-                    notification.auth_mode,
-                    Some(
-                        AuthMode::Chatgpt
-                            | AuthMode::ChatgptAuthTokens
-                            | AuthMode::AgentIdentity
-                            | AuthMode::PersonalAccessToken
-                    )
-                );
                 self.chat_widget.update_account_state(
                     status_account_display_from_auth_mode(
                         notification.auth_mode,
                         notification.plan_type,
                     ),
                     notification.plan_type,
-                    notification
-                        .auth_mode
-                        .is_some_and(AuthMode::has_chatgpt_account),
-                    has_ody_backend_auth,
+                    false,
+                    false,
                 );
                 return;
             }

@@ -826,7 +826,7 @@ impl App {
         let feedback_audience = bootstrap.feedback_audience;
         let auth_mode = bootstrap.auth_mode;
         let has_chatgpt_account = bootstrap.has_chatgpt_account;
-        let has_ody_backend_auth = matches!(auth_mode, Some(TelemetryAuthMode::Chatgpt));
+        let has_ody_backend_auth = matches!(auth_mode, Some(TelemetryAuthMode::ApiKey));
         let requires_odysseythink_auth = bootstrap.requires_odysseythink_auth;
         let status_account_display = bootstrap.status_account_display.clone();
         let initial_plan_type = bootstrap.plan_type;

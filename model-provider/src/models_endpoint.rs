@@ -57,10 +57,7 @@ impl OpenAiModelsEndpoint {
     }
 
     async fn uses_ody_backend(&self) -> bool {
-        self.auth()
-            .await
-            .as_ref()
-            .is_some_and(OdyAuth::uses_ody_backend)
+        false
     }
 
     async fn list_models(

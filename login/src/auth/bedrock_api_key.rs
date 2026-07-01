@@ -25,7 +25,7 @@ pub fn login_with_bedrock_api_key(
     keyring_backend_kind: AuthKeyringBackendKind,
 ) -> std::io::Result<()> {
     let auth_dot_json = AuthDotJson {
-        auth_mode: Some(AuthMode::BedrockApiKey),
+        auth_mode: Some(AuthMode::ApiKey),
         odysseythink_api_key: None,
         tokens: None,
         last_refresh: None,

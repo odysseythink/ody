@@ -4178,7 +4178,6 @@ async fn auto_compact_counts_encrypted_reasoning_before_last_user() {
     let ody = test_ody()
         .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(move |config| {
-            config.chatgpt_base_url = chatgpt_base_url;
             set_test_compact_prompt(config);
             config.model_auto_compact_token_limit = Some(300);
             let _ = config.features.disable(Feature::RemoteCompactionV2);

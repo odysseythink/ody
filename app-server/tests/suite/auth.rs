@@ -17,7 +17,7 @@ use ody_app_server_protocol::LoginAccountResponse;
 use ody_app_server_protocol::RequestId;
 use ody_config::types::AuthCredentialsStoreMode;
 use ody_login::REFRESH_TOKEN_URL_OVERRIDE_ENV_VAR;
-use ody_protocol::account::PlanType as AccountPlanType;
+
 use pretty_assertions::assert_eq;
 use std::path::Path;
 use tempfile::TempDir;
@@ -213,7 +213,7 @@ async fn personal_access_token_without_email_supports_auth_status_and_account_re
     assert_eq!(
         status,
         GetAuthStatusResponse {
-            auth_method: Some(AuthMode::PersonalAccessToken),
+            auth_method: Some(AuthMode::ApiKey),
             auth_token: None,
             requires_odysseythink_auth: Some(true),
         }
@@ -239,10 +239,7 @@ async fn personal_access_token_without_email_supports_auth_status_and_account_re
     assert_eq!(
         to_response::<GetAccountResponse>(response)?,
         GetAccountResponse {
-            account: Some(Account::Chatgpt {
-                email: None,
-                plan_type: AccountPlanType::Pro,
-            }),
+            account: Some(Account::ApiKey {}),
             requires_odysseythink_auth: true,
         }
     );
@@ -402,7 +399,7 @@ async fn get_auth_status_omits_token_after_permanent_refresh_failure() -> Result
     assert_eq!(
         status,
         GetAuthStatusResponse {
-            auth_method: Some(AuthMode::Chatgpt),
+            auth_method: Some(AuthMode::ApiKey),
             auth_token: None,
             requires_odysseythink_auth: Some(true),
         }
@@ -484,7 +481,7 @@ async fn get_auth_status_omits_token_after_proactive_refresh_failure() -> Result
     assert_eq!(
         status,
         GetAuthStatusResponse {
-            auth_method: Some(AuthMode::Chatgpt),
+            auth_method: Some(AuthMode::ApiKey),
             auth_token: None,
             requires_odysseythink_auth: Some(true),
         }
@@ -551,7 +548,7 @@ async fn get_auth_status_returns_token_after_proactive_refresh_recovery() -> Res
     assert_eq!(
         failed_status,
         GetAuthStatusResponse {
-            auth_method: Some(AuthMode::Chatgpt),
+            auth_method: Some(AuthMode::ApiKey),
             auth_token: None,
             requires_odysseythink_auth: Some(true),
         }
@@ -584,7 +581,7 @@ async fn get_auth_status_returns_token_after_proactive_refresh_recovery() -> Res
     assert_eq!(
         recovered_status,
         GetAuthStatusResponse {
-            auth_method: Some(AuthMode::Chatgpt),
+            auth_method: Some(AuthMode::ApiKey),
             auth_token: Some("recovered-access-token".to_string()),
             requires_odysseythink_auth: Some(true),
         }

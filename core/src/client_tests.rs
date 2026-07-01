@@ -22,7 +22,6 @@ use ody_login::OdyAuth;
 use ody_model_provider::BearerAuthProvider;
 use ody_model_provider::SharedModelProvider;
 use ody_model_provider::create_model_provider;
-use ody_model_provider_info::CHATGPT_ODY_BASE_URL;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::WireApi;
 use ody_model_provider_info::create_oss_provider_with_base_url;
@@ -565,7 +564,7 @@ async fn dropped_backpressured_response_stream_traces_cancelled_partial_output()
 #[test]
 fn auth_request_telemetry_context_tracks_attached_auth_and_retry_phase() {
     let auth_context = AuthRequestTelemetryContext::new(
-        Some(AuthMode::Chatgpt),
+        Some(AuthMode::ApiKey),
         &BearerAuthProvider::for_test(Some("access-token")),
         PendingUnauthorizedRetry::from_recovery(UnauthorizedRecoveryExecution {
             mode: "managed",
@@ -573,7 +572,7 @@ fn auth_request_telemetry_context_tracks_attached_auth_and_retry_phase() {
         }),
     );
 
-    assert_eq!(auth_context.auth_mode, Some("Chatgpt"));
+    assert_eq!(auth_context.auth_mode, Some("ApiKey"));
     assert!(auth_context.auth_header_attached);
     assert_eq!(auth_context.auth_header_name, Some("authorization"));
     assert!(auth_context.retry_after_unauthorized);
@@ -608,7 +607,7 @@ fn model_client_with_counting_attestation(
             Some(AuthManager::from_auth_for_testing(
                 OdyAuth::create_dummy_api_key_auth_for_testing(),
             )),
-            ModelProviderInfo::create_odysseythink_provider(Some(CHATGPT_ODY_BASE_URL.to_string())),
+            ModelProviderInfo::create_odysseythink_provider(Some("https://api.odysseythink.com/v1".to_string())),
         )
     } else {
         (

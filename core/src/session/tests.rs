@@ -3873,7 +3873,7 @@ fn session_telemetry(
         model_info.slug.as_str(),
         /*account_id*/ None,
         Some("test@test.com".to_string()),
-        Some(TelemetryAuthMode::Chatgpt),
+        Some(TelemetryAuthMode::ApiKey),
         "test_originator".to_string(),
         /*log_user_prompts*/ false,
         "test".to_string(),
@@ -5130,7 +5130,7 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
         main_execve_wrapper_exe: config.main_execve_wrapper_exe.clone(),
         analytics_events_client: AnalyticsEventsClient::new(
             Arc::clone(&auth_manager),
-            config.chatgpt_base_url.trim_end_matches('/').to_string(),
+            String::new(),
             config.analytics_enabled,
         ),
         hooks: arc_swap::ArcSwap::from_pointee(Hooks::new(HooksConfig {
@@ -7195,7 +7195,7 @@ where
         main_execve_wrapper_exe: config.main_execve_wrapper_exe.clone(),
         analytics_events_client: AnalyticsEventsClient::new(
             Arc::clone(&auth_manager),
-            config.chatgpt_base_url.trim_end_matches('/').to_string(),
+            String::new(),
             config.analytics_enabled,
         ),
         hooks: arc_swap::ArcSwap::from_pointee(Hooks::new(HooksConfig {

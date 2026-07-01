@@ -126,7 +126,6 @@ async fn build_analytics_plugin_test_ody(
         .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_model("gpt-5.2")
         .with_config(move |config| {
-            config.chatgpt_base_url = chatgpt_base_url;
         });
     Ok(builder
         .build(server)
@@ -147,7 +146,6 @@ async fn build_apps_enabled_plugin_test_ody(
                 .features
                 .enable(Feature::Apps)
                 .expect("test config should allow feature update");
-            config.chatgpt_base_url = chatgpt_base_url;
         });
     Ok(builder
         .build(server)

@@ -160,15 +160,6 @@ fn test_supports_remote_compaction_for_odysseythink() {
 }
 
 #[test]
-fn test_personal_access_token_uses_chatgpt_ody_base_url() {
-    let api_provider = ModelProviderInfo::create_odysseythink_provider(/*base_url*/ None)
-        .to_api_provider(Some(AuthMode::PersonalAccessToken))
-        .expect("OpenAI provider should build API provider");
-
-    assert_eq!(api_provider.base_url, CHATGPT_ODY_BASE_URL);
-}
-
-#[test]
 fn test_supports_remote_compaction_for_azure_name() {
     let provider = ModelProviderInfo {
         name: "Azure".into(),

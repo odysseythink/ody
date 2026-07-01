@@ -6910,47 +6910,19 @@
         ]
       },
       "AuthMode": {
-        "description": "Authentication mode for OpenAI-backed providers.",
+        "description": "Authentication mode for model providers.",
         "oneOf": [
           {
-            "description": "OpenAI API key provided by the caller and stored by Ody.",
+            "description": "API key provided by the caller and stored by Ody.",
             "enum": [
               "apikey"
             ],
             "type": "string"
           },
           {
-            "description": "ChatGPT OAuth managed by Ody (tokens persisted and refreshed by Ody).",
+            "description": "No authentication.",
             "enum": [
-              "chatgpt"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "[UNSTABLE] FOR OPENAI INTERNAL USE ONLY - DO NOT USE.\n\nChatGPT auth tokens are supplied by an external host app and are only stored in memory. Token refresh must be handled by the external host app.",
-            "enum": [
-              "chatgptAuthTokens"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "Programmatic Ody auth backed by a registered Agent Identity.",
-            "enum": [
-              "agentIdentity"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "Programmatic Ody auth backed by a personal access token.",
-            "enum": [
-              "personalAccessToken"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "Amazon Bedrock bearer token managed by Ody.",
-            "enum": [
-              "bedrockApiKey"
+              "unauthenticated"
             ],
             "type": "string"
           }

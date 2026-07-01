@@ -32,7 +32,7 @@ async fn returns_fallback_plugins_when_remote_disabled_for_ody_auth() {
 
     let plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
     let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
-    plugins_manager.set_auth_mode(Some(AuthMode::Chatgpt));
+    plugins_manager.set_auth_mode(Some(AuthMode::ApiKey));
     let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
     let discoverable_plugins = list_discoverable_plugins(
         &plugins_manager,
@@ -156,7 +156,7 @@ source = "/tmp/{marketplace_name}"
     );
     let plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
     let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
-    assert!(plugins_manager.set_auth_mode(Some(AuthMode::Chatgpt)));
+    assert!(plugins_manager.set_auth_mode(Some(AuthMode::ApiKey)));
     let chatgpt_projection = list_discoverable_plugins(
         &plugins_manager,
         discovery_input(plugins.clone(), &[plugin_id.as_str()], &[], &[]),

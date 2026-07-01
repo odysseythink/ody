@@ -1592,7 +1592,6 @@ async fn includes_apps_guidance_as_developer_message_for_chatgpt_auth() {
                 .features
                 .enable(Feature::Apps)
                 .expect("test config should allow feature update");
-            config.chatgpt_base_url = apps_base_url;
         });
     let ody = builder
         .build(&server)
@@ -1655,7 +1654,6 @@ async fn omits_apps_guidance_for_api_key_auth_even_when_feature_enabled() {
                 .features
                 .enable(Feature::Apps)
                 .expect("test config should allow feature update");
-            config.chatgpt_base_url = apps_base_url;
         });
     let ody = builder
         .build(&server)
@@ -1713,7 +1711,6 @@ async fn omits_apps_guidance_when_configured_off() {
                 .features
                 .enable(Feature::Apps)
                 .expect("test config should allow feature update");
-            config.chatgpt_base_url = apps_base_url;
             config.include_apps_instructions = false;
         });
     let ody = builder
@@ -1790,7 +1787,6 @@ async fn omits_apps_guidance_when_orchestrator_mcp_is_disabled() {
                 .features
                 .enable(Feature::Apps)
                 .expect("test config should allow feature update");
-            config.chatgpt_base_url = apps_base_url;
             config.orchestrator_mcp_enabled = false;
         });
     let ody = builder

@@ -15,57 +15,19 @@ use serde::Serialize;
 use strum_macros::Display;
 use ts_rs::TS;
 
-/// Authentication mode for OpenAI-backed providers.
+/// Authentication mode for model providers.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Display, JsonSchema, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum AuthMode {
-    /// OpenAI API key provided by the caller and stored by Ody.
+    /// API key provided by the caller and stored by Ody.
     ApiKey,
-    /// ChatGPT OAuth managed by Ody (tokens persisted and refreshed by Ody).
-    Chatgpt,
-    /// [UNSTABLE] FOR OPENAI INTERNAL USE ONLY - DO NOT USE.
-    ///
-    /// ChatGPT auth tokens are supplied by an external host app and are only
-    /// stored in memory. Token refresh must be handled by the external host app.
-    #[serde(rename = "chatgptAuthTokens")]
-    #[ts(rename = "chatgptAuthTokens")]
-    #[strum(serialize = "chatgptAuthTokens")]
-    ChatgptAuthTokens,
-    /// Programmatic Ody auth backed by a registered Agent Identity.
-    #[serde(rename = "agentIdentity")]
-    #[ts(rename = "agentIdentity")]
-    #[strum(serialize = "agentIdentity")]
-    AgentIdentity,
-    /// Programmatic Ody auth backed by a personal access token.
-    #[serde(rename = "personalAccessToken")]
-    #[ts(rename = "personalAccessToken")]
-    #[strum(serialize = "personalAccessToken")]
-    PersonalAccessToken,
-    /// Amazon Bedrock bearer token managed by Ody.
-    #[serde(rename = "bedrockApiKey")]
-    #[ts(rename = "bedrockApiKey")]
-    #[strum(serialize = "bedrockApiKey")]
-    BedrockApiKey,
+    /// No authentication.
+    Unauthenticated,
 }
 
 impl AuthMode {
-    /// Returns whether this mode represents an authenticated human ChatGPT account.
-    pub fn has_chatgpt_account(self) -> bool {
-        match self {
-            Self::Chatgpt | Self::ChatgptAuthTokens | Self::PersonalAccessToken => true,
-            Self::ApiKey | Self::AgentIdentity | Self::BedrockApiKey => false,
-        }
-    }
-
-    /// Returns whether this mode is backed by Ody services rather than a direct model API.
-    pub fn uses_ody_backend(self) -> bool {
-        match self {
-            Self::Chatgpt
-            | Self::ChatgptAuthTokens
-            | Self::AgentIdentity
-            | Self::PersonalAccessToken => true,
-            Self::ApiKey | Self::BedrockApiKey => false,
-        }
+    pub fn is_api_key(self) -> bool {
+        matches!(self, Self::ApiKey)
     }
 }
 
@@ -1482,11 +1444,6 @@ server_request_definitions! {
         response: v2::DynamicToolCallResponse,
     },
 
-    ChatgptAuthTokensRefresh => "account/chatgptAuthTokens/refresh" {
-        params: v2::ChatgptAuthTokensRefreshParams,
-        response: v2::ChatgptAuthTokensRefreshResponse,
-    },
-
     /// Generate a fresh upstream attestation result on demand.
     AttestationGenerate => "attestation/generate" {
         params: v2::AttestationGenerateParams,
@@ -1705,8 +1662,7 @@ mod tests {
     use super::*;
     use anyhow::Result;
     use ody_protocol::ThreadId;
-    use ody_protocol::account::AmazonBedrockCredentialSource;
-    use ody_protocol::account::PlanType;
+
     use ody_protocol::config_types::MultiAgentMode;
     use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_READ_ONLY;
     use ody_protocol::parse_command::ParsedCommand;
@@ -2216,7 +2172,7 @@ mod tests {
                     "capabilities": {
                         "experimentalApi": true,
                         "requestAttestation": true,
-                        "mcpServerOpenaiFormElicitation": true,
+                        "mcpServerOdysseythinkFormElicitation": true,
                         "optOutNotificationMethods": [
                             "thread/started",
                             "item/agentMessage/delta"
@@ -2243,7 +2199,7 @@ mod tests {
                 "capabilities": {
                     "experimentalApi": true,
                     "requestAttestation": true,
-                    "mcpServerOpenaiFormElicitation": true,
+                    "mcpServerOdysseythinkFormElicitation": true,
                     "optOutNotificationMethods": [
                         "thread/started",
                         "item/agentMessage/delta"
@@ -2356,29 +2312,6 @@ mod tests {
         let payload = ServerRequestPayload::ExecCommandApproval(params);
         assert_eq!(request.id(), &RequestId::Integer(7));
         assert_eq!(payload.request_with_id(RequestId::Integer(7)), request);
-        Ok(())
-    }
-
-    #[test]
-    fn serialize_chatgpt_auth_tokens_refresh_request() -> Result<()> {
-        let request = ServerRequest::ChatgptAuthTokensRefresh {
-            request_id: RequestId::Integer(8),
-            params: v2::ChatgptAuthTokensRefreshParams {
-                reason: v2::ChatgptAuthTokensRefreshReason::Unauthorized,
-                previous_account_id: Some("org-123".to_string()),
-            },
-        };
-        assert_eq!(
-            json!({
-                "method": "account/chatgptAuthTokens/refresh",
-                "id": 8,
-                "params": {
-                    "reason": "unauthorized",
-                    "previousAccountId": "org-123"
-                }
-            }),
-            serde_json::to_value(&request)?,
-        );
         Ok(())
     }
 
@@ -2705,68 +2638,6 @@ mod tests {
     }
 
     #[test]
-    fn serialize_account_login_chatgpt() -> Result<()> {
-        let request = ClientRequest::LoginAccount {
-            request_id: RequestId::Integer(3),
-            params: v2::LoginAccountParams::Chatgpt {
-                ody_streamlined_login: false,
-            },
-        };
-        assert_eq!(
-            json!({
-                "method": "account/login/start",
-                "id": 3,
-                "params": {
-                    "type": "chatgpt"
-                }
-            }),
-            serde_json::to_value(&request)?,
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn serialize_account_login_chatgpt_streamlined() -> Result<()> {
-        let request = ClientRequest::LoginAccount {
-            request_id: RequestId::Integer(3),
-            params: v2::LoginAccountParams::Chatgpt {
-                ody_streamlined_login: true,
-            },
-        };
-        assert_eq!(
-            json!({
-                "method": "account/login/start",
-                "id": 3,
-                "params": {
-                    "type": "chatgpt",
-                    "odyStreamlinedLogin": true
-                }
-            }),
-            serde_json::to_value(&request)?,
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn serialize_account_login_chatgpt_device_code() -> Result<()> {
-        let request = ClientRequest::LoginAccount {
-            request_id: RequestId::Integer(4),
-            params: v2::LoginAccountParams::ChatgptDeviceCode,
-        };
-        assert_eq!(
-            json!({
-                "method": "account/login/start",
-                "id": 4,
-                "params": {
-                    "type": "chatgptDeviceCode"
-                }
-            }),
-            serde_json::to_value(&request)?,
-        );
-        Ok(())
-    }
-
-    #[test]
     fn serialize_account_logout() -> Result<()> {
         let request = ClientRequest::LogoutAccount {
             request_id: RequestId::Integer(5),
@@ -2776,32 +2647,6 @@ mod tests {
             json!({
                 "method": "account/logout",
                 "id": 5,
-            }),
-            serde_json::to_value(&request)?,
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn serialize_account_login_chatgpt_auth_tokens() -> Result<()> {
-        let request = ClientRequest::LoginAccount {
-            request_id: RequestId::Integer(6),
-            params: v2::LoginAccountParams::ChatgptAuthTokens {
-                access_token: "access-token".to_string(),
-                chatgpt_account_id: "org-123".to_string(),
-                chatgpt_plan_type: Some("business".to_string()),
-            },
-        };
-        assert_eq!(
-            json!({
-                "method": "account/login/start",
-                "id": 6,
-                "params": {
-                    "type": "chatgptAuthTokens",
-                    "accessToken": "access-token",
-                    "chatgptAccountId": "org-123",
-                    "chatgptPlanType": "business"
-                }
             }),
             serde_json::to_value(&request)?,
         );
@@ -2853,67 +2698,6 @@ mod tests {
             serde_json::to_value(&api_key)?,
         );
 
-        let chatgpt = v2::Account::Chatgpt {
-            email: Some("user@example.com".to_string()),
-            plan_type: PlanType::Plus,
-        };
-        assert_eq!(
-            json!({
-                "type": "chatgpt",
-                "email": "user@example.com",
-                "planType": "plus",
-            }),
-            serde_json::to_value(&chatgpt)?,
-        );
-
-        let chatgpt_without_email = v2::Account::Chatgpt {
-            email: None,
-            plan_type: PlanType::Pro,
-        };
-        assert_eq!(
-            json!({
-                "type": "chatgpt",
-                "email": null,
-                "planType": "pro",
-            }),
-            serde_json::to_value(&chatgpt_without_email)?,
-        );
-
-        let ody_managed_bedrock = v2::Account::AmazonBedrock {
-            credential_source: AmazonBedrockCredentialSource::OdyManaged,
-        };
-        assert_eq!(
-            json!({
-                "type": "amazonBedrock",
-                "credentialSource": "odyManaged",
-            }),
-            serde_json::to_value(&ody_managed_bedrock)?,
-        );
-
-        let aws_managed_bedrock = v2::Account::AmazonBedrock {
-            credential_source: AmazonBedrockCredentialSource::AwsManaged,
-        };
-        assert_eq!(
-            json!({
-                "type": "amazonBedrock",
-                "credentialSource": "awsManaged",
-            }),
-            serde_json::to_value(&aws_managed_bedrock)?,
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn account_defaults_legacy_bedrock_credential_source() -> Result<()> {
-        assert_eq!(
-            v2::Account::AmazonBedrock {
-                credential_source: AmazonBedrockCredentialSource::AwsManaged,
-            },
-            serde_json::from_value(json!({
-                "type": "amazonBedrock",
-            }))?,
-        );
         Ok(())
     }
 

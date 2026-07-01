@@ -229,12 +229,8 @@ enum CliCommand {
         #[arg(long)]
         abort_on: Option<usize>,
     },
-    /// Trigger the ChatGPT login flow and wait for completion.
-    TestLogin {
-        /// Use the device-code login flow instead of the browser callback flow.
-        #[arg(long, default_value_t = false)]
-        device_code: bool,
-    },
+    /// Trigger the API key login flow and wait for completion.
+    TestLogin,
     /// List the available models from the Ody app-server.
     #[command(name = "model-list")]
     ModelList,
@@ -412,10 +408,10 @@ pub async fn run() -> Result<()> {
             )
             .await
         }
-        CliCommand::TestLogin { device_code } => {
+        CliCommand::TestLogin => {
             ensure_dynamic_tools_unused(&dynamic_tools, "test-login")?;
             let endpoint = resolve_endpoint(ody_bin, url)?;
-            test_login(&endpoint, &config_overrides, device_code).await
+            test_login(&endpoint, &config_overrides).await
         }
         CliCommand::ModelList => {
             ensure_dynamic_tools_unused(&dynamic_tools, "model-list")?;
@@ -1117,53 +1113,21 @@ async fn send_follow_up_v2(
     .await
 }
 
-async fn test_login(
-    endpoint: &Endpoint,
-    config_overrides: &[String],
-    device_code: bool,
-) -> Result<()> {
+async fn test_login(endpoint: &Endpoint, config_overrides: &[String]) -> Result<()> {
     with_client("test-login", endpoint, config_overrides, |client| {
         let initialize = client.initialize()?;
         println!("< initialize response: {initialize:?}");
 
-        let login_response = if device_code {
-            client.login_account_chatgpt_device_code()?
-        } else {
-            client.login_account_chatgpt()?
-        };
+        let api_key = std::env::var("OPENAI_API_KEY")
+            .unwrap_or_else(|_| "sk-test-dummy-key".to_string());
+        let login_response = client.login_account_api_key(api_key)?;
         println!("< account/login/start response: {login_response:?}");
-        let login_id = match login_response {
-            LoginAccountResponse::Chatgpt { login_id, auth_url } => {
-                println!("Open the following URL in your browser to continue:\n{auth_url}");
-                login_id
-            }
-            LoginAccountResponse::ChatgptDeviceCode {
-                login_id,
-                verification_url,
-                user_code,
-            } => {
-                println!(
-                    "Open the following URL and enter the code to continue:\n{verification_url}\n\nCode: {user_code}"
-                );
-                login_id
-            }
-            _ => bail!("expected chatgpt login response"),
-        };
 
-        let completion = client.wait_for_account_login_completion(&login_id)?;
-        println!("< account/login/completed notification: {completion:?}");
-
-        if completion.success {
-            println!("Login succeeded.");
+        if matches!(login_response, LoginAccountResponse::ApiKey {}) {
+            println!("API key login accepted by app-server.");
             Ok(())
         } else {
-            bail!(
-                "login failed: {}",
-                completion
-                    .error
-                    .as_deref()
-                    .unwrap_or("unknown error from account/login/completed")
-            );
+            bail!("expected apiKey login response");
         }
     })
     .await
@@ -1690,23 +1654,11 @@ impl OdyClient {
         self.send_request(request, request_id, "turn/start")
     }
 
-    fn login_account_chatgpt(&mut self) -> Result<LoginAccountResponse> {
+    fn login_account_api_key(&mut self, api_key: String) -> Result<LoginAccountResponse> {
         let request_id = self.request_id();
         let request = ClientRequest::LoginAccount {
             request_id: request_id.clone(),
-            params: ody_app_server_protocol::LoginAccountParams::Chatgpt {
-                ody_streamlined_login: false,
-            },
-        };
-
-        self.send_request(request, request_id, "account/login/start")
-    }
-
-    fn login_account_chatgpt_device_code(&mut self) -> Result<LoginAccountResponse> {
-        let request_id = self.request_id();
-        let request = ClientRequest::LoginAccount {
-            request_id: request_id.clone(),
-            params: ody_app_server_protocol::LoginAccountParams::ChatgptDeviceCode,
+            params: ody_app_server_protocol::LoginAccountParams::ApiKey { api_key },
         };
 
         self.send_request(request, request_id, "account/login/start")

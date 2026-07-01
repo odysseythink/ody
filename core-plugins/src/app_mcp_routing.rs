@@ -3,8 +3,8 @@ use ody_plugin::AppDeclaration;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-pub fn apps_route_available(auth_mode: Option<AuthMode>) -> bool {
-    auth_mode.is_some_and(AuthMode::uses_ody_backend)
+pub fn apps_route_available(_auth_mode: Option<AuthMode>) -> bool {
+    false
 }
 
 pub(crate) fn apply_app_mcp_routing_policy<M>(

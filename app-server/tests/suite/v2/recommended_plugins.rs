@@ -1,7 +1,5 @@
 use anyhow::Result;
-use app_test_support::ChatGptIdTokenClaims;
 use app_test_support::TestAppServer;
-use app_test_support::encode_id_token;
 use app_test_support::to_response;
 use app_test_support::write_mock_responses_config_toml_with_chatgpt_base_url;
 use ody_app_server_protocol::JSONRPCResponse;
@@ -25,7 +23,6 @@ use wiremock::matchers::path;
 use wiremock::matchers::query_param;
 
 const DEFAULT_READ_TIMEOUT: Duration = Duration::from_secs(20);
-const WORKSPACE_ID: &str = "123e4567-e89b-42d3-a456-426614174010";
 
 #[tokio::test]
 async fn first_turn_after_external_login_waits_for_recommended_plugins() -> Result<()> {
@@ -81,18 +78,8 @@ async fn first_turn_after_external_login_waits_for_recommended_plugins() -> Resu
     .await?;
     timeout(DEFAULT_READ_TIMEOUT, app_server.initialize()).await??;
 
-    let access_token = encode_id_token(
-        &ChatGptIdTokenClaims::new()
-            .email("embedded@example.com")
-            .plan_type("pro")
-            .chatgpt_account_id(WORKSPACE_ID),
-    )?;
     let login_id = app_server
-        .send_chatgpt_auth_tokens_login_request(
-            access_token,
-            WORKSPACE_ID.to_string(),
-            Some("pro".to_string()),
-        )
+        .send_login_account_api_key_request("sk-test-key")
         .await?;
     let login_response: JSONRPCResponse = timeout(
         DEFAULT_READ_TIMEOUT,
@@ -101,7 +88,7 @@ async fn first_turn_after_external_login_waits_for_recommended_plugins() -> Resu
     .await??;
     assert_eq!(
         to_response::<LoginAccountResponse>(login_response)?,
-        LoginAccountResponse::ChatgptAuthTokens {}
+        LoginAccountResponse::ApiKey {}
     );
 
     let thread_id = app_server

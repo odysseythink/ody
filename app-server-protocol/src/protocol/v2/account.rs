@@ -1,6 +1,5 @@
 use crate::protocol::common::AuthMode;
 use ody_experimental_api_macros::ExperimentalApi;
-use ody_protocol::account::AmazonBedrockCredentialSource;
 use ody_protocol::account::PlanType;
 use ody_protocol::account::ProviderAccount;
 use ody_protocol::protocol::CreditsSnapshot as CoreCreditsSnapshot;
@@ -22,40 +21,12 @@ pub enum Account {
     #[serde(rename = "apiKey", rename_all = "camelCase")]
     #[ts(rename = "apiKey", rename_all = "camelCase")]
     ApiKey {},
-
-    #[serde(rename = "chatgpt", rename_all = "camelCase")]
-    #[ts(rename = "chatgpt", rename_all = "camelCase")]
-    Chatgpt {
-        #[schemars(required, schema_with = "nullable_string_schema")]
-        email: Option<String>,
-        plan_type: PlanType,
-    },
-
-    #[serde(rename = "amazonBedrock", rename_all = "camelCase")]
-    #[ts(rename = "amazonBedrock", rename_all = "camelCase")]
-    AmazonBedrock {
-        #[serde(default = "default_bedrock_credential_source")]
-        credential_source: AmazonBedrockCredentialSource,
-    },
-}
-
-fn nullable_string_schema(
-    generator: &mut schemars::r#gen::SchemaGenerator,
-) -> schemars::schema::Schema {
-    generator.subschema_for::<Option<String>>()
-}
-
-fn default_bedrock_credential_source() -> AmazonBedrockCredentialSource {
-    AmazonBedrockCredentialSource::AwsManaged
 }
 
 impl From<ProviderAccount> for Account {
     fn from(account: ProviderAccount) -> Self {
         match account {
-            ProviderAccount::ApiKey => Self::ApiKey {},
-            ProviderAccount::AmazonBedrock { credential_source } => {
-                Self::AmazonBedrock { credential_source }
-            }
+            ProviderAccount::ApiKey | ProviderAccount::AmazonBedrock { .. } => Self::ApiKey {},
         }
     }
 }
@@ -72,33 +43,6 @@ pub enum LoginAccountParams {
         #[ts(rename = "apiKey")]
         api_key: String,
     },
-    #[serde(rename = "chatgpt", rename_all = "camelCase")]
-    #[ts(rename = "chatgpt", rename_all = "camelCase")]
-    Chatgpt {
-        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-        ody_streamlined_login: bool,
-    },
-    #[serde(rename = "chatgptDeviceCode")]
-    #[ts(rename = "chatgptDeviceCode")]
-    ChatgptDeviceCode,
-    /// [UNSTABLE] FOR OPENAI INTERNAL USE ONLY - DO NOT USE.
-    /// The access token must contain the same scopes that Ody-managed ChatGPT auth tokens have.
-    #[experimental("account/login/start.chatgptAuthTokens")]
-    #[serde(rename = "chatgptAuthTokens", rename_all = "camelCase")]
-    #[ts(rename = "chatgptAuthTokens", rename_all = "camelCase")]
-    ChatgptAuthTokens {
-        /// Access token (JWT) supplied by the client.
-        /// This token is used for backend API requests and email extraction.
-        access_token: String,
-        /// Workspace/account identifier supplied by the client.
-        chatgpt_account_id: String,
-        /// Optional plan type supplied by the client.
-        ///
-        /// When `null`, Ody attempts to derive the plan type from access-token
-        /// claims. If unavailable, the plan defaults to `unknown`.
-        #[ts(optional = nullable)]
-        chatgpt_plan_type: Option<String>,
-    },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
@@ -109,29 +53,6 @@ pub enum LoginAccountResponse {
     #[serde(rename = "apiKey", rename_all = "camelCase")]
     #[ts(rename = "apiKey", rename_all = "camelCase")]
     ApiKey {},
-    #[serde(rename = "chatgpt", rename_all = "camelCase")]
-    #[ts(rename = "chatgpt", rename_all = "camelCase")]
-    Chatgpt {
-        // Use plain String for identifiers to avoid TS/JSON Schema quirks around uuid-specific types.
-        // Convert to/from UUIDs at the application layer as needed.
-        login_id: String,
-        /// URL the client should open in a browser to initiate the OAuth flow.
-        auth_url: String,
-    },
-    #[serde(rename = "chatgptDeviceCode", rename_all = "camelCase")]
-    #[ts(rename = "chatgptDeviceCode", rename_all = "camelCase")]
-    ChatgptDeviceCode {
-        // Use plain String for identifiers to avoid TS/JSON Schema quirks around uuid-specific types.
-        // Convert to/from UUIDs at the application layer as needed.
-        login_id: String,
-        /// URL the client should open in a browser to complete device code authorization.
-        verification_url: String,
-        /// One-time code the user must enter after signing in.
-        user_code: String,
-    },
-    #[serde(rename = "chatgptAuthTokens", rename_all = "camelCase")]
-    #[ts(rename = "chatgptAuthTokens", rename_all = "camelCase")]
-    ChatgptAuthTokens {},
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
@@ -233,39 +154,6 @@ pub enum AccountSessionWorkspaceKind {
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct LogoutAccountResponse {}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub enum ChatgptAuthTokensRefreshReason {
-    /// Ody attempted a backend request and received `401 Unauthorized`.
-    Unauthorized,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct ChatgptAuthTokensRefreshParams {
-    pub reason: ChatgptAuthTokensRefreshReason,
-    /// Workspace/account identifier that Ody was previously using.
-    ///
-    /// Clients that manage multiple accounts/workspaces can use this as a hint
-    /// to refresh the token for the correct workspace.
-    ///
-    /// This may be `null` when the prior auth state did not include a workspace
-    /// identifier (`chatgpt_account_id`).
-    #[ts(optional = nullable)]
-    pub previous_account_id: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct ChatgptAuthTokensRefreshResponse {
-    pub access_token: String,
-    pub chatgpt_account_id: String,
-    pub chatgpt_plan_type: Option<String>,
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
@@ -413,9 +301,7 @@ pub enum AddCreditsNudgeEmailStatus {
 pub struct GetAccountParams {
     /// When `true`, requests a proactive token refresh before returning.
     ///
-    /// In managed auth mode this triggers the normal refresh-token flow. In
-    /// external auth mode this flag is ignored. Clients should refresh tokens
-    /// themselves and call `account/login/start` with `chatgptAuthTokens`.
+    /// This flag is no longer used; API key auth does not require a refresh flow.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub refresh_token: bool,
 }
@@ -601,4 +487,15 @@ pub struct AccountLoginCompletedNotification {
     pub login_id: Option<String>,
     pub success: bool,
     pub error: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn login_account_params_rejects_legacy_chatgpt() {
+        let json = r#"{"type":"chatgpt","odyStreamlinedLogin":false}"#;
+        assert!(serde_json::from_str::<LoginAccountParams>(json).is_err());
+    }
 }

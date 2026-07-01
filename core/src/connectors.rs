@@ -47,7 +47,6 @@ const CONNECTORS_READY_TIMEOUT_ON_EMPTY_TOOLS: Duration = Duration::from_secs(30
 
 #[derive(Clone, PartialEq, Eq)]
 struct AccessibleConnectorsCacheKey {
-    chatgpt_base_url: String,
     account_id: Option<String>,
     chatgpt_user_id: Option<String>,
     is_workspace_account: bool,
@@ -361,10 +360,6 @@ fn accessible_connectors_cache_key(
     let chatgpt_user_id = auth.and_then(OdyAuth::get_chatgpt_user_id);
     let is_workspace_account = auth.is_some_and(OdyAuth::is_workspace_account);
     AccessibleConnectorsCacheKey {
-        // The remote hosted plugin/Apps catalog config field this used to be sourced from has
-        // been removed. `uses_ody_backend()` auth (required just below/by callers) can never
-        // be true anymore, so this cache key component is now unreachable in practice.
-        chatgpt_base_url: String::new(),
         account_id,
         chatgpt_user_id,
         is_workspace_account,

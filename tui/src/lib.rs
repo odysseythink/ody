@@ -135,7 +135,7 @@ mod keymap_setup;
 mod line_truncation;
 pub(crate) mod live_wrap;
 pub use live_wrap::RowBuilder;
-mod local_chatgpt_auth;
+
 mod markdown;
 mod markdown_render;
 mod markdown_stream;
@@ -1894,8 +1894,6 @@ async fn get_login_status(
     let account = app_server.read_account().await?;
     Ok(match account.account {
         Some(AppServerAccount::ApiKey {}) => LoginStatus::AuthMode(AppServerAuthMode::ApiKey),
-        Some(AppServerAccount::Chatgpt { .. }) => LoginStatus::AuthMode(AppServerAuthMode::Chatgpt),
-        Some(AppServerAccount::AmazonBedrock { .. }) => LoginStatus::NotAuthenticated,
         None => LoginStatus::NotAuthenticated,
     })
 }

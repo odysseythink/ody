@@ -61,17 +61,17 @@ fn plugins_manager_tracks_auth_mode() {
     assert!(manager.set_auth_mode(Some(AuthMode::ApiKey)));
     assert_eq!(manager.auth_mode(), Some(AuthMode::ApiKey));
     assert!(!manager.set_auth_mode(Some(AuthMode::ApiKey)));
-    assert!(manager.set_auth_mode(Some(AuthMode::ChatgptAuthTokens)));
-    assert_eq!(manager.auth_mode(), Some(AuthMode::ChatgptAuthTokens));
+    assert!(manager.set_auth_mode(Some(AuthMode::ApiKey)));
+    assert_eq!(manager.auth_mode(), Some(AuthMode::ApiKey));
     assert!(manager.set_auth_mode(/*auth_mode*/ None));
     assert_eq!(manager.auth_mode(), None);
 
     let manager_with_auth = PluginsManager::new_with_options(
         tmp.path().join("auth"),
         Some(Product::Ody),
-        Some(AuthMode::Chatgpt),
+        Some(AuthMode::ApiKey),
     );
-    assert_eq!(manager_with_auth.auth_mode(), Some(AuthMode::Chatgpt));
+    assert_eq!(manager_with_auth.auth_mode(), Some(AuthMode::ApiKey));
 }
 
 fn write_auth_projection_plugin(ody_home: &Path, name: &str, include_app: bool) {
@@ -184,7 +184,7 @@ async fn plugin_auth_projection_hides_matching_mcp_with_chatgpt_apps_route() {
     let manager = PluginsManager::new_with_options(
         ody_home.path().to_path_buf(),
         Some(Product::Ody),
-        Some(AuthMode::Chatgpt),
+        Some(AuthMode::ApiKey),
     );
 
     let outcome = manager.plugins_for_config(&config).await;
@@ -225,7 +225,7 @@ async fn plugin_auth_projection_hides_dual_surface_mcp_with_agent_identity_apps_
     let manager = PluginsManager::new_with_options(
         ody_home.path().to_path_buf(),
         Some(Product::Ody),
-        Some(AuthMode::AgentIdentity),
+        Some(AuthMode::ApiKey),
     );
 
     let outcome = manager.plugins_for_config(&config).await;
@@ -250,7 +250,7 @@ async fn plugin_auth_projection_keeps_non_conflicting_mcp_with_chatgpt_apps_rout
     let manager = PluginsManager::new_with_options(
         ody_home.path().to_path_buf(),
         Some(Product::Ody),
-        Some(AuthMode::Chatgpt),
+        Some(AuthMode::ApiKey),
     );
 
     let outcome = manager.plugins_for_config(&config).await;
@@ -333,7 +333,7 @@ enabled = true
     let manager = PluginsManager::new_with_options(
         ody_home.path().to_path_buf(),
         Some(Product::Ody),
-        Some(AuthMode::Chatgpt),
+        Some(AuthMode::ApiKey),
     );
 
     let outcome = manager.plugins_for_config(&config).await;
@@ -367,7 +367,7 @@ async fn plugin_auth_projection_reprojects_cached_plugins_when_auth_changes() {
     let manager = PluginsManager::new_with_options(
         ody_home.path().to_path_buf(),
         Some(Product::Ody),
-        Some(AuthMode::Chatgpt),
+        Some(AuthMode::ApiKey),
     );
 
     let chatgpt_outcome = manager.plugins_for_config(&config).await;
@@ -583,7 +583,7 @@ async fn load_plugins_loads_default_skills_and_mcp_servers() {
     let outcome = load_plugins_from_config(
         &plugin_config_toml(/*enabled*/ true, /*plugins_feature_enabled*/ true),
         ody_home.path(),
-        Some(AuthMode::Chatgpt),
+        Some(AuthMode::ApiKey),
     )
     .await;
 
@@ -1215,7 +1215,7 @@ async fn load_plugins_uses_manifest_configured_component_paths() {
         let outcome = load_plugins_from_config(
             &plugin_config_toml(/*enabled*/ true, /*plugins_feature_enabled*/ true),
             ody_home.path(),
-            Some(AuthMode::Chatgpt),
+            Some(AuthMode::ApiKey),
         )
         .await;
         let mut expected_skill_roots = expected_skill_dirs
@@ -1398,7 +1398,7 @@ async fn load_plugins_ignores_manifest_component_paths_without_dot_slash() {
     let outcome = load_plugins_from_config(
         &plugin_config_toml(/*enabled*/ true, /*plugins_feature_enabled*/ true),
         ody_home.path(),
-        Some(AuthMode::Chatgpt),
+        Some(AuthMode::ApiKey),
     )
     .await;
 
@@ -1599,7 +1599,7 @@ async fn effective_apps_dedupes_connector_ids_across_plugins() {
         toml::to_string(&Value::Table(root)).expect("plugin test config should serialize");
 
     let outcome =
-        load_plugins_from_config(&config_toml, ody_home.path(), Some(AuthMode::Chatgpt)).await;
+        load_plugins_from_config(&config_toml, ody_home.path(), Some(AuthMode::ApiKey)).await;
 
     assert_eq!(
         outcome.effective_apps(),
@@ -1642,7 +1642,7 @@ async fn effective_apps_preserves_app_config_order() {
     let outcome = load_plugins_from_config(
         &plugin_config_toml(/*enabled*/ true, /*plugins_feature_enabled*/ true),
         ody_home.path(),
-        Some(AuthMode::Chatgpt),
+        Some(AuthMode::ApiKey),
     )
     .await;
 
@@ -2674,7 +2674,7 @@ plugins = true
     let chatgpt_outcome = PluginsManager::new_with_options(
         tmp.path().to_path_buf(),
         Some(Product::Ody),
-        Some(AuthMode::Chatgpt),
+        Some(AuthMode::ApiKey),
     )
     .read_plugin_for_config(&config, &request)
     .await
@@ -3490,7 +3490,7 @@ plugins = true
 
     let config = load_config(tmp.path(), tmp.path()).await;
     let manager = PluginsManager::new(tmp.path().to_path_buf());
-    manager.set_auth_mode(Some(AuthMode::BedrockApiKey));
+    manager.set_auth_mode(Some(AuthMode::ApiKey));
     let outcome = manager
         .list_marketplaces_for_config(&config, &[], /*include_odysseythink_curated*/ true)
         .unwrap();

@@ -49,10 +49,6 @@ use crate::transport::AppServerTransport;
 use crate::transport::RemoteControlHandle;
 use ody_analytics::AnalyticsEventsClient;
 use ody_analytics::AppServerRpcTransport;
-use ody_app_server_protocol::AuthMode as LoginAuthMode;
-use ody_app_server_protocol::ChatgptAuthTokensRefreshParams;
-use ody_app_server_protocol::ChatgptAuthTokensRefreshReason;
-use ody_app_server_protocol::ChatgptAuthTokensRefreshResponse;
 use ody_app_server_protocol::ClientNotification;
 use ody_app_server_protocol::ClientRequest;
 use ody_app_server_protocol::ClientResponsePayload;
@@ -74,10 +70,7 @@ use ody_feedback::OdyFeedback;
 use ody_goal_extension::GoalService;
 use ody_home::OdyHomeUserInstructionsProvider;
 use ody_login::AuthManager;
-use ody_login::auth::ExternalAuth;
-use ody_login::auth::ExternalAuthRefreshContext;
-use ody_login::auth::ExternalAuthRefreshReason;
-use ody_login::auth::ExternalAuthTokens;
+
 use ody_protocol::ThreadId;
 use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::W3cTraceContext;
@@ -106,80 +99,6 @@ fn deserialize_client_request(
             serde_json::from_value(request_json)
                 .map_err(|err| invalid_request(format!("Invalid request: {err}")))
         })
-}
-
-#[derive(Clone)]
-struct ExternalAuthRefreshBridge {
-    outgoing: Arc<OutgoingMessageSender>,
-}
-
-impl ExternalAuthRefreshBridge {
-    fn map_reason(reason: ExternalAuthRefreshReason) -> ChatgptAuthTokensRefreshReason {
-        match reason {
-            ExternalAuthRefreshReason::Unauthorized => ChatgptAuthTokensRefreshReason::Unauthorized,
-        }
-    }
-
-    async fn refresh(
-        &self,
-        context: ExternalAuthRefreshContext,
-    ) -> std::io::Result<ExternalAuthTokens> {
-        let params = ChatgptAuthTokensRefreshParams {
-            reason: Self::map_reason(context.reason),
-            previous_account_id: context.previous_account_id,
-        };
-
-        let (request_id, rx) = self
-            .outgoing
-            .send_request(ServerRequestPayload::ChatgptAuthTokensRefresh(params))
-            .await;
-
-        let result = match timeout(EXTERNAL_AUTH_REFRESH_TIMEOUT, rx).await {
-            Ok(result) => {
-                // Two failure scenarios:
-                // 1) `oneshot::Receiver` failed (sender dropped) => request canceled/channel closed.
-                // 2) client answered with JSON-RPC error payload => propagate code/message.
-                let result = result.map_err(|err| {
-                    std::io::Error::other(format!("auth refresh request canceled: {err}"))
-                })?;
-                result.map_err(|err| {
-                    std::io::Error::other(format!(
-                        "auth refresh request failed: code={} message={}",
-                        err.code, err.message
-                    ))
-                })?
-            }
-            Err(_) => {
-                let _canceled = self.outgoing.cancel_request(&request_id).await;
-                return Err(std::io::Error::other(format!(
-                    "auth refresh request timed out after {}s",
-                    EXTERNAL_AUTH_REFRESH_TIMEOUT.as_secs()
-                )));
-            }
-        };
-
-        let response: ChatgptAuthTokensRefreshResponse =
-            serde_json::from_value(result).map_err(std::io::Error::other)?;
-
-        Ok(ExternalAuthTokens::chatgpt(
-            response.access_token,
-            response.chatgpt_account_id,
-            response.chatgpt_plan_type,
-        ))
-    }
-}
-
-impl ExternalAuth for ExternalAuthRefreshBridge {
-    fn auth_mode(&self) -> LoginAuthMode {
-        LoginAuthMode::Chatgpt
-    }
-
-    fn refresh(
-        &self,
-        context: ExternalAuthRefreshContext,
-    ) -> ody_login::ExternalAuthFuture<'_, ExternalAuthTokens> {
-        Box::pin(ExternalAuthRefreshBridge::refresh(self, context))
-    }
 }
 
 pub(crate) struct MessageProcessor {
@@ -325,9 +244,6 @@ impl MessageProcessor {
             remote_control_handle,
             plugin_startup_tasks,
         } = args;
-        auth_manager.set_external_auth(Arc::new(ExternalAuthRefreshBridge {
-            outgoing: outgoing.clone(),
-        }));
         let thread_state_manager = ThreadStateManager::new();
         // The thread store is intentionally process-scoped. Config reloads can
         // affect per-thread behavior, but they must not move newly started,

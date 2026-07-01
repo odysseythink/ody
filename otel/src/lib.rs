@@ -55,11 +55,7 @@ impl From<ody_app_server_protocol::AuthMode> for TelemetryAuthMode {
     fn from(mode: ody_app_server_protocol::AuthMode) -> Self {
         match mode {
             ody_app_server_protocol::AuthMode::ApiKey
-            | ody_app_server_protocol::AuthMode::BedrockApiKey => Self::ApiKey,
-            ody_app_server_protocol::AuthMode::Chatgpt
-            | ody_app_server_protocol::AuthMode::ChatgptAuthTokens
-            | ody_app_server_protocol::AuthMode::AgentIdentity
-            | ody_app_server_protocol::AuthMode::PersonalAccessToken => Self::Chatgpt,
+            | ody_app_server_protocol::AuthMode::Unauthenticated => Self::ApiKey,
         }
     }
 }

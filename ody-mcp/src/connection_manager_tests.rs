@@ -24,6 +24,7 @@ use ody_config::AppToolApproval;
 use ody_config::Constrained;
 use ody_config::McpServerConfig;
 use ody_config::McpServerToolConfig;
+use ody_config::McpServerTransportConfig;
 use ody_config::types::AuthKeyringBackendKind;
 use ody_exec_server::EnvironmentManager;
 use ody_protocol::ToolName;
@@ -1173,10 +1174,28 @@ async fn list_all_tools_adds_server_metadata_to_cached_tools() {
 
 #[test]
 fn server_metadata_preserves_tool_approval_policy() {
-    let mut config = crate::ody_apps_mcp_server_config(
-        "https://docs.example",
-        /*apps_mcp_product_sku*/ None,
-    );
+    let mut config = McpServerConfig {
+        transport: McpServerTransportConfig::StreamableHttp {
+            url: "https://docs.example".to_string(),
+            bearer_token_env_var: None,
+            http_headers: None,
+            env_http_headers: None,
+        },
+        environment_id: ody_config::DEFAULT_MCP_SERVER_ENVIRONMENT_ID.to_string(),
+        enabled: true,
+        required: false,
+        supports_parallel_tool_calls: false,
+        disabled_reason: None,
+        startup_timeout_sec: None,
+        tool_timeout_sec: None,
+        default_tools_approval_mode: None,
+        enabled_tools: None,
+        disabled_tools: None,
+        scopes: None,
+        oauth: None,
+        oauth_resource: None,
+        tools: std::collections::HashMap::new(),
+    };
     config.environment_id = "remote".to_string();
     config.default_tools_approval_mode = Some(AppToolApproval::Prompt);
     config.tools.insert(

@@ -244,21 +244,9 @@ pub async fn run_login_status(cli_config_overrides: CliConfigOverrides) -> ! {
                     std::process::exit(1);
                 }
             },
-            AuthMode::Chatgpt | AuthMode::ChatgptAuthTokens => {
-                eprintln!("Logged in using ChatGPT");
-                std::process::exit(0);
-            }
-            AuthMode::AgentIdentity => {
-                eprintln!("Logged in using access token");
-                std::process::exit(0);
-            }
-            AuthMode::PersonalAccessToken => {
-                eprintln!("Logged in using personal access token");
-                std::process::exit(0);
-            }
-            AuthMode::BedrockApiKey => {
-                eprintln!("Logged in using Amazon Bedrock API key");
-                std::process::exit(0);
+            AuthMode::Unauthenticated => {
+                eprintln!("Not logged in");
+                std::process::exit(1);
             }
         },
         Ok(None) => {

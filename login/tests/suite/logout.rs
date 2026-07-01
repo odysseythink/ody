@@ -248,7 +248,7 @@ fn chatgpt_auth() -> AuthDotJson {
 
 fn chatgpt_auth_with_refresh_token(refresh_token: &str) -> AuthDotJson {
     AuthDotJson {
-        auth_mode: Some(AuthMode::Chatgpt),
+        auth_mode: Some(AuthMode::ApiKey),
         odysseythink_api_key: None,
         tokens: Some(TokenData {
             id_token: IdTokenInfo {
@@ -260,8 +260,6 @@ fn chatgpt_auth_with_refresh_token(refresh_token: &str) -> AuthDotJson {
             account_id: Some("account-id".to_string()),
         }),
         last_refresh: None,
-        agent_identity: None,
-        personal_access_token: None,
         bedrock_api_key: None,
     }
 }

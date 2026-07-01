@@ -217,46 +217,14 @@ impl AccountRequestProcessor {
                 self.login_api_key_v2(request_id, LoginApiKeyParams { api_key })
                     .await;
             }
-            LoginAccountParams::Chatgpt {
-                ody_streamlined_login,
-            } => {
-                self.login_chatgpt_v2(request_id, ody_streamlined_login)
-                    .await;
-            }
-            LoginAccountParams::ChatgptDeviceCode => {
-                self.login_chatgpt_device_code_v2(request_id).await;
-            }
-            LoginAccountParams::ChatgptAuthTokens {
-                access_token,
-                chatgpt_account_id,
-                chatgpt_plan_type,
-            } => {
-                self.login_chatgpt_auth_tokens(
-                    request_id,
-                    access_token,
-                    chatgpt_account_id,
-                    chatgpt_plan_type,
-                )
-                .await;
-            }
         }
         Ok(())
-    }
-
-    fn external_auth_active_error(&self) -> JSONRPCErrorError {
-        invalid_request(
-            "External auth is active. Use account/login/start (chatgptAuthTokens) to update it or account/logout to clear it.",
-        )
     }
 
     async fn login_api_key_common(
         &self,
         params: &LoginApiKeyParams,
     ) -> std::result::Result<(), JSONRPCErrorError> {
-        if self.auth_manager.is_external_chatgpt_auth_active() {
-            return Err(self.external_auth_active_error());
-        }
-
         if matches!(
             self.config.forced_login_method,
             Some(ForcedLoginMethod::Chatgpt)
@@ -302,24 +270,6 @@ impl AccountRequestProcessor {
         }
     }
 
-    async fn login_chatgpt_v2(
-        &self,
-        request_id: ConnectionRequestId,
-        _ody_streamlined_login: bool,
-    ) {
-        let result: Result<LoginAccountResponse, JSONRPCErrorError> = Err(invalid_request(
-            "ChatGPT account login is no longer supported. Use API key login instead.",
-        ));
-        self.outgoing.send_result(request_id, result).await;
-    }
-
-    async fn login_chatgpt_device_code_v2(&self, request_id: ConnectionRequestId) {
-        let result: Result<LoginAccountResponse, JSONRPCErrorError> = Err(invalid_request(
-            "ChatGPT account login is no longer supported. Use API key login instead.",
-        ));
-        self.outgoing.send_result(request_id, result).await;
-    }
-
     async fn cancel_login_chatgpt_common(
         &self,
         login_id: Uuid,
@@ -347,36 +297,6 @@ impl AccountRequestProcessor {
             Err(CancelLoginError::NotFound) => CancelLoginAccountStatus::NotFound,
         };
         Ok(CancelLoginAccountResponse { status })
-    }
-
-    async fn login_chatgpt_auth_tokens(
-        &self,
-        request_id: ConnectionRequestId,
-        access_token: String,
-        chatgpt_account_id: String,
-        chatgpt_plan_type: Option<String>,
-    ) {
-        let result = self
-            .login_chatgpt_auth_tokens_response(access_token, chatgpt_account_id, chatgpt_plan_type)
-            .await;
-        let logged_in = result.is_ok();
-        self.outgoing.send_result(request_id, result).await;
-
-        if logged_in {
-            self.send_login_success_notifications(/*login_id*/ None)
-                .await;
-        }
-    }
-
-    async fn login_chatgpt_auth_tokens_response(
-        &self,
-        _access_token: String,
-        _chatgpt_account_id: String,
-        _chatgpt_plan_type: Option<String>,
-    ) -> Result<LoginAccountResponse, JSONRPCErrorError> {
-        Err(invalid_request(
-            "ChatGPT account login is no longer supported. Use API key login instead.",
-        ))
     }
 
     async fn send_login_success_notifications(&self, login_id: Option<Uuid>) {

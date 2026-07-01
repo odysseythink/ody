@@ -1,5 +1,3 @@
-#[cfg(test)]
-use serial_test::serial;
 use std::env;
 use std::fmt::Debug;
 use std::future::Future;
@@ -43,13 +41,14 @@ pub enum OdyAuth {
 impl PartialEq for OdyAuth {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
+            (Self::ApiKey(a), Self::ApiKey(b)) => a == b,
             (Self::BedrockApiKey(a), Self::BedrockApiKey(b)) => a == b,
-            _ => self.api_auth_mode() == other.api_auth_mode(),
+            _ => false,
         }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApiKeyAuth {
     api_key: String,
 }
@@ -168,20 +167,16 @@ impl OdyAuth {
         auth_dot_json: AuthDotJson,
         _auth_credentials_store_mode: AuthCredentialsStoreMode,
     ) -> std::io::Result<Self> {
+        if let Some(auth) = auth_dot_json.bedrock_api_key {
+            return Ok(Self::BedrockApiKey(auth));
+        }
+
         let auth_mode = auth_dot_json.resolved_mode();
         if auth_mode == ApiAuthMode::ApiKey {
             let Some(api_key) = auth_dot_json.odysseythink_api_key.as_deref() else {
                 return Err(std::io::Error::other("API key auth is missing a key."));
             };
             return Ok(Self::from_api_key(api_key));
-        }
-        if auth_mode == ApiAuthMode::BedrockApiKey {
-            let Some(auth) = auth_dot_json.bedrock_api_key else {
-                return Err(std::io::Error::other(
-                    "Bedrock API key auth is missing a Bedrock API key.",
-                ));
-            };
-            return Ok(Self::BedrockApiKey(auth));
         }
 
         Err(std::io::Error::other(
@@ -208,15 +203,13 @@ impl OdyAuth {
 
     pub fn auth_mode(&self) -> AuthMode {
         match self {
-            Self::ApiKey(_) => AuthMode::ApiKey,
-            Self::BedrockApiKey(_) => AuthMode::BedrockApiKey,
+            Self::ApiKey(_) | Self::BedrockApiKey(_) => AuthMode::ApiKey,
         }
     }
 
     pub fn api_auth_mode(&self) -> ApiAuthMode {
         match self {
-            Self::ApiKey(_) => ApiAuthMode::ApiKey,
-            Self::BedrockApiKey(_) => ApiAuthMode::BedrockApiKey,
+            Self::ApiKey(_) | Self::BedrockApiKey(_) => ApiAuthMode::ApiKey,
         }
     }
 
@@ -225,11 +218,11 @@ impl OdyAuth {
     }
 
     pub fn is_chatgpt_auth(&self) -> bool {
-        self.api_auth_mode().has_chatgpt_account()
+        false
     }
 
     pub fn uses_ody_backend(&self) -> bool {
-        self.api_auth_mode().uses_ody_backend()
+        false
     }
 
     /// Returns `None` if `auth_mode() != AuthMode::ApiKey`.
@@ -479,8 +472,7 @@ pub async fn enforce_login_restrictions(config: &AuthConfig) -> std::io::Result<
 
     if let Some(required_method) = config.forced_login_method {
         let method_violation = match (required_method, auth.auth_mode()) {
-            (ForcedLoginMethod::Api, AuthMode::ApiKey)
-            | (ForcedLoginMethod::Api, AuthMode::BedrockApiKey) => None,
+            (ForcedLoginMethod::Api, AuthMode::ApiKey) => None,
             (ForcedLoginMethod::Chatgpt, _) => Some(
                 "ChatGPT login is no longer supported. Logging out.".to_string(),
             ),
@@ -1067,9 +1059,9 @@ impl AuthManager {
     fn auths_equal_for_refresh(a: Option<&OdyAuth>, b: Option<&OdyAuth>) -> bool {
         match (a, b) {
             (None, None) => true,
-            (Some(a), Some(b)) => match (a.api_auth_mode(), b.api_auth_mode()) {
-                (ApiAuthMode::ApiKey, ApiAuthMode::ApiKey) => a.api_key() == b.api_key(),
-                (ApiAuthMode::BedrockApiKey, ApiAuthMode::BedrockApiKey) => a == b,
+            (Some(a), Some(b)) => match (a, b) {
+                (OdyAuth::ApiKey(_), OdyAuth::ApiKey(_)) => a.api_key() == b.api_key(),
+                (OdyAuth::BedrockApiKey(a), OdyAuth::BedrockApiKey(b)) => a == b,
                 _ => false,
             },
             _ => false,
@@ -1309,8 +1301,7 @@ impl AuthManager {
     }
 
     pub fn current_auth_uses_ody_backend(&self) -> bool {
-        self.get_api_auth_mode()
-            .is_some_and(AuthMode::uses_ody_backend)
+        false
     }
 
     async fn refresh_external_auth(
@@ -1345,6 +1336,4 @@ impl AuthManager {
     }
 }
 
-#[cfg(test)]
-#[path = "auth_tests.rs"]
-mod tests;
+

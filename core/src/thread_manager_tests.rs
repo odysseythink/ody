@@ -7,6 +7,8 @@ use crate::session::session::SessionSettingsUpdate;
 use crate::session::tests::make_session_and_context;
 use crate::tasks::InterruptedTurnHistoryMarker;
 use crate::tasks::interrupted_turn_history_marker;
+use ody_config::McpServerConfig;
+use ody_config::McpServerTransportConfig;
 use ody_extension_api::empty_extension_registry;
 use ody_models_manager::manager::RefreshStrategy;
 use ody_protocol::capabilities::CapabilityRootLocation;
@@ -393,10 +395,28 @@ async fn start_thread_seeds_extension_data_for_mcp_and_lifecycle_contributors() 
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .push(selected_root.id.clone());
-                let mut server = ody_mcp::ody_apps_mcp_server_config(
-                    "https://selected.invalid",
-                    /*apps_mcp_product_sku*/ None,
-                );
+                let mut server = McpServerConfig {
+                    transport: McpServerTransportConfig::StreamableHttp {
+                        url: "https://selected.invalid".to_string(),
+                        bearer_token_env_var: None,
+                        http_headers: None,
+                        env_http_headers: None,
+                    },
+                    environment_id: ody_config::DEFAULT_MCP_SERVER_ENVIRONMENT_ID.to_string(),
+                    enabled: true,
+                    required: false,
+                    supports_parallel_tool_calls: false,
+                    disabled_reason: None,
+                    startup_timeout_sec: None,
+                    tool_timeout_sec: None,
+                    default_tools_approval_mode: None,
+                    enabled_tools: None,
+                    disabled_tools: None,
+                    scopes: None,
+                    oauth: None,
+                    oauth_resource: None,
+                    tools: std::collections::HashMap::new(),
+                };
                 let CapabilityRootLocation::Environment { environment_id, .. } =
                     &selected_root.location;
                 server.environment_id = environment_id.clone();

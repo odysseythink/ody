@@ -25,6 +25,23 @@ fn client_response_payload_returns_jsonrpc_parts_and_client_response() -> Result
 }
 
 #[test]
+fn auth_mode_serializes_to_lowercase() {
+    assert_eq!(
+        serde_json::to_string(&AuthMode::ApiKey).unwrap(),
+        "\"apikey\""
+    );
+    assert_eq!(
+        serde_json::to_string(&AuthMode::Unauthenticated).unwrap(),
+        "\"unauthenticated\""
+    );
+}
+
+#[test]
+fn auth_mode_deserializes_legacy_chatgpt_as_error() {
+    assert!(serde_json::from_str::<AuthMode>("\"chatgpt\"").is_err());
+}
+
+#[test]
 fn interrupt_conversation_payload_stays_jsonrpc_only() -> Result<()> {
     let (request_id, result, payload) =
         ClientResponsePayload::InterruptConversation(v1::InterruptConversationResponse {

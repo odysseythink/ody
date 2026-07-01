@@ -310,30 +310,6 @@ impl AppServerSession {
                 FeedbackAudience::External,
                 false,
             ),
-            Some(Account::Chatgpt { email, plan_type }) => {
-                let feedback_audience = if email
-                    .as_deref()
-                    .is_some_and(|email| email.ends_with("@odysseythink.com"))
-                {
-                    FeedbackAudience::OpenAiEmployee
-                } else {
-                    FeedbackAudience::External
-                };
-                (
-                    email.clone(),
-                    Some(TelemetryAuthMode::Chatgpt),
-                    Some(StatusAccountDisplay::ChatGpt {
-                        email,
-                        plan: Some(plan_type_display_name(plan_type)),
-                    }),
-                    Some(plan_type),
-                    feedback_audience,
-                    true,
-                )
-            }
-            Some(Account::AmazonBedrock { .. }) => {
-                (None, None, None, None, FeedbackAudience::External, false)
-            }
             None => (None, None, None, None, FeedbackAudience::External, false),
         };
         Ok(AppServerBootstrap {
@@ -1177,15 +1153,7 @@ pub(crate) fn status_account_display_from_auth_mode(
 ) -> Option<StatusAccountDisplay> {
     match auth_mode {
         Some(AuthMode::ApiKey) => Some(StatusAccountDisplay::ApiKey),
-        Some(AuthMode::Chatgpt)
-        | Some(AuthMode::ChatgptAuthTokens)
-        | Some(AuthMode::AgentIdentity)
-        | Some(AuthMode::PersonalAccessToken) => Some(StatusAccountDisplay::ChatGpt {
-            email: None,
-            plan: plan_type.map(plan_type_display_name),
-        }),
-        Some(AuthMode::BedrockApiKey) => None,
-        None => None,
+        Some(AuthMode::Unauthenticated) | None => None,
     }
 }
 
@@ -2562,7 +2530,7 @@ mod tests {
     #[test]
     fn status_account_display_from_auth_mode_uses_remapped_plan_labels() {
         let business = status_account_display_from_auth_mode(
-            Some(AuthMode::Chatgpt),
+            Some(AuthMode::ApiKey),
             Some(ody_protocol::account::PlanType::EnterpriseCbpUsageBased),
         );
         assert!(matches!(
@@ -2574,7 +2542,7 @@ mod tests {
         ));
 
         let team = status_account_display_from_auth_mode(
-            Some(AuthMode::Chatgpt),
+            Some(AuthMode::ApiKey),
             Some(ody_protocol::account::PlanType::SelfServeBusinessUsageBased),
         );
         assert!(matches!(

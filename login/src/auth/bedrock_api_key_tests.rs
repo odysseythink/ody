@@ -65,22 +65,18 @@ async fn login_with_bedrock_api_key_replaces_odysseythink_auth() -> anyhow::Resu
 
     let loaded = storage.load()?.expect("auth should be stored");
     let expected = AuthDotJson {
-        auth_mode: Some(AuthMode::BedrockApiKey),
+        auth_mode: Some(AuthMode::ApiKey),
         odysseythink_api_key: None,
         tokens: None,
         last_refresh: None,
         bedrock_api_key: Some(bedrock_auth()),
     };
     assert_eq!(loaded, expected);
-    assert_eq!(auth_manager.auth_mode(), Some(AuthMode::BedrockApiKey));
+    assert_eq!(auth_manager.auth_mode(), Some(AuthMode::ApiKey));
     assert_eq!(
         auth_manager.auth_cached().and_then(|auth| match auth {
             OdyAuth::BedrockApiKey(auth) => Some(auth),
-            OdyAuth::ApiKey(_)
-            | OdyAuth::Chatgpt(_)
-            | OdyAuth::ChatgptAuthTokens(_)
-            | OdyAuth::AgentIdentity(_)
-            | OdyAuth::PersonalAccessToken(_) => None,
+            OdyAuth::ApiKey(_) => None,
         }),
         Some(bedrock_auth())
     );
@@ -135,15 +131,11 @@ async fn bedrock_only_auth_storage_creates_primary_auth() -> anyhow::Result<()> 
     )
     .await;
 
-    assert_eq!(auth_manager.auth_mode(), Some(AuthMode::BedrockApiKey));
+    assert_eq!(auth_manager.auth_mode(), Some(AuthMode::ApiKey));
     assert_eq!(
         auth_manager.auth_cached().and_then(|auth| match auth {
             OdyAuth::BedrockApiKey(auth) => Some(auth),
-            OdyAuth::ApiKey(_)
-            | OdyAuth::Chatgpt(_)
-            | OdyAuth::ChatgptAuthTokens(_)
-            | OdyAuth::AgentIdentity(_)
-            | OdyAuth::PersonalAccessToken(_) => None,
+            OdyAuth::ApiKey(_) => None,
         }),
         Some(bedrock_auth())
     );

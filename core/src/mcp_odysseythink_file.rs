@@ -283,7 +283,6 @@ mod tests {
         set_primary_environment_cwd(&mut turn_context, dir.path());
 
         let mut config = (*turn_context.config).clone();
-        config.chatgpt_base_url = format!("{}/backend-api", server.uri());
         turn_context.config = Arc::new(config);
 
         let rewritten = build_uploaded_argument_value(
@@ -389,7 +388,6 @@ mod tests {
         set_primary_environment_cwd(&mut turn_context, dir.path());
 
         let mut config = (*turn_context.config).clone();
-        config.chatgpt_base_url = format!("{}/backend-api", server.uri());
         turn_context.config = Arc::new(config);
         let rewritten = rewrite_argument_value_for_odysseythink_files(
             &turn_context,
@@ -503,7 +501,6 @@ mod tests {
         set_primary_environment_cwd(&mut turn_context, dir.path());
 
         let mut config = (*turn_context.config).clone();
-        config.chatgpt_base_url = format!("{}/backend-api", server.uri());
         turn_context.config = Arc::new(config);
         let rewritten = rewrite_argument_value_for_odysseythink_files(
             &turn_context,

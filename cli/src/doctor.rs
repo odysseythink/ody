@@ -1320,11 +1320,7 @@ fn provider_specific_auth_check(
 fn stored_auth_mode(auth: &ody_login::AuthDotJson) -> &'static str {
     match stored_auth_mode_value(auth) {
         ody_app_server_protocol::AuthMode::ApiKey => "api_key",
-        ody_app_server_protocol::AuthMode::Chatgpt => "chatgpt",
-        ody_app_server_protocol::AuthMode::ChatgptAuthTokens => "chatgpt_auth_tokens",
-        ody_app_server_protocol::AuthMode::AgentIdentity => "agent_identity",
-        ody_app_server_protocol::AuthMode::PersonalAccessToken => "personal_access_token",
-        ody_app_server_protocol::AuthMode::BedrockApiKey => "bedrock_api_key",
+        ody_app_server_protocol::AuthMode::Unauthenticated => "unauthenticated",
     }
 }
 
@@ -1332,12 +1328,10 @@ fn stored_auth_mode_value(auth: &AuthDotJson) -> ody_app_server_protocol::AuthMo
     if let Some(mode) = auth.auth_mode {
         return mode;
     }
-    if auth.bedrock_api_key.is_some() {
-        ody_app_server_protocol::AuthMode::BedrockApiKey
-    } else if auth.odysseythink_api_key.is_some() {
+    if auth.odysseythink_api_key.is_some() {
         ody_app_server_protocol::AuthMode::ApiKey
     } else {
-        ody_app_server_protocol::AuthMode::Chatgpt
+        ody_app_server_protocol::AuthMode::Unauthenticated
     }
 }
 
@@ -1358,48 +1352,8 @@ fn stored_auth_issues(
                 issues.push("API key auth is missing an API key");
             }
         }
-        ody_app_server_protocol::AuthMode::Chatgpt => {
-            match auth.tokens.as_ref() {
-                Some(tokens) => {
-                    if tokens.access_token.trim().is_empty() {
-                        issues.push("ChatGPT auth is missing an access token");
-                    }
-                    if tokens.refresh_token.trim().is_empty() {
-                        issues.push("ChatGPT auth is missing a refresh token");
-                    }
-                }
-                None => issues.push("ChatGPT auth is missing token data"),
-            }
-            if auth.last_refresh.is_none() {
-                issues.push("ChatGPT auth is missing refresh metadata");
-            }
-        }
-        ody_app_server_protocol::AuthMode::ChatgptAuthTokens => {
-            match auth.tokens.as_ref() {
-                Some(tokens) => {
-                    if tokens.access_token.trim().is_empty() {
-                        issues.push("external ChatGPT auth is missing an access token");
-                    }
-                    if tokens.account_id.is_none() && tokens.id_token.chatgpt_account_id.is_none() {
-                        issues.push("external ChatGPT auth is missing a ChatGPT account id");
-                    }
-                }
-                None => issues.push("external ChatGPT auth is missing token data"),
-            }
-            if auth.last_refresh.is_none() {
-                issues.push("external ChatGPT auth is missing refresh metadata");
-            }
-        }
-        ody_app_server_protocol::AuthMode::AgentIdentity => {
-            issues.push("agent identity auth is no longer supported");
-        }
-        ody_app_server_protocol::AuthMode::PersonalAccessToken => {
-            issues.push("personal access token auth is no longer supported");
-        }
-        ody_app_server_protocol::AuthMode::BedrockApiKey => {
-            if auth.bedrock_api_key.is_none() {
-                issues.push("Bedrock API key auth is missing a Bedrock API key");
-            }
+        ody_app_server_protocol::AuthMode::Unauthenticated => {
+            issues.push("no authentication configured");
         }
     }
     issues
@@ -2445,11 +2399,7 @@ fn websocket_error_detail(err: &ApiError) -> String {
 fn auth_mode_name(auth: &OdyAuth) -> &'static str {
     match auth.auth_mode() {
         ody_app_server_protocol::AuthMode::ApiKey => "api_key",
-        ody_app_server_protocol::AuthMode::Chatgpt => "chatgpt",
-        ody_app_server_protocol::AuthMode::ChatgptAuthTokens => "chatgpt_auth_tokens",
-        ody_app_server_protocol::AuthMode::AgentIdentity => "agent_identity",
-        ody_app_server_protocol::AuthMode::PersonalAccessToken => "personal_access_token",
-        ody_app_server_protocol::AuthMode::BedrockApiKey => "bedrock_api_key",
+        ody_app_server_protocol::AuthMode::Unauthenticated => "unauthenticated",
     }
 }
 
@@ -2585,17 +2535,10 @@ fn provider_auth_reachability_mode_from_auth(
         return ProviderAuthReachabilityMode::Chatgpt;
     }
     match stored_auth.map(stored_auth_mode_value) {
-        Some(
-            ody_app_server_protocol::AuthMode::ApiKey
-            | ody_app_server_protocol::AuthMode::BedrockApiKey,
-        ) => ProviderAuthReachabilityMode::ApiKey,
-        Some(
-            ody_app_server_protocol::AuthMode::Chatgpt
-            | ody_app_server_protocol::AuthMode::ChatgptAuthTokens
-            | ody_app_server_protocol::AuthMode::AgentIdentity
-            | ody_app_server_protocol::AuthMode::PersonalAccessToken,
-        )
-        | None => ProviderAuthReachabilityMode::Chatgpt,
+        Some(ody_app_server_protocol::AuthMode::ApiKey) => ProviderAuthReachabilityMode::ApiKey,
+        Some(ody_app_server_protocol::AuthMode::Unauthenticated) | None => {
+            ProviderAuthReachabilityMode::Chatgpt
+        }
     }
 }
 
@@ -3491,8 +3434,6 @@ mod tests {
             odysseythink_api_key: None,
             tokens: None,
             last_refresh: None,
-            agent_identity: None,
-            personal_access_token: None,
             bedrock_api_key: None,
         };
 
@@ -3504,46 +3445,18 @@ mod tests {
     }
 
     #[test]
-    fn stored_auth_validation_rejects_missing_chatgpt_tokens() {
+    fn stored_auth_validation_rejects_unauthenticated() {
         let auth = AuthDotJson {
             auth_mode: None,
             odysseythink_api_key: None,
             tokens: None,
             last_refresh: None,
-            agent_identity: None,
-            personal_access_token: None,
             bedrock_api_key: None,
         };
 
         assert_eq!(
             stored_auth_issues(&auth, |_| false),
-            vec![
-                "ChatGPT auth is missing token data",
-                "ChatGPT auth is missing refresh metadata",
-            ]
-        );
-    }
-
-    #[test]
-    fn stored_auth_validation_handles_personal_access_token() {
-        let mut auth = AuthDotJson {
-            auth_mode: None,
-            odysseythink_api_key: None,
-            tokens: None,
-            last_refresh: None,
-            agent_identity: None,
-            personal_access_token: Some("at-test".to_string()),
-            bedrock_api_key: None,
-        };
-
-        assert_eq!(stored_auth_mode(&auth), "personal_access_token");
-        assert!(stored_auth_issues(&auth, |_| false).is_empty());
-
-        auth.auth_mode = Some(ody_app_server_protocol::AuthMode::PersonalAccessToken);
-        auth.personal_access_token = None;
-        assert_eq!(
-            stored_auth_issues(&auth, |_| false),
-            vec!["personal access token auth is missing a personal access token"]
+            vec!["no authentication configured"]
         );
     }
 
@@ -3554,8 +3467,6 @@ mod tests {
             odysseythink_api_key: Some("sk-test".to_string()),
             tokens: None,
             last_refresh: None,
-            agent_identity: None,
-            personal_access_token: None,
             bedrock_api_key: None,
         };
 
