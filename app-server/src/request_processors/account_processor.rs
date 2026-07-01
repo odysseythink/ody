@@ -1,47 +1,6 @@
 use super::*;
 use crate::error_code::internal_error;
 
-// ChatGPT account login (browser OAuth, device code, and externally-supplied auth tokens) is no
-// longer supported. `ActiveLogin` is retained in a reduced form for the `account/login/cancel`
-// RPC surface, but nothing constructs a variant anymore.
-enum ActiveLogin {
-    DeviceCode {
-        cancel: CancellationToken,
-        login_id: Uuid,
-    },
-}
-
-impl ActiveLogin {
-    fn login_id(&self) -> Uuid {
-        match self {
-            ActiveLogin::DeviceCode { login_id, .. } => *login_id,
-        }
-    }
-
-    fn cancel(&self) {
-        match self {
-            ActiveLogin::DeviceCode { cancel, .. } => cancel.cancel(),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-enum CancelLoginError {
-    NotFound,
-}
-
-enum RefreshTokenRequestOutcome {
-    NotAttemptedOrSucceeded,
-    FailedTransiently,
-    FailedPermanently,
-}
-
-impl Drop for ActiveLogin {
-    fn drop(&mut self) {
-        self.cancel();
-    }
-}
-
 #[derive(Clone)]
 pub(crate) struct AccountRequestProcessor {
     auth_manager: Arc<AuthManager>,
@@ -49,7 +8,6 @@ pub(crate) struct AccountRequestProcessor {
     outgoing: Arc<OutgoingMessageSender>,
     config: Arc<Config>,
     config_manager: ConfigManager,
-    active_login: Arc<Mutex<Option<ActiveLogin>>>,
 }
 
 impl AccountRequestProcessor {
@@ -66,7 +24,6 @@ impl AccountRequestProcessor {
             outgoing,
             config,
             config_manager,
-            active_login: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -83,15 +40,6 @@ impl AccountRequestProcessor {
         request_id: ConnectionRequestId,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         self.logout_v2(request_id).await.map(|()| None)
-    }
-
-    pub(crate) async fn cancel_login_account(
-        &self,
-        params: CancelLoginAccountParams,
-    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
-        self.cancel_login_response(params)
-            .await
-            .map(|response| Some(response.into()))
     }
 
     pub(crate) async fn get_account(
@@ -154,20 +102,6 @@ impl AccountRequestProcessor {
         ))
     }
 
-    pub(crate) async fn cancel_active_login(&self) {
-        let mut guard = self.active_login.lock().await;
-        if let Some(active_login) = guard.take() {
-            drop(active_login);
-        }
-    }
-
-    pub(crate) fn clear_external_auth(&self) {
-        // External ChatGPT auth is no longer supported; nothing to clear.
-        self.thread_manager
-            .plugins_manager()
-            .set_auth_mode(self.auth_manager.get_api_auth_mode());
-    }
-
     fn current_account_updated_notification(&self) -> AccountUpdatedNotification {
         let auth = self.auth_manager.auth_cached();
         AccountUpdatedNotification {
@@ -225,14 +159,6 @@ impl AccountRequestProcessor {
         &self,
         params: &LoginApiKeyParams,
     ) -> std::result::Result<(), JSONRPCErrorError> {
-        // Cancel any active login attempt.
-        {
-            let mut guard = self.active_login.lock().await;
-            if let Some(active) = guard.take() {
-                drop(active);
-            }
-        }
-
         match login_with_api_key(
             &self.config.ody_home,
             &params.api_key,
@@ -256,41 +182,11 @@ impl AccountRequestProcessor {
         self.outgoing.send_result(request_id, result).await;
 
         if logged_in {
-            self.send_login_success_notifications(/*login_id*/ None)
-                .await;
+            self.send_login_success_notifications().await;
         }
     }
 
-    async fn cancel_login_chatgpt_common(
-        &self,
-        login_id: Uuid,
-    ) -> std::result::Result<(), CancelLoginError> {
-        let mut guard = self.active_login.lock().await;
-        if guard.as_ref().map(ActiveLogin::login_id) == Some(login_id) {
-            if let Some(active) = guard.take() {
-                drop(active);
-            }
-            Ok(())
-        } else {
-            Err(CancelLoginError::NotFound)
-        }
-    }
-
-    async fn cancel_login_response(
-        &self,
-        params: CancelLoginAccountParams,
-    ) -> Result<CancelLoginAccountResponse, JSONRPCErrorError> {
-        let login_id = params.login_id;
-        let uuid = Uuid::parse_str(&login_id)
-            .map_err(|_| invalid_request(format!("invalid login id: {login_id}")))?;
-        let status = match self.cancel_login_chatgpt_common(uuid).await {
-            Ok(()) => CancelLoginAccountStatus::Canceled,
-            Err(CancelLoginError::NotFound) => CancelLoginAccountStatus::NotFound,
-        };
-        Ok(CancelLoginAccountResponse { status })
-    }
-
-    async fn send_login_success_notifications(&self, login_id: Option<Uuid>) {
+    async fn send_login_success_notifications(&self) {
         Self::maybe_refresh_plugin_caches_for_current_config(
             &self.config_manager,
             &self.thread_manager,
@@ -299,7 +195,7 @@ impl AccountRequestProcessor {
         .await;
 
         let payload_login_completed = AccountLoginCompletedNotification {
-            login_id: login_id.map(|id| id.to_string()),
+            login_id: None,
             success: true,
             error: None,
         };
@@ -316,16 +212,7 @@ impl AccountRequestProcessor {
             .await;
     }
 
-
     async fn logout_common(&self) -> std::result::Result<Option<AuthMode>, JSONRPCErrorError> {
-        // Cancel any active login attempt.
-        {
-            let mut guard = self.active_login.lock().await;
-            if let Some(active) = guard.take() {
-                drop(active);
-            }
-        }
-
         match self.auth_manager.logout().await {
             Ok(_) => {}
             Err(err) => {
@@ -371,19 +258,11 @@ impl AccountRequestProcessor {
         Ok(())
     }
 
-    async fn refresh_token_if_requested(&self, _do_refresh: bool) -> RefreshTokenRequestOutcome {
-        // Only API-key auth is supported; there is no refreshable token.
-        RefreshTokenRequestOutcome::NotAttemptedOrSucceeded
-    }
-
     async fn get_auth_status_response(
         &self,
         params: GetAuthStatusParams,
     ) -> Result<GetAuthStatusResponse, JSONRPCErrorError> {
         let include_token = params.include_token.unwrap_or(false);
-        let do_refresh = params.refresh_token.unwrap_or(false);
-
-        self.refresh_token_if_requested(do_refresh).await;
 
         // Determine whether auth is required based on the active model provider.
         // If a custom provider is configured with `requires_odysseythink_auth == false`,
@@ -397,22 +276,11 @@ impl AccountRequestProcessor {
                 requires_odysseythink_auth: Some(false),
             }
         } else {
-            let auth = if do_refresh {
-                self.auth_manager.auth_cached()
-            } else {
-                self.auth_manager.auth().await
-            };
+            let auth = self.auth_manager.auth().await;
             match auth {
                 Some(auth) => {
-                    let permanent_refresh_failure = false;
                     let auth_mode = auth.api_auth_mode();
-                    let (reported_auth_method, token_opt) = if include_token
-                        && permanent_refresh_failure
-                    {
-                        // This response cannot represent the metadata needed to reuse these
-                        // credentials.
-                        (Some(auth_mode), None)
-                    } else {
+                    let (reported_auth_method, token_opt) = {
                         match auth.get_token() {
                             Ok(token) if !token.is_empty() => {
                                 let tok = if include_token { Some(token) } else { None };
@@ -444,12 +312,8 @@ impl AccountRequestProcessor {
 
     async fn get_account_response(
         &self,
-        params: GetAccountParams,
+        _params: GetAccountParams,
     ) -> Result<GetAccountResponse, JSONRPCErrorError> {
-        let do_refresh = params.refresh_token;
-
-        self.refresh_token_if_requested(do_refresh).await;
-
         let provider = create_model_provider(
             self.config.model_provider.clone(),
             Some(self.auth_manager.clone()),
@@ -466,4 +330,3 @@ impl AccountRequestProcessor {
         })
     }
 }
-

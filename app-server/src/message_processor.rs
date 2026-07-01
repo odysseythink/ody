@@ -59,11 +59,10 @@ use ody_app_server_protocol::JSONRPCErrorError;
 use ody_app_server_protocol::JSONRPCNotification;
 use ody_app_server_protocol::JSONRPCRequest;
 use ody_app_server_protocol::JSONRPCResponse;
-use ody_app_server_protocol::ServerRequestPayload;
 use ody_app_server_protocol::experimental_required_message;
 use ody_arg0::Arg0DispatchPaths;
-use ody_chatgpt::workspace_settings;
 use ody_core::ThreadManager;
+use ody_core::workspace_settings;
 use ody_core::config::Config;
 use ody_exec_server::EnvironmentManager;
 use ody_feedback::OdyFeedback;
@@ -87,7 +86,6 @@ use tracing::Instrument;
 
 use crate::models_refresh_worker::ModelsRefreshWorker;
 
-const EXTERNAL_AUTH_REFRESH_TIMEOUT: Duration = Duration::from_secs(10);
 const CONNECTION_RPC_DRAIN_TIMEOUT: Duration = Duration::from_secs(/*secs*/ 30);
 
 fn deserialize_client_request(
@@ -349,7 +347,6 @@ impl MessageProcessor {
             Arc::clone(&environment_manager_for_requests),
         );
         let feedback_processor = FeedbackRequestProcessor::new(
-            auth_manager.clone(),
             Arc::clone(&thread_manager),
             Arc::clone(&config),
             feedback,
@@ -379,7 +376,6 @@ impl MessageProcessor {
             auth_manager.clone(),
             Arc::clone(&thread_manager),
             outgoing.clone(),
-            analytics_events_client.clone(),
             config_manager.clone(),
             workspace_settings_cache,
         );
@@ -483,7 +479,6 @@ impl MessageProcessor {
     }
 
     pub(crate) fn clear_runtime_references(&self) {
-        self.account_processor.clear_external_auth();
         self.apps_processor.shutdown();
         self.models_refresh_worker.shutdown();
         self.skills_watcher.shutdown();
@@ -664,10 +659,6 @@ impl MessageProcessor {
     pub(crate) async fn drain_background_tasks(&self) {
         self.models_refresh_worker.shutdown();
         self.thread_processor.drain_background_tasks().await;
-    }
-
-    pub(crate) async fn cancel_active_login(&self) {
-        self.account_processor.cancel_active_login().await;
     }
 
     pub(crate) async fn clear_all_thread_listeners(&self) {
@@ -1300,8 +1291,10 @@ impl MessageProcessor {
                     .logout_account(request_id.clone())
                     .await
             }
-            ClientRequest::CancelLoginAccount { params, .. } => {
-                self.account_processor.cancel_login_account(params).await
+            ClientRequest::CancelLoginAccount { .. } => {
+                Err(invalid_request(
+                    "account/login/cancel is no longer supported",
+                ))
             }
             ClientRequest::GetAccount { params, .. } => {
                 self.account_processor.get_account(params).await
