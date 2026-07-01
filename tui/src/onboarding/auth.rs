@@ -10,8 +10,6 @@
 use ody_app_server_client::AppServerRequestHandle;
 use ody_app_server_protocol::AccountLoginCompletedNotification;
 use ody_app_server_protocol::AccountUpdatedNotification;
-#[cfg(test)]
-use ody_app_server_protocol::AuthMode as AppServerAuthMode;
 use ody_app_server_protocol::CancelLoginAccountParams;
 use ody_app_server_protocol::ClientRequest;
 use ody_app_server_protocol::LoginAccountParams;
@@ -87,13 +85,13 @@ pub(crate) enum SignInState {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(dead_code)]
 pub(crate) enum SignInOption {
     ChatGpt,
     DeviceCode,
     ApiKey,
 }
 
-const API_KEY_DISABLED_MESSAGE: &str = "API key login is disabled.";
 fn onboarding_request_id() -> ody_app_server_protocol::RequestId {
     ody_app_server_protocol::RequestId::String(Uuid::new_v4().to_string())
 }
@@ -304,35 +302,12 @@ impl AuthModeWidget {
         keys::CANCEL[0]
     }
 
-    fn is_api_login_allowed(&self) -> bool {
-        !matches!(self.forced_login_method, Some(ForcedLoginMethod::Chatgpt))
-    }
-
-    fn is_chatgpt_login_allowed(&self) -> bool {
-        !matches!(self.forced_login_method, Some(ForcedLoginMethod::Api))
-    }
-
     fn displayed_sign_in_options(&self) -> Vec<SignInOption> {
-        let mut options = vec![SignInOption::ChatGpt];
-        if self.is_chatgpt_login_allowed() {
-            options.push(SignInOption::DeviceCode);
-        }
-        if self.is_api_login_allowed() {
-            options.push(SignInOption::ApiKey);
-        }
-        options
+        vec![SignInOption::ApiKey]
     }
 
     fn selectable_sign_in_options(&self) -> Vec<SignInOption> {
-        let mut options = Vec::new();
-        if self.is_chatgpt_login_allowed() {
-            options.push(SignInOption::ChatGpt);
-            options.push(SignInOption::DeviceCode);
-        }
-        if self.is_api_login_allowed() {
-            options.push(SignInOption::ApiKey);
-        }
-        options
+        vec![SignInOption::ApiKey]
     }
 
     fn move_highlight(&mut self, delta: isize) {
@@ -359,31 +334,11 @@ impl AuthModeWidget {
 
     fn handle_sign_in_option(&mut self, option: SignInOption) {
         match option {
-            SignInOption::ChatGpt => {
-                if self.is_chatgpt_login_allowed() {
-                    self.start_chatgpt_login();
-                }
-            }
-            SignInOption::DeviceCode => {
-                if self.is_chatgpt_login_allowed() {
-                    self.start_device_code_login();
-                }
-            }
-            SignInOption::ApiKey => {
-                if self.is_api_login_allowed() {
-                    self.start_api_key_entry();
-                } else {
-                    self.disallow_api_login();
-                }
+            SignInOption::ApiKey => self.start_api_key_entry(),
+            SignInOption::ChatGpt | SignInOption::DeviceCode => {
+                // ChatGPT account login is no longer supported.
             }
         }
-    }
-
-    fn disallow_api_login(&mut self) {
-        self.highlighted_mode = SignInOption::ChatGpt;
-        self.set_error(Some(API_KEY_DISABLED_MESSAGE.to_string()));
-        *self.sign_in_state.write().unwrap() = SignInState::PickMode;
-        self.request_frame.schedule_frame();
     }
 
     fn render_pick_mode(&self, area: Rect, buf: &mut Buffer) {
@@ -426,31 +381,8 @@ impl AuthModeWidget {
             vec![line1, line2]
         };
 
-        let chatgpt_description = if !self.is_chatgpt_login_allowed() {
-            "ChatGPT login is disabled"
-        } else {
-            "Usage included with Plus, Pro, Business, and Enterprise plans"
-        };
-        let device_code_description = "Sign in from another device with a one-time code";
-
         for (idx, option) in self.displayed_sign_in_options().into_iter().enumerate() {
             match option {
-                SignInOption::ChatGpt => {
-                    lines.extend(create_mode_item(
-                        idx,
-                        option,
-                        "Sign in with ChatGPT",
-                        chatgpt_description,
-                    ));
-                }
-                SignInOption::DeviceCode => {
-                    lines.extend(create_mode_item(
-                        idx,
-                        option,
-                        "Sign in with Device Code",
-                        device_code_description,
-                    ));
-                }
                 SignInOption::ApiKey => {
                     lines.extend(create_mode_item(
                         idx,
@@ -459,16 +391,11 @@ impl AuthModeWidget {
                         "Pay for what you use",
                     ));
                 }
+                SignInOption::ChatGpt | SignInOption::DeviceCode => {
+                    // ChatGPT account login is no longer supported; these options
+                    // are not displayed.
+                }
             }
-            lines.push("".into());
-        }
-
-        if !self.is_api_login_allowed() {
-            lines.push(
-                "  API key login is disabled by this workspace. Sign in with ChatGPT to continue."
-                    .dim()
-                    .into(),
-            );
             lines.push("".into());
         }
         lines.push(Line::from(vec![
@@ -766,10 +693,6 @@ impl AuthModeWidget {
     }
 
     fn start_api_key_entry(&mut self) {
-        if !self.is_api_login_allowed() {
-            self.disallow_api_login();
-            return;
-        }
         self.set_error(/*message*/ None);
         let prefill_from_env = read_odysseythink_api_key_from_env();
         let mut guard = self.sign_in_state.write().unwrap();
@@ -796,10 +719,6 @@ impl AuthModeWidget {
     }
 
     fn save_api_key(&mut self, api_key: String) {
-        if !self.is_api_login_allowed() {
-            self.disallow_api_login();
-            return;
-        }
         self.set_error(/*message*/ None);
         let request_handle = self.app_server_request_handle.clone();
         let sign_in_state = self.sign_in_state.clone();
@@ -838,38 +757,6 @@ impl AuthModeWidget {
             }
             request_frame.schedule_frame();
         });
-        self.request_frame.schedule_frame();
-    }
-
-    fn handle_existing_chatgpt_login(&mut self) -> bool {
-        if matches!(
-            self.login_status,
-            LoginStatus::AuthMode(_auth_mode) if false
-        ) {
-            *self.sign_in_state.write().unwrap() = SignInState::ChatGptSuccess;
-            self.request_frame.schedule_frame();
-            true
-        } else {
-            false
-        }
-    }
-
-    /// Kicks off the ChatGPT auth flow and keeps the UI state consistent with the attempt.
-    ///
-    /// ChatGPT account login is no longer supported; this immediately shows an error.
-    fn start_chatgpt_login(&mut self) {
-        self.set_error(Some(
-            "ChatGPT account login is no longer supported. Use API key login instead.".to_string(),
-        ));
-        *self.sign_in_state.write().unwrap() = SignInState::PickMode;
-        self.request_frame.schedule_frame();
-    }
-
-    fn start_device_code_login(&mut self) {
-        self.set_error(Some(
-            "ChatGPT account login is no longer supported. Use API key login instead.".to_string(),
-        ));
-        *self.sign_in_state.write().unwrap() = SignInState::PickMode;
         self.request_frame.schedule_frame();
     }
 
@@ -981,7 +868,7 @@ mod tests {
     use std::sync::Arc;
     use tempfile::TempDir;
 
-    async fn widget_forced_chatgpt() -> (AuthModeWidget, TempDir) {
+    async fn widget() -> (AuthModeWidget, TempDir) {
         let ody_home = TempDir::new().unwrap();
         let ody_home_path = ody_home.path().to_path_buf();
         let config = ConfigBuilder::default()
@@ -1025,12 +912,12 @@ mod tests {
         .unwrap();
         let widget = AuthModeWidget {
             request_frame: FrameRequester::test_dummy(),
-            highlighted_mode: SignInOption::ChatGpt,
+            highlighted_mode: SignInOption::ApiKey,
             error: Arc::new(RwLock::new(None)),
             sign_in_state: Arc::new(RwLock::new(SignInState::PickMode)),
             login_status: LoginStatus::NotAuthenticated,
             app_server_request_handle: AppServerRequestHandle::InProcess(client.request_handle()),
-            forced_login_method: Some(ForcedLoginMethod::Chatgpt),
+            forced_login_method: None,
             animations_enabled: true,
             animations_suppressed: std::cell::Cell::new(false),
         };
@@ -1038,60 +925,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn api_key_flow_disabled_when_chatgpt_forced() {
-        let (mut widget, _tmp) = widget_forced_chatgpt().await;
-
-        widget.start_api_key_entry();
-
-        assert_eq!(
-            widget.error_message().as_deref(),
-            Some(API_KEY_DISABLED_MESSAGE)
-        );
-        assert!(matches!(
-            &*widget.sign_in_state.read().unwrap(),
-            SignInState::PickMode
-        ));
-    }
-
-    #[tokio::test]
-    async fn saving_api_key_is_blocked_when_chatgpt_forced() {
-        let (mut widget, _tmp) = widget_forced_chatgpt().await;
-
-        widget.save_api_key("sk-test".to_string());
-
-        assert_eq!(
-            widget.error_message().as_deref(),
-            Some(API_KEY_DISABLED_MESSAGE)
-        );
-        assert!(matches!(
-            &*widget.sign_in_state.read().unwrap(),
-            SignInState::PickMode
-        ));
-        assert_eq!(widget.login_status, LoginStatus::NotAuthenticated);
-    }
-
-    #[tokio::test]
-    async fn existing_non_oauth_chatgpt_login_counts_as_signed_in() {
-        for auth_mode in [
-            AppServerAuthMode::ApiKey,
-            AppServerAuthMode::ApiKey,
-        ] {
-            let (mut widget, _tmp) = widget_forced_chatgpt().await;
-            widget.login_status = LoginStatus::AuthMode(auth_mode);
-
-            let handled = widget.handle_existing_chatgpt_login();
-
-            assert_eq!(handled, true);
-            assert!(matches!(
-                &*widget.sign_in_state.read().unwrap(),
-                SignInState::ChatGptSuccess
-            ));
-        }
-    }
-
-    #[tokio::test]
     async fn cancel_active_attempt_resets_browser_login_state() {
-        let (widget, _tmp) = widget_forced_chatgpt().await;
+        let (widget, _tmp) = widget().await;
         *widget.error.write().unwrap() = Some("still logging in".to_string());
         *widget.sign_in_state.write().unwrap() =
             SignInState::ChatGptContinueInBrowser(ContinueInBrowserState {
@@ -1110,7 +945,7 @@ mod tests {
 
     #[tokio::test]
     async fn cancel_active_attempt_notifies_device_code_login() {
-        let (widget, _tmp) = widget_forced_chatgpt().await;
+        let (widget, _tmp) = widget().await;
         *widget.error.write().unwrap() = Some("still logging in".to_string());
         *widget.sign_in_state.write().unwrap() =
             SignInState::ChatGptDeviceCode(ContinueWithDeviceCodeState::ready(
@@ -1151,7 +986,7 @@ mod tests {
     #[test]
     fn continue_in_browser_renders_osc8_hyperlink() {
         let runtime = tokio::runtime::Runtime::new().unwrap();
-        let (widget, _tmp) = runtime.block_on(widget_forced_chatgpt());
+        let (widget, _tmp) = runtime.block_on(widget());
         let url = "https://auth.example.com/login?state=abc123";
         *widget.sign_in_state.write().unwrap() =
             SignInState::ChatGptContinueInBrowser(ContinueInBrowserState {
@@ -1172,7 +1007,7 @@ mod tests {
     #[test]
     fn auth_widget_suppresses_animations_when_device_code_is_visible() {
         let runtime = tokio::runtime::Runtime::new().unwrap();
-        let (widget, _tmp) = runtime.block_on(widget_forced_chatgpt());
+        let (widget, _tmp) = runtime.block_on(widget());
         *widget.sign_in_state.write().unwrap() =
             SignInState::ChatGptDeviceCode(ContinueWithDeviceCodeState::ready(
                 "request-1".to_string(),
@@ -1187,7 +1022,7 @@ mod tests {
     #[test]
     fn auth_widget_suppresses_animations_while_requesting_device_code() {
         let runtime = tokio::runtime::Runtime::new().unwrap();
-        let (widget, _tmp) = runtime.block_on(widget_forced_chatgpt());
+        let (widget, _tmp) = runtime.block_on(widget());
         *widget.sign_in_state.write().unwrap() = SignInState::ChatGptDeviceCode(
             ContinueWithDeviceCodeState::pending("request-1".to_string()),
         );
@@ -1197,7 +1032,7 @@ mod tests {
 
     #[tokio::test]
     async fn device_code_login_completion_advances_to_success_message() {
-        let (mut widget, _tmp) = widget_forced_chatgpt().await;
+        let (mut widget, _tmp) = widget().await;
         *widget.sign_in_state.write().unwrap() =
             SignInState::ChatGptDeviceCode(ContinueWithDeviceCodeState::ready(
                 "request-1".to_string(),

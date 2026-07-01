@@ -12,7 +12,6 @@ use ody_core::config::Config;
 use ody_login::OdyAuth;
 use ody_login::login_with_api_key;
 use ody_login::logout;
-use ody_protocol::config_types::ForcedLoginMethod;
 use ody_utils_cli::CliConfigOverrides;
 use std::fs::OpenOptions;
 use std::io::IsTerminal;
@@ -26,8 +25,6 @@ use tracing_subscriber::util::SubscriberInitExt;
 
 const CHATGPT_LOGIN_REMOVED_MESSAGE: &str =
     "ChatGPT account login is no longer supported. Use `ody login --with-api-key` instead.";
-const API_KEY_LOGIN_DISABLED_MESSAGE: &str =
-    "API key login is disabled. Use ChatGPT login instead.";
 const ACCESS_TOKEN_LOGIN_REMOVED_MESSAGE: &str =
     "Access token login is no longer supported. Use `ody login --with-api-key` instead.";
 const LOGIN_SUCCESS_MESSAGE: &str = "Successfully logged in";
@@ -116,11 +113,6 @@ pub async fn run_login_with_api_key(
     let config = load_config_or_exit(cli_config_overrides).await;
     let _login_log_guard = init_login_file_logging(&config);
     tracing::info!("starting api key login flow");
-
-    if matches!(config.forced_login_method, Some(ForcedLoginMethod::Chatgpt)) {
-        eprintln!("{API_KEY_LOGIN_DISABLED_MESSAGE}");
-        std::process::exit(1);
-    }
 
     match login_with_api_key(
         &config.ody_home,

@@ -343,7 +343,6 @@ use ody_model_provider::create_model_provider;
 use ody_models_manager::collaboration_mode_presets::builtin_collaboration_mode_presets;
 use ody_protocol::ThreadId;
 use ody_protocol::config_types::CollaborationMode;
-use ody_protocol::config_types::ForcedLoginMethod;
 use ody_protocol::config_types::Personality;
 use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::config_types::TrustLevel;

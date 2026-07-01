@@ -218,9 +218,6 @@ pub async fn enforce_login_restrictions(config: &AuthConfig) -> std::io::Result<
     if let Some(required_method) = config.forced_login_method {
         let method_violation = match (required_method, auth.auth_mode()) {
             (ForcedLoginMethod::Api, AuthMode::ApiKey) => None,
-            (ForcedLoginMethod::Chatgpt, _) => Some(
-                "ChatGPT login is no longer supported. Logging out.".to_string(),
-            ),
             (ForcedLoginMethod::Api, _) => Some(
                 "API key login is required, but the stored credentials use an unsupported login method. Logging out."
                     .to_string(),

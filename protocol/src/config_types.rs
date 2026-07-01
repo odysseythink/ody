@@ -477,7 +477,6 @@ impl ServiceTier {
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum ForcedLoginMethod {
-    Chatgpt,
     Api,
 }
 
@@ -885,5 +884,15 @@ mod tests {
         };
 
         assert_eq!(expected, base.merge(&overlay));
+    }
+
+    #[test]
+    fn forced_login_method_serializes_api_only() {
+        assert_eq!(serde_json::to_string(&ForcedLoginMethod::Api).unwrap(), "\"api\"");
+    }
+
+    #[test]
+    fn forced_login_method_rejects_chatgpt() {
+        assert!(serde_json::from_str::<ForcedLoginMethod>("\"chatgpt\"").is_err());
     }
 }

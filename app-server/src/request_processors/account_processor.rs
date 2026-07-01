@@ -225,15 +225,6 @@ impl AccountRequestProcessor {
         &self,
         params: &LoginApiKeyParams,
     ) -> std::result::Result<(), JSONRPCErrorError> {
-        if matches!(
-            self.config.forced_login_method,
-            Some(ForcedLoginMethod::Chatgpt)
-        ) {
-            return Err(invalid_request(
-                "API key login is disabled. Use ChatGPT login instead.",
-            ));
-        }
-
         // Cancel any active login attempt.
         {
             let mut guard = self.active_login.lock().await;
