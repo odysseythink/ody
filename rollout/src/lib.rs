@@ -28,7 +28,6 @@ pub static INTERACTIVE_SESSION_SOURCES: LazyLock<Vec<SessionSource>> = LazyLock:
         SessionSource::Cli,
         SessionSource::VSCode,
         SessionSource::Custom("atlas".to_string()),
-        SessionSource::Custom("chatgpt".to_string()),
     ]
 });
 

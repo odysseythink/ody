@@ -37,8 +37,8 @@ fn auth_mode_serializes_to_lowercase() {
 }
 
 #[test]
-fn auth_mode_deserializes_legacy_chatgpt_as_error() {
-    assert!(serde_json::from_str::<AuthMode>("\"chatgpt\"").is_err());
+fn auth_mode_deserializes_legacy_provider_as_error() {
+    assert!(serde_json::from_str::<AuthMode>("\"legacy-provider\"").is_err());
 }
 
 #[test]

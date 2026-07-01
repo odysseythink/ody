@@ -155,7 +155,7 @@ pub(crate) fn reexec_managed_updater(managed_ody_bin: &std::path::Path) -> Resul
 
 #[cfg(unix)]
 async fn install_latest_standalone() -> Result<()> {
-    let script = reqwest::get("https://chatgpt.com/ody/install.sh")
+    let script = reqwest::get("https://example.com/ody/install.sh")
         .await
         .context("failed to fetch standalone Ody updater")?
         .error_for_status()

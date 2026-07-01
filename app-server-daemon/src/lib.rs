@@ -671,7 +671,7 @@ impl Daemon {
             "managed standalone Ody install not found at {managed_ody_path}\n\n\
              This command requires the standalone install managed by the Ody installer, because \
              the daemon starts and updates app-server from that fixed path.\n\n\
-             Install it with:\n  curl -fsSL https://chatgpt.com/ody/install.sh | sh\n\n\
+             Install it with:\n  curl -fsSL https://example.com/ody/install.sh | sh\n\n\
              Then rerun the command you just tried."
         ))
     }

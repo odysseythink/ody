@@ -494,8 +494,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn login_account_params_rejects_legacy_chatgpt() {
-        let json = r#"{"type":"chatgpt","odyStreamlinedLogin":false}"#;
+    fn login_account_params_rejects_legacy_provider() {
+        let json = r#"{"type":"legacy-provider","odyStreamlinedLogin":false}"#;
         assert!(serde_json::from_str::<LoginAccountParams>(json).is_err());
     }
 }
