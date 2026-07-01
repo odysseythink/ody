@@ -65,7 +65,6 @@ use crate::multi_agents::AgentMetadata;
 use crate::session_state::SessionNetworkProxyRuntime;
 use crate::session_state::ThreadSessionState;
 use crate::status::RateLimitWindowDisplay;
-use crate::status::StatusAccountDisplay;
 use crate::status::StatusHistoryHandle;
 use crate::status::format_directory_display;
 use crate::status::format_tokens_compact;
@@ -137,7 +136,6 @@ use ody_otel::RuntimeMetricsSummary;
 use ody_otel::SessionTelemetry;
 use ody_plugin::PluginCapabilitySummary;
 use ody_protocol::ThreadId;
-use ody_protocol::account::PlanType;
 use ody_protocol::approvals::GuardianAssessmentAction;
 use ody_protocol::approvals::GuardianAssessmentDecisionSource;
 use ody_protocol::approvals::GuardianAssessmentEvent;
@@ -487,14 +485,12 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) workspace_command_runner: Option<WorkspaceCommandRunner>,
     pub(crate) initial_user_message: Option<UserMessage>,
     pub(crate) enhanced_keys_supported: bool,
-    pub(crate) has_chatgpt_account: bool,
+    pub(crate) api_key_configured: bool,
     pub(crate) has_ody_backend_auth: bool,
     pub(crate) model_catalog: Arc<ModelCatalog>,
     pub(crate) feedback: ody_feedback::OdyFeedback,
     pub(crate) is_first_run: bool,
-    pub(crate) status_account_display: Option<StatusAccountDisplay>,
     pub(crate) runtime_model_provider_base_url: Option<String>,
-    pub(crate) initial_plan_type: Option<PlanType>,
     pub(crate) model: Option<String>,
     pub(crate) startup_tooltip_override: Option<String>,
     // Shared latch so we only warn once about invalid status-line item IDs.
@@ -539,13 +535,12 @@ pub(crate) struct ChatWidget {
     current_collaboration_mode: CollaborationMode,
     /// The currently active collaboration mask, if any.
     active_collaboration_mask: Option<CollaborationModeMask>,
-    has_chatgpt_account: bool,
+    api_key_configured: bool,
     has_ody_backend_auth: bool,
     model_catalog: Arc<ModelCatalog>,
     session_telemetry: SessionTelemetry,
     session_header: SessionHeader,
     initial_user_message: Option<UserMessage>,
-    status_account_display: Option<StatusAccountDisplay>,
     runtime_model_provider_base_url: Option<String>,
     pub(crate) remote_connection: Option<RemoteConnectionStatus>,
     token_info: Option<TokenUsageInfo>,
@@ -561,7 +556,6 @@ pub(crate) struct ChatWidget {
     pending_rate_limit_reset_hint: Option<PlainHistoryCell>,
     available_rate_limit_reset_credits: Option<i64>,
     next_rate_limit_reset_request_id: u64,
-    plan_type: Option<PlanType>,
     ody_rate_limit_reached_type: Option<RateLimitReachedType>,
     rate_limit_warnings: RateLimitWarningState,
     warning_display_state: WarningDisplayState,

@@ -736,17 +736,15 @@ impl App {
             workspace_command_runner: self.workspace_command_runner.clone(),
             initial_user_message,
             enhanced_keys_supported: self.enhanced_keys_supported,
-            has_chatgpt_account: self.chat_widget.has_chatgpt_account(),
+            api_key_configured: self.chat_widget.api_key_configured(),
             has_ody_backend_auth: self.chat_widget.has_ody_backend_auth(),
             model_catalog: self.model_catalog.clone(),
             feedback: self.feedback.clone(),
             is_first_run: false,
-            status_account_display: self.chat_widget.status_account_display().cloned(),
             runtime_model_provider_base_url: self
                 .chat_widget
                 .runtime_model_provider_base_url()
                 .map(str::to_string),
-            initial_plan_type: self.chat_widget.current_plan_type(),
             model: Some(self.chat_widget.current_model().to_string()),
             startup_tooltip_override: None,
             status_line_invalid_items_warned: self.status_line_invalid_items_warned.clone(),
@@ -825,17 +823,15 @@ impl App {
         let model_catalog = Arc::new(ModelCatalog::new(available_models.clone()));
         let feedback_audience = bootstrap.feedback_audience;
         let auth_mode = bootstrap.auth_mode;
-        let has_chatgpt_account = bootstrap.has_chatgpt_account;
-        let has_ody_backend_auth = matches!(auth_mode, Some(TelemetryAuthMode::ApiKey));
+        let api_key_configured = matches!(auth_mode, Some(TelemetryAuthMode::ApiKey));
+        let has_ody_backend_auth = api_key_configured;
         let requires_odysseythink_auth = bootstrap.requires_odysseythink_auth;
-        let status_account_display = bootstrap.status_account_display.clone();
-        let initial_plan_type = bootstrap.plan_type;
         let session_telemetry = SessionTelemetry::new(
             ThreadId::new(),
             model.as_str(),
             model.as_str(),
             /*account_id*/ None,
-            bootstrap.account_email.clone(),
+            /*account_email*/ None,
             auth_mode,
             ody_login::default_client::originator().value,
             config.otel.log_user_prompt,
@@ -894,14 +890,12 @@ impl App {
                         Vec::new(),
                     ),
                     enhanced_keys_supported,
-                    has_chatgpt_account,
+                    api_key_configured,
                     has_ody_backend_auth,
                     model_catalog: model_catalog.clone(),
                     feedback: feedback.clone(),
                     is_first_run,
-                    status_account_display: status_account_display.clone(),
                     runtime_model_provider_base_url: runtime_model_provider_base_url.clone(),
-                    initial_plan_type,
                     model: Some(model.clone()),
                     startup_tooltip_override,
                     status_line_invalid_items_warned: status_line_invalid_items_warned.clone(),
@@ -930,14 +924,12 @@ impl App {
                         Vec::new(),
                     ),
                     enhanced_keys_supported,
-                    has_chatgpt_account,
+                    api_key_configured,
                     has_ody_backend_auth,
                     model_catalog: model_catalog.clone(),
                     feedback: feedback.clone(),
                     is_first_run,
-                    status_account_display: status_account_display.clone(),
                     runtime_model_provider_base_url: runtime_model_provider_base_url.clone(),
-                    initial_plan_type,
                     model: config.model.clone(),
                     startup_tooltip_override: None,
                     status_line_invalid_items_warned: status_line_invalid_items_warned.clone(),
@@ -969,14 +961,12 @@ impl App {
                         Vec::new(),
                     ),
                     enhanced_keys_supported,
-                    has_chatgpt_account,
+                    api_key_configured,
                     has_ody_backend_auth,
                     model_catalog: model_catalog.clone(),
                     feedback: feedback.clone(),
                     is_first_run,
-                    status_account_display: status_account_display.clone(),
                     runtime_model_provider_base_url: runtime_model_provider_base_url.clone(),
-                    initial_plan_type,
                     model: config.model.clone(),
                     startup_tooltip_override: None,
                     status_line_invalid_items_warned: status_line_invalid_items_warned.clone(),
@@ -1117,7 +1107,7 @@ See the Ody keymap documentation for supported actions and examples."
         // Kick off a non-blocking rate-limit prefetch so the first `/status`
         // already has data and available reset credits can be surfaced, without
         // delaying the initial frame render.
-        if requires_odysseythink_auth && has_chatgpt_account {
+        if requires_odysseythink_auth && api_key_configured {
             let reset_hint_request_id = app.chat_widget.start_rate_limit_reset_startup_check();
             app.refresh_rate_limits(
                 &app_server,

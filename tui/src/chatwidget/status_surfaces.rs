@@ -879,7 +879,7 @@ impl ChatWidget {
                     .find(|tier| tier.id == service_tier)
                     .map(|tier| tier.name)
             })
-            .filter(|_| self.has_chatgpt_account)
+            .filter(|_| self.api_key_configured)
             .map(|tier| format!(" {tier}"))
             .unwrap_or_default();
         format!("{} {label}{service_tier_label}", self.model_display_name())

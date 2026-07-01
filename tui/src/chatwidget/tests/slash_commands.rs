@@ -1263,7 +1263,7 @@ async fn signed_out_usage_command_with_args_reports_chatgpt_login_requirement() 
 #[tokio::test]
 async fn usage_command_with_invalid_view_reports_usage_snapshot() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
 
     submit_composer_text(&mut chat, "/usage monthly");
 
@@ -1280,20 +1280,20 @@ async fn usage_command_with_invalid_view_reports_usage_snapshot() {
 async fn usage_command_runs_with_backend_auth_without_chatgpt_account_flag() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.update_account_state(
-        /*status_account_display*/ None, /*plan_type*/ None,
-        /*has_chatgpt_account*/ false, /*has_ody_backend_auth*/ true,
+        
+        /*api_key_configured*/ false, /*has_ody_backend_auth*/ true,
     );
 
     chat.dispatch_command_with_args(SlashCommand::Usage, "daily".to_string(), Vec::new());
 
     assert_matches!(rx.try_recv(), Ok(AppEvent::RefreshTokenActivity { .. }));
-    assert!(!chat.has_chatgpt_account());
+    assert!(!chat.api_key_configured());
 }
 
 #[tokio::test]
 async fn usage_command_runs_with_backend_auth_from_widget_init() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual_with_auth(
-        /*model_override*/ None, /*has_chatgpt_account*/ false,
+        /*model_override*/ None, /*api_key_configured*/ false,
         /*has_ody_backend_auth*/ true,
     )
     .await;
@@ -1301,14 +1301,14 @@ async fn usage_command_runs_with_backend_auth_from_widget_init() {
     chat.dispatch_command_with_args(SlashCommand::Usage, "daily".to_string(), Vec::new());
 
     assert_matches!(rx.try_recv(), Ok(AppEvent::RefreshTokenActivity { .. }));
-    assert!(!chat.has_chatgpt_account());
+    assert!(!chat.api_key_configured());
     assert!(chat.has_ody_backend_auth());
 }
 
 #[tokio::test]
 async fn clearing_pending_token_activity_refreshes_discards_late_result() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
 
     let request_id = dispatch_usage_and_expect_refresh(&mut chat, &mut rx);
     assert_eq!(
@@ -1335,18 +1335,13 @@ async fn clearing_pending_token_activity_refreshes_discards_late_result() {
 #[tokio::test]
 async fn account_state_change_discards_pending_token_activity_refresh() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
 
     let request_id = dispatch_usage_and_expect_refresh(&mut chat, &mut rx);
     assert!(chat.pending_token_activity_output().is_some());
 
     chat.update_account_state(
-        Some(crate::status::StatusAccountDisplay::ChatGpt {
-            email: Some("new-account@example.com".to_string()),
-            plan: None,
-        }),
-        /*plan_type*/ None,
-        /*has_chatgpt_account*/ true,
+        /*api_key_configured*/ true,
         /*has_ody_backend_auth*/ true,
     );
 
@@ -1362,7 +1357,7 @@ async fn account_state_change_discards_pending_token_activity_refresh() {
 #[tokio::test]
 async fn pending_token_activity_refresh_renders_above_composer_snapshot() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
 
     dispatch_usage_and_expect_refresh(&mut chat, &mut rx);
 
@@ -1384,7 +1379,7 @@ async fn pending_token_activity_refresh_renders_above_composer_snapshot() {
 #[tokio::test]
 async fn completed_token_activity_refresh_returns_one_history_cell() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
 
     let request_id = dispatch_usage_and_expect_refresh(&mut chat, &mut rx);
     assert!(chat.pending_token_activity_output().is_some());
@@ -1410,7 +1405,7 @@ async fn completed_token_activity_refresh_returns_one_history_cell() {
 #[tokio::test]
 async fn completed_token_activity_refresh_waits_for_active_stream() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
 
     let request_id = dispatch_usage_and_expect_refresh(&mut chat, &mut rx);
     chat.on_agent_message_delta("partial response".to_string());
@@ -1440,7 +1435,7 @@ async fn completed_token_activity_refresh_waits_for_active_stream() {
 #[tokio::test]
 async fn completed_token_activity_refresh_waits_for_queued_stream_consolidation() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
 
     let request_id = dispatch_usage_and_expect_refresh(&mut chat, &mut rx);
     chat.on_agent_message_delta("partial response".to_string());
@@ -1463,7 +1458,7 @@ async fn completed_token_activity_refresh_waits_for_queued_stream_consolidation(
 #[tokio::test]
 async fn completed_token_activity_refresh_waits_for_active_history_cell() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
 
     let request_id = dispatch_usage_and_expect_refresh(&mut chat, &mut rx);
     chat.transcript.active_cell = Some(Box::new(PlainHistoryCell::new(vec![Line::from(
@@ -1486,7 +1481,7 @@ async fn completed_token_activity_refresh_waits_for_active_history_cell() {
 #[tokio::test]
 async fn completed_token_activity_refresh_waits_for_active_hook() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     handle_hook_started(
         &mut chat,
         hook_run(
@@ -1528,7 +1523,7 @@ async fn completed_token_activity_refresh_waits_for_active_hook() {
 #[tokio::test]
 async fn completed_token_activity_refresh_retries_after_plan_item_completion() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
 
     let request_id = dispatch_usage_and_expect_refresh(&mut chat, &mut rx);
     let mut controller = crate::streaming::controller::PlanStreamController::new(
@@ -1556,7 +1551,7 @@ async fn completed_token_activity_refresh_retries_after_plan_item_completion() {
 #[tokio::test]
 async fn pending_token_activity_refresh_keeps_composer_visible_in_short_viewport() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     chat.transcript.active_cell = Some(Box::new(PlainHistoryCell::new(
         std::iter::repeat_n(Line::from("active output"), /*n*/ 20).collect(),
     )));
@@ -1585,7 +1580,7 @@ async fn pending_token_activity_refresh_keeps_composer_visible_in_short_viewport
 #[tokio::test]
 async fn repeated_token_activity_refreshes_keep_only_latest_card() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
 
     let first_request_id = dispatch_usage_and_expect_refresh(&mut chat, &mut rx);
 
@@ -2707,7 +2702,7 @@ async fn fast_keybinding_toggle_requires_feature_and_idle_surface() {
 async fn user_turn_carries_service_tier_after_fast_toggle() {
     let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
     chat.thread_id = Some(ThreadId::new());
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     set_fast_mode_test_catalog(&mut chat);
     chat.set_feature_enabled(Feature::FastMode, /*enabled*/ true);
 
@@ -2732,7 +2727,7 @@ async fn user_turn_carries_service_tier_after_fast_toggle() {
 async fn model_switch_recomputes_catalog_default_service_tier() {
     let (mut chat, _rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5.3-ody")).await;
     chat.thread_id = Some(ThreadId::new());
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     set_fast_mode_test_catalog(&mut chat);
     chat.set_feature_enabled(Feature::FastMode, /*enabled*/ true);
 
@@ -2773,7 +2768,7 @@ async fn model_switch_recomputes_catalog_default_service_tier() {
 async fn queued_fast_slash_applies_before_next_queued_message() {
     let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
     chat.thread_id = Some(ThreadId::new());
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     set_fast_mode_test_catalog(&mut chat);
     chat.set_feature_enabled(Feature::FastMode, /*enabled*/ true);
     handle_turn_started(&mut chat, "turn-1");
@@ -2815,7 +2810,7 @@ async fn queued_fast_slash_applies_before_next_queued_message() {
 async fn user_turn_sends_standard_override_after_fast_is_turned_off() {
     let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
     chat.thread_id = Some(ThreadId::new());
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     set_fast_mode_test_catalog(&mut chat);
     chat.set_feature_enabled(Feature::FastMode, /*enabled*/ true);
 

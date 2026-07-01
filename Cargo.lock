@@ -6864,7 +6864,6 @@ dependencies = [
  "ody-app-server-protocol",
  "ody-app-server-transport",
  "ody-arg0",
- "ody-chatgpt",
  "ody-cloud-config",
  "ody-config",
  "ody-core",
@@ -7146,28 +7145,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ody-chatgpt"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "clap",
- "ody-app-server-protocol",
- "ody-connectors",
- "ody-core",
- "ody-git-utils",
- "ody-login",
- "ody-model-provider",
- "ody-plugin",
- "ody-utils-cargo-bin",
- "ody-utils-cli",
- "pretty_assertions",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
-]
-
-[[package]]
 name = "ody-cli"
 version = "0.0.0"
 dependencies = [
@@ -7186,7 +7163,6 @@ dependencies = [
  "ody-app-server-protocol",
  "ody-app-server-test-client",
  "ody-arg0",
- "ody-chatgpt",
  "ody-config",
  "ody-core",
  "ody-core-plugins",

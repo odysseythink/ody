@@ -1270,7 +1270,7 @@ async fn enqueueing_history_prompt_multiple_times_is_stable() {
 async fn submit_user_message_ignores_inaccessible_app_mentions_from_bindings() {
     let (mut chat, _rx, mut op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.thread_id = Some(ThreadId::new());
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     chat.config
         .features
         .enable(Feature::Apps)

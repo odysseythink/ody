@@ -8,7 +8,6 @@ use crate::app_command::AppCommand;
 use crate::app_event::AppEvent;
 use crate::app_event::ConnectorsSnapshot;
 use crate::app_server_session::AppServerSession;
-use crate::app_server_session::status_account_display_from_auth_mode;
 use ody_app_server_client::AppServerEvent;
 use ody_app_server_protocol::AuthMode;
 use ody_app_server_protocol::ServerNotification;
@@ -80,15 +79,10 @@ impl App {
                 return;
             }
             ServerNotification::AccountUpdated(notification) => {
-                self.chat_widget.update_account_state(
-                    status_account_display_from_auth_mode(
-                        notification.auth_mode,
-                        notification.plan_type,
-                    ),
-                    notification.plan_type,
-                    false,
-                    false,
-                );
+                let api_key_configured = matches!(notification.auth_mode, Some(AuthMode::ApiKey));
+                let has_ody_backend_auth = false;
+                self.chat_widget
+                    .update_account_state(api_key_configured, has_ody_backend_auth);
                 return;
             }
             ServerNotification::ExternalAgentConfigImportCompleted(_) => {

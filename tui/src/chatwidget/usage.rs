@@ -26,7 +26,7 @@ impl ChatWidget {
     }
 
     fn usage_menu_params(&self) -> SelectionViewParams {
-        let reset_eligible = self.has_chatgpt_account;
+        let reset_eligible = self.api_key_configured;
         let (reset_action_enabled, reset_description) =
             match (reset_eligible, self.available_rate_limit_reset_credits) {
                 (true, Some(available_count)) if available_count > 0 => (
@@ -169,9 +169,7 @@ impl ChatWidget {
                     .as_deref()
                     == Some("monthly")
             });
-        let reset_description = if has_monthly_window
-            || matches!(self.plan_type, Some(PlanType::Free | PlanType::Go))
-        {
+        let reset_description = if has_monthly_window {
             "Reset your current monthly usage limit."
         } else {
             "Reset your current 5-hour and weekly usage limits."

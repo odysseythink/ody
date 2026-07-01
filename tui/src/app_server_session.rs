@@ -11,8 +11,6 @@ use crate::permission_compat::legacy_compatible_permission_profile;
 use crate::service_tier_resolution;
 use crate::session_state::MessageHistoryMetadata;
 use crate::session_state::ThreadSessionState;
-use crate::status::StatusAccountDisplay;
-use crate::status::plan_type_display_name;
 use crate::terminal_visualization_instructions::with_terminal_visualization_instructions;
 use ody_app_server_client::AppServerClient;
 use ody_app_server_client::AppServerEvent;
@@ -156,17 +154,10 @@ fn is_thread_settings_update_unsupported(source: &JSONRPCErrorError) -> bool {
 /// its first frame without waiting for the rate-limit round-trip.
 pub(crate) struct AppServerBootstrap {
     pub(crate) duration: Duration,
-    pub(crate) account_email: Option<String>,
     pub(crate) auth_mode: Option<TelemetryAuthMode>,
-    pub(crate) status_account_display: Option<StatusAccountDisplay>,
-    pub(crate) plan_type: Option<ody_protocol::account::PlanType>,
-    /// Whether the configured model provider needs OpenAI-style auth. Combined
-    /// with `has_chatgpt_account` to decide if a startup rate-limit prefetch
-    /// should be fired.
     pub(crate) requires_odysseythink_auth: bool,
     pub(crate) default_model: String,
     pub(crate) feedback_audience: FeedbackAudience,
-    pub(crate) has_chatgpt_account: bool,
     pub(crate) available_models: Vec<ModelPreset>,
 }
 
@@ -294,34 +285,16 @@ impl AppServerSession {
         self.default_model = Some(default_model.clone());
         self.available_models = available_models.clone();
 
-        let (
-            account_email,
-            auth_mode,
-            status_account_display,
-            plan_type,
-            feedback_audience,
-            has_chatgpt_account,
-        ) = match account.account {
-            Some(Account::ApiKey {}) => (
-                None,
-                Some(TelemetryAuthMode::ApiKey),
-                Some(StatusAccountDisplay::ApiKey),
-                None,
-                FeedbackAudience::External,
-                false,
-            ),
-            None => (None, None, None, None, FeedbackAudience::External, false),
+        let auth_mode = match account.account {
+            Some(Account::ApiKey {}) => Some(TelemetryAuthMode::ApiKey),
+            None => None,
         };
         Ok(AppServerBootstrap {
             duration: started_at.elapsed(),
-            account_email,
             auth_mode,
-            status_account_display,
-            plan_type,
             requires_odysseythink_auth: account.requires_odysseythink_auth,
             default_model,
-            feedback_audience,
-            has_chatgpt_account,
+            feedback_audience: FeedbackAudience::External,
             available_models,
         })
     }
@@ -1145,16 +1118,6 @@ pub(crate) async fn start_thread_with_request_handle(
         .await
         .map_err(|err| bootstrap_request_error("thread/start failed during TUI bootstrap", err))?;
     started_thread_from_start_response(response, &config, thread_params_mode).await
-}
-
-pub(crate) fn status_account_display_from_auth_mode(
-    auth_mode: Option<AuthMode>,
-    plan_type: Option<ody_protocol::account::PlanType>,
-) -> Option<StatusAccountDisplay> {
-    match auth_mode {
-        Some(AuthMode::ApiKey) => Some(StatusAccountDisplay::ApiKey),
-        Some(AuthMode::Unauthenticated) | None => None,
-    }
 }
 
 fn model_preset_from_api_model(model: ApiModel) -> ModelPreset {
@@ -2527,30 +2490,4 @@ mod tests {
         assert_eq!(session.forked_from_id, Some(forked_from_id));
     }
 
-    #[test]
-    fn status_account_display_from_auth_mode_uses_remapped_plan_labels() {
-        let business = status_account_display_from_auth_mode(
-            Some(AuthMode::ApiKey),
-            Some(ody_protocol::account::PlanType::EnterpriseCbpUsageBased),
-        );
-        assert!(matches!(
-            business,
-            Some(StatusAccountDisplay::ChatGpt {
-                email: None,
-                plan: Some(ref plan),
-            }) if plan == "Enterprise"
-        ));
-
-        let team = status_account_display_from_auth_mode(
-            Some(AuthMode::ApiKey),
-            Some(ody_protocol::account::PlanType::SelfServeBusinessUsageBased),
-        );
-        assert!(matches!(
-            team,
-            Some(StatusAccountDisplay::ChatGpt {
-                email: None,
-                plan: Some(ref plan),
-            }) if plan == "Business"
-        ));
-    }
 }

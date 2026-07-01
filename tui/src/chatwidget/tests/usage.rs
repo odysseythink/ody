@@ -9,7 +9,7 @@ const TEST_OVERLAY_VIEW_ID: &str = "usage-test-overlay";
 #[tokio::test]
 async fn usage_command_opens_menu_when_reset_is_available_snapshot() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     let request_id = chat.start_rate_limit_reset_startup_check();
     assert!(chat.finish_rate_limit_reset_hint_refresh(
         request_id,
@@ -30,7 +30,7 @@ async fn usage_command_opens_menu_when_reset_is_available_snapshot() {
 #[tokio::test]
 async fn usage_command_disables_reset_after_cached_zero_snapshot() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     let request_id = chat.start_rate_limit_reset_startup_check();
     assert!(chat.finish_rate_limit_reset_hint_refresh(
         request_id,
@@ -58,7 +58,7 @@ async fn usage_command_disables_reset_after_cached_zero_snapshot() {
 #[tokio::test]
 async fn usage_menu_refresh_enables_newly_available_reset() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     let request_id = chat.start_rate_limit_reset_startup_check();
     assert!(chat.finish_rate_limit_reset_hint_refresh(
         request_id,
@@ -87,7 +87,7 @@ async fn usage_menu_refresh_enables_newly_available_reset() {
 #[tokio::test]
 async fn usage_menu_refresh_failure_preserves_disabled_known_zero() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     let request_id = chat.start_rate_limit_reset_startup_check();
     assert!(chat.finish_rate_limit_reset_hint_refresh(
         request_id,
@@ -117,7 +117,7 @@ async fn usage_menu_refresh_failure_preserves_disabled_known_zero() {
 #[tokio::test]
 async fn account_update_invalidates_usage_menu_refresh_when_visible_state_is_unchanged() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     let startup_request_id = chat.start_rate_limit_reset_startup_check();
     assert!(chat.finish_rate_limit_reset_hint_refresh(
         startup_request_id,
@@ -133,8 +133,8 @@ async fn account_update_invalidates_usage_menu_refresh_when_visible_state_is_unc
     );
 
     chat.update_account_state(
-        /*status_account_display*/ None, /*plan_type*/ None,
-        /*has_chatgpt_account*/ true, /*has_ody_backend_auth*/ true,
+        
+        /*api_key_configured*/ true, /*has_ody_backend_auth*/ true,
     );
     chat.finish_usage_menu_rate_limit_refresh(
         /*request_id*/ 1,
@@ -150,7 +150,7 @@ async fn account_update_invalidates_usage_menu_refresh_when_visible_state_is_unc
 #[tokio::test]
 async fn usage_command_can_check_reset_availability_before_startup_refresh_finishes_snapshot() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     chat.start_rate_limit_reset_startup_check();
 
     chat.dispatch_command(SlashCommand::Usage);
@@ -167,8 +167,7 @@ async fn usage_command_can_check_reset_availability_before_startup_refresh_finis
 #[tokio::test]
 async fn usage_command_can_check_reset_availability_for_workspace_accounts() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
-    chat.plan_type = Some(PlanType::Business);
+    set_api_key_auth(&mut chat);
 
     chat.dispatch_command(SlashCommand::Usage);
 
@@ -180,7 +179,7 @@ async fn usage_command_can_check_reset_availability_for_workspace_accounts() {
 #[tokio::test]
 async fn usage_menu_rate_limit_reset_entry_opens_reset_flow() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     let request_id = chat.start_rate_limit_reset_startup_check();
     assert!(chat.finish_rate_limit_reset_hint_refresh(
         request_id,
@@ -198,7 +197,7 @@ async fn usage_menu_rate_limit_reset_entry_opens_reset_flow() {
 #[tokio::test]
 async fn rate_limit_reset_popup_states_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     let mut states = Vec::new();
 
     let loading_request_id = chat.show_rate_limit_reset_loading_popup();
@@ -280,10 +279,9 @@ async fn rate_limit_reset_popup_states_snapshot() {
 #[tokio::test]
 async fn usage_limit_reset_confirmation_uses_monthly_copy_for_monthly_limits_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     let mut states = Vec::new();
 
-    chat.plan_type = Some(PlanType::Free);
     let free_request_id = chat.show_rate_limit_reset_loading_popup();
     assert!(chat.finish_rate_limit_reset_credits_refresh(
         free_request_id,
@@ -296,7 +294,6 @@ async fn usage_limit_reset_confirmation_uses_monthly_copy_for_monthly_limits_sna
     ));
 
     dismiss_popup(&mut chat);
-    chat.plan_type = Some(PlanType::Go);
     let go_request_id = chat.show_rate_limit_reset_loading_popup();
     assert!(chat.finish_rate_limit_reset_credits_refresh(
         go_request_id,
@@ -388,7 +385,7 @@ async fn rate_limit_reset_retry_reuses_idempotency_key() {
 #[tokio::test]
 async fn no_credit_outcome_disables_reset_entry_in_usage_menu() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     let startup_request_id = chat.start_rate_limit_reset_startup_check();
     assert!(chat.finish_rate_limit_reset_hint_refresh(
         startup_request_id,
@@ -420,7 +417,7 @@ async fn no_credit_outcome_disables_reset_entry_in_usage_menu() {
 #[tokio::test]
 async fn rate_limit_reset_redemption_cannot_be_dismissed_while_in_flight() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
 
     let request_id = chat.show_rate_limit_reset_consuming_popup();
     dismiss_popup(&mut chat);
@@ -480,7 +477,7 @@ async fn already_redeemed_is_an_idempotent_success() {
 #[tokio::test]
 async fn failed_post_consume_refresh_does_not_keep_stale_reset_count() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     let startup_request_id = chat.start_rate_limit_reset_startup_check();
     assert!(chat.finish_rate_limit_reset_hint_refresh(
         startup_request_id,
@@ -511,12 +508,12 @@ async fn failed_post_consume_refresh_does_not_keep_stale_reset_count() {
 #[tokio::test]
 async fn account_change_invalidates_pending_reset_requests() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     let request_id = chat.show_rate_limit_reset_loading_popup();
 
     chat.update_account_state(
-        /*status_account_display*/ None, /*plan_type*/ None,
-        /*has_chatgpt_account*/ false, /*has_ody_backend_auth*/ false,
+        
+        /*api_key_configured*/ false, /*has_ody_backend_auth*/ false,
     );
 
     assert!(!chat.finish_rate_limit_reset_credits_refresh(
@@ -530,7 +527,7 @@ async fn account_change_invalidates_pending_reset_requests() {
 #[tokio::test]
 async fn clearing_pending_reset_hint_preserves_in_flight_redemption() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     let consume_request_id = chat.show_rate_limit_reset_consuming_popup();
     let hint_request_id = chat.start_rate_limit_reset_startup_check();
     assert!(chat.finish_rate_limit_reset_hint_refresh(
@@ -605,13 +602,13 @@ async fn rate_limit_reset_success_updates_popup_beneath_overlay() {
 #[tokio::test]
 async fn account_change_dismisses_reset_popup_beneath_overlay() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     chat.show_rate_limit_reset_loading_popup();
     show_usage_test_overlay(&mut chat);
 
     chat.update_account_state(
-        /*status_account_display*/ None, /*plan_type*/ None,
-        /*has_chatgpt_account*/ false, /*has_ody_backend_auth*/ false,
+        
+        /*api_key_configured*/ false, /*has_ody_backend_auth*/ false,
     );
     assert_eq!(
         chat.bottom_pane.active_view_id(),
@@ -625,7 +622,7 @@ async fn account_change_dismisses_reset_popup_beneath_overlay() {
 #[tokio::test]
 async fn startup_check_shows_available_reset_hint_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     let hint_request_id = chat.start_rate_limit_reset_startup_check();
 
     assert!(chat.finish_rate_limit_reset_hint_refresh(
@@ -645,7 +642,7 @@ async fn startup_check_shows_available_reset_hint_snapshot() {
 #[tokio::test]
 async fn startup_reset_hint_waits_for_active_output_snapshot() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     let hint_request_id = chat.start_rate_limit_reset_startup_check();
     chat.transcript.active_cell = Some(Box::new(PlainHistoryCell::new(vec![Line::from(
         "active tool",
@@ -677,7 +674,7 @@ async fn startup_reset_hint_waits_for_active_output_snapshot() {
 #[tokio::test]
 async fn opening_rate_limit_reset_flow_invalidates_in_flight_startup_hint() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     let hint_request_id = chat.start_rate_limit_reset_startup_check();
 
     chat.show_rate_limit_reset_loading_popup();
@@ -693,7 +690,7 @@ async fn opening_rate_limit_reset_flow_invalidates_in_flight_startup_hint() {
 #[tokio::test]
 async fn starting_rate_limit_reset_redemption_clears_deferred_startup_hint() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     let hint_request_id = chat.start_rate_limit_reset_startup_check();
     assert!(chat.finish_rate_limit_reset_hint_refresh(
         hint_request_id,
@@ -710,7 +707,7 @@ async fn starting_rate_limit_reset_redemption_clears_deferred_startup_hint() {
 #[tokio::test]
 async fn startup_check_omits_reset_hint_when_none_are_available() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     let hint_request_id = chat.start_rate_limit_reset_startup_check();
 
     assert!(chat.finish_rate_limit_reset_hint_refresh(
@@ -724,8 +721,7 @@ async fn startup_check_omits_reset_hint_when_none_are_available() {
 #[tokio::test]
 async fn startup_check_shows_reset_hint_for_workspace_account_with_credit() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
-    chat.plan_type = Some(PlanType::Business);
+    set_api_key_auth(&mut chat);
     let hint_request_id = chat.start_rate_limit_reset_startup_check();
 
     assert!(chat.finish_rate_limit_reset_hint_refresh(

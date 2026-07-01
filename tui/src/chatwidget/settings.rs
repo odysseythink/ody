@@ -186,10 +186,6 @@ impl ChatWidget {
         self.config.personality = Some(personality);
     }
 
-    pub(crate) fn status_account_display(&self) -> Option<&StatusAccountDisplay> {
-        self.status_account_display.as_ref()
-    }
-
     pub(crate) fn runtime_model_provider_base_url(&self) -> Option<&str> {
         self.runtime_model_provider_base_url.as_deref()
     }
@@ -199,12 +195,8 @@ impl ChatWidget {
         self.model_catalog.clone()
     }
 
-    pub(crate) fn current_plan_type(&self) -> Option<PlanType> {
-        self.plan_type
-    }
-
-    pub(crate) fn has_chatgpt_account(&self) -> bool {
-        self.has_chatgpt_account
+    pub(crate) fn api_key_configured(&self) -> bool {
+        self.api_key_configured
     }
 
     pub(crate) fn has_ody_backend_auth(&self) -> bool {
@@ -213,9 +205,7 @@ impl ChatWidget {
 
     pub(crate) fn update_account_state(
         &mut self,
-        status_account_display: Option<StatusAccountDisplay>,
-        plan_type: Option<PlanType>,
-        has_chatgpt_account: bool,
+        api_key_configured: bool,
         has_ody_backend_auth: bool,
     ) {
         // Account-update notifications are the identity boundary. The visible account fields can
@@ -239,9 +229,7 @@ impl ChatWidget {
         self.status_line_workspace_headline_pending_request_id = None;
         self.status_line_workspace_headline_last_requested_at = None;
         self.status_line_workspace_messages_disabled = false;
-        self.status_account_display = status_account_display;
-        self.plan_type = plan_type;
-        self.has_chatgpt_account = has_chatgpt_account;
+        self.api_key_configured = api_key_configured;
         self.has_ody_backend_auth = has_ody_backend_auth;
         self.bottom_pane
             .set_connectors_enabled(self.connectors_enabled());

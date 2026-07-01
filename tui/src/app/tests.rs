@@ -14,7 +14,7 @@ use crate::chatwidget::ChatWidgetInit;
 use crate::chatwidget::create_initial_user_message;
 use crate::chatwidget::tests::helpers::render_bottom_popup;
 use crate::chatwidget::tests::make_chatwidget_manual_with_sender;
-use crate::chatwidget::tests::set_chatgpt_auth;
+use crate::chatwidget::tests::set_api_key_auth;
 use crate::chatwidget::tests::set_fast_mode_test_catalog;
 use crate::file_search::FileSearchManager;
 use crate::goal_files;
@@ -326,14 +326,12 @@ async fn enqueue_primary_thread_session_replays_turns_before_initial_prompt_subm
             Vec::new(),
         ),
         enhanced_keys_supported: false,
-        has_chatgpt_account: false,
+        api_key_configured: false,
         has_ody_backend_auth: false,
         model_catalog: app.model_catalog.clone(),
         feedback: ody_feedback::OdyFeedback::new(),
         is_first_run: false,
-        status_account_display: None,
         runtime_model_provider_base_url: None,
-        initial_plan_type: None,
         model: Some(model),
         startup_tooltip_override: None,
         status_line_invalid_items_warned: app.status_line_invalid_items_warned.clone(),
@@ -4019,7 +4017,7 @@ async fn clear_ui_header_shows_fast_status_for_fast_capable_models() {
             .request_value()
             .to_string(),
     ));
-    set_chatgpt_auth(&mut app.chat_widget);
+    set_api_key_auth(&mut app.chat_widget);
     set_fast_mode_test_catalog(&mut app.chat_widget);
 
     let rendered = app
@@ -5379,17 +5377,15 @@ async fn replace_chat_widget_reseeds_collab_agent_metadata_for_replay() {
         workspace_command_runner: None,
         initial_user_message: None,
         enhanced_keys_supported: app.enhanced_keys_supported,
-        has_chatgpt_account: app.chat_widget.has_chatgpt_account(),
+        api_key_configured: app.chat_widget.api_key_configured(),
         has_ody_backend_auth: app.chat_widget.has_ody_backend_auth(),
         model_catalog: app.model_catalog.clone(),
         feedback: app.feedback.clone(),
         is_first_run: false,
-        status_account_display: app.chat_widget.status_account_display().cloned(),
         runtime_model_provider_base_url: app
             .chat_widget
             .runtime_model_provider_base_url()
             .map(str::to_string),
-        initial_plan_type: app.chat_widget.current_plan_type(),
         model: Some(app.chat_widget.current_model().to_string()),
         startup_tooltip_override: None,
         status_line_invalid_items_warned: app.status_line_invalid_items_warned.clone(),
@@ -5538,10 +5534,8 @@ async fn queued_rollback_syncs_overlay_and_clears_deferred_history() {
     app.deferred_history_lines = vec![Line::from("stale buffered line").into()];
     app.backtrack.overlay_preview_active = true;
     app.backtrack.nth_user_message = 1;
-    app.chat_widget.update_account_state(
-        /*status_account_display*/ None, /*plan_type*/ None,
-        /*has_chatgpt_account*/ false, /*has_ody_backend_auth*/ true,
-    );
+    app.chat_widget
+        .update_account_state(/*api_key_configured*/ false, /*has_ody_backend_auth*/ true);
     app.chat_widget
         .set_composer_text("/usage daily".to_string(), Vec::new(), Vec::new());
     app.chat_widget

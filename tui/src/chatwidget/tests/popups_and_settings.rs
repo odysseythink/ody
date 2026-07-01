@@ -41,14 +41,12 @@ async fn experimental_mode_plan_is_ignored_on_startup() {
         workspace_command_runner: None,
         initial_user_message: None,
         enhanced_keys_supported: false,
-        has_chatgpt_account: false,
+        api_key_configured: false,
         has_ody_backend_auth: false,
         model_catalog: test_model_catalog(&cfg),
         feedback: ody_feedback::OdyFeedback::new(),
         is_first_run: true,
-        status_account_display: None,
         runtime_model_provider_base_url: None,
-        initial_plan_type: None,
         model: Some(resolved_model.clone()),
         startup_tooltip_override: None,
         status_line_invalid_items_warned: Arc::new(AtomicBool::new(false)),
@@ -1909,7 +1907,7 @@ async fn plugins_popup_search_no_matches_and_backspace_restores_results() {
 #[tokio::test]
 async fn apps_popup_stays_loading_until_final_snapshot_updates() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     chat.config
         .features
         .enable(Feature::Apps)
@@ -2003,7 +2001,7 @@ async fn apps_popup_stays_loading_until_final_snapshot_updates() {
 #[tokio::test]
 async fn apps_notification_update_excludes_inaccessible_apps_from_mentions() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     chat.config
         .features
         .enable(Feature::Apps)
@@ -2074,7 +2072,7 @@ async fn apps_notification_update_excludes_inaccessible_apps_from_mentions() {
 #[tokio::test]
 async fn apps_refresh_failure_keeps_existing_full_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     chat.config
         .features
         .enable(Feature::Apps)
@@ -2163,7 +2161,7 @@ async fn apps_refresh_failure_keeps_existing_full_snapshot() {
 #[tokio::test]
 async fn apps_popup_preserves_selected_app_across_refresh() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     chat.config
         .features
         .enable(Feature::Apps)
@@ -2283,7 +2281,7 @@ async fn apps_popup_preserves_selected_app_across_refresh() {
 #[tokio::test]
 async fn apps_refresh_failure_with_cached_snapshot_triggers_pending_force_refetch() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     chat.config
         .features
         .enable(Feature::Apps)
@@ -2327,7 +2325,7 @@ async fn apps_refresh_failure_with_cached_snapshot_triggers_pending_force_refetc
 #[tokio::test]
 async fn apps_popup_keeps_existing_full_snapshot_while_partial_refresh_loads() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     chat.config
         .features
         .enable(Feature::Apps)
@@ -2431,7 +2429,7 @@ async fn apps_popup_keeps_existing_full_snapshot_while_partial_refresh_loads() {
 #[tokio::test]
 async fn apps_refresh_failure_without_full_snapshot_falls_back_to_installed_apps() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     chat.config
         .features
         .enable(Feature::Apps)
@@ -2490,7 +2488,7 @@ async fn apps_refresh_failure_without_full_snapshot_falls_back_to_installed_apps
 #[tokio::test]
 async fn apps_popup_shows_disabled_status_for_installed_but_disabled_apps() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     chat.config
         .features
         .enable(Feature::Apps)
@@ -2533,7 +2531,7 @@ async fn apps_popup_shows_disabled_status_for_installed_but_disabled_apps() {
 #[tokio::test]
 async fn apps_refresh_preserves_toggled_enabled_state() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     chat.config
         .features
         .enable(Feature::Apps)
@@ -2604,7 +2602,7 @@ async fn apps_refresh_preserves_toggled_enabled_state() {
 #[tokio::test]
 async fn apps_popup_for_not_installed_app_uses_install_only_selected_description() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     chat.config
         .features
         .enable(Feature::Apps)
@@ -2965,7 +2963,7 @@ async fn server_overloaded_error_does_not_switch_models() {
 async fn model_reasoning_selection_popup_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
 
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     chat.set_reasoning_effort(Some(ReasoningEffortConfig::High));
 
     let mut preset = get_available_model(&chat, "gpt-5.4");
@@ -3021,7 +3019,7 @@ async fn model_reasoning_selection_popup_applies_custom_effort() {
 async fn model_reasoning_selection_popup_extra_high_warning_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.2")).await;
 
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     chat.set_reasoning_effort(Some(ReasoningEffortConfig::XHigh));
 
     let preset = get_available_model(&chat, "gpt-5.2");
@@ -3143,7 +3141,7 @@ async fn reasoning_shortcut_is_ignored_with_model_popup_open() {
 async fn reasoning_popup_shows_extra_high_with_space() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
 
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
 
     let preset = get_available_model(&chat, "gpt-5.4");
     chat.open_reasoning_popup(preset);

@@ -202,8 +202,6 @@ impl ChatWidget {
                 } else {
                     None
                 };
-            self.plan_type = snapshot.plan_type.or(self.plan_type);
-
             let is_ody_limit = limit_id.eq_ignore_ascii_case("ody");
             if is_ody_limit
                 && let Some(rate_limit_reached_type) = snapshot.rate_limit_reached_type
@@ -293,7 +291,7 @@ impl ChatWidget {
 
     #[cfg_attr(not(test), allow(dead_code))]
     pub(super) fn should_prefetch_rate_limits(&self) -> bool {
-        self.config.model_provider.requires_odysseythink_auth && self.has_chatgpt_account
+        self.config.model_provider.requires_odysseythink_auth && self.api_key_configured
     }
 
     fn lower_cost_preset(&self) -> Option<ModelPreset> {

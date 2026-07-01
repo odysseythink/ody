@@ -429,14 +429,12 @@ async fn configured_pet_load_is_deferred_until_after_construction() {
         workspace_command_runner: None,
         initial_user_message: None,
         enhanced_keys_supported: false,
-        has_chatgpt_account: false,
+        api_key_configured: false,
         has_ody_backend_auth: false,
         model_catalog: test_model_catalog(&cfg),
         feedback: ody_feedback::OdyFeedback::new(),
         is_first_run: true,
-        status_account_display: None,
         runtime_model_provider_base_url: None,
-        initial_plan_type: None,
         model: Some(resolved_model),
         startup_tooltip_override: None,
         status_line_invalid_items_warned: Arc::new(AtomicBool::new(false)),
@@ -466,7 +464,7 @@ async fn prefetch_rate_limits_is_gated_on_chatgpt_auth_provider() {
 
     assert!(!chat.should_prefetch_rate_limits());
 
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     assert!(chat.should_prefetch_rate_limits());
 
     chat.config.model_provider.requires_odysseythink_auth = false;
@@ -868,7 +866,6 @@ async fn rate_limit_snapshot_updates_and_retains_plan_type() {
         plan_type: Some(PlanType::Plus),
         rate_limit_reached_type: None,
     }));
-    assert_eq!(chat.plan_type, Some(PlanType::Plus));
 
     chat.on_rate_limit_snapshot(Some(RateLimitSnapshot {
         limit_id: None,
@@ -888,7 +885,6 @@ async fn rate_limit_snapshot_updates_and_retains_plan_type() {
         plan_type: Some(PlanType::Pro),
         rate_limit_reached_type: None,
     }));
-    assert_eq!(chat.plan_type, Some(PlanType::Pro));
 
     chat.on_rate_limit_snapshot(Some(RateLimitSnapshot {
         limit_id: None,
@@ -908,7 +904,6 @@ async fn rate_limit_snapshot_updates_and_retains_plan_type() {
         plan_type: None,
         rate_limit_reached_type: None,
     }));
-    assert_eq!(chat.plan_type, Some(PlanType::Pro));
 }
 
 #[tokio::test]
@@ -973,7 +968,7 @@ async fn rate_limit_snapshots_keep_separate_entries_per_limit_id() {
 #[tokio::test]
 async fn rate_limit_switch_prompt_skips_when_on_lower_cost_model() {
     let (mut chat, _, _) = make_chatwidget_manual(Some(NUDGE_MODEL_SLUG)).await;
-    chat.has_chatgpt_account = true;
+    chat.api_key_configured = true;
 
     chat.on_rate_limit_snapshot(Some(snapshot(/*percent*/ 95.0)));
 
@@ -986,7 +981,7 @@ async fn rate_limit_switch_prompt_skips_when_on_lower_cost_model() {
 #[tokio::test]
 async fn rate_limit_switch_prompt_skips_non_ody_limit() {
     let (mut chat, _, _) = make_chatwidget_manual(Some("gpt-5")).await;
-    chat.has_chatgpt_account = true;
+    chat.api_key_configured = true;
 
     chat.on_rate_limit_snapshot(Some(RateLimitSnapshot {
         limit_id: Some("ody_other".to_string()),
@@ -1012,7 +1007,7 @@ async fn rate_limit_switch_prompt_skips_non_ody_limit() {
 #[tokio::test]
 async fn rate_limit_switch_prompt_shows_once_per_session() {
     let (mut chat, _, _) = make_chatwidget_manual(Some("gpt-5")).await;
-    chat.has_chatgpt_account = true;
+    chat.api_key_configured = true;
 
     chat.on_rate_limit_snapshot(Some(snapshot(/*percent*/ 90.0)));
     assert!(
@@ -1035,7 +1030,7 @@ async fn rate_limit_switch_prompt_shows_once_per_session() {
 #[tokio::test]
 async fn account_update_clears_derived_usage_limit_state_and_prompt() {
     let (mut chat, _, _) = make_chatwidget_manual(Some("gpt-5")).await;
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     let mut limits = snapshot(/*percent*/ 95.0);
     limits.rate_limit_reached_type = Some(RateLimitReachedType::WorkspaceMemberUsageLimitReached);
     chat.on_rate_limit_snapshot(Some(limits));
@@ -1050,8 +1045,8 @@ async fn account_update_clears_derived_usage_limit_state_and_prompt() {
     assert!(!chat.bottom_pane.no_modal_or_popup_active());
 
     chat.update_account_state(
-        /*status_account_display*/ None, /*plan_type*/ None,
-        /*has_chatgpt_account*/ true, /*has_ody_backend_auth*/ true,
+        
+        /*api_key_configured*/ true, /*has_ody_backend_auth*/ true,
     );
 
     assert_eq!(chat.rate_limit_warnings.primary_index, 0);
@@ -1068,7 +1063,7 @@ async fn account_update_clears_derived_usage_limit_state_and_prompt() {
 #[tokio::test]
 async fn rate_limit_switch_prompt_respects_hidden_notice() {
     let (mut chat, _, _) = make_chatwidget_manual(Some("gpt-5")).await;
-    chat.has_chatgpt_account = true;
+    chat.api_key_configured = true;
     chat.config.notices.hide_rate_limit_model_nudge = Some(true);
 
     chat.on_rate_limit_snapshot(Some(snapshot(/*percent*/ 95.0)));
@@ -1082,7 +1077,7 @@ async fn rate_limit_switch_prompt_respects_hidden_notice() {
 #[tokio::test]
 async fn rate_limit_switch_prompt_defers_until_task_complete() {
     let (mut chat, _, _) = make_chatwidget_manual(Some("gpt-5")).await;
-    chat.has_chatgpt_account = true;
+    chat.api_key_configured = true;
 
     chat.bottom_pane.set_task_running(/*running*/ true);
     chat.on_rate_limit_snapshot(Some(snapshot(/*percent*/ 90.0)));
@@ -1102,7 +1097,7 @@ async fn rate_limit_switch_prompt_defers_until_task_complete() {
 #[tokio::test]
 async fn rate_limit_switch_prompt_popup_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
-    chat.has_chatgpt_account = true;
+    chat.api_key_configured = true;
 
     chat.on_rate_limit_snapshot(Some(snapshot(/*percent*/ 92.0)));
     chat.maybe_show_pending_rate_limit_prompt();
@@ -1666,7 +1661,7 @@ async fn fast_status_indicator_requires_chatgpt_auth() {
 
     assert!(!chat.should_show_fast_status(chat.current_model(), chat.current_service_tier(),));
 
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     set_fast_mode_test_catalog(&mut chat);
     assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
 
@@ -1679,7 +1674,7 @@ async fn fast_status_indicator_is_hidden_for_models_without_fast_support() {
     set_fast_mode_test_catalog(&mut chat);
     assert!(!get_available_model(&chat, "gpt-5.3-ody").supports_fast_mode());
     chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     set_fast_mode_test_catalog(&mut chat);
     assert!(!get_available_model(&chat, "gpt-5.3-ody").supports_fast_mode());
 
@@ -1691,7 +1686,7 @@ async fn fast_status_indicator_is_hidden_when_fast_mode_is_off() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
     set_fast_mode_test_catalog(&mut chat);
     assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     set_fast_mode_test_catalog(&mut chat);
     assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
 
@@ -2286,8 +2281,8 @@ async fn account_update_clears_workspace_headline_state() {
     chat.status_line_workspace_messages_disabled = true;
 
     chat.update_account_state(
-        /*status_account_display*/ None, /*plan_type*/ None,
-        /*has_chatgpt_account*/ false, /*has_ody_backend_auth*/ false,
+        
+        /*api_key_configured*/ false, /*has_ody_backend_auth*/ false,
     );
 
     assert_eq!(
@@ -2307,8 +2302,8 @@ async fn workspace_headline_fetch_allows_backend_auth_without_chatgpt_account() 
     chat.config.tui_status_line = Some(vec!["workspace-headline".to_string()]);
 
     chat.update_account_state(
-        /*status_account_display*/ None, /*plan_type*/ None,
-        /*has_chatgpt_account*/ false, /*has_ody_backend_auth*/ true,
+        
+        /*api_key_configured*/ false, /*has_ody_backend_auth*/ true,
     );
 
     let request_id = take_workspace_headline_request_id(&mut rx);
@@ -2324,23 +2319,13 @@ async fn account_update_discards_stale_workspace_headline_results() {
     chat.config.tui_status_line = Some(vec!["workspace-headline".to_string()]);
 
     chat.update_account_state(
-        Some(StatusAccountDisplay::ChatGpt {
-            email: Some("first@example.com".to_string()),
-            plan: None,
-        }),
-        /*plan_type*/ None,
-        /*has_chatgpt_account*/ true,
+        /*api_key_configured*/ true,
         /*has_ody_backend_auth*/ true,
     );
     let stale_request_id = take_workspace_headline_request_id(&mut rx);
 
     chat.update_account_state(
-        Some(StatusAccountDisplay::ChatGpt {
-            email: Some("second@example.com".to_string()),
-            plan: None,
-        }),
-        /*plan_type*/ None,
-        /*has_chatgpt_account*/ true,
+        /*api_key_configured*/ true,
         /*has_ody_backend_auth*/ true,
     );
     let current_request_id = take_workspace_headline_request_id(&mut rx);
@@ -2558,7 +2543,7 @@ async fn status_line_model_with_reasoning_includes_fast_for_fast_capable_models(
     ]);
     chat.set_reasoning_effort(Some(ReasoningEffortConfig::XHigh));
     chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     set_fast_mode_test_catalog(&mut chat);
     assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
     chat.refresh_status_line();
@@ -2737,7 +2722,7 @@ async fn status_line_model_with_reasoning_fast_footer_snapshot() {
     ]);
     chat.set_reasoning_effort(Some(ReasoningEffortConfig::XHigh));
     chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     set_fast_mode_test_catalog(&mut chat);
     assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
     chat.refresh_status_line();
@@ -2771,7 +2756,7 @@ async fn status_line_model_with_reasoning_context_remaining_footer_snapshot() {
     ]);
     chat.set_reasoning_effort(Some(ReasoningEffortConfig::XHigh));
     chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     set_fast_mode_test_catalog(&mut chat);
     assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
     chat.refresh_status_line();

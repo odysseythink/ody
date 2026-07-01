@@ -150,7 +150,7 @@ pub(super) async fn make_chatwidget_manual(
 ) {
     make_chatwidget_manual_with_auth(
         model_override,
-        /*has_chatgpt_account*/ false,
+        /*api_key_configured*/ false,
         /*has_ody_backend_auth*/ false,
     )
     .await
@@ -158,7 +158,7 @@ pub(super) async fn make_chatwidget_manual(
 
 pub(super) async fn make_chatwidget_manual_with_auth(
     model_override: Option<&str>,
-    has_chatgpt_account: bool,
+    api_key_configured: bool,
     has_ody_backend_auth: bool,
 ) -> (
     ChatWidget,
@@ -184,14 +184,12 @@ pub(super) async fn make_chatwidget_manual_with_auth(
         workspace_command_runner: None,
         initial_user_message: None,
         enhanced_keys_supported: false,
-        has_chatgpt_account,
+        api_key_configured,
         has_ody_backend_auth,
         model_catalog,
         feedback: ody_feedback::OdyFeedback::new(),
         is_first_run: true,
-        status_account_display: None,
         runtime_model_provider_base_url: None,
-        initial_plan_type: None,
         model: Some(resolved_model.clone()),
         startup_tooltip_override: None,
         status_line_invalid_items_warned: Arc::new(AtomicBool::new(false)),
@@ -244,8 +242,8 @@ pub(super) fn assert_no_submit_op(op_rx: &mut tokio::sync::mpsc::UnboundedReceiv
     }
 }
 
-pub(crate) fn set_chatgpt_auth(chat: &mut ChatWidget) {
-    chat.has_chatgpt_account = true;
+pub(crate) fn set_api_key_auth(chat: &mut ChatWidget) {
+    chat.api_key_configured = true;
     chat.has_ody_backend_auth = true;
     chat.model_catalog = test_model_catalog(&chat.config);
 }

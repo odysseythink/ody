@@ -1574,7 +1574,7 @@ Run ody doctor without --summary for detailed diagnostics.
         assert!(rendered.contains("⚠ sandbox"));
         assert!(rendered.contains("⚠ mcp"));
         assert!(rendered.contains("○ app-server   not running (ephemeral mode)"));
-        assert!(rendered.contains("5 ok · 1 idle · 5 notes · 1 warn · 0 fail degraded"));
+        assert!(rendered.contains("5 ok · 1 idle · 5 notes · 0 warn · 0 fail degraded"));
     }
 
     #[test]

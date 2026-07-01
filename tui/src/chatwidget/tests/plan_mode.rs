@@ -298,7 +298,7 @@ async fn reasoning_selection_in_plan_mode_opens_scope_prompt_event() {
         .expect("expected plan collaboration mode");
     chat.set_collaboration_mask(plan_mask);
     let _ = drain_insert_history(&mut rx);
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     chat.set_reasoning_effort(Some(ReasoningEffortConfig::High));
 
     let preset = get_available_model(&chat, "gpt-5.4");
@@ -325,7 +325,7 @@ async fn reasoning_selection_in_plan_mode_without_effort_change_does_not_open_sc
         .expect("expected plan collaboration mode");
     chat.set_collaboration_mask(plan_mask);
     let _ = drain_insert_history(&mut rx);
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
 
     chat.set_reasoning_effort(Some(ReasoningEffortConfig::Medium));
 
@@ -359,7 +359,7 @@ async fn reasoning_selection_in_plan_mode_matching_plan_effort_but_different_glo
         .expect("expected plan collaboration mode");
     chat.set_collaboration_mask(plan_mask);
     let _ = drain_insert_history(&mut rx);
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
 
     // Reproduce: Plan effective reasoning remains the preset (medium), but the
     // global default differs (high). Pressing Enter on the current Plan choice
@@ -431,7 +431,7 @@ async fn reasoning_shortcut_in_plan_mode_updates_plan_override_without_prompt_or
 async fn plan_mode_reasoning_override_is_marked_current_in_reasoning_popup() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
     chat.set_feature_enabled(Feature::CollaborationModes, /*enabled*/ true);
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
     chat.set_reasoning_effort(Some(ReasoningEffortConfig::High));
     chat.set_plan_mode_reasoning_effort(Some(ReasoningEffortConfig::Low));
 
@@ -459,7 +459,7 @@ async fn reasoning_selection_in_plan_mode_model_switch_does_not_open_scope_promp
         .expect("expected plan collaboration mode");
     chat.set_collaboration_mask(plan_mask);
     let _ = drain_insert_history(&mut rx);
-    set_chatgpt_auth(&mut chat);
+    set_api_key_auth(&mut chat);
 
     let preset = get_available_model(&chat, "gpt-5.2");
     chat.open_reasoning_popup(preset);
@@ -1068,7 +1068,7 @@ async fn plan_implementation_popup_shows_after_new_plan_follows_steer() {
 #[tokio::test]
 async fn plan_implementation_popup_skips_when_rate_limit_prompt_pending() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
-    chat.has_chatgpt_account = true;
+    chat.api_key_configured = true;
     chat.set_feature_enabled(Feature::CollaborationModes, /*enabled*/ true);
     let plan_mask = collaboration_modes::mask_for_kind(chat.model_catalog.as_ref(), ModeKind::Plan)
         .expect("expected plan collaboration mask");
@@ -1493,14 +1493,12 @@ async fn make_startup_chat_with_cli_overrides(
         workspace_command_runner: None,
         initial_user_message: None,
         enhanced_keys_supported: false,
-        has_chatgpt_account: false,
+        api_key_configured: false,
         has_ody_backend_auth: false,
         model_catalog: test_model_catalog(&cfg),
         feedback: ody_feedback::OdyFeedback::new(),
         is_first_run: true,
-        status_account_display: None,
         runtime_model_provider_base_url: None,
-        initial_plan_type: None,
         model: Some(resolved_model),
         startup_tooltip_override: None,
         status_line_invalid_items_warned: Arc::new(AtomicBool::new(false)),

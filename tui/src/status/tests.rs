@@ -17,9 +17,6 @@ use crate::test_support::PathBufExt;
 use crate::test_support::test_path_buf;
 use crate::token_usage::TokenUsage;
 use crate::token_usage::TokenUsageInfo;
-use app_test_support::ChatGptAuthFixture;
-use app_test_support::write_chatgpt_auth;
-use app_test_support::write_models_cache;
 use chrono::Duration as ChronoDuration;
 use chrono::Local;
 use chrono::TimeZone;
@@ -30,7 +27,6 @@ use ody_app_server_protocol::RateLimitSnapshot;
 use ody_app_server_protocol::RateLimitWindow;
 use ody_app_server_protocol::SpendControlLimitSnapshot;
 use ody_config::LoaderOverrides;
-use ody_config::types::AuthCredentialsStoreMode;
 use ody_model_provider_info::ModelProviderAwsAuthInfo;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_models_manager::test_support::construct_model_info_offline_for_tests;
@@ -148,7 +144,7 @@ fn set_workspace_cwd(config: &mut Config, cwd: AbsolutePathBuf) {
 }
 
 fn test_status_account_display() -> Option<StatusAccountDisplay> {
-    None
+    Some(StatusAccountDisplay::ApiKey)
 }
 
 fn token_info_for(model_slug: &str, config: &Config, usage: &TokenUsage) -> TokenUsageInfo {
@@ -228,7 +224,6 @@ fn permissions_text_for(config: &Config) -> Option<String> {
         /*thread_name*/ None,
         /*forked_from*/ None,
         /*rate_limits*/ None,
-        None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -306,7 +301,6 @@ async fn status_snapshot_includes_reasoning_details() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         Some(&rate_display),
-        None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -319,67 +313,6 @@ async fn status_snapshot_includes_reasoning_details() {
         }
     }
     let sanitized = sanitize_directory(rendered_lines).join("\n");
-    assert_snapshot!(sanitized);
-}
-
-#[tokio::test]
-async fn status_snapshot_shows_chatgpt_plan_without_email() {
-    let temp_home = TempDir::new().expect("temp home");
-    write_models_cache(temp_home.path()).expect("write models cache");
-    let mut config = test_config(&temp_home).await;
-    config.model = Some("gpt-5.1-ody-max".to_string());
-    config.model_provider_id = "odysseythink".to_string();
-    config.cli_auth_credentials_store_mode = AuthCredentialsStoreMode::File;
-    set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
-
-    write_chatgpt_auth(
-        temp_home.path(),
-        ChatGptAuthFixture::new("access-chatgpt").plan_type("enterprise"),
-        AuthCredentialsStoreMode::File,
-    )
-    .expect("write email-less ChatGPT auth");
-    let mut app_server = crate::start_embedded_app_server_for_picker(&config)
-        .await
-        .expect("start embedded app server");
-    let bootstrap = app_server
-        .bootstrap(&config)
-        .await
-        .expect("bootstrap app server session");
-    app_server.shutdown().await.expect("shut down app server");
-    let account_display = bootstrap
-        .status_account_display
-        .expect("bootstrap should return ChatGPT account display");
-    assert_eq!(
-        account_display,
-        StatusAccountDisplay::ChatGpt {
-            email: None,
-            plan: Some("Enterprise".to_string()),
-        }
-    );
-    let usage = TokenUsage::default();
-    let captured_at = chrono::Local
-        .with_ymd_and_hms(2024, 1, 2, 3, 4, 5)
-        .single()
-        .expect("timestamp");
-    let model_slug = get_model_offline_for_tests(config.model.as_deref());
-
-    let composite = new_status_output(
-        &config,
-        Some(&account_display),
-        /*token_info*/ None,
-        &usage,
-        &None,
-        /*thread_name*/ None,
-        /*forked_from*/ None,
-        /*rate_limits*/ None,
-        None,
-        captured_at,
-        &model_slug,
-        /*collaboration_mode*/ None,
-        /*reasoning_effort_override*/ None,
-    );
-    let sanitized =
-        sanitize_directory(render_lines(&composite.display_lines(/*width*/ 80))).join("\n");
     assert_snapshot!(sanitized);
 }
 
@@ -682,7 +615,6 @@ async fn status_snapshot_shows_active_user_defined_profile() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         /*rate_limits*/ None,
-        None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -729,7 +661,6 @@ async fn status_model_provider_uses_bedrock_runtime_base_url_and_gates_usage_lin
         /*thread_name*/ None,
         /*forked_from*/ None,
         /*rate_limits*/ &[],
-        None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -770,7 +701,6 @@ async fn status_model_provider_uses_bedrock_runtime_base_url_and_gates_usage_lin
         /*thread_name*/ None,
         /*forked_from*/ None,
         /*rate_limits*/ &[],
-        None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -837,7 +767,6 @@ async fn status_snapshot_shows_auto_review_permissions() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         /*rate_limits*/ None,
-        None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -937,7 +866,6 @@ async fn status_snapshot_includes_forked_from() {
         /*thread_name*/ None,
         Some(forked_from),
         /*rate_limits*/ None,
-        None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -1001,7 +929,6 @@ async fn status_snapshot_includes_monthly_limit() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         Some(&rate_display),
-        None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -1065,7 +992,6 @@ async fn status_snapshot_includes_enterprise_monthly_credit_limit() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         Some(&rate_display),
-        None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -1145,7 +1071,6 @@ async fn status_snapshot_uses_generic_limit_labels_for_unsupported_windows() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         Some(&rate_display),
-        None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -1197,7 +1122,6 @@ async fn status_snapshot_shows_unlimited_credits() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         Some(&rate_display),
-        None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -1248,7 +1172,6 @@ async fn status_snapshot_shows_positive_credits() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         Some(&rate_display),
-        None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -1299,7 +1222,6 @@ async fn status_snapshot_hides_zero_credits() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         Some(&rate_display),
-        None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -1348,7 +1270,6 @@ async fn status_snapshot_hides_when_has_no_credits_flag() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         Some(&rate_display),
-        None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -1393,7 +1314,6 @@ async fn status_card_token_usage_excludes_cached_tokens() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         /*rate_limits*/ None,
-        None,
         now,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -1457,7 +1377,6 @@ async fn status_snapshot_truncates_in_narrow_terminal() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         Some(&rate_display),
-        None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -1506,7 +1425,6 @@ async fn status_snapshot_shows_missing_limits_message() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         /*rate_limits*/ None,
-        None,
         now,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -1560,7 +1478,6 @@ async fn status_snapshot_uses_default_reasoning_when_config_empty() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         &[],
-        None,
         now,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -1627,7 +1544,6 @@ async fn status_snapshot_shows_refreshing_limits_notice() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         std::slice::from_ref(&rate_display),
-        None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -1699,7 +1615,6 @@ async fn status_snapshot_includes_credits_and_limits() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         Some(&rate_display),
-        None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -1758,7 +1673,6 @@ async fn status_snapshot_shows_unavailable_limits_message() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         Some(&rate_display),
-        None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -1816,7 +1730,6 @@ async fn status_snapshot_treats_refreshing_empty_limits_as_unavailable() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         std::slice::from_ref(&rate_display),
-        None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -1885,7 +1798,6 @@ async fn status_snapshot_shows_stale_limits_message() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         Some(&rate_display),
-        None,
         now,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -1957,7 +1869,6 @@ async fn status_snapshot_cached_limits_hide_credits_without_flag() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         Some(&rate_display),
-        None,
         now,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -2015,7 +1926,6 @@ async fn status_context_window_uses_last_usage() {
         /*thread_name*/ None,
         /*forked_from*/ None,
         /*rate_limits*/ None,
-        None,
         now,
         &model_slug,
         /*collaboration_mode*/ None,
