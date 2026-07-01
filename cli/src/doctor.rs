@@ -1202,7 +1202,6 @@ fn auth_check(config: &Config) -> DoctorCheck {
         Ok(Some(auth)) => {
             details.push(format!("stored auth mode: {}", stored_auth_mode(&auth)));
             details.push(format!("stored API key: {}", auth.odysseythink_api_key.is_some()));
-            details.push("stored ChatGPT tokens: false".to_string());
             let auth_issues = stored_auth_issues(&auth, env_var_present);
             details.extend(
                 auth_issues
@@ -1350,9 +1349,7 @@ fn stored_auth_issues(
                 issues.push("API key auth is missing an API key");
             }
         }
-        ody_app_server_protocol::AuthMode::Unauthenticated => {
-            issues.push("no authentication configured");
-        }
+        ody_app_server_protocol::AuthMode::Unauthenticated => {}
     }
     issues
 }
@@ -2466,7 +2463,6 @@ struct ReachabilityEndpoint {
 enum ProviderAuthReachabilityMode {
     NotRequired,
     ApiKey,
-    Chatgpt,
 }
 
 impl ProviderAuthReachabilityMode {
@@ -2474,7 +2470,6 @@ impl ProviderAuthReachabilityMode {
         match self {
             Self::NotRequired => "provider auth",
             Self::ApiKey => "API key auth",
-            Self::Chatgpt => "ChatGPT auth",
         }
     }
 }
@@ -2499,22 +2494,17 @@ fn provider_reachability_plan(config: &Config) -> ReachabilityPlan {
         config.model_provider.base_url.as_deref(),
         config.model_provider.query_params.as_ref(),
         config.model_provider.is_amazon_bedrock(),
-        // The remote hosted plugin/Apps catalog config field this used to be sourced from has
-        // been removed; keep using the same historical default as `default_reachability_plan`
-        // below.
-        "https://chatgpt.com/backend-api/",
     )
 }
 
 fn default_reachability_plan() -> ReachabilityPlan {
     provider_reachability_plan_from_parts(
-        ProviderAuthReachabilityMode::Chatgpt,
+        ProviderAuthReachabilityMode::ApiKey,
         "odysseythink",
         "OpenAI",
         /*provider_base_url*/ None,
         /*provider_query_params*/ None,
         /*is_amazon_bedrock*/ false,
-        "https://chatgpt.com/backend-api/",
     )
 }
 
@@ -2532,7 +2522,7 @@ fn provider_auth_reachability_mode_from_auth(
     match stored_auth.map(stored_auth_mode_value) {
         Some(ody_app_server_protocol::AuthMode::ApiKey) => ProviderAuthReachabilityMode::ApiKey,
         Some(ody_app_server_protocol::AuthMode::Unauthenticated) | None => {
-            ProviderAuthReachabilityMode::Chatgpt
+            ProviderAuthReachabilityMode::ApiKey
         }
     }
 }
@@ -2544,7 +2534,6 @@ fn provider_reachability_plan_from_parts(
     provider_base_url: Option<&str>,
     provider_query_params: Option<&HashMap<String, String>>,
     is_amazon_bedrock: bool,
-    chatgpt_base_url: &str,
 ) -> ReachabilityPlan {
     let provider_route_probe_url = provider_base_url
         .or_else(|| {
@@ -2562,12 +2551,6 @@ fn provider_reachability_plan_from_parts(
                 .to_string(),
             required: true,
             route_probe_url: provider_route_probe_url,
-        }],
-        ProviderAuthReachabilityMode::Chatgpt => vec![ReachabilityEndpoint {
-            label: "ChatGPT".to_string(),
-            url: chatgpt_base_url.to_string(),
-            required: true,
-            route_probe_url: None,
         }],
         ProviderAuthReachabilityMode::NotRequired => provider_base_url
             .map(|url| {
@@ -3437,16 +3420,13 @@ mod tests {
     }
 
     #[test]
-    fn stored_auth_validation_rejects_unauthenticated() {
+    fn stored_auth_validation_allows_unauthenticated() {
         let auth = AuthDotJson {
             auth_mode: None,
             odysseythink_api_key: None,
         };
 
-        assert_eq!(
-            stored_auth_issues(&auth, |_| false),
-            vec!["no authentication configured"]
-        );
+        assert!(stored_auth_issues(&auth, |_| false).is_empty());
     }
 
     #[test]
@@ -3484,7 +3464,7 @@ mod tests {
                 Some("https://example.odysseythink.azure.com/odysseythink/v1"),
                 /*provider_query_params*/ None,
                 /*is_amazon_bedrock*/ false,
-                "https://chatgpt.com/backend-api/",
+
             ),
             ReachabilityPlan {
                 description: "provider auth".to_string(),
@@ -3510,7 +3490,6 @@ mod tests {
                 Some("https://example.com/odysseythink/v1/"),
                 Some(&query_params),
                 /*is_amazon_bedrock*/ false,
-                "https://chatgpt.com/backend-api/",
             ),
             ReachabilityPlan {
                 description: "provider auth".to_string(),
@@ -3535,14 +3514,13 @@ mod tests {
             Some("https://bedrock-runtime.us-east-1.amazonaws.com/odysseythink/v1"),
             /*provider_query_params*/ None,
             /*is_amazon_bedrock*/ true,
-            "https://chatgpt.com/backend-api/",
         );
 
         assert_eq!(plan.endpoints[0].route_probe_url, None);
     }
 
     #[test]
-    fn provider_reachability_api_key_does_not_require_chatgpt() {
+    fn provider_reachability_api_key_uses_odysseythink_endpoint() {
         let plan = provider_reachability_plan_from_parts(
             ProviderAuthReachabilityMode::ApiKey,
             "odysseythink",
@@ -3550,7 +3528,6 @@ mod tests {
             /*provider_base_url*/ None,
             /*provider_query_params*/ None,
             /*is_amazon_bedrock*/ false,
-            "https://chatgpt.com/backend-api/",
         );
 
         assert_eq!(
@@ -3561,6 +3538,18 @@ mod tests {
                 required: true,
                 route_probe_url: Some("https://api.odysseythink.com/v1/models".to_string()),
             }]
+        );
+    }
+
+    #[test]
+    fn provider_reachability_default_uses_api_key_mode() {
+        let plan = default_reachability_plan();
+        assert_eq!(plan.description, "API key auth");
+        assert_eq!(plan.endpoints.len(), 1);
+        assert_eq!(plan.endpoints[0].label, "odysseythink API");
+        assert_eq!(
+            plan.endpoints[0].route_probe_url,
+            Some("https://api.odysseythink.com/v1/models".to_string())
         );
     }
 
@@ -3603,7 +3592,6 @@ mod tests {
             Some(&format!("http://{addr}/xxxx")),
             /*provider_query_params*/ None,
             /*is_amazon_bedrock*/ false,
-            "https://chatgpt.com/backend-api/",
         );
 
         let check = provider_reachability_check(plan).await;
@@ -3644,7 +3632,6 @@ mod tests {
             Some(&format!("http://{addr}/v1")),
             /*provider_query_params*/ None,
             /*is_amazon_bedrock*/ false,
-            "https://chatgpt.com/backend-api/",
         );
 
         let check = provider_reachability_check(plan).await;
