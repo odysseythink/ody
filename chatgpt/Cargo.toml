@@ -1,0 +1,31 @@
+[package]
+name = "ody-chatgpt"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+ody-app-server-protocol = { workspace = true }
+ody-connectors = { workspace = true }
+ody-core = { workspace = true }
+ody-git-utils = { workspace = true }
+ody-login = { workspace = true }
+ody-model-provider = { workspace = true }
+ody-plugin = { workspace = true }
+ody-utils-cli = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, features = ["full"] }
+
+[dev-dependencies]
+ody-utils-cargo-bin = { workspace = true }
+pretty_assertions = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+
+[lib]
+doctest = false

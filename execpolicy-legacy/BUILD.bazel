@@ -1,0 +1,7 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "execpolicy-legacy",
+    compile_data = ["src/default.policy"],
+    crate_name = "ody_execpolicy_legacy",
+)

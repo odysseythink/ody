@@ -1,0 +1,14 @@
+interface:
+  display_name: "OpenAI Docs"
+  short_description: "Reference OpenAI docs, Ody self-knowledge, and model migration guidance"
+  icon_small: "./assets/odysseythink-small.svg"
+  icon_large: "./assets/odysseythink.png"
+  default_prompt: "Use OpenAI Docs for official docs lookup, questions about Ody itself or Ody surfaces, model selection, model migration, and prompt-upgrade work."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "odysseythinkDeveloperDocs"
+      description: "OpenAI Developer Docs MCP server"
+      transport: "streamable_http"
+      url: "https://developers.odysseythink.com/mcp"

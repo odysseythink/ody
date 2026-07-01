@@ -1,0 +1,9 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "rmcp-client",
+    crate_name = "ody_rmcp_client",
+    extra_binaries = [
+        "//ody-rs/cli:ody",
+    ],
+)

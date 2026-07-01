@@ -1,0 +1,24 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name = "ody-cloud-tasks-client"
+version.workspace = true
+
+[lib]
+name = "ody_cloud_tasks_client"
+path = "src/lib.rs"
+test = false
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+ody-api = { workspace = true }
+ody-backend-client = { workspace = true }
+ody-git-utils = { workspace = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

@@ -1,0 +1,36 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name = "ody-mcp-extension"
+version.workspace = true
+
+[lib]
+name = "ody_mcp_extension"
+path = "src/lib.rs"
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+ody-core = { workspace = true }
+ody-core-plugins = { workspace = true }
+ody-config = { workspace = true }
+ody-exec-server = { workspace = true }
+ody-extension-api = { workspace = true }
+ody-features = { workspace = true }
+ody-mcp = { workspace = true }
+ody-plugin = { workspace = true }
+ody-protocol = { workspace = true }
+ody-utils-absolute-path = { workspace = true }
+ody-utils-path-uri = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+
+[dev-dependencies]
+ody-login = { workspace = true }
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

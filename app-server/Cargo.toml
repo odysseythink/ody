@@ -1,0 +1,134 @@
+[package]
+name = "ody-app-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ody-app-server"
+path = "src/main.rs"
+
+[[bin]]
+name = "ody-app-server-test-notify-capture"
+path = "src/bin/notify_capture.rs"
+
+[lib]
+name = "ody_app_server"
+path = "src/lib.rs"
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+base64 = { workspace = true }
+axum = { workspace = true, default-features = false, features = [
+    "http1",
+    "json",
+    "tokio",
+    "ws",
+] }
+ody-analytics = { workspace = true }
+ody-arg0 = { workspace = true }
+ody-cloud-config = { workspace = true }
+ody-config = { workspace = true }
+ody-core = { workspace = true }
+ody-core-plugins = { workspace = true }
+ody-home = { workspace = true }
+ody-exec-server = { workspace = true }
+ody-extension-api = { workspace = true }
+ody-external-agent-migration = { workspace = true }
+ody-external-agent-sessions = { workspace = true }
+ody-features = { workspace = true }
+ody-goal-extension = { workspace = true }
+ody-guardian = { workspace = true }
+ody-git-utils = { workspace = true }
+ody-file-watcher = { workspace = true }
+ody-hooks = { workspace = true }
+ody-otel = { workspace = true }
+ody-plugin = { workspace = true }
+ody-shell-command = { workspace = true }
+ody-skills-extension = { workspace = true }
+ody-utils-cli = { workspace = true }
+ody-utils-pty = { workspace = true }
+ody-backend-client = { workspace = true }
+ody-file-search = { workspace = true }
+ody-chatgpt = { workspace = true }
+ody-login = { workspace = true }
+ody-image-generation-extension = { workspace = true }
+ody-memories-extension = { workspace = true }
+ody-web-search-extension = { workspace = true }
+ody-memories-write = { workspace = true }
+ody-mcp = { workspace = true }
+ody-mcp-extension = { workspace = true }
+ody-model-provider = { workspace = true }
+ody-models-manager = { workspace = true }
+ody-protocol = { workspace = true }
+ody-app-server-protocol = { workspace = true }
+ody-app-server-transport = { workspace = true }
+ody-feedback = { workspace = true }
+ody-rmcp-client = { workspace = true }
+ody-rollout = { workspace = true }
+ody-sandboxing = { workspace = true }
+ody-state = { workspace = true }
+ody-thread-store = { workspace = true }
+ody-tools = { workspace = true }
+ody-utils-absolute-path = { workspace = true }
+ody-utils-json-to-toml = { workspace = true }
+ody-utils-path-uri = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+futures = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+toml = { workspace = true }
+toml_edit = { workspace = true }
+tokio = { workspace = true, features = [
+    "io-std",
+    "macros",
+    "process",
+    "rt-multi-thread",
+    "signal",
+] }
+tokio-util = { workspace = true }
+tracing = { workspace = true, features = ["log"] }
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt", "json"] }
+uuid = { workspace = true, features = ["serde", "v7"] }
+
+[target.'cfg(windows)'.dependencies]
+ody-windows-sandbox = { workspace = true }
+
+[dev-dependencies]
+app_test_support = { workspace = true }
+axum = { workspace = true, default-features = false, features = [
+    "http1",
+    "json",
+    "tokio",
+] }
+base64 = { workspace = true }
+ody-model-provider-info = { workspace = true }
+ody-utils-cargo-bin = { workspace = true }
+core_test_support = { workspace = true }
+flate2 = { workspace = true }
+hmac = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+pretty_assertions = { workspace = true }
+reqwest = { workspace = true, features = ["rustls-tls"] }
+rmcp = { workspace = true, default-features = false, features = [
+    "elicitation",
+    "server",
+    "transport-streamable-http-server",
+] }
+serial_test = { workspace = true }
+sha2 = { workspace = true }
+shlex = { workspace = true }
+tar = { workspace = true }
+tokio-tungstenite = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+url = { workspace = true }
+wiremock = { workspace = true }

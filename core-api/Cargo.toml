@@ -1,0 +1,30 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name = "ody-core-api"
+version.workspace = true
+
+[lib]
+doctest = false
+name = "ody_core_api"
+path = "src/lib.rs"
+test = false
+
+[lints]
+workspace = true
+
+[dependencies]
+ody-app-server-protocol = { workspace = true }
+ody-arg0 = { workspace = true }
+ody-analytics = { workspace = true }
+ody-config = { workspace = true }
+ody-core = { workspace = true }
+ody-extension-api = { workspace = true }
+ody-home = { workspace = true }
+ody-exec-server = { workspace = true }
+ody-features = { workspace = true }
+ody-login = { workspace = true }
+ody-model-provider-info = { workspace = true }
+ody-models-manager = { workspace = true }
+ody-protocol = { workspace = true }
+ody-utils-absolute-path = { workspace = true }

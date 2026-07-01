@@ -1,0 +1,5 @@
+---
+source: tui/src/app/history_ui_tests.rs
+expression: render_cell(&cell)
+---
+■ Failed to open this session in Ody Desktop: launch failed. Install or launch Ody Desktop and try again.

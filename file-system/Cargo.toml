@@ -1,0 +1,20 @@
+[package]
+name = "ody-file-system"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+bytes = { workspace = true }
+ody-protocol = { workspace = true }
+ody-utils-absolute-path = { workspace = true }
+ody-utils-path-uri = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+
+[lib]
+test = false
+doctest = false

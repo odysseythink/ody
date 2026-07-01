@@ -1,0 +1,40 @@
+[package]
+name = "ody-app-server-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "ody_app_server_client"
+path = "src/lib.rs"
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+ody-app-server = { workspace = true }
+ody-app-server-protocol = { workspace = true }
+ody-arg0 = { workspace = true }
+ody-config = { workspace = true }
+ody-core = { workspace = true }
+ody-exec-server = { workspace = true }
+ody-feedback = { workspace = true }
+ody-protocol = { workspace = true }
+ody-uds = { workspace = true }
+ody-utils-absolute-path = { workspace = true }
+ody-utils-rustls-provider = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time", "rt"] }
+tokio-tungstenite = { workspace = true }
+toml = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

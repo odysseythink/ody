@@ -1,0 +1,23 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name = "ody-plugin"
+version.workspace = true
+
+[lib]
+doctest = false
+name = "ody_plugin"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+ody-config = { workspace = true }
+ody-protocol = { workspace = true }
+ody-utils-absolute-path = { workspace = true }
+ody-utils-plugins = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }

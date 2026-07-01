@@ -1,0 +1,19 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name = "ody-skills"
+version.workspace = true
+build = "build.rs"
+
+[lib]
+doctest = false
+name = "ody_skills"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+ody-utils-absolute-path = { workspace = true }
+include_dir = { workspace = true }
+thiserror = { workspace = true }

@@ -1,0 +1,15 @@
+---
+source: tui/src/model_migration.rs
+expression: terminal.backend()
+---
+
+> Ody just got an upgrade. Introducing gpt-5.1-ody-mini.
+
+  We recommend switching from gpt-5-ody-mini to
+  gpt-5.1-ody-mini.
+
+  Optimized for ody. Cheaper, faster, but less capable.
+  Learn more about gpt-5.1-ody-mini at
+  https://www.ody.com/models/gpt-5.1-ody-mini
+
+  Press enter to continue

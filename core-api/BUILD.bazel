@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "core-api",
+    crate_name = "ody_core_api",
+)

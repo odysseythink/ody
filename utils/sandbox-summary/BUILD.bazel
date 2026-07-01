@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "sandbox-summary",
+    crate_name = "ody_utils_sandbox_summary",
+)

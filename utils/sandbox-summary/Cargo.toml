@@ -1,0 +1,21 @@
+[package]
+name = "ody-utils-sandbox-summary"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+ody-core = { workspace = true }
+ody-model-provider-info = { workspace = true }
+ody-protocol = { workspace = true }
+ody-utils-absolute-path = { workspace = true }
+
+[dev-dependencies]
+ody-utils-absolute-path = { workspace = true }
+pretty_assertions = { workspace = true }
+
+[lib]
+doctest = false

@@ -1,0 +1,54 @@
+[package]
+name = "ody-mcp-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ody-mcp-server"
+path = "src/main.rs"
+
+[lib]
+name = "ody_mcp_server"
+path = "src/lib.rs"
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+ody-arg0 = { workspace = true }
+ody-config = { workspace = true }
+ody-core = { workspace = true }
+ody-home = { workspace = true }
+ody-exec-server = { workspace = true }
+ody-extension-api = { workspace = true }
+ody-login = { workspace = true }
+ody-protocol = { workspace = true }
+ody-utils-cli = { workspace = true }
+ody-utils-json-to-toml = { workspace = true }
+rmcp = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+shlex = { workspace = true }
+tokio = { workspace = true, features = [
+    "io-std",
+    "macros",
+    "process",
+    "rt-multi-thread",
+    "signal",
+] }
+tracing = { workspace = true, features = ["log"] }
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
+
+[dev-dependencies]
+ody-utils-absolute-path = { workspace = true }
+ody-shell-command = { workspace = true }
+core_test_support = { workspace = true }
+mcp_test_support = { workspace = true }
+os_info = { workspace = true }
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
+wiremock = { workspace = true }

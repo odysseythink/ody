@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "external-agent-migration",
+    crate_name = "ody_external_agent_migration",
+)

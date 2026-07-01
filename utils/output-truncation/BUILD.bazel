@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "output-truncation",
+    crate_name = "ody_utils_output_truncation",
+)

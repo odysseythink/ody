@@ -1,0 +1,7 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "otel",
+    crate_name = "ody_otel",
+    integration_test_args = ["--test-threads=1"],
+)

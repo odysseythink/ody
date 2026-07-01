@@ -1,0 +1,18 @@
+---
+source: tui/src/model_migration.rs
+expression: terminal.backend()
+---
+
+> Ody just got an upgrade. Introducing gpt-5.1-ody-max.
+
+  Upgrade to gpt-5.2-ody for the latest and greatest
+  agentic coding model.
+
+  You can continue using gpt-5.1-ody-mini if you prefer.
+
+  Choose how you'd like Ody to proceed.
+
+› 1. Try new model
+  2. Use existing model
+
+  Use ↑/↓ to move, press enter to confirm

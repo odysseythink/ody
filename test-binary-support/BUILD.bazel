@@ -1,0 +1,7 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "test-binary-support",
+    crate_name = "ody_test_binary_support",
+    crate_srcs = ["lib.rs"],
+)

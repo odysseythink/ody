@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "apply-patch",
+    crate_name = "ody_apply_patch",
+)

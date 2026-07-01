@@ -1,0 +1,105 @@
+[package]
+name = "ody-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+
+[[bin]]
+name = "ody"
+path = "src/main.rs"
+
+[lib]
+name = "ody_cli"
+path = "src/lib.rs"
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["derive", "env"] }
+clap_complete = { workspace = true }
+ody-app-server = { workspace = true }
+ody-app-server-daemon = { workspace = true }
+ody-app-server-protocol = { workspace = true }
+ody-app-server-test-client = { workspace = true }
+ody-arg0 = { workspace = true }
+ody-api = { workspace = true }
+ody-chatgpt = { workspace = true }
+ody-cloud-tasks = { path = "../cloud-tasks" }
+ody-utils-cli = { workspace = true }
+ody-config = { workspace = true }
+ody-core = { workspace = true }
+ody-core-plugins = { workspace = true }
+ody-home = { workspace = true }
+ody-exec = { workspace = true }
+ody-exec-server = { workspace = true }
+ody-execpolicy = { workspace = true }
+ody-features = { workspace = true }
+ody-git-utils = { workspace = true }
+ody-install-context = { workspace = true }
+ody-login = { workspace = true }
+ody-memories-write = { workspace = true }
+ody-mcp = { workspace = true }
+ody-mcp-server = { workspace = true }
+ody-model-provider = { workspace = true }
+ody-models-manager = { workspace = true }
+ody-plugin = { workspace = true }
+ody-protocol = { workspace = true }
+ody-responses-api-proxy = { workspace = true }
+ody-rmcp-client = { workspace = true }
+ody-rollout = { workspace = true }
+ody-rollout-trace = { workspace = true }
+ody-sandboxing = { workspace = true }
+ody-state = { workspace = true }
+ody-stdio-to-uds = { workspace = true }
+ody-terminal-detection = { workspace = true }
+ody-tui = { workspace = true }
+ody-utils-absolute-path = { workspace = true }
+ody-utils-path = { workspace = true }
+crossterm = { workspace = true }
+http = { workspace = true }
+libc = { workspace = true }
+os_info = { workspace = true }
+owo-colors = { workspace = true }
+regex-lite = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+supports-color = { workspace = true }
+sys-locale = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = [
+    "io-std",
+    "macros",
+    "net",
+    "process",
+    "rt-multi-thread",
+    "signal",
+    "time",
+] }
+toml = { workspace = true }
+tracing = { workspace = true }
+tracing-appender = { workspace = true }
+tracing-subscriber = { workspace = true }
+unicode-segmentation = { workspace = true }
+url = { workspace = true }
+which = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+ody_windows_sandbox = { package = "ody-windows-sandbox", path = "../windows-sandbox-rs" }
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_System_Console",
+] }
+
+[dev-dependencies]
+assert_cmd = { workspace = true }
+assert_matches = { workspace = true }
+ody-utils-cargo-bin = { workspace = true }
+insta = { workspace = true }
+predicates = { workspace = true }
+pretty_assertions = { workspace = true }
+sqlx = { workspace = true }
+wiremock = { workspace = true }

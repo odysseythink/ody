@@ -1,0 +1,21 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name = "ody-memories-read"
+version.workspace = true
+
+[lib]
+name = "ody_memories_read"
+path = "src/lib.rs"
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+ody-protocol = { workspace = true }
+ody-shell-command = { workspace = true }
+ody-utils-absolute-path = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }

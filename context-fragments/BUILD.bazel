@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "context-fragments",
+    crate_name = "ody_context_fragments",
+)

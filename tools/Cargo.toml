@@ -1,0 +1,38 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name = "ody-tools"
+version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+ody-app-server-protocol = { workspace = true }
+ody-code-mode = { workspace = true }
+ody-features = { workspace = true }
+ody-file-system = { workspace = true }
+ody-protocol = { workspace = true }
+ody-utils-absolute-path = { workspace = true }
+ody-utils-output-truncation = { workspace = true }
+ody-utils-pty = { workspace = true }
+ody-utils-string = { workspace = true }
+jsonptr = { workspace = true }
+rmcp = { workspace = true, default-features = false, features = [
+    "base64",
+    "macros",
+    "schemars",
+    "server",
+] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+urlencoding = { workspace = true }
+
+[dev-dependencies]
+ody-utils-cargo-bin = { workspace = true }
+pretty_assertions = { workspace = true }
+
+[lib]
+doctest = false

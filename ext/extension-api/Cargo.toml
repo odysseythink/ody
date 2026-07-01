@@ -1,0 +1,25 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name = "ody-extension-api"
+version.workspace = true
+
+[lib]
+name = "ody_extension_api"
+path = "src/lib.rs"
+test = false
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+ody-config = { workspace = true }
+ody-context-fragments = { workspace = true }
+ody-protocol = { workspace = true }
+ody-tools = { workspace = true }
+ody-utils-absolute-path = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

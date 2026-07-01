@@ -1,0 +1,25 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name = "ody-prompts"
+version.workspace = true
+
+[lib]
+doctest = false
+name = "ody_prompts"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+ody-context-fragments = { workspace = true }
+ody-git-utils = { workspace = true }
+ody-execpolicy = { workspace = true }
+ody-protocol = { workspace = true }
+ody-utils-absolute-path = { workspace = true }
+ody-utils-template = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }

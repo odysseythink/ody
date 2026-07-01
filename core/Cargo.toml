@@ -1,0 +1,167 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name = "ody-core"
+version.workspace = true
+
+[lib]
+name = "ody_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ody-write-config-schema"
+path = "src/bin/config_schema.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+arc-swap = { workspace = true }
+async-channel = { workspace = true }
+base64 = { workspace = true }
+bm25 = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+clap = { workspace = true, features = ["derive"] }
+ody-analytics = { workspace = true }
+ody-api = { workspace = true }
+ody-app-server-protocol = { workspace = true }
+ody-apply-patch = { workspace = true }
+ody-async-utils = { workspace = true }
+ody-code-mode = { workspace = true }
+ody-connectors = { workspace = true }
+ody-context-fragments = { workspace = true }
+ody-config = { workspace = true }
+ody-core-plugins = { workspace = true }
+ody-core-skills = { workspace = true }
+ody-exec-server = { workspace = true }
+ody-extension-api = { workspace = true }
+ody-features = { workspace = true }
+ody-feedback = { workspace = true }
+ody-file-system = { workspace = true }
+ody-login = { workspace = true }
+ody-memories-read = { workspace = true }
+ody-mcp = { workspace = true }
+ody-model-provider-info = { workspace = true }
+ody-models-manager = { workspace = true }
+ody-shell-command = { workspace = true }
+ody-execpolicy = { workspace = true }
+ody-git-utils = { workspace = true }
+ody-hooks = { workspace = true }
+ody-install-context = { workspace = true }
+ody-network-proxy = { workspace = true }
+ody-otel = { workspace = true }
+ody-plugin = { workspace = true }
+ody-model-provider = { workspace = true }
+ody-protocol = { workspace = true }
+ody-response-debug-context = { workspace = true }
+ody-prompts = { workspace = true }
+ody-rollout = { workspace = true }
+ody-rollout-trace = { workspace = true }
+ody-rmcp-client = { workspace = true }
+ody-sandboxing = { workspace = true }
+ody-state = { workspace = true }
+ody-terminal-detection = { workspace = true }
+ody-thread-store = { workspace = true }
+ody-tools = { workspace = true }
+ody-utils-absolute-path = { workspace = true }
+ody-utils-cache = { workspace = true }
+ody-utils-image = { workspace = true }
+ody-utils-home-dir = { workspace = true }
+ody-utils-output-truncation = { workspace = true }
+ody-utils-path = { workspace = true }
+ody-utils-path-uri = { workspace = true }
+ody-utils-plugins = { workspace = true }
+ody-utils-pty = { workspace = true }
+ody-utils-string = { workspace = true }
+ody-utils-stream-parser = { workspace = true }
+ody-windows-sandbox = { package = "ody-windows-sandbox", path = "../windows-sandbox-rs" }
+csv = { workspace = true }
+dirs = { workspace = true }
+dunce = { workspace = true }
+eventsource-stream = { workspace = true }
+futures = { workspace = true }
+http = { workspace = true }
+iana-time-zone = { workspace = true }
+image = { workspace = true, features = ["jpeg", "png", "webp"] }
+indexmap = { workspace = true }
+libc = { workspace = true }
+once_cell = { workspace = true }
+rand = { workspace = true }
+regex-lite = { workspace = true }
+reqwest = { workspace = true, features = ["json", "stream"] }
+rmcp = { workspace = true, default-features = false, features = [
+    "base64",
+    "macros",
+    "schemars",
+    "server",
+] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha1 = { workspace = true }
+shlex = { workspace = true }
+similar = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = [
+    "io-std",
+    "macros",
+    "process",
+    "rt-multi-thread",
+    "signal",
+] }
+tokio-util = { workspace = true, features = ["rt"] }
+tokio-tungstenite = { workspace = true }
+toml = { workspace = true }
+toml_edit = { workspace = true }
+tracing = { workspace = true, features = ["log"] }
+url = { workspace = true }
+uuid = { workspace = true, features = ["serde", "v4", "v5"] }
+which = { workspace = true }
+whoami = { workspace = true }
+
+# Build OpenSSL from source for musl builds.
+[target.x86_64-unknown-linux-musl.dependencies]
+openssl-sys = { workspace = true, features = ["vendored"] }
+
+# Build OpenSSL from source for musl builds.
+[target.aarch64-unknown-linux-musl.dependencies]
+openssl-sys = { workspace = true, features = ["vendored"] }
+
+[target.'cfg(unix)'.dependencies]
+ody-shell-escalation = { workspace = true }
+
+[dev-dependencies]
+assert_cmd = { workspace = true }
+assert_matches = { workspace = true }
+ody-image-generation-extension = { workspace = true }
+ody-home = { workspace = true }
+ody-otel = { workspace = true }
+ody-test-binary-support = { workspace = true }
+ody-utils-cargo-bin = { workspace = true }
+ody-web-search-extension = { workspace = true }
+core_test_support = { workspace = true }
+ctor = { workspace = true }
+insta = { workspace = true }
+maplit = { workspace = true }
+opentelemetry = { workspace = true }
+predicates = { workspace = true }
+pretty_assertions = { workspace = true }
+test-case = "3.3.1"
+opentelemetry_sdk = { workspace = true, features = [
+    "experimental_metrics_custom_reader",
+    "metrics",
+] }
+serial_test = { workspace = true }
+tempfile = { workspace = true }
+test-log = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-test = { workspace = true, features = ["no-env-filter"] }
+walkdir = { workspace = true }
+wiremock = { workspace = true }
+zstd = { workspace = true }
+
+[package.metadata.cargo-shear]
+ignored = ["openssl-sys"]
+ignored-paths = ["tests/remote_env_windows/*.rs"]

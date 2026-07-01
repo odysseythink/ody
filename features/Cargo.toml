@@ -1,0 +1,24 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name = "ody-features"
+version.workspace = true
+
+[lib]
+doctest = false
+name = "ody_features"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+ody-otel = { workspace = true }
+ody-protocol = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+toml = { workspace = true }
+tracing = { workspace = true, features = ["log"] }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }

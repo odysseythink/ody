@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "stdio-to-uds",
+    crate_name = "ody_stdio_to_uds",
+)

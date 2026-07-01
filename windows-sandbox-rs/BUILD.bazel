@@ -1,0 +1,9 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "windows-sandbox-rs",
+    build_script_data = [
+        "ody-windows-sandbox-setup.manifest",
+    ],
+    crate_name = "ody_windows_sandbox",
+)

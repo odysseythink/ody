@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "code-mode-host",
+    crate_name = "ody_code_mode_host",
+)

@@ -1,0 +1,32 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name = "ody-models-manager"
+version.workspace = true
+
+[lib]
+doctest = false
+name = "ody_models_manager"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+chrono = { workspace = true, features = ["serde"] }
+ody-app-server-protocol = { workspace = true }
+ody-collaboration-mode-templates = { workspace = true }
+ody-login = { workspace = true }
+ody-otel = { workspace = true }
+ody-protocol = { workspace = true }
+ody-utils-output-truncation = { workspace = true }
+ody-utils-template = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["fs", "sync", "time"] }
+tracing = { workspace = true, features = ["log"] }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }

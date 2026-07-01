@@ -1,0 +1,33 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name = "ody-memories-extension"
+version.workspace = true
+
+[lib]
+name = "ody_memories_extension"
+path = "src/lib.rs"
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+ody-core = { workspace = true }
+ody-extension-api = { workspace = true }
+ody-features = { workspace = true }
+ody-otel = { workspace = true }
+ody-tools = { workspace = true }
+ody-utils-absolute-path = { workspace = true }
+ody-utils-output-truncation = { workspace = true }
+ody-utils-template = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs"] }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["fs", "macros"] }

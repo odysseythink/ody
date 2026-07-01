@@ -1,0 +1,7 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "ody-client",
+    compile_data = glob(["tests/fixtures/**"]),
+    crate_name = "ody_client",
+)

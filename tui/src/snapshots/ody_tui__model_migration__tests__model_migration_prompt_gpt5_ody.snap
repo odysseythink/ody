@@ -1,0 +1,15 @@
+---
+source: tui/src/model_migration.rs
+expression: terminal.backend()
+---
+
+> Ody just got an upgrade. Introducing gpt-5.1-ody-max.
+
+  We recommend switching from gpt-5-ody to
+  gpt-5.1-ody-max.
+
+  Ody-optimized flagship for deep and fast reasoning.
+  Learn more about gpt-5.1-ody-max at
+  https://www.ody.com/models/gpt-5.1-ody-max
+
+  Press enter to continue

@@ -1,0 +1,57 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name = "ody-core-plugins"
+version.workspace = true
+
+[lib]
+doctest = false
+name = "ody_core_plugins"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+ody-analytics = { workspace = true }
+ody-app-server-protocol = { workspace = true }
+ody-config = { workspace = true }
+ody-core-skills = { workspace = true }
+ody-exec-server = { workspace = true }
+ody-git-utils = { workspace = true }
+ody-hooks = { workspace = true }
+ody-login = { workspace = true }
+ody-mcp = { workspace = true }
+ody-model-provider = { workspace = true }
+ody-otel = { workspace = true }
+ody-plugin = { workspace = true }
+ody-protocol = { workspace = true }
+ody-tools = { workspace = true }
+ody-utils-absolute-path = { workspace = true }
+ody-utils-path-uri = { workspace = true }
+ody-utils-plugins = { workspace = true }
+chrono = { workspace = true }
+dirs = { workspace = true }
+flate2 = { workspace = true }
+indexmap = { workspace = true, features = ["serde"] }
+reqwest = { workspace = true }
+semver = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tar = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs", "macros", "rt", "time"] }
+toml = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+zip = { workspace = true }
+
+[dev-dependencies]
+libc = { workspace = true }
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-test = { workspace = true, features = ["no-env-filter"] }
+wiremock = { workspace = true }

@@ -1,0 +1,7 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "ody-experimental-api-macros",
+    crate_name = "ody_experimental_api_macros",
+    proc_macro = True,
+)

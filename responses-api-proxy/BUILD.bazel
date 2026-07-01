@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "responses-api-proxy",
+    crate_name = "ody_responses_api_proxy",
+)

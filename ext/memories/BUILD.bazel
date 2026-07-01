@@ -1,0 +1,9 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "memories",
+    compile_data = glob([
+        "templates/**",
+    ]),
+    crate_name = "ody_memories_extension",
+)

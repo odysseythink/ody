@@ -1,0 +1,7 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "common",
+    crate_name = "mcp_test_support",
+    crate_srcs = glob(["*.rs"]),
+)

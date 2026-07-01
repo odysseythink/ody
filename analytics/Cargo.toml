@@ -1,0 +1,35 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name = "ody-analytics"
+version.workspace = true
+
+[lib]
+doctest = false
+name = "ody_analytics"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+ody-app-server-protocol = { workspace = true }
+ody-git-utils = { workspace = true }
+ody-login = { workspace = true }
+ody-model-provider = { workspace = true }
+ody-plugin = { workspace = true }
+ody-protocol = { workspace = true }
+ody-state = { workspace = true }
+os_info = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha1 = { workspace = true }
+tokio = { workspace = true, features = [
+    "macros",
+    "rt-multi-thread",
+] }
+tracing = { workspace = true, features = ["log"] }
+
+[dev-dependencies]
+ody-utils-absolute-path = { workspace = true }
+pretty_assertions = { workspace = true }

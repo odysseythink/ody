@@ -1,0 +1,282 @@
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::time::Duration;
+
+use crate::chatgpt_client::chatgpt_get_request_with_timeout;
+
+use ody_app_server_protocol::AppInfo;
+use ody_connectors::ConnectorDirectoryCacheContext;
+use ody_connectors::ConnectorDirectoryCacheKey;
+use ody_connectors::DirectoryListResponse;
+use ody_connectors::merge::merge_connectors;
+use ody_connectors::merge::merge_plugin_connectors;
+use ody_core::config::Config;
+pub use ody_core::connectors::list_accessible_connectors_from_mcp_tools;
+pub use ody_core::connectors::list_accessible_connectors_from_mcp_tools_with_environment_manager;
+pub use ody_core::connectors::list_accessible_connectors_from_mcp_tools_with_mcp_manager;
+pub use ody_core::connectors::list_accessible_connectors_from_mcp_tools_with_options;
+pub use ody_core::connectors::list_accessible_connectors_from_mcp_tools_with_options_and_status;
+pub use ody_core::connectors::list_cached_accessible_connectors_from_mcp_tools;
+pub use ody_core::connectors::with_app_enabled_state;
+use ody_login::AuthManager;
+use ody_login::OdyAuth;
+use ody_plugin::AppConnectorId;
+
+const DIRECTORY_CONNECTORS_TIMEOUT: Duration = Duration::from_secs(60);
+
+async fn apps_enabled(config: &Config) -> bool {
+    let auth_manager =
+        AuthManager::shared_from_config(config, /*enable_ody_api_key_env*/ false).await;
+    let auth = auth_manager.auth().await;
+    config
+        .features
+        .apps_enabled_for_auth(auth.as_ref().is_some_and(OdyAuth::uses_ody_backend))
+}
+
+async fn connector_auth(config: &Config) -> anyhow::Result<OdyAuth> {
+    let auth_manager =
+        AuthManager::shared_from_config(config, /*enable_ody_api_key_env*/ false).await;
+    let auth = auth_manager
+        .auth()
+        .await
+        .ok_or_else(|| anyhow::anyhow!("ChatGPT auth not available"))?;
+    anyhow::ensure!(
+        auth.uses_ody_backend(),
+        "ChatGPT connectors require Ody backend auth"
+    );
+    Ok(auth)
+}
+
+pub async fn list_connectors(config: &Config) -> anyhow::Result<Vec<AppInfo>> {
+    if !apps_enabled(config).await {
+        return Ok(Vec::new());
+    }
+    let (connectors_result, accessible_result) = tokio::join!(
+        list_all_connectors(config),
+        list_accessible_connectors_from_mcp_tools(config),
+    );
+    let connectors = connectors_result?;
+    let accessible = accessible_result?;
+    Ok(with_app_enabled_state(
+        merge_connectors_with_accessible(
+            connectors, accessible, /*all_connectors_loaded*/ true,
+        ),
+        config,
+    ))
+}
+
+pub async fn list_all_connectors(config: &Config) -> anyhow::Result<Vec<AppInfo>> {
+    list_all_connectors_with_options(config, /*force_refetch*/ false, &[]).await
+}
+
+pub async fn list_cached_all_connectors(
+    config: &Config,
+    plugin_apps: &[AppConnectorId],
+) -> Option<Vec<AppInfo>> {
+    if !apps_enabled(config).await {
+        return Some(Vec::new());
+    }
+
+    let auth = connector_auth(config).await.ok()?;
+    let cache_context = connector_directory_cache_context(config, &auth);
+    let connectors = ody_connectors::cached_directory_connectors(&cache_context)?;
+    Some(merge_directory_and_plugin_connectors(
+        connectors,
+        plugin_apps,
+    ))
+}
+
+pub async fn list_all_connectors_with_options(
+    config: &Config,
+    force_refetch: bool,
+    plugin_apps: &[AppConnectorId],
+) -> anyhow::Result<Vec<AppInfo>> {
+    if !apps_enabled(config).await {
+        return Ok(Vec::new());
+    }
+    let auth = connector_auth(config).await?;
+    let cache_context = connector_directory_cache_context(config, &auth);
+    let connectors = ody_connectors::list_all_connectors_with_options(
+        cache_context,
+        auth.is_workspace_account(),
+        force_refetch,
+        |path| async move {
+            chatgpt_get_request_with_timeout::<DirectoryListResponse>(
+                config,
+                path,
+                Some(DIRECTORY_CONNECTORS_TIMEOUT),
+            )
+            .await
+        },
+    )
+    .await?;
+    Ok(merge_directory_and_plugin_connectors(
+        connectors,
+        plugin_apps,
+    ))
+}
+
+fn connector_directory_cache_context(
+    config: &Config,
+    auth: &OdyAuth,
+) -> ConnectorDirectoryCacheContext {
+    ConnectorDirectoryCacheContext::new(
+        config.ody_home.to_path_buf(),
+        ConnectorDirectoryCacheKey::new(
+            config.chatgpt_base_url.clone(),
+            auth.get_account_id(),
+            auth.get_chatgpt_user_id(),
+            auth.is_workspace_account(),
+        ),
+    )
+}
+
+fn merge_directory_and_plugin_connectors(
+    connectors: Vec<AppInfo>,
+    plugin_apps: &[AppConnectorId],
+) -> Vec<AppInfo> {
+    merge_plugin_connectors(
+        connectors,
+        plugin_apps
+            .iter()
+            .map(|connector_id| connector_id.0.clone()),
+    )
+}
+
+pub fn connectors_for_plugin_apps(
+    connectors: Vec<AppInfo>,
+    plugin_apps: &[AppConnectorId],
+) -> Vec<AppInfo> {
+    let connectors = merge_plugin_connectors(
+        connectors,
+        plugin_apps
+            .iter()
+            .map(|connector_id| connector_id.0.clone()),
+    );
+    let mut connectors_by_id = connectors
+        .into_iter()
+        .map(|connector| (connector.id.clone(), connector))
+        .collect::<HashMap<_, _>>();
+
+    plugin_apps
+        .iter()
+        .filter_map(|connector_id| connectors_by_id.remove(connector_id.0.as_str()))
+        .collect()
+}
+
+pub fn merge_connectors_with_accessible(
+    connectors: Vec<AppInfo>,
+    accessible_connectors: Vec<AppInfo>,
+    all_connectors_loaded: bool,
+) -> Vec<AppInfo> {
+    let accessible_connectors = if all_connectors_loaded {
+        let connector_ids: HashSet<&str> = connectors
+            .iter()
+            .map(|connector| connector.id.as_str())
+            .collect();
+        accessible_connectors
+            .into_iter()
+            .filter(|connector| connector_ids.contains(connector.id.as_str()))
+            .collect()
+    } else {
+        accessible_connectors
+    };
+    merge_connectors(connectors, accessible_connectors)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ody_connectors::metadata::connector_install_url;
+    use ody_plugin::AppConnectorId;
+    use pretty_assertions::assert_eq;
+
+    fn app(id: &str) -> AppInfo {
+        AppInfo {
+            id: id.to_string(),
+            name: id.to_string(),
+            description: None,
+            logo_url: None,
+            logo_url_dark: None,
+            distribution_channel: None,
+            branding: None,
+            app_metadata: None,
+            labels: None,
+            install_url: None,
+            is_accessible: false,
+            is_enabled: true,
+            plugin_display_names: Vec::new(),
+        }
+    }
+
+    fn merged_app(id: &str, is_accessible: bool) -> AppInfo {
+        AppInfo {
+            id: id.to_string(),
+            name: id.to_string(),
+            description: None,
+            logo_url: None,
+            logo_url_dark: None,
+            distribution_channel: None,
+            branding: None,
+            app_metadata: None,
+            labels: None,
+            install_url: Some(connector_install_url(id, id)),
+            is_accessible,
+            is_enabled: true,
+            plugin_display_names: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn excludes_accessible_connectors_not_in_all_when_all_loaded() {
+        let merged = merge_connectors_with_accessible(
+            vec![app("alpha")],
+            vec![app("alpha"), app("beta")],
+            /*all_connectors_loaded*/ true,
+        );
+        assert_eq!(merged, vec![merged_app("alpha", /*is_accessible*/ true)]);
+    }
+
+    #[test]
+    fn keeps_accessible_connectors_not_in_all_while_all_loading() {
+        let merged = merge_connectors_with_accessible(
+            vec![app("alpha")],
+            vec![app("alpha"), app("beta")],
+            /*all_connectors_loaded*/ false,
+        );
+        assert_eq!(
+            merged,
+            vec![
+                merged_app("alpha", /*is_accessible*/ true),
+                merged_app("beta", /*is_accessible*/ true)
+            ]
+        );
+    }
+
+    #[test]
+    fn connectors_for_plugin_apps_returns_only_requested_plugin_apps() {
+        let connectors = connectors_for_plugin_apps(
+            vec![app("alpha"), app("beta")],
+            &[
+                AppConnectorId("gmail".to_string()),
+                AppConnectorId("alpha".to_string()),
+                AppConnectorId("gmail".to_string()),
+            ],
+        );
+        assert_eq!(
+            connectors,
+            vec![merged_app("gmail", /*is_accessible*/ false), app("alpha")]
+        );
+    }
+
+    #[test]
+    fn connectors_for_plugin_apps_preserves_formerly_disallowed_plugin_apps() {
+        let connector_id = "asdk_app_6938a94a61d881918ef32cb999ff937c";
+        let connectors =
+            connectors_for_plugin_apps(Vec::new(), &[AppConnectorId(connector_id.to_string())]);
+        assert_eq!(
+            connectors,
+            vec![merged_app(connector_id, /*is_accessible*/ false)]
+        );
+    }
+}

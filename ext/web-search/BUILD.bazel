@@ -1,0 +1,9 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "web-search",
+    compile_data = [
+        "web_run_description.md",
+    ],
+    crate_name = "ody_web_search_extension",
+)

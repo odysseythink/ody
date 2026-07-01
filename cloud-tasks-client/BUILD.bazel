@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "cloud-tasks-client",
+    crate_name = "ody_cloud_tasks_client",
+)

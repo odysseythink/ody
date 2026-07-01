@@ -1,0 +1,19 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name = "ody-guardian"
+version.workspace = true
+
+[lib]
+name = "ody_guardian"
+path = "src/lib.rs"
+test = false
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+ody-core = { workspace = true }
+ody-extension-api = { workspace = true }
+ody-protocol = { workspace = true }
