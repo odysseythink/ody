@@ -29,23 +29,23 @@ pub const CONNECTORS_CACHE_TTL: Duration = Duration::from_secs(3600);
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConnectorDirectoryCacheKey {
-    chatgpt_base_url: String,
+    base_url: String,
     account_id: Option<String>,
-    chatgpt_user_id: Option<String>,
+    user_id: Option<String>,
     is_workspace_account: bool,
 }
 
 impl ConnectorDirectoryCacheKey {
     pub fn new(
-        chatgpt_base_url: String,
+        base_url: String,
         account_id: Option<String>,
-        chatgpt_user_id: Option<String>,
+        user_id: Option<String>,
         is_workspace_account: bool,
     ) -> Self {
         Self {
-            chatgpt_base_url,
+            base_url,
             account_id,
-            chatgpt_user_id,
+            user_id,
             is_workspace_account,
         }
     }
@@ -430,7 +430,7 @@ fn directory_app_to_app_info(app: DirectoryApp) -> AppInfo {
 
 fn connector_install_url(name: &str, connector_id: &str) -> String {
     let slug = connector_name_slug(name);
-    format!("https://chatgpt.com/apps/{slug}/{connector_id}")
+    format!("https://example.com/apps/{slug}/{connector_id}")
 }
 
 fn connector_name_slug(name: &str) -> String {
@@ -481,7 +481,7 @@ mod tests {
 
     fn cache_key(id: &str) -> ConnectorDirectoryCacheKey {
         ConnectorDirectoryCacheKey::new(
-            "https://chatgpt.example".to_string(),
+            "https://example.com".to_string(),
             Some(format!("account-{id}")),
             Some(format!("user-{id}")),
             /*is_workspace_account*/ true,
@@ -623,7 +623,7 @@ mod tests {
         );
         assert_eq!(
             connectors[0].install_url.as_deref(),
-            Some("https://chatgpt.com/apps/alpha/alpha")
+            Some("https://example.com/apps/alpha/alpha")
         );
         assert_eq!(
             connectors[0]
