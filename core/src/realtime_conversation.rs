@@ -21,12 +21,10 @@ use ody_api::RealtimeWebsocketClient;
 use ody_api::RealtimeWebsocketEvents;
 use ody_api::RealtimeWebsocketWriter;
 use ody_api::map_api_error;
-use ody_app_server_protocol::AuthMode;
 use ody_config::config_toml::RealtimeWsMode;
 use ody_config::config_toml::RealtimeWsVersion;
 use ody_login::OdyAuth;
 use ody_login::default_client::default_headers;
-use ody_login::read_odysseythink_api_key_from_env;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_protocol::error::OdyErr;
 use ody_protocol::error::Result as OdyResult;
@@ -747,13 +745,13 @@ async fn prepare_realtime_start(
         .transport
         .clone()
         .unwrap_or(ConversationStartTransport::Websocket);
-    let mut api_provider = provider.to_api_provider(Some(AuthMode::ApiKey))?;
+    let mut api_provider = provider.to_api_provider(None)?;
     if let Some(realtime_ws_base_url) = &config.experimental_realtime_ws_base_url {
         api_provider.base_url = realtime_ws_base_url.clone();
     }
     let realtime_call_api_provider =
         if let Some(realtime_call_base_url) = &config.experimental_realtime_webrtc_call_base_url {
-            let mut api_provider = provider.to_api_provider(Some(AuthMode::ApiKey))?;
+            let mut api_provider = provider.to_api_provider(None)?;
             api_provider.base_url = realtime_call_base_url.clone();
             Some(api_provider)
         } else {
@@ -1152,14 +1150,6 @@ fn realtime_api_key(auth: Option<&OdyAuth>, provider: &ModelProviderInfo) -> Ody
 
     if let Some(api_key) = auth.and_then(OdyAuth::api_key) {
         return Ok(api_key.to_string());
-    }
-
-    // TODO(aibrahim): Remove this temporary fallback once realtime auth no longer
-    // requires API key auth for ChatGPT/SIWC sessions.
-    if provider.is_odysseythink()
-        && let Some(api_key) = read_odysseythink_api_key_from_env()
-    {
-        return Ok(api_key);
     }
 
     Err(OdyErr::InvalidRequest(

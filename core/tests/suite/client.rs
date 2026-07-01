@@ -1,5 +1,4 @@
 use ody_config::ConfigLayerStack;
-use ody_config::types::AuthCredentialsStoreMode;
 use ody_core::ModelClient;
 use ody_core::NewThread;
 use ody_core::Prompt;
@@ -9,7 +8,6 @@ use ody_core::resolve_installation_id;
 use ody_core::thread_store_from_config;
 use ody_extension_api::empty_extension_registry;
 use ody_features::Feature;
-use ody_login::AuthKeyringBackendKind;
 use ody_login::AuthManager;
 use ody_login::OdyAuth;
 use ody_login::default_client::originator;
@@ -57,7 +55,6 @@ use core_test_support::responses::ResponsesRequest;
 use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
 use core_test_support::responses::ev_completed_with_tokens;
-use core_test_support::responses::ev_function_call;
 use core_test_support::responses::ev_message_item_added;
 use core_test_support::responses::ev_output_text_delta;
 use core_test_support::responses::ev_response_created;
@@ -417,58 +414,6 @@ async fn response_item_ids_are_sent_for_all_remote_v2_compaction_requests() -> a
     }
 
     Ok(())
-}
-
-/// Writes an `auth.json` into the provided `ody_home` with the specified parameters.
-/// Returns the fake JWT string written to `tokens.id_token`.
-#[expect(clippy::unwrap_used)]
-fn write_auth_json(
-    ody_home: &TempDir,
-    odysseythink_api_key: Option<&str>,
-    chatgpt_plan_type: &str,
-    access_token: &str,
-    account_id: Option<&str>,
-) -> String {
-    use base64::Engine as _;
-
-    let header = json!({ "alg": "none", "typ": "JWT" });
-    let payload = json!({
-        "email": "user@example.com",
-        "https://api.odysseythink.com/auth": {
-            "chatgpt_plan_type": chatgpt_plan_type,
-            "chatgpt_account_id": account_id.unwrap_or("acc-123")
-        }
-    });
-
-    let b64 = |b: &[u8]| base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b);
-    let header_b64 = b64(&serde_json::to_vec(&header).unwrap());
-    let payload_b64 = b64(&serde_json::to_vec(&payload).unwrap());
-    let signature_b64 = b64(b"sig");
-    let fake_jwt = format!("{header_b64}.{payload_b64}.{signature_b64}");
-
-    let mut tokens = json!({
-        "id_token": fake_jwt,
-        "access_token": access_token,
-        "refresh_token": "refresh-test",
-    });
-    if let Some(acc) = account_id {
-        tokens["account_id"] = json!(acc);
-    }
-
-    let auth_json = json!({
-        "OPENAI_API_KEY": odysseythink_api_key,
-        "tokens": tokens,
-        // RFC3339 datetime; value doesn't matter for these tests
-        "last_refresh": chrono::Utc::now(),
-    });
-
-    std::fs::write(
-        ody_home.path().join("auth.json"),
-        serde_json::to_string_pretty(&auth_json).unwrap(),
-    )
-    .unwrap();
-
-    fake_jwt
 }
 
 struct ProviderAuthCommandFixture {
@@ -1314,90 +1259,7 @@ async fn includes_base_instructions_override_in_request() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn chatgpt_auth_sends_correct_request() {
-    skip_if_no_network!();
-
-    // Mock server
-    let server = MockServer::start().await;
-
-    let resp_mock = mount_sse_once(
-        &server,
-        sse(vec![ev_response_created("resp1"), ev_completed("resp1")]),
-    )
-    .await;
-
-    let mut model_provider =
-        built_in_model_providers(/* odysseythink_base_url */ /*odysseythink_base_url*/ None)["odysseythink"].clone();
-    model_provider.base_url = Some(format!("{}/api/ody", server.uri()));
-    model_provider.supports_websockets = false;
-    let mut builder = test_ody()
-        .with_auth(create_dummy_ody_auth())
-        .with_config(move |config| {
-            config.model_provider = model_provider;
-        });
-    let test = builder
-        .build(&server)
-        .await
-        .expect("create new conversation");
-    let ody = test.ody.clone();
-    let expected_session_id = test.session_configured.session_id;
-    let expected_thread_id = test.session_configured.thread_id;
-
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
-
-    wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
-
-    let request = resp_mock.single_request();
-    assert_eq!(request.path(), "/api/ody/responses");
-    let request_authorization = request
-        .header("authorization")
-        .expect("authorization header");
-    let request_originator = request.header("originator").expect("originator header");
-    let request_chatgpt_account_id = request
-        .header("chatgpt-account-id")
-        .expect("chatgpt-account-id header");
-    let request_body = request.body_json();
-
-    let request_session_id = request.header("session-id").expect("session-id header");
-    let request_thread_id = request.header("thread-id").expect("thread-id header");
-    let installation_id =
-        std::fs::read_to_string(test.ody_home_path().join(INSTALLATION_ID_FILENAME))
-            .expect("read installation id");
-    let session_id_string = expected_session_id.to_string();
-    let thread_id_string = expected_thread_id.to_string();
-    assert_eq!(request_session_id, session_id_string.as_str());
-    assert_eq!(request_thread_id, thread_id_string.as_str());
-
-    assert_eq!(request_originator, originator().value);
-    assert_eq!(request_authorization, "Bearer Access Token");
-    assert_eq!(request_chatgpt_account_id, "account_id");
-    assert_ody_client_metadata(
-        &request_body,
-        installation_id.as_str(),
-        session_id_string.as_str(),
-        thread_id_string.as_str(),
-    );
-    assert!(request_body["stream"].as_bool().unwrap());
-    assert_eq!(
-        request_body["include"][0].as_str().unwrap(),
-        "reasoning.encrypted_content"
-    );
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn prefers_apikey_when_config_prefers_apikey_even_with_chatgpt_tokens() {
+async fn prefers_apikey_when_config_prefers_apikey() {
     skip_if_no_network!();
 
     // Mock server
@@ -1410,7 +1272,7 @@ async fn prefers_apikey_when_config_prefers_apikey_even_with_chatgpt_tokens() {
             "text/event-stream",
         );
 
-    // Expect API key header, no ChatGPT account header required.
+    // Expect API key header, no account-id header required.
     Mock::given(method("POST"))
         .and(path("/v1/responses"))
         .and(header_regex("Authorization", r"Bearer sk-test-key"))
@@ -1428,14 +1290,8 @@ async fn prefers_apikey_when_config_prefers_apikey_even_with_chatgpt_tokens() {
     // Init session
     let ody_home = TempDir::new().unwrap();
     // Only API key auth is supported now.
-    let auth_manager = AuthManager::shared(
-        ody_home.path().to_path_buf(),
-        /*enable_ody_api_key_env*/ true,
-        AuthCredentialsStoreMode::File,
-        AuthKeyringBackendKind::default(),
-        /*auth_route_config*/ None,
-    )
-    .await;
+    let auth_manager =
+        AuthManager::from_auth_for_testing(OdyAuth::from_api_key("sk-test-key"));
 
     let mut config = load_default_config_for_test(&ody_home).await;
     config.model_provider = model_provider;
@@ -1559,75 +1415,13 @@ async fn includes_user_instructions_message_in_request() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn includes_apps_guidance_as_developer_message_for_chatgpt_auth() {
-    skip_if_no_network!();
-    let server = MockServer::start().await;
-    let apps_server = AppsTestServer::mount(&server)
-        .await
-        .expect("mount apps MCP mock");
-    let apps_base_url = apps_server.base_url.clone();
-
-    let resp_mock = mount_sse_once(
-        &server,
-        sse(vec![ev_response_created("resp1"), ev_completed("resp1")]),
-    )
-    .await;
-
-    let mut builder = test_ody()
-        .with_auth(create_dummy_ody_auth())
-        .with_config(move |config| {
-            config
-                .features
-                .enable(Feature::Apps)
-                .expect("test config should allow feature update");
-        });
-    let ody = builder
-        .build(&server)
-        .await
-        .expect("create new conversation")
-        .ody;
-
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
-
-    wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
-
-    let request = resp_mock.single_request();
-    let apps_snippet =
-        "Apps (Connectors) can be explicitly triggered in user messages in the format";
-
-    assert!(
-        message_input_text_contains(&request, "developer", apps_snippet),
-        "expected apps guidance in a developer message, got {:?}",
-        request.body_json()["input"]
-    );
-
-    assert!(
-        !message_input_text_contains(&request, "user", apps_snippet),
-        "did not expect apps guidance in user messages, got {:?}",
-        request.body_json()["input"]
-    );
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn omits_apps_guidance_for_api_key_auth_even_when_feature_enabled() {
     skip_if_no_network!();
     let server = MockServer::start().await;
     let apps_server = AppsTestServer::mount(&server)
         .await
         .expect("mount apps MCP mock");
-    let apps_base_url = apps_server.base_url.clone();
+    let _apps_base_url = apps_server.base_url.clone();
 
     let resp_mock = mount_sse_once(
         &server,
@@ -1684,7 +1478,7 @@ async fn omits_apps_guidance_when_configured_off() {
     let apps_server = AppsTestServer::mount(&server)
         .await
         .expect("mount apps MCP mock");
-    let apps_base_url = apps_server.base_url.clone();
+    let _apps_base_url = apps_server.base_url.clone();
 
     let resp_mock = mount_sse_once(
         &server,
@@ -1728,122 +1522,6 @@ async fn omits_apps_guidance_when_configured_off() {
         !message_input_text_contains(&request, "developer", "<apps_instructions>"),
         "did not expect apps instructions when include_apps_instructions = false, got {:?}",
         request.body_json()["input"]
-    );
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn omits_apps_guidance_when_orchestrator_mcp_is_disabled() {
-    skip_if_no_network!();
-    let server = MockServer::start().await;
-    let apps_server = AppsTestServer::mount(&server)
-        .await
-        .expect("mount apps MCP mock");
-    let apps_base_url = apps_server.base_url.clone();
-
-    let list_call_id = "list-resources";
-    let read_call_id = "read-resource";
-    let resp_mock = mount_sse_sequence(
-        &server,
-        vec![
-            sse(vec![
-                ev_response_created("resp1"),
-                ev_function_call(list_call_id, "list_mcp_resources", "{}"),
-                ev_completed("resp1"),
-            ]),
-            sse(vec![
-                ev_response_created("resp2"),
-                ev_function_call(
-                    read_call_id,
-                    "read_mcp_resource",
-                    &json!({
-                        "server": "ody_apps",
-                        "uri": "skill://demo/SKILL.md",
-                    })
-                    .to_string(),
-                ),
-                ev_completed("resp2"),
-            ]),
-            sse(vec![ev_response_created("resp3"), ev_completed("resp3")]),
-        ],
-    )
-    .await;
-
-    let mut builder = test_ody()
-        .with_auth(create_dummy_ody_auth())
-        .with_config(move |config| {
-            config
-                .features
-                .enable(Feature::Apps)
-                .expect("test config should allow feature update");
-            config.orchestrator_mcp_enabled = false;
-        });
-    let ody = builder
-        .build(&server)
-        .await
-        .expect("create new conversation")
-        .ody;
-
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
-
-    wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
-
-    let requests = resp_mock.requests();
-    assert_eq!(requests.len(), 3);
-    let request = &requests[0];
-    assert!(
-        !message_input_text_contains(request, "developer", "<apps_instructions>"),
-        "did not expect apps instructions when orchestrator MCP is disabled, got {:?}",
-        request.body_json()["input"]
-    );
-    assert!(
-        !request.body_contains_text("mcp__ody_apps"),
-        "did not expect ody_apps MCP tools when orchestrator MCP is disabled, got {:?}",
-        request.body_json()["tools"]
-    );
-    let list_output = requests[1]
-        .function_call_output_text(list_call_id)
-        .expect("resource list output should be sent to the model");
-    assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&list_output)
-            .expect("parse resource list output"),
-        json!({"resources": []})
-    );
-    let read_output = requests[2]
-        .function_call_output_text(read_call_id)
-        .expect("resource read output should be sent to the model");
-    assert!(
-        read_output.contains("disabled by `orchestrator.mcp.enabled`"),
-        "unexpected resource read output: {read_output}"
-    );
-
-    let resource_methods = server
-        .received_requests()
-        .await
-        .expect("read recorded requests")
-        .into_iter()
-        .filter_map(|request| serde_json::from_slice::<serde_json::Value>(&request.body).ok())
-        .filter_map(|body| {
-            body.get("method")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_owned)
-        })
-        .filter(|method| method.starts_with("resources/"))
-        .collect::<Vec<_>>();
-    assert!(
-        resource_methods.is_empty(),
-        "did not expect ody_apps resource calls: {resource_methods:?}"
     );
 }
 

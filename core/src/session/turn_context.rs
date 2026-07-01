@@ -196,9 +196,10 @@ impl TurnContext {
     }
 
     pub(crate) fn apps_enabled(&self) -> bool {
-        // Apps gated on Ody backend auth are no longer available.
-        let _ = &self.auth_manager;
-        self.config.orchestrator_mcp_enabled
+        self.config
+            .features
+            .apps_enabled_for_auth(false)
+            && self.config.orchestrator_mcp_enabled
     }
 
     pub(crate) fn tool_environment_mode(&self) -> ToolEnvironmentMode {

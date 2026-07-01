@@ -59,13 +59,11 @@ use crate::tools::registry::override_tool_exposure;
 use crate::tools::router::ToolRouter;
 use crate::tools::router::ToolRouterParams;
 use ody_features::Feature;
-use ody_login::AuthManager;
 use ody_mcp::ToolInfo;
 use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::dynamic_tools::DynamicToolNamespaceTool;
 use ody_protocol::dynamic_tools::DynamicToolSpec;
 use ody_protocol::odysseythink_models::ConfigShellToolType;
-use ody_protocol::odysseythink_models::InputModality;
 use ody_protocol::odysseythink_models::ToolMode;
 use ody_protocol::protocol::MultiAgentVersion;
 use ody_protocol::protocol::SessionSource;
@@ -382,16 +380,8 @@ fn image_generation_tool_enabled(turn_context: &TurnContext) -> bool {
             .enabled(Feature::ImageGeneration)
 }
 
-fn image_generation_runtime_enabled(turn_context: &TurnContext) -> bool {
-    turn_context
-        .auth_manager
-        .as_deref()
-        .is_some_and(AuthManager::current_auth_uses_ody_backend)
-        && turn_context.provider.capabilities().image_generation
-        && turn_context
-            .model_info
-            .input_modalities
-            .contains(&InputModality::Image)
+fn image_generation_runtime_enabled(_turn_context: &TurnContext) -> bool {
+    false
 }
 
 fn standalone_image_generation_model_visible(turn_context: &TurnContext) -> bool {

@@ -375,10 +375,6 @@ async fn remote_compact_replaces_history_for_followups() -> Result<()> {
     let compact_request = compact_mock.single_request();
     assert_eq!(compact_request.path(), "/v1/responses/compact");
     assert_eq!(
-        compact_request.header("chatgpt-account-id").as_deref(),
-        Some("account_id")
-    );
-    assert_eq!(
         compact_request.header("authorization").as_deref(),
         Some("Bearer Access Token")
     );
@@ -778,23 +774,6 @@ async fn remote_manual_compact_api_auth_omits_service_tier_and_reuses_prompt_cac
         /*expected_service_tier*/ None,
         "remote_manual_compact_api_auth_prompt_cache_key_request_diff",
         "After five varied API-key-auth turns, remote manual compaction omits service_tier, reuses prompt_cache_key, and still omits responses-only fields.",
-    )
-    .await?;
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn remote_manual_compact_chatgpt_auth_reuses_service_tier_and_prompt_cache_key() -> Result<()>
-{
-    skip_if_no_network!(Ok(()));
-
-    assert_remote_manual_compact_request_parity(
-        OdyAuth::create_dummy_api_key_auth_for_testing(),
-        Some(ServiceTier::Fast),
-        Some("priority"),
-        "remote_manual_compact_chatgpt_auth_service_tier_prompt_cache_key_request_diff",
-        "After five varied ChatGPT-auth turns, remote manual compaction reuses service_tier and prompt_cache_key while omitting responses-only fields.",
     )
     .await?;
 

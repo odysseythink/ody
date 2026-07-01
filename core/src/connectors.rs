@@ -5,50 +5,35 @@ use std::sync::Mutex as StdMutex;
 use std::time::Duration;
 use std::time::Instant;
 
-use async_channel::unbounded;
 pub use ody_app_server_protocol::AppBranding;
 pub use ody_app_server_protocol::AppInfo;
 pub use ody_app_server_protocol::AppMetadata;
-use ody_connectors::ConnectorDirectoryCacheContext;
-use ody_connectors::ConnectorDirectoryCacheKey;
 use ody_connectors::app_is_enabled;
 use ody_connectors::apps_config_from_layer_stack;
 use ody_exec_server::EnvironmentManager;
 use ody_exec_server::ExecServerRuntimePaths;
-use ody_protocol::models::PermissionProfile;
 use ody_tools::DiscoverableTool;
-use tokio_util::sync::CancellationToken;
 use tracing::instrument;
-use tracing::warn;
 
 use crate::config::Config;
 use crate::mcp::McpManager;
 use crate::plugins::list_tool_suggest_discoverable_plugins;
-use crate::session::INITIAL_SUBMIT_ID;
 use ody_config::types::ApprovalsReviewer;
 use ody_config::types::ToolSuggestDiscoverableType;
 use ody_core_plugins::PluginsManager;
 use ody_features::Feature;
-use ody_login::AuthManager;
 use ody_login::OdyAuth;
 use ody_mcp::ODY_APPS_MCP_SERVER_NAME;
 use ody_mcp::MCP_TOOL_ODY_APPS_META_KEY;
 use ody_mcp::McpConnectionManager;
-use ody_mcp::McpRuntimeContext;
 use ody_mcp::ToolInfo;
 use ody_mcp::ToolPluginProvenance;
-use ody_mcp::ody_apps_tools_cache_key;
-use ody_mcp::compute_auth_statuses;
-use ody_mcp::effective_mcp_servers;
-use ody_mcp::host_owned_ody_apps_enabled;
-use ody_mcp::tool_plugin_provenance;
 
 const CONNECTORS_READY_TIMEOUT_ON_EMPTY_TOOLS: Duration = Duration::from_secs(30);
 
 #[derive(Clone, PartialEq, Eq)]
 struct AccessibleConnectorsCacheKey {
     account_id: Option<String>,
-    chatgpt_user_id: Option<String>,
     is_workspace_account: bool,
 }
 
@@ -131,7 +116,7 @@ pub(crate) async fn list_tool_suggest_discoverable_tools_with_auth(
 pub async fn list_cached_accessible_connectors_from_mcp_tools(
     _config: &Config,
 ) -> Option<Vec<AppInfo>> {
-    // ChatGPT-backed connectors require Ody backend auth, which has been removed.
+    // Remote directory connectors are no longer available.
     Some(Vec::new())
 }
 
@@ -204,7 +189,7 @@ pub async fn list_accessible_connectors_from_mcp_tools_with_mcp_manager(
     environment_manager: Arc<EnvironmentManager>,
     mcp_manager: Arc<McpManager>,
 ) -> anyhow::Result<AccessibleConnectorsStatus> {
-    // ChatGPT-backed connectors require Ody backend auth, which has been removed.
+    // Remote directory connectors are no longer available.
     let _ = (config, environment_manager, mcp_manager);
     Ok(AccessibleConnectorsStatus {
         connectors: Vec::new(),
@@ -216,10 +201,9 @@ fn accessible_connectors_cache_key(
     _config: &Config,
     _auth: Option<&OdyAuth>,
 ) -> AccessibleConnectorsCacheKey {
-    // ChatGPT-backed connector metadata is no longer available.
+    // Account-specific connector metadata is no longer available.
     AccessibleConnectorsCacheKey {
         account_id: None,
-        chatgpt_user_id: None,
         is_workspace_account: false,
     }
 }
@@ -290,8 +274,7 @@ async fn cached_directory_connectors_for_tool_suggest_with_auth(
     _config: &Config,
     _auth: Option<&OdyAuth>,
 ) -> Vec<AppInfo> {
-    // ChatGPT-backed directory connectors require Ody backend auth, which has
-    // been removed.
+    // Remote directory connectors are no longer available.
     Vec::new()
 }
 

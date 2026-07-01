@@ -74,7 +74,6 @@ mod models_cache_ttl;
 mod models_etag_responses;
 mod multi_agent_mode;
 mod network_approval;
-mod odysseythink_file_mcp;
 mod otel;
 mod override_updates;
 mod pending_input;

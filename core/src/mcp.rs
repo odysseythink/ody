@@ -9,15 +9,12 @@ use ody_extension_api::ExtensionRegistry;
 use ody_extension_api::McpServerContribution;
 use ody_extension_api::McpServerContributionContext;
 use ody_login::OdyAuth;
-use ody_mcp::ODY_APPS_MCP_SERVER_NAME;
 use ody_mcp::EffectiveMcpServer;
 use ody_mcp::McpConfig;
 use ody_mcp::McpPluginAttribution;
 use ody_mcp::McpServerRegistration;
 use ody_mcp::configured_mcp_servers;
 use ody_mcp::effective_mcp_servers;
-
-const LEGACY_ODY_APPS_REGISTRATION_ID: &str = "legacy_ody_apps";
 
 enum OrderedMcpOverlay {
     Set {
@@ -132,13 +129,6 @@ impl McpManager {
             )
             .await;
         let mut catalog = mcp_config.mcp_server_catalog.to_builder();
-        // The host-owned "ody_apps" MCP server used to be registered here pointed at a
-        // ChatGPT/OpenAI-hosted Apps endpoint (`chatgpt_base_url`). That remote-hosted
-        // integration has been removed, so this compatibility slot is never populated now.
-        catalog.remove_compatibility(
-            ODY_APPS_MCP_SERVER_NAME.to_string(),
-            LEGACY_ODY_APPS_REGISTRATION_ID,
-        );
 
         for overlay in overlays {
             match overlay {

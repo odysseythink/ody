@@ -753,9 +753,6 @@ impl Session {
 
             let auth = auth.as_ref();
             let auth_mode = auth.map(OdyAuth::auth_mode).map(TelemetryAuthMode::from);
-            // Ody backend auth metadata (account id/email) is no longer available.
-            let account_id: Option<String> = None;
-            let account_email: Option<String> = None;
             let originator = originator().value;
             let terminal_type = user_agent();
             let session_model = session_configuration.collaboration_mode.model().to_string();
@@ -767,8 +764,8 @@ impl Session {
                 thread_id,
                 session_model.as_str(),
                 session_model.as_str(),
-                account_id.clone(),
-                account_email.clone(),
+                None,
+                None,
                 auth_mode,
                 originator.clone(),
                 config.otel.log_user_prompt,
@@ -782,10 +779,10 @@ impl Session {
             let network_proxy_audit_metadata = NetworkProxyAuditMetadata {
                 conversation_id: Some(thread_id.to_string()),
                 app_version: Some(env!("CARGO_PKG_VERSION").to_string()),
-                user_account_id: account_id,
+                user_account_id: None,
                 auth_mode: auth_mode.map(|mode| mode.to_string()),
                 originator: Some(originator),
-                user_email: account_email,
+                user_email: None,
                 terminal_type: Some(terminal_type),
                 model: Some(session_model.clone()),
                 slug: Some(session_model),
@@ -973,8 +970,8 @@ impl Session {
                     Arc::clone(&auth_manager),
                     // The remote hosted plugin/Apps catalog config field this used to be
                     // sourced from has been removed; analytics telemetry is unrelated to that
-                    // catalog, so keep using its historical default endpoint here.
-                    "https://chatgpt.com/backend-api".to_string(),
+                    // catalog, so keep using a neutral historical default endpoint here.
+                    "https://api.odysseythink.com/v1".to_string(),
                     config.analytics_enabled,
                 )
             });
@@ -1136,8 +1133,8 @@ impl Session {
                 sess.send_event_raw(event).await;
             }
 
-            // Host-owned Ody Apps required Ody backend auth, which has been removed.
-            let host_owned_ody_apps_enabled = false;
+            // Host-owned Ody Apps required backend auth, which has been removed.
+            let host_owned_ody_apps_enabled = config.features.apps_enabled_for_auth(false);
             let client_elicitation_capability = if config.features.enabled(Feature::AuthElicitation) {
                 ElicitationCapability {
                     form: Some(FormElicitationCapability::default()),

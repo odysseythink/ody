@@ -12,6 +12,9 @@ use ody_config::McpServerTransportConfig;
 use ody_extension_api::empty_extension_registry;
 use ody_models_manager::manager::RefreshStrategy;
 use ody_protocol::capabilities::CapabilityRootLocation;
+use ody_protocol::config_types::ModelProviderAuthInfo;
+use ody_utils_absolute_path::AbsolutePathBuf;
+use std::num::NonZeroU64;
 use ody_protocol::capabilities::SelectedCapabilityRoot;
 use ody_protocol::models::ContentItem;
 use ody_protocol::models::ReasoningItemReasoningSummary;
@@ -1045,6 +1048,13 @@ async fn new_uses_active_provider_for_model_refresh() {
     std::fs::create_dir_all(&config.ody_home).expect("create ody home");
     config.model_catalog = None;
     config.model_provider.base_url = Some(server.uri());
+    config.model_provider.auth = Some(ModelProviderAuthInfo {
+        command: "true".to_string(),
+        args: vec![],
+        timeout_ms: NonZeroU64::new(1000).unwrap(),
+        refresh_interval_ms: 0,
+        cwd: AbsolutePathBuf::current_dir().unwrap_or_else(|_| config.cwd.clone()),
+    });
 
     let auth_manager =
         AuthManager::from_auth_for_testing(OdyAuth::create_dummy_api_key_auth_for_testing());

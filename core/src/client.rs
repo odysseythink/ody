@@ -113,7 +113,6 @@ use crate::client_common::ResponseStream;
 use crate::feedback_tags;
 use crate::responses_metadata::OdyResponsesMetadata;
 use crate::responses_metadata::subagent_header_value;
-use crate::util::emit_feedback_auth_recovery_tags;
 use ody_feedback::FeedbackRequestTags;
 use ody_feedback::emit_feedback_request_tags_with_auth_env;
 use ody_login::auth_env_telemetry::AuthEnvTelemetry;
@@ -124,7 +123,6 @@ use ody_model_provider::create_model_provider;
 use ody_model_provider_info::DEFAULT_WEBSOCKET_CONNECT_TIMEOUT_MS;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::WireApi;
-use ody_protocol::error::OdyErr;
 use ody_protocol::error::Result;
 use ody_response_debug_context::extract_response_debug_context;
 use ody_response_debug_context::extract_response_debug_context_from_api_error;
@@ -377,8 +375,8 @@ pub(crate) struct RealtimeWebrtcCallStart {
 
 /// Reuses the API-auth material that created the WebRTC call for the sideband WebSocket join.
 ///
-/// API-key sessions send that API bearer. ChatGPT-auth sessions send their bearer plus account id;
-/// transceiver is responsible for accepting that same call-create identity on the direct
+/// All sessions send the API bearer; account-id headers have been removed.
+/// Transceiver is responsible for accepting that same call-create identity on the direct
 /// `api.odysseythink.com` sideband path.
 fn sideband_websocket_auth_headers(api_auth: &dyn AuthProvider) -> ApiHeaderMap {
     let mut headers = ApiHeaderMap::new();
@@ -1310,8 +1308,8 @@ impl ModelClientSession {
     }
 
     fn responses_request_compression(&self, _auth: Option<&OdyAuth>) -> Compression {
-        // Zstd compression was only enabled for Ody backend auth, which has been
-        // removed.
+        // Backend-auth request compression has been removed; request compression
+        // is now controlled purely by the config flag.
         Compression::None
     }
 

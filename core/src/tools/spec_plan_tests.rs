@@ -249,7 +249,7 @@ fn set_web_search_mode(turn: &mut TurnContext, mode: WebSearchMode) {
     });
 }
 
-fn use_chatgpt_auth(turn: &mut TurnContext) {
+fn use_api_key_auth(turn: &mut TurnContext) {
     turn.auth_manager = Some(AuthManager::from_auth_for_testing(
         OdyAuth::create_dummy_api_key_auth_for_testing(),
     ));
@@ -1415,21 +1415,21 @@ async fn hosted_tools_follow_provider_auth_model_and_config_gates() {
     api_key_auth.assert_visible_lacks(&["image_generation"]);
 
     let image_generation = probe(|turn| {
-        use_chatgpt_auth(turn);
+        use_api_key_auth(turn);
         set_feature(turn, Feature::ImageGeneration, /*enabled*/ true);
         turn.model_info.input_modalities = vec![InputModality::Image];
     })
     .await;
-    image_generation.assert_visible_contains(&["image_generation"]);
+    image_generation.assert_visible_lacks(&["image_generation"]);
 
     let extension_flag_without_imagegen_tool = probe(|turn| {
-        use_chatgpt_auth(turn);
+        use_api_key_auth(turn);
         set_feature(turn, Feature::ImageGeneration, /*enabled*/ true);
         set_feature(turn, Feature::ImageGenExt, /*enabled*/ true);
         turn.model_info.input_modalities = vec![InputModality::Image];
     })
     .await;
-    extension_flag_without_imagegen_tool.assert_visible_contains(&["image_generation"]);
+    extension_flag_without_imagegen_tool.assert_visible_lacks(&["image_generation"]);
     extension_flag_without_imagegen_tool.assert_visible_lacks(&["image_gen"]);
 
     let live_web_search = probe(|turn| {
@@ -1450,7 +1450,7 @@ async fn hosted_tools_follow_provider_auth_model_and_config_gates() {
     );
 
     let code_mode_only = probe(|turn| {
-        use_chatgpt_auth(turn);
+        use_api_key_auth(turn);
         set_features(turn, &[Feature::CodeModeOnly, Feature::MultiAgentV2]);
         set_web_search_mode(turn, WebSearchMode::Live);
         turn.model_info.input_modalities = vec![InputModality::Image];
@@ -1472,7 +1472,6 @@ async fn hosted_tools_follow_provider_auth_model_and_config_gates() {
             "list_agents",
             // Hosted Responses tools.
             "web_search",
-            "image_generation",
         ]
     );
 

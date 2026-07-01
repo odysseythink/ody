@@ -36,14 +36,14 @@ enum Mode {
 
 #[derive(Clone, Copy, Debug)]
 enum AuthCase {
-    ChatGpt,
+    DummyApiKey,
     ApiKey,
 }
 
 impl AuthCase {
     fn build(self) -> OdyAuth {
         match self {
-            AuthCase::ChatGpt => OdyAuth::create_dummy_api_key_auth_for_testing(),
+            AuthCase::DummyApiKey => OdyAuth::create_dummy_api_key_auth_for_testing(),
             AuthCase::ApiKey => OdyAuth::from_api_key("dummy"),
         }
     }
@@ -58,7 +58,7 @@ struct RunSettings {
 impl Default for RunSettings {
     fn default() -> Self {
         Self {
-            auth: AuthCase::ChatGpt,
+            auth: AuthCase::DummyApiKey,
             service_tier_fast: false,
         }
     }

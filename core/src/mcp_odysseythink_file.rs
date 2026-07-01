@@ -3,20 +3,15 @@
 //! Strategy:
 //! - Inspect `_meta["odysseythink/fileParams"]` to discover which tool arguments are
 //!   file inputs.
-//! - At tool execution time, read those files from the primary environment,
-//!   upload them to OpenAI file storage,
-//!   and rewrite only the declared arguments into the provided-file payload
-//!   shape expected by the downstream Apps tool.
+//! - At tool execution time, file uploads for Ody Apps tools are not supported,
+//!   so the rewrite returns a clear error for any declared file parameter.
 //!
 //! Model-visible schema masking is owned by `ody-mcp` alongside MCP tool
 //! inventory, so this module only handles the execution-time argument rewrite.
 
 use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
-use ody_api::OPENAI_FILE_UPLOAD_LIMIT_BYTES;
-use ody_api::upload_odysseythink_file;
 use ody_login::OdyAuth;
-use ody_utils_path_uri::PathUri;
 use serde_json::Value as JsonValue;
 
 pub(crate) async fn rewrite_mcp_tool_arguments_for_odysseythink_files(
@@ -99,23 +94,18 @@ async fn rewrite_argument_value_for_odysseythink_files(
 }
 
 async fn build_uploaded_argument_value(
-    turn_context: &TurnContext,
-    auth: Option<&OdyAuth>,
+    _turn_context: &TurnContext,
+    _auth: Option<&OdyAuth>,
     field_name: &str,
     index: Option<usize>,
     file_path: &str,
 ) -> Result<JsonValue, String> {
-    let contextualize_error = |error: String| match index {
-        Some(index) => {
-            format!("failed to upload `{file_path}` for `{field_name}[{index}]`: {error}")
-        }
-        None => format!("failed to upload `{file_path}` for `{field_name}`: {error}"),
+    let location = match index {
+        Some(index) => format!("`{field_name}[{index}]`"),
+        None => format!("`{field_name}`"),
     };
-    // ChatGPT auth is no longer supported; file uploads for Ody Apps tools are
-    // unavailable.
-    let _ = auth;
-    Err(contextualize_error(
-        "ChatGPT auth is required to upload files for Ody Apps tools".to_string(),
+    Err(format!(
+        "Ody Apps file uploads are not supported in this release ({location}: {file_path})"
     ))
 }
 
@@ -123,29 +113,8 @@ async fn build_uploaded_argument_value(
 mod tests {
     use super::*;
     use crate::session::tests::make_session_and_context;
-    use crate::session::turn_context::TurnEnvironment;
-    use ody_utils_absolute_path::AbsolutePathBuf;
-    use ody_utils_path_uri::PathUri;
     use pretty_assertions::assert_eq;
-    use std::path::Path;
     use std::sync::Arc;
-    use tempfile::tempdir;
-
-    fn set_primary_environment_cwd(turn_context: &mut TurnContext, cwd: &Path) {
-        let cwd = AbsolutePathBuf::try_from(cwd).expect("absolute path");
-        turn_context.permission_profile = ody_protocol::models::PermissionProfile::Disabled;
-        let primary = turn_context
-            .environments
-            .turn_environments
-            .first_mut()
-            .expect("primary environment");
-        *primary = TurnEnvironment::new(
-            primary.environment_id.clone(),
-            Arc::clone(&primary.environment),
-            PathUri::from_abs_path(&cwd),
-            primary.shell.clone(),
-        );
-    }
 
     #[tokio::test]
     async fn odysseythink_file_argument_rewrite_requires_declared_file_params() {
@@ -167,329 +136,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn build_uploaded_argument_value_uploads_environment_file() {
-        use wiremock::Mock;
-        use wiremock::MockServer;
-        use wiremock::ResponseTemplate;
-        use wiremock::matchers::body_json;
-        use wiremock::matchers::header;
-        use wiremock::matchers::method;
-        use wiremock::matchers::path;
-
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/backend-api/files"))
-            .and(header("chatgpt-account-id", "account_id"))
-            .and(body_json(serde_json::json!({
-                "file_name": "file_report.csv",
-                "file_size": 5,
-                "use_case": "ody",
-            })))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "file_id": "file_123",
-                "upload_url": format!("{}/upload/file_123", server.uri()),
-            })))
-            .expect(1)
-            .mount(&server)
-            .await;
-        Mock::given(method("PUT"))
-            .and(path("/upload/file_123"))
-            .respond_with(ResponseTemplate::new(200))
-            .expect(1)
-            .mount(&server)
-            .await;
-        Mock::given(method("POST"))
-            .and(path("/backend-api/files/file_123/uploaded"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "status": "success",
-                "download_url": format!("{}/download/file_123", server.uri()),
-                "file_name": "file_report.csv",
-                "mime_type": "text/csv",
-                "file_size_bytes": 5,
-            })))
-            .expect(1)
-            .mount(&server)
-            .await;
-
-        let (_, mut turn_context) = make_session_and_context().await;
-        let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
-        let dir = tempdir().expect("temp dir");
-        let local_path = dir.path().join("file_report.csv");
-        tokio::fs::write(&local_path, b"hello")
-            .await
-            .expect("write local file");
-        set_primary_environment_cwd(&mut turn_context, dir.path());
-
-        let mut config = (*turn_context.config).clone();
-        turn_context.config = Arc::new(config);
-
-        let rewritten = build_uploaded_argument_value(
-            &turn_context,
-            Some(&auth),
-            "file",
-            /*index*/ None,
-            "file_report.csv",
-        )
-        .await
-        .expect("rewrite should upload the local file");
-
-        assert_eq!(
-            rewritten,
-            serde_json::json!({
-                "download_url": format!("{}/download/file_123", server.uri()),
-                "file_id": "file_123",
-                "mime_type": "text/csv",
-                "file_name": "file_report.csv",
-                "uri": "sediment://file_123",
-                "file_size_bytes": 5,
-            })
-        );
-    }
-
-    #[tokio::test]
-    async fn build_uploaded_argument_value_rejects_oversized_file_before_reading() {
-        let (_, mut turn_context) = make_session_and_context().await;
-        let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
-        let dir = tempdir().expect("temp dir");
-        let file_path = dir.path().join("oversized.bin");
-        let file = std::fs::File::create(&file_path).expect("create sparse file");
-        file.set_len(OPENAI_FILE_UPLOAD_LIMIT_BYTES + 1)
-            .expect("size sparse file");
-        set_primary_environment_cwd(&mut turn_context, dir.path());
-
-        let error = build_uploaded_argument_value(
-            &turn_context,
-            Some(&auth),
-            "file",
-            /*index*/ None,
-            "oversized.bin",
-        )
-        .await
-        .expect_err("oversized file should be rejected");
-
-        assert!(error.contains("is too large"));
-        assert!(error.contains(&(OPENAI_FILE_UPLOAD_LIMIT_BYTES + 1).to_string()));
-    }
-
-    #[tokio::test]
-    async fn rewrite_argument_value_for_odysseythink_files_rewrites_scalar_path() {
-        use wiremock::Mock;
-        use wiremock::MockServer;
-        use wiremock::ResponseTemplate;
-        use wiremock::matchers::body_json;
-        use wiremock::matchers::header;
-        use wiremock::matchers::method;
-        use wiremock::matchers::path;
-
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/backend-api/files"))
-            .and(header("chatgpt-account-id", "account_id"))
-            .and(body_json(serde_json::json!({
-                "file_name": "file_report.csv",
-                "file_size": 5,
-                "use_case": "ody",
-            })))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "file_id": "file_123",
-                "upload_url": format!("{}/upload/file_123", server.uri()),
-            })))
-            .expect(1)
-            .mount(&server)
-            .await;
-        Mock::given(method("PUT"))
-            .and(path("/upload/file_123"))
-            .respond_with(ResponseTemplate::new(200))
-            .expect(1)
-            .mount(&server)
-            .await;
-        Mock::given(method("POST"))
-            .and(path("/backend-api/files/file_123/uploaded"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "status": "success",
-                "download_url": format!("{}/download/file_123", server.uri()),
-                "file_name": "file_report.csv",
-                "mime_type": "text/csv",
-                "file_size_bytes": 5,
-            })))
-            .expect(1)
-            .mount(&server)
-            .await;
-
-        let (_, mut turn_context) = make_session_and_context().await;
-        let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
-        let dir = tempdir().expect("temp dir");
-        let local_path = dir.path().join("file_report.csv");
-        tokio::fs::write(&local_path, b"hello")
-            .await
-            .expect("write local file");
-        set_primary_environment_cwd(&mut turn_context, dir.path());
-
-        let mut config = (*turn_context.config).clone();
-        turn_context.config = Arc::new(config);
-        let rewritten = rewrite_argument_value_for_odysseythink_files(
-            &turn_context,
-            Some(&auth),
-            "file",
-            &serde_json::json!("file_report.csv"),
-        )
-        .await
-        .expect("rewrite should succeed");
-
-        assert_eq!(
-            rewritten,
-            Some(serde_json::json!({
-                "download_url": format!("{}/download/file_123", server.uri()),
-                "file_id": "file_123",
-                "mime_type": "text/csv",
-                "file_name": "file_report.csv",
-                "uri": "sediment://file_123",
-                "file_size_bytes": 5,
-            }))
-        );
-    }
-
-    #[tokio::test]
-    async fn rewrite_argument_value_for_odysseythink_files_rewrites_array_paths() {
-        use wiremock::Mock;
-        use wiremock::MockServer;
-        use wiremock::ResponseTemplate;
-        use wiremock::matchers::body_json;
-        use wiremock::matchers::header;
-        use wiremock::matchers::method;
-        use wiremock::matchers::path;
-
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/backend-api/files"))
-            .and(header("chatgpt-account-id", "account_id"))
-            .and(body_json(serde_json::json!({
-                "file_name": "one.csv",
-                "file_size": 3,
-                "use_case": "ody",
-            })))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "file_id": "file_1",
-                "upload_url": format!("{}/upload/file_1", server.uri()),
-            })))
-            .expect(1)
-            .mount(&server)
-            .await;
-        Mock::given(method("POST"))
-            .and(path("/backend-api/files"))
-            .and(header("chatgpt-account-id", "account_id"))
-            .and(body_json(serde_json::json!({
-                "file_name": "two.csv",
-                "file_size": 3,
-                "use_case": "ody",
-            })))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "file_id": "file_2",
-                "upload_url": format!("{}/upload/file_2", server.uri()),
-            })))
-            .expect(1)
-            .mount(&server)
-            .await;
-        Mock::given(method("PUT"))
-            .and(path("/upload/file_1"))
-            .respond_with(ResponseTemplate::new(200))
-            .expect(1)
-            .mount(&server)
-            .await;
-        Mock::given(method("PUT"))
-            .and(path("/upload/file_2"))
-            .respond_with(ResponseTemplate::new(200))
-            .expect(1)
-            .mount(&server)
-            .await;
-        Mock::given(method("POST"))
-            .and(path("/backend-api/files/file_1/uploaded"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "status": "success",
-                "download_url": format!("{}/download/file_1", server.uri()),
-                "file_name": "one.csv",
-                "mime_type": "text/csv",
-                "file_size_bytes": 3,
-            })))
-            .expect(1)
-            .mount(&server)
-            .await;
-        Mock::given(method("POST"))
-            .and(path("/backend-api/files/file_2/uploaded"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "status": "success",
-                "download_url": format!("{}/download/file_2", server.uri()),
-                "file_name": "two.csv",
-                "mime_type": "text/csv",
-                "file_size_bytes": 3,
-            })))
-            .expect(1)
-            .mount(&server)
-            .await;
-
-        let (_, mut turn_context) = make_session_and_context().await;
-        let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
-        let dir = tempdir().expect("temp dir");
-        tokio::fs::write(dir.path().join("one.csv"), b"one")
-            .await
-            .expect("write first local file");
-        tokio::fs::write(dir.path().join("two.csv"), b"two")
-            .await
-            .expect("write second local file");
-        set_primary_environment_cwd(&mut turn_context, dir.path());
-
-        let mut config = (*turn_context.config).clone();
-        turn_context.config = Arc::new(config);
-        let rewritten = rewrite_argument_value_for_odysseythink_files(
-            &turn_context,
-            Some(&auth),
-            "files",
-            &serde_json::json!(["one.csv", "two.csv"]),
-        )
-        .await
-        .expect("rewrite should succeed");
-
-        assert_eq!(
-            rewritten,
-            Some(serde_json::json!([
-                {
-                    "download_url": format!("{}/download/file_1", server.uri()),
-                    "file_id": "file_1",
-                    "mime_type": "text/csv",
-                    "file_name": "one.csv",
-                    "uri": "sediment://file_1",
-                    "file_size_bytes": 3,
-                },
-                {
-                    "download_url": format!("{}/download/file_2", server.uri()),
-                    "file_id": "file_2",
-                    "mime_type": "text/csv",
-                    "file_name": "two.csv",
-                    "uri": "sediment://file_2",
-                    "file_size_bytes": 3,
-                }
-            ]))
-        );
-    }
-
-    #[tokio::test]
-    async fn rewrite_mcp_tool_arguments_for_odysseythink_files_surfaces_upload_failures() {
-        let (mut session, turn_context) = make_session_and_context().await;
-        session.services.auth_manager = crate::test_support::auth_manager_from_auth(
-            OdyAuth::create_dummy_api_key_auth_for_testing(),
-        );
-        let error = rewrite_mcp_tool_arguments_for_odysseythink_files(
+    async fn odysseythink_file_upload_returns_unsupported() {
+        let (session, turn_context) = make_session_and_context().await;
+        let arguments = Some(serde_json::json!({ "file": "/tmp/ody-smoke-file.txt" }));
+        let result = rewrite_mcp_tool_arguments_for_odysseythink_files(
             &session,
             &turn_context,
-            Some(serde_json::json!({
-                "file": "/definitely/missing/file.csv",
-            })),
+            arguments,
             Some(&["file".to_string()]),
         )
-        .await
-        .expect_err("missing file should fail");
-
-        assert!(error.contains("failed to upload"));
-        assert!(error.contains("file"));
+        .await;
+        let err = result.expect_err("should return unsupported");
+        assert!(err.contains("not supported"));
     }
 }

@@ -475,7 +475,7 @@ pub(crate) fn resolve_multi_agent_version(
 
 pub(crate) const INITIAL_SUBMIT_ID: &str = "";
 pub(crate) const SUBMISSION_CHANNEL_CAPACITY: usize = 512;
-const CYBER_VERIFY_URL: &str = "https://chatgpt.com/cyber";
+const CYBER_VERIFY_URL: &str = "https://developers.odysseythink.com/ody/concepts/cyber-safety";
 const CYBER_SAFETY_URL: &str = "https://developers.odysseythink.com/ody/concepts/cyber-safety";
 
 impl Ody {

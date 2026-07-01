@@ -1,6 +1,4 @@
-use super::AuthRequestTelemetryContext;
 use super::ModelClient;
-use super::PendingUnauthorizedRetry;
 use super::X_ODY_INSTALLATION_ID_HEADER;
 use super::X_ODY_PARENT_THREAD_ID_HEADER;
 use super::X_ODY_TURN_METADATA_HEADER;
@@ -14,13 +12,9 @@ use crate::test_support::TestOdyResponsesRequestKind;
 use crate::test_support::responses_metadata as test_responses_metadata;
 use ody_api::ApiError;
 use ody_api::ResponseEvent;
-use ody_api::TransportError;
-use ody_app_server_protocol::AuthMode;
 use ody_login::AuthManager;
 use ody_login::OdyAuth;
-use ody_model_provider::BearerAuthProvider;
 use ody_model_provider::SharedModelProvider;
-use ody_model_provider::create_model_provider;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::WireApi;
 use ody_model_provider_info::create_oss_provider_with_base_url;
@@ -528,7 +522,7 @@ async fn dropped_backpressured_response_stream_traces_cancelled_partial_output()
 }
 
 fn model_client_with_counting_attestation(
-    include_attestation: bool,
+    odysseythink_provider: bool,
 ) -> (ModelClient, Arc<AtomicUsize>) {
     #[derive(Debug)]
     struct CountingAttestationProvider {
@@ -549,7 +543,7 @@ fn model_client_with_counting_attestation(
     }
 
     let attestation_calls = Arc::new(AtomicUsize::new(0));
-    let (auth_manager, provider) = if include_attestation {
+    let (auth_manager, provider) = if odysseythink_provider {
         (
             Some(AuthManager::from_auth_for_testing(
                 OdyAuth::create_dummy_api_key_auth_for_testing(),
@@ -580,9 +574,9 @@ fn model_client_with_counting_attestation(
 }
 
 #[tokio::test]
-async fn websocket_handshake_includes_attestation_for_chatgpt_ody_responses() {
+async fn websocket_handshake_omits_attestation_for_odysseythink_responses() {
     let (model_client, attestation_calls) =
-        model_client_with_counting_attestation(/*include_attestation*/ true);
+        model_client_with_counting_attestation(/*odysseythink_provider*/ true);
     let responses_metadata = test_responses_metadata_for_client(
         &model_client,
         /*turn_id*/ None,
@@ -599,15 +593,15 @@ async fn websocket_handshake_includes_attestation_for_chatgpt_ody_responses() {
         headers
             .get(crate::attestation::X_OAI_ATTESTATION_HEADER)
             .and_then(|value| value.to_str().ok()),
-        Some("v1.header-1"),
+        None,
     );
-    assert_eq!(attestation_calls.load(Ordering::Relaxed), 1);
+    assert_eq!(attestation_calls.load(Ordering::Relaxed), 0);
 }
 
 #[tokio::test]
-async fn non_chatgpt_ody_endpoints_omit_attestation_generation() {
+async fn non_odysseythink_endpoints_omit_attestation_generation() {
     let (model_client, attestation_calls) =
-        model_client_with_counting_attestation(/*include_attestation*/ false);
+        model_client_with_counting_attestation(/*odysseythink_provider*/ false);
     let mut response_headers = http::HeaderMap::new();
 
     if let Some(header_value) = model_client.generate_attestation_header_for().await {
