@@ -3,10 +3,10 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
-use app_test_support::ChatGptAuthFixture;
+use app_test_support::ApiKeyAuthFixture;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
-use app_test_support::write_chatgpt_auth;
+use app_test_support::write_api_key_auth;
 use ody_app_server_protocol::ItemCompletedNotification;
 use ody_app_server_protocol::ItemStartedNotification;
 use ody_app_server_protocol::JSONRPCResponse;
@@ -72,9 +72,9 @@ async fn standalone_web_search_round_trips_output() -> Result<()> {
 
     let ody_home = TempDir::new()?;
     create_config_toml(ody_home.path(), &server.uri())?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("access-chatgpt"),
+        ApiKeyAuthFixture::new("access-key"),
         AuthCredentialsStoreMode::File,
     )?;
 

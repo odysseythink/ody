@@ -7,10 +7,10 @@ use std::time::Duration;
 
 use anyhow::Result;
 use anyhow::bail;
-use app_test_support::ChatGptAuthFixture;
+use app_test_support::ApiKeyAuthFixture;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
-use app_test_support::write_chatgpt_auth;
+use app_test_support::write_api_key_auth;
 use axum::Json;
 use axum::Router;
 use axum::extract::State;
@@ -174,13 +174,10 @@ async fn list_apps_returns_empty_when_workspace_ody_plugins_disabled() -> Result
 
     let ody_home = TempDir::new()?;
     write_connectors_config(ody_home.path(), &server_url)?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123")
-            .plan_type("team"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123").plan_type("team"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -220,12 +217,10 @@ async fn list_apps_includes_plugin_apps_for_chatgpt_auth() -> Result<()> {
     let ody_home = TempDir::new()?;
     write_connectors_and_plugins_config(ody_home.path(), &server_url)?;
     write_plugin_app_fixture(ody_home.path(), "sample", "connector_sample")?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-plugin-apps")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -278,12 +273,10 @@ async fn list_apps_uses_thread_feature_flag_when_thread_id_is_provided() -> Resu
 
     let ody_home = TempDir::new()?;
     write_connectors_config(ody_home.path(), &server_url)?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -389,12 +382,10 @@ async fn list_apps_keeps_apps_with_app_only_tools_accessible() -> Result<()> {
 
     let ody_home = TempDir::new()?;
     write_connectors_config(ody_home.path(), &server_url)?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-app-only")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -462,12 +453,10 @@ enabled = false
 "#
         ),
     )?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -581,12 +570,10 @@ async fn list_apps_emits_updates_and_returns_after_both_lists_load() -> Result<(
 
     let ody_home = TempDir::new()?;
     write_connectors_config(ody_home.path(), &server_url)?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -721,12 +708,10 @@ async fn list_apps_waits_for_accessible_data_before_emitting_directory_updates()
 
     let ody_home = TempDir::new()?;
     write_connectors_config(ody_home.path(), &server_url)?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-directory-first")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -827,12 +812,10 @@ async fn list_apps_does_not_emit_empty_interim_updates() -> Result<()> {
 
     let ody_home = TempDir::new()?;
     write_connectors_config(ody_home.path(), &server_url)?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-empty-interim")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -936,12 +919,10 @@ async fn list_apps_paginates_results() -> Result<()> {
 
     let ody_home = TempDir::new()?;
     write_connectors_config(ody_home.path(), &server_url)?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -1056,12 +1037,10 @@ async fn list_apps_force_refetch_preserves_previous_cache_on_failure() -> Result
 
     let ody_home = TempDir::new()?;
     write_connectors_config(ody_home.path(), &server_url)?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -1089,12 +1068,10 @@ async fn list_apps_force_refetch_preserves_previous_cache_on_failure() -> Result
     assert_eq!(initial_data.len(), 1);
     assert!(initial_data.iter().all(|app| app.is_accessible));
 
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token-invalid")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("chatgpt-token-invalid")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -1182,12 +1159,10 @@ async fn list_apps_force_refetch_patches_updates_from_cached_snapshots() -> Resu
 
     let ody_home = TempDir::new()?;
     write_connectors_config(ody_home.path(), &server_url)?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 

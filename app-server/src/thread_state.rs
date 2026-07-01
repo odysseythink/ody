@@ -40,7 +40,6 @@ pub(crate) struct PendingThreadResumeRequest {
     pub(crate) include_turns: bool,
     pub(crate) initial_turns_page:
         Option<ody_app_server_protocol::ThreadResumeInitialTurnsPageParams>,
-    pub(crate) redact_resume_payloads: bool,
 }
 
 // ThreadListenerCommand is used to perform operations in the context of the thread listener, for serialization purposes.

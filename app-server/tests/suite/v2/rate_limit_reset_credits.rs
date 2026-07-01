@@ -1,10 +1,10 @@
 use std::path::Path;
 
 use anyhow::Result;
-use app_test_support::ChatGptAuthFixture;
+use app_test_support::ApiKeyAuthFixture;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
-use app_test_support::write_chatgpt_auth;
+use app_test_support::write_api_key_auth;
 use ody_app_server_protocol::ConsumeAccountRateLimitResetCreditOutcome;
 use ody_app_server_protocol::ConsumeAccountRateLimitResetCreditParams;
 use ody_app_server_protocol::ConsumeAccountRateLimitResetCreditResponse;
@@ -214,9 +214,9 @@ async fn consume_timeout_releases_account_auth_queue() -> Result<()> {
 
 async fn chatgpt_test_context() -> Result<(TempDir, MockServer)> {
     let ody_home = TempDir::new()?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
+        ApiKeyAuthFixture::new("api-key")
             .account_id("account-123")
             .plan_type("pro"),
         AuthCredentialsStoreMode::File,

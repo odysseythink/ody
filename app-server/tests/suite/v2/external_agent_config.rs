@@ -1,12 +1,12 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use app_test_support::ChatGptAuthFixture;
+use app_test_support::ApiKeyAuthFixture;
 use app_test_support::TestAppServer;
 use app_test_support::create_mock_responses_server_repeating_assistant;
 use app_test_support::start_analytics_events_server;
 use app_test_support::to_response;
-use app_test_support::write_chatgpt_auth;
+use app_test_support::write_api_key_auth;
 use app_test_support::write_mock_responses_config_toml;
 use ody_app_server_protocol::ExternalAgentConfigDetectResponse;
 use ody_app_server_protocol::ExternalAgentConfigImportCompletedNotification;
@@ -171,12 +171,10 @@ async fn external_agent_config_import_sends_completion_notification_for_sync_onl
 #[tokio::test]
 async fn external_agent_config_import_reports_failed_sync_import_in_completion() -> Result<()> {
     let ody_home = TempDir::new()?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
     let source_home = external_agent_home(ody_home.path());
@@ -322,12 +320,10 @@ async fn external_agent_config_import_completed_tracks_analytics_event() -> Resu
     let analytics_server = start_analytics_events_server().await?;
     let ody_home = TempDir::new()?;
     write_analytics_config(ody_home.path(), &analytics_server.uri())?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 

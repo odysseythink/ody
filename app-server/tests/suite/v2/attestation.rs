@@ -1,9 +1,9 @@
 use anyhow::Result;
 use anyhow::bail;
-use app_test_support::ChatGptAuthFixture;
+use app_test_support::ApiKeyAuthFixture;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
-use app_test_support::write_chatgpt_auth;
+use app_test_support::write_api_key_auth;
 use app_test_support::write_models_cache;
 use ody_app_server_protocol::AttestationGenerateResponse;
 use ody_app_server_protocol::ClientInfo;
@@ -61,9 +61,9 @@ async fn attestation_generate_round_trip_adds_header_to_responses_websocket_hand
         ody_home.path(),
         &websocket_server.uri().replacen("ws://", "http://", 1),
     )?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("access-chatgpt").plan_type("pro"),
+        ApiKeyAuthFixture::new("access-key").plan_type("pro"),
         AuthCredentialsStoreMode::File,
     )?;
 

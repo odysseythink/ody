@@ -9,8 +9,7 @@ use ody_core::config::Config;
 use ody_core::config::ConfigOverrides;
 use ody_exec_server::LOCAL_FS;
 use ody_features::feature_for_key;
-use ody_login::AuthManager;
-use ody_login::default_client::set_default_client_residency_requirement;
+
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_json_to_toml::json_to_toml;
 use std::collections::BTreeMap;
@@ -91,8 +90,7 @@ impl ConfigManager {
         Ok(())
     }
 
-    pub(crate) fn replace_cloud_config_bundle_loader(&self, auth_manager: Arc<AuthManager>) {
-        let _ = auth_manager;
+    pub(crate) fn replace_cloud_config_bundle_loader(&self) {
         let loader = cloud_config_bundle_loader();
         if let Ok(mut guard) = self.cloud_config_bundle.write() {
             *guard = loader;
@@ -117,18 +115,6 @@ impl ConfigManager {
             .read()
             .map(|guard| Arc::clone(&*guard))
             .unwrap_or_else(|_| Arc::new(ody_config::NoopThreadConfigLoader))
-    }
-
-    pub(crate) async fn sync_default_client_residency_requirement(&self) {
-        match self.load_latest_config(/*fallback_cwd*/ None).await {
-            Ok(config) => {
-                set_default_client_residency_requirement(config.enforce_residency.value());
-            }
-            Err(err) => warn!(
-                error = %err,
-                "failed to sync default client residency requirement after auth refresh"
-            ),
-        }
     }
 
     pub(crate) async fn load_latest_config(

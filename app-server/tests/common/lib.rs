@@ -10,10 +10,8 @@ mod rollout;
 mod test_app_server;
 
 pub use analytics_server::start_analytics_events_server;
-pub use auth_fixtures::ChatGptAuthFixture;
-pub use auth_fixtures::ChatGptIdTokenClaims;
-pub use auth_fixtures::encode_id_token;
-pub use auth_fixtures::write_chatgpt_auth;
+pub use auth_fixtures::ApiKeyAuthFixture;
+pub use auth_fixtures::write_api_key_auth;
 use ody_app_server_protocol::JSONRPCResponse;
 pub use config::write_mock_responses_config_toml;
 pub use config::write_mock_responses_config_toml_simple;

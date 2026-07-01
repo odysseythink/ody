@@ -5,11 +5,11 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
-use app_test_support::ChatGptAuthFixture;
+use app_test_support::ApiKeyAuthFixture;
 use app_test_support::DEFAULT_CLIENT_NAME;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
-use app_test_support::write_chatgpt_auth;
+use app_test_support::write_api_key_auth;
 use app_test_support::write_mock_responses_config_toml_simple;
 use ody_app_server::AppServerRuntimeOptions;
 use ody_app_server::AppServerTransport;
@@ -1024,11 +1024,10 @@ async fn configured_remote_control_listener(ody_home: &std::path::Path) -> Resul
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let remote_control_url = format!("http://{}/backend-api/", listener.local_addr()?);
     write_mock_responses_config_toml_simple(ody_home, &remote_control_url)?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home,
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account_id")
-            .chatgpt_account_id("account_id"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account_id"),
         AuthCredentialsStoreMode::File,
     )?;
     Ok(listener)

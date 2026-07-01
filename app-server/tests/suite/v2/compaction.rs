@@ -6,10 +6,10 @@
 //! 3) Assert: verify item/started + item/completed notifications for context compaction.
 
 use anyhow::Result;
-use app_test_support::ChatGptAuthFixture;
+use app_test_support::ApiKeyAuthFixture;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
-use app_test_support::write_chatgpt_auth;
+use app_test_support::write_api_key_auth;
 use app_test_support::write_mock_responses_config_toml;
 use ody_app_server_protocol::ItemCompletedNotification;
 use ody_app_server_protocol::ItemStartedNotification;
@@ -158,9 +158,9 @@ async fn auto_compaction_remote_emits_started_and_completed_items() -> Result<()
         "mock_provider",
         COMPACT_PROMPT,
     )?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("access-chatgpt").plan_type("pro"),
+        ApiKeyAuthFixture::new("access-key").plan_type("pro"),
         AuthCredentialsStoreMode::File,
     )?;
 

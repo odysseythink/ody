@@ -1,7 +1,7 @@
 use anyhow::Result;
-use app_test_support::ChatGptAuthFixture;
+use app_test_support::ApiKeyAuthFixture;
 use app_test_support::DEFAULT_CLIENT_NAME;
-use app_test_support::write_chatgpt_auth;
+use app_test_support::write_api_key_auth;
 use ody_config::types::AuthCredentialsStoreMode;
 use ody_config::types::OtelExporterKind;
 use ody_config::types::OtelHttpProtocol;
@@ -86,12 +86,10 @@ pub(crate) async fn mount_analytics_capture(server: &MockServer, ody_home: &Path
         .mount(server)
         .await;
 
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home,
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 

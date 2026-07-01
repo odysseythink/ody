@@ -3,10 +3,10 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
-use app_test_support::ChatGptAuthFixture;
+use app_test_support::ApiKeyAuthFixture;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
-use app_test_support::write_chatgpt_auth;
+use app_test_support::write_api_key_auth;
 use ody_app_server_protocol::ItemCompletedNotification;
 use ody_app_server_protocol::JSONRPCResponse;
 use ody_app_server_protocol::RequestId;
@@ -81,9 +81,9 @@ async fn standalone_image_generation_returns_saved_path_hint_to_model() -> Resul
 
     let ody_home = TempDir::new()?;
     create_config_toml(ody_home.path(), &server.uri(), ImagegenTestMode::Direct)?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("access-chatgpt"),
+        ApiKeyAuthFixture::new("access-key"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -180,9 +180,9 @@ async fn standalone_image_generation_failure_emits_terminal_item() -> Result<()>
 
     let ody_home = TempDir::new()?;
     create_config_toml(ody_home.path(), &server.uri(), ImagegenTestMode::Direct)?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("access-chatgpt"),
+        ApiKeyAuthFixture::new("access-key"),
         AuthCredentialsStoreMode::File,
     )?;
     let mut mcp =
@@ -300,9 +300,9 @@ async fn standalone_image_generation_is_exposed_in_code_mode_only() -> Result<()
         &server.uri(),
         ImagegenTestMode::CodeModeOnly,
     )?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("access-chatgpt"),
+        ApiKeyAuthFixture::new("access-key"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -363,9 +363,9 @@ generatedImage(result);
         &server.uri(),
         ImagegenTestMode::CodeModeOnly,
     )?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("access-chatgpt"),
+        ApiKeyAuthFixture::new("access-key"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -443,9 +443,9 @@ async fn run_image_edit_test(
     .await;
 
     create_config_toml(ody_home.path(), &server.uri(), ImagegenTestMode::Direct)?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("access-chatgpt"),
+        ApiKeyAuthFixture::new("access-key"),
         AuthCredentialsStoreMode::File,
     )?;
 

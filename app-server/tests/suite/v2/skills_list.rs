@@ -2,11 +2,11 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
-use app_test_support::ChatGptAuthFixture;
+use app_test_support::ApiKeyAuthFixture;
 use app_test_support::TestAppServer;
 use app_test_support::create_mock_responses_server_repeating_assistant;
 use app_test_support::to_response;
-use app_test_support::write_chatgpt_auth;
+use app_test_support::write_api_key_auth;
 use app_test_support::write_mock_responses_config_toml_simple;
 use ody_app_server_protocol::JSONRPCResponse;
 use ody_app_server_protocol::PluginListParams;
@@ -165,12 +165,10 @@ async fn skills_list_loads_remote_installed_plugin_skills_from_cache() -> Result
         ody_home.path(),
         &format!("{}/backend-api/", server.uri()),
     )?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -347,13 +345,10 @@ async fn skills_list_excludes_plugin_skills_when_workspace_ody_plugins_disabled(
         ody_home.path(),
         &format!("{}/backend-api/", server.uri()),
     )?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123")
-            .plan_type("team"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123").plan_type("team"),
         AuthCredentialsStoreMode::File,
     )?;
     Mock::given(method("GET"))

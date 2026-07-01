@@ -51,7 +51,6 @@ ody-skills-extension = { workspace = true }
 ody-utils-cli = { workspace = true }
 ody-utils-pty = { workspace = true }
 ody-file-search = { workspace = true }
-ody-chatgpt = { workspace = true }
 ody-login = { workspace = true }
 ody-image-generation-extension = { workspace = true }
 ody-memories-extension = { workspace = true }

@@ -8,100 +8,48 @@ use ody_login::AuthDotJson;
 use ody_login::AuthKeyringBackendKind;
 use ody_login::save_auth;
 
-/// Builder for writing a fake auth.json in tests.
-///
-/// Historically this constructed ChatGPT JWT credentials. With ChatGPT auth
-/// removed, the fixture now writes API-key auth while keeping the builder API
-/// so existing tests continue to compile.
+/// Builder for writing a fake auth.json in tests using API-key auth.
 #[derive(Debug, Clone)]
-pub struct ChatGptAuthFixture {
-    access_token: String,
+pub struct ApiKeyAuthFixture {
+    api_key: String,
 }
 
-impl ChatGptAuthFixture {
-    pub fn new(access_token: impl Into<String>) -> Self {
+impl ApiKeyAuthFixture {
+    pub fn new(api_key: impl Into<String>) -> Self {
         Self {
-            access_token: access_token.into(),
+            api_key: api_key.into(),
         }
     }
 
-    pub fn refresh_token(mut self, _refresh_token: impl Into<String>) -> Self {
+    pub fn refresh_token(self, _refresh_token: impl Into<String>) -> Self {
         self
     }
 
-    pub fn account_id(mut self, _account_id: impl Into<String>) -> Self {
+    pub fn account_id(self, _account_id: impl Into<String>) -> Self {
         self
     }
 
-    pub fn plan_type(mut self, _plan_type: impl Into<String>) -> Self {
+    pub fn plan_type(self, _plan_type: impl Into<String>) -> Self {
         self
     }
 
-    pub fn chatgpt_user_id(mut self, _chatgpt_user_id: impl Into<String>) -> Self {
+    pub fn email(self, _email: impl Into<String>) -> Self {
         self
     }
 
-    pub fn chatgpt_account_id(mut self, _chatgpt_account_id: impl Into<String>) -> Self {
-        self
-    }
-
-    pub fn email(mut self, _email: impl Into<String>) -> Self {
-        self
-    }
-
-    pub fn last_refresh(mut self, _last_refresh: Option<()>) -> Self {
-        self
-    }
-
-    pub fn claims(mut self, _claims: ChatGptIdTokenClaims) -> Self {
+    pub fn last_refresh(self, _last_refresh: Option<()>) -> Self {
         self
     }
 }
 
-/// Legacy claims type. Kept for source compatibility but no longer used.
-#[derive(Debug, Clone, Default)]
-pub struct ChatGptIdTokenClaims {
-    pub email: Option<String>,
-    pub plan_type: Option<String>,
-    pub chatgpt_user_id: Option<String>,
-    pub chatgpt_account_id: Option<String>,
-}
-
-impl ChatGptIdTokenClaims {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn email(mut self, _email: impl Into<String>) -> Self {
-        self
-    }
-
-    pub fn plan_type(mut self, _plan_type: impl Into<String>) -> Self {
-        self
-    }
-
-    pub fn chatgpt_user_id(mut self, _chatgpt_user_id: impl Into<String>) -> Self {
-        self
-    }
-
-    pub fn chatgpt_account_id(mut self, _chatgpt_account_id: impl Into<String>) -> Self {
-        self
-    }
-}
-
-/// Legacy token encoder. Kept for source compatibility but returns a dummy value.
-pub fn encode_id_token(_claims: &ChatGptIdTokenClaims) -> Result<String> {
-    Ok("dummy-token".to_string())
-}
-
-pub fn write_chatgpt_auth(
+pub fn write_api_key_auth(
     ody_home: &Path,
-    fixture: ChatGptAuthFixture,
+    fixture: ApiKeyAuthFixture,
     cli_auth_credentials_store_mode: AuthCredentialsStoreMode,
 ) -> Result<()> {
     let auth = AuthDotJson {
         auth_mode: Some(AuthMode::ApiKey),
-        odysseythink_api_key: Some(fixture.access_token),
+        odysseythink_api_key: Some(fixture.api_key),
     };
 
     save_auth(

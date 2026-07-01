@@ -6,7 +6,6 @@ const MAX_FEEDBACK_TREE_THREADS: usize = 8;
 
 #[derive(Clone)]
 pub(crate) struct FeedbackRequestProcessor {
-    auth_manager: Arc<AuthManager>,
     thread_manager: Arc<ThreadManager>,
     config: Arc<Config>,
     feedback: OdyFeedback,
@@ -16,7 +15,6 @@ pub(crate) struct FeedbackRequestProcessor {
 
 impl FeedbackRequestProcessor {
     pub(crate) fn new(
-        auth_manager: Arc<AuthManager>,
         thread_manager: Arc<ThreadManager>,
         config: Arc<Config>,
         feedback: OdyFeedback,
@@ -24,7 +22,6 @@ impl FeedbackRequestProcessor {
         state_db: Option<StateDbHandle>,
     ) -> Self {
         Self {
-            auth_manager,
             thread_manager,
             config,
             feedback,
@@ -70,7 +67,7 @@ impl FeedbackRequestProcessor {
             None => None,
         };
 
-        // ChatGPT account metadata is no longer available; no-op for feedback tags.
+        // Remote account metadata is no longer available; no-op for feedback tags.
         let snapshot = self.feedback.snapshot(conversation_id);
         let thread_id = snapshot.thread_id.clone();
         let (feedback_thread_ids, sqlite_feedback_logs, state_db_ctx) = if include_logs {

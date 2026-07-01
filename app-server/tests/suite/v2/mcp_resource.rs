@@ -4,10 +4,10 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use anyhow::Result;
-use app_test_support::ChatGptAuthFixture;
+use app_test_support::ApiKeyAuthFixture;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
-use app_test_support::write_chatgpt_auth;
+use app_test_support::write_api_key_auth;
 use axum::Router;
 use ody_app_server::in_process;
 use ody_app_server::in_process::InProcessStartArgs;
@@ -543,12 +543,10 @@ apps = true
 "#
         ),
     )?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -683,12 +681,10 @@ stream_max_retries = 0
 "#
         ),
     )?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 

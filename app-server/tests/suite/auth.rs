@@ -1,8 +1,8 @@
 use anyhow::Result;
-use app_test_support::ChatGptAuthFixture;
+use app_test_support::ApiKeyAuthFixture;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
-use app_test_support::write_chatgpt_auth;
+use app_test_support::write_api_key_auth;
 use chrono::Duration;
 use chrono::Utc;
 use ody_app_server_protocol::Account;
@@ -346,9 +346,9 @@ async fn get_auth_status_with_api_key_refresh_requested() -> Result<()> {
 async fn get_auth_status_omits_token_after_permanent_refresh_failure() -> Result<()> {
     let ody_home = TempDir::new()?;
     create_config_toml(ody_home.path())?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("stale-access-token")
+        ApiKeyAuthFixture::new("stale-access-token")
             .refresh_token("stale-refresh-token")
             .account_id("acct_123")
             .email("user@example.com")
@@ -424,9 +424,9 @@ async fn get_auth_status_omits_token_after_permanent_refresh_failure() -> Result
 async fn get_auth_status_omits_token_after_proactive_refresh_failure() -> Result<()> {
     let ody_home = TempDir::new()?;
     create_config_toml(ody_home.path())?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("stale-access-token")
+        ApiKeyAuthFixture::new("stale-access-token")
             .refresh_token("stale-refresh-token")
             .account_id("acct_123")
             .email("user@example.com")
@@ -488,9 +488,9 @@ async fn get_auth_status_omits_token_after_proactive_refresh_failure() -> Result
 async fn get_auth_status_returns_token_after_proactive_refresh_recovery() -> Result<()> {
     let ody_home = TempDir::new()?;
     create_config_toml(ody_home.path())?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("stale-access-token")
+        ApiKeyAuthFixture::new("stale-access-token")
             .refresh_token("stale-refresh-token")
             .account_id("acct_123")
             .email("user@example.com")
@@ -544,9 +544,9 @@ async fn get_auth_status_returns_token_after_proactive_refresh_recovery() -> Res
         }
     );
 
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("recovered-access-token")
+        ApiKeyAuthFixture::new("recovered-access-token")
             .refresh_token("recovered-refresh-token")
             .account_id("acct_123")
             .email("user@example.com")

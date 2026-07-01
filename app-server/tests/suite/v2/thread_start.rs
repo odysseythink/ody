@@ -1,11 +1,11 @@
 use anyhow::Context;
 use anyhow::Result;
-use app_test_support::ChatGptAuthFixture;
+use app_test_support::ApiKeyAuthFixture;
 use app_test_support::PathBufExt;
 use app_test_support::TestAppServer;
 use app_test_support::create_mock_responses_server_repeating_assistant;
 use app_test_support::to_response;
-use app_test_support::write_chatgpt_auth;
+use app_test_support::write_api_key_auth;
 use ody_app_server_protocol::AskForApproval;
 use ody_app_server_protocol::JSONRPCError;
 use ody_app_server_protocol::JSONRPCMessage;
@@ -902,14 +902,11 @@ async fn thread_start_surfaces_cloud_config_bundle_load_errors() -> Result<()> {
     let ody_home = TempDir::new()?;
     let model_server = create_mock_responses_server_repeating_assistant("Done").await;
     create_config_toml_simple(ody_home.path(), &model_server.uri())?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
+        ApiKeyAuthFixture::new("api-key")
             .refresh_token("stale-refresh-token")
-            .plan_type("business")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123")
-            .account_id("account-123"),
+            .plan_type("business").account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 

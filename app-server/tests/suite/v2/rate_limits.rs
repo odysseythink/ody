@@ -1,8 +1,8 @@
 use anyhow::Result;
-use app_test_support::ChatGptAuthFixture;
+use app_test_support::ApiKeyAuthFixture;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
-use app_test_support::write_chatgpt_auth;
+use app_test_support::write_api_key_auth;
 use ody_app_server_protocol::AddCreditsNudgeCreditType;
 use ody_app_server_protocol::AddCreditsNudgeEmailStatus;
 use ody_app_server_protocol::GetAccountRateLimitsResponse;
@@ -91,9 +91,9 @@ async fn get_account_rate_limits_requires_chatgpt_auth() -> Result<()> {
 #[tokio::test]
 async fn get_account_rate_limits_returns_snapshot() -> Result<()> {
     let ody_home = TempDir::new()?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
+        ApiKeyAuthFixture::new("api-key")
             .account_id("account-123")
             .plan_type("pro"),
         AuthCredentialsStoreMode::File,
@@ -332,9 +332,9 @@ async fn send_add_credits_nudge_email_requires_chatgpt_auth() -> Result<()> {
 #[tokio::test]
 async fn send_add_credits_nudge_email_posts_expected_body() -> Result<()> {
     let ody_home = TempDir::new()?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
+        ApiKeyAuthFixture::new("api-key")
             .account_id("account-123")
             .plan_type("pro"),
         AuthCredentialsStoreMode::File,
@@ -381,9 +381,9 @@ async fn send_add_credits_nudge_email_posts_expected_body() -> Result<()> {
 #[tokio::test]
 async fn send_add_credits_nudge_email_maps_cooldown() -> Result<()> {
     let ody_home = TempDir::new()?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
+        ApiKeyAuthFixture::new("api-key")
             .account_id("account-123")
             .plan_type("pro"),
         AuthCredentialsStoreMode::File,
@@ -425,9 +425,9 @@ async fn send_add_credits_nudge_email_maps_cooldown() -> Result<()> {
 #[tokio::test]
 async fn send_add_credits_nudge_email_surfaces_backend_failure() -> Result<()> {
     let ody_home = TempDir::new()?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
+        ApiKeyAuthFixture::new("api-key")
             .account_id("account-123")
             .plan_type("pro"),
         AuthCredentialsStoreMode::File,

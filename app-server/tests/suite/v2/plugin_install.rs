@@ -7,12 +7,12 @@ use std::time::Duration;
 
 use anyhow::Result;
 use anyhow::bail;
-use app_test_support::ChatGptAuthFixture;
+use app_test_support::ApiKeyAuthFixture;
 use app_test_support::DEFAULT_CLIENT_NAME;
 use app_test_support::TestAppServer;
 use app_test_support::start_analytics_events_server;
 use app_test_support::to_response;
-use app_test_support::write_chatgpt_auth;
+use app_test_support::write_api_key_auth;
 use axum::Json;
 use axum::Router;
 use axum::extract::State;
@@ -656,13 +656,10 @@ async fn plugin_install_rejects_when_workspace_ody_plugins_disabled() -> Result<
         ody_home.path(),
         &format!("{}/backend-api/", server.uri()),
     )?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123")
-            .plan_type("team"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123").plan_type("team"),
         AuthCredentialsStoreMode::File,
     )?;
     write_plugin_marketplace(
@@ -835,12 +832,10 @@ async fn plugin_install_tracks_analytics_event() -> Result<()> {
     let analytics_server = start_analytics_events_server().await?;
     let ody_home = TempDir::new()?;
     write_analytics_config(ody_home.path(), &analytics_server.uri())?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -901,12 +896,10 @@ async fn plugin_install_failure_tracks_analytics_event() -> Result<()> {
     let analytics_server = start_analytics_events_server().await?;
     let ody_home = TempDir::new()?;
     write_analytics_config(ody_home.path(), &analytics_server.uri())?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -1123,12 +1116,10 @@ async fn plugin_install_returns_apps_needing_auth() -> Result<()> {
 
     let ody_home = TempDir::new()?;
     write_connectors_config(ody_home.path(), &server_url)?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -1207,12 +1198,10 @@ async fn plugin_install_skips_mcp_oauth_for_chatgpt_dual_surface_plugin() -> Res
 
     let ody_home = TempDir::new()?;
     write_connectors_config(ody_home.path(), &apps_server_url)?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -1263,12 +1252,10 @@ async fn plugin_install_starts_mcp_oauth_with_formerly_disallowed_plugin_app() -
 
     let ody_home = TempDir::new()?;
     write_connectors_config(ody_home.path(), &apps_server_url)?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -1598,12 +1585,10 @@ async fn plugin_install_includes_formerly_disallowed_apps_needing_auth() -> Resu
 
     let ody_home = TempDir::new()?;
     write_connectors_config(ody_home.path(), &server_url)?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -2025,12 +2010,10 @@ remote_plugin = true
 
 fn configure_remote_plugin_test(ody_home: &std::path::Path, server: &MockServer) -> Result<()> {
     write_remote_plugin_catalog_config(ody_home, &format!("{}/backend-api/", server.uri()))?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home,
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )
 }
@@ -2053,12 +2036,10 @@ connectors = true
             server.uri()
         ),
     )?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home,
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )
 }

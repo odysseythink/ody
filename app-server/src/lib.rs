@@ -489,9 +489,7 @@ pub async fn run_main_with_transport_options(
             let discovered_thread_config_loader = configured_thread_config_loader(&config);
             config_manager
                 .replace_thread_config_loader(Arc::clone(&discovered_thread_config_loader));
-            let auth_manager =
-                AuthManager::shared_from_config(&config, /*enable_ody_api_key_env*/ false).await;
-            config_manager.replace_cloud_config_bundle_loader(auth_manager);
+            config_manager.replace_cloud_config_bundle_loader();
         }
         Err(err) => {
             warn!(error = %err, "Failed to preload config for cloud config bundle");
@@ -778,7 +776,7 @@ pub async fn run_main_with_transport_options(
             // Remote control pairing is a distinct feature from the removed remote hosted
             // plugin/Apps catalog; it previously reused this same config field purely as a
             // default base URL, so keep using the historical default here.
-            remote_control_url: "https://chatgpt.com/backend-api".to_string(),
+            remote_control_url: String::new(),
             installation_id: installation_id.clone(),
             policy: remote_control_policy,
         },

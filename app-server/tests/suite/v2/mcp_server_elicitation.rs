@@ -2,10 +2,10 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use anyhow::Result;
-use app_test_support::ChatGptAuthFixture;
+use app_test_support::ApiKeyAuthFixture;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
-use app_test_support::write_chatgpt_auth;
+use app_test_support::write_api_key_auth;
 use axum::Json;
 use axum::Router;
 use axum::extract::State;
@@ -173,12 +173,10 @@ async fn odysseythink_form_capability_follows_the_turn_starting_connection() -> 
         start_elicitation_services(ElicitationScenario::OpenAiForm).await?;
     let ody_home = TempDir::new()?;
     write_config_toml(ody_home.path(), &responses_server.uri(), &apps_server_url)?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -413,12 +411,10 @@ impl ElicitationRoundTripFixture {
             start_elicitation_services(scenario).await?;
         let ody_home = TempDir::new()?;
         write_config_toml(ody_home.path(), &responses_server.uri(), &apps_server_url)?;
-        write_chatgpt_auth(
+        write_api_key_auth(
             ody_home.path(),
-            ChatGptAuthFixture::new("chatgpt-token")
-                .account_id("account-123")
-                .chatgpt_user_id("user-123")
-                .chatgpt_account_id("account-123"),
+            ApiKeyAuthFixture::new("api-key")
+                .account_id("account-123"),
             AuthCredentialsStoreMode::File,
         )?;
 

@@ -2,12 +2,12 @@ use std::time::Duration;
 
 use anyhow::Result;
 use anyhow::bail;
-use app_test_support::ChatGptAuthFixture;
+use app_test_support::ApiKeyAuthFixture;
 use app_test_support::DEFAULT_CLIENT_NAME;
 use app_test_support::TestAppServer;
 use app_test_support::start_analytics_events_server;
 use app_test_support::to_response;
-use app_test_support::write_chatgpt_auth;
+use app_test_support::write_api_key_auth;
 use ody_app_server_protocol::JSONRPCResponse;
 use ody_app_server_protocol::PluginUninstallParams;
 use ody_app_server_protocol::PluginUninstallResponse;
@@ -91,12 +91,10 @@ async fn plugin_uninstall_tracks_analytics_event() -> Result<()> {
             analytics_server.uri()
         ),
     )?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -193,12 +191,10 @@ async fn plugin_uninstall_writes_remote_plugin_to_cloud_when_remote_plugin_enabl
         ody_home.path(),
         &format!("{}/backend-api/", server.uri()),
     )?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -266,12 +262,10 @@ async fn plugin_uninstall_uses_detail_scope_for_cache_namespace() -> Result<()> 
         ody_home.path(),
         &format!("{}/backend-api/", server.uri()),
     )?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
     mount_remote_plugin_detail(&server, REMOTE_PLUGIN_ID, "1.0.0", "WORKSPACE").await;
@@ -338,12 +332,10 @@ async fn plugin_uninstall_accepts_workspace_remote_plugin_id_shape() -> Result<(
         ody_home.path(),
         &format!("{}/backend-api/", server.uri()),
     )?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
     mount_remote_plugin_detail_with_name(
@@ -411,12 +403,10 @@ async fn plugin_uninstall_rejects_before_post_when_remote_detail_fetch_fails() -
         ody_home.path(),
         &format!("{}/backend-api/", server.uri()),
     )?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-token")
-            .account_id("account-123")
-            .chatgpt_user_id("user-123")
-            .chatgpt_account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key")
+            .account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::LazyLock;
@@ -10,6 +11,9 @@ pub use ody_app_server_protocol::AppInfo;
 pub use ody_app_server_protocol::AppMetadata;
 use ody_connectors::app_is_enabled;
 use ody_connectors::apps_config_from_layer_stack;
+use ody_connectors::merge::merge_connectors;
+use ody_connectors::merge::merge_plugin_connectors;
+use ody_plugin::AppConnectorId;
 use ody_exec_server::EnvironmentManager;
 use ody_exec_server::ExecServerRuntimePaths;
 use ody_tools::DiscoverableTool;
@@ -386,6 +390,70 @@ pub(crate) fn mcp_approvals_reviewer(
     }
 
     config.approvals_reviewer
+}
+
+/// The remote connector directory is no longer available.
+pub async fn list_all_connectors_with_options(
+    _config: &Config,
+    _force_refetch: bool,
+    _plugin_apps: &[AppConnectorId],
+) -> anyhow::Result<Vec<AppInfo>> {
+    Ok(Vec::new())
+}
+
+/// The remote connector directory is no longer available.
+pub async fn list_cached_all_connectors(
+    _config: &Config,
+    _plugin_apps: &[AppConnectorId],
+) -> Option<Vec<AppInfo>> {
+    Some(Vec::new())
+}
+
+/// Merge a full connector directory listing with the set of connectors that are
+/// accessible via MCP tools. When the full listing is known to be complete,
+/// inaccessible connectors not present in the full listing are dropped.
+pub fn merge_connectors_with_accessible(
+    connectors: Vec<AppInfo>,
+    accessible_connectors: Vec<AppInfo>,
+    all_connectors_loaded: bool,
+) -> Vec<AppInfo> {
+    let accessible_connectors = if all_connectors_loaded {
+        let connector_ids: HashSet<&str> = connectors
+            .iter()
+            .map(|connector| connector.id.as_str())
+            .collect();
+        accessible_connectors
+            .into_iter()
+            .filter(|connector| connector_ids.contains(connector.id.as_str()))
+            .collect()
+    } else {
+        accessible_connectors
+    };
+    merge_connectors(connectors, accessible_connectors)
+}
+
+/// Filters a connector listing down to only the connectors referenced by a plugin's
+/// declared apps, synthesizing placeholder entries for apps that have no directory
+/// metadata.
+pub fn connectors_for_plugin_apps(
+    connectors: Vec<AppInfo>,
+    plugin_apps: &[AppConnectorId],
+) -> Vec<AppInfo> {
+    let connectors = merge_plugin_connectors(
+        connectors,
+        plugin_apps
+            .iter()
+            .map(|connector_id| connector_id.0.clone()),
+    );
+    let mut connectors_by_id = connectors
+        .into_iter()
+        .map(|connector| (connector.id.clone(), connector))
+        .collect::<HashMap<_, _>>();
+
+    plugin_apps
+        .iter()
+        .filter_map(|connector_id| connectors_by_id.remove(connector_id.0.as_str()))
+        .collect()
 }
 
 #[cfg(test)]

@@ -2,10 +2,10 @@ use std::time::Duration;
 
 use anyhow::Error;
 use anyhow::Result;
-use app_test_support::ChatGptAuthFixture;
+use app_test_support::ApiKeyAuthFixture;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
-use app_test_support::write_chatgpt_auth;
+use app_test_support::write_api_key_auth;
 use app_test_support::write_models_cache;
 use ody_app_server_protocol::JSONRPCError;
 use ody_app_server_protocol::JSONRPCResponse;
@@ -210,9 +210,9 @@ odysseythink_base_url = "{server_uri}/v1"
 "#
         ),
     )?;
-    write_chatgpt_auth(
+    write_api_key_auth(
         ody_home.path(),
-        ChatGptAuthFixture::new("chatgpt-access-token").plan_type("pro"),
+        ApiKeyAuthFixture::new("chatgpt-access-token").plan_type("pro"),
         AuthCredentialsStoreMode::File,
     )?;
 
