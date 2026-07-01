@@ -138,7 +138,6 @@ ody-app-server-test-client = { path = "app-server-test-client" }
 ody-apply-patch = { path = "apply-patch" }
 ody-arg0 = { path = "arg0" }
 ody-async-utils = { path = "async-utils" }
-ody-chatgpt = { path = "chatgpt" }
 ody-cli = { path = "cli" }
 ody-client = { path = "ody-client" }
 ody-collaboration-mode-templates = { path = "collaboration-mode-templates" }
