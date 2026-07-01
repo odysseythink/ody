@@ -1277,7 +1277,7 @@ async fn usage_command_with_invalid_view_reports_usage_snapshot() {
 }
 
 #[tokio::test]
-async fn usage_command_runs_with_backend_auth_without_chatgpt_account_flag() {
+async fn usage_command_runs_with_backend_auth_without_api_key_configured() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.update_account_state(
         

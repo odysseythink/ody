@@ -459,7 +459,7 @@ async fn configured_pet_load_is_deferred_until_after_construction() {
 }
 
 #[tokio::test]
-async fn prefetch_rate_limits_is_gated_on_chatgpt_auth_provider() {
+async fn prefetch_rate_limits_is_gated_on_api_key_auth_provider() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
 
     assert!(!chat.should_prefetch_rate_limits());
@@ -1653,7 +1653,7 @@ async fn commentary_completion_restores_status_indicator_before_exec_begin() {
 }
 
 #[tokio::test]
-async fn fast_status_indicator_requires_chatgpt_auth() {
+async fn fast_status_indicator_requires_api_key_auth() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
     set_fast_mode_test_catalog(&mut chat);
     assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
@@ -2297,7 +2297,7 @@ async fn account_update_clears_workspace_headline_state() {
 }
 
 #[tokio::test]
-async fn workspace_headline_fetch_allows_backend_auth_without_chatgpt_account() {
+async fn workspace_headline_fetch_allows_backend_auth_without_api_key() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.config.tui_status_line = Some(vec!["workspace-headline".to_string()]);
 

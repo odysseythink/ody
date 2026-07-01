@@ -1397,9 +1397,9 @@ pub(super) fn plugins_test_curated_marketplace(
 ) -> PluginMarketplaceEntry {
     PluginMarketplaceEntry {
         name: OPENAI_CURATED_MARKETPLACE_NAME.to_string(),
-        path: Some(plugins_test_absolute_path("marketplaces/chatgpt")),
+        path: Some(plugins_test_absolute_path("marketplaces/ody")),
         interface: Some(MarketplaceInterface {
-            display_name: Some("ChatGPT Marketplace".to_string()),
+            display_name: Some("Ody Marketplace".to_string()),
         }),
         plugins,
     }
@@ -1457,8 +1457,8 @@ pub(super) fn plugins_test_detail(
     mcp_servers: &[&str],
 ) -> PluginDetail {
     PluginDetail {
-        marketplace_name: "ChatGPT Marketplace".to_string(),
-        marketplace_path: Some(plugins_test_absolute_path("marketplaces/chatgpt")),
+        marketplace_name: "Ody Marketplace".to_string(),
+        marketplace_path: Some(plugins_test_absolute_path("marketplaces/ody")),
         summary,
         share_url: None,
         description: description.map(str::to_string),

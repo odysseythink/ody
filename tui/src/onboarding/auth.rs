@@ -23,7 +23,6 @@ use ratatui::layout::Layout;
 use ratatui::layout::Rect;
 use ratatui::prelude::Widget;
 use ratatui::style::Color;
-use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
@@ -114,11 +113,13 @@ impl KeyboardHandler for AuthModeWidget {
 #[derive(Clone)]
 pub(crate) struct AuthModeWidget {
     pub request_frame: FrameRequester,
+    #[allow(dead_code)]
     pub highlighted_mode: SignInOption,
     pub error: Arc<RwLock<Option<String>>>,
     pub sign_in_state: Arc<RwLock<SignInState>>,
     pub login_status: LoginStatus,
     pub app_server_request_handle: AppServerRequestHandle,
+    #[allow(dead_code)]
     pub animations_enabled: bool,
     pub animations_suppressed: Cell<bool>,
 }
@@ -403,15 +404,6 @@ impl AuthModeWidget {
                     *error.write().unwrap() = None;
                     *sign_in_state.write().unwrap() = SignInState::ApiKeyConfigured;
                 }
-                Ok(other) => {
-                    *error.write().unwrap() = Some(format!(
-                        "Unexpected account/login/start response: {other:?}"
-                    ));
-                    *sign_in_state.write().unwrap() = SignInState::ApiKeyEntry(ApiKeyInputState {
-                        value: api_key,
-                        prepopulated_from_env: false,
-                    });
-                }
                 Err(err) => {
                     *error.write().unwrap() = Some(format!("Failed to save API key: {err}"));
                     *sign_in_state.write().unwrap() = SignInState::ApiKeyEntry(ApiKeyInputState {
@@ -573,7 +565,7 @@ mod tests {
             let cell = &mut buf[(i as u16, 0)];
             cell.set_symbol(&ch.to_string());
             cell.fg = Color::Cyan;
-            cell.modifier = Modifier::UNDERLINED;
+            cell.modifier = ratatui::style::Modifier::UNDERLINED;
         }
         // Leave a plain cell that should NOT be marked.
         buf[(7, 0)].set_symbol("X");
@@ -597,7 +589,7 @@ mod tests {
         let cell = &mut buf[(0, 0)];
         cell.set_symbol("a");
         cell.fg = Color::Cyan;
-        cell.modifier = Modifier::UNDERLINED;
+        cell.modifier = ratatui::style::Modifier::UNDERLINED;
 
         // URL contains ESC and BEL that could break the OSC 8 sequence.
         let malicious_url = "https://evil.com/\x1B]8;;\x07injected";

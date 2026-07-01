@@ -12,7 +12,7 @@ expression: strip_osc8_for_snapshot(&popup)
      Source           Local
      Auth             Auth on install
      Version          remote 7
-     Sharing          Private · creator Test User · https://chatgpt.com/ody/plugins/share/docs
+     Sharing          Private · creator Test User · https://ody.odysseythink.com/ody/plugins/share/docs
      Skills           No plugin skills.
      Hooks            No plugin hooks.
 

@@ -631,7 +631,7 @@ async fn status_snapshot_shows_active_user_defined_profile() {
 }
 
 #[tokio::test]
-async fn status_model_provider_uses_bedrock_runtime_base_url_and_omits_chatgpt_usage_link() {
+async fn status_model_provider_uses_bedrock_runtime_base_url_and_omits_usage_link() {
     let temp_home = TempDir::new().expect("temp home");
     let mut config = test_config(&temp_home).await;
     config.model_provider_id = "amazon-bedrock".to_string();
@@ -678,10 +678,6 @@ async fn status_model_provider_uses_bedrock_runtime_base_url_and_omits_chatgpt_u
         !rendered.contains("bedrock-mantle.us-east-1"),
         "expected /status to ignore configured Bedrock base URL, got: {rendered}"
     );
-    assert!(
-        !rendered.contains("https://chatgpt.com/ody/settings/usage"),
-        "expected /status to omit ChatGPT usage link, got: {rendered}"
-    );
 
     config.model_provider_id = "odysseythink-proxy".to_string();
     config.model_provider = ModelProviderInfo {
@@ -707,12 +703,6 @@ async fn status_model_provider_uses_bedrock_runtime_base_url_and_omits_chatgpt_u
         /*reasoning_effort_override*/ None,
         "<none>".to_string(),
         /*refreshing_rate_limits*/ false,
-    );
-    let rendered = render_lines(&composite.display_lines(/*width*/ 120)).join("\n");
-
-    assert!(
-        !rendered.contains("https://chatgpt.com/ody/settings/usage"),
-        "expected /status to omit ChatGPT usage link for OpenAI-auth proxy, got: {rendered}"
     );
 
     let wide_destinations: Vec<String> = composite

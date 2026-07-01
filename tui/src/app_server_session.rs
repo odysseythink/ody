@@ -19,7 +19,6 @@ use ody_app_server_client::AppServerRequestHandle;
 use ody_app_server_client::TypedRequestError;
 use ody_app_server_protocol::Account;
 use ody_app_server_protocol::AskForApproval;
-use ody_app_server_protocol::AuthMode;
 use ody_app_server_protocol::ClientRequest;
 use ody_app_server_protocol::ConfigBatchWriteParams;
 use ody_app_server_protocol::ConfigWriteResponse;

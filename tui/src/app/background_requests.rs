@@ -1377,12 +1377,12 @@ mod tests {
         let cases = [
             (
                 "Workspace",
-                "chatgpt authentication required for remote plugin catalog",
+                "ody backend authentication required for remote plugin catalog",
                 "Sign in with `ody login <provider>`, then try loading this section again.",
             ),
             (
                 "OpenAI Curated",
-                "chatgpt authentication required for remote plugin catalog; api key auth is not supported",
+                "ody backend authentication required for remote plugin catalog; api key auth is not supported",
                 "API key auth cannot load remote plugin catalogs.",
             ),
             (

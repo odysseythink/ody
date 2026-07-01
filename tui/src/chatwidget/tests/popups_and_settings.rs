@@ -966,7 +966,7 @@ async fn plugin_detail_popup_shows_local_share_context_as_read_only_snapshot() {
             remote_plugin_id: "plugins~Plugin_docs".to_string(),
             remote_version: Some("7".to_string()),
             discoverability: Some(PluginShareDiscoverability::Private),
-            share_url: Some("https://chatgpt.com/ody/plugins/share/docs".to_string()),
+            share_url: Some("https://ody.odysseythink.com/ody/plugins/share/docs".to_string()),
             creator_account_user_id: None,
             creator_name: Some("Test User".to_string()),
             share_principals: None,
@@ -1035,7 +1035,7 @@ async fn plugin_detail_popup_shows_admin_disabled_status_snapshot() {
         .expect("expected admin-disabled status row");
     insta::assert_snapshot!(
         status_row,
-        @"  Admin Blocked · Disabled by admin · ChatGPT Marketplace"
+        @"  Admin Blocked · Disabled by admin · Ody Marketplace"
     );
     assert!(
         popup.contains("This plugin is disabled by your workspace admin.")
@@ -1178,7 +1178,7 @@ async fn plugins_popup_remote_section_fallback_states_snapshot() {
         vec![crate::app_event::PluginRemoteSectionError {
             section_id: "workspace".to_string(),
             label: "Workspace".to_string(),
-            message: "Sign in to ChatGPT to load workspace plugins.".to_string(),
+            message: "Sign in with `ody login` to load workspace plugins.".to_string(),
         }],
     );
     let workspace_error_popup = select_tab_containing(&mut chat, "Workspace unavailable.");
@@ -1217,7 +1217,7 @@ async fn plugins_popup_remote_section_fallback_states_snapshot() {
         No shared plugins available  No plugins have been shared with you.
 
         Workspace unavailable.
-        Workspace unavailable  Sign in to ChatGPT to load workspace plugins.
+        Workspace unavailable  Sign in with `ody login` to load workspace plugins.
 
         OpenAI Curated marketplace.
         No OpenAI Curated plugins available  No OpenAI Curated plugins available.
@@ -1772,7 +1772,7 @@ async fn plugins_popup_odysseythink_curated_tab_omits_marketplace_in_rows() {
         "expected OpenAI Curated tab to show only official marketplace plugins, got:\n{popup}"
     );
     assert!(
-        !popup.contains("ChatGPT Marketplace ·"),
+        !popup.contains("Ody Marketplace ·"),
         "expected marketplace-specific rows to omit marketplace labels, got:\n{popup}"
     );
 }

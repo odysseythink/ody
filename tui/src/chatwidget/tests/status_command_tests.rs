@@ -3,7 +3,7 @@ use assert_matches::assert_matches;
 use ody_utils_path_uri::PathUri;
 
 #[tokio::test]
-async fn status_command_renders_immediately_and_refreshes_rate_limits_for_chatgpt_auth() {
+async fn status_command_renders_immediately_and_refreshes_rate_limits_for_api_key_auth() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     set_api_key_auth(&mut chat);
 
@@ -72,7 +72,7 @@ async fn status_command_renders_immediately_without_rate_limit_refresh() {
     assert!(
         !std::iter::from_fn(|| rx.try_recv().ok())
             .any(|event| matches!(event, AppEvent::RefreshRateLimits { .. })),
-        "non-ChatGPT sessions should not request a rate-limit refresh for /status"
+        "non-API-key sessions should not request a rate-limit refresh for /status"
     );
 }
 

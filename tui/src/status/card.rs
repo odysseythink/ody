@@ -25,7 +25,6 @@ use ratatui::prelude::*;
 use ratatui::style::Stylize;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
-use unicode_width::UnicodeWidthStr;
 use url::Url;
 
 use super::account::StatusAccountDisplay;
@@ -47,7 +46,6 @@ use super::rate_limits::format_status_limit_summary;
 use super::rate_limits::render_status_limit_progress_bar;
 use super::remote_connection::RemoteConnectionStatus;
 use crate::wrapping::RtOptions;
-use crate::wrapping::adaptive_wrap_lines;
 use crate::wrapping::word_wrap_lines;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -841,9 +839,7 @@ impl HistoryCell for StatusHistoryCell {
         &self,
         width: u16,
     ) -> Vec<crate::terminal_hyperlinks::HyperlinkLine> {
-        let mut lines =
-            crate::terminal_hyperlinks::plain_hyperlink_lines(self.display_lines(width));
-        lines
+        crate::terminal_hyperlinks::plain_hyperlink_lines(self.display_lines(width))
     }
 
     fn transcript_hyperlink_lines(
