@@ -950,12 +950,12 @@ fn plugin_remote_section_error_message(label: &str, err: &str) -> String {
 fn plugin_remote_section_error_next_step(label: &str, err: &str) -> &'static str {
     let err = err.to_ascii_lowercase();
     if err.contains("api key auth is not supported") {
-        "Sign in with ChatGPT auth; API key auth cannot load remote plugin catalogs."
+        "API key auth cannot load remote plugin catalogs."
     } else if err.contains("authentication required")
         || err.contains("not signed in")
         || err.contains("not logged in")
     {
-        "Sign in to ChatGPT, then try loading this section again."
+        "Sign in with `ody login <provider>`, then try loading this section again."
     } else if err.contains("ody plugins are disabled")
         || err.contains("plugin sharing is disabled")
         || err.contains("plugin sharing is not enabled")
@@ -1378,12 +1378,12 @@ mod tests {
             (
                 "Workspace",
                 "chatgpt authentication required for remote plugin catalog",
-                "Sign in to ChatGPT, then try loading this section again.",
+                "Sign in with `ody login <provider>`, then try loading this section again.",
             ),
             (
                 "OpenAI Curated",
                 "chatgpt authentication required for remote plugin catalog; api key auth is not supported",
-                "Sign in with ChatGPT auth; API key auth cannot load remote plugin catalogs.",
+                "API key auth cannot load remote plugin catalogs.",
             ),
             (
                 "Shared with me",

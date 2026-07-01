@@ -152,7 +152,7 @@ mod tests {
                 remote_plugin_id: format!("plugins~{name}"),
                 remote_version: Some("7".to_string()),
                 discoverability: Some(PluginShareDiscoverability::Private),
-                share_url: Some(format!("https://chatgpt.com/ody/plugins/share/{name}")),
+                share_url: Some(format!("https://ody.odysseythink.com/plugins/share/{name}")),
                 creator_account_user_id: None,
                 creator_name: Some("Test User".to_string()),
                 share_principals: None,

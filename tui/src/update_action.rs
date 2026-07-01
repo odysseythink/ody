@@ -14,9 +14,9 @@ pub enum UpdateAction {
     BunGlobalLatest,
     /// Update via `brew upgrade ody`.
     BrewUpgrade,
-    /// Update via `curl -fsSL https://chatgpt.com/ody/install.sh | ODY_NON_INTERACTIVE=1 sh`.
+    /// Update via `curl -fsSL https://cdn.odysseythink.com/ody/install.sh | ODY_NON_INTERACTIVE=1 sh`.
     StandaloneUnix,
-    /// Update via `$env:ODY_NON_INTERACTIVE=1; irm https://chatgpt.com/ody/install.ps1 | iex`.
+    /// Update via `$env:ODY_NON_INTERACTIVE=1; irm https://cdn.odysseythink.com/ody/install.ps1 | iex`.
     StandaloneWindows,
 }
 
@@ -45,7 +45,7 @@ impl UpdateAction {
                 "sh",
                 &[
                     "-c",
-                    "curl -fsSL https://chatgpt.com/ody/install.sh | ODY_NON_INTERACTIVE=1 sh",
+                    "curl -fsSL https://cdn.odysseythink.com/ody/install.sh | ODY_NON_INTERACTIVE=1 sh",
                 ],
             ),
             UpdateAction::StandaloneWindows => (
@@ -54,7 +54,7 @@ impl UpdateAction {
                     "-ExecutionPolicy",
                     "Bypass",
                     "-c",
-                    "$env:ODY_NON_INTERACTIVE=1; irm https://chatgpt.com/ody/install.ps1 | iex",
+                    "$env:ODY_NON_INTERACTIVE=1; irm https://cdn.odysseythink.com/ody/install.ps1 | iex",
                 ],
             ),
         }
@@ -145,7 +145,7 @@ mod tests {
                 "sh",
                 &[
                     "-c",
-                    "curl -fsSL https://chatgpt.com/ody/install.sh | ODY_NON_INTERACTIVE=1 sh"
+                    "curl -fsSL https://cdn.odysseythink.com/ody/install.sh | ODY_NON_INTERACTIVE=1 sh"
                 ][..],
             )
         );
@@ -157,7 +157,7 @@ mod tests {
                     "-ExecutionPolicy",
                     "Bypass",
                     "-c",
-                    "$env:ODY_NON_INTERACTIVE=1; irm https://chatgpt.com/ody/install.ps1 | iex"
+                    "$env:ODY_NON_INTERACTIVE=1; irm https://cdn.odysseythink.com/ody/install.ps1 | iex"
                 ][..],
             )
         );
