@@ -138,7 +138,7 @@ async fn responses_lite_uses_standalone_web_search_and_image_generation() -> Res
     )
     .await;
 
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
+    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
     let extensions = responses_extensions(&auth);
 
     let mut builder = test_ody()
@@ -245,7 +245,7 @@ async fn responses_lite_omits_hosted_tools_without_standalone_extensions() -> Re
     .await;
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_model_info_override("gpt-5.4", |model_info| {
             model_info.use_responses_lite = true;
             configure_image_capable_model(model_info);
@@ -279,7 +279,7 @@ async fn non_lite_uses_hosted_tools_when_standalone_features_are_disabled() -> R
     )
     .await;
 
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
+    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
     let extensions = responses_extensions(&auth);
     let mut builder = test_ody()
         .with_auth(auth)

@@ -1,6 +1,0 @@
-load("//:defs.bzl", "ody_rust_crate")
-
-ody_rust_crate(
-    name = "ody-backend-openapi-models",
-    crate_name = "ody_backend_openapi_models",
-)

@@ -17,8 +17,6 @@ fn api_key_auth() -> AuthDotJson {
         odysseythink_api_key: Some("sk-test-key".to_string()),
         tokens: None,
         last_refresh: None,
-        agent_identity: None,
-        personal_access_token: None,
         bedrock_api_key: None,
     }
 }
@@ -29,8 +27,6 @@ fn bedrock_only_auth() -> AuthDotJson {
         odysseythink_api_key: None,
         tokens: None,
         last_refresh: None,
-        agent_identity: None,
-        personal_access_token: None,
         bedrock_api_key: Some(bedrock_auth()),
     }
 }
@@ -73,8 +69,6 @@ async fn login_with_bedrock_api_key_replaces_odysseythink_auth() -> anyhow::Resu
         odysseythink_api_key: None,
         tokens: None,
         last_refresh: None,
-        agent_identity: None,
-        personal_access_token: None,
         bedrock_api_key: Some(bedrock_auth()),
     };
     assert_eq!(loaded, expected);

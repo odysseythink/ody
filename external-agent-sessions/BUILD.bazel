@@ -1,6 +1,0 @@
-load("//:defs.bzl", "ody_rust_crate")
-
-ody_rust_crate(
-    name = "external-agent-sessions",
-    crate_name = "ody_external_agent_sessions",
-)

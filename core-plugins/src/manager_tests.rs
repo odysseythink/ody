@@ -6,17 +6,14 @@ use crate::PluginLoadOutcome;
 use crate::ToolSuggestDiscoverablePlugin;
 use crate::ToolSuggestPluginDiscoveryInput;
 use crate::installed_marketplaces::marketplace_install_root;
+use crate::loader::configured_curated_plugin_ids_from_ody_home;
+use crate::loader::curated_plugins_repo_path;
 use crate::loader::load_plugin_skills;
 use crate::loader::load_plugins_from_layer_stack;
+use crate::loader::refresh_curated_plugin_cache;
 use crate::loader::refresh_non_curated_plugin_cache;
 use crate::loader::refresh_non_curated_plugin_cache_force_reinstall;
 use crate::marketplace::MarketplacePluginInstallPolicy;
-use crate::remote::REMOTE_GLOBAL_MARKETPLACE_NAME;
-use crate::remote::REMOTE_WORKSPACE_MARKETPLACE_NAME;
-use crate::remote::REMOTE_WORKSPACE_SHARED_WITH_ME_MARKETPLACE_NAME;
-use crate::remote::RecommendedPlugin;
-use crate::remote::RemoteInstalledPlugin;
-use crate::startup_sync::curated_plugins_repo_path;
 use crate::test_support::TEST_CURATED_PLUGIN_CACHE_VERSION;
 use crate::test_support::TEST_CURATED_PLUGIN_SHA;
 use crate::test_support::load_plugins_config as load_plugins_config_input;
@@ -41,7 +38,6 @@ use ody_core_skills::PluginSkillSnapshots;
 use ody_core_skills::SkillsLoadInput;
 use ody_core_skills::SkillsService;
 use ody_core_skills::config_rules::SkillConfigRules;
-use ody_login::OdyAuth;
 use ody_plugin::AppDeclaration;
 use ody_plugin::PluginId;
 use ody_protocol::protocol::HookEventName;
@@ -51,16 +47,8 @@ use ody_utils_absolute_path::test_support::PathBufExt;
 use pretty_assertions::assert_eq;
 use std::fs;
 use std::path::Path;
-use std::time::Duration;
 use tempfile::TempDir;
 use toml::Value;
-use wiremock::Mock;
-use wiremock::MockServer;
-use wiremock::ResponseTemplate;
-use wiremock::matchers::header;
-use wiremock::matchers::method;
-use wiremock::matchers::path;
-use wiremock::matchers::query_param;
 
 const MAX_CAPABILITY_SUMMARY_DESCRIPTION_LEN: usize = 1024;
 
@@ -535,31 +523,6 @@ async fn load_config(ody_home: &Path, cwd: &Path) -> PluginsConfigInput {
     load_plugins_config_input(ody_home, cwd).await
 }
 
-fn remote_installed_linear_plugin() -> RemoteInstalledPlugin {
-    remote_installed_plugin("linear")
-}
-
-fn remote_installed_plugin(name: &str) -> RemoteInstalledPlugin {
-    remote_installed_plugin_in_marketplace(name, REMOTE_GLOBAL_MARKETPLACE_NAME)
-}
-
-fn remote_installed_plugin_in_marketplace(
-    name: &str,
-    marketplace_name: &str,
-) -> RemoteInstalledPlugin {
-    RemoteInstalledPlugin {
-        marketplace_name: marketplace_name.to_string(),
-        id: format!("plugins~Plugin_{name}"),
-        name: name.to_string(),
-        enabled: true,
-        install_policy: ody_app_server_protocol::PluginInstallPolicy::Available,
-        auth_policy: ody_app_server_protocol::PluginAuthPolicy::OnUse,
-        availability: ody_app_server_protocol::PluginAvailability::Available,
-        interface: None,
-        keywords: Vec::new(),
-    }
-}
-
 fn write_cached_plugin(ody_home: &Path, marketplace_name: &str, plugin_name: &str) {
     write_plugin_with_version(
         &ody_home
@@ -827,25 +790,6 @@ approval_mode = "approve"
 }
 
 #[tokio::test]
-async fn remote_installed_cache_ignores_plugins_missing_local_cache() {
-    let ody_home = TempDir::new().unwrap();
-    write_file(
-        &ody_home.path().join(CONFIG_TOML_FILE),
-        r#"[features]
-plugins = true
-remote_plugin = true
-"#,
-    );
-
-    let config = load_config(ody_home.path(), ody_home.path()).await;
-    let manager = PluginsManager::new(ody_home.path().to_path_buf());
-    manager.write_remote_installed_plugins_cache(vec![remote_installed_linear_plugin()]);
-
-    let outcome = manager.plugins_for_config(&config).await;
-    assert_eq!(outcome, PluginLoadOutcome::default());
-}
-
-#[tokio::test]
 async fn installed_plugin_telemetry_metadata_collects_capabilities() {
     let ody_home = TempDir::new().unwrap();
     write_cached_plugin(ody_home.path(), "test", "sample");
@@ -920,203 +864,6 @@ fn capability_summary_telemetry_metadata_uses_local_identity() {
     );
 }
 
-#[tokio::test]
-async fn remote_installed_cache_prefers_local_curated_conflicts_when_remote_plugin_disabled() {
-    let ody_home = TempDir::new().unwrap();
-    write_file(
-        &ody_home.path().join(CONFIG_TOML_FILE),
-        r#"[features]
-plugins = true
-remote_plugin = false
-
-[plugins."linear@odysseythink-curated"]
-enabled = true
-
-[plugins."calendar@odysseythink-curated"]
-enabled = true
-"#,
-    );
-    write_cached_plugin(ody_home.path(), "odysseythink-curated", "linear");
-    write_cached_plugin(ody_home.path(), "odysseythink-curated", "calendar");
-    write_cached_plugin(ody_home.path(), "odysseythink-curated-remote", "linear");
-    write_cached_plugin(ody_home.path(), "odysseythink-curated-remote", "remote-only");
-
-    let config = load_config(ody_home.path(), ody_home.path()).await;
-    let manager = PluginsManager::new(ody_home.path().to_path_buf());
-    manager.write_remote_installed_plugins_cache(vec![
-        remote_installed_plugin("linear"),
-        remote_installed_plugin("remote-only"),
-    ]);
-
-    let outcome = manager.plugins_for_config(&config).await;
-    assert_eq!(
-        outcome
-            .plugins()
-            .iter()
-            .map(|plugin| plugin.config_name.clone())
-            .collect::<Vec<_>>(),
-        vec![
-            "calendar@odysseythink-curated".to_string(),
-            "linear@odysseythink-curated".to_string(),
-            "remote-only@odysseythink-curated-remote".to_string(),
-        ]
-    );
-}
-
-#[tokio::test]
-async fn remote_installed_cache_prefers_remote_curated_conflicts_when_remote_plugin_enabled() {
-    let ody_home = TempDir::new().unwrap();
-    write_file(
-        &ody_home.path().join(CONFIG_TOML_FILE),
-        r#"[features]
-plugins = true
-remote_plugin = true
-
-[plugins."linear@odysseythink-curated"]
-enabled = true
-
-[plugins."linear@odysseythink-api-curated"]
-enabled = true
-
-[plugins."calendar@odysseythink-curated"]
-enabled = true
-"#,
-    );
-    write_cached_plugin(ody_home.path(), "odysseythink-curated", "linear");
-    write_cached_plugin(ody_home.path(), "odysseythink-api-curated", "linear");
-    write_cached_plugin(ody_home.path(), "odysseythink-curated", "calendar");
-    write_cached_plugin(ody_home.path(), "odysseythink-curated-remote", "linear");
-    write_cached_plugin(ody_home.path(), "odysseythink-curated-remote", "remote-only");
-
-    let config = load_config(ody_home.path(), ody_home.path()).await;
-    let manager = PluginsManager::new(ody_home.path().to_path_buf());
-    manager.write_remote_installed_plugins_cache(vec![
-        remote_installed_plugin("linear"),
-        remote_installed_plugin("remote-only"),
-    ]);
-
-    let outcome = manager.plugins_for_config(&config).await;
-    assert_eq!(
-        outcome
-            .plugins()
-            .iter()
-            .map(|plugin| plugin.config_name.clone())
-            .collect::<Vec<_>>(),
-        vec![
-            "calendar@odysseythink-curated".to_string(),
-            "linear@odysseythink-curated-remote".to_string(),
-            "remote-only@odysseythink-curated-remote".to_string(),
-        ]
-    );
-}
-
-#[tokio::test]
-async fn build_remote_installed_plugin_marketplaces_from_cache_uses_remote_metadata() {
-    let ody_home = TempDir::new().unwrap();
-    let manager = PluginsManager::new(ody_home.path().to_path_buf());
-    let mut plugin = remote_installed_linear_plugin();
-    plugin.install_policy = ody_app_server_protocol::PluginInstallPolicy::InstalledByDefault;
-    plugin.auth_policy = ody_app_server_protocol::PluginAuthPolicy::OnInstall;
-    plugin.interface = Some(ody_app_server_protocol::PluginInterface {
-        display_name: Some("Linear".to_string()),
-        short_description: Some("Track remote work".to_string()),
-        long_description: None,
-        developer_name: None,
-        category: None,
-        capabilities: Vec::new(),
-        website_url: None,
-        privacy_policy_url: None,
-        terms_of_service_url: None,
-        default_prompt: None,
-        brand_color: Some("#111111".to_string()),
-        composer_icon: None,
-        composer_icon_url: None,
-        logo: None,
-        logo_dark: None,
-        logo_url: None,
-        logo_url_dark: None,
-        screenshots: Vec::new(),
-        screenshot_urls: Vec::new(),
-    });
-    plugin.keywords = vec!["issues".to_string()];
-    manager.write_remote_installed_plugins_cache(vec![plugin]);
-
-    let marketplaces = manager
-        .build_remote_installed_plugin_marketplaces_from_cache(&[REMOTE_GLOBAL_MARKETPLACE_NAME])
-        .expect("remote installed cache should be present");
-    assert_eq!(marketplaces.len(), 1);
-    assert_eq!(marketplaces[0].name, "odysseythink-curated-remote");
-    assert_eq!(marketplaces[0].display_name, "OpenAI Curated Remote");
-    assert_eq!(marketplaces[0].plugins.len(), 1);
-    let plugin = &marketplaces[0].plugins[0];
-    assert_eq!(plugin.id, "linear@odysseythink-curated-remote");
-    assert_eq!(plugin.remote_plugin_id, "plugins~Plugin_linear");
-    assert_eq!(plugin.name, "linear");
-    assert_eq!(plugin.installed, true);
-    assert_eq!(plugin.enabled, true);
-    assert_eq!(
-        plugin.install_policy,
-        ody_app_server_protocol::PluginInstallPolicy::InstalledByDefault
-    );
-    assert_eq!(
-        plugin.auth_policy,
-        ody_app_server_protocol::PluginAuthPolicy::OnInstall
-    );
-    assert_eq!(plugin.keywords, vec!["issues".to_string()]);
-    assert_eq!(
-        plugin
-            .interface
-            .as_ref()
-            .and_then(|interface| interface.display_name.as_deref()),
-        Some("Linear")
-    );
-    assert_eq!(
-        plugin
-            .interface
-            .as_ref()
-            .and_then(|interface| interface.short_description.as_deref()),
-        Some("Track remote work")
-    );
-    assert_eq!(
-        manager
-            .build_remote_installed_plugin_marketplaces_from_cache(&[
-                REMOTE_WORKSPACE_MARKETPLACE_NAME
-            ])
-            .expect("remote installed cache should be present"),
-        Vec::new()
-    );
-}
-
-#[tokio::test]
-async fn build_remote_installed_plugin_marketplaces_from_cache_filters_by_marketplace_name() {
-    let ody_home = TempDir::new().unwrap();
-    let manager = PluginsManager::new(ody_home.path().to_path_buf());
-    manager.write_remote_installed_plugins_cache(vec![
-        remote_installed_plugin_in_marketplace(
-            "workspace-linear",
-            REMOTE_WORKSPACE_MARKETPLACE_NAME,
-        ),
-        remote_installed_plugin_in_marketplace(
-            "shared-linear",
-            REMOTE_WORKSPACE_SHARED_WITH_ME_MARKETPLACE_NAME,
-        ),
-    ]);
-
-    let marketplaces = manager
-        .build_remote_installed_plugin_marketplaces_from_cache(&[REMOTE_WORKSPACE_MARKETPLACE_NAME])
-        .expect("remote installed cache should be present");
-
-    assert_eq!(marketplaces.len(), 1);
-    assert_eq!(marketplaces[0].name, REMOTE_WORKSPACE_MARKETPLACE_NAME);
-    assert_eq!(
-        marketplaces[0]
-            .plugins
-            .iter()
-            .map(|plugin| plugin.id.as_str())
-            .collect::<Vec<_>>(),
-        vec!["workspace-linear@workspace-directory"]
-    );
-}
 
 #[tokio::test]
 async fn load_plugins_resolves_disabled_skill_names_against_loaded_plugin_skills() {
@@ -2099,12 +1846,7 @@ async fn plugin_cache_ignores_unrelated_session_overrides() {
         .expect("config layer stack should build")
     };
     let config = |session_config| {
-        PluginsConfigInput::new(
-            stack(session_config),
-            /*plugins_enabled*/ true,
-            /*remote_plugin_enabled*/ false,
-            "https://chatgpt.com".to_string(),
-        )
+        PluginsConfigInput::new(stack(session_config), /*plugins_enabled*/ true)
     };
     let manager = PluginsManager::new(ody_home.path().to_path_buf());
 
@@ -2176,7 +1918,6 @@ fn loaded_plugins_cache_invalidation_rejects_stale_load_completion() {
     let cache_key = PluginLoadCacheKey {
         configured_plugins: HashMap::new(),
         skill_config_rules: SkillConfigRules::default(),
-        remote_plugin_enabled: false,
     };
     let stale_generation = manager.loaded_plugins_cache_generation();
 
@@ -2284,42 +2025,6 @@ async fn install_plugin_updates_config_with_relative_path_and_plugin_key() {
     let config = fs::read_to_string(tmp.path().join("config.toml")).unwrap();
     assert!(config.contains(r#"[plugins."sample-plugin@debug"]"#));
     assert!(config.contains("enabled = true"));
-}
-
-#[tokio::test]
-async fn install_odysseythink_curated_plugin_uses_short_sha_cache_version() {
-    let tmp = tempfile::tempdir().unwrap();
-    let curated_root = curated_plugins_repo_path(tmp.path());
-    write_odysseythink_curated_marketplace(&curated_root, &["slack"]);
-    write_curated_plugin_sha(tmp.path(), TEST_CURATED_PLUGIN_SHA);
-
-    let result = PluginsManager::new(tmp.path().to_path_buf())
-        .install_plugin(PluginInstallRequest {
-            plugin_name: "slack".to_string(),
-            marketplace_path: AbsolutePathBuf::try_from(
-                curated_root.join(".agents/plugins/marketplace.json"),
-            )
-            .unwrap(),
-        })
-        .await
-        .unwrap();
-
-    let installed_path = tmp.path().join(format!(
-        "plugins/cache/odysseythink-curated/slack/{TEST_CURATED_PLUGIN_CACHE_VERSION}"
-    ));
-    assert_eq!(
-        result,
-        PluginInstallOutcome {
-            plugin_id: PluginId::new(
-                "slack".to_string(),
-                OPENAI_CURATED_MARKETPLACE_NAME.to_string()
-            )
-            .unwrap(),
-            plugin_version: TEST_CURATED_PLUGIN_CACHE_VERSION.to_string(),
-            installed_path: AbsolutePathBuf::try_from(installed_path).unwrap(),
-            auth_policy: MarketplacePluginAuthPolicy::OnInstall,
-        }
-    );
 }
 
 #[tokio::test]
@@ -4315,382 +4020,6 @@ enabled = true
                 installed: false,
                 enabled: true,
             }],
-        }
-    );
-}
-
-#[tokio::test]
-async fn featured_plugin_ids_for_config_uses_restriction_product_query_param() {
-    let tmp = tempfile::tempdir().unwrap();
-    write_file(
-        &tmp.path().join(CONFIG_TOML_FILE),
-        r#"[features]
-plugins = true
-"#,
-    );
-
-    let server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/backend-api/plugins/featured"))
-        .and(query_param("platform", "chat"))
-        .and(header("authorization", "Bearer Access Token"))
-        .and(header("chatgpt-account-id", "account_id"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(r#"["chat-plugin"]"#))
-        .mount(&server)
-        .await;
-
-    let mut config = load_config(tmp.path(), tmp.path()).await;
-    config.chatgpt_base_url = format!("{}/backend-api/", server.uri());
-    let manager = PluginsManager::new_with_options(
-        tmp.path().to_path_buf(),
-        Some(Product::Chatgpt),
-        /*auth_mode*/ None,
-    );
-
-    let featured_plugin_ids = manager
-        .featured_plugin_ids_for_config(
-            &config,
-            Some(&OdyAuth::create_dummy_chatgpt_auth_for_testing()),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(featured_plugin_ids, vec!["chat-plugin".to_string()]);
-}
-
-#[tokio::test]
-async fn featured_plugin_ids_for_config_defaults_query_param_to_ody() {
-    let tmp = tempfile::tempdir().unwrap();
-    write_file(
-        &tmp.path().join(CONFIG_TOML_FILE),
-        r#"[features]
-plugins = true
-"#,
-    );
-
-    let server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/backend-api/plugins/featured"))
-        .and(query_param("platform", "ody"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(r#"["ody-plugin"]"#))
-        .mount(&server)
-        .await;
-
-    let mut config = load_config(tmp.path(), tmp.path()).await;
-    config.chatgpt_base_url = format!("{}/backend-api/", server.uri());
-    let manager = PluginsManager::new_with_options(
-        tmp.path().to_path_buf(),
-        /*restriction_product*/ None,
-        /*auth_mode*/ None,
-    );
-
-    let featured_plugin_ids = manager
-        .featured_plugin_ids_for_config(&config, /*auth*/ None)
-        .await
-        .unwrap();
-
-    assert_eq!(featured_plugin_ids, vec!["ody-plugin".to_string()]);
-}
-
-#[tokio::test]
-async fn remote_plugin_caches_refresh_warms_recommended_plugins_cache() {
-    let tmp = tempfile::tempdir().unwrap();
-    write_file(
-        &tmp.path().join(CONFIG_TOML_FILE),
-        r#"[features]
-plugins = true
-remote_plugin = true
-"#,
-    );
-
-    let server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/ps/plugins/suggested"))
-        .and(query_param("scope", "GLOBAL"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "enabled": true,
-            "plugins": []
-        })))
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    let mut config = load_config(tmp.path(), tmp.path()).await;
-    config.chatgpt_base_url = server.uri();
-    let manager = std::sync::Arc::new(PluginsManager::new(tmp.path().to_path_buf()));
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
-    let cache_key = recommended_plugins_cache_key(&config);
-
-    manager.maybe_start_remote_plugin_caches_refresh(
-        &config,
-        Some(auth.clone()),
-        /*on_effective_plugins_changed*/ None,
-    );
-
-    let mode = tokio::time::timeout(Duration::from_secs(2), async {
-        loop {
-            if let Some(mode) = manager.cached_recommended_plugins_mode(&cache_key) {
-                break mode;
-            }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    })
-    .await
-    .expect("recommended plugins cache should be warmed");
-    assert_eq!(
-        mode,
-        RecommendedPluginsMode::Endpoint {
-            plugins: Vec::new()
-        }
-    );
-    assert_eq!(
-        manager
-            .recommended_plugins_mode_for_config(&config, Some(&auth))
-            .await,
-        mode
-    );
-    manager.clear_recommended_plugins_cache();
-    assert_eq!(manager.cached_recommended_plugins_mode(&cache_key), None);
-}
-
-#[tokio::test]
-async fn recommended_plugins_mode_deduplicates_concurrent_cache_misses() {
-    let tmp = tempfile::tempdir().unwrap();
-    write_file(
-        &tmp.path().join(CONFIG_TOML_FILE),
-        r#"[features]
-plugins = true
-remote_plugin = true
-"#,
-    );
-
-    let server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/ps/plugins/suggested"))
-        .and(query_param("scope", "GLOBAL"))
-        .and(header("authorization", "Bearer Access Token"))
-        .and(header("chatgpt-account-id", "account_id"))
-        .and(header("OAI-Product-Sku", "ody"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(serde_json::json!({
-                    "enabled": true,
-                    "plugins": [
-                        {
-                            "id": "plugin_slack",
-                            "name": "slack",
-                            "release": {
-                                "display_name": "Slack",
-                                "app_ids": ["connector_slack"]
-                            }
-                        },
-                        {
-                            "id": "plugin_github",
-                            "name": "github",
-                            "release": {"display_name": "GitHub"}
-                        }
-                    ]
-                }))
-                .set_delay(Duration::from_millis(100)),
-        )
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    let mut config = load_config(tmp.path(), tmp.path()).await;
-    config.chatgpt_base_url = server.uri();
-    let manager = PluginsManager::new(tmp.path().to_path_buf());
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
-    let expected = RecommendedPluginsMode::Endpoint {
-        plugins: vec![
-            RecommendedPlugin {
-                config_id: "github@odysseythink-curated-remote".to_string(),
-                remote_plugin_id: "plugin_github".to_string(),
-                display_name: "GitHub".to_string(),
-                app_connector_ids: Vec::new(),
-            },
-            RecommendedPlugin {
-                config_id: "slack@odysseythink-curated-remote".to_string(),
-                remote_plugin_id: "plugin_slack".to_string(),
-                display_name: "Slack".to_string(),
-                app_connector_ids: vec!["connector_slack".to_string()],
-            },
-        ],
-    };
-
-    let (left, right) = tokio::join!(
-        manager.recommended_plugins_mode_for_config(&config, Some(&auth)),
-        manager.recommended_plugins_mode_for_config(&config, Some(&auth)),
-    );
-    assert_eq!((left, right), (expected.clone(), expected.clone()));
-    assert_eq!(
-        manager
-            .recommended_plugins_mode_for_config(&config, Some(&auth))
-            .await,
-        expected
-    );
-}
-
-#[tokio::test]
-async fn recommended_plugin_candidates_filter_installed_and_disabled_plugins() {
-    let tmp = tempfile::tempdir().unwrap();
-    write_file(
-        &tmp.path().join(CONFIG_TOML_FILE),
-        r#"[features]
-plugins = true
-remote_plugin = true
-"#,
-    );
-    let server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/ps/plugins/suggested"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "enabled": true,
-            "plugins": [
-                {
-                    "id": "plugin_linear",
-                    "name": "linear",
-                    "release": {"display_name": "Linear"}
-                },
-                {
-                    "id": "plugin_github",
-                    "name": "github",
-                    "release": {"display_name": "GitHub"}
-                },
-                {
-                    "id": "plugin_slack",
-                    "name": "slack",
-                    "release": {"display_name": "Slack"}
-                }
-            ]
-        })))
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    let mut config = load_config(tmp.path(), tmp.path()).await;
-    config.chatgpt_base_url = server.uri();
-    let manager = PluginsManager::new(tmp.path().to_path_buf());
-    let mut installed_linear = remote_installed_plugin("linear");
-    installed_linear.id = "plugin_linear".to_string();
-    manager.write_remote_installed_plugins_cache(vec![installed_linear]);
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
-    let disabled_tools = [ToolSuggestDisabledTool::plugin(
-        "github@odysseythink-curated-remote",
-    )];
-    let loaded_plugins = manager.plugins_for_config(&config).await;
-
-    let candidates = manager
-        .recommended_plugin_candidates_for_config(RecommendedPluginCandidatesInput {
-            plugins_config: &config,
-            loaded_plugins: &loaded_plugins,
-            auth: Some(&auth),
-            disabled_tools: &disabled_tools,
-            app_server_client_name: None,
-        })
-        .await;
-
-    assert_eq!(
-        candidates,
-        Some(vec![DiscoverableTool::from(DiscoverablePluginInfo {
-            id: "slack@odysseythink-curated-remote".to_string(),
-            remote_plugin_id: Some("plugin_slack".to_string()),
-            name: "Slack".to_string(),
-            description: None,
-            has_skills: false,
-            mcp_server_names: Vec::new(),
-            app_connector_ids: Vec::new(),
-        })])
-    );
-}
-
-#[tokio::test]
-async fn recommended_plugins_mode_caches_explicit_false() {
-    let tmp = tempfile::tempdir().unwrap();
-    write_file(
-        &tmp.path().join(CONFIG_TOML_FILE),
-        r#"[features]
-plugins = true
-remote_plugin = true
-"#,
-    );
-
-    let server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/ps/plugins/suggested"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "enabled": false,
-            "plugins": []
-        })))
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    let mut config = load_config(tmp.path(), tmp.path()).await;
-    config.chatgpt_base_url = server.uri();
-    let manager = PluginsManager::new(tmp.path().to_path_buf());
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
-    assert_eq!(
-        manager
-            .recommended_plugins_mode_for_config(&config, Some(&auth))
-            .await,
-        RecommendedPluginsMode::Legacy
-    );
-    assert_eq!(
-        manager
-            .recommended_plugins_mode_for_config(&config, Some(&auth))
-            .await,
-        RecommendedPluginsMode::Legacy
-    );
-}
-
-#[tokio::test]
-async fn recommended_plugins_mode_retries_after_fetch_failure() {
-    let tmp = tempfile::tempdir().unwrap();
-    write_file(
-        &tmp.path().join(CONFIG_TOML_FILE),
-        r#"[features]
-plugins = true
-remote_plugin = true
-"#,
-    );
-
-    let server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/ps/plugins/suggested"))
-        .respond_with(ResponseTemplate::new(500).set_body_string("unavailable"))
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    let mut config = load_config(tmp.path(), tmp.path()).await;
-    config.chatgpt_base_url = server.uri();
-    let manager = PluginsManager::new(tmp.path().to_path_buf());
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
-    assert_eq!(
-        manager
-            .recommended_plugins_mode_for_config(&config, Some(&auth))
-            .await,
-        RecommendedPluginsMode::Legacy
-    );
-
-    server.reset().await;
-    Mock::given(method("GET"))
-        .and(path("/ps/plugins/suggested"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "enabled": true,
-            "plugins": []
-        })))
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    assert_eq!(
-        manager
-            .recommended_plugins_mode_for_config(&config, Some(&auth))
-            .await,
-        RecommendedPluginsMode::Endpoint {
-            plugins: Vec::new()
         }
     );
 }

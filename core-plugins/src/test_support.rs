@@ -146,12 +146,6 @@ pub(crate) async fn load_plugins_config(ody_home: &Path, cwd: &Path) -> PluginsC
     PluginsConfigInput::new(
         config_layer_stack,
         feature_enabled(&effective_config, "plugins", /*default_enabled*/ true),
-        feature_enabled(
-            &effective_config,
-            "remote_plugin",
-            /*default_enabled*/ false,
-        ),
-        "https://chatgpt.com/backend-api/".to_string(),
     )
 }
 

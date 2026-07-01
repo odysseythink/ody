@@ -183,7 +183,7 @@ fn odysseythink_manager_for_tests(
         ody_home,
         endpoint_client,
         Some(AuthManager::from_auth_for_testing(
-            OdyAuth::create_dummy_chatgpt_auth_for_testing(),
+            OdyAuth::create_dummy_api_key_auth_for_testing(),
         )),
     )
 }
@@ -767,7 +767,7 @@ async fn refresh_available_models_skips_network_when_external_api_key_overrides_
     let dynamic_slug = "dynamic-model-only-for-test-external-api-key";
     let ody_home = tempdir().expect("temp dir");
     let auth_manager =
-        AuthManager::from_auth_for_testing(OdyAuth::create_dummy_chatgpt_auth_for_testing());
+        AuthManager::from_auth_for_testing(OdyAuth::create_dummy_api_key_auth_for_testing());
     auth_manager.set_external_auth(Arc::new(TestExternalApiKeyAuth));
     let endpoint = TestAuthAwareModelsEndpoint::new(
         Some(Arc::clone(&auth_manager)),
@@ -807,7 +807,7 @@ async fn refresh_available_models_uses_cached_chatgpt_when_external_api_key_is_u
     let dynamic_slug = "dynamic-model-only-for-test-unresolved-external-api-key";
     let ody_home = tempdir().expect("temp dir");
     let auth_manager =
-        AuthManager::from_auth_for_testing(OdyAuth::create_dummy_chatgpt_auth_for_testing());
+        AuthManager::from_auth_for_testing(OdyAuth::create_dummy_api_key_auth_for_testing());
     auth_manager.set_external_auth(Arc::new(TestUnresolvedExternalApiKeyAuth));
     let endpoint = TestAuthAwareModelsEndpoint::new(
         Some(Arc::clone(&auth_manager)),
@@ -900,7 +900,7 @@ fn build_available_models_picks_default_after_hiding_hidden_models() {
 #[tokio::test]
 async fn static_manager_reads_latest_auth_mode() {
     let auth_manager =
-        AuthManager::from_auth_for_testing(OdyAuth::create_dummy_chatgpt_auth_for_testing());
+        AuthManager::from_auth_for_testing(OdyAuth::create_dummy_api_key_auth_for_testing());
     let chatgpt_only_model = {
         let mut model = remote_model("chatgpt-only", "ChatGPT Only", /*priority*/ 0);
         model.supported_in_api = false;

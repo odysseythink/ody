@@ -4,9 +4,9 @@ expression: rendered
 ---
 ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ ✨ Update available! 0.0.0 -> 9.9.9                                                                        │
-│ Run powershell -ExecutionPolicy Bypass -c '$env:ODY_NON_INTERACTIVE=1; irm                               │
-│ https://chatgpt.com/ody/install.ps1 | iex' to update.                                                    │
+│ Run powershell -ExecutionPolicy Bypass -c '$env:ODY_NON_INTERACTIVE=1; irm                                 │
+│ https://chatgpt.com/ody/install.ps1 | iex' to update.                                                      │
 │                                                                                                            │
 │ See full release notes:                                                                                    │
-│ https://github.com/odysseythink/ody/releases/latest                                                            │
+│ https://github.com/odysseythink/ody/releases/latest                                                        │
 ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯

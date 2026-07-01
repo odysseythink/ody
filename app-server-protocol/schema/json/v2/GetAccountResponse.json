@@ -108,12 +108,12 @@
         }
       ]
     },
-    "requiresOpenaiAuth": {
+    "requiresOdysseythinkAuth": {
       "type": "boolean"
     }
   },
   "required": [
-    "requiresOpenaiAuth"
+    "requiresOdysseythinkAuth"
   ],
   "title": "GetAccountResponse",
   "type": "object"

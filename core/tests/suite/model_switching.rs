@@ -497,7 +497,7 @@ async fn model_change_from_image_to_text_strips_prior_image_content() -> Result<
     .await;
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(move |config| {
             config.model = Some(image_model_slug.to_string());
         });
@@ -597,7 +597,7 @@ async fn generated_image_is_replayed_for_image_capable_models() -> Result<()> {
     .await;
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(move |config| {
             config.model = Some(image_model_slug.to_string());
         });
@@ -711,7 +711,7 @@ async fn model_change_from_generated_image_to_text_preserves_prior_generated_ima
     .await;
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(move |config| {
             config.model = Some(image_model_slug.to_string());
         });
@@ -827,7 +827,7 @@ async fn thread_rollback_after_generated_image_drops_entire_image_turn_history()
     .await;
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(move |config| {
             config.model = Some(image_model_slug.to_string());
         });
@@ -992,7 +992,7 @@ async fn model_switch_to_smaller_model_updates_token_context_window() -> Result<
     .await;
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(|config| {
             config.model = Some(large_model_slug.to_string());
         });

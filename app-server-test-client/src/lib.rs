@@ -37,7 +37,6 @@ use ody_app_server_protocol::DynamicToolSpec;
 use ody_app_server_protocol::FileChangeApprovalDecision;
 use ody_app_server_protocol::FileChangeRequestApprovalParams;
 use ody_app_server_protocol::FileChangeRequestApprovalResponse;
-use ody_app_server_protocol::GetAccountRateLimitsResponse;
 use ody_app_server_protocol::InitializeCapabilities;
 use ody_app_server_protocol::InitializeParams;
 use ody_app_server_protocol::InitializeResponse;
@@ -236,8 +235,6 @@ enum CliCommand {
         #[arg(long, default_value_t = false)]
         device_code: bool,
     },
-    /// Fetch the current account rate limits from the Ody app-server.
-    GetAccountRateLimits,
     /// List the available models from the Ody app-server.
     #[command(name = "model-list")]
     ModelList,
@@ -419,11 +416,6 @@ pub async fn run() -> Result<()> {
             ensure_dynamic_tools_unused(&dynamic_tools, "test-login")?;
             let endpoint = resolve_endpoint(ody_bin, url)?;
             test_login(&endpoint, &config_overrides, device_code).await
-        }
-        CliCommand::GetAccountRateLimits => {
-            ensure_dynamic_tools_unused(&dynamic_tools, "get-account-rate-limits")?;
-            let endpoint = resolve_endpoint(ody_bin, url)?;
-            get_account_rate_limits(&endpoint, &config_overrides).await
         }
         CliCommand::ModelList => {
             ensure_dynamic_tools_unused(&dynamic_tools, "model-list")?;
@@ -1177,24 +1169,6 @@ async fn test_login(
     .await
 }
 
-async fn get_account_rate_limits(endpoint: &Endpoint, config_overrides: &[String]) -> Result<()> {
-    with_client(
-        "get-account-rate-limits",
-        endpoint,
-        config_overrides,
-        |client| {
-            let initialize = client.initialize()?;
-            println!("< initialize response: {initialize:?}");
-
-            let response = client.get_account_rate_limits()?;
-            println!("< account/rateLimits/read response: {response:?}");
-
-            Ok(())
-        },
-    )
-    .await
-}
-
 async fn model_list(endpoint: &Endpoint, config_overrides: &[String]) -> Result<()> {
     with_client("model-list", endpoint, config_overrides, |client| {
         let initialize = client.initialize()?;
@@ -1736,16 +1710,6 @@ impl OdyClient {
         };
 
         self.send_request(request, request_id, "account/login/start")
-    }
-
-    fn get_account_rate_limits(&mut self) -> Result<GetAccountRateLimitsResponse> {
-        let request_id = self.request_id();
-        let request = ClientRequest::GetAccountRateLimits {
-            request_id: request_id.clone(),
-            params: None,
-        };
-
-        self.send_request(request, request_id, "account/rateLimits/read")
     }
 
     fn model_list(&mut self, params: ModelListParams) -> Result<ModelListResponse> {

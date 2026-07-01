@@ -101,7 +101,10 @@ pub async fn ody_plugins_enabled_for_workspace(
     };
 
     let cache_key = WorkspaceSettingsCacheKey {
-        chatgpt_base_url: config.chatgpt_base_url.clone(),
+        // The remote hosted plugin/Apps catalog config field this used to be sourced from has
+        // been removed; this path already requires ChatGPT workspace auth above, which is
+        // unreachable now, so this is kept only so the crate still compiles.
+        chatgpt_base_url: String::new(),
         account_id: account_id.clone(),
     };
     if let Some(cache) = cache

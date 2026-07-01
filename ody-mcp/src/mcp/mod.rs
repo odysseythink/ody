@@ -13,14 +13,11 @@ pub(crate) mod auth;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::env;
 use std::path::PathBuf;
-use std::time::Duration;
 
 use async_channel::unbounded;
 use ody_config::Constrained;
 use ody_config::McpServerConfig;
-use ody_config::McpServerTransportConfig;
 use ody_config::types::AppToolApproval;
 use ody_config::types::AuthKeyringBackendKind;
 use ody_config::types::OAuthCredentialsStoreMode;
@@ -48,7 +45,6 @@ use crate::server::EffectiveMcpServer;
 pub const ODY_APPS_MCP_SERVER_NAME: &str = "ody_apps";
 const MCP_TOOL_NAME_PREFIX: &str = "mcp";
 const MCP_TOOL_NAME_DELIMITER: &str = "__";
-const ODY_CONNECTORS_TOKEN_ENV_VAR: &str = "ODY_CONNECTORS_TOKEN";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum McpSnapshotDetail {
@@ -108,10 +104,6 @@ pub struct McpPermissionPromptAutoApproveContext {
 /// do not go stale when auth changes.
 #[derive(Debug, Clone)]
 pub struct McpConfig {
-    /// Base URL for ChatGPT-hosted app MCP servers, copied from the root config.
-    pub chatgpt_base_url: String,
-    /// Optional product SKU forwarded to the host-owned apps MCP server.
-    pub apps_mcp_product_sku: Option<String>,
     /// Ody home directory used for MCP OAuth state and app-tool cache files.
     pub ody_home: PathBuf,
     /// Preferred credential store for MCP OAuth tokens.
@@ -417,91 +409,6 @@ pub(crate) fn sanitize_responses_api_tool_name(name: &str) -> String {
         "_".to_string()
     } else {
         sanitized
-    }
-}
-
-fn ody_apps_mcp_bearer_token_env_var() -> Option<String> {
-    match env::var(ODY_CONNECTORS_TOKEN_ENV_VAR) {
-        Ok(value) if !value.trim().is_empty() => Some(ODY_CONNECTORS_TOKEN_ENV_VAR.to_string()),
-        Ok(_) => None,
-        Err(env::VarError::NotPresent) => None,
-        Err(env::VarError::NotUnicode(_)) => Some(ODY_CONNECTORS_TOKEN_ENV_VAR.to_string()),
-    }
-}
-
-fn normalize_ody_apps_base_url(base_url: &str) -> String {
-    let mut base_url = base_url.trim_end_matches('/').to_string();
-    if (base_url.starts_with("https://chatgpt.com")
-        || base_url.starts_with("https://chat.odysseythink.com"))
-        && !base_url.contains("/backend-api")
-    {
-        base_url = format!("{base_url}/backend-api");
-    }
-    base_url
-}
-
-fn ody_apps_mcp_url_for_base_url(base_url: &str) -> String {
-    let base_url = normalize_ody_apps_base_url(base_url);
-    let (base_url, default_path) = if base_url.contains("/backend-api") {
-        (base_url, "wham/apps")
-    } else if base_url.contains("/api/ody") {
-        (base_url, "apps")
-    } else {
-        (format!("{base_url}/api/ody"), "apps")
-    };
-    format!("{base_url}/{default_path}")
-}
-
-pub fn ody_apps_mcp_server_config(
-    chatgpt_base_url: &str,
-    apps_mcp_product_sku: Option<&str>,
-) -> McpServerConfig {
-    mcp_server_config_for_url(
-        ody_apps_mcp_url_for_base_url(chatgpt_base_url),
-        apps_mcp_product_sku,
-    )
-}
-
-/// Builds the ChatGPT-hosted plugin runtime served by plugin-service.
-pub fn hosted_plugin_runtime_mcp_server_config(
-    chatgpt_base_url: &str,
-    apps_mcp_product_sku: Option<&str>,
-) -> McpServerConfig {
-    let base_url = normalize_ody_apps_base_url(chatgpt_base_url);
-    let base_url = if base_url.contains("/backend-api") || base_url.contains("/api/ody") {
-        base_url
-    } else {
-        format!("{base_url}/api/ody")
-    };
-    mcp_server_config_for_url(format!("{base_url}/ps/mcp"), apps_mcp_product_sku)
-}
-
-fn mcp_server_config_for_url(url: String, apps_mcp_product_sku: Option<&str>) -> McpServerConfig {
-    let http_headers = apps_mcp_product_sku.map(|product_sku| {
-        HashMap::from([("X-OpenAI-Product-Sku".to_string(), product_sku.to_string())])
-    });
-
-    McpServerConfig {
-        transport: McpServerTransportConfig::StreamableHttp {
-            url,
-            bearer_token_env_var: ody_apps_mcp_bearer_token_env_var(),
-            http_headers,
-            env_http_headers: None,
-        },
-        environment_id: ody_config::DEFAULT_MCP_SERVER_ENVIRONMENT_ID.to_string(),
-        enabled: true,
-        required: false,
-        supports_parallel_tool_calls: false,
-        disabled_reason: None,
-        startup_timeout_sec: Some(Duration::from_secs(30)),
-        tool_timeout_sec: None,
-        default_tools_approval_mode: None,
-        enabled_tools: None,
-        disabled_tools: None,
-        scopes: None,
-        oauth: None,
-        oauth_resource: None,
-        tools: HashMap::new(),
     }
 }
 

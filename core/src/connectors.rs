@@ -354,14 +354,17 @@ pub async fn list_accessible_connectors_from_mcp_tools_with_mcp_manager(
 }
 
 fn accessible_connectors_cache_key(
-    config: &Config,
+    _config: &Config,
     auth: Option<&OdyAuth>,
 ) -> AccessibleConnectorsCacheKey {
     let account_id = auth.and_then(OdyAuth::get_account_id);
     let chatgpt_user_id = auth.and_then(OdyAuth::get_chatgpt_user_id);
     let is_workspace_account = auth.is_some_and(OdyAuth::is_workspace_account);
     AccessibleConnectorsCacheKey {
-        chatgpt_base_url: config.chatgpt_base_url.clone(),
+        // The remote hosted plugin/Apps catalog config field this used to be sourced from has
+        // been removed. `uses_ody_backend()` auth (required just below/by callers) can never
+        // be true anymore, so this cache key component is now unreachable in practice.
+        chatgpt_base_url: String::new(),
         account_id,
         chatgpt_user_id,
         is_workspace_account,
@@ -459,7 +462,10 @@ async fn cached_directory_connectors_for_tool_suggest_with_auth(
     let cache_context = ConnectorDirectoryCacheContext::new(
         config.ody_home.to_path_buf(),
         ConnectorDirectoryCacheKey::new(
-            config.chatgpt_base_url.clone(),
+            // See note in `accessible_connectors_cache_key`: this remote-catalog config field
+            // has been removed and this path is unreachable now that `uses_ody_backend()` is
+            // always false.
+            String::new(),
             Some(account_id),
             auth.get_chatgpt_user_id(),
             is_workspace_account,

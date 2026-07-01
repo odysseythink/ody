@@ -123,7 +123,10 @@ fn connector_directory_cache_context(
     ConnectorDirectoryCacheContext::new(
         config.ody_home.to_path_buf(),
         ConnectorDirectoryCacheKey::new(
-            config.chatgpt_base_url.clone(),
+            // The remote hosted plugin/Apps catalog config field this used to be sourced from
+            // has been removed; this path is unreachable now (see chatgpt_client.rs), kept
+            // only so the crate still compiles.
+            String::new(),
             auth.get_account_id(),
             auth.get_chatgpt_user_id(),
             auth.is_workspace_account(),

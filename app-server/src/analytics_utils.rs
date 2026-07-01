@@ -10,7 +10,10 @@ pub(crate) fn analytics_events_client_from_config(
 ) -> AnalyticsEventsClient {
     AnalyticsEventsClient::new(
         auth_manager,
-        config.chatgpt_base_url.trim_end_matches('/').to_string(),
+        // The remote hosted plugin/Apps catalog config field this used to be sourced from has
+        // been removed; analytics telemetry is unrelated to that catalog, so keep using its
+        // historical default endpoint here.
+        "https://chatgpt.com/backend-api".to_string(),
         config.analytics_enabled,
     )
 }

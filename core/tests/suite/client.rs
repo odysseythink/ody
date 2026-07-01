@@ -384,7 +384,7 @@ async fn response_item_ids_are_sent_for_all_remote_v2_compaction_requests() -> a
     )
     .await;
     let test = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(|config| {
             let _ = config.features.enable(Feature::ItemIds);
             let _ = config.features.enable(Feature::RemoteCompactionV2);
@@ -3540,7 +3540,7 @@ async fn env_var_overrides_loaded_auth() {
 }
 
 fn create_dummy_ody_auth() -> OdyAuth {
-    OdyAuth::create_dummy_chatgpt_auth_for_testing()
+    OdyAuth::create_dummy_api_key_auth_for_testing()
 }
 
 /// Scenario:

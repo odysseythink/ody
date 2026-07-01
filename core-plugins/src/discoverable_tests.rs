@@ -4,10 +4,7 @@ use crate::OPENAI_BUNDLED_MARKETPLACE_NAME;
 use crate::PluginInstallRequest;
 use crate::PluginsConfigInput;
 use crate::PluginsManager;
-use crate::remote::REMOTE_GLOBAL_MARKETPLACE_NAME;
-use crate::remote::RemotePluginServiceConfig;
-use crate::remote::fetch_and_cache_global_remote_plugin_catalog;
-use crate::startup_sync::curated_plugins_repo_path;
+use crate::loader::curated_plugins_repo_path;
 use crate::test_support::TEST_CURATED_PLUGIN_SHA;
 use crate::test_support::load_plugins_config;
 use crate::test_support::write_curated_plugin;
@@ -20,19 +17,12 @@ use ody_config::CONFIG_TOML_FILE;
 use ody_login::OdyAuth;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use pretty_assertions::assert_eq;
-use serde_json::json;
 use std::collections::HashSet;
 use std::path::Path;
 use tempfile::tempdir;
 use tracing::Level;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_test::internal::MockWriter;
-use wiremock::Mock;
-use wiremock::MockServer;
-use wiremock::ResponseTemplate;
-use wiremock::matchers::method;
-use wiremock::matchers::path;
-use wiremock::matchers::query_param;
 
 #[tokio::test]
 async fn returns_fallback_plugins_when_remote_disabled_for_ody_auth() {
@@ -43,7 +33,7 @@ async fn returns_fallback_plugins_when_remote_disabled_for_ody_auth() {
     let plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
     let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
     plugins_manager.set_auth_mode(Some(AuthMode::Chatgpt));
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
+    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
     let discoverable_plugins = list_discoverable_plugins(
         &plugins_manager,
         discovery_input(plugins, &[], &[], &[]),
@@ -69,8 +59,7 @@ async fn returns_api_curated_fallback_plugins_for_direct_provider_auth() {
     let curated_root = curated_plugins_repo_path(ody_home.path());
     write_odysseythink_api_curated_marketplace(&curated_root, &["sample", "slack", "odysseythink-developers"]);
 
-    let mut plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
-    plugins.remote_plugin_enabled = true;
+    let plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
     let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
     plugins_manager.set_auth_mode(Some(AuthMode::ApiKey));
     let auth = OdyAuth::from_api_key("test-api-key");
@@ -122,88 +111,6 @@ async fn returns_microsoft_fallback_plugins() {
             "outlook-email@odysseythink-curated".to_string(),
             "sharepoint@odysseythink-curated".to_string(),
         ]
-    );
-}
-
-#[tokio::test]
-async fn omits_odysseythink_curated_but_keeps_configured_marketplaces_for_remote_ody_auth() {
-    let ody_home = tempdir().expect("tempdir should succeed");
-    let curated_root = curated_plugins_repo_path(ody_home.path());
-    write_odysseythink_curated_marketplace(&curated_root, &["slack"]);
-
-    let bundled_marketplace_name = OPENAI_BUNDLED_MARKETPLACE_NAME;
-    let bundled_marketplace_root = ody_home
-        .path()
-        .join(format!(".tmp/marketplaces/{bundled_marketplace_name}"));
-    write_file(
-        &bundled_marketplace_root.join(".agents/plugins/marketplace.json"),
-        &format!(
-            r#"{{
-  "name": "{bundled_marketplace_name}",
-  "plugins": [
-    {{"name": "chrome", "source": {{"source": "local", "path": "./plugins/chrome"}}}}
-  ]
-}}
-"#
-        ),
-    );
-    write_curated_plugin(&bundled_marketplace_root, "chrome");
-    write_file(
-        &ody_home.path().join(CONFIG_TOML_FILE),
-        &format!(
-            r#"[features]
-plugins = true
-remote_plugin = true
-
-[marketplaces.{bundled_marketplace_name}]
-source_type = "git"
-source = "/tmp/{bundled_marketplace_name}"
-"#
-        ),
-    );
-
-    let plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
-    let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
-    plugins_manager.set_auth_mode(Some(AuthMode::Chatgpt));
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
-    let discoverable_plugins = list_discoverable_plugins(
-        &plugins_manager,
-        discovery_input(plugins, &[], &[], &[]),
-        Some(&auth),
-    )
-    .await;
-
-    assert_eq!(
-        discoverable_plugins
-            .into_iter()
-            .map(|plugin| plugin.id)
-            .collect::<Vec<_>>(),
-        vec!["chrome@odysseythink-bundled".to_string()]
-    );
-}
-
-#[tokio::test]
-async fn includes_odysseythink_curated_when_remote_enabled_without_auth() {
-    let ody_home = tempdir().expect("tempdir should succeed");
-    let curated_root = curated_plugins_repo_path(ody_home.path());
-    write_odysseythink_curated_marketplace(&curated_root, &["slack"]);
-
-    let mut plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
-    plugins.remote_plugin_enabled = true;
-    let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
-    let discoverable_plugins = list_discoverable_plugins(
-        &plugins_manager,
-        discovery_input(plugins, &[], &[], &[]),
-        /*auth*/ None,
-    )
-    .await;
-
-    assert_eq!(
-        discoverable_plugins
-            .into_iter()
-            .map(|plugin| plugin.id)
-            .collect::<Vec<_>>(),
-        vec!["slack@odysseythink-curated".to_string()]
     );
 }
 
@@ -779,126 +686,6 @@ source = "/tmp/{sales_marketplace_name}"
     .await;
 
     assert_eq!(discoverable_plugins, Vec::new());
-}
-
-#[tokio::test]
-async fn expands_cached_remote_plugins_by_loaded_apps() {
-    let ody_home = tempdir().expect("tempdir should succeed");
-    write_file(
-        &ody_home.path().join(CONFIG_TOML_FILE),
-        r#"[features]
-plugins = true
-remote_plugin = true
-"#,
-    );
-
-    let server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/backend-api/ps/plugins/list"))
-        .and(query_param("scope", "GLOBAL"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "plugins": [
-                {
-                    "id": "plugins~Plugin_remote_unlisted",
-                    "name": "remote-unlisted",
-                    "scope": "GLOBAL",
-                    "installation_policy": "AVAILABLE",
-                    "authentication_policy": "ON_USE",
-                    "status": "AVAILABLE",
-                    "release": {
-                        "display_name": "Remote Unlisted",
-                        "description": "Remote Unlisted long",
-                        "app_ids": ["remote-unlisted-app"],
-                        "interface": {
-                            "short_description": "Remote Unlisted short",
-                            "long_description": null,
-                            "developer_name": null,
-                            "category": null,
-                            "capabilities": [],
-                            "website_url": null,
-                            "privacy_policy_url": null,
-                            "terms_of_service_url": null,
-                            "brand_color": null,
-                            "default_prompt": null,
-                            "composer_icon_url": null,
-                            "logo_url": null,
-                            "screenshot_urls": []
-                        },
-                        "skills": [
-                            {
-                                "name": "remote-unlisted",
-                                "description": "Use unlisted remote plugin",
-                                "interface": null
-                            }
-                        ]
-                    }
-                }
-            ],
-            "pagination": {
-                "next_page_token": null
-            }
-        })))
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
-    let mut plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
-    plugins.chatgpt_base_url = format!("{}/backend-api", server.uri());
-    let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
-    fetch_and_cache_global_remote_plugin_catalog(
-        ody_home.path(),
-        &RemotePluginServiceConfig {
-            chatgpt_base_url: plugins.chatgpt_base_url.clone(),
-        },
-        Some(&auth),
-    )
-    .await
-    .expect("remote plugin catalog cache should write");
-
-    for scope in ["GLOBAL", "USER", "WORKSPACE"] {
-        Mock::given(method("GET"))
-            .and(path("/backend-api/ps/plugins/installed"))
-            .and(query_param("scope", scope))
-            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-                "plugins": [],
-                "pagination": {
-                    "next_page_token": null
-                }
-            })))
-            .expect(1)
-            .mount(&server)
-            .await;
-    }
-    plugins_manager
-        .build_and_cache_remote_installed_plugin_marketplaces(
-            &plugins,
-            Some(&auth),
-            &[REMOTE_GLOBAL_MARKETPLACE_NAME],
-            /*on_effective_plugins_changed*/ None,
-        )
-        .await
-        .expect("remote installed plugin cache should write");
-
-    let discoverable_plugins = list_discoverable_plugins(
-        &plugins_manager,
-        discovery_input(plugins, &[], &[], &["remote-unlisted-app"]),
-        Some(&auth),
-    )
-    .await;
-
-    assert_eq!(
-        discoverable_plugins,
-        vec![ToolSuggestDiscoverablePlugin {
-            id: "remote-unlisted@odysseythink-curated-remote".to_string(),
-            remote_plugin_id: Some("plugins~Plugin_remote_unlisted".to_string()),
-            name: "Remote Unlisted".to_string(),
-            description: Some("Remote Unlisted short".to_string()),
-            has_skills: true,
-            mcp_server_names: Vec::new(),
-            app_connector_ids: vec!["remote-unlisted-app".to_string()],
-        }]
-    );
 }
 
 fn discovery_input(

@@ -4,7 +4,6 @@ expression: normalize_snapshot_paths(term.backend().vt100().screen().contents())
 ---
 
 
-
 ✔ Request approved for permission request: Need write access for generated
   report assets.
 
@@ -14,3 +13,4 @@ expression: normalize_snapshot_paths(term.backend().vt100().screen().contents())
 › Ask Ody to do anything
 
   gpt-5.5 default · /tmp/project
+                                                                                                 context: --

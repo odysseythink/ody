@@ -3,8 +3,6 @@ members = [
     "aws-auth",
     "analytics",
     "agent-graph-store",
-    "agent-identity",
-    "backend-client",
     "bwrap",
     "ansi-escape",
     "async-utils",
@@ -19,15 +17,11 @@ members = [
     "feedback",
     "features",
     "install-context",
-    "ody-backend-openapi-models",
     "code-mode",
     "code-mode-host",
     "code-mode-protocol",
     "ody-home",
     "cloud-config",
-    "cloud-tasks",
-    "cloud-tasks-client",
-    "cloud-tasks-mock-client",
     "cli",
     "collaboration-mode-templates",
     "connectors",
@@ -55,8 +49,6 @@ members = [
     "ext/mcp",
     "ext/skills",
     "ext/web-search",
-    "external-agent-migration",
-    "external-agent-sessions",
     "keyring-store",
     "file-search",
     "file-watcher",
@@ -73,19 +65,16 @@ members = [
     "ollama",
     "process-hardening",
     "protocol",
-    "realtime-webrtc",
     "prompts",
     "rollout",
     "rollout-trace",
     "rmcp-client",
-    "responses-api-proxy",
     "response-debug-context",
     "sandboxing",
     "stdio-to-uds",
     "otel",
     "tui",
     "tools",
-    "v8-poc",
     "utils/absolute-path",
     "utils/path-uri",
     "utils/cargo-bin",
@@ -115,7 +104,6 @@ members = [
     "state",
     "terminal-detection",
     "test-binary-support",
-    "thread-manager-sample",
     "thread-store",
     "uds",
     "ody-experimental-api-macros",
@@ -138,7 +126,6 @@ license = "Apache-2.0"
 app_test_support = { path = "app-server/tests/common" }
 ody-analytics = { path = "analytics" }
 ody-agent-graph-store = { path = "agent-graph-store" }
-ody-agent-identity = { path = "agent-identity" }
 ody-ansi-escape = { path = "ansi-escape" }
 ody-api = { path = "ody-api" }
 ody-aws-auth = { path = "aws-auth" }
@@ -151,14 +138,11 @@ ody-app-server-test-client = { path = "app-server-test-client" }
 ody-apply-patch = { path = "apply-patch" }
 ody-arg0 = { path = "arg0" }
 ody-async-utils = { path = "async-utils" }
-ody-backend-client = { path = "backend-client" }
 ody-chatgpt = { path = "chatgpt" }
 ody-cli = { path = "cli" }
 ody-client = { path = "ody-client" }
 ody-collaboration-mode-templates = { path = "collaboration-mode-templates" }
 ody-cloud-config = { path = "cloud-config" }
-ody-cloud-tasks-client = { path = "cloud-tasks-client" }
-ody-cloud-tasks-mock-client = { path = "cloud-tasks-mock-client" }
 ody-code-mode = { path = "code-mode" }
 ody-code-mode-protocol = { path = "code-mode-protocol" }
 ody-home = { path = "ody-home" }
@@ -177,8 +161,6 @@ ody-extension-api = { path = "ext/extension-api" }
 ody-goal-extension = { path = "ext/goal" }
 ody-guardian = { path = "ext/guardian" }
 ody-image-generation-extension = { path = "ext/image-generation" }
-ody-external-agent-migration = { path = "external-agent-migration" }
-ody-external-agent-sessions = { path = "external-agent-sessions" }
 ody-experimental-api-macros = { path = "ody-experimental-api-macros" }
 ody-features = { path = "features" }
 ody-feedback = { path = "feedback" }
@@ -209,7 +191,6 @@ ody-model-provider = { path = "model-provider" }
 ody-process-hardening = { path = "process-hardening" }
 ody-protocol = { path = "protocol" }
 ody-prompts = { path = "prompts" }
-ody-responses-api-proxy = { path = "responses-api-proxy" }
 ody-response-debug-context = { path = "response-debug-context" }
 ody-rmcp-client = { path = "rmcp-client" }
 ody-rollout = { path = "rollout" }
@@ -250,7 +231,6 @@ ody-utils-sleep-inhibitor = { path = "utils/sleep-inhibitor" }
 ody-utils-stream-parser = { path = "utils/stream-parser" }
 ody-utils-string = { path = "utils/string" }
 ody-utils-template = { path = "utils/template" }
-ody-v8-poc = { path = "v8-poc" }
 ody-windows-sandbox = { path = "windows-sandbox-rs" }
 core_test_support = { path = "core/tests/common" }
 mcp_test_support = { path = "mcp-server/tests/common" }
@@ -505,7 +485,6 @@ ignored = [
     "ody-agent-graph-store",
     "icu_provider",
     "openssl-sys",
-    "ody-v8-poc",
 ]
 
 [profile.dev]

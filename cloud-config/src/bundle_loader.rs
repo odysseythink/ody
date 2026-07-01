@@ -1,8 +1,3 @@
-use crate::backend::BackendBundleClient;
-use crate::service::CLOUD_CONFIG_BUNDLE_TIMEOUT;
-use crate::service::CloudConfigBundleService;
-use ody_config::CloudConfigBundleLoadError;
-use ody_config::CloudConfigBundleLoadErrorCode;
 use ody_config::CloudConfigBundleLoader;
 use ody_config::types::AuthCredentialsStoreMode;
 use ody_login::AuthKeyringBackendKind;
@@ -10,66 +5,26 @@ use ody_login::AuthManager;
 use ody_login::AuthRouteConfig;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::OnceLock;
-use tokio::task::JoinHandle;
 
-fn refresher_task_slot() -> &'static Mutex<Option<JoinHandle<()>>> {
-    static REFRESHER_TASK: OnceLock<Mutex<Option<JoinHandle<()>>>> = OnceLock::new();
-    REFRESHER_TASK.get_or_init(|| Mutex::new(None))
-}
-
+/// Returns a no-op cloud-config bundle loader.
+///
+/// The OpenAI/Codex backend-delivered enterprise config bundle was removed in
+/// M1.2; this stub preserves the public surface while always yielding no bundle.
 pub fn cloud_config_bundle_loader(
-    auth_manager: Arc<AuthManager>,
-    chatgpt_base_url: String,
-    ody_home: PathBuf,
+    _auth_manager: Arc<AuthManager>,
+    _chatgpt_base_url: String,
+    _ody_home: PathBuf,
 ) -> CloudConfigBundleLoader {
-    let service = CloudConfigBundleService::new(
-        auth_manager,
-        Arc::new(BackendBundleClient::new(chatgpt_base_url)),
-        ody_home,
-        CLOUD_CONFIG_BUNDLE_TIMEOUT,
-    );
-    let refresh_service = service.clone();
-    let task = tokio::spawn(async move { service.load_startup_bundle_with_timeout().await });
-    let refresh_task =
-        tokio::spawn(async move { refresh_service.refresh_cache_in_background().await });
-    let mut refresher_guard = refresher_task_slot().lock().unwrap_or_else(|err| {
-        tracing::warn!("cloud config bundle refresher task slot was poisoned");
-        err.into_inner()
-    });
-    if let Some(existing_task) = refresher_guard.replace(refresh_task) {
-        existing_task.abort();
-    }
-    CloudConfigBundleLoader::new(async move {
-        task.await.map_err(|err| {
-            tracing::error!(error = %err, "Cloud config bundle task failed");
-            CloudConfigBundleLoadError::new(
-                CloudConfigBundleLoadErrorCode::Internal,
-                /*status_code*/ None,
-                format!("cloud config bundle load failed: {err}"),
-            )
-        })?
-    })
+    CloudConfigBundleLoader::default()
 }
 
 pub async fn cloud_config_bundle_loader_for_storage(
-    ody_home: PathBuf,
-    enable_ody_api_key_env: bool,
-    credentials_store_mode: AuthCredentialsStoreMode,
-    keyring_backend_kind: AuthKeyringBackendKind,
-    chatgpt_base_url: String,
-    auth_route_config: Option<AuthRouteConfig>,
+    _ody_home: PathBuf,
+    _enable_ody_api_key_env: bool,
+    _credentials_store_mode: AuthCredentialsStoreMode,
+    _keyring_backend_kind: AuthKeyringBackendKind,
+    _chatgpt_base_url: String,
+    _auth_route_config: Option<AuthRouteConfig>,
 ) -> CloudConfigBundleLoader {
-    let auth_manager = AuthManager::shared(
-        ody_home.clone(),
-        enable_ody_api_key_env,
-        credentials_store_mode,
-        /*forced_chatgpt_workspace_id*/ None,
-        Some(chatgpt_base_url.clone()),
-        keyring_backend_kind,
-        auth_route_config,
-    )
-    .await;
-    cloud_config_bundle_loader(auth_manager, chatgpt_base_url, ody_home)
+    CloudConfigBundleLoader::default()
 }

@@ -160,7 +160,7 @@ async fn spawn_agent_description_lists_visible_models_and_reasoning_efforts() ->
     .await;
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_model("visible-model")
         .with_config(|config| {
             config

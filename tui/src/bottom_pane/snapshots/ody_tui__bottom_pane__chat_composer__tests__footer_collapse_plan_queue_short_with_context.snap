@@ -10,4 +10,5 @@ expression: terminal.backend()
 "                                                  "
 "                                                  "
 "                                                  "
-"  tab to queue · Plan mode      98% context left  "
+"  tab to queue · Plan mode       3% context left  "
+"                        context: 96.8% (968K/1M)  "

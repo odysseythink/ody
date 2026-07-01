@@ -18,6 +18,32 @@ pub struct TokenUsage {
 }
 
 impl TokenUsage {
+    pub const BASELINE_TOKENS: i64 = BASELINE_TOKENS;
+
+    /// Derive the first-row context-window indicator values from raw usage.
+    ///
+    /// When a maximum context window is known, returns the percent of the window still
+    /// remaining (matching the legacy first-row "Context X% left" indicator) and no used
+    /// token count. The remaining percent is computed from `last_context_tokens` to match
+    /// pre-existing behavior. When the window is unknown, returns no percent and the total
+    /// token count so the first row can show "N tokens used".
+    pub(crate) fn context_window_percent_and_used_tokens(
+        last_context_tokens: Option<i64>,
+        total_context_tokens: Option<i64>,
+        max_context_tokens: Option<i64>,
+    ) -> (Option<i64>, Option<i64>) {
+        match max_context_tokens {
+            Some(max) if max > 0 => {
+                let usage = Self {
+                    total_tokens: last_context_tokens.unwrap_or(0),
+                    ..Self::default()
+                };
+                (Some(usage.percent_of_context_window_remaining(max)), None)
+            }
+            _ => (None, total_context_tokens),
+        }
+    }
+
     pub fn is_zero(&self) -> bool {
         self.total_tokens == 0
     }

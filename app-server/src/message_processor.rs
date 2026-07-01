@@ -8,6 +8,7 @@ use crate::attestation::app_server_attestation_provider;
 use crate::config_manager::ConfigManager;
 use crate::connection_rpc_gate::ConnectionRpcGate;
 use crate::current_time::app_server_time_provider;
+use crate::error_code::internal_error;
 use crate::error_code::invalid_request;
 use crate::extensions::ThreadExtensionDependencies;
 use crate::extensions::app_server_extension_event_sink;
@@ -24,8 +25,6 @@ use crate::request_processors::CatalogRequestProcessor;
 use crate::request_processors::CommandExecRequestProcessor;
 use crate::request_processors::ConfigRequestProcessor;
 use crate::request_processors::EnvironmentRequestProcessor;
-use crate::request_processors::ExternalAgentConfigRequestProcessor;
-use crate::request_processors::ExternalAgentConfigRequestProcessorArgs;
 use crate::request_processors::FeedbackRequestProcessor;
 use crate::request_processors::FsRequestProcessor;
 use crate::request_processors::GitRequestProcessor;
@@ -194,7 +193,6 @@ pub(crate) struct MessageProcessor {
     process_exec_processor: ProcessExecRequestProcessor,
     config_processor: ConfigRequestProcessor,
     environment_processor: EnvironmentRequestProcessor,
-    external_agent_config_processor: ExternalAgentConfigRequestProcessor,
     feedback_processor: FeedbackRequestProcessor,
     fs_processor: FsRequestProcessor,
     git_processor: GitRequestProcessor,
@@ -528,18 +526,6 @@ impl MessageProcessor {
             thread_manager.clone(),
             analytics_events_client.clone(),
         );
-        let external_agent_config_processor =
-            ExternalAgentConfigRequestProcessor::new(ExternalAgentConfigRequestProcessorArgs {
-                outgoing: outgoing.clone(),
-                thread_manager: Arc::clone(&thread_manager),
-                thread_store: Arc::clone(&thread_store),
-                config_manager: config_manager.clone(),
-                config_processor: config_processor.clone(),
-                state_db,
-                analytics_events_client,
-                arg0_paths,
-                ody_home: config.ody_home.to_path_buf(),
-            });
         let environment_processor =
             EnvironmentRequestProcessor::new(thread_manager.environment_manager());
         let fs_processor = FsRequestProcessor::new(
@@ -563,7 +549,6 @@ impl MessageProcessor {
             process_exec_processor,
             config_processor,
             environment_processor,
-            external_agent_config_processor,
             feedback_processor,
             fs_processor,
             git_processor,
@@ -963,21 +948,13 @@ impl MessageProcessor {
                 .windows_sandbox_readiness()
                 .await
                 .map(|response| Some(response.into())),
-            ClientRequest::ExternalAgentConfigDetect { params, .. } => self
-                .external_agent_config_processor
-                .detect(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::ExternalAgentConfigImport { params, .. } => self
-                .external_agent_config_processor
-                .import(request_id.clone(), params)
-                .await
-                .map(|()| None),
-            ClientRequest::ExternalAgentConfigImportHistoriesRead { .. } => self
-                .external_agent_config_processor
-                .read_import_histories()
-                .await
-                .map(|response| Some(response.into())),
+            ClientRequest::ExternalAgentConfigDetect { .. }
+            | ClientRequest::ExternalAgentConfigImport { .. }
+            | ClientRequest::ExternalAgentConfigImportHistoriesRead { .. } => {
+                Err(internal_error(
+                    "external agent config migration is not supported in this build",
+                ))
+            }
             ClientRequest::ConfigValueWrite { params, .. } => {
                 self.config_processor.value_write(params).await.map(Some)
             }

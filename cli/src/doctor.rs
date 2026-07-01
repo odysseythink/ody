@@ -1205,10 +1205,6 @@ fn auth_check(config: &Config) -> DoctorCheck {
             details.push(format!("stored auth mode: {}", stored_auth_mode(&auth)));
             details.push(format!("stored API key: {}", auth.odysseythink_api_key.is_some()));
             details.push(format!("stored ChatGPT tokens: {}", auth.tokens.is_some()));
-            details.push(format!(
-                "stored agent identity: {}",
-                auth.agent_identity.is_some()
-            ));
             let auth_issues = stored_auth_issues(&auth, env_var_present);
             details.extend(
                 auth_issues
@@ -1336,9 +1332,7 @@ fn stored_auth_mode_value(auth: &AuthDotJson) -> ody_app_server_protocol::AuthMo
     if let Some(mode) = auth.auth_mode {
         return mode;
     }
-    if auth.personal_access_token.is_some() {
-        ody_app_server_protocol::AuthMode::PersonalAccessToken
-    } else if auth.bedrock_api_key.is_some() {
+    if auth.bedrock_api_key.is_some() {
         ody_app_server_protocol::AuthMode::BedrockApiKey
     } else if auth.odysseythink_api_key.is_some() {
         ody_app_server_protocol::AuthMode::ApiKey
@@ -1397,22 +1391,10 @@ fn stored_auth_issues(
             }
         }
         ody_app_server_protocol::AuthMode::AgentIdentity => {
-            if auth
-                .agent_identity
-                .as_ref()
-                .is_none_or(|agent_identity| !agent_identity.has_auth_material())
-            {
-                issues.push("agent identity auth is missing an agent identity token");
-            }
+            issues.push("agent identity auth is no longer supported");
         }
         ody_app_server_protocol::AuthMode::PersonalAccessToken => {
-            if auth
-                .personal_access_token
-                .as_deref()
-                .is_none_or(|token| token.trim().is_empty())
-            {
-                issues.push("personal access token auth is missing a personal access token");
-            }
+            issues.push("personal access token auth is no longer supported");
         }
         ody_app_server_protocol::AuthMode::BedrockApiKey => {
             if auth.bedrock_api_key.is_none() {
@@ -2569,7 +2551,10 @@ fn provider_reachability_plan(config: &Config) -> ReachabilityPlan {
         config.model_provider.base_url.as_deref(),
         config.model_provider.query_params.as_ref(),
         config.model_provider.is_amazon_bedrock(),
-        &config.chatgpt_base_url,
+        // The remote hosted plugin/Apps catalog config field this used to be sourced from has
+        // been removed; keep using the same historical default as `default_reachability_plan`
+        // below.
+        "https://chatgpt.com/backend-api/",
     )
 }
 

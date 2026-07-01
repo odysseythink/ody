@@ -1388,7 +1388,7 @@ async fn view_image_tool_returns_unsupported_message_for_text_only_model() -> an
     .await;
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(|config| {
             config.model = Some(model_slug.to_string());
         });

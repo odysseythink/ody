@@ -10,8 +10,6 @@ use crate::marketplace::MarketplacePluginSource;
 use crate::marketplace::find_marketplace_plugin;
 use crate::marketplace::list_marketplaces;
 use crate::marketplace::load_marketplace;
-use crate::remote::REMOTE_GLOBAL_MARKETPLACE_NAME;
-use crate::remote::RemoteInstalledPlugin;
 use crate::store::PluginStore;
 use crate::store::plugin_version_for_source;
 use crate::store::plugin_version_for_source_with_fallback_manifest;
@@ -50,6 +48,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
 use tempfile::TempDir;
@@ -202,6 +201,12 @@ pub async fn load_plugin_hooks_from_layer_stack(
     }
 }
 
+// The remote hosted plugin catalog has been removed; `extra_plugins` passed into this
+// function is always empty now, but the merge/conflict-avoidance logic is kept generic (and
+// this name is kept solely for local-vs-configured-plugin key comparisons) so callers can
+// still pass in supplemental plugin configs from other local sources in the future.
+const REMOTE_GLOBAL_MARKETPLACE_NAME: &str = "odysseythink-curated-remote";
+
 fn merge_configured_plugins_with_remote_installed(
     mut configured_plugins: HashMap<String, PluginConfig>,
     extra_plugins: HashMap<String, PluginConfig>,
@@ -261,41 +266,6 @@ fn installed_plugin_name_for_marketplace(
     }
     store.active_plugin_root(&plugin_id)?;
     Some(plugin_id.plugin_name)
-}
-
-pub fn remote_installed_plugins_to_config(
-    plugins: &[RemoteInstalledPlugin],
-    store: &PluginStore,
-) -> HashMap<String, PluginConfig> {
-    plugins
-        .iter()
-        .filter_map(|plugin| {
-            let plugin_id =
-                match PluginId::new(plugin.name.clone(), plugin.marketplace_name.clone()) {
-                    Ok(plugin_id) => plugin_id,
-                    Err(err) => {
-                        warn!(
-                            plugin = %plugin.name,
-                            remote_id = %plugin.id,
-                            error = %err,
-                            "ignoring invalid remote installed plugin name"
-                        );
-                        return None;
-                    }
-                };
-            // TODO(remote plugins): download or update missing local bundles during remote
-            // installed reconciliation. Until then, only publish remote installed state for
-            // bundles already present in the local plugin cache.
-            store.active_plugin_root(&plugin_id)?;
-            Some((
-                plugin_id.as_key(),
-                PluginConfig {
-                    enabled: plugin.enabled,
-                    mcp_servers: HashMap::new(),
-                },
-            ))
-        })
-        .collect()
 }
 
 pub fn refresh_curated_plugin_cache(
@@ -387,6 +357,20 @@ pub fn refresh_curated_plugin_cache(
     }
 
     Ok(cache_refreshed)
+}
+
+/// Local on-disk location for the curated plugin marketplace, if present.
+///
+/// This directory was historically populated by syncing a remote (chatgpt.com-hosted) curated
+/// plugins repository at startup. That remote sync has been removed; this path is kept purely
+/// as the well-known local location plugin listing/discovery checks for curated marketplace
+/// content, which may still be present from a prior sync or seeded by other means.
+pub fn curated_plugins_repo_path(ody_home: &Path) -> PathBuf {
+    ody_home.join(".tmp/plugins")
+}
+
+pub fn curated_plugins_api_marketplace_path(ody_home: &Path) -> PathBuf {
+    curated_plugins_repo_path(ody_home).join(".agents/plugins/api_marketplace.json")
 }
 
 fn curated_marketplace_paths_for_cache_refresh(

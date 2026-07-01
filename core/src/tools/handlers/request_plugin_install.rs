@@ -2,7 +2,6 @@ use std::collections::HashSet;
 
 use ody_app_server_protocol::AppInfo;
 use ody_config::types::ToolSuggestDisabledTool;
-use ody_core_plugins::remote::REMOTE_GLOBAL_MARKETPLACE_NAME;
 use ody_mcp::ODY_APPS_MCP_SERVER_NAME;
 use ody_rmcp_client::ElicitationAction;
 use ody_rmcp_client::ElicitationResponse;
@@ -327,30 +326,6 @@ async fn verify_request_plugin_install_completed(
             verified_connector_install_completed(connector.id.as_str(), &accessible_connectors)
         }),
         DiscoverableTool::Plugin(plugin) => {
-            if is_remote_plugin_install_suggestion(&plugin.id) {
-                let (_, accessible_connectors) = tokio::join!(
-                    refresh_remote_installed_plugins_cache_after_install(
-                        session,
-                        turn,
-                        auth,
-                        plugin.id.as_str(),
-                    ),
-                    refresh_missing_requested_connectors(
-                        session,
-                        turn,
-                        auth,
-                        &plugin.app_connector_ids,
-                        plugin.id.as_str(),
-                    )
-                );
-                return accessible_connectors.is_some_and(|accessible_connectors| {
-                    all_requested_connectors_picked_up(
-                        &plugin.app_connector_ids,
-                        &accessible_connectors,
-                    )
-                });
-            }
-
             session.reload_user_config_layer().await;
             let config = session.get_config().await;
             let completed = verified_plugin_install_completed(
@@ -371,34 +346,6 @@ async fn verify_request_plugin_install_completed(
     }
 }
 
-async fn refresh_remote_installed_plugins_cache_after_install(
-    session: &crate::session::session::Session,
-    turn: &crate::session::turn_context::TurnContext,
-    auth: Option<&ody_login::OdyAuth>,
-    tool_id: &str,
-) {
-    let plugins_manager = &session.services.plugins_manager;
-    let plugins_config = turn.config.plugins_config_input();
-    if let Err(err) = plugins_manager
-        .build_and_cache_remote_installed_plugin_marketplaces(
-            &plugins_config,
-            auth,
-            &[REMOTE_GLOBAL_MARKETPLACE_NAME],
-            /*on_effective_plugins_changed*/ None,
-        )
-        .await
-    {
-        warn!(
-            "failed to refresh remote installed plugins cache after plugin install request for {tool_id}: {err:#}"
-        );
-    }
-}
-
-fn is_remote_plugin_install_suggestion(plugin_id: &str) -> bool {
-    plugin_id
-        .rsplit_once('@')
-        .is_some_and(|(_, marketplace_name)| marketplace_name == REMOTE_GLOBAL_MARKETPLACE_NAME)
-}
 
 async fn refresh_missing_requested_connectors(
     session: &crate::session::session::Session,

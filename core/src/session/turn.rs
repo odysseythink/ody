@@ -74,7 +74,6 @@ use ody_analytics::InvocationType;
 use ody_analytics::TurnResolvedConfigFact;
 use ody_analytics::build_track_events_context;
 use ody_async_utils::OrCancelExt;
-use ody_core_plugins::RecommendedPluginCandidatesInput;
 use ody_core_skills::injection::InjectedHostSkillPrompts;
 use ody_extension_api::TurnInputContext;
 use ody_extension_api::TurnInputEnvironment;
@@ -1279,21 +1278,9 @@ pub(crate) async fn built_tools(
     } else {
         None
     };
-    let endpoint_recommended_plugin_candidates = if tool_suggest_is_enabled {
-        let plugins_config = turn_context.config.plugins_config_input();
-        sess.services
-            .plugins_manager
-            .recommended_plugin_candidates_for_config(RecommendedPluginCandidatesInput {
-                plugins_config: &plugins_config,
-                loaded_plugins: &loaded_plugins,
-                auth: auth.as_ref(),
-                disabled_tools: &turn_context.config.tool_suggest.disabled_tools,
-                app_server_client_name: turn_context.app_server_client_name.as_deref(),
-            })
-            .await
-    } else {
-        None
-    };
+    // Endpoint-backed (remote catalog) plugin recommendations have been removed; tool suggest
+    // always falls back to the legacy local-discovery path below now.
+    let endpoint_recommended_plugin_candidates: Option<Vec<ody_tools::DiscoverableTool>> = None;
     let tool_suggest_candidates =
         if let Some(recommended_plugin_candidates) = endpoint_recommended_plugin_candidates {
             Some(ToolSuggestCandidates {

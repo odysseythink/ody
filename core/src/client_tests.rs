@@ -566,7 +566,7 @@ async fn dropped_backpressured_response_stream_traces_cancelled_partial_output()
 fn auth_request_telemetry_context_tracks_attached_auth_and_retry_phase() {
     let auth_context = AuthRequestTelemetryContext::new(
         Some(AuthMode::Chatgpt),
-        &BearerAuthProvider::for_test(Some("access-token"), Some("workspace-123")),
+        &BearerAuthProvider::for_test(Some("access-token")),
         PendingUnauthorizedRetry::from_recovery(UnauthorizedRecoveryExecution {
             mode: "managed",
             phase: "refresh_token",
@@ -606,7 +606,7 @@ fn model_client_with_counting_attestation(
     let (auth_manager, provider) = if include_attestation {
         (
             Some(AuthManager::from_auth_for_testing(
-                OdyAuth::create_dummy_chatgpt_auth_for_testing(),
+                OdyAuth::create_dummy_api_key_auth_for_testing(),
             )),
             ModelProviderInfo::create_odysseythink_provider(Some(CHATGPT_ODY_BASE_URL.to_string())),
         )

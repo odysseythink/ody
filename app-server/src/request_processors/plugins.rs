@@ -2,27 +2,12 @@ use super::*;
 use crate::error_code::internal_error;
 use crate::error_code::invalid_request;
 use ody_app_server_protocol::PluginAvailability;
-use ody_app_server_protocol::PluginInstallPolicy;
-use ody_app_server_protocol::PluginSharePrincipalRole;
-use ody_app_server_protocol::PluginShareTargetRole;
 use ody_config::types::McpServerConfig;
-use ody_core_plugins::OPENAI_CURATED_MARKETPLACE_NAME;
 use ody_core_plugins::PluginListBackgroundTaskOptions;
 use ody_core_plugins::is_odysseythink_curated_marketplace_name;
-use ody_core_plugins::remote::REMOTE_CREATED_BY_ME_MARKETPLACE_NAME;
-use ody_core_plugins::remote::REMOTE_GLOBAL_MARKETPLACE_NAME;
-use ody_core_plugins::remote::REMOTE_WORKSPACE_MARKETPLACE_NAME;
-use ody_core_plugins::remote::REMOTE_WORKSPACE_SHARED_WITH_ME_MARKETPLACE_NAME;
-use ody_core_plugins::remote::REMOTE_WORKSPACE_SHARED_WITH_ME_PRIVATE_MARKETPLACE_NAME;
-use ody_core_plugins::remote::REMOTE_WORKSPACE_SHARED_WITH_ME_UNLISTED_MARKETPLACE_NAME;
-use ody_core_plugins::remote::RemoteAppTemplateUnavailableReason;
-use ody_core_plugins::remote::is_valid_remote_plugin_id;
-use ody_core_plugins::remote::validate_remote_plugin_id;
-use ody_core_plugins::remote_bundle::RemotePluginBundleInstallError;
 use ody_mcp::McpOAuthLoginSupport;
 use ody_mcp::oauth_login_support;
 use ody_mcp::should_retry_without_scopes;
-use ody_plugin::PluginId;
 use ody_rmcp_client::perform_oauth_login_silent;
 
 #[derive(Clone)]
@@ -103,16 +88,11 @@ fn marketplace_plugin_source_to_info(source: MarketplacePluginSource) -> PluginS
 }
 
 fn load_shared_plugin_ids_by_local_path(
-    config: &Config,
+    _config: &Config,
 ) -> Result<std::collections::BTreeMap<AbsolutePathBuf, String>, JSONRPCErrorError> {
-    ody_core_plugins::remote::load_plugin_share_remote_ids_by_local_path(
-        config.ody_home.as_path(),
-    )
-    .map_err(|err| {
-        internal_error(format!(
-            "failed to load plugin share local path mapping: {err}"
-        ))
-    })
+    // Plugin sharing was implemented entirely via the remote hosted plugin catalog, which has
+    // been removed, so there is no longer any local-path-to-remote-share-id mapping to load.
+    Ok(std::collections::BTreeMap::new())
 }
 
 fn share_context_for_source(
@@ -158,20 +138,11 @@ fn convert_configured_marketplace_plugin_to_plugin_summary(
     }
 }
 
-fn remote_installed_plugin_visible_marketplaces(config: &Config) -> Vec<&'static str> {
-    let mut marketplaces = Vec::new();
-    if config.features.enabled(Feature::RemotePlugin) {
-        marketplaces.push(REMOTE_GLOBAL_MARKETPLACE_NAME);
-        marketplaces.push(REMOTE_CREATED_BY_ME_MARKETPLACE_NAME);
-    }
-    marketplaces.push(REMOTE_WORKSPACE_MARKETPLACE_NAME);
-    if config.features.enabled(Feature::PluginSharing) {
-        marketplaces.push(REMOTE_WORKSPACE_SHARED_WITH_ME_MARKETPLACE_NAME);
-        marketplaces.push(REMOTE_WORKSPACE_SHARED_WITH_ME_PRIVATE_MARKETPLACE_NAME);
-        marketplaces.push(REMOTE_WORKSPACE_SHARED_WITH_ME_UNLISTED_MARKETPLACE_NAME);
-    }
-    marketplaces
-}
+// The remote hosted plugin catalog (and its "odysseythink-curated-remote" marketplace) has been
+// removed. `marketplaces` passed into this function will never contain that marketplace name
+// anymore, so this de-conflict pass is now unreachable in practice, but is kept as a harmless
+// no-op rather than deleting the (still locally meaningful) curated-marketplace-name check.
+const REMOTE_GLOBAL_MARKETPLACE_NAME: &str = "odysseythink-curated-remote";
 
 fn filter_odysseythink_curated_installed_conflicts(
     marketplaces: &mut Vec<PluginMarketplaceEntry>,
@@ -218,123 +189,17 @@ fn installed_plugin_names(plugins: &[PluginSummary]) -> HashSet<String> {
         .collect()
 }
 
-fn remote_plugin_share_discoverability(
-    discoverability: PluginShareDiscoverability,
-) -> ody_core_plugins::remote::RemotePluginShareDiscoverability {
-    match discoverability {
-        PluginShareDiscoverability::Listed => {
-            ody_core_plugins::remote::RemotePluginShareDiscoverability::Listed
-        }
-        PluginShareDiscoverability::Unlisted => {
-            ody_core_plugins::remote::RemotePluginShareDiscoverability::Unlisted
-        }
-        PluginShareDiscoverability::Private => {
-            ody_core_plugins::remote::RemotePluginShareDiscoverability::Private
-        }
-    }
+/// Format check for the plugin-id shape previously used to identify plugins served by the
+/// (now removed) remote hosted plugin catalog. Kept only so `plugin/install` and
+/// `plugin/uninstall` can distinguish "this looks like a remote-catalog-style id" from "this is
+/// not a valid plugin id at all" when producing a "no longer supported" error.
+fn is_valid_remote_plugin_id(plugin_id: &str) -> bool {
+    !plugin_id.is_empty()
+        && plugin_id
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '~')
 }
 
-fn remote_plugin_share_update_discoverability(
-    discoverability: PluginShareUpdateDiscoverability,
-) -> ody_core_plugins::remote::RemotePluginShareUpdateDiscoverability {
-    match discoverability {
-        PluginShareUpdateDiscoverability::Unlisted => {
-            ody_core_plugins::remote::RemotePluginShareUpdateDiscoverability::Unlisted
-        }
-        PluginShareUpdateDiscoverability::Private => {
-            ody_core_plugins::remote::RemotePluginShareUpdateDiscoverability::Private
-        }
-    }
-}
-
-fn validate_client_plugin_share_targets(
-    targets: &[PluginShareTarget],
-) -> Result<(), JSONRPCErrorError> {
-    if targets
-        .iter()
-        .any(|target| target.principal_type == PluginSharePrincipalType::Workspace)
-    {
-        return Err(invalid_request(
-            "shareTargets cannot include workspace principals; use discoverability UNLISTED for workspace link access",
-        ));
-    }
-    Ok(())
-}
-
-fn remote_plugin_share_target_role(
-    role: PluginShareTargetRole,
-) -> ody_core_plugins::remote::RemotePluginShareTargetRole {
-    match role {
-        PluginShareTargetRole::Reader => {
-            ody_core_plugins::remote::RemotePluginShareTargetRole::Reader
-        }
-        PluginShareTargetRole::Editor => {
-            ody_core_plugins::remote::RemotePluginShareTargetRole::Editor
-        }
-    }
-}
-
-fn plugin_share_principal_role_from_remote(
-    role: ody_core_plugins::remote::RemotePluginSharePrincipalRole,
-) -> PluginSharePrincipalRole {
-    match role {
-        ody_core_plugins::remote::RemotePluginSharePrincipalRole::Reader => {
-            PluginSharePrincipalRole::Reader
-        }
-        ody_core_plugins::remote::RemotePluginSharePrincipalRole::Editor => {
-            PluginSharePrincipalRole::Editor
-        }
-        ody_core_plugins::remote::RemotePluginSharePrincipalRole::Owner => {
-            PluginSharePrincipalRole::Owner
-        }
-    }
-}
-
-fn remote_plugin_share_targets(
-    targets: Vec<PluginShareTarget>,
-) -> Vec<ody_core_plugins::remote::RemotePluginShareTarget> {
-    targets
-        .into_iter()
-        .map(
-            |target| ody_core_plugins::remote::RemotePluginShareTarget {
-                principal_type: match target.principal_type {
-                    PluginSharePrincipalType::User => {
-                        ody_core_plugins::remote::RemotePluginSharePrincipalType::User
-                    }
-                    PluginSharePrincipalType::Group => {
-                        ody_core_plugins::remote::RemotePluginSharePrincipalType::Group
-                    }
-                    PluginSharePrincipalType::Workspace => {
-                        ody_core_plugins::remote::RemotePluginSharePrincipalType::Workspace
-                    }
-                },
-                principal_id: target.principal_id,
-                role: remote_plugin_share_target_role(target.role),
-            },
-        )
-        .collect()
-}
-
-fn plugin_share_principal_from_remote(
-    principal: ody_core_plugins::remote::RemotePluginSharePrincipal,
-) -> PluginSharePrincipal {
-    PluginSharePrincipal {
-        principal_type: match principal.principal_type {
-            ody_core_plugins::remote::RemotePluginSharePrincipalType::User => {
-                PluginSharePrincipalType::User
-            }
-            ody_core_plugins::remote::RemotePluginSharePrincipalType::Group => {
-                PluginSharePrincipalType::Group
-            }
-            ody_core_plugins::remote::RemotePluginSharePrincipalType::Workspace => {
-                PluginSharePrincipalType::Workspace
-            }
-        },
-        principal_id: principal.principal_id,
-        role: plugin_share_principal_role_from_remote(principal.role),
-        name: principal.name,
-    }
-}
 
 impl PluginRequestProcessor {
     pub(crate) fn new(
@@ -533,7 +398,6 @@ impl PluginRequestProcessor {
             marketplace_kinds,
         } = params;
         let roots = cwds.unwrap_or_default();
-        let explicit_marketplace_kinds = marketplace_kinds.is_some();
         let marketplace_kinds =
             marketplace_kinds.unwrap_or_else(|| vec![PluginListMarketplaceKind::Local]);
         let include_local = marketplace_kinds.contains(&PluginListMarketplaceKind::Local);
@@ -558,25 +422,11 @@ impl PluginRequestProcessor {
         let auth_mode = auth.as_ref().map(OdyAuth::api_auth_mode);
         plugins_manager.set_auth_mode(auth_mode);
         let plugins_input = config.plugins_config_input();
-        let include_shared_with_me =
-            marketplace_kinds.contains(&PluginListMarketplaceKind::SharedWithMe);
-        let include_created_by_me_remote = marketplace_kinds
-            .contains(&PluginListMarketplaceKind::CreatedByMeRemote)
-            && config.features.enabled(Feature::RemotePlugin);
-        let include_global_remote =
-            !explicit_marketplace_kinds && config.features.enabled(Feature::RemotePlugin);
-        let use_remote_global_catalog =
-            include_global_remote && auth_mode.is_some_and(AuthMode::uses_ody_backend);
-        let remote_plugin_service_config = RemotePluginServiceConfig {
-            chatgpt_base_url: config.chatgpt_base_url.clone(),
-        };
-        let refresh_global_remote_catalog_cache = use_remote_global_catalog
-            && ody_core_plugins::remote::has_cached_global_remote_plugin_catalog(
-                config.ody_home.as_path(),
-                &remote_plugin_service_config,
-                auth.as_ref(),
-            );
-        let (mut data, marketplace_load_errors) = if include_local {
+        // The remote hosted plugin catalog (global/created-by-me remote marketplaces, remote
+        // "vertical" collections) has been removed; plugin/list now always serves local
+        // marketplaces regardless of the requested marketplace kinds.
+        let use_remote_global_catalog = false;
+        let (data, marketplace_load_errors) = if include_local {
             let config_for_marketplace_listing = plugins_input.clone();
             let plugins_manager_for_marketplace_listing = plugins_manager.clone();
             let roots_for_marketplace_listing = roots.clone();
@@ -644,129 +494,21 @@ impl PluginRequestProcessor {
             (Vec::new(), Vec::new())
         };
 
-        // TODO(remote plugins): Remove this once remote plugins are ready and vertical plugins are
-        // served directly from the normal remote catalog.
-        if include_vertical && !config.features.enabled(Feature::RemotePlugin) {
-            match ody_core_plugins::remote::fetch_odysseythink_curated_remote_collection_marketplace(
-                &remote_plugin_service_config,
-                auth.as_ref(),
-            )
-            .await
-            {
-                Ok(Some(remote_marketplace)) => {
-                    data.push(remote_marketplace_to_info(remote_marketplace));
-                }
-                Ok(None) => {}
-                Err(RemotePluginCatalogError::UnsupportedAuthMode) => {}
-                Err(err) if explicit_marketplace_kinds => {
-                    return Err(remote_plugin_catalog_error_to_jsonrpc(
-                        err,
-                        "list OpenAI Curated remote plugin catalog",
-                    ));
-                }
-                Err(RemotePluginCatalogError::AuthRequired) => {}
-                Err(err) => {
-                    warn!(
-                        error = %err,
-                        "plugin/list odysseythink-curated-remote collection fetch failed; returning local marketplaces only"
-                    );
-                }
-            }
-        }
-
-        let mut remote_sources = Vec::new();
-        if use_remote_global_catalog {
-            remote_sources.push(RemoteMarketplaceSource::Global);
-        }
-        if include_created_by_me_remote {
-            remote_sources.push(RemoteMarketplaceSource::CreatedByMeRemote);
-        }
-        if marketplace_kinds.contains(&PluginListMarketplaceKind::WorkspaceDirectory) {
-            remote_sources.push(RemoteMarketplaceSource::WorkspaceDirectory);
-        }
-        if include_shared_with_me && config.features.enabled(Feature::PluginSharing) {
-            remote_sources.push(RemoteMarketplaceSource::SharedWithMe);
-        }
-        if !remote_sources.is_empty() {
-            match ody_core_plugins::remote::fetch_remote_marketplaces(
-                &remote_plugin_service_config,
-                auth.as_ref(),
-                &remote_sources,
-                /*global_catalog_cache_path*/ Some(config.ody_home.as_path()),
-            )
-            .await
-            {
-                Ok(remote_marketplaces) => {
-                    for remote_marketplace in remote_marketplaces
-                        .into_iter()
-                        .map(remote_marketplace_to_info)
-                    {
-                        data.push(remote_marketplace);
-                    }
-                }
-                Err(
-                    err @ (RemotePluginCatalogError::AuthRequired
-                    | RemotePluginCatalogError::UnsupportedAuthMode),
-                ) if explicit_marketplace_kinds => {
-                    return Err(remote_plugin_catalog_error_to_jsonrpc(
-                        err,
-                        "list remote plugin catalog",
-                    ));
-                }
-                Err(
-                    RemotePluginCatalogError::AuthRequired
-                    | RemotePluginCatalogError::UnsupportedAuthMode,
-                ) => {}
-                Err(err) if explicit_marketplace_kinds => {
-                    return Err(remote_plugin_catalog_error_to_jsonrpc(
-                        err,
-                        "list remote plugin catalog",
-                    ));
-                }
-                Err(err) => {
-                    warn!(
-                        error = %err,
-                        "plugin/list remote plugin catalog fetch failed; returning local marketplaces only"
-                    );
-                }
-            }
-        }
-        if include_local
-            || include_created_by_me_remote
-            || include_shared_with_me
-            || include_global_remote
-        {
+        // The remote-hosted "vertical"/global/created-by-me/shared-with-me/workspace-directory
+        // marketplace sources have all been removed along with the remote plugin catalog.
+        let _ = include_vertical;
+        let _ = marketplace_kinds;
+        if include_local {
             plugins_manager.maybe_start_plugin_list_background_tasks_for_config(
                 &plugins_input,
-                auth.clone(),
                 &roots,
-                PluginListBackgroundTaskOptions {
-                    refresh_global_remote_catalog_cache,
-                },
-                Some(self.effective_plugins_changed_callback()),
+                PluginListBackgroundTaskOptions {},
             );
         }
 
-        let featured_plugin_ids = if data.iter().any(|marketplace| {
-            marketplace.name == OPENAI_CURATED_MARKETPLACE_NAME
-                || marketplace.name == REMOTE_GLOBAL_MARKETPLACE_NAME
-        }) {
-            match plugins_manager
-                .featured_plugin_ids_for_config(&plugins_input, auth.as_ref())
-                .await
-            {
-                Ok(featured_plugin_ids) => featured_plugin_ids,
-                Err(err) => {
-                    warn!(
-                        error = %err,
-                        "plugin/list featured plugin fetch failed; returning empty featured ids"
-                    );
-                    Vec::new()
-                }
-            }
-        } else {
-            Vec::new()
-        };
+        // Featured plugin ids were sourced from the remote plugin catalog and are no longer
+        // available.
+        let featured_plugin_ids = Vec::new();
 
         Ok(PluginListResponse {
             marketplaces: data,
@@ -808,13 +550,6 @@ impl PluginRequestProcessor {
         plugins_manager.set_auth_mode(auth.as_ref().map(OdyAuth::api_auth_mode));
 
         let plugins_input = config.plugins_config_input();
-        let remote_installed_plugin_visible_marketplaces =
-            remote_installed_plugin_visible_marketplaces(&config);
-        plugins_manager.maybe_start_remote_installed_plugin_bundle_sync(
-            &plugins_input,
-            auth.clone(),
-            Some(self.effective_plugins_changed_callback()),
-        );
 
         let (mut data, marketplace_load_errors) = self
             .load_local_installed_and_suggested_plugins(
@@ -826,18 +561,11 @@ impl PluginRequestProcessor {
             )
             .await?;
 
-        data.extend(
-            self.load_remote_installed_plugins(
-                plugins_manager,
-                &plugins_input,
-                &remote_installed_plugin_visible_marketplaces,
-                auth.as_ref(),
-            )
-            .await,
-        );
+        // Remote-installed plugin marketplaces (synced from the removed hosted plugin catalog)
+        // no longer exist, so there is nothing to merge in or de-conflict against here.
         filter_odysseythink_curated_installed_conflicts(
             &mut data,
-            config.features.enabled(Feature::RemotePlugin),
+            /*prefer_remote_curated_conflicts*/ false,
         );
 
         Ok(PluginInstalledResponse {
@@ -929,47 +657,6 @@ impl PluginRequestProcessor {
         }
     }
 
-    async fn load_remote_installed_plugins(
-        &self,
-        plugins_manager: Arc<ody_core_plugins::PluginsManager>,
-        plugins_input: &ody_core_plugins::PluginsConfigInput,
-        visible_marketplaces: &[&str],
-        auth: Option<&OdyAuth>,
-    ) -> Vec<PluginMarketplaceEntry> {
-        let remote_marketplaces = if let Some(remote_marketplaces) = plugins_manager
-            .build_remote_installed_plugin_marketplaces_from_cache(visible_marketplaces)
-        {
-            Ok(remote_marketplaces)
-        } else {
-            plugins_manager
-                .build_and_cache_remote_installed_plugin_marketplaces(
-                    plugins_input,
-                    auth,
-                    visible_marketplaces,
-                    Some(self.effective_plugins_changed_callback()),
-                )
-                .await
-        };
-
-        match remote_marketplaces {
-            Ok(remote_marketplaces) => remote_marketplaces
-                .into_iter()
-                .map(remote_marketplace_to_info)
-                .collect(),
-            Err(
-                RemotePluginCatalogError::AuthRequired
-                | RemotePluginCatalogError::UnsupportedAuthMode,
-            ) => Vec::new(),
-            Err(err) => {
-                warn!(
-                    error = %err,
-                    "plugin/installed remote installed plugin fetch failed; returning local marketplaces only"
-                );
-                Vec::new()
-            }
-        }
-    }
-
     async fn plugin_read_response(
         &self,
         params: PluginReadParams,
@@ -1010,57 +697,13 @@ impl PluginRequestProcessor {
                     .map_err(|err| Self::marketplace_error(err, "read plugin details"))?;
                 let shared_plugin_ids_by_local_path =
                     load_shared_plugin_ids_by_local_path(&config)?;
+                // This used to be hydrated further with remote share metadata (principals,
+                // remote version) fetched from the removed hosted plugin-share service; now the
+                // locally-derived share mapping context is used as-is.
                 let share_context = share_context_for_source(
                     &outcome.plugin.source,
                     &shared_plugin_ids_by_local_path,
                 );
-                let share_context = match share_context {
-                    Some(context) => {
-                        let remote_plugin_service_config = RemotePluginServiceConfig {
-                            chatgpt_base_url: config.chatgpt_base_url.clone(),
-                        };
-                        match ody_core_plugins::remote::fetch_remote_plugin_share_context(
-                            &remote_plugin_service_config,
-                            auth.as_ref(),
-                            &context.remote_plugin_id,
-                        )
-                        .await
-                        {
-                            Ok(Some(remote_share_context)) => {
-                                if remote_share_context.share_principals.is_some() {
-                                    Some(remote_plugin_share_context_to_info(remote_share_context))
-                                } else {
-                                    let remote_version = remote_share_context.remote_version;
-                                    let remote_plugin_id = context.remote_plugin_id.clone();
-                                    warn!(
-                                        remote_plugin_id = %remote_plugin_id,
-                                        "remote shared plugin detail did not include share principals; returning local share mapping context with remote version"
-                                    );
-                                    Some(PluginShareContext {
-                                        remote_version,
-                                        ..context
-                                    })
-                                }
-                            }
-                            Ok(None) => {
-                                warn!(
-                                    remote_plugin_id = %context.remote_plugin_id,
-                                    "remote shared plugin detail did not include share context; returning local share mapping context"
-                                );
-                                Some(context)
-                            }
-                            Err(err) => {
-                                warn!(
-                                    remote_plugin_id = %context.remote_plugin_id,
-                                    error = %err,
-                                    "failed to hydrate local plugin share context; returning local share mapping context"
-                                );
-                                Some(context)
-                            }
-                        }
-                    }
-                    None => None,
-                };
                 let app_summaries = load_plugin_app_summaries(
                     &config,
                     &outcome.plugin.apps,
@@ -1116,40 +759,12 @@ impl PluginRequestProcessor {
                     mcp_servers: outcome.plugin.mcp_server_names,
                 }
             }
-            Err(remote_marketplace_name) => {
-                if !config.features.enabled(Feature::Plugins) {
-                    return Err(invalid_request(format!(
-                        "remote plugin read is not enabled for marketplace {remote_marketplace_name}"
-                    )));
-                }
-                let remote_plugin_service_config = RemotePluginServiceConfig {
-                    chatgpt_base_url: config.chatgpt_base_url.clone(),
-                };
-                validate_remote_plugin_id(&plugin_name)?;
-                let remote_detail = ody_core_plugins::remote::fetch_remote_plugin_detail(
-                    &remote_plugin_service_config,
-                    auth.as_ref(),
-                    &remote_marketplace_name,
-                    &plugin_name,
-                )
-                .await
-                .map_err(|err| {
-                    remote_plugin_catalog_error_to_jsonrpc(err, "read remote plugin details")
-                })?;
-                let plugin_apps = remote_detail
-                    .app_ids
-                    .iter()
-                    .cloned()
-                    .map(ody_plugin::AppConnectorId)
-                    .collect::<Vec<_>>();
-                let app_category_by_id = remote_detail
-                    .app_manifest
-                    .as_ref()
-                    .map(plugin_app_category_by_id_from_value)
-                    .unwrap_or_default();
-                let app_summaries =
-                    load_plugin_app_summaries(&config, &plugin_apps, &app_category_by_id).await;
-                remote_plugin_detail_to_info(remote_detail, app_summaries)
+            Err(_remote_marketplace_name) => {
+                // The remote hosted plugin catalog has been removed; plugin/read no longer
+                // supports reading plugin details by remote marketplace name.
+                return Err(invalid_request(
+                    "plugin/read by remoteMarketplaceName is no longer supported",
+                ));
             }
         };
 
@@ -1158,251 +773,58 @@ impl PluginRequestProcessor {
 
     async fn plugin_skill_read_response(
         &self,
-        params: PluginSkillReadParams,
+        _params: PluginSkillReadParams,
     ) -> Result<PluginSkillReadResponse, JSONRPCErrorError> {
-        let PluginSkillReadParams {
-            remote_marketplace_name,
-            remote_plugin_id,
-            skill_name,
-        } = params;
-
-        let config = self.load_latest_config(/*fallback_cwd*/ None).await?;
-        if !config.features.enabled(Feature::Plugins) {
-            return Err(invalid_request(format!(
-                "remote plugin skill read is not enabled for marketplace {remote_marketplace_name}"
-            )));
-        }
-        validate_remote_plugin_id(&remote_plugin_id)?;
-        if skill_name.is_empty() {
-            return Err(invalid_request(
-                "invalid remote plugin skill name: cannot be empty",
-            ));
-        }
-
-        let auth = self.auth_manager.auth().await;
-        let remote_plugin_service_config = RemotePluginServiceConfig {
-            chatgpt_base_url: config.chatgpt_base_url.clone(),
-        };
-        let remote_skill_detail = ody_core_plugins::remote::fetch_remote_plugin_skill_detail(
-            &remote_plugin_service_config,
-            auth.as_ref(),
-            &remote_marketplace_name,
-            &remote_plugin_id,
-            &skill_name,
-        )
-        .await
-        .map_err(|err| {
-            remote_plugin_catalog_error_to_jsonrpc(err, "read remote plugin skill details")
-        })?;
-
-        Ok(PluginSkillReadResponse {
-            contents: remote_skill_detail.contents,
-        })
+        // This only ever read a skill belonging to a plugin from the remote hosted plugin
+        // catalog, which has been removed.
+        Err(invalid_request(
+            "plugin/skill/read is no longer supported",
+        ))
     }
 
     async fn plugin_share_save_response(
         &self,
-        params: PluginShareSaveParams,
+        _params: PluginShareSaveParams,
     ) -> Result<PluginShareSaveResponse, JSONRPCErrorError> {
-        let (config, auth) = self.load_plugin_share_config_and_auth().await?;
-        if !config.features.enabled(Feature::PluginSharing) {
-            return Err(invalid_request("plugin sharing is disabled"));
-        }
-        let PluginShareSaveParams {
-            plugin_path,
-            remote_plugin_id,
-            discoverability,
-            share_targets,
-        } = params;
-        if let Some(remote_plugin_id) = remote_plugin_id.as_ref()
-            && (remote_plugin_id.is_empty() || !is_valid_remote_plugin_id(remote_plugin_id))
-        {
-            return Err(invalid_request("invalid remote plugin id"));
-        }
-        if remote_plugin_id.is_some() && (discoverability.is_some() || share_targets.is_some()) {
-            return Err(invalid_request(
-                "discoverability and shareTargets are only supported when creating a plugin share; use plugin/share/updateTargets to update share settings",
-            ));
-        }
-        if discoverability == Some(PluginShareDiscoverability::Listed) {
-            return Err(invalid_request(
-                "discoverability LISTED is not supported for plugin/share/save; use UNLISTED or PRIVATE",
-            ));
-        }
-        if let Some(share_targets) = share_targets.as_ref() {
-            validate_client_plugin_share_targets(share_targets)?;
-        }
-
-        let remote_plugin_service_config = RemotePluginServiceConfig {
-            chatgpt_base_url: config.chatgpt_base_url.clone(),
-        };
-        let access_policy = ody_core_plugins::remote::RemotePluginShareAccessPolicy {
-            discoverability: discoverability.map(remote_plugin_share_discoverability),
-            share_targets: share_targets.map(remote_plugin_share_targets),
-        };
-        let result = ody_core_plugins::remote::save_remote_plugin_share(
-            &remote_plugin_service_config,
-            auth.as_ref(),
-            config.ody_home.as_path(),
-            &plugin_path,
-            remote_plugin_id.as_deref(),
-            access_policy,
-        )
-        .await
-        .map_err(|err| remote_plugin_catalog_error_to_jsonrpc(err, "save remote plugin share"))?;
-        let remote_plugin_id = result.remote_plugin_id;
-        self.clear_plugin_related_caches();
-        Ok(PluginShareSaveResponse {
-            remote_plugin_id,
-            share_url: result.share_url.unwrap_or_default(),
-        })
+        // Plugin sharing was implemented entirely via the remote hosted plugin catalog, which
+        // has been removed.
+        Err(invalid_request("plugin/share/save is no longer supported"))
     }
 
     async fn plugin_share_update_targets_response(
         &self,
-        params: PluginShareUpdateTargetsParams,
+        _params: PluginShareUpdateTargetsParams,
     ) -> Result<PluginShareUpdateTargetsResponse, JSONRPCErrorError> {
-        let (config, auth) = self.load_plugin_share_config_and_auth().await?;
-        if !config.features.enabled(Feature::PluginSharing) {
-            return Err(invalid_request("plugin sharing is disabled"));
-        }
-        let PluginShareUpdateTargetsParams {
-            remote_plugin_id,
-            discoverability,
-            share_targets,
-        } = params;
-        if remote_plugin_id.is_empty() || !is_valid_remote_plugin_id(&remote_plugin_id) {
-            return Err(invalid_request("invalid remote plugin id"));
-        }
-        validate_client_plugin_share_targets(&share_targets)?;
-
-        let remote_plugin_service_config = RemotePluginServiceConfig {
-            chatgpt_base_url: config.chatgpt_base_url.clone(),
-        };
-        let result = ody_core_plugins::remote::update_remote_plugin_share_targets(
-            &remote_plugin_service_config,
-            auth.as_ref(),
-            &remote_plugin_id,
-            remote_plugin_share_targets(share_targets),
-            remote_plugin_share_update_discoverability(discoverability),
-        )
-        .await
-        .map_err(|err| {
-            remote_plugin_catalog_error_to_jsonrpc(err, "update remote plugin share targets")
-        })?;
-        self.clear_plugin_related_caches();
-        Ok(PluginShareUpdateTargetsResponse {
-            principals: result
-                .principals
-                .into_iter()
-                .map(plugin_share_principal_from_remote)
-                .collect(),
-            discoverability: remote_plugin_share_discoverability_to_info(result.discoverability),
-        })
+        Err(invalid_request(
+            "plugin/share/updateTargets is no longer supported",
+        ))
     }
 
     async fn plugin_share_list_response(
         &self,
         _params: PluginShareListParams,
     ) -> Result<PluginShareListResponse, JSONRPCErrorError> {
-        let (config, auth) = self.load_plugin_share_config_and_auth().await?;
-        let remote_plugin_service_config = RemotePluginServiceConfig {
-            chatgpt_base_url: config.chatgpt_base_url.clone(),
-        };
-        let data = ody_core_plugins::remote::list_remote_plugin_shares(
-            &remote_plugin_service_config,
-            auth.as_ref(),
-            config.ody_home.as_path(),
-        )
-        .await
-        .map_err(|err| remote_plugin_catalog_error_to_jsonrpc(err, "list remote plugin shares"))?
-        .into_iter()
-        .map(|summary| {
-            let RemoteCatalogPluginShareSummary {
-                summary,
-                local_plugin_path,
-            } = summary;
-            let plugin = remote_plugin_summary_to_info(summary);
-            PluginShareListItem {
-                plugin,
-                local_plugin_path,
-            }
-        })
-        .collect();
-        Ok(PluginShareListResponse { data })
+        Err(invalid_request("plugin/share/list is no longer supported"))
     }
 
     async fn plugin_share_checkout_response(
         &self,
-        params: PluginShareCheckoutParams,
+        _params: PluginShareCheckoutParams,
     ) -> Result<PluginShareCheckoutResponse, JSONRPCErrorError> {
-        let (config, auth) = self.load_plugin_share_config_and_auth().await?;
-        if !config.features.enabled(Feature::PluginSharing) {
-            return Err(invalid_request("plugin sharing is disabled"));
-        }
-        let PluginShareCheckoutParams { remote_plugin_id } = params;
-        if remote_plugin_id.is_empty() || !is_valid_remote_plugin_id(&remote_plugin_id) {
-            return Err(invalid_request("invalid remote plugin id"));
-        }
-
-        let remote_plugin_service_config = RemotePluginServiceConfig {
-            chatgpt_base_url: config.chatgpt_base_url.clone(),
-        };
-        let result = ody_core_plugins::remote::checkout_remote_plugin_share(
-            &remote_plugin_service_config,
-            auth.as_ref(),
-            config.ody_home.as_path(),
-            &remote_plugin_id,
-        )
-        .await
-        .map_err(|err| remote_plugin_catalog_error_to_jsonrpc(err, "checkout plugin share"))?;
-        self.clear_plugin_related_caches();
-        Ok(PluginShareCheckoutResponse {
-            remote_plugin_id: result.remote_plugin_id,
-            plugin_id: result.plugin_id,
-            plugin_name: result.plugin_name,
-            plugin_path: result.plugin_path,
-            marketplace_name: result.marketplace_name,
-            marketplace_path: result.marketplace_path,
-            remote_version: result.remote_version,
-        })
+        Err(invalid_request(
+            "plugin/share/checkout is no longer supported",
+        ))
     }
 
     async fn plugin_share_delete_response(
         &self,
-        params: PluginShareDeleteParams,
+        _params: PluginShareDeleteParams,
     ) -> Result<PluginShareDeleteResponse, JSONRPCErrorError> {
-        let (config, auth) = self.load_plugin_share_config_and_auth().await?;
-        let PluginShareDeleteParams { remote_plugin_id } = params;
-        if remote_plugin_id.is_empty() || !is_valid_remote_plugin_id(&remote_plugin_id) {
-            return Err(invalid_request("invalid remote plugin id"));
-        }
-
-        let remote_plugin_service_config = RemotePluginServiceConfig {
-            chatgpt_base_url: config.chatgpt_base_url.clone(),
-        };
-        ody_core_plugins::remote::delete_remote_plugin_share(
-            &remote_plugin_service_config,
-            auth.as_ref(),
-            config.ody_home.as_path(),
-            &remote_plugin_id,
-        )
-        .await
-        .map_err(|err| remote_plugin_catalog_error_to_jsonrpc(err, "delete remote plugin share"))?;
-        self.clear_plugin_related_caches();
-        Ok(PluginShareDeleteResponse {})
+        Err(invalid_request(
+            "plugin/share/delete is no longer supported",
+        ))
     }
 
-    async fn load_plugin_share_config_and_auth(
-        &self,
-    ) -> Result<(Config, Option<OdyAuth>), JSONRPCErrorError> {
-        let config = self.load_latest_config(/*fallback_cwd*/ None).await?;
-        if !config.features.enabled(Feature::Plugins) {
-            return Err(invalid_request("plugin sharing is not enabled"));
-        }
-        let auth = self.auth_manager.auth().await;
-        Ok((config, auth))
-    }
 
     async fn plugin_install_response(
         &self,
@@ -1500,231 +922,17 @@ impl PluginRequestProcessor {
 
     async fn remote_plugin_install_response(
         &self,
-        remote_marketplace_name: String,
-        remote_plugin_id: String,
+        _remote_marketplace_name: String,
+        _remote_plugin_id: String,
     ) -> Result<PluginInstallResponse, JSONRPCErrorError> {
-        let config = self.load_latest_config(/*fallback_cwd*/ None).await?;
-        if !config.features.enabled(Feature::Plugins) {
-            return Err(invalid_request(format!(
-                "remote plugin install is not enabled for marketplace {remote_marketplace_name}"
-            )));
-        }
-        validate_remote_plugin_id(&remote_plugin_id)?;
-
-        let auth = self.auth_manager.auth().await;
-        let remote_plugin_service_config = RemotePluginServiceConfig {
-            chatgpt_base_url: config.chatgpt_base_url.clone(),
-        };
-        let remote_detail =
-            ody_core_plugins::remote::fetch_remote_plugin_detail_with_download_urls(
-                &remote_plugin_service_config,
-                auth.as_ref(),
-                &remote_marketplace_name,
-                &remote_plugin_id,
-            )
-            .await
-            .map_err(|err| {
-                let error_type = remote_plugin_catalog_error_type(&err);
-                self.track_plugin_install_failed_for_remote_plugin(
-                    &remote_plugin_id,
-                    &remote_marketplace_name,
-                    error_type,
-                    err.to_string(),
-                );
-                remote_plugin_catalog_error_to_jsonrpc(
-                    err,
-                    "read remote plugin details before install",
-                )
-            })?;
-        let actual_remote_marketplace_name = remote_detail.marketplace_name.clone();
-        let remote_plugin_name = remote_detail.summary.name.clone();
-        if remote_detail.summary.availability == PluginAvailability::DisabledByAdmin {
-            return Err(invalid_request(format!(
-                "remote plugin {remote_plugin_id} is disabled by admin"
-            )));
-        }
-        if remote_detail.summary.install_policy == PluginInstallPolicy::NotAvailable {
-            return Err(invalid_request(format!(
-                "remote plugin {remote_plugin_id} is not available for install"
-            )));
-        }
-        // Direct install writes the same cache tree that installed-plugin sync
-        // prunes before the backend installed snapshot can include this plugin.
-        let _remote_plugin_cache_mutation =
-            ody_core_plugins::remote::mark_remote_plugin_cache_mutation_in_flight(
-                config.ody_home.as_path(),
-                &actual_remote_marketplace_name,
-                &remote_plugin_name,
-            );
-        let validated_bundle = ody_core_plugins::remote_bundle::validate_remote_plugin_bundle(
-            &remote_plugin_id,
-            &actual_remote_marketplace_name,
-            &remote_plugin_name,
-            remote_detail.release_version.as_deref(),
-            remote_detail.bundle_download_url.as_deref(),
-            remote_detail.app_manifest.clone(),
-        )
-        .map_err(|err| {
-            let error_type = remote_plugin_bundle_install_error_type(&err);
-            self.track_plugin_install_failed_for_remote_plugin(
-                &remote_plugin_id,
-                &actual_remote_marketplace_name,
-                error_type,
-                err.to_string(),
-            );
-            remote_plugin_bundle_install_error_to_jsonrpc(err)
-        })?;
-
-        let result = ody_core_plugins::remote_bundle::download_and_install_remote_plugin_bundle(
-            config.ody_home.to_path_buf(),
-            validated_bundle,
-        )
-        .await
-        .map_err(|err| {
-            let error_type = remote_plugin_bundle_install_error_type(&err);
-            self.track_plugin_install_failed_for_remote_plugin(
-                &remote_plugin_id,
-                &actual_remote_marketplace_name,
-                error_type,
-                err.to_string(),
-            );
-            remote_plugin_bundle_install_error_to_jsonrpc(err)
-        })?;
-
-        // Cache first so a backend install cannot succeed when local materialization fails.
-        // If this backend call fails, the cache entry is harmless because remote installed state
-        // is still backend-gated.
-        let install_result = ody_core_plugins::remote::install_remote_plugin(
-            &remote_plugin_service_config,
-            auth.as_ref(),
-            &actual_remote_marketplace_name,
-            &remote_plugin_id,
-        )
-        .await
-        .map_err(|err| {
-            let error_type = remote_plugin_catalog_error_type(&err);
-            self.track_plugin_install_failed_for_remote_plugin(
-                &remote_plugin_id,
-                &actual_remote_marketplace_name,
-                error_type,
-                err.to_string(),
-            );
-            remote_plugin_catalog_error_to_jsonrpc(err, "install remote plugin")
-        })?;
-
-        self.thread_manager
-            .plugins_manager()
-            .maybe_start_remote_installed_plugins_cache_refresh_after_mutation(
-                &config.plugins_config_input(),
-                auth.clone(),
-                Some(self.effective_plugins_changed_callback()),
-            );
-
-        let plugin_metadata = self
-            .thread_manager
-            .plugins_manager()
-            .telemetry_metadata_for_installed_plugin_with_remote_id(
-                &result.plugin_id,
-                &remote_plugin_id,
-            )
-            .await;
-        self.analytics_events_client
-            .track_plugin_installed(plugin_metadata);
-
-        let plugin_mcp_servers = load_plugin_mcp_servers(
-            result.installed_path.as_path(),
-            auth.as_ref().map(OdyAuth::auth_mode),
-        )
-        .await;
-        if !plugin_mcp_servers.is_empty() {
-            self.start_plugin_mcp_oauth_logins(&config, plugin_mcp_servers)
-                .await;
-        }
-
-        let is_chatgpt_auth = auth.as_ref().is_some_and(OdyAuth::is_chatgpt_auth);
-        let apps_needing_auth = if let Some(app_ids_needing_auth) =
-            install_result.app_ids_needing_auth
-        {
-            if app_ids_needing_auth.is_empty()
-                || !config.features.apps_enabled_for_auth(is_chatgpt_auth)
-            {
-                Vec::new()
-            } else {
-                let plugin_apps = app_ids_needing_auth
-                    .into_iter()
-                    .map(ody_plugin::AppConnectorId)
-                    .collect::<Vec<_>>();
-                let app_category_by_id = remote_detail
-                    .app_manifest
-                    .as_ref()
-                    .map(plugin_app_category_by_id_from_value)
-                    .unwrap_or_default();
-                let all_connectors = connectors::list_cached_all_connectors(&config, &[])
-                    .await
-                    .unwrap_or_default();
-                connectors::connectors_for_plugin_apps(all_connectors, &plugin_apps)
-                    .into_iter()
-                    .map(|connector| {
-                        let category = app_category_by_id
-                            .get(&connector.id)
-                            .cloned()
-                            .or_else(|| connector.category());
-                        AppSummary {
-                            category,
-                            id: connector.id,
-                            name: connector.name,
-                            description: connector.description,
-                            install_url: connector.install_url,
-                        }
-                    })
-                    .collect()
-            }
-        } else {
-            let plugin_app_declarations = load_plugin_apps(result.installed_path.as_path()).await;
-            let plugin_apps =
-                ody_plugin::app_connector_ids_from_declarations(&plugin_app_declarations);
-            self.plugin_apps_needing_auth_for_install(
-                &config,
-                is_chatgpt_auth,
-                &result.plugin_id.as_key(),
-                &plugin_apps,
-            )
-            .await
-        };
-
-        Ok(PluginInstallResponse {
-            auth_policy: remote_detail.summary.auth_policy,
-            apps_needing_auth,
-        })
+        // Installing a plugin by remote marketplace name/id required the remote hosted plugin
+        // catalog, which has been removed. Local marketplace-path installs are unaffected; see
+        // `plugin_install_response`.
+        Err(invalid_request(
+            "plugin/install by remoteMarketplaceName is no longer supported",
+        ))
     }
 
-    fn track_plugin_install_failed_for_remote_plugin(
-        &self,
-        remote_plugin_id: &str,
-        marketplace_name: &str,
-        error_type: &'static str,
-        error_message: String,
-    ) {
-        tracing::warn!(
-            remote_plugin_id = %remote_plugin_id,
-            marketplace_name = %marketplace_name,
-            error_type = %error_type,
-            error = %error_message,
-            "remote plugin install failed"
-        );
-        // The remote id is reported separately; this local name only satisfies
-        // PluginId validation before remote details are available.
-        let Ok(plugin_id) = PluginId::new("unknown".to_string(), marketplace_name.to_string())
-        else {
-            return;
-        };
-        let plugin = self
-            .thread_manager
-            .plugins_manager()
-            .telemetry_metadata_for_plugin_id_with_remote_id(&plugin_id, remote_plugin_id);
-        self.analytics_events_client
-            .track_plugin_install_failed(plugin, error_type.to_string());
-    }
 
     async fn plugin_apps_needing_auth_for_install(
         &self,
@@ -1918,9 +1126,6 @@ impl PluginRequestProcessor {
             CorePluginInstallError::Config(err) => {
                 internal_error(format!("failed to persist installed plugin config: {err}"))
             }
-            CorePluginInstallError::Remote(err) => {
-                internal_error(format!("failed to enable remote plugin: {err}"))
-            }
             CorePluginInstallError::Join(err) => {
                 internal_error(format!("failed to install plugin: {err}"))
             }
@@ -1938,9 +1143,6 @@ impl PluginRequestProcessor {
         match err {
             CorePluginUninstallError::Config(err) => {
                 internal_error(format!("failed to clear plugin config: {err}"))
-            }
-            CorePluginUninstallError::Remote(err) => {
-                internal_error(format!("failed to uninstall remote plugin: {err}"))
             }
             CorePluginUninstallError::Join(err) => {
                 internal_error(format!("failed to uninstall plugin: {err}"))
@@ -1968,45 +1170,14 @@ impl PluginRequestProcessor {
 
     async fn remote_plugin_uninstall_response(
         &self,
-        plugin_id: String,
+        _plugin_id: String,
     ) -> Result<PluginUninstallResponse, JSONRPCErrorError> {
-        let config = self.load_latest_config(/*fallback_cwd*/ None).await?;
-        if !config.features.enabled(Feature::Plugins) {
-            return Err(invalid_request("remote plugin uninstall is not enabled"));
-        }
-        validate_remote_plugin_id(&plugin_id)?;
-
-        let auth = self.auth_manager.auth().await;
-        let remote_plugin_service_config = RemotePluginServiceConfig {
-            chatgpt_base_url: config.chatgpt_base_url.clone(),
-        };
-        let uninstall_result = ody_core_plugins::remote::uninstall_remote_plugin(
-            &remote_plugin_service_config,
-            auth.as_ref(),
-            config.ody_home.to_path_buf(),
-            &plugin_id,
-        )
-        .await;
-
-        if matches!(
-            &uninstall_result,
-            Ok(()) | Err(RemotePluginCatalogError::CacheRemove(_))
-        ) {
-            let plugins_manager = self.thread_manager.plugins_manager();
-            if plugins_manager.clear_remote_installed_plugins_cache() {
-                self.on_effective_plugins_changed();
-            }
-            plugins_manager.maybe_start_remote_installed_plugins_cache_refresh_after_mutation(
-                &config.plugins_config_input(),
-                auth.clone(),
-                Some(self.effective_plugins_changed_callback()),
-            );
-        }
-
-        uninstall_result.map_err(|err| {
-            remote_plugin_catalog_error_to_jsonrpc(err, "uninstall remote plugin")
-        })?;
-        Ok(PluginUninstallResponse {})
+        // Uninstalling a plugin by remote plugin id required the remote hosted plugin catalog,
+        // which has been removed. Local marketplace-path uninstalls are unaffected; see
+        // `plugin_uninstall_response`.
+        Err(invalid_request(
+            "plugin/uninstall by remote plugin id is no longer supported",
+        ))
     }
 }
 
@@ -2055,13 +1226,6 @@ async fn load_plugin_app_summaries(
         .collect()
 }
 
-fn plugin_app_category_by_id_from_value(value: &serde_json::Value) -> HashMap<String, String> {
-    ody_core_plugins::loader::plugin_app_declarations_from_value(value)
-        .into_iter()
-        .filter_map(|app| app.category.map(|category| (app.connector_id.0, category)))
-        .collect()
-}
-
 fn plugin_apps_needing_auth(
     all_connectors: &[AppInfo],
     accessible_connectors: &[AppInfo],
@@ -2101,234 +1265,3 @@ fn plugin_apps_needing_auth(
         .collect()
 }
 
-fn remote_marketplace_to_info(marketplace: RemoteMarketplace) -> PluginMarketplaceEntry {
-    PluginMarketplaceEntry {
-        name: marketplace.name,
-        path: None,
-        interface: Some(MarketplaceInterface {
-            display_name: Some(marketplace.display_name),
-        }),
-        plugins: marketplace
-            .plugins
-            .into_iter()
-            .map(remote_plugin_summary_to_info)
-            .collect(),
-    }
-}
-
-fn remote_plugin_summary_to_info(summary: RemoteCatalogPluginSummary) -> PluginSummary {
-    PluginSummary {
-        id: summary.id,
-        remote_plugin_id: Some(summary.remote_plugin_id),
-        local_version: None,
-        name: summary.name,
-        share_context: summary
-            .share_context
-            .map(remote_plugin_share_context_to_info),
-        source: PluginSource::Remote,
-        installed: summary.installed,
-        enabled: summary.enabled,
-        install_policy: summary.install_policy,
-        auth_policy: summary.auth_policy,
-        availability: summary.availability,
-        interface: summary.interface,
-        keywords: summary.keywords,
-    }
-}
-
-fn remote_plugin_share_context_to_info(
-    context: RemoteCatalogPluginShareContext,
-) -> PluginShareContext {
-    PluginShareContext {
-        remote_plugin_id: context.remote_plugin_id,
-        remote_version: context.remote_version,
-        discoverability: Some(remote_plugin_share_discoverability_to_info(
-            context.discoverability,
-        )),
-        share_url: context.share_url,
-        creator_account_user_id: context.creator_account_user_id,
-        creator_name: context.creator_name,
-        share_principals: context.share_principals.map(|principals| {
-            principals
-                .into_iter()
-                .map(plugin_share_principal_from_remote)
-                .collect()
-        }),
-    }
-}
-
-fn remote_plugin_share_discoverability_to_info(
-    discoverability: ody_core_plugins::remote::RemotePluginShareDiscoverability,
-) -> PluginShareDiscoverability {
-    match discoverability {
-        ody_core_plugins::remote::RemotePluginShareDiscoverability::Listed => {
-            PluginShareDiscoverability::Listed
-        }
-        ody_core_plugins::remote::RemotePluginShareDiscoverability::Unlisted => {
-            PluginShareDiscoverability::Unlisted
-        }
-        ody_core_plugins::remote::RemotePluginShareDiscoverability::Private => {
-            PluginShareDiscoverability::Private
-        }
-    }
-}
-
-fn remote_plugin_detail_to_info(
-    detail: RemoteCatalogPluginDetail,
-    apps: Vec<AppSummary>,
-) -> PluginDetail {
-    let app_templates = detail
-        .app_templates
-        .into_iter()
-        .map(|template| AppTemplateSummary {
-            template_id: template.template_id,
-            name: template.name,
-            description: template.description,
-            category: template.category,
-            canonical_connector_id: template.canonical_connector_id,
-            logo_url: template.logo_url,
-            logo_url_dark: template.logo_url_dark,
-            materialized_app_ids: template.materialized_app_ids,
-            reason: template.reason.map(|reason| match reason {
-                RemoteAppTemplateUnavailableReason::NotConfiguredForWorkspace => {
-                    AppTemplateUnavailableReason::NotConfiguredForWorkspace
-                }
-                RemoteAppTemplateUnavailableReason::NoActiveWorkspace => {
-                    AppTemplateUnavailableReason::NoActiveWorkspace
-                }
-            }),
-        })
-        .collect();
-
-    PluginDetail {
-        marketplace_name: detail.marketplace_name,
-        marketplace_path: None,
-        summary: remote_plugin_summary_to_info(detail.summary),
-        share_url: detail.share_url,
-        description: detail.description,
-        skills: detail
-            .skills
-            .into_iter()
-            .map(|skill| SkillSummary {
-                name: skill.name,
-                description: skill.description,
-                short_description: skill.short_description,
-                interface: skill.interface,
-                path: None,
-                enabled: skill.enabled,
-            })
-            .collect(),
-        hooks: Vec::new(),
-        apps,
-        app_templates,
-        mcp_servers: detail.mcp_servers,
-    }
-}
-
-fn remote_plugin_catalog_error_type(err: &RemotePluginCatalogError) -> &'static str {
-    match err {
-        RemotePluginCatalogError::AuthRequired => "remote_catalog_auth_required",
-        RemotePluginCatalogError::UnsupportedAuthMode => "remote_catalog_unsupported_auth_mode",
-        RemotePluginCatalogError::AuthToken(_) => "remote_catalog_auth_token",
-        RemotePluginCatalogError::Request { .. } => "remote_catalog_request",
-        RemotePluginCatalogError::UnexpectedStatus { .. } => "remote_catalog_unexpected_status",
-        RemotePluginCatalogError::Decode { .. } => "remote_catalog_decode",
-        RemotePluginCatalogError::InvalidBaseUrl(_) => "remote_catalog_invalid_base_url",
-        RemotePluginCatalogError::InvalidBaseUrlPath => "remote_catalog_invalid_base_url_path",
-        RemotePluginCatalogError::UnknownMarketplace { .. } => "remote_catalog_unknown_marketplace",
-        RemotePluginCatalogError::UnexpectedPluginId { .. } => {
-            "remote_catalog_unexpected_plugin_id"
-        }
-        RemotePluginCatalogError::UnexpectedSkillName { .. } => {
-            "remote_catalog_unexpected_skill_name"
-        }
-        RemotePluginCatalogError::UnexpectedEnabledState { .. } => {
-            "remote_catalog_unexpected_enabled_state"
-        }
-        RemotePluginCatalogError::InvalidPluginPath { .. } => "remote_catalog_invalid_plugin_path",
-        RemotePluginCatalogError::PluginShareCheckoutNotAvailable { .. } => {
-            "remote_catalog_plugin_share_checkout_not_available"
-        }
-        RemotePluginCatalogError::Archive { .. } => "remote_catalog_archive",
-        RemotePluginCatalogError::ArchiveJoin(_) => "remote_catalog_archive_join",
-        RemotePluginCatalogError::ArchiveTooLarge { .. } => "remote_catalog_archive_too_large",
-        RemotePluginCatalogError::MissingUploadEtag => "remote_catalog_missing_upload_etag",
-        RemotePluginCatalogError::UnexpectedResponse(_) => "remote_catalog_unexpected_response",
-        RemotePluginCatalogError::CacheRemove(_) => "remote_catalog_cache_remove",
-    }
-}
-
-fn remote_plugin_bundle_install_error_type(err: &RemotePluginBundleInstallError) -> &'static str {
-    match err {
-        RemotePluginBundleInstallError::MissingReleaseVersion { .. } => {
-            "remote_bundle_missing_release_version"
-        }
-        RemotePluginBundleInstallError::InvalidReleaseVersion { .. } => {
-            "remote_bundle_invalid_release_version"
-        }
-        RemotePluginBundleInstallError::MissingBundleDownloadUrl { .. } => {
-            "remote_bundle_missing_download_url"
-        }
-        RemotePluginBundleInstallError::InvalidBundleDownloadUrl { .. } => {
-            "remote_bundle_invalid_download_url"
-        }
-        RemotePluginBundleInstallError::UnsupportedBundleDownloadUrlScheme { .. } => {
-            "remote_bundle_unsupported_download_url_scheme"
-        }
-        RemotePluginBundleInstallError::InvalidPluginId { .. } => "remote_bundle_invalid_plugin_id",
-        RemotePluginBundleInstallError::DownloadRequest { .. } => "remote_bundle_download_request",
-        RemotePluginBundleInstallError::DownloadStatus { .. } => "remote_bundle_download_status",
-        RemotePluginBundleInstallError::DownloadBody { .. } => "remote_bundle_download_body",
-        RemotePluginBundleInstallError::DownloadTooLarge { .. } => {
-            "remote_bundle_download_too_large"
-        }
-        RemotePluginBundleInstallError::UnsupportedBundleDownloadFinalUrl { .. } => {
-            "remote_bundle_unsupported_download_final_url"
-        }
-        RemotePluginBundleInstallError::ExtractedBundleTooLarge { .. } => {
-            "remote_bundle_extracted_too_large"
-        }
-        RemotePluginBundleInstallError::Io { .. } => "remote_bundle_io",
-        RemotePluginBundleInstallError::InvalidBundle(_) => "remote_bundle_invalid_bundle",
-        RemotePluginBundleInstallError::Store(_) => "remote_bundle_store",
-    }
-}
-
-fn remote_plugin_catalog_error_to_jsonrpc(
-    err: RemotePluginCatalogError,
-    context: &str,
-) -> JSONRPCErrorError {
-    let message = format!("{context}: {err}");
-    match &err {
-        RemotePluginCatalogError::AuthRequired | RemotePluginCatalogError::UnsupportedAuthMode => {
-            invalid_request(message)
-        }
-        RemotePluginCatalogError::UnexpectedStatus { status, .. } if status.as_u16() == 404 => {
-            invalid_request(message)
-        }
-        RemotePluginCatalogError::InvalidPluginPath { .. }
-        | RemotePluginCatalogError::PluginShareCheckoutNotAvailable { .. }
-        | RemotePluginCatalogError::ArchiveTooLarge { .. }
-        | RemotePluginCatalogError::UnknownMarketplace { .. } => invalid_request(message),
-        RemotePluginCatalogError::AuthToken(_)
-        | RemotePluginCatalogError::Request { .. }
-        | RemotePluginCatalogError::UnexpectedStatus { .. }
-        | RemotePluginCatalogError::Decode { .. }
-        | RemotePluginCatalogError::InvalidBaseUrl(_)
-        | RemotePluginCatalogError::InvalidBaseUrlPath
-        | RemotePluginCatalogError::UnexpectedPluginId { .. }
-        | RemotePluginCatalogError::UnexpectedSkillName { .. }
-        | RemotePluginCatalogError::UnexpectedEnabledState { .. }
-        | RemotePluginCatalogError::Archive { .. }
-        | RemotePluginCatalogError::ArchiveJoin(_)
-        | RemotePluginCatalogError::MissingUploadEtag
-        | RemotePluginCatalogError::UnexpectedResponse(_)
-        | RemotePluginCatalogError::CacheRemove(_) => internal_error(message),
-    }
-}
-
-fn remote_plugin_bundle_install_error_to_jsonrpc(
-    err: ody_core_plugins::remote_bundle::RemotePluginBundleInstallError,
-) -> JSONRPCErrorError {
-    internal_error(format!("install remote plugin bundle: {err}"))
-}

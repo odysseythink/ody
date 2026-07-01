@@ -60,7 +60,7 @@ async fn extension_tool_receives_turn_environment_sandbox() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = responses::start_mock_server().await;
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
+    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
     let extensions = image_generation_extensions(&auth);
     let mut builder = test_ody()
         .with_auth(auth)
@@ -156,7 +156,7 @@ async fn extension_tool_uses_granted_turn_permissions() -> Result<()> {
         .mount(&server)
         .await;
 
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
+    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
     let extensions = image_generation_extensions(&auth);
     let base_permission_profile = PermissionProfile::workspace_write_with(
         &[],

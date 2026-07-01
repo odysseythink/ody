@@ -258,9 +258,16 @@ impl ChatWidget {
     /// the clear-context option does not imply urgency without evidence.
     pub(super) fn plan_implementation_context_usage_label(&self) -> Option<String> {
         let info = self.token_info.as_ref()?;
-        let percent = self.context_remaining_percent(info);
+        let percent = info.model_context_window.map(|window| {
+            info.last_token_usage
+                .percent_of_context_window_remaining(window)
+        });
 
-        let used_tokens = self.context_used_tokens(info, percent.is_some());
+        let used_tokens = if percent.is_some() {
+            None
+        } else {
+            Some(info.total_token_usage.tokens_in_context_window())
+        };
         if let Some(percent) = percent {
             let used_percent = 100 - percent.clamp(0, 100);
             if used_percent <= 0 {

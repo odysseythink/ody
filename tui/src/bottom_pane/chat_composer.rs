@@ -177,6 +177,7 @@ use super::footer::max_left_width_for_right;
 use super::footer::passive_footer_status_line;
 use super::footer::render_context_right;
 use super::footer::render_footer_from_props;
+use super::footer::render_second_footer_line;
 use super::footer::render_footer_hint_items;
 use super::footer::render_footer_line;
 use super::footer::reset_mode_after_activity;
@@ -196,6 +197,7 @@ use super::slash_commands::BuiltinCommandFlags;
 use super::slash_commands::ServiceTierCommand;
 use super::slash_commands::SlashCommandItem;
 use crate::bottom_pane::paste_burst::FlushResult;
+use crate::token_usage::TokenUsage;
 use crate::key_hint::KeyBindingListExt;
 use crate::keymap::EditorKeymap;
 use crate::keymap::RuntimeKeymap;
@@ -501,6 +503,9 @@ impl ChatComposer {
                 flash: None,
                 context_window_percent: None,
                 context_window_used_tokens: None,
+                model_name: String::new(),
+                context_tokens: None,
+                max_context_tokens: None,
                 collaboration_mode_indicator: None,
                 goal_status_indicator: None,
                 ide_context_active: false,
@@ -3891,14 +3896,30 @@ impl ChatComposer {
         self.queue_submissions = queue_submissions;
     }
 
-    pub(crate) fn set_context_window(&mut self, percent: Option<i64>, used_tokens: Option<i64>) {
-        if self.footer.context_window_percent == percent
-            && self.footer.context_window_used_tokens == used_tokens
+    pub(crate) fn set_context_window(
+        &mut self,
+        last_context_tokens: Option<i64>,
+        total_context_tokens: Option<i64>,
+        max_context_tokens: Option<i64>,
+    ) {
+        if self.footer.context_tokens == total_context_tokens
+            && self.footer.max_context_tokens == max_context_tokens
         {
             return;
         }
+        self.footer.context_tokens = total_context_tokens;
+        self.footer.max_context_tokens = max_context_tokens;
+        let (percent, used_tokens) = TokenUsage::context_window_percent_and_used_tokens(
+            last_context_tokens,
+            total_context_tokens,
+            max_context_tokens,
+        );
         self.footer.context_window_percent = percent;
         self.footer.context_window_used_tokens = used_tokens;
+    }
+
+    pub(crate) fn set_model_name(&mut self, model_name: String) {
+        self.footer.model_name = model_name;
     }
 
     pub(crate) fn set_esc_backtrack_hint(&mut self, show: bool) {
@@ -4179,23 +4200,33 @@ impl ChatComposer {
                 let footer_hint_height =
                     custom_height.unwrap_or_else(|| footer_height(&footer_props));
                 let footer_spacing = Self::footer_spacing(footer_hint_height);
-                let hint_rect = if footer_spacing > 0 && footer_hint_height > 0 {
-                    let [_, hint_rect] = Layout::vertical([
+                let first_line_rect = if footer_spacing > 0 && footer_hint_height > 0 {
+                    let [_, first_line_rect] = Layout::vertical([
                         Constraint::Length(footer_spacing),
                         Constraint::Length(footer_hint_height),
                     ])
                     .areas(popup_rect);
-                    hint_rect
+                    first_line_rect
                 } else {
                     popup_rect
                 };
+                let (first_line_rect, second_line_rect) = if footer_hint_height >= 2 {
+                    let [first, second] = Layout::vertical([
+                        Constraint::Length(1),
+                        Constraint::Length(1),
+                    ])
+                    .areas(first_line_rect);
+                    (first, Some(second))
+                } else {
+                    (first_line_rect, None)
+                };
                 if let Some(line) = self.history_search_footer_line() {
-                    render_footer_line(hint_rect, buf, line);
+                    render_footer_line(first_line_rect, buf, line);
                 } else if self.footer.plan_mode_nudge_visible {
                     let available_width =
-                        hint_rect.width.saturating_sub(FOOTER_INDENT_COLS as u16) as usize;
+                        first_line_rect.width.saturating_sub(FOOTER_INDENT_COLS as u16) as usize;
                     render_footer_line(
-                        hint_rect,
+                        first_line_rect,
                         buf,
                         truncate_line_with_ellipsis_if_overflow(
                             plan_mode_nudge_line(),
@@ -4204,7 +4235,7 @@ impl ChatComposer {
                     );
                 } else {
                     let available_width =
-                        hint_rect.width.saturating_sub(FOOTER_INDENT_COLS as u16) as usize;
+                        first_line_rect.width.saturating_sub(FOOTER_INDENT_COLS as u16) as usize;
                     let status_line_active = uses_passive_footer_status_layout(&footer_props);
                     let combined_status_line = if status_line_active {
                         passive_footer_status_line(&footer_props)
@@ -4255,7 +4286,7 @@ impl ChatComposer {
                             let full = self.mode_indicator_line(show_cycle_hint);
                             let compact = self.mode_indicator_line(/*show_cycle_hint*/ false);
                             let full_width = full.as_ref().map(|l| l.width() as u16).unwrap_or(0);
-                            if can_show_left_with_context(hint_rect, left_width, full_width) {
+                            if can_show_left_with_context(first_line_rect, left_width, full_width) {
                                 full
                             } else {
                                 compact
@@ -4265,7 +4296,7 @@ impl ChatComposer {
                         };
                     let right_width = right_line.as_ref().map(|l| l.width() as u16).unwrap_or(0);
                     if status_line_active
-                        && let Some(max_left) = max_left_width_for_right(hint_rect, right_width)
+                        && let Some(max_left) = max_left_width_for_right(first_line_rect, right_width)
                         && left_width > max_left
                         && let Some(line) = combined_status_line.as_ref().map(|line| {
                             truncate_line_with_ellipsis_if_overflow(line.clone(), max_left as usize)
@@ -4275,7 +4306,7 @@ impl ChatComposer {
                         truncated_status_line = Some(line);
                     }
                     let can_show_left_and_context =
-                        can_show_left_with_context(hint_rect, left_width, right_width);
+                        can_show_left_with_context(first_line_rect, left_width, right_width);
                     let has_override =
                         self.footer.flash_visible() || active_footer_hint_override.is_some();
                     let single_line_layout = if has_override || status_line_active {
@@ -4288,7 +4319,7 @@ impl ChatComposer {
                                 // want the single-line collapse rules so the mode label can win over
                                 // the context indicator on narrow widths.
                                 Some(single_line_footer_layout(
-                                    hint_rect,
+                                    first_line_rect,
                                     right_width,
                                     left_mode_indicator,
                                     show_cycle_hint,
@@ -4323,10 +4354,10 @@ impl ChatComposer {
                             SummaryLeft::Default => {
                                 if status_line_active {
                                     if let Some(line) = truncated_status_line.clone() {
-                                        render_footer_line(hint_rect, buf, line);
+                                        render_footer_line(first_line_rect, buf, line);
                                     } else {
                                         render_footer_from_props(
-                                            hint_rect,
+                                            first_line_rect,
                                             buf,
                                             &footer_props,
                                             left_mode_indicator,
@@ -4337,7 +4368,7 @@ impl ChatComposer {
                                     }
                                 } else {
                                     render_footer_from_props(
-                                        hint_rect,
+                                        first_line_rect,
                                         buf,
                                         &footer_props,
                                         left_mode_indicator,
@@ -4348,23 +4379,23 @@ impl ChatComposer {
                                 }
                             }
                             SummaryLeft::Custom(line) => {
-                                render_footer_line(hint_rect, buf, line);
+                                render_footer_line(first_line_rect, buf, line);
                             }
                             SummaryLeft::None => {}
                         }
                     } else if self.footer.flash_visible() {
                         if let Some(flash) = self.footer.flash.as_ref() {
-                            flash.line.render(inset_footer_hint_area(hint_rect), buf);
+                            flash.line.render(inset_footer_hint_area(first_line_rect), buf);
                         }
                     } else if let Some(items) = active_footer_hint_override {
-                        render_footer_hint_items(hint_rect, buf, items);
+                        render_footer_hint_items(first_line_rect, buf, items);
                     } else if status_line_active {
                         if let Some(line) = truncated_status_line {
-                            render_footer_line(hint_rect, buf, line);
+                            render_footer_line(first_line_rect, buf, line);
                         }
                     } else {
                         render_footer_from_props(
-                            hint_rect,
+                            first_line_rect,
                             buf,
                             &footer_props,
                             self.footer.collaboration_mode_indicator,
@@ -4374,13 +4405,22 @@ impl ChatComposer {
                         );
                     }
                     if show_right && let Some(line) = &right_line {
-                        render_context_right(hint_rect, buf, line);
+                        render_context_right(first_line_rect, buf, line);
                     }
                     if status_line_active
                         && let Some(url) = self.footer.status_line_hyperlink_url.as_deref()
                     {
-                        mark_underlined_hyperlink(buf, hint_rect, url);
+                        mark_underlined_hyperlink(buf, first_line_rect, url);
                     }
+                }
+                if let Some(second_line_rect) = second_line_rect {
+                    render_second_footer_line(
+                        second_line_rect,
+                        buf,
+                        &self.footer.model_name,
+                        self.footer.context_tokens,
+                        self.footer.max_context_tokens,
+                    );
                 }
             }
         }
@@ -4521,8 +4561,8 @@ mod tests {
             hint_row.expect("expected footer hint row to be rendered");
         assert_eq!(
             hint_row_idx,
-            area.height - 1,
-            "hint row should occupy the bottom line: {hint_row_contents:?}",
+            area.height - 2,
+            "hint row should occupy the line above the second footer line: {hint_row_contents:?}",
         );
 
         assert!(
@@ -4845,17 +4885,17 @@ mod tests {
         assert_eq!(prompt_cell.symbol(), "!");
         assert_eq!(prompt_cell.style().fg, Some(Color::LightRed));
 
-        let footer_y = area.height - 1;
-        let footer_text = (0..area.width)
-            .map(|x| buf[(x, footer_y)].symbol().chars().next().unwrap_or(' '))
-            .collect::<String>();
-        let shell_label_x = footer_text
-            .find("Shell mode")
+        let (footer_y, shell_label_x) = (area.height.saturating_sub(2)..area.height)
+            .find_map(|y| {
+                let footer_text = (0..area.width)
+                    .map(|x| buf[(x, y)].symbol().chars().next().unwrap_or(' '))
+                    .collect::<String>();
+                footer_text
+                    .find("Shell mode")
+                    .map(|x| (y, x as u16))
+            })
             .expect("expected shell mode footer label");
-        assert_eq!(
-            buf[(shell_label_x as u16, footer_y)].style().fg,
-            Some(Color::LightRed)
-        );
+        assert_eq!(buf[(shell_label_x, footer_y)].style().fg, Some(Color::LightRed));
     }
 
     fn plugin_mention_foreground_color(composer: &ChatComposer) -> Option<Color> {
@@ -5095,7 +5135,10 @@ mod tests {
         ) {
             composer.set_collaboration_modes_enabled(/*enabled*/ true);
             composer.set_collaboration_mode_indicator(indicator);
-            composer.set_context_window(Some(context_percent), /*used_tokens*/ None);
+            const MAX_CONTEXT_TOKENS: i64 = 1_000_000;
+            let raw_used = (context_percent * MAX_CONTEXT_TOKENS / 100)
+                .saturating_sub(TokenUsage::BASELINE_TOKENS);
+            composer.set_context_window(Some(raw_used), Some(raw_used), Some(MAX_CONTEXT_TOKENS));
         }
 
         // Empty textarea, agent idle: shortcuts hint can show, and cycle hint is hidden.

@@ -340,7 +340,6 @@ use crate::turn_timing::record_turn_ttfm_metric;
 use crate::unified_exec::UnifiedExecProcessManager;
 use crate::windows_sandbox::WindowsSandboxLevelExt;
 use ody_core_plugins::PluginsManager;
-use ody_core_plugins::RecommendedPluginCandidatesInput;
 use ody_git_utils::get_git_repo_root;
 use ody_mcp::McpConfig;
 use ody_mcp::compute_auth_statuses;
@@ -3188,23 +3187,9 @@ impl Session {
             .plugins_manager
             .plugins_for_config(&turn_context.config.plugins_config_input())
             .await;
-        let recommended_plugin_candidates =
-            if crate::tools::spec_plan::tool_suggest_enabled(turn_context) {
-                let auth = self.services.auth_manager.auth().await;
-                let plugins_config = turn_context.config.plugins_config_input();
-                self.services
-                    .plugins_manager
-                    .recommended_plugin_candidates_for_config(RecommendedPluginCandidatesInput {
-                        plugins_config: &plugins_config,
-                        loaded_plugins: &loaded_plugins,
-                        auth: auth.as_ref(),
-                        disabled_tools: &turn_context.config.tool_suggest.disabled_tools,
-                        app_server_client_name: turn_context.app_server_client_name.as_deref(),
-                    })
-                    .await
-            } else {
-                None
-            };
+        // Endpoint-backed (remote catalog) plugin recommendations have been removed; tool
+        // suggest always falls back to the legacy local-discovery path now.
+        let recommended_plugin_candidates: Option<Vec<ody_tools::DiscoverableTool>> = None;
         if let Some(recommended_plugins) = recommended_plugin_candidates
             .as_deref()
             .and_then(RecommendedPluginsInstructions::from_plugins)

@@ -1862,12 +1862,12 @@ async fn ambient_pet_reduces_stream_width_and_composer_text_width() {
         .set_composer_text(draft, Vec::new(), Vec::new());
 
     let mut with_pet_terminal =
-        Terminal::new(TestBackend::new(/*width*/ 80, /*height*/ 6)).expect("create terminal");
+        Terminal::new(TestBackend::new(/*width*/ 80, /*height*/ 8)).expect("create terminal");
     with_pet_terminal
         .draw(|f| with_pet.render(f.area(), f.buffer_mut()))
         .expect("draw pet-enabled chat");
     let mut disabled_terminal =
-        Terminal::new(TestBackend::new(/*width*/ 80, /*height*/ 6)).expect("create terminal");
+        Terminal::new(TestBackend::new(/*width*/ 80, /*height*/ 8)).expect("create terminal");
     disabled_terminal
         .draw(|f| disabled.render(f.area(), f.buffer_mut()))
         .expect("draw disabled-pet chat");

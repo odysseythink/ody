@@ -6,7 +6,6 @@ expression: normalize_snapshot_paths(term.backend().vt100().screen().contents())
 
 
 
-
 ✔ Auto-reviewer approved ody to run rm -f /tmp/guardian-approved.sqlite this
   time
 
@@ -14,3 +13,4 @@ expression: normalize_snapshot_paths(term.backend().vt100().screen().contents())
 › Ask Ody to do anything
 
   gpt-5.5 default · /tmp/project
+                                                                                                           context: --

@@ -3,11 +3,12 @@ source: tui/src/bottom_pane/chat_composer.rs
 expression: terminal.backend()
 ---
 "                          "
-"› Ask Ody to do anythin "
+"› Ask Ody to do anything  "
 "                          "
 "                          "
 "                          "
 "                          "
 "                          "
 "                          "
-"       100% context left  "
+"         1% context left  "
+"  context: 98.8% (988K/1M)"

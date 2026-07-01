@@ -550,7 +550,7 @@ discoverables = [
         .build()
         .await
         .expect("config should load");
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
+    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
     let plugins_manager = PluginsManager::new(config.ody_home.to_path_buf());
 
     let discoverable_tools = list_tool_suggest_discoverable_tools_with_auth(
@@ -587,7 +587,7 @@ apps = true
         .build()
         .await
         .expect("config should load");
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
+    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
     let loaded_plugin_app_connector_ids = vec!["asdk_app_databricks_workspace".to_string()];
     let plugins_manager = PluginsManager::new(config.ody_home.to_path_buf());
 

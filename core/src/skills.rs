@@ -27,7 +27,6 @@ pub use ody_core_skills::injection::build_skill_injections;
 pub use ody_core_skills::injection::collect_explicit_skill_mentions;
 pub use ody_core_skills::loader;
 pub use ody_core_skills::model;
-pub use ody_core_skills::remote;
 pub use ody_core_skills::render;
 pub use ody_core_skills::render::SkillRenderSideEffects;
 pub use ody_core_skills::service;

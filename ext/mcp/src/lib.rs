@@ -1,46 +1,13 @@
 use ody_core::config::Config;
-use ody_extension_api::ExtensionFuture;
 use ody_extension_api::ExtensionRegistryBuilder;
-use ody_extension_api::McpServerContribution;
-use ody_extension_api::McpServerContributionContext;
-use ody_extension_api::McpServerContributor;
-use ody_mcp::ODY_APPS_MCP_SERVER_NAME;
-use ody_mcp::hosted_plugin_runtime_mcp_server_config;
 
 mod executor_plugin;
 
-struct HostedPluginRuntimeExtension;
-
-impl McpServerContributor<Config> for HostedPluginRuntimeExtension {
-    fn id(&self) -> &'static str {
-        "hosted_plugin_runtime"
-    }
-
-    fn contribute<'a>(
-        &'a self,
-        context: McpServerContributionContext<'a, Config>,
-    ) -> ExtensionFuture<'a, Vec<McpServerContribution>> {
-        Box::pin(async move {
-            let config = context.config();
-            let name = ODY_APPS_MCP_SERVER_NAME.to_string();
-            if !config.features.enabled(ody_features::Feature::Apps) {
-                return vec![McpServerContribution::Remove { name }];
-            }
-
-            vec![McpServerContribution::Set {
-                name,
-                config: Box::new(hosted_plugin_runtime_mcp_server_config(
-                    &config.chatgpt_base_url,
-                    config.apps_mcp_product_sku.as_deref(),
-                )),
-            }]
-        })
-    }
-}
-
-pub fn install(builder: &mut ExtensionRegistryBuilder<Config>) {
-    builder.mcp_server_contributor(std::sync::Arc::new(HostedPluginRuntimeExtension));
-}
+/// Previously wired a `hosted_plugin_runtime` MCP server contributor that pointed at a
+/// ChatGPT/OpenAI-hosted "Apps" plugin runtime endpoint. That remote-hosted-catalog
+/// integration has been removed; this function is now a no-op kept so callers do not need
+/// to change their extension-registration sequence.
+pub fn install(_builder: &mut ExtensionRegistryBuilder<Config>) {}
 
 /// Installs discovery for MCP servers declared by thread-selected executor plugins.
 pub fn install_executor_plugins(

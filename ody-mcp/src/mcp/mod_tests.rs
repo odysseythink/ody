@@ -287,7 +287,7 @@ async fn effective_mcp_servers_preserve_runtime_servers() {
     let ody_home = tempfile::tempdir().expect("tempdir");
     let mut config = test_mcp_config(ody_home.path().to_path_buf());
     config.apps_enabled = true;
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
+    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
 
     let mut catalog = ResolvedMcpCatalog::builder();
     catalog.register(McpServerRegistration::from_config(

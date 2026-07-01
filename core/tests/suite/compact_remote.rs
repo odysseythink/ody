@@ -308,7 +308,7 @@ async fn remote_compact_replaces_history_for_followups() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let harness = TestOdyHarness::with_builder(
-        test_ody().with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing()),
+        test_ody().with_auth(OdyAuth::create_dummy_api_key_auth_for_testing()),
     )
     .await?;
     let ody = harness.test().ody.clone();
@@ -790,7 +790,7 @@ async fn remote_manual_compact_chatgpt_auth_reuses_service_tier_and_prompt_cache
     skip_if_no_network!(Ok(()));
 
     assert_remote_manual_compact_request_parity(
-        OdyAuth::create_dummy_chatgpt_auth_for_testing(),
+        OdyAuth::create_dummy_api_key_auth_for_testing(),
         Some(ServiceTier::Fast),
         Some("priority"),
         "remote_manual_compact_chatgpt_auth_service_tier_prompt_cache_key_request_diff",
@@ -807,7 +807,7 @@ async fn remote_compact_v2_reuses_compaction_trigger_for_followups() -> Result<(
 
     let harness = TestOdyHarness::with_builder(
         test_ody()
-            .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+            .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
             .with_config(|config| {
                 let _ = config.features.enable(Feature::RemoteCompactionV2);
             }),
@@ -945,7 +945,7 @@ async fn remote_compact_v2_retries_failures_with_stream_retry_budget() -> Result
 
     let harness = TestOdyHarness::with_builder(
         test_ody()
-            .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+            .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
             .with_config(|config| {
                 let _ = config.features.enable(Feature::RemoteCompactionV2);
                 config.model_provider.request_max_retries = Some(0);
@@ -1057,7 +1057,7 @@ async fn remote_compact_v2_accepts_additional_output_items_before_compaction() -
 
     let harness = TestOdyHarness::with_builder(
         test_ody()
-            .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+            .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
             .with_config(|config| {
                 let _ = config.features.enable(Feature::RemoteCompactionV2);
             }),
@@ -1146,7 +1146,7 @@ async fn remote_compact_filters_deferred_dynamic_tools() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = responses::start_mock_server().await;
-    let mut builder = test_ody().with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing());
+    let mut builder = test_ody().with_auth(OdyAuth::create_dummy_api_key_auth_for_testing());
     let mut test = builder.build(&server).await?;
     let hidden_tool = "hidden_dynamic_tool";
     let visible_tool = "visible_dynamic_tool";
@@ -1239,7 +1239,7 @@ async fn remote_compact_runs_automatically() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let harness = TestOdyHarness::with_builder(
-        test_ody().with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing()),
+        test_ody().with_auth(OdyAuth::create_dummy_api_key_auth_for_testing()),
     )
     .await?;
     let ody = harness.test().ody.clone();
@@ -1378,7 +1378,7 @@ async fn remote_compact_trims_function_call_history_to_fit_context_window() -> R
 
     let harness = TestOdyHarness::with_builder(
         test_ody()
-            .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+            .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
             .with_config(|config| {
                 config.model_context_window = Some(2_000);
                 config.model_auto_compact_token_limit = Some(200_000);
@@ -1505,7 +1505,7 @@ async fn remote_compact_rewrites_multiple_trailing_function_call_outputs() -> Re
 
     let harness = TestOdyHarness::with_builder(
         test_ody()
-            .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+            .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
             .with_config(|config| {
                 config.model_context_window = Some(2_000);
                 config.model_auto_compact_token_limit = Some(200_000);
@@ -1622,7 +1622,7 @@ async fn auto_remote_compact_trims_function_call_history_to_fit_context_window()
     let trimmed_command = "yes x | head -n 3000";
     let harness = TestOdyHarness::with_builder(
         test_ody()
-            .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+            .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
             .with_config(|config| {
                 config.model_context_window = Some(2_000);
                 config.model_auto_compact_token_limit = Some(200_000);
@@ -1808,7 +1808,7 @@ async fn remote_compact_trims_tool_search_output_to_empty_tools_array() -> Resul
     });
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(|config| {
             configure_search_capable_model(config);
             config.model_context_window = Some(2_000);
@@ -1871,7 +1871,7 @@ async fn auto_remote_compact_failure_stops_agent_loop() -> Result<()> {
 
     let harness = TestOdyHarness::with_builder(
         test_ody()
-            .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+            .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
             .with_config(|config| {
                 config.model_auto_compact_token_limit = Some(120);
             }),
@@ -1980,7 +1980,7 @@ async fn remote_compact_trim_estimate_uses_session_base_instructions() -> Result
 
     let baseline_harness = TestOdyHarness::with_builder(
         test_ody()
-            .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+            .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
             .with_config(|config| {
                 config.model_context_window = Some(200_000);
             }),
@@ -2084,7 +2084,7 @@ async fn remote_compact_trim_estimate_uses_session_base_instructions() -> Result
 
     let override_harness = TestOdyHarness::with_builder(
         test_ody()
-            .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+            .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
             .with_config({
                 let override_base_instructions = override_base_instructions.clone();
                 move |config| {
@@ -2191,7 +2191,7 @@ async fn remote_manual_compact_emits_context_compaction_items() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let harness = TestOdyHarness::with_builder(
-        test_ody().with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing()),
+        test_ody().with_auth(OdyAuth::create_dummy_api_key_auth_for_testing()),
     )
     .await?;
     let ody = harness.test().ody.clone();
@@ -2272,7 +2272,7 @@ async fn remote_manual_compact_failure_emits_task_error_event() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let harness = TestOdyHarness::with_builder(
-        test_ody().with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing()),
+        test_ody().with_auth(OdyAuth::create_dummy_api_key_auth_for_testing()),
     )
     .await?;
     let ody = harness.test().ody.clone();
@@ -2337,7 +2337,7 @@ async fn remote_compact_persists_replacement_history_in_rollout() -> Result<()> 
     skip_if_no_network!(Ok(()));
 
     let harness = TestOdyHarness::with_builder(
-        test_ody().with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing()),
+        test_ody().with_auth(OdyAuth::create_dummy_api_key_auth_for_testing()),
     )
     .await?;
     let ody = harness.test().ody.clone();
@@ -2476,7 +2476,7 @@ async fn remote_compact_and_resume_refresh_stale_developer_instructions() -> Res
     let stale_developer_message = "STALE_DEVELOPER_INSTRUCTIONS_SHOULD_BE_REMOVED";
 
     let mut start_builder =
-        test_ody().with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing());
+        test_ody().with_auth(OdyAuth::create_dummy_api_key_auth_for_testing());
     let initial = start_builder.build(&server).await?;
     let home = initial.home.clone();
     let rollout_path = initial
@@ -2566,7 +2566,7 @@ async fn remote_compact_and_resume_refresh_stale_developer_instructions() -> Res
     .await;
 
     let mut resume_builder =
-        test_ody().with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing());
+        test_ody().with_auth(OdyAuth::create_dummy_api_key_auth_for_testing());
     let resumed = resume_builder.resume(&server, home, rollout_path).await?;
 
     resumed
@@ -2629,7 +2629,7 @@ async fn remote_compact_refreshes_stale_developer_instructions_without_resume() 
     let server = wiremock::MockServer::start().await;
     let stale_developer_message = "STALE_DEVELOPER_INSTRUCTIONS_SHOULD_BE_REMOVED";
 
-    let mut builder = test_ody().with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing());
+    let mut builder = test_ody().with_auth(OdyAuth::create_dummy_api_key_auth_for_testing());
     let test = builder.build(&server).await?;
 
     let responses_mock = responses::mount_sse_sequence(
@@ -3224,7 +3224,7 @@ async fn snapshot_request_shape_remote_compact_resume_restates_realtime_end() ->
     .await;
 
     let mut resume_builder =
-        test_ody().with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing());
+        test_ody().with_auth(OdyAuth::create_dummy_api_key_auth_for_testing());
     let resumed = resume_builder.resume(&server, home, rollout_path).await?;
 
     resumed
@@ -3273,7 +3273,7 @@ async fn snapshot_request_shape_remote_pre_turn_compaction_including_incoming_us
 
     let harness = TestOdyHarness::with_builder(
         test_ody()
-            .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+            .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
             .with_config(|config| {
                 config.model_auto_compact_token_limit = Some(200);
             }),
@@ -3375,7 +3375,7 @@ async fn snapshot_request_shape_remote_pre_turn_compaction_strips_incoming_model
     let next_model = "gpt-5.3-ody";
     let harness = TestOdyHarness::with_builder(
         test_ody()
-            .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+            .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
             .with_model(previous_model)
             .with_config(|config| {
                 config.model_auto_compact_token_limit = Some(200);
@@ -3511,7 +3511,7 @@ async fn snapshot_request_shape_remote_pre_turn_compaction_context_window_exceed
 
     let harness = TestOdyHarness::with_builder(
         test_ody()
-            .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+            .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
             .with_config(|config| {
                 config.model_auto_compact_token_limit = Some(200);
             }),
@@ -3617,7 +3617,7 @@ async fn remote_pre_turn_compact_response_seeds_turn_state() -> Result<()> {
 
     let harness = TestOdyHarness::with_builder(
         test_ody()
-            .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+            .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
             .with_config(|config| {
                 config.model_auto_compact_token_limit = Some(200);
             }),
@@ -3690,7 +3690,7 @@ async fn remote_mid_turn_compact_v1_sends_turn_state_over_http() -> Result<()> {
 
     let harness = TestOdyHarness::with_builder(
         test_ody()
-            .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+            .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
             .with_config(|config| {
                 config.model_auto_compact_token_limit = Some(200);
             }),
@@ -3773,7 +3773,7 @@ async fn remote_mid_turn_compact_v2_sends_turn_state_over_http() -> Result<()> {
 
     let harness = TestOdyHarness::with_builder(
         test_ody()
-            .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+            .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
             .with_config(|config| {
                 let _ = config.features.enable(Feature::RemoteCompactionV2);
                 config.model_auto_compact_token_limit = Some(200);
@@ -3908,7 +3908,7 @@ async fn remote_mid_turn_compact_v2_sends_turn_state_over_websocket() -> Result<
     ]])
     .await;
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(|config| {
             let _ = config.features.enable(Feature::RemoteCompactionV2);
             config.model_auto_compact_token_limit = Some(200);
@@ -3966,7 +3966,7 @@ async fn snapshot_request_shape_remote_mid_turn_continuation_compaction() -> Res
 
     let harness = TestOdyHarness::with_builder(
         test_ody()
-            .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+            .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
             .with_config(|config| {
                 config.model_auto_compact_token_limit = Some(200);
             }),
@@ -4039,7 +4039,7 @@ async fn snapshot_request_shape_remote_mid_turn_compaction_summary_only_reinject
 
     let harness = TestOdyHarness::with_builder(
         test_ody()
-            .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+            .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
             .with_config(|config| {
                 config.model_auto_compact_token_limit = Some(200);
             }),
@@ -4127,7 +4127,7 @@ async fn snapshot_request_shape_remote_mid_turn_compaction_multi_summary_reinjec
 
     let harness = TestOdyHarness::with_builder(
         test_ody()
-            .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+            .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
             .with_config(|config| {
                 config.model_auto_compact_token_limit = Some(200);
             }),
@@ -4239,7 +4239,7 @@ async fn snapshot_request_shape_remote_manual_compact_without_previous_user_mess
     skip_if_no_network!(Ok(()));
 
     let harness = TestOdyHarness::with_builder(
-        test_ody().with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing()),
+        test_ody().with_auth(OdyAuth::create_dummy_api_key_auth_for_testing()),
     )
     .await?;
     let ody = harness.test().ody.clone();

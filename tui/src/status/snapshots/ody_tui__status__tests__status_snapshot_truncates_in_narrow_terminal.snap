@@ -5,12 +5,12 @@ expression: sanitized
 /status
 
 ╭────────────────────────────────────────────────────────────────────╮
-│  >_ odysseythink ody (v0.0.0)                                          │
+│  >_ odysseythink ody (v0.0.0)                                      │
 │                                                                    │
-│ Visit https://chatgpt.com/ody/settings/usage for up-to-date      │
+│ Visit https://chatgpt.com/ody/settings/usage for up-to-date        │
 │ information on rate limits and credits                             │
 │                                                                    │
-│  Model:            gpt-5.1-ody-max (reasoning high, summaries de │
+│  Model:            gpt-5.1-ody-max (reasoning high, summaries deta │
 │  Directory: [[workspace]]                                          │
 │  Permissions:      Custom (workspace with network access, Ask for  │
 │  Agents.md:        <none>                                          │

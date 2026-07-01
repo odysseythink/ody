@@ -179,7 +179,7 @@ async fn capture_file_writes_exact_serialized_request() {
     };
     let event = sample_regular_track_event("thread-1");
     let expected_event = serde_json::to_value(&event).expect("serialize expected event");
-    let auth = ody_login::OdyAuth::create_dummy_chatgpt_auth_for_testing();
+    let auth = ody_login::OdyAuth::create_dummy_api_key_auth_for_testing();
 
     send_track_events_request(&auth, &destination, vec![event]).await;
 
@@ -200,7 +200,7 @@ async fn capture_file_writes_final_batches_as_separate_lines() {
     let destination = AnalyticsEventsDestination::CaptureFile {
         path: capture_path.clone(),
     };
-    let auth = ody_login::OdyAuth::create_dummy_chatgpt_auth_for_testing();
+    let auth = ody_login::OdyAuth::create_dummy_api_key_auth_for_testing();
     let events = vec![
         sample_regular_track_event("thread-1"),
         sample_accepted_line_fingerprint_event("thread-2"),

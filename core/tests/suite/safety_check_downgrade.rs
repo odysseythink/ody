@@ -70,7 +70,7 @@ async fn odysseythink_model_header_mismatch_emits_warning_event() -> Result<()> 
 
     let server = start_mock_server().await;
     let response =
-        sse_response(sse_completed("resp-1")).insert_header("OpenAI-Model", SERVER_MODEL);
+        sse_response(sse_completed("resp-1")).insert_header("odysseythink-model", SERVER_MODEL);
     let _mock = mount_response_once(&server, response).await;
 
     let mut builder = test_ody().with_model(REQUESTED_MODEL);
@@ -151,13 +151,13 @@ async fn response_model_field_mismatch_emits_warning_when_header_matches_request
             "response": {
                 "id": "resp-1",
                 "headers": {
-                    "OpenAI-Model": SERVER_MODEL
+                    "odysseythink-model": SERVER_MODEL
                 }
             }
         }),
         core_test_support::responses::ev_completed("resp-1"),
     ]))
-    .insert_header("OpenAI-Model", REQUESTED_MODEL);
+    .insert_header("odysseythink-model", REQUESTED_MODEL);
     let _mock = mount_response_once(&server, response).await;
 
     let mut builder = test_ody().with_model(REQUESTED_MODEL);
@@ -221,13 +221,13 @@ async fn odysseythink_model_header_mismatch_only_emits_one_warning_per_turn() ->
         ),
         core_test_support::responses::ev_completed("resp-1"),
     ]))
-    .insert_header("OpenAI-Model", SERVER_MODEL);
+    .insert_header("odysseythink-model", SERVER_MODEL);
     let second_response = sse_response(sse(vec![
         ev_response_created("resp-2"),
         ev_assistant_message("msg-1", "done"),
         core_test_support::responses::ev_completed("resp-2"),
     ]))
-    .insert_header("OpenAI-Model", SERVER_MODEL);
+    .insert_header("odysseythink-model", SERVER_MODEL);
     let _mock = mount_response_sequence(&server, vec![first_response, second_response]).await;
 
     let mut builder = test_ody().with_model(REQUESTED_MODEL);
@@ -261,7 +261,7 @@ async fn odysseythink_model_header_casing_only_mismatch_does_not_warn() -> Resul
     let server = start_mock_server().await;
     let requested_header = REQUESTED_MODEL.to_ascii_uppercase();
     let response = sse_response(sse_completed("resp-1"))
-        .insert_header("OpenAI-Model", requested_header.as_str());
+        .insert_header("odysseythink-model", requested_header.as_str());
     let _mock = mount_response_once(&server, response).await;
 
     let mut builder = test_ody().with_model(REQUESTED_MODEL);

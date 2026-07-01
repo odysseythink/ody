@@ -15,7 +15,6 @@ workspace = true
 [dependencies]
 anyhow = { workspace = true }
 chrono = { workspace = true }
-ody-backend-client = { workspace = true }
 ody-core = { workspace = true }
 ody-config = { workspace = true }
 ody-features = { workspace = true }

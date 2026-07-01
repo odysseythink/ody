@@ -38,11 +38,6 @@ use ody_app_server_protocol::PluginSharePrincipal;
 use ody_app_server_protocol::PluginSource;
 use ody_app_server_protocol::PluginSummary;
 use ody_core_plugins::is_odysseythink_curated_marketplace_name;
-use ody_core_plugins::remote::REMOTE_GLOBAL_MARKETPLACE_NAME;
-use ody_core_plugins::remote::REMOTE_WORKSPACE_MARKETPLACE_NAME;
-use ody_core_plugins::remote::REMOTE_WORKSPACE_SHARED_WITH_ME_MARKETPLACE_NAME;
-use ody_core_plugins::remote::REMOTE_WORKSPACE_SHARED_WITH_ME_PRIVATE_MARKETPLACE_NAME;
-use ody_core_plugins::remote::REMOTE_WORKSPACE_SHARED_WITH_ME_UNLISTED_MARKETPLACE_NAME;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use crossterm::event::KeyCode;
 use ratatui::buffer::Buffer;
@@ -67,6 +62,18 @@ const PERSONAL_MARKETPLACE_RELATIVE_PATH: &str = ".agents/plugins/marketplace.js
 const REMOTE_LOADING_TAB_ID_PREFIX: &str = "remote-loading:";
 const REMOTE_EMPTY_TAB_ID_PREFIX: &str = "remote-empty:";
 const REMOTE_ERROR_TAB_ID_PREFIX: &str = "remote-error:";
+// These marketplace names were only ever populated by the remote hosted plugin catalog, which
+// has been removed; app-server's `plugin/list` response will never include a marketplace with
+// one of these names anymore, but the constants are kept locally so this file's marketplace
+// categorization/tab logic doesn't need a larger rewrite.
+const REMOTE_GLOBAL_MARKETPLACE_NAME: &str = "odysseythink-curated-remote";
+const REMOTE_WORKSPACE_MARKETPLACE_NAME: &str = "workspace-directory";
+const REMOTE_WORKSPACE_SHARED_WITH_ME_MARKETPLACE_NAME: &str = "workspace-shared-with-me";
+const REMOTE_WORKSPACE_SHARED_WITH_ME_PRIVATE_MARKETPLACE_NAME: &str =
+    "workspace-shared-with-me-private";
+const REMOTE_WORKSPACE_SHARED_WITH_ME_UNLISTED_MARKETPLACE_NAME: &str =
+    "workspace-shared-with-me-unlisted";
+
 const WORKSPACE_SECTION_TAB_ORDER: u8 = 0;
 const SHARED_WITH_ME_SECTION_TAB_ORDER: u8 = 1;
 const SHARED_WITH_ME_LINK_SECTION_TAB_ORDER: u8 = 2;

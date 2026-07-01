@@ -66,11 +66,7 @@ impl AmazonBedrockModelProvider {
             .and_then(|auth_manager| auth_manager.auth_cached())
             .and_then(|auth| match auth {
                 OdyAuth::BedrockApiKey(auth) => Some(auth),
-                OdyAuth::ApiKey(_)
-                | OdyAuth::Chatgpt(_)
-                | OdyAuth::ChatgptAuthTokens(_)
-                | OdyAuth::AgentIdentity(_)
-                | OdyAuth::PersonalAccessToken(_) => None,
+                OdyAuth::ApiKey(_) => None,
             })
     }
 

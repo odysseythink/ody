@@ -921,13 +921,13 @@ mod tests {
     #[test]
     fn canonicalize_git_remote_url_normalizes_github_variants() {
         for remote in [
-            "git@github.com:OpenAI/Ody.git",
+            "git@github.com:OdysseyThink/Ody.git",
             "ssh://git@github.com/odysseythink/ody.git",
-            "ssh://git@github.com:22/OpenAI/Ody.git",
+            "ssh://git@github.com:22/OdysseyThink/Ody.git",
             "https://github.com/odysseythink/ody.git",
             "https://github.com:443/odysseythink/ody.git",
             "https://token@github.com/odysseythink/ody/",
-            "github.com/OpenAI/Ody.git",
+            "github.com/OdysseyThink/Ody.git",
         ] {
             assert_eq!(
                 canonicalize_git_remote_url(remote),

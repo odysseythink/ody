@@ -1567,7 +1567,7 @@ mod tests {
                     id: request.id,
                     result: serde_json::json!({
                         "account": null,
-                        "requiresOpenaiAuth": false,
+                        "requiresOdysseythinkAuth": false,
                         "padding": padding,
                     }),
                 }),

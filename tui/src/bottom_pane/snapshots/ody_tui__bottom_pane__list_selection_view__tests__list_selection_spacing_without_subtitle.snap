@@ -5,7 +5,7 @@ expression: render_lines(&view)
                                                 
   Select Approval Mode                          
                                                 
-› 1. Read Only (current)  Ody can read files  
-  2. Full Access          Ody can edit files  
+› 1. Read Only (current)  Ody can read files    
+  2. Full Access          Ody can edit files    
                                                 
   Press enter to confirm or esc to go back

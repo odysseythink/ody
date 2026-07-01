@@ -253,10 +253,10 @@ mod tests {
                 "Disable terminal pets",
                 "BSOD",
                 "Chefito",
-                "Ody",
                 "Dewey",
                 "Fireball",
                 "Null Signal",
+                "Ody",
                 "Rocky",
                 "Seedy",
                 "Stacky",
@@ -278,8 +278,8 @@ mod tests {
             PetPickerPreviewState::default(),
         );
 
-        assert_eq!(params.initial_selected_idx, Some(2));
-        assert_eq!(params.items[2].name, "Ody");
+        assert_eq!(params.initial_selected_idx, Some(5));
+        assert_eq!(params.items[5].name, "Ody");
         assert!(!params.items[2].is_current);
     }
 

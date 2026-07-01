@@ -38,8 +38,6 @@ ody-core-plugins = { workspace = true }
 ody-home = { workspace = true }
 ody-exec-server = { workspace = true }
 ody-extension-api = { workspace = true }
-ody-external-agent-migration = { workspace = true }
-ody-external-agent-sessions = { workspace = true }
 ody-features = { workspace = true }
 ody-goal-extension = { workspace = true }
 ody-guardian = { workspace = true }
@@ -52,7 +50,6 @@ ody-shell-command = { workspace = true }
 ody-skills-extension = { workspace = true }
 ody-utils-cli = { workspace = true }
 ody-utils-pty = { workspace = true }
-ody-backend-client = { workspace = true }
 ody-file-search = { workspace = true }
 ody-chatgpt = { workspace = true }
 ody-login = { workspace = true }

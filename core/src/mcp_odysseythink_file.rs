@@ -160,7 +160,10 @@ async fn build_uploaded_argument_value(
         .to_string();
     let upload_auth = ody_model_provider::auth_provider_from_auth(auth);
     let uploaded = upload_odysseythink_file(
-        turn_context.config.chatgpt_base_url.trim_end_matches('/'),
+        // The remote hosted plugin/Apps catalog config field this used to be sourced from has
+        // been removed; this file-upload endpoint is unrelated to that catalog, so keep using
+        // its historical default endpoint here.
+        "https://chatgpt.com/backend-api",
         upload_auth.as_ref(),
         file_name,
         metadata.size,
@@ -271,7 +274,7 @@ mod tests {
             .await;
 
         let (_, mut turn_context) = make_session_and_context().await;
-        let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
+        let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
         let dir = tempdir().expect("temp dir");
         let local_path = dir.path().join("file_report.csv");
         tokio::fs::write(&local_path, b"hello")
@@ -309,7 +312,7 @@ mod tests {
     #[tokio::test]
     async fn build_uploaded_argument_value_rejects_oversized_file_before_reading() {
         let (_, mut turn_context) = make_session_and_context().await;
-        let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
+        let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
         let dir = tempdir().expect("temp dir");
         let file_path = dir.path().join("oversized.bin");
         let file = std::fs::File::create(&file_path).expect("create sparse file");
@@ -377,7 +380,7 @@ mod tests {
             .await;
 
         let (_, mut turn_context) = make_session_and_context().await;
-        let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
+        let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
         let dir = tempdir().expect("temp dir");
         let local_path = dir.path().join("file_report.csv");
         tokio::fs::write(&local_path, b"hello")
@@ -489,7 +492,7 @@ mod tests {
             .await;
 
         let (_, mut turn_context) = make_session_and_context().await;
-        let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
+        let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
         let dir = tempdir().expect("temp dir");
         tokio::fs::write(dir.path().join("one.csv"), b"one")
             .await
@@ -538,7 +541,7 @@ mod tests {
     async fn rewrite_mcp_tool_arguments_for_odysseythink_files_surfaces_upload_failures() {
         let (mut session, turn_context) = make_session_and_context().await;
         session.services.auth_manager = crate::test_support::auth_manager_from_auth(
-            OdyAuth::create_dummy_chatgpt_auth_for_testing(),
+            OdyAuth::create_dummy_api_key_auth_for_testing(),
         );
         let error = rewrite_mcp_tool_arguments_for_odysseythink_files(
             &session,

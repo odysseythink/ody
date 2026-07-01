@@ -1,7 +1,3 @@
-use chrono::Utc;
-use reqwest::StatusCode;
-use serde::Deserialize;
-use serde::Serialize;
 #[cfg(test)]
 use serial_test::serial;
 use std::env;
@@ -11,7 +7,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::RwLock;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -19,75 +14,35 @@ use tokio::sync::Semaphore;
 use tokio::sync::watch;
 use tracing::instrument;
 
-use ody_agent_identity::ChatGptEnvironment;
 use ody_app_server_protocol::AuthMode;
 use ody_app_server_protocol::AuthMode as ApiAuthMode;
 use ody_protocol::config_types::ForcedLoginMethod;
 use ody_protocol::config_types::ModelProviderAuthInfo;
 
-use super::access_token::OdyAccessToken;
-use super::access_token::classify_ody_access_token;
-use super::agent_identity::ManagedChatGptAgentIdentityBinding;
-use super::agent_identity::agent_identity_authapi_base_url;
-use super::agent_identity::classify_bootstrap_error;
-use super::agent_identity::record_matches_managed_chatgpt_binding;
-use super::agent_identity::record_needs_task_registration;
-use super::agent_identity::register_managed_chatgpt_agent_identity;
-use super::agent_identity::require_agent_identity_authapi_base_url;
-use super::agent_identity::verified_record_from_jwt;
 use super::external_bearer::BearerTokenRefresher;
 use super::revoke::revoke_auth_tokens;
-pub use crate::auth::agent_identity::AgentIdentityAuth;
-pub use crate::auth::agent_identity::AgentIdentityAuthError;
 pub use crate::auth::bedrock_api_key::BedrockApiKeyAuth;
-pub use crate::auth::personal_access_token::PersonalAccessTokenAuth;
-pub use crate::auth::storage::AgentIdentityAuthRecord;
-pub use crate::auth::storage::AgentIdentityStorage;
 pub use crate::auth::storage::AuthDotJson;
 pub use crate::auth::storage::AuthKeyringBackendKind;
-use crate::auth::storage::AuthStorageBackend;
 use crate::auth::storage::create_auth_storage;
-use crate::auth::util::try_parse_error_message;
-use crate::default_client::create_client;
-use crate::default_client::create_default_auth_client;
 use crate::outbound_proxy::AuthRouteConfig;
 use crate::token_data::TokenData;
-use crate::token_data::parse_chatgpt_jwt_claims;
-use crate::token_data::parse_jwt_expiration;
-use ody_client::OdyHttpClient;
 use ody_config::types::AuthCredentialsStoreMode;
 use ody_protocol::account::PlanType as AccountPlanType;
-use ody_protocol::auth::PlanType as InternalPlanType;
 use ody_protocol::auth::RefreshTokenFailedError;
 use ody_protocol::auth::RefreshTokenFailedReason;
-use ody_protocol::protocol::SessionSource;
-use serde_json::Value;
 use thiserror::Error;
 
 /// Authentication mechanism used by the current user.
 #[derive(Debug, Clone)]
 pub enum OdyAuth {
     ApiKey(ApiKeyAuth),
-    Chatgpt(ChatgptAuth),
-    ChatgptAuthTokens(ChatgptAuthTokens),
-    AgentIdentity(AgentIdentityAuth),
-    PersonalAccessToken(PersonalAccessTokenAuth),
     BedrockApiKey(BedrockApiKeyAuth),
-}
-
-/// Policy for resolving Agent Identity auth from a broader Ody auth snapshot.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AgentIdentityAuthPolicy {
-    /// Use Agent Identity auth only when the current auth is already Agent Identity.
-    JwtOnly,
-    /// Allow managed ChatGPT auth to register or reuse Agent Identity auth.
-    ChatGptAuth,
 }
 
 impl PartialEq for OdyAuth {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::PersonalAccessToken(a), Self::PersonalAccessToken(b)) => a == b,
             (Self::BedrockApiKey(a), Self::BedrockApiKey(b)) => a == b,
             _ => self.api_auth_mode() == other.api_auth_mode(),
         }
@@ -99,33 +54,9 @@ pub struct ApiKeyAuth {
     api_key: String,
 }
 
-#[derive(Debug, Clone)]
-pub struct ChatgptAuth {
-    state: ChatgptAuthState,
-    storage: Arc<dyn AuthStorageBackend>,
-}
-
-#[derive(Debug, Clone)]
-pub struct ChatgptAuthTokens {
-    state: ChatgptAuthState,
-}
-
-#[derive(Debug, Clone)]
-struct ChatgptAuthState {
-    auth_dot_json: Arc<Mutex<Option<AuthDotJson>>>,
-    client: OdyHttpClient,
-}
-
-const TOKEN_REFRESH_INTERVAL: i64 = 8;
-const CHATGPT_ACCESS_TOKEN_REFRESH_WINDOW_MINUTES: i64 = 5;
-
-const REFRESH_TOKEN_EXPIRED_MESSAGE: &str = "Your access token could not be refreshed because your refresh token has expired. Please log out and sign in again.";
-const REFRESH_TOKEN_REUSED_MESSAGE: &str = "Your access token could not be refreshed because your refresh token was already used. Please log out and sign in again.";
-const REFRESH_TOKEN_INVALIDATED_MESSAGE: &str = "Your access token could not be refreshed because your refresh token was revoked. Please log out and sign in again.";
 const REFRESH_TOKEN_UNKNOWN_MESSAGE: &str =
     "Your access token could not be refreshed. Please log out and sign in again.";
 const REFRESH_TOKEN_ACCOUNT_MISMATCH_MESSAGE: &str = "Your access token could not be refreshed because you have since logged out or signed in to another account. Please sign in again.";
-const REFRESH_TOKEN_URL: &str = "https://auth.odysseythink.com/oauth/token";
 pub(super) const REVOKE_TOKEN_URL: &str = "https://auth.odysseythink.com/oauth/revoke";
 pub const REFRESH_TOKEN_URL_OVERRIDE_ENV_VAR: &str = "ODY_REFRESH_TOKEN_URL_OVERRIDE";
 pub const REVOKE_TOKEN_URL_OVERRIDE_ENV_VAR: &str = "ODY_REVOKE_TOKEN_URL_OVERRIDE";
@@ -233,13 +164,9 @@ impl From<RefreshTokenError> for std::io::Error {
 
 impl OdyAuth {
     async fn from_auth_dot_json(
-        ody_home: &Path,
+        _ody_home: &Path,
         auth_dot_json: AuthDotJson,
-        auth_credentials_store_mode: AuthCredentialsStoreMode,
-        chatgpt_base_url: Option<&str>,
-        keyring_backend_kind: AuthKeyringBackendKind,
-        agent_identity_authapi_base_url: Option<&str>,
-        auth_route_config: Option<&AuthRouteConfig>,
+        _auth_credentials_store_mode: AuthCredentialsStoreMode,
     ) -> std::io::Result<Self> {
         let auth_mode = auth_dot_json.resolved_mode();
         if auth_mode == ApiAuthMode::ApiKey {
@@ -247,49 +174,6 @@ impl OdyAuth {
                 return Err(std::io::Error::other("API key auth is missing a key."));
             };
             return Ok(Self::from_api_key(api_key));
-        }
-        if auth_mode == ApiAuthMode::AgentIdentity {
-            let Some(agent_identity) = auth_dot_json.agent_identity.clone() else {
-                return Err(std::io::Error::other(
-                    "agent identity auth is missing agent identity auth material.",
-                ));
-            };
-            let base_url = chatgpt_base_url
-                .unwrap_or(ChatGptEnvironment::default().chatgpt_base_url())
-                .trim_end_matches('/')
-                .to_string();
-            let agent_identity_authapi_base_url =
-                require_agent_identity_authapi_base_url(agent_identity_authapi_base_url)?;
-            match agent_identity {
-                AgentIdentityStorage::Jwt(jwt) => {
-                    let auth = AgentIdentityAuth::from_jwt(
-                        &jwt,
-                        &base_url,
-                        agent_identity_authapi_base_url,
-                        auth_route_config,
-                    )
-                    .await?;
-                    return Ok(Self::AgentIdentity(auth));
-                }
-                AgentIdentityStorage::Record(record) => {
-                    let auth = AgentIdentityAuth::from_record(
-                        record,
-                        agent_identity_authapi_base_url,
-                        auth_route_config,
-                    )
-                    .await?;
-                    return Ok(Self::AgentIdentity(auth));
-                }
-            }
-        }
-        if auth_mode == ApiAuthMode::PersonalAccessToken {
-            let Some(personal_access_token) = auth_dot_json.personal_access_token.as_deref() else {
-                return Err(std::io::Error::other(
-                    "personal access token auth is missing a personal access token.",
-                ));
-            };
-            return Self::from_personal_access_token(personal_access_token, auth_route_config)
-                .await;
         }
         if auth_mode == ApiAuthMode::BedrockApiKey {
             let Some(auth) = auth_dot_json.bedrock_api_key else {
@@ -300,107 +184,31 @@ impl OdyAuth {
             return Ok(Self::BedrockApiKey(auth));
         }
 
-        let storage_mode = auth_dot_json.storage_mode(auth_credentials_store_mode);
-        let client = create_default_auth_client(&refresh_token_endpoint(), auth_route_config)?;
-        let state = ChatgptAuthState {
-            auth_dot_json: Arc::new(Mutex::new(Some(auth_dot_json))),
-            client,
-        };
-
-        match auth_mode {
-            ApiAuthMode::Chatgpt => {
-                let storage = create_auth_storage(
-                    ody_home.to_path_buf(),
-                    storage_mode,
-                    keyring_backend_kind,
-                );
-                Ok(Self::Chatgpt(ChatgptAuth { state, storage }))
-            }
-            ApiAuthMode::ChatgptAuthTokens => {
-                Ok(Self::ChatgptAuthTokens(ChatgptAuthTokens { state }))
-            }
-            ApiAuthMode::ApiKey => unreachable!("api key mode is handled above"),
-            ApiAuthMode::AgentIdentity => unreachable!("agent identity mode is handled above"),
-            ApiAuthMode::PersonalAccessToken => {
-                unreachable!("personal access token mode is handled above")
-            }
-            ApiAuthMode::BedrockApiKey => unreachable!("bedrock api key mode is handled above"),
-        }
+        Err(std::io::Error::other(
+            "Stored auth uses a login method that is no longer supported. Please log in again with an API key.",
+        ))
     }
 
     pub async fn from_auth_storage(
         ody_home: &Path,
         auth_credentials_store_mode: AuthCredentialsStoreMode,
-        chatgpt_base_url: Option<&str>,
+        _chatgpt_base_url: Option<&str>,
         keyring_backend_kind: AuthKeyringBackendKind,
         auth_route_config: Option<&AuthRouteConfig>,
     ) -> std::io::Result<Option<Self>> {
-        let agent_identity_authapi_base_url =
-            agent_identity_authapi_base_url(chatgpt_base_url).ok();
         load_auth(
             ody_home,
             /*enable_ody_api_key_env*/ false,
             auth_credentials_store_mode,
-            /*forced_chatgpt_workspace_id*/ None,
-            chatgpt_base_url,
             keyring_backend_kind,
-            agent_identity_authapi_base_url.as_deref(),
             auth_route_config,
         )
         .await
-    }
-
-    pub async fn from_agent_identity_jwt(
-        jwt: &str,
-        chatgpt_base_url: Option<&str>,
-        auth_route_config: Option<&AuthRouteConfig>,
-    ) -> std::io::Result<Self> {
-        let agent_identity_authapi_base_url = agent_identity_authapi_base_url(chatgpt_base_url)?;
-        Self::from_agent_identity_jwt_with_authapi_base_url(
-            jwt,
-            chatgpt_base_url,
-            &agent_identity_authapi_base_url,
-            auth_route_config,
-        )
-        .await
-    }
-
-    async fn from_agent_identity_jwt_with_authapi_base_url(
-        jwt: &str,
-        chatgpt_base_url: Option<&str>,
-        agent_identity_authapi_base_url: &str,
-        auth_route_config: Option<&AuthRouteConfig>,
-    ) -> std::io::Result<Self> {
-        let base_url = chatgpt_base_url
-            .unwrap_or(ChatGptEnvironment::default().chatgpt_base_url())
-            .trim_end_matches('/')
-            .to_string();
-        Ok(Self::AgentIdentity(
-            AgentIdentityAuth::from_jwt(
-                jwt,
-                &base_url,
-                agent_identity_authapi_base_url,
-                auth_route_config,
-            )
-            .await?,
-        ))
-    }
-
-    pub async fn from_personal_access_token(
-        access_token: &str,
-        auth_route_config: Option<&AuthRouteConfig>,
-    ) -> std::io::Result<Self> {
-        Ok(Self::PersonalAccessToken(
-            PersonalAccessTokenAuth::load(access_token, auth_route_config).await?,
-        ))
     }
 
     pub fn auth_mode(&self) -> AuthMode {
         match self {
             Self::ApiKey(_) => AuthMode::ApiKey,
-            Self::Chatgpt(_) | Self::ChatgptAuthTokens(_) => AuthMode::Chatgpt,
-            Self::AgentIdentity(_) => AuthMode::AgentIdentity,
-            Self::PersonalAccessToken(_) => AuthMode::PersonalAccessToken,
             Self::BedrockApiKey(_) => AuthMode::BedrockApiKey,
         }
     }
@@ -408,20 +216,12 @@ impl OdyAuth {
     pub fn api_auth_mode(&self) -> ApiAuthMode {
         match self {
             Self::ApiKey(_) => ApiAuthMode::ApiKey,
-            Self::Chatgpt(_) => ApiAuthMode::Chatgpt,
-            Self::ChatgptAuthTokens(_) => ApiAuthMode::ChatgptAuthTokens,
-            Self::AgentIdentity(_) => ApiAuthMode::AgentIdentity,
-            Self::PersonalAccessToken(_) => ApiAuthMode::PersonalAccessToken,
             Self::BedrockApiKey(_) => ApiAuthMode::BedrockApiKey,
         }
     }
 
     pub fn is_api_key_auth(&self) -> bool {
         self.auth_mode() == AuthMode::ApiKey
-    }
-
-    pub fn is_personal_access_token_auth(&self) -> bool {
-        self.auth_mode() == AuthMode::PersonalAccessToken
     }
 
     pub fn is_chatgpt_auth(&self) -> bool {
@@ -432,27 +232,17 @@ impl OdyAuth {
         self.api_auth_mode().uses_ody_backend()
     }
 
-    pub fn is_external_chatgpt_tokens(&self) -> bool {
-        matches!(self, Self::ChatgptAuthTokens(_))
-    }
-
-    fn supports_unauthorized_recovery(&self) -> bool {
-        matches!(self, Self::Chatgpt(_) | Self::ChatgptAuthTokens(_))
-    }
-
     /// Returns `None` if `auth_mode() != AuthMode::ApiKey`.
     pub fn api_key(&self) -> Option<&str> {
         match self {
             Self::ApiKey(auth) => Some(auth.api_key.as_str()),
-            Self::Chatgpt(_)
-            | Self::ChatgptAuthTokens(_)
-            | Self::AgentIdentity(_)
-            | Self::PersonalAccessToken(_)
-            | Self::BedrockApiKey(_) => None,
+            Self::BedrockApiKey(_) => None,
         }
     }
 
-    /// Returns `Err` if token-backed ChatGPT auth is unavailable.
+    /// Returns `Err` if token-backed auth is unavailable.
+    ///
+    /// Neither `ApiKey` nor `BedrockApiKey` auth carries token data; this always fails.
     pub fn get_token_data(&self) -> Result<TokenData, std::io::Error> {
         let auth_dot_json: Option<AuthDotJson> = self.get_current_auth_json();
         match auth_dot_json {
@@ -469,14 +259,6 @@ impl OdyAuth {
     pub fn get_token(&self) -> Result<String, std::io::Error> {
         match self {
             Self::ApiKey(auth) => Ok(auth.api_key.clone()),
-            Self::Chatgpt(_) | Self::ChatgptAuthTokens(_) => {
-                let access_token = self.get_token_data()?.access_token;
-                Ok(access_token)
-            }
-            Self::AgentIdentity(_) => Err(std::io::Error::other(
-                "agent identity auth does not expose a bearer token",
-            )),
-            Self::PersonalAccessToken(auth) => Ok(auth.access_token().to_string()),
             Self::BedrockApiKey(_) => Err(std::io::Error::other(
                 "Bedrock API key auth does not expose a Ody bearer token",
             )),
@@ -485,55 +267,30 @@ impl OdyAuth {
 
     /// Returns `None` if Ody backend auth does not expose an account id.
     pub fn get_account_id(&self) -> Option<String> {
-        match self {
-            Self::AgentIdentity(auth) => Some(auth.account_id().to_string()),
-            Self::PersonalAccessToken(auth) => Some(auth.account_id().to_string()),
-            _ => self.get_current_token_data().and_then(|t| t.account_id),
-        }
+        self.get_current_token_data().and_then(|t| t.account_id)
     }
 
     /// Returns false if Ody backend auth omits the FedRAMP claim.
     pub fn is_fedramp_account(&self) -> bool {
-        match self {
-            Self::AgentIdentity(auth) => auth.is_fedramp_account(),
-            Self::PersonalAccessToken(auth) => auth.is_fedramp_account(),
-            _ => self
-                .get_current_token_data()
-                .is_some_and(|t| t.id_token.is_fedramp_account()),
-        }
+        self.get_current_token_data()
+            .is_some_and(|t| t.id_token.is_fedramp_account())
     }
 
     /// Returns `None` if Ody backend auth does not expose an account email.
     pub fn get_account_email(&self) -> Option<String> {
-        match self {
-            Self::AgentIdentity(auth) => auth.email().map(str::to_string),
-            Self::PersonalAccessToken(auth) => auth.email().map(str::to_string),
-            _ => self.get_current_token_data().and_then(|t| t.id_token.email),
-        }
+        self.get_current_token_data().and_then(|t| t.id_token.email)
     }
 
     /// Returns `None` if Ody backend auth does not expose a ChatGPT user id.
     pub fn get_chatgpt_user_id(&self) -> Option<String> {
-        match self {
-            Self::AgentIdentity(auth) => Some(auth.chatgpt_user_id().to_string()),
-            Self::PersonalAccessToken(auth) => Some(auth.chatgpt_user_id().to_string()),
-            _ => self
-                .get_current_token_data()
-                .and_then(|t| t.id_token.chatgpt_user_id),
-        }
+        self.get_current_token_data()
+            .and_then(|t| t.id_token.chatgpt_user_id)
     }
 
     /// Account-facing plan classification derived from the current auth.
     /// Returns a high-level `AccountPlanType` (e.g., Free/Plus/Pro/Team/…)
     /// for UI or product decisions based on the user's subscription.
     pub fn account_plan_type(&self) -> Option<AccountPlanType> {
-        if let Self::AgentIdentity(auth) = self {
-            return Some(auth.plan_type());
-        }
-        if let Self::PersonalAccessToken(auth) = self {
-            return Some(auth.plan_type());
-        }
-
         self.get_current_token_data().map(|t| {
             t.id_token
                 .chatgpt_plan_type
@@ -547,144 +304,22 @@ impl OdyAuth {
             .is_some_and(AccountPlanType::is_workspace_account)
     }
 
-    /// Returns `None` if token-backed ChatGPT auth is unavailable.
+    /// Returns `None`. Neither `ApiKey` nor `BedrockApiKey` auth carries a cached
+    /// token-backed `auth.json` snapshot.
     fn get_current_auth_json(&self) -> Option<AuthDotJson> {
-        let state = match self {
-            Self::Chatgpt(auth) => &auth.state,
-            Self::ChatgptAuthTokens(auth) => &auth.state,
-            Self::ApiKey(_)
-            | Self::AgentIdentity(_)
-            | Self::PersonalAccessToken(_)
-            | Self::BedrockApiKey(_) => return None,
-        };
-        #[expect(clippy::unwrap_used)]
-        state.auth_dot_json.lock().unwrap().clone()
+        None
     }
 
-    /// Returns `None` if token-backed ChatGPT auth is unavailable.
+    /// Returns `None`. Neither `ApiKey` nor `BedrockApiKey` auth carries a cached
+    /// token-backed `auth.json` snapshot.
     fn get_current_token_data(&self) -> Option<TokenData> {
         self.get_current_auth_json().and_then(|t| t.tokens)
     }
 
-    fn stored_managed_chatgpt_agent_identity_record(
-        &self,
-        account_id: &str,
-    ) -> Option<AgentIdentityAuthRecord> {
-        self.get_current_auth_json()
-            .and_then(|auth| auth.agent_identity)
-            .and_then(|identity| identity.as_record().cloned())
-            .filter(|identity| identity.account_id == account_id)
-    }
-
-    fn persist_managed_chatgpt_agent_identity_record(
-        &self,
-        record: AgentIdentityAuthRecord,
-    ) -> std::io::Result<()> {
-        if let Self::Chatgpt(chatgpt_auth) = self {
-            chatgpt_auth.persist_agent_identity_record(record)?;
-        }
-        Ok(())
-    }
-
-    async fn agent_identity_auth(
-        &self,
-        policy: AgentIdentityAuthPolicy,
-        agent_identity_authapi_base_url: Option<&str>,
-        forced_chatgpt_workspace_id: Option<Vec<String>>,
-        auth_route_config: Option<&AuthRouteConfig>,
-        session_source: SessionSource,
-    ) -> std::io::Result<Option<AgentIdentityAuth>> {
-        match self {
-            Self::AgentIdentity(auth) => Ok(Some(auth.clone())),
-            Self::ApiKey(_)
-            | Self::ChatgptAuthTokens(_)
-            | Self::PersonalAccessToken(_)
-            | Self::BedrockApiKey(_) => Ok(None),
-            Self::Chatgpt(_) => {
-                if policy == AgentIdentityAuthPolicy::JwtOnly {
-                    return Ok(None);
-                }
-                self.ensure_managed_chatgpt_agent_identity(
-                    require_agent_identity_authapi_base_url(agent_identity_authapi_base_url)?,
-                    forced_chatgpt_workspace_id,
-                    auth_route_config,
-                    session_source,
-                )
-                .await
-                .map(Some)
-            }
-        }
-    }
-
-    async fn ensure_managed_chatgpt_agent_identity(
-        &self,
-        agent_identity_authapi_base_url: &str,
-        forced_chatgpt_workspace_id: Option<Vec<String>>,
-        auth_route_config: Option<&AuthRouteConfig>,
-        session_source: SessionSource,
-    ) -> std::io::Result<AgentIdentityAuth> {
-        let binding =
-            ManagedChatGptAgentIdentityBinding::from_auth(self, forced_chatgpt_workspace_id)
-                .ok_or_else(|| std::io::Error::other("ChatGPT auth is unavailable"))?;
-
-        // JWT auth is loaded as OdyAuth::AgentIdentity; this path only reuses
-        // records created by the managed ChatGPT Agent Identity bootstrap.
-        if let Some(record) = self.stored_managed_chatgpt_agent_identity_record(&binding.account_id)
-            && record_matches_managed_chatgpt_binding(&record, &binding)
-        {
-            let should_persist = record_needs_task_registration(&record);
-            let auth = AgentIdentityAuth::from_record(
-                record,
-                agent_identity_authapi_base_url,
-                auth_route_config,
-            )
-            .await
-            .map_err(|err| classify_bootstrap_error("agent task registration", err))?;
-            if should_persist {
-                self.persist_managed_chatgpt_agent_identity_record(auth.record().clone())?;
-            }
-            return Ok(auth);
-        }
-
-        let auth = register_managed_chatgpt_agent_identity(
-            binding,
-            agent_identity_authapi_base_url,
-            session_source,
-            auth_route_config,
-        )
-        .await?;
-        self.persist_managed_chatgpt_agent_identity_record(auth.record().clone())?;
-        Ok(auth)
-    }
-
     /// Consider this private to integration tests.
-    pub fn create_dummy_chatgpt_auth_for_testing() -> Self {
-        let auth_dot_json = AuthDotJson {
-            auth_mode: Some(ApiAuthMode::Chatgpt),
-            odysseythink_api_key: None,
-            tokens: Some(TokenData {
-                id_token: Default::default(),
-                access_token: "Access Token".to_string(),
-                refresh_token: "test".to_string(),
-                account_id: Some("account_id".to_string()),
-            }),
-            last_refresh: Some(Utc::now()),
-            agent_identity: None,
-            personal_access_token: None,
-            bedrock_api_key: None,
-        };
-
-        let state = ChatgptAuthState {
-            auth_dot_json: Arc::new(Mutex::new(Some(auth_dot_json))),
-            client: create_client(),
-        };
+    pub fn create_dummy_api_key_auth_for_testing() -> Self {
         let dummy_auth_id = NEXT_DUMMY_AUTH_ID.fetch_add(1, Ordering::Relaxed);
-        let storage = create_auth_storage(
-            PathBuf::from(format!("dummy-chatgpt-auth-{dummy_auth_id}")),
-            AuthCredentialsStoreMode::Ephemeral,
-            AuthKeyringBackendKind::default(),
-        );
-        Self::Chatgpt(ChatgptAuth { state, storage })
+        Self::from_api_key(&format!("sk-dummy-chatgpt-auth-{dummy_auth_id}"))
     }
 
     pub fn from_api_key(api_key: &str) -> Self {
@@ -692,87 +327,6 @@ impl OdyAuth {
             api_key: api_key.to_owned(),
         })
     }
-}
-
-impl ManagedChatGptAgentIdentityBinding {
-    fn from_auth(auth: &OdyAuth, forced_workspace_id: Option<Vec<String>>) -> Option<Self> {
-        if !auth.is_chatgpt_auth() {
-            return None;
-        }
-
-        let token_data = auth.get_token_data().ok()?;
-        let forced_workspace_id =
-            forced_workspace_id
-                .as_deref()
-                .and_then(|workspace_ids| match workspace_ids {
-                    [workspace_id] if !workspace_id.is_empty() => Some(workspace_id.clone()),
-                    _ => None,
-                });
-        let account_id = forced_workspace_id
-            .or(token_data
-                .account_id
-                .clone()
-                .filter(|value| !value.is_empty()))
-            .or(token_data.id_token.chatgpt_account_id.clone())?;
-        let chatgpt_user_id = token_data
-            .id_token
-            .chatgpt_user_id
-            .clone()
-            .filter(|value| !value.is_empty())?;
-
-        Some(Self {
-            account_id,
-            chatgpt_user_id,
-            email: token_data.id_token.email.clone(),
-            plan_type: auth.account_plan_type().unwrap_or(AccountPlanType::Unknown),
-            chatgpt_account_is_fedramp: auth.is_fedramp_account(),
-            access_token: token_data.access_token,
-        })
-    }
-}
-
-impl ChatgptAuth {
-    fn current_auth_json(&self) -> Option<AuthDotJson> {
-        #[expect(clippy::unwrap_used)]
-        self.state.auth_dot_json.lock().unwrap().clone()
-    }
-
-    fn current_token_data(&self) -> Option<TokenData> {
-        self.current_auth_json().and_then(|auth| auth.tokens)
-    }
-
-    fn storage(&self) -> &Arc<dyn AuthStorageBackend> {
-        &self.storage
-    }
-
-    fn client(&self) -> &OdyHttpClient {
-        &self.state.client
-    }
-
-    fn persist_agent_identity_record(
-        &self,
-        record: AgentIdentityAuthRecord,
-    ) -> std::io::Result<()> {
-        persist_agent_identity_record(&self.state.auth_dot_json, &self.storage, record)
-    }
-}
-
-fn persist_agent_identity_record(
-    auth_dot_json: &Arc<Mutex<Option<AuthDotJson>>>,
-    storage: &Arc<dyn AuthStorageBackend>,
-    record: AgentIdentityAuthRecord,
-) -> std::io::Result<()> {
-    let mut guard = auth_dot_json
-        .lock()
-        .map_err(|_| std::io::Error::other("failed to lock auth state"))?;
-    let mut auth = storage
-        .load()?
-        .or_else(|| guard.clone())
-        .ok_or_else(|| std::io::Error::other("auth data is not available"))?;
-    auth.agent_identity = Some(AgentIdentityStorage::Record(record));
-    storage.save(&auth)?;
-    *guard = Some(auth);
-    Ok(())
 }
 
 pub const OPENAI_API_KEY_ENV_VAR: &str = "OPENAI_API_KEY";
@@ -855,8 +409,6 @@ pub fn login_with_api_key(
         odysseythink_api_key: Some(api_key.to_string()),
         tokens: None,
         last_refresh: None,
-        agent_identity: None,
-        personal_access_token: None,
         bedrock_api_key: None,
     };
     save_auth(
@@ -864,85 +416,6 @@ pub fn login_with_api_key(
         &auth_dot_json,
         auth_credentials_store_mode,
         keyring_backend_kind,
-    )
-}
-
-/// Writes an `auth.json` that contains only the access token.
-pub async fn login_with_access_token(
-    ody_home: &Path,
-    access_token: &str,
-    auth_credentials_store_mode: AuthCredentialsStoreMode,
-    forced_chatgpt_workspace_id: Option<&[String]>,
-    chatgpt_base_url: Option<&str>,
-    keyring_backend_kind: AuthKeyringBackendKind,
-    auth_route_config: Option<&AuthRouteConfig>,
-) -> std::io::Result<()> {
-    let auth_dot_json = match classify_ody_access_token(access_token) {
-        OdyAccessToken::PersonalAccessToken(access_token) => {
-            let auth = PersonalAccessTokenAuth::load(access_token, auth_route_config).await?;
-            ensure_personal_access_token_workspace_allowed(forced_chatgpt_workspace_id, &auth)?;
-            AuthDotJson {
-                // Infer PAT auth from the credential field so older Ody builds can still
-                // deserialize auth.json after a rollback.
-                auth_mode: None,
-                odysseythink_api_key: None,
-                tokens: None,
-                last_refresh: None,
-                agent_identity: None,
-                personal_access_token: Some(access_token.to_string()),
-                bedrock_api_key: None,
-            }
-        }
-        OdyAccessToken::AgentIdentityJwt(jwt) => {
-            let base_url = chatgpt_base_url
-                .unwrap_or(ChatGptEnvironment::default().chatgpt_base_url())
-                .trim_end_matches('/')
-                .to_string();
-            verified_record_from_jwt(jwt, &base_url, auth_route_config).await?;
-            AuthDotJson {
-                auth_mode: Some(ApiAuthMode::AgentIdentity),
-                odysseythink_api_key: None,
-                tokens: None,
-                last_refresh: None,
-                agent_identity: Some(AgentIdentityStorage::Jwt(jwt.to_string())),
-                personal_access_token: None,
-                bedrock_api_key: None,
-            }
-        }
-    };
-    save_auth(
-        ody_home,
-        &auth_dot_json,
-        auth_credentials_store_mode,
-        keyring_backend_kind,
-    )
-}
-
-fn ensure_personal_access_token_workspace_allowed(
-    expected_workspace_ids: Option<&[String]>,
-    auth: &PersonalAccessTokenAuth,
-) -> std::io::Result<()> {
-    crate::server::ensure_workspace_account_allowed(expected_workspace_ids, auth.account_id())
-        .map_err(|message| std::io::Error::new(std::io::ErrorKind::PermissionDenied, message))
-}
-
-/// Writes an in-memory auth payload for externally managed ChatGPT tokens.
-pub fn login_with_chatgpt_auth_tokens(
-    ody_home: &Path,
-    access_token: &str,
-    chatgpt_account_id: &str,
-    chatgpt_plan_type: Option<&str>,
-) -> std::io::Result<()> {
-    let auth_dot_json = AuthDotJson::from_external_access_token(
-        access_token,
-        chatgpt_account_id,
-        chatgpt_plan_type,
-    )?;
-    save_auth(
-        ody_home,
-        &auth_dot_json,
-        AuthCredentialsStoreMode::Ephemeral,
-        AuthKeyringBackendKind::default(),
     )
 }
 
@@ -992,27 +465,11 @@ pub struct AuthConfig {
 
 /// Enforces configured login restrictions using auth-owned HTTP settings.
 pub async fn enforce_login_restrictions(config: &AuthConfig) -> std::io::Result<()> {
-    let agent_identity_authapi_base_url =
-        agent_identity_authapi_base_url(config.chatgpt_base_url.as_deref()).ok();
-    enforce_login_restrictions_with_agent_identity_authapi_base_url(
-        config,
-        agent_identity_authapi_base_url.as_deref(),
-    )
-    .await
-}
-
-async fn enforce_login_restrictions_with_agent_identity_authapi_base_url(
-    config: &AuthConfig,
-    agent_identity_authapi_base_url: Option<&str>,
-) -> std::io::Result<()> {
     let Some(auth) = load_auth(
         &config.ody_home,
         /*enable_ody_api_key_env*/ true,
         config.auth_credentials_store_mode,
-        /*forced_chatgpt_workspace_id*/ None,
-        config.chatgpt_base_url.as_deref(),
         config.keyring_backend_kind,
-        agent_identity_authapi_base_url,
         config.auth_route_config.as_ref(),
     )
     .await?
@@ -1024,74 +481,16 @@ async fn enforce_login_restrictions_with_agent_identity_authapi_base_url(
         let method_violation = match (required_method, auth.auth_mode()) {
             (ForcedLoginMethod::Api, AuthMode::ApiKey)
             | (ForcedLoginMethod::Api, AuthMode::BedrockApiKey) => None,
-            (ForcedLoginMethod::Chatgpt, AuthMode::Chatgpt)
-            | (ForcedLoginMethod::Chatgpt, AuthMode::ChatgptAuthTokens)
-            | (ForcedLoginMethod::Chatgpt, AuthMode::AgentIdentity)
-            | (ForcedLoginMethod::Chatgpt, AuthMode::PersonalAccessToken) => None,
-            (ForcedLoginMethod::Api, AuthMode::Chatgpt)
-            | (ForcedLoginMethod::Api, AuthMode::ChatgptAuthTokens)
-            | (ForcedLoginMethod::Api, AuthMode::AgentIdentity)
-            | (ForcedLoginMethod::Api, AuthMode::PersonalAccessToken) => Some(
-                "API key login is required, but ChatGPT is currently being used. Logging out."
-                    .to_string(),
+            (ForcedLoginMethod::Chatgpt, _) => Some(
+                "ChatGPT login is no longer supported. Logging out.".to_string(),
             ),
-            (ForcedLoginMethod::Chatgpt, AuthMode::ApiKey)
-            | (ForcedLoginMethod::Chatgpt, AuthMode::BedrockApiKey) => Some(
-                "ChatGPT login is required, but an API key is currently being used. Logging out."
+            (ForcedLoginMethod::Api, _) => Some(
+                "API key login is required, but the stored credentials use an unsupported login method. Logging out."
                     .to_string(),
             ),
         };
 
         if let Some(message) = method_violation {
-            return logout_with_message(
-                &config.ody_home,
-                message,
-                config.auth_credentials_store_mode,
-                config.keyring_backend_kind,
-            );
-        }
-    }
-
-    if let Some(expected_account_ids) = config.forced_chatgpt_workspace_id.as_deref() {
-        let chatgpt_account_id = match &auth {
-            OdyAuth::ApiKey(_) | OdyAuth::BedrockApiKey(_) => return Ok(()),
-            OdyAuth::AgentIdentity(_) | OdyAuth::PersonalAccessToken(_) => {
-                auth.get_account_id()
-            }
-            OdyAuth::Chatgpt(_) | OdyAuth::ChatgptAuthTokens(_) => {
-                let token_data = match auth.get_token_data() {
-                    Ok(data) => data,
-                    Err(err) => {
-                        return logout_with_message(
-                            &config.ody_home,
-                            format!(
-                                "Failed to load ChatGPT credentials while enforcing workspace restrictions: {err}. Logging out."
-                            ),
-                            config.auth_credentials_store_mode,
-                            config.keyring_backend_kind,
-                        );
-                    }
-                };
-                token_data.id_token.chatgpt_account_id
-            }
-        };
-
-        // workspace is the external identifier for account id.
-        let chatgpt_account_id = chatgpt_account_id.as_deref();
-        if !chatgpt_account_id.is_some_and(|actual| {
-            expected_account_ids
-                .iter()
-                .any(|expected| expected == actual)
-        }) {
-            let expected_workspaces = expected_account_ids.join(", ");
-            let message = match chatgpt_account_id {
-                Some(actual) => format!(
-                    "Login is restricted to workspace(s) {expected_workspaces}, but current credentials belong to {actual}. Logging out."
-                ),
-                None => format!(
-                    "Login is restricted to workspace(s) {expected_workspaces}, but current credentials lack a workspace identifier. Logging out."
-                ),
-            };
             return logout_with_message(
                 &config.ody_home,
                 message,
@@ -1149,23 +548,19 @@ fn logout_all_stores(
     Ok(removed_ephemeral || removed_managed)
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn load_auth(
     ody_home: &Path,
     enable_ody_api_key_env: bool,
     auth_credentials_store_mode: AuthCredentialsStoreMode,
-    forced_chatgpt_workspace_id: Option<&[String]>,
-    chatgpt_base_url: Option<&str>,
     keyring_backend_kind: AuthKeyringBackendKind,
-    agent_identity_authapi_base_url: Option<&str>,
-    auth_route_config: Option<&AuthRouteConfig>,
+    _auth_route_config: Option<&AuthRouteConfig>,
 ) -> std::io::Result<Option<OdyAuth>> {
     // API key via env var takes precedence over any other auth method.
     if enable_ody_api_key_env && let Some(api_key) = read_ody_api_key_from_env() {
         return Ok(Some(OdyAuth::from_api_key(api_key.as_str())));
     }
 
-    // External ChatGPT auth tokens live in the in-memory (ephemeral) store. Always check this
+    // External auth tokens live in the in-memory (ephemeral) store. Always check this
     // first so external auth takes precedence over any persisted credentials.
     let ephemeral_storage = create_auth_storage(
         ody_home.to_path_buf(),
@@ -1177,36 +572,9 @@ async fn load_auth(
             ody_home,
             auth_dot_json,
             AuthCredentialsStoreMode::Ephemeral,
-            chatgpt_base_url,
-            keyring_backend_kind,
-            agent_identity_authapi_base_url,
-            auth_route_config,
         )
         .await?;
-        if let OdyAuth::PersonalAccessToken(auth) = &auth {
-            ensure_personal_access_token_workspace_allowed(forced_chatgpt_workspace_id, auth)?;
-        }
         return Ok(Some(auth));
-    }
-
-    if let Some(access_token) = read_ody_access_token_from_env() {
-        return match classify_ody_access_token(&access_token) {
-            OdyAccessToken::PersonalAccessToken(access_token) => {
-                let auth = PersonalAccessTokenAuth::load(access_token, auth_route_config).await?;
-                ensure_personal_access_token_workspace_allowed(forced_chatgpt_workspace_id, &auth)?;
-                Ok(Some(OdyAuth::PersonalAccessToken(auth)))
-            }
-            OdyAccessToken::AgentIdentityJwt(jwt) => {
-                OdyAuth::from_agent_identity_jwt_with_authapi_base_url(
-                    jwt,
-                    chatgpt_base_url,
-                    require_agent_identity_authapi_base_url(agent_identity_authapi_base_url)?,
-                    auth_route_config,
-                )
-            }
-            .await
-            .map(Some),
-        };
     }
 
     // If the caller explicitly requested ephemeral auth, there is no persisted fallback.
@@ -1225,162 +593,14 @@ async fn load_auth(
         None => return Ok(None),
     };
 
-    let auth = OdyAuth::from_auth_dot_json(
-        ody_home,
-        auth_dot_json,
-        auth_credentials_store_mode,
-        chatgpt_base_url,
-        keyring_backend_kind,
-        agent_identity_authapi_base_url,
-        auth_route_config,
-    )
-    .await?;
-    if let OdyAuth::PersonalAccessToken(auth) = &auth {
-        ensure_personal_access_token_workspace_allowed(forced_chatgpt_workspace_id, auth)?;
-    }
+    let auth =
+        OdyAuth::from_auth_dot_json(ody_home, auth_dot_json, auth_credentials_store_mode).await?;
     Ok(Some(auth))
 }
 
-// Persist refreshed tokens into auth storage and update last_refresh.
-fn persist_tokens(
-    storage: &Arc<dyn AuthStorageBackend>,
-    id_token: Option<String>,
-    access_token: Option<String>,
-    refresh_token: Option<String>,
-) -> std::io::Result<AuthDotJson> {
-    let mut auth_dot_json = storage
-        .load()?
-        .ok_or(std::io::Error::other("Token data is not available."))?;
-
-    let tokens = auth_dot_json.tokens.get_or_insert_with(TokenData::default);
-    if let Some(id_token) = id_token {
-        tokens.id_token = parse_chatgpt_jwt_claims(&id_token).map_err(std::io::Error::other)?;
-    }
-    if let Some(access_token) = access_token {
-        tokens.access_token = access_token;
-    }
-    if let Some(refresh_token) = refresh_token {
-        tokens.refresh_token = refresh_token;
-    }
-    auth_dot_json.last_refresh = Some(Utc::now());
-    storage.save(&auth_dot_json)?;
-    Ok(auth_dot_json)
-}
-
-// Requests refreshed ChatGPT OAuth tokens from the auth service using a refresh token.
-// The caller is responsible for persisting any returned tokens.
-async fn request_chatgpt_token_refresh(
-    refresh_token: String,
-    client: &OdyHttpClient,
-) -> Result<RefreshResponse, RefreshTokenError> {
-    let refresh_request = RefreshRequest {
-        client_id: oauth_client_id(),
-        grant_type: "refresh_token",
-        refresh_token,
-    };
-    let endpoint = refresh_token_endpoint();
-
-    // Use shared client factory to include standard headers
-    let response = client
-        .post(endpoint.as_str())
-        .header("Content-Type", "application/json")
-        .json(&refresh_request)
-        .send()
-        .await
-        .map_err(|err| RefreshTokenError::Transient(std::io::Error::other(err)))?;
-
-    let status = response.status();
-    if status.is_success() {
-        let refresh_response = response
-            .json::<RefreshResponse>()
-            .await
-            .map_err(|err| RefreshTokenError::Transient(std::io::Error::other(err)))?;
-        Ok(refresh_response)
-    } else {
-        let body = response.text().await.unwrap_or_default();
-        tracing::error!("Failed to refresh token: {status}: {body}");
-        let failed = classify_refresh_token_failure(&body);
-        if status == StatusCode::UNAUTHORIZED || failed.reason != RefreshTokenFailedReason::Other {
-            Err(RefreshTokenError::Permanent(failed))
-        } else {
-            let message = try_parse_error_message(&body);
-            Err(RefreshTokenError::Transient(std::io::Error::other(
-                format!("Failed to refresh token: {status}: {message}"),
-            )))
-        }
-    }
-}
-
-fn classify_refresh_token_failure(body: &str) -> RefreshTokenFailedError {
-    let code = extract_refresh_token_error_code(body);
-
-    let normalized_code = code.as_deref().map(str::to_ascii_lowercase);
-    let reason = match normalized_code.as_deref() {
-        Some("refresh_token_expired") => RefreshTokenFailedReason::Expired,
-        Some("refresh_token_reused") => RefreshTokenFailedReason::Exhausted,
-        Some("refresh_token_invalidated") => RefreshTokenFailedReason::Revoked,
-        _ => RefreshTokenFailedReason::Other,
-    };
-
-    if reason == RefreshTokenFailedReason::Other {
-        tracing::warn!(
-            backend_code = normalized_code.as_deref(),
-            backend_body = body,
-            "Encountered unknown response while refreshing token"
-        );
-    }
-
-    let message = match reason {
-        RefreshTokenFailedReason::Expired => REFRESH_TOKEN_EXPIRED_MESSAGE.to_string(),
-        RefreshTokenFailedReason::Exhausted => REFRESH_TOKEN_REUSED_MESSAGE.to_string(),
-        RefreshTokenFailedReason::Revoked => REFRESH_TOKEN_INVALIDATED_MESSAGE.to_string(),
-        RefreshTokenFailedReason::Other => REFRESH_TOKEN_UNKNOWN_MESSAGE.to_string(),
-    };
-
-    RefreshTokenFailedError::new(reason, message)
-}
-
-fn extract_refresh_token_error_code(body: &str) -> Option<String> {
-    if body.trim().is_empty() {
-        return None;
-    }
-
-    let Value::Object(map) = serde_json::from_str::<Value>(body).ok()? else {
-        return None;
-    };
-
-    if let Some(error_value) = map.get("error") {
-        match error_value {
-            Value::Object(obj) => {
-                if let Some(code) = obj.get("code").and_then(Value::as_str) {
-                    return Some(code.to_string());
-                }
-            }
-            Value::String(code) => {
-                return Some(code.to_string());
-            }
-            _ => {}
-        }
-    }
-
-    map.get("code").and_then(Value::as_str).map(str::to_string)
-}
-
-#[derive(Serialize)]
-struct RefreshRequest {
-    client_id: String,
-    grant_type: &'static str,
-    refresh_token: String,
-}
-
-#[derive(Deserialize, Clone)]
-struct RefreshResponse {
-    id_token: Option<String>,
-    access_token: Option<String>,
-    refresh_token: Option<String>,
-}
-
-// Shared constant for token refresh (client id used for oauth token refresh flow)
+// Shared constant used by the (best-effort) OAuth token revocation flow in `revoke.rs`.
+// Stale `auth.json` files written by older Ody builds may still carry ChatGPT OAuth
+// tokens; revocation reads them directly rather than through `OdyAuth`.
 pub const CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 
 pub fn oauth_client_id() -> String {
@@ -1388,86 +608,6 @@ pub fn oauth_client_id() -> String {
         .ok()
         .filter(|client_id| !client_id.trim().is_empty())
         .unwrap_or_else(|| CLIENT_ID.to_string())
-}
-
-fn refresh_token_endpoint() -> String {
-    std::env::var(REFRESH_TOKEN_URL_OVERRIDE_ENV_VAR)
-        .unwrap_or_else(|_| REFRESH_TOKEN_URL.to_string())
-}
-
-impl AuthDotJson {
-    fn from_external_tokens(external: &ExternalAuthTokens) -> std::io::Result<Self> {
-        let Some(chatgpt_metadata) = external.chatgpt_metadata() else {
-            return Err(std::io::Error::other(
-                "external auth tokens are missing ChatGPT metadata",
-            ));
-        };
-        let mut token_info =
-            parse_chatgpt_jwt_claims(&external.access_token).map_err(std::io::Error::other)?;
-        token_info.chatgpt_account_id = Some(chatgpt_metadata.account_id.clone());
-        token_info.chatgpt_plan_type = chatgpt_metadata
-            .plan_type
-            .as_deref()
-            .map(InternalPlanType::from_raw_value)
-            .or(token_info.chatgpt_plan_type)
-            .or(Some(InternalPlanType::Unknown("unknown".to_string())));
-        let tokens = TokenData {
-            id_token: token_info,
-            access_token: external.access_token.clone(),
-            refresh_token: String::new(),
-            account_id: Some(chatgpt_metadata.account_id.clone()),
-        };
-
-        Ok(Self {
-            auth_mode: Some(ApiAuthMode::ChatgptAuthTokens),
-            odysseythink_api_key: None,
-            tokens: Some(tokens),
-            last_refresh: Some(Utc::now()),
-            agent_identity: None,
-            personal_access_token: None,
-            bedrock_api_key: None,
-        })
-    }
-
-    fn from_external_access_token(
-        access_token: &str,
-        chatgpt_account_id: &str,
-        chatgpt_plan_type: Option<&str>,
-    ) -> std::io::Result<Self> {
-        let external = ExternalAuthTokens::chatgpt(
-            access_token,
-            chatgpt_account_id,
-            chatgpt_plan_type.map(str::to_string),
-        );
-        Self::from_external_tokens(&external)
-    }
-
-    pub(super) fn resolved_mode(&self) -> ApiAuthMode {
-        if let Some(mode) = self.auth_mode {
-            return mode;
-        }
-        if self.personal_access_token.is_some() {
-            return ApiAuthMode::PersonalAccessToken;
-        }
-        if self.bedrock_api_key.is_some() {
-            return ApiAuthMode::BedrockApiKey;
-        }
-        if self.odysseythink_api_key.is_some() {
-            return ApiAuthMode::ApiKey;
-        }
-        ApiAuthMode::Chatgpt
-    }
-
-    fn storage_mode(
-        &self,
-        auth_credentials_store_mode: AuthCredentialsStoreMode,
-    ) -> AuthCredentialsStoreMode {
-        if self.resolved_mode() == ApiAuthMode::ChatgptAuthTokens {
-            AuthCredentialsStoreMode::Ephemeral
-        } else {
-            auth_credentials_store_mode
-        }
-    }
 }
 
 /// Internal cached auth state.
@@ -1528,21 +668,14 @@ enum UnauthorizedRecoveryMode {
 // UnauthorizedRecovery is a state machine that handles an attempt to refresh the authentication when requests
 // to API fail with 401 status code.
 // The client calls next() every time it encounters a 401 error, one time per retry.
-// For API key based authentication, we don't do anything and let the error bubble to the user.
 //
-// For ChatGPT based authentication, we:
-// 1. Attempt to reload the auth data from disk. We only reload if the account id matches the one the current process is running as.
-// 2. Attempt to refresh the token using OAuth token refresh flow.
-// If after both steps the server still responds with 401 we let the error bubble to the user.
+// Neither `ApiKey` nor `BedrockApiKey` managed auth supports refresh, so the managed
+// recovery path is effectively inert; it exists so future managed auth methods can plug
+// in without changing this state machine's shape.
 //
-// For external auth sources, UnauthorizedRecovery retries once.
-//
-// - External ChatGPT auth tokens (`chatgptAuthTokens`) are refreshed by asking
-//   the parent app for new tokens through the configured
-//   `ExternalAuth`, persisting them in the ephemeral auth store, and
-//   reloading the cached auth snapshot.
-// - External bearer auth sources for custom model providers rerun the provider
-//   auth command without touching disk.
+// For external auth sources, UnauthorizedRecovery retries once by asking the configured
+// `ExternalAuth` provider to refresh (e.g. rerunning a provider auth command without
+// touching disk).
 pub struct UnauthorizedRecovery {
     manager: Arc<AuthManager>,
     step: UnauthorizedRecoveryStep,
@@ -1565,11 +698,7 @@ impl UnauthorizedRecovery {
     fn new(manager: Arc<AuthManager>) -> Self {
         let cached_auth = manager.auth_cached();
         let expected_account_id = cached_auth.as_ref().and_then(OdyAuth::get_account_id);
-        let mode = if manager.has_external_api_key_auth()
-            || cached_auth
-                .as_ref()
-                .is_some_and(OdyAuth::is_external_chatgpt_tokens)
-        {
+        let mode = if manager.has_external_api_key_auth() {
             UnauthorizedRecoveryMode::External
         } else {
             UnauthorizedRecoveryMode::Managed
@@ -1591,20 +720,8 @@ impl UnauthorizedRecovery {
             return !matches!(self.step, UnauthorizedRecoveryStep::Done);
         }
 
-        if !self
-            .manager
-            .auth_cached()
-            .as_ref()
-            .is_some_and(OdyAuth::supports_unauthorized_recovery)
-        {
-            return false;
-        }
-
-        if self.mode == UnauthorizedRecoveryMode::External && !self.manager.has_external_auth() {
-            return false;
-        }
-
-        !matches!(self.step, UnauthorizedRecoveryStep::Done)
+        // Neither ApiKey nor BedrockApiKey managed auth supports unauthorized recovery.
+        false
     }
 
     pub fn unavailable_reason(&self) -> &'static str {
@@ -1616,33 +733,7 @@ impl UnauthorizedRecovery {
             };
         }
 
-        if self
-            .manager
-            .auth_cached()
-            .as_ref()
-            .is_some_and(OdyAuth::is_personal_access_token_auth)
-        {
-            return "not_refreshable_auth";
-        }
-
-        if !self
-            .manager
-            .auth_cached()
-            .as_ref()
-            .is_some_and(OdyAuth::supports_unauthorized_recovery)
-        {
-            return "not_chatgpt_auth";
-        }
-
-        if self.mode == UnauthorizedRecoveryMode::External && !self.manager.has_external_auth() {
-            return "no_external_auth";
-        }
-
-        if matches!(self.step, UnauthorizedRecoveryStep::Done) {
-            return "recovery_exhausted";
-        }
-
-        "ready"
+        "not_refreshable_auth"
     }
 
     pub fn mode_name(&self) -> &'static str {
@@ -1738,9 +829,7 @@ pub struct AuthManager {
     keyring_backend_kind: AuthKeyringBackendKind,
     forced_chatgpt_workspace_id: RwLock<Option<Vec<String>>>,
     chatgpt_base_url: Option<String>,
-    agent_identity_authapi_base_url: Option<String>,
     refresh_lock: Semaphore,
-    agent_identity_lock: Semaphore,
     external_auth: RwLock<Option<Arc<dyn ExternalAuth>>>,
     auth_route_config: Option<AuthRouteConfig>,
 }
@@ -1793,10 +882,6 @@ impl Debug for AuthManager {
     }
 }
 
-fn default_agent_identity_authapi_base_url() -> Option<String> {
-    agent_identity_authapi_base_url(/*chatgpt_base_url*/ None).ok()
-}
-
 impl AuthManager {
     /// Create a new manager loading the initial auth using the provided
     /// preferred auth method. Errors loading auth are swallowed; `auth()` will
@@ -1811,16 +896,11 @@ impl AuthManager {
         keyring_backend_kind: AuthKeyringBackendKind,
         auth_route_config: Option<AuthRouteConfig>,
     ) -> Self {
-        let agent_identity_authapi_base_url =
-            agent_identity_authapi_base_url(chatgpt_base_url.as_deref()).ok();
         let managed_auth = load_auth(
             &ody_home,
             enable_ody_api_key_env,
             auth_credentials_store_mode,
-            forced_chatgpt_workspace_id.as_deref(),
-            chatgpt_base_url.as_deref(),
             keyring_backend_kind,
-            agent_identity_authapi_base_url.as_deref(),
             auth_route_config.as_ref(),
         )
         .await
@@ -1839,9 +919,7 @@ impl AuthManager {
             keyring_backend_kind,
             forced_chatgpt_workspace_id: RwLock::new(forced_chatgpt_workspace_id),
             chatgpt_base_url,
-            agent_identity_authapi_base_url,
             refresh_lock: Semaphore::new(/*permits*/ 1),
-            agent_identity_lock: Semaphore::new(/*permits*/ 1),
             external_auth: RwLock::new(None),
             auth_route_config,
         }
@@ -1864,9 +942,7 @@ impl AuthManager {
             keyring_backend_kind: AuthKeyringBackendKind::default(),
             forced_chatgpt_workspace_id: RwLock::new(None),
             chatgpt_base_url: None,
-            agent_identity_authapi_base_url: default_agent_identity_authapi_base_url(),
             refresh_lock: Semaphore::new(/*permits*/ 1),
-            agent_identity_lock: Semaphore::new(/*permits*/ 1),
             external_auth: RwLock::new(None),
             auth_route_config: None,
         })
@@ -1888,41 +964,7 @@ impl AuthManager {
             keyring_backend_kind: AuthKeyringBackendKind::default(),
             forced_chatgpt_workspace_id: RwLock::new(None),
             chatgpt_base_url: None,
-            agent_identity_authapi_base_url: default_agent_identity_authapi_base_url(),
             refresh_lock: Semaphore::new(/*permits*/ 1),
-            agent_identity_lock: Semaphore::new(/*permits*/ 1),
-            external_auth: RwLock::new(None),
-            auth_route_config: None,
-        })
-    }
-
-    /// Create an AuthManager with a specific OdyAuth and Agent Identity AuthAPI base URL, for testing only.
-    #[doc(hidden)]
-    pub fn from_auth_for_testing_with_agent_identity_authapi_base_url(
-        auth: OdyAuth,
-        agent_identity_authapi_base_url: String,
-    ) -> Arc<Self> {
-        let cached = CachedAuth {
-            auth: Some(auth),
-            permanent_refresh_failure: None,
-        };
-        let (auth_change_tx, _auth_change_rx) = watch::channel(0);
-        Arc::new(Self {
-            ody_home: PathBuf::from("non-existent"),
-            inner: RwLock::new(cached),
-            auth_change_tx,
-            enable_ody_api_key_env: false,
-            auth_credentials_store_mode: AuthCredentialsStoreMode::File,
-            keyring_backend_kind: AuthKeyringBackendKind::default(),
-            forced_chatgpt_workspace_id: RwLock::new(None),
-            chatgpt_base_url: None,
-            agent_identity_authapi_base_url: Some(
-                agent_identity_authapi_base_url
-                    .trim_end_matches('/')
-                    .to_string(),
-            ),
-            refresh_lock: Semaphore::new(/*permits*/ 1),
-            agent_identity_lock: Semaphore::new(/*permits*/ 1),
             external_auth: RwLock::new(None),
             auth_route_config: None,
         })
@@ -1942,9 +984,7 @@ impl AuthManager {
             keyring_backend_kind: AuthKeyringBackendKind::default(),
             forced_chatgpt_workspace_id: RwLock::new(None),
             chatgpt_base_url: None,
-            agent_identity_authapi_base_url: default_agent_identity_authapi_base_url(),
             refresh_lock: Semaphore::new(/*permits*/ 1),
-            agent_identity_lock: Semaphore::new(/*permits*/ 1),
             external_auth: RwLock::new(Some(
                 Arc::new(BearerTokenRefresher::new(config)) as Arc<dyn ExternalAuth>
             )),
@@ -1973,56 +1013,12 @@ impl AuthManager {
     }
 
     /// Current cached auth (clone). May be `None` if not logged in or load failed.
-    /// For managed ChatGPT auth that needs a proactive refresh, first performs
-    /// a guarded reload and then refreshes only if the on-disk auth is unchanged.
     #[instrument(level = "trace", skip_all)]
     pub async fn auth(&self) -> Option<OdyAuth> {
         if let Some(auth) = self.resolve_external_api_key_auth().await {
             return Some(auth);
         }
-
-        let auth = self.auth_cached()?;
-        if Self::should_refresh_proactively(&auth)
-            && let Err(err) = self.refresh_token().await
-        {
-            tracing::error!("Failed to refresh token: {}", err);
-            return Some(auth);
-        }
         self.auth_cached()
-    }
-
-    pub async fn agent_identity_auth(
-        &self,
-        policy: AgentIdentityAuthPolicy,
-        session_source: SessionSource,
-    ) -> std::io::Result<Option<AgentIdentityAuth>> {
-        let Some(auth) = self.auth().await else {
-            return Ok(None);
-        };
-        if policy == AgentIdentityAuthPolicy::ChatGptAuth && matches!(auth, OdyAuth::Chatgpt(_)) {
-            let _bootstrap_permit = self
-                .agent_identity_lock
-                .acquire()
-                .await
-                .map_err(std::io::Error::other)?;
-            return auth
-                .agent_identity_auth(
-                    policy,
-                    self.agent_identity_authapi_base_url.as_deref(),
-                    self.forced_chatgpt_workspace_id(),
-                    self.auth_route_config.as_ref(),
-                    session_source,
-                )
-                .await;
-        }
-        auth.agent_identity_auth(
-            policy,
-            self.agent_identity_authapi_base_url.as_deref(),
-            self.forced_chatgpt_workspace_id(),
-            self.auth_route_config.as_ref(),
-            session_source,
-        )
-        .await
     }
 
     /// Force a reload of the auth information from auth.json. Returns
@@ -2073,17 +1069,6 @@ impl AuthManager {
             (None, None) => true,
             (Some(a), Some(b)) => match (a.api_auth_mode(), b.api_auth_mode()) {
                 (ApiAuthMode::ApiKey, ApiAuthMode::ApiKey) => a.api_key() == b.api_key(),
-                (ApiAuthMode::Chatgpt, ApiAuthMode::Chatgpt)
-                | (ApiAuthMode::ChatgptAuthTokens, ApiAuthMode::ChatgptAuthTokens) => {
-                    a.get_current_auth_json() == b.get_current_auth_json()
-                }
-                (ApiAuthMode::AgentIdentity, ApiAuthMode::AgentIdentity) => match (a, b) {
-                    (OdyAuth::AgentIdentity(a), OdyAuth::AgentIdentity(b)) => {
-                        a.record() == b.record()
-                    }
-                    _ => false,
-                },
-                (ApiAuthMode::PersonalAccessToken, ApiAuthMode::PersonalAccessToken) => a == b,
                 (ApiAuthMode::BedrockApiKey, ApiAuthMode::BedrockApiKey) => a == b,
                 _ => false,
             },
@@ -2099,35 +1084,12 @@ impl AuthManager {
         }
     }
 
-    /// Records a permanent refresh failure only if the failed refresh was
-    /// attempted against the auth snapshot that is still cached.
-    fn record_permanent_refresh_failure_if_unchanged(
-        &self,
-        attempted_auth: &OdyAuth,
-        error: &RefreshTokenFailedError,
-    ) {
-        if let Ok(mut guard) = self.inner.write() {
-            let current_auth_matches =
-                Self::auths_equal_for_refresh(Some(attempted_auth), guard.auth.as_ref());
-            if current_auth_matches {
-                guard.permanent_refresh_failure = Some(AuthScopedRefreshFailure {
-                    auth: attempted_auth.clone(),
-                    error: error.clone(),
-                });
-            }
-        }
-    }
-
     async fn load_auth_from_storage(&self) -> Option<OdyAuth> {
-        let forced_chatgpt_workspace_id = self.forced_chatgpt_workspace_id();
         load_auth(
             &self.ody_home,
             self.enable_ody_api_key_env,
             self.auth_credentials_store_mode,
-            forced_chatgpt_workspace_id.as_deref(),
-            self.chatgpt_base_url.as_deref(),
             self.keyring_backend_kind,
-            self.agent_identity_authapi_base_url.as_deref(),
             self.auth_route_config.as_ref(),
         )
         .await
@@ -2187,9 +1149,7 @@ impl AuthManager {
     }
 
     pub fn is_external_chatgpt_auth_active(&self) -> bool {
-        self.auth_cached()
-            .as_ref()
-            .is_some_and(OdyAuth::is_external_chatgpt_tokens)
+        false
     }
 
     pub fn ody_api_key_env_enabled(&self) -> bool {
@@ -2275,11 +1235,9 @@ impl AuthManager {
         }
     }
 
-    /// Attempt to refresh the token by first performing a guarded reload. Auth
-    /// is reloaded from storage only when the account id matches the currently
-    /// cached account id. If the persisted token differs from the cached token, we
-    /// can assume that some other instance already refreshed it. If the persisted
-    /// token is the same as the cached, then ask the token authority to refresh.
+    /// Attempt to refresh the token. Neither `ApiKey` nor `BedrockApiKey` managed
+    /// auth supports refresh, so this is a no-op for managed auth; it exists for
+    /// API symmetry with the unauthorized-recovery state machine.
     pub async fn refresh_token(&self) -> Result<(), RefreshTokenError> {
         let _refresh_guard = self.refresh_lock.acquire().await.map_err(|_| {
             RefreshTokenError::Permanent(RefreshTokenFailedError::new(
@@ -2287,39 +1245,11 @@ impl AuthManager {
                 REFRESH_TOKEN_UNKNOWN_MESSAGE.to_string(),
             ))
         })?;
-        let auth_before_reload = self.auth_cached();
-        if auth_before_reload
-            .as_ref()
-            .is_some_and(|auth| auth.is_api_key_auth() || auth.is_personal_access_token_auth())
-        {
-            return Ok(());
-        }
-        let expected_account_id = auth_before_reload
-            .as_ref()
-            .and_then(OdyAuth::get_account_id);
-
-        match self
-            .reload_if_account_id_matches(expected_account_id.as_deref())
-            .await
-        {
-            ReloadOutcome::ReloadedChanged => {
-                tracing::info!("Skipping token refresh because auth changed after guarded reload.");
-                Ok(())
-            }
-            ReloadOutcome::ReloadedNoChange => self.refresh_token_from_authority_impl().await,
-            ReloadOutcome::Skipped => {
-                Err(RefreshTokenError::Permanent(RefreshTokenFailedError::new(
-                    RefreshTokenFailedReason::Other,
-                    REFRESH_TOKEN_ACCOUNT_MISMATCH_MESSAGE.to_string(),
-                )))
-            }
-        }
+        Ok(())
     }
 
     /// Attempt to refresh the current auth token from the authority that issued
-    /// the token. On success, reloads the auth state from disk so other components
-    /// observe refreshed token. If the token refresh fails, returns the error to
-    /// the caller.
+    /// the token. Neither `ApiKey` nor `BedrockApiKey` managed auth supports this.
     pub async fn refresh_token_from_authority(&self) -> Result<(), RefreshTokenError> {
         let _refresh_guard = self.refresh_lock.acquire().await.map_err(|_| {
             RefreshTokenError::Permanent(RefreshTokenFailedError::new(
@@ -2327,44 +1257,7 @@ impl AuthManager {
                 REFRESH_TOKEN_UNKNOWN_MESSAGE.to_string(),
             ))
         })?;
-        self.refresh_token_from_authority_impl().await
-    }
-
-    async fn refresh_token_from_authority_impl(&self) -> Result<(), RefreshTokenError> {
-        tracing::info!("Refreshing token");
-
-        let auth = match self.auth_cached() {
-            Some(auth) => auth,
-            None => return Ok(()),
-        };
-        if let Some(error) = self.refresh_failure_for_auth(&auth) {
-            return Err(RefreshTokenError::Permanent(error));
-        }
-
-        let attempted_auth = auth.clone();
-        let result = match auth {
-            OdyAuth::ChatgptAuthTokens(_) => {
-                self.refresh_external_auth(ExternalAuthRefreshReason::Unauthorized)
-                    .await
-            }
-            OdyAuth::Chatgpt(chatgpt_auth) => {
-                let token_data = chatgpt_auth.current_token_data().ok_or_else(|| {
-                    RefreshTokenError::Transient(std::io::Error::other(
-                        "Token data is not available.",
-                    ))
-                })?;
-                self.refresh_and_persist_chatgpt_token(&chatgpt_auth, token_data.refresh_token)
-                    .await
-            }
-            OdyAuth::ApiKey(_)
-            | OdyAuth::AgentIdentity(_)
-            | OdyAuth::PersonalAccessToken(_)
-            | OdyAuth::BedrockApiKey(_) => Ok(()),
-        };
-        if let Err(RefreshTokenError::Permanent(error)) = &result {
-            self.record_permanent_refresh_failure_if_unchanged(&attempted_auth, error);
-        }
-        result
+        Ok(())
     }
 
     /// Log out by deleting the on‑disk auth.json (if present). Returns Ok(true)
@@ -2420,30 +1313,6 @@ impl AuthManager {
             .is_some_and(AuthMode::uses_ody_backend)
     }
 
-    fn should_refresh_proactively(auth: &OdyAuth) -> bool {
-        let chatgpt_auth = match auth {
-            OdyAuth::Chatgpt(chatgpt_auth) => chatgpt_auth,
-            _ => return false,
-        };
-
-        let auth_dot_json = match chatgpt_auth.current_auth_json() {
-            Some(auth_dot_json) => auth_dot_json,
-            None => return false,
-        };
-        if let Some(tokens) = auth_dot_json.tokens.as_ref()
-            && let Ok(Some(expires_at)) = parse_jwt_expiration(&tokens.access_token)
-        {
-            return expires_at
-                <= Utc::now()
-                    + chrono::Duration::minutes(CHATGPT_ACCESS_TOKEN_REFRESH_WINDOW_MINUTES);
-        }
-        let last_refresh = match auth_dot_json.last_refresh {
-            Some(last_refresh) => last_refresh,
-            None => return false,
-        };
-        last_refresh < Utc::now() - chrono::Duration::days(TOKEN_REFRESH_INTERVAL)
-    }
-
     async fn refresh_external_auth(
         &self,
         reason: ExternalAuthRefreshReason,
@@ -2453,7 +1322,6 @@ impl AuthManager {
                 "external auth is not configured",
             )));
         };
-        let forced_chatgpt_workspace_id = self.forced_chatgpt_workspace_id();
         let previous_account_id = self
             .auth_cached()
             .as_ref()
@@ -2463,59 +1331,16 @@ impl AuthManager {
             previous_account_id,
         };
 
-        let refreshed = external_auth
+        external_auth
             .refresh(context)
             .await
             .map_err(RefreshTokenError::Transient)?;
-        if external_auth.auth_mode() == AuthMode::ApiKey {
-            return Ok(());
-        }
-        let Some(chatgpt_metadata) = refreshed.chatgpt_metadata() else {
+
+        if external_auth.auth_mode() != AuthMode::ApiKey {
             return Err(RefreshTokenError::Transient(std::io::Error::other(
-                "external auth refresh did not return ChatGPT metadata",
-            )));
-        };
-        if let Some(expected_workspace_ids) = forced_chatgpt_workspace_id.as_deref()
-            && !expected_workspace_ids.contains(&chatgpt_metadata.account_id)
-        {
-            return Err(RefreshTokenError::Transient(std::io::Error::other(
-                format!(
-                    "external auth refresh returned workspace {:?}, expected one of {:?}",
-                    chatgpt_metadata.account_id, expected_workspace_ids,
-                ),
+                "external auth refresh is only supported for API key auth",
             )));
         }
-        let auth_dot_json =
-            AuthDotJson::from_external_tokens(&refreshed).map_err(RefreshTokenError::Transient)?;
-        save_auth(
-            &self.ody_home,
-            &auth_dot_json,
-            AuthCredentialsStoreMode::Ephemeral,
-            AuthKeyringBackendKind::default(),
-        )
-        .map_err(RefreshTokenError::Transient)?;
-        self.reload().await;
-        Ok(())
-    }
-
-    // Refreshes ChatGPT OAuth tokens, persists the updated auth state, and
-    // reloads the in-memory cache so callers immediately observe new tokens.
-    async fn refresh_and_persist_chatgpt_token(
-        &self,
-        auth: &ChatgptAuth,
-        refresh_token: String,
-    ) -> Result<(), RefreshTokenError> {
-        let refresh_response = request_chatgpt_token_refresh(refresh_token, auth.client()).await?;
-
-        persist_tokens(
-            auth.storage(),
-            refresh_response.id_token,
-            refresh_response.access_token,
-            refresh_response.refresh_token,
-        )
-        .map_err(RefreshTokenError::from)?;
-        self.reload().await;
-
         Ok(())
     }
 }

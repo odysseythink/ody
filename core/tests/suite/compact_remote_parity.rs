@@ -43,7 +43,7 @@ enum AuthCase {
 impl AuthCase {
     fn build(self) -> OdyAuth {
         match self {
-            AuthCase::ChatGpt => OdyAuth::create_dummy_chatgpt_auth_for_testing(),
+            AuthCase::ChatGpt => OdyAuth::create_dummy_api_key_auth_for_testing(),
             AuthCase::ApiKey => OdyAuth::from_api_key("dummy"),
         }
     }

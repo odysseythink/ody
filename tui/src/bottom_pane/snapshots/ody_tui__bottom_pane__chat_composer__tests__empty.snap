@@ -3,8 +3,7 @@ source: tui/src/bottom_pane/chat_composer.rs
 expression: terminal.backend()
 ---
 "                                                                                                    "
-"› Ask Ody to do anything                                                                          "
-"                                                                                                    "
+"› Ask Ody to do anything                                                                            "
 "                                                                                                    "
 "                                                                                                    "
 "                                                                                                    "
@@ -12,3 +11,4 @@ expression: terminal.backend()
 "                                                                                                    "
 "                                                                                                    "
 "  ? for shortcuts                                                                100% context left  "
+"                                                                                       context: --  "

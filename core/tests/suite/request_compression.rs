@@ -28,7 +28,7 @@ async fn request_body_is_zstd_compressed_for_ody_backend_when_enabled() -> anyho
 
     let base_url = format!("{}/backend-api/ody/v1", server.uri());
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(move |config| {
             config
                 .features

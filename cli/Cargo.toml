@@ -28,7 +28,6 @@ ody-app-server-test-client = { workspace = true }
 ody-arg0 = { workspace = true }
 ody-api = { workspace = true }
 ody-chatgpt = { workspace = true }
-ody-cloud-tasks = { path = "../cloud-tasks" }
 ody-utils-cli = { workspace = true }
 ody-config = { workspace = true }
 ody-core = { workspace = true }
@@ -48,7 +47,6 @@ ody-model-provider = { workspace = true }
 ody-models-manager = { workspace = true }
 ody-plugin = { workspace = true }
 ody-protocol = { workspace = true }
-ody-responses-api-proxy = { workspace = true }
 ody-rmcp-client = { workspace = true }
 ody-rollout = { workspace = true }
 ody-rollout-trace = { workspace = true }

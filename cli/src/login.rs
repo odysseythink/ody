@@ -8,25 +8,15 @@
 //! support can request from users.
 
 use ody_app_server_protocol::AuthMode;
-use ody_config::types::AuthCredentialsStoreMode;
 use ody_core::config::Config;
-use ody_login::AuthKeyringBackendKind;
-use ody_login::AuthRouteConfig;
-use ody_login::CLIENT_ID;
 use ody_login::OdyAuth;
-use ody_login::ServerOptions;
-use ody_login::login_with_access_token;
 use ody_login::login_with_api_key;
 use ody_login::logout_with_revoke;
-use ody_login::run_device_code_login;
-use ody_login::run_login_server;
 use ody_protocol::config_types::ForcedLoginMethod;
 use ody_utils_cli::CliConfigOverrides;
 use std::fs::OpenOptions;
 use std::io::IsTerminal;
 use std::io::Read;
-use std::path::Path;
-use std::path::PathBuf;
 use tracing_appender::non_blocking;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::EnvFilter;
@@ -34,12 +24,12 @@ use tracing_subscriber::Layer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-const CHATGPT_LOGIN_DISABLED_MESSAGE: &str =
-    "ChatGPT login is disabled. Use API key login instead.";
+const CHATGPT_LOGIN_REMOVED_MESSAGE: &str =
+    "ChatGPT account login is no longer supported. Use `ody login --with-api-key` instead.";
 const API_KEY_LOGIN_DISABLED_MESSAGE: &str =
     "API key login is disabled. Use ChatGPT login instead.";
-const ACCESS_TOKEN_LOGIN_DISABLED_MESSAGE: &str =
-    "Access token login is disabled. Use API key login instead.";
+const ACCESS_TOKEN_LOGIN_REMOVED_MESSAGE: &str =
+    "Access token login is no longer supported. Use `ody login --with-api-key` instead.";
 const LOGIN_SUCCESS_MESSAGE: &str = "Successfully logged in";
 
 /// Installs a small file-backed tracing layer for direct `ody login` flows.
@@ -110,89 +100,13 @@ fn init_login_file_logging(config: &Config) -> Option<WorkerGuard> {
     Some(guard)
 }
 
-fn print_login_server_start(actual_port: u16, auth_url: &str) {
-    eprintln!(
-        "Starting local login server on http://localhost:{actual_port}.\nIf your browser did not open, navigate to this URL to authenticate:\n\n{auth_url}\n\nOn a remote or headless machine? Use `ody login --device-auth` instead."
-    );
-}
-
-async fn clear_existing_auth_before_login(
-    ody_home: &Path,
-    auth_credentials_store_mode: AuthCredentialsStoreMode,
-    auth_keyring_backend_kind: AuthKeyringBackendKind,
-    auth_route_config: Option<&AuthRouteConfig>,
-) {
-    if let Err(err) = logout_with_revoke(
-        ody_home,
-        auth_credentials_store_mode,
-        auth_keyring_backend_kind,
-        auth_route_config,
-    )
-    .await
-    {
-        tracing::warn!("failed to clear existing auth before login: {err}");
-    }
-}
-
-pub async fn login_with_chatgpt(
-    ody_home: PathBuf,
-    forced_chatgpt_workspace_id: Option<Vec<String>>,
-    cli_auth_credentials_store_mode: AuthCredentialsStoreMode,
-    auth_keyring_backend_kind: AuthKeyringBackendKind,
-    auth_route_config: Option<AuthRouteConfig>,
-) -> std::io::Result<()> {
-    clear_existing_auth_before_login(
-        &ody_home,
-        cli_auth_credentials_store_mode,
-        auth_keyring_backend_kind,
-        auth_route_config.as_ref(),
-    )
-    .await;
-
-    let opts = ServerOptions::new(
-        ody_home,
-        CLIENT_ID.to_string(),
-        forced_chatgpt_workspace_id,
-        cli_auth_credentials_store_mode,
-        auth_keyring_backend_kind,
-        auth_route_config,
-    );
-    let server = run_login_server(opts)?;
-
-    print_login_server_start(server.actual_port, &server.auth_url);
-
-    server.block_until_done().await
-}
-
 pub async fn run_login_with_chatgpt(cli_config_overrides: CliConfigOverrides) -> ! {
     let config = load_config_or_exit(cli_config_overrides).await;
     let _login_log_guard = init_login_file_logging(&config);
     tracing::info!("starting browser login flow");
 
-    if matches!(config.forced_login_method, Some(ForcedLoginMethod::Api)) {
-        eprintln!("{CHATGPT_LOGIN_DISABLED_MESSAGE}");
-        std::process::exit(1);
-    }
-
-    let forced_chatgpt_workspace_id = config.forced_chatgpt_workspace_id.clone();
-    match login_with_chatgpt(
-        config.ody_home.to_path_buf(),
-        forced_chatgpt_workspace_id,
-        config.cli_auth_credentials_store_mode,
-        config.auth_keyring_backend_kind(),
-        config.auth_route_config(),
-    )
-    .await
-    {
-        Ok(_) => {
-            eprintln!("{LOGIN_SUCCESS_MESSAGE}");
-            std::process::exit(0);
-        }
-        Err(e) => {
-            eprintln!("Error logging in: {e}");
-            std::process::exit(1);
-        }
-    }
+    eprintln!("{CHATGPT_LOGIN_REMOVED_MESSAGE}");
+    std::process::exit(1);
 }
 
 pub async fn run_login_with_api_key(
@@ -227,38 +141,14 @@ pub async fn run_login_with_api_key(
 
 pub async fn run_login_with_access_token(
     cli_config_overrides: CliConfigOverrides,
-    access_token: String,
+    _access_token: String,
 ) -> ! {
     let config = load_config_or_exit(cli_config_overrides).await;
     let _login_log_guard = init_login_file_logging(&config);
     tracing::info!("starting access token login flow");
 
-    if matches!(config.forced_login_method, Some(ForcedLoginMethod::Api)) {
-        eprintln!("{ACCESS_TOKEN_LOGIN_DISABLED_MESSAGE}");
-        std::process::exit(1);
-    }
-
-    let auth_route_config = config.auth_route_config();
-    match login_with_access_token(
-        &config.ody_home,
-        &access_token,
-        config.cli_auth_credentials_store_mode,
-        config.forced_chatgpt_workspace_id.as_deref(),
-        Some(&config.chatgpt_base_url),
-        config.auth_keyring_backend_kind(),
-        auth_route_config.as_ref(),
-    )
-    .await
-    {
-        Ok(_) => {
-            eprintln!("{LOGIN_SUCCESS_MESSAGE}");
-            std::process::exit(0);
-        }
-        Err(e) => {
-            eprintln!("Error logging in with access token: {e}");
-            std::process::exit(1);
-        }
-    }
+    eprintln!("{ACCESS_TOKEN_LOGIN_REMOVED_MESSAGE}");
+    std::process::exit(1);
 }
 
 pub fn read_api_key_from_stdin() -> String {
@@ -302,123 +192,30 @@ fn read_stdin_secret(terminal_message: &str, reading_message: &str, empty_messag
     secret
 }
 
-/// Login using the OAuth device code flow.
+/// ChatGPT device-code login is no longer supported.
 pub async fn run_login_with_device_code(
     cli_config_overrides: CliConfigOverrides,
-    issuer_base_url: Option<String>,
-    client_id: Option<String>,
+    _issuer_base_url: Option<String>,
+    _client_id: Option<String>,
 ) -> ! {
     let config = load_config_or_exit(cli_config_overrides).await;
     let _login_log_guard = init_login_file_logging(&config);
     tracing::info!("starting device code login flow");
-    if matches!(config.forced_login_method, Some(ForcedLoginMethod::Api)) {
-        eprintln!("{CHATGPT_LOGIN_DISABLED_MESSAGE}");
-        std::process::exit(1);
-    }
-    let auth_route_config = config.auth_route_config();
-    clear_existing_auth_before_login(
-        &config.ody_home,
-        config.cli_auth_credentials_store_mode,
-        config.auth_keyring_backend_kind(),
-        auth_route_config.as_ref(),
-    )
-    .await;
-    let forced_chatgpt_workspace_id = config.forced_chatgpt_workspace_id.clone();
-    let mut opts = ServerOptions::new(
-        config.ody_home.to_path_buf(),
-        client_id.unwrap_or(CLIENT_ID.to_string()),
-        forced_chatgpt_workspace_id,
-        config.cli_auth_credentials_store_mode,
-        config.auth_keyring_backend_kind(),
-        auth_route_config,
-    );
-    if let Some(iss) = issuer_base_url {
-        opts.issuer = iss;
-    }
-    match run_device_code_login(opts).await {
-        Ok(()) => {
-            eprintln!("{LOGIN_SUCCESS_MESSAGE}");
-            std::process::exit(0);
-        }
-        Err(e) => {
-            eprintln!("Error logging in with device code: {e}");
-            std::process::exit(1);
-        }
-    }
+    eprintln!("{CHATGPT_LOGIN_REMOVED_MESSAGE}");
+    std::process::exit(1);
 }
 
-/// Prefers device-code login (with `open_browser = false`) when headless environment is detected, but keeps
-/// `ody login` working in environments where device-code may be disabled/feature-gated.
-/// If `run_device_code_login` returns `ErrorKind::NotFound` ("device-code unsupported"), this
-/// falls back to starting the local browser login server.
+/// ChatGPT device-code (and its browser fallback) login is no longer supported.
 pub async fn run_login_with_device_code_fallback_to_browser(
     cli_config_overrides: CliConfigOverrides,
-    issuer_base_url: Option<String>,
-    client_id: Option<String>,
+    _issuer_base_url: Option<String>,
+    _client_id: Option<String>,
 ) -> ! {
     let config = load_config_or_exit(cli_config_overrides).await;
     let _login_log_guard = init_login_file_logging(&config);
     tracing::info!("starting login flow with device code fallback");
-    if matches!(config.forced_login_method, Some(ForcedLoginMethod::Api)) {
-        eprintln!("{CHATGPT_LOGIN_DISABLED_MESSAGE}");
-        std::process::exit(1);
-    }
-    let auth_route_config = config.auth_route_config();
-    clear_existing_auth_before_login(
-        &config.ody_home,
-        config.cli_auth_credentials_store_mode,
-        config.auth_keyring_backend_kind(),
-        auth_route_config.as_ref(),
-    )
-    .await;
-
-    let forced_chatgpt_workspace_id = config.forced_chatgpt_workspace_id.clone();
-    let mut opts = ServerOptions::new(
-        config.ody_home.to_path_buf(),
-        client_id.unwrap_or(CLIENT_ID.to_string()),
-        forced_chatgpt_workspace_id,
-        config.cli_auth_credentials_store_mode,
-        config.auth_keyring_backend_kind(),
-        auth_route_config,
-    );
-    if let Some(iss) = issuer_base_url {
-        opts.issuer = iss;
-    }
-    opts.open_browser = false;
-
-    match run_device_code_login(opts.clone()).await {
-        Ok(()) => {
-            eprintln!("{LOGIN_SUCCESS_MESSAGE}");
-            std::process::exit(0);
-        }
-        Err(e) => {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                eprintln!("Device code login is not enabled; falling back to browser login.");
-                match run_login_server(opts) {
-                    Ok(server) => {
-                        print_login_server_start(server.actual_port, &server.auth_url);
-                        match server.block_until_done().await {
-                            Ok(()) => {
-                                eprintln!("{LOGIN_SUCCESS_MESSAGE}");
-                                std::process::exit(0);
-                            }
-                            Err(e) => {
-                                eprintln!("Error logging in: {e}");
-                                std::process::exit(1);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("Error logging in: {e}");
-                        std::process::exit(1);
-                    }
-                }
-            } else {
-                eprintln!("Error logging in with device code: {e}");
-                std::process::exit(1);
-            }
-        }
-    }
+    eprintln!("{CHATGPT_LOGIN_REMOVED_MESSAGE}");
+    std::process::exit(1);
 }
 
 pub async fn run_login_status(cli_config_overrides: CliConfigOverrides) -> ! {
@@ -428,7 +225,9 @@ pub async fn run_login_status(cli_config_overrides: CliConfigOverrides) -> ! {
     match OdyAuth::from_auth_storage(
         &config.ody_home,
         config.cli_auth_credentials_store_mode,
-        Some(&config.chatgpt_base_url),
+        // This parameter is unused by `from_auth_storage` (ChatGPT OAuth login has been
+        // removed), and the `Config` field it used to be sourced from is gone too.
+        None,
         config.auth_keyring_backend_kind(),
         auth_route_config.as_ref(),
     )
@@ -529,43 +328,9 @@ fn safe_format_key(key: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use ody_config::types::AuthCredentialsStoreMode;
-    use ody_login::AuthKeyringBackendKind;
-    use ody_login::load_auth_dot_json;
-    use ody_login::login_with_api_key;
     use pretty_assertions::assert_eq;
-    use tempfile::tempdir;
 
-    use super::clear_existing_auth_before_login;
     use super::safe_format_key;
-
-    #[tokio::test]
-    async fn clears_existing_auth_before_login() {
-        let ody_home = tempdir().expect("create temporary Ody home");
-        login_with_api_key(
-            ody_home.path(),
-            "sk-existing",
-            AuthCredentialsStoreMode::File,
-            AuthKeyringBackendKind::default(),
-        )
-        .expect("save existing auth");
-
-        clear_existing_auth_before_login(
-            ody_home.path(),
-            AuthCredentialsStoreMode::File,
-            AuthKeyringBackendKind::default(),
-            /*auth_route_config*/ None,
-        )
-        .await;
-
-        let auth = load_auth_dot_json(
-            ody_home.path(),
-            AuthCredentialsStoreMode::File,
-            AuthKeyringBackendKind::default(),
-        )
-        .expect("load auth after cleanup");
-        assert_eq!(auth, None);
-    }
 
     #[test]
     fn formats_long_key() {

@@ -5,15 +5,15 @@ expression: sanitized
 /status
 
 ╭─────────────────────────────────────────────────────────────────────────────╮
-│  >_ odysseythink ody (v0.0.0)                                                   │
+│  >_ odysseythink ody (v0.0.0)                                               │
 │                                                                             │
-│ Visit https://chatgpt.com/ody/settings/usage for up-to-date               │
+│ Visit https://chatgpt.com/ody/settings/usage for up-to-date                 │
 │ information on rate limits and credits                                      │
 │                                                                             │
-│  Remote:           unix:///tmp/ody-home/app-server-control/app-server-    │
+│  Remote:           unix:///tmp/ody-home/app-server-control/app-server-      │
 │                    control.sock (v0.133.0)                                  │
 │                                                                             │
-│  Model:            gpt-5.1-ody-max (reasoning medium, summaries auto)     │
+│  Model:            gpt-5.1-ody-max (reasoning medium, summaries auto)       │
 │  Directory: [[workspace]]                                                   │
 │  Permissions:      Custom (workspace with network access, Ask for approval) │
 │  Agents.md:        <none>                                                   │

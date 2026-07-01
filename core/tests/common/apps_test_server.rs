@@ -178,12 +178,15 @@ pub fn configure_search_capable_model(config: &mut Config) {
     config.model_catalog = Some(model_catalog);
 }
 
-fn configure_apps(config: &mut Config, apps_base_url: &str) {
+fn configure_apps(config: &mut Config, _apps_base_url: &str) {
     config
         .features
         .enable(Feature::Apps)
         .expect("test config should allow feature update");
-    config.chatgpt_base_url = apps_base_url.to_string();
+    // The remote hosted plugin/Apps catalog config field this used to be sourced from has been
+    // removed, along with the "ody_apps" hosted MCP server registration it fed. Tests built on
+    // top of this mock apps server (via `apps_enabled_builder`/`search_capable_apps_builder`)
+    // may need follow-up updates in a later step; this just keeps the crate compiling.
 }
 
 pub fn configure_search_capable_apps(config: &mut Config, apps_base_url: &str) {
@@ -194,14 +197,14 @@ pub fn configure_search_capable_apps(config: &mut Config, apps_base_url: &str) {
 pub fn apps_enabled_builder(apps_base_url: impl Into<String>) -> TestOdyBuilder {
     let apps_base_url = apps_base_url.into();
     test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(move |config| configure_apps(config, apps_base_url.as_str()))
 }
 
 pub fn search_capable_apps_builder(apps_base_url: impl Into<String>) -> TestOdyBuilder {
     let apps_base_url = apps_base_url.into();
     test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(move |config| configure_search_capable_apps(config, apps_base_url.as_str()))
 }
 

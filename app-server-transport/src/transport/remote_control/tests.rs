@@ -74,12 +74,12 @@ const TEST_REFRESHED_REMOTE_CONTROL_SERVER_TOKEN: &str = "Refreshed Remote Contr
 const TEST_REMOTE_CONTROL_SERVER_TOKEN_EXPIRES_AT: &str = "2999-01-01T00:00:00Z";
 
 fn remote_control_auth_manager() -> Arc<AuthManager> {
-    auth_manager_from_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+    auth_manager_from_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
 }
 
 fn remote_control_auth_manager_with_home(ody_home: &TempDir) -> Arc<AuthManager> {
     auth_manager_from_auth_with_home(
-        OdyAuth::create_dummy_chatgpt_auth_for_testing(),
+        OdyAuth::create_dummy_api_key_auth_for_testing(),
         ody_home.path().to_path_buf(),
     )
 }

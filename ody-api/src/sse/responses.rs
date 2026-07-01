@@ -1241,7 +1241,7 @@ mod tests {
                 "response": {
                     "id": "resp-1",
                     "headers": {
-                        "OpenAI-Model": CYBER_RESTRICTED_MODEL_FOR_TESTS
+                        "odysseythink-model": CYBER_RESTRICTED_MODEL_FOR_TESTS
                     }
                 }
             }),

@@ -573,7 +573,7 @@ if (!tool) {
 
     let apps_base_url = apps_server.chatgpt_base_url.clone();
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(move |config| {
             config
                 .features

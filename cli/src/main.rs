@@ -18,12 +18,10 @@ use ody_cli::run_login_with_api_key;
 use ody_cli::run_login_with_chatgpt;
 use ody_cli::run_login_with_device_code;
 use ody_cli::run_logout;
-use ody_cloud_tasks::Cli as CloudTasksCli;
 use ody_exec::Cli as ExecCli;
 use ody_exec::Command as ExecCommand;
 use ody_exec::ReviewArgs;
 use ody_execpolicy::ExecPolicyCheckCommand;
-use ody_responses_api_proxy::Args as ResponsesApiProxyArgs;
 use ody_rollout_trace::REDUCED_STATE_FILE_NAME;
 use ody_rollout_trace::replay_bundle;
 use ody_state::StateRuntime;
@@ -80,7 +78,6 @@ use ody_features::is_known_feature_key;
 use ody_home::OdyHomeUserInstructionsProvider;
 use ody_login::AuthManager;
 use ody_login::OdyAuth;
-use ody_login::read_ody_access_token_from_env;
 use ody_memories_write::clear_memory_roots_contents;
 use ody_models_manager::bundled_models_response;
 use ody_models_manager::manager::RefreshStrategy;
@@ -191,14 +188,6 @@ enum Subcommand {
 
     /// Fork a previous interactive session (picker by default; use --last to fork the most recent).
     Fork(ForkCommand),
-
-    /// [EXPERIMENTAL] Browse tasks from Ody Cloud and apply changes locally.
-    #[clap(name = "cloud", alias = "cloud-tasks")]
-    Cloud(CloudTasksCli),
-
-    /// Internal: run the responses API proxy.
-    #[clap(hide = true)]
-    ResponsesApiProxy(ResponsesApiProxyArgs),
 
     /// Internal: relay stdio to a Unix domain socket.
     #[clap(hide = true, name = "stdio-to-uds")]
@@ -1422,19 +1411,6 @@ async fn cli_main(
             )
             .await?;
         }
-        Some(Subcommand::Cloud(mut cloud_cli)) => {
-            reject_remote_mode_for_subcommand(
-                root_remote.as_deref(),
-                root_remote_auth_token_env.as_deref(),
-                "cloud",
-            )?;
-            prepend_config_flags(
-                &mut cloud_cli.config_overrides,
-                root_config_overrides.clone(),
-            );
-            ody_cloud_tasks::run_main(cloud_cli, arg0_paths.ody_linux_sandbox_exe.clone())
-                .await?;
-        }
         Some(Subcommand::Sandbox(mut sandbox_cli)) => {
             #[cfg(target_os = "windows")]
             if let Some(setup_cli) = sandbox_setup::parse_setup_command(&sandbox_cli.command)? {
@@ -1556,15 +1532,6 @@ async fn cli_main(
                 root_config_overrides.clone(),
             );
             run_apply_command(apply_cli, /*cwd*/ None).await?;
-        }
-        Some(Subcommand::ResponsesApiProxy(args)) => {
-            reject_remote_mode_for_subcommand(
-                root_remote.as_deref(),
-                root_remote_auth_token_env.as_deref(),
-                "responses-api-proxy",
-            )?;
-            tokio::task::spawn_blocking(move || ody_responses_api_proxy::run_main(args))
-                .await??;
         }
         Some(Subcommand::StdioToUds(cmd)) => {
             reject_remote_mode_for_subcommand(
@@ -1735,29 +1702,19 @@ async fn load_exec_server_remote_auth_provider(
     use_agent_identity_auth: bool,
 ) -> anyhow::Result<ody_api::SharedAuthProvider> {
     if use_agent_identity_auth {
-        let agent_identity_jwt = read_ody_access_token_from_env().ok_or_else(|| {
-            anyhow::anyhow!("ODY_ACCESS_TOKEN is required when --use-agent-identity-auth is set")
-        })?;
-        let auth_route_config = config.auth_route_config();
-        let auth = OdyAuth::from_agent_identity_jwt(
-            &agent_identity_jwt,
-            Some(&config.chatgpt_base_url),
-            auth_route_config.as_ref(),
-        )
-        .await?;
-        return Ok(ody_model_provider::auth_provider_from_auth(&auth));
+        anyhow::bail!(
+            "--use-agent-identity-auth is no longer supported; use API key authentication instead"
+        );
     }
 
     let auth = load_exec_server_remote_auth(
         config,
-        "remote exec-server registration requires ChatGPT authentication or API key authentication; run `ody login` or set ODY_API_KEY",
+        "remote exec-server registration requires API key authentication; run `ody login` or set ODY_API_KEY",
     )
     .await?;
 
     if !is_supported_exec_server_remote_auth(&auth) {
-        anyhow::bail!(
-            "remote exec-server registration requires ChatGPT authentication or API key authentication; Agent Identity auth requires --use-agent-identity-auth"
-        );
+        anyhow::bail!("remote exec-server registration requires API key authentication");
     }
 
     if auth.is_api_key_auth() {
@@ -2126,12 +2083,10 @@ fn unsupported_subcommand_name_for_strict_config(
         Some(Subcommand::Logout(_)) => Some("logout"),
         Some(Subcommand::Completion(_)) => Some("completion"),
         Some(Subcommand::Update) => Some("update"),
-        Some(Subcommand::Cloud(_)) => Some("cloud"),
         Some(Subcommand::Sandbox(_)) => Some("sandbox"),
         Some(Subcommand::Debug(_)) => Some("debug"),
         Some(Subcommand::Execpolicy(_)) => Some("execpolicy"),
         Some(Subcommand::Apply(_)) => Some("apply"),
-        Some(Subcommand::ResponsesApiProxy(_)) => Some("responses-api-proxy"),
         Some(Subcommand::StdioToUds(_)) => Some("stdio-to-uds"),
         Some(Subcommand::Features(_)) => Some("features"),
     }

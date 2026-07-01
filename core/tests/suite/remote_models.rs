@@ -92,7 +92,7 @@ async fn remote_models_get_model_info_uses_longest_matching_prefix() -> Result<(
     let ody_home = TempDir::new()?;
     let config = load_default_config_for_test(&ody_home).await;
 
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
+    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         ..built_in_model_providers(/* odysseythink_base_url */ /*odysseythink_base_url*/ None)["odysseythink"].clone()
@@ -144,7 +144,7 @@ async fn remote_models_config_context_window_override_clamps_to_max_context_wind
     .await;
 
     let TestOdy { ody, .. } = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(|config| {
             config.model = Some(requested_model.to_string());
             config.model_context_window = Some(1_000_000);
@@ -211,7 +211,7 @@ async fn remote_models_config_override_above_max_uses_max_context_window() -> Re
     .await;
 
     let TestOdy { ody, .. } = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(|config| {
             config.model = Some(requested_model.to_string());
             config.model_context_window = Some(500_000);
@@ -278,7 +278,7 @@ async fn remote_models_use_context_window_when_config_override_is_absent() -> Re
     .await;
 
     let TestOdy { ody, .. } = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(|config| {
             config.model = Some(requested_model.to_string());
         })
@@ -358,7 +358,7 @@ async fn remote_models_long_model_slug_is_sent_with_custom_reasoning() -> Result
     .await;
 
     let TestOdy { ody, .. } = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(|config| {
             config.model = Some(requested_model.to_string());
         })
@@ -512,7 +512,7 @@ async fn remote_models_remote_model_uses_unified_exec() -> Result<()> {
     .await;
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(|config| {
             config.model = Some("gpt-5.4".to_string());
         });
@@ -632,7 +632,7 @@ async fn remote_models_truncation_policy_without_override_preserves_remote() -> 
     .await;
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(|config| {
             config.model = Some("gpt-5.4".to_string());
         });
@@ -678,7 +678,7 @@ async fn remote_models_truncation_policy_with_tool_output_override() -> Result<(
     .await;
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(|config| {
             config.model = Some("gpt-5.4".to_string());
             config.tool_output_token_limit = Some(50);
@@ -774,7 +774,7 @@ async fn remote_models_apply_remote_base_instructions() -> Result<()> {
     .await;
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(|config| {
             config.model = Some("gpt-5.2".to_string());
         });
@@ -851,7 +851,7 @@ async fn remote_models_do_not_append_removed_builtin_presets() -> Result<()> {
 
     let ody_home = TempDir::new()?;
 
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
+    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         ..built_in_model_providers(/* odysseythink_base_url */ /*odysseythink_base_url*/ None)["odysseythink"].clone()
@@ -912,7 +912,7 @@ async fn remote_models_merge_adds_new_high_priority_first() -> Result<()> {
 
     let ody_home = TempDir::new()?;
 
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
+    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         ..built_in_model_providers(/* odysseythink_base_url */ /*odysseythink_base_url*/ None)["odysseythink"].clone()
@@ -959,7 +959,7 @@ async fn remote_models_merge_replaces_overlapping_model() -> Result<()> {
 
     let ody_home = TempDir::new()?;
 
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
+    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         ..built_in_model_providers(/* odysseythink_base_url */ /*odysseythink_base_url*/ None)["odysseythink"].clone()
@@ -1003,7 +1003,7 @@ async fn remote_models_merge_preserves_bundled_models_on_empty_response() -> Res
 
     let ody_home = TempDir::new()?;
 
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
+    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         ..built_in_model_providers(/* odysseythink_base_url */ /*odysseythink_base_url*/ None)["odysseythink"].clone()
@@ -1045,7 +1045,7 @@ async fn remote_models_request_times_out_after_5s() -> Result<()> {
 
     let ody_home = TempDir::new()?;
 
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
+    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         ..built_in_model_providers(/* odysseythink_base_url */ /*odysseythink_base_url*/ None)["odysseythink"].clone()
@@ -1115,7 +1115,7 @@ async fn remote_models_hide_picker_only_models() -> Result<()> {
 
     let ody_home = TempDir::new()?;
 
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
+    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         ..built_in_model_providers(/* odysseythink_base_url */ /*odysseythink_base_url*/ None)["odysseythink"].clone()

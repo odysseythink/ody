@@ -956,9 +956,6 @@ pub struct Config {
     /// Optional verbosity control for GPT-5 models (Responses API `text.verbosity`).
     pub model_verbosity: Option<Verbosity>,
 
-    /// Base URL for requests to ChatGPT (as opposed to the OpenAI API).
-    pub chatgpt_base_url: String,
-
     /// Whether Ody-owned clients should respect host system proxy settings.
     pub respect_system_proxy: bool,
 
@@ -1000,8 +997,6 @@ pub struct Config {
 
     /// Experimental / do not use. Selects the thread persistence backend.
     pub experimental_thread_store: ThreadStoreConfig,
-    /// When set, restricts ChatGPT login to one or more workspace identifiers.
-    pub forced_chatgpt_workspace_id: Option<Vec<String>>,
 
     /// When set, restricts the login mechanism users may use.
     pub forced_login_method: Option<ForcedLoginMethod>,
@@ -1202,11 +1197,15 @@ impl AuthManagerConfig for Config {
     }
 
     fn forced_chatgpt_workspace_id(&self) -> Option<Vec<String>> {
-        self.forced_chatgpt_workspace_id.clone()
+        // ChatGPT OAuth login (and the workspace restriction that applied to it) has been
+        // removed; this restriction can never apply now.
+        None
     }
 
     fn chatgpt_base_url(&self) -> String {
-        self.chatgpt_base_url.clone()
+        // No product surface still consults this value: the remote hosted plugin/Apps
+        // catalog and ChatGPT OAuth login paths that used it have been removed.
+        String::new()
     }
 
     fn auth_route_config(&self) -> Option<AuthRouteConfig> {
@@ -1475,8 +1474,6 @@ impl Config {
         PluginsConfigInput::new(
             self.config_layer_stack.clone(),
             self.features.enabled(Feature::Plugins),
-            self.features.enabled(Feature::RemotePlugin),
-            self.chatgpt_base_url.clone(),
         )
     }
 
@@ -1551,8 +1548,6 @@ impl Config {
         }
 
         McpConfig {
-            chatgpt_base_url: self.chatgpt_base_url.clone(),
-            apps_mcp_product_sku: self.apps_mcp_product_sku.clone(),
             ody_home: self.ody_home.to_path_buf(),
             mcp_oauth_credentials_store_mode: self.mcp_oauth_credentials_store_mode,
             auth_keyring_backend_kind: self.auth_keyring_backend_kind(),
@@ -3530,19 +3525,6 @@ impl Config {
 
         let use_experimental_unified_exec_tool = features.enabled(Feature::UnifiedExec);
 
-        let forced_chatgpt_workspace_id = cfg
-            .forced_chatgpt_workspace_id
-            .clone()
-            .map(ody_config::config_toml::ForcedChatgptWorkspaceIds::into_vec)
-            .map(|values| {
-                values
-                    .into_iter()
-                    .map(|value| value.trim().to_string())
-                    .filter(|value| !value.is_empty())
-                    .collect::<Vec<_>>()
-            })
-            .filter(|values| !values.is_empty());
-
         let forced_login_method = cfg.forced_login_method;
 
         let model = model.or(ody_code_model).or(cfg.model);
@@ -3874,9 +3856,6 @@ impl Config {
             model_supports_reasoning_summaries: cfg.model_supports_reasoning_summaries,
             model_catalog,
             model_verbosity: cfg.model_verbosity,
-            chatgpt_base_url: cfg
-                .chatgpt_base_url
-                .unwrap_or("https://chatgpt.com/backend-api/".to_string()),
             respect_system_proxy,
             apps_mcp_product_sku: cfg.apps_mcp_product_sku.clone(),
             realtime_audio: cfg
@@ -3905,7 +3884,6 @@ impl Config {
             experimental_realtime_start_instructions: cfg.experimental_realtime_start_instructions,
             experimental_thread_config_endpoint: cfg.experimental_thread_config_endpoint,
             experimental_thread_store: thread_store_config(cfg.experimental_thread_store),
-            forced_chatgpt_workspace_id,
             forced_login_method,
             web_search_mode: constrained_web_search_mode.value,
             web_search_config,

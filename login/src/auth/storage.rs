@@ -20,14 +20,11 @@ use tracing::warn;
 
 use super::BedrockApiKeyAuth;
 use crate::token_data::TokenData;
-use ody_agent_identity::AgentIdentityJwtClaims;
-use ody_agent_identity::decode_agent_identity_jwt;
 use ody_app_server_protocol::AuthMode;
 use ody_config::types::AuthCredentialsStoreMode;
 pub use ody_config::types::AuthKeyringBackendKind;
 use ody_keyring_store::DefaultKeyringStore;
 use ody_keyring_store::KeyringStore;
-use ody_protocol::account::PlanType as AccountPlanType;
 use ody_secrets::LocalSecretsNamespace;
 use ody_secrets::SecretName;
 use ody_secrets::SecretScope;
@@ -51,99 +48,23 @@ pub struct AuthDotJson {
     pub last_refresh: Option<DateTime<Utc>>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub agent_identity: Option<AgentIdentityStorage>,
-
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub personal_access_token: Option<String>,
-
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bedrock_api_key: Option<BedrockApiKeyAuth>,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
-#[serde(untagged)]
-pub enum AgentIdentityStorage {
-    Jwt(String),
-    Record(AgentIdentityAuthRecord),
-}
-
-impl AgentIdentityStorage {
-    pub fn has_auth_material(&self) -> bool {
-        match self {
-            Self::Jwt(jwt) => !jwt.trim().is_empty(),
-            Self::Record(record) => {
-                !record.agent_runtime_id.trim().is_empty()
-                    && !record.agent_private_key.trim().is_empty()
-            }
+impl AuthDotJson {
+    /// Best-effort classification of the auth mode represented by this payload,
+    /// for callers that infer the mode instead of relying solely on `auth_mode`.
+    pub(super) fn resolved_mode(&self) -> AuthMode {
+        if let Some(mode) = self.auth_mode {
+            return mode;
         }
-    }
-
-    pub(crate) fn as_record(&self) -> Option<&AgentIdentityAuthRecord> {
-        match self {
-            Self::Jwt(_) => None,
-            Self::Record(record) => Some(record),
+        if self.bedrock_api_key.is_some() {
+            return AuthMode::BedrockApiKey;
         }
-    }
-}
-
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
-pub struct AgentIdentityAuthRecord {
-    pub agent_runtime_id: String,
-    pub agent_private_key: String,
-    pub account_id: String,
-    pub chatgpt_user_id: String,
-    #[serde(
-        default,
-        deserialize_with = "deserialize_optional_non_empty_string",
-        serialize_with = "serialize_optional_string_as_empty"
-    )]
-    pub email: Option<String>,
-    pub plan_type: AccountPlanType,
-    pub chatgpt_account_is_fedramp: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub task_id: Option<String>,
-}
-
-fn deserialize_optional_non_empty_string<'de, D>(
-    deserializer: D,
-) -> Result<Option<String>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    Option::<String>::deserialize(deserializer).map(|value| value.filter(|value| !value.is_empty()))
-}
-
-fn serialize_optional_string_as_empty<S>(
-    value: &Option<String>,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    value.as_deref().unwrap_or_default().serialize(serializer)
-}
-
-impl AgentIdentityAuthRecord {
-    pub(crate) fn from_agent_identity_jwt(jwt: &str) -> std::io::Result<Self> {
-        let claims =
-            decode_agent_identity_jwt(jwt, /*jwks*/ None).map_err(std::io::Error::other)?;
-
-        Ok(claims.into())
-    }
-}
-
-impl From<AgentIdentityJwtClaims> for AgentIdentityAuthRecord {
-    fn from(claims: AgentIdentityJwtClaims) -> Self {
-        Self {
-            agent_runtime_id: claims.agent_runtime_id,
-            agent_private_key: claims.agent_private_key,
-            account_id: claims.account_id,
-            chatgpt_user_id: claims.chatgpt_user_id,
-            email: claims.email,
-            plan_type: claims.plan_type.into(),
-            chatgpt_account_is_fedramp: claims.chatgpt_account_is_fedramp,
-            task_id: None,
+        if self.odysseythink_api_key.is_some() {
+            return AuthMode::ApiKey;
         }
+        AuthMode::Chatgpt
     }
 }
 

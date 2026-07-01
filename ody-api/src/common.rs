@@ -75,7 +75,7 @@ pub enum ResponseEvent {
     SafetyBuffering(SafetyBuffering),
     OutputItemDone(ResponseItem),
     OutputItemAdded(ResponseItem),
-    /// Emitted when the server includes `OpenAI-Model` on the stream response.
+    /// Emitted when the server includes `odysseythink-model` on the stream response.
     /// This can differ from the requested model when backend safety routing applies.
     ServerModel(String),
     /// Emitted when the server recommends additional account verification.

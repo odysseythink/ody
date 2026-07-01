@@ -1,6 +1,4 @@
 use anyhow::Context;
-use ody_app_server_protocol::PluginAvailability;
-use ody_app_server_protocol::PluginInstallPolicy;
 use ody_core_skills::config_rules::skill_config_rules_from_stack;
 use ody_login::OdyAuth;
 use ody_plugin::PluginId;
@@ -12,7 +10,6 @@ use crate::OPENAI_CURATED_MARKETPLACE_NAME;
 use crate::PluginsConfigInput;
 use crate::PluginsManager;
 use crate::marketplace::MarketplacePluginInstallPolicy;
-use crate::remote::REMOTE_GLOBAL_MARKETPLACE_NAME;
 
 const TOOL_SUGGEST_DISCOVERABLE_PLUGIN_ALLOWLIST: &[&str] = &[
     "github@odysseythink-curated",
@@ -70,29 +67,20 @@ impl PluginsManager {
     pub async fn list_tool_suggest_discoverable_plugins(
         &self,
         input: &ToolSuggestPluginDiscoveryInput,
-        auth: Option<&OdyAuth>,
+        _auth: Option<&OdyAuth>,
     ) -> anyhow::Result<Vec<ToolSuggestDiscoverablePlugin>> {
         if !input.plugins.plugins_enabled {
             return Ok(Vec::new());
         }
 
-        let use_remote_global_catalog =
-            input.plugins.remote_plugin_enabled && auth.is_some_and(OdyAuth::uses_ody_backend);
         let marketplaces = self
             .list_marketplaces_for_config(
                 &input.plugins,
                 &[],
-                /*include_odysseythink_curated*/ !use_remote_global_catalog,
+                /*include_odysseythink_curated*/ true,
             )
             .context("failed to list plugin marketplaces for tool suggestions")?
             .marketplaces;
-        let remote_installed_marketplaces = if use_remote_global_catalog {
-            self.build_remote_installed_plugin_marketplaces_from_cache(&[
-                REMOTE_GLOBAL_MARKETPLACE_NAME,
-            ])
-        } else {
-            None
-        };
         let skill_config_rules = skill_config_rules_from_stack(&input.plugins.config_layer_stack);
 
         let mut discoverable_plugins = Vec::<ToolSuggestDiscoverablePlugin>::new();
@@ -138,62 +126,6 @@ impl PluginsManager {
                         warn!("failed to load discoverable plugin suggestion {plugin_id}: {err:#}")
                     }
                 }
-            }
-        }
-        if let Some(remote_installed_marketplaces) = remote_installed_marketplaces.as_ref() {
-            let mut installed_app_connector_ids = self
-                .plugins_for_config(&input.plugins)
-                .await
-                .capability_summaries()
-                .iter()
-                .flat_map(|plugin| plugin.app_connector_ids.iter())
-                .map(|connector_id| connector_id.0.clone())
-                .collect::<HashSet<_>>();
-            installed_app_connector_ids
-                .extend(input.loaded_plugin_app_connector_ids.iter().cloned());
-            let installed_remote_plugin_ids = remote_installed_marketplaces
-                .iter()
-                .flat_map(|marketplace| marketplace.plugins.iter())
-                .map(|plugin| plugin.remote_plugin_id.clone())
-                .collect::<HashSet<_>>();
-            for plugin in
-                self.cached_global_remote_discoverable_plugins_for_config(&input.plugins, auth)
-            {
-                let is_configured_plugin = input
-                    .configured_plugin_ids
-                    .contains(plugin.config_id.as_str())
-                    || input
-                        .configured_plugin_ids
-                        .contains(plugin.remote_plugin_id.as_str());
-                let is_fallback_plugin = is_tool_suggest_fallback_plugin(&plugin.config_id);
-                let matches_installed_app = plugin
-                    .app_ids
-                    .iter()
-                    .any(|app_id| installed_app_connector_ids.contains(app_id.as_str()));
-                let is_disabled = input
-                    .disabled_plugin_ids
-                    .contains(plugin.config_id.as_str())
-                    || input
-                        .disabled_plugin_ids
-                        .contains(plugin.remote_plugin_id.as_str());
-                if installed_remote_plugin_ids.contains(&plugin.remote_plugin_id)
-                    || plugin.install_policy == PluginInstallPolicy::NotAvailable
-                    || plugin.availability == PluginAvailability::DisabledByAdmin
-                    || is_disabled
-                    || (!is_configured_plugin && !is_fallback_plugin && !matches_installed_app)
-                {
-                    continue;
-                }
-
-                discoverable_plugins.push(ToolSuggestDiscoverablePlugin {
-                    id: plugin.config_id,
-                    remote_plugin_id: Some(plugin.remote_plugin_id),
-                    name: plugin.name,
-                    description: plugin.description,
-                    has_skills: plugin.has_skills,
-                    mcp_server_names: Vec::new(),
-                    app_connector_ids: plugin.app_ids,
-                });
             }
         }
         discoverable_plugins.sort_by(|left, right| {

@@ -216,7 +216,7 @@ remote_plugin = true
         .mount(&server)
         .await;
 
-    let auth = OdyAuth::create_dummy_chatgpt_auth_for_testing();
+    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
     let mut config = load_plugins_config(ody_home.path()).await;
     config.chatgpt_base_url = format!("{}/backend-api", server.uri());
     let plugins_manager = PluginsManager::new(config.ody_home.to_path_buf());

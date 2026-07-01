@@ -4117,7 +4117,7 @@ async fn emit_subagent_session_started_includes_fork_lineage_from_session_config
         .await;
 
     let auth_manager =
-        AuthManager::from_auth_for_testing(OdyAuth::create_dummy_chatgpt_auth_for_testing());
+        AuthManager::from_auth_for_testing(OdyAuth::create_dummy_api_key_auth_for_testing());
     let analytics_events_client = AnalyticsEventsClient::new(
         auth_manager,
         server.uri(),

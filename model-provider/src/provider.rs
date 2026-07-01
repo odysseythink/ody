@@ -55,16 +55,12 @@ pub struct ProviderAccountState {
 /// Error returned when a provider cannot construct its app-visible account state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProviderAccountError {
-    MissingChatgptAccountDetails,
     UnsupportedBedrockApiKeyAuth,
 }
 
 impl fmt::Display for ProviderAccountError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingChatgptAccountDetails => {
-                write!(f, "plan type is required for chatgpt authentication")
-            }
             Self::UnsupportedBedrockApiKeyAuth => {
                 write!(
                     f,
@@ -243,13 +239,6 @@ impl ModelProvider for ConfiguredModelProvider {
         self.auth_manager.clone()
     }
 
-    fn supports_attestation(&self) -> bool {
-        self.auth_manager
-            .as_ref()
-            .and_then(|auth_manager| auth_manager.auth_cached())
-            .is_some_and(|auth| auth.is_chatgpt_auth())
-    }
-
     fn auth(&self) -> ModelProviderFuture<'_, Option<OdyAuth>> {
         Box::pin(async move {
             match self.auth_manager.as_ref() {
@@ -274,17 +263,6 @@ impl ModelProvider for ConfiguredModelProvider {
                     OdyAuth::ApiKey(_) => Ok(ProviderAccount::ApiKey),
                     OdyAuth::BedrockApiKey(_) => {
                         Err(ProviderAccountError::UnsupportedBedrockApiKeyAuth)
-                    }
-                    OdyAuth::Chatgpt(_)
-                    | OdyAuth::ChatgptAuthTokens(_)
-                    | OdyAuth::AgentIdentity(_)
-                    | OdyAuth::PersonalAccessToken(_) => {
-                        let email = auth.get_account_email();
-                        let plan_type = auth.account_plan_type();
-
-                        plan_type
-                            .map(|plan_type| ProviderAccount::Chatgpt { email, plan_type })
-                            .ok_or(ProviderAccountError::MissingChatgptAccountDetails)
                     }
                 })
                 .transpose()?
@@ -351,18 +329,9 @@ mod tests {
     use ody_model_provider_info::ModelProviderAwsAuthInfo;
     use ody_model_provider_info::WireApi;
     use ody_models_manager::manager::RefreshStrategy;
-    use ody_protocol::account::PlanType;
     use ody_protocol::config_types::ModelProviderAuthInfo;
-    use ody_protocol::odysseythink_models::ModelInfo;
     use ody_protocol::odysseythink_models::ModelsResponse;
     use pretty_assertions::assert_eq;
-    use serde_json::json;
-    use wiremock::Mock;
-    use wiremock::MockServer;
-    use wiremock::ResponseTemplate;
-    use wiremock::matchers::header_regex;
-    use wiremock::matchers::method;
-    use wiremock::matchers::path;
 
     use super::*;
 
@@ -407,33 +376,6 @@ mod tests {
             requires_odysseythink_auth: false,
             supports_websockets: false,
         }
-    }
-
-    fn remote_model(slug: &str) -> ModelInfo {
-        serde_json::from_value(json!({
-            "slug": slug,
-            "display_name": slug,
-            "description": null,
-            "default_reasoning_level": "medium",
-            "supported_reasoning_levels": [],
-            "shell_type": "shell_command",
-            "visibility": "list",
-            "supported_in_api": true,
-            "priority": 0,
-            "upgrade": null,
-            "base_instructions": "base instructions",
-            "supports_reasoning_summaries": false,
-            "support_verbosity": false,
-            "default_verbosity": null,
-            "apply_patch_tool_type": null,
-            "truncation_policy": {"mode": "bytes", "limit": 10_000},
-            "supports_parallel_tool_calls": false,
-            "supports_image_detail_original": false,
-            "context_window": 272_000,
-            "max_context_window": 272_000,
-            "experimental_supported_tools": [],
-        }))
-        .expect("valid model")
     }
 
     fn bedrock_api_key_auth() -> OdyAuth {
@@ -551,27 +493,6 @@ mod tests {
             provider.account_state(),
             Ok(ProviderAccountState {
                 account: Some(ProviderAccount::ApiKey),
-                requires_odysseythink_auth: true,
-            })
-        );
-    }
-
-    #[test]
-    fn odysseythink_provider_returns_chatgpt_account_state_without_email() {
-        let provider = create_model_provider(
-            ModelProviderInfo::create_odysseythink_provider(/*base_url*/ None),
-            Some(AuthManager::from_auth_for_testing(
-                OdyAuth::create_dummy_chatgpt_auth_for_testing(),
-            )),
-        );
-
-        assert_eq!(
-            provider.account_state(),
-            Ok(ProviderAccountState {
-                account: Some(ProviderAccount::Chatgpt {
-                    email: None,
-                    plan_type: PlanType::Unknown,
-                }),
                 requires_odysseythink_auth: true,
             })
         );
@@ -703,42 +624,28 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn configured_provider_models_manager_uses_provider_bearer_token() {
-        let server = MockServer::start().await;
-        let remote_models = vec![remote_model("provider-model")];
-
-        Mock::given(method("GET"))
-            .and(path("/models"))
-            .and(header_regex("Authorization", "Bearer provider-token"))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .insert_header("content-type", "application/json")
-                    .set_body_json(ModelsResponse {
-                        models: remote_models.clone(),
-                    }),
-            )
-            .expect(1)
-            .mount(&server)
-            .await;
-
-        let mut provider_info = provider_for(server.uri());
+    async fn configured_provider_uses_provider_bearer_token_for_api_auth() {
+        let mut provider_info = provider_for("https://example.test/v1".to_string());
         provider_info.experimental_bearer_token = Some("provider-token".to_string());
         let provider = create_model_provider(
             provider_info,
-            Some(AuthManager::from_auth_for_testing(
-                OdyAuth::create_dummy_chatgpt_auth_for_testing(),
-            )),
+            Some(AuthManager::from_auth_for_testing(OdyAuth::from_api_key(
+                "odysseythink-api-key",
+            ))),
         );
 
-        let manager =
-            provider.models_manager(test_ody_home(), /*config_model_catalog*/ None);
-        let catalog = manager.raw_model_catalog(RefreshStrategy::Online).await;
+        let auth = provider
+            .api_auth()
+            .await
+            .expect("provider auth should resolve");
+        let mut headers = http::HeaderMap::new();
+        auth.add_auth_headers(&mut headers);
 
-        assert!(
-            catalog
-                .models
-                .iter()
-                .any(|model| model.slug == "provider-model")
+        assert_eq!(
+            headers
+                .get(http::header::AUTHORIZATION)
+                .and_then(|value| value.to_str().ok()),
+            Some("Bearer provider-token")
         );
     }
 }

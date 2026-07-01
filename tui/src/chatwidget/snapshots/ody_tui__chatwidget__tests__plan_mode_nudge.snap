@@ -5,3 +5,4 @@ expression: "render_bottom_popup(&chat, 80)"
 › make a plan
 
   Create a plan?  shift + tab use Plan mode   esc dismiss
+  gpt-5                                              context: 50.0% (50K/100K)

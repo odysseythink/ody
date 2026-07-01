@@ -243,19 +243,6 @@ fn default_reqwest_client_builder() -> reqwest::ClientBuilder {
     with_chatgpt_cloudflare_cookie_store(builder)
 }
 
-/// Builds a raw reqwest client for an auth endpoint without Ody default headers.
-pub(crate) fn build_raw_auth_reqwest_client(
-    endpoint: &str,
-    auth_route_config: Option<&AuthRouteConfig>,
-) -> Result<reqwest::Client, BuildRouteAwareHttpClientError> {
-    build_reqwest_client_for_route(
-        reqwest::Client::builder(),
-        endpoint,
-        ClientRouteClass::Auth,
-        auth_route_config.map(AuthRouteConfig::route_config),
-    )
-}
-
 /// Builds the default Ody reqwest client for an auth endpoint.
 pub(crate) fn build_default_auth_reqwest_client(
     endpoint: &str,

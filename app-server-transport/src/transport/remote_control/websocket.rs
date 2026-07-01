@@ -1988,7 +1988,7 @@ mod tests {
     }
 
     fn remote_control_auth_manager() -> Arc<AuthManager> {
-        auth_manager_from_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        auth_manager_from_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
     }
 
     fn remote_control_url_for_listener(listener: &TcpListener) -> String {

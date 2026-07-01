@@ -1171,8 +1171,12 @@ pub async fn run_main(
             auth_credentials_store_mode: config.cli_auth_credentials_store_mode,
             keyring_backend_kind: config.auth_keyring_backend_kind(),
             forced_login_method: config.forced_login_method,
-            forced_chatgpt_workspace_id: config.forced_chatgpt_workspace_id.clone(),
-            chatgpt_base_url: Some(config.chatgpt_base_url.clone()),
+            // `AuthConfig::forced_chatgpt_workspace_id`/`chatgpt_base_url` are unread by
+            // `enforce_login_restrictions` now that ChatGPT OAuth login and the remote hosted
+            // plugin/Apps catalog have been removed; the corresponding `Config` fields these
+            // used to be sourced from are gone too.
+            forced_chatgpt_workspace_id: None,
+            chatgpt_base_url: None,
             auth_route_config,
         })
         .await
@@ -1440,7 +1444,10 @@ async fn run_ratatui_app(
                 /*enable_ody_api_key_env*/ false,
                 initial_config.cli_auth_credentials_store_mode,
                 initial_config.auth_keyring_backend_kind(),
-                initial_config.chatgpt_base_url.clone(),
+                // `cloud_config_bundle_loader_for_storage` ignores this base-url parameter (it
+                // is a permanent no-op stub since M1.2); the remote hosted plugin/Apps catalog
+                // config field this used to be sourced from has been removed.
+                String::new(),
                 initial_config.auth_route_config(),
             )
             .await;

@@ -22,7 +22,11 @@ pub(crate) async fn chatgpt_get_request_with_timeout<T: DeserializeOwned>(
     path: String,
     timeout: Option<Duration>,
 ) -> anyhow::Result<T> {
-    let chatgpt_base_url = &config.chatgpt_base_url;
+    // The remote hosted plugin/Apps catalog config field this used to be sourced from has been
+    // removed. Every caller of this function requires `uses_ody_backend()` auth below, which
+    // can never be true anymore, so this request path is unreachable in practice; keep the
+    // historical default endpoint here purely so the crate still compiles.
+    let chatgpt_base_url = "https://chatgpt.com/backend-api";
     let auth_manager =
         AuthManager::shared_from_config(config, /*enable_ody_api_key_env*/ false).await;
     let auth = auth_manager

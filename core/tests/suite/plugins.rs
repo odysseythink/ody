@@ -123,7 +123,7 @@ async fn build_analytics_plugin_test_ody(
     let chatgpt_base_url = server.uri();
     let mut builder = test_ody()
         .with_home(ody_home)
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_model("gpt-5.2")
         .with_config(move |config| {
             config.chatgpt_base_url = chatgpt_base_url;
@@ -141,7 +141,7 @@ async fn build_apps_enabled_plugin_test_ody(
 ) -> Result<TestOdy> {
     let mut builder = test_ody()
         .with_home(ody_home)
-        .with_auth(OdyAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(move |config| {
             config
                 .features

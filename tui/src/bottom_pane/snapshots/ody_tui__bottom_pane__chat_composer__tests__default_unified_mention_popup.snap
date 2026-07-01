@@ -10,4 +10,5 @@ expression: terminal.backend()
 "                                                                                                    "
 "                                                                                                    "
 "                                                                                                    "
+"                                                                                                    "
 "  enter insert · esc close · ←/→ switch search modes     [All Results]   Filesystem Only    Plugins "
