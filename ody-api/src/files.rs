@@ -252,20 +252,19 @@ mod tests {
     use wiremock::matchers::path;
 
     #[derive(Clone, Copy)]
-    struct ChatGptTestAuth;
+    struct OdyTestAuth;
 
-    impl AuthProvider for ChatGptTestAuth {
+    impl AuthProvider for OdyTestAuth {
         fn add_auth_headers(&self, headers: &mut reqwest::header::HeaderMap) {
             headers.insert(
                 reqwest::header::AUTHORIZATION,
                 HeaderValue::from_static("Bearer token"),
             );
-            headers.insert("ChatGPT-Account-ID", HeaderValue::from_static("account_id"));
         }
     }
 
-    fn chatgpt_auth() -> ChatGptTestAuth {
-        ChatGptTestAuth
+    fn ody_auth() -> OdyTestAuth {
+        OdyTestAuth
     }
 
     fn base_url_for(server: &MockServer) -> String {
@@ -277,7 +276,6 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/backend-api/files"))
-            .and(header("chatgpt-account-id", "account_id"))
             .and(body_json(serde_json::json!({
                 "file_name": "hello.txt",
                 "file_size": 5,
@@ -323,7 +321,7 @@ mod tests {
             futures::stream::iter([Ok::<_, std::io::Error>(Bytes::from_static(b"hello"))]);
         let uploaded = upload_odysseythink_file(
             &base_url,
-            &chatgpt_auth(),
+            &ody_auth(),
             "hello.txt".to_string(),
             /*file_size_bytes*/ 5,
             contents,

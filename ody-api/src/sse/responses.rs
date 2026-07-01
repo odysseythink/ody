@@ -226,7 +226,7 @@ impl ResponsesStreamEvent {
 
         self.metadata
             .as_ref()
-            .and_then(|metadata| metadata.get("odysseythink_chatgpt_moderation_metadata"))
+            .and_then(|metadata| metadata.get("odysseythink_moderation_metadata"))
             .cloned()
             .map(|metadata| TurnModerationMetadataEvent { metadata })
     }
@@ -1311,7 +1311,7 @@ mod tests {
             json!({
                 "type": "response.metadata",
                 "metadata": {
-                    "odysseythink_chatgpt_moderation_metadata": {
+                    "odysseythink_moderation_metadata": {
                         "presentation": "inline"
                     }
                 }

@@ -105,14 +105,12 @@ impl AuthProvider for NoAuth {
 #[derive(Clone)]
 struct StaticAuth {
     token: String,
-    account_id: String,
 }
 
 impl StaticAuth {
-    fn new(token: &str, account_id: &str) -> Self {
+    fn new(token: &str) -> Self {
         Self {
             token: token.to_string(),
-            account_id: account_id.to_string(),
         }
     }
 }
@@ -122,9 +120,6 @@ impl AuthProvider for StaticAuth {
         let token = &self.token;
         if let Ok(header) = HeaderValue::from_str(&format!("Bearer {token}")) {
             headers.insert(http::header::AUTHORIZATION, header);
-        }
-        if let Ok(header) = HeaderValue::from_str(&self.account_id) {
-            headers.insert("ChatGPT-Account-ID", header);
         }
     }
 }
@@ -353,7 +348,7 @@ async fn responses_client_stream_request_preserves_item_ids() -> Result<()> {
 async fn streaming_client_adds_auth_headers() -> Result<()> {
     let state = RecordingState::default();
     let transport = RecordingTransport::new(state.clone());
-    let auth = Arc::new(StaticAuth::new("secret-token", "acct-1"));
+    let auth = Arc::new(StaticAuth::new("secret-token"));
     let client = ResponsesClient::new(transport, provider("odysseythink"), auth);
 
     let body = serde_json::json!({ "model": "gpt-test" });
@@ -376,10 +371,6 @@ async fn streaming_client_adds_auth_headers() -> Result<()> {
         auth_header.unwrap().to_str().ok(),
         Some("Bearer secret-token")
     );
-
-    let account_header = req.headers.get("ChatGPT-Account-ID");
-    assert!(account_header.is_some(), "missing account header");
-    assert_eq!(account_header.unwrap().to_str().ok(), Some("acct-1"));
 
     let accept_header = req.headers.get(http::header::ACCEPT);
     assert!(accept_header.is_some(), "missing Accept header");

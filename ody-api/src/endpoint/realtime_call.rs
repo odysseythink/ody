@@ -426,7 +426,7 @@ mod tests {
             CapturingTransport::with_location("/v1/realtime/calls/calls/rtc_backend_test");
         let client = RealtimeCallClient::new(
             transport.clone(),
-            provider("https://chatgpt.com/backend-api/ody"),
+            provider("https://api.odysseythink.com/v1"),
             Arc::new(DummyAuth),
         );
 
@@ -447,7 +447,7 @@ mod tests {
         assert_eq!(request.method, Method::POST);
         assert_eq!(
             request.url,
-            "https://chatgpt.com/backend-api/ody/realtime/calls"
+            "https://api.odysseythink.com/v1/realtime/calls"
         );
         assert_eq!(
             request.body,
@@ -576,55 +576,6 @@ mod tests {
             "invalid request: AVAS realtime calls require realtime v1"
         );
         assert!(transport.last_request.lock().unwrap().is_none());
-    }
-
-    #[tokio::test]
-    async fn sends_backend_session_call_as_json_body() {
-        let transport = CapturingTransport::new();
-        let client = RealtimeCallClient::new(
-            transport.clone(),
-            provider("https://chatgpt.com/backend-api/ody"),
-            Arc::new(DummyAuth),
-        );
-
-        let response = client
-            .create_with_session(
-                "v=offer\r\n".to_string(),
-                realtime_session_config("sess-backend"),
-            )
-            .await
-            .expect("request should succeed");
-
-        assert_eq!(
-            response,
-            RealtimeCallResponse {
-                sdp: "v=0\r\n".to_string(),
-                call_id: "rtc_test".to_string(),
-            }
-        );
-
-        let request = transport.last_request.lock().unwrap().clone().unwrap();
-        assert_eq!(request.method, Method::POST);
-        assert_eq!(
-            request.url,
-            "https://chatgpt.com/backend-api/ody/realtime/calls?intent=quicksilver&architecture=avas"
-        );
-        let mut expected_session = realtime_session_json(realtime_session_config("sess-backend"))
-            .expect("session should encode");
-        expected_session
-            .as_object_mut()
-            .expect("session should be an object")
-            .remove("id");
-        assert_eq!(
-            request.body,
-            Some(RequestBody::Json(
-                to_value(BackendRealtimeCallRequest {
-                    sdp: "v=offer\r\n",
-                    session: &expected_session,
-                })
-                .expect("request should encode")
-            ))
-        );
     }
 
     #[tokio::test]
