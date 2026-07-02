@@ -101,7 +101,10 @@ impl OpenAiModelsEndpoint {
 
 impl ModelsEndpointClient for OpenAiModelsEndpoint {
     fn has_command_auth(&self) -> bool {
-        self.provider_info.has_command_auth()
+        // Under API-key-only auth, the odysseythink provider is always considered
+        // authenticated because the API key lives in AuthManager rather than in
+        // provider_info.auth.
+        self.provider_info.has_command_auth() || self.provider_info.requires_odysseythink_auth
     }
 
     fn uses_ody_backend(&self) -> ModelsEndpointFuture<'_, bool> {
@@ -211,6 +214,8 @@ mod tests {
     use std::num::NonZeroU64;
 
     use super::*;
+    use ody_model_provider_info::WireApi;
+    use ody_model_provider_info::create_oss_provider_with_base_url;
     use ody_protocol::config_types::ModelProviderAuthInfo;
 
     fn provider_info_with_command_auth() -> ModelProviderInfo {
@@ -241,9 +246,9 @@ mod tests {
     }
 
     #[test]
-    fn provider_without_command_auth_reports_no_command_auth() {
+    fn oss_provider_without_command_auth_reports_no_command_auth() {
         let endpoint = OpenAiModelsEndpoint::new(
-            ModelProviderInfo::create_odysseythink_provider(/*base_url*/ None),
+            create_oss_provider_with_base_url("http://localhost:11434/v1", WireApi::Responses),
             /*auth_manager*/ None,
         );
 

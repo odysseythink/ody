@@ -74,7 +74,8 @@ struct TestModelsEndpoint {
 impl TestModelsEndpoint {
     fn new(responses: Vec<Vec<ModelInfo>>) -> Arc<Self> {
         Arc::new(Self {
-            has_command_auth: false,
+            // API-key-only auth should always allow model refresh.
+            has_command_auth: true,
             uses_ody_backend: true,
             responses: Mutex::new(responses.into()),
             fetch_count: AtomicUsize::new(0),
