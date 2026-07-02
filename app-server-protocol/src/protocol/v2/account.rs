@@ -24,10 +24,8 @@ pub enum Account {
 }
 
 impl From<ProviderAccount> for Account {
-    fn from(account: ProviderAccount) -> Self {
-        match account {
-            ProviderAccount::ApiKey | ProviderAccount::AmazonBedrock { .. } => Self::ApiKey {},
-        }
+    fn from(_account: ProviderAccount) -> Self {
+        Self::ApiKey {}
     }
 }
 

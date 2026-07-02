@@ -18,7 +18,6 @@ use ody_protocol::account::ProviderAccount;
 use ody_protocol::error::OdyErr;
 use ody_protocol::odysseythink_models::ModelsResponse;
 
-use crate::amazon_bedrock::AmazonBedrockModelProvider;
 use crate::auth::auth_manager_for_provider;
 use crate::auth::resolve_provider_auth;
 use crate::models_endpoint::OpenAiModelsEndpoint;
@@ -169,11 +168,7 @@ pub fn create_model_provider(
     provider_info: ModelProviderInfo,
     auth_manager: Option<Arc<AuthManager>>,
 ) -> SharedModelProvider {
-    if provider_info.is_amazon_bedrock() {
-        Arc::new(AmazonBedrockModelProvider::new(provider_info, auth_manager))
-    } else {
-        Arc::new(ConfiguredModelProvider::new(provider_info, auth_manager))
-    }
+    Arc::new(ConfiguredModelProvider::new(provider_info, auth_manager))
 }
 
 /// Runtime model provider backed by configured `ModelProviderInfo`.
@@ -290,17 +285,10 @@ fn provider_id_for_chat_catalog(info: &ModelProviderInfo) -> String {
 
 #[cfg(test)]
 mod tests {
-    use ody_model_provider_info::ModelProviderAwsAuthInfo;
     use ody_model_provider_info::WireApi;
-    use ody_models_manager::manager::RefreshStrategy;
-    use ody_protocol::odysseythink_models::ModelsResponse;
     use pretty_assertions::assert_eq;
 
     use super::*;
-
-    fn test_ody_home() -> std::path::PathBuf {
-        std::env::temp_dir().join(format!("ody-model-provider-test-{}", std::process::id()))
-    }
 
     fn provider_for(base_url: String) -> ModelProviderInfo {
         ModelProviderInfo {
@@ -310,7 +298,6 @@ mod tests {
             env_key_instructions: None,
             experimental_bearer_token: None,
             auth: None,
-            aws: None,
             wire_api: WireApi::Responses,
             query_params: None,
             http_headers: None,
@@ -361,21 +348,6 @@ mod tests {
                 .expect("runtime base URL should resolve"),
             Some("https://example.test/v1".to_string())
         );
-    }
-
-    #[test]
-    fn create_model_provider_does_not_use_odysseythink_auth_manager_for_amazon_bedrock_provider() {
-        let provider = create_model_provider(
-            ModelProviderInfo::create_amazon_bedrock_provider(Some(ModelProviderAwsAuthInfo {
-                profile: Some("ody-bedrock".to_string()),
-                region: None,
-            })),
-            Some(AuthManager::from_auth_for_testing(OdyAuth::from_api_key(
-                "odysseythink-api-key",
-            ))),
-        );
-
-        assert!(provider.auth_manager().is_none());
     }
 
     #[test]
@@ -432,96 +404,6 @@ mod tests {
                 requires_odysseythink_auth: false,
             }
         );
-    }
-
-    #[test]
-    fn amazon_bedrock_provider_returns_bedrock_account_state() {
-        let provider = create_model_provider(
-            ModelProviderInfo::create_amazon_bedrock_provider(/*aws*/ None),
-            /*auth_manager*/ None,
-        );
-
-        assert_eq!(
-            provider.account_state().unwrap(),
-            ProviderAccountState {
-                account: Some(ProviderAccount::AmazonBedrock {
-                    credential_source:
-                        ody_protocol::account::AmazonBedrockCredentialSource::AwsManaged,
-                }),
-                requires_odysseythink_auth: false,
-            }
-        );
-    }
-
-    #[tokio::test]
-    async fn amazon_bedrock_provider_creates_static_models_manager() {
-        let provider = create_model_provider(
-            ModelProviderInfo::create_amazon_bedrock_provider(/*aws*/ None),
-            /*auth_manager*/ None,
-        );
-        let manager =
-            provider.models_manager(test_ody_home(), /*config_model_catalog*/ None);
-
-        let catalog = manager.raw_model_catalog(RefreshStrategy::Online).await;
-        let model_ids = catalog
-            .models
-            .iter()
-            .map(|model| model.slug.as_str())
-            .collect::<Vec<_>>();
-
-        assert_eq!(
-            model_ids,
-            vec![
-                "odysseythink.gpt-5.5",
-                "odysseythink.gpt-5.4",
-                "odysseythink.gpt-5.6-sol",
-                "odysseythink.gpt-5.6-terra",
-                "odysseythink.gpt-5.6-luna",
-            ]
-        );
-
-        let default_model = manager
-            .list_models(RefreshStrategy::Online)
-            .await
-            .into_iter()
-            .find(|preset| preset.is_default)
-            .expect("Bedrock catalog should have a default model");
-
-        assert_eq!(default_model.model, "odysseythink.gpt-5.5");
-    }
-
-    #[tokio::test]
-    async fn configured_bedrock_catalog_only_allows_default_service_tier() {
-        let configured_model = ody_models_manager::bundled_models_response()
-            .expect("bundled models should parse")
-            .models
-            .into_iter()
-            .find(|model| model.slug == "gpt-5.5")
-            .expect("bundled models should include GPT-5.5");
-        assert!(!configured_model.additional_speed_tiers.is_empty());
-        assert!(!configured_model.service_tiers.is_empty());
-
-        let provider = create_model_provider(
-            ModelProviderInfo::create_amazon_bedrock_provider(/*aws*/ None),
-            /*auth_manager*/ None,
-        );
-        let manager = provider.models_manager(
-            test_ody_home(),
-            Some(ModelsResponse {
-                models: vec![configured_model],
-            }),
-        );
-
-        let catalog = manager.raw_model_catalog(RefreshStrategy::Online).await;
-
-        assert_eq!(catalog.models.len(), 1);
-        assert_eq!(catalog.models[0].slug, "gpt-5.5");
-        assert_eq!(
-            catalog.models[0].additional_speed_tiers,
-            Vec::<String>::new()
-        );
-        assert_eq!(catalog.models[0].service_tiers, Vec::new());
-        assert_eq!(catalog.models[0].default_service_tier, None);
     }
 
     #[tokio::test]

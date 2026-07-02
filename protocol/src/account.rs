@@ -34,17 +34,6 @@ pub enum PlanType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderAccount {
     ApiKey,
-    AmazonBedrock {
-        credential_source: AmazonBedrockCredentialSource,
-    },
-}
-
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(rename_all = "camelCase")]
-pub enum AmazonBedrockCredentialSource {
-    OdyManaged,
-    AwsManaged,
 }
 
 impl PlanType {

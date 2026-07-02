@@ -2493,7 +2493,6 @@ fn provider_reachability_plan(config: &Config) -> ReachabilityPlan {
         &config.model_provider.name,
         config.model_provider.base_url.as_deref(),
         config.model_provider.query_params.as_ref(),
-        config.model_provider.is_amazon_bedrock(),
     )
 }
 
@@ -2504,7 +2503,6 @@ fn default_reachability_plan() -> ReachabilityPlan {
         "OpenAI",
         /*provider_base_url*/ None,
         /*provider_query_params*/ None,
-        /*is_amazon_bedrock*/ false,
     )
 }
 
@@ -2533,14 +2531,13 @@ fn provider_reachability_plan_from_parts(
     provider_name: &str,
     provider_base_url: Option<&str>,
     provider_query_params: Option<&HashMap<String, String>>,
-    is_amazon_bedrock: bool,
 ) -> ReachabilityPlan {
     let provider_route_probe_url = provider_base_url
         .or_else(|| {
             (mode == ProviderAuthReachabilityMode::ApiKey).then_some("https://api.odysseythink.com/v1")
         })
         .and_then(|url| {
-            should_probe_models_route(provider_name, url, is_amazon_bedrock)
+            should_probe_models_route(provider_name, url)
                 .then(|| provider_url_for_path(url, "models", provider_query_params))
         });
     let endpoints = match mode {
@@ -2569,8 +2566,8 @@ fn provider_reachability_plan_from_parts(
     }
 }
 
-fn should_probe_models_route(provider_name: &str, base_url: &str, is_amazon_bedrock: bool) -> bool {
-    !is_amazon_bedrock && !is_azure_responses_provider(provider_name, Some(base_url))
+fn should_probe_models_route(provider_name: &str, base_url: &str) -> bool {
+    !is_azure_responses_provider(provider_name, Some(base_url))
 }
 
 fn provider_url_for_path(
@@ -3463,8 +3460,6 @@ mod tests {
                 "azure",
                 Some("https://example.odysseythink.azure.com/odysseythink/v1"),
                 /*provider_query_params*/ None,
-                /*is_amazon_bedrock*/ false,
-
             ),
             ReachabilityPlan {
                 description: "provider auth".to_string(),
@@ -3489,7 +3484,6 @@ mod tests {
                 "Custom",
                 Some("https://example.com/odysseythink/v1/"),
                 Some(&query_params),
-                /*is_amazon_bedrock*/ false,
             ),
             ReachabilityPlan {
                 description: "provider auth".to_string(),
@@ -3506,20 +3500,6 @@ mod tests {
     }
 
     #[test]
-    fn provider_reachability_skips_route_probe_for_bedrock() {
-        let plan = provider_reachability_plan_from_parts(
-            ProviderAuthReachabilityMode::NotRequired,
-            "amazon-bedrock",
-            "Amazon Bedrock",
-            Some("https://bedrock-runtime.us-east-1.amazonaws.com/odysseythink/v1"),
-            /*provider_query_params*/ None,
-            /*is_amazon_bedrock*/ true,
-        );
-
-        assert_eq!(plan.endpoints[0].route_probe_url, None);
-    }
-
-    #[test]
     fn provider_reachability_api_key_uses_odysseythink_endpoint() {
         let plan = provider_reachability_plan_from_parts(
             ProviderAuthReachabilityMode::ApiKey,
@@ -3527,7 +3507,6 @@ mod tests {
             "OpenAI",
             /*provider_base_url*/ None,
             /*provider_query_params*/ None,
-            /*is_amazon_bedrock*/ false,
         );
 
         assert_eq!(
@@ -3591,7 +3570,6 @@ mod tests {
             "OpenAI",
             Some(&format!("http://{addr}/xxxx")),
             /*provider_query_params*/ None,
-            /*is_amazon_bedrock*/ false,
         );
 
         let check = provider_reachability_check(plan).await;
@@ -3631,7 +3609,6 @@ mod tests {
             "OpenAI",
             Some(&format!("http://{addr}/v1")),
             /*provider_query_params*/ None,
-            /*is_amazon_bedrock*/ false,
         );
 
         let check = provider_reachability_check(plan).await;

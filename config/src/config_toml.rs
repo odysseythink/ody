@@ -28,7 +28,6 @@ use crate::types::Tui;
 use crate::types::UriBasedFileOpener;
 use crate::types::WindowsToml;
 use ody_features::FeaturesToml;
-use ody_model_provider_info::AMAZON_BEDROCK_PROVIDER_ID;
 use ody_model_provider_info::DEEPSEEK_PROVIDER_ID;
 use ody_model_provider_info::GLM_PROVIDER_ID;
 use ody_model_provider_info::KIMI_PROVIDER_ID;
@@ -61,8 +60,7 @@ use serde::Serialize;
 
 use serde_json::Value as JsonValue;
 
-const RESERVED_MODEL_PROVIDER_IDS: [&str; 7] = [
-    AMAZON_BEDROCK_PROVIDER_ID,
+const RESERVED_MODEL_PROVIDER_IDS: [&str; 6] = [
     OPENAI_PROVIDER_ID,
     OLLAMA_OSS_PROVIDER_ID,
     LMSTUDIO_OSS_PROVIDER_ID,
@@ -538,7 +536,6 @@ impl ConfigToml {
                     env_key_instructions: None,
                     experimental_bearer_token: provider.api_key.clone(),
                     auth: None,
-                    aws: None,
                     wire_api,
                     query_params: None,
                     http_headers: Some(provider.custom_headers.clone()),
@@ -972,10 +969,7 @@ pub fn validate_reserved_model_provider_ids(
 ) -> Result<(), String> {
     let mut conflicts = model_providers
         .keys()
-        .filter(|key| {
-            key.as_str() != AMAZON_BEDROCK_PROVIDER_ID
-                && RESERVED_MODEL_PROVIDER_IDS.contains(&key.as_str())
-        })
+        .filter(|key| RESERVED_MODEL_PROVIDER_IDS.contains(&key.as_str()))
         .map(|key| format!("`{key}`"))
         .collect::<Vec<_>>();
     conflicts.sort_unstable();
@@ -995,14 +989,6 @@ pub fn validate_model_providers(
 ) -> Result<(), String> {
     validate_reserved_model_provider_ids(model_providers)?;
     for (key, provider) in model_providers {
-        if key == AMAZON_BEDROCK_PROVIDER_ID {
-            continue;
-        }
-        if provider.aws.is_some() {
-            return Err(format!(
-                "model_providers.{key}: provider aws is only supported for `{AMAZON_BEDROCK_PROVIDER_ID}`"
-            ));
-        }
         if provider.name.trim().is_empty() {
             return Err(format!(
                 "model_providers.{key}: provider name must not be empty"

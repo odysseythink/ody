@@ -540,12 +540,12 @@ fn auto_auth_storage_delete_removes_keyring_and_file() -> anyhow::Result<()> {
 }
 
 #[test]
-fn auth_dot_json_ignores_unknown_legacy_fields_and_bedrock_key() -> anyhow::Result<()> {
+fn auth_dot_json_ignores_unknown_legacy_fields() -> anyhow::Result<()> {
     let ody_home = tempdir()?;
     let auth_file = get_auth_file(ody_home.path());
-    // Legacy auth.json payloads may carry unknown fields such as OAuth tokens or a
-    // Bedrock API key. We should still be able to read the file and the unknown
-    // fields should be ignored.
+    // Legacy auth.json payloads may carry unknown fields such as OAuth tokens.
+    // We should still be able to read the file and the unknown fields should be
+    // ignored.
     std::fs::write(
         &auth_file,
         json!({
@@ -557,11 +557,7 @@ fn auth_dot_json_ignores_unknown_legacy_fields_and_bedrock_key() -> anyhow::Resu
                 "refresh_token": "rt",
                 "account_id": "account-id"
             },
-            "last_refresh": "2024-01-01T00:00:00Z",
-            "bedrock_api_key": {
-                "api_key": "bedrock-key",
-                "region": "us-east-1"
-            }
+            "last_refresh": "2024-01-01T00:00:00Z"
         })
         .to_string(),
     )?;

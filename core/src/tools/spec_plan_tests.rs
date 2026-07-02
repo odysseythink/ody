@@ -6,8 +6,6 @@ use ody_login::AuthManager;
 use ody_login::OdyAuth;
 use ody_mcp::ToolInfo;
 use ody_model_provider::create_model_provider;
-use ody_model_provider_info::AMAZON_BEDROCK_PROVIDER_ID;
-use ody_model_provider_info::ModelProviderInfo;
 use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::dynamic_tools::DynamicToolSpec;
 use ody_protocol::odysseythink_models::ApplyPatchToolType;
@@ -257,15 +255,6 @@ fn use_api_key_auth(turn: &mut TurnContext) {
         turn.config.model_provider.clone(),
         turn.auth_manager.clone(),
     );
-}
-
-fn use_bedrock_provider(turn: &mut TurnContext) {
-    let provider_info = ModelProviderInfo::create_amazon_bedrock_provider(/*aws*/ None);
-    update_config(turn, |config| {
-        config.model_provider_id = AMAZON_BEDROCK_PROVIDER_ID.to_string();
-        config.model_provider = provider_info.clone();
-    });
-    turn.provider = create_model_provider(provider_info, turn.auth_manager.clone());
 }
 
 struct WebRunExtensionTool;
@@ -720,19 +709,6 @@ async fn mcp_and_tool_search_follow_direct_and_deferred_tool_exposure() {
         "list_mcp_resource_templates",
         "read_mcp_resource",
     ]);
-
-    let bedrock_namespace_capability = probe_with(
-        |turn| {
-            turn.model_info.supports_search_tool = true;
-            use_bedrock_provider(turn);
-        },
-        ToolPlanInputs {
-            deferred_mcp_tools: searchable_mcp.deferred_mcp_tools.clone(),
-            ..ToolPlanInputs::default()
-        },
-    )
-    .await;
-    bedrock_namespace_capability.assert_visible_contains(&["tool_search"]);
 
     let enabled = probe_with(
         |turn| {
@@ -1329,30 +1305,6 @@ async fn multi_agent_v2_can_use_configured_tool_namespace() {
 }
 
 #[tokio::test]
-async fn multi_agent_v2_namespace_is_supported_by_bedrock_provider() {
-    let plan = probe(|turn| {
-        set_feature(turn, Feature::MultiAgentV2, /*enabled*/ true);
-        update_config(turn, |config| {
-            config.multi_agent_v2.tool_namespace = Some("agents".to_string());
-        });
-        use_bedrock_provider(turn);
-    })
-    .await;
-
-    plan.assert_visible_contains(&["agents"]);
-    plan.assert_visible_lacks(&["spawn_agent", "send_message", "list_agents"]);
-    assert!(
-        !plan
-            .registered_names
-            .contains(&ToolName::plain("spawn_agent").to_string())
-    );
-    assert!(
-        plan.registered_names
-            .contains(&ToolName::namespaced("agents", "spawn_agent").to_string())
-    );
-}
-
-#[tokio::test]
 async fn code_mode_only_can_expose_namespaced_multi_agent_v2_as_normal_tools() {
     let plan = probe(|turn| {
         set_features(
@@ -1495,10 +1447,4 @@ async fn hosted_tools_follow_provider_auth_model_and_config_gates() {
     .await;
     standalone_web_search.assert_visible_lacks(&["web_search"]);
 
-    let unsupported_provider = probe(|turn| {
-        set_web_search_mode(turn, WebSearchMode::Live);
-        use_bedrock_provider(turn);
-    })
-    .await;
-    unsupported_provider.assert_visible_lacks(&["web_search"]);
 }

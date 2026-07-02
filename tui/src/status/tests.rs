@@ -27,7 +27,6 @@ use ody_app_server_protocol::RateLimitSnapshot;
 use ody_app_server_protocol::RateLimitWindow;
 use ody_app_server_protocol::SpendControlLimitSnapshot;
 use ody_config::LoaderOverrides;
-use ody_model_provider_info::ModelProviderAwsAuthInfo;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_models_manager::test_support::construct_model_info_offline_for_tests;
 use ody_models_manager::test_support::get_model_offline_for_tests;
@@ -631,54 +630,9 @@ async fn status_snapshot_shows_active_user_defined_profile() {
 }
 
 #[tokio::test]
-async fn status_model_provider_uses_bedrock_runtime_base_url_and_omits_usage_link() {
+async fn status_model_provider_omits_usage_link_for_non_odysseythink_proxy() {
     let temp_home = TempDir::new().expect("temp home");
     let mut config = test_config(&temp_home).await;
-    config.model_provider_id = "amazon-bedrock".to_string();
-    config.model_provider =
-        ModelProviderInfo::create_amazon_bedrock_provider(Some(ModelProviderAwsAuthInfo {
-            profile: None,
-            region: Some("eu-west-1".to_string()),
-        }));
-    config.model_provider.base_url =
-        Some("https://bedrock-mantle.us-east-1.api.aws/odysseythink/v1".to_string());
-    let usage = TokenUsage::default();
-    let captured_at = chrono::Local
-        .with_ymd_and_hms(2024, 1, 2, 3, 4, 5)
-        .single()
-        .expect("timestamp");
-    let model_slug = get_model_offline_for_tests(config.model.as_deref());
-    let runtime_base_url = "https://bedrock-mantle.eu-west-1.api.aws/odysseythink/v1";
-
-    let (composite, _handle) = new_status_output_with_rate_limits_handle(
-        &config,
-        Some(runtime_base_url),
-        /*remote_connection*/ None,
-        test_status_account_display().as_ref(),
-        /*token_info*/ None,
-        &usage,
-        &None,
-        /*thread_name*/ None,
-        /*forked_from*/ None,
-        /*rate_limits*/ &[],
-        captured_at,
-        &model_slug,
-        /*collaboration_mode*/ None,
-        /*reasoning_effort_override*/ None,
-        "<none>".to_string(),
-        /*refreshing_rate_limits*/ false,
-    );
-    let rendered = render_lines(&composite.display_lines(/*width*/ 120)).join("\n");
-
-    assert!(
-        rendered.contains(&format!("Amazon Bedrock - {runtime_base_url}")),
-        "expected /status to render runtime Bedrock URL, got: {rendered}"
-    );
-    assert!(
-        !rendered.contains("bedrock-mantle.us-east-1"),
-        "expected /status to ignore configured Bedrock base URL, got: {rendered}"
-    );
-
     config.model_provider_id = "odysseythink-proxy".to_string();
     config.model_provider = ModelProviderInfo {
         name: "OpenAI Proxy".to_string(),
@@ -686,6 +640,12 @@ async fn status_model_provider_uses_bedrock_runtime_base_url_and_omits_usage_lin
         requires_odysseythink_auth: true,
         ..ModelProviderInfo::default()
     };
+    let usage = TokenUsage::default();
+    let captured_at = chrono::Local
+        .with_ymd_and_hms(2024, 1, 2, 3, 4, 5)
+        .single()
+        .expect("timestamp");
+    let model_slug = get_model_offline_for_tests(config.model.as_deref());
     let (composite, _handle) = new_status_output_with_rate_limits_handle(
         &config,
         /*runtime_model_provider_base_url*/ None,
