@@ -1,5 +1,4 @@
 use anyhow::Result;
-use app_test_support::ApiKeyAuthFixture;
 use app_test_support::TestAppServer;
 use app_test_support::create_apply_patch_sse_response;
 use app_test_support::create_fake_rollout;
@@ -12,10 +11,8 @@ use app_test_support::create_shell_command_sse_response;
 use app_test_support::rollout_path;
 use app_test_support::test_absolute_path;
 use app_test_support::to_response;
-use app_test_support::write_api_key_auth;
 use chrono::Utc;
 use ody_app_server_protocol::AskForApproval;
-use ody_app_server_protocol::ClientInfo;
 use ody_app_server_protocol::CommandExecutionApprovalDecision;
 use ody_app_server_protocol::CommandExecutionRequestApprovalResponse;
 use ody_app_server_protocol::FileChangeApprovalDecision;
@@ -23,7 +20,6 @@ use ody_app_server_protocol::FileChangeRequestApprovalResponse;
 use ody_app_server_protocol::ItemStartedNotification;
 use ody_app_server_protocol::JSONRPCError;
 use ody_app_server_protocol::JSONRPCResponse;
-use ody_app_server_protocol::McpToolCallAppContext;
 use ody_app_server_protocol::PatchApplyStatus;
 use ody_app_server_protocol::PatchChangeKind;
 use ody_app_server_protocol::RequestId;
@@ -52,18 +48,13 @@ use ody_app_server_protocol::TurnStartParams;
 use ody_app_server_protocol::TurnStartResponse;
 use ody_app_server_protocol::TurnStatus;
 use ody_app_server_protocol::UserInput;
-use ody_config::types::AuthCredentialsStoreMode;
 use ody_core::ARCHIVED_SESSIONS_SUBDIR;
 use ody_protocol::ThreadId;
 use ody_protocol::config_types::Personality;
-use ody_protocol::mcp::CallToolResult;
 use ody_protocol::models::ContentItem;
 use ody_protocol::models::ResponseItem;
 use ody_protocol::protocol::AgentMessageEvent;
 use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::ImageGenerationEndEvent;
-use ody_protocol::protocol::McpInvocation;
-use ody_protocol::protocol::McpToolCallEndEvent;
 use ody_protocol::protocol::MultiAgentVersion;
 use ody_protocol::protocol::RolloutItem;
 use ody_protocol::protocol::SessionMeta;
@@ -95,17 +86,6 @@ use std::time::Duration;
 use tempfile::TempDir;
 use tokio::time::timeout;
 use uuid::Uuid;
-use wiremock::Mock;
-use wiremock::MockServer;
-use wiremock::ResponseTemplate;
-use wiremock::matchers::method;
-use wiremock::matchers::path;
-
-use super::analytics::assert_basic_thread_initialized_event;
-use super::analytics::mount_analytics_capture;
-use super::analytics::thread_initialized_event;
-use super::analytics::wait_for_analytics_payload;
-use super::analytics::wait_for_goal_event;
 
 #[cfg(windows)]
 const DEFAULT_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(25);
@@ -557,83 +537,6 @@ async fn goal_first_live_thread_appears_in_state_db_thread_list() -> Result<()> 
 }
 
 #[tokio::test]
-async fn thread_resume_tracks_thread_initialized_analytics() -> Result<()> {
-    let server = create_mock_responses_server_repeating_assistant("Done").await;
-
-    let ody_home = TempDir::new()?;
-    create_config_toml_simple(ody_home.path(), &server.uri())?;
-    mount_analytics_capture(&server, ody_home.path()).await?;
-
-    let conversation_id = create_fake_rollout(
-        ody_home.path(),
-        "2025-01-05T12-00-00",
-        "2025-01-05T12:00:00Z",
-        "Saved user message",
-        Some("mock_provider"),
-        /*git_info*/ None,
-    )?;
-    set_thread_source_on_fake_rollout(
-        ody_home.path(),
-        "2025-01-05T12-00-00",
-        &conversation_id,
-        "user",
-    )?;
-
-    let mut mcp = TestAppServer::new_without_managed_config(ody_home.path()).await?;
-    timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
-
-    let resume_id = mcp
-        .send_thread_resume_request(ThreadResumeParams {
-            thread_id: conversation_id,
-            ..Default::default()
-        })
-        .await?;
-    let resume_resp: JSONRPCResponse = timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(resume_id)),
-    )
-    .await??;
-    let ThreadResumeResponse { thread, .. } = to_response::<ThreadResumeResponse>(resume_resp)?;
-    assert!(
-        !thread.session_id.is_empty(),
-        "session id should not be empty"
-    );
-    assert_eq!(thread.thread_source, Some(ThreadSource::User));
-
-    let payload = wait_for_analytics_payload(&server, DEFAULT_READ_TIMEOUT).await?;
-    let event = thread_initialized_event(&payload)?;
-    assert_basic_thread_initialized_event(
-        event,
-        &thread.id,
-        &thread.session_id,
-        "gpt-5.3-ody",
-        "resumed",
-        "user",
-    );
-    assert_eq!(event["event_params"]["thread_source"], "user");
-    Ok(())
-}
-
-fn set_thread_source_on_fake_rollout(
-    ody_home: &std::path::Path,
-    filename_ts: &str,
-    thread_id: &str,
-    thread_source: &str,
-) -> Result<()> {
-    let path = rollout_path(ody_home, filename_ts, thread_id);
-    let contents = std::fs::read_to_string(&path)?;
-    let mut lines = contents.lines();
-    let session_meta = lines
-        .next()
-        .ok_or_else(|| anyhow::anyhow!("fake rollout missing session meta"))?;
-    let mut session_meta: serde_json::Value = serde_json::from_str(session_meta)?;
-    session_meta["payload"]["thread_source"] = serde_json::json!(thread_source);
-    let remaining = lines.collect::<Vec<_>>().join("\n");
-    std::fs::write(&path, format!("{session_meta}\n{remaining}\n"))?;
-    Ok(())
-}
-
-#[tokio::test]
 async fn thread_resume_returns_rollout_history() -> Result<()> {
     let server = create_mock_responses_server_repeating_assistant("Done").await;
     let ody_home = TempDir::new()?;
@@ -704,239 +607,6 @@ async fn thread_resume_returns_rollout_history() -> Result<()> {
         other => panic!("expected user message item, got {other:?}"),
     }
 
-    Ok(())
-}
-
-#[tokio::test]
-async fn thread_resume_redacts_payloads_for_legacy_remote_clients() -> Result<()> {
-    for client_name in ["ody_mobile_remote", "ody_mobile_remote_2"] {
-        let remote_resume = resume_redaction_fixture(Some(client_name)).await?;
-        let remote_turn = remote_resume
-            .thread
-            .turns
-            .first()
-            .expect("remote resume should include a turn");
-        let remote_page_turn = remote_resume
-            .initial_turns_page
-            .as_ref()
-            .expect("remote resume should include the requested initial turns page")
-            .data
-            .first()
-            .expect("remote initial turns page should include a turn");
-        for remote_turn in [remote_turn, remote_page_turn] {
-            let remote_mcp_item = remote_turn
-                .items
-                .iter()
-                .find(|item| matches!(item, ThreadItem::McpToolCall { .. }))
-                .expect("remote resume should include redacted MCP item");
-            let ThreadItem::McpToolCall {
-                arguments,
-                app_context,
-                result,
-                error,
-                ..
-            } = remote_mcp_item
-            else {
-                unreachable!("matched MCP item");
-            };
-            assert_eq!(arguments, &json!("[redacted]"));
-            assert_eq!(
-                app_context,
-                &Some(McpToolCallAppContext {
-                    connector_id: "calendar".to_string(),
-                    link_id: Some("link_calendar".to_string()),
-                    resource_uri: Some("ui://widget/lookup.html".to_string()),
-                })
-            );
-            let result = result.as_ref().expect("redacted MCP result");
-            assert_eq!(
-                result.content,
-                vec![json!({
-                    "type": "text",
-                    "text": "[redacted]",
-                })]
-            );
-            assert_eq!(result.structured_content, None);
-            assert_eq!(result.meta, None);
-            assert_eq!(error, &None);
-            assert!(
-                !remote_turn
-                    .items
-                    .iter()
-                    .any(|item| matches!(item, ThreadItem::ImageGeneration { .. })),
-                "remote resume should drop image generation items for {client_name}"
-            );
-        }
-    }
-
-    let normal_resume = resume_redaction_fixture(Some("some_other_client")).await?;
-    let normal_turn = normal_resume
-        .thread
-        .turns
-        .first()
-        .expect("normal resume should include a turn");
-    let normal_mcp_item = normal_turn
-        .items
-        .iter()
-        .find(|item| matches!(item, ThreadItem::McpToolCall { .. }))
-        .expect("normal resume should include MCP item");
-    let ThreadItem::McpToolCall {
-        arguments,
-        app_context,
-        result,
-        ..
-    } = normal_mcp_item
-    else {
-        unreachable!("matched MCP item");
-    };
-    assert_eq!(arguments, &json!({"secret":"argument"}));
-    assert_eq!(
-        app_context,
-        &Some(McpToolCallAppContext {
-            connector_id: "calendar".to_string(),
-            link_id: Some("link_calendar".to_string()),
-            resource_uri: Some("ui://widget/lookup.html".to_string()),
-        })
-    );
-    let result = result.as_ref().expect("normal MCP result");
-    assert_eq!(
-        result.content,
-        vec![json!({
-            "type": "text",
-            "text": "secret result",
-        })]
-    );
-    assert_eq!(
-        result.structured_content,
-        Some(json!({"secret":"structured"}))
-    );
-    assert_eq!(result.meta, Some(json!({"secret":"meta"})));
-    assert!(
-        normal_turn.items.iter().any(|item| matches!(
-            item,
-            ThreadItem::ImageGeneration {
-                result,
-                revised_prompt,
-                ..
-            } if result == "base64-image-result"
-                && revised_prompt.as_deref() == Some("secret revised prompt")
-        )),
-        "normal resume should keep image generation items"
-    );
-
-    Ok(())
-}
-
-async fn resume_redaction_fixture(client_name: Option<&str>) -> Result<ThreadResumeResponse> {
-    let server = create_mock_responses_server_repeating_assistant("Done").await;
-    let ody_home = TempDir::new()?;
-    create_config_toml(ody_home.path(), &server.uri())?;
-
-    let filename_ts = "2025-01-05T12-00-00";
-    let meta_rfc3339 = "2025-01-05T12:00:00Z";
-    let conversation_id = create_fake_rollout(
-        ody_home.path(),
-        filename_ts,
-        meta_rfc3339,
-        "Saved user message",
-        Some("mock_provider"),
-        /*git_info*/ None,
-    )?;
-    append_resume_redaction_history(
-        ody_home.path(),
-        filename_ts,
-        meta_rfc3339,
-        &conversation_id,
-    )?;
-
-    let mut mcp = TestAppServer::new(ody_home.path()).await?;
-    if let Some(client_name) = client_name {
-        let _ = timeout(
-            DEFAULT_READ_TIMEOUT,
-            mcp.initialize_with_client_info(ClientInfo {
-                name: client_name.to_string(),
-                title: None,
-                version: "0.1.0".to_string(),
-            }),
-        )
-        .await??;
-    } else {
-        timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
-    }
-
-    let resume_id = mcp
-        .send_thread_resume_request(ThreadResumeParams {
-            thread_id: conversation_id,
-            initial_turns_page: Some(ThreadResumeInitialTurnsPageParams {
-                limit: None,
-                sort_direction: None,
-                items_view: Some(TurnItemsView::Full),
-            }),
-            ..Default::default()
-        })
-        .await?;
-    let resume_resp: JSONRPCResponse = timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(resume_id)),
-    )
-    .await??;
-    to_response::<ThreadResumeResponse>(resume_resp)
-}
-
-fn append_resume_redaction_history(
-    ody_home: &Path,
-    filename_ts: &str,
-    meta_rfc3339: &str,
-    conversation_id: &str,
-) -> Result<()> {
-    let rollout_file_path = rollout_path(ody_home, filename_ts, conversation_id);
-    let persisted_rollout = std::fs::read_to_string(&rollout_file_path)?;
-    let appended_rollout = [
-        EventMsg::McpToolCallEnd(McpToolCallEndEvent {
-            call_id: "mcp-1".to_string(),
-            invocation: McpInvocation {
-                server: "docs".to_string(),
-                tool: "lookup".to_string(),
-                arguments: Some(json!({"secret":"argument"})),
-            },
-            connector_id: Some("calendar".to_string()),
-            mcp_app_resource_uri: Some("ui://widget/lookup.html".to_string()),
-            link_id: Some("link_calendar".to_string()),
-            plugin_id: None,
-            duration: Duration::from_millis(8),
-            result: Ok(CallToolResult {
-                content: vec![json!({
-                    "type": "text",
-                    "text": "secret result",
-                })],
-                structured_content: Some(json!({"secret":"structured"})),
-                is_error: Some(false),
-                meta: Some(json!({"secret":"meta"})),
-            }),
-        }),
-        EventMsg::ImageGenerationEnd(ImageGenerationEndEvent {
-            call_id: "ig-1".to_string(),
-            status: "completed".to_string(),
-            revised_prompt: Some("secret revised prompt".to_string()),
-            result: "base64-image-result".to_string(),
-            saved_path: Some(test_absolute_path("/tmp/ig-1.png")),
-        }),
-    ]
-    .into_iter()
-    .map(|payload| {
-        Ok(json!({
-            "timestamp": meta_rfc3339,
-            "type": "event_msg",
-            "payload": serde_json::to_value(payload)?,
-        })
-        .to_string())
-    })
-    .collect::<Result<Vec<_>>>()?
-    .join("\n");
-    std::fs::write(
-        &rollout_file_path,
-        format!("{persisted_rollout}{appended_rollout}\n"),
-    )?;
     Ok(())
 }
 
@@ -1426,200 +1096,6 @@ async fn thread_goal_set_edits_objective_without_resetting_usage() -> Result<()>
     assert_eq!(edit.goal.tokens_used, 50);
     assert_eq!(edit.goal.time_used_seconds, 12);
     assert_eq!(edit.goal.created_at, goal.goal.created_at);
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn thread_goal_lifecycle_emits_analytics_and_clear_deletes_goal() -> Result<()> {
-    let server = create_mock_responses_server_sequence_unchecked(vec![
-        responses::sse(vec![
-            responses::ev_response_created("materialize-thread"),
-            responses::ev_completed("materialize-thread"),
-        ]),
-        responses::sse(vec![
-            responses::ev_response_created("goal-continuation"),
-            responses::ev_completed_with_tokens("goal-continuation", /*total_tokens*/ 200),
-        ]),
-    ])
-    .await;
-    let ody_home = TempDir::new()?;
-    create_config_toml_simple(ody_home.path(), &server.uri())?;
-    let config_path = ody_home.path().join("config.toml");
-    let config = std::fs::read_to_string(&config_path)?;
-    std::fs::write(
-        &config_path,
-        config.replace("personality = true\n", "personality = true\ngoals = true\n"),
-    )?;
-    mount_analytics_capture(&server, ody_home.path()).await?;
-
-    let mut mcp = TestAppServer::new_without_managed_config(ody_home.path()).await?;
-    timeout(DEFAULT_READ_TIMEOUT.saturating_mul(2), mcp.initialize()).await??;
-
-    let start_id = mcp
-        .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.2-ody".to_string()),
-            ..Default::default()
-        })
-        .await?;
-    let start_resp: JSONRPCResponse = timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(start_id)),
-    )
-    .await??;
-    let ThreadStartResponse { thread, .. } = to_response::<ThreadStartResponse>(start_resp)?;
-
-    let turn_id = mcp
-        .send_turn_start_request(TurnStartParams {
-            thread_id: thread.id.clone(),
-            client_user_message_id: None,
-            input: vec![UserInput::Text {
-                text: "materialize this thread".to_string(),
-                text_elements: Vec::new(),
-            }],
-            ..Default::default()
-        })
-        .await?;
-    let _turn_resp: JSONRPCResponse = timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(turn_id)),
-    )
-    .await??;
-    timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_notification_message("turn/completed"),
-    )
-    .await??;
-
-    let goal_id = mcp
-        .send_raw_request(
-            "thread/goal/set",
-            Some(json!({
-                "threadId": thread.id,
-                "objective": "do not serialize this objective",
-                "tokenBudget": 100,
-            })),
-        )
-        .await?;
-    let goal_resp: JSONRPCResponse = timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(goal_id)),
-    )
-    .await??;
-    let _goal: ThreadGoalSetResponse = to_response(goal_resp)?;
-    timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_notification_message("thread/goal/updated"),
-    )
-    .await??;
-
-    let created = wait_for_goal_event(&server, DEFAULT_READ_TIMEOUT, "created", "active").await?;
-    let persisted_goal_id = created["event_params"]["goal_id"]
-        .as_str()
-        .expect("created goal id");
-    assert_eq!(created["event_params"]["thread_id"], thread.id);
-    assert_eq!(created["event_params"]["turn_id"], serde_json::Value::Null);
-    assert_eq!(created["event_params"]["has_token_budget"], true);
-    assert!(created["event_params"]["session_id"].is_string());
-    assert!(created["event_params"]["app_server_client"].is_object());
-    assert!(created["event_params"]["runtime"].is_object());
-    assert!(created["event_params"].get("objective").is_none());
-    assert!(created["event_params"].get("token_budget").is_none());
-
-    let usage = wait_for_goal_event(
-        &server,
-        DEFAULT_READ_TIMEOUT,
-        "usage_accounted",
-        "budget_limited",
-    )
-    .await?;
-    let causal_turn_id = usage["event_params"]["turn_id"]
-        .as_str()
-        .expect("accounted usage turn id");
-    assert_eq!(usage["event_params"]["goal_id"], persisted_goal_id);
-    assert_eq!(usage["event_params"]["cumulative_tokens_accounted"], 200);
-    assert!(
-        usage["event_params"]["cumulative_time_accounted_seconds"]
-            .as_i64()
-            .is_some()
-    );
-
-    let status = wait_for_goal_event(
-        &server,
-        DEFAULT_READ_TIMEOUT,
-        "status_changed",
-        "budget_limited",
-    )
-    .await?;
-    assert_eq!(status["event_params"]["goal_id"], persisted_goal_id);
-    assert_eq!(status["event_params"]["turn_id"], causal_turn_id);
-    assert_eq!(
-        status["event_params"]["cumulative_tokens_accounted"],
-        serde_json::Value::Null
-    );
-    assert_eq!(
-        status["event_params"]["cumulative_time_accounted_seconds"],
-        serde_json::Value::Null
-    );
-
-    let clear_id = mcp
-        .send_raw_request(
-            "thread/goal/clear",
-            Some(json!({
-                "threadId": thread.id,
-            })),
-        )
-        .await?;
-    let clear_resp: JSONRPCResponse = timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(clear_id)),
-    )
-    .await??;
-    let clear: ThreadGoalClearResponse = to_response(clear_resp)?;
-    assert!(clear.cleared);
-
-    timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_notification_message("thread/goal/cleared"),
-    )
-    .await??;
-
-    let cleared =
-        wait_for_goal_event(&server, DEFAULT_READ_TIMEOUT, "cleared", "budget_limited").await?;
-    assert_eq!(cleared["event_params"]["goal_id"], persisted_goal_id);
-    assert_eq!(cleared["event_params"]["turn_id"], serde_json::Value::Null);
-
-    let get_id = mcp
-        .send_raw_request(
-            "thread/goal/get",
-            Some(json!({
-                "threadId": thread.id,
-            })),
-        )
-        .await?;
-    let get_resp: JSONRPCResponse = timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(get_id)),
-    )
-    .await??;
-    let get: ody_app_server_protocol::ThreadGoalGetResponse = to_response(get_resp)?;
-    assert_eq!(None, get.goal);
-
-    let clear_again_id = mcp
-        .send_raw_request(
-            "thread/goal/clear",
-            Some(json!({
-                "threadId": thread.id,
-            })),
-        )
-        .await?;
-    let clear_again_resp: JSONRPCResponse = timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(clear_again_id)),
-    )
-    .await??;
-    let clear_again: ThreadGoalClearResponse = to_response(clear_again_resp)?;
-    assert!(!clear_again.cleared);
 
     Ok(())
 }
@@ -3402,85 +2878,6 @@ async fn thread_resume_fails_when_required_mcp_server_fails_to_initialize() -> R
         err.error.message.contains("required_broken"),
         "unexpected error message: {}",
         err.error.message
-    );
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn thread_resume_surfaces_cloud_config_bundle_load_errors() -> Result<()> {
-    let server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/backend-api/wham/config/bundle"))
-        .respond_with(
-            ResponseTemplate::new(401)
-                .insert_header("content-type", "text/html")
-                .set_body_string("<html>nope</html>"),
-        )
-        .mount(&server)
-        .await;
-    Mock::given(method("POST"))
-        .and(path("/oauth/token"))
-        .respond_with(ResponseTemplate::new(401).set_body_json(json!({
-            "error": { "code": "refresh_token_invalidated" }
-        })))
-        .mount(&server)
-        .await;
-
-    let ody_home = TempDir::new()?;
-    let model_server = create_mock_responses_server_repeating_assistant("Done").await;
-    create_config_toml_simple(ody_home.path(), &model_server.uri())?;
-    write_api_key_auth(
-        ody_home.path(),
-        ApiKeyAuthFixture::new("api-key")
-            .refresh_token("stale-refresh-token")
-            .plan_type("business").account_id("account-123"),
-        AuthCredentialsStoreMode::File,
-    )?;
-    let conversation_id = create_fake_rollout_with_text_elements(
-        ody_home.path(),
-        "2025-01-05T12-00-00",
-        "2025-01-05T12:00:00Z",
-        "Saved user message",
-        Vec::new(),
-        Some("mock_provider"),
-        /*git_info*/ None,
-    )?;
-    let mut mcp = TestAppServer::new_with_env(
-        ody_home.path(),
-        &[
-            ("OPENAI_API_KEY", None),
-        ],
-    )
-    .await?;
-    timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
-
-    let resume_id = mcp
-        .send_thread_resume_request(ThreadResumeParams {
-            thread_id: conversation_id,
-            ..Default::default()
-        })
-        .await?;
-    let err: JSONRPCError = timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_error_message(RequestId::Integer(resume_id)),
-    )
-    .await??;
-
-    assert!(
-        err.error.message.contains("failed to load configuration"),
-        "unexpected error message: {}",
-        err.error.message
-    );
-    assert_eq!(
-        err.error.data,
-        Some(json!({
-            "reason": "cloudConfigBundle",
-            "errorCode": "Auth",
-            "action": "relogin",
-            "statusCode": 401,
-            "detail": "Your access token could not be refreshed because your refresh token was revoked. Please log out and sign in again.",
-        }))
     );
 
     Ok(())

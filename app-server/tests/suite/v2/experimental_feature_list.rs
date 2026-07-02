@@ -102,8 +102,7 @@ async fn experimental_feature_list_returns_feature_metadata_with_stage() -> Resu
 }
 
 #[tokio::test]
-async fn experimental_feature_list_marks_apps_and_plugins_disabled_by_workspace_policy()
--> Result<()> {
+async fn experimental_feature_list_ignores_remote_workspace_policy() -> Result<()> {
     let ody_home = TempDir::new()?;
     let server = MockServer::start().await;
     std::fs::write(
@@ -149,8 +148,9 @@ async fn experimental_feature_list_marks_apps_and_plugins_disabled_by_workspace_
         .iter()
         .find(|feature| feature.name == "plugins")
         .expect("plugins feature should be present");
-    assert!(!apps.enabled);
-    assert!(!plugins.enabled);
+    // Remote workspace settings are no longer consulted; feature enablement is local-only.
+    assert!(apps.enabled);
+    assert!(plugins.enabled);
     assert!(apps.default_enabled);
     assert!(plugins.default_enabled);
     Ok(())

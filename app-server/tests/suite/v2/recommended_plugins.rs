@@ -9,45 +9,17 @@ use ody_app_server_protocol::ThreadStartParams;
 use ody_app_server_protocol::ThreadStartResponse;
 use ody_app_server_protocol::TurnStartParams;
 use ody_app_server_protocol::UserInput;
-use core_test_support::apps_test_server::AppsTestServer;
 use core_test_support::responses;
 use serde_json::Value;
-use serde_json::json;
 use std::time::Duration;
 use tempfile::TempDir;
 use tokio::time::timeout;
-use wiremock::Mock;
-use wiremock::ResponseTemplate;
-use wiremock::matchers::method;
-use wiremock::matchers::path;
-use wiremock::matchers::query_param;
 
 const DEFAULT_READ_TIMEOUT: Duration = Duration::from_secs(20);
 
 #[tokio::test]
-async fn first_turn_after_external_login_waits_for_recommended_plugins() -> Result<()> {
+async fn first_turn_after_external_login_does_not_inject_recommended_plugins() -> Result<()> {
     let server = responses::start_mock_server().await;
-    let apps_server = AppsTestServer::mount(&server).await?;
-    Mock::given(method("GET"))
-        .and(path("/ps/plugins/suggested"))
-        .and(query_param("scope", "GLOBAL"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_delay(Duration::from_millis(250))
-                .set_body_json(json!({
-                    "enabled": true,
-                    "plugins": [{
-                        "id": "plugin_github",
-                        "name": "github",
-                        "status": "ENABLED",
-                        "installation_policy": "AVAILABLE",
-                        "release": {"display_name": "GitHub"}
-                    }]
-                })),
-        )
-        .expect(1)
-        .mount(&server)
-        .await;
     let response = responses::sse(vec![
         responses::ev_response_created("resp-1"),
         responses::ev_assistant_message("msg-1", "done"),
@@ -132,8 +104,10 @@ async fn first_turn_after_external_login_waits_for_recommended_plugins() -> Resu
         })
         .expect("turn request");
     let contextual_user_message = request.message_input_texts("user").join("\n");
-    assert!(contextual_user_message.contains("<recommended_plugins>"));
-    assert!(contextual_user_message.contains("- GitHub (github@odysseythink-curated-remote)"));
+    assert!(
+        !contextual_user_message.contains("<recommended_plugins>"),
+        "recommended plugins should not be injected after remote catalog removal"
+    );
     let body = request.body_json();
     let tool_names = body
         .get("tools")
@@ -142,7 +116,9 @@ async fn first_turn_after_external_login_waits_for_recommended_plugins() -> Resu
         .flatten()
         .filter_map(|tool| tool.get("name").and_then(Value::as_str))
         .collect::<Vec<_>>();
-    assert!(tool_names.contains(&"request_plugin_install"));
-    assert!(!tool_names.contains(&"list_available_plugins_to_install"));
+    assert!(
+        !tool_names.contains(&"request_plugin_install"),
+        "request_plugin_install should not be present without remote recommended plugins"
+    );
     Ok(())
 }
