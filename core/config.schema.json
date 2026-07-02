@@ -701,9 +701,6 @@
             "unified_exec_zsh_fork": {
               "type": "boolean"
             },
-            "use_agent_identity": {
-              "type": "boolean"
-            },
             "use_legacy_landlock": {
               "type": "boolean"
             },
@@ -1627,7 +1624,7 @@
         },
         "requires_odysseythink_auth": {
           "default": false,
-          "description": "Does this provider require an OpenAI API Key or ChatGPT login token? If true, user is presented with login screen on first run, and login preference and token/key are stored in auth.json. If false (which is the default), login screen is skipped, and API key (if needed) comes from the \"env_key\" environment variable.",
+          "description": "Does this provider require an API key? If true, user is presented with login screen on first run, and login preference and token/key are stored in auth.json. If false (which is the default), login screen is skipped, and API key (if needed) comes from the \"env_key\" environment variable.",
           "type": "boolean"
         },
         "stream_idle_timeout_ms": {
@@ -5069,9 +5066,6 @@
           "type": "boolean"
         },
         "unified_exec_zsh_fork": {
-          "type": "boolean"
-        },
-        "use_agent_identity": {
           "type": "boolean"
         },
         "use_legacy_landlock": {
