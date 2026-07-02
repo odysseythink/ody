@@ -1,32 +1,18 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use anyhow::bail;
-use app_test_support::ApiKeyAuthFixture;
-use app_test_support::DEFAULT_CLIENT_NAME;
 use app_test_support::TestAppServer;
-use app_test_support::start_analytics_events_server;
 use app_test_support::to_response;
-use app_test_support::write_api_key_auth;
 use ody_app_server_protocol::JSONRPCResponse;
 use ody_app_server_protocol::PluginUninstallParams;
 use ody_app_server_protocol::PluginUninstallResponse;
 use ody_app_server_protocol::RequestId;
-use ody_config::types::AuthCredentialsStoreMode;
 use pretty_assertions::assert_eq;
-use serde_json::json;
 use tempfile::TempDir;
 use tokio::time::timeout;
-use wiremock::Mock;
-use wiremock::MockServer;
-use wiremock::ResponseTemplate;
-use wiremock::matchers::header;
-use wiremock::matchers::method;
-use wiremock::matchers::path;
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 const REMOTE_PLUGIN_ID: &str = "plugins~Plugin_linear";
-const WORKSPACE_REMOTE_PLUGIN_ID: &str = "plugins_69f27c3e67848191a45cbaa5f2adb39d";
 
 #[tokio::test]
 async fn plugin_uninstall_removes_plugin_cache_and_config_entry() -> Result<()> {
@@ -80,78 +66,7 @@ enabled = true
 }
 
 #[tokio::test]
-async fn plugin_uninstall_tracks_analytics_event() -> Result<()> {
-    let analytics_server = start_analytics_events_server().await?;
-    let ody_home = TempDir::new()?;
-    write_installed_plugin(&ody_home, "debug", "sample-plugin")?;
-    std::fs::write(
-        ody_home.path().join("config.toml"),
-        format!(
-            "legacy_base_url = \"{}\"\n\n[features]\nplugins = true\n\n[plugins.\"sample-plugin@debug\"]\nenabled = true\n",
-            analytics_server.uri()
-        ),
-    )?;
-    write_api_key_auth(
-        ody_home.path(),
-        ApiKeyAuthFixture::new("api-key")
-            .account_id("account-123"),
-        AuthCredentialsStoreMode::File,
-    )?;
-
-    let mut mcp = TestAppServer::new(ody_home.path()).await?;
-    timeout(DEFAULT_TIMEOUT, mcp.initialize()).await??;
-
-    let request_id = mcp
-        .send_plugin_uninstall_request(PluginUninstallParams {
-            plugin_id: "sample-plugin@debug".to_string(),
-        })
-        .await?;
-    let response: JSONRPCResponse = timeout(
-        DEFAULT_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(request_id)),
-    )
-    .await??;
-    let response: PluginUninstallResponse = to_response(response)?;
-    assert_eq!(response, PluginUninstallResponse {});
-
-    let payload = timeout(DEFAULT_TIMEOUT, async {
-        loop {
-            let Some(requests) = analytics_server.received_requests().await else {
-                tokio::time::sleep(Duration::from_millis(25)).await;
-                continue;
-            };
-            if let Some(request) = requests.iter().find(|request| {
-                request.method == "POST" && request.url.path() == "/ody/analytics-events/events"
-            }) {
-                break request.body.clone();
-            }
-            tokio::time::sleep(Duration::from_millis(25)).await;
-        }
-    })
-    .await?;
-    let payload: serde_json::Value = serde_json::from_slice(&payload).expect("analytics payload");
-    assert_eq!(
-        payload,
-        json!({
-            "events": [{
-                "event_type": "ody_plugin_uninstalled",
-                "event_params": {
-                    "plugin_id": "sample-plugin@debug",
-                    "plugin_name": "sample-plugin",
-                    "marketplace_name": "debug",
-                    "has_skills": false,
-                    "mcp_server_count": 0,
-                    "connector_ids": [],
-                    "product_client_id": DEFAULT_CLIENT_NAME,
-                }
-            }]
-        })
-    );
-    Ok(())
-}
-
-#[tokio::test]
-async fn plugin_uninstall_rejects_remote_plugin_when_plugins_are_disabled() -> Result<()> {
+async fn plugin_uninstall_rejects_remote_plugin_id() -> Result<()> {
     let ody_home = TempDir::new()?;
     std::fs::write(
         ody_home.path().join("config.toml"),
@@ -175,246 +90,16 @@ plugins = false
     .await??;
 
     assert_eq!(err.error.code, -32600);
-    assert!(
-        err.error
-            .message
-            .contains("remote plugin uninstall is not enabled")
+    assert_eq!(
+        err.error.message,
+        "plugin/uninstall by remote plugin id is no longer supported"
     );
     Ok(())
 }
 
 #[tokio::test]
-async fn plugin_uninstall_writes_remote_plugin_to_cloud_when_remote_plugin_enabled() -> Result<()> {
+async fn plugin_uninstall_rejects_remote_plugin_id_without_network_call() -> Result<()> {
     let ody_home = TempDir::new()?;
-    let server = MockServer::start().await;
-    write_remote_plugin_catalog_config(
-        ody_home.path(),
-        &format!("{}/backend-api/", server.uri()),
-    )?;
-    write_api_key_auth(
-        ody_home.path(),
-        ApiKeyAuthFixture::new("api-key")
-            .account_id("account-123"),
-        AuthCredentialsStoreMode::File,
-    )?;
-
-    mount_remote_plugin_detail(&server, REMOTE_PLUGIN_ID, "1.0.0", "GLOBAL").await;
-
-    Mock::given(method("POST"))
-        .and(path(format!(
-            "/backend-api/ps/plugins/{REMOTE_PLUGIN_ID}/uninstall"
-        )))
-        .and(header("authorization", "Bearer api-key-token"))
-        .and(header("x-account-id", "account-123"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_string(format!(r#"{{"id":"{REMOTE_PLUGIN_ID}","enabled":false}}"#)),
-        )
-        .mount(&server)
-        .await;
-
-    let remote_plugin_cache_root = ody_home
-        .path()
-        .join("plugins/cache/odysseythink-curated-remote/linear");
-    std::fs::create_dir_all(remote_plugin_cache_root.join("1.0.0/.ody-plugin"))?;
-    std::fs::write(
-        remote_plugin_cache_root.join("1.0.0/.ody-plugin/plugin.json"),
-        r#"{"name":"linear","version":"1.0.0"}"#,
-    )?;
-    let legacy_remote_plugin_cache_root = ody_home.path().join(format!(
-        "plugins/cache/odysseythink-curated-remote/{REMOTE_PLUGIN_ID}"
-    ));
-    std::fs::create_dir_all(legacy_remote_plugin_cache_root.join("local/.ody-plugin"))?;
-
-    let mut mcp = TestAppServer::new(ody_home.path()).await?;
-    timeout(DEFAULT_TIMEOUT, mcp.initialize()).await??;
-
-    let request_id = mcp
-        .send_plugin_uninstall_request(PluginUninstallParams {
-            plugin_id: REMOTE_PLUGIN_ID.to_string(),
-        })
-        .await?;
-    let response: JSONRPCResponse = timeout(
-        DEFAULT_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(request_id)),
-    )
-    .await??;
-    let response: PluginUninstallResponse = to_response(response)?;
-
-    assert_eq!(response, PluginUninstallResponse {});
-    wait_for_remote_plugin_request_count(
-        &server,
-        "POST",
-        &format!("/ps/plugins/{REMOTE_PLUGIN_ID}/uninstall"),
-        /*expected_count*/ 1,
-    )
-    .await?;
-    assert!(!remote_plugin_cache_root.exists());
-    assert!(!legacy_remote_plugin_cache_root.exists());
-    Ok(())
-}
-
-#[tokio::test]
-async fn plugin_uninstall_uses_detail_scope_for_cache_namespace() -> Result<()> {
-    let ody_home = TempDir::new()?;
-    let server = MockServer::start().await;
-    write_remote_plugin_catalog_config(
-        ody_home.path(),
-        &format!("{}/backend-api/", server.uri()),
-    )?;
-    write_api_key_auth(
-        ody_home.path(),
-        ApiKeyAuthFixture::new("api-key")
-            .account_id("account-123"),
-        AuthCredentialsStoreMode::File,
-    )?;
-    mount_remote_plugin_detail(&server, REMOTE_PLUGIN_ID, "1.0.0", "WORKSPACE").await;
-
-    Mock::given(method("POST"))
-        .and(path(format!(
-            "/backend-api/ps/plugins/{REMOTE_PLUGIN_ID}/uninstall"
-        )))
-        .and(header("authorization", "Bearer api-key-token"))
-        .and(header("x-account-id", "account-123"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_string(format!(r#"{{"id":"{REMOTE_PLUGIN_ID}","enabled":false}}"#)),
-        )
-        .mount(&server)
-        .await;
-
-    let workspace_cache_root = ody_home
-        .path()
-        .join("plugins/cache/workspace-directory/linear");
-    std::fs::create_dir_all(workspace_cache_root.join("1.0.0/.ody-plugin"))?;
-    std::fs::write(
-        workspace_cache_root.join("1.0.0/.ody-plugin/plugin.json"),
-        r#"{"name":"linear","version":"1.0.0"}"#,
-    )?;
-    let global_cache_root = ody_home
-        .path()
-        .join("plugins/cache/odysseythink-curated-remote/linear");
-    std::fs::create_dir_all(global_cache_root.join("1.0.0/.ody-plugin"))?;
-
-    let mut mcp = TestAppServer::new(ody_home.path()).await?;
-    timeout(DEFAULT_TIMEOUT, mcp.initialize()).await??;
-
-    let request_id = mcp
-        .send_plugin_uninstall_request(PluginUninstallParams {
-            plugin_id: REMOTE_PLUGIN_ID.to_string(),
-        })
-        .await?;
-    let response: JSONRPCResponse = timeout(
-        DEFAULT_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(request_id)),
-    )
-    .await??;
-    let response: PluginUninstallResponse = to_response(response)?;
-
-    assert_eq!(response, PluginUninstallResponse {});
-    wait_for_remote_plugin_request_count(
-        &server,
-        "POST",
-        &format!("/ps/plugins/{REMOTE_PLUGIN_ID}/uninstall"),
-        /*expected_count*/ 1,
-    )
-    .await?;
-    assert!(!workspace_cache_root.exists());
-    assert!(global_cache_root.exists());
-    Ok(())
-}
-
-#[tokio::test]
-async fn plugin_uninstall_accepts_workspace_remote_plugin_id_shape() -> Result<()> {
-    let ody_home = TempDir::new()?;
-    let server = MockServer::start().await;
-    write_remote_plugin_catalog_config(
-        ody_home.path(),
-        &format!("{}/backend-api/", server.uri()),
-    )?;
-    write_api_key_auth(
-        ody_home.path(),
-        ApiKeyAuthFixture::new("api-key")
-            .account_id("account-123"),
-        AuthCredentialsStoreMode::File,
-    )?;
-    mount_remote_plugin_detail_with_name(
-        &server,
-        WORKSPACE_REMOTE_PLUGIN_ID,
-        "skill-improver",
-        "1.0.0",
-        "WORKSPACE",
-    )
-    .await;
-
-    Mock::given(method("POST"))
-        .and(path(format!(
-            "/backend-api/ps/plugins/{WORKSPACE_REMOTE_PLUGIN_ID}/uninstall"
-        )))
-        .and(header("authorization", "Bearer api-key-token"))
-        .and(header("x-account-id", "account-123"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(format!(
-            r#"{{"id":"{WORKSPACE_REMOTE_PLUGIN_ID}","enabled":false}}"#
-        )))
-        .mount(&server)
-        .await;
-
-    let remote_plugin_cache_root = ody_home
-        .path()
-        .join("plugins/cache/workspace-directory/skill-improver");
-    std::fs::create_dir_all(remote_plugin_cache_root.join("1.0.0/.ody-plugin"))?;
-    std::fs::write(
-        remote_plugin_cache_root.join("1.0.0/.ody-plugin/plugin.json"),
-        r#"{"name":"skill-improver","version":"1.0.0"}"#,
-    )?;
-
-    let mut mcp = TestAppServer::new(ody_home.path()).await?;
-    timeout(DEFAULT_TIMEOUT, mcp.initialize()).await??;
-
-    let request_id = mcp
-        .send_plugin_uninstall_request(PluginUninstallParams {
-            plugin_id: WORKSPACE_REMOTE_PLUGIN_ID.to_string(),
-        })
-        .await?;
-    let response: JSONRPCResponse = timeout(
-        DEFAULT_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(request_id)),
-    )
-    .await??;
-    let response: PluginUninstallResponse = to_response(response)?;
-
-    assert_eq!(response, PluginUninstallResponse {});
-    wait_for_remote_plugin_request_count(
-        &server,
-        "POST",
-        &format!("/ps/plugins/{WORKSPACE_REMOTE_PLUGIN_ID}/uninstall"),
-        /*expected_count*/ 1,
-    )
-    .await?;
-    assert!(!remote_plugin_cache_root.exists());
-    Ok(())
-}
-
-#[tokio::test]
-async fn plugin_uninstall_rejects_before_post_when_remote_detail_fetch_fails() -> Result<()> {
-    let ody_home = TempDir::new()?;
-    let server = MockServer::start().await;
-    write_remote_plugin_catalog_config(
-        ody_home.path(),
-        &format!("{}/backend-api/", server.uri()),
-    )?;
-    write_api_key_auth(
-        ody_home.path(),
-        ApiKeyAuthFixture::new("api-key")
-            .account_id("account-123"),
-        AuthCredentialsStoreMode::File,
-    )?;
-
-    let legacy_remote_plugin_cache_root = ody_home.path().join(format!(
-        "plugins/cache/odysseythink-curated-remote/{REMOTE_PLUGIN_ID}"
-    ));
-    std::fs::create_dir_all(legacy_remote_plugin_cache_root.join("local/.ody-plugin"))?;
-
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
     timeout(DEFAULT_TIMEOUT, mcp.initialize()).await??;
 
@@ -430,33 +115,16 @@ async fn plugin_uninstall_rejects_before_post_when_remote_detail_fetch_fails() -
     .await??;
 
     assert_eq!(err.error.code, -32600);
-    assert!(err.error.message.contains("remote plugin catalog request"));
-    wait_for_remote_plugin_request_count(
-        &server,
-        "GET",
-        &format!("/ps/plugins/{REMOTE_PLUGIN_ID}"),
-        /*expected_count*/ 1,
-    )
-    .await?;
-    wait_for_remote_plugin_request_count(
-        &server,
-        "POST",
-        &format!("/ps/plugins/{REMOTE_PLUGIN_ID}/uninstall"),
-        /*expected_count*/ 0,
-    )
-    .await?;
-    assert!(legacy_remote_plugin_cache_root.exists());
+    assert_eq!(
+        err.error.message,
+        "plugin/uninstall by remote plugin id is no longer supported"
+    );
     Ok(())
 }
 
 #[tokio::test]
 async fn plugin_uninstall_rejects_remote_plugin_id_with_spaces_before_network_call() -> Result<()> {
     let ody_home = TempDir::new()?;
-    let server = MockServer::start().await;
-    write_remote_plugin_catalog_config(
-        ody_home.path(),
-        &format!("{}/backend-api/", server.uri()),
-    )?;
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
     timeout(DEFAULT_TIMEOUT, mcp.initialize()).await??;
 
@@ -474,24 +142,12 @@ async fn plugin_uninstall_rejects_remote_plugin_id_with_spaces_before_network_ca
 
     assert_eq!(err.error.code, -32600);
     assert!(err.error.message.contains("invalid remote plugin id"));
-    wait_for_remote_plugin_request_count(
-        &server,
-        "POST",
-        "/ps/plugins/sample plugin/uninstall",
-        /*expected_count*/ 0,
-    )
-    .await?;
     Ok(())
 }
 
 #[tokio::test]
 async fn plugin_uninstall_rejects_invalid_remote_plugin_id_before_network_call() -> Result<()> {
     let ody_home = TempDir::new()?;
-    let server = MockServer::start().await;
-    write_remote_plugin_catalog_config(
-        ody_home.path(),
-        &format!("{}/backend-api/", server.uri()),
-    )?;
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
     timeout(DEFAULT_TIMEOUT, mcp.initialize()).await??;
 
@@ -509,24 +165,12 @@ async fn plugin_uninstall_rejects_invalid_remote_plugin_id_before_network_call()
 
     assert_eq!(err.error.code, -32600);
     assert!(err.error.message.contains("invalid remote plugin id"));
-    wait_for_remote_plugin_request_count(
-        &server,
-        "POST",
-        "/ps/plugins/linear/../../oops/uninstall",
-        /*expected_count*/ 0,
-    )
-    .await?;
     Ok(())
 }
 
 #[tokio::test]
 async fn plugin_uninstall_rejects_empty_remote_plugin_id() -> Result<()> {
     let ody_home = TempDir::new()?;
-    let server = MockServer::start().await;
-    write_remote_plugin_catalog_config(
-        ody_home.path(),
-        &format!("{}/backend-api/", server.uri()),
-    )?;
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
     timeout(DEFAULT_TIMEOUT, mcp.initialize()).await??;
 
@@ -563,116 +207,5 @@ fn write_installed_plugin(
         plugin_root.join("plugin.json"),
         format!(r#"{{"name":"{plugin_name}"}}"#),
     )?;
-    Ok(())
-}
-
-fn write_remote_plugin_catalog_config(
-    ody_home: &std::path::Path,
-    base_url: &str,
-) -> std::io::Result<()> {
-    std::fs::write(
-        ody_home.join("config.toml"),
-        format!(
-            r#"
-legacy_base_url = "{base_url}"
-
-[features]
-plugins = true
-remote_plugin = true
-"#
-        ),
-    )
-}
-
-async fn mount_remote_plugin_detail(
-    server: &MockServer,
-    remote_plugin_id: &str,
-    release_version: &str,
-    scope: &str,
-) {
-    mount_remote_plugin_detail_with_name(
-        server,
-        remote_plugin_id,
-        "linear",
-        release_version,
-        scope,
-    )
-    .await;
-}
-
-async fn mount_remote_plugin_detail_with_name(
-    server: &MockServer,
-    remote_plugin_id: &str,
-    plugin_name: &str,
-    release_version: &str,
-    scope: &str,
-) {
-    let discoverability = if scope == "WORKSPACE" {
-        r#"
-  "discoverability": "LISTED","#
-    } else {
-        ""
-    };
-    let detail_body = format!(
-        r#"{{
-  "id": "{remote_plugin_id}",
-  "name": "{plugin_name}",
-  "scope": "{scope}",{discoverability}
-  "installation_policy": "AVAILABLE",
-  "authentication_policy": "ON_USE",
-  "release": {{
-    "version": "{release_version}",
-    "display_name": "Linear",
-    "description": "Track work in Linear",
-    "app_ids": [],
-    "interface": {{
-      "short_description": "Plan and track work"
-    }},
-    "skills": []
-  }}
-}}"#
-    );
-
-    Mock::given(method("GET"))
-        .and(path(format!("/backend-api/ps/plugins/{remote_plugin_id}")))
-        .and(header("authorization", "Bearer api-key-token"))
-        .and(header("x-account-id", "account-123"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(detail_body))
-        .mount(server)
-        .await;
-}
-
-async fn wait_for_remote_plugin_request_count(
-    server: &MockServer,
-    method_name: &str,
-    path_suffix: &str,
-    expected_count: usize,
-) -> Result<()> {
-    timeout(DEFAULT_TIMEOUT, async {
-        loop {
-            let Some(requests) = server.received_requests().await else {
-                if expected_count == 0 {
-                    return Ok::<(), anyhow::Error>(());
-                }
-                bail!("wiremock did not record requests");
-            };
-            let request_count = requests
-                .iter()
-                .filter(|request| {
-                    request.method == method_name && request.url.path().ends_with(path_suffix)
-                })
-                .count();
-            if request_count == expected_count {
-                return Ok::<(), anyhow::Error>(());
-            }
-            if request_count > expected_count {
-                bail!(
-                    "expected exactly {expected_count} {method_name} {path_suffix} requests, got {request_count}"
-                );
-            }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    })
-    .await??;
     Ok(())
 }
