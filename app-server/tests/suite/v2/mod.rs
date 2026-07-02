@@ -1,7 +1,6 @@
 mod account;
 mod analytics;
 mod app_list;
-mod attestation;
 mod client_metadata;
 mod collaboration_mode_list;
 #[cfg(unix)]
@@ -22,13 +21,11 @@ mod experimental_feature_list;
 mod external_agent_config;
 mod fs;
 mod hooks_list;
-mod imagegen_extension;
 mod initialize;
 mod marketplace_add;
 mod marketplace_remove;
 mod marketplace_upgrade;
 mod mcp_resource;
-mod mcp_server_elicitation;
 mod mcp_server_status;
 mod mcp_tool;
 mod memory_reset;

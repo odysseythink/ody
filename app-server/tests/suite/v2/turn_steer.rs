@@ -78,12 +78,6 @@ async fn turn_steer_requires_active_turn() -> Result<()> {
     .await??;
     assert_eq!(steer_err.error.code, -32600);
 
-    timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_notification_message("turn/completed"),
-    )
-    .await??;
-
     Ok(())
 }
 

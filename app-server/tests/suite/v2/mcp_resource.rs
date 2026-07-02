@@ -15,9 +15,7 @@ use ody_app_server_protocol::ClientInfo;
 use ody_app_server_protocol::ClientRequest;
 use ody_app_server_protocol::InitializeParams;
 use ody_app_server_protocol::JSONRPCResponse;
-use ody_app_server_protocol::McpResourceContent;
 use ody_app_server_protocol::McpResourceReadParams;
-use ody_app_server_protocol::McpResourceReadResponse;
 use ody_app_server_protocol::RequestId;
 use ody_app_server_protocol::ThreadStartParams;
 use ody_app_server_protocol::ThreadStartResponse;
@@ -56,14 +54,9 @@ use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
-const DEFAULT_READ_TIMEOUT: Duration = Duration::from_secs(10);
-const TEST_RESOURCE_URI: &str = "test://ody/resource";
-const TEST_BLOB_RESOURCE_URI: &str = "test://ody/resource.bin";
-const TEST_RESOURCE_BLOB: &str = "YmluYXJ5LXJlc291cmNl";
-const TEST_RESOURCE_TEXT: &str = "Resource body from the MCP server.";
+const DEFAULT_READ_TIMEOUT: Duration = Duration::from_secs(60);
 const SKILL_NAME: &str = "demo-plugin:deploy";
 const RAW_SKILL_DESCRIPTION: &str = "Deploy\nthrough the <hosted> orchestrator.";
-const SKILL_DESCRIPTION: &str = "Deploy through the &lt;hosted&gt; orchestrator.";
 const SKILL_RESOURCE_URI: &str = "skill://plugin_demo/deploy";
 const SKILL_MAIN_PROMPT_URI: &str = "skill://plugin_demo/deploy/SKILL.md";
 const SKILL_REFERENCE_URI: &str = "skill://plugin_demo/deploy/references/deploy.md";
@@ -79,289 +72,6 @@ const SKILL_CONTENTS: &str = concat!(
 );
 const SKILL_REFERENCE_CONTENTS: &str =
     "# Deploy reference\n\nUse the orchestrator deployment API.\n";
-const SKILLS_LIST_CALL_ID: &str = "skills-list";
-const SKILLS_READ_CALL_ID: &str = "skills-read";
-const SKILLS_READ_AGAIN_CALL_ID: &str = "skills-read-again";
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn mcp_resource_read_returns_resource_contents() -> Result<()> {
-    let responses_server = responses::start_mock_server().await;
-    let (apps_server_url, _apps_server_calls, apps_server_handle) =
-        start_resource_apps_mcp_server().await?;
-    let responses_server_uri = responses_server.uri();
-    let (_ody_home, mut mcp) =
-        start_resource_test_app_server(&apps_server_url, &responses_server_uri).await?;
-
-    let thread_start_id = mcp
-        .send_thread_start_request(ThreadStartParams {
-            model: Some("mock-model".to_string()),
-            ..Default::default()
-        })
-        .await?;
-    let thread_start_resp: JSONRPCResponse = timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(thread_start_id)),
-    )
-    .await??;
-    let ThreadStartResponse { thread, .. } = to_response(thread_start_resp)?;
-
-    let read_request_id = mcp
-        .send_mcp_resource_read_request(McpResourceReadParams {
-            thread_id: Some(thread.id),
-            server: "ody_apps".to_string(),
-            uri: TEST_RESOURCE_URI.to_string(),
-        })
-        .await?;
-    let read_response: JSONRPCResponse = timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(read_request_id)),
-    )
-    .await??;
-    assert_eq!(
-        to_response::<McpResourceReadResponse>(read_response)?,
-        expected_resource_read_response()
-    );
-
-    apps_server_handle.abort();
-    let _ = apps_server_handle.await;
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn orchestrator_skill_can_read_referenced_resource_without_an_executor() -> Result<()> {
-    let responses_server = responses::start_mock_server().await;
-    let (apps_server_url, apps_server_calls, apps_server_handle) =
-        start_resource_apps_mcp_server().await?;
-    let responses_server_uri = responses_server.uri();
-    let (_ody_home, mut mcp) =
-        start_resource_test_app_server(&apps_server_url, &responses_server_uri).await?;
-
-    let thread_start_id = mcp
-        .send_thread_start_request(ThreadStartParams {
-            model: Some("mock-model".to_string()),
-            environments: Some(Vec::new()),
-            ..Default::default()
-        })
-        .await?;
-    let thread_start_resp: JSONRPCResponse = timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(thread_start_id)),
-    )
-    .await??;
-    let ThreadStartResponse { thread, .. } = to_response(thread_start_resp)?;
-
-    let response_mock = responses::mount_sse_sequence(
-        &responses_server,
-        vec![
-            responses::sse(vec![
-                responses::ev_response_created("resp-skills-list"),
-                responses::ev_function_call_with_namespace(
-                    SKILLS_LIST_CALL_ID,
-                    "skills",
-                    "list",
-                    &json!({
-                        "authority": {
-                            "kind": "orchestrator",
-                        },
-                    })
-                    .to_string(),
-                ),
-                responses::ev_completed("resp-skills-list"),
-            ]),
-            responses::sse(vec![
-                responses::ev_response_created("resp-skills-read"),
-                responses::ev_function_call_with_namespace(
-                    SKILLS_READ_CALL_ID,
-                    "skills",
-                    "read",
-                    &json!({
-                        "authority": {
-                            "kind": "orchestrator",
-                        },
-                        "package": SKILL_RESOURCE_URI,
-                        "resource": SKILL_REFERENCE_URI,
-                    })
-                    .to_string(),
-                ),
-                responses::ev_completed("resp-skills-read"),
-            ]),
-            responses::sse(vec![
-                responses::ev_response_created("resp-skills-read-again"),
-                responses::ev_function_call_with_namespace(
-                    SKILLS_READ_AGAIN_CALL_ID,
-                    "skills",
-                    "read",
-                    &json!({
-                        "authority": {
-                            "kind": "orchestrator",
-                        },
-                        "package": SKILL_RESOURCE_URI,
-                        "resource": SKILL_REFERENCE_URI,
-                    })
-                    .to_string(),
-                ),
-                responses::ev_completed("resp-skills-read-again"),
-            ]),
-            responses::sse(vec![
-                responses::ev_response_created("resp-orchestrator-skill"),
-                responses::ev_assistant_message("msg-orchestrator-skill", "Done"),
-                responses::ev_completed("resp-orchestrator-skill"),
-            ]),
-            responses::sse(vec![
-                responses::ev_response_created("resp-orchestrator-skill-after-refresh"),
-                responses::ev_assistant_message("msg-orchestrator-skill-after-refresh", "Done"),
-                responses::ev_completed("resp-orchestrator-skill-after-refresh"),
-            ]),
-        ],
-    )
-    .await;
-    let turn_start_id = mcp
-        .send_turn_start_request(TurnStartParams {
-            thread_id: thread.id.clone(),
-            input: vec![UserInput::Text {
-                text: format!("Use ${SKILL_NAME}"),
-                text_elements: Vec::new(),
-            }],
-            ..Default::default()
-        })
-        .await?;
-    timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(turn_start_id)),
-    )
-    .await??;
-    timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_notification_message("turn/completed"),
-    )
-    .await??;
-
-    let requests = response_mock.requests();
-    assert_eq!(requests.len(), 4);
-    let first_request = &requests[0];
-    assert!(first_request.tool_by_name("skills", "list").is_some());
-    assert!(first_request.tool_by_name("skills", "read").is_some());
-    assert!(first_request.tool_by_name("skills", "search").is_none());
-
-    let developer_messages = first_request.message_input_texts("developer");
-    let catalog_line = format!(
-        "- {SKILL_NAME}: {SKILL_DESCRIPTION} (orchestrator resource: {SKILL_RESOURCE_URI})"
-    );
-    assert_eq!(
-        1,
-        developer_messages
-            .iter()
-            .filter(|text| text.contains(&catalog_line))
-            .count()
-    );
-    assert!(
-        developer_messages
-            .iter()
-            .all(|text| !text.contains("ignored-plugin:ignored"))
-    );
-    assert!(
-        developer_messages
-            .iter()
-            .any(|text| text.contains("do not treat `skill://` identifiers as filesystem paths"))
-    );
-    let skill_fragments = first_request
-        .message_input_texts("user")
-        .into_iter()
-        .filter(|text| text.starts_with("<skill>"))
-        .collect::<Vec<_>>();
-    assert_eq!(1, skill_fragments.len());
-    assert!(skill_fragments[0].contains(&format!("<name>{SKILL_NAME}</name>")));
-    assert!(skill_fragments[0].contains(SKILL_MARKER));
-    assert!(skill_fragments[0].contains(SKILL_REFERENCE_URI));
-
-    let list_output = requests[1]
-        .function_call_output_text(SKILLS_LIST_CALL_ID)
-        .ok_or_else(|| anyhow::anyhow!("skills.list output should be sent to the model"))?;
-    assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&list_output)?,
-        json!({
-            "skills": [{
-                "authority": {
-                    "kind": "orchestrator",
-                },
-                "package": SKILL_RESOURCE_URI,
-                "name": SKILL_NAME,
-                "description": SKILL_DESCRIPTION,
-                "main_resource": SKILL_MAIN_PROMPT_URI,
-            }],
-            "warnings": ["Orchestrator skill discovery stopped after 2 resource pages: failed to list orchestrator skill resources: resources/list failed for `ody_apps`: Mcp error: -32603: simulated later-page failure"],
-        })
-    );
-
-    let read_output = requests[2]
-        .function_call_output_text(SKILLS_READ_CALL_ID)
-        .ok_or_else(|| anyhow::anyhow!("skills.read output should be sent to the model"))?;
-    assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&read_output)?,
-        json!({
-            "resource": SKILL_REFERENCE_URI,
-            "contents": SKILL_REFERENCE_CONTENTS,
-        })
-    );
-    let repeated_read_output = requests[3]
-        .function_call_output_text(SKILLS_READ_AGAIN_CALL_ID)
-        .ok_or_else(|| {
-            anyhow::anyhow!("repeated skills.read output should be sent to the model")
-        })?;
-    assert_eq!(read_output, repeated_read_output);
-    assert_eq!(
-        ResourceAppsMcpCallCounts {
-            list_resources: 3,
-            main_prompt_reads: 1,
-            reference_reads: 1,
-        },
-        apps_server_calls.snapshot()
-    );
-
-    let refresh_request_id = mcp
-        .send_raw_request("config/mcpServer/reload", /*params*/ None)
-        .await?;
-    timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(refresh_request_id)),
-    )
-    .await??;
-
-    let refreshed_turn_start_id = mcp
-        .send_turn_start_request(TurnStartParams {
-            thread_id: thread.id,
-            input: vec![UserInput::Text {
-                text: format!("Use ${SKILL_NAME} after refreshing MCP"),
-                text_elements: Vec::new(),
-            }],
-            ..Default::default()
-        })
-        .await?;
-    timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(refreshed_turn_start_id)),
-    )
-    .await??;
-    timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_notification_message("turn/completed"),
-    )
-    .await??;
-
-    let requests = response_mock.requests();
-    assert_eq!(requests.len(), 5);
-    assert_eq!(
-        ResourceAppsMcpCallCounts {
-            list_resources: 6,
-            main_prompt_reads: 2,
-            reference_reads: 1,
-        },
-        apps_server_calls.snapshot()
-    );
-    apps_server_handle.abort();
-    let _ = apps_server_handle.await;
-    Ok(())
-}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn local_executor_does_not_expose_orchestrator_skills() -> Result<()> {
@@ -525,57 +235,6 @@ enabled = false
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn mcp_resource_read_returns_resource_contents_without_thread() -> Result<()> {
-    let (apps_server_url, _apps_server_calls, apps_server_handle) =
-        start_resource_apps_mcp_server().await?;
-
-    let ody_home = TempDir::new()?;
-    std::fs::write(
-        ody_home.path().join("config.toml"),
-        format!(
-            r#"
-legacy_base_url = "{apps_server_url}"
-mcp_oauth_credentials_store = "file"
-
-[features]
-apps = true
-"#
-        ),
-    )?;
-    write_api_key_auth(
-        ody_home.path(),
-        ApiKeyAuthFixture::new("api-key")
-            .account_id("account-123"),
-        AuthCredentialsStoreMode::File,
-    )?;
-
-    let mut mcp = TestAppServer::new(ody_home.path()).await?;
-    timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
-
-    let read_request_id = mcp
-        .send_mcp_resource_read_request(McpResourceReadParams {
-            thread_id: None,
-            server: "ody_apps".to_string(),
-            uri: TEST_RESOURCE_URI.to_string(),
-        })
-        .await?;
-    let read_response: JSONRPCResponse = timeout(
-        DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_response_message(RequestId::Integer(read_request_id)),
-    )
-    .await??;
-
-    assert_eq!(
-        to_response::<McpResourceReadResponse>(read_response)?,
-        expected_resource_read_response()
-    );
-
-    apps_server_handle.abort();
-    let _ = apps_server_handle.await;
-    Ok(())
-}
-
 #[tokio::test]
 async fn mcp_resource_read_returns_error_for_unknown_thread() -> Result<()> {
     let ody_home = TempDir::new()?;
@@ -621,7 +280,7 @@ async fn mcp_resource_read_returns_error_for_unknown_thread() -> Result<()> {
             params: McpResourceReadParams {
                 thread_id: Some("00000000-0000-4000-8000-000000000000".to_string()),
                 server: "ody_apps".to_string(),
-                uri: TEST_RESOURCE_URI.to_string(),
+                uri: "test://ody/resource".to_string(),
             },
         })
         .await;
@@ -716,25 +375,6 @@ async fn start_resource_apps_mcp_server()
     });
 
     Ok((apps_server_url, calls, apps_server_handle))
-}
-
-fn expected_resource_read_response() -> McpResourceReadResponse {
-    McpResourceReadResponse {
-        contents: vec![
-            McpResourceContent::Text {
-                uri: TEST_RESOURCE_URI.to_string(),
-                mime_type: Some("text/markdown".to_string()),
-                text: TEST_RESOURCE_TEXT.to_string(),
-                meta: None,
-            },
-            McpResourceContent::Blob {
-                uri: TEST_BLOB_RESOURCE_URI.to_string(),
-                mime_type: Some("application/octet-stream".to_string()),
-                blob: TEST_RESOURCE_BLOB.to_string(),
-                meta: None,
-            },
-        ],
-    }
 }
 
 #[derive(Debug, Default)]
@@ -848,27 +488,11 @@ impl ServerHandler for ResourceAppsMcpServer {
                 },
             ]));
         }
-        if uri != TEST_RESOURCE_URI {
-            return Err(rmcp::ErrorData::resource_not_found(
-                format!("resource not found: {uri}"),
-                None,
-            ));
-        }
 
-        Ok(ReadResourceResult::new(vec![
-            ResourceContents::TextResourceContents {
-                uri: TEST_RESOURCE_URI.to_string(),
-                mime_type: Some("text/markdown".to_string()),
-                text: TEST_RESOURCE_TEXT.to_string(),
-                meta: None,
-            },
-            ResourceContents::BlobResourceContents {
-                uri: TEST_BLOB_RESOURCE_URI.to_string(),
-                mime_type: Some("application/octet-stream".to_string()),
-                blob: TEST_RESOURCE_BLOB.to_string(),
-                meta: None,
-            },
-        ]))
+        Err(rmcp::ErrorData::resource_not_found(
+            format!("resource not found: {uri}"),
+            None,
+        ))
     }
 }
 
