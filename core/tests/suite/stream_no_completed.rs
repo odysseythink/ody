@@ -3,6 +3,7 @@
 
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::WireApi;
+use ody_model_provider_info::ProviderCapabilities;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::Op;
 use ody_protocol::user_input::UserInput;
@@ -63,6 +64,7 @@ async fn retries_on_early_close() {
         websocket_connect_timeout_ms: None,
         requires_odysseythink_auth: false,
         supports_websockets: false,
+            capabilities: ProviderCapabilities::default(),
     };
 
     let TestOdy { ody, .. } = test_ody()

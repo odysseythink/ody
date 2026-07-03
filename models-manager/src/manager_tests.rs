@@ -495,3 +495,32 @@ fn bundled_models_json_roundtrips() {
         "bundled models.json should contain at least one model"
     );
 }
+
+#[test]
+fn bundled_models_have_populated_capabilities() {
+    let response = crate::bundled_models_response()
+        .expect("bundled models.json should parse");
+    assert!(!response.models.is_empty(), "bundled models.json should contain models");
+    for model in &response.models {
+        // Every bundled model has a non-default context_window at the top level;
+        // the nested capabilities object must mirror it.
+        assert_eq!(
+            model.capabilities.context_window,
+            model.context_window,
+            "model {} capabilities.context_window must match top-level context_window",
+            model.slug
+        );
+        assert_eq!(
+            model.capabilities.max_context_window,
+            model.max_context_window,
+            "model {} capabilities.max_context_window must match top-level max_context_window",
+            model.slug
+        );
+        assert_eq!(
+            model.capabilities.input_modalities,
+            model.input_modalities,
+            "model {} capabilities.input_modalities must match top-level input_modalities",
+            model.slug
+        );
+    }
+}

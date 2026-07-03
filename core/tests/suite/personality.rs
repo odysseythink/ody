@@ -14,6 +14,7 @@ use ody_protocol::odysseythink_models::ReasoningEffort;
 use ody_protocol::odysseythink_models::ReasoningEffortPreset;
 use ody_protocol::odysseythink_models::TruncationPolicyConfig;
 use ody_protocol::odysseythink_models::default_input_modalities;
+use ody_protocol::odysseythink_models::ModelCapabilities;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::Op;
@@ -597,7 +598,8 @@ async fn remote_model_friendly_personality_instructions_with_feature() -> anyhow
         auto_review_model_override: None,
         tool_mode: None,
         multi_agent_version: None,
-    };
+        capabilities: ModelCapabilities::default(),
+};
 
     let _models_mock = mount_models_once(
         &server,
@@ -712,7 +714,8 @@ async fn user_turn_personality_remote_model_template_includes_update_message() -
         auto_review_model_override: None,
         tool_mode: None,
         multi_agent_version: None,
-    };
+        capabilities: ModelCapabilities::default(),
+};
 
     let _models_mock = mount_models_once(
         &server,

@@ -10,6 +10,15 @@ rustflags = ["-C", "link-arg=/STACK:8388608", "-C", "link-arg=/arm64hazardfree"]
 [target.'cfg(all(windows, target_env = "gnu"))']
 rustflags = ["-C", "link-arg=-Wl,--stack,8388608"]
 
+[source.crates-io]
+replace-with = 'tuna'
+
+[source.tuna]
+registry = "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/"
+
+[target.x86_64-pc-windows-msvc]
+linker = "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\link.exe"
+
 [env]
 # macOS uses a 2 MiB default thread stack, which is too small for deep async
 # call chains in agent control and guardian tests. Use 4 MiB to match the

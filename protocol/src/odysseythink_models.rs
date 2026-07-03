@@ -255,6 +255,7 @@ pub enum ModelVisibility {
     Deserialize,
     Clone,
     Copy,
+    Default,
     PartialEq,
     Eq,
     TS,
@@ -266,6 +267,7 @@ pub enum ModelVisibility {
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ConfigShellToolType {
+    #[default]
     Default,
     Local,
     UnifiedExec,
@@ -290,9 +292,10 @@ pub enum WebSearchToolType {
 }
 
 /// Server-provided truncation policy metadata for a model.
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, TS, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Default, PartialEq, Eq, TS, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TruncationMode {
+    #[default]
     Bytes,
     Tokens,
 }
@@ -316,7 +319,7 @@ where
     Ok(serde_json::from_value(serde_json::Value::String(value)).ok())
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, TS, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default, TS, JsonSchema)]
 pub struct TruncationPolicyConfig {
     pub mode: TruncationMode,
     pub limit: i64,
@@ -334,6 +337,126 @@ impl TruncationPolicyConfig {
         Self {
             mode: TruncationMode::Tokens,
             limit,
+        }
+    }
+}
+
+/// Model-level capability matrix.
+///
+/// This is the canonical source for adaptive decisions in core/TUI. The
+/// `ModelInfo` struct keeps a copy of these values in nested form; legacy
+/// top-level fields are maintained for backward compatibility.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, TS, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct ModelCapabilities {
+    /// Maximum context tokens the model accepts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_window: Option<i64>,
+
+    /// Hard upper bound for context_window; overrides clamp to this value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_context_window: Option<i64>,
+
+    /// Maximum output tokens the model can generate in one turn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<i64>,
+
+    /// Percentage of the context window considered usable for inputs.
+    #[serde(default = "default_effective_context_window_percent")]
+    pub effective_context_window_percent: i64,
+
+    /// Input modalities accepted by the model.
+    #[serde(default = "default_input_modalities")]
+    pub input_modalities: Vec<InputModality>,
+
+    /// Whether the model supports reasoning / extended thinking.
+    #[serde(default)]
+    pub supports_thinking: bool,
+
+    /// Reasoning effort levels supported by the model.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub thinking_effort: Vec<ReasoningEffort>,
+
+    /// Whether the model supports function / tool calls.
+    #[serde(default)]
+    pub supports_tools: bool,
+
+    /// Whether the model supports parallel tool calls.
+    #[serde(default)]
+    pub supports_parallel_tool_calls: bool,
+
+    /// Whether the model accepts image inputs.
+    #[serde(default)]
+    pub supports_vision: bool,
+
+    /// Whether ImageDetail::Original can be requested.
+    #[serde(default)]
+    pub supports_image_detail_original: bool,
+
+    /// Whether the model has a native search tool.
+    #[serde(default)]
+    pub supports_search_tool: bool,
+
+    /// Variant of web search content the model can return.
+    #[serde(default)]
+    pub web_search_tool_type: WebSearchToolType,
+
+    /// Whether reasoning summaries can be surfaced.
+    #[serde(default)]
+    pub supports_reasoning_summaries: bool,
+
+    /// Shell execution backend preferred by the model.
+    #[serde(default)]
+    pub shell_type: ConfigShellToolType,
+
+    /// Tool-mode hint for code-mode vs direct tool execution.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_optional_model_selector"
+    )]
+    pub tool_mode: Option<ToolMode>,
+
+    /// Whether multiple system/developer messages are allowed.
+    #[serde(default)]
+    pub supports_multiple_system_messages: bool,
+
+    /// Whether the provider adapter may return PauseTurn finish reason.
+    #[serde(default)]
+    pub supports_turn_pause: bool,
+
+    /// Truncation policy for tool outputs and history.
+    #[serde(default)]
+    pub truncation_policy: TruncationPolicyConfig,
+
+    /// Token threshold for automatic compaction.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_compact_token_limit: Option<i64>,
+}
+
+impl Default for ModelCapabilities {
+    fn default() -> Self {
+        Self {
+            context_window: None,
+            max_context_window: None,
+            max_output_tokens: None,
+            effective_context_window_percent: default_effective_context_window_percent(),
+            input_modalities: vec![InputModality::Text],
+            supports_thinking: false,
+            thinking_effort: Vec::new(),
+            supports_tools: false,
+            supports_parallel_tool_calls: false,
+            supports_vision: false,
+            supports_image_detail_original: false,
+            supports_search_tool: false,
+            web_search_tool_type: WebSearchToolType::default(),
+            supports_reasoning_summaries: false,
+            shell_type: ConfigShellToolType::default(),
+            tool_mode: None,
+            supports_multiple_system_messages: false,
+            supports_turn_pause: false,
+            truncation_policy: TruncationPolicyConfig::default(),
+            auto_compact_token_limit: None,
         }
     }
 }
@@ -426,6 +549,16 @@ pub struct ModelInfo {
         deserialize_with = "deserialize_optional_model_selector"
     )]
     pub multi_agent_version: Option<MultiAgentVersion>,
+    /// Model-level capability matrix.
+    #[serde(default = "default_model_capabilities")]
+    pub capabilities: ModelCapabilities,
+}
+
+fn default_model_capabilities() -> ModelCapabilities {
+    ModelCapabilities {
+        input_modalities: default_input_modalities(),
+        ..ModelCapabilities::default()
+    }
 }
 
 impl ModelInfo {
@@ -582,7 +715,7 @@ impl From<ModelInfo> for ModelPreset {
             show_in_picker: info.visibility == ModelVisibility::List,
             availability_nux: info.availability_nux,
             supported_in_api: info.supported_in_api,
-            input_modalities: info.input_modalities,
+            input_modalities: info.capabilities.input_modalities,
         }
     }
 }
@@ -648,6 +781,63 @@ mod tests {
     use serde_json::from_str;
     use serde_json::to_string;
 
+    #[test]
+    fn model_capabilities_default_is_conservative() {
+        let caps = ModelCapabilities::default();
+        assert_eq!(caps.context_window, None);
+        assert_eq!(caps.max_context_window, None);
+        assert_eq!(caps.max_output_tokens, None);
+        assert_eq!(caps.effective_context_window_percent, 95);
+        assert_eq!(caps.input_modalities, vec![InputModality::Text]);
+        assert!(!caps.supports_thinking);
+        assert!(caps.thinking_effort.is_empty());
+        assert!(!caps.supports_tools);
+        assert!(!caps.supports_parallel_tool_calls);
+        assert!(!caps.supports_vision);
+        assert!(!caps.supports_image_detail_original);
+        assert!(!caps.supports_search_tool);
+        assert_eq!(caps.web_search_tool_type, WebSearchToolType::Text);
+        assert!(!caps.supports_reasoning_summaries);
+        assert_eq!(caps.shell_type, ConfigShellToolType::Default);
+        assert_eq!(caps.tool_mode, None);
+        assert!(!caps.supports_multiple_system_messages);
+        assert!(!caps.supports_turn_pause);
+        assert_eq!(caps.truncation_policy, TruncationPolicyConfig::bytes(0));
+        assert_eq!(caps.auto_compact_token_limit, None);
+    }
+
+    #[test]
+    fn model_info_has_capabilities_field() {
+        let mut model = test_model(None);
+        model.capabilities.context_window = Some(128_000);
+        assert_eq!(model.capabilities.context_window, Some(128_000));
+    }
+
+    #[test]
+    fn model_info_json_without_capabilities_uses_defaults() {
+        let json = r#"{
+            "slug": "legacy-model",
+            "display_name": "Legacy Model",
+            "supported_reasoning_levels": [],
+            "shell_type": "default",
+            "visibility": "list",
+            "supported_in_api": true,
+            "priority": 1,
+            "base_instructions": "base",
+            "supports_reasoning_summaries": false,
+            "support_verbosity": false,
+            "truncation_policy": {"mode": "bytes", "limit": 10000},
+            "supports_parallel_tool_calls": false,
+            "web_search_tool_type": "text",
+            "experimental_supported_tools": []
+        }"#;
+        let model: ModelInfo = serde_json::from_str(json).unwrap();
+        assert_eq!(model.capabilities.effective_context_window_percent, 95);
+        assert_eq!(model.capabilities.input_modalities, vec![InputModality::Text, InputModality::Image]);
+        assert_eq!(model.capabilities.context_window, None);
+        assert!(!model.capabilities.supports_tools);
+    }
+
     fn test_model(spec: Option<ModelMessages>) -> ModelInfo {
         ModelInfo {
             slug: "test-model".to_string(),
@@ -688,6 +878,28 @@ mod tests {
             auto_review_model_override: None,
             tool_mode: None,
             multi_agent_version: None,
+            capabilities: ModelCapabilities {
+                context_window: None,
+                max_context_window: None,
+                max_output_tokens: None,
+                effective_context_window_percent: 95,
+                input_modalities: vec![InputModality::Text],
+                supports_thinking: false,
+                thinking_effort: vec![],
+                supports_tools: false,
+                supports_parallel_tool_calls: false,
+                supports_vision: false,
+                supports_image_detail_original: false,
+                supports_search_tool: false,
+                web_search_tool_type: WebSearchToolType::Text,
+                supports_reasoning_summaries: false,
+                shell_type: ConfigShellToolType::ShellCommand,
+                tool_mode: None,
+                supports_multiple_system_messages: false,
+                supports_turn_pause: false,
+                truncation_policy: TruncationPolicyConfig::bytes(/*limit*/ 10_000),
+                auto_compact_token_limit: None,
+            },
         }
     }
 

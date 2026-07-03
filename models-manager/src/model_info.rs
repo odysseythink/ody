@@ -1,5 +1,8 @@
+use ody_model_provider_info::ProviderCapabilities;
+use ody_model_provider_info::WireApi;
 use ody_protocol::config_types::ReasoningSummary;
-use ody_protocol::odysseythink_models::ConfigShellToolType;
+use ody_protocol::odysseythink_models::InputModality;
+use ody_protocol::odysseythink_models::ModelCapabilities;
 use ody_protocol::odysseythink_models::ModelInfo;
 use ody_protocol::odysseythink_models::ModelInstructionsVariables;
 use ody_protocol::odysseythink_models::ModelMessages;
@@ -7,8 +10,6 @@ use ody_protocol::odysseythink_models::ModelVisibility;
 use ody_protocol::odysseythink_models::ModelsResponse;
 use ody_protocol::odysseythink_models::TruncationMode;
 use ody_protocol::odysseythink_models::TruncationPolicyConfig;
-use ody_protocol::odysseythink_models::WebSearchToolType;
-use ody_protocol::odysseythink_models::default_input_modalities;
 
 use crate::config::ModelsManagerConfig;
 use ody_utils_output_truncation::approx_bytes_for_tokens;
@@ -21,11 +22,93 @@ const LOCAL_FRIENDLY_TEMPLATE: &str =
 const LOCAL_PRAGMATIC_TEMPLATE: &str = "You are a deeply pragmatic, effective software engineer.";
 const PERSONALITY_PLACEHOLDER: &str = "{{ personality }}";
 
+/// Model capability fallback when no user config or built-in catalog value exists.
+pub fn default_model_capabilities_for_wire_api(wire_api: WireApi) -> ModelCapabilities {
+    use ody_protocol::odysseythink_models::InputModality::{Image, Text};
+    match wire_api {
+        WireApi::Responses => ModelCapabilities {
+            supports_tools: true,
+            supports_vision: true,
+            supports_multiple_system_messages: true,
+            input_modalities: vec![Text, Image],
+            ..Default::default()
+        },
+        WireApi::Chat | WireApi::GoogleGenAI => ModelCapabilities {
+            supports_tools: true,
+            supports_vision: true,
+            input_modalities: vec![Text, Image],
+            ..Default::default()
+        },
+        WireApi::AnthropicMessages => ModelCapabilities {
+            supports_tools: true,
+            supports_vision: true,
+            supports_turn_pause: true,
+            input_modalities: vec![Text, Image],
+            ..Default::default()
+        },
+        WireApi::Local => ModelCapabilities {
+            supports_tools: true,
+            input_modalities: vec![Text],
+            ..Default::default()
+        },
+    }
+}
+
+/// Resolve model capabilities from configured / built-in / inferred sources.
+///
+/// Precedence: configured > built_in > wire_api inference > conservative default.
+/// Also applies provider-level upper bounds and consistency clamps.
+pub fn resolve_model_capabilities(
+    provider_caps: &ProviderCapabilities,
+    wire_api: WireApi,
+    configured: Option<&ModelCapabilities>,
+    built_in: Option<&ModelCapabilities>,
+    model_slug: &str,
+) -> ModelCapabilities {
+    use ody_protocol::odysseythink_models::WebSearchToolType;
+
+    let mut caps = if let Some(configured) = configured {
+        tracing::debug!(model = %model_slug, "model capabilities from user config");
+        configured.clone()
+    } else if let Some(built_in) = built_in {
+        tracing::debug!(model = %model_slug, "model capabilities from bundled catalog");
+        built_in.clone()
+    } else {
+        tracing::debug!(model = %model_slug, wire_api = ?wire_api, "model capabilities inferred from wire_api");
+        default_model_capabilities_for_wire_api(wire_api)
+    };
+
+    // Provider-level web_search is an upper bound for model-level search support.
+    if !provider_caps.web_search {
+        caps.supports_search_tool = false;
+        caps.web_search_tool_type = WebSearchToolType::Text;
+    }
+
+    // Context window consistency: context_window must not exceed max_context_window,
+    // and if missing it inherits max_context_window.
+    if let (Some(context), Some(max)) = (caps.context_window, caps.max_context_window) {
+        caps.context_window = Some(context.min(max));
+    } else if caps.context_window.is_none() && caps.max_context_window.is_some() {
+        caps.context_window = caps.max_context_window;
+    }
+
+    // auto_compact_token_limit must not exceed 90% of the resolved context window.
+    if let Some(context_window) = caps.context_window {
+        let max_auto_compact = (context_window * 9) / 10;
+        if let Some(limit) = caps.auto_compact_token_limit {
+            caps.auto_compact_token_limit = Some(limit.min(max_auto_compact));
+        }
+    }
+
+    caps
+}
+
 pub fn with_config_overrides(mut model: ModelInfo, config: &ModelsManagerConfig) -> ModelInfo {
     if let Some(supports_reasoning_summaries) = config.model_supports_reasoning_summaries
         && supports_reasoning_summaries
     {
         model.supports_reasoning_summaries = true;
+        model.capabilities.supports_reasoning_summaries = true;
     }
     if let Some(context_window) = config.model_context_window {
         model.context_window = Some(
@@ -35,9 +118,11 @@ pub fn with_config_overrides(mut model: ModelInfo, config: &ModelsManagerConfig)
                     context_window.min(max_context_window)
                 }),
         );
+        model.capabilities.context_window = model.context_window;
     }
     if let Some(auto_compact_token_limit) = config.model_auto_compact_token_limit {
         model.auto_compact_token_limit = Some(auto_compact_token_limit);
+        model.capabilities.auto_compact_token_limit = model.auto_compact_token_limit;
     }
     if let Some(token_limit) = config.tool_output_token_limit {
         model.truncation_policy = match model.truncation_policy.mode {
@@ -51,6 +136,7 @@ pub fn with_config_overrides(mut model: ModelInfo, config: &ModelsManagerConfig)
                 TruncationPolicyConfig::tokens(limit)
             }
         };
+        model.capabilities.truncation_policy = model.truncation_policy;
     }
 
     if let Some(base_instructions) = &config.base_instructions {
@@ -66,13 +152,20 @@ pub fn with_config_overrides(mut model: ModelInfo, config: &ModelsManagerConfig)
 /// Build a minimal fallback model descriptor for missing/unknown slugs.
 pub fn model_info_from_slug(slug: &str) -> ModelInfo {
     warn!("Unknown model {slug} is used. This will use fallback model metadata.");
+    let caps = resolve_model_capabilities(
+        &ProviderCapabilities::default(),
+        WireApi::Local,
+        None,
+        None,
+        slug,
+    );
     ModelInfo {
         slug: slug.to_string(),
         display_name: slug.to_string(),
         description: None,
         default_reasoning_level: None,
         supported_reasoning_levels: Vec::new(),
-        shell_type: ConfigShellToolType::Default,
+        shell_type: caps.shell_type,
         visibility: ModelVisibility::None,
         supported_in_api: true,
         priority: 99,
@@ -83,28 +176,29 @@ pub fn model_info_from_slug(slug: &str) -> ModelInfo {
         upgrade: None,
         base_instructions: BASE_INSTRUCTIONS.to_string(),
         model_messages: local_personality_messages_for_slug(slug),
-        supports_reasoning_summaries: false,
+        supports_reasoning_summaries: caps.supports_reasoning_summaries,
         default_reasoning_summary: ReasoningSummary::Auto,
         support_verbosity: false,
         default_verbosity: None,
         apply_patch_tool_type: None,
-        web_search_tool_type: WebSearchToolType::Text,
-        truncation_policy: TruncationPolicyConfig::bytes(/*limit*/ 10_000),
-        supports_parallel_tool_calls: false,
-        supports_image_detail_original: false,
-        context_window: Some(272_000),
-        max_context_window: Some(272_000),
-        auto_compact_token_limit: None,
+        web_search_tool_type: caps.web_search_tool_type,
+        truncation_policy: caps.truncation_policy,
+        supports_parallel_tool_calls: caps.supports_parallel_tool_calls,
+        supports_image_detail_original: caps.supports_image_detail_original,
+        context_window: caps.context_window,
+        max_context_window: caps.max_context_window,
+        auto_compact_token_limit: caps.auto_compact_token_limit,
         comp_hash: None,
-        effective_context_window_percent: 95,
+        effective_context_window_percent: caps.effective_context_window_percent,
         experimental_supported_tools: Vec::new(),
-        input_modalities: default_input_modalities(),
+        input_modalities: caps.input_modalities.clone(),
         used_fallback_model_metadata: true, // this is the fallback model metadata
-        supports_search_tool: false,
+        supports_search_tool: caps.supports_search_tool,
         use_responses_lite: false,
         auto_review_model_override: None,
-        tool_mode: None,
+        tool_mode: caps.tool_mode.clone(),
         multi_agent_version: None,
+        capabilities: caps,
     }
 }
 
@@ -175,6 +269,26 @@ impl ChatModelSpec {
         model.max_context_window = Some(self.context_window);
         model.supports_reasoning_summaries = self.supports_thinking;
         model.used_fallback_model_metadata = false;
+
+        model.capabilities = ModelCapabilities {
+            context_window: Some(self.context_window),
+            max_context_window: Some(self.context_window),
+            supports_thinking: self.supports_thinking,
+            supports_reasoning_summaries: self.supports_thinking,
+            supports_tools: true,
+            supports_parallel_tool_calls: true,
+            supports_vision: true,
+            supports_image_detail_original: false,
+            input_modalities: vec![InputModality::Text, InputModality::Image],
+            ..Default::default()
+        };
+        // Keep top-level fields in sync with capabilities.
+        model.input_modalities = model.capabilities.input_modalities.clone();
+        model.web_search_tool_type = model.capabilities.web_search_tool_type;
+        model.truncation_policy = model.capabilities.truncation_policy;
+        model.shell_type = model.capabilities.shell_type;
+        model.tool_mode = model.capabilities.tool_mode.clone();
+        model.effective_context_window_percent = model.capabilities.effective_context_window_percent;
         model
     }
 }

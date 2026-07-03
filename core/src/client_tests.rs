@@ -24,6 +24,7 @@ use ody_protocol::models::ContentItem;
 use ody_protocol::models::ResponseItem;
 use ody_protocol::odysseythink_models::ModelInfo;
 use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::odysseythink_models::ModelCapabilities;
 use ody_protocol::protocol::InternalSessionSource;
 use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::SubAgentSource;
@@ -787,5 +788,6 @@ fn test_model_info_for_chat_provider() -> ModelInfo {
         auto_review_model_override: None,
         tool_mode: None,
         multi_agent_version: None,
+        capabilities: ModelCapabilities::default(),
     }
 }

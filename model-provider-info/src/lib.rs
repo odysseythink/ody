@@ -105,6 +105,68 @@ impl<'de> Deserialize<'de> for WireApi {
     }
 }
 
+/// Provider-level feature capabilities.
+///
+/// These are upper-bound flags that core/TUI use to decide which features a
+/// provider can expose. Defaults are conservative (all false) so unknown
+/// providers do not accidentally claim advanced features.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct ProviderCapabilities {
+    /// Whether the provider can use WebSocket transport for streaming.
+    #[serde(default)]
+    pub supports_websockets: bool,
+
+    /// Whether the provider supports remote context compaction.
+    #[serde(default)]
+    pub supports_remote_compaction: bool,
+
+    /// Whether the provider exposes namespaced / server-side tools.
+    #[serde(default)]
+    pub namespace_tools: bool,
+
+    /// Whether the provider supports server-side image generation.
+    #[serde(default)]
+    pub image_generation: bool,
+
+    /// Whether the provider supports server-side web search.
+    #[serde(default)]
+    pub web_search: bool,
+
+    /// Whether the provider uses command-backed dynamic auth.
+    #[serde(default)]
+    pub command_auth: bool,
+
+    /// Whether requests should include attestation headers.
+    #[serde(default)]
+    pub attestation: bool,
+}
+
+/// Provider capability fallback when no user config or built-in catalog value exists.
+pub fn default_provider_capabilities_for_wire_api(wire_api: WireApi) -> ProviderCapabilities {
+    match wire_api {
+        WireApi::Responses => ProviderCapabilities {
+            supports_websockets: true,
+            supports_remote_compaction: true,
+            namespace_tools: true,
+            image_generation: true,
+            web_search: true,
+            command_auth: false,
+            attestation: false,
+        },
+        WireApi::Chat | WireApi::AnthropicMessages | WireApi::GoogleGenAI => ProviderCapabilities {
+            supports_websockets: false,
+            supports_remote_compaction: false,
+            namespace_tools: false,
+            image_generation: false,
+            web_search: false,
+            command_auth: false,
+            attestation: false,
+        },
+        WireApi::Local => ProviderCapabilities::default(),
+    }
+}
+
 /// Serializable representation of a provider definition.
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, JsonSchema)]
 #[schemars(deny_unknown_fields)]
@@ -158,6 +220,9 @@ pub struct ModelProviderInfo {
     /// Whether this provider supports the Responses API WebSocket transport.
     #[serde(default)]
     pub supports_websockets: bool,
+    /// Provider-level feature capabilities.
+    #[serde(default)]
+    pub capabilities: ProviderCapabilities,
 }
 
 impl ModelProviderInfo {
@@ -326,6 +391,15 @@ impl ModelProviderInfo {
             websocket_connect_timeout_ms: None,
             requires_odysseythink_auth: true,
             supports_websockets: true,
+            capabilities: ProviderCapabilities {
+                supports_websockets: true,
+                supports_remote_compaction: true,
+                namespace_tools: true,
+                image_generation: true,
+                web_search: true,
+                command_auth: false,
+                attestation: false,
+            },
         }
     }
 
@@ -448,6 +522,7 @@ pub fn create_oss_provider_with_base_url(base_url: &str, wire_api: WireApi) -> M
         websocket_connect_timeout_ms: None,
         requires_odysseythink_auth: false,
         supports_websockets: false,
+        capabilities: ProviderCapabilities::default(),
     }
 }
 
@@ -475,6 +550,15 @@ fn create_chat_provider(
         websocket_connect_timeout_ms: None,
         requires_odysseythink_auth: false,
         supports_websockets: false,
+        capabilities: ProviderCapabilities {
+            supports_websockets: false,
+            supports_remote_compaction: false,
+            namespace_tools: false,
+            image_generation: false,
+            web_search: false,
+            command_auth: false,
+            attestation: false,
+        },
     }
 }
 

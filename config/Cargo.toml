@@ -8,6 +8,10 @@ license.workspace = true
 name = "generate-proto"
 path = "examples/generate-proto.rs"
 
+[[example]]
+name = "write-config-schema"
+path = "examples/write-config-schema.rs"
+
 [lints]
 workspace = true
 

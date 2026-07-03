@@ -18,6 +18,7 @@ use ody_protocol::odysseythink_models::ModelsResponse;
 use ody_protocol::odysseythink_models::ReasoningEffort;
 use ody_protocol::odysseythink_models::ReasoningEffortPreset;
 use ody_protocol::odysseythink_models::TruncationPolicyConfig;
+use ody_protocol::odysseythink_models::ModelCapabilities;
 use ody_protocol::permissions::FileSystemAccessMode;
 use ody_protocol::permissions::FileSystemPath;
 use ody_protocol::permissions::FileSystemSandboxEntry;
@@ -1378,7 +1379,8 @@ async fn view_image_tool_returns_unsupported_message_for_text_only_model() -> an
         comp_hash: None,
         effective_context_window_percent: 95,
         experimental_supported_tools: Vec::new(),
-    };
+        capabilities: ModelCapabilities::default(),
+};
     mount_models_once(
         &server,
         ModelsResponse {

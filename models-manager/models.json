@@ -1,6 +1,6 @@
 {
   "models": [
-    { 
+    {
       "prefer_websockets": true,
       "support_verbosity": true,
       "default_verbosity": "low",
@@ -92,7 +92,37 @@
       "additional_speed_tiers": [
         "fast"
       ],
-      "supports_reasoning_summaries": true
+      "supports_reasoning_summaries": true,
+      "capabilities": {
+        "context_window": 272000,
+        "max_context_window": 272000,
+        "effective_context_window_percent": 95,
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "supports_thinking": true,
+        "thinking_effort": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "supports_tools": true,
+        "supports_parallel_tool_calls": true,
+        "supports_vision": true,
+        "supports_image_detail_original": true,
+        "supports_search_tool": true,
+        "web_search_tool_type": "text_and_image",
+        "supports_reasoning_summaries": true,
+        "shell_type": "shell_command",
+        "supports_multiple_system_messages": false,
+        "supports_turn_pause": false,
+        "truncation_policy": {
+          "mode": "tokens",
+          "limit": 10000
+        }
+      }
     },
     {
       "prefer_websockets": true,
@@ -181,7 +211,37 @@
       "additional_speed_tiers": [
         "fast"
       ],
-      "supports_reasoning_summaries": true
+      "supports_reasoning_summaries": true,
+      "capabilities": {
+        "context_window": 272000,
+        "max_context_window": 1000000,
+        "effective_context_window_percent": 95,
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "supports_thinking": true,
+        "thinking_effort": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "supports_tools": true,
+        "supports_parallel_tool_calls": true,
+        "supports_vision": true,
+        "supports_image_detail_original": true,
+        "supports_search_tool": true,
+        "web_search_tool_type": "text_and_image",
+        "supports_reasoning_summaries": true,
+        "shell_type": "shell_command",
+        "supports_multiple_system_messages": false,
+        "supports_turn_pause": false,
+        "truncation_policy": {
+          "mode": "tokens",
+          "limit": 10000
+        }
+      }
     },
     {
       "prefer_websockets": true,
@@ -265,7 +325,37 @@
       "supports_search_tool": true,
       "service_tiers": [],
       "additional_speed_tiers": [],
-      "supports_reasoning_summaries": true
+      "supports_reasoning_summaries": true,
+      "capabilities": {
+        "context_window": 272000,
+        "max_context_window": 272000,
+        "effective_context_window_percent": 95,
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "supports_thinking": true,
+        "thinking_effort": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "supports_tools": true,
+        "supports_parallel_tool_calls": true,
+        "supports_vision": true,
+        "supports_image_detail_original": true,
+        "supports_search_tool": true,
+        "web_search_tool_type": "text_and_image",
+        "supports_reasoning_summaries": true,
+        "shell_type": "shell_command",
+        "supports_multiple_system_messages": false,
+        "supports_turn_pause": false,
+        "truncation_policy": {
+          "mode": "tokens",
+          "limit": 10000
+        }
+      }
     },
     {
       "prefer_websockets": true,
@@ -349,7 +439,37 @@
       "supports_search_tool": true,
       "service_tiers": [],
       "additional_speed_tiers": [],
-      "supports_reasoning_summaries": true
+      "supports_reasoning_summaries": true,
+      "capabilities": {
+        "context_window": 272000,
+        "max_context_window": 272000,
+        "effective_context_window_percent": 95,
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "supports_thinking": true,
+        "thinking_effort": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "supports_tools": true,
+        "supports_parallel_tool_calls": true,
+        "supports_vision": true,
+        "supports_image_detail_original": true,
+        "supports_search_tool": true,
+        "web_search_tool_type": "text",
+        "supports_reasoning_summaries": true,
+        "shell_type": "shell_command",
+        "supports_multiple_system_messages": false,
+        "supports_turn_pause": false,
+        "truncation_policy": {
+          "mode": "tokens",
+          "limit": 10000
+        }
+      }
     },
     {
       "prefer_websockets": true,
@@ -429,7 +549,37 @@
       "supports_search_tool": true,
       "service_tiers": [],
       "additional_speed_tiers": [],
-      "supports_reasoning_summaries": true
+      "supports_reasoning_summaries": true,
+      "capabilities": {
+        "context_window": 272000,
+        "max_context_window": 272000,
+        "effective_context_window_percent": 95,
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "supports_thinking": true,
+        "thinking_effort": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "supports_tools": true,
+        "supports_parallel_tool_calls": true,
+        "supports_vision": true,
+        "supports_image_detail_original": false,
+        "supports_search_tool": true,
+        "web_search_tool_type": "text",
+        "supports_reasoning_summaries": true,
+        "shell_type": "shell_command",
+        "supports_multiple_system_messages": false,
+        "supports_turn_pause": false,
+        "truncation_policy": {
+          "mode": "bytes",
+          "limit": 10000
+        }
+      }
     },
     {
       "prefer_websockets": true,
@@ -510,7 +660,37 @@
       "supports_search_tool": true,
       "service_tiers": [],
       "additional_speed_tiers": [],
-      "supports_reasoning_summaries": true
+      "supports_reasoning_summaries": true,
+      "capabilities": {
+        "context_window": 272000,
+        "max_context_window": 1000000,
+        "effective_context_window_percent": 95,
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "supports_thinking": true,
+        "thinking_effort": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "supports_tools": true,
+        "supports_parallel_tool_calls": true,
+        "supports_vision": true,
+        "supports_image_detail_original": true,
+        "supports_search_tool": true,
+        "web_search_tool_type": "text_and_image",
+        "supports_reasoning_summaries": true,
+        "shell_type": "shell_command",
+        "supports_multiple_system_messages": false,
+        "supports_turn_pause": false,
+        "truncation_policy": {
+          "mode": "tokens",
+          "limit": 10000
+        }
+      }
     }
   ]
 }

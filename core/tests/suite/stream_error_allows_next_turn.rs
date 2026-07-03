@@ -1,5 +1,6 @@
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::WireApi;
+use ody_model_provider_info::ProviderCapabilities;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::Op;
 use ody_protocol::user_input::UserInput;
@@ -80,6 +81,7 @@ async fn continue_after_stream_error() {
         websocket_connect_timeout_ms: None,
         requires_odysseythink_auth: false,
         supports_websockets: false,
+            capabilities: ProviderCapabilities::default(),
     };
 
     let TestOdy { ody, .. } = test_ody()

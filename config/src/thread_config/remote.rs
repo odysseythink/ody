@@ -4,6 +4,7 @@ use std::num::NonZeroU64;
 use std::time::Duration;
 
 use ody_model_provider_info::ModelProviderInfo;
+use ody_model_provider_info::ProviderCapabilities;
 use ody_model_provider_info::WireApi;
 use ody_protocol::config_types::ModelProviderAuthInfo;
 use ody_utils_absolute_path::AbsolutePathBuf;
@@ -190,6 +191,7 @@ fn model_provider_from_proto(
         websocket_connect_timeout_ms: provider.websocket_connect_timeout_ms,
         requires_odysseythink_auth: provider.requires_odysseythink_auth,
         supports_websockets: provider.supports_websockets,
+            capabilities: ProviderCapabilities::default(),
     };
     Ok((id, info))
 }
@@ -216,6 +218,7 @@ fn model_provider_to_proto(
         websocket_connect_timeout_ms,
         requires_odysseythink_auth,
         supports_websockets,
+        capabilities: _capabilities,
     } = provider;
 
     proto::ModelProvider {
@@ -288,7 +291,10 @@ fn proto_string_map(values: HashMap<String, String>) -> proto::StringMap {
 fn proto_wire_api(wire_api: WireApi) -> proto::WireApi {
     match wire_api {
         WireApi::Responses => proto::WireApi::Responses,
-        WireApi::Chat => proto::WireApi::Chat,
+        WireApi::Chat
+        | WireApi::AnthropicMessages
+        | WireApi::GoogleGenAI
+        | WireApi::Local => proto::WireApi::Chat,
     }
 }
 
@@ -536,6 +542,7 @@ mod tests {
             websocket_connect_timeout_ms: Some(10_000),
             requires_odysseythink_auth: false,
             supports_websockets: true,
+            capabilities: ProviderCapabilities::default(),
         }
     }
 

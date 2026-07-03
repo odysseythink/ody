@@ -11,6 +11,7 @@ use ody_features::Feature;
 use ody_login::OdyAuth;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::WireApi;
+use ody_model_provider_info::ProviderCapabilities;
 use ody_otel::MetricsClient;
 use ody_otel::MetricsConfig;
 use ody_otel::SessionTelemetry;
@@ -2117,6 +2118,7 @@ fn websocket_provider_with_connect_timeout(
         websocket_connect_timeout_ms,
         requires_odysseythink_auth: false,
         supports_websockets: true,
+        capabilities: ProviderCapabilities::default(),
     }
 }
 

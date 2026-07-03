@@ -17,6 +17,7 @@ chrono = { workspace = true, features = ["serde"] }
 ody-app-server-protocol = { workspace = true }
 ody-collaboration-mode-templates = { workspace = true }
 ody-login = { workspace = true }
+ody-model-provider-info = { workspace = true }
 ody-otel = { workspace = true }
 ody-protocol = { workspace = true }
 ody-utils-output-truncation = { workspace = true }

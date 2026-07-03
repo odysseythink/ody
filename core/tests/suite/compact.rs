@@ -8,6 +8,7 @@ use ody_features::Feature;
 use ody_login::OdyAuth;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::built_in_model_providers;
+use ody_model_provider_info::ProviderCapabilities;
 use ody_models_manager::bundled_models_response;
 use ody_protocol::config_types::AutoCompactTokenLimitScope;
 use ody_protocol::items::TurnItem;
@@ -401,6 +402,7 @@ fn local_compaction_provider(server: &wiremock::MockServer) -> ModelProviderInfo
     provider.base_url = Some(format!("{}/v1", server.uri()));
     provider.supports_websockets = false;
     provider
+    capabilities: ProviderCapabilities::default(),
 }
 
 fn model_info_with_context_window(slug: &str, context_window: i64) -> ModelInfo {

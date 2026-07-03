@@ -5,6 +5,7 @@ use ody_protocol::odysseythink_models::ConfigShellToolType;
 use ody_protocol::odysseythink_models::ModelInfo;
 use ody_protocol::odysseythink_models::ModelVisibility;
 use ody_protocol::odysseythink_models::TruncationPolicyConfig;
+use ody_protocol::odysseythink_models::ModelCapabilities;
 use pretty_assertions::assert_eq;
 
 use super::*;
@@ -49,6 +50,7 @@ fn model_with_shell_type(shell_type: ConfigShellToolType) -> ModelInfo {
         auto_review_model_override: None,
         tool_mode: None,
         multi_agent_version: None,
+        capabilities: ModelCapabilities::default(),
     }
 }
 
