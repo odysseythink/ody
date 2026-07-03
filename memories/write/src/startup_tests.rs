@@ -16,7 +16,6 @@ use ody_model_provider::ProviderAccountResult;
 use ody_model_provider::SharedModelProvider;
 use ody_model_provider::create_model_provider;
 use ody_model_provider_info::ModelProviderInfo;
-use ody_model_provider_info::ProviderCapabilities;
 use ody_protocol::ThreadId;
 use ody_protocol::config_types::ServiceTier;
 use ody_protocol::models::ContentItem;
@@ -602,7 +601,12 @@ impl MockMemoryModelProvider {
 impl ModelProvider for MockMemoryModelProvider {
     fn info(&self) -> &ModelProviderInfo {
         self.delegate.info()
-            capabilities: ProviderCapabilities::default(),
+    }
+
+    fn chat_provider(
+        &self,
+    ) -> ModelProviderFuture<'_, ody_protocol::error::Result<Box<dyn ody_model_provider::ChatProvider>>> {
+        self.delegate.chat_provider()
     }
 
     fn memory_extraction_preferred_model(&self) -> &'static str {
