@@ -2371,6 +2371,100 @@
       ],
       "type": "string"
     },
+    "PlanContextIsolation": {
+      "description": "Whether Plan mode conversations are isolated from the main thread context.",
+      "oneOf": [
+        {
+          "description": "Plan conversations stay in the main thread (legacy behavior).",
+          "enum": [
+            "off"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Plan conversations are routed to a separate partition.",
+          "enum": [
+            "on"
+          ],
+          "type": "string"
+        }
+      ]
+    },
+    "PlanEnforcement": {
+      "description": "Enforcement level for Plan mode write protections.",
+      "oneOf": [
+        {
+          "description": "Truly read-only planning: writes are denied with feedback to the model.",
+          "enum": [
+            "strict"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Every write operation is forced through user approval.",
+          "enum": [
+            "ask"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Equivalent to the legacy prompt-only Plan behavior.",
+          "enum": [
+            "advisory"
+          ],
+          "type": "string"
+        }
+      ]
+    },
+    "PlanModeConfigToml": {
+      "additionalProperties": false,
+      "description": "Settings scoped to Plan mode.",
+      "properties": {
+        "context_isolation": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/PlanContextIsolation"
+            }
+          ],
+          "default": "off",
+          "description": "Whether to isolate Plan mode conversations from the main thread context."
+        },
+        "enforcement": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/PlanEnforcement"
+            }
+          ],
+          "default": "strict",
+          "description": "Enforcement level for Plan mode write protections."
+        },
+        "model": {
+          "description": "Optional model alias to use exclusively in Plan mode.",
+          "type": "string"
+        },
+        "persist_plan_file": {
+          "default": true,
+          "description": "Whether to persist the plan to a file on disk.",
+          "type": "boolean"
+        },
+        "reasoning_effort": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ReasoningEffort"
+            }
+          ],
+          "description": "Reasoning effort override used by the Plan preset."
+        },
+        "split_threshold": {
+          "default": 8,
+          "description": "Number of tasks that triggers splitting a large plan into multiple files. 0 disables splitting.",
+          "format": "uint",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
     "PluginConfig": {
       "additionalProperties": false,
       "properties": {
@@ -5404,8 +5498,29 @@
       ],
       "description": "Optionally specify a personality for the model"
     },
+    "plan_mode": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/PlanModeConfigToml"
+        }
+      ],
+      "default": {
+        "context_isolation": "off",
+        "enforcement": "strict",
+        "model": null,
+        "persist_plan_file": true,
+        "reasoning_effort": null,
+        "split_threshold": 8
+      },
+      "description": "Plan mode settings."
+    },
     "plan_mode_reasoning_effort": {
-      "$ref": "#/definitions/ReasoningEffort"
+      "allOf": [
+        {
+          "$ref": "#/definitions/ReasoningEffort"
+        }
+      ],
+      "description": "Deprecated: use `plan_mode.reasoning_effort` instead."
     },
     "plugins": {
       "additionalProperties": {

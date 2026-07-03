@@ -111,6 +111,88 @@ pub struct OrchestratorFeatureToml {
     pub enabled: Option<bool>,
 }
 
+/// Enforcement level for Plan mode write protections.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[schemars(deny_unknown_fields)]
+pub enum PlanEnforcement {
+    /// Truly read-only planning: writes are denied with feedback to the model.
+    #[default]
+    Strict,
+    /// Every write operation is forced through user approval.
+    Ask,
+    /// Equivalent to the legacy prompt-only Plan behavior.
+    Advisory,
+}
+
+/// Whether Plan mode conversations are isolated from the main thread context.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[schemars(deny_unknown_fields)]
+pub enum PlanContextIsolation {
+    /// Plan conversations stay in the main thread (legacy behavior).
+    #[default]
+    Off,
+    /// Plan conversations are routed to a separate partition.
+    On,
+}
+
+const fn default_plan_enforcement() -> Option<PlanEnforcement> {
+    Some(PlanEnforcement::Strict)
+}
+
+const fn default_persist_plan_file() -> Option<bool> {
+    Some(true)
+}
+
+const fn default_plan_context_isolation() -> Option<PlanContextIsolation> {
+    Some(PlanContextIsolation::Off)
+}
+
+const fn default_split_threshold() -> Option<usize> {
+    Some(8)
+}
+
+fn default_plan_mode_config() -> Option<PlanModeConfigToml> {
+    Some(PlanModeConfigToml::default())
+}
+
+/// Settings scoped to Plan mode.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct PlanModeConfigToml {
+    /// Enforcement level for Plan mode write protections.
+    #[serde(default = "default_plan_enforcement")]
+    pub enforcement: Option<PlanEnforcement>,
+    /// Whether to persist the plan to a file on disk.
+    #[serde(default = "default_persist_plan_file")]
+    pub persist_plan_file: Option<bool>,
+    /// Whether to isolate Plan mode conversations from the main thread context.
+    #[serde(default = "default_plan_context_isolation")]
+    pub context_isolation: Option<PlanContextIsolation>,
+    /// Optional model alias to use exclusively in Plan mode.
+    pub model: Option<String>,
+    /// Reasoning effort override used by the Plan preset.
+    pub reasoning_effort: Option<ReasoningEffort>,
+    /// Number of tasks that triggers splitting a large plan into multiple files.
+    /// 0 disables splitting.
+    #[serde(default = "default_split_threshold")]
+    pub split_threshold: Option<usize>,
+}
+
+impl Default for PlanModeConfigToml {
+    fn default() -> Self {
+        Self {
+            enforcement: default_plan_enforcement(),
+            persist_plan_file: default_persist_plan_file(),
+            context_isolation: default_plan_context_isolation(),
+            model: None,
+            reasoning_effort: None,
+            split_threshold: default_split_threshold(),
+        }
+    }
+}
+
 /// Base config deserialized from ~/.ody-code/config.toml.
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, JsonSchema)]
 #[schemars(deny_unknown_fields)]
@@ -327,7 +409,11 @@ pub struct ConfigToml {
     pub show_raw_agent_reasoning: Option<bool>,
 
     pub model_reasoning_effort: Option<ReasoningEffort>,
+    /// Deprecated: use `plan_mode.reasoning_effort` instead.
     pub plan_mode_reasoning_effort: Option<ReasoningEffort>,
+    /// Plan mode settings.
+    #[serde(default = "default_plan_mode_config")]
+    pub plan_mode: Option<PlanModeConfigToml>,
     pub model_reasoning_summary: Option<ReasoningSummary>,
     /// Optional verbosity control for GPT-5 models (Responses API `text.verbosity`).
     pub model_verbosity: Option<Verbosity>,
@@ -1223,5 +1309,41 @@ type = "openai"
         let provider = converted.get("openai_custom").expect("provider");
         assert_eq!(provider.wire_api, WireApi::Responses);
         assert!(provider.capabilities.supports_websockets);
+    }
+
+    #[test]
+    fn plan_mode_defaults() {
+        let config: ConfigToml = toml::from_str("").expect("empty config should deserialize");
+        let plan_mode = config.plan_mode.expect("default plan_mode table should be present");
+        assert_eq!(plan_mode.enforcement, Some(PlanEnforcement::Strict));
+        assert_eq!(plan_mode.persist_plan_file, Some(true));
+        assert_eq!(plan_mode.context_isolation, Some(PlanContextIsolation::Off));
+        assert_eq!(plan_mode.split_threshold, Some(8));
+        assert!(plan_mode.model.is_none());
+        assert!(plan_mode.reasoning_effort.is_none());
+    }
+
+    #[test]
+    fn plan_mode_deserializes_all_fields() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[plan_mode]
+enforcement = "ask"
+persist_plan_file = false
+context_isolation = "on"
+model = "kimi-k2-thinking"
+reasoning_effort = "high"
+split_threshold = 16
+"#,
+        )
+        .expect("plan_mode config should deserialize");
+
+        let plan_mode = config.plan_mode.expect("plan_mode should be present");
+        assert_eq!(plan_mode.enforcement, Some(PlanEnforcement::Ask));
+        assert_eq!(plan_mode.persist_plan_file, Some(false));
+        assert_eq!(plan_mode.context_isolation, Some(PlanContextIsolation::On));
+        assert_eq!(plan_mode.model, Some("kimi-k2-thinking".to_string()));
+        assert_eq!(plan_mode.reasoning_effort, Some(ReasoningEffort::High));
+        assert_eq!(plan_mode.split_threshold, Some(16));
     }
 }
