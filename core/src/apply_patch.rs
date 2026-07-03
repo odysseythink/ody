@@ -1,10 +1,14 @@
 use crate::function_tool::FunctionCallError;
+use crate::safety::PlanGateDecision;
 use crate::safety::SafetyCheck;
 use crate::safety::assess_patch_safety;
+use crate::safety::plan_mode_gate_for_patch;
 use crate::session::turn_context::TurnContext;
 use crate::tools::sandboxing::ExecApprovalRequirement;
 use ody_apply_patch::ApplyPatchAction;
 use ody_apply_patch::ApplyPatchFileChange;
+use ody_config::config_toml::PlanEnforcement;
+use ody_protocol::config_types::ModeKind;
 use ody_protocol::protocol::FileChange;
 use ody_protocol::protocol::FileSystemSandboxPolicy;
 use ody_utils_path_uri::PathUri;
@@ -31,11 +35,83 @@ pub(crate) struct ApplyPatchRuntimeInvocation {
     pub(crate) exec_approval_requirement: ExecApprovalRequirement,
 }
 
+fn resolve_plan_enforcement(config: &crate::config::Config) -> PlanEnforcement {
+    config
+        .plan_mode
+        .as_ref()
+        .and_then(|pm| pm.enforcement)
+        .unwrap_or_default()
+}
+
+/// Converts the plan-mode gate decision into an `InternalApplyPatchInvocation` when the
+/// gate wants to short-circuit `apply_patch`. Returns `None` when the patch should proceed
+/// to the normal safety assessment.
+///
+/// This helper is `#[cfg(test)]` because production code in `apply_patch` needs to keep the
+/// owned `ApplyPatchAction` available for the Allow/advisory fallthrough path; it therefore
+/// calls `plan_mode_gate_for_patch` directly and constructs invocations inline. The helper
+/// remains as a pure, testable seam for the conversion logic.
+#[cfg(test)]
+pub(crate) fn apply_plan_mode_patch_gate(
+    mode: &ody_protocol::config_types::CollaborationMode,
+    enforcement: PlanEnforcement,
+    action: ApplyPatchAction,
+) -> Option<InternalApplyPatchInvocation> {
+    if mode.mode != ModeKind::Plan {
+        return None;
+    }
+    match plan_mode_gate_for_patch(mode, enforcement, &action, None) {
+        PlanGateDecision::Deny { reason } => Some(InternalApplyPatchInvocation::Output(Err(
+            FunctionCallError::RespondToModel(format!("Plan mode: {reason}")),
+        ))),
+        PlanGateDecision::Ask { reason } => Some(InternalApplyPatchInvocation::DelegateToRuntime(
+            ApplyPatchRuntimeInvocation {
+                action,
+                auto_approved: false,
+                exec_approval_requirement: ExecApprovalRequirement::NeedsApproval {
+                    reason: Some(reason),
+                    proposed_execpolicy_amendment: None,
+                },
+            },
+        )),
+        PlanGateDecision::Allow => None,
+    }
+}
+
 pub(crate) async fn apply_patch(
     turn_context: &TurnContext,
     file_system_sandbox_policy: &FileSystemSandboxPolicy,
     action: ApplyPatchAction,
 ) -> InternalApplyPatchInvocation {
+    if turn_context.collaboration_mode.mode == ModeKind::Plan {
+        let enforcement = resolve_plan_enforcement(&turn_context.config);
+        match plan_mode_gate_for_patch(
+            &turn_context.collaboration_mode,
+            enforcement,
+            &action,
+            None,
+        ) {
+            PlanGateDecision::Deny { reason } => {
+                return InternalApplyPatchInvocation::Output(Err(
+                    FunctionCallError::RespondToModel(format!("Plan mode: {reason}")),
+                ));
+            }
+            PlanGateDecision::Ask { reason } => {
+                return InternalApplyPatchInvocation::DelegateToRuntime(
+                    ApplyPatchRuntimeInvocation {
+                        action,
+                        auto_approved: false,
+                        exec_approval_requirement: ExecApprovalRequirement::NeedsApproval {
+                            reason: Some(reason),
+                            proposed_execpolicy_amendment: None,
+                        },
+                    },
+                );
+            }
+            PlanGateDecision::Allow => {}
+        }
+    }
+
     match assess_patch_safety(
         &action,
         turn_context.approval_policy.value(),
