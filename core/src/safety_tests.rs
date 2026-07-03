@@ -420,3 +420,114 @@ fn plan_gate_allows_default_mode_regardless_of_enforcement() {
         assert_eq!(decision, PlanGateDecision::Allow, "Default mode should never be gated");
     }
 }
+
+fn vec_str(items: &[&str]) -> Vec<String> {
+    items.iter().map(|s| s.to_string()).collect()
+}
+
+#[test]
+fn plan_gate_exec_read_only_allowed_in_strict() {
+    let cases = vec![
+        vec_str(&["ls"]),
+        vec_str(&["cat", "file.txt"]),
+        vec_str(&["grep", "TODO", "src"]),
+        vec_str(&["rg", "TODO"]),
+        vec_str(&["find", ".", "-name", "x"]),
+        vec_str(&["git", "status"]),
+        vec_str(&["git", "diff"]),
+        vec_str(&["git", "log", "-1"]),
+        vec_str(&["sed", "-n", "1,5p", "file.txt"]),
+        vec_str(&["bash", "-lc", "git status && grep TODO src"]),
+        vec_str(&["bash", "-lc", "ls | wc -l"]),
+    ];
+    for cmd in cases {
+        assert_eq!(
+            plan_mode_gate_for_exec(&plan_mode(), PlanEnforcement::Strict, &cmd),
+            PlanGateDecision::Allow,
+            "expected {cmd:?} to be read-only"
+        );
+    }
+}
+
+#[test]
+fn plan_gate_exec_known_write_strict_denies() {
+    let cases = vec![
+        vec_str(&["rm", "-rf", "/"]),
+        vec_str(&["rm", "-f", "x"]),
+        vec_str(&["cp", "a", "b"]),
+        vec_str(&["mv", "a", "b"]),
+        vec_str(&["bash", "-lc", "echo x > file.txt"]),
+        vec_str(&["bash", "-lc", "echo x >> file.txt"]),
+        vec_str(&["git", "commit", "-m", "x"]),
+        vec_str(&["git", "checkout", "main"]),
+        vec_str(&["git", "apply", "patch.diff"]),
+    ];
+    for cmd in cases {
+        assert!(
+            matches!(
+                plan_mode_gate_for_exec(&plan_mode(), PlanEnforcement::Strict, &cmd),
+                PlanGateDecision::Deny { .. }
+            ),
+            "expected {cmd:?} to be denied in strict"
+        );
+    }
+}
+
+#[test]
+fn plan_gate_exec_indeterminate_strict_asks() {
+    let cases = vec![
+        vec_str(&["cargo", "check"]),
+        vec_str(&["python", "script.py"]),
+        vec_str(&["bash", "-lc", "some-tool --analyze"]),
+    ];
+    for cmd in cases {
+        assert!(
+            matches!(
+                plan_mode_gate_for_exec(&plan_mode(), PlanEnforcement::Strict, &cmd),
+                PlanGateDecision::Ask { .. }
+            ),
+            "expected {cmd:?} to require approval in strict"
+        );
+    }
+}
+
+#[test]
+fn plan_gate_exec_ask_enforcement_asks_for_non_readonly() {
+    for cmd in [vec_str(&["cp", "a", "b"]), vec_str(&["cargo", "check"])] {
+        assert!(
+            matches!(
+                plan_mode_gate_for_exec(&plan_mode(), PlanEnforcement::Ask, &cmd),
+                PlanGateDecision::Ask { .. }
+            ),
+            "expected {cmd:?} to require approval in ask enforcement"
+        );
+    }
+}
+
+#[test]
+fn plan_gate_exec_advisory_allows_everything() {
+    for cmd in [vec_str(&["rm", "-rf", "/"]), vec_str(&["cargo", "check"])] {
+        assert_eq!(
+            plan_mode_gate_for_exec(&plan_mode(), PlanEnforcement::Advisory, &cmd),
+            PlanGateDecision::Allow,
+            "advisory should behave like the legacy prompt-only plan mode"
+        );
+    }
+}
+
+#[test]
+fn plan_gate_exec_default_mode_zero_regression() {
+    for enforcement in [
+        PlanEnforcement::Strict,
+        PlanEnforcement::Ask,
+        PlanEnforcement::Advisory,
+    ] {
+        for cmd in [vec_str(&["rm", "-rf", "/"]), vec_str(&["ls"])] {
+            assert_eq!(
+                plan_mode_gate_for_exec(&default_mode(), enforcement, &cmd),
+                PlanGateDecision::Allow,
+                "Default mode must never gate exec"
+            );
+        }
+    }
+}
