@@ -25,6 +25,7 @@ use ody_config::ThreadConfigLoader;
 use ody_config::config_toml::ConfigLockfileToml;
 use ody_config::config_toml::ConfigToml;
 use ody_config::config_toml::DEFAULT_PROJECT_DOC_MAX_BYTES;
+use ody_config::config_toml::PlanModeConfigToml;
 use ody_config::config_toml::ProjectConfig;
 use ody_config::config_toml::RealtimeAudioConfig;
 use ody_config::config_toml::RealtimeConfig;
@@ -941,6 +942,8 @@ pub struct Config {
     /// Plan preset. The `none` value means "no reasoning" (not "inherit the
     /// global default").
     pub plan_mode_reasoning_effort: Option<ReasoningEffort>,
+    /// Plan mode settings (enforcement, persistence, isolation, model, split threshold).
+    pub plan_mode: Option<PlanModeConfigToml>,
 
     /// Optional value to use for `reasoning.summary` when making a request
     /// using the Responses API. When unset, the model catalog default is used.
@@ -3843,6 +3846,7 @@ impl Config {
             guardian_policy_config,
             model_reasoning_effort: cfg.model_reasoning_effort,
             plan_mode_reasoning_effort: cfg.plan_mode_reasoning_effort,
+            plan_mode: cfg.plan_mode.clone(),
             model_reasoning_summary: cfg.model_reasoning_summary,
             model_supports_reasoning_summaries: cfg.model_supports_reasoning_summaries,
             model_catalog,

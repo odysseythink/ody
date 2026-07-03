@@ -13,6 +13,8 @@ use ody_config::config_toml::AgentsToml;
 use ody_config::config_toml::AutoReviewToml;
 use ody_config::config_toml::ConfigToml;
 use ody_config::config_toml::ExperimentalRequestUserInput;
+use ody_config::config_toml::PlanContextIsolation;
+use ody_config::config_toml::PlanEnforcement;
 use ody_config::config_toml::ProjectConfig;
 use ody_config::config_toml::RealtimeConfig;
 use ody_config::config_toml::RealtimeToml;
@@ -11104,4 +11106,31 @@ fn test_tui_notification_condition_rejects_unknown_value() {
             && err.contains("always"),
         "unexpected error: {err}"
     );
+}
+
+#[tokio::test]
+async fn config_promotes_plan_mode_from_toml() {
+    let toml = r#"
+[plan_mode]
+enforcement = "ask"
+persist_plan_file = false
+context_isolation = "on"
+model = "kimi-k2-thinking"
+split_threshold = 16
+"#;
+    let config_toml: ConfigToml = toml::from_str(toml).expect("valid toml");
+    let ody_home = tempdir().unwrap();
+    let config = Config::load_from_base_config_with_overrides(
+        config_toml,
+        ConfigOverrides::default(),
+        ody_home.abs(),
+    )
+    .await
+    .expect("load config");
+    let plan_mode = config.plan_mode.expect("plan_mode should be present");
+    assert_eq!(plan_mode.enforcement, Some(PlanEnforcement::Ask));
+    assert_eq!(plan_mode.persist_plan_file, Some(false));
+    assert_eq!(plan_mode.context_isolation, Some(PlanContextIsolation::On));
+    assert_eq!(plan_mode.model, Some("kimi-k2-thinking".to_string()));
+    assert_eq!(plan_mode.split_threshold, Some(16));
 }
