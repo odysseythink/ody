@@ -7701,6 +7701,10 @@ dependencies = [
 name = "ody-model-provider"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "futures",
  "http 1.4.0",
  "ody-api",
  "ody-client",
@@ -7711,8 +7715,11 @@ dependencies = [
  "ody-otel",
  "ody-protocol",
  "ody-response-debug-context",
+ "ody-tools",
  "pretty_assertions",
+ "serde",
  "serde_json",
+ "thiserror 2.0.18",
  "tokio",
  "tracing",
  "wiremock",

@@ -4561,6 +4561,27 @@
             "chat"
           ],
           "type": "string"
+        },
+        {
+          "description": "Anthropic Messages API at `/v1/messages`.",
+          "enum": [
+            "anthropic_messages"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Google GenAI API.",
+          "enum": [
+            "google_genai"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Local model servers (Ollama, LM Studio).",
+          "enum": [
+            "local"
+          ],
+          "type": "string"
         }
       ]
     },

@@ -9,3 +9,9 @@ rustflags = ["-C", "link-arg=/STACK:8388608", "-C", "link-arg=/arm64hazardfree"]
 
 [target.'cfg(all(windows, target_env = "gnu"))']
 rustflags = ["-C", "link-arg=-Wl,--stack,8388608"]
+
+[env]
+# macOS uses a 2 MiB default thread stack, which is too small for deep async
+# call chains in agent control and guardian tests. Use 4 MiB to match the
+# effective headroom on Linux and stay below the Windows link-time 8 MiB.
+RUST_MIN_STACK = "4194304"

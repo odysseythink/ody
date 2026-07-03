@@ -27,6 +27,8 @@ fn base_request(vendor: ChatVendor) -> ChatCompletionsRequest {
         reasoning_effort: None,
         max_completion_tokens: None,
         temperature: None,
+        top_p: None,
+        stop: Vec::new(),
         vendor,
     }
 }

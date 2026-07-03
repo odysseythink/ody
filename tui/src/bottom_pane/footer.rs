@@ -43,17 +43,12 @@
 //! `FooterProps` mapping.
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
-use crate::line_truncation::truncate_line_with_ellipsis_if_overflow;
 use crate::render::line_utils::prefix_lines;
 use crate::status::format_tokens_compact;
 use crate::ui_consts::FOOTER_INDENT_COLS;
 use crossterm::event::KeyCode;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-#[cfg(test)]
-use ratatui::layout::Constraint;
-#[cfg(test)]
-use ratatui::layout::Layout;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;
@@ -233,10 +228,6 @@ pub(crate) fn reset_mode_after_activity(current: FooterMode) -> FooterMode {
 }
 
 pub(crate) fn footer_height(props: &FooterProps) -> u16 {
-    let is_base_mode = matches!(
-        props.mode,
-        FooterMode::ComposerEmpty | FooterMode::ComposerHasDraft
-    );
     let show_shortcuts_hint = match props.mode {
         FooterMode::ComposerEmpty => true,
         FooterMode::ComposerHasDraft => false,
@@ -253,19 +244,14 @@ pub(crate) fn footer_height(props: &FooterProps) -> u16 {
         | FooterMode::ShortcutOverlay
         | FooterMode::EscHint => false,
     };
-    let lines = footer_from_props_lines(
+    footer_from_props_lines(
         props,
         /*collaboration_mode_indicator*/ None,
         /*show_cycle_hint*/ false,
         show_shortcuts_hint,
         show_queue_hint,
     )
-    .len() as u16;
-    if is_base_mode {
-        lines.max(2)
-    } else {
-        lines
-    }
+    .len() as u16
 }
 
 /// Render a single precomputed footer line.
@@ -1033,61 +1019,6 @@ pub(crate) fn context_window_line(percent: Option<i64>, used_tokens: Option<i64>
     Line::from(vec![Span::from("100% context left").dim()])
 }
 
-/// Format a raw token count for the second footer line.
-///
-/// Mirrors `crate::status::format_tokens_compact` but returns `"--"` when the value is unknown.
-pub(crate) fn format_context_token_count(tokens: Option<i64>) -> String {
-    tokens.map(format_tokens_compact).unwrap_or_else(|| "--".to_string())
-}
-
-/// Format the raw context usage as `context: XX.X% (used/max)`.
-///
-/// Uses the raw token ratio (not the `BASELINE_TOKENS` adjustment used by the first-row context
-/// indicator). Returns `context: --` when the maximum context window is unknown or zero.
-pub(crate) fn format_context_usage(context_tokens: Option<i64>, max_context_tokens: Option<i64>) -> String {
-    let max = match max_context_tokens {
-        Some(max) if max > 0 => max,
-        _ => return "context: --".to_string(),
-    };
-    let used = context_tokens.unwrap_or(0).max(0);
-    let percent = (used as f64 / max as f64 * 100.0).clamp(0.0, 100.0);
-    format!(
-        "context: {:.1}% ({}/{})",
-        percent,
-        format_context_token_count(Some(used)),
-        format_context_token_count(Some(max)),
-    )
-}
-
-/// Render the second footer line: model name on the left and raw context usage on the right.
-///
-/// The line is indented on both sides to match the first footer line. If the model name would
-/// collide with the context usage, the model name is truncated with an ellipsis.
-pub(crate) fn render_second_footer_line(
-    area: Rect,
-    buf: &mut Buffer,
-    model_name: &str,
-    context_tokens: Option<i64>,
-    max_context_tokens: Option<i64>,
-) {
-    if area.is_empty() {
-        return;
-    }
-
-    let right_text = format_context_usage(context_tokens, max_context_tokens);
-    let right_line = Line::from(vec![Span::from(right_text).dim()]);
-    let right_width = right_line.width() as u16;
-
-    let left_line = if let Some(max_left) = max_left_width_for_right(area, right_width) {
-        truncate_line_with_ellipsis_if_overflow(Line::from(model_name.to_string()), max_left as usize)
-    } else {
-        Line::from(model_name.to_string())
-    };
-
-    render_footer_line(area, buf, left_line);
-    render_context_right(area, buf, &right_line);
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ShortcutId {
     Commands,
@@ -1386,24 +1317,8 @@ mod tests {
     ) {
         terminal
             .draw(|f| {
-                let total_area = Rect::new(0, 0, f.area().width, height);
-                let (first_line_area, second_line_area) = if total_area.height >= 2
-                    && matches!(
-                        props.mode,
-                        FooterMode::ComposerEmpty | FooterMode::ComposerHasDraft
-                    ) {
-                    let [first, second] = Layout::vertical([
-                        Constraint::Length(1),
-                        Constraint::Length(1),
-                    ])
-                    .areas(total_area);
-                    (first, Some(second))
-                } else {
-                    (total_area, None)
-                };
-                {
-                    let area = first_line_area;
-                    let show_cycle_hint = !props.is_task_running;
+                let area = Rect::new(0, 0, f.area().width, height);
+                let show_cycle_hint = !props.is_task_running;
                 let show_shortcuts_hint = match props.mode {
                     FooterMode::ComposerEmpty => true,
                     FooterMode::ComposerHasDraft => false,
@@ -1558,16 +1473,6 @@ mod tests {
                     if show_context && let Some(line) = &right_line {
                         render_context_right(area, f.buffer_mut(), line);
                     }
-                }
-            }
-                if let Some(second_line_area) = second_line_area {
-                    render_second_footer_line(
-                        second_line_area,
-                        f.buffer_mut(),
-                        "",
-                        None,
-                        None,
-                    );
                 }
             })
             .unwrap();

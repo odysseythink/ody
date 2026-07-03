@@ -55,7 +55,7 @@ const GLM_ENV_KEY: &str = "GLM_API_KEY";
 
 /// Wire protocol that the provider speaks.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, JsonSchema)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum WireApi {
     /// The Responses API exposed by OpenAI at `/v1/responses`.
     #[default]
@@ -63,6 +63,13 @@ pub enum WireApi {
     /// The Chat Completions API exposed at `/v1/chat/completions`. Used by
     /// OpenAI-compatible third-party providers such as Kimi, DeepSeek and GLM.
     Chat,
+    /// Anthropic Messages API at `/v1/messages`.
+    AnthropicMessages,
+    /// Google GenAI API.
+    #[schemars(rename = "google_genai")]
+    GoogleGenAI,
+    /// Local model servers (Ollama, LM Studio).
+    Local,
 }
 
 impl fmt::Display for WireApi {
@@ -70,6 +77,9 @@ impl fmt::Display for WireApi {
         let value = match self {
             Self::Responses => "responses",
             Self::Chat => "chat",
+            Self::AnthropicMessages => "anthropic_messages",
+            Self::GoogleGenAI => "google_genai",
+            Self::Local => "local",
         };
         f.write_str(value)
     }
@@ -84,9 +94,12 @@ impl<'de> Deserialize<'de> for WireApi {
         match value.as_str() {
             "responses" => Ok(Self::Responses),
             "chat" => Ok(Self::Chat),
+            "anthropic_messages" => Ok(Self::AnthropicMessages),
+            "google_genai" => Ok(Self::GoogleGenAI),
+            "local" => Ok(Self::Local),
             _ => Err(serde::de::Error::unknown_variant(
                 &value,
-                &["responses", "chat"],
+                &["responses", "chat", "anthropic_messages", "google_genai", "local"],
             )),
         }
     }

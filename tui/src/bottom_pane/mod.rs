@@ -28,7 +28,6 @@ use crate::key_hint::KeyBinding;
 use crate::key_hint::KeyBindingListExt;
 use crate::keymap::RuntimeKeymap;
 use crate::keymap::primary_binding;
-use crate::token_usage::TokenUsage;
 use crate::render::renderable::FlexRenderable;
 use crate::render::renderable::Renderable;
 use crate::render::renderable::RenderableItem;
@@ -238,8 +237,6 @@ pub(crate) struct BottomPane {
     pending_thread_approvals: PendingThreadApprovals,
     context_window_percent: Option<i64>,
     context_window_used_tokens: Option<i64>,
-    context_tokens: Option<i64>,
-    max_context_tokens: Option<i64>,
     keymap: RuntimeKeymap,
 }
 
@@ -297,8 +294,6 @@ impl BottomPane {
             animations_enabled,
             context_window_percent: None,
             context_window_used_tokens: None,
-            context_tokens: None,
-            max_context_tokens: None,
             keymap,
         }
     }
@@ -1052,33 +1047,17 @@ impl BottomPane {
         }
     }
 
-    pub(crate) fn set_context_window(
-        &mut self,
-        last_context_tokens: Option<i64>,
-        total_context_tokens: Option<i64>,
-        max_context_tokens: Option<i64>,
-    ) {
-        if self.context_tokens == total_context_tokens && self.max_context_tokens == max_context_tokens
+    pub(crate) fn set_context_window(&mut self, percent: Option<i64>, used_tokens: Option<i64>) {
+        if self.context_window_percent == percent && self.context_window_used_tokens == used_tokens
         {
             return;
         }
 
-        self.context_tokens = total_context_tokens;
-        self.max_context_tokens = max_context_tokens;
-        let (percent, used_tokens) = TokenUsage::context_window_percent_and_used_tokens(
-            last_context_tokens,
-            total_context_tokens,
-            max_context_tokens,
-        );
         self.context_window_percent = percent;
         self.context_window_used_tokens = used_tokens;
         self.composer
-            .set_context_window(last_context_tokens, total_context_tokens, max_context_tokens);
+            .set_context_window(percent, self.context_window_used_tokens);
         self.request_redraw();
-    }
-
-    pub(crate) fn set_model_name(&mut self, model_name: String) {
-        self.composer.set_model_name(model_name);
     }
 
     /// Show a generic list selection view with the provided items.

@@ -21,8 +21,17 @@ use ody_protocol::odysseythink_models::ModelsResponse;
 use crate::auth::auth_manager_for_provider;
 use crate::auth::resolve_provider_auth;
 use crate::models_endpoint::OpenAiModelsEndpoint;
+use crate::adapters::chat::ChatAdapter;
+use crate::adapters::local::LocalAdapter;
+use crate::adapters::responses::ResponsesAdapter;
+use crate::chat_provider::ChatProvider;
 
-/// Optional provider-backed features that Ody may expose at runtime.
+/// Optional app-visible features that Ody may expose at runtime.
+///
+/// These are *feature-level* capabilities (e.g. whether the provider supports
+/// namespaced tools or server-side web search). They are intentionally
+/// separate from `chat_provider::ProviderCapabilities`, which describes raw
+/// chat-model capabilities such as streaming, vision, or thinking.
 ///
 /// These capabilities are a provider-owned upper bound. Callers can disable
 /// more functionality through normal config, but should not expose a feature
@@ -150,6 +159,11 @@ pub trait ModelProvider: fmt::Debug + Send + Sync {
         })
     }
 
+    /// Returns a provider-neutral chat adapter for this provider.
+    fn chat_provider(
+        &self,
+    ) -> ModelProviderFuture<'_, ody_protocol::error::Result<Box<dyn ChatProvider>>>;
+
     /// Creates the model manager implementation appropriate for this provider.
     fn models_manager(
         &self,
@@ -191,6 +205,45 @@ impl ConfiguredModelProvider {
 impl ModelProvider for ConfiguredModelProvider {
     fn info(&self) -> &ModelProviderInfo {
         &self.info
+    }
+
+    fn chat_provider(
+        &self,
+    ) -> ModelProviderFuture<'_, ody_protocol::error::Result<Box<dyn ChatProvider>>> {
+        Box::pin(async move {
+            let api_provider = self.api_provider().await?;
+            let auth = self.api_auth().await?;
+            let transport = ody_api::ReqwestTransport::new(
+                ody_login::default_client::build_reqwest_client(),
+            );
+            let adapter: Box<dyn ChatProvider> = match self.info.wire_api {
+                ody_model_provider_info::WireApi::Responses => {
+                    Box::new(ResponsesAdapter::new(transport, api_provider, auth).with_provider_id(
+                        provider_id_for_wire_api(&self.info),
+                    ))
+                }
+                ody_model_provider_info::WireApi::Chat => {
+                    let vendor = ody_api::chat::ChatVendor::from_provider(
+                        &self.info.name,
+                        self.info.base_url.as_deref(),
+                    );
+                    Box::new(ChatAdapter::new(transport, api_provider, auth, vendor).with_provider_id(
+                        provider_id_for_wire_api(&self.info),
+                    ))
+                }
+                ody_model_provider_info::WireApi::Local => {
+                    Box::new(LocalAdapter::new(provider_id_for_wire_api(&self.info)))
+                }
+                ody_model_provider_info::WireApi::AnthropicMessages
+                | ody_model_provider_info::WireApi::GoogleGenAI => {
+                    return Err(OdyErr::InvalidRequest(format!(
+                        "wire api {:?} is not yet supported by chat_provider",
+                        self.info.wire_api
+                    )))
+                }
+            };
+            Ok(adapter)
+        })
     }
 
     fn capabilities(&self) -> ProviderCapabilities {
@@ -267,6 +320,34 @@ impl ModelProvider for ConfiguredModelProvider {
             endpoint,
             self.auth_manager.clone(),
         ))
+    }
+}
+
+/// Resolve the provider id used by the chat adapter.
+fn provider_id_for_wire_api(info: &ModelProviderInfo) -> &'static str {
+    if info.is_kimi() {
+        "kimi"
+    } else if info.is_deepseek() {
+        "deepseek"
+    } else if info.is_glm() {
+        "glm"
+    } else if info.is_odysseythink() {
+        "openai-responses"
+    } else if info.wire_api == ody_model_provider_info::WireApi::Local {
+        provider_id_for_local(info)
+    } else {
+        "chat"
+    }
+}
+
+fn provider_id_for_local(info: &ModelProviderInfo) -> &'static str {
+    let name = info.name.to_ascii_lowercase();
+    if name.contains("ollama") {
+        "ollama"
+    } else if name.contains("lmstudio") {
+        "lmstudio"
+    } else {
+        "local"
     }
 }
 
@@ -404,6 +485,58 @@ mod tests {
                 requires_odysseythink_auth: false,
             }
         );
+    }
+
+    #[tokio::test]
+    async fn chat_provider_selects_responses_adapter_for_odysseythink() {
+        let provider = create_model_provider(
+            ModelProviderInfo::create_odysseythink_provider(None),
+            None,
+        );
+        let chat = provider.chat_provider().await.expect("selects adapter");
+        assert_eq!(chat.provider_id(), "openai-responses");
+    }
+
+    #[tokio::test]
+    async fn chat_provider_selects_chat_adapter_for_kimi() {
+        let mut info = ModelProviderInfo::create_odysseythink_provider(None);
+        info.name = "Kimi".into();
+        info.wire_api = WireApi::Chat;
+        let provider = create_model_provider(info, None);
+        let chat = provider.chat_provider().await.expect("selects adapter");
+        assert_eq!(chat.provider_id(), "kimi");
+        assert!(chat.capabilities().supports_streaming);
+    }
+
+    #[tokio::test]
+    async fn chat_provider_selects_chat_adapter_for_deepseek() {
+        let mut info = ModelProviderInfo::create_odysseythink_provider(None);
+        info.name = "DeepSeek".into();
+        info.wire_api = WireApi::Chat;
+        let provider = create_model_provider(info, None);
+        let chat = provider.chat_provider().await.expect("selects adapter");
+        assert_eq!(chat.provider_id(), "deepseek");
+        assert!(chat.capabilities().supports_thinking);
+    }
+
+    #[tokio::test]
+    async fn chat_provider_selects_chat_adapter_for_glm() {
+        let mut info = ModelProviderInfo::create_odysseythink_provider(None);
+        info.name = "GLM".into();
+        info.wire_api = WireApi::Chat;
+        let provider = create_model_provider(info, None);
+        let chat = provider.chat_provider().await.expect("selects adapter");
+        assert_eq!(chat.provider_id(), "glm");
+    }
+
+    #[tokio::test]
+    async fn chat_provider_selects_local_adapter_for_ollama() {
+        let mut info = ModelProviderInfo::create_odysseythink_provider(None);
+        info.name = "ollama".into();
+        info.wire_api = WireApi::Local;
+        let provider = create_model_provider(info, None);
+        let chat = provider.chat_provider().await.expect("selects adapter");
+        assert_eq!(chat.provider_id(), "ollama");
     }
 
     #[tokio::test]

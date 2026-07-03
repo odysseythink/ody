@@ -55,6 +55,7 @@ use core_test_support::context_snapshot::ContextSnapshotOptions;
 use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
 use core_test_support::responses::ev_response_created;
+use core_test_support::responses::mount_response_once;
 use core_test_support::responses::mount_response_sequence;
 use core_test_support::responses::mount_sse_once;
 use core_test_support::responses::mount_sse_sequence;
@@ -2268,17 +2269,15 @@ async fn guardian_review_surfaces_responses_api_errors_in_rejection_reason() -> 
     let server = start_mock_server().await;
     let error_message =
         "Item 'rs_test' of type 'reasoning' was provided without its required following item.";
-    let request_log = mount_response_sequence(
+    let request_log = mount_response_once(
         &server,
-        vec![
-            wiremock::ResponseTemplate::new(400).set_body_json(serde_json::json!({
-                "error": {
-                    "message": error_message,
-                    "type": "invalid_request_error",
-                    "param": "input"
-                }
-            })),
-        ],
+        wiremock::ResponseTemplate::new(400).set_body_json(serde_json::json!({
+            "error": {
+                "message": error_message,
+                "type": "invalid_request_error",
+                "param": "input"
+            }
+        })),
     )
     .await;
 
@@ -2321,7 +2320,8 @@ async fn guardian_review_surfaces_responses_api_errors_in_rejection_reason() -> 
     .await;
 
     assert_eq!(decision, ReviewDecision::Denied);
-    assert_eq!(request_log.requests().len(), 1);
+    let requests = request_log.requests();
+    assert_eq!(requests.len(), 1);
 
     let mut warnings = Vec::new();
     let mut denial_rationales = Vec::new();

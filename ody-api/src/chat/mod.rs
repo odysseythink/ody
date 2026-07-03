@@ -37,6 +37,8 @@ pub struct ChatCompletionsRequest {
     pub reasoning_effort: Option<String>,
     pub max_completion_tokens: Option<u64>,
     pub temperature: Option<f64>,
+    pub top_p: Option<f64>,
+    pub stop: Vec<String>,
     /// Which provider's dialect to emit. Controls vendor-specific extensions.
     pub vendor: ChatVendor,
 }
@@ -133,10 +135,21 @@ impl ChatCompletionsRequest {
         {
             body.insert("temperature".into(), Value::Number(temperature));
         }
+        if let Some(top_p) = self.top_p
+            && let Some(top_p) = serde_json::Number::from_f64(top_p)
+        {
+            body.insert("top_p".into(), Value::Number(top_p));
+        }
         if let Some(max_completion_tokens) = self.max_completion_tokens {
             body.insert(
                 self.vendor.max_tokens_field().into(),
                 Value::Number(max_completion_tokens.into()),
+            );
+        }
+        if !self.stop.is_empty() {
+            body.insert(
+                "stop".into(),
+                Value::Array(self.stop.iter().cloned().map(Value::String).collect()),
             );
         }
         if let Some(effort) = &self.reasoning_effort

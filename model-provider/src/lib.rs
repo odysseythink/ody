@@ -1,7 +1,32 @@
 mod auth;
 mod bearer_auth_provider;
 mod models_endpoint;
+mod chat_provider;
+#[cfg(test)]
+mod chat_provider_tests;
 mod provider;
+
+pub mod adapters;
+
+pub use chat_provider::ChatCompletion;
+pub use chat_provider::ChatEvent;
+pub use chat_provider::ChatProvider;
+pub use chat_provider::ChatProviderError;
+pub use chat_provider::ChatRequest;
+pub use chat_provider::ChatStream;
+pub use chat_provider::ContentPart;
+pub use chat_provider::FinishReason;
+pub use chat_provider::Message;
+pub use chat_provider::ProviderCapabilities as ChatProviderCapabilities;
+pub use chat_provider::ProviderId;
+pub use chat_provider::RawFrame;
+pub use chat_provider::Role;
+pub use chat_provider::ThinkingEffort;
+pub use chat_provider::ToolCall;
+pub use chat_provider::ToolDefinition;
+pub use chat_provider::Usage;
+pub use chat_provider::clamp_thinking_effort;
+pub use chat_provider::transport_error;
 
 pub use auth::auth_provider_from_auth;
 pub use auth::unauthenticated_auth_provider;

@@ -32,10 +32,6 @@ use std::sync::atomic::Ordering;
 
 use ody_api::ApiError;
 use ody_api::AuthProvider;
-use ody_api::ChatCompletionsClient as ApiChatCompletionsClient;
-use ody_api::ChatCompletionsOptions as ApiChatCompletionsOptions;
-use ody_api::ChatCompletionsRequest;
-use ody_api::ChatVendor;
 use ody_api::CompactClient as ApiCompactClient;
 use ody_api::CompactionInput as ApiCompactionInput;
 use ody_api::Compression;
@@ -75,8 +71,11 @@ use ody_otel::current_span_w3c_trace_context;
 use ody_protocol::ThreadId;
 use ody_protocol::config_types::ReasoningSummary as ReasoningSummaryConfig;
 use ody_protocol::config_types::Verbosity as VerbosityConfig;
+use ody_protocol::models::ContentItem;
+use ody_protocol::models::ReasoningItemContent;
 use ody_protocol::models::ResponseItem;
 use ody_protocol::odysseythink_models::ModelInfo;
+use ody_protocol::protocol::TokenUsage;
 use ody_protocol::odysseythink_models::ReasoningEffort as ReasoningEffortConfig;
 use ody_protocol::protocol::InternalSessionSource;
 use ody_protocol::protocol::SessionSource;
@@ -119,10 +118,19 @@ use ody_login::auth_env_telemetry::AuthEnvTelemetry;
 use ody_login::auth_env_telemetry::collect_auth_env_telemetry;
 use ody_model_provider::SharedModelProvider;
 use ody_model_provider::create_model_provider;
+use ody_model_provider::adapters::core::prompt_to_chat_request;
+use ody_model_provider::ChatEvent;
+use ody_model_provider::ChatProviderError;
+use ody_model_provider::ContentPart;
+use ody_model_provider::FinishReason;
+use ody_model_provider::ToolCall;
+use ody_model_provider::Usage;
+
 #[cfg(test)]
 use ody_model_provider_info::DEFAULT_WEBSOCKET_CONNECT_TIMEOUT_MS;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::WireApi;
+use ody_protocol::error::OdyErr;
 use ody_protocol::error::Result;
 use ody_response_debug_context::extract_response_debug_context;
 use ody_response_debug_context::extract_response_debug_context_from_api_error;
@@ -167,20 +175,6 @@ fn reasoning_effort_for_request(effort: ReasoningEffortConfig) -> ReasoningEffor
     match effort {
         ReasoningEffortConfig::Ultra => ReasoningEffortConfig::Custom("max".to_string()),
         effort => effort,
-    }
-}
-
-/// Map an internal reasoning effort onto the `reasoning_effort` values accepted
-/// by OpenAI-compatible Chat Completions providers (`low`/`medium`/`high`).
-fn chat_reasoning_effort_string(effort: ReasoningEffortConfig) -> String {
-    match effort {
-        ReasoningEffortConfig::None => "none".to_string(),
-        ReasoningEffortConfig::Minimal | ReasoningEffortConfig::Low => "low".to_string(),
-        ReasoningEffortConfig::Medium => "medium".to_string(),
-        ReasoningEffortConfig::High
-        | ReasoningEffortConfig::XHigh
-        | ReasoningEffortConfig::Ultra => "high".to_string(),
-        ReasoningEffortConfig::Custom(value) => value,
     }
 }
 
@@ -854,47 +848,6 @@ impl ModelClient {
         Ok(request)
     }
 
-    /// Build a Chat Completions request for OpenAI-compatible third-party
-    /// providers (Kimi, DeepSeek, GLM) that do not speak the Responses API.
-    fn build_chat_completions_request(
-        &self,
-        prompt: &Prompt,
-        model_info: &ModelInfo,
-        effort: Option<ReasoningEffortConfig>,
-    ) -> Result<ChatCompletionsRequest> {
-        let instructions = prompt.base_instructions.text.clone();
-        let mut input = prompt.get_formatted_input_for_request(/*use_responses_lite*/ false);
-        tracing::info!(
-            input_len = input.len(),
-            model = %model_info.slug,
-            "client::build_chat_completions_request"
-        );
-        input
-            .iter_mut()
-            .for_each(ResponseItem::clear_internal_chat_message_metadata_passthrough);
-        let tools = create_tools_json_for_responses_api(&prompt.tools)?;
-        let reasoning_effort = if model_info.supports_reasoning_summaries {
-            effort
-                .or_else(|| model_info.default_reasoning_level.clone())
-                .map(chat_reasoning_effort_string)
-        } else {
-            None
-        };
-        let info = self.state.provider.info();
-        let vendor = ChatVendor::from_provider(&info.name, info.base_url.as_deref());
-        Ok(ChatCompletionsRequest {
-            model: model_info.slug.clone(),
-            instructions,
-            input,
-            tools,
-            parallel_tool_calls: prompt.parallel_tool_calls,
-            reasoning_effort,
-            max_completion_tokens: None,
-            temperature: None,
-            vendor,
-        })
-    }
-
     fn prepare_response_items_for_request(&self, input: &mut [ResponseItem], store: bool) {
         if self.state.item_ids_enabled || store {
             return;
@@ -1074,41 +1027,6 @@ impl ModelClientSession {
         self.websocket_session.last_response_from_untraced_warmup = false;
         self.websocket_session
             .set_connection_reused(/*connection_reused*/ false);
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    /// Builds shared Responses API transport options and request-body options.
-    ///
-    /// Keeping option construction in one place ensures request-scoped headers are consistent
-    /// regardless of transport choice.
-    async fn build_responses_options(
-        &self,
-        responses_metadata: &OdyResponsesMetadata,
-        compression: Compression,
-        use_responses_lite: bool,
-    ) -> ApiResponsesOptions {
-        ApiResponsesOptions {
-            session_id: Some(responses_metadata.session_id.to_string()),
-            thread_id: Some(responses_metadata.thread_id.to_string()),
-            session_source: Some(self.client.state.session_source.clone()),
-            extra_headers: {
-                let mut headers = build_responses_headers(
-                    self.client.state.beta_features_header.as_deref(),
-                    Some(&self.turn_state),
-                );
-                headers.extend(
-                    self.client
-                        .build_responses_compatibility_headers(responses_metadata),
-                );
-                if let Some(header_value) = self.client.generate_attestation_header_for().await {
-                    headers.insert(X_OAI_ATTESTATION_HEADER, header_value);
-                }
-                add_responses_lite_header(&mut headers, use_responses_lite);
-                headers
-            },
-            compression,
-            turn_state: Some(Arc::clone(&self.turn_state)),
-        }
     }
 
     fn get_incremental_items(
@@ -1305,129 +1223,6 @@ impl ModelClientSession {
             .ok_or(ApiError::Stream(
                 "websocket connection is unavailable".to_string(),
             ))
-    }
-
-    fn responses_request_compression(&self, _auth: Option<&OdyAuth>) -> Compression {
-        // Backend-auth request compression has been removed; request compression
-        // is now controlled purely by the config flag.
-        Compression::None
-    }
-
-    /// Streams a turn via the OpenAI Responses API.
-    ///
-    /// Handles reasoning summaries, verbosity, and the `text` controls used for output schemas.
-    #[allow(clippy::too_many_arguments)]
-    #[instrument(
-        name = "model_client.stream_responses_api",
-        level = "info",
-        skip_all,
-        fields(
-            model = %model_info.slug,
-            wire_api = %self.client.state.provider.info().wire_api,
-            transport = "responses_http",
-            http.method = "POST",
-            api.path = "responses",
-            turn.has_metadata_header = responses_metadata.has_turn_metadata()
-        )
-    )]
-    async fn stream_responses_api(
-        &self,
-        prompt: &Prompt,
-        model_info: &ModelInfo,
-        session_telemetry: &SessionTelemetry,
-        effort: Option<ReasoningEffortConfig>,
-        summary: ReasoningSummaryConfig,
-        service_tier: Option<String>,
-        responses_metadata: &OdyResponsesMetadata,
-        inference_trace: &InferenceTraceContext,
-    ) -> Result<ResponseStream> {
-        let mut pending_retry = PendingUnauthorizedRetry::default();
-        loop {
-            let client_setup = self.client.current_client_setup().await?;
-            let transport = ReqwestTransport::new(build_reqwest_client());
-            let request_auth_context = AuthRequestTelemetryContext::new(
-                client_setup.auth.as_ref().map(OdyAuth::auth_mode),
-                client_setup.api_auth.as_ref(),
-                pending_retry,
-            );
-            let (request_telemetry, sse_telemetry) = Self::build_streaming_telemetry(
-                session_telemetry,
-                request_auth_context,
-                RequestRouteTelemetry::for_endpoint(RESPONSES_ENDPOINT),
-                self.client.state.auth_env_telemetry.clone(),
-            );
-            let compression = self.responses_request_compression(client_setup.auth.as_ref());
-            let mut options = self
-                .build_responses_options(
-                    responses_metadata,
-                    compression,
-                    model_info.use_responses_lite,
-                )
-                .await;
-
-            let mut request = self.client.build_responses_request(
-                &client_setup.api_provider,
-                prompt,
-                model_info,
-                effort.clone(),
-                summary,
-                service_tier.clone(),
-                responses_metadata,
-            )?;
-            let store = request.store;
-            self.client
-                .prepare_response_items_for_request(&mut request.input, store);
-            let inference_trace_attempt = inference_trace.start_attempt();
-            inference_trace_attempt.add_request_headers(&mut options.extra_headers);
-            inference_trace_attempt.record_started(&request);
-            let client = ApiResponsesClient::new(
-                transport,
-                client_setup.api_provider,
-                client_setup.api_auth,
-            )
-            .with_telemetry(Some(request_telemetry), Some(sse_telemetry));
-            let stream_result = client.stream_request(request, options).await;
-
-            match stream_result {
-                Ok(stream) => {
-                    let (stream, _) = map_response_stream(
-                        stream,
-                        session_telemetry.clone(),
-                        inference_trace_attempt,
-                        Arc::clone(&self.client.state.provider),
-                    );
-                    return Ok(stream);
-                }
-                Err(ApiError::Transport(
-                    unauthorized_transport @ TransportError::Http { status, .. },
-                )) if status == StatusCode::UNAUTHORIZED => {
-                    let response_debug_context =
-                        extract_response_debug_context(&unauthorized_transport);
-                    inference_trace_attempt.record_failed(
-                        &unauthorized_transport,
-                        response_debug_context.request_id.as_deref(),
-                        /*output_items*/ &[],
-                    );
-                    let err = self
-                        .client
-                        .state
-                        .provider
-                        .map_api_error(ApiError::Transport(unauthorized_transport));
-                    return Err(err);
-                }
-                Err(err) => {
-                    let response_debug_context =
-                        extract_response_debug_context_from_api_error(&err);
-                    let err = self.client.state.provider.map_api_error(err);
-                    inference_trace_attempt.record_failed(
-                        &err,
-                        response_debug_context.request_id.as_deref(),
-                        /*output_items*/ &[],
-                    );
-                    return Err(err);
-                }
-            }
-        }
     }
 
     /// Streams a turn via the Responses API over WebSocket transport.
@@ -1692,70 +1487,58 @@ impl ModelClientSession {
         inference_trace: &InferenceTraceContext,
     ) -> Result<ResponseStream> {
         let wire_api = self.client.state.provider.info().wire_api;
-        match wire_api {
-            WireApi::Responses => {
-                if self.client.responses_websocket_enabled() {
-                    let request_trace = current_span_w3c_trace_context();
-                    match self
-                        .stream_responses_websocket(
-                            prompt,
-                            model_info,
-                            session_telemetry,
-                            effort.clone(),
-                            summary,
-                            service_tier.clone(),
-                            responses_metadata,
-                            /*warmup*/ false,
-                            request_trace,
-                            inference_trace,
-                        )
-                        .await?
-                    {
-                        WebsocketStreamOutcome::Stream(stream) => return Ok(stream),
-                        WebsocketStreamOutcome::FallbackToHttp => {
-                            self.try_switch_fallback_transport(session_telemetry, model_info);
-                        }
-                    }
-                }
-
-                self.stream_responses_api(
+        // Preserve the Responses WebSocket fast path for the Responses wire API.
+        // HTTP fallback and all other wire APIs route through the unified ChatProvider.
+        if wire_api == WireApi::Responses && self.client.responses_websocket_enabled() {
+            let request_trace = current_span_w3c_trace_context();
+            match self
+                .stream_responses_websocket(
                     prompt,
                     model_info,
                     session_telemetry,
-                    effort,
+                    effort.clone(),
                     summary,
-                    service_tier,
+                    service_tier.clone(),
                     responses_metadata,
+                    /*warmup*/ false,
+                    request_trace,
                     inference_trace,
                 )
-                .await
-            }
-            WireApi::Chat => {
-                self.stream_chat_completions(
-                    prompt,
-                    model_info,
-                    session_telemetry,
-                    effort,
-                    inference_trace,
-                )
-                .await
+                .await?
+            {
+                WebsocketStreamOutcome::Stream(stream) => return Ok(stream),
+                WebsocketStreamOutcome::FallbackToHttp => {
+                    self.try_switch_fallback_transport(session_telemetry, model_info);
+                }
             }
         }
+
+        self.stream_chat_provider(
+            prompt,
+            model_info,
+            session_telemetry,
+            effort,
+            inference_trace,
+        )
+        .await
     }
 
-    /// Streams a turn via the Chat Completions API (Kimi / DeepSeek / GLM).
+    /// Stream a turn through the unified `ChatProvider` path.
+    ///
+    /// This is the new default for all non-Responses-WebSocket traffic. It maps
+    /// the provider-neutral `ChatEvent` stream back into `ResponseEvent` so
+    /// downstream consumers remain unchanged.
     #[instrument(
-        name = "model_client.stream_chat_completions",
+        name = "model_client.stream_chat_provider",
         level = "info",
         skip_all,
         fields(
             model = %model_info.slug,
             wire_api = %self.client.state.provider.info().wire_api,
-            transport = "chat_http",
-            api.path = "chat/completions",
+            transport = "chat_provider",
         )
     )]
-    async fn stream_chat_completions(
+    async fn stream_chat_provider(
         &self,
         prompt: &Prompt,
         model_info: &ModelInfo,
@@ -1763,76 +1546,58 @@ impl ModelClientSession {
         effort: Option<ReasoningEffortConfig>,
         inference_trace: &InferenceTraceContext,
     ) -> Result<ResponseStream> {
-        let mut pending_retry = PendingUnauthorizedRetry::default();
-        loop {
-            let client_setup = self.client.current_client_setup().await?;
-            let transport = ReqwestTransport::new(build_reqwest_client());
-            let request_auth_context = AuthRequestTelemetryContext::new(
-                client_setup.auth.as_ref().map(OdyAuth::auth_mode),
-                client_setup.api_auth.as_ref(),
-                pending_retry,
-            );
-            let (request_telemetry, sse_telemetry) = Self::build_streaming_telemetry(
-                session_telemetry,
-                request_auth_context,
-                RequestRouteTelemetry::for_endpoint(CHAT_COMPLETIONS_ENDPOINT),
-                self.client.state.auth_env_telemetry.clone(),
-            );
+        let client_setup = self.client.current_client_setup().await?;
+        let auth_context = AuthRequestTelemetryContext::new(
+            client_setup.auth.as_ref().map(OdyAuth::auth_mode),
+            client_setup.api_auth.as_ref(),
+            PendingUnauthorizedRetry::default(),
+        );
+        let (_request_telemetry, _sse_telemetry) = Self::build_streaming_telemetry(
+            session_telemetry,
+            auth_context,
+            RequestRouteTelemetry::for_endpoint(CHAT_COMPLETIONS_ENDPOINT),
+            self.client.state.auth_env_telemetry.clone(),
+        );
 
-            let request =
-                self.client
-                    .build_chat_completions_request(prompt, model_info, effort.clone())?;
-            let mut options = ApiChatCompletionsOptions::default();
-            let inference_trace_attempt = inference_trace.start_attempt();
-            inference_trace_attempt.add_request_headers(&mut options.extra_headers);
-            inference_trace_attempt.record_started(&request.to_wire());
+        let chat_provider = self.client.state.provider.chat_provider().await.map_err(|err| {
+            OdyErr::Stream(format!("failed to create chat provider: {err}"), None)
+        })?;
+        let mut request = prompt_to_chat_request(&model_info.slug, prompt, effort.clone());
+        request.prompt_cache_key = Some(self.client.prompt_cache_key());
+        let inference_trace_attempt = inference_trace.start_attempt();
+        let stream_result = chat_provider.chat(request).await;
 
-            let client = ApiChatCompletionsClient::new(
-                transport,
-                client_setup.api_provider,
-                client_setup.api_auth,
-            )
-            .with_telemetry(Some(request_telemetry), Some(sse_telemetry));
-            let stream_result = client.stream_request(request, options).await;
-
-            match stream_result {
-                Ok(stream) => {
-                    let (stream, _) = map_response_stream(
-                        stream,
-                        session_telemetry.clone(),
-                        inference_trace_attempt,
-                        Arc::clone(&self.client.state.provider),
-                    );
-                    return Ok(stream);
-                }
-                Err(ApiError::Transport(
-                    unauthorized_transport @ TransportError::Http { status, .. },
-                )) if status == StatusCode::UNAUTHORIZED => {
-                    let response_debug_context =
-                        extract_response_debug_context(&unauthorized_transport);
-                    inference_trace_attempt.record_failed(
-                        &unauthorized_transport,
-                        response_debug_context.request_id.as_deref(),
-                        /*output_items*/ &[],
-                    );
-                    let err = self
-                        .client
-                        .state
-                        .provider
-                        .map_api_error(ApiError::Transport(unauthorized_transport));
-                    return Err(err);
-                }
-                Err(err) => {
-                    let response_debug_context =
-                        extract_response_debug_context_from_api_error(&err);
-                    let err = self.client.state.provider.map_api_error(err);
-                    inference_trace_attempt.record_failed(
-                        &err,
-                        response_debug_context.request_id.as_deref(),
-                        /*output_items*/ &[],
-                    );
-                    return Err(err);
-                }
+        match stream_result {
+            Ok(chat_stream) => {
+                let stream = map_chat_stream(
+                    chat_stream,
+                    session_telemetry.clone(),
+                    inference_trace_attempt,
+                );
+                return Ok(stream);
+            }
+            Err(ChatProviderError::Auth(_)) => {
+                let err = ApiError::Transport(TransportError::Http {
+                    status: reqwest::StatusCode::UNAUTHORIZED,
+                    body: Some(String::new()),
+                    headers: None,
+                    url: None,
+                });
+                inference_trace_attempt.record_failed(
+                    &err,
+                    None,
+                    /*output_items*/ &[],
+                );
+                return Err(self.client.state.provider.map_api_error(err));
+            }
+            Err(err) => {
+                let mapped = err.to_ody_err();
+                inference_trace_attempt.record_failed(
+                    &mapped,
+                    None,
+                    /*output_items*/ &[],
+                );
+                return Err(mapped);
             }
         }
     }
@@ -1930,6 +1695,282 @@ fn map_response_stream(
         inference_trace_attempt,
         provider,
     )
+}
+
+
+/// Map a `ChatProvider` `ChatStream` into a `ResponseStream` that downstream
+/// consumers already expect.
+///
+/// This is intentionally a near-mirror of `map_response_events`, but with the
+/// source stream emitting `ChatEvent` instead of `ResponseEvent`. Text and
+/// reasoning deltas are accumulated so that a closing `OutputItemDone` can be
+/// emitted before the terminal `Completed` event, preserving the item lifecycle
+/// that downstream turn handling relies on.
+fn map_chat_stream(
+    chat_stream: ody_model_provider::ChatStream,
+    session_telemetry: SessionTelemetry,
+    inference_trace_attempt: InferenceTraceAttempt,
+) -> ResponseStream {
+    let (tx_event, rx_event) =
+        mpsc::channel::<Result<ResponseEvent>>(RESPONSE_STREAM_CHANNEL_CAPACITY);
+    let consumer_dropped = CancellationToken::new();
+    let consumer_dropped_for_stream = consumer_dropped.clone();
+
+    tokio::spawn(async move {
+        let mut chat_stream = chat_stream;
+        let mut assistant_text: Option<String> = None;
+        let mut reasoning_text: Option<String> = None;
+        let mut assistant_item_added = false;
+        let mut reasoning_item_added = false;
+
+        loop {
+            let event = tokio::select! {
+                _ = consumer_dropped.cancelled() => {
+                    inference_trace_attempt.record_cancelled(
+                        STREAM_DROPPED_REASON,
+                        None,
+                        &[],
+                    );
+                    return;
+                }
+                event = chat_stream.next() => event,
+            };
+            let Some(event) = event else {
+                inference_trace_attempt.record_failed(
+                    "stream closed before response.completed",
+                    None,
+                    &[],
+                );
+                return;
+            };
+
+            let mut events: Vec<ResponseEvent> = Vec::new();
+            match event {
+                Ok(ChatEvent::Start) => {
+                    events.push(ResponseEvent::Created);
+                }
+                Ok(ChatEvent::ContentPart(ContentPart::Text(text))) => {
+                    if assistant_text.is_none() {
+                        assistant_text = Some(String::new());
+                        if !assistant_item_added {
+                            events.push(ResponseEvent::OutputItemAdded(ResponseItem::Message {
+                                id: None,
+                                role: "assistant".to_string(),
+                                content: vec![],
+                                phase: None,
+                                internal_chat_message_metadata_passthrough: None,
+                            }));
+                            assistant_item_added = true;
+                        }
+                    }
+                    assistant_text.as_mut().expect("assistant text initialized").push_str(&text);
+                    events.push(ResponseEvent::OutputTextDelta(text));
+                }
+                Ok(ChatEvent::ContentPart(ContentPart::Reasoning(text)))
+                | Ok(ChatEvent::ReasoningPart(text)) => {
+                    if reasoning_text.is_none() {
+                        reasoning_text = Some(String::new());
+                        if !reasoning_item_added {
+                            events.push(ResponseEvent::OutputItemAdded(ResponseItem::Reasoning {
+                                id: None,
+                                summary: Vec::new(),
+                                content: None,
+                                encrypted_content: None,
+                                internal_chat_message_metadata_passthrough: None,
+                            }));
+                            reasoning_item_added = true;
+                        }
+                    }
+                    reasoning_text.as_mut().expect("reasoning text initialized").push_str(&text);
+                    events.push(ResponseEvent::ReasoningContentDelta {
+                        delta: text,
+                        content_index: 0,
+                    });
+                }
+                Ok(ChatEvent::ContentPart(part)) => {
+                    // Image or tool-result parts are not streamed as deltas;
+                    // emit a single completed message item.
+                    if let Some(text) = assistant_text.take() {
+                        events.push(ResponseEvent::OutputItemDone(ResponseItem::Message {
+                            id: None,
+                            role: "assistant".to_string(),
+                            content: vec![ContentItem::OutputText { text }],
+                            phase: None,
+                            internal_chat_message_metadata_passthrough: None,
+                        }));
+                    }
+                    if let Some(text) = reasoning_text.take() {
+                        events.push(ResponseEvent::OutputItemDone(ResponseItem::Reasoning {
+                            id: None,
+                            summary: Vec::new(),
+                            content: Some(vec![ReasoningItemContent::ReasoningText { text }]),
+                            encrypted_content: None,
+                            internal_chat_message_metadata_passthrough: None,
+                        }));
+                    }
+                    events.push(ResponseEvent::OutputItemDone(ResponseItem::Message {
+                        id: None,
+                        role: "assistant".to_string(),
+                        content: vec![ContentItem::OutputText {
+                            text: format!("{:?}", part),
+                        }],
+                        phase: None,
+                        internal_chat_message_metadata_passthrough: None,
+                    }));
+                }
+                Ok(ChatEvent::ToolCall(ToolCall { id, name, arguments })) => {
+                    if let Some(text) = assistant_text.take() {
+                        events.push(ResponseEvent::OutputItemDone(ResponseItem::Message {
+                            id: None,
+                            role: "assistant".to_string(),
+                            content: vec![ContentItem::OutputText { text }],
+                            phase: None,
+                            internal_chat_message_metadata_passthrough: None,
+                        }));
+                    }
+                    if let Some(text) = reasoning_text.take() {
+                        events.push(ResponseEvent::OutputItemDone(ResponseItem::Reasoning {
+                            id: None,
+                            summary: Vec::new(),
+                            content: Some(vec![ReasoningItemContent::ReasoningText { text }]),
+                            encrypted_content: None,
+                            internal_chat_message_metadata_passthrough: None,
+                        }));
+                    }
+                    events.push(ResponseEvent::OutputItemDone(ResponseItem::FunctionCall {
+                        id: None,
+                        name,
+                        namespace: None,
+                        arguments: arguments.to_string(),
+                        call_id: id,
+                        internal_chat_message_metadata_passthrough: None,
+                    }));
+                }
+                Ok(ChatEvent::Usage(Usage {
+                    input_tokens,
+                    output_tokens,
+                    reasoning_tokens,
+                })) => {
+                    if let Some(text) = assistant_text.take() {
+                        events.push(ResponseEvent::OutputItemDone(ResponseItem::Message {
+                            id: None,
+                            role: "assistant".to_string(),
+                            content: vec![ContentItem::OutputText { text }],
+                            phase: None,
+                            internal_chat_message_metadata_passthrough: None,
+                        }));
+                    }
+                    if let Some(text) = reasoning_text.take() {
+                        events.push(ResponseEvent::OutputItemDone(ResponseItem::Reasoning {
+                            id: None,
+                            summary: Vec::new(),
+                            content: Some(vec![ReasoningItemContent::ReasoningText { text }]),
+                            encrypted_content: None,
+                            internal_chat_message_metadata_passthrough: None,
+                        }));
+                    }
+                    events.push(ResponseEvent::Completed {
+                        response_id: String::new(),
+                        token_usage: Some(TokenUsage {
+                            input_tokens: input_tokens as i64,
+                            output_tokens: output_tokens as i64,
+                            cached_input_tokens: 0,
+                            reasoning_output_tokens: reasoning_tokens.unwrap_or(0) as i64,
+                            total_tokens: (input_tokens + output_tokens) as i64,
+                        }),
+                        end_turn: Some(true),
+                    });
+                }
+                Ok(ChatEvent::Finish { reason, raw_reason: _ }) => {
+                    if let Some(text) = assistant_text.take() {
+                        events.push(ResponseEvent::OutputItemDone(ResponseItem::Message {
+                            id: None,
+                            role: "assistant".to_string(),
+                            content: vec![ContentItem::OutputText { text }],
+                            phase: None,
+                            internal_chat_message_metadata_passthrough: None,
+                        }));
+                    }
+                    if let Some(text) = reasoning_text.take() {
+                        events.push(ResponseEvent::OutputItemDone(ResponseItem::Reasoning {
+                            id: None,
+                            summary: Vec::new(),
+                            content: Some(vec![ReasoningItemContent::ReasoningText { text }]),
+                            encrypted_content: None,
+                            internal_chat_message_metadata_passthrough: None,
+                        }));
+                    }
+                    let end_turn = matches!(reason, FinishReason::Stop);
+                    events.push(ResponseEvent::Completed {
+                        response_id: String::new(),
+                        token_usage: None,
+                        end_turn: Some(end_turn),
+                    });
+                }
+                Ok(ChatEvent::Raw(_)) => {}
+                Ok(ChatEvent::Error(_err)) => {
+                    events.push(ResponseEvent::Completed {
+                        response_id: String::new(),
+                        token_usage: None,
+                        end_turn: Some(false),
+                    });
+                }
+                Err(err) => {
+                    let mapped = err.to_ody_err();
+                    inference_trace_attempt.record_failed(
+                        &mapped,
+                        None,
+                        &[],
+                    );
+                    session_telemetry.see_event_completed_failed(&mapped);
+                    let _ = tx_event.send(Err(mapped)).await;
+                    return;
+                }
+            };
+
+            for event in events.into_iter().map(Ok) {
+                let is_terminal = matches!(&event, Ok(ResponseEvent::Completed { .. }));
+                if let Ok(ResponseEvent::Completed {
+                    response_id,
+                    token_usage,
+                    ..
+                }) = &event
+                {
+                    if let Some(usage) = token_usage {
+                        session_telemetry.sse_event_completed(
+                            usage.input_tokens,
+                            usage.output_tokens,
+                            Some(usage.cached_input_tokens),
+                            Some(usage.reasoning_output_tokens),
+                            usage.total_tokens,
+                        );
+                    }
+                    inference_trace_attempt.record_completed(
+                        response_id,
+                        None,
+                        token_usage,
+                        &[],
+                    );
+                }
+                if tx_event.send(event).await.is_err() {
+                    inference_trace_attempt.record_cancelled(
+                        STREAM_DROPPED_REASON,
+                        None,
+                        &[],
+                    );
+                    return;
+                }
+                if is_terminal {
+                    return;
+                }
+            }
+        }
+    });
+
+    ResponseStream {
+        rx_event,
+        consumer_dropped: consumer_dropped_for_stream,
+    }
 }
 
 fn map_response_events<S>(

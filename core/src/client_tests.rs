@@ -58,6 +58,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::util::SubscriberInitExt;
 
+use ody_protocol::config_types::ReasoningSummary;
 const TEST_INSTALLATION_ID: &str = "11111111-1111-4111-8111-111111111111";
 
 fn test_model_client(session_source: SessionSource) -> ModelClient {
@@ -629,4 +630,162 @@ async fn non_odysseythink_endpoints_omit_attestation_generation() {
         None,
     );
     assert_eq!(attestation_calls.load(Ordering::Relaxed), 0);
+}
+#[tokio::test]
+async fn chat_stream_maps_events_to_response_stream() {
+    use futures::stream;
+    use ody_model_provider::{ChatEvent, ContentPart, FinishReason};
+
+    let chat_stream = stream::iter(vec![
+        Ok(ChatEvent::Start),
+        Ok(ChatEvent::ContentPart(ContentPart::Text("hello".into()))),
+        Ok(ChatEvent::Finish {
+            reason: FinishReason::Stop,
+            raw_reason: None,
+        }),
+    ]);
+    let stream = crate::client::map_chat_stream(
+        Box::pin(chat_stream),
+        create_test_session_telemetry(),
+        InferenceTraceContext::disabled().start_attempt(),
+    );
+
+    let mut saw_created = false;
+    let mut saw_output_delta = false;
+    let mut saw_completed = false;
+    futures::pin_mut!(stream);
+    while let Some(event) = stream.next().await {
+        match event {
+            Ok(ResponseEvent::Created) => saw_created = true,
+            Ok(ResponseEvent::OutputTextDelta(_)) => saw_output_delta = true,
+            Ok(ResponseEvent::Completed { .. }) => saw_completed = true,
+            _ => {}
+        }
+    }
+    assert!(saw_created, "Expected Created event");
+    assert!(saw_output_delta, "Expected OutputTextDelta event");
+    assert!(saw_completed, "Expected Completed event");
+}
+
+#[tokio::test]
+async fn local_wire_api_returns_chat_provider_unsupported() {
+    let provider = create_oss_provider_with_base_url("https://example.com/v1", WireApi::Local);
+    let client = test_model_client_with_provider(provider);
+    let mut session = client.new_session();
+    let prompt = test_prompt_for_chat_provider();
+    let model_info = test_model_info_for_chat_provider();
+    let responses_metadata = test_responses_metadata_for_client(
+        &client,
+        Some("turn-1"),
+        "window-1".into(),
+        None,
+        TestOdyResponsesRequestKind::Turn,
+    );
+    let inference_trace = InferenceTraceContext::disabled();
+
+    let result = session
+        .stream(
+            &prompt,
+            &model_info,
+            &create_test_session_telemetry(),
+            None,
+            ReasoningSummary::None,
+            None,
+            &responses_metadata,
+            &inference_trace,
+        )
+        .await;
+
+    assert!(result.is_err());
+}
+
+fn test_model_client_with_provider(provider: ModelProviderInfo) -> ModelClient {
+    let thread_id = ThreadId::new();
+    ModelClient::new(
+        /*auth_manager*/ None,
+        thread_id,
+        provider,
+        SessionSource::Cli,
+        /*model_verbosity*/ None,
+        /*enable_request_compression*/ false,
+        /*include_timing_metrics*/ false,
+        /*beta_features_header*/ None,
+        /*item_ids_enabled*/ false,
+        /*attestation_provider*/ None,
+    )
+}
+
+fn create_test_session_telemetry() -> SessionTelemetry {
+    SessionTelemetry::new(
+        ThreadId::new(),
+        "test-model",
+        "test-model",
+        None,
+        None,
+        None,
+        "test-originator".to_string(),
+        false,
+        "test-terminal".to_string(),
+        SessionSource::Cli,
+    )
+}
+
+fn test_prompt_for_chat_provider() -> crate::client_common::Prompt {
+    crate::client_common::Prompt {
+        input: vec![ResponseItem::Message {
+            id: None,
+            role: "user".into(),
+            content: vec![ContentItem::InputText { text: "hello".into() }],
+            phase: None,
+            internal_chat_message_metadata_passthrough: None,
+        }],
+        tools: Vec::new(),
+        parallel_tool_calls: false,
+        base_instructions: Default::default(),
+        output_schema: None,
+        output_schema_strict: true,
+    }
+}
+
+fn test_model_info_for_chat_provider() -> ModelInfo {
+    ModelInfo {
+        slug: "test-model".into(),
+        display_name: "Test Model".into(),
+        description: None,
+        default_reasoning_level: None,
+        supported_reasoning_levels: Vec::new(),
+        shell_type: ody_protocol::odysseythink_models::ConfigShellToolType::Default,
+        visibility: ody_protocol::odysseythink_models::ModelVisibility::List,
+        supported_in_api: true,
+        priority: 0,
+        additional_speed_tiers: Vec::new(),
+        service_tiers: Vec::new(),
+        default_service_tier: None,
+        availability_nux: None,
+        upgrade: None,
+        base_instructions: "You are a helpful assistant.".into(),
+        model_messages: None,
+        supports_reasoning_summaries: false,
+        default_reasoning_summary: ody_protocol::config_types::ReasoningSummary::None,
+        support_verbosity: false,
+        default_verbosity: None,
+        apply_patch_tool_type: None,
+        web_search_tool_type: ody_protocol::odysseythink_models::WebSearchToolType::Text,
+        truncation_policy: ody_protocol::odysseythink_models::TruncationPolicyConfig::bytes(1_000_000),
+        supports_parallel_tool_calls: false,
+        supports_image_detail_original: false,
+        context_window: None,
+        max_context_window: None,
+        auto_compact_token_limit: None,
+        comp_hash: None,
+        effective_context_window_percent: 90,
+        experimental_supported_tools: Vec::new(),
+        input_modalities: Vec::new(),
+        used_fallback_model_metadata: false,
+        supports_search_tool: false,
+        use_responses_lite: false,
+        auto_review_model_override: None,
+        tool_mode: None,
+        multi_agent_version: None,
+    }
 }

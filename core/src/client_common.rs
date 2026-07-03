@@ -121,6 +121,30 @@ impl Drop for ResponseStream {
     }
 }
 
+
+impl ody_model_provider::adapters::core::Prompt for Prompt {
+    fn get_formatted_input_for_request(&self, use_responses_lite: bool) -> Vec<ResponseItem> {
+        self.get_formatted_input_for_request(use_responses_lite)
+    }
+
+    fn tools(&self) -> &[ody_tools::ToolSpec] {
+        &self.tools
+    }
+
+    fn base_instructions(&self) -> String {
+        self.base_instructions.text.clone()
+    }
+
+    fn output_schema(&self) -> Option<serde_json::Value> {
+        self.output_schema.clone()
+    }
+
+    fn output_schema_strict(&self) -> bool {
+        self.output_schema_strict
+    }
+}
+
+
 #[cfg(test)]
 #[path = "client_common_tests.rs"]
 mod tests;

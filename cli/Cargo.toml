@@ -17,6 +17,13 @@ doctest = false
 [lints]
 workspace = true
 
+[features]
+# Debug-only `ody debug app-server send-message-v2` subcommand. Off by
+# default: pulls in ody-app-server-test-client (~2.6MB of .text), which is
+# only useful for manually exercising the app-server protocol during
+# development.
+debug-app-server-client = ["dep:ody-app-server-test-client"]
+
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
@@ -24,7 +31,7 @@ clap_complete = { workspace = true }
 ody-app-server = { workspace = true }
 ody-app-server-daemon = { workspace = true }
 ody-app-server-protocol = { workspace = true }
-ody-app-server-test-client = { workspace = true }
+ody-app-server-test-client = { workspace = true, optional = true }
 ody-arg0 = { workspace = true }
 ody-api = { workspace = true }
 ody-utils-cli = { workspace = true }

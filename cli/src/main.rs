@@ -210,6 +210,7 @@ enum DebugSubcommand {
     Models(DebugModelsCommand),
 
     /// Tooling: helps debug the app server.
+    #[cfg(feature = "debug-app-server-client")]
     AppServer(DebugAppServerCommand),
 
     /// Render the model-visible prompt input list as JSON.
@@ -224,18 +225,21 @@ enum DebugSubcommand {
     ClearMemories,
 }
 
+#[cfg(feature = "debug-app-server-client")]
 #[derive(Debug, Parser)]
 struct DebugAppServerCommand {
     #[command(subcommand)]
     subcommand: DebugAppServerSubcommand,
 }
 
+#[cfg(feature = "debug-app-server-client")]
 #[derive(Debug, clap::Subcommand)]
 enum DebugAppServerSubcommand {
     // Send message to app server V2.
     SendMessageV2(DebugAppServerSendMessageV2Command),
 }
 
+#[cfg(feature = "debug-app-server-client")]
 #[derive(Debug, Parser)]
 struct DebugAppServerSendMessageV2Command {
     #[arg(value_name = "USER_MESSAGE", required = true)]
@@ -825,6 +829,7 @@ fn delete_action(target: &str, force: bool) -> anyhow::Result<ody_tui::SessionAr
     Ok(ody_tui::SessionArchiveAction::Delete(confirmation))
 }
 
+#[cfg(feature = "debug-app-server-client")]
 async fn run_debug_app_server_command(cmd: DebugAppServerCommand) -> anyhow::Result<()> {
     match cmd.subcommand {
         DebugAppServerSubcommand::SendMessageV2(cmd) => {
@@ -1430,6 +1435,7 @@ async fn cli_main(
                 )?;
                 run_debug_models_command(cmd, root_config_overrides).await?;
             }
+            #[cfg(feature = "debug-app-server-client")]
             DebugSubcommand::AppServer(cmd) => {
                 reject_remote_mode_for_subcommand(
                     root_remote.as_deref(),

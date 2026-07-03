@@ -2191,6 +2191,8 @@ fn repro_history_to_chat_messages_emits_logs() {
         reasoning_effort: None,
         max_completion_tokens: None,
         temperature: None,
+        top_p: None,
+        stop: Vec::new(),
         vendor: ChatVendor::Generic,
     };
 
