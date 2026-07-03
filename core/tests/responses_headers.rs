@@ -7,6 +7,7 @@ use ody_core::ResponseEvent;
 use ody_login::OdyAuth;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::WireApi;
+use ody_model_provider_info::ProviderCapabilities;
 use ody_otel::SessionTelemetry;
 use ody_otel::TelemetryAuthMode;
 use ody_protocol::ThreadId;
@@ -86,6 +87,7 @@ async fn responses_stream_includes_subagent_header_on_review() {
         websocket_connect_timeout_ms: None,
         requires_odysseythink_auth: false,
         supports_websockets: false,
+            capabilities: ProviderCapabilities::default(),
     };
 
     let ody_home = TempDir::new().expect("failed to create TempDir");
@@ -217,6 +219,7 @@ async fn responses_stream_includes_subagent_header_on_other() {
         websocket_connect_timeout_ms: None,
         requires_odysseythink_auth: false,
         supports_websockets: false,
+            capabilities: ProviderCapabilities::default(),
     };
 
     let ody_home = TempDir::new().expect("failed to create TempDir");
@@ -329,6 +332,7 @@ async fn responses_respects_model_info_overrides_from_config() {
         websocket_connect_timeout_ms: None,
         requires_odysseythink_auth: false,
         supports_websockets: false,
+            capabilities: ProviderCapabilities::default(),
     };
 
     let ody_home = TempDir::new().expect("failed to create TempDir");

@@ -1555,6 +1555,23 @@
           "description": "Base URL for the provider's OpenAI-compatible API.",
           "type": "string"
         },
+        "capabilities": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ProviderCapabilities"
+            }
+          ],
+          "default": {
+            "attestation": false,
+            "command_auth": false,
+            "image_generation": false,
+            "namespace_tools": false,
+            "supports_remote_compaction": false,
+            "supports_websockets": false,
+            "web_search": false
+          },
+          "description": "Provider-level feature capabilities."
+        },
         "env_http_headers": {
           "additionalProperties": {
             "type": "string"
@@ -2433,6 +2450,48 @@
       "properties": {
         "trust_level": {
           "$ref": "#/definitions/TrustLevel"
+        }
+      },
+      "type": "object"
+    },
+    "ProviderCapabilities": {
+      "additionalProperties": false,
+      "description": "Provider-level feature capabilities.\n\nThese are upper-bound flags that core/TUI use to decide which features a provider can expose. Defaults are conservative (all false) so unknown providers do not accidentally claim advanced features.",
+      "properties": {
+        "attestation": {
+          "default": false,
+          "description": "Whether requests should include attestation headers.",
+          "type": "boolean"
+        },
+        "command_auth": {
+          "default": false,
+          "description": "Whether the provider uses command-backed dynamic auth.",
+          "type": "boolean"
+        },
+        "image_generation": {
+          "default": false,
+          "description": "Whether the provider supports server-side image generation.",
+          "type": "boolean"
+        },
+        "namespace_tools": {
+          "default": false,
+          "description": "Whether the provider exposes namespaced / server-side tools.",
+          "type": "boolean"
+        },
+        "supports_remote_compaction": {
+          "default": false,
+          "description": "Whether the provider supports remote context compaction.",
+          "type": "boolean"
+        },
+        "supports_websockets": {
+          "default": false,
+          "description": "Whether the provider can use WebSocket transport for streaming.",
+          "type": "boolean"
+        },
+        "web_search": {
+          "default": false,
+          "description": "Whether the provider supports server-side web search.",
+          "type": "boolean"
         }
       },
       "type": "object"

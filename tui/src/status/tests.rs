@@ -28,6 +28,7 @@ use ody_app_server_protocol::RateLimitWindow;
 use ody_app_server_protocol::SpendControlLimitSnapshot;
 use ody_config::LoaderOverrides;
 use ody_model_provider_info::ModelProviderInfo;
+use ody_model_provider_info::ProviderCapabilities;
 use ody_models_manager::test_support::construct_model_info_offline_for_tests;
 use ody_models_manager::test_support::get_model_offline_for_tests;
 use ody_protocol::ThreadId;
@@ -639,6 +640,7 @@ async fn status_model_provider_omits_usage_link_for_non_odysseythink_proxy() {
         base_url: Some("https://odysseythink-proxy.example/v1".to_string()),
         requires_odysseythink_auth: true,
         ..ModelProviderInfo::default()
+            capabilities: ProviderCapabilities::default(),
     };
     let usage = TokenUsage::default();
     let captured_at = chrono::Local

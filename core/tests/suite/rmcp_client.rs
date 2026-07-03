@@ -38,6 +38,7 @@ use ody_protocol::odysseythink_models::ModelVisibility;
 use ody_protocol::odysseythink_models::ModelsResponse;
 use ody_protocol::odysseythink_models::ReasoningEffortPreset;
 use ody_protocol::odysseythink_models::TruncationPolicyConfig;
+use ody_protocol::odysseythink_models::ModelCapabilities;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::McpInvocation;
@@ -1659,7 +1660,8 @@ async fn stdio_image_responses_are_sanitized_for_text_only_model() -> anyhow::Re
                 auto_review_model_override: None,
                 tool_mode: None,
                 multi_agent_version: None,
-            }],
+                capabilities: ModelCapabilities::default(),
+}],
         },
     )
     .await;

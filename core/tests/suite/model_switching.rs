@@ -17,6 +17,7 @@ use ody_protocol::odysseythink_models::ReasoningEffort;
 use ody_protocol::odysseythink_models::ReasoningEffortPreset;
 use ody_protocol::odysseythink_models::TruncationPolicyConfig;
 use ody_protocol::odysseythink_models::default_input_modalities;
+use ody_protocol::odysseythink_models::ModelCapabilities;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::Op;
@@ -139,6 +140,7 @@ fn test_model_info(
         comp_hash: None,
         effective_context_window_percent: 95,
         experimental_supported_tools: Vec::new(),
+        capabilities: ModelCapabilities::default(),
     }
 }
 
@@ -961,7 +963,8 @@ async fn model_switch_to_smaller_model_updates_token_context_window() -> Result<
         comp_hash: None,
         effective_context_window_percent,
         experimental_supported_tools: Vec::new(),
-    };
+        capabilities: ModelCapabilities::default(),
+};
     let mut smaller_model = base_model.clone();
     smaller_model.slug = smaller_model_slug.to_string();
     smaller_model.display_name = "Smaller Model".to_string();

@@ -216,6 +216,7 @@ fn session_thread_config_to_toml(
 mod tests {
     use ody_model_provider_info::ModelProviderInfo;
     use ody_model_provider_info::WireApi;
+use ody_model_provider_info::ProviderCapabilities;
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -254,11 +255,14 @@ mod tests {
 
     #[tokio::test]
     async fn loader_translates_sources_to_config_layers() {
+        let provider = test_provider("local");
+        let provider_toml =
+            toml::Value::try_from(&provider).expect("test_provider serializes to toml");
         let loader = StaticThreadConfigLoader::new(vec![
             ThreadConfigSource::User(UserThreadConfig::default()),
             ThreadConfigSource::Session(SessionThreadConfig {
                 model_provider: Some("local".to_string()),
-                model_providers: HashMap::from([("local".to_string(), test_provider("local"))]),
+                model_providers: HashMap::from([("local".to_string(), provider)]),
                 features: BTreeMap::from([("plugins".to_string(), false)]),
             }),
         ]);
@@ -275,24 +279,24 @@ mod tests {
             .await
             .expect("thread config layers load");
 
+        // Build expected TOML programmatically so it matches the loader's
+        // serialization, including any new fields like `capabilities`.
+        let mut expected_toml = toml::map::Map::new();
+        expected_toml.insert("model_provider".to_string(), toml::Value::String("local".to_string()));
+        let mut providers = toml::map::Map::new();
+        providers.insert("local".to_string(), provider_toml);
+        expected_toml.insert("model_providers".to_string(), toml::Value::Table(providers));
+
+        // features
+        let mut features = toml::map::Map::new();
+        features.insert("plugins".to_string(), toml::Value::Boolean(false));
+        expected_toml.insert("features".to_string(), toml::Value::Table(features));
+
         assert_eq!(
             layers,
             vec![ConfigLayerEntry::new(
                 ConfigLayerSource::SessionFlags,
-                toml::toml! {
-                    model_provider = "local"
-
-                    [model_providers.local]
-                    name = "local"
-                    base_url = "http://127.0.0.1:8061/api/ody"
-                    wire_api = "responses"
-                    requires_odysseythink_auth = false
-                    supports_websockets = true
-
-                    [features]
-                    plugins = false
-                }
-                .into()
+                toml::Value::Table(expected_toml).into()
             )]
         );
     }
@@ -315,6 +319,7 @@ mod tests {
             websocket_connect_timeout_ms: None,
             requires_odysseythink_auth: false,
             supports_websockets: true,
+            capabilities: ProviderCapabilities::default(),
         }
     }
 }

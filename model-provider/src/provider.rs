@@ -10,6 +10,7 @@ use ody_api::SharedAuthProvider;
 use ody_login::AuthManager;
 use ody_login::OdyAuth;
 use ody_model_provider_info::ModelProviderInfo;
+use ody_model_provider_info::ProviderCapabilities as ModelProviderCapabilities;
 use ody_models_manager::manager::OpenAiModelsManager;
 use ody_models_manager::manager::SharedModelsManager;
 use ody_models_manager::manager::StaticModelsManager;
@@ -389,6 +390,7 @@ mod tests {
             websocket_connect_timeout_ms: None,
             requires_odysseythink_auth: false,
             supports_websockets: false,
+            capabilities: ModelProviderCapabilities::default(),
         }
     }
 

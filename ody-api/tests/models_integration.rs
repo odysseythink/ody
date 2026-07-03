@@ -5,6 +5,7 @@ use ody_api::RetryConfig;
 use ody_client::ReqwestTransport;
 use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::odysseythink_models::ConfigShellToolType;
+use ody_protocol::odysseythink_models::ModelCapabilities;
 use ody_protocol::odysseythink_models::ModelInfo;
 use ody_protocol::odysseythink_models::ModelVisibility;
 use ody_protocol::odysseythink_models::ModelsResponse;
@@ -103,7 +104,8 @@ async fn models_client_hits_models_endpoint() {
             auto_review_model_override: None,
             tool_mode: None,
             multi_agent_version: None,
-        }],
+                    capabilities: ModelCapabilities::default(),
+}],
     };
 
     Mock::given(method("GET"))

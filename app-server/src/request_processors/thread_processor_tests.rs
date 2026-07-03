@@ -120,6 +120,7 @@ mod thread_processor_behavior_tests {
     use ody_config::ThreadConfigSource;
     use ody_model_provider_info::ModelProviderInfo;
     use ody_model_provider_info::WireApi;
+use ody_model_provider_info::ProviderCapabilities;
     use ody_protocol::ThreadId;
     use ody_protocol::config_types::CollaborationMode;
     use ody_protocol::config_types::ModeKind;
@@ -684,6 +685,7 @@ mod thread_processor_behavior_tests {
             websocket_connect_timeout_ms: None,
             requires_odysseythink_auth: false,
             supports_websockets: true,
+                    capabilities: ProviderCapabilities::default(),
         };
         let config_manager = ConfigManager::new(
             temp_dir.path().to_path_buf(),

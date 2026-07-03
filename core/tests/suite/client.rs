@@ -14,6 +14,7 @@ use ody_login::default_client::originator;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::WireApi;
 use ody_model_provider_info::built_in_model_providers;
+use ody_model_provider_info::ProviderCapabilities;
 use ody_models_manager::bundled_models_response;
 use ody_otel::SessionTelemetry;
 use ody_otel::TelemetryAuthMode;
@@ -1134,6 +1135,7 @@ async fn send_provider_auth_request(server: &MockServer, auth: ModelProviderAuth
         websocket_connect_timeout_ms: None,
         requires_odysseythink_auth: false,
         supports_websockets: false,
+            capabilities: ProviderCapabilities::default(),
     };
 
     let ody_home = TempDir::new().unwrap();
@@ -1284,6 +1286,7 @@ async fn prefers_apikey_when_config_prefers_apikey() {
         base_url: Some(format!("{}/v1", server.uri())),
         supports_websockets: false,
         ..built_in_model_providers(/* odysseythink_base_url */ /*odysseythink_base_url*/ None)["odysseythink"].clone()
+            capabilities: ProviderCapabilities::default(),
     };
 
     // Init session
@@ -2461,6 +2464,7 @@ async fn azure_responses_request_includes_store_and_reasoning_ids() {
         websocket_connect_timeout_ms: None,
         requires_odysseythink_auth: false,
         supports_websockets: false,
+            capabilities: ProviderCapabilities::default(),
     };
 
     let ody_home = TempDir::new().unwrap();
@@ -3078,6 +3082,7 @@ async fn azure_overrides_assign_properties_used_for_responses_url() {
         websocket_connect_timeout_ms: None,
         requires_odysseythink_auth: false,
         supports_websockets: false,
+            capabilities: ProviderCapabilities::default(),
     };
 
     // Init session
@@ -3166,6 +3171,7 @@ async fn env_var_overrides_loaded_auth() {
         websocket_connect_timeout_ms: None,
         requires_odysseythink_auth: false,
         supports_websockets: false,
+            capabilities: ProviderCapabilities::default(),
     };
 
     // Init session

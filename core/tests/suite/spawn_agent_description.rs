@@ -16,6 +16,7 @@ use ody_protocol::odysseythink_models::ReasoningEffort;
 use ody_protocol::odysseythink_models::ReasoningEffortPreset;
 use ody_protocol::odysseythink_models::TruncationPolicyConfig;
 use ody_protocol::odysseythink_models::default_input_modalities;
+use ody_protocol::odysseythink_models::ModelCapabilities;
 use core_test_support::responses::ev_completed;
 use core_test_support::responses::ev_response_created;
 use core_test_support::responses::mount_models_once;
@@ -87,6 +88,7 @@ fn test_model_info(
         comp_hash: None,
         effective_context_window_percent: 95,
         experimental_supported_tools: Vec::new(),
+        capabilities: ModelCapabilities::default(),
     }
 }
 

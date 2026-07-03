@@ -13,6 +13,7 @@ fn reasoning_summaries_override_true_enables_support() {
     let updated = with_config_overrides(model.clone(), &config);
     let mut expected = model;
     expected.supports_reasoning_summaries = true;
+    expected.capabilities.supports_reasoning_summaries = true;
 
     assert_eq!(updated, expected);
 }
@@ -57,6 +58,7 @@ fn model_context_window_override_clamps_to_max_context_window() {
     let updated = with_config_overrides(model.clone(), &config);
     let mut expected = model;
     expected.context_window = Some(400_000);
+    expected.capabilities.context_window = expected.context_window;
 
     assert_eq!(updated, expected);
 }
@@ -114,4 +116,150 @@ fn deepseek_reasoner_supports_thinking() {
         .find(|m| m.slug == "deepseek-chat")
         .unwrap();
     assert!(!chat.supports_reasoning_summaries);
+}
+
+mod capability_tests {
+    use super::default_model_capabilities_for_wire_api;
+    use super::resolve_model_capabilities;
+    use super::ModelCapabilities;
+    use super::ProviderCapabilities;
+    use super::WireApi;
+    use ody_protocol::odysseythink_models::InputModality;
+    use ody_protocol::odysseythink_models::WebSearchToolType;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn default_model_capabilities_for_wire_api_chat() {
+        let caps = default_model_capabilities_for_wire_api(WireApi::Chat);
+        assert!(caps.supports_tools);
+        assert!(caps.supports_vision);
+        assert_eq!(
+            caps.input_modalities,
+            vec![InputModality::Text, InputModality::Image]
+        );
+        assert!(!caps.supports_turn_pause);
+    }
+
+    #[test]
+    fn default_model_capabilities_for_wire_api_responses() {
+        let caps = default_model_capabilities_for_wire_api(WireApi::Responses);
+        assert!(caps.supports_tools);
+        assert!(caps.supports_vision);
+        assert!(caps.supports_multiple_system_messages);
+        assert_eq!(
+            caps.input_modalities,
+            vec![InputModality::Text, InputModality::Image]
+        );
+    }
+
+    #[test]
+    fn default_model_capabilities_for_wire_api_anthropic() {
+        let caps = default_model_capabilities_for_wire_api(WireApi::AnthropicMessages);
+        assert!(caps.supports_tools);
+        assert!(caps.supports_vision);
+        assert!(caps.supports_turn_pause);
+        assert_eq!(
+            caps.input_modalities,
+            vec![InputModality::Text, InputModality::Image]
+        );
+    }
+
+    #[test]
+    fn default_model_capabilities_for_wire_api_local() {
+        let caps = default_model_capabilities_for_wire_api(WireApi::Local);
+        assert!(caps.supports_tools);
+        assert!(!caps.supports_vision);
+        assert_eq!(caps.input_modalities, vec![InputModality::Text]);
+        assert!(!caps.supports_multiple_system_messages);
+    }
+
+    #[test]
+    fn model_capabilities_clamped_by_provider_web_search() {
+        let provider_caps = ProviderCapabilities {
+            web_search: false,
+            ..Default::default()
+        };
+        let model_caps = ModelCapabilities {
+            supports_search_tool: true,
+            web_search_tool_type: WebSearchToolType::TextAndImage,
+            ..Default::default()
+        };
+        let resolved = resolve_model_capabilities(
+            &provider_caps,
+            WireApi::Chat,
+            None,
+            Some(&model_caps),
+            "test-model",
+        );
+        assert!(!resolved.supports_search_tool);
+        assert_eq!(resolved.web_search_tool_type, WebSearchToolType::Text);
+    }
+
+    #[test]
+    fn model_capabilities_clamps_context_window_to_max() {
+        let model_caps = ModelCapabilities {
+            context_window: Some(300_000),
+            max_context_window: Some(200_000),
+            ..Default::default()
+        };
+        let resolved = resolve_model_capabilities(
+            &ProviderCapabilities::default(),
+            WireApi::Chat,
+            None,
+            Some(&model_caps),
+            "test-model",
+        );
+        assert_eq!(resolved.context_window, Some(200_000));
+    }
+
+    #[test]
+    fn model_capabilities_clamps_auto_compact_to_ninety_percent() {
+        let model_caps = ModelCapabilities {
+            context_window: Some(100_000),
+            auto_compact_token_limit: Some(95_000),
+            ..Default::default()
+        };
+        let resolved = resolve_model_capabilities(
+            &ProviderCapabilities::default(),
+            WireApi::Chat,
+            None,
+            Some(&model_caps),
+            "test-model",
+        );
+        assert_eq!(resolved.auto_compact_token_limit, Some(90_000));
+    }
+
+    #[test]
+    fn model_capabilities_configured_takes_precedence() {
+        let built_in = ModelCapabilities {
+            context_window: Some(100_000),
+            ..Default::default()
+        };
+        let configured = ModelCapabilities {
+            context_window: Some(200_000),
+            ..Default::default()
+        };
+        let resolved = resolve_model_capabilities(
+            &ProviderCapabilities::default(),
+            WireApi::Chat,
+            Some(&configured),
+            Some(&built_in),
+            "test-model",
+        );
+        assert_eq!(resolved.context_window, Some(200_000));
+    }
+
+    #[test]
+    fn model_capabilities_falls_back_to_wire_api_inference() {
+        let resolved = resolve_model_capabilities(
+            &ProviderCapabilities::default(),
+            WireApi::AnthropicMessages,
+            None,
+            None,
+            "test-model",
+        );
+        assert!(resolved.supports_tools);
+        assert!(resolved.supports_vision);
+        assert!(resolved.supports_turn_pause);
+    }
 }

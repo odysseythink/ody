@@ -50,6 +50,7 @@ fn env_var_present(name: &str) -> bool {
 mod tests {
     use super::*;
     use ody_model_provider_info::WireApi;
+use ody_model_provider_info::ProviderCapabilities;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -71,6 +72,7 @@ mod tests {
             websocket_connect_timeout_ms: None,
             requires_odysseythink_auth: false,
             supports_websockets: false,
+                    capabilities: ProviderCapabilities::default(),
         };
 
         let telemetry =

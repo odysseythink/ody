@@ -9,6 +9,7 @@ use ody_protocol::odysseythink_models::ModelPreset;
 use ody_protocol::odysseythink_models::ModelVisibility;
 use ody_protocol::odysseythink_models::TruncationPolicyConfig;
 use ody_protocol::odysseythink_models::default_input_modalities;
+use ody_protocol::odysseythink_models::ModelCapabilities;
 use serde_json::json;
 use std::path::Path;
 
@@ -57,6 +58,7 @@ fn preset_to_info(preset: &ModelPreset, priority: i32) -> ModelInfo {
         auto_review_model_override: None,
         tool_mode: None,
         multi_agent_version: None,
+        capabilities: ModelCapabilities::default(),
     }
 }
 

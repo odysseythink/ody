@@ -7750,6 +7750,7 @@ dependencies = [
  "ody-app-server-protocol",
  "ody-collaboration-mode-templates",
  "ody-login",
+ "ody-model-provider-info",
  "ody-otel",
  "ody-protocol",
  "ody-utils-output-truncation",

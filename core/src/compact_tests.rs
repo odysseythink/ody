@@ -1,6 +1,7 @@
 use super::*;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::WireApi;
+use ody_model_provider_info::ProviderCapabilities;
 use ody_protocol::models::DEFAULT_IMAGE_DETAIL;
 use ody_protocol::models::InternalChatMessageMetadataPassthrough;
 use pretty_assertions::assert_eq;
@@ -268,6 +269,7 @@ fn should_use_remote_compact_task_for_azure_provider() {
         websocket_connect_timeout_ms: None,
         requires_odysseythink_auth: false,
         supports_websockets: false,
+            capabilities: ProviderCapabilities::default(),
     };
 
     assert!(should_use_remote_compact_task(&provider));

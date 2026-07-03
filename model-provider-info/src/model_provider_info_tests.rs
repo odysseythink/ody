@@ -28,6 +28,7 @@ base_url = "http://localhost:11434/v1"
         websocket_connect_timeout_ms: None,
         requires_odysseythink_auth: false,
         supports_websockets: false,
+            capabilities: ProviderCapabilities::default(),
     };
 
     let provider: ModelProviderInfo = toml::from_str(azure_provider_toml).unwrap();
@@ -61,6 +62,7 @@ query_params = { api-version = "2025-04-01-preview" }
         websocket_connect_timeout_ms: None,
         requires_odysseythink_auth: false,
         supports_websockets: false,
+            capabilities: ProviderCapabilities::default(),
     };
 
     let provider: ModelProviderInfo = toml::from_str(azure_provider_toml).unwrap();
@@ -97,6 +99,7 @@ env_http_headers = { "X-Example-Env-Header" = "EXAMPLE_ENV_VAR" }
         websocket_connect_timeout_ms: None,
         requires_odysseythink_auth: false,
         supports_websockets: false,
+            capabilities: ProviderCapabilities::default(),
     };
 
     let provider: ModelProviderInfo = toml::from_str(azure_provider_toml).unwrap();
@@ -175,6 +178,7 @@ fn test_supports_remote_compaction_for_azure_name() {
         websocket_connect_timeout_ms: None,
         requires_odysseythink_auth: false,
         supports_websockets: false,
+            capabilities: ProviderCapabilities::default(),
     };
 
     assert!(provider.supports_remote_compaction());
@@ -199,6 +203,7 @@ fn test_supports_remote_compaction_for_non_odysseythink_non_azure_provider() {
         websocket_connect_timeout_ms: None,
         requires_odysseythink_auth: false,
         supports_websockets: false,
+            capabilities: ProviderCapabilities::default(),
     };
 
     assert!(!provider.supports_remote_compaction());
@@ -252,6 +257,87 @@ fn test_merge_configured_model_providers_adds_custom_provider() {
         ),
         Ok(expected)
     );
+}
+
+#[test]
+fn provider_capabilities_default_is_conservative() {
+    let caps = ProviderCapabilities::default();
+    assert!(!caps.supports_websockets);
+    assert!(!caps.supports_remote_compaction);
+    assert!(!caps.namespace_tools);
+    assert!(!caps.image_generation);
+    assert!(!caps.web_search);
+    assert!(!caps.command_auth);
+    assert!(!caps.attestation);
+}
+
+#[test]
+fn built_in_odysseythink_provider_capabilities() {
+    let provider = ModelProviderInfo::create_odysseythink_provider(None);
+    assert!(provider.capabilities.supports_websockets);
+    assert!(provider.capabilities.supports_remote_compaction);
+    assert!(provider.capabilities.namespace_tools);
+    assert!(provider.capabilities.image_generation);
+    assert!(provider.capabilities.web_search);
+    assert!(!provider.capabilities.command_auth);
+    assert!(!provider.capabilities.attestation);
+}
+
+#[test]
+fn built_in_kimi_provider_capabilities() {
+    let provider = create_kimi_provider();
+    assert!(!provider.capabilities.supports_websockets);
+    assert!(!provider.capabilities.supports_remote_compaction);
+    assert!(!provider.capabilities.namespace_tools);
+    assert!(!provider.capabilities.image_generation);
+    assert!(!provider.capabilities.web_search);
+    assert!(!provider.capabilities.command_auth);
+    assert!(!provider.capabilities.attestation);
+}
+
+#[test]
+fn test_deserialize_provider_capabilities() {
+    let provider_toml = r#"
+name = "Custom"
+base_url = "https://example.com/v1"
+wire_api = "responses"
+
+[capabilities]
+supports_websockets = true
+web_search = false
+namespace_tools = true
+"#;
+    let provider: ModelProviderInfo = toml::from_str(provider_toml).unwrap();
+    assert!(provider.capabilities.supports_websockets);
+    assert!(!provider.capabilities.web_search);
+    assert!(provider.capabilities.namespace_tools);
+    assert!(!provider.capabilities.image_generation);
+    assert!(provider.validate().is_ok());
+}
+
+#[test]
+fn default_provider_capabilities_for_responses() {
+    let caps = default_provider_capabilities_for_wire_api(WireApi::Responses);
+    assert!(caps.supports_websockets);
+    assert!(caps.supports_remote_compaction);
+    assert!(caps.namespace_tools);
+    assert!(caps.image_generation);
+    assert!(caps.web_search);
+}
+
+#[test]
+fn default_provider_capabilities_for_chat_is_conservative() {
+    let caps = default_provider_capabilities_for_wire_api(WireApi::Chat);
+    assert!(!caps.supports_websockets);
+    assert!(!caps.namespace_tools);
+    assert!(!caps.image_generation);
+    assert!(!caps.web_search);
+}
+
+#[test]
+fn default_provider_capabilities_for_local_is_all_false() {
+    let caps = default_provider_capabilities_for_wire_api(WireApi::Local);
+    assert_eq!(caps, ProviderCapabilities::default());
 }
 
 #[test]

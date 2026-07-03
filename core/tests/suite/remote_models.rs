@@ -3,6 +3,7 @@ use anyhow::Result;
 use ody_login::OdyAuth;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::built_in_model_providers;
+use ody_model_provider_info::ProviderCapabilities;
 use ody_models_manager::bundled_models_response;
 use ody_models_manager::manager::RefreshStrategy;
 use ody_models_manager::manager::SharedModelsManager;
@@ -17,6 +18,7 @@ use ody_protocol::odysseythink_models::ReasoningEffort;
 use ody_protocol::odysseythink_models::ReasoningEffortPreset;
 use ody_protocol::odysseythink_models::TruncationPolicyConfig;
 use ody_protocol::odysseythink_models::default_input_modalities;
+use ody_protocol::odysseythink_models::ModelCapabilities;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::ExecCommandSource;
@@ -96,6 +98,7 @@ async fn remote_models_get_model_info_uses_longest_matching_prefix() -> Result<(
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         ..built_in_model_providers(/* odysseythink_base_url */ /*odysseythink_base_url*/ None)["odysseythink"].clone()
+            capabilities: ProviderCapabilities::default(),
     };
     let manager = ody_core::test_support::models_manager_with_provider(
         ody_home.path().to_path_buf(),
@@ -501,7 +504,8 @@ async fn remote_models_remote_model_uses_unified_exec() -> Result<()> {
         comp_hash: None,
         effective_context_window_percent: 95,
         experimental_supported_tools: Vec::new(),
-    };
+        capabilities: ModelCapabilities::default(),
+};
 
     let models_mock = mount_models_once(
         &server,
@@ -754,7 +758,8 @@ async fn remote_models_apply_remote_base_instructions() -> Result<()> {
         comp_hash: None,
         effective_context_window_percent: 95,
         experimental_supported_tools: Vec::new(),
-    };
+        capabilities: ModelCapabilities::default(),
+};
     mount_models_once(
         &server,
         ModelsResponse {
@@ -855,6 +860,7 @@ async fn remote_models_do_not_append_removed_builtin_presets() -> Result<()> {
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         ..built_in_model_providers(/* odysseythink_base_url */ /*odysseythink_base_url*/ None)["odysseythink"].clone()
+            capabilities: ProviderCapabilities::default(),
     };
     let manager = ody_core::test_support::models_manager_with_provider(
         ody_home.path().to_path_buf(),
@@ -916,6 +922,7 @@ async fn remote_models_merge_adds_new_high_priority_first() -> Result<()> {
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         ..built_in_model_providers(/* odysseythink_base_url */ /*odysseythink_base_url*/ None)["odysseythink"].clone()
+            capabilities: ProviderCapabilities::default(),
     };
     let manager = ody_core::test_support::models_manager_with_provider(
         ody_home.path().to_path_buf(),
@@ -963,6 +970,7 @@ async fn remote_models_merge_replaces_overlapping_model() -> Result<()> {
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         ..built_in_model_providers(/* odysseythink_base_url */ /*odysseythink_base_url*/ None)["odysseythink"].clone()
+            capabilities: ProviderCapabilities::default(),
     };
     let manager = ody_core::test_support::models_manager_with_provider(
         ody_home.path().to_path_buf(),
@@ -1007,6 +1015,7 @@ async fn remote_models_merge_preserves_bundled_models_on_empty_response() -> Res
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         ..built_in_model_providers(/* odysseythink_base_url */ /*odysseythink_base_url*/ None)["odysseythink"].clone()
+            capabilities: ProviderCapabilities::default(),
     };
     let manager = ody_core::test_support::models_manager_with_provider(
         ody_home.path().to_path_buf(),
@@ -1049,6 +1058,7 @@ async fn remote_models_request_times_out_after_5s() -> Result<()> {
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         ..built_in_model_providers(/* odysseythink_base_url */ /*odysseythink_base_url*/ None)["odysseythink"].clone()
+            capabilities: ProviderCapabilities::default(),
     };
     let manager = ody_core::test_support::models_manager_with_provider(
         ody_home.path().to_path_buf(),
@@ -1121,6 +1131,7 @@ async fn remote_models_hide_picker_only_models() -> Result<()> {
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         ..built_in_model_providers(/* odysseythink_base_url */ /*odysseythink_base_url*/ None)["odysseythink"].clone()
+            capabilities: ProviderCapabilities::default(),
     };
     let manager = ody_core::test_support::models_manager_with_provider(
         ody_home.path().to_path_buf(),
@@ -1242,5 +1253,6 @@ fn test_remote_model_with_policy(
         comp_hash: None,
         effective_context_window_percent: 95,
         experimental_supported_tools: Vec::new(),
+        capabilities: ModelCapabilities::default(),
     }
 }

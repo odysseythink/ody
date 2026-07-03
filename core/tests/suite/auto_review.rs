@@ -14,6 +14,7 @@ use ody_protocol::odysseythink_models::ReasoningEffort;
 use ody_protocol::odysseythink_models::ReasoningEffortPreset;
 use ody_protocol::odysseythink_models::TruncationPolicyConfig;
 use ody_protocol::odysseythink_models::default_input_modalities;
+use ody_protocol::odysseythink_models::ModelCapabilities;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::Op;
@@ -257,5 +258,6 @@ fn remote_model_with_auto_review_override(slug: &str, review_model: &str) -> Mod
         comp_hash: None,
         effective_context_window_percent: 95,
         experimental_supported_tools: Vec::new(),
+        capabilities: ModelCapabilities::default(),
     }
 }

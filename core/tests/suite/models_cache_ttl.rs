@@ -19,6 +19,7 @@ use ody_protocol::odysseythink_models::ReasoningEffort;
 use ody_protocol::odysseythink_models::ReasoningEffortPreset;
 use ody_protocol::odysseythink_models::TruncationPolicyConfig;
 use ody_protocol::odysseythink_models::default_input_modalities;
+use ody_protocol::odysseythink_models::ModelCapabilities;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::Op;
 use ody_protocol::user_input::UserInput;
@@ -375,5 +376,6 @@ fn test_remote_model(slug: &str, priority: i32) -> ModelInfo {
         auto_review_model_override: None,
         tool_mode: None,
         multi_agent_version: None,
+        capabilities: ModelCapabilities::default(),
     }
 }

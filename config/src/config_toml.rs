@@ -34,6 +34,7 @@ use ody_model_provider_info::KIMI_PROVIDER_ID;
 use ody_model_provider_info::LEGACY_OLLAMA_CHAT_PROVIDER_ID;
 use ody_model_provider_info::LMSTUDIO_OSS_PROVIDER_ID;
 use ody_model_provider_info::ModelProviderInfo;
+use ody_model_provider_info::ProviderCapabilities;
 use ody_model_provider_info::OLLAMA_CHAT_PROVIDER_REMOVED_ERROR;
 use ody_model_provider_info::OLLAMA_OSS_PROVIDER_ID;
 use ody_model_provider_info::OPENAI_PROVIDER_ID;
@@ -546,6 +547,7 @@ impl ConfigToml {
                     websocket_connect_timeout_ms: None,
                     requires_odysseythink_auth: false,
                     supports_websockets: false,
+                                    capabilities: ProviderCapabilities::default(),
                 };
                 if info.http_headers.as_ref().map_or(true, |h| h.is_empty()) {
                     info.http_headers = None;
