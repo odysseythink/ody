@@ -639,8 +639,8 @@ async fn status_model_provider_omits_usage_link_for_non_odysseythink_proxy() {
         name: "OpenAI Proxy".to_string(),
         base_url: Some("https://odysseythink-proxy.example/v1".to_string()),
         requires_odysseythink_auth: true,
+        capabilities: ProviderCapabilities::default(),
         ..ModelProviderInfo::default()
-            capabilities: ProviderCapabilities::default(),
     };
     let usage = TokenUsage::default();
     let captured_at = chrono::Local
