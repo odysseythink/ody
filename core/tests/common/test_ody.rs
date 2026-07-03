@@ -674,8 +674,8 @@ impl TestOdyBuilder {
             // Most core tests use SSE-only mock servers, so keep websocket transport off unless
             // a test explicitly opts into websocket coverage.
             supports_websockets: false,
+            capabilities: ProviderCapabilities::default(),
             ..built_in_model_providers(/*odysseythink_base_url*/ None)["odysseythink"].clone()
-                    capabilities: ProviderCapabilities::default(),
         };
         let cwd = Arc::new(TempDir::new()?);
         for hook in self.pre_build_hooks.drain(..) {

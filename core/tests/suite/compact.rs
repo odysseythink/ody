@@ -401,8 +401,8 @@ fn local_compaction_provider(server: &wiremock::MockServer) -> ModelProviderInfo
     provider.name = "OpenAI-compatible test provider".to_string();
     provider.base_url = Some(format!("{}/v1", server.uri()));
     provider.supports_websockets = false;
+    provider.capabilities = ProviderCapabilities::default();
     provider
-    capabilities: ProviderCapabilities::default(),
 }
 
 fn model_info_with_context_window(slug: &str, context_window: i64) -> ModelInfo {

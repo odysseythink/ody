@@ -1285,8 +1285,8 @@ async fn prefers_apikey_when_config_prefers_apikey() {
     let model_provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         supports_websockets: false,
+        capabilities: ProviderCapabilities::default(),
         ..built_in_model_providers(/* odysseythink_base_url */ /*odysseythink_base_url*/ None)["odysseythink"].clone()
-            capabilities: ProviderCapabilities::default(),
     };
 
     // Init session
