@@ -1,9 +1,9 @@
 mod auth;
 mod bearer_auth_provider;
-mod models_endpoint;
 mod chat_provider;
 #[cfg(test)]
 mod chat_provider_tests;
+mod models_endpoint;
 mod provider;
 
 pub mod adapters;
@@ -40,3 +40,4 @@ pub use provider::ProviderAccountState;
 pub use provider::ProviderCapabilities;
 pub use provider::SharedModelProvider;
 pub use provider::create_model_provider;
+pub use provider::create_model_provider_with_id;

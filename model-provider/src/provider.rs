@@ -10,11 +10,10 @@ use ody_api::SharedAuthProvider;
 use ody_login::AuthManager;
 use ody_login::OdyAuth;
 use ody_model_provider_info::ModelProviderInfo;
-use ody_model_provider_info::ProviderCapabilities as ModelProviderCapabilities;
 use ody_models_manager::manager::OpenAiModelsManager;
 use ody_models_manager::manager::SharedModelsManager;
 use ody_models_manager::manager::StaticModelsManager;
-use ody_models_manager::model_info::chat_provider_models;
+use ody_models_manager::model_info::model_catalog_for_provider;
 use ody_protocol::account::ProviderAccount;
 use ody_protocol::error::OdyErr;
 use ody_protocol::odysseythink_models::ModelsResponse;
@@ -178,25 +177,46 @@ pub type ModelProviderFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a
 /// Shared runtime model provider handle.
 pub type SharedModelProvider = Arc<dyn ModelProvider>;
 
-/// Creates the default runtime model provider for configured provider metadata.
+/// Creates the default runtime model provider for configured provider metadata,
+/// deriving the provider id from the wire API identity.
 pub fn create_model_provider(
     provider_info: ModelProviderInfo,
     auth_manager: Option<Arc<AuthManager>>,
 ) -> SharedModelProvider {
-    Arc::new(ConfiguredModelProvider::new(provider_info, auth_manager))
+    create_model_provider_with_id(provider_id_for_wire_api(&provider_info), provider_info, auth_manager)
+}
+
+/// Creates the default runtime model provider for configured provider metadata
+/// using the given provider id.
+pub fn create_model_provider_with_id(
+    provider_id: impl Into<String>,
+    provider_info: ModelProviderInfo,
+    auth_manager: Option<Arc<AuthManager>>,
+) -> SharedModelProvider {
+    Arc::new(ConfiguredModelProvider::new(
+        provider_id.into(),
+        provider_info,
+        auth_manager,
+    ))
 }
 
 /// Runtime model provider backed by configured `ModelProviderInfo`.
 #[derive(Clone, Debug)]
 struct ConfiguredModelProvider {
+    provider_id: String,
     info: ModelProviderInfo,
     auth_manager: Option<Arc<AuthManager>>,
 }
 
 impl ConfiguredModelProvider {
-    fn new(provider_info: ModelProviderInfo, auth_manager: Option<Arc<AuthManager>>) -> Self {
+    fn new(
+        provider_id: String,
+        provider_info: ModelProviderInfo,
+        auth_manager: Option<Arc<AuthManager>>,
+    ) -> Self {
         let auth_manager = auth_manager_for_provider(auth_manager, &provider_info);
         Self {
+            provider_id,
             info: provider_info,
             auth_manager,
         }
@@ -248,18 +268,10 @@ impl ModelProvider for ConfiguredModelProvider {
     }
 
     fn capabilities(&self) -> ProviderCapabilities {
-        if self.info.is_chat_completions() {
-            // Chat Completions providers expose plain function tools only;
-            // namespaced tools, server-side image generation and web search are
-            // Responses-API features. (Kimi's web search is handled separately
-            // via its `builtin_function` tool.)
-            ProviderCapabilities {
-                namespace_tools: false,
-                image_generation: false,
-                web_search: false,
-            }
-        } else {
-            ProviderCapabilities::default()
+        ProviderCapabilities {
+            namespace_tools: self.info.capabilities.namespace_tools,
+            image_generation: self.info.capabilities.image_generation,
+            web_search: self.info.capabilities.web_search,
         }
     }
 
@@ -307,7 +319,7 @@ impl ModelProvider for ConfiguredModelProvider {
         // OpenAI-compatible Chat Completions providers (Kimi / DeepSeek / GLM)
         // do not expose the ody `/models` catalog; serve a bundled static list.
         if self.info.is_chat_completions()
-            && let Some(catalog) = chat_provider_models(&provider_id_for_chat_catalog(&self.info))
+            && let Some(catalog) = model_catalog_for_provider(&self.provider_id, &self.info)
         {
             return Arc::new(StaticModelsManager::new(self.auth_manager.clone(), catalog));
         }
@@ -352,22 +364,11 @@ fn provider_id_for_local(info: &ModelProviderInfo) -> &'static str {
     }
 }
 
-/// Resolve the catalog key for a Chat Completions provider from its identity.
-fn provider_id_for_chat_catalog(info: &ModelProviderInfo) -> String {
-    if info.is_kimi() {
-        "kimi".to_string()
-    } else if info.is_deepseek() {
-        "deepseek".to_string()
-    } else if info.is_glm() {
-        "glm".to_string()
-    } else {
-        String::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use ody_model_provider_info::ProviderCapabilities as ModelProviderCapabilities;
     use ody_model_provider_info::WireApi;
+    use ody_models_manager::manager::RefreshStrategy;
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -565,5 +566,54 @@ mod tests {
                 .and_then(|value| value.to_str().ok()),
             Some("Bearer provider-token")
         );
+    }
+
+    #[tokio::test]
+    async fn configured_provider_with_id_uses_given_id() {
+        let info = ModelProviderInfo {
+            name: "my-provider".into(),
+            base_url: Some("http://localhost:1234/v1".into()),
+            wire_api: WireApi::Chat,
+            ..Default::default()
+        };
+        let provider = create_model_provider_with_id("my-provider", info, None);
+        let manager = provider.models_manager(PathBuf::from("/tmp/ody-models-test"), None);
+        let catalog = manager.raw_model_catalog(RefreshStrategy::Offline).await;
+
+        assert_eq!(catalog.models.len(), 1);
+        assert_eq!(catalog.models[0].slug, "my-provider");
+    }
+
+    #[test]
+    fn configured_provider_capabilities_match_info() {
+        let info = ModelProviderInfo {
+            name: "custom-chat".into(),
+            base_url: Some("http://localhost:1234/v1".into()),
+            wire_api: WireApi::Chat,
+            capabilities: ModelProviderCapabilities {
+                web_search: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let provider = create_model_provider_with_id("custom-chat", info, None);
+        let caps = provider.capabilities();
+
+        assert!(caps.web_search);
+        assert!(!caps.namespace_tools);
+    }
+
+    #[test]
+    fn odysseythink_provider_capabilities_remain_true() {
+        let provider = create_model_provider_with_id(
+            "openai-responses",
+            ModelProviderInfo::create_odysseythink_provider(None),
+            None,
+        );
+        let caps = provider.capabilities();
+
+        assert!(caps.namespace_tools);
+        assert!(caps.image_generation);
+        assert!(caps.web_search);
     }
 }

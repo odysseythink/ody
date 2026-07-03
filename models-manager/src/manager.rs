@@ -363,8 +363,7 @@ impl OpenAiModelsManager {
 
     /// Attempt to satisfy the refresh from the cache when it matches the provider and TTL.
     async fn try_load_cache(&self) -> bool {
-        let _timer =
-            ody_otel::start_global_timer("ody.remote_models.load_cache.duration_ms", &[]);
+        let _timer = ody_otel::start_global_timer("ody.remote_models.load_cache.duration_ms", &[]);
         let client_version = crate::client_version_to_whole();
         info!(client_version, "models cache: evaluating cache eligibility");
         // TODO(celia-oai): Include provider identity in cache eligibility so switching

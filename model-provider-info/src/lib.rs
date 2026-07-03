@@ -431,6 +431,16 @@ impl ModelProviderInfo {
     pub fn has_command_auth(&self) -> bool {
         self.auth.is_some()
     }
+
+    /// Backfill capabilities from the wire-api defaults when the provider has
+    /// not explicitly configured any capabilities (i.e. the value is the
+    /// all-false default). This gives user-defined and converted providers
+    /// sensible defaults without overriding explicit choices.
+    pub fn normalize_capabilities(&mut self) {
+        if self.capabilities == ProviderCapabilities::default() {
+            self.capabilities = default_provider_capabilities_for_wire_api(self.wire_api);
+        }
+    }
 }
 
 pub const DEFAULT_LMSTUDIO_PORT: u16 = 1234;
@@ -454,11 +464,11 @@ pub fn built_in_model_providers(
         (OPENAI_PROVIDER_ID, odysseythink_provider),
         (
             OLLAMA_OSS_PROVIDER_ID,
-            create_oss_provider(DEFAULT_OLLAMA_PORT, WireApi::Responses),
+            create_oss_provider(DEFAULT_OLLAMA_PORT, WireApi::Local),
         ),
         (
             LMSTUDIO_OSS_PROVIDER_ID,
-            create_oss_provider(DEFAULT_LMSTUDIO_PORT, WireApi::Responses),
+            create_oss_provider(DEFAULT_LMSTUDIO_PORT, WireApi::Local),
         ),
         // OpenAI-compatible third-party Chat Completions providers.
         (KIMI_PROVIDER_ID, create_kimi_provider()),

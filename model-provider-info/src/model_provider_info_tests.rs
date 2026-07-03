@@ -360,3 +360,62 @@ refresh_interval_ms = 0
     assert_eq!(auth.refresh_interval_ms, 0);
     assert_eq!(auth.refresh_interval(), None);
 }
+
+#[test]
+fn built_in_oss_providers_use_local_wire_api() {
+    let providers = built_in_model_providers(/*odysseythink_base_url*/ None);
+    assert_eq!(providers["ollama"].wire_api, WireApi::Local);
+    assert_eq!(providers["lmstudio"].wire_api, WireApi::Local);
+}
+
+#[test]
+fn normalize_capabilities_fills_responses_defaults() {
+    let mut provider = ModelProviderInfo {
+        wire_api: WireApi::Responses,
+        capabilities: ProviderCapabilities::default(),
+        ..ModelProviderInfo::default()
+    };
+    provider.normalize_capabilities();
+    assert!(provider.capabilities.supports_websockets);
+    assert!(provider.capabilities.supports_remote_compaction);
+    assert!(provider.capabilities.namespace_tools);
+    assert!(provider.capabilities.image_generation);
+    assert!(provider.capabilities.web_search);
+    assert!(!provider.capabilities.command_auth);
+    assert!(!provider.capabilities.attestation);
+}
+
+#[test]
+fn normalize_capabilities_keeps_local_conservative() {
+    let mut provider = ModelProviderInfo {
+        wire_api: WireApi::Local,
+        capabilities: ProviderCapabilities::default(),
+        ..ModelProviderInfo::default()
+    };
+    provider.normalize_capabilities();
+    assert_eq!(provider.capabilities, ProviderCapabilities::default());
+}
+
+#[test]
+fn normalize_capabilities_respects_explicit_values() {
+    // With all-false replacement semantics, explicit choices are preserved as
+    // long as the capability struct is no longer the all-false default.
+    let mut provider = ModelProviderInfo {
+        wire_api: WireApi::Responses,
+        capabilities: ProviderCapabilities {
+            supports_websockets: false,
+            web_search: false,
+            image_generation: true,
+            ..ProviderCapabilities::default()
+        },
+        ..ModelProviderInfo::default()
+    };
+    provider.normalize_capabilities();
+    assert!(!provider.capabilities.supports_websockets);
+    assert!(!provider.capabilities.web_search);
+    assert!(provider.capabilities.image_generation);
+    assert!(!provider.capabilities.supports_remote_compaction);
+    assert!(!provider.capabilities.namespace_tools);
+    assert!(!provider.capabilities.command_auth);
+    assert!(!provider.capabilities.attestation);
+}

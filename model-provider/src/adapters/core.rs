@@ -45,7 +45,11 @@ pub fn to_response_event(event: ChatEvent) -> Vec<ResponseEvent> {
                 internal_chat_message_metadata_passthrough: None,
             })]
         }
-        ChatEvent::ToolCall(ToolCall { id, name, arguments }) => {
+        ChatEvent::ToolCall(ToolCall {
+            id,
+            name,
+            arguments,
+        }) => {
             vec![ResponseEvent::OutputItemDone(ResponseItem::FunctionCall {
                 id: None,
                 name,
@@ -146,11 +150,7 @@ pub fn prompt_to_chat_request(
         messages.extend(response_item_to_messages(item));
     }
 
-    let tools = prompt
-        .tools()
-        .iter()
-        .flat_map(tools_from_spec)
-        .collect();
+    let tools = prompt.tools().iter().flat_map(tools_from_spec).collect();
 
     ChatRequest {
         model: model.to_string(),
@@ -283,8 +283,12 @@ fn response_item_to_messages(item: ResponseItem) -> Vec<Message> {
                 tool_call_id: None,
             }]
         }
-        ResponseItem::FunctionCallOutput { call_id, output, .. }
-        | ResponseItem::CustomToolCallOutput { call_id, output, .. } => {
+        ResponseItem::FunctionCallOutput {
+            call_id, output, ..
+        }
+        | ResponseItem::CustomToolCallOutput {
+            call_id, output, ..
+        } => {
             let mut parts = Vec::new();
             match output.content_items() {
                 Some(items) => {
@@ -379,7 +383,9 @@ mod tests {
             input: vec![ResponseItem::Message {
                 id: None,
                 role: "user".to_string(),
-                content: vec![ContentItem::InputText { text: "hello".into() }],
+                content: vec![ContentItem::InputText {
+                    text: "hello".into(),
+                }],
                 phase: None,
                 internal_chat_message_metadata_passthrough: None,
             }],
@@ -481,7 +487,10 @@ mod tests {
         assert_eq!(request.tools.len(), 1);
         assert_eq!(request.tools[0].name, "read_file");
         assert_eq!(request.tools[0].description, "Read a file from disk.");
-        assert_eq!(request.tools[0].schema, serde_json::to_value(&schema).unwrap());
+        assert_eq!(
+            request.tools[0].schema,
+            serde_json::to_value(&schema).unwrap()
+        );
     }
 
     #[test]

@@ -104,7 +104,10 @@ fn capabilities_from_vendor(vendor: ChatVendor) -> ProviderCapabilities {
     }
 }
 
-fn build_api_request(request: ChatRequest, vendor: ChatVendor) -> Result<ChatCompletionsRequest, ChatProviderError> {
+fn build_api_request(
+    request: ChatRequest,
+    vendor: ChatVendor,
+) -> Result<ChatCompletionsRequest, ChatProviderError> {
     use crate::chat_provider::Role;
     let instructions = request
         .messages
@@ -161,10 +164,11 @@ fn reasoning_effort_for_request(
         ],
         _ => vec![],
     };
-    let effort = clamp_thinking_effort(thinking_effort, &supported)
-        .ok_or_else(|| ChatProviderError::Unsupported {
+    let effort = clamp_thinking_effort(thinking_effort, &supported).ok_or_else(|| {
+        ChatProviderError::Unsupported {
             capability: "thinking effort".into(),
-        })?;
+        }
+    })?;
     if effort == ThinkingEffort::Off {
         return Ok(None);
     }
@@ -188,9 +192,7 @@ fn content_to_text(content: &[crate::chat_provider::ContentPart]) -> String {
         .join("")
 }
 
-fn message_to_response_items(
-    message: crate::chat_provider::Message,
-) -> Vec<ResponseItem> {
+fn message_to_response_items(message: crate::chat_provider::Message) -> Vec<ResponseItem> {
     use crate::chat_provider::{ContentPart, Role};
 
     // Tool messages → FunctionCallOutput
@@ -231,9 +233,9 @@ fn message_to_response_items(
     let mut content = Vec::new();
     for part in message.content {
         match part {
-            ContentPart::Text(text) => content.push(ody_protocol::models::ContentItem::InputText {
-                text,
-            }),
+            ContentPart::Text(text) => {
+                content.push(ody_protocol::models::ContentItem::InputText { text })
+            }
             ContentPart::Image { mime, bytes } => {
                 let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
                 content.push(ody_protocol::models::ContentItem::InputImage {
@@ -241,9 +243,9 @@ fn message_to_response_items(
                     detail: None,
                 });
             }
-            ContentPart::Reasoning(text) => content.push(ody_protocol::models::ContentItem::InputText {
-                text,
-            }),
+            ContentPart::Reasoning(text) => {
+                content.push(ody_protocol::models::ContentItem::InputText { text })
+            }
             ContentPart::ToolResult {
                 tool_call_id,
                 content: parts,
@@ -378,8 +380,12 @@ fn log_invalid_message_function_names(input: &[ResponseItem], vendor: ChatVendor
                     );
                 }
             }
-            ResponseItem::FunctionCallOutput { call_id, output, .. }
-            | ResponseItem::CustomToolCallOutput { call_id, output, .. } => {
+            ResponseItem::FunctionCallOutput {
+                call_id, output, ..
+            }
+            | ResponseItem::CustomToolCallOutput {
+                call_id, output, ..
+            } => {
                 if !is_valid_function_name(call_id) {
                     tracing::warn!(
                         call_id = call_id,
@@ -415,20 +421,15 @@ impl<T: HttpTransport + 'static> ChatProvider for ChatAdapter<T> {
             .await
             .map_err(chat_provider_error_from_api_error)?;
 
-        let mapped =
-            stream.map(
-                |result: Result<ody_api::ResponseEvent, _>| -> ChatStream {
-                    match result
-                        .map_err(chat_provider_error_from_api_error)
-                        .and_then(common::normalize_response_event)
-                    {
-                        Ok(events) => Box::pin(futures::stream::iter(
-                            events.into_iter().map(Ok),
-                        )),
-                        Err(e) => Box::pin(futures::stream::iter(std::iter::once(Err(e)))),
-                    }
-                },
-            );
+        let mapped = stream.map(|result: Result<ody_api::ResponseEvent, _>| -> ChatStream {
+            match result
+                .map_err(chat_provider_error_from_api_error)
+                .and_then(common::normalize_response_event)
+            {
+                Ok(events) => Box::pin(futures::stream::iter(events.into_iter().map(Ok))),
+                Err(e) => Box::pin(futures::stream::iter(std::iter::once(Err(e)))),
+            }
+        });
         Ok(Box::pin(mapped.flatten()))
     }
 }
@@ -485,14 +486,12 @@ mod tests {
         let request = ChatRequest {
             model: "kimi-k2".into(),
             thinking_effort: ThinkingEffort::High,
-            messages: vec![
-                Message {
-                    role: Role::User,
-                    content: vec![ContentPart::Text("hi".into())],
-                    tool_calls: vec![],
-                    tool_call_id: None,
-                },
-            ],
+            messages: vec![Message {
+                role: Role::User,
+                content: vec![ContentPart::Text("hi".into())],
+                tool_calls: vec![],
+                tool_call_id: None,
+            }],
             ..Default::default()
         };
         let api_request = build_api_request(request, ChatVendor::Kimi).expect("builds");
@@ -504,14 +503,12 @@ mod tests {
         let request = ChatRequest {
             model: "deepseek-chat".into(),
             thinking_effort: ThinkingEffort::High,
-            messages: vec![
-                Message {
-                    role: Role::User,
-                    content: vec![ContentPart::Text("hi".into())],
-                    tool_calls: vec![],
-                    tool_call_id: None,
-                },
-            ],
+            messages: vec![Message {
+                role: Role::User,
+                content: vec![ContentPart::Text("hi".into())],
+                tool_calls: vec![],
+                tool_call_id: None,
+            }],
             ..Default::default()
         };
         let api_request = build_api_request(request, ChatVendor::DeepSeek).expect("builds");
@@ -525,14 +522,12 @@ mod tests {
             temperature: Some(0.7),
             top_p: Some(0.9),
             stop: vec!["<|end|>".into()],
-            messages: vec![
-                Message {
-                    role: Role::User,
-                    content: vec![ContentPart::Text("hi".into())],
-                    tool_calls: vec![],
-                    tool_call_id: None,
-                },
-            ],
+            messages: vec![Message {
+                role: Role::User,
+                content: vec![ContentPart::Text("hi".into())],
+                tool_calls: vec![],
+                tool_call_id: None,
+            }],
             ..Default::default()
         };
         let api_request = build_api_request(request, ChatVendor::Kimi).expect("builds");

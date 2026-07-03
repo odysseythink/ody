@@ -30,6 +30,7 @@ use ody_features::Feature;
 use ody_login::AuthManager;
 use ody_login::OdyAuth;
 use ody_model_provider::create_model_provider;
+use ody_model_provider::create_model_provider_with_id;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::OPENAI_PROVIDER_ID;
 use ody_models_manager::manager::RefreshStrategy;
@@ -229,7 +230,11 @@ pub fn build_models_manager(
     config: &Config,
     auth_manager: Arc<AuthManager>,
 ) -> SharedModelsManager {
-    let provider = create_model_provider(config.model_provider.clone(), Some(auth_manager));
+    let provider = create_model_provider_with_id(
+        config.model_provider_id.clone(),
+        config.model_provider.clone(),
+        Some(auth_manager),
+    );
     provider.models_manager(
         config.ody_home.to_path_buf(),
         config.model_catalog.clone(),

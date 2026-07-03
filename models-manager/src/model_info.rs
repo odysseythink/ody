@@ -1,3 +1,4 @@
+use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::ProviderCapabilities;
 use ody_model_provider_info::WireApi;
 use ody_protocol::config_types::ReasoningSummary;
@@ -202,35 +203,88 @@ pub fn model_info_from_slug(slug: &str) -> ModelInfo {
     }
 }
 
-/// Bundled static model catalog for an OpenAI-compatible Chat Completions
-/// provider (Kimi / DeepSeek / GLM). These providers do not expose the ody
-/// `/models` catalog, so a small curated list is shipped instead. Returns
-/// `None` for providers that are not handled here.
-pub fn chat_provider_models(provider_id: &str) -> Option<ModelsResponse> {
-    let specs: &[ChatModelSpec] = match provider_id {
-        "kimi" => &[
-            ChatModelSpec::thinking("kimi-k2-0711", "Kimi K2 (0711)", 262_144),
-            ChatModelSpec::thinking("kimi-k2-1024", "Kimi K2 (1024)", 262_144),
-            ChatModelSpec::plain("kimi-for-coding", "Kimi for Coding", 262_144),
-        ],
-        "deepseek" => &[
-            ChatModelSpec::plain("deepseek-chat", "DeepSeek Chat", 65_536),
-            ChatModelSpec::thinking("deepseek-reasoner", "DeepSeek Reasoner", 65_536),
-        ],
-        "glm" => &[
-            ChatModelSpec::thinking("glm-4.6", "GLM-4.6", 200_000),
-            ChatModelSpec::thinking("glm-4.5", "GLM-4.5", 131_072),
-            ChatModelSpec::plain("glm-4.5-air", "GLM-4.5 Air", 131_072),
-        ],
-        _ => return None,
-    };
+/// Bundled or fallback model catalog for a provider.
+///
+/// Returns a curated static catalog for the built-in OpenAI-compatible Chat
+/// Completions providers (Kimi / DeepSeek / GLM). For other Chat Completions
+/// providers and for Local providers, returns a single-model fallback catalog
+/// inferred from the wire API. Returns `None` for providers whose catalog is
+/// fetched dynamically (Responses / Anthropic Messages / Google GenAI).
+pub fn model_catalog_for_provider(
+    provider_id: &str,
+    info: &ModelProviderInfo,
+) -> Option<ModelsResponse> {
+    match info.wire_api {
+        WireApi::Chat => {
+            let specs: &[ChatModelSpec] = match provider_id {
+                "kimi" => &[
+                    ChatModelSpec::thinking("kimi-k2-0711", "Kimi K2 (0711)", 262_144),
+                    ChatModelSpec::thinking("kimi-k2-1024", "Kimi K2 (1024)", 262_144),
+                    ChatModelSpec::plain("kimi-for-coding", "Kimi for Coding", 262_144),
+                ],
+                "deepseek" => &[
+                    ChatModelSpec::plain("deepseek-chat", "DeepSeek Chat", 65_536),
+                    ChatModelSpec::thinking("deepseek-reasoner", "DeepSeek Reasoner", 65_536),
+                ],
+                "glm" => &[
+                    ChatModelSpec::thinking("glm-4.6", "GLM-4.6", 200_000),
+                    ChatModelSpec::thinking("glm-4.5", "GLM-4.5", 131_072),
+                    ChatModelSpec::plain("glm-4.5-air", "GLM-4.5 Air", 131_072),
+                ],
+                _ => {
+                    let model = fallback_catalog_model(provider_id, WireApi::Chat, 128_000);
+                    return Some(ModelsResponse {
+                        models: vec![model],
+                    });
+                }
+            };
 
-    let models = specs
-        .iter()
-        .enumerate()
-        .map(|(index, spec)| spec.to_model_info(index as i32))
-        .collect();
-    Some(ModelsResponse { models })
+            let models = specs
+                .iter()
+                .enumerate()
+                .map(|(index, spec)| spec.to_model_info(index as i32))
+                .collect();
+            Some(ModelsResponse { models })
+        }
+        WireApi::Local => {
+            let model = fallback_catalog_model(provider_id, WireApi::Local, 32_768);
+            Some(ModelsResponse {
+                models: vec![model],
+            })
+        }
+        WireApi::Responses | WireApi::AnthropicMessages | WireApi::GoogleGenAI => None,
+    }
+}
+
+/// Build a single-model fallback descriptor inferred from a wire API.
+fn fallback_catalog_model(provider_id: &str, wire_api: WireApi, context_window: i64) -> ModelInfo {
+    let mut caps = resolve_model_capabilities(
+        &ProviderCapabilities::default(),
+        wire_api,
+        None,
+        None,
+        provider_id,
+    );
+    caps.context_window = Some(context_window);
+    caps.max_context_window = Some(context_window);
+    caps.supports_parallel_tool_calls = true;
+
+    let mut model = model_info_from_slug(provider_id);
+    model.visibility = ModelVisibility::List;
+    model.priority = 0;
+    model.supports_parallel_tool_calls = true;
+    model.context_window = Some(context_window);
+    model.max_context_window = Some(context_window);
+    model.capabilities = caps;
+    // Keep top-level fields in sync with capabilities.
+    model.input_modalities = model.capabilities.input_modalities.clone();
+    model.web_search_tool_type = model.capabilities.web_search_tool_type;
+    model.truncation_policy = model.capabilities.truncation_policy;
+    model.shell_type = model.capabilities.shell_type;
+    model.tool_mode = model.capabilities.tool_mode.clone();
+    model.effective_context_window_percent = model.capabilities.effective_context_window_percent;
+    model.used_fallback_model_metadata = true;
+    model
 }
 
 struct ChatModelSpec {

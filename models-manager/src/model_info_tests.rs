@@ -1,5 +1,6 @@
 use super::*;
 use crate::ModelsManagerConfig;
+use ody_model_provider_info::ModelProviderInfo;
 use pretty_assertions::assert_eq;
 
 #[test]
@@ -76,7 +77,7 @@ fn model_context_window_uses_model_value_without_override() {
 }
 
 #[test]
-fn chat_provider_models_lists_known_vendors() {
+fn model_catalog_for_provider_lists_known_chat_vendors() {
     use ody_protocol::odysseythink_models::ModelVisibility;
 
     for (provider, expected_slug) in [
@@ -84,7 +85,11 @@ fn chat_provider_models_lists_known_vendors() {
         ("deepseek", "deepseek-reasoner"),
         ("glm", "glm-4.6"),
     ] {
-        let catalog = chat_provider_models(provider)
+        let info = ModelProviderInfo {
+            wire_api: WireApi::Chat,
+            ..Default::default()
+        };
+        let catalog = model_catalog_for_provider(provider, &info)
             .unwrap_or_else(|| panic!("missing catalog for {provider}"));
         assert!(
             catalog.models.iter().any(|m| m.slug == expected_slug),
@@ -98,12 +103,15 @@ fn chat_provider_models_lists_known_vendors() {
                 .all(|m| m.visibility == ModelVisibility::List && !m.used_fallback_model_metadata)
         );
     }
-    assert!(chat_provider_models("unknown").is_none());
 }
 
 #[test]
 fn deepseek_reasoner_supports_thinking() {
-    let catalog = chat_provider_models("deepseek").unwrap();
+    let info = ModelProviderInfo {
+        wire_api: WireApi::Chat,
+        ..Default::default()
+    };
+    let catalog = model_catalog_for_provider("deepseek", &info).unwrap();
     let reasoner = catalog
         .models
         .iter()
@@ -262,4 +270,58 @@ mod capability_tests {
         assert!(resolved.supports_vision);
         assert!(resolved.supports_turn_pause);
     }
+}
+
+#[test]
+fn model_catalog_for_custom_chat_returns_fallback() {
+    let info = ModelProviderInfo {
+        wire_api: WireApi::Chat,
+        ..Default::default()
+    };
+    let catalog = model_catalog_for_provider("custom", &info)
+        .expect("custom chat provider should return a fallback catalog");
+    assert!(!catalog.models.is_empty());
+    assert!(
+        catalog
+            .models
+            .iter()
+            .any(|m| m.used_fallback_model_metadata),
+        "custom chat fallback model should be marked as fallback"
+    );
+}
+
+#[test]
+fn model_catalog_for_local_returns_fallback() {
+    let info = ModelProviderInfo {
+        wire_api: WireApi::Local,
+        ..Default::default()
+    };
+    let catalog = model_catalog_for_provider("ollama", &info)
+        .expect("local provider should return a fallback catalog");
+    assert!(!catalog.models.is_empty());
+    assert!(
+        catalog
+            .models
+            .iter()
+            .any(|m| m.used_fallback_model_metadata),
+        "local fallback model should be marked as fallback"
+    );
+}
+
+#[test]
+fn model_catalog_for_unknown_chat_returns_fallback() {
+    let info = ModelProviderInfo {
+        wire_api: WireApi::Chat,
+        ..Default::default()
+    };
+    let catalog = model_catalog_for_provider("unknown", &info)
+        .expect("unknown chat provider should return a fallback catalog");
+    assert!(!catalog.models.is_empty());
+    assert!(
+        catalog
+            .models
+            .iter()
+            .any(|m| m.used_fallback_model_metadata),
+        "unknown chat fallback model should be marked as fallback"
+    );
 }

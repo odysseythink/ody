@@ -29,15 +29,13 @@ pub(crate) fn normalize_response_event(
         // call is delivered by `OutputItemDone(ResponseItem::FunctionCall)`, which
         // is normalized above. Emit the delta as a raw frame so it does not produce
         // a malformed `ChatEvent::ToolCall`.
-        ResponseEvent::ToolCallInputDelta {
-            item_id, delta, ..
-        } => Ok(vec![ChatEvent::Raw(RawFrame::Json(
-            serde_json::json!({
+        ResponseEvent::ToolCallInputDelta { item_id, delta, .. } => {
+            Ok(vec![ChatEvent::Raw(RawFrame::Json(serde_json::json!({
                 "event": "tool_call_input_delta",
                 "item_id": item_id,
                 "delta": delta,
-            }),
-        ))]),
+            })))])
+        }
         ResponseEvent::ReasoningContentDelta { delta, .. } => {
             Ok(vec![ChatEvent::ReasoningPart(delta)])
         }
@@ -62,8 +60,13 @@ pub(crate) fn normalize_response_event(
             };
             events.push(ChatEvent::Finish {
                 reason,
-                raw_reason: end_turn
-                    .map(|e| if e { "stop".into() } else { "incomplete".into() }),
+                raw_reason: end_turn.map(|e| {
+                    if e {
+                        "stop".into()
+                    } else {
+                        "incomplete".into()
+                    }
+                }),
             });
             Ok(events)
         }
@@ -91,15 +94,13 @@ pub(crate) fn normalize_response_event(
         ResponseEvent::ReasoningSummaryDelta { delta, .. } => {
             Ok(vec![ChatEvent::ReasoningPart(delta)])
         }
-        ResponseEvent::ReasoningSummaryPartAdded { .. } => Ok(vec![ChatEvent::Raw(RawFrame::Json(
-            serde_json::json!({"event": "reasoning_summary_part_added"}),
-        ))]),
+        ResponseEvent::ReasoningSummaryPartAdded { .. } => Ok(vec![ChatEvent::Raw(
+            RawFrame::Json(serde_json::json!({"event": "reasoning_summary_part_added"})),
+        )]),
     }
 }
 
-fn normalize_response_item(
-    item: ResponseItem,
-) -> Result<Vec<ChatEvent>, ChatProviderError> {
+fn normalize_response_item(item: ResponseItem) -> Result<Vec<ChatEvent>, ChatProviderError> {
     match item {
         ResponseItem::Message { content, .. } => {
             let text = content
@@ -115,7 +116,10 @@ fn normalize_response_item(
             Ok(vec![ChatEvent::ContentPart(ContentPart::Text(text))])
         }
         ResponseItem::FunctionCall {
-            call_id, name, arguments, ..
+            call_id,
+            name,
+            arguments,
+            ..
         } => {
             let parsed = parse_or_string(arguments);
             Ok(vec![ChatEvent::ToolCall(ToolCall {
@@ -210,7 +214,9 @@ fn http_error_to_provider_error(status: StatusCode, body: String) -> ChatProvide
                 .and_then(Value::as_str)
                 .filter(|message| !message.trim().is_empty())
                 .map(str::to_string)
-                .unwrap_or_else(|| "This request has been flagged for possible cybersecurity risk.".to_string());
+                .unwrap_or_else(|| {
+                    "This request has been flagged for possible cybersecurity risk.".to_string()
+                });
             return ChatProviderError::Provider {
                 code: "cyber_policy".into(),
                 message,

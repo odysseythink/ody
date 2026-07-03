@@ -1,9 +1,8 @@
 //! Additional tests for the unified chat provider types.
 
 use crate::chat_provider::{
-    clamp_thinking_effort, ChatCompletion, ChatEvent, ChatProviderError, ChatRequest,
-    ContentPart, FinishReason, Message, ProviderCapabilities, Role, ThinkingEffort, ToolCall,
-    Usage,
+    ChatCompletion, ChatEvent, ChatProviderError, ChatRequest, ContentPart, FinishReason, Message,
+    ProviderCapabilities, Role, ThinkingEffort, ToolCall, Usage, clamp_thinking_effort,
 };
 
 #[test]

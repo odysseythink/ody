@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use http::HeaderMap;
 use ody_api::ModelsClient;
 use ody_api::RequestTelemetry;
 use ody_api::ReqwestTransport;
@@ -23,7 +24,6 @@ use ody_protocol::error::Result as CoreResult;
 use ody_protocol::odysseythink_models::ModelInfo;
 use ody_response_debug_context::extract_response_debug_context;
 use ody_response_debug_context::telemetry_transport_error_message;
-use http::HeaderMap;
 use tokio::time::timeout;
 
 use crate::auth::resolve_provider_auth;

@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
+use http::HeaderMap;
 use ody_api::AuthProvider;
 use ody_api::SharedAuthProvider;
 use ody_login::AuthManager;
 use ody_login::OdyAuth;
 use ody_model_provider_info::ModelProviderInfo;
-use http::HeaderMap;
 
 use crate::bearer_auth_provider::BearerAuthProvider;
 
@@ -95,7 +95,9 @@ mod tests {
         let resolved = resolve_provider_auth(Some(&auth), &provider).expect("should resolve");
         let headers = resolved.to_auth_headers();
         assert_eq!(
-            headers.get(http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()),
+            headers
+                .get(http::header::AUTHORIZATION)
+                .and_then(|v| v.to_str().ok()),
             Some("Bearer sk-test")
         );
     }

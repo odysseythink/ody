@@ -1,4 +1,3 @@
-
 use anyhow::Error;
 use futures::stream::BoxStream;
 use http::StatusCode;
@@ -69,7 +68,10 @@ pub enum Role {
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum ContentPart {
     Text(String),
-    Image { mime: String, bytes: Vec<u8> },
+    Image {
+        mime: String,
+        bytes: Vec<u8>,
+    },
     Reasoning(String),
     ToolResult {
         tool_call_id: String,
@@ -255,18 +257,16 @@ impl ChatProviderError {
                     }
                 }
             },
-            ChatProviderError::Auth(message) => {
-                OdyErr::UnexpectedStatus(UnexpectedResponseError {
-                    status: StatusCode::UNAUTHORIZED,
-                    body: message.clone(),
-                    user_message: None,
-                    url: None,
-                    cf_ray: None,
-                    request_id: None,
-                    identity_authorization_error: None,
-                    identity_error_code: None,
-                })
-            }
+            ChatProviderError::Auth(message) => OdyErr::UnexpectedStatus(UnexpectedResponseError {
+                status: StatusCode::UNAUTHORIZED,
+                body: message.clone(),
+                user_message: None,
+                url: None,
+                cf_ray: None,
+                request_id: None,
+                identity_authorization_error: None,
+                identity_error_code: None,
+            }),
             ChatProviderError::Transport(message)
             | ChatProviderError::RequestSerialization(message)
             | ChatProviderError::StreamParse(message) => OdyErr::Stream(message.clone(), None),
@@ -313,10 +313,7 @@ pub trait ChatProvider: Send + Sync {
                 ChatEvent::ToolCall(tc) => tool_calls.push(tc),
                 ChatEvent::ReasoningPart(r) => content_parts.push(ContentPart::Reasoning(r)),
                 ChatEvent::Usage(u) => usage = Some(u),
-                ChatEvent::Finish {
-                    reason,
-                    raw_reason,
-                } => {
+                ChatEvent::Finish { reason, raw_reason } => {
                     finish = reason;
                     raw_finish = raw_reason;
                 }

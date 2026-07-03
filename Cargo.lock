@@ -6684,6 +6684,7 @@ dependencies = [
  "ody-mcp-server",
  "ody-memories-write",
  "ody-model-provider",
+ "ody-model-provider-info",
  "ody-models-manager",
  "ody-plugin",
  "ody-protocol",

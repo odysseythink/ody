@@ -50,6 +50,7 @@ ody-memories-write = { workspace = true }
 ody-mcp = { workspace = true }
 ody-mcp-server = { workspace = true }
 ody-model-provider = { workspace = true }
+ody-model-provider-info = { workspace = true }
 ody-models-manager = { workspace = true }
 ody-plugin = { workspace = true }
 ody-protocol = { workspace = true }

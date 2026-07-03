@@ -525,9 +525,11 @@ impl ConfigToml {
             .map(|(id, provider)| {
                 let display_name = provider_display_name(&provider.r#type);
                 let wire_api = match provider.r#type.as_str() {
-                    "openai" | "openai_responses" | "anthropic" | "vertexai" => {
-                        WireApi::Responses
-                    }
+                    "openai" | "openai_responses" => WireApi::Responses,
+                    "anthropic" => WireApi::AnthropicMessages,
+                    "google-genai" | "vertexai" => WireApi::GoogleGenAI,
+                    "ollama" | "lmstudio" => WireApi::Local,
+                    "kimi" | "deepseek" | "glm" => WireApi::Chat,
                     _ => WireApi::Chat,
                 };
                 let mut info = ModelProviderInfo {
@@ -547,11 +549,12 @@ impl ConfigToml {
                     websocket_connect_timeout_ms: None,
                     requires_odysseythink_auth: false,
                     supports_websockets: false,
-                                    capabilities: ProviderCapabilities::default(),
+                    capabilities: ProviderCapabilities::default(),
                 };
                 if info.http_headers.as_ref().map_or(true, |h| h.is_empty()) {
                     info.http_headers = None;
                 }
+                info.normalize_capabilities();
                 (id.clone(), info)
             })
             .collect()
@@ -582,6 +585,8 @@ fn provider_display_name(provider_type: &str) -> String {
         "anthropic" => "Anthropic".to_string(),
         "vertexai" => "Vertex AI".to_string(),
         "google-genai" => "Google GenAI".to_string(),
+        "ollama" => "Ollama".to_string(),
+        "lmstudio" => "LM Studio".to_string(),
         other => {
             let mut chars = other.chars();
             match chars.next() {
@@ -1033,6 +1038,7 @@ pub fn validate_oss_provider(provider: &str) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ody_model_provider_info::WireApi;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -1142,5 +1148,80 @@ default_model = "kimi-for-coding"
         let (provider, model) = config.resolve_ody_code_default_model();
         assert_eq!(provider, Some("kimi_gyy".to_string()));
         assert_eq!(model, Some("kimi-for-coding".to_string()));
+    }
+
+    #[test]
+    fn convert_ody_code_ollama_type_is_local() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[providers.local_ollama]
+type = "ollama"
+"#,
+        )
+        .expect("config should deserialize");
+        let converted = config.convert_ody_code_providers();
+        let provider = converted.get("local_ollama").expect("provider");
+        assert_eq!(provider.wire_api, WireApi::Local);
+        assert_eq!(provider.name, "Ollama");
+        assert_eq!(provider.capabilities, ProviderCapabilities::default());
+    }
+
+    #[test]
+    fn convert_ody_code_lmstudio_type_is_local() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[providers.local_lmstudio]
+type = "lmstudio"
+"#,
+        )
+        .expect("config should deserialize");
+        let converted = config.convert_ody_code_providers();
+        let provider = converted.get("local_lmstudio").expect("provider");
+        assert_eq!(provider.wire_api, WireApi::Local);
+        assert_eq!(provider.name, "LM Studio");
+        assert_eq!(provider.capabilities, ProviderCapabilities::default());
+    }
+
+    #[test]
+    fn convert_ody_code_anthropic_type_is_anthropic_messages() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[providers.anthropic_custom]
+type = "anthropic"
+"#,
+        )
+        .expect("config should deserialize");
+        let converted = config.convert_ody_code_providers();
+        let provider = converted.get("anthropic_custom").expect("provider");
+        assert_eq!(provider.wire_api, WireApi::AnthropicMessages);
+    }
+
+    #[test]
+    fn convert_ody_code_google_genai_type_is_google_genai() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[providers.google_custom]
+type = "google-genai"
+"#,
+        )
+        .expect("config should deserialize");
+        let converted = config.convert_ody_code_providers();
+        let provider = converted.get("google_custom").expect("provider");
+        assert_eq!(provider.wire_api, WireApi::GoogleGenAI);
+    }
+
+    #[test]
+    fn convert_ody_code_openai_type_normalizes_capabilities() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[providers.openai_custom]
+type = "openai"
+"#,
+        )
+        .expect("config should deserialize");
+        let converted = config.convert_ody_code_providers();
+        let provider = converted.get("openai_custom").expect("provider");
+        assert_eq!(provider.wire_api, WireApi::Responses);
+        assert!(provider.capabilities.supports_websockets);
     }
 }

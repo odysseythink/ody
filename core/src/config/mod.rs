@@ -3378,9 +3378,12 @@ impl Config {
             configured_model_providers.entry(key).or_insert(provider);
         }
 
-        let model_providers =
+        let mut model_providers =
             merge_configured_model_providers(built_in_model_providers(odysseythink_base_url), configured_model_providers)
                 .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidData, message))?;
+        for provider in model_providers.values_mut() {
+            provider.normalize_capabilities();
+        }
         let model_provider_id = model_provider
             .or(ody_code_provider)
             .or(cfg.model_provider)

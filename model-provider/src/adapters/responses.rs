@@ -3,12 +3,12 @@
 //! Wraps `ody_api::ResponsesClient` and normalizes its `ResponseEvent` stream to
 //! the provider-neutral `ChatEvent` model defined by `ChatProvider`.
 
+use crate::adapters::common;
+use crate::adapters::common::chat_provider_error_from_api_error;
 use crate::chat_provider::{
     ChatProvider, ChatProviderError, ChatRequest, ChatStream, ProviderCapabilities, ProviderId,
     ThinkingEffort, clamp_thinking_effort,
 };
-use crate::adapters::common::chat_provider_error_from_api_error;
-use crate::adapters::common;
 use base64::Engine;
 use futures::StreamExt;
 use ody_api::{
@@ -114,10 +114,11 @@ fn reasoning_for_request(
         ThinkingEffort::Medium,
         ThinkingEffort::High,
     ];
-    let effort = clamp_thinking_effort(thinking_effort, &supported)
-        .ok_or_else(|| ChatProviderError::Unsupported {
+    let effort = clamp_thinking_effort(thinking_effort, &supported).ok_or_else(|| {
+        ChatProviderError::Unsupported {
             capability: "thinking effort".into(),
-        })?;
+        }
+    })?;
     if effort == ThinkingEffort::Off {
         return Ok(None);
     }
@@ -157,7 +158,7 @@ fn message_to_response_item(
         Role::System => {
             return Err(ChatProviderError::Unsupported {
                 capability: "system message in input".into(),
-            })
+            });
         }
     }
     .to_string();
@@ -165,9 +166,9 @@ fn message_to_response_item(
     let mut content = Vec::new();
     for part in message.content {
         match part {
-            ContentPart::Text(text) => content.push(ody_protocol::models::ContentItem::InputText {
-                text,
-            }),
+            ContentPart::Text(text) => {
+                content.push(ody_protocol::models::ContentItem::InputText { text })
+            }
             ContentPart::Image { mime, bytes } => {
                 // Preserve images as base64 data URLs so the Responses API can
                 // consume them. The mime type was recovered when normalizing the
@@ -178,9 +179,9 @@ fn message_to_response_item(
                     detail: None,
                 });
             }
-            ContentPart::Reasoning(text) => content.push(ody_protocol::models::ContentItem::InputText {
-                text,
-            }),
+            ContentPart::Reasoning(text) => {
+                content.push(ody_protocol::models::ContentItem::InputText { text })
+            }
             ContentPart::ToolResult {
                 tool_call_id,
                 content: parts,
@@ -261,20 +262,15 @@ impl<T: HttpTransport + 'static> ChatProvider for ResponsesAdapter<T> {
             .await
             .map_err(chat_provider_error_from_api_error)?;
 
-        let mapped =
-            stream.map(
-                |result: Result<ody_api::ResponseEvent, _>| -> ChatStream {
-                    match result
-                        .map_err(chat_provider_error_from_api_error)
-                        .and_then(common::normalize_response_event)
-                    {
-                        Ok(events) => Box::pin(futures::stream::iter(
-                            events.into_iter().map(Ok),
-                        )),
-                        Err(e) => Box::pin(futures::stream::iter(std::iter::once(Err(e)))),
-                    }
-                },
-            );
+        let mapped = stream.map(|result: Result<ody_api::ResponseEvent, _>| -> ChatStream {
+            match result
+                .map_err(chat_provider_error_from_api_error)
+                .and_then(common::normalize_response_event)
+            {
+                Ok(events) => Box::pin(futures::stream::iter(events.into_iter().map(Ok))),
+                Err(e) => Box::pin(futures::stream::iter(std::iter::once(Err(e)))),
+            }
+        });
         Ok(Box::pin(mapped.flatten()))
     }
 }

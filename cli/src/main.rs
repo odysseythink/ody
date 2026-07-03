@@ -30,6 +30,7 @@ use ody_utils_cli::CliConfigOverrides;
 use ody_utils_cli::ProfileV2Name;
 use ody_utils_cli::SharedCliOptions;
 use owo_colors::OwoColorize;
+use serde::Serialize;
 use std::collections::HashSet;
 use std::io::IsTerminal;
 use std::io::Write;
@@ -209,6 +210,9 @@ enum DebugSubcommand {
     /// Render the raw model catalog as JSON.
     Models(DebugModelsCommand),
 
+    /// List configured model providers and their capabilities as JSON.
+    Providers(DebugProvidersCommand),
+
     /// Tooling: helps debug the app server.
     #[cfg(feature = "debug-app-server-client")]
     AppServer(DebugAppServerCommand),
@@ -263,6 +267,9 @@ struct DebugModelsCommand {
     #[arg(long = "bundled", default_value_t = false)]
     bundled: bool,
 }
+
+#[derive(Debug, Parser)]
+struct DebugProvidersCommand {}
 
 #[derive(Debug, Parser)]
 struct ReviewCommand {
@@ -1435,6 +1442,14 @@ async fn cli_main(
                 )?;
                 run_debug_models_command(cmd, root_config_overrides).await?;
             }
+            DebugSubcommand::Providers(cmd) => {
+                reject_remote_mode_for_subcommand(
+                    root_remote.as_deref(),
+                    root_remote_auth_token_env.as_deref(),
+                    "debug providers",
+                )?;
+                run_debug_providers_command(cmd, root_config_overrides).await?;
+            }
             #[cfg(feature = "debug-app-server-client")]
             DebugSubcommand::AppServer(cmd) => {
                 reject_remote_mode_for_subcommand(
@@ -1917,6 +1932,43 @@ async fn run_debug_models_command(
     };
 
     serde_json::to_writer(std::io::stdout(), &catalog)?;
+    println!();
+    Ok(())
+}
+
+async fn run_debug_providers_command(
+    _cmd: DebugProvidersCommand,
+    root_config_overrides: CliConfigOverrides,
+) -> anyhow::Result<()> {
+    let cli_overrides = root_config_overrides
+        .parse_overrides()
+        .map_err(anyhow::Error::msg)?;
+    let config = ConfigBuilder::default()
+        .cli_overrides(cli_overrides)
+        .build()
+        .await?;
+
+    #[derive(Serialize)]
+    struct ProviderEntry {
+        provider_id: String,
+        name: String,
+        wire_api: String,
+        capabilities: ody_model_provider_info::ProviderCapabilities,
+    }
+
+    let mut providers: Vec<ProviderEntry> = config
+        .model_providers
+        .into_iter()
+        .map(|(provider_id, info)| ProviderEntry {
+            provider_id,
+            name: info.name,
+            wire_api: info.wire_api.to_string(),
+            capabilities: info.capabilities,
+        })
+        .collect();
+    providers.sort_by(|a, b| a.provider_id.cmp(&b.provider_id));
+
+    serde_json::to_writer(std::io::stdout(), &providers)?;
     println!();
     Ok(())
 }
@@ -3948,5 +4000,17 @@ mod tests {
         cli.feature_toggles
             .to_overrides()
             .expect_err("feature should be rejected")
+    }
+
+    #[test]
+    fn debug_providers_subcommand_parses() {
+        let cli = MultitoolCli::try_parse_from(["ody", "debug", "providers"])
+            .expect("parse should succeed");
+        let Some(Subcommand::Debug(DebugCommand {
+            subcommand: DebugSubcommand::Providers(_),
+        })) = cli.subcommand
+        else {
+            panic!("expected debug providers subcommand");
+        };
     }
 }
