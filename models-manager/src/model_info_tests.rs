@@ -1,6 +1,7 @@
 use super::*;
 use crate::ModelsManagerConfig;
 use ody_model_provider_info::ModelProviderInfo;
+use ody_protocol::odysseythink_models::InputModality;
 use pretty_assertions::assert_eq;
 
 #[test]
@@ -324,4 +325,47 @@ fn model_catalog_for_unknown_chat_returns_fallback() {
             .any(|m| m.used_fallback_model_metadata),
         "unknown chat fallback model should be marked as fallback"
     );
+}
+
+#[test]
+fn unknown_model_slug_has_conservative_fallback_capabilities() {
+    let model = model_info_from_slug("totally-unknown-model");
+    assert!(model.used_fallback_model_metadata);
+    assert!(model.capabilities.supports_tools);
+    assert_eq!(model.capabilities.input_modalities, vec![InputModality::Text]);
+    assert!(!model.capabilities.supports_vision);
+    assert!(!model.capabilities.supports_search_tool);
+}
+
+#[test]
+fn unknown_chat_provider_has_fallback_catalog_with_capabilities() {
+    let info = ModelProviderInfo {
+        name: "Unknown Chat".to_string(),
+        wire_api: WireApi::Chat,
+        ..Default::default()
+    };
+    let catalog = model_catalog_for_provider("unknown-chat", &info)
+        .expect("Chat provider should always have a fallback catalog");
+    assert_eq!(catalog.models.len(), 1);
+    let model = &catalog.models[0];
+    assert!(model.capabilities.supports_tools);
+    assert!(model.capabilities.supports_vision);
+    assert_eq!(model.capabilities.input_modalities, vec![InputModality::Text, InputModality::Image]);
+    assert!(model.context_window.is_some());
+    assert!(model.max_context_window.is_some());
+}
+
+#[test]
+fn unknown_local_provider_has_text_only_fallback() {
+    let info = ModelProviderInfo {
+        name: "Unknown Local".to_string(),
+        wire_api: WireApi::Local,
+        ..Default::default()
+    };
+    let catalog = model_catalog_for_provider("unknown-local", &info)
+        .expect("Local provider should always have a fallback catalog");
+    let model = &catalog.models[0];
+    assert!(model.capabilities.supports_tools);
+    assert_eq!(model.capabilities.input_modalities, vec![InputModality::Text]);
+    assert!(!model.capabilities.supports_vision);
 }

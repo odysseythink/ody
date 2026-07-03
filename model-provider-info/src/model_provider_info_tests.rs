@@ -2,6 +2,7 @@ use super::*;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_absolute_path::AbsolutePathBufGuard;
 use pretty_assertions::assert_eq;
+use std::collections::HashMap;
 use std::num::NonZeroU64;
 use tempfile::tempdir;
 
@@ -248,7 +249,9 @@ fn test_merge_configured_model_providers_adds_custom_provider() {
         std::collections::HashMap::from([("custom".to_string(), custom_provider.clone())]);
 
     let mut expected = built_in_model_providers(/*odysseythink_base_url*/ None);
-    expected.insert("custom".to_string(), custom_provider);
+    let mut expected_custom = custom_provider;
+    expected_custom.normalize_capabilities();
+    expected.insert("custom".to_string(), expected_custom);
 
     assert_eq!(
         merge_configured_model_providers(
@@ -418,4 +421,64 @@ fn normalize_capabilities_respects_explicit_values() {
     assert!(!provider.capabilities.namespace_tools);
     assert!(!provider.capabilities.command_auth);
     assert!(!provider.capabilities.attestation);
+}
+
+#[test]
+fn user_defined_provider_gets_wire_api_default_capabilities() {
+    let built_in = built_in_model_providers(None);
+    let mut configured = HashMap::new();
+    configured.insert(
+        "my-responses".to_string(),
+        ModelProviderInfo {
+            name: "My Responses".to_string(),
+            wire_api: WireApi::Responses,
+            ..Default::default()
+        },
+    );
+    let merged = merge_configured_model_providers(built_in, configured).unwrap();
+    let my_responses = merged.get("my-responses").expect("user provider should be present");
+    assert_eq!(my_responses.wire_api, WireApi::Responses);
+    // Responses 的 provider 级推断默认值包含多项 true；实现前 capabilities 为全 false，会失败。
+    assert_eq!(
+        my_responses.capabilities,
+        default_provider_capabilities_for_wire_api(WireApi::Responses)
+    );
+}
+
+#[test]
+fn user_defined_provider_with_explicit_capabilities_is_preserved() {
+    let built_in = built_in_model_providers(None);
+    let mut configured = HashMap::new();
+    configured.insert(
+        "my-chat".to_string(),
+        ModelProviderInfo {
+            name: "My Chat".to_string(),
+            wire_api: WireApi::Chat,
+            capabilities: ProviderCapabilities {
+                web_search: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    );
+    let merged = merge_configured_model_providers(built_in, configured).unwrap();
+    let my_chat = merged.get("my-chat").unwrap();
+    assert!(my_chat.capabilities.web_search);
+}
+
+#[test]
+fn built_in_reserved_ids_cannot_be_overridden() {
+    let mut configured = HashMap::new();
+    configured.insert(
+        KIMI_PROVIDER_ID.to_string(),
+        ModelProviderInfo {
+            name: "Evil Kimi".to_string(),
+            wire_api: WireApi::Local,
+            ..Default::default()
+        },
+    );
+    let merged = merge_configured_model_providers(built_in_model_providers(None), configured).unwrap();
+    let kimi = merged.get(KIMI_PROVIDER_ID).unwrap();
+    assert_eq!(kimi.name, "Kimi");
+    assert_eq!(kimi.wire_api, WireApi::Chat);
 }

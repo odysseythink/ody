@@ -488,8 +488,11 @@ pub fn merge_configured_model_providers(
     mut model_providers: HashMap<String, ModelProviderInfo>,
     configured_model_providers: HashMap<String, ModelProviderInfo>,
 ) -> Result<HashMap<String, ModelProviderInfo>, String> {
-    for (key, provider) in configured_model_providers {
-        model_providers.entry(key).or_insert(provider);
+    for (key, mut provider) in configured_model_providers {
+        model_providers.entry(key).or_insert_with(|| {
+            provider.normalize_capabilities();
+            provider
+        });
     }
 
     Ok(model_providers)

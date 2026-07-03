@@ -188,6 +188,9 @@ enum Subcommand {
     /// [EXPERIMENTAL] Run the standalone exec-server service.
     ExecServer(ExecServerCommand),
 
+    /// List configured model providers and their capabilities.
+    Providers(ProvidersCommand),
+
     /// Inspect feature flags.
     Features(FeaturesCli),
 }
@@ -270,6 +273,13 @@ struct DebugModelsCommand {
 
 #[derive(Debug, Parser)]
 struct DebugProvidersCommand {}
+
+#[derive(Debug, Parser)]
+struct ProvidersCommand {
+    /// Output the provider list as JSON.
+    #[arg(long = "json", default_value_t = false)]
+    json: bool,
+}
 
 #[derive(Debug, Parser)]
 struct ReviewCommand {
@@ -1519,6 +1529,14 @@ async fn cli_main(
             run_exec_server_command(cmd, &arg0_paths, &root_config_overrides, strict_config)
                 .await?;
         }
+        Some(Subcommand::Providers(cmd)) => {
+            reject_remote_mode_for_subcommand(
+                root_remote.as_deref(),
+                root_remote_auth_token_env.as_deref(),
+                "providers",
+            )?;
+            run_providers_command(cmd, root_config_overrides).await?;
+        }
         Some(Subcommand::Features(FeaturesCli { sub })) => match sub {
             FeaturesSubcommand::List => {
                 reject_remote_mode_for_subcommand(
@@ -1973,6 +1991,59 @@ async fn run_debug_providers_command(
     Ok(())
 }
 
+async fn run_providers_command(
+    cmd: ProvidersCommand,
+    root_config_overrides: CliConfigOverrides,
+) -> anyhow::Result<()> {
+    let cli_overrides = root_config_overrides
+        .parse_overrides()
+        .map_err(anyhow::Error::msg)?;
+    let config = ConfigBuilder::default()
+        .cli_overrides(cli_overrides)
+        .build()
+        .await?;
+
+    let mut providers: Vec<(String, ody_model_provider_info::ModelProviderInfo)> = config
+        .model_providers
+        .into_iter()
+        .collect();
+    providers.sort_by(|a, b| a.0.cmp(&b.0));
+
+    if cmd.json {
+        #[derive(Serialize)]
+        struct ProviderEntry {
+            provider_id: String,
+            name: String,
+            wire_api: String,
+            capabilities: ody_model_provider_info::ProviderCapabilities,
+        }
+        let entries: Vec<ProviderEntry> = providers
+            .into_iter()
+            .map(|(provider_id, info)| ProviderEntry {
+                provider_id,
+                name: info.name,
+                wire_api: info.wire_api.to_string(),
+                capabilities: info.capabilities,
+            })
+            .collect();
+        serde_json::to_writer(std::io::stdout(), &entries)?;
+        println!();
+    } else {
+        println!("{:<14} {:<14} {:<18} {}", "ID", "NAME", "WIRE API", "CAPABILITIES");
+        for (provider_id, info) in providers {
+            println!(
+                "{:<14} {:<14} {:<18} {:?}",
+                provider_id,
+                info.name,
+                info.wire_api,
+                info.capabilities
+            );
+        }
+    }
+
+    Ok(())
+}
+
 async fn run_debug_clear_memories_command(
     root_config_overrides: &CliConfigOverrides,
 ) -> anyhow::Result<()> {
@@ -2092,6 +2163,7 @@ fn unsupported_subcommand_name_for_strict_config(
         Some(Subcommand::Debug(_)) => Some("debug"),
         Some(Subcommand::Execpolicy(_)) => Some("execpolicy"),
         Some(Subcommand::StdioToUds(_)) => Some("stdio-to-uds"),
+        Some(Subcommand::Providers(_)) => Some("providers"),
         Some(Subcommand::Features(_)) => Some("features"),
     }
 }
