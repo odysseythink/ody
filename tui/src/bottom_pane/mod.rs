@@ -428,10 +428,6 @@ impl BottomPane {
         self.request_redraw();
     }
 
-    pub fn has_pinned_plan(&self) -> bool {
-        self.pinned_plan.is_some()
-    }
-
     pub fn pinned_plan_update_args(&self) -> Option<UpdatePlanArgs> {
         self.pinned_plan.as_ref().and_then(|w| w.to_update_args())
     }

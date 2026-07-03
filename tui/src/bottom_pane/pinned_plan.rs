@@ -10,7 +10,6 @@ use ratatui::layout::Rect;
 use ratatui::style::Styled;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
-use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::WidgetRef;
 
@@ -62,21 +61,17 @@ impl PinnedPlanWidget {
         self.expanded = false;
     }
 
-    /// Clear the displayed plan, leaving the widget empty.
-    pub(crate) fn clear(&mut self) {
-        self.explanation = None;
-        self.plan.clear();
-        self.expanded = false;
-    }
-
     /// Toggle expanded / folded state.
     pub(crate) fn toggle_expanded(&mut self) {
         self.expanded = !self.expanded;
     }
 
-    /// Whether the plan is currently expanded.
-    pub(crate) fn is_expanded(&self) -> bool {
-        self.expanded
+    /// Clear the displayed plan, leaving the widget empty.
+    #[cfg(test)]
+    pub(crate) fn clear(&mut self) {
+        self.explanation = None;
+        self.plan.clear();
+        self.expanded = false;
     }
 
     /// Extract the current plan state as `UpdatePlanArgs`, or `None` if no plan is set.
@@ -127,8 +122,8 @@ impl PinnedPlanWidget {
         let wrap_width = width.saturating_sub(4).max(1) as usize;
         let mut indented: Vec<Line<'static>> = vec![];
 
-        // Show explanation if present
-        if let Some(expl) = self
+        // Show explanation if present and remember how many lines it consumes.
+        let expl_lines = if let Some(expl) = self
             .explanation
             .as_ref()
             .map(|s| s.trim())
@@ -136,14 +131,21 @@ impl PinnedPlanWidget {
         {
             let note = Line::from(expl.to_string().dim().italic());
             let wrapped = adaptive_wrap_line(&note, RtOptions::new(wrap_width));
+            let before = indented.len();
             push_owned_lines(&wrapped, &mut indented);
-        }
+            indented.len().saturating_sub(before)
+        } else {
+            0
+        };
 
-        // Budget: max_lines - 1 (header) - explanation lines
+        // Reserve one line for the footer (ellipsis or completed summary) whenever
+        // the plan is non-empty, so the folded view never exceeds max_lines.
+        let reserve_footer = total > 0;
         let mut remaining = self
             .max_lines
-            .saturating_sub(1)
-            .saturating_sub(indented.len());
+            .saturating_sub(1) // header
+            .saturating_sub(indented.len()) // explanation
+            .saturating_sub(if reserve_footer { 1 } else { 0 });
 
         // Show in-progress items first
         for item in self
@@ -197,20 +199,6 @@ impl PinnedPlanWidget {
             }
         }
 
-        // Count explanation lines for hidden calculation
-        let expl_lines = if let Some(e) = self
-            .explanation
-            .as_ref()
-            .filter(|t| !t.trim().is_empty())
-        {
-            let note = Line::from(e.to_string().dim().italic());
-            let wrapped = adaptive_wrap_line(&note, RtOptions::new(wrap_width));
-            let mut out = Vec::new();
-            push_owned_lines(&wrapped, &mut out);
-            out.len()
-        } else {
-            0
-        };
         let shown_visible = indented.len().saturating_sub(expl_lines);
         let hidden = total.saturating_sub(completed).saturating_sub(shown_visible);
 
@@ -331,6 +319,33 @@ mod tests {
 
         widget.clear();
         assert_eq!(widget.desired_height(80), 2); // header + (no steps provided)
+    }
+
+    #[test]
+    fn folded_mode_respects_max_lines() {
+        let widget = PinnedPlanWidget {
+            explanation: Some("A short note".to_string()),
+            plan: (0..20)
+                .map(|i| PlanItemArg {
+                    step: format!("Step {i} with enough text to avoid wrapping at 80 columns"),
+                    status: if i < 10 {
+                        StepStatus::Completed
+                    } else if i == 10 {
+                        StepStatus::InProgress
+                    } else {
+                        StepStatus::Pending
+                    },
+                })
+                .collect(),
+            max_lines: 8,
+            expanded: false,
+        };
+
+        assert!(
+            widget.desired_height(80) <= 8,
+            "folded pinned plan must not exceed max_lines: got {}",
+            widget.desired_height(80)
+        );
     }
 
     #[test]

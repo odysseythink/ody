@@ -160,8 +160,68 @@ impl ChatCompletionsRequest {
 
         let mut body = Value::Object(body);
         self.vendor.apply_request(&mut body, self);
+        log_invalid_function_names(&body);
         body
     }
+}
+
+/// Warn about function names that providers such as Kimi/Moonshot reject.
+fn log_invalid_function_names(body: &Value) {
+    let Some(messages) = body.get("messages").and_then(Value::as_array) else {
+        return;
+    };
+    for (idx, message) in messages.iter().enumerate() {
+        if let Some(tool_calls) = message.get("tool_calls").and_then(Value::as_array) {
+            for (tc_idx, tool_call) in tool_calls.iter().enumerate() {
+                if let Some(name) = tool_call
+                    .get("function")
+                    .and_then(|f| f.get("name"))
+                    .and_then(Value::as_str)
+                {
+                    if !is_valid_function_name(name) {
+                        tracing::warn!(
+                            message_idx = idx,
+                            tool_call_idx = tc_idx,
+                            function_name = name,
+                            "function call name on wire may be rejected by provider"
+                        );
+                    }
+                }
+            }
+        }
+        if let Some(name) = message.get("name").and_then(Value::as_str) {
+            if !is_valid_function_name(name) {
+                tracing::warn!(
+                    message_idx = idx,
+                    function_name = name,
+                    "function message name on wire may be rejected by provider"
+                );
+            }
+        }
+    }
+    if let Some(tools) = body.get("tools").and_then(Value::as_array) {
+        for (idx, tool) in tools.iter().enumerate() {
+            if let Some(name) = tool
+                .get("function")
+                .and_then(|f| f.get("name"))
+                .and_then(Value::as_str)
+            {
+                if !is_valid_function_name(name) {
+                    tracing::warn!(
+                        tool_idx = idx,
+                        tool_name = name,
+                        "tool definition name on wire may be rejected by provider"
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn is_valid_function_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    matches!(chars.next(), Some(c) if c.is_ascii_alphabetic())
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
 /// Convert a single internal [`ResponseItem`] into zero or more chat messages,

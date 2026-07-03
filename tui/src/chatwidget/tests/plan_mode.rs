@@ -1631,7 +1631,7 @@ async fn user_turn_includes_personality_from_config() {
 }
 
 #[tokio::test]
-async fn plan_update_renders_history_cell() {
+async fn plan_update_sets_pinned_plan_widget() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     let update = UpdatePlanArgs {
         explanation: Some("Adapting plan".to_string()),
@@ -1652,7 +1652,7 @@ async fn plan_update_renders_history_cell() {
     };
     chat.on_plan_update(update);
     assert!(
-        chat.bottom_pane.has_pinned_plan(),
+        chat.bottom_pane.pinned_plan_update_args().is_some(),
         "expected pinned plan to be set on bottom_pane"
     );
 }

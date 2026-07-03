@@ -117,7 +117,7 @@ fn build_api_request(request: ChatRequest, vendor: ChatVendor) -> Result<ChatCom
         .messages
         .into_iter()
         .filter(|m| !matches!(m.role, Role::System))
-        .map(message_to_response_item)
+        .flat_map(message_to_response_items)
         .collect();
 
     let tools = request
@@ -125,6 +125,9 @@ fn build_api_request(request: ChatRequest, vendor: ChatVendor) -> Result<ChatCom
         .into_iter()
         .map(tool_definition_to_value)
         .collect::<Result<Vec<_>, _>>()?;
+
+    log_invalid_function_names(&tools, vendor);
+    log_invalid_message_function_names(&input, vendor);
 
     let reasoning_effort = reasoning_effort_for_request(request.thinking_effort, vendor)?;
 
@@ -185,17 +188,46 @@ fn content_to_text(content: &[crate::chat_provider::ContentPart]) -> String {
         .join("")
 }
 
-fn message_to_response_item(message: crate::chat_provider::Message) -> ResponseItem {
+fn message_to_response_items(
+    message: crate::chat_provider::Message,
+) -> Vec<ResponseItem> {
     use crate::chat_provider::{ContentPart, Role};
+
+    // Tool messages → FunctionCallOutput
+    if message.role == Role::Tool {
+        if let Some(call_id) = message.tool_call_id {
+            let text = message
+                .content
+                .iter()
+                .filter_map(|p| match p {
+                    ContentPart::Text(t) => Some(t.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("");
+            return vec![ResponseItem::FunctionCallOutput {
+                id: None,
+                call_id,
+                output: ody_protocol::models::FunctionCallOutputPayload::from_text(text),
+                internal_chat_message_metadata_passthrough: None,
+            }];
+        }
+        // Fallback: tool message without `tool_call_id` → skip (or emit as
+        // user, but that would be incorrect for Chat Completions wire).
+        return vec![];
+    }
+
     let role = match message.role {
         Role::User => "user",
         Role::Developer => "system",
         Role::Assistant => "assistant",
-        Role::Tool => "user",
+        Role::Tool => unreachable!("handled above"),
         Role::System => "system",
     }
     .to_string();
 
+    // Build content items from text/image/reasoning parts.
+    // ToolResult parts within assistant/user messages are rendered as text.
     let mut content = Vec::new();
     for part in message.content {
         match part {
@@ -245,27 +277,120 @@ fn message_to_response_item(message: crate::chat_provider::Message) -> ResponseI
         content
     };
 
-    ResponseItem::Message {
-        id: None,
-        role,
-        content,
-        phase: None,
-        internal_chat_message_metadata_passthrough: None,
+    let mut items = Vec::new();
+
+    // Emit a Message item for text content (only for assistant, where
+    // content might coexist with tool_calls; for user/developer/system,
+    // content is the only output and is never empty in practice).
+    let has_text = content.iter().any(|c| match c {
+        ody_protocol::models::ContentItem::OutputText { text } => !text.is_empty(),
+        _ => true,
+    });
+    if has_text {
+        items.push(ResponseItem::Message {
+            id: None,
+            role: role.clone(),
+            content,
+            phase: None,
+            internal_chat_message_metadata_passthrough: None,
+        });
     }
+
+    // Emit FunctionCall items for assistant tool_calls.
+    for tc in message.tool_calls {
+        items.push(ResponseItem::FunctionCall {
+            id: None,
+            name: tc.name,
+            arguments: tc.arguments.to_string(),
+            call_id: tc.id,
+            namespace: None,
+            internal_chat_message_metadata_passthrough: None,
+        });
+    }
+
+    items
 }
 
 fn tool_definition_to_value(
     def: crate::chat_provider::ToolDefinition,
 ) -> Result<serde_json::Value, ChatProviderError> {
+    // Emit the Responses-API flat tool shape that `ody_api::chat::convert_tools`
+    // expects; it will rewrite this into the nested Chat Completions shape on the
+    // wire. Emitting the nested shape here causes `convert_tools` to drop the name,
+    // which providers such as Kimi reject as an invalid function name.
     Ok(serde_json::json!({
         "type": "function",
-        "function": {
-            "name": def.name,
-            "description": def.description,
-            "parameters": def.schema,
-            "strict": true,
-        }
+        "name": def.name,
+        "description": def.description,
+        "parameters": def.schema,
+        "strict": true,
     }))
+}
+
+/// Some Chat Completions providers (notably Kimi/Moonshot) reject function names
+/// that do not start with a letter or contain characters other than letters,
+/// numbers, underscores, and dashes. Log any violating names at warning level so
+/// the offending tool can be identified without guessing.
+fn log_invalid_function_names(tools: &[serde_json::Value], vendor: ChatVendor) {
+    if vendor != ChatVendor::Kimi {
+        return;
+    }
+    for tool in tools {
+        let Some(name) = tool.get("name").and_then(|n| n.as_str()) else {
+            continue;
+        };
+        if !is_valid_function_name(name) {
+            tracing::warn!(
+                tool_name = name,
+                "tool name may be rejected by provider: must start with a letter and contain only letters, numbers, underscores, and dashes"
+            );
+        }
+    }
+}
+
+fn is_valid_function_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    matches!(chars.next(), Some(c) if c.is_ascii_alphabetic())
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+/// Also validate function names inside message history (assistant tool_calls and
+/// tool response call_ids). Kimi rejects these with the same error even when the
+/// tool definitions themselves are valid.
+fn log_invalid_message_function_names(input: &[ResponseItem], vendor: ChatVendor) {
+    if vendor != ChatVendor::Kimi {
+        return;
+    }
+    for item in input {
+        match item {
+            ResponseItem::FunctionCall {
+                name,
+                call_id,
+                arguments,
+                ..
+            } => {
+                if !is_valid_function_name(name) {
+                    tracing::warn!(
+                        function_name = name,
+                        call_id = call_id,
+                        arguments = arguments,
+                        "function call name in message history may be rejected by provider"
+                    );
+                }
+            }
+            ResponseItem::FunctionCallOutput { call_id, output, .. }
+            | ResponseItem::CustomToolCallOutput { call_id, output, .. } => {
+                if !is_valid_function_name(call_id) {
+                    tracing::warn!(
+                        call_id = call_id,
+                        output = ?output,
+                        "function call output call_id in message history may be rejected by provider"
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -414,6 +539,36 @@ mod tests {
         assert!((api_request.temperature.unwrap() - 0.7).abs() < 1e-6);
         assert!((api_request.top_p.unwrap() - 0.9).abs() < 1e-6);
         assert_eq!(api_request.stop, vec!["<|end|>"]);
+    }
+
+    #[test]
+    fn build_request_emits_responses_api_flat_tool_shape() {
+        use crate::chat_provider::ToolDefinition;
+
+        let request = ChatRequest {
+            model: "kimi-k2".into(),
+            messages: vec![Message {
+                role: Role::User,
+                content: vec![ContentPart::Text("hi".into())],
+                tool_calls: vec![],
+                tool_call_id: None,
+            }],
+            tools: vec![ToolDefinition {
+                name: "read_file".into(),
+                description: "Read a file".into(),
+                schema: serde_json::json!({"type": "object"}),
+            }],
+            ..Default::default()
+        };
+        let api_request = build_api_request(request, ChatVendor::Kimi).expect("builds");
+        assert_eq!(api_request.tools.len(), 1);
+        let tool = &api_request.tools[0];
+        // The wire conversion in `ody_api::chat` expects the Responses-API flat
+        // shape and rewrites it into the nested Chat Completions shape.
+        assert_eq!(tool["type"], "function");
+        assert_eq!(tool["name"], "read_file");
+        assert_eq!(tool["description"], "Read a file");
+        assert!(tool.get("function").is_none());
     }
 
     #[test]

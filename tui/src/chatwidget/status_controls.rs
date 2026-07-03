@@ -354,9 +354,10 @@ impl ChatWidget {
     }
 
     pub(super) fn status_line_context_remaining_percent(&self) -> Option<i64> {
-        let Some(context_window) = self.status_line_context_window_size() else {
-            return Some(100);
-        };
+        // When the context window is unknown we cannot compute a meaningful
+        // percentage; return None so the status-line item is omitted instead of
+        // misleadingly reporting a hard-coded 100%.
+        let context_window = self.status_line_context_window_size()?;
         let default_usage = TokenUsage::default();
         let usage = self
             .token_info
@@ -371,7 +372,9 @@ impl ChatWidget {
     }
 
     pub(super) fn status_line_context_used_percent(&self) -> Option<i64> {
-        let remaining = self.status_line_context_remaining_percent().unwrap_or(100);
+        // Mirror `status_line_context_remaining_percent`: omit the item when the
+        // context window is unknown rather than reporting a misleading 0% used.
+        let remaining = self.status_line_context_remaining_percent()?;
         Some((100 - remaining).clamp(0, 100))
     }
 

@@ -285,11 +285,27 @@ fn response_item_to_messages(item: ResponseItem) -> Vec<Message> {
         }
         ResponseItem::FunctionCallOutput { call_id, output, .. }
         | ResponseItem::CustomToolCallOutput { call_id, output, .. } => {
-            let content = output.content_items().unwrap_or_default();
             let mut parts = Vec::new();
-            for item in content {
-                if let Some(part) = function_call_output_item_to_part(item) {
-                    parts.push(part);
+            match output.content_items() {
+                Some(items) => {
+                    for item in items {
+                        if let Some(part) = function_call_output_item_to_part(item) {
+                            parts.push(part);
+                        }
+                    }
+                }
+                // Text-body outputs (exec/shell and most tools store their result
+                // as a plain string) make `content_items()` return `None`. The old
+                // code dropped them, so every tool result reached the model as an
+                // empty `role: tool` message — the model saw all tool output as
+                // blank and looped ("file not found" despite a successful read).
+                // Preserve the text instead.
+                None => {
+                    if let Some(text) = output.body.to_text()
+                        && !text.is_empty()
+                    {
+                        parts.push(ContentPart::Text(text));
+                    }
                 }
             }
             vec![Message {
