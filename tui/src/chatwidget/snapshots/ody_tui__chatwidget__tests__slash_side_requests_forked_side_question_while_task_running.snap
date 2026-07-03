@@ -9,4 +9,3 @@ expression: normalized_backend_snapshot(terminal.backend())
 "› Ask Ody to do anything                                                        "
 "                                                                                "
 "  gpt-5.5 default                                             Side starting...  "
-"                                                                   context: --  "

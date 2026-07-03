@@ -188,6 +188,13 @@ impl ChatWidget {
         if !from_replay {
             self.transcript.saw_plan_item_this_turn = false;
         }
+        // Write the final plan snapshot to transcript for export/persistence.
+        if self.transcript.saw_plan_update_this_turn {
+            self.transcript.saw_plan_update_this_turn = false;
+            if let Some(update) = self.bottom_pane.pinned_plan_update_args() {
+                self.add_to_history(history_cell::new_plan_update(update));
+            }
+        }
         // If there is a queued user message, send exactly one now to begin the next turn.
         let follow_up_started = self.maybe_send_next_queued_input();
         let active_goal_continuing = self
@@ -477,7 +484,7 @@ impl ChatWidget {
             .count();
         self.transcript.last_plan_progress = (total > 0).then_some((completed, total));
         self.refresh_status_surfaces();
-        self.add_to_history(history_cell::new_plan_update(update));
+        self.bottom_pane.set_pinned_plan(Some(update));
     }
 
     pub(super) fn interrupted_turn_message(&self, reason: TurnAbortReason) -> String {

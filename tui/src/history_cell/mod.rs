@@ -132,6 +132,7 @@ pub(crate) use mcp::*;
 pub(crate) use messages::*;
 pub(crate) use notices::*;
 pub(crate) use patches::*;
+pub(crate) use plans::render_plan_steps;
 pub(crate) use plans::*;
 pub(crate) use request_user_input::*;
 pub(crate) use search::*;

@@ -10,5 +10,4 @@ expression: terminal.backend()
 "                                                                                                                        "
 "                                                                                                                        "
 "                                                                                                                        "
-"  tab to queue message                                                                                 3% context left  "
-"                                                                                              context: 96.8% (968K/1M)  "
+"  tab to queue message                                                                                98% context left  "

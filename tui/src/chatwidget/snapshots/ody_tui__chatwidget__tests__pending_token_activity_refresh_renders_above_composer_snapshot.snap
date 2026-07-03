@@ -12,4 +12,3 @@ expression: normalize_snapshot_paths(term.backend().vt100().screen().contents())
 › Ask Ody to do anything
 
   gpt-5.5 default · /tmp/project
-                                                                   context: --

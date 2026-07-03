@@ -7,4 +7,3 @@ expression: terminal.backend()
 "› Check recently modified functions for compatibility                           "
 "                                                                                "
 "  gpt-5.5                             Side from main thread · Ctrl+C to return  "
-"                                                                   context: --  "

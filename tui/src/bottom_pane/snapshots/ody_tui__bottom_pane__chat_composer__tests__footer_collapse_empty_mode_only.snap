@@ -10,5 +10,4 @@ expression: terminal.backend()
 "                          "
 "                          "
 "                          "
-"         1% context left  "
-"  context: 98.8% (988K/1M)"
+"       100% context left  "

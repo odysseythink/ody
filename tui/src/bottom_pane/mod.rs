@@ -40,10 +40,12 @@ use ody_features::Features;
 use ody_file_search::FileMatch;
 use ody_plugin::PluginCapabilitySummary;
 use ody_protocol::ThreadId;
+use ody_protocol::plan_tool::UpdatePlanArgs;
 use ody_protocol::user_input::TextElement;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
+use crossterm::event::KeyModifiers;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::text::Line;
@@ -55,6 +57,7 @@ mod app_link_view;
 mod approval_overlay;
 mod mcp_server_elicitation;
 mod multi_select_picker;
+mod pinned_plan;
 mod request_user_input;
 mod status_line_setup;
 mod status_line_style;
@@ -73,6 +76,7 @@ pub(crate) use mcp_server_elicitation::McpServerElicitationFormRequest;
 pub(crate) use mcp_server_elicitation::McpServerElicitationOverlay;
 pub(crate) use request_user_input::RequestUserInputOverlay;
 pub(crate) use status_line_style::status_line_from_segments;
+pub(crate) use pinned_plan::PinnedPlanWidget;
 mod bottom_pane_view;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -226,6 +230,8 @@ pub(crate) struct BottomPane {
 
     /// Inline status indicator shown above the composer while a task is running.
     status: Option<StatusIndicatorWidget>,
+    /// Pinned live plan checklist shown between the status line and the composer.
+    pinned_plan: Option<PinnedPlanWidget>,
     /// Unified exec session summary source.
     ///
     /// When a status row exists, this summary is mirrored inline in that row;
@@ -287,6 +293,7 @@ impl BottomPane {
             disable_paste_burst,
             is_task_running: false,
             status: None,
+            pinned_plan: None,
             unified_exec_footer: UnifiedExecFooter::new(),
             pending_input_preview: PendingInputPreview::new(),
             pending_thread_approvals: PendingThreadApprovals::new(),
@@ -405,6 +412,28 @@ impl BottomPane {
     pub fn set_goal_status_indicator(&mut self, indicator: Option<GoalStatusIndicator>) {
         self.composer.set_goal_status_indicator(indicator);
         self.request_redraw();
+    }
+
+    pub fn set_pinned_plan(&mut self, update: Option<UpdatePlanArgs>) {
+        match update {
+            Some(args) => {
+                let mut widget = PinnedPlanWidget::new();
+                widget.update(args);
+                self.pinned_plan = Some(widget);
+            }
+            None => {
+                self.pinned_plan = None;
+            }
+        }
+        self.request_redraw();
+    }
+
+    pub fn has_pinned_plan(&self) -> bool {
+        self.pinned_plan.is_some()
+    }
+
+    pub fn pinned_plan_update_args(&self) -> Option<UpdatePlanArgs> {
+        self.pinned_plan.as_ref().and_then(|w| w.to_update_args())
     }
 
     pub fn set_ide_context_active(&mut self, active: bool) {
@@ -624,6 +653,18 @@ impl BottomPane {
             {
                 // Send Op::Interrupt
                 status.interrupt();
+                self.request_redraw();
+                return InputResult::None;
+            }
+            // Toggle pinned plan expanded state with ctrl+e.
+            if key_event.kind == KeyEventKind::Press
+                && key_event.code == KeyCode::Char('e')
+                && key_event.modifiers.contains(KeyModifiers::CONTROL)
+                && self.pinned_plan.is_some()
+            {
+                if let Some(pinned) = &mut self.pinned_plan {
+                    pinned.toggle_expanded();
+                }
                 self.request_redraw();
                 return InputResult::None;
             }
@@ -1710,6 +1751,9 @@ impl BottomPane {
             }
             let mut flex2 = FlexRenderable::new();
             flex2.push(/*flex*/ 1, RenderableItem::Owned(flex.into()));
+            if let Some(pinned) = &self.pinned_plan {
+                flex2.push(/*flex*/ 0, RenderableItem::Borrowed(pinned));
+            }
             let composer: RenderableItem<'_> = if composer_right_reserve == 0 {
                 RenderableItem::Borrowed(&self.composer)
             } else {
@@ -3054,5 +3098,49 @@ mod tests {
         let area = Rect::new(0, 0, 40, pane.desired_height(/*width*/ 40).max(2));
         assert!(pane.cursor_pos(area).is_some());
         assert_eq!(lower_view_handle_calls.get(), 0);
+    }
+
+    #[test]
+    fn pinned_plan_renders_above_composer_snapshot() {
+        use ody_protocol::plan_tool::{PlanItemArg, StepStatus, UpdatePlanArgs};
+
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut pane = BottomPane::new(BottomPaneParams {
+            app_event_tx: tx,
+            frame_requester: FrameRequester::test_dummy(),
+            has_input_focus: true,
+            enhanced_keys_supported: false,
+            placeholder_text: "Ask Ody to do anything".to_string(),
+            disable_paste_burst: false,
+            animations_enabled: true,
+            skills: Some(Vec::new()),
+        });
+
+        pane.set_pinned_plan(Some(UpdatePlanArgs {
+            explanation: Some("Working on feature".to_string()),
+            plan: vec![
+                PlanItemArg {
+                    step: "Explore codebase".to_string(),
+                    status: StepStatus::Completed,
+                },
+                PlanItemArg {
+                    step: "Implement the change".to_string(),
+                    status: StepStatus::InProgress,
+                },
+                PlanItemArg {
+                    step: "Write tests".to_string(),
+                    status: StepStatus::Pending,
+                },
+            ],
+        }));
+
+        let width = 50;
+        let height = pane.desired_height(width);
+        let area = Rect::new(0, 0, width, height);
+        assert_snapshot!(
+            "pinned_plan_renders_above_composer_snapshot",
+            render_snapshot(&pane, area)
+        );
     }
 }

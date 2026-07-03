@@ -1,0 +1,15 @@
+---
+source: tui/src/bottom_pane/pinned_plan.rs
+assertion_line: 99
+expression: terminal.backend()
+---
+"• Updated Plan                                              "
+"  └ Phase 1 pinned plan                                     "
+"    ✔ Extract shared render function                        "
+"    □ Create PinnedPlanWidget                               "
+"    □ Add snapshot tests                                    "
+"                                                            "
+"                                                            "
+"                                                            "
+"                                                            "
+"                                                            "

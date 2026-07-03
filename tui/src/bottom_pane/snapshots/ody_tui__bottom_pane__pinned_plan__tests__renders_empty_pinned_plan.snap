@@ -1,0 +1,10 @@
+---
+source: tui/src/bottom_pane/pinned_plan.rs
+assertion_line: 110
+expression: terminal.backend()
+---
+"• Updated Plan                          "
+"  └ (no steps provided)                 "
+"                                        "
+"                                        "
+"                                        "
