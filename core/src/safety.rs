@@ -4,6 +4,9 @@ use std::path::PathBuf;
 
 use ody_apply_patch::ApplyPatchAction;
 use ody_apply_patch::ApplyPatchFileChange;
+use ody_config::config_toml::PlanEnforcement;
+use ody_protocol::config_types::CollaborationMode;
+use ody_protocol::config_types::ModeKind;
 use ody_protocol::config_types::WindowsSandboxLevel;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::permissions::FileSystemSandboxPolicy;
@@ -27,6 +30,49 @@ pub enum SafetyCheck {
     Reject {
         reason: String,
     },
+}
+
+#[derive(Debug, PartialEq)]
+pub enum PlanGateDecision {
+    /// The patch is allowed to proceed to the normal safety assessment.
+    Allow,
+    /// The patch is blocked in Plan mode; the caller should return this reason to the model.
+    Deny { reason: String },
+    /// The patch requires explicit user approval even if the policy would auto-approve.
+    Ask { reason: String },
+}
+
+const PLAN_MODE_WRITE_DENIED_REASON: &str =
+    "Plan mode is read-only by default. Finish planning and switch to Default mode to apply patches.";
+
+/// Plan-mode front gate for `apply_patch`. Runs before `assess_patch_safety` so that
+/// `AskForApproval::Never` and future auto-approve paths cannot bypass Plan mode.
+///
+/// `plan_file` is the path to the current session's plan file. In Phase 1.0 the whitelist
+/// is not yet wired, so every patch write in Plan mode is treated as a non-plan write.
+pub fn plan_mode_gate_for_patch(
+    mode: &CollaborationMode,
+    enforcement: PlanEnforcement,
+    action: &ApplyPatchAction,
+    _plan_file: Option<&std::path::Path>,
+) -> PlanGateDecision {
+    if mode.mode != ModeKind::Plan {
+        return PlanGateDecision::Allow;
+    }
+    if action.is_empty() {
+        return PlanGateDecision::Allow;
+    }
+
+    // Phase 1.0: no plan-file whitelist yet. All patch writes are non-whitelist writes.
+    match enforcement {
+        PlanEnforcement::Strict => PlanGateDecision::Deny {
+            reason: PLAN_MODE_WRITE_DENIED_REASON.to_string(),
+        },
+        PlanEnforcement::Ask => PlanGateDecision::Ask {
+            reason: PLAN_MODE_WRITE_DENIED_REASON.to_string(),
+        },
+        PlanEnforcement::Advisory => PlanGateDecision::Allow,
+    }
 }
 
 pub fn assess_patch_safety(

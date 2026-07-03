@@ -1,4 +1,6 @@
 use super::*;
+use ody_config::config_toml::PlanEnforcement;
+use ody_protocol::config_types::{CollaborationMode, ModeKind, Settings};
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::permissions::NetworkSandboxPolicy;
 use ody_protocol::protocol::FileSystemAccessMode;
@@ -345,4 +347,76 @@ fn missing_project_dot_ody_config_requires_approval() {
         ),
         SafetyCheck::AskUser,
     );
+}
+
+fn plan_mode() -> CollaborationMode {
+    CollaborationMode {
+        mode: ModeKind::Plan,
+        settings: Settings {
+            model: "test".to_string(),
+            reasoning_effort: None,
+            developer_instructions: None,
+        },
+    }
+}
+
+fn default_mode() -> CollaborationMode {
+    CollaborationMode {
+        mode: ModeKind::Default,
+        settings: Settings {
+            model: "test".to_string(),
+            reasoning_effort: None,
+            developer_instructions: None,
+        },
+    }
+}
+
+#[test]
+fn plan_gate_strict_denies_patch_in_plan_mode() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("file.txt");
+    let action = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&path.abs()),
+        "hello".to_string(),
+    );
+    let decision = plan_mode_gate_for_patch(&plan_mode(), PlanEnforcement::Strict, &action, None);
+    assert!(matches!(decision, PlanGateDecision::Deny { .. }));
+}
+
+#[test]
+fn plan_gate_ask_forces_approval_in_plan_mode() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("file.txt");
+    let action = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&path.abs()),
+        "hello".to_string(),
+    );
+    let decision = plan_mode_gate_for_patch(&plan_mode(), PlanEnforcement::Ask, &action, None);
+    assert!(matches!(decision, PlanGateDecision::Ask { .. }));
+}
+
+#[test]
+fn plan_gate_advisory_allows_patch_in_plan_mode() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("file.txt");
+    let action = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&path.abs()),
+        "hello".to_string(),
+    );
+    let decision = plan_mode_gate_for_patch(&plan_mode(), PlanEnforcement::Advisory, &action, None);
+    assert_eq!(decision, PlanGateDecision::Allow);
+}
+
+#[test]
+fn plan_gate_allows_default_mode_regardless_of_enforcement() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("file.txt");
+    let action = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&path.abs()),
+        "hello".to_string(),
+    );
+    for enforcement in [PlanEnforcement::Strict, PlanEnforcement::Ask, PlanEnforcement::Advisory] {
+        let decision = plan_mode_gate_for_patch(&default_mode(), enforcement, &action, None);
+        assert_eq!(decision, PlanGateDecision::Allow, "Default mode should never be gated");
+    }
 }
