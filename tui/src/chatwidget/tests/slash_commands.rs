@@ -1704,6 +1704,7 @@ async fn slash_copy_state_tracks_plan_item_completion() {
             item: AppServerThreadItem::Plan {
                 id: "plan-1".to_string(),
                 text: plan_text.clone(),
+                plan_file_path: None,
             },
         }),
         /*replay_kind*/ None,

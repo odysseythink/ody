@@ -5796,6 +5796,7 @@ session_picker_view = "dense"
                     ThreadItem::Plan {
                         id: String::from("plan-1"),
                         text: String::from("1. Do the thing"),
+                        plan_file_path: None,
                     },
                 ],
                 status: ody_app_server_protocol::TurnStatus::Completed,

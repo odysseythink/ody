@@ -1282,6 +1282,12 @@
             "id": {
               "type": "string"
             },
+            "planFilePath": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "text": {
               "type": "string"
             },

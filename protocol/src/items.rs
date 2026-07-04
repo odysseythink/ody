@@ -114,10 +114,13 @@ pub struct AgentMessageItem {
     pub memory_citation: Option<MemoryCitation>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, TS, JsonSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, TS, JsonSchema, PartialEq, Eq)]
 pub struct PlanItem {
     pub id: String,
     pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub plan_file_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, TS, JsonSchema)]
@@ -660,6 +663,52 @@ mod tests {
             HookPromptFragment {
                 text: "Retry with tests.".to_string(),
                 hook_run_id: "hook-run-1".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn plan_item_roundtrips_without_plan_file_path() {
+        let original = PlanItem {
+            id: "plan-1".to_string(),
+            text: "Do the thing.".to_string(),
+            plan_file_path: None,
+        };
+        let json = serde_json::to_value(&original).unwrap();
+        assert_eq!(json.get("planFilePath"), None);
+        let roundtripped: PlanItem = serde_json::from_value(json).unwrap();
+        assert_eq!(roundtripped, original);
+    }
+
+    #[test]
+    fn plan_item_roundtrips_with_plan_file_path() {
+        let original = PlanItem {
+            id: "plan-1".to_string(),
+            text: "Do the thing.".to_string(),
+            plan_file_path: Some(PathBuf::from("/workspace/.ody-code/plans/thing.md")),
+        };
+        let json = serde_json::to_value(&original).unwrap();
+        assert_eq!(
+            json.get("plan_file_path").unwrap().as_str().unwrap(),
+            "/workspace/.ody-code/plans/thing.md"
+        );
+        let roundtripped: PlanItem = serde_json::from_value(json).unwrap();
+        assert_eq!(roundtripped, original);
+    }
+
+    #[test]
+    fn plan_item_deserializes_missing_plan_file_path_as_none() {
+        let json = serde_json::json!({
+            "id": "plan-2",
+            "text": "Another plan."
+        });
+        let parsed: PlanItem = serde_json::from_value(json).unwrap();
+        assert_eq!(
+            parsed,
+            PlanItem {
+                id: "plan-2".to_string(),
+                text: "Another plan.".to_string(),
+                plan_file_path: None,
             }
         );
     }
