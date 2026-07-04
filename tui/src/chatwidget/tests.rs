@@ -116,6 +116,7 @@ pub(super) use ody_config::ConfigLayerStack;
 pub(super) use ody_config::Constrained;
 pub(super) use ody_config::ConstraintError;
 pub(super) use ody_config::RequirementSource;
+pub(super) use ody_config::config_toml::PlanModeConfigToml;
 pub(super) use ody_config::types::ApprovalsReviewer;
 pub(super) use ody_config::types::Notifications;
 pub(super) use ody_config::types::WindowsSandboxModeToml;
