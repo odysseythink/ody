@@ -1,5 +1,7 @@
 //! Transcript and active-cell bookkeeping for `ChatWidget`.
 
+use std::path::PathBuf;
+
 use super::HistoryCell;
 use super::MAX_AGENT_COPY_HISTORY;
 
@@ -27,6 +29,8 @@ pub(super) struct TranscriptState {
     pub(super) copy_history_evicted_by_rollback: bool,
     /// Raw markdown of the most recently completed proposed plan.
     pub(super) latest_proposed_plan_markdown: Option<String>,
+    /// Path to the on-disk plan file when the plan was persisted.
+    pub(super) latest_proposed_plan_file_path: Option<PathBuf>,
     /// Whether this turn already produced a copyable response.
     pub(super) saw_copy_source_this_turn: bool,
     /// Whether the next streamed assistant content should be preceded by a final message separator.
@@ -112,6 +116,7 @@ impl TranscriptState {
         self.saw_plan_item_this_turn = false;
         self.had_work_activity = false;
         self.latest_proposed_plan_markdown = None;
+        self.latest_proposed_plan_file_path = None;
         self.plan_delta_buffer.clear();
         self.plan_item_active = false;
     }

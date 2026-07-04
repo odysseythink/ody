@@ -57,11 +57,12 @@ pub(crate) fn apply_plan_mode_patch_gate(
     mode: &ody_protocol::config_types::CollaborationMode,
     enforcement: PlanEnforcement,
     action: ApplyPatchAction,
+    plan_artifact: Option<&crate::plan_artifact::PlanArtifact>,
 ) -> Option<InternalApplyPatchInvocation> {
     if mode.mode != ModeKind::Plan {
         return None;
     }
-    match plan_mode_gate_for_patch(mode, enforcement, &action, None) {
+    match plan_mode_gate_for_patch(mode, enforcement, &action, plan_artifact) {
         PlanGateDecision::Deny { reason } => Some(InternalApplyPatchInvocation::Output(Err(
             FunctionCallError::RespondToModel(format!("Plan mode: {reason}")),
         ))),
@@ -86,8 +87,12 @@ pub(crate) async fn apply_patch(
 ) -> InternalApplyPatchInvocation {
     if turn_context.collaboration_mode.mode == ModeKind::Plan {
         let enforcement = resolve_plan_enforcement(&turn_context.config);
-        match plan_mode_gate_for_patch(&turn_context.collaboration_mode, enforcement, &action, None)
-        {
+        match plan_mode_gate_for_patch(
+            &turn_context.collaboration_mode,
+            enforcement,
+            &action,
+            turn_context.plan_artifact.as_deref(),
+        ) {
             PlanGateDecision::Deny { .. } => {
                 let path = action
                     .changes()

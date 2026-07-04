@@ -10,6 +10,7 @@ use ody_protocol::config_types::ModeKind;
 use ody_protocol::config_types::WindowsSandboxLevel;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::parse_command::ParsedCommand;
+use crate::plan_artifact::PlanArtifact;
 use ody_protocol::permissions::FileSystemSandboxPolicy;
 use ody_protocol::protocol::AskForApproval;
 use ody_sandboxing::SandboxType;
@@ -59,13 +60,14 @@ pub fn plan_mode_write_denied_message(path: &std::path::Path) -> String {
 /// Plan-mode front gate for `apply_patch`. Runs before `assess_patch_safety` so that
 /// `AskForApproval::Never` and future auto-approve paths cannot bypass Plan mode.
 ///
-/// `plan_file` is the path to the current session's plan file. In Phase 1.0 the whitelist
-/// is not yet wired, so every patch write in Plan mode is treated as a non-plan write.
+/// `plan_artifact` is the current session's `PlanArtifact`. When provided, writes to the
+/// plan file itself or to `<stem>/*.md` files under the plan file's stem directory are
+/// allowed even under `Strict` enforcement.
 pub fn plan_mode_gate_for_patch(
     mode: &CollaborationMode,
     enforcement: PlanEnforcement,
     action: &ApplyPatchAction,
-    _plan_file: Option<&std::path::Path>,
+    plan_artifact: Option<&PlanArtifact>,
 ) -> PlanGateDecision {
     if mode.mode != ModeKind::Plan {
         return PlanGateDecision::Allow;
@@ -74,7 +76,24 @@ pub fn plan_mode_gate_for_patch(
         return PlanGateDecision::Allow;
     }
 
-    // Phase 1.0: no plan-file whitelist yet. All patch writes are non-whitelist writes.
+    let all_paths_whitelisted = action
+        .changes()
+        .keys()
+        .all(|path_uri| {
+            path_uri
+                .to_abs_path()
+                .ok()
+                .map(|abs_path| {
+                    plan_artifact
+                        .is_some_and(|artifact| artifact.is_plan_file_path(abs_path.as_path()))
+                })
+                .unwrap_or(false)
+        });
+
+    if all_paths_whitelisted {
+        return PlanGateDecision::Allow;
+    }
+
     match enforcement {
         PlanEnforcement::Strict => PlanGateDecision::Deny {
             reason: PLAN_MODE_WRITE_DENIED_REASON.to_string(),

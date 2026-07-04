@@ -67,6 +67,7 @@ async fn plan_mode_uses_proposed_plan_block_for_plan_item() -> Result<()> {
     let expected_plan = ThreadItem::Plan {
         id: format!("{}-plan", turn.id),
         text: "# Final plan\n- first\n- second\n".to_string(),
+        plan_file_path: None,
     };
     let expected_plan_id = format!("{}-plan", turn.id);
     let streamed_plan = plan_deltas

@@ -78,11 +78,16 @@ pub(crate) fn thread_to_transcript_cells(
                     )));
                 }
             }
-            ThreadItem::Plan { text, .. } => {
+            ThreadItem::Plan {
+                text,
+                plan_file_path,
+                ..
+            } => {
                 if !text.trim().is_empty() {
                     cells.push(Arc::new(crate::history_cell::new_proposed_plan(
                         text.clone(),
                         cwd,
+                        plan_file_path.clone(),
                     )));
                 }
             }

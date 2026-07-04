@@ -114,10 +114,15 @@ pub struct AgentMessageItem {
     pub memory_citation: Option<MemoryCitation>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, TS, JsonSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, TS, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct PlanItem {
     pub id: String,
     pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub plan_file_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, TS, JsonSchema)]
@@ -662,5 +667,25 @@ mod tests {
                 hook_run_id: "hook-run-1".to_string(),
             }
         );
+    }
+
+    #[test]
+    fn plan_item_roundtrips_plan_file_path() {
+        let item = PlanItem {
+            id: "plan-1".to_string(),
+            text: "# Plan".to_string(),
+            plan_file_path: Some(PathBuf::from("/tmp/plan.md")),
+        };
+        let json = serde_json::to_string(&item).unwrap();
+        assert!(json.contains("\"planFilePath\":\"/tmp/plan.md\""));
+        let parsed: PlanItem = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.plan_file_path, item.plan_file_path);
+    }
+
+    #[test]
+    fn plan_item_deserializes_without_plan_file_path() {
+        let json = r##"{"id":"plan-1","text":"# Plan"}"##;
+        let parsed: PlanItem = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.plan_file_path, None);
     }
 }

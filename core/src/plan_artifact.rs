@@ -1,4 +1,5 @@
 use ody_utils_absolute_path::AbsolutePathBuf;
+use ody_utils_path::write_atomically;
 use std::path::Path;
 use std::path::PathBuf;
 use tokio::sync::Mutex;
@@ -80,7 +81,7 @@ impl PlanArtifact {
         }
     }
 
-    pub async fn write_plan(&self, _markdown: &str, persist: bool) -> PlanWriteOutcome {
+    pub async fn write_plan(&self, markdown: &str, persist: bool) -> PlanWriteOutcome {
         let mut state = self.state.lock().await;
         if !persist {
             *state = PlanArtifactState::InlineOnly;
@@ -95,15 +96,42 @@ impl PlanArtifact {
             }
         };
 
-        // PM 4.0 stub: do not perform actual disk IO.
-        PlanWriteOutcome::Written { path }
+        match write_atomically(&path, markdown) {
+            Ok(()) => PlanWriteOutcome::Written { path },
+            Err(error) => {
+                *state = PlanArtifactState::InlineOnly;
+                PlanWriteOutcome::Failed {
+                    error: PlanArtifactError::Io(error),
+                }
+            }
+        }
     }
 
     pub fn is_plan_file_path(&self, target: &Path) -> bool {
         let Some(plan_path) = self.path() else {
             return false;
         };
-        ody_utils_path::paths_match_after_normalization(&plan_path, target)
+
+        if ody_utils_path::paths_match_after_normalization(&plan_path, target) {
+            return true;
+        }
+
+        let Some(stem_dir) = plan_path
+            .file_stem()
+            .map(|stem| plan_path.with_file_name(stem))
+        else {
+            return false;
+        };
+
+        let Some(target_parent) = target.parent() else {
+            return false;
+        };
+
+        if !target.extension().map_or(false, |ext| ext == "md") {
+            return false;
+        }
+
+        ody_utils_path::paths_match_after_normalization(&stem_dir, target_parent)
     }
 
     pub fn restore_or_create(
@@ -274,5 +302,92 @@ mod tests {
         let artifact =
             PlanArtifact::restore_or_create(ody_home, thread_id, Some(existing.clone()), "2026-07-04");
         assert!(artifact.is_plan_file_path(&existing));
+    }
+
+    #[tokio::test]
+    async fn write_plan_persists_markdown_to_disk() {
+        let (artifact, _tmp) = test_artifact("2026-07-04");
+        artifact.finalize_name("refactor_auth").await.unwrap();
+        let markdown = "# Plan\n\n- Step 1\n";
+        let outcome = artifact.write_plan(markdown, true).await;
+        let path = match outcome {
+            PlanWriteOutcome::Written { path } => path,
+            other => panic!("expected Written, got {other:?}"),
+        };
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), markdown);
+    }
+
+    #[tokio::test]
+    async fn write_plan_creates_parent_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let ody_home = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let thread_id =
+            ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
+        let artifact = PlanArtifact::new_temp(ody_home, thread_id, "2026-07-04");
+        artifact.finalize_name("refactor_auth").await.unwrap();
+
+        let outcome = artifact.write_plan("# Plan\n", true).await;
+        let path = match outcome {
+            PlanWriteOutcome::Written { path } => path,
+            other => panic!("expected Written, got {other:?}"),
+        };
+
+        assert!(path.parent().unwrap().exists());
+    }
+
+    #[tokio::test]
+    async fn write_plan_failure_falls_back_to_inline_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Make ody_home a file so create_dir_all(plans) fails.
+        let ody_home_file = tmp.path().join("ody_home_file");
+        std::fs::write(&ody_home_file, "").unwrap();
+        let ody_home = AbsolutePathBuf::from_absolute_path(&ody_home_file).unwrap();
+        let thread_id =
+            ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
+        let artifact = PlanArtifact::new_temp(ody_home, thread_id, "2026-07-04");
+
+        let outcome = artifact.write_plan("# Plan\n", true).await;
+
+        assert!(
+            matches!(outcome, PlanWriteOutcome::Failed { .. }),
+            "expected Failed when parent cannot be created, got {outcome:?}"
+        );
+        assert!(matches!(
+            &*artifact.state.lock().await,
+            PlanArtifactState::InlineOnly
+        ));
+    }
+
+    #[tokio::test]
+    async fn is_plan_file_path_matches_stem_subdirectory_md() {
+        let (artifact, _tmp) = test_artifact("2026-07-04");
+        artifact.finalize_name("refactor_auth").await.unwrap();
+        let plan_path = artifact.path().unwrap();
+        let stem_dir = plan_path.with_extension("");
+        let sub_file = stem_dir.join("subsystem.md");
+        assert!(
+            artifact.is_plan_file_path(&sub_file),
+            "expected {sub_file:?} to be whitelisted under {stem_dir:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn is_plan_file_path_rejects_non_md_in_stem_subdirectory() {
+        let (artifact, _tmp) = test_artifact("2026-07-04");
+        artifact.finalize_name("refactor_auth").await.unwrap();
+        let plan_path = artifact.path().unwrap();
+        let stem_dir = plan_path.with_extension("");
+        let sub_file = stem_dir.join("subsystem.txt");
+        assert!(!artifact.is_plan_file_path(&sub_file));
+    }
+
+    #[tokio::test]
+    async fn is_plan_file_path_rejects_sibling_stem_subdirectory() {
+        let (artifact, _tmp) = test_artifact("2026-07-04");
+        artifact.finalize_name("refactor_auth").await.unwrap();
+        let plan_path = artifact.path().unwrap();
+        let sibling_dir = plan_path.parent().unwrap().join("2026-07-04-other");
+        let sub_file = sibling_dir.join("subsystem.md");
+        assert!(!artifact.is_plan_file_path(&sub_file));
     }
 }

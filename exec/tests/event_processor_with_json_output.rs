@@ -278,6 +278,7 @@ fn unsupported_items_do_not_consume_synthetic_ids() {
             item: ThreadItem::Plan {
                 id: "plan-1".to_string(),
                 text: "ignored plan".to_string(),
+                plan_file_path: None,
             },
             thread_id: "thread-1".to_string(),
             turn_id: "turn-1".to_string(),
@@ -1561,6 +1562,7 @@ fn turn_completion_falls_back_to_final_plan_text() {
                 items: vec![ThreadItem::Plan {
                     id: "plan-1".to_string(),
                     text: "ship the typed adapter".to_string(),
+                    plan_file_path: None,
                 }],
                 status: TurnStatus::Completed,
                 error: None,

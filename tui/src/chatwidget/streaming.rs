@@ -144,7 +144,11 @@ impl ChatWidget {
         self.request_redraw();
     }
 
-    pub(super) fn on_plan_item_completed(&mut self, text: String) {
+    pub(super) fn on_plan_item_completed(
+        &mut self,
+        text: String,
+        plan_file_path: Option<std::path::PathBuf>,
+    ) {
         let streamed_plan = self.transcript.plan_delta_buffer.trim().to_string();
         let plan_text = if text.trim().is_empty() {
             streamed_plan
@@ -154,6 +158,7 @@ impl ChatWidget {
         if !plan_text.trim().is_empty() {
             self.record_agent_markdown(&plan_text);
             self.transcript.latest_proposed_plan_markdown = Some(plan_text.clone());
+            self.transcript.latest_proposed_plan_file_path = plan_file_path.clone();
         }
         // Plan commit ticks can hide the status row; remember whether we streamed plan output so
         // completion can restore it once stream queues are idle.
@@ -184,7 +189,11 @@ impl ChatWidget {
                     .send(AppEvent::ConsolidateProposedPlan(source));
             }
         } else if !plan_text.is_empty() {
-            self.add_to_history(history_cell::new_proposed_plan(plan_text, &self.config.cwd));
+            self.add_to_history(history_cell::new_proposed_plan(
+                plan_text,
+                &self.config.cwd,
+                plan_file_path,
+            ));
         } else if let Some(source) = consolidated_plan_source {
             self.note_stream_consolidation_queued();
             self.app_event_tx

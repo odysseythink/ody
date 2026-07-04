@@ -239,6 +239,7 @@ fn source_backed_cells_render_raw_source_without_prefix_or_style() {
     let plan = new_proposed_plan(
         "1. Inspect\n\n```sh\ncargo test\n```".to_string(),
         &test_cwd(),
+        None,
     );
 
     let user_lines = user.raw_lines();
@@ -291,6 +292,7 @@ fn proposed_plan_cell_renders_markdown_table() {
     let plan = new_proposed_plan(
         "## Plan\n\n| Step | Owner |\n| --- | --- |\n| Verify | Ody |\n".to_string(),
         &test_cwd(),
+        None,
     );
 
     let rendered = render_lines(&plan.display_lines(/*width*/ 80));
@@ -319,6 +321,7 @@ fn proposed_plan_cell_preserves_wrapped_table_web_links() {
     let plan = new_proposed_plan(
         format!("| Step | URL |\n| --- | --- |\n| Verify | {destination} |\n"),
         &test_cwd(),
+        None,
     );
 
     let lines = plan.display_hyperlink_lines(/*width*/ 32);
@@ -360,6 +363,7 @@ fn proposed_plan_cell_unwraps_markdown_fenced_table() {
         "## Plan\n\n```markdown\n| Step | Owner |\n| --- | --- |\n| Verify | Ody |\n```\n"
             .to_string(),
         &test_cwd(),
+        None,
     );
 
     let rendered = render_lines(&plan.display_lines(/*width*/ 80));
@@ -371,6 +375,24 @@ fn proposed_plan_cell_unwraps_markdown_fenced_table() {
     assert!(
         !rendered.iter().any(|line| line.trim() == "```markdown"),
         "did not expect markdown fence to render as code block: {rendered:?}"
+    );
+}
+
+#[test]
+fn proposed_plan_cell_displays_plan_file_path() {
+    let path = PathBuf::from("/tmp/plan.md");
+    let plan = new_proposed_plan("- Step".to_string(), &test_cwd(), Some(path.clone()));
+
+    let rendered = render_lines(&plan.display_lines(/*width*/ 80));
+    assert!(
+        rendered.iter().any(|line| line.contains("Plan file: /tmp/plan.md")),
+        "expected plan file indicator in rendered lines: {rendered:?}"
+    );
+
+    let raw = render_lines(&plan.raw_lines());
+    assert!(
+        raw.iter().any(|line| line == "Plan file: /tmp/plan.md"),
+        "expected plan file indicator in raw lines: {raw:?}"
     );
 }
 

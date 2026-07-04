@@ -1489,6 +1489,10 @@ impl ProposedPlanItemState {
         let item = TurnItem::Plan(PlanItem {
             id: self.item_id.clone(),
             text: String::new(),
+            plan_file_path: turn_context
+                .plan_artifact
+                .as_ref()
+                .and_then(|artifact| artifact.path().map(PathBuf::from)),
         });
         sess.emit_turn_item_started(turn_context, &item).await;
     }
@@ -1534,6 +1538,10 @@ impl ProposedPlanItemState {
         let item = TurnItem::Plan(PlanItem {
             id: self.item_id.clone(),
             text,
+            plan_file_path: turn_context
+                .plan_artifact
+                .as_ref()
+                .and_then(|artifact| artifact.path().map(PathBuf::from)),
         });
         sess.emit_turn_item_completed(turn_context, item).await;
     }

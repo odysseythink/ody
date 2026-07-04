@@ -1540,7 +1540,7 @@ async fn completed_token_activity_refresh_retries_after_plan_item_completion() {
         )
     );
 
-    chat.on_plan_item_completed("Plan details".to_string());
+    chat.on_plan_item_completed("Plan details".to_string(), None);
 
     assert!(
         std::iter::from_fn(|| rx.try_recv().ok())
@@ -1704,6 +1704,7 @@ async fn slash_copy_state_tracks_plan_item_completion() {
             item: AppServerThreadItem::Plan {
                 id: "plan-1".to_string(),
                 text: plan_text.clone(),
+                plan_file_path: None,
             },
         }),
         /*replay_kind*/ None,

@@ -107,7 +107,11 @@ impl ChatWidget {
                     from_replay,
                 );
             }
-            ThreadItem::Plan { text, .. } => self.on_plan_item_completed(text),
+            ThreadItem::Plan {
+                text,
+                plan_file_path,
+                ..
+            } => self.on_plan_item_completed(text, plan_file_path),
             ThreadItem::Reasoning {
                 summary, content, ..
             } => {
