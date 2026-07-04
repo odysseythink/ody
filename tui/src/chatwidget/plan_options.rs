@@ -13,6 +13,7 @@ pub struct PlanOption {
 
 /// All actions a user may take in the plan approval popup.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum PlanApprovalChoice {
     /// Approve a specific candidate option and implement it.
     ApproveOption {
