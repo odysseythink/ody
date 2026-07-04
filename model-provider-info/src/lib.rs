@@ -425,7 +425,12 @@ impl ModelProviderInfo {
     }
 
     pub fn supports_remote_compaction(&self) -> bool {
-        self.is_odysseythink() || is_azure_responses_provider(&self.name, self.base_url.as_deref())
+        // The capability matrix is the authoritative source; legacy name/base_url
+        // detection remains as a compatibility fallback for configs that predate
+        // the `capabilities` field.
+        self.capabilities.supports_remote_compaction
+            || self.is_odysseythink()
+            || is_azure_responses_provider(&self.name, self.base_url.as_deref())
     }
 
     pub fn has_command_auth(&self) -> bool {
@@ -483,16 +488,17 @@ pub fn built_in_model_providers(
 /// Merge configured providers into the built-in provider catalog.
 ///
 /// Configured providers extend the built-in set. Built-in providers are not
-/// overridable.
+/// overridable. After merging, all providers are normalized so their
+/// capability matrices reflect their wire API and other declared fields.
 pub fn merge_configured_model_providers(
     mut model_providers: HashMap<String, ModelProviderInfo>,
     configured_model_providers: HashMap<String, ModelProviderInfo>,
 ) -> Result<HashMap<String, ModelProviderInfo>, String> {
-    for (key, mut provider) in configured_model_providers {
-        model_providers.entry(key).or_insert_with(|| {
-            provider.normalize_capabilities();
-            provider
-        });
+    for (key, provider) in configured_model_providers {
+        model_providers.entry(key).or_insert(provider);
+    }
+    for provider in model_providers.values_mut() {
+        provider.normalize_capabilities();
     }
 
     Ok(model_providers)
@@ -535,7 +541,7 @@ pub fn create_oss_provider_with_base_url(base_url: &str, wire_api: WireApi) -> M
         websocket_connect_timeout_ms: None,
         requires_odysseythink_auth: false,
         supports_websockets: false,
-        capabilities: ProviderCapabilities::default(),
+        capabilities: default_provider_capabilities_for_wire_api(WireApi::Local),
     }
 }
 

@@ -150,16 +150,22 @@ pub fn with_config_overrides(mut model: ModelInfo, config: &ModelsManagerConfig)
     model
 }
 
-/// Build a minimal fallback model descriptor for missing/unknown slugs.
-pub fn model_info_from_slug(slug: &str) -> ModelInfo {
-    warn!("Unknown model {slug} is used. This will use fallback model metadata.");
-    let caps = resolve_model_capabilities(
-        &ProviderCapabilities::default(),
-        WireApi::Local,
-        None,
-        None,
-        slug,
+/// Build a minimal fallback model descriptor for missing/unknown slugs using the
+/// given provider context.
+///
+/// `provider_id` and `provider_caps` let the fallback respect the provider's
+/// wire API and capability matrix instead of always falling back to conservative
+/// Local defaults.
+pub fn model_info_from_slug_with_provider(
+    slug: &str,
+    provider_id: &str,
+    wire_api: WireApi,
+    provider_caps: &ProviderCapabilities,
+) -> ModelInfo {
+    warn!(
+        "Unknown model {slug} for provider {provider_id} is used. This will use fallback model metadata."
     );
+    let caps = resolve_model_capabilities(provider_caps, wire_api, None, None, slug);
     ModelInfo {
         slug: slug.to_string(),
         display_name: slug.to_string(),
@@ -203,6 +209,15 @@ pub fn model_info_from_slug(slug: &str) -> ModelInfo {
     }
 }
 
+/// Build a minimal fallback model descriptor for missing/unknown slugs.
+///
+/// This is a convenience wrapper that falls back to conservative Local provider
+/// defaults. Prefer `model_info_from_slug_with_provider` when the active
+/// provider is known.
+pub fn model_info_from_slug(slug: &str) -> ModelInfo {
+    model_info_from_slug_with_provider(slug, slug, WireApi::Local, &ProviderCapabilities::default())
+}
+
 /// Bundled or fallback model catalog for a provider.
 ///
 /// Returns a curated static catalog for the built-in OpenAI-compatible Chat
@@ -242,7 +257,7 @@ pub fn model_catalog_for_provider(
             let models = specs
                 .iter()
                 .enumerate()
-                .map(|(index, spec)| spec.to_model_info(index as i32))
+                .map(|(index, spec)| spec.to_model_info(index as i32, provider_id, info))
                 .collect();
             Some(ModelsResponse { models })
         }
@@ -269,7 +284,12 @@ fn fallback_catalog_model(provider_id: &str, wire_api: WireApi, context_window: 
     caps.max_context_window = Some(context_window);
     caps.supports_parallel_tool_calls = true;
 
-    let mut model = model_info_from_slug(provider_id);
+    let mut model = model_info_from_slug_with_provider(
+        provider_id,
+        provider_id,
+        wire_api,
+        &ProviderCapabilities::default(),
+    );
     model.visibility = ModelVisibility::List;
     model.priority = 0;
     model.supports_parallel_tool_calls = true;
@@ -313,8 +333,18 @@ impl ChatModelSpec {
         }
     }
 
-    fn to_model_info(&self, priority: i32) -> ModelInfo {
-        let mut model = model_info_from_slug(self.slug);
+    fn to_model_info(
+        &self,
+        priority: i32,
+        provider_id: &str,
+        info: &ModelProviderInfo,
+    ) -> ModelInfo {
+        let mut model = model_info_from_slug_with_provider(
+            self.slug,
+            provider_id,
+            info.wire_api,
+            &info.capabilities,
+        );
         model.display_name = self.display_name.to_string();
         model.visibility = ModelVisibility::List;
         model.priority = priority;

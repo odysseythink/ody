@@ -10,6 +10,7 @@ use ody_api::SharedAuthProvider;
 use ody_login::AuthManager;
 use ody_login::OdyAuth;
 use ody_model_provider_info::ModelProviderInfo;
+use ody_model_provider_info::ProviderCapabilities as ModelProviderInfoCapabilities;
 use ody_models_manager::manager::OpenAiModelsManager;
 use ody_models_manager::manager::SharedModelsManager;
 use ody_models_manager::manager::StaticModelsManager;
@@ -49,6 +50,16 @@ impl Default for ProviderCapabilities {
             namespace_tools: true,
             image_generation: true,
             web_search: true,
+        }
+    }
+}
+
+impl From<&ModelProviderInfoCapabilities> for ProviderCapabilities {
+    fn from(capabilities: &ModelProviderInfoCapabilities) -> Self {
+        Self {
+            namespace_tools: capabilities.namespace_tools,
+            image_generation: capabilities.image_generation,
+            web_search: capabilities.web_search,
         }
     }
 }
@@ -268,11 +279,7 @@ impl ModelProvider for ConfiguredModelProvider {
     }
 
     fn capabilities(&self) -> ProviderCapabilities {
-        ProviderCapabilities {
-            namespace_tools: self.info.capabilities.namespace_tools,
-            image_generation: self.info.capabilities.image_generation,
-            web_search: self.info.capabilities.web_search,
-        }
+        (&self.info.capabilities).into()
     }
 
     fn auth_manager(&self) -> Option<Arc<AuthManager>> {

@@ -189,6 +189,8 @@ enum Subcommand {
     ExecServer(ExecServerCommand),
 
     /// List configured model providers and their capabilities.
+    ///
+    /// Use `--json` for machine-readable output.
     Providers(ProvidersCommand),
 
     /// Inspect feature flags.
@@ -214,6 +216,9 @@ enum DebugSubcommand {
     Models(DebugModelsCommand),
 
     /// List configured model providers and their capabilities as JSON.
+    ///
+    /// This is intended for lockfile/debug reproduction. For stable programmatic
+    /// consumption, prefer `ody providers --json`.
     Providers(DebugProvidersCommand),
 
     /// Tooling: helps debug the app server.
@@ -276,7 +281,7 @@ struct DebugProvidersCommand {}
 
 #[derive(Debug, Parser)]
 struct ProvidersCommand {
-    /// Output the provider list as JSON.
+    /// Output the provider list as JSON (same format as `ody debug providers`).
     #[arg(long = "json", default_value_t = false)]
     json: bool,
 }
@@ -1954,6 +1959,34 @@ async fn run_debug_models_command(
     Ok(())
 }
 
+#[derive(Serialize)]
+struct ProviderEntry {
+    provider_id: String,
+    name: String,
+    wire_api: String,
+    capabilities: ody_model_provider_info::ProviderCapabilities,
+}
+
+/// Write a sorted JSON array of provider entries to `writer`.
+fn write_provider_entries(
+    writer: impl std::io::Write,
+    providers: Vec<(String, ody_model_provider_info::ModelProviderInfo)>,
+) -> anyhow::Result<()> {
+    let mut entries: Vec<ProviderEntry> = providers
+        .into_iter()
+        .map(|(provider_id, info)| ProviderEntry {
+            provider_id,
+            name: info.name,
+            wire_api: info.wire_api.to_string(),
+            capabilities: info.capabilities,
+        })
+        .collect();
+    entries.sort_by(|a, b| a.provider_id.cmp(&b.provider_id));
+    serde_json::to_writer(writer, &entries)?;
+    println!();
+    Ok(())
+}
+
 async fn run_debug_providers_command(
     _cmd: DebugProvidersCommand,
     root_config_overrides: CliConfigOverrides,
@@ -1966,28 +1999,8 @@ async fn run_debug_providers_command(
         .build()
         .await?;
 
-    #[derive(Serialize)]
-    struct ProviderEntry {
-        provider_id: String,
-        name: String,
-        wire_api: String,
-        capabilities: ody_model_provider_info::ProviderCapabilities,
-    }
-
-    let mut providers: Vec<ProviderEntry> = config
-        .model_providers
-        .into_iter()
-        .map(|(provider_id, info)| ProviderEntry {
-            provider_id,
-            name: info.name,
-            wire_api: info.wire_api.to_string(),
-            capabilities: info.capabilities,
-        })
-        .collect();
-    providers.sort_by(|a, b| a.provider_id.cmp(&b.provider_id));
-
-    serde_json::to_writer(std::io::stdout(), &providers)?;
-    println!();
+    let providers: Vec<_> = config.model_providers.into_iter().collect();
+    write_provider_entries(std::io::stdout(), providers)?;
     Ok(())
 }
 
@@ -2003,40 +2016,30 @@ async fn run_providers_command(
         .build()
         .await?;
 
-    let mut providers: Vec<(String, ody_model_provider_info::ModelProviderInfo)> = config
-        .model_providers
-        .into_iter()
-        .collect();
+    let mut providers: Vec<(String, ody_model_provider_info::ModelProviderInfo)> =
+        config.model_providers.into_iter().collect();
     providers.sort_by(|a, b| a.0.cmp(&b.0));
 
     if cmd.json {
-        #[derive(Serialize)]
-        struct ProviderEntry {
-            provider_id: String,
-            name: String,
-            wire_api: String,
-            capabilities: ody_model_provider_info::ProviderCapabilities,
-        }
-        let entries: Vec<ProviderEntry> = providers
-            .into_iter()
-            .map(|(provider_id, info)| ProviderEntry {
-                provider_id,
-                name: info.name,
-                wire_api: info.wire_api.to_string(),
-                capabilities: info.capabilities,
-            })
-            .collect();
-        serde_json::to_writer(std::io::stdout(), &entries)?;
-        println!();
+        write_provider_entries(std::io::stdout(), providers)?;
     } else {
-        println!("{:<14} {:<14} {:<18} {}", "ID", "NAME", "WIRE API", "CAPABILITIES");
+        let mut id_width = "ID".len();
+        let mut name_width = "NAME".len();
+        let mut wire_width = "WIRE API".len();
+        for (provider_id, info) in &providers {
+            id_width = id_width.max(provider_id.len());
+            name_width = name_width.max(info.name.len());
+            wire_width = wire_width.max(info.wire_api.to_string().len());
+        }
+
+        println!(
+            "{:<id_width$} {:<name_width$} {:<wire_width$} {}",
+            "ID", "NAME", "WIRE API", "CAPABILITIES"
+        );
         for (provider_id, info) in providers {
             println!(
-                "{:<14} {:<14} {:<18} {:?}",
-                provider_id,
-                info.name,
-                info.wire_api,
-                info.capabilities
+                "{:<id_width$} {:<name_width$} {:<wire_width$} {:?}",
+                provider_id, info.name, info.wire_api, info.capabilities
             );
         }
     }

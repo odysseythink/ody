@@ -1210,6 +1210,27 @@ base_url = "https://api.openai.com/v1"
     }
 
     #[test]
+    fn ody_code_providers_reject_reserved_ids() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[providers.odysseythink]
+type = "openai"
+"#,
+        )
+        .expect("config should deserialize");
+
+        let converted = config.convert_ody_code_providers();
+        let result = validate_reserved_model_provider_ids(&converted);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .contains("reserved built-in provider IDs"),
+            "error should mention reserved built-in provider IDs"
+        );
+    }
+
+    #[test]
     fn resolve_ody_code_default_model_splits_provider_and_model() {
         let config: ConfigToml = toml::from_str(
             r#"default_model = "kimi_gyy/kimi-for-coding""#,

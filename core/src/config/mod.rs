@@ -31,6 +31,7 @@ use ody_config::config_toml::RealtimeAudioConfig;
 use ody_config::config_toml::RealtimeConfig;
 use ody_config::config_toml::ThreadStoreToml;
 use ody_config::config_toml::validate_model_providers;
+use ody_config::config_toml::validate_reserved_model_provider_ids;
 use ody_config::loader::load_config_layers_state;
 use ody_config::loader::project_trust_key;
 use ody_config::permissions_toml::PermissionsToml;
@@ -3376,17 +3377,17 @@ impl Config {
 
         let (ody_code_provider, ody_code_model) = cfg.resolve_ody_code_default_model();
         let ody_code_providers = cfg.convert_ody_code_providers();
+        validate_reserved_model_provider_ids(&ody_code_providers).map_err(|message| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, message)
+        })?;
         let mut configured_model_providers = cfg.model_providers;
         for (key, provider) in ody_code_providers {
             configured_model_providers.entry(key).or_insert(provider);
         }
 
-        let mut model_providers =
+        let model_providers =
             merge_configured_model_providers(built_in_model_providers(odysseythink_base_url), configured_model_providers)
                 .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidData, message))?;
-        for provider in model_providers.values_mut() {
-            provider.normalize_capabilities();
-        }
         let model_provider_id = model_provider
             .or(ody_code_provider)
             .or(cfg.model_provider)
