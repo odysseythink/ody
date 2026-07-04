@@ -29,7 +29,10 @@ use crate::unified_exec::generate_chunk_id;
 use ody_features::Feature;
 use ody_otel::SessionTelemetry;
 use ody_otel::TOOL_CALL_UNIFIED_EXEC_METRIC;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::WarningEvent;
 use ody_sandboxing::SandboxManager;
+use crate::safety::PLAN_MODE_REJECTION_MARKER;
 use ody_sandboxing::SandboxType;
 use ody_sandboxing::SandboxablePreference;
 use ody_shell_command::shell_detect::detect_shell_type;
@@ -382,9 +385,22 @@ impl ExecCommandHandler {
                     hook_command: Some(hook_command),
                 }))
             }
-            Err(err) => Err(FunctionCallError::RespondToModel(format!(
-                "exec_command failed for `{command_for_display}`: {err:?}"
-            ))),
+            Err(err) => {
+                let err_text = format!("{err}");
+                if let UnifiedExecError::ProcessFailed { ref message } = err
+                    && message.contains(PLAN_MODE_REJECTION_MARKER)
+                {
+                    session
+                        .send_event(
+                            turn.as_ref(),
+                            EventMsg::Warning(WarningEvent { message: message.clone() }),
+                        )
+                        .await;
+                }
+                Err(FunctionCallError::RespondToModel(format!(
+                    "exec_command failed for `{command_for_display}`: {err_text}"
+                )))
+            }
         }
     }
 }
@@ -444,3 +460,7 @@ fn emit_unified_exec_tty_metric(session_telemetry: &SessionTelemetry, tty: bool)
         &[("tty", if tty { "true" } else { "false" })],
     );
 }
+
+#[cfg(test)]
+#[path = "exec_command_tests.rs"]
+mod tests;

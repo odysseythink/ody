@@ -1,4 +1,5 @@
 use super::*;
+use crate::safety::PLAN_MODE_REJECTION_MARKER;
 use crate::tools::sandboxing::ExecApprovalRequirement;
 use crate::unified_exec::clamp_yield_time;
 use ody_config::config_toml::PlanEnforcement;
@@ -405,6 +406,8 @@ fn plan_mode_exec_gate_strict_write_forbids() {
     );
     if let ExecApprovalRequirement::Forbidden { reason } = result {
         assert!(reason.contains("Plan mode is read-only by default"));
+        assert!(reason.contains(PLAN_MODE_REJECTION_MARKER));
+        assert!(reason.contains("cp a b"), "reason should include command: {reason}");
     }
 }
 
