@@ -1,5 +1,8 @@
 use super::*;
+use crate::tools::sandboxing::ExecApprovalRequirement;
 use crate::unified_exec::clamp_yield_time;
+use ody_config::config_toml::PlanEnforcement;
+use ody_protocol::config_types::{CollaborationMode, ModeKind, Settings};
 use pretty_assertions::assert_eq;
 use tokio::time::Duration;
 use tokio::time::Instant;
@@ -327,4 +330,179 @@ fn pruning_protects_recent_processes_even_if_exited() {
 
     // (10) is exited but among the last 8; we should drop the LRU outside that set.
     assert_eq!(candidate, Some(1));
+}
+
+fn plan_mode() -> CollaborationMode {
+    CollaborationMode {
+        mode: ModeKind::Plan,
+        settings: Settings {
+            model: "m".to_string(),
+            reasoning_effort: None,
+            developer_instructions: None,
+        },
+    }
+}
+
+fn default_mode() -> CollaborationMode {
+    CollaborationMode {
+        mode: ModeKind::Default,
+        settings: Settings {
+            model: "m".to_string(),
+            reasoning_effort: None,
+            developer_instructions: None,
+        },
+    }
+}
+
+fn cmd(args: &[&str]) -> Vec<String> {
+    args.iter().map(|s| s.to_string()).collect()
+}
+
+#[test]
+fn plan_mode_exec_gate_default_mode_leaves_skip_unchanged() {
+    let req = ExecApprovalRequirement::Skip {
+        bypass_sandbox: false,
+        proposed_execpolicy_amendment: None,
+    };
+    let result = apply_plan_mode_gate_to_exec_requirement(
+        req.clone(),
+        &default_mode(),
+        PlanEnforcement::Strict,
+        &cmd(&["rm", "-rf", "/"]),
+    );
+    assert_eq!(result, req, "Default mode must not gate exec");
+}
+
+#[test]
+fn plan_mode_exec_gate_read_only_leaves_skip_unchanged() {
+    let req = ExecApprovalRequirement::Skip {
+        bypass_sandbox: false,
+        proposed_execpolicy_amendment: None,
+    };
+    let result = apply_plan_mode_gate_to_exec_requirement(
+        req.clone(),
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &cmd(&["ls", "-la"]),
+    );
+    assert_eq!(result, req);
+}
+
+#[test]
+fn plan_mode_exec_gate_strict_write_forbids() {
+    let result = apply_plan_mode_gate_to_exec_requirement(
+        ExecApprovalRequirement::Skip {
+            bypass_sandbox: false,
+            proposed_execpolicy_amendment: None,
+        },
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &cmd(&["cp", "a", "b"]),
+    );
+    assert!(
+        matches!(result, ExecApprovalRequirement::Forbidden { .. }),
+        "expected cp to be forbidden in Plan/strict"
+    );
+    if let ExecApprovalRequirement::Forbidden { reason } = result {
+        assert!(reason.contains("Plan mode is read-only by default"));
+    }
+}
+
+#[test]
+fn plan_mode_exec_gate_ask_write_needs_approval() {
+    let result = apply_plan_mode_gate_to_exec_requirement(
+        ExecApprovalRequirement::Skip {
+            bypass_sandbox: false,
+            proposed_execpolicy_amendment: None,
+        },
+        &plan_mode(),
+        PlanEnforcement::Ask,
+        &cmd(&["cp", "a", "b"]),
+    );
+    assert!(
+        matches!(result, ExecApprovalRequirement::NeedsApproval { .. }),
+        "expected cp to require approval in Plan/ask"
+    );
+    if let ExecApprovalRequirement::NeedsApproval { reason, .. } = result {
+        assert!(
+            reason.as_ref().unwrap().contains("may modify files while in Plan mode")
+        );
+    }
+}
+
+#[test]
+fn plan_mode_exec_gate_advisory_allows_write() {
+    let req = ExecApprovalRequirement::Skip {
+        bypass_sandbox: false,
+        proposed_execpolicy_amendment: None,
+    };
+    let result = apply_plan_mode_gate_to_exec_requirement(
+        req.clone(),
+        &plan_mode(),
+        PlanEnforcement::Advisory,
+        &cmd(&["rm", "-rf", "/"]),
+    );
+    assert_eq!(result, req, "advisory should behave like legacy prompt-only plan mode");
+}
+
+#[test]
+fn plan_mode_exec_gate_strict_indeterminate_needs_approval() {
+    let result = apply_plan_mode_gate_to_exec_requirement(
+        ExecApprovalRequirement::Skip {
+            bypass_sandbox: false,
+            proposed_execpolicy_amendment: None,
+        },
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &cmd(&["cargo", "check"]),
+    );
+    assert!(
+        matches!(result, ExecApprovalRequirement::NeedsApproval { .. }),
+        "expected cargo check to require approval in Plan/strict"
+    );
+}
+
+#[test]
+fn plan_mode_exec_gate_strict_deny_overrides_existing_needs_approval() {
+    let result = apply_plan_mode_gate_to_exec_requirement(
+        ExecApprovalRequirement::NeedsApproval {
+            reason: Some("policy".to_string()),
+            proposed_execpolicy_amendment: None,
+        },
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &cmd(&["cp", "a", "b"]),
+    );
+    assert!(
+        matches!(result, ExecApprovalRequirement::Forbidden { .. }),
+        "Plan-mode Deny must override an existing NeedsApproval"
+    );
+}
+
+#[test]
+fn plan_mode_exec_gate_ask_does_not_downgrade_existing_forbidden() {
+    let req = ExecApprovalRequirement::Forbidden {
+        reason: "policy".to_string(),
+    };
+    let result = apply_plan_mode_gate_to_exec_requirement(
+        req.clone(),
+        &plan_mode(),
+        PlanEnforcement::Ask,
+        &cmd(&["cp", "a", "b"]),
+    );
+    assert_eq!(result, req, "Plan-mode Ask must not downgrade execpolicy Forbidden");
+}
+
+#[test]
+fn plan_mode_exec_gate_read_only_does_not_downgrade_existing_forbidden() {
+    let req = ExecApprovalRequirement::Forbidden {
+        reason: "policy".to_string(),
+    };
+    let result = apply_plan_mode_gate_to_exec_requirement(
+        req.clone(),
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &cmd(&["ls"]),
+    );
+    assert_eq!(result, req, "Read-only command must not downgrade execpolicy Forbidden");
 }

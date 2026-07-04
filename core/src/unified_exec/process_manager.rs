@@ -16,10 +16,12 @@ use crate::ody_thread::BackgroundTerminalInfo;
 use crate::exec_env::ODY_THREAD_ID_ENV_VAR;
 use crate::exec_env::create_env;
 use crate::exec_policy::ExecApprovalRequest;
+use crate::safety::{PlanGateDecision, plan_mode_gate_for_exec};
 use crate::sandboxing::ExecOptions;
 use crate::sandboxing::ExecRequest;
 use crate::sandboxing::ExecServerEnvConfig;
 use crate::tools::context::ExecCommandToolOutput;
+use crate::tools::sandboxing::ExecApprovalRequirement;
 use crate::tools::events::ToolEmitter;
 use crate::tools::events::ToolEventCtx;
 use crate::tools::events::ToolEventStage;
@@ -53,7 +55,9 @@ use crate::unified_exec::process::OutputBuffer;
 use crate::unified_exec::process::OutputHandles;
 use crate::unified_exec::process::SpawnLifecycleHandle;
 use crate::unified_exec::process::UnifiedExecProcess;
+use ody_config::config_toml::PlanEnforcement;
 use ody_network_proxy::NetworkProxy;
+use ody_protocol::config_types::CollaborationMode;
 use ody_protocol::config_types::ShellEnvironmentPolicy;
 use ody_protocol::error::OdyErr;
 use ody_protocol::error::SandboxErr;
@@ -348,6 +352,30 @@ fn terminate_process_on_network_denial(
         let message = network_denial_message_for_session(session.as_ref(), Some(deferred)).await;
         process.fail_and_terminate(message);
     });
+}
+
+/// Overlay the Plan-mode exec gate onto an existing exec-policy requirement.
+///
+/// Evaluated *after* exec-policy so that execpolicy `Forbidden` decisions are
+/// never downgraded, and so that Plan-mode `Deny` takes precedence over
+/// `Skip`/`NeedsApproval`.
+fn apply_plan_mode_gate_to_exec_requirement(
+    requirement: ExecApprovalRequirement,
+    mode: &CollaborationMode,
+    enforcement: PlanEnforcement,
+    command: &[String],
+) -> ExecApprovalRequirement {
+    match plan_mode_gate_for_exec(mode, enforcement, command) {
+        PlanGateDecision::Allow => requirement,
+        PlanGateDecision::Deny { reason } => ExecApprovalRequirement::Forbidden { reason },
+        PlanGateDecision::Ask { reason } => match requirement {
+            ExecApprovalRequirement::Forbidden { .. } => requirement,
+            _ => ExecApprovalRequirement::NeedsApproval {
+                reason: Some(reason),
+                proposed_execpolicy_amendment: None,
+            },
+        },
+    }
 }
 
 impl UnifiedExecProcessManager {
@@ -1128,6 +1156,19 @@ impl UnifiedExecProcessManager {
                 prefix_rule: request.prefix_rule.clone(),
             })
             .await;
+        let plan_mode_enforcement = context
+            .turn
+            .config
+            .plan_mode
+            .as_ref()
+            .and_then(|pm| pm.enforcement)
+            .unwrap_or(PlanEnforcement::Strict);
+        let exec_approval_requirement = apply_plan_mode_gate_to_exec_requirement(
+            exec_approval_requirement,
+            &context.turn.collaboration_mode,
+            plan_mode_enforcement,
+            &request.command,
+        );
         let req = UnifiedExecToolRequest {
             command: request.command.clone(),
             shell_type: request.shell_type,
