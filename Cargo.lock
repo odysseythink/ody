@@ -6660,6 +6660,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "crossterm",
+ "futures",
  "http 1.4.0",
  "insta",
  "libc",
