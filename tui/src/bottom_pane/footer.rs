@@ -84,6 +84,9 @@ pub(crate) struct FooterProps {
     /// When both this label and the configured status line are available, they are rendered on the
     /// same row separated by ` · `.
     pub(crate) active_agent_label: Option<String>,
+    /// Transient hint shown after a Plan-mode action (patch/exec) is blocked,
+    /// reminding the user to switch to Default mode to apply changes.
+    pub(crate) plan_mode_rejection_hint: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -733,11 +736,15 @@ fn footer_from_props_lines(
                 },
                 show_cycle_hint,
             };
-            vec![left_side_line(
+            let mut lines = vec![left_side_line(
                 collaboration_mode_indicator,
                 state,
                 key_hints,
-            )]
+            )];
+            if let Some(hint) = props.plan_mode_rejection_hint.as_ref() {
+                lines.push(Line::from(hint.clone()).dim());
+            }
+            lines
         }
         FooterMode::ShortcutOverlay => {
             let state = ShortcutsState {
@@ -763,11 +770,15 @@ fn footer_from_props_lines(
                 },
                 show_cycle_hint,
             };
-            vec![left_side_line(
+            let mut lines = vec![left_side_line(
                 collaboration_mode_indicator,
                 state,
                 key_hints,
-            )]
+            )];
+            if let Some(hint) = props.plan_mode_rejection_hint.as_ref() {
+                lines.push(Line::from(hint.clone()).dim());
+            }
+            lines
         }
     }
 }
@@ -1421,6 +1432,19 @@ mod tests {
                         if can_show_left_and_context && let Some(line) = &right_line {
                             render_context_right(area, f.buffer_mut(), line);
                         }
+                    } else if props.plan_mode_rejection_hint.is_some() {
+                        // When a Plan-mode rejection hint is active, keep the full multi-line
+                        // footer so the dim hint remains visible. The right-side context
+                        // indicator is suppressed on the hint row to avoid overlap.
+                        render_footer_from_props(
+                            area,
+                            f.buffer_mut(),
+                            props,
+                            left_mode_indicator,
+                            show_cycle_hint,
+                            show_shortcuts_hint,
+                            show_queue_hint,
+                        );
                     } else {
                         let (summary_left, show_context) = single_line_footer_layout(
                             area,
@@ -1569,6 +1593,7 @@ mod tests {
                 status_line_enabled: false,
                 key_hints: FooterKeyHints::default_bindings(),
                 active_agent_label: None,
+                plan_mode_rejection_hint: None,
             },
         );
 
@@ -1590,6 +1615,7 @@ mod tests {
                     ..FooterKeyHints::default_bindings()
                 },
                 active_agent_label: None,
+                plan_mode_rejection_hint: None,
             },
         );
 
@@ -1608,6 +1634,7 @@ mod tests {
                 status_line_enabled: false,
                 key_hints: FooterKeyHints::default_bindings(),
                 active_agent_label: None,
+                plan_mode_rejection_hint: None,
             },
         );
 
@@ -1626,6 +1653,7 @@ mod tests {
                 status_line_enabled: false,
                 key_hints: FooterKeyHints::default_bindings(),
                 active_agent_label: None,
+                plan_mode_rejection_hint: None,
             },
         );
 
@@ -1644,6 +1672,7 @@ mod tests {
                 status_line_enabled: false,
                 key_hints: FooterKeyHints::default_bindings(),
                 active_agent_label: None,
+                plan_mode_rejection_hint: None,
             },
         );
 
@@ -1662,6 +1691,7 @@ mod tests {
                 status_line_enabled: false,
                 key_hints: FooterKeyHints::default_bindings(),
                 active_agent_label: None,
+                plan_mode_rejection_hint: None,
             },
         );
 
@@ -1680,6 +1710,7 @@ mod tests {
                 status_line_enabled: false,
                 key_hints: FooterKeyHints::default_bindings(),
                 active_agent_label: None,
+                plan_mode_rejection_hint: None,
             },
         );
 
@@ -1698,6 +1729,7 @@ mod tests {
                 status_line_enabled: false,
                 key_hints: FooterKeyHints::default_bindings(),
                 active_agent_label: None,
+                plan_mode_rejection_hint: None,
             },
         );
 
@@ -1716,6 +1748,7 @@ mod tests {
                 status_line_enabled: false,
                 key_hints: FooterKeyHints::default_bindings(),
                 active_agent_label: None,
+                plan_mode_rejection_hint: None,
             },
             Some(72),
             /*used_tokens*/ None,
@@ -1736,6 +1769,7 @@ mod tests {
                 status_line_enabled: false,
                 key_hints: FooterKeyHints::default_bindings(),
                 active_agent_label: None,
+                plan_mode_rejection_hint: None,
             },
             /*percent*/ None,
             Some(123_456),
@@ -1756,6 +1790,7 @@ mod tests {
                 status_line_enabled: false,
                 key_hints: FooterKeyHints::default_bindings(),
                 active_agent_label: None,
+                plan_mode_rejection_hint: None,
             },
         );
 
@@ -1772,6 +1807,7 @@ mod tests {
             status_line_enabled: false,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: None,
+            plan_mode_rejection_hint: None,
         };
 
         snapshot_footer_with_mode_indicator(
@@ -1801,6 +1837,7 @@ mod tests {
             status_line_enabled: false,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: None,
+            plan_mode_rejection_hint: None,
         };
 
         snapshot_footer_with_mode_indicator(
@@ -1823,6 +1860,7 @@ mod tests {
             status_line_enabled: true,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: None,
+            plan_mode_rejection_hint: None,
         };
 
         snapshot_footer("footer_status_line_overrides_shortcuts", props);
@@ -1840,6 +1878,7 @@ mod tests {
             status_line_enabled: true,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: None,
+            plan_mode_rejection_hint: None,
         };
 
         snapshot_footer("footer_status_line_yields_to_queue_hint", props);
@@ -1857,6 +1896,7 @@ mod tests {
             status_line_enabled: true,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: None,
+            plan_mode_rejection_hint: None,
         };
 
         snapshot_footer("footer_status_line_overrides_draft_idle", props);
@@ -1874,6 +1914,7 @@ mod tests {
             status_line_enabled: true,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: None,
+            plan_mode_rejection_hint: None,
         };
 
         snapshot_footer_with_mode_indicator_and_context(
@@ -1905,6 +1946,7 @@ mod tests {
             status_line_enabled: false,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: None,
+            plan_mode_rejection_hint: None,
         };
 
         snapshot_footer_with_mode_indicator_and_context(
@@ -1928,6 +1970,7 @@ mod tests {
             status_line_enabled: true,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: None,
+            plan_mode_rejection_hint: None,
         };
 
         // has status line and no collaboration mode
@@ -1954,6 +1997,7 @@ mod tests {
             status_line_enabled: true,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: None,
+            plan_mode_rejection_hint: None,
         };
 
         snapshot_footer_with_mode_indicator_and_context(
@@ -1977,6 +2021,7 @@ mod tests {
             status_line_enabled: false,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: Some("Robie [explorer]".to_string()),
+            plan_mode_rejection_hint: None,
         };
 
         snapshot_footer("footer_active_agent_label", props);
@@ -1994,9 +2039,35 @@ mod tests {
             status_line_enabled: true,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: Some("Robie [explorer]".to_string()),
+            plan_mode_rejection_hint: None,
         };
 
         snapshot_footer("footer_status_line_with_active_agent_label", props);
+
+        let props = FooterProps {
+            mode: FooterMode::ComposerEmpty,
+            esc_backtrack_hint: false,
+            use_shift_enter_hint: false,
+            is_task_running: false,
+            queue_submissions: false,
+            collaboration_modes_enabled: true,
+            is_wsl: false,
+            quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
+            status_line_value: None,
+            status_line_enabled: false,
+            key_hints: FooterKeyHints::default_bindings(),
+            active_agent_label: None,
+            plan_mode_rejection_hint: Some(
+                "Action blocked while planning — switch to Default mode to apply.".to_string(),
+            ),
+        };
+
+        snapshot_footer_with_mode_indicator(
+            "footer_plan_mode_rejection_hint",
+            /*width*/ 80,
+            &props,
+            Some(CollaborationModeIndicator::Plan),
+        );
     }
 
     #[test]
@@ -2017,6 +2088,7 @@ mod tests {
             status_line_enabled: true,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: None,
+            plan_mode_rejection_hint: None,
         };
 
         let screen = render_footer_with_mode_indicator_and_context(

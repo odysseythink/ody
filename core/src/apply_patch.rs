@@ -3,6 +3,7 @@ use crate::safety::PlanGateDecision;
 use crate::safety::SafetyCheck;
 use crate::safety::assess_patch_safety;
 use crate::safety::plan_mode_gate_for_patch;
+use crate::safety::plan_mode_write_denied_message;
 use crate::session::turn_context::TurnContext;
 use crate::tools::sandboxing::ExecApprovalRequirement;
 use ody_apply_patch::ApplyPatchAction;
@@ -85,20 +86,16 @@ pub(crate) async fn apply_patch(
 ) -> InternalApplyPatchInvocation {
     if turn_context.collaboration_mode.mode == ModeKind::Plan {
         let enforcement = resolve_plan_enforcement(&turn_context.config);
-        match plan_mode_gate_for_patch(
-            &turn_context.collaboration_mode,
-            enforcement,
-            &action,
-            None,
-        ) {
-            PlanGateDecision::Deny { reason } => {
+        match plan_mode_gate_for_patch(&turn_context.collaboration_mode, enforcement, &action, None)
+        {
+            PlanGateDecision::Deny { .. } => {
                 let path = action
                     .changes()
                     .keys()
                     .next()
-                    .map(|p| p.to_path_buf().to_string_lossy().into_owned())
-                    .unwrap_or_else(|| "unknown file".to_string());
-                let message = format!("{reason} (file: {path})");
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|| PathBuf::from("unknown file"));
+                let message = plan_mode_write_denied_message(&path);
                 return InternalApplyPatchInvocation::Output(Err(
                     FunctionCallError::RespondToModel(message),
                 ));

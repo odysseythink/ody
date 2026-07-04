@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::function_tool::FunctionCallError;
 use crate::maybe_emit_implicit_skill_invocation;
+use crate::safety::PLAN_MODE_REJECTION_MARKER;
 use crate::tools::context::ExecCommandToolOutput;
 use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolPayload;
@@ -32,7 +33,6 @@ use ody_otel::TOOL_CALL_UNIFIED_EXEC_METRIC;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::WarningEvent;
 use ody_sandboxing::SandboxManager;
-use crate::safety::PLAN_MODE_REJECTION_MARKER;
 use ody_sandboxing::SandboxType;
 use ody_sandboxing::SandboxablePreference;
 use ody_shell_command::shell_detect::detect_shell_type;
@@ -393,7 +393,9 @@ impl ExecCommandHandler {
                     session
                         .send_event(
                             turn.as_ref(),
-                            EventMsg::Warning(WarningEvent { message: message.clone() }),
+                            EventMsg::Warning(WarningEvent {
+                                message: message.clone(),
+                            }),
                         )
                         .await;
                 }

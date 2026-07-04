@@ -498,6 +498,7 @@ impl ChatComposer {
                 mode: FooterMode::ComposerEmpty,
                 hint_override: None,
                 plan_mode_nudge_visible: false,
+                plan_mode_rejection_hint: None,
                 flash: None,
                 context_window_percent: None,
                 context_window_used_tokens: None,
@@ -1161,6 +1162,18 @@ impl ChatComposer {
     #[cfg(test)]
     pub(crate) fn plan_mode_nudge_visible(&self) -> bool {
         self.footer.plan_mode_nudge_visible
+    }
+
+    /// Sets (or clears) the transient Plan-mode rejection hint shown in the footer.
+    ///
+    /// Returns `true` only when the rendered footer can change so callers can avoid scheduling
+    /// redundant redraws while reevaluating rejection state on routine composer updates.
+    pub(crate) fn set_plan_mode_rejection_hint(&mut self, hint: Option<String>) -> bool {
+        if self.footer.plan_mode_rejection_hint == hint {
+            return false;
+        }
+        self.footer.plan_mode_rejection_hint = hint;
+        true
     }
 
     pub(crate) fn set_remote_image_urls(&mut self, urls: Vec<String>) {
@@ -3449,6 +3462,7 @@ impl ChatComposer {
                 reasoning_up: self.footer.reasoning_up_key,
             },
             active_agent_label: self.footer.active_agent_label.clone(),
+            plan_mode_rejection_hint: self.footer.plan_mode_rejection_hint.clone(),
         }
     }
 
@@ -3880,6 +3894,7 @@ impl ChatComposer {
         self.footer.mode = FooterMode::ComposerEmpty;
         self.footer.hint_override = Some(Vec::new());
         self.footer.plan_mode_nudge_visible = false;
+        self.footer.plan_mode_rejection_hint = None;
         self.footer.flash = None;
     }
 
@@ -4278,38 +4293,41 @@ impl ChatComposer {
                         can_show_left_with_context(hint_rect, left_width, right_width);
                     let has_override =
                         self.footer.flash_visible() || active_footer_hint_override.is_some();
-                    let single_line_layout = if has_override || status_line_active {
-                        None
-                    } else {
-                        match footer_props.mode {
-                            FooterMode::ComposerEmpty | FooterMode::ComposerHasDraft => {
-                                // Both of these modes render the single-line footer style (with
-                                // either the shortcuts hint or the optional queue hint). We still
-                                // want the single-line collapse rules so the mode label can win over
-                                // the context indicator on narrow widths.
-                                Some(single_line_footer_layout(
-                                    hint_rect,
-                                    right_width,
-                                    left_mode_indicator,
-                                    show_cycle_hint,
-                                    show_shortcuts_hint,
-                                    show_queue_hint,
-                                    footer_props.key_hints,
-                                ))
+                    let has_rejection_hint = footer_props.plan_mode_rejection_hint.is_some();
+                    let single_line_layout =
+                        if has_override || status_line_active || has_rejection_hint {
+                            None
+                        } else {
+                            match footer_props.mode {
+                                FooterMode::ComposerEmpty | FooterMode::ComposerHasDraft => {
+                                    // Both of these modes render the single-line footer style (with
+                                    // either the shortcuts hint or the optional queue hint). We still
+                                    // want the single-line collapse rules so the mode label can win over
+                                    // the context indicator on narrow widths.
+                                    Some(single_line_footer_layout(
+                                        hint_rect,
+                                        right_width,
+                                        left_mode_indicator,
+                                        show_cycle_hint,
+                                        show_shortcuts_hint,
+                                        show_queue_hint,
+                                        footer_props.key_hints,
+                                    ))
+                                }
+                                FooterMode::EscHint
+                                | FooterMode::HistorySearch
+                                | FooterMode::QuitShortcutReminder
+                                | FooterMode::ShortcutOverlay => None,
                             }
+                        };
+                    let show_right = if has_rejection_hint
+                        || matches!(
+                            footer_props.mode,
                             FooterMode::EscHint
-                            | FooterMode::HistorySearch
-                            | FooterMode::QuitShortcutReminder
-                            | FooterMode::ShortcutOverlay => None,
-                        }
-                    };
-                    let show_right = if matches!(
-                        footer_props.mode,
-                        FooterMode::EscHint
-                            | FooterMode::HistorySearch
-                            | FooterMode::QuitShortcutReminder
-                            | FooterMode::ShortcutOverlay
-                    ) {
+                                | FooterMode::HistorySearch
+                                | FooterMode::QuitShortcutReminder
+                                | FooterMode::ShortcutOverlay
+                        ) {
                         false
                     } else {
                         single_line_layout

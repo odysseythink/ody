@@ -600,6 +600,9 @@ impl ChatWidget {
 
     pub(super) fn update_collaboration_mode_indicator(&mut self) {
         let indicator = self.collaboration_mode_indicator();
+        if indicator != Some(CollaborationModeIndicator::Plan) {
+            self.bottom_pane.set_plan_mode_rejection_hint(None);
+        }
         let goal_indicator = if indicator.is_none() {
             self.goal_status_indicator(Instant::now())
         } else {

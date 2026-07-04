@@ -453,8 +453,17 @@ impl ChatWidget {
         }
     }
 
+    const PLAN_MODE_REJECTION_MARKER: &str = "[plan-mode-blocked]";
+
     pub(super) fn on_warning(&mut self, message: impl Into<String>) {
         let message = message.into();
+        if self.active_mode_kind() == ModeKind::Plan
+            && message.contains(Self::PLAN_MODE_REJECTION_MARKER)
+        {
+            self.bottom_pane.set_plan_mode_rejection_hint(Some(
+                "Action blocked while planning — switch to Default mode to apply.".to_string(),
+            ));
+        }
         if !self.warning_display_state.should_display(&message) {
             return;
         }

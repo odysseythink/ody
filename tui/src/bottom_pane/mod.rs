@@ -34,6 +34,10 @@ use crate::render::renderable::RenderableItem;
 use crate::tui::FrameRequester;
 pub(crate) use bottom_pane_view::BottomPaneView;
 pub(crate) use bottom_pane_view::ViewCompletion;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
+use crossterm::event::KeyModifiers;
 use ody_app_server_protocol::ToolRequestUserInputParams;
 use ody_core_skills::model::SkillMetadata;
 use ody_features::Features;
@@ -42,10 +46,6 @@ use ody_plugin::PluginCapabilitySummary;
 use ody_protocol::ThreadId;
 use ody_protocol::plan_tool::UpdatePlanArgs;
 use ody_protocol::user_input::TextElement;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyEventKind;
-use crossterm::event::KeyModifiers;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::text::Line;
@@ -74,9 +74,9 @@ pub(crate) use approval_overlay::ApprovalRequest;
 pub(crate) use approval_overlay::format_requested_permissions_rule;
 pub(crate) use mcp_server_elicitation::McpServerElicitationFormRequest;
 pub(crate) use mcp_server_elicitation::McpServerElicitationOverlay;
+pub(crate) use pinned_plan::PinnedPlanWidget;
 pub(crate) use request_user_input::RequestUserInputOverlay;
 pub(crate) use status_line_style::status_line_from_segments;
-pub(crate) use pinned_plan::PinnedPlanWidget;
 mod bottom_pane_view;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -918,6 +918,13 @@ impl BottomPane {
     #[cfg(test)]
     pub(crate) fn plan_mode_nudge_visible(&self) -> bool {
         self.composer.plan_mode_nudge_visible()
+    }
+
+    /// Sets (or clears) the transient Plan-mode rejection hint shown in the footer.
+    pub(crate) fn set_plan_mode_rejection_hint(&mut self, hint: Option<String>) {
+        if self.composer.set_plan_mode_rejection_hint(hint) {
+            self.request_redraw();
+        }
     }
 
     pub(crate) fn set_remote_image_urls(&mut self, urls: Vec<String>) {
@@ -1891,12 +1898,12 @@ mod tests {
     use crate::status_indicator_widget::StatusDetailsCapitalization;
     use crate::test_support::PathBufExt;
     use crate::test_support::test_path_buf;
-    use ody_app_server_protocol::CommandExecutionApprovalDecision;
     use crossterm::event::KeyCode;
     use crossterm::event::KeyEvent;
     use crossterm::event::KeyEventKind;
     use crossterm::event::KeyModifiers;
     use insta::assert_snapshot;
+    use ody_app_server_protocol::CommandExecutionApprovalDecision;
     use pretty_assertions::assert_eq;
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;

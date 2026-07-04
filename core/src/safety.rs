@@ -8,13 +8,13 @@ use ody_config::config_toml::PlanEnforcement;
 use ody_protocol::config_types::CollaborationMode;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::config_types::WindowsSandboxLevel;
-use ody_protocol::parse_command::ParsedCommand;
-use ody_shell_command::bash::extract_bash_command;
 use ody_protocol::models::PermissionProfile;
+use ody_protocol::parse_command::ParsedCommand;
 use ody_protocol::permissions::FileSystemSandboxPolicy;
 use ody_protocol::protocol::AskForApproval;
 use ody_sandboxing::SandboxType;
 use ody_sandboxing::get_platform_sandbox;
+use ody_shell_command::bash::extract_bash_command;
 use ody_utils_path_uri::PathUri;
 
 const PATCH_REJECTED_OUTSIDE_PROJECT_REASON: &str =
@@ -48,8 +48,7 @@ pub enum PlanGateDecision {
 /// consumers (e.g. the TUI footer) can detect them without parsing prose.
 pub const PLAN_MODE_REJECTION_MARKER: &str = "[plan-mode-blocked]";
 
-const PLAN_MODE_WRITE_DENIED_REASON: &str =
-    "Plan mode is read-only by default. Finish planning and switch to Default mode to apply patches. [plan-mode-blocked]";
+const PLAN_MODE_WRITE_DENIED_REASON: &str = "Plan mode is read-only by default. Finish planning and switch to Default mode to apply patches. [plan-mode-blocked]";
 
 /// Returns a human-readable Plan-mode patch-denial message that includes the
 /// rejected file path and the stable rejection marker.
@@ -87,8 +86,7 @@ pub fn plan_mode_gate_for_patch(
     }
 }
 
-const PLAN_MODE_EXEC_DENIED_REASON: &str =
-    "Plan mode is read-only by default. This command may modify files; finish planning and switch to Default mode to run it. [plan-mode-blocked]";
+const PLAN_MODE_EXEC_DENIED_REASON: &str = "Plan mode is read-only by default. This command may modify files; finish planning and switch to Default mode to run it. [plan-mode-blocked]";
 const PLAN_MODE_EXEC_ASK_REASON: &str =
     "This command may modify files while in Plan mode. Please confirm before running.";
 
@@ -216,13 +214,22 @@ fn is_known_write_command(command: &[String]) -> bool {
 
     match key.as_deref() {
         Some(
-            "cp" | "mv" | "rm" | "rmdir" | "mkdir" | "touch" | "chmod" | "chown" | "ln"
-            | "dd" | "tee",
+            "cp" | "mv" | "rm" | "rmdir" | "mkdir" | "touch" | "chmod" | "chown" | "ln" | "dd"
+            | "tee",
         ) => true,
         Some("git") => {
             const WRITE_SUBCOMMANDS: &[&str] = &[
-                "commit", "checkout", "apply", "reset", "clean", "revert", "merge", "rebase",
-                "cherry-pick", "push", "pull",
+                "commit",
+                "checkout",
+                "apply",
+                "reset",
+                "clean",
+                "revert",
+                "merge",
+                "rebase",
+                "cherry-pick",
+                "push",
+                "pull",
             ];
             let mut skip_next = false;
             for arg in command.iter().skip(1).map(String::as_str) {

@@ -10,6 +10,7 @@ use crate::apply_patch;
 use crate::apply_patch::InternalApplyPatchInvocation;
 use crate::apply_patch::convert_apply_patch_to_protocol;
 use crate::function_tool::FunctionCallError;
+use crate::safety::PLAN_MODE_REJECTION_MARKER;
 use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
 use crate::session::turn_context::TurnEnvironment;
@@ -47,7 +48,6 @@ use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::FileChange;
 use ody_protocol::protocol::PatchApplyUpdatedEvent;
 use ody_protocol::protocol::WarningEvent;
-use crate::safety::PLAN_MODE_REJECTION_MARKER;
 use ody_sandboxing::policy_transforms::effective_file_system_sandbox_policy;
 use ody_sandboxing::policy_transforms::merge_permission_profiles;
 use ody_sandboxing::policy_transforms::normalize_additional_permissions;
@@ -408,13 +408,15 @@ impl ApplyPatchHandler {
                 match apply_patch::apply_patch(turn.as_ref(), &file_system_sandbox_policy, changes)
                     .await
                 {
-                    InternalApplyPatchInvocation::Output(Err(FunctionCallError::RespondToModel(ref msg)))
-                        if msg.contains(PLAN_MODE_REJECTION_MARKER) =>
-                    {
+                    InternalApplyPatchInvocation::Output(Err(
+                        FunctionCallError::RespondToModel(ref msg),
+                    )) if msg.contains(PLAN_MODE_REJECTION_MARKER) => {
                         session
                             .send_event(
                                 turn.as_ref(),
-                                EventMsg::Warning(WarningEvent { message: msg.clone() }),
+                                EventMsg::Warning(WarningEvent {
+                                    message: msg.clone(),
+                                }),
                             )
                             .await;
                         Err(FunctionCallError::RespondToModel(msg.clone()))
@@ -565,8 +567,7 @@ pub(crate) async fn intercept_apply_patch(
     tool_name: &str,
 ) -> Result<Option<FunctionToolOutput>, FunctionCallError> {
     let sandbox = turn.file_system_sandbox_context(/*additional_permissions*/ None, cwd);
-    match ody_apply_patch::maybe_parse_apply_patch_verified(command, cwd, fs, Some(&sandbox))
-        .await
+    match ody_apply_patch::maybe_parse_apply_patch_verified(command, cwd, fs, Some(&sandbox)).await
     {
         ody_apply_patch::MaybeApplyPatchVerified::Body(changes) => {
             let (approval_keys, effective_additional_permissions, file_system_sandbox_policy) =
@@ -582,13 +583,15 @@ pub(crate) async fn intercept_apply_patch(
             match apply_patch::apply_patch(turn.as_ref(), &file_system_sandbox_policy, changes)
                 .await
             {
-                InternalApplyPatchInvocation::Output(Err(FunctionCallError::RespondToModel(ref msg)))
-                    if msg.contains(PLAN_MODE_REJECTION_MARKER) =>
-                {
+                InternalApplyPatchInvocation::Output(Err(FunctionCallError::RespondToModel(
+                    ref msg,
+                ))) if msg.contains(PLAN_MODE_REJECTION_MARKER) => {
                     session
                         .send_event(
                             turn.as_ref(),
-                            EventMsg::Warning(WarningEvent { message: msg.clone() }),
+                            EventMsg::Warning(WarningEvent {
+                                message: msg.clone(),
+                            }),
                         )
                         .await;
                     Err(FunctionCallError::RespondToModel(msg.clone()))
