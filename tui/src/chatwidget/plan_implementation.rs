@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use ody_protocol::config_types::CollaborationModeMask;
 
 use crate::app_event::AppEvent;
@@ -19,6 +21,8 @@ pub(super) const PLAN_IMPLEMENTATION_CLEAR_CONTEXT_PREFIX: &str = concat!(
 );
 pub(super) const PLAN_IMPLEMENTATION_DEFAULT_UNAVAILABLE: &str = "Default mode unavailable";
 pub(super) const PLAN_IMPLEMENTATION_NO_APPROVED_PLAN: &str = "No approved plan available";
+pub(super) const PLAN_IMPLEMENTATION_PLAN_FILE_READ_FAILED: &str =
+    "Could not read plan file";
 
 /// Builds the confirmation prompt shown after a plan is approved in Plan mode.
 ///
@@ -29,7 +33,28 @@ pub(super) fn selection_view_params(
     default_mask: Option<CollaborationModeMask>,
     plan_markdown: Option<&str>,
     clear_context_usage_label: Option<&str>,
+    plan_file_path: Option<&Path>,
 ) -> SelectionViewParams {
+    // When the plan was persisted to disk, reload it at approval time so the
+    // handoff payload is exactly what is on disk rather than a memory snapshot.
+    let (loaded_plan_markdown, disk_read_failed) = match plan_file_path {
+        Some(path) => match std::fs::read_to_string(path) {
+            Ok(content) if !content.trim().is_empty() => (Some(content), false),
+            Ok(_) => (None, true),
+            Err(err) => {
+                tracing::warn!(
+                    path = %path.display(),
+                    error = %err,
+                    "failed to read plan file for implementation prompt"
+                );
+                (None, true)
+            }
+        },
+        None => (plan_markdown.map(|s| s.to_string()), false),
+    };
+
+    let subtitle = plan_file_path.map(|path| format!("Plan file: {}", path.display()));
+
     let (implement_actions, implement_disabled_reason) = match default_mask.clone() {
         Some(mask) => {
             let user_text = PLAN_IMPLEMENTATION_CODING_MESSAGE.to_string();
@@ -47,27 +72,33 @@ pub(super) fn selection_view_params(
         ),
     };
 
-    let (clear_context_actions, clear_context_disabled_reason) = match (default_mask, plan_markdown)
-    {
-        (None, _) => (
-            Vec::new(),
-            Some(PLAN_IMPLEMENTATION_DEFAULT_UNAVAILABLE.to_string()),
-        ),
-        (Some(_), Some(plan_markdown)) if !plan_markdown.trim().is_empty() => {
-            let user_text =
-                format!("{PLAN_IMPLEMENTATION_CLEAR_CONTEXT_PREFIX}\n\n{plan_markdown}");
-            let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-                tx.send(AppEvent::ClearUiAndSubmitUserMessage {
-                    text: user_text.clone(),
-                });
-            })];
-            (actions, None)
-        }
-        (Some(_), _) => (
-            Vec::new(),
-            Some(PLAN_IMPLEMENTATION_NO_APPROVED_PLAN.to_string()),
-        ),
+    let no_plan_reason = if disk_read_failed {
+        PLAN_IMPLEMENTATION_PLAN_FILE_READ_FAILED
+    } else {
+        PLAN_IMPLEMENTATION_NO_APPROVED_PLAN
     };
+
+    let (clear_context_actions, clear_context_disabled_reason) =
+        match (default_mask, loaded_plan_markdown.as_deref()) {
+            (None, _) => (
+                Vec::new(),
+                Some(PLAN_IMPLEMENTATION_DEFAULT_UNAVAILABLE.to_string()),
+            ),
+            (Some(_), Some(plan_markdown)) if !plan_markdown.trim().is_empty() => {
+                let user_text =
+                    format!("{PLAN_IMPLEMENTATION_CLEAR_CONTEXT_PREFIX}\n\n{plan_markdown}");
+                let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
+                    tx.send(AppEvent::ClearUiAndSubmitUserMessage {
+                        text: user_text.clone(),
+                    });
+                })];
+                (actions, None)
+            }
+            (Some(_), _) => (
+                Vec::new(),
+                Some(no_plan_reason.to_string()),
+            ),
+        };
 
     let clear_context_description = clear_context_usage_label.map_or_else(
         || "Fresh thread with this plan.".to_string(),
@@ -76,7 +107,7 @@ pub(super) fn selection_view_params(
 
     SelectionViewParams {
         title: Some(PLAN_IMPLEMENTATION_TITLE.to_string()),
-        subtitle: None,
+        subtitle,
         footer_hint: Some(standard_popup_hint_line()),
         items: vec![
             SelectionItem {

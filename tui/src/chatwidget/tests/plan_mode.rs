@@ -126,7 +126,7 @@ async fn plan_mode_nudge_narrow_snapshot() {
 #[tokio::test]
 async fn plan_implementation_popup_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
-    chat.on_plan_item_completed("- Step 1\n- Step 2\n".to_string());
+    chat.on_plan_item_completed("- Step 1\n- Step 2\n".to_string(), None);
     chat.open_plan_implementation_prompt();
 
     let popup = render_bottom_popup(&chat, /*width*/ 80);
@@ -139,7 +139,7 @@ async fn plan_implementation_popup_context_usage_snapshot() {
     chat.set_token_info(Some(make_token_info(
         /*total_tokens*/ 90_000, /*context_window*/ 100_000,
     )));
-    chat.on_plan_item_completed("- Step 1\n- Step 2\n".to_string());
+    chat.on_plan_item_completed("- Step 1\n- Step 2\n".to_string(), None);
     chat.open_plan_implementation_prompt();
 
     let popup = render_bottom_popup(&chat, /*width*/ 80);
@@ -149,7 +149,7 @@ async fn plan_implementation_popup_context_usage_snapshot() {
 #[tokio::test]
 async fn plan_implementation_popup_no_selected_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
-    chat.on_plan_item_completed("- Step 1\n- Step 2\n".to_string());
+    chat.on_plan_item_completed("- Step 1\n- Step 2\n".to_string(), None);
     chat.open_plan_implementation_prompt();
     chat.handle_key_event(KeyEvent::from(KeyCode::Down));
 
@@ -183,7 +183,7 @@ async fn plan_implementation_popup_yes_emits_submit_message_event() {
 async fn plan_implementation_popup_clear_context_emits_clear_submit_event() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
     let plan_markdown = "- Step 1\n- Step 2\n";
-    chat.on_plan_item_completed(plan_markdown.to_string());
+    chat.on_plan_item_completed(plan_markdown.to_string(), None);
     let _ = drain_insert_history(&mut rx);
     chat.open_plan_implementation_prompt();
 
@@ -213,6 +213,7 @@ async fn plan_implementation_clear_context_requires_default_mode_and_plan() {
         /*default_mask*/ None,
         Some("- Step\n"),
         /*clear_context_usage_label*/ None,
+        /*plan_file_path*/ None,
     );
     assert_eq!(
         params.items[1].disabled_reason.as_deref(),
@@ -223,6 +224,7 @@ async fn plan_implementation_clear_context_requires_default_mode_and_plan() {
         Some(default_mask.clone()),
         /*plan_markdown*/ None,
         /*clear_context_usage_label*/ None,
+        /*plan_file_path*/ None,
     );
     assert_eq!(
         params.items[1].disabled_reason.as_deref(),
@@ -233,6 +235,7 @@ async fn plan_implementation_clear_context_requires_default_mode_and_plan() {
         Some(default_mask.clone()),
         Some("  \n"),
         /*clear_context_usage_label*/ None,
+        /*plan_file_path*/ None,
     );
     assert_eq!(
         params.items[1].disabled_reason.as_deref(),
@@ -243,6 +246,7 @@ async fn plan_implementation_clear_context_requires_default_mode_and_plan() {
         Some(default_mask.clone()),
         Some("- Step\n"),
         /*clear_context_usage_label*/ None,
+        /*plan_file_path*/ None,
     );
     assert_eq!(params.items[1].disabled_reason, None);
     assert!(!params.items[1].actions.is_empty());
@@ -256,6 +260,7 @@ async fn plan_implementation_clear_context_requires_default_mode_and_plan() {
         Some(default_mask),
         Some("- Step\n"),
         Some("89% used"),
+        /*plan_file_path*/ None,
     );
     assert_eq!(
         params.items[1].description.as_deref(),
@@ -842,7 +847,7 @@ async fn plan_implementation_popup_shows_once_when_replay_precedes_live_turn_com
 
     chat.on_task_started();
     chat.on_plan_delta("- Step 1\n- Step 2\n".to_string());
-    chat.on_plan_item_completed("- Step 1\n- Step 2\n".to_string());
+    chat.on_plan_item_completed("- Step 1\n- Step 2\n".to_string(), None);
 
     chat.replay_thread_turns(
         vec![AppServerTurn {
@@ -963,7 +968,7 @@ async fn plan_implementation_popup_shows_after_proposed_plan_output() {
 
     chat.on_task_started();
     chat.on_plan_delta("- Step 1\n- Step 2\n".to_string());
-    chat.on_plan_item_completed("- Step 1\n- Step 2\n".to_string());
+    chat.on_plan_item_completed("- Step 1\n- Step 2\n".to_string(), None);
     chat.on_task_complete(
         /*last_agent_message*/ None, /*duration_ms*/ None, /*from_replay*/ false,
     );
@@ -990,6 +995,7 @@ async fn plan_implementation_popup_skips_when_steer_follows_proposed_plan() {
 - Step 2
 "
         .to_string(),
+        None,
     );
     chat.bottom_pane
         .set_composer_text("Please continue.".to_string(), Vec::new(), Vec::new());
@@ -1032,6 +1038,7 @@ async fn plan_implementation_popup_shows_after_new_plan_follows_steer() {
         "- Initial plan
 "
         .to_string(),
+        None,
     );
     chat.bottom_pane
         .set_composer_text("Please revise.".to_string(), Vec::new(), Vec::new());
@@ -1053,6 +1060,7 @@ async fn plan_implementation_popup_shows_after_new_plan_follows_steer() {
         "- Revised plan
 "
         .to_string(),
+        None,
     );
     chat.on_task_complete(
         /*last_agent_message*/ None, /*duration_ms*/ None, /*from_replay*/ false,
@@ -1116,7 +1124,7 @@ async fn plan_completion_restores_status_indicator_after_streaming_plan_output()
     assert_eq!(chat.bottom_pane.status_indicator_visible(), false);
     assert_eq!(chat.bottom_pane.is_task_running(), true);
 
-    chat.on_plan_item_completed("- Step 1\n".to_string());
+    chat.on_plan_item_completed("- Step 1\n".to_string(), None);
 
     assert_eq!(chat.bottom_pane.status_indicator_visible(), true);
     assert_eq!(chat.bottom_pane.is_task_running(), true);
@@ -1655,4 +1663,67 @@ async fn plan_update_sets_pinned_plan_widget() {
         chat.bottom_pane.pinned_plan_update_args().is_some(),
         "expected pinned plan to be set on bottom_pane"
     );
+}
+
+#[tokio::test]
+async fn plan_implementation_reload_reads_plan_from_disk() {
+    let (chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    let default_mask = collaboration_modes::default_mode_mask(chat.model_catalog.as_ref())
+        .expect("expected default collaboration mode");
+
+    let dir = std::env::temp_dir();
+    let path = dir.join(format!("ody-plan-reload-{}.md", std::process::id()));
+    std::fs::write(&path, "- Disk step 1\n- Disk step 2\n").unwrap();
+
+    let params = plan_implementation::selection_view_params(
+        Some(default_mask),
+        Some("- Memory step\n"),
+        /*clear_context_usage_label*/ None,
+        Some(&path),
+    );
+
+    assert_eq!(
+        params.subtitle,
+        Some(format!("Plan file: {}", path.display()))
+    );
+    assert!(params.items[1].disabled_reason.is_none());
+
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<AppEvent>();
+    let sender = AppEventSender::new(tx);
+    params.items[1].actions[0](&sender);
+    let event = rx.try_recv().expect("expected AppEvent");
+    let AppEvent::ClearUiAndSubmitUserMessage { text } = event else {
+        panic!("expected ClearUiAndSubmitUserMessage, got {event:?}");
+    };
+    assert!(
+        text.contains("- Disk step 1"),
+        "expected disk plan content in handoff, got {text:?}"
+    );
+    assert!(
+        !text.contains("- Memory step"),
+        "expected memory plan content to be replaced by disk reload, got {text:?}"
+    );
+
+    std::fs::remove_file(&path).ok();
+}
+
+#[tokio::test]
+async fn plan_implementation_reload_disables_clear_context_when_disk_read_fails() {
+    let (chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    let default_mask = collaboration_modes::default_mode_mask(chat.model_catalog.as_ref())
+        .expect("expected default collaboration mode");
+
+    let path = std::env::temp_dir().join("ody-plan-missing-not-present.md");
+    let params = plan_implementation::selection_view_params(
+        Some(default_mask),
+        Some("- Memory step\n"),
+        /*clear_context_usage_label*/ None,
+        Some(&path),
+    );
+
+    assert_eq!(
+        params.items[1].disabled_reason.as_deref(),
+        Some(plan_implementation::PLAN_IMPLEMENTATION_PLAN_FILE_READ_FAILED)
+    );
+    assert!(params.items[1].actions.is_empty());
 }

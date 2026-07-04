@@ -110,10 +110,15 @@ pub(crate) fn new_plan_update(update: UpdatePlanArgs) -> PlanUpdateCell {
 /// The plan body is stored as raw markdown so terminal resize reflow can render it again at the
 /// current width. Callers should use `new_proposed_plan_stream` only for transient live streaming
 /// cells, then consolidate to this source-backed cell when the plan is complete.
-pub(crate) fn new_proposed_plan(plan_markdown: String, cwd: &Path) -> ProposedPlanCell {
+pub(crate) fn new_proposed_plan(
+    plan_markdown: String,
+    cwd: &Path,
+    plan_file_path: Option<PathBuf>,
+) -> ProposedPlanCell {
     ProposedPlanCell {
         plan_markdown,
         cwd: cwd.to_path_buf(),
+        plan_file_path,
     }
 }
 
@@ -140,6 +145,8 @@ pub(crate) struct ProposedPlanCell {
     plan_markdown: String,
     /// Session cwd used to keep local file-link display aligned with live streamed plan rendering.
     cwd: PathBuf,
+    /// Path to the persisted plan file, shown as a subtle indicator when available.
+    plan_file_path: Option<PathBuf>,
 }
 
 /// Transient proposed-plan history emitted while a plan is still streaming.
@@ -165,6 +172,12 @@ impl HistoryCell for ProposedPlanCell {
         ];
 
         let mut plan_lines = vec![HyperlinkLine::new(Line::from(" "))];
+        if let Some(path) = &self.plan_file_path {
+            plan_lines.push(HyperlinkLine::new(Line::from(vec![
+                "Plan file: ".dim(),
+                path.display().to_string().dim(),
+            ])));
+        }
         let plan_style = proposed_plan_style();
         let wrap_width = width.saturating_sub(4).max(1) as usize;
         let mut body = crate::markdown::render_markdown_agent_with_links_and_cwd(
@@ -187,7 +200,12 @@ impl HistoryCell for ProposedPlanCell {
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
-        raw_lines_from_source(&self.plan_markdown)
+        let mut lines = Vec::new();
+        if let Some(path) = &self.plan_file_path {
+            lines.push(Line::from(format!("Plan file: {}", path.display())));
+        }
+        lines.extend(raw_lines_from_source(&self.plan_markdown));
+        lines
     }
 }
 

@@ -1540,7 +1540,7 @@ async fn completed_token_activity_refresh_retries_after_plan_item_completion() {
         )
     );
 
-    chat.on_plan_item_completed("Plan details".to_string());
+    chat.on_plan_item_completed("Plan details".to_string(), None);
 
     assert!(
         std::iter::from_fn(|| rx.try_recv().ok())

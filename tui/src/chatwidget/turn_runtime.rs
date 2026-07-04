@@ -250,6 +250,7 @@ impl ChatWidget {
                 default_mask,
                 self.transcript.latest_proposed_plan_markdown.as_deref(),
                 context_usage_label.as_deref(),
+                self.transcript.latest_proposed_plan_file_path.as_deref(),
             ));
         self.notify(Notification::PlanModePrompt {
             title: PLAN_IMPLEMENTATION_TITLE.to_string(),

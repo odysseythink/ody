@@ -253,8 +253,9 @@ impl App {
                 let start = trailing_run_start::<history_cell::ProposedPlanStreamCell>(
                     &self.transcript_cells,
                 );
-                let consolidated: Arc<dyn HistoryCell> =
-                    Arc::new(history_cell::new_proposed_plan(source, &self.config.cwd));
+                let consolidated: Arc<dyn HistoryCell> = Arc::new(
+                    history_cell::new_proposed_plan(source, &self.config.cwd, None),
+                );
 
                 if start < end {
                     self.transcript_cells
