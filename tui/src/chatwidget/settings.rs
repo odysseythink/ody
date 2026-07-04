@@ -269,6 +269,15 @@ impl ChatWidget {
             .unwrap_or_else(|| self.current_collaboration_mode.model())
     }
 
+    /// Return the model alias configured for Plan mode, if any and non-empty.
+    fn configured_plan_mode_model(&self) -> Option<String> {
+        self.config
+            .plan_mode
+            .as_ref()
+            .and_then(|pm| pm.model.clone())
+            .filter(|m| !m.trim().is_empty())
+    }
+
     pub(super) fn sync_personality_command_enabled(&mut self) {
         self.bottom_pane
             .set_personality_command_enabled(self.config.features.enabled(Feature::Personality));
@@ -684,6 +693,21 @@ impl ChatWidget {
         let previous_mode = self.active_mode_kind();
         let previous_model = self.current_model().to_string();
         let previous_effort = self.effective_reasoning_effort();
+
+        // Plan-mode per-mode model switching: remember the model we are leaving
+        // and apply/restore the configured `plan_mode.model` when entering or
+        // exiting Plan mode.
+        if previous_mode != ModeKind::Plan && mask.mode == Some(ModeKind::Plan) {
+            self.pre_plan_mode_model = Some(previous_model.clone());
+            if let Some(plan_model) = self.configured_plan_mode_model() {
+                mask.model = Some(plan_model);
+            }
+        } else if previous_mode == ModeKind::Plan && mask.mode != Some(ModeKind::Plan) {
+            if let Some(restored_model) = self.pre_plan_mode_model.take() {
+                mask.model = Some(restored_model);
+            }
+        }
+
         if mask.mode == Some(ModeKind::Plan)
             && let Some(effort) = self.config.plan_mode_reasoning_effort.clone()
         {

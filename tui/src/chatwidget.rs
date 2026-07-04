@@ -536,6 +536,11 @@ pub(crate) struct ChatWidget {
     current_collaboration_mode: CollaborationMode,
     /// The currently active collaboration mask, if any.
     active_collaboration_mask: Option<CollaborationModeMask>,
+    /// The model that was active immediately before entering Plan mode.
+    ///
+    /// Used to restore the previous model when leaving Plan mode when a
+    /// `plan_mode.model` per-mode override is configured.
+    pre_plan_mode_model: Option<String>,
     api_key_configured: bool,
     has_ody_backend_auth: bool,
     model_catalog: Arc<ModelCatalog>,

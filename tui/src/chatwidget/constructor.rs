@@ -111,6 +111,7 @@ impl ChatWidget {
             skills_initial_state: None,
             current_collaboration_mode,
             active_collaboration_mask,
+            pre_plan_mode_model: None,
             api_key_configured,
             has_ody_backend_auth,
             model_catalog,
