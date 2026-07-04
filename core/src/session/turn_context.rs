@@ -1,5 +1,6 @@
 use super::*;
 use crate::agents_md::LoadedAgentsMd;
+use crate::plan_artifact::PlanArtifact;
 use crate::environment_selection::TurnEnvironmentSnapshot;
 use crate::shell_snapshot::ShellSnapshotFile;
 use ody_core_skills::HostSkillsSnapshot;
@@ -134,6 +135,7 @@ pub struct TurnContext {
     pub(crate) available_models: Vec<ModelPreset>,
     pub(crate) unified_exec_shell_mode: UnifiedExecShellMode,
     pub(crate) final_output_json_schema: Option<Value>,
+    pub(crate) plan_artifact: Option<Arc<PlanArtifact>>,
     pub(crate) dynamic_tools: Vec<DynamicToolSpec>,
     pub(crate) turn_metadata_state: Arc<TurnMetadataState>,
     pub(crate) extension_data: Arc<ody_extension_api::ExtensionData>,
@@ -294,6 +296,7 @@ impl TurnContext {
             model_verification_emitted: AtomicBool::new(
                 self.model_verification_emitted.load(Ordering::Relaxed),
             ),
+            plan_artifact: self.plan_artifact.clone(),
         }
     }
 
@@ -578,6 +581,7 @@ impl Session {
             terminal_error: Arc::new(Mutex::new(None)),
             server_model_warning_emitted: AtomicBool::new(false),
             model_verification_emitted: AtomicBool::new(false),
+            plan_artifact: None,
         }
     }
 

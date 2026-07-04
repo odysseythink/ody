@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use tokio::sync::Mutex;
 
 /// Session-level plan file artifact. Lives in Plan mode only.
+#[derive(Debug)]
 pub struct PlanArtifact {
     state: Mutex<PlanArtifactState>,
     ody_home: AbsolutePathBuf,
