@@ -421,6 +421,20 @@ fn plan_gate_allows_default_mode_regardless_of_enforcement() {
     }
 }
 
+#[test]
+fn plan_mode_write_denied_message_includes_marker_and_path() {
+    let msg = plan_mode_write_denied_message(std::path::Path::new("src/main.rs"));
+    assert!(msg.contains(PLAN_MODE_REJECTION_MARKER));
+    assert!(msg.contains("src/main.rs"));
+}
+
+#[test]
+fn plan_mode_exec_denied_message_includes_marker_and_command() {
+    let msg = plan_mode_exec_denied_message("git commit");
+    assert!(msg.contains(PLAN_MODE_REJECTION_MARKER));
+    assert!(msg.contains("git commit"));
+}
+
 fn vec_str(items: &[&str]) -> Vec<String> {
     items.iter().map(|s| s.to_string()).collect()
 }

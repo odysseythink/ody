@@ -44,8 +44,18 @@ pub enum PlanGateDecision {
     Ask { reason: String },
 }
 
+/// Stable marker appended to Plan-mode rejection messages so that downstream
+/// consumers (e.g. the TUI footer) can detect them without parsing prose.
+pub const PLAN_MODE_REJECTION_MARKER: &str = "[plan-mode-blocked]";
+
 const PLAN_MODE_WRITE_DENIED_REASON: &str =
-    "Plan mode is read-only by default. Finish planning and switch to Default mode to apply patches.";
+    "Plan mode is read-only by default. Finish planning and switch to Default mode to apply patches. [plan-mode-blocked]";
+
+/// Returns a human-readable Plan-mode patch-denial message that includes the
+/// rejected file path and the stable rejection marker.
+pub fn plan_mode_write_denied_message(path: &std::path::Path) -> String {
+    format!("{PLAN_MODE_WRITE_DENIED_REASON} (file: {})", path.display())
+}
 
 /// Plan-mode front gate for `apply_patch`. Runs before `assess_patch_safety` so that
 /// `AskForApproval::Never` and future auto-approve paths cannot bypass Plan mode.
@@ -78,9 +88,15 @@ pub fn plan_mode_gate_for_patch(
 }
 
 const PLAN_MODE_EXEC_DENIED_REASON: &str =
-    "Plan mode is read-only by default. This command may modify files; finish planning and switch to Default mode to run it.";
+    "Plan mode is read-only by default. This command may modify files; finish planning and switch to Default mode to run it. [plan-mode-blocked]";
 const PLAN_MODE_EXEC_ASK_REASON: &str =
     "This command may modify files while in Plan mode. Please confirm before running.";
+
+/// Returns a human-readable Plan-mode exec-denial message that includes the
+/// rejected command and the stable rejection marker.
+pub fn plan_mode_exec_denied_message(command: &str) -> String {
+    format!("{PLAN_MODE_EXEC_DENIED_REASON} (command: {command})")
+}
 
 #[derive(Debug, PartialEq)]
 enum PlanModeExecClassification {
@@ -101,11 +117,12 @@ pub fn plan_mode_gate_for_exec(
         return PlanGateDecision::Allow;
     }
 
+    let command_for_display = command.join(" ");
     match classify_command_for_plan_mode(command) {
         PlanModeExecClassification::ReadOnly => PlanGateDecision::Allow,
         PlanModeExecClassification::KnownWrite => match enforcement {
             PlanEnforcement::Strict => PlanGateDecision::Deny {
-                reason: PLAN_MODE_EXEC_DENIED_REASON.to_string(),
+                reason: plan_mode_exec_denied_message(&command_for_display),
             },
             PlanEnforcement::Ask => PlanGateDecision::Ask {
                 reason: PLAN_MODE_EXEC_ASK_REASON.to_string(),
