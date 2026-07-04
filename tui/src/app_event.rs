@@ -953,6 +953,10 @@ pub(crate) enum AppEvent {
         collaboration_mode: CollaborationModeMask,
     },
 
+    /// Switch the active collaboration mask without submitting a user message.
+    /// Used by the Plan mode rejection action to return to Default mode.
+    SetCollaborationMask(CollaborationModeMask),
+
     /// Open the approval popup.
     FullScreenApprovalRequest(ApprovalRequest),
 
