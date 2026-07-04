@@ -111,7 +111,27 @@ impl PlanArtifact {
         let Some(plan_path) = self.path() else {
             return false;
         };
-        ody_utils_path::paths_match_after_normalization(&plan_path, target)
+
+        if ody_utils_path::paths_match_after_normalization(&plan_path, target) {
+            return true;
+        }
+
+        let Some(stem_dir) = plan_path
+            .file_stem()
+            .map(|stem| plan_path.with_file_name(stem))
+        else {
+            return false;
+        };
+
+        let Some(target_parent) = target.parent() else {
+            return false;
+        };
+
+        if !target.extension().map_or(false, |ext| ext == "md") {
+            return false;
+        }
+
+        ody_utils_path::paths_match_after_normalization(&stem_dir, target_parent)
     }
 
     pub fn restore_or_create(
@@ -336,5 +356,38 @@ mod tests {
             &*artifact.state.lock().await,
             PlanArtifactState::InlineOnly
         ));
+    }
+
+    #[tokio::test]
+    async fn is_plan_file_path_matches_stem_subdirectory_md() {
+        let (artifact, _tmp) = test_artifact("2026-07-04");
+        artifact.finalize_name("refactor_auth").await.unwrap();
+        let plan_path = artifact.path().unwrap();
+        let stem_dir = plan_path.with_extension("");
+        let sub_file = stem_dir.join("subsystem.md");
+        assert!(
+            artifact.is_plan_file_path(&sub_file),
+            "expected {sub_file:?} to be whitelisted under {stem_dir:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn is_plan_file_path_rejects_non_md_in_stem_subdirectory() {
+        let (artifact, _tmp) = test_artifact("2026-07-04");
+        artifact.finalize_name("refactor_auth").await.unwrap();
+        let plan_path = artifact.path().unwrap();
+        let stem_dir = plan_path.with_extension("");
+        let sub_file = stem_dir.join("subsystem.txt");
+        assert!(!artifact.is_plan_file_path(&sub_file));
+    }
+
+    #[tokio::test]
+    async fn is_plan_file_path_rejects_sibling_stem_subdirectory() {
+        let (artifact, _tmp) = test_artifact("2026-07-04");
+        artifact.finalize_name("refactor_auth").await.unwrap();
+        let plan_path = artifact.path().unwrap();
+        let sibling_dir = plan_path.parent().unwrap().join("2026-07-04-other");
+        let sub_file = sibling_dir.join("subsystem.md");
+        assert!(!artifact.is_plan_file_path(&sub_file));
     }
 }
