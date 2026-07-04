@@ -8,6 +8,8 @@ use ody_config::config_toml::PlanEnforcement;
 use ody_protocol::config_types::CollaborationMode;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::config_types::WindowsSandboxLevel;
+use ody_protocol::parse_command::ParsedCommand;
+use ody_shell_command::bash::extract_bash_command;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::permissions::FileSystemSandboxPolicy;
 use ody_protocol::protocol::AskForApproval;
@@ -72,6 +74,178 @@ pub fn plan_mode_gate_for_patch(
             reason: PLAN_MODE_WRITE_DENIED_REASON.to_string(),
         },
         PlanEnforcement::Advisory => PlanGateDecision::Allow,
+    }
+}
+
+const PLAN_MODE_EXEC_DENIED_REASON: &str =
+    "Plan mode is read-only by default. This command may modify files; finish planning and switch to Default mode to run it.";
+const PLAN_MODE_EXEC_ASK_REASON: &str =
+    "This command may modify files while in Plan mode. Please confirm before running.";
+
+#[derive(Debug, PartialEq)]
+enum PlanModeExecClassification {
+    ReadOnly,
+    KnownWrite,
+    Indeterminate,
+}
+
+/// Plan-mode front gate for exec commands. Runs before the normal exec approval
+/// path so that `AskForApproval::Never` and future auto-approve paths cannot
+/// bypass Plan mode.
+pub fn plan_mode_gate_for_exec(
+    mode: &CollaborationMode,
+    enforcement: PlanEnforcement,
+    command: &[String],
+) -> PlanGateDecision {
+    if mode.mode != ModeKind::Plan {
+        return PlanGateDecision::Allow;
+    }
+
+    match classify_command_for_plan_mode(command) {
+        PlanModeExecClassification::ReadOnly => PlanGateDecision::Allow,
+        PlanModeExecClassification::KnownWrite => match enforcement {
+            PlanEnforcement::Strict => PlanGateDecision::Deny {
+                reason: PLAN_MODE_EXEC_DENIED_REASON.to_string(),
+            },
+            PlanEnforcement::Ask => PlanGateDecision::Ask {
+                reason: PLAN_MODE_EXEC_ASK_REASON.to_string(),
+            },
+            PlanEnforcement::Advisory => PlanGateDecision::Allow,
+        },
+        PlanModeExecClassification::Indeterminate => match enforcement {
+            PlanEnforcement::Strict | PlanEnforcement::Ask => PlanGateDecision::Ask {
+                reason: PLAN_MODE_EXEC_ASK_REASON.to_string(),
+            },
+            PlanEnforcement::Advisory => PlanGateDecision::Allow,
+        },
+    }
+}
+
+fn classify_command_for_plan_mode(command: &[String]) -> PlanModeExecClassification {
+    // For bash/zsh/sh wrappers, recurse into the parsed script so that
+    // `bash -lc "echo x > file"` is caught as a write.
+    if let Some((_, script)) = extract_bash_command(command) {
+        let inner = ody_shell_command::parse_command::parse_shell_script(script);
+        return inner
+            .iter()
+            .map(classify_parsed_command_for_plan_mode)
+            .fold(PlanModeExecClassification::ReadOnly, merge_classification);
+    }
+
+    let parsed = ody_shell_command::parse_command::parse_command(command);
+    parsed
+        .iter()
+        .map(classify_parsed_command_for_plan_mode)
+        .fold(PlanModeExecClassification::ReadOnly, merge_classification)
+}
+
+fn classify_parsed_command_for_plan_mode(cmd: &ParsedCommand) -> PlanModeExecClassification {
+    match cmd {
+        ParsedCommand::Read { .. }
+        | ParsedCommand::ListFiles { .. }
+        | ParsedCommand::Search { .. } => PlanModeExecClassification::ReadOnly,
+        ParsedCommand::Unknown { cmd } => classify_unknown_command_string(cmd),
+    }
+}
+
+fn classify_unknown_command_string(cmd: &str) -> PlanModeExecClassification {
+    let Some(tokens) = shlex::split(cmd) else {
+        return PlanModeExecClassification::Indeterminate;
+    };
+
+    // A literal redirection token is a definite write.
+    if tokens.iter().any(|t| t == ">" || t == ">>") {
+        return PlanModeExecClassification::KnownWrite;
+    }
+
+    if ody_shell_command::is_safe_command::is_known_safe_command(&tokens) {
+        return PlanModeExecClassification::ReadOnly;
+    }
+
+    if ody_shell_command::is_dangerous_command::command_might_be_dangerous(&tokens) {
+        return PlanModeExecClassification::KnownWrite;
+    }
+
+    if is_known_write_command(&tokens) {
+        return PlanModeExecClassification::KnownWrite;
+    }
+
+    PlanModeExecClassification::Indeterminate
+}
+
+fn executable_base_name(raw: &str) -> Option<String> {
+    let name = Path::new(raw)
+        .file_name()
+        .and_then(|n| n.to_str())?
+        .to_ascii_lowercase();
+
+    #[cfg(windows)]
+    {
+        for suffix in [".exe", ".cmd", ".bat", ".com"] {
+            if let Some(stripped) = name.strip_suffix(suffix) {
+                return Some(stripped.to_string());
+            }
+        }
+    }
+
+    Some(name)
+}
+
+fn is_known_write_command(command: &[String]) -> bool {
+    let Some(cmd0) = command.first().map(String::as_str) else {
+        return false;
+    };
+    let key = executable_base_name(cmd0);
+
+    match key.as_deref() {
+        Some(
+            "cp" | "mv" | "rm" | "rmdir" | "mkdir" | "touch" | "chmod" | "chown" | "ln"
+            | "dd" | "tee",
+        ) => true,
+        Some("git") => {
+            const WRITE_SUBCOMMANDS: &[&str] = &[
+                "commit", "checkout", "apply", "reset", "clean", "revert", "merge", "rebase",
+                "cherry-pick", "push", "pull",
+            ];
+            let mut skip_next = false;
+            for arg in command.iter().skip(1).map(String::as_str) {
+                if skip_next {
+                    skip_next = false;
+                    continue;
+                }
+                // Skip global options that take a value.
+                if matches!(arg, "-C" | "-c" | "--git-dir" | "--work-tree") {
+                    skip_next = true;
+                    continue;
+                }
+                if arg.starts_with("--git-dir=")
+                    || arg.starts_with("--work-tree=")
+                    || arg.starts_with("-C")
+                    || arg.starts_with("-c")
+                    || arg.starts_with('-')
+                {
+                    continue;
+                }
+                return WRITE_SUBCOMMANDS.contains(&arg);
+            }
+            false
+        }
+        _ => false,
+    }
+}
+
+fn merge_classification(
+    a: PlanModeExecClassification,
+    b: PlanModeExecClassification,
+) -> PlanModeExecClassification {
+    match (a, b) {
+        (PlanModeExecClassification::KnownWrite, _)
+        | (_, PlanModeExecClassification::KnownWrite) => PlanModeExecClassification::KnownWrite,
+        (PlanModeExecClassification::Indeterminate, _)
+        | (_, PlanModeExecClassification::Indeterminate) => {
+            PlanModeExecClassification::Indeterminate
+        }
+        _ => PlanModeExecClassification::ReadOnly,
     }
 }
 
