@@ -10,19 +10,57 @@ use ody_client::TransportError;
 use ody_protocol::models::{ContentItem, ResponseItem};
 use serde_json::Value;
 
+/// Per-response state used while normalizing `ResponseEvent`s into `ChatEvent`s.
+///
+/// Some wire APIs emit an `OutputItemDone` snapshot that repeats the full item
+/// text. When we have already streamed that text as `OutputTextDelta`s, the
+/// snapshot must be dropped to avoid duplicating the message downstream.
+#[derive(Debug, Default)]
+pub(crate) struct NormalizeState {
+    pub saw_text_delta: bool,
+    pub saw_message_added: bool,
+}
+
 /// Normalize a single `ResponseEvent` into zero or more provider-neutral events.
 ///
 /// Most events map 1:1, but a `Completed` event may produce both a `Usage` event
 /// and a `Finish` event, so the return type is a vector.
+///
+/// This overload starts with a fresh state; streaming adapters should use
+/// [`normalize_response_event_with_state`] so state is carried across events.
 pub(crate) fn normalize_response_event(
     event: ResponseEvent,
+) -> Result<Vec<ChatEvent>, ChatProviderError> {
+    normalize_response_event_with_state(event, &mut NormalizeState::default())
+}
+
+pub(crate) fn normalize_response_event_with_state(
+    event: ResponseEvent,
+    state: &mut NormalizeState,
 ) -> Result<Vec<ChatEvent>, ChatProviderError> {
     match event {
         ResponseEvent::Created => Ok(vec![ChatEvent::Start]),
         ResponseEvent::OutputTextDelta(delta) => {
+            state.saw_text_delta = true;
             Ok(vec![ChatEvent::ContentPart(ContentPart::Text(delta))])
         }
-        ResponseEvent::OutputItemAdded(item) | ResponseEvent::OutputItemDone(item) => {
+        ResponseEvent::OutputItemAdded(item) => {
+            if matches!(&item, ResponseItem::Message { .. }) {
+                state.saw_message_added = true;
+            }
+            normalize_response_item(item)
+        }
+        ResponseEvent::OutputItemDone(item) => {
+            // A message-level `OutputItemDone` carries the full snapshot. If we
+            // already received text for this item (either as deltas or in the
+            // added event), downstream will reconstruct the final text from the
+            // streamed deltas, so emitting this as another delta would duplicate
+            // the message. Only emit it when it is the sole source of text.
+            if matches!(&item, ResponseItem::Message { .. })
+                && (state.saw_text_delta || state.saw_message_added)
+            {
+                return Ok(vec![]);
+            }
             normalize_response_item(item)
         }
         // Tool-call argument deltas are partial JSON fragments. The complete tool
@@ -271,5 +309,49 @@ mod tests {
         assert!(
             matches!(&chat[0], ChatEvent::Raw(RawFrame::Json(v)) if v.get("event") == Some(&serde_json::json!("tool_call_input_delta")))
         );
+    }
+
+    #[test]
+    fn output_item_done_message_dropped_after_text_delta() {
+        let mut state = NormalizeState::default();
+        let delta = normalize_response_event_with_state(
+            ResponseEvent::OutputTextDelta("hello ".into()),
+            &mut state,
+        )
+        .expect("normalizes");
+        assert!(matches!(&delta[0], ChatEvent::ContentPart(ContentPart::Text(t)) if t == "hello "));
+
+        let done = normalize_response_event_with_state(
+            ResponseEvent::OutputItemDone(ResponseItem::Message {
+                id: Some("msg-1".into()),
+                role: "assistant".into(),
+                content: vec![ContentItem::OutputText {
+                    text: "hello world".into(),
+                }],
+                phase: None,
+                internal_chat_message_metadata_passthrough: None,
+            }),
+            &mut state,
+        )
+        .expect("normalizes");
+        assert!(done.is_empty());
+    }
+
+    #[test]
+    fn standalone_output_item_done_message_emits_text() {
+        let mut state = NormalizeState::default();
+        let done = normalize_response_event_with_state(
+            ResponseEvent::OutputItemDone(ResponseItem::Message {
+                id: Some("msg-1".into()),
+                role: "assistant".into(),
+                content: vec![ContentItem::OutputText { text: "done".into() }],
+                phase: None,
+                internal_chat_message_metadata_passthrough: None,
+            }),
+            &mut state,
+        )
+        .expect("normalizes");
+        assert_eq!(done.len(), 1);
+        assert!(matches!(&done[0], ChatEvent::ContentPart(ContentPart::Text(t)) if t == "done"));
     }
 }

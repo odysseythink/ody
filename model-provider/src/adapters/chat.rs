@@ -421,10 +421,11 @@ impl<T: HttpTransport + 'static> ChatProvider for ChatAdapter<T> {
             .await
             .map_err(chat_provider_error_from_api_error)?;
 
-        let mapped = stream.map(|result: Result<ody_api::ResponseEvent, _>| -> ChatStream {
+        let mut state = common::NormalizeState::default();
+        let mapped = stream.map(move |result: Result<ody_api::ResponseEvent, _>| -> ChatStream {
             match result
                 .map_err(chat_provider_error_from_api_error)
-                .and_then(common::normalize_response_event)
+                .and_then(|event| common::normalize_response_event_with_state(event, &mut state))
             {
                 Ok(events) => Box::pin(futures::stream::iter(events.into_iter().map(Ok))),
                 Err(e) => Box::pin(futures::stream::iter(std::iter::once(Err(e)))),

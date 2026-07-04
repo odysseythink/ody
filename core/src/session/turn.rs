@@ -1855,7 +1855,7 @@ async fn handle_assistant_item_done_in_plan_mode(
         maybe_complete_plan_item_from_message(sess, turn_context, state, item).await;
 
         let mut finalized_facts = None;
-        if let Some(finalized_turn_item) = finalize_non_tool_response_item(
+        if let Some(mut finalized_turn_item) = finalize_non_tool_response_item(
             sess,
             turn_context,
             TurnItemContributorPolicy::Run(turn_store),
@@ -1865,6 +1865,17 @@ async fn handle_assistant_item_done_in_plan_mode(
         .await
         {
             finalized_facts = Some(finalized_turn_item.facts.clone());
+            // In plan mode the streaming agent message was started with an id
+            // generated from the live deltas. The finalized item parsed from the
+            // response snapshot has a different id. Reconcile them so the
+            // ItemStarted and ItemCompleted events refer to the same turn item.
+            if let (
+                TurnItem::AgentMessage(finalized_agent),
+                Some(TurnItem::AgentMessage(previous_agent)),
+            ) = (&mut finalized_turn_item.turn_item, previously_active_item)
+            {
+                finalized_agent.id = previous_agent.id.clone();
+            }
             emit_turn_item_in_plan_mode(
                 sess,
                 turn_context,
