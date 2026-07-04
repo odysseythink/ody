@@ -371,6 +371,14 @@ fn default_mode() -> CollaborationMode {
     }
 }
 
+fn plan_artifact_at(path: &std::path::Path) -> crate::plan_artifact::PlanArtifact {
+    use ody_utils_absolute_path::AbsolutePathBuf;
+    let ody_home = AbsolutePathBuf::from_absolute_path(path).unwrap();
+    let thread_id =
+        ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
+    crate::plan_artifact::PlanArtifact::new_temp(ody_home, thread_id, "2026-07-04")
+}
+
 #[test]
 fn plan_gate_strict_denies_patch_in_plan_mode() {
     let tmp = TempDir::new().unwrap();
@@ -417,6 +425,62 @@ fn plan_gate_allows_default_mode_regardless_of_enforcement() {
     );
     for enforcement in [PlanEnforcement::Strict, PlanEnforcement::Ask, PlanEnforcement::Advisory] {
         let decision = plan_mode_gate_for_patch(&default_mode(), enforcement, &action, None);
+        assert_eq!(decision, PlanGateDecision::Allow, "Default mode should never be gated");
+    }
+}
+
+#[test]
+fn plan_gate_strict_allows_whitelisted_plan_file() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = plan_artifact_at(tmp.path());
+    let plan_path = artifact.path().unwrap();
+    let action = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&plan_path.abs()),
+        "# Plan\n".to_string(),
+    );
+    let decision = plan_mode_gate_for_patch(&plan_mode(), PlanEnforcement::Strict, &action, Some(&artifact));
+    assert_eq!(decision, PlanGateDecision::Allow);
+}
+
+#[test]
+fn plan_gate_strict_allows_whitelisted_stem_subdirectory_md() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = plan_artifact_at(tmp.path());
+    let plan_path = artifact.path().unwrap();
+    let stem_dir = plan_path.with_extension("");
+    let sub_path = stem_dir.join("subsystem.md");
+    let action = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&sub_path.abs()),
+        "## Subsystem\n".to_string(),
+    );
+    let decision = plan_mode_gate_for_patch(&plan_mode(), PlanEnforcement::Strict, &action, Some(&artifact));
+    assert_eq!(decision, PlanGateDecision::Allow);
+}
+
+#[test]
+fn plan_gate_strict_denies_non_whitelisted_file_even_with_artifact() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = plan_artifact_at(tmp.path());
+    let other_path = tmp.path().join("other.txt");
+    let action = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&other_path.abs()),
+        "hello".to_string(),
+    );
+    let decision = plan_mode_gate_for_patch(&plan_mode(), PlanEnforcement::Strict, &action, Some(&artifact));
+    assert!(matches!(decision, PlanGateDecision::Deny { .. }));
+}
+
+#[test]
+fn plan_gate_allows_default_mode_regardless_of_artifact() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = plan_artifact_at(tmp.path());
+    let plan_path = artifact.path().unwrap();
+    let action = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&plan_path.abs()),
+        "# Plan\n".to_string(),
+    );
+    for enforcement in [PlanEnforcement::Strict, PlanEnforcement::Ask, PlanEnforcement::Advisory] {
+        let decision = plan_mode_gate_for_patch(&default_mode(), enforcement, &action, Some(&artifact));
         assert_eq!(decision, PlanGateDecision::Allow, "Default mode should never be gated");
     }
 }

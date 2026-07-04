@@ -45,6 +45,7 @@ fn apply_plan_mode_patch_gate_denies_in_plan_mode_strict() {
         &collaboration_mode(ModeKind::Plan),
         PlanEnforcement::Strict,
         action,
+        None,
     );
 
     assert!(
@@ -67,6 +68,7 @@ fn apply_plan_mode_patch_gate_asks_in_plan_mode_ask() {
         &collaboration_mode(ModeKind::Plan),
         PlanEnforcement::Ask,
         action,
+        None,
     );
 
     assert!(
@@ -93,10 +95,40 @@ fn apply_plan_mode_patch_gate_allows_in_default_mode() {
         &collaboration_mode(ModeKind::Default),
         PlanEnforcement::Strict,
         action,
+        None,
     );
 
     assert!(
         result.is_none(),
         "Default mode should not be gated"
     );
+}
+
+#[test]
+fn apply_plan_mode_patch_gate_allows_whitelisted_plan_file() {
+    let tmp = tempdir().expect("tmp");
+    let artifact = plan_artifact_at(tmp.path());
+    let plan_path = artifact.path().unwrap();
+    let path_uri = PathUri::from_host_native_path(&plan_path).expect("absolute test path");
+    let action = ApplyPatchAction::new_add_for_test(&path_uri, "# Plan\n".to_string());
+
+    let result = apply_plan_mode_patch_gate(
+        &collaboration_mode(ModeKind::Plan),
+        PlanEnforcement::Strict,
+        action,
+        Some(&artifact),
+    );
+
+    assert!(
+        result.is_none(),
+        "whitelisted plan file should proceed to normal safety assessment"
+    );
+}
+
+fn plan_artifact_at(path: &std::path::Path) -> crate::plan_artifact::PlanArtifact {
+    use ody_utils_absolute_path::AbsolutePathBuf;
+    let ody_home = AbsolutePathBuf::from_absolute_path(path).unwrap();
+    let thread_id =
+        ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
+    crate::plan_artifact::PlanArtifact::new_temp(ody_home, thread_id, "2026-07-04")
 }
