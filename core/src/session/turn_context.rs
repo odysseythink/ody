@@ -774,6 +774,14 @@ impl Session {
             sub_id,
             skills_snapshot,
         );
+        if turn_context.collaboration_mode.mode == ody_protocol::config_types::ModeKind::Plan {
+            let artifact = PlanArtifact::new_temp(
+                turn_context.config.ody_home.clone(),
+                self.thread_id(),
+                turn_context.current_date.as_deref().unwrap_or("0000-00-00"),
+            );
+            turn_context.plan_artifact = Some(Arc::new(artifact));
+        }
         turn_context.realtime_active = self.conversation.running_state().await.is_some();
 
         if let Some(final_schema) = final_output_json_schema {
