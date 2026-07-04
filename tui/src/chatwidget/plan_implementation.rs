@@ -12,9 +12,9 @@ use crate::chatwidget::plan_options::parse_plan_options;
 use crate::chatwidget::plan_options::plan_choice_handoff_suffix;
 
 pub(super) const PLAN_IMPLEMENTATION_TITLE: &str = "Implement this plan?";
-const PLAN_IMPLEMENTATION_YES: &str = "Yes, implement this plan";
-const PLAN_IMPLEMENTATION_CLEAR_CONTEXT: &str = "Yes, clear context and implement";
-const PLAN_IMPLEMENTATION_NO: &str = "No, stay in Plan mode";
+pub(super) const PLAN_IMPLEMENTATION_YES: &str = "Yes, implement this plan";
+pub(super) const PLAN_IMPLEMENTATION_CLEAR_CONTEXT: &str = "Yes, clear context and implement";
+pub(super) const PLAN_IMPLEMENTATION_NO: &str = "No, stay in Plan mode";
 pub(super) const PLAN_IMPLEMENTATION_CODING_MESSAGE: &str = "Implement the plan.";
 pub(super) const PLAN_IMPLEMENTATION_CLEAR_CONTEXT_PREFIX: &str = concat!(
     "A previous agent produced the plan below to accomplish the user's task. ",

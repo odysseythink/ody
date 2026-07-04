@@ -1813,3 +1813,115 @@ async fn plan_implementation_reload_disables_clear_context_when_disk_read_fails(
     );
     assert!(params.items[1].actions.is_empty());
 }
+
+
+#[tokio::test]
+async fn plan_implementation_popup_with_options_shows_approve_items() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    chat.on_plan_item_completed(
+        "## Option A: Refactor incrementally\n- step 1\n\n## Option B: Rewrite in one go\n- step 2\n".to_string(),
+        None,
+    );
+    chat.open_plan_implementation_prompt();
+
+    let popup = render_bottom_popup(&chat, /*width*/ 80);
+    assert!(popup.contains("Approve Option A"), "expected Approve Option A, got {popup}");
+    assert!(popup.contains("Approve Option B"), "expected Approve Option B, got {popup}");
+    assert!(popup.contains("Refactor incrementally"), "expected summary A, got {popup}");
+    assert!(popup.contains("Rewrite in one go"), "expected summary B, got {popup}");
+    assert!(popup.contains("Revise plan"), "expected Revise plan, got {popup}");
+    assert!(popup.contains("Reject plan"), "expected Reject plan, got {popup}");
+    assert!(popup.contains("Continue planning"), "expected Continue planning, got {popup}");
+}
+
+#[tokio::test]
+async fn plan_implementation_popup_without_options_falls_back_to_three_items() {
+    let (chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    let default_mask = collaboration_modes::default_mode_mask(chat.model_catalog.as_ref())
+        .expect("expected default collaboration mode");
+    let plan_mask = collaboration_modes::plan_mask(chat.model_catalog.as_ref())
+        .expect("expected plan collaboration mode");
+
+    let params = plan_implementation::selection_view_params(
+        Some(default_mask),
+        Some(plan_mask),
+        Some("- Step 1\n- Step 2\n"),
+        None,
+        None,
+    );
+
+    assert_eq!(params.items.len(), 3);
+    assert_eq!(params.items[0].name, plan_implementation::PLAN_IMPLEMENTATION_YES);
+    assert_eq!(params.items[1].name, plan_implementation::PLAN_IMPLEMENTATION_CLEAR_CONTEXT);
+    assert_eq!(params.items[2].name, plan_implementation::PLAN_IMPLEMENTATION_NO);
+}
+
+#[tokio::test]
+async fn plan_implementation_popup_option_approve_emits_handoff_suffix() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    chat.on_plan_item_completed(
+        "## Option A: Refactor incrementally\n- step 1\n".to_string(),
+        None,
+    );
+    let _ = drain_insert_history(&mut rx);
+    chat.open_plan_implementation_prompt();
+
+    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+
+    let event = rx.try_recv().expect("expected AppEvent");
+    let AppEvent::SubmitUserMessageWithMode { text, .. } = event else {
+        panic!("expected SubmitUserMessageWithMode, got {event:?}");
+    };
+    assert_eq!(
+        text,
+        "Implement the plan.\n\nExecute Option A only: Refactor incrementally."
+    );
+}
+
+#[tokio::test]
+async fn plan_implementation_popup_option_reject_emits_set_mask_event() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    chat.on_plan_item_completed(
+        "## Option A: Refactor incrementally\n- step 1\n".to_string(),
+        None,
+    );
+    let _ = drain_insert_history(&mut rx);
+    chat.open_plan_implementation_prompt();
+
+    // 选项列表：A(上下文) -> A(清空) -> Revise -> Reject -> Continue
+    chat.handle_key_event(KeyEvent::from(KeyCode::Down));
+    chat.handle_key_event(KeyEvent::from(KeyCode::Down));
+    chat.handle_key_event(KeyEvent::from(KeyCode::Down));
+    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+
+    let event = rx.try_recv().expect("expected AppEvent");
+    assert_matches!(event, AppEvent::SetCollaborationMask(_));
+}
+
+#[tokio::test]
+async fn plan_implementation_popup_option_revise_emits_plan_mode_message() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    let plan_mask = collaboration_modes::plan_mask(chat.model_catalog.as_ref())
+        .expect("expected plan collaboration mode");
+    chat.set_collaboration_mask(plan_mask);
+    let _ = drain_insert_history(&mut rx);
+
+    chat.on_plan_item_completed(
+        "## Option A: Refactor incrementally\n- step 1\n".to_string(),
+        None,
+    );
+    let _ = drain_insert_history(&mut rx);
+    chat.open_plan_implementation_prompt();
+
+    // 移动到 Revise plan（第二个固定动作）
+    chat.handle_key_event(KeyEvent::from(KeyCode::Down));
+    chat.handle_key_event(KeyEvent::from(KeyCode::Down));
+    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+
+    let event = rx.try_recv().expect("expected AppEvent");
+    let AppEvent::SubmitUserMessageWithMode { text, collaboration_mode } = event else {
+        panic!("expected SubmitUserMessageWithMode, got {event:?}");
+    };
+    assert_eq!(text, "");
+    assert_eq!(collaboration_mode.mode, Some(ModeKind::Plan));
+}
