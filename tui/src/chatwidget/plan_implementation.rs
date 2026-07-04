@@ -7,6 +7,9 @@ use crate::bottom_pane::SelectionAction;
 use crate::bottom_pane::SelectionItem;
 use crate::bottom_pane::SelectionViewParams;
 use crate::bottom_pane::popup_consts::standard_popup_hint_line;
+use crate::chatwidget::plan_options::PlanApprovalChoice;
+use crate::chatwidget::plan_options::parse_plan_options;
+use crate::chatwidget::plan_options::plan_choice_handoff_suffix;
 
 pub(super) const PLAN_IMPLEMENTATION_TITLE: &str = "Implement this plan?";
 const PLAN_IMPLEMENTATION_YES: &str = "Yes, implement this plan";
@@ -31,6 +34,7 @@ pub(super) const PLAN_IMPLEMENTATION_PLAN_FILE_READ_FAILED: &str =
 /// decision copy so action wiring stays separate from token accounting.
 pub(super) fn selection_view_params(
     default_mask: Option<CollaborationModeMask>,
+    current_plan_mask: Option<CollaborationModeMask>,
     plan_markdown: Option<&str>,
     clear_context_usage_label: Option<&str>,
     plan_file_path: Option<&Path>,
@@ -54,6 +58,9 @@ pub(super) fn selection_view_params(
     };
 
     let subtitle = plan_file_path.map(|path| format!("Plan file: {}", path.display()));
+
+    let options = parse_plan_options(loaded_plan_markdown.as_deref().unwrap_or(""));
+    let has_options = !options.is_empty();
 
     let (implement_actions, implement_disabled_reason) = match default_mask.clone() {
         Some(mask) => {
@@ -79,7 +86,7 @@ pub(super) fn selection_view_params(
     };
 
     let (clear_context_actions, clear_context_disabled_reason) =
-        match (default_mask, loaded_plan_markdown.as_deref()) {
+        match (default_mask.clone(), loaded_plan_markdown.as_deref()) {
             (None, _) => (
                 Vec::new(),
                 Some(PLAN_IMPLEMENTATION_DEFAULT_UNAVAILABLE.to_string()),
@@ -100,46 +107,191 @@ pub(super) fn selection_view_params(
             ),
         };
 
-    let clear_context_description = clear_context_usage_label.map_or_else(
-        || "Fresh thread with this plan.".to_string(),
-        |label| format!("Fresh thread. Context: {label}."),
-    );
+    let mut items: Vec<SelectionItem> = Vec::new();
+
+    if has_options {
+        for opt in options {
+            let label = opt.label;
+            let summary = opt.summary;
+
+            // 1) Approve Option X (keep current context)
+            let approve_text = {
+                let suffix = plan_choice_handoff_suffix(&PlanApprovalChoice::ApproveOption {
+                    label,
+                    summary: summary.clone(),
+                    clear_context: false,
+                });
+                match suffix {
+                    Some(s) => format!("{PLAN_IMPLEMENTATION_CODING_MESSAGE}\n\n{s}"),
+                    None => PLAN_IMPLEMENTATION_CODING_MESSAGE.to_string(),
+                }
+            };
+            let approve_actions: Vec<SelectionAction> = match default_mask.clone() {
+                Some(mask) => vec![Box::new(move |tx| {
+                    tx.send(AppEvent::SubmitUserMessageWithMode {
+                        text: approve_text.clone(),
+                        collaboration_mode: mask.clone(),
+                    });
+                })],
+                None => Vec::new(),
+            };
+            items.push(SelectionItem {
+                name: format!("Approve Option {label}"),
+                description: Some(if summary.is_empty() {
+                    "Implement this option.".to_string()
+                } else {
+                    summary.clone()
+                }),
+                selected_description: None,
+                is_current: false,
+                actions: approve_actions,
+                disabled_reason: implement_disabled_reason.clone(),
+                dismiss_on_select: true,
+                ..Default::default()
+            });
+
+            // 2) Approve Option X (fresh context)
+            let fresh_text = match loaded_plan_markdown.as_deref() {
+                Some(plan) if !plan.trim().is_empty() => {
+                    let suffix = plan_choice_handoff_suffix(&PlanApprovalChoice::ApproveOption {
+                        label,
+                        summary: summary.clone(),
+                        clear_context: true,
+                    });
+                    let suffix = suffix.unwrap_or_default();
+                    format!("{PLAN_IMPLEMENTATION_CLEAR_CONTEXT_PREFIX}\n\n{plan}\n\n{suffix}")
+                }
+                _ => String::new(),
+            };
+            let (fresh_actions, fresh_disabled_reason): (Vec<SelectionAction>, Option<String>) =
+                match (default_mask.clone(), loaded_plan_markdown.as_deref()) {
+                    (Some(_), Some(plan)) if !plan.trim().is_empty() => {
+                        let text = fresh_text.clone();
+                        (
+                            vec![Box::new(move |tx| {
+                                tx.send(AppEvent::ClearUiAndSubmitUserMessage {
+                                    text: text.clone(),
+                                });
+                            })],
+                            None,
+                        )
+                    }
+                    (None, _) => (Vec::new(), Some(PLAN_IMPLEMENTATION_DEFAULT_UNAVAILABLE.to_string())),
+                    _ => (Vec::new(), Some(no_plan_reason.to_string())),
+                };
+            items.push(SelectionItem {
+                name: format!("Approve Option {label} (fresh context)"),
+                description: Some(if summary.is_empty() {
+                    "Fresh thread with this option.".to_string()
+                } else {
+                    format!("Fresh thread. {summary}")
+                }),
+                selected_description: None,
+                is_current: false,
+                actions: fresh_actions,
+                disabled_reason: fresh_disabled_reason,
+                dismiss_on_select: true,
+                ..Default::default()
+            });
+        }
+
+        // 3) Revise plan
+        let revise_actions: Vec<SelectionAction> = match current_plan_mask.clone() {
+            Some(mask) => {
+                let feedback = String::new(); // PM 6b will wire the real feedback input
+                vec![Box::new(move |tx| {
+                    tx.send(AppEvent::SubmitUserMessageWithMode {
+                        text: feedback.clone(),
+                        collaboration_mode: mask.clone(),
+                    });
+                })]
+            }
+            None => Vec::new(),
+        };
+        items.push(SelectionItem {
+            name: "Revise plan".to_string(),
+            description: Some("Provide feedback and continue planning.".to_string()),
+            selected_description: None,
+            is_current: false,
+            actions: revise_actions,
+            disabled_reason: current_plan_mask
+                .clone()
+                .map(|_| None)
+                .unwrap_or_else(|| Some(PLAN_IMPLEMENTATION_DEFAULT_UNAVAILABLE.to_string())),
+            dismiss_on_select: true,
+            ..Default::default()
+        });
+
+        // 4) Reject plan
+        let reject_actions: Vec<SelectionAction> = match default_mask.clone() {
+            Some(mask) => vec![Box::new(move |tx| {
+                tx.send(AppEvent::SetCollaborationMask(mask.clone()));
+            })],
+            None => Vec::new(),
+        };
+        items.push(SelectionItem {
+            name: "Reject plan".to_string(),
+            description: Some("Exit Plan mode without implementing.".to_string()),
+            selected_description: None,
+            is_current: false,
+            actions: reject_actions,
+            disabled_reason: default_mask
+                .clone()
+                .map(|_| None)
+                .unwrap_or_else(|| Some(PLAN_IMPLEMENTATION_DEFAULT_UNAVAILABLE.to_string())),
+            dismiss_on_select: true,
+            ..Default::default()
+        });
+    } else {
+        // 无多方案时退化到现有两项实施动作
+        items.push(SelectionItem {
+            name: PLAN_IMPLEMENTATION_YES.to_string(),
+            description: Some("Switch to Default and start coding.".to_string()),
+            selected_description: None,
+            is_current: false,
+            actions: implement_actions,
+            disabled_reason: implement_disabled_reason,
+            dismiss_on_select: true,
+            ..Default::default()
+        });
+
+        let clear_context_description = clear_context_usage_label.map_or_else(
+            || "Fresh thread with this plan.".to_string(),
+            |label| format!("Fresh thread. Context: {label}."),
+        );
+        items.push(SelectionItem {
+            name: PLAN_IMPLEMENTATION_CLEAR_CONTEXT.to_string(),
+            description: Some(clear_context_description),
+            selected_description: None,
+            is_current: false,
+            actions: clear_context_actions,
+            disabled_reason: clear_context_disabled_reason,
+            dismiss_on_select: true,
+            ..Default::default()
+        });
+    }
+
+    // 继续规划始终放在最后
+    items.push(SelectionItem {
+        name: if has_options {
+            "Continue planning".to_string()
+        } else {
+            PLAN_IMPLEMENTATION_NO.to_string()
+        },
+        description: Some("Keep Plan mode and continue the conversation.".to_string()),
+        selected_description: None,
+        is_current: false,
+        actions: Vec::new(),
+        disabled_reason: None,
+        dismiss_on_select: true,
+        ..Default::default()
+    });
 
     SelectionViewParams {
         title: Some(PLAN_IMPLEMENTATION_TITLE.to_string()),
         subtitle,
         footer_hint: Some(standard_popup_hint_line()),
-        items: vec![
-            SelectionItem {
-                name: PLAN_IMPLEMENTATION_YES.to_string(),
-                description: Some("Switch to Default and start coding.".to_string()),
-                selected_description: None,
-                is_current: false,
-                actions: implement_actions,
-                disabled_reason: implement_disabled_reason,
-                dismiss_on_select: true,
-                ..Default::default()
-            },
-            SelectionItem {
-                name: PLAN_IMPLEMENTATION_CLEAR_CONTEXT.to_string(),
-                description: Some(clear_context_description),
-                selected_description: None,
-                is_current: false,
-                actions: clear_context_actions,
-                disabled_reason: clear_context_disabled_reason,
-                dismiss_on_select: true,
-                ..Default::default()
-            },
-            SelectionItem {
-                name: PLAN_IMPLEMENTATION_NO.to_string(),
-                description: Some("Continue planning with the model.".to_string()),
-                selected_description: None,
-                is_current: false,
-                actions: Vec::new(),
-                dismiss_on_select: true,
-                ..Default::default()
-            },
-        ],
+        items,
         ..Default::default()
     }
 }
