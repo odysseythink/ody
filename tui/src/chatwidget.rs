@@ -372,6 +372,7 @@ use self::plugins::PluginListFetchState;
 use self::plugins::PluginsCacheState;
 mod plan_implementation;
 use self::plan_implementation::PLAN_IMPLEMENTATION_TITLE;
+mod plan_options;
 mod model_popups;
 mod notifications;
 use self::notifications::Notification;
