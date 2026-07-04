@@ -1492,6 +1492,17 @@ impl ProposedPlanItemState {
             return;
         }
         self.completed = true;
+
+        if let Some(artifact) = &turn_context.plan_artifact {
+            let persist = turn_context
+                .config
+                .plan_mode
+                .as_ref()
+                .and_then(|pm| pm.persist_plan_file)
+                .unwrap_or(true);
+            let _ = artifact.write_plan(&text, persist).await;
+        }
+
         let item = TurnItem::Plan(PlanItem {
             id: self.item_id.clone(),
             text,
