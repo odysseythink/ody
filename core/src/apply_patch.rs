@@ -92,8 +92,15 @@ pub(crate) async fn apply_patch(
             None,
         ) {
             PlanGateDecision::Deny { reason } => {
+                let path = action
+                    .changes()
+                    .keys()
+                    .next()
+                    .map(|p| p.to_path_buf().to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "unknown file".to_string());
+                let message = format!("{reason} (file: {path})");
                 return InternalApplyPatchInvocation::Output(Err(
-                    FunctionCallError::RespondToModel(format!("Plan mode: {reason}")),
+                    FunctionCallError::RespondToModel(message),
                 ));
             }
             PlanGateDecision::Ask { reason } => {

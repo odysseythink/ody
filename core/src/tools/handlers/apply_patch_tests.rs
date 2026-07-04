@@ -13,12 +13,19 @@ use std::sync::Arc;
 use tempfile::TempDir;
 use tokio::sync::Mutex;
 
+use crate::safety::PLAN_MODE_REJECTION_MARKER;
 use crate::session::tests::make_session_and_context;
+use crate::session::tests::make_session_and_context_with_rx;
 use crate::tools::context::ToolInvocation;
 use crate::tools::hook_names::HookToolName;
 use crate::tools::registry::PostToolUsePayload;
 use crate::tools::registry::PreToolUsePayload;
 use crate::turn_diff_tracker::TurnDiffTracker;
+use ody_config::config_toml::PlanEnforcement;
+use ody_config::config_toml::PlanModeConfigToml;
+use ody_protocol::config_types::ModeKind;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::WarningEvent;
 
 fn sample_patch() -> &'static str {
     r#"*** Begin Patch
@@ -290,4 +297,63 @@ fn write_permissions_for_paths_keep_dirs_outside_workspace_root() {
             .and_then(|(_read, write)| write),
         Some(vec![expected_outside])
     );
+}
+
+async fn plan_mode_invocation_for_payload(
+    payload: ToolPayload,
+) -> (ToolInvocation, async_channel::Receiver<ody_protocol::protocol::Event>) {
+    let (session, turn, rx) = make_session_and_context_with_rx().await;
+
+    let mut turn = Arc::try_unwrap(turn).expect("turn Arc should be unique");
+    turn.collaboration_mode.mode = ModeKind::Plan;
+
+    let mut config = Arc::try_unwrap(turn.config).expect("config Arc should be unique");
+    config.plan_mode = Some(PlanModeConfigToml {
+        enforcement: Some(PlanEnforcement::Strict),
+        ..Default::default()
+    });
+    turn.config = Arc::new(config);
+
+    let turn = Arc::new(turn);
+
+    let invocation = ToolInvocation {
+        session,
+        turn,
+        cancellation_token: tokio_util::sync::CancellationToken::new(),
+        tracker: Arc::new(Mutex::new(TurnDiffTracker::new())),
+        call_id: "call-apply-patch".to_string(),
+        tool_name: ody_tools::ToolName::plain("apply_patch"),
+        source: crate::tools::context::ToolCallSource::Direct,
+        payload,
+    };
+    (invocation, rx)
+}
+
+#[tokio::test]
+async fn plan_mode_patch_denial_emits_warning() {
+    let payload = ToolPayload::Custom {
+        input: sample_patch().to_string(),
+    };
+    let (invocation, rx) = plan_mode_invocation_for_payload(payload).await;
+    let handler = ApplyPatchHandler::default();
+
+    let result = handler.handle(invocation).await;
+    let msg = match result {
+        Err(FunctionCallError::RespondToModel(msg)) => msg,
+        Err(other) => panic!("expected RespondToModel error, got {other}"),
+        Ok(_) => panic!("expected error, got success"),
+    };
+    assert!(
+        msg.contains(PLAN_MODE_REJECTION_MARKER),
+        "denial message should contain marker: {msg}"
+    );
+    assert!(msg.contains("hello.txt"), "denial message should name file: {msg}");
+
+    loop {
+        let event = rx.recv().await.expect("expected event");
+        match event.msg {
+            EventMsg::Warning(WarningEvent { message }) if message == msg => break,
+            _ => continue,
+        }
+    }
 }

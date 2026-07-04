@@ -46,6 +46,8 @@ use ody_protocol::models::FileSystemPermissions;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::FileChange;
 use ody_protocol::protocol::PatchApplyUpdatedEvent;
+use ody_protocol::protocol::WarningEvent;
+use crate::safety::PLAN_MODE_REJECTION_MARKER;
 use ody_sandboxing::policy_transforms::effective_file_system_sandbox_policy;
 use ody_sandboxing::policy_transforms::merge_permission_profiles;
 use ody_sandboxing::policy_transforms::normalize_additional_permissions;
@@ -406,6 +408,17 @@ impl ApplyPatchHandler {
                 match apply_patch::apply_patch(turn.as_ref(), &file_system_sandbox_policy, changes)
                     .await
                 {
+                    InternalApplyPatchInvocation::Output(Err(FunctionCallError::RespondToModel(ref msg)))
+                        if msg.contains(PLAN_MODE_REJECTION_MARKER) =>
+                    {
+                        session
+                            .send_event(
+                                turn.as_ref(),
+                                EventMsg::Warning(WarningEvent { message: msg.clone() }),
+                            )
+                            .await;
+                        Err(FunctionCallError::RespondToModel(msg.clone()))
+                    }
                     InternalApplyPatchInvocation::Output(item) => {
                         let content = item?;
                         Ok(boxed_tool_output(ApplyPatchToolOutput::from_text(content)))
@@ -569,6 +582,17 @@ pub(crate) async fn intercept_apply_patch(
             match apply_patch::apply_patch(turn.as_ref(), &file_system_sandbox_policy, changes)
                 .await
             {
+                InternalApplyPatchInvocation::Output(Err(FunctionCallError::RespondToModel(ref msg)))
+                    if msg.contains(PLAN_MODE_REJECTION_MARKER) =>
+                {
+                    session
+                        .send_event(
+                            turn.as_ref(),
+                            EventMsg::Warning(WarningEvent { message: msg.clone() }),
+                        )
+                        .await;
+                    Err(FunctionCallError::RespondToModel(msg.clone()))
+                }
                 InternalApplyPatchInvocation::Output(item) => {
                     let content = item?;
                     Ok(Some(FunctionToolOutput::from_text(content, Some(true))))
