@@ -204,6 +204,37 @@ async fn plan_implementation_popup_clear_context_emits_clear_submit_event() {
 }
 
 #[tokio::test]
+async fn plan_implementation_popup_prefers_disk_plan_over_memory_text() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    let dir = tempdir().unwrap();
+    let plan_path = dir.path().join("handoff-plan.md");
+    std::fs::write(&plan_path, "- Disk step 1\n- Disk step 2\n").unwrap();
+
+    chat.on_plan_item_completed(
+        "- Memory step\n".to_string(),
+        Some(plan_path.clone()),
+    );
+    let _ = drain_insert_history(&mut rx);
+    chat.open_plan_implementation_prompt();
+
+    chat.handle_key_event(KeyEvent::from(KeyCode::Down));
+    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+
+    let event = rx.try_recv().expect("expected AppEvent");
+    let AppEvent::ClearUiAndSubmitUserMessage { text } = event else {
+        panic!("expected ClearUiAndSubmitUserMessage, got {event:?}");
+    };
+    assert!(
+        text.contains("- Disk step 1"),
+        "expected disk plan content in handoff, got {text:?}"
+    );
+    assert!(
+        !text.contains("- Memory step"),
+        "expected memory plan content to be replaced by disk reload, got {text:?}"
+    );
+}
+
+#[tokio::test]
 async fn plan_implementation_clear_context_requires_default_mode_and_plan() {
     let (chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
     let default_mask = collaboration_modes::default_mode_mask(chat.model_catalog.as_ref())
