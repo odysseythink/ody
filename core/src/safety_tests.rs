@@ -458,6 +458,60 @@ fn plan_gate_strict_allows_whitelisted_stem_subdirectory_md() {
 }
 
 #[test]
+fn plan_gate_strict_denies_non_md_in_stem_subdirectory() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = plan_artifact_at(tmp.path());
+    let plan_path = artifact.path().unwrap();
+    let stem_dir = plan_path.with_extension("");
+    let sub_path = stem_dir.join("subsystem.rs");
+    let action = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&sub_path.abs()),
+        "fn main() {}\n".to_string(),
+    );
+    let decision = plan_mode_gate_for_patch(&plan_mode(), PlanEnforcement::Strict, &action, Some(&artifact));
+    assert!(matches!(decision, PlanGateDecision::Deny { .. }));
+}
+
+#[test]
+fn plan_gate_strict_denies_sibling_stem_subdirectory_md() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = plan_artifact_at(tmp.path());
+    let plan_path = artifact.path().unwrap();
+    let stem_dir = plan_path.with_extension("");
+    let sibling_stem = stem_dir
+        .parent()
+        .unwrap()
+        .join(format!("{}-sibling", stem_dir.file_name().unwrap().to_string_lossy()));
+    let sub_path = sibling_stem.join("subsystem.md");
+    let action = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&sub_path.abs()),
+        "## Sibling subsystem\n".to_string(),
+    );
+    let decision = plan_mode_gate_for_patch(&plan_mode(), PlanEnforcement::Strict, &action, Some(&artifact));
+    assert!(matches!(decision, PlanGateDecision::Deny { .. }));
+}
+
+#[test]
+fn plan_gate_strict_denies_mixed_whitelist_and_non_whitelist_changes() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = plan_artifact_at(tmp.path());
+    let plan_path = artifact.path().unwrap();
+    let stem_dir = plan_path.with_extension("");
+    let whitelisted = stem_dir.join("part.md");
+    let outside = tmp.path().join("outside.txt");
+    let action = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&whitelisted.abs()),
+        "## Part\n".to_string(),
+    );
+    let action = action.with_extra_change_for_test(
+        &PathUri::from_abs_path(&outside.abs()),
+        "outside".to_string(),
+    );
+    let decision = plan_mode_gate_for_patch(&plan_mode(), PlanEnforcement::Strict, &action, Some(&artifact));
+    assert!(matches!(decision, PlanGateDecision::Deny { .. }));
+}
+
+#[test]
 fn plan_gate_strict_denies_non_whitelisted_file_even_with_artifact() {
     let tmp = TempDir::new().unwrap();
     let artifact = plan_artifact_at(tmp.path());

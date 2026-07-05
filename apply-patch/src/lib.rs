@@ -177,6 +177,13 @@ impl ApplyPatchAction {
             patch,
         }
     }
+
+    /// Should be used exclusively for testing.
+    pub fn with_extra_change_for_test(mut self, path: &PathUri, content: String) -> Self {
+        self.changes
+            .insert(path.clone(), ApplyPatchFileChange::Add { content });
+        self
+    }
 }
 
 /// Textual file changes that were actually committed while applying a patch.
