@@ -2,6 +2,7 @@ use crate::harness::attributes_to_map;
 use crate::harness::build_metrics_with_defaults;
 use crate::harness::find_metric;
 use crate::harness::latest_metrics;
+use ody_otel::PLAN_RESOLVED_METRIC;
 use ody_otel::PLUGIN_INSTALL_ELICITATION_SENT_METRIC;
 use ody_otel::PLUGIN_INSTALL_SUGGESTION_METRIC;
 use ody_otel::Result;
@@ -258,5 +259,47 @@ fn manager_records_plugin_install_elicitation_sent_metric() -> Result<()> {
         BTreeMap::from([("tool_type".to_string(), "plugin".to_string())])
     );
 
+    Ok(())
+}
+
+#[test]
+fn manager_records_plan_resolved_counter_with_outcome_tag() -> Result<()> {
+    let (metrics, exporter) = build_metrics_with_defaults(&[])?;
+    let manager = SessionTelemetry::new(
+        ThreadId::new(),
+        "gpt-5.1",
+        "gpt-5.1",
+        Some("account-id".to_string()),
+        /*account_email*/ None,
+        Some(TelemetryAuthMode::ApiKey),
+        "test_originator".to_string(),
+        /*log_user_prompts*/ true,
+        "tty".to_string(),
+        SessionSource::Cli,
+    )
+    .with_metrics(metrics);
+
+    manager.record_plan_resolved("implement_fresh_context");
+    manager.shutdown_metrics()?;
+
+    let resource_metrics = latest_metrics(&exporter);
+    let metric = find_metric(&resource_metrics, PLAN_RESOLVED_METRIC)
+        .expect("ody.plan_resolved counter missing");
+    let attrs = match metric.data() {
+        AggregatedMetrics::U64(data) => match data {
+            MetricData::Sum(sum) => {
+                let points: Vec<_> = sum.data_points().collect();
+                assert_eq!(points.len(), 1);
+                assert_eq!(points[0].value(), 1);
+                attributes_to_map(points[0].attributes())
+            }
+            _ => panic!("unexpected counter aggregation"),
+        },
+        _ => panic!("unexpected counter data type"),
+    };
+    assert_eq!(
+        attrs.get("outcome"),
+        Some(&"implement_fresh_context".to_string())
+    );
     Ok(())
 }

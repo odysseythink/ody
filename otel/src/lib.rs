@@ -18,6 +18,7 @@ pub use crate::config::OtelTlsConfig;
 pub use crate::config::StatsigMetricsSettings;
 pub use crate::config::validate_span_attributes;
 pub use crate::events::session_telemetry::AuthEnvTelemetryMetadata;
+pub use crate::events::session_telemetry::PLAN_RESOLVED_METRIC;
 pub use crate::events::session_telemetry::SessionTelemetry;
 pub use crate::events::session_telemetry::SessionTelemetryMetadata;
 pub use crate::metrics::runtime_metrics::RuntimeMetricTotals;

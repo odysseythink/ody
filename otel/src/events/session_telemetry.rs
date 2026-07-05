@@ -105,6 +105,8 @@ pub struct SessionTelemetry {
     pub(crate) metrics_use_metadata_tags: bool,
 }
 
+pub const PLAN_RESOLVED_METRIC: &str = "ody.plan_resolved";
+
 impl SessionTelemetry {
     pub fn with_auth_env(mut self, auth_env: AuthEnvTelemetryMetadata) -> Self {
         self.metadata.auth_env = auth_env;
@@ -189,6 +191,20 @@ impl SessionTelemetry {
         if let Err(e) = res {
             tracing::warn!("metrics duration [{name}] failed: {e}");
         }
+    }
+
+    /// Records the outcome of a Plan-mode approval/exit decision.
+    pub fn record_plan_resolved(&self, outcome: &str) {
+        self.counter(PLAN_RESOLVED_METRIC, /*inc*/ 1, &[("outcome", outcome)]);
+        log_and_trace_event!(
+            self,
+            common: {
+                event.name = "ody.plan_resolved",
+                plan.outcome = %outcome,
+            },
+            log: {},
+            trace: {},
+        );
     }
 
     /// Records a coarse startup phase for production latency breakdowns.
