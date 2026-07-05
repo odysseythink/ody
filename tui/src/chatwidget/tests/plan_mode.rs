@@ -2064,3 +2064,142 @@ async fn plan_implementation_popup_with_options_snapshot() {
     let popup = render_bottom_popup(&chat, /*width*/ 80);
     assert_chatwidget_snapshot!("plan_implementation_popup_with_options", popup);
 }
+
+#[tokio::test]
+async fn plan_implementation_telemetry_records_implement_outcome() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    let (telemetry, exporter) = test_session_telemetry_with_metrics(&chat.config, "gpt-5");
+    chat.session_telemetry = telemetry;
+    chat.open_plan_implementation_prompt();
+
+    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+
+    let event = rx.try_recv().expect("expected AppEvent");
+    assert_matches!(event, AppEvent::SubmitUserMessageWithMode { .. });
+    chat.session_telemetry.shutdown_metrics().unwrap();
+    assert_plan_resolved_outcome(&exporter, "implement");
+}
+
+#[tokio::test]
+async fn plan_implementation_telemetry_records_implement_fresh_context_outcome() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    let plan_markdown = "- Step 1\n- Step 2\n";
+    chat.on_plan_item_completed(plan_markdown.to_string(), None);
+    let _ = drain_insert_history(&mut rx);
+    let (telemetry, exporter) = test_session_telemetry_with_metrics(&chat.config, "gpt-5");
+    chat.session_telemetry = telemetry;
+    chat.open_plan_implementation_prompt();
+
+    chat.handle_key_event(KeyEvent::from(KeyCode::Down));
+    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+
+    let event = rx.try_recv().expect("expected AppEvent");
+    assert_matches!(event, AppEvent::ClearUiAndSubmitUserMessage { .. });
+    chat.session_telemetry.shutdown_metrics().unwrap();
+    assert_plan_resolved_outcome(&exporter, "implement_fresh_context");
+}
+
+#[tokio::test]
+async fn plan_implementation_telemetry_records_approve_option_outcome() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    chat.on_plan_item_completed(
+        "## Option A: Refactor incrementally\n- step 1\n".to_string(),
+        None,
+    );
+    let _ = drain_insert_history(&mut rx);
+    let (telemetry, exporter) = test_session_telemetry_with_metrics(&chat.config, "gpt-5");
+    chat.session_telemetry = telemetry;
+    chat.open_plan_implementation_prompt();
+
+    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+
+    let event = rx.try_recv().expect("expected AppEvent");
+    assert_matches!(event, AppEvent::SubmitUserMessageWithMode { .. });
+    chat.session_telemetry.shutdown_metrics().unwrap();
+    assert_plan_resolved_outcome(&exporter, "approve_option");
+}
+
+#[tokio::test]
+async fn plan_implementation_telemetry_records_approve_option_fresh_context_outcome() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    chat.on_plan_item_completed(
+        "## Option A: Refactor incrementally\n- step 1\n".to_string(),
+        None,
+    );
+    let _ = drain_insert_history(&mut rx);
+    let (telemetry, exporter) = test_session_telemetry_with_metrics(&chat.config, "gpt-5");
+    chat.session_telemetry = telemetry;
+    chat.open_plan_implementation_prompt();
+
+    chat.handle_key_event(KeyEvent::from(KeyCode::Down));
+    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+
+    let event = rx.try_recv().expect("expected AppEvent");
+    assert_matches!(event, AppEvent::ClearUiAndSubmitUserMessage { .. });
+    chat.session_telemetry.shutdown_metrics().unwrap();
+    assert_plan_resolved_outcome(&exporter, "approve_option_fresh_context");
+}
+
+#[tokio::test]
+async fn plan_implementation_telemetry_records_revise_outcome() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    let plan_mask = collaboration_modes::plan_mask(chat.model_catalog.as_ref())
+        .expect("expected plan collaboration mode");
+    chat.set_collaboration_mask(plan_mask);
+    chat.on_plan_item_completed(
+        "## Option A: Refactor incrementally\n- step 1\n".to_string(),
+        None,
+    );
+    let _ = drain_insert_history(&mut rx);
+    let (telemetry, exporter) = test_session_telemetry_with_metrics(&chat.config, "gpt-5");
+    chat.session_telemetry = telemetry;
+    chat.open_plan_implementation_prompt();
+
+    chat.handle_key_event(KeyEvent::from(KeyCode::Down));
+    chat.handle_key_event(KeyEvent::from(KeyCode::Down));
+    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+
+    let event = rx.try_recv().expect("expected AppEvent");
+    assert_matches!(event, AppEvent::OpenPlanRevisionPrompt { .. });
+    chat.session_telemetry.shutdown_metrics().unwrap();
+    assert_plan_resolved_outcome(&exporter, "revise");
+}
+
+#[tokio::test]
+async fn plan_implementation_telemetry_records_reject_outcome() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    chat.on_plan_item_completed(
+        "## Option A: Refactor incrementally\n- step 1\n".to_string(),
+        None,
+    );
+    let _ = drain_insert_history(&mut rx);
+    let (telemetry, exporter) = test_session_telemetry_with_metrics(&chat.config, "gpt-5");
+    chat.session_telemetry = telemetry;
+    chat.open_plan_implementation_prompt();
+
+    chat.handle_key_event(KeyEvent::from(KeyCode::Down));
+    chat.handle_key_event(KeyEvent::from(KeyCode::Down));
+    chat.handle_key_event(KeyEvent::from(KeyCode::Down));
+    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+
+    let event = rx.try_recv().expect("expected AppEvent");
+    assert_matches!(event, AppEvent::SetCollaborationMask(_));
+    chat.session_telemetry.shutdown_metrics().unwrap();
+    assert_plan_resolved_outcome(&exporter, "reject");
+}
+
+#[tokio::test]
+async fn plan_implementation_telemetry_records_continue_planning_outcome() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    let (telemetry, exporter) = test_session_telemetry_with_metrics(&chat.config, "gpt-5");
+    chat.session_telemetry = telemetry;
+    chat.open_plan_implementation_prompt();
+
+    // Without options and no plan markdown, the clear-context item is disabled,
+    // so a single Down wraps past it to the continue-planning item.
+    chat.handle_key_event(KeyEvent::from(KeyCode::Down));
+    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+
+    chat.session_telemetry.shutdown_metrics().unwrap();
+    assert_plan_resolved_outcome(&exporter, "continue_planning");
+}

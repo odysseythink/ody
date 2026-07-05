@@ -1,6 +1,11 @@
 use super::*;
 use ody_app_server_protocol::PluginAvailability;
+use ody_otel::{MetricsClient, MetricsConfig};
+use opentelemetry::KeyValue;
+use opentelemetry_sdk::metrics::InMemoryMetricExporter;
+use opentelemetry_sdk::metrics::data::{AggregatedMetrics, Metric, MetricData, ResourceMetrics};
 use pretty_assertions::assert_eq;
+use std::collections::BTreeMap;
 
 pub(super) async fn test_config() -> Config {
     // Start from the built-in defaults so tests do not inherit host/system config.
@@ -132,6 +137,82 @@ pub(super) fn test_session_telemetry(config: &Config, model: &str) -> SessionTel
         "test".to_string(),
         crate::test_support::session_source_cli(),
     )
+}
+
+pub(super) fn build_test_metrics() -> (MetricsClient, InMemoryMetricExporter) {
+    let exporter = InMemoryMetricExporter::default();
+    let config = MetricsConfig::in_memory(
+        "test",
+        "ody-cli",
+        env!("CARGO_PKG_VERSION"),
+        exporter.clone(),
+    );
+    let metrics = MetricsClient::new(config).expect("metrics client should build");
+    (metrics, exporter)
+}
+
+pub(super) fn test_session_telemetry_with_metrics(
+    config: &Config,
+    model: &str,
+) -> (SessionTelemetry, InMemoryMetricExporter) {
+    let (metrics, exporter) = build_test_metrics();
+    let telemetry = test_session_telemetry(config, model)
+        .with_metrics_without_metadata_tags(metrics);
+    (telemetry, exporter)
+}
+
+pub(super) fn latest_metrics(exporter: &InMemoryMetricExporter) -> ResourceMetrics {
+    exporter
+        .get_finished_metrics()
+        .expect("finished metrics should be available")
+        .into_iter()
+        .last()
+        .expect("metrics export should exist")
+}
+
+pub(super) fn find_metric<'a>(resource_metrics: &'a ResourceMetrics, name: &str) -> Option<&'a Metric> {
+    for scope_metrics in resource_metrics.scope_metrics() {
+        for metric in scope_metrics.metrics() {
+            if metric.name() == name {
+                return Some(metric);
+            }
+        }
+    }
+    None
+}
+
+pub(super) fn attributes_to_map<'a>(
+    attributes: impl Iterator<Item = &'a KeyValue>,
+) -> BTreeMap<String, String> {
+    attributes
+        .map(|kv| (kv.key.as_str().to_string(), kv.value.as_str().to_string()))
+        .collect()
+}
+
+pub(super) fn assert_plan_resolved_outcome(
+    exporter: &InMemoryMetricExporter,
+    expected_outcome: &str,
+) {
+    let resource_metrics = latest_metrics(exporter);
+    let metric = find_metric(&resource_metrics, ody_otel::PLAN_RESOLVED_METRIC)
+        .expect("ody.plan_resolved counter missing");
+    let attrs = match metric.data() {
+        AggregatedMetrics::U64(data) => match data {
+            MetricData::Sum(sum) => {
+                let points: Vec<_> = sum.data_points().collect();
+                assert_eq!(points.len(), 1, "expected exactly one data point");
+                assert_eq!(points[0].value(), 1, "expected counter value 1");
+                attributes_to_map(points[0].attributes())
+            }
+            _ => panic!("unexpected counter aggregation"),
+        },
+        _ => panic!("unexpected counter data type"),
+    };
+    assert_eq!(
+        attrs.get("outcome"),
+        Some(&expected_outcome.to_string()),
+        "expected outcome tag {expected_outcome}, got {attrs:?}"
+    );
 }
 
 pub(super) fn test_model_catalog(_config: &Config) -> Arc<ModelCatalog> {
