@@ -1,8 +1,10 @@
 use std::path::Path;
 
+use crossterm::event::KeyCode;
 use ody_protocol::config_types::CollaborationModeMask;
 
 use crate::app_event::AppEvent;
+use crate::key_hint;
 use crate::bottom_pane::SelectionAction;
 use crate::bottom_pane::SelectionItem;
 use crate::bottom_pane::SelectionViewParams;
@@ -137,6 +139,7 @@ pub(super) fn selection_view_params(
                 })],
                 None => Vec::new(),
             };
+            let shortcut = opt.label.to_ascii_lowercase();
             items.push(SelectionItem {
                 name: format!("Approve Option {label}"),
                 description: Some(if summary.is_empty() {
@@ -146,6 +149,7 @@ pub(super) fn selection_view_params(
                 }),
                 selected_description: None,
                 is_current: false,
+                display_shortcut: Some(key_hint::plain(KeyCode::Char(shortcut))),
                 actions: approve_actions,
                 disabled_reason: implement_disabled_reason.clone(),
                 dismiss_on_select: true,

@@ -1835,6 +1835,19 @@ async fn plan_implementation_popup_with_options_shows_approve_items() {
 }
 
 #[tokio::test]
+async fn plan_implementation_popup_options_snapshot() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    chat.on_plan_item_completed(
+        "## Option A: Refactor incrementally\n- step 1\n\n## Option B: Rewrite in one go\n- step 2\n".to_string(),
+        None,
+    );
+    chat.open_plan_implementation_prompt();
+
+    let popup = render_bottom_popup(&chat, /*width*/ 80);
+    assert_chatwidget_snapshot!("plan_implementation_popup_options", popup);
+}
+
+#[tokio::test]
 async fn plan_implementation_popup_without_options_falls_back_to_three_items() {
     let (chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
     let default_mask = collaboration_modes::default_mode_mask(chat.model_catalog.as_ref())
@@ -1964,4 +1977,38 @@ async fn plan_implementation_revise_feedback_submits_plan_mode_message() {
     };
     assert_eq!(text, "add tests");
     assert_eq!(collaboration_mode.mode, Some(ModeKind::Plan));
+}
+
+#[tokio::test]
+async fn plan_implementation_popup_option_shortcuts_select_approve_options() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    chat.on_plan_item_completed(
+        "## Option A: Refactor incrementally\n- step 1\n\n## Option B: Rewrite in one go\n- step 2\n".to_string(),
+        None,
+    );
+    let _ = drain_insert_history(&mut rx);
+    chat.open_plan_implementation_prompt();
+
+    chat.handle_key_event(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+
+    let event = rx.try_recv().expect("expected AppEvent for option A");
+    let AppEvent::SubmitUserMessageWithMode { text, .. } = event else {
+        panic!("expected SubmitUserMessageWithMode for option A, got {event:?}");
+    };
+    assert_eq!(
+        text,
+        "Implement the plan.\n\nExecute Option A only: Refactor incrementally."
+    );
+
+    chat.open_plan_implementation_prompt();
+    chat.handle_key_event(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE));
+
+    let event = rx.try_recv().expect("expected AppEvent for option B");
+    let AppEvent::SubmitUserMessageWithMode { text, .. } = event else {
+        panic!("expected SubmitUserMessageWithMode for option B, got {event:?}");
+    };
+    assert_eq!(
+        text,
+        "Implement the plan.\n\nExecute Option B only: Rewrite in one go."
+    );
 }
