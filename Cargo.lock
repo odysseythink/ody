@@ -8304,6 +8304,8 @@ dependencies = [
  "ody-utils-sleep-inhibitor",
  "ody-utils-string",
  "ody-windows-sandbox",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "pathdiff",
  "pretty_assertions",
  "pulldown-cmark",
