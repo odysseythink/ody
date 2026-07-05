@@ -29,6 +29,7 @@ ody-app-server-protocol = { workspace = true }
 ody-apply-patch = { workspace = true }
 ody-async-utils = { workspace = true }
 ody-code-mode = { workspace = true }
+ody-collaboration-mode-templates = { workspace = true }
 ody-connectors = { workspace = true }
 ody-context-fragments = { workspace = true }
 ody-config = { workspace = true }
@@ -75,6 +76,7 @@ ody-utils-plugins = { workspace = true }
 ody-utils-pty = { workspace = true }
 ody-utils-string = { workspace = true }
 ody-utils-stream-parser = { workspace = true }
+ody-utils-template = { workspace = true }
 ody-windows-sandbox = { package = "ody-windows-sandbox", path = "../windows-sandbox-rs" }
 csv = { workspace = true }
 dirs = { workspace = true }

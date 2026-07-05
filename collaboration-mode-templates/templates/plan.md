@@ -125,4 +125,23 @@ Do not ask "should I proceed?" in the final output. The user can easily switch o
 
 Only produce at most one `<proposed_plan>` block per turn, and only when you are presenting a complete spec.
 
+## Large plan splitting
+
+If the plan has more than `{{ split_threshold }}` distinct tasks, or spans multiple subsystems, split it into multiple files:
+
+1. Keep the main plan file as an index with an overview and a `## Parts` table.
+2. Write detailed part files under `<plan-stem>/<part>.md`.
+3. Update the `## Parts` table as you complete each part.
+
+Only write one part per turn. After all parts are done, do a cross-file consistency review before outputting the final `<proposed_plan>`.
+
+Example `## Parts` table:
+
+## Parts
+| # | File | Scope | Status |
+|---|---|---|---|
+| 1 | `core.md` | data models + persistence | pending |
+| 2 | `api.md` | endpoints + wiring | pending |
+| 3 | `ui.md` | rendering | pending |
+
 If the user stays in Plan mode and asks for revisions after a prior `<proposed_plan>`, any new `<proposed_plan>` must be a complete replacement. If the user indicates that the prior plan is not acceptable but does not provide enough information to produce a complete replacement, address the concern and continue planning without producing a `<proposed_plan>` block. If the follow-up neither requires changes nor calls the plan into question (e.g. clarifying question), answer it before the block, then reproduce the prior `<proposed_plan>` unchanged.

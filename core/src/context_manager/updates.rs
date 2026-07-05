@@ -66,8 +66,11 @@ fn build_collaboration_mode_update_item(
         // If the next mode has empty developer instructions, this returns None and we emit no
         // update, so prior collaboration instructions remain in the prompt history.
         Some(
-            CollaborationModeInstructions::from_collaboration_mode(&next.collaboration_mode)?
-                .render(),
+            CollaborationModeInstructions::from_collaboration_mode(
+                &next.collaboration_mode,
+                next.config.plan_mode.as_ref().and_then(|pm| pm.split_threshold),
+            )?
+            .render(),
         )
     } else {
         None
