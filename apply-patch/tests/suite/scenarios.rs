@@ -1,4 +1,3 @@
-use ody_utils_cargo_bin::repo_root;
 use pretty_assertions::assert_eq;
 use std::collections::BTreeMap;
 use std::fs;
@@ -9,9 +8,7 @@ use tempfile::tempdir;
 
 #[test]
 fn test_apply_patch_scenarios() -> anyhow::Result<()> {
-    let scenarios_dir = repo_root()?
-        .join("ody-rs")
-        .join("apply-patch")
+    let scenarios_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
         .join("scenarios");
