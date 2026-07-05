@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use crossterm::event::KeyCode;
+use ody_otel::SessionTelemetry;
 use ody_protocol::config_types::CollaborationModeMask;
 
 use crate::app_event::AppEvent;
@@ -37,6 +38,7 @@ pub(super) const PLAN_IMPLEMENTATION_PLAN_FILE_READ_FAILED: &str =
 /// or `123K used`. This module only decides where that label belongs in the
 /// decision copy so action wiring stays separate from token accounting.
 pub(super) fn selection_view_params(
+    session_telemetry: &SessionTelemetry,
     default_mask: Option<CollaborationModeMask>,
     current_plan_mask: Option<CollaborationModeMask>,
     plan_markdown: Option<&str>,
@@ -69,7 +71,9 @@ pub(super) fn selection_view_params(
     let (implement_actions, implement_disabled_reason) = match default_mask.clone() {
         Some(mask) => {
             let user_text = PLAN_IMPLEMENTATION_CODING_MESSAGE.to_string();
+            let telemetry = session_telemetry.clone();
             let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
+                telemetry.record_plan_resolved("implement");
                 tx.send(AppEvent::SubmitUserMessageWithMode {
                     text: user_text.clone(),
                     collaboration_mode: mask.clone(),
@@ -98,7 +102,9 @@ pub(super) fn selection_view_params(
             (Some(_), Some(plan_markdown)) if !plan_markdown.trim().is_empty() => {
                 let user_text =
                     format!("{PLAN_IMPLEMENTATION_CLEAR_CONTEXT_PREFIX}\n\n{plan_markdown}");
+                let telemetry = session_telemetry.clone();
                 let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
+                    telemetry.record_plan_resolved("implement_fresh_context");
                     tx.send(AppEvent::ClearUiAndSubmitUserMessage {
                         text: user_text.clone(),
                     });
@@ -131,12 +137,16 @@ pub(super) fn selection_view_params(
                 }
             };
             let approve_actions: Vec<SelectionAction> = match default_mask.clone() {
-                Some(mask) => vec![Box::new(move |tx| {
-                    tx.send(AppEvent::SubmitUserMessageWithMode {
-                        text: approve_text.clone(),
-                        collaboration_mode: mask.clone(),
-                    });
-                })],
+                Some(mask) => {
+                    let telemetry = session_telemetry.clone();
+                    vec![Box::new(move |tx| {
+                        telemetry.record_plan_resolved("approve_option");
+                        tx.send(AppEvent::SubmitUserMessageWithMode {
+                            text: approve_text.clone(),
+                            collaboration_mode: mask.clone(),
+                        });
+                    })]
+                }
                 None => Vec::new(),
             };
             let shortcut = opt.label.to_ascii_lowercase();
@@ -173,8 +183,10 @@ pub(super) fn selection_view_params(
                 match (default_mask.clone(), loaded_plan_markdown.as_deref()) {
                     (Some(_), Some(plan)) if !plan.trim().is_empty() => {
                         let text = fresh_text.clone();
+                        let telemetry = session_telemetry.clone();
                         (
                             vec![Box::new(move |tx| {
+                                telemetry.record_plan_resolved("approve_option_fresh_context");
                                 tx.send(AppEvent::ClearUiAndSubmitUserMessage {
                                     text: text.clone(),
                                 });
@@ -203,11 +215,15 @@ pub(super) fn selection_view_params(
 
         // 3) Revise plan
         let revise_actions: Vec<SelectionAction> = match current_plan_mask.clone() {
-            Some(mask) => vec![Box::new(move |tx| {
-                tx.send(AppEvent::OpenPlanRevisionPrompt {
-                    collaboration_mode: mask.clone(),
-                });
-            })],
+            Some(mask) => {
+                let telemetry = session_telemetry.clone();
+                vec![Box::new(move |tx| {
+                    telemetry.record_plan_resolved("revise");
+                    tx.send(AppEvent::OpenPlanRevisionPrompt {
+                        collaboration_mode: mask.clone(),
+                    });
+                })]
+            }
             None => Vec::new(),
         };
         items.push(SelectionItem {
@@ -226,9 +242,13 @@ pub(super) fn selection_view_params(
 
         // 4) Reject plan
         let reject_actions: Vec<SelectionAction> = match default_mask.clone() {
-            Some(mask) => vec![Box::new(move |tx| {
-                tx.send(AppEvent::SetCollaborationMask(mask.clone()));
-            })],
+            Some(mask) => {
+                let telemetry = session_telemetry.clone();
+                vec![Box::new(move |tx| {
+                    telemetry.record_plan_resolved("reject");
+                    tx.send(AppEvent::SetCollaborationMask(mask.clone()));
+                })]
+            }
             None => Vec::new(),
         };
         items.push(SelectionItem {
@@ -274,6 +294,10 @@ pub(super) fn selection_view_params(
     }
 
     // 继续规划始终放在最后
+    let continue_telemetry = session_telemetry.clone();
+    let continue_actions: Vec<SelectionAction> = vec![Box::new(move |_tx| {
+        continue_telemetry.record_plan_resolved("continue_planning");
+    })];
     items.push(SelectionItem {
         name: if has_options {
             "Continue planning".to_string()
@@ -283,7 +307,7 @@ pub(super) fn selection_view_params(
         description: Some("Keep Plan mode and continue the conversation.".to_string()),
         selected_description: None,
         is_current: false,
-        actions: Vec::new(),
+        actions: continue_actions,
         disabled_reason: None,
         dismiss_on_select: true,
         ..Default::default()

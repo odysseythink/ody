@@ -247,6 +247,7 @@ impl ChatWidget {
 
         self.bottom_pane
             .show_selection_view(plan_implementation::selection_view_params(
+                &self.session_telemetry,
                 default_mask,
                 self.active_collaboration_mask.clone(),
                 self.transcript.latest_proposed_plan_markdown.as_deref(),

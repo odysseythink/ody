@@ -243,6 +243,7 @@ async fn plan_implementation_clear_context_requires_default_mode_and_plan() {
         .expect("expected plan collaboration mode");
 
     let params = plan_implementation::selection_view_params(
+        &chat.session_telemetry,
         /*default_mask*/ None,
         /*current_plan_mask*/ None,
         Some("- Step\n"),
@@ -255,6 +256,7 @@ async fn plan_implementation_clear_context_requires_default_mode_and_plan() {
     );
 
     let params = plan_implementation::selection_view_params(
+        &chat.session_telemetry,
         Some(default_mask.clone()),
         Some(plan_mask.clone()),
         /*plan_markdown*/ None,
@@ -267,6 +269,7 @@ async fn plan_implementation_clear_context_requires_default_mode_and_plan() {
     );
 
     let params = plan_implementation::selection_view_params(
+        &chat.session_telemetry,
         Some(default_mask.clone()),
         Some(plan_mask.clone()),
         Some("  \n"),
@@ -279,6 +282,7 @@ async fn plan_implementation_clear_context_requires_default_mode_and_plan() {
     );
 
     let params = plan_implementation::selection_view_params(
+        &chat.session_telemetry,
         Some(default_mask.clone()),
         Some(plan_mask.clone()),
         Some("- Step\n"),
@@ -294,6 +298,7 @@ async fn plan_implementation_clear_context_requires_default_mode_and_plan() {
     );
 
     let params = plan_implementation::selection_view_params(
+        &chat.session_telemetry,
         Some(default_mask),
         Some(plan_mask),
         Some("- Step\n"),
@@ -1788,6 +1793,7 @@ async fn plan_implementation_reload_reads_plan_from_disk() {
         .expect("expected plan collaboration mode");
 
     let params = plan_implementation::selection_view_params(
+        &chat.session_telemetry,
         Some(default_mask),
         Some(plan_mask),
         Some("- Memory step\n"),
@@ -1831,6 +1837,7 @@ async fn plan_implementation_reload_disables_clear_context_when_disk_read_fails(
 
     let path = std::env::temp_dir().join("ody-plan-missing-not-present.md");
     let params = plan_implementation::selection_view_params(
+        &chat.session_telemetry,
         Some(default_mask),
         Some(plan_mask),
         Some("- Memory step\n"),
@@ -1887,6 +1894,7 @@ async fn plan_implementation_popup_without_options_falls_back_to_three_items() {
         .expect("expected plan collaboration mode");
 
     let params = plan_implementation::selection_view_params(
+        &chat.session_telemetry,
         Some(default_mask),
         Some(plan_mask),
         Some("- Step 1\n- Step 2\n"),
