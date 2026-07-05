@@ -1,0 +1,16 @@
+---
+source: tui/src/chatwidget/tests/plan_mode.rs
+expression: popup
+---
+  Implement this plan?
+
+› 1. Approve Option A (a)                  Refactor incrementally
+  2. Approve Option A (fresh context)  Fresh thread. Refactor incrementally
+  3. Approve Option B (b)                  Rewrite in one go
+  4. Approve Option B (fresh context)  Fresh thread. Rewrite in one go
+  5. Revise plan                       Provide feedback and continue planning.
+  6. Reject plan                       Exit Plan mode without implementing.
+  7. Continue planning                 Keep Plan mode and continue the
+                                       conversation.
+
+  Press enter to confirm or esc to go back

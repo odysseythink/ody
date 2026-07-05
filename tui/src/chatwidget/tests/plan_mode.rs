@@ -2012,3 +2012,16 @@ async fn plan_implementation_popup_option_shortcuts_select_approve_options() {
         "Implement the plan.\n\nExecute Option B only: Rewrite in one go."
     );
 }
+
+#[tokio::test]
+async fn plan_implementation_popup_with_options_snapshot() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    chat.on_plan_item_completed(
+        "## Option A: Refactor incrementally\n- step 1\n\n## Option B: Rewrite in one go\n- step 2\n".to_string(),
+        None,
+    );
+    chat.open_plan_implementation_prompt();
+
+    let popup = render_bottom_popup(&chat, /*width*/ 80);
+    assert_chatwidget_snapshot!("plan_implementation_popup_with_options", popup);
+}
