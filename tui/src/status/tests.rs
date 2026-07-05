@@ -132,6 +132,7 @@ async fn test_config(temp_home: &TempDir) -> Config {
             /*network_enabled*/ true,
         ))
         .expect("set permission profile");
+    config.model_context_window = Some(272_000);
     config
 }
 

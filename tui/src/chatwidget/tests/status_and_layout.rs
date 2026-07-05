@@ -2151,6 +2151,7 @@ async fn status_line_context_used_renders_labeled_percent() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.thread_id = Some(ThreadId::new());
     chat.config.tui_status_line = Some(vec!["context-used".to_string()]);
+    chat.config.model_context_window = Some(272_000);
 
     chat.refresh_status_line();
 
@@ -2166,6 +2167,7 @@ async fn status_line_context_remaining_renders_labeled_percent() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.thread_id = Some(ThreadId::new());
     chat.config.tui_status_line = Some(vec!["context-remaining".to_string()]);
+    chat.config.model_context_window = Some(272_000);
 
     chat.refresh_status_line();
 
@@ -2184,6 +2186,7 @@ async fn status_line_legacy_context_usage_renders_context_used_percent() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.thread_id = Some(ThreadId::new());
     chat.config.tui_status_line = Some(vec!["context-usage".to_string()]);
+    chat.config.model_context_window = Some(272_000);
 
     chat.refresh_status_line();
 
@@ -2541,6 +2544,7 @@ async fn status_line_model_with_reasoning_includes_fast_for_fast_capable_models(
         "context-used".to_string(),
         "current-dir".to_string(),
     ]);
+    chat.config.model_context_window = Some(272_000);
     chat.set_reasoning_effort(Some(ReasoningEffortConfig::XHigh));
     chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
     set_api_key_auth(&mut chat);
@@ -2720,6 +2724,7 @@ async fn status_line_model_with_reasoning_fast_footer_snapshot() {
         "context-used".to_string(),
         "current-dir".to_string(),
     ]);
+    chat.config.model_context_window = Some(272_000);
     chat.set_reasoning_effort(Some(ReasoningEffortConfig::XHigh));
     chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
     set_api_key_auth(&mut chat);
@@ -2754,6 +2759,7 @@ async fn status_line_model_with_reasoning_context_remaining_footer_snapshot() {
         "context-remaining".to_string(),
         "current-dir".to_string(),
     ]);
+    chat.config.model_context_window = Some(272_000);
     chat.set_reasoning_effort(Some(ReasoningEffortConfig::XHigh));
     chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
     set_api_key_auth(&mut chat);
