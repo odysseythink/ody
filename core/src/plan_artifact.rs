@@ -471,4 +471,14 @@ mod tests {
         let stem = artifact.stem_dir().unwrap();
         assert!(stem.to_string_lossy().ends_with("2026-07-04-refactor_auth"));
     }
+
+    #[tokio::test]
+    async fn is_plan_file_path_allows_part_file_under_stem() {
+        let (artifact, _tmp) = test_artifact("2026-07-04");
+        artifact.finalize_name("topic").await.unwrap();
+        let plan_path = artifact.path().unwrap();
+        let stem_dir = plan_path.with_extension("");
+        let part_file = stem_dir.join("core.md");
+        assert!(artifact.is_plan_file_path(&part_file));
+    }
 }
