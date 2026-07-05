@@ -6,7 +6,9 @@ use crate::app_event::AppEvent;
 use crate::bottom_pane::SelectionAction;
 use crate::bottom_pane::SelectionItem;
 use crate::bottom_pane::SelectionViewParams;
+use crate::bottom_pane::custom_prompt_view::CustomPromptView;
 use crate::bottom_pane::popup_consts::standard_popup_hint_line;
+use crate::chatwidget::ChatWidget;
 use crate::chatwidget::plan_options::PlanApprovalChoice;
 use crate::chatwidget::plan_options::parse_plan_options;
 use crate::chatwidget::plan_options::plan_choice_handoff_suffix;
@@ -197,15 +199,11 @@ pub(super) fn selection_view_params(
 
         // 3) Revise plan
         let revise_actions: Vec<SelectionAction> = match current_plan_mask.clone() {
-            Some(mask) => {
-                let feedback = String::new(); // PM 6b will wire the real feedback input
-                vec![Box::new(move |tx| {
-                    tx.send(AppEvent::SubmitUserMessageWithMode {
-                        text: feedback.clone(),
-                        collaboration_mode: mask.clone(),
-                    });
-                })]
-            }
+            Some(mask) => vec![Box::new(move |tx| {
+                tx.send(AppEvent::OpenPlanRevisionPrompt {
+                    collaboration_mode: mask.clone(),
+                });
+            })],
             None => Vec::new(),
         };
         items.push(SelectionItem {
@@ -293,5 +291,29 @@ pub(super) fn selection_view_params(
         footer_hint: Some(standard_popup_hint_line()),
         items,
         ..Default::default()
+    }
+}
+
+impl ChatWidget {
+    /// Open a free-form feedback prompt for revising the current plan.
+    pub(crate) fn show_plan_revision_prompt(&mut self, collaboration_mode: CollaborationModeMask) {
+        let tx = self.app_event_tx.clone();
+        let view = CustomPromptView::new(
+            "Revise plan".to_string(),
+            "What would you like to change?".to_string(),
+            /*initial_text*/ String::new(),
+            /*context_label*/ None,
+            Box::new(move |feedback: String| {
+                let trimmed = feedback.trim().to_string();
+                if trimmed.is_empty() {
+                    return;
+                }
+                tx.send(AppEvent::SubmitUserMessageWithMode {
+                    text: trimmed,
+                    collaboration_mode: collaboration_mode.clone(),
+                });
+            }),
+        );
+        self.bottom_pane.show_view(Box::new(view));
     }
 }

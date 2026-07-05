@@ -1899,7 +1899,7 @@ async fn plan_implementation_popup_option_reject_emits_set_mask_event() {
 }
 
 #[tokio::test]
-async fn plan_implementation_popup_option_revise_emits_plan_mode_message() {
+async fn plan_implementation_popup_option_revise_opens_feedback_prompt() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
     let plan_mask = collaboration_modes::plan_mask(chat.model_catalog.as_ref())
         .expect("expected plan collaboration mode");
@@ -1913,15 +1913,55 @@ async fn plan_implementation_popup_option_revise_emits_plan_mode_message() {
     let _ = drain_insert_history(&mut rx);
     chat.open_plan_implementation_prompt();
 
-    // 移动到 Revise plan（第二个固定动作）
+    // 选项列表：A(keep) -> A(fresh) -> Revise -> Reject -> Continue
     chat.handle_key_event(KeyEvent::from(KeyCode::Down));
     chat.handle_key_event(KeyEvent::from(KeyCode::Down));
     chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
 
     let event = rx.try_recv().expect("expected AppEvent");
+    assert_matches!(
+        event,
+        AppEvent::OpenPlanRevisionPrompt { collaboration_mode }
+            if collaboration_mode.mode == Some(ModeKind::Plan)
+    );
+}
+
+#[tokio::test]
+async fn plan_implementation_revise_feedback_submits_plan_mode_message() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    let plan_mask = collaboration_modes::plan_mask(chat.model_catalog.as_ref())
+        .expect("expected plan collaboration mode");
+    chat.set_collaboration_mask(plan_mask);
+    let _ = drain_insert_history(&mut rx);
+
+    chat.on_plan_item_completed(
+        "## Option A: Refactor incrementally\n- step 1\n".to_string(),
+        None,
+    );
+    let _ = drain_insert_history(&mut rx);
+    chat.open_plan_implementation_prompt();
+
+    // 选中 Revise plan
+    chat.handle_key_event(KeyEvent::from(KeyCode::Down));
+    chat.handle_key_event(KeyEvent::from(KeyCode::Down));
+    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+
+    let event = rx.try_recv().expect("expected AppEvent");
+    let AppEvent::OpenPlanRevisionPrompt { collaboration_mode } = event else {
+        panic!("expected OpenPlanRevisionPrompt, got {event:?}");
+    };
+
+    // 手动触发 App 会做的分发：显示修订反馈输入框
+    chat.show_plan_revision_prompt(collaboration_mode);
+
+    // 在 CustomPromptView 中输入 "add tests" 并提交
+    chat.handle_paste("add tests".to_string());
+    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    let event = rx.try_recv().expect("expected AppEvent");
     let AppEvent::SubmitUserMessageWithMode { text, collaboration_mode } = event else {
         panic!("expected SubmitUserMessageWithMode, got {event:?}");
     };
-    assert_eq!(text, "");
+    assert_eq!(text, "add tests");
     assert_eq!(collaboration_mode.mode, Some(ModeKind::Plan));
 }

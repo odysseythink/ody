@@ -957,6 +957,12 @@ pub(crate) enum AppEvent {
     /// Used by the Plan mode rejection action to return to Default mode.
     SetCollaborationMask(CollaborationModeMask),
 
+    /// Open a text input overlay for revising the current plan.
+    /// The feedback text is submitted back to the model in Plan mode.
+    OpenPlanRevisionPrompt {
+        collaboration_mode: CollaborationModeMask,
+    },
+
     /// Open the approval popup.
     FullScreenApprovalRequest(ApprovalRequest),
 

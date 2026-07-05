@@ -1955,6 +1955,9 @@ impl App {
             AppEvent::SetCollaborationMask(mask) => {
                 self.chat_widget.set_collaboration_mask(mask);
             }
+            AppEvent::OpenPlanRevisionPrompt { collaboration_mode } => {
+                self.chat_widget.show_plan_revision_prompt(collaboration_mode);
+            }
             AppEvent::ManageSkillsClosed => {
                 self.chat_widget.handle_manage_skills_closed();
             }
