@@ -153,6 +153,10 @@ const fn default_split_threshold() -> Option<usize> {
     Some(8)
 }
 
+const fn default_split_plan_compaction_ratio() -> Option<f64> {
+    Some(0.5)
+}
+
 fn default_plan_mode_config() -> Option<PlanModeConfigToml> {
     Some(PlanModeConfigToml::default())
 }
@@ -178,6 +182,10 @@ pub struct PlanModeConfigToml {
     /// 0 disables splitting.
     #[serde(default = "default_split_threshold")]
     pub split_threshold: Option<usize>,
+    /// Ratio of max context usage above which a synchronous compaction is
+    /// triggered when a plan part boundary is crossed. 0.0 disables.
+    #[serde(default = "default_split_plan_compaction_ratio")]
+    pub split_plan_compaction_ratio: Option<f64>,
 }
 
 impl Default for PlanModeConfigToml {
@@ -189,6 +197,7 @@ impl Default for PlanModeConfigToml {
             model: None,
             reasoning_effort: None,
             split_threshold: default_split_threshold(),
+            split_plan_compaction_ratio: default_split_plan_compaction_ratio(),
         }
     }
 }
@@ -1366,5 +1375,29 @@ split_threshold = 16
         assert_eq!(plan_mode.model, Some("kimi-k2-thinking".to_string()));
         assert_eq!(plan_mode.reasoning_effort, Some(ReasoningEffort::High));
         assert_eq!(plan_mode.split_threshold, Some(16));
+    }
+
+    #[test]
+    fn default_split_plan_compaction_ratio_is_half() {
+        let cfg = PlanModeConfigToml::default();
+        assert_eq!(cfg.split_plan_compaction_ratio, Some(0.5));
+    }
+
+    #[test]
+    fn deserialize_split_plan_compaction_ratio() {
+        let toml = r#"
+            split_plan_compaction_ratio = 0.75
+        "#;
+        let cfg: PlanModeConfigToml = toml::from_str(toml).unwrap();
+        assert_eq!(cfg.split_plan_compaction_ratio, Some(0.75));
+    }
+
+    #[test]
+    fn deserialize_split_plan_compaction_ratio_zero_disables() {
+        let toml = r#"
+            split_plan_compaction_ratio = 0.0
+        "#;
+        let cfg: PlanModeConfigToml = toml::from_str(toml).unwrap();
+        assert_eq!(cfg.split_plan_compaction_ratio, Some(0.0));
     }
 }

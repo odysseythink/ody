@@ -2455,6 +2455,12 @@
           ],
           "description": "Reasoning effort override used by the Plan preset."
         },
+        "split_plan_compaction_ratio": {
+          "default": 0.5,
+          "description": "Ratio of max context usage above which a synchronous compaction is triggered when a plan part boundary is crossed. 0.0 disables.",
+          "format": "double",
+          "type": "number"
+        },
         "split_threshold": {
           "default": 8,
           "description": "Number of tasks that triggers splitting a large plan into multiple files. 0 disables splitting.",
@@ -5510,6 +5516,7 @@
         "model": null,
         "persist_plan_file": true,
         "reasoning_effort": null,
+        "split_plan_compaction_ratio": 0.5,
         "split_threshold": 8
       },
       "description": "Plan mode settings."
