@@ -1,5 +1,6 @@
 //! Session-wide mutable state.
 
+use crate::plan_artifact::ManifestSnapshot;
 use ody_protocol::models::AdditionalPermissionProfile;
 use ody_protocol::models::ResponseItem;
 use ody_sandboxing::policy_transforms::merge_permission_profiles;
@@ -43,6 +44,7 @@ pub(crate) struct SessionState {
     pub(crate) pending_session_start_sources: VecDeque<ody_hooks::SessionStartSource>,
     granted_permissions_by_environment_id: HashMap<String, AdditionalPermissionProfile>,
     next_turn_is_first: bool,
+    plan_mode_last_manifest_snapshot: Option<ManifestSnapshot>,
 }
 
 impl SessionState {
@@ -64,6 +66,7 @@ impl SessionState {
             pending_session_start_sources: VecDeque::new(),
             granted_permissions_by_environment_id: HashMap::new(),
             next_turn_is_first: true,
+            plan_mode_last_manifest_snapshot: None,
         }
     }
 
@@ -299,6 +302,17 @@ impl SessionState {
         self.granted_permissions_by_environment_id
             .get(environment_id)
             .cloned()
+    }
+
+    pub(crate) fn plan_mode_last_manifest_snapshot(&self) -> Option<ManifestSnapshot> {
+        self.plan_mode_last_manifest_snapshot.clone()
+    }
+
+    pub(crate) fn set_plan_mode_last_manifest_snapshot(
+        &mut self,
+        snapshot: ManifestSnapshot,
+    ) {
+        self.plan_mode_last_manifest_snapshot = Some(snapshot);
     }
 }
 

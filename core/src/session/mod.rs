@@ -39,6 +39,7 @@ use crate::environment_selection::TurnEnvironmentSnapshot;
 use crate::exec_policy::ExecPolicyManager;
 use crate::image_preparation::prepare_response_items;
 use crate::parse_turn_item;
+use crate::plan_artifact::ManifestSnapshot;
 use crate::realtime_conversation::RealtimeConversationManager;
 use crate::session::turn_context::TurnEnvironment;
 use crate::session_prefix::format_inter_agent_completion_message;
@@ -1191,6 +1192,19 @@ impl Session {
     pub(crate) async fn get_total_token_usage(&self) -> i64 {
         let state = self.state.lock().await;
         state.get_total_token_usage(state.server_reasoning_included())
+    }
+
+    pub(crate) async fn plan_mode_last_manifest_snapshot(&self) -> Option<ManifestSnapshot> {
+        let state = self.state.lock().await;
+        state.plan_mode_last_manifest_snapshot()
+    }
+
+    pub(crate) async fn set_plan_mode_last_manifest_snapshot(
+        &self,
+        snapshot: ManifestSnapshot,
+    ) {
+        let mut state = self.state.lock().await;
+        state.set_plan_mode_last_manifest_snapshot(snapshot);
     }
 
     pub(crate) async fn auto_compact_window_snapshot(&self) -> AutoCompactWindowSnapshot {

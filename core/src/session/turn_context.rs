@@ -780,6 +780,9 @@ impl Session {
                 self.thread_id(),
                 turn_context.current_date.as_deref().unwrap_or("0000-00-00"),
             );
+            if let Some(snapshot) = self.plan_mode_last_manifest_snapshot().await {
+                artifact.set_last_manifest_snapshot(snapshot);
+            }
             turn_context.plan_artifact = Some(Arc::new(artifact));
         }
         turn_context.realtime_active = self.conversation.running_state().await.is_some();

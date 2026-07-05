@@ -9,6 +9,7 @@ use tokio::sync::Mutex;
 pub struct PlanArtifact {
     state: Mutex<PlanArtifactState>,
     last_manifest_snapshot: Mutex<Option<ManifestSnapshot>>,
+    last_plan_text: Mutex<Option<String>>,
     ody_home: AbsolutePathBuf,
     thread_id: ody_protocol::ThreadId,
     date: String,
@@ -73,6 +74,7 @@ impl PlanArtifact {
         Self {
             state: Mutex::new(PlanArtifactState::Temporary { temp_path }),
             last_manifest_snapshot: Mutex::new(None),
+            last_plan_text: Mutex::new(None),
             ody_home,
             thread_id,
             date: date.to_string(),
@@ -104,6 +106,9 @@ impl PlanArtifact {
     }
 
     pub async fn write_plan(&self, markdown: &str, persist: bool) -> PlanWriteOutcome {
+        if let Ok(mut guard) = self.last_plan_text.try_lock() {
+            *guard = Some(markdown.to_string());
+        }
         let mut state = self.state.lock().await;
         if !persist {
             *state = PlanArtifactState::InlineOnly;
@@ -143,6 +148,10 @@ impl PlanArtifact {
         if let Ok(mut guard) = self.last_manifest_snapshot.try_lock() {
             *guard = None;
         }
+    }
+
+    pub fn last_plan_text(&self) -> Option<String> {
+        self.last_plan_text.try_lock().ok()?.clone()
     }
 
     pub fn stem_dir(&self) -> Option<PathBuf> {
@@ -188,6 +197,7 @@ impl PlanArtifact {
             Some(path) if path.exists() => Self {
                 state: Mutex::new(PlanArtifactState::Finalized { final_path: path }),
                 last_manifest_snapshot: Mutex::new(None),
+                last_plan_text: Mutex::new(None),
                 ody_home,
                 thread_id,
                 date: date.to_string(),

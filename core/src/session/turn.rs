@@ -1,12 +1,17 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use crate::SkillInjections;
 use crate::build_skill_injections;
+use crate::context::InternalContextSource;
+use crate::context::InternalModelContextFragment;
 use crate::plan_artifact::sanitize_plan_slug;
+use crate::plan_mode_injector::PlanModeInjector;
+use crate::plan_mode_injector::render_directive;
 use crate::client::ModelClientSession;
 use crate::client_common::Prompt;
 use crate::client_common::ResponseEvent;
@@ -1073,6 +1078,61 @@ async fn run_auto_compact(
         )
         .await?;
     }
+    Ok(())
+}
+
+#[instrument(level = "trace", skip_all)]
+async fn run_plan_mode_after_turn(
+    sess: &Arc<Session>,
+    turn_context: &Arc<TurnContext>,
+    client_session: &mut ModelClientSession,
+    plan_markdown: &str,
+) -> OdyResult<()> {
+    let Some(artifact) = turn_context.plan_artifact.as_ref() else {
+        return Ok(());
+    };
+
+    let plan_mode_config = turn_context.config.plan_mode.as_ref();
+    let result = PlanModeInjector::after_plan_turn(artifact, plan_markdown, plan_mode_config);
+
+    if let Some(snapshot) = artifact.last_manifest_snapshot() {
+        sess.set_plan_mode_last_manifest_snapshot(snapshot).await;
+    }
+
+    if result.boundary_crossed {
+        let ratio = plan_mode_config
+            .and_then(|cfg| cfg.split_plan_compaction_ratio)
+            .unwrap_or(0.5);
+        if ratio > 0.0 {
+            let total_tokens = sess.get_total_token_usage().await;
+            if let Some(context_window) = turn_context.model_context_window() {
+                let context_usage_ratio = total_tokens as f64 / context_window as f64;
+                if context_usage_ratio >= ratio {
+                    run_auto_compact(
+                        sess,
+                        turn_context,
+                        client_session,
+                        InitialContextInjection::BeforeLastUserMessage,
+                        CompactionReason::PlanSplitCheckpoint,
+                        CompactionPhase::MidTurn,
+                    )
+                    .await?;
+                }
+            }
+        }
+    }
+
+    if let Some(directive_text) = render_directive(
+        &result.directive,
+        artifact.path().as_deref().unwrap_or_else(|| Path::new("plan.md")),
+    ) {
+        let source = InternalContextSource::from_static("plan_mode_directive");
+        let fragment = InternalModelContextFragment::new(source, directive_text);
+        let item: ResponseItem = ContextualUserFragment::into(fragment);
+        sess.record_conversation_items(turn_context, std::slice::from_ref(&item))
+            .await;
+    }
+
     Ok(())
 }
 
@@ -2479,6 +2539,29 @@ async fn try_run_sampling_request(
         if let Some(unified_diff) = unified_diff {
             let msg = EventMsg::TurnDiff(TurnDiffEvent { unified_diff });
             sess.clone().send_event(&turn_context, msg).await;
+        }
+    }
+
+    if turn_context.collaboration_mode.mode == ModeKind::Plan {
+        if let Some(artifact) = turn_context.plan_artifact.as_ref() {
+            if let Some(plan_markdown) = artifact.last_plan_text() {
+                if let Err(err) = run_plan_mode_after_turn(
+                    &sess,
+                    &turn_context,
+                    client_session,
+                    &plan_markdown,
+                )
+                .await
+                {
+                    if matches!(err, OdyErr::TurnAborted) {
+                        return Err(err);
+                    }
+                    let error = err.to_ody_protocol_error();
+                    sess.emit_turn_error_lifecycle(turn_context.as_ref(), error.clone())
+                        .await;
+                    error!(error = ?error, "Failed to run plan-mode after-turn hook");
+                }
+            }
         }
     }
 
