@@ -135,6 +135,7 @@ pub use agents_md::LoadedAgentsMd;
 mod rollout;
 mod rollout_budget;
 pub(crate) mod plan_artifact;
+pub(crate) mod plan_mode_injector;
 pub(crate) mod safety;
 mod session_rollout_init_error;
 pub mod shell;

@@ -1,0 +1,222 @@
+use std::path::{Path, PathBuf};
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PartsManifest {
+    pub rows: Vec<ManifestRow>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ManifestRow {
+    pub number: usize,
+    pub file: String,
+    pub scope: String,
+    pub status: RowStatus,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RowStatus {
+    Pending,
+    Done,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ManifestParseResult {
+    pub manifest: Option<PartsManifest>,
+    pub warning: Option<String>,
+}
+
+pub fn parse_parts_manifest(content: &str) -> ManifestParseResult {
+    let mut result = ManifestParseResult {
+        manifest: None,
+        warning: None,
+    };
+
+    let Some(heading_pos) = content.find("## Parts") else {
+        return result;
+    };
+
+    let remainder = &content[heading_pos..];
+    let section_end = remainder
+        .find("\n## ")
+        .map(|i| i + 1)
+        .unwrap_or(remainder.len());
+    let section = &remainder[..section_end];
+
+    let lines: Vec<&str> = section.lines().collect();
+    let mut table_start = None;
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('|') && i + 1 < lines.len() && lines[i + 1].contains("---") {
+            table_start = Some(i);
+            break;
+        }
+    }
+
+    let Some(table_start) = table_start else {
+        result.warning = Some("## Parts found but no table".to_string());
+        return result;
+    };
+
+    let mut rows = Vec::new();
+    for line in lines.iter().skip(table_start + 2) {
+        let trimmed = line.trim();
+        if !trimmed.starts_with('|') {
+            break;
+        }
+        let cells: Vec<&str> = trimmed
+            .split('|')
+            .skip(1)
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if cells.len() < 4 {
+            continue;
+        }
+        let Ok(number) = cells[0].trim().parse::<usize>() else {
+            continue;
+        };
+        let file_raw = cells[1].trim();
+        let scope = cells[2].trim().to_string();
+        let status_raw = cells[3].trim().to_lowercase();
+
+        let file = strip_backticks(file_raw);
+        if file.is_empty() || !file.ends_with(".md") {
+            continue;
+        }
+        let status = match status_raw.as_str() {
+            "pending" => RowStatus::Pending,
+            "done" => RowStatus::Done,
+            _ => continue,
+        };
+
+        rows.push(ManifestRow {
+            number,
+            file,
+            scope,
+            status,
+        });
+    }
+
+    if rows.is_empty() {
+        result.warning = Some("## Parts table has no valid rows".to_string());
+        return result;
+    }
+
+    result.manifest = Some(PartsManifest { rows });
+    result
+}
+
+pub fn normalize_part_path(stem_dir: &Path, file_cell: &str) -> Option<PathBuf> {
+    if file_cell.starts_with('/') || file_cell.contains("..") {
+        return None;
+    }
+    let path = Path::new(file_cell);
+    let basename = path.file_name()?;
+    let normalized = stem_dir.join(basename);
+    if !normalized.starts_with(stem_dir) {
+        return None;
+    }
+    if normalized.extension()? != "md" {
+        return None;
+    }
+    Some(normalized)
+}
+
+fn strip_backticks(value: &str) -> String {
+    value.trim().trim_matches('`').trim().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_parts_manifest_finds_table() {
+        let markdown = r#"# Plan
+
+## Parts
+| # | File | Scope | Status |
+|---|---|---|---|
+| 1 | core.md | models + persistence | pending |
+| 2 | api.md | endpoints + wiring | pending |
+| 3 | ui.md | rendering | pending |
+"#;
+        let result = parse_parts_manifest(markdown);
+        let manifest = result.manifest.expect("expected manifest");
+        assert_eq!(manifest.rows.len(), 3);
+        assert_eq!(manifest.rows[0].file, "core.md");
+        assert_eq!(manifest.rows[0].status, RowStatus::Pending);
+    }
+
+    #[test]
+    fn parse_parts_manifest_ignores_separator() {
+        let markdown = r#"## Parts
+| # | File | Scope | Status |
+|---|---|---|---|
+| 1 | core.md | models | pending |
+"#;
+        let result = parse_parts_manifest(markdown);
+        let manifest = result.manifest.expect("expected manifest");
+        assert_eq!(manifest.rows.len(), 1);
+    }
+
+    #[test]
+    fn parse_parts_manifest_strips_backticks() {
+        let markdown = r#"## Parts
+| # | File | Scope | Status |
+|---|---|---|---|
+| 1 | `api.md` | endpoints | pending |
+"#;
+        let result = parse_parts_manifest(markdown);
+        let manifest = result.manifest.expect("expected manifest");
+        assert_eq!(manifest.rows[0].file, "api.md");
+    }
+
+    #[test]
+    fn parse_parts_manifest_rejects_invalid_status() {
+        let markdown = r#"## Parts
+| # | File | Scope | Status |
+|---|---|---|---|
+| 1 | core.md | models | in-progress |
+"#;
+        let result = parse_parts_manifest(markdown);
+        assert!(result.manifest.is_none());
+        assert!(result.warning.is_some());
+    }
+
+    #[test]
+    fn parse_parts_manifest_returns_none_without_heading() {
+        let markdown = r#"| # | File | Scope | Status |
+|---|---|---|---|
+| 1 | core.md | models | pending |
+"#;
+        let result = parse_parts_manifest(markdown);
+        assert!(result.manifest.is_none());
+        assert!(result.warning.is_none());
+    }
+
+    #[test]
+    fn normalize_part_path_accepts_basename() {
+        let stem = Path::new("/plans/2026-07-05-topic");
+        let normalized = normalize_part_path(stem, "core.md").unwrap();
+        assert_eq!(normalized, Path::new("/plans/2026-07-05-topic/core.md"));
+    }
+
+    #[test]
+    fn normalize_part_path_rejects_traversal() {
+        let stem = Path::new("/plans/2026-07-05-topic");
+        assert!(normalize_part_path(stem, "../escape.md").is_none());
+    }
+
+    #[test]
+    fn normalize_part_path_rejects_absolute() {
+        let stem = Path::new("/plans/2026-07-05-topic");
+        assert!(normalize_part_path(stem, "/etc/passwd.md").is_none());
+    }
+
+    #[test]
+    fn normalize_part_path_rejects_non_md() {
+        let stem = Path::new("/plans/2026-07-05-topic");
+        assert!(normalize_part_path(stem, "core.txt").is_none());
+    }
+}
