@@ -8,6 +8,7 @@ use tokio::sync::Mutex;
 #[derive(Debug)]
 pub struct PlanArtifact {
     state: Mutex<PlanArtifactState>,
+    last_manifest_snapshot: Mutex<Option<ManifestSnapshot>>,
     ody_home: AbsolutePathBuf,
     thread_id: ody_protocol::ThreadId,
     date: String,
@@ -18,6 +19,26 @@ pub enum PlanArtifactState {
     Temporary { temp_path: PathBuf },
     Finalized { final_path: PathBuf },
     InlineOnly,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ManifestSnapshot {
+    pub done_count: usize,
+    pub pending_count: usize,
+    pub rows: Vec<PartRow>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PartRow {
+    pub file_name: String,
+    pub scope: String,
+    pub status: PartStatus,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PartStatus {
+    Pending,
+    Done,
 }
 
 #[derive(Debug)]
@@ -51,6 +72,7 @@ impl PlanArtifact {
         let temp_path = allocate_temp_path(&ody_home, &thread_id, date);
         Self {
             state: Mutex::new(PlanArtifactState::Temporary { temp_path }),
+            last_manifest_snapshot: Mutex::new(None),
             ody_home,
             thread_id,
             date: date.to_string(),
@@ -107,6 +129,28 @@ impl PlanArtifact {
         }
     }
 
+    pub fn last_manifest_snapshot(&self) -> Option<ManifestSnapshot> {
+        self.last_manifest_snapshot.try_lock().ok()?.clone()
+    }
+
+    pub fn set_last_manifest_snapshot(&self, snapshot: ManifestSnapshot) {
+        if let Ok(mut guard) = self.last_manifest_snapshot.try_lock() {
+            *guard = Some(snapshot);
+        }
+    }
+
+    pub fn clear_last_manifest_snapshot(&self) {
+        if let Ok(mut guard) = self.last_manifest_snapshot.try_lock() {
+            *guard = None;
+        }
+    }
+
+    pub fn stem_dir(&self) -> Option<PathBuf> {
+        let path = self.path()?;
+        let stem = path.file_stem()?;
+        Some(path.with_file_name(stem))
+    }
+
     pub fn is_plan_file_path(&self, target: &Path) -> bool {
         let Some(plan_path) = self.path() else {
             return false;
@@ -143,6 +187,7 @@ impl PlanArtifact {
         match stored_path {
             Some(path) if path.exists() => Self {
                 state: Mutex::new(PlanArtifactState::Finalized { final_path: path }),
+                last_manifest_snapshot: Mutex::new(None),
                 ody_home,
                 thread_id,
                 date: date.to_string(),
@@ -389,5 +434,41 @@ mod tests {
         let sibling_dir = plan_path.parent().unwrap().join("2026-07-04-other");
         let sub_file = sibling_dir.join("subsystem.md");
         assert!(!artifact.is_plan_file_path(&sub_file));
+    }
+
+    #[tokio::test]
+    async fn manifest_snapshot_round_trip() {
+        let (artifact, _tmp) = test_artifact("2026-07-04");
+        assert!(artifact.last_manifest_snapshot().is_none());
+
+        let snapshot = ManifestSnapshot {
+            done_count: 1,
+            pending_count: 2,
+            rows: vec![
+                PartRow {
+                    file_name: "core.md".to_string(),
+                    scope: "models".to_string(),
+                    status: PartStatus::Done,
+                },
+                PartRow {
+                    file_name: "api.md".to_string(),
+                    scope: "endpoints".to_string(),
+                    status: PartStatus::Pending,
+                },
+            ],
+        };
+        artifact.set_last_manifest_snapshot(snapshot.clone());
+        assert_eq!(artifact.last_manifest_snapshot(), Some(snapshot));
+
+        artifact.clear_last_manifest_snapshot();
+        assert!(artifact.last_manifest_snapshot().is_none());
+    }
+
+    #[tokio::test]
+    async fn stem_dir_returns_plan_stem_directory() {
+        let (artifact, _tmp) = test_artifact("2026-07-04");
+        artifact.finalize_name("refactor_auth").await.unwrap();
+        let stem = artifact.stem_dir().unwrap();
+        assert!(stem.to_string_lossy().ends_with("2026-07-04-refactor_auth"));
     }
 }
