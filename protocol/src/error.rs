@@ -476,7 +476,10 @@ impl std::fmt::Display for UsageLimitReachedError {
             );
         }
 
-        let message = "";
+        let message = format!(
+            "You've hit your usage limit.{}",
+            retry_suffix(self.resets_at.as_ref())
+        );
 
         write!(f, "{message}")
     }
