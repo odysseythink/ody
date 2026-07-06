@@ -106,7 +106,6 @@ impl AccountRequestProcessor {
         let auth = self.auth_manager.auth_cached();
         AccountUpdatedNotification {
             auth_mode: auth.as_ref().map(OdyAuth::api_auth_mode),
-            plan_type: None,
         }
     }
 
@@ -244,7 +243,6 @@ impl AccountRequestProcessor {
                 .cloned()
                 .map(|auth_mode| AccountUpdatedNotification {
                     auth_mode,
-                    plan_type: None,
                 });
         self.outgoing
             .send_result(request_id, result.map(|_| LogoutAccountResponse {}))

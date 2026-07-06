@@ -37,8 +37,6 @@ pub(super) struct TranscriptState {
     pub(super) needs_final_message_separator: bool,
     /// Whether the current turn performed "work" (exec commands, MCP tool calls, patch applications).
     pub(super) had_work_activity: bool,
-    /// Whether the current turn emitted a plan update.
-    pub(super) saw_plan_update_this_turn: bool,
     /// Whether the current turn emitted a proposed plan item that has not been superseded by a
     /// later steer.
     pub(super) saw_plan_item_this_turn: bool,
@@ -112,7 +110,6 @@ impl TranscriptState {
 
     pub(super) fn reset_turn_flags(&mut self) {
         self.saw_copy_source_this_turn = false;
-        self.saw_plan_update_this_turn = false;
         self.saw_plan_item_this_turn = false;
         self.had_work_activity = false;
         self.latest_proposed_plan_markdown = None;

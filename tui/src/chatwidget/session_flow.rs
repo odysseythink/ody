@@ -24,7 +24,7 @@ impl ChatWidget {
             .set_queue_submissions(/*queue_submissions*/ false);
         if previous_thread_id != self.thread_id {
             self.review.recent_auto_review_denials = RecentAutoReviewDenials::default();
-            self.bottom_pane.set_pinned_plan(None);
+            self.bottom_pane.set_pinned_todo(None);
         }
         self.refresh_plan_mode_nudge();
         self.turn_lifecycle.reset_thread();
@@ -118,7 +118,6 @@ impl ChatWidget {
                 &session,
                 self.show_welcome_banner,
                 startup_tooltip_override,
-                None,
                 show_fast_status,
             );
             self.apply_session_info_cell(session_info_cell);

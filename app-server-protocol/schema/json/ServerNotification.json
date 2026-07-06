@@ -51,16 +51,6 @@
               "type": "null"
             }
           ]
-        },
-        "planType": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/PlanType"
-            },
-            {
-              "type": "null"
-            }
-          ]
         }
       },
       "type": "object"
@@ -2906,16 +2896,6 @@
           "type": [
             "string",
             "null"
-          ]
-        },
-        "planType": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/PlanType"
-            },
-            {
-              "type": "null"
-            }
           ]
         },
         "primary": {

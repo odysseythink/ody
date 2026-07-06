@@ -479,42 +479,7 @@ impl std::fmt::Display for UsageLimitReachedError {
             );
         }
 
-        let message = match self.plan_type.as_ref() {
-            Some(PlanType::Known(KnownPlan::Plus)) => format!(
-                "You've hit your usage limit. Upgrade to Pro (https://odysseythink.com/pro), visit https://odysseythink.com/settings/usage to purchase more credits{}",
-                retry_suffix_after_or(self.resets_at.as_ref())
-            ),
-            Some(PlanType::Known(
-                KnownPlan::Team
-                | KnownPlan::SelfServeBusinessUsageBased
-                | KnownPlan::Business
-                | KnownPlan::EnterpriseCbpUsageBased,
-            )) => {
-                format!(
-                    "You've hit your usage limit. To get more access now, send a request to your admin{}",
-                    retry_suffix_after_or(self.resets_at.as_ref())
-                )
-            }
-            Some(PlanType::Known(KnownPlan::Free)) | Some(PlanType::Known(KnownPlan::Go)) => {
-                format!(
-                    "You've hit your usage limit. Upgrade to Plus to continue using Ody (https://odysseythink.com/plus),{}",
-                    retry_suffix_after_or(self.resets_at.as_ref())
-                )
-            }
-            Some(PlanType::Known(KnownPlan::Pro | KnownPlan::ProLite)) => format!(
-                "You've hit your usage limit. Visit https://odysseythink.com/settings/usage to purchase more credits{}",
-                retry_suffix_after_or(self.resets_at.as_ref())
-            ),
-            Some(PlanType::Known(KnownPlan::Enterprise))
-            | Some(PlanType::Known(KnownPlan::Edu)) => format!(
-                "You've hit your usage limit.{}",
-                retry_suffix(self.resets_at.as_ref())
-            ),
-            Some(PlanType::Unknown(_)) | None => format!(
-                "You've hit your usage limit.{}",
-                retry_suffix(self.resets_at.as_ref())
-            ),
-        };
+        let message = "";
 
         write!(f, "{message}")
     }

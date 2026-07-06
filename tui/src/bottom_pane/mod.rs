@@ -57,7 +57,7 @@ mod app_link_view;
 mod approval_overlay;
 mod mcp_server_elicitation;
 mod multi_select_picker;
-mod pinned_plan;
+mod pinned_todo;
 mod request_user_input;
 mod status_line_setup;
 mod status_line_style;
@@ -74,7 +74,7 @@ pub(crate) use approval_overlay::ApprovalRequest;
 pub(crate) use approval_overlay::format_requested_permissions_rule;
 pub(crate) use mcp_server_elicitation::McpServerElicitationFormRequest;
 pub(crate) use mcp_server_elicitation::McpServerElicitationOverlay;
-pub(crate) use pinned_plan::PinnedPlanWidget;
+pub(crate) use pinned_todo::PinnedTodoWidget;
 pub(crate) use request_user_input::RequestUserInputOverlay;
 pub(crate) use status_line_style::status_line_from_segments;
 mod bottom_pane_view;
@@ -231,7 +231,7 @@ pub(crate) struct BottomPane {
     /// Inline status indicator shown above the composer while a task is running.
     status: Option<StatusIndicatorWidget>,
     /// Pinned live plan checklist shown between the status line and the composer.
-    pinned_plan: Option<PinnedPlanWidget>,
+    pinned_todo: Option<PinnedTodoWidget>,
     /// Unified exec session summary source.
     ///
     /// When a status row exists, this summary is mirrored inline in that row;
@@ -293,7 +293,7 @@ impl BottomPane {
             disable_paste_burst,
             is_task_running: false,
             status: None,
-            pinned_plan: None,
+            pinned_todo: None,
             unified_exec_footer: UnifiedExecFooter::new(),
             pending_input_preview: PendingInputPreview::new(),
             pending_thread_approvals: PendingThreadApprovals::new(),
@@ -414,22 +414,22 @@ impl BottomPane {
         self.request_redraw();
     }
 
-    pub fn set_pinned_plan(&mut self, update: Option<UpdatePlanArgs>) {
+    pub fn set_pinned_todo(&mut self, update: Option<UpdatePlanArgs>) {
         match update {
             Some(args) => {
-                let mut widget = PinnedPlanWidget::new();
+                let mut widget = PinnedTodoWidget::new();
                 widget.update(args);
-                self.pinned_plan = Some(widget);
+                self.pinned_todo = Some(widget);
             }
             None => {
-                self.pinned_plan = None;
+                self.pinned_todo = None;
             }
         }
         self.request_redraw();
     }
 
-    pub fn pinned_plan_update_args(&self) -> Option<UpdatePlanArgs> {
-        self.pinned_plan.as_ref().and_then(|w| w.to_update_args())
+    pub fn pinned_todo_update_args(&self) -> Option<UpdatePlanArgs> {
+        self.pinned_todo.as_ref().and_then(|w| w.to_update_args())
     }
 
     pub fn set_ide_context_active(&mut self, active: bool) {
@@ -652,13 +652,13 @@ impl BottomPane {
                 self.request_redraw();
                 return InputResult::None;
             }
-            // Toggle pinned plan expanded state with ctrl+e.
+            // Toggle pinned todo expanded state with ctrl+e.
             if key_event.kind == KeyEventKind::Press
                 && key_event.code == KeyCode::Char('e')
                 && key_event.modifiers.contains(KeyModifiers::CONTROL)
-                && self.pinned_plan.is_some()
+                && self.pinned_todo.is_some()
             {
-                if let Some(pinned) = &mut self.pinned_plan {
+                if let Some(pinned) = &mut self.pinned_todo {
                     pinned.toggle_expanded();
                 }
                 self.request_redraw();
@@ -1754,7 +1754,7 @@ impl BottomPane {
             }
             let mut flex2 = FlexRenderable::new();
             flex2.push(/*flex*/ 1, RenderableItem::Owned(flex.into()));
-            if let Some(pinned) = &self.pinned_plan {
+            if let Some(pinned) = &self.pinned_todo {
                 flex2.push(/*flex*/ 0, RenderableItem::Borrowed(pinned));
             }
             let composer: RenderableItem<'_> = if composer_right_reserve == 0 {
@@ -3104,7 +3104,7 @@ mod tests {
     }
 
     #[test]
-    fn pinned_plan_renders_above_composer_snapshot() {
+    fn pinned_todo_renders_above_composer_snapshot() {
         use ody_protocol::plan_tool::{PlanItemArg, StepStatus, UpdatePlanArgs};
 
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
@@ -3120,7 +3120,7 @@ mod tests {
             skills: Some(Vec::new()),
         });
 
-        pane.set_pinned_plan(Some(UpdatePlanArgs {
+        pane.set_pinned_todo(Some(UpdatePlanArgs {
             explanation: Some("Working on feature".to_string()),
             plan: vec![
                 PlanItemArg {
@@ -3142,7 +3142,7 @@ mod tests {
         let height = pane.desired_height(width);
         let area = Rect::new(0, 0, width, height);
         assert_snapshot!(
-            "pinned_plan_renders_above_composer_snapshot",
+            "pinned_todo_renders_above_composer_snapshot",
             render_snapshot(&pane, area)
         );
     }

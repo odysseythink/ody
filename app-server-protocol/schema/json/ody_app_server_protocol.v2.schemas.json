@@ -132,16 +132,6 @@
               "type": "null"
             }
           ]
-        },
-        "planType": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/PlanType"
-            },
-            {
-              "type": "null"
-            }
-          ]
         }
       },
       "title": "AccountUpdatedNotification",
@@ -10548,16 +10538,6 @@
           "type": [
             "string",
             "null"
-          ]
-        },
-        "planType": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/PlanType"
-            },
-            {
-              "type": "null"
-            }
           ]
         },
         "primary": {

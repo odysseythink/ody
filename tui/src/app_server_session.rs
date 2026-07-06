@@ -1718,7 +1718,6 @@ mod tests {
             secondary: None,
             credits: None,
             individual_limit: None,
-            plan_type: None,
             rate_limit_reached_type: None,
         }
     }

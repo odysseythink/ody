@@ -1,6 +1,8 @@
 //! Proposed-plan and plan-update history cells.
 
 use super::*;
+use crate::style::accent_style;
+use ratatui::text::Span;
 
 /// Transient active-cell representation of the mutable tail of a proposed-plan stream.
 ///
@@ -45,8 +47,9 @@ impl HistoryCell for StreamingPlanTailCell {
 }
 /// Render the shared plan-update content lines (header + optional note + steps).
 ///
-/// Used by both the history `PlanUpdateCell` and the bottom-pane `PinnedPlanWidget` so the
-/// pinned live plan matches the committed history rendering.
+/// Used by the bottom-pane `PinnedTodoWidget` and, in tests, by the legacy
+/// `PlanUpdateCell`. Keeping the rendering shared ensures the pinned live plan
+/// matches the historical entry rendering.
 pub(crate) fn render_plan_steps(
     width: u16,
     explanation: Option<&str>,
@@ -79,7 +82,7 @@ pub(crate) fn render_plan_steps(
     };
 
     let mut lines: Vec<Line<'static>> = vec![];
-    lines.push(vec!["• ".dim(), "Updated Plan".bold()].into());
+    lines.push(vec!["• ".dim(), Span::styled("Todo", accent_style())].into());
 
     let mut indented_lines = vec![];
     let note = explanation.map(|s| s.trim()).filter(|t| !t.is_empty());
@@ -100,6 +103,11 @@ pub(crate) fn render_plan_steps(
 }
 
 /// Render a user‑friendly plan update styled like a checkbox todo list.
+///
+/// Only needed in tests now that live plan updates are rendered exclusively
+/// through the bottom-pane `PinnedTodoWidget` to avoid duplicate “Updated Plan”
+/// UI in the scrolling transcript.
+#[cfg(test)]
 pub(crate) fn new_plan_update(update: UpdatePlanArgs) -> PlanUpdateCell {
     let UpdatePlanArgs { explanation, plan } = update;
     PlanUpdateCell { explanation, plan }
@@ -232,18 +240,20 @@ impl HistoryCell for ProposedPlanStreamCell {
 }
 
 #[derive(Debug)]
+#[cfg(test)]
 pub(crate) struct PlanUpdateCell {
     explanation: Option<String>,
     plan: Vec<PlanItemArg>,
 }
 
+#[cfg(test)]
 impl HistoryCell for PlanUpdateCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
         render_plan_steps(width, self.explanation.as_deref(), &self.plan)
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
-        let mut lines = vec![Line::from("Updated Plan")];
+        let mut lines = vec![Line::from("Todo")];
         if let Some(explanation) = self
             .explanation
             .as_ref()

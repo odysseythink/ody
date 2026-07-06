@@ -3745,7 +3745,6 @@ mod tests {
                 balance: Some("5".to_string()),
             }),
             individual_limit: None,
-            plan_type: None,
             rate_limit_reached_type: None,
         };
 

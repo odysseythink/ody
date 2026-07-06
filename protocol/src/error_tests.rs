@@ -36,7 +36,6 @@ fn rate_limit_snapshot() -> RateLimitSnapshot {
         }),
         credits: None,
         individual_limit: None,
-        plan_type: None,
         rate_limit_reached_type: None,
     }
 }

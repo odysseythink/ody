@@ -3937,7 +3937,6 @@ async fn render_clear_ui_header_after_long_transcript_for_snapshot() -> String {
             &session,
             is_first,
             /*tooltip_override*/ None,
-            /*auth_plan*/ None,
             /*show_fast_status*/ false,
         )) as Arc<dyn HistoryCell>
     };
@@ -5026,7 +5025,6 @@ async fn backtrack_selection_with_duplicate_history_targets_unique_turn() {
             &session,
             is_first,
             /*tooltip_override*/ None,
-            /*auth_plan*/ None,
             /*show_fast_status*/ false,
         )) as Arc<dyn HistoryCell>
     };

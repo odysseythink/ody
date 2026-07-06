@@ -332,9 +332,6 @@ fn merge_rate_limit_fields(
     if snapshot.individual_limit.is_none() {
         snapshot.individual_limit = previous.and_then(|prior| prior.individual_limit.clone());
     }
-    if snapshot.plan_type.is_none() {
-        snapshot.plan_type = previous.and_then(|prior| prior.plan_type);
-    }
     snapshot
 }
 

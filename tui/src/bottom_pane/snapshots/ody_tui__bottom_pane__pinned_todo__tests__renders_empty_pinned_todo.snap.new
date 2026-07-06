@@ -1,9 +1,9 @@
 ---
 source: tui/src/bottom_pane/pinned_todo.rs
-assertion_line: 110
+assertion_line: 284
 expression: terminal.backend()
 ---
-"• Todo                          "
+"• Todo                                  "
 "  └ (no steps provided)                 "
 "                                        "
 "                                        "

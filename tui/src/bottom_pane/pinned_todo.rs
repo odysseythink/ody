@@ -1,8 +1,8 @@
 //! Pinned live plan widget rendered above the composer in the bottom pane.
 //!
 //! Phase 1: this widget renders the current `UpdatePlanArgs` checklist using the same shared
-//! rendering logic as `PlanUpdateCell` so the pinned plan matches the committed history entry.
-//! It does not yet receive live data from the controller; that wiring is for Phase 2/3.
+//! rendering logic as the legacy `PlanUpdateCell` so the pinned todo matches the history entry
+//! rendering. It does not yet receive live data from the controller; that wiring is for Phase 2/3.
 
 use ody_protocol::plan_tool::PlanItemArg;
 use ratatui::buffer::Buffer;
@@ -10,15 +10,17 @@ use ratatui::layout::Rect;
 use ratatui::style::Styled;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
+use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::WidgetRef;
 
 use crate::history_cell::render_plan_steps;
+use crate::style::accent_style;
 use crate::render::line_utils::{prefix_lines, push_owned_lines};
 use crate::render::renderable::Renderable;
 use crate::wrapping::{adaptive_wrap_line, RtOptions};
 
-/// Live pinned plan widget shown between the Working status line and the composer.
+/// Live pinned todo widget shown between the Working status line and the composer.
 ///
 /// The widget owns a snapshot of the latest plan-update arguments and re-renders in place each
 /// time `update_plan` is called, avoiding the stacked scrolling history cells used for committed
@@ -27,7 +29,7 @@ use crate::wrapping::{adaptive_wrap_line, RtOptions};
 /// When the plan has many steps, folded mode (default) limits the visible height to `max_lines`
 /// and hides completed steps first. Press `ctrl+e` to toggle `expanded` and see all steps.
 #[derive(Debug, Clone)]
-pub(crate) struct PinnedPlanWidget {
+pub(crate) struct PinnedTodoWidget {
     explanation: Option<String>,
     plan: Vec<PlanItemArg>,
     /// Maximum visible lines in folded mode (including header).
@@ -36,7 +38,7 @@ pub(crate) struct PinnedPlanWidget {
     expanded: bool,
 }
 
-impl Default for PinnedPlanWidget {
+impl Default for PinnedTodoWidget {
     fn default() -> Self {
         Self {
             explanation: None,
@@ -47,8 +49,8 @@ impl Default for PinnedPlanWidget {
     }
 }
 
-impl PinnedPlanWidget {
-    /// Create a new empty pinned plan widget.
+impl PinnedTodoWidget {
+    /// Create a new empty pinned todo widget.
     pub(crate) fn new() -> Self {
         Self::default()
     }
@@ -113,7 +115,7 @@ impl PinnedPlanWidget {
         lines.push(
             vec![
                 "• ".dim(),
-                "Updated Plan".bold(),
+                Span::styled("Todo", accent_style()),
                 format!("  ({completed}/{total} done)").dim(),
             ]
             .into(),
@@ -216,7 +218,7 @@ impl PinnedPlanWidget {
     }
 }
 
-impl Renderable for PinnedPlanWidget {
+impl Renderable for PinnedTodoWidget {
     fn desired_height(&self, width: u16) -> u16 {
         self.display_lines(width).len() as u16
     }
@@ -237,14 +239,14 @@ mod tests {
     use ratatui::layout::Rect;
     use ratatui::Terminal;
 
-    use super::PinnedPlanWidget;
+    use super::PinnedTodoWidget;
     use crate::history_cell::new_plan_update;
     use crate::history_cell::HistoryCell;
     use crate::render::renderable::Renderable;
 
     #[test]
-    fn renders_pinned_plan_with_explanation_and_steps() {
-        let widget = PinnedPlanWidget {
+    fn renders_pinned_todo_with_explanation_and_steps() {
+        let widget = PinnedTodoWidget {
             explanation: Some("Phase 1 pinned plan".to_string()),
             plan: vec![
                 PlanItemArg {
@@ -252,7 +254,7 @@ mod tests {
                     status: StepStatus::Completed,
                 },
                 PlanItemArg {
-                    step: "Create PinnedPlanWidget".to_string(),
+                    step: "Create PinnedTodoWidget".to_string(),
                     status: StepStatus::InProgress,
                 },
                 PlanItemArg {
@@ -272,8 +274,8 @@ mod tests {
     }
 
     #[test]
-    fn renders_empty_pinned_plan() {
-        let widget = PinnedPlanWidget::new();
+    fn renders_empty_pinned_todo() {
+        let widget = PinnedTodoWidget::new();
 
         let mut terminal = Terminal::new(TestBackend::new(40, 5)).expect("terminal");
         terminal
@@ -284,7 +286,7 @@ mod tests {
 
     #[test]
     fn desired_height_matches_lines() {
-        let widget = PinnedPlanWidget {
+        let widget = PinnedTodoWidget {
             explanation: Some("Note".to_string()),
             plan: vec![
                 PlanItemArg {
@@ -306,7 +308,7 @@ mod tests {
 
     #[test]
     fn update_replaces_content() {
-        let mut widget = PinnedPlanWidget::new();
+        let mut widget = PinnedTodoWidget::new();
         widget.update(UpdatePlanArgs {
             explanation: Some("New plan".to_string()),
             plan: vec![PlanItemArg {
@@ -323,7 +325,7 @@ mod tests {
 
     #[test]
     fn folded_mode_respects_max_lines() {
-        let widget = PinnedPlanWidget {
+        let widget = PinnedTodoWidget {
             explanation: Some("A short note".to_string()),
             plan: (0..20)
                 .map(|i| PlanItemArg {
@@ -349,7 +351,7 @@ mod tests {
     }
 
     #[test]
-    fn pinned_plan_renders_identically_to_history_cell() {
+    fn pinned_todo_renders_identically_to_history_cell() {
         let update = UpdatePlanArgs {
             explanation: Some("Shared rendering contract check".to_string()),
             plan: vec![
@@ -358,7 +360,7 @@ mod tests {
                     status: StepStatus::Completed,
                 },
                 PlanItemArg {
-                    step: "Create PinnedPlanWidget".to_string(),
+                    step: "Create PinnedTodoWidget".to_string(),
                     status: StepStatus::InProgress,
                 },
                 PlanItemArg {
@@ -368,7 +370,7 @@ mod tests {
             ],
         };
 
-        let pinned = PinnedPlanWidget {
+        let pinned = PinnedTodoWidget {
             explanation: update.explanation.clone(),
             plan: update.plan.clone(),
             max_lines: 8,
@@ -379,7 +381,7 @@ mod tests {
         assert_eq!(
             pinned.display_lines(80),
             cell.display_lines(80),
-            "PinnedPlanWidget and PlanUpdateCell must produce identical display_lines from render_plan_steps"
+            "PinnedTodoWidget and PlanUpdateCell must produce identical display_lines from render_plan_steps"
         );
     }
 }

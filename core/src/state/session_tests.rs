@@ -51,7 +51,6 @@ async fn set_rate_limits_defaults_limit_id_to_ody_when_missing() {
         secondary: None,
         credits: None,
         individual_limit: None,
-        plan_type: None,
         rate_limit_reached_type: None,
     });
 
@@ -96,7 +95,6 @@ async fn set_rate_limits_defaults_to_ody_when_limit_id_missing_after_other_bucke
         secondary: None,
         credits: None,
         individual_limit: None,
-        plan_type: None,
         rate_limit_reached_type: None,
     });
     state.set_rate_limits(RateLimitSnapshot {
@@ -110,7 +108,6 @@ async fn set_rate_limits_defaults_to_ody_when_limit_id_missing_after_other_bucke
         secondary: None,
         credits: None,
         individual_limit: None,
-        plan_type: None,
         rate_limit_reached_type: None,
     });
 
@@ -148,7 +145,6 @@ async fn set_rate_limits_carries_account_metadata_from_ody_to_ody_other() {
             remaining_percent: 68,
             resets_at: 300,
         }),
-        plan_type: Some(ody_protocol::account::PlanType::Plus),
         rate_limit_reached_type: None,
     });
 
@@ -163,7 +159,6 @@ async fn set_rate_limits_carries_account_metadata_from_ody_to_ody_other() {
         secondary: None,
         credits: None,
         individual_limit: None,
-        plan_type: None,
         rate_limit_reached_type: None,
     });
 
@@ -189,7 +184,6 @@ async fn set_rate_limits_carries_account_metadata_from_ody_to_ody_other() {
                 remaining_percent: 68,
                 resets_at: 300,
             }),
-            plan_type: Some(ody_protocol::account::PlanType::Plus),
             rate_limit_reached_type: None,
         })
     );

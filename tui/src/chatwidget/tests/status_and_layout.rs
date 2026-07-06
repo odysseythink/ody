@@ -590,7 +590,6 @@ async fn status_line_uses_secondary_fallback_for_unsupported_window() {
         }),
         credits: None,
         individual_limit: None,
-        plan_type: None,
         rate_limit_reached_type: None,
     }));
 
@@ -619,7 +618,6 @@ async fn status_line_legacy_limit_items_prefer_matching_windows() {
         }),
         credits: None,
         individual_limit: None,
-        plan_type: None,
         rate_limit_reached_type: None,
     }));
 
@@ -652,7 +650,6 @@ async fn status_line_shows_secondary_non_weekly_when_primary_is_weekly() {
         }),
         credits: None,
         individual_limit: None,
-        plan_type: None,
         rate_limit_reached_type: None,
     }));
 
@@ -681,7 +678,6 @@ async fn status_line_five_hour_item_omits_weekly_only_limit() {
         secondary: None,
         credits: None,
         individual_limit: None,
-        plan_type: None,
         rate_limit_reached_type: None,
     }));
 
@@ -710,7 +706,6 @@ async fn status_line_single_monthly_primary_omits_weekly_limit_item() {
         secondary: None,
         credits: None,
         individual_limit: None,
-        plan_type: None,
         rate_limit_reached_type: None,
     }));
 
@@ -739,7 +734,6 @@ async fn status_line_secondary_only_non_weekly_limit_omits_primary_limit_item() 
         }),
         credits: None,
         individual_limit: None,
-        plan_type: None,
         rate_limit_reached_type: None,
     }));
 
@@ -768,7 +762,6 @@ async fn rate_limit_snapshot_keeps_prior_credits_when_missing_from_headers() {
             balance: Some("17.5".to_string()),
         }),
         individual_limit: None,
-        plan_type: None,
         rate_limit_reached_type: None,
     }));
     let initial_balance = chat
@@ -789,7 +782,6 @@ async fn rate_limit_snapshot_keeps_prior_credits_when_missing_from_headers() {
         secondary: None,
         credits: None,
         individual_limit: None,
-        plan_type: None,
         rate_limit_reached_type: None,
     }));
 
@@ -863,7 +855,6 @@ async fn rate_limit_snapshot_updates_and_retains_plan_type() {
         }),
         credits: None,
         individual_limit: None,
-        plan_type: Some(PlanType::Plus),
         rate_limit_reached_type: None,
     }));
 
@@ -882,7 +873,6 @@ async fn rate_limit_snapshot_updates_and_retains_plan_type() {
         }),
         credits: None,
         individual_limit: None,
-        plan_type: Some(PlanType::Pro),
         rate_limit_reached_type: None,
     }));
 
@@ -901,7 +891,6 @@ async fn rate_limit_snapshot_updates_and_retains_plan_type() {
         }),
         credits: None,
         individual_limit: None,
-        plan_type: None,
         rate_limit_reached_type: None,
     }));
 }
@@ -925,7 +914,6 @@ async fn rate_limit_snapshots_keep_separate_entries_per_limit_id() {
             balance: Some("5.00".to_string()),
         }),
         individual_limit: None,
-        plan_type: Some(PlanType::Pro),
         rate_limit_reached_type: None,
     }));
 
@@ -940,7 +928,6 @@ async fn rate_limit_snapshots_keep_separate_entries_per_limit_id() {
         secondary: None,
         credits: None,
         individual_limit: None,
-        plan_type: Some(PlanType::Pro),
         rate_limit_reached_type: None,
     }));
 
@@ -994,7 +981,6 @@ async fn rate_limit_switch_prompt_skips_non_ody_limit() {
         secondary: None,
         credits: None,
         individual_limit: None,
-        plan_type: None,
         rate_limit_reached_type: None,
     }));
 

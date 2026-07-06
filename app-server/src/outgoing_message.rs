@@ -33,9 +33,6 @@ pub(crate) use ody_app_server_transport::OutgoingMessage;
 pub(crate) use ody_app_server_transport::OutgoingResponse;
 pub(crate) use ody_app_server_transport::QueuedOutgoingMessage;
 
-#[cfg(test)]
-use ody_protocol::account::PlanType;
-
 pub(crate) type ClientRequestResult = std::result::Result<Result, JSONRPCErrorError>;
 
 /// Stable identifier for a client request scoped to a transport connection.
@@ -790,7 +787,6 @@ mod tests {
                     secondary: None,
                     credits: None,
                     individual_limit: None,
-                    plan_type: Some(PlanType::Plus),
                     rate_limit_reached_type: None,
                 },
             });
@@ -826,7 +822,6 @@ mod tests {
     fn verify_account_updated_notification_serialization() {
         let notification = ServerNotification::AccountUpdated(AccountUpdatedNotification {
             auth_mode: Some(AuthMode::ApiKey),
-            plan_type: None,
         });
 
         let jsonrpc_notification = OutgoingMessage::AppServerNotification(notification);

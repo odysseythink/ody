@@ -1748,7 +1748,6 @@ mod tests {
                         serde_json::to_value(ServerNotification::AccountUpdated(
                             AccountUpdatedNotification {
                                 auth_mode: None,
-                                plan_type: None,
                             },
                         ))
                         .expect("notification should serialize"),

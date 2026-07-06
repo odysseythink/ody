@@ -630,7 +630,6 @@ async fn session_info_uses_availability_nux_tooltip_override() {
         &session_configured_event("gpt-5"),
         /*is_first_event*/ false,
         Some("Model just became available".to_string()),
-        Some(PlanType::Free),
         /*show_fast_status*/ false,
     );
 
@@ -652,7 +651,6 @@ async fn session_info_availability_nux_tooltip_snapshot() {
         &session_configured_event("gpt-5"),
         /*is_first_event*/ false,
         Some("Model just became available".to_string()),
-        Some(PlanType::Free),
         /*show_fast_status*/ false,
     );
 
@@ -669,7 +667,6 @@ async fn session_info_first_event_suppresses_tooltips_and_nux() {
         &session_configured_event("gpt-5"),
         /*is_first_event*/ true,
         Some("Model just became available".to_string()),
-        Some(PlanType::Free),
         /*show_fast_status*/ false,
     );
 
@@ -688,7 +685,6 @@ async fn session_info_hides_tooltips_when_disabled() {
         &session_configured_event("gpt-5"),
         /*is_first_event*/ false,
         Some("Model just became available".to_string()),
-        Some(PlanType::Free),
         /*show_fast_status*/ false,
     );
 

@@ -95,16 +95,6 @@
             "null"
           ]
         },
-        "planType": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/PlanType"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "primary": {
           "anyOf": [
             {

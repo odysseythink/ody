@@ -317,7 +317,6 @@ pub struct GetAccountResponse {
 #[ts(export_to = "v2/")]
 pub struct AccountUpdatedNotification {
     pub auth_mode: Option<AuthMode>,
-    pub plan_type: Option<PlanType>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
@@ -342,7 +341,6 @@ pub struct RateLimitSnapshot {
     pub secondary: Option<RateLimitWindow>,
     pub credits: Option<CreditsSnapshot>,
     pub individual_limit: Option<SpendControlLimitSnapshot>,
-    pub plan_type: Option<PlanType>,
     pub rate_limit_reached_type: Option<RateLimitReachedType>,
 }
 
@@ -355,7 +353,6 @@ impl From<CoreRateLimitSnapshot> for RateLimitSnapshot {
             secondary: value.secondary.map(RateLimitWindow::from),
             credits: value.credits.map(CreditsSnapshot::from),
             individual_limit: value.individual_limit.map(SpendControlLimitSnapshot::from),
-            plan_type: value.plan_type,
             rate_limit_reached_type: value
                 .rate_limit_reached_type
                 .map(RateLimitReachedType::from),
