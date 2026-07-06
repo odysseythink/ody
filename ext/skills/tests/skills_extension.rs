@@ -692,6 +692,35 @@ fn test_entry(
     .with_display_path(format!("skill://{package_id}/SKILL.md"))
 }
 
+fn test_entry_with_metadata(
+    kind: SkillSourceKind,
+    authority_id: &str,
+    name: &str,
+    resource: &str,
+    metadata: SkillMetadata,
+) -> SkillCatalogEntry {
+    let authority = SkillAuthority::new(kind.clone(), authority_id);
+    let resource_id = match kind {
+        SkillSourceKind::Executor => SkillResourceId::environment(
+            resource.to_string(),
+            authority_id,
+            metadata.path_to_skills_md.clone(),
+        ),
+        _ => SkillResourceId::new(resource),
+    };
+    SkillCatalogEntry::new(
+        SkillPackageId(name.to_string()),
+        authority,
+        metadata.name,
+        metadata.description,
+        resource_id,
+    )
+    .with_skill_type(metadata.skill_type)
+    .with_triggers(metadata.triggers)
+    .with_hidden_in_modes(metadata.hidden_in_modes)
+    .with_disable_model_invocation(metadata.disable_model_invocation)
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct TestConfig {
     include_instructions: bool,
@@ -778,6 +807,37 @@ async fn host_provider_maps_new_metadata_fields() {
         .unwrap();
 
     let entry = catalog.entries.iter().find(|e| e.name == "host-review").unwrap();
+    assert!(matches!(entry.skill_type, SkillType::Knowledge));
+    assert_eq!(entry.triggers, vec!["review"]);
+    assert!(entry.hidden_in_modes.contains(&ModeKind::Plan));
+    assert!(entry.disable_model_invocation);
+}
+
+#[tokio::test]
+async fn executor_provider_maps_new_metadata_fields() {
+    let entry = test_entry_with_metadata(
+        SkillSourceKind::Executor,
+        "env-1",
+        "executor/review",
+        "review/SKILL.md",
+        SkillMetadata {
+            name: "executor-review".to_string(),
+            description: "Executor review.".to_string(),
+            short_description: None,
+            interface: None,
+            dependencies: None,
+            policy: None,
+            path_to_skills_md: AbsolutePathBuf::try_from("/review/SKILL.md").unwrap(),
+            scope: SkillScope::User,
+            plugin_id: None,
+            skill_type: SkillType::Knowledge,
+            triggers: vec!["review".to_string()],
+            hidden_in_modes: vec![ModeKind::Plan],
+            disable_model_invocation: true,
+            mermaid: None,
+            d2: None,
+        },
+    );
     assert!(matches!(entry.skill_type, SkillType::Knowledge));
     assert_eq!(entry.triggers, vec!["review"]);
     assert!(entry.hidden_in_modes.contains(&ModeKind::Plan));
