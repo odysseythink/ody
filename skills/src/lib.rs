@@ -23,6 +23,11 @@ pub fn system_cache_root_dir(ody_home: &AbsolutePathBuf) -> AbsolutePathBuf {
 
 /// Installs embedded system skills into `ODY_HOME/skills/.system`.
 ///
+/// `ody-core-skills` treats `.system` as a system-scope skill root, so skills
+/// installed here are automatically discovered by the unified registry through
+/// the host provider (`HostSkillProvider`) and appear in the host authority
+/// catalog.
+///
 /// Clears any existing system skills directory first and then writes the embedded
 /// skills directory into place.
 ///
@@ -145,8 +150,15 @@ impl SystemSkillsError {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use ody_exec_server::LocalFileSystem;
+    use ody_protocol::protocol::SkillScope;
+
     use super::SYSTEM_SKILLS_DIR;
     use super::collect_fingerprint_items;
+    use super::install_system_skills;
+    use super::system_cache_root_dir;
 
     #[test]
     fn fingerprint_traverses_nested_entries() {
@@ -165,5 +177,30 @@ mod tests {
                 .binary_search_by(|probe| probe.as_str().cmp("skill-creator/scripts/init_skill.py"))
                 .is_ok()
         );
+    }
+
+    #[tokio::test]
+    async fn installed_system_skills_are_loadable_by_core_skills() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let ody_home = ody_utils_absolute_path::AbsolutePathBuf::try_from(temp_dir.path())
+            .expect("absolute temp dir");
+        install_system_skills(&ody_home).expect("install system skills");
+
+        let system_root = system_cache_root_dir(&ody_home);
+        let outcome = ody_core_skills::loader::load_skills_from_roots(
+            [ody_core_skills::loader::SkillRoot {
+                path: system_root,
+                scope: SkillScope::System,
+                file_system: Arc::new(LocalFileSystem::unsandboxed()),
+                plugin_id: None,
+                plugin_namespace: None,
+                plugin_root: None,
+            }],
+            /*plugin_skill_snapshots*/ None,
+        )
+        .await;
+
+        assert!(outcome.errors.is_empty(), "errors: {:?}", outcome.errors);
+        assert!(!outcome.skills.is_empty(), "system skills should be discovered");
     }
 }

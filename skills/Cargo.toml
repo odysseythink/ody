@@ -17,3 +17,10 @@ workspace = true
 ody-utils-absolute-path = { workspace = true }
 include_dir = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+ody-core-skills = { workspace = true }
+ody-exec-server = { workspace = true }
+ody-protocol = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
