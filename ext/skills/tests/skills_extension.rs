@@ -434,11 +434,11 @@ async fn orchestrator_catalog_snapshot_caches_failure() -> TestResult {
         .contribute_thread_context(&session_store, &thread_store)
         .await;
     assert!(initial_fragments.is_empty());
-    let EventMsg::Warning(warning) = event_rx.try_recv()?.msg else {
-        panic!("expected warning event");
+    let EventMsg::SkillLoadError(error) = event_rx.try_recv()?.msg else {
+        panic!("expected skill load error event");
     };
     assert_eq!(
-        warning.message,
+        error.message,
         "orchestrator skills unavailable: temporary orchestrator failure"
     );
 

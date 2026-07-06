@@ -149,6 +149,11 @@ impl ExtensionEventSink for AppServerExtensionEventSink {
                         .await;
                 });
             }
+            EventMsg::SkillLoaded(_)
+            | EventMsg::SkillActivated(_)
+            | EventMsg::SkillLoadError(_) => {
+                tracing::debug!(event_id = %event.id, ?event.msg, "dropping unsupported extension event");
+            }
             msg => {
                 tracing::debug!(event_id = %event.id, ?msg, "dropping unsupported extension event");
             }

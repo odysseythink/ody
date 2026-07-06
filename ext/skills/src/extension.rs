@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use ody_core_skills::HostSkillsSnapshot;
@@ -25,10 +26,14 @@ use ody_protocol::capabilities::SelectedCapabilityRoot;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::protocol::Event;
 use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::SkillActivatedEvent;
+use ody_protocol::protocol::SkillLoadedEvent;
+use ody_protocol::protocol::SkillLoadErrorEvent;
 use ody_protocol::protocol::WarningEvent;
 use ody_protocol::user_input::UserInput;
 
 use crate::SkillsExtensionConfig;
+use crate::catalog::SkillAuthority;
 use crate::catalog::SkillCatalog;
 use crate::catalog::SkillCatalogEntry;
 use crate::catalog::SkillReadResult;
@@ -154,7 +159,25 @@ where
                 )
                 .await;
             for warning in &catalog.warnings {
-                self.emit_warning(thread_store.level_id(), warning.clone());
+                self.emit_skill_load_error(
+                    thread_store.level_id(),
+                    &SkillAuthority::new(SkillSourceKind::Host, "host"),
+                    None,
+                    warning.clone(),
+                );
+            }
+            for entry in &catalog.entries {
+                if thread_state.mark_loaded_event_emitted((entry.authority.clone(), entry.id.clone()))
+                {
+                    self.event_sink.emit(Event {
+                        id: thread_store.level_id().to_string(),
+                        msg: EventMsg::SkillLoaded(SkillLoadedEvent {
+                            authority: format!("{}/{}", entry.authority.kind, entry.authority.id),
+                            package: entry.id.0.clone(),
+                            name: entry.name.clone(),
+                        }),
+                    });
+                }
             }
             available_skills_fragment(&catalog)
                 .map(|fragment| PromptFragment::developer_capability(fragment.render()))
@@ -225,7 +248,12 @@ where
             };
             let catalog = self.list_skills(query, &thread_state).await;
             for warning in &catalog.warnings {
-                self.emit_warning(&input.turn_id, warning.clone());
+                self.emit_skill_load_error(
+                    &input.turn_id,
+                    &SkillAuthority::new(SkillSourceKind::Host, "host"),
+                    None,
+                    warning.clone(),
+                );
             }
 
             let latest_user_text = input
@@ -298,7 +326,12 @@ where
                     }
                     Err(message) => {
                         let warning = format!("Failed to load skill `{}`: {message}", entry.name);
-                        self.emit_warning(&input.turn_id, warning.clone());
+                        self.emit_skill_load_error(
+                            &input.turn_id,
+                            &entry.authority,
+                            Some(entry.id.0.clone()),
+                            warning.clone(),
+                        );
                         warnings.push(warning);
                     }
                 }
@@ -319,6 +352,27 @@ where
                         injected_host_skill_prompts
                             .insert_path(host_skill.path_to_skills_md.to_string_lossy());
                     }
+                }
+            }
+
+            let mut activated_events_emitted = HashSet::new();
+            for entry in &injected_entries {
+                let key = (entry.authority.clone(), entry.id.clone());
+                if activated_events_emitted.insert(key) {
+                    let activation = if knowledge_entries.iter().any(|k| k == *entry) {
+                        "knowledge"
+                    } else {
+                        "explicit"
+                    };
+                    self.event_sink.emit(Event {
+                        id: input.turn_id.clone(),
+                        msg: EventMsg::SkillActivated(SkillActivatedEvent {
+                            authority: format!("{}/{}", entry.authority.kind, entry.authority.id),
+                            package: entry.id.0.clone(),
+                            name: entry.name.clone(),
+                            activation: activation.to_string(),
+                        }),
+                    });
                 }
             }
 
@@ -391,6 +445,23 @@ impl<C> SkillsExtension<C> {
         self.event_sink.emit(Event {
             id: turn_id.to_string(),
             msg: EventMsg::Warning(WarningEvent { message }),
+        });
+    }
+
+    fn emit_skill_load_error(
+        &self,
+        turn_id: &str,
+        authority: &SkillAuthority,
+        package: Option<String>,
+        message: String,
+    ) {
+        self.event_sink.emit(Event {
+            id: turn_id.to_string(),
+            msg: EventMsg::SkillLoadError(SkillLoadErrorEvent {
+                authority: format!("{}/{}", authority.kind, authority.id),
+                package,
+                message,
+            }),
         });
     }
 }

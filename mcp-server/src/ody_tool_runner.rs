@@ -389,7 +389,10 @@ async fn run_ody_tool_session_inner(
                     | EventMsg::RealtimeConversationSdp(_)
                     | EventMsg::RealtimeConversationRealtime(_)
                     | EventMsg::RealtimeConversationClosed(_)
-                    | EventMsg::DeprecationNotice(_) => {
+                    | EventMsg::DeprecationNotice(_)
+                    | EventMsg::SkillLoaded(_)
+                    | EventMsg::SkillActivated(_)
+                    | EventMsg::SkillLoadError(_) => {
                         // For now, we do not do anything extra for these
                         // events. Note that
                         // send(ody_event_to_notification(&event)) above has

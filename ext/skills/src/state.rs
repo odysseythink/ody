@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::future::Future;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -31,6 +32,7 @@ pub(crate) struct SkillsThreadState {
     orchestrator_skills_available: bool,
     orchestrator_cache: Mutex<Option<Arc<OrchestratorGenerationCache>>>,
     mode: Mutex<Option<RuntimeMode>>,
+    loaded_skill_events_emitted: Mutex<HashSet<(SkillAuthority, SkillPackageId)>>,
 }
 
 impl SkillsThreadState {
@@ -45,7 +47,18 @@ impl SkillsThreadState {
             orchestrator_skills_available,
             orchestrator_cache: Mutex::new(None),
             mode: Mutex::new(None),
+            loaded_skill_events_emitted: Mutex::new(HashSet::new()),
         }
+    }
+
+    pub(crate) fn mark_loaded_event_emitted(
+        &self,
+        key: (SkillAuthority, SkillPackageId),
+    ) -> bool {
+        self.loaded_skill_events_emitted
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(key)
     }
 
     pub(crate) fn config(&self) -> SkillsExtensionConfig {
