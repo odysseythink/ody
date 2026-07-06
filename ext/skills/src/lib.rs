@@ -2,6 +2,7 @@ pub mod catalog;
 mod config;
 mod extension;
 mod fragments;
+pub mod knowledge;
 pub mod provider;
 mod render;
 mod selection;

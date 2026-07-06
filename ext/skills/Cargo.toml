@@ -23,6 +23,7 @@ ody-tools = { workspace = true }
 ody-utils-absolute-path = { workspace = true }
 ody-utils-path-uri = { workspace = true }
 ody-utils-string = { workspace = true }
+regex = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
