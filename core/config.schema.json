@@ -3009,8 +3009,36 @@
           },
           "type": "array"
         },
+        "executor_model_tools_enabled": {
+          "description": "Whether model tools are enabled in the executor (subagent) model.",
+          "type": "boolean"
+        },
+        "host_model_tools_enabled": {
+          "description": "Whether model tools are enabled in the host (UI) model.",
+          "type": "boolean"
+        },
         "include_instructions": {
           "description": "Whether turns receive the automatic skills instructions block.",
+          "type": "boolean"
+        },
+        "knowledge_max_contents_bytes": {
+          "description": "Maximum total size of knowledge skill contents in bytes.",
+          "format": "uint",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "knowledge_max_skills_per_turn": {
+          "description": "Maximum number of knowledge skills that may be loaded in a single turn.",
+          "format": "uint",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "knowledge_microagents_enabled": {
+          "description": "Whether knowledge microagents may be loaded from the project.",
+          "type": "boolean"
+        },
+        "legacy_host_skill_injection": {
+          "description": "Whether to use the legacy core-only host skill injection path.\n\nDefaults to `true` in T3.1.1 for backwards compatibility. Will default to `false` in T3.1.2 and be removed in T3.1.3.",
           "type": "boolean"
         }
       },
