@@ -984,7 +984,7 @@ async fn knowledge_skills_are_not_selected_by_explicit_mention() -> TestResult {
                 "review/SKILL.md",
             )
             .with_skill_type(SkillType::Knowledge)
-            .with_triggers(vec!["review".to_string()])],
+            .with_triggers(vec!["audit".to_string()])],
             warnings: Vec::new(),
         },
         read_requests: Arc::clone(&read_requests),

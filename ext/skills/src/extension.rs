@@ -22,9 +22,11 @@ use ody_extension_api::TurnLifecycleContributor;
 use ody_extension_api::TurnStartInput;
 use ody_mcp::McpResourceClient;
 use ody_protocol::capabilities::SelectedCapabilityRoot;
+use ody_protocol::config_types::ModeKind;
 use ody_protocol::protocol::Event;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::WarningEvent;
+use ody_protocol::user_input::UserInput;
 
 use crate::SkillsExtensionConfig;
 use crate::catalog::SkillCatalog;
@@ -32,6 +34,7 @@ use crate::catalog::SkillCatalogEntry;
 use crate::catalog::SkillReadResult;
 use crate::catalog::SkillSourceKind;
 use crate::fragments::SkillInstructions;
+use crate::knowledge::KnowledgeMicroagentInjector;
 use crate::provider::HostSkillProvider;
 use crate::provider::SkillListQuery;
 use crate::provider::SkillReadRequest;
@@ -222,7 +225,24 @@ where
                 self.emit_warning(&input.turn_id, warning.clone());
             }
 
+            let latest_user_text = input
+                .user_input
+                .iter()
+                .filter_map(|user_input| match user_input {
+                    UserInput::Text { text, .. } => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
             let selected_entries = collect_explicit_skill_mentions(&input.user_input, &catalog);
+            let knowledge_entries = KnowledgeMicroagentInjector::select(
+                latest_user_text.as_str(),
+                &catalog,
+                turn_mode.unwrap_or(ModeKind::Default),
+                3,
+                8_000,
+            );
+
             let mut fragments: Vec<Box<dyn ContextualUserFragment + Send>> = Vec::new();
             if config.include_instructions {
                 let mut turn_catalog = catalog.clone();
@@ -238,7 +258,11 @@ where
             let mut warnings = catalog.warnings.clone();
             let mut main_prompts_injected = false;
             let mut injected_host_skill_prompts = InjectedHostSkillPrompts::default();
-            for entry in &selected_entries {
+            let injected_entries: Vec<&SkillCatalogEntry> = selected_entries
+                .iter()
+                .chain(knowledge_entries.iter())
+                .collect();
+            for entry in &injected_entries {
                 match self
                     .read_main_prompt(entry, host_snapshot.clone(), session_store, &thread_state)
                     .await
@@ -278,8 +302,9 @@ where
             }
 
             if let Some(host_snapshot) = &host_snapshot {
-                for entry in selected_entries
+                for entry in injected_entries
                     .iter()
+                    .copied()
                     .filter(|entry| entry.authority.kind != SkillSourceKind::Host)
                 {
                     for host_skill in host_snapshot
@@ -297,6 +322,7 @@ where
             turn_store.insert(SkillsTurnState {
                 catalog,
                 selected_entries,
+                knowledge_entries,
                 warnings,
                 main_prompts_injected,
             });

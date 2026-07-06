@@ -202,6 +202,7 @@ impl OrchestratorResourceCache {
 pub(crate) struct SkillsTurnState {
     pub(crate) catalog: SkillCatalog,
     pub(crate) selected_entries: Vec<SkillCatalogEntry>,
+    pub(crate) knowledge_entries: Vec<SkillCatalogEntry>,
     pub(crate) warnings: Vec<String>,
     pub(crate) main_prompts_injected: bool,
 }
