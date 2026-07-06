@@ -774,6 +774,7 @@ async fn host_provider_maps_new_metadata_fields() {
             include_host_skills: true,
             include_bundled_skills: true,
             include_orchestrator_skills: false,
+            mode: None,
             mcp_resources: None,
         })
         .await
@@ -815,6 +816,7 @@ async fn executor_provider_maps_new_metadata_fields() {
             include_host_skills: false,
             include_bundled_skills: true,
             include_orchestrator_skills: false,
+            mode: None,
             mcp_resources: None,
         })
         .await

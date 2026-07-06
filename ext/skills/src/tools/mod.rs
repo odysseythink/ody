@@ -72,6 +72,7 @@ impl SkillToolContext {
                             include_host_skills: false,
                             include_bundled_skills: false,
                             include_orchestrator_skills: true,
+                            mode: None,
                             mcp_resources: self.mcp_resources.clone(),
                         }),
                     )
