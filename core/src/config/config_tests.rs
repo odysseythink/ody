@@ -54,6 +54,7 @@ use ody_config::types::OtelConfigToml;
 use ody_config::types::OtelExporterKind;
 use ody_config::types::SandboxWorkspaceWrite;
 use ody_config::types::SessionPickerViewMode;
+use ody_config::types::SkillConfig;
 use ody_config::types::SkillsConfig;
 use ody_config::types::ToolSuggestDisabledTool;
 use ody_config::types::ToolSuggestDiscoverableType;
@@ -339,6 +340,34 @@ enabled = false
             legacy_host_skill_injection: true,
         })
     );
+}
+
+#[test]
+fn skills_config_roundtrip() {
+    let original = ConfigToml {
+        skills: Some(SkillsConfig {
+            bundled: Some(BundledSkillsConfig { enabled: false }),
+            include_instructions: Some(false),
+            config: vec![SkillConfig {
+                path: None,
+                name: Some("test-skill".to_string()),
+                enabled: true,
+            }],
+            knowledge_microagents_enabled: Some(true),
+            knowledge_max_skills_per_turn: 5,
+            knowledge_max_contents_bytes: 12_000,
+            host_model_tools_enabled: Some(true),
+            executor_model_tools_enabled: Some(false),
+            legacy_host_skill_injection: false,
+        }),
+        ..ConfigToml::default()
+    };
+
+    let serialized = toml::to_string(&original).expect("ConfigToml should serialize to TOML");
+    let roundtripped: ConfigToml =
+        toml::from_str(&serialized).expect("serialized TOML should deserialize");
+
+    assert_eq!(roundtripped.skills, original.skills);
 }
 
 #[test]
