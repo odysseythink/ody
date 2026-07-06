@@ -30,6 +30,7 @@ use ody_protocol::capabilities::CapabilityRootLocation;
 use ody_protocol::capabilities::SelectedCapabilityRoot;
 use ody_protocol::protocol::Event;
 use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::SkillActivationKind;
 use ody_protocol::protocol::SKILLS_INSTRUCTIONS_CLOSE_TAG;
 use ody_protocol::protocol::SKILLS_INSTRUCTIONS_OPEN_TAG;
 use ody_protocol::protocol::SessionSource;
@@ -434,11 +435,11 @@ async fn orchestrator_catalog_snapshot_caches_failure() -> TestResult {
         .contribute_thread_context(&session_store, &thread_store)
         .await;
     assert!(initial_fragments.is_empty());
-    let EventMsg::SkillLoadError(error) = event_rx.try_recv()?.msg else {
-        panic!("expected skill load error event");
+    let EventMsg::Warning(warning) = event_rx.try_recv()?.msg else {
+        panic!("expected warning event");
     };
     assert_eq!(
-        error.message,
+        warning.message,
         "orchestrator skills unavailable: temporary orchestrator failure"
     );
 
@@ -1289,4 +1290,141 @@ async fn disable_model_invocation_blocks_tool_read() -> TestResult {
     );
 
     Ok(())
+}
+
+#[tokio::test]
+async fn skill_loaded_event_is_emitted_for_thread_catalog() -> TestResult {
+    let (event_tx, event_rx) = std::sync::mpsc::channel();
+    let mut builder =
+        ExtensionRegistryBuilder::with_event_sink(Arc::new(ChannelEventSink(event_tx)));
+    let provider = Arc::new(StaticSkillProvider {
+        catalog: SkillCatalog {
+            entries: vec![test_entry(
+                SkillSourceKind::Orchestrator,
+                "ody_apps",
+                "orchestrator/demo",
+                "skill://orchestrator/demo/SKILL.md",
+            )],
+            warnings: Vec::new(),
+        },
+        read_requests: Arc::new(Mutex::new(Vec::new())),
+        list_calls: None,
+        fail_first_list: false,
+    });
+    let providers = SkillProviders::new().with_orchestrator_provider(provider);
+    install_with_providers(&mut builder, providers, skills_extension_config);
+    let registry = builder.build();
+
+    let session_store = ExtensionData::new("session");
+    let thread_store = ExtensionData::new("thread");
+    let session_source = SessionSource::Cli;
+    let config = default_config();
+    registry.thread_lifecycle_contributors()[0]
+        .on_thread_start(ThreadStartInput {
+            config: &config,
+            session_source: &session_source,
+            persistent_thread_state_available: true,
+            environments: &[],
+            session_store: &session_store,
+            thread_store: &thread_store,
+        })
+        .await;
+
+    let _fragments = registry.context_contributors()[0]
+        .contribute_thread_context(&session_store, &thread_store)
+        .await;
+
+    let event = event_rx.try_recv()?;
+    let EventMsg::SkillLoaded(loaded) = event.msg else {
+        panic!("expected SkillLoaded event, got {:?}", event.msg);
+    };
+    assert_eq!(loaded.name, "demo");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn skill_activated_event_is_emitted_for_explicit_selection() -> TestResult {
+    let (event_tx, event_rx) = std::sync::mpsc::channel();
+    let mut builder =
+        ExtensionRegistryBuilder::with_event_sink(Arc::new(ChannelEventSink(event_tx)));
+    let provider = Arc::new(StaticSkillProvider {
+        catalog: SkillCatalog {
+            entries: vec![test_entry(
+                SkillSourceKind::Host,
+                "host",
+                "host/demo",
+                "demo/SKILL.md",
+            )],
+            warnings: Vec::new(),
+        },
+        read_requests: Arc::new(Mutex::new(Vec::new())),
+        list_calls: None,
+        fail_first_list: false,
+    });
+    let providers = SkillProviders::new().with_host_provider(provider);
+    install_with_providers(&mut builder, providers, skills_extension_config);
+    let registry = builder.build();
+
+    let session_store = ExtensionData::new("session");
+    let thread_store = ExtensionData::new("thread");
+    let session_source = SessionSource::Cli;
+    let config = default_config();
+    registry.thread_lifecycle_contributors()[0]
+        .on_thread_start(ThreadStartInput {
+            config: &config,
+            session_source: &session_source,
+            persistent_thread_state_available: true,
+            environments: &[],
+            session_store: &session_store,
+            thread_store: &thread_store,
+        })
+        .await;
+
+    registry.turn_lifecycle_contributors()[0]
+        .on_turn_start(TurnStartInput {
+            turn_id: "turn-1",
+            collaboration_mode: &CollaborationMode {
+                mode: ModeKind::Default,
+                settings: Settings {
+                    model: "test".to_string(),
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                },
+            },
+            token_usage_at_turn_start: &TokenUsage::default(),
+            session_store: &session_store,
+            thread_store: &thread_store,
+            turn_store: &ExtensionData::new("turn-1"),
+        })
+        .await;
+
+    let _fragments = registry.turn_input_contributors()[0]
+        .contribute(
+            TurnInputContext {
+                turn_id: "turn-1".to_string(),
+                user_input: vec![UserInput::Text {
+                    text: "$demo please".to_string(),
+                    text_elements: Vec::new(),
+                }],
+                environments: Vec::new(),
+            },
+            &session_store,
+            &thread_store,
+            &ExtensionData::new("turn-1"),
+        )
+        .await;
+
+    // Drain any SkillLoaded events emitted by the thread-level catalog.
+    while let Ok(event) = event_rx.try_recv() {
+        if matches!(event.msg, EventMsg::SkillActivated(_)) {
+            let EventMsg::SkillActivated(activated) = event.msg else {
+                unreachable!();
+            };
+            assert_eq!(activated.name, "demo");
+            assert_eq!(activated.activation, SkillActivationKind::Explicit);
+            return Ok(());
+        }
+    }
+    panic!("expected SkillActivated event");
 }

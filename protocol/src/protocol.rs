@@ -1924,12 +1924,21 @@ pub struct SkillLoadedEvent {
     pub name: String,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum SkillActivationKind {
+    Explicit,
+    Knowledge,
+    Tool,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct SkillActivatedEvent {
     pub authority: String,
     pub package: String,
     pub name: String,
-    pub activation: String, // "explicit" | "knowledge" | "tool"
+    pub activation: SkillActivationKind,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]

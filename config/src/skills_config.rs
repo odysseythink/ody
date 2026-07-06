@@ -41,7 +41,7 @@ pub struct SkillConfig {
     pub enabled: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct SkillsConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -95,6 +95,22 @@ pub struct BundledSkillsConfig {
 impl Default for BundledSkillsConfig {
     fn default() -> Self {
         Self { enabled: true }
+    }
+}
+
+impl Default for SkillsConfig {
+    fn default() -> Self {
+        Self {
+            bundled: None,
+            include_instructions: None,
+            config: Vec::new(),
+            knowledge_microagents_enabled: None,
+            knowledge_max_skills_per_turn: default_max_skills(),
+            knowledge_max_contents_bytes: default_max_contents_bytes(),
+            host_model_tools_enabled: None,
+            executor_model_tools_enabled: None,
+            legacy_host_skill_injection: default_enabled(),
+        }
     }
 }
 
