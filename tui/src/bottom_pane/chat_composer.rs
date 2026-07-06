@@ -6270,6 +6270,7 @@ mod tests {
             path_to_skills_md: skill_path.clone(),
             scope: crate::test_support::skill_scope_user(),
             plugin_id: None,
+            ..Default::default()
         }]));
 
         let ActivePopup::Skill(popup) = &composer.popups.active else {
@@ -6313,6 +6314,7 @@ mod tests {
             path_to_skills_md: skill_path.clone(),
             scope: crate::test_support::skill_scope_repo(),
             plugin_id: None,
+            ..Default::default()
         }]));
         composer.set_plugin_mentions(Some(vec![PluginCapabilitySummary {
             config_name: "google-calendar@debug".to_string(),
@@ -6427,6 +6429,7 @@ mod tests {
                     path_to_skills_md: test_path_buf("/tmp/repo/google-calendar/SKILL.md").abs(),
                     scope: crate::test_support::skill_scope_repo(),
                     plugin_id: None,
+                    ..Default::default()
                 }]));
                 composer.set_plugin_mentions(Some(vec![PluginCapabilitySummary {
                 config_name: "google-calendar@debug".to_string(),

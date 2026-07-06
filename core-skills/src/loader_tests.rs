@@ -334,6 +334,7 @@ async fn loads_skills_from_home_agents_dir_for_user_scope() -> anyhow::Result<()
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::User,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 
@@ -472,6 +473,7 @@ async fn loads_skill_dependencies_metadata_from_yaml() {
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::User,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -528,6 +530,7 @@ interface:
             path_to_skills_md: normalized(skill_path.as_path()),
             scope: SkillScope::User,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -681,6 +684,7 @@ async fn accepts_icon_paths_under_assets_dir() {
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::User,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -722,6 +726,7 @@ async fn ignores_invalid_brand_color() {
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::User,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -776,6 +781,7 @@ async fn ignores_default_prompt_over_max_length() {
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::User,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -818,6 +824,7 @@ async fn drops_interface_when_icons_are_invalid() {
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::User,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -883,6 +890,7 @@ interface:
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::User,
             plugin_id: Some("twilio-developer-kit@test".to_string()),
+            ..Default::default()
         }]
     );
 }
@@ -936,6 +944,7 @@ interface:
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::User,
             plugin_id: Some("twilio-developer-kit@test".to_string()),
+            ..Default::default()
         }]
     );
 }
@@ -981,6 +990,7 @@ async fn loads_skills_via_symlinked_subdir_for_user_scope() {
             path_to_skills_md: normalized(&shared_skill_path),
             scope: SkillScope::User,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -1041,6 +1051,7 @@ async fn does_not_loop_on_symlink_cycle_for_user_scope() {
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::User,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -1086,6 +1097,7 @@ async fn loads_skills_via_symlinked_subdir_for_admin_scope() {
             path_to_skills_md: normalized(&shared_skill_path),
             scope: SkillScope::Admin,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -1126,6 +1138,7 @@ async fn loads_skills_via_symlinked_subdir_for_repo_scope() {
             path_to_skills_md: normalized(&linked_skill_path),
             scope: SkillScope::Repo,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -1210,6 +1223,7 @@ async fn respects_max_scan_depth_for_user_scope() {
             path_to_skills_md: normalized(&within_depth_path),
             scope: SkillScope::User,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -1238,6 +1252,7 @@ async fn loads_valid_skill() {
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::User,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -1271,6 +1286,7 @@ async fn falls_back_to_directory_name_when_skill_name_is_missing() {
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::User,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -1321,6 +1337,7 @@ async fn namespaces_plugin_skills_using_provided_namespace() {
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::User,
             plugin_id: Some("sample@test".to_string()),
+            ..Default::default()
         }]
     );
 }
@@ -1370,6 +1387,7 @@ async fn plugin_skill_name_length_limit_allows_max_qualified_name() {
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::User,
             plugin_id: Some("sample@test".to_string()),
+            ..Default::default()
         }]
     );
 }
@@ -1439,6 +1457,7 @@ async fn loads_short_description_from_metadata() {
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::User,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -1471,6 +1490,7 @@ async fn loads_unquoted_description_containing_colon_space() {
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::User,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -1503,6 +1523,7 @@ async fn loads_unquoted_short_description_containing_colon_space_and_apostrophe(
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::User,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -1535,6 +1556,7 @@ async fn loads_unrecognized_frontmatter_fields_that_need_quotes() {
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::User,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -1567,6 +1589,7 @@ async fn preserves_block_scalar_body_while_repairing_other_fields() {
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::User,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -1684,6 +1707,7 @@ async fn loads_skills_from_repo_root() {
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::Repo,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -1720,6 +1744,7 @@ async fn loads_skills_from_agents_dir_without_ody_dir() {
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::Repo,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -1774,6 +1799,7 @@ async fn loads_skills_from_all_ody_dirs_under_project_root() {
                 path_to_skills_md: normalized(&nested_skill_path),
                 scope: SkillScope::Repo,
                 plugin_id: None,
+                ..Default::default()
             },
             SkillMetadata {
                 name: "root-skill".to_string(),
@@ -1785,6 +1811,7 @@ async fn loads_skills_from_all_ody_dirs_under_project_root() {
                 path_to_skills_md: normalized(&root_skill_path),
                 scope: SkillScope::Repo,
                 plugin_id: None,
+                ..Default::default()
             },
         ]
     );
@@ -1825,6 +1852,7 @@ async fn loads_skills_from_ody_dir_when_not_git_repo() {
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::Repo,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -1875,6 +1903,7 @@ async fn deduplicates_by_path_preferring_first_root() {
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::Repo,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -1917,6 +1946,7 @@ async fn keeps_duplicate_names_from_repo_and_user() {
                 path_to_skills_md: normalized(&repo_skill_path),
                 scope: SkillScope::Repo,
                 plugin_id: None,
+                ..Default::default()
             },
             SkillMetadata {
                 name: "dupe-skill".to_string(),
@@ -1928,6 +1958,7 @@ async fn keeps_duplicate_names_from_repo_and_user() {
                 path_to_skills_md: normalized(&user_skill_path),
                 scope: SkillScope::User,
                 plugin_id: None,
+                ..Default::default()
             },
         ]
     );
@@ -1991,6 +2022,7 @@ async fn keeps_duplicate_names_from_nested_ody_dirs() {
                 path_to_skills_md: first_path,
                 scope: SkillScope::Repo,
                 plugin_id: None,
+                ..Default::default()
             },
             SkillMetadata {
                 name: "dupe-skill".to_string(),
@@ -2002,6 +2034,7 @@ async fn keeps_duplicate_names_from_nested_ody_dirs() {
                 path_to_skills_md: second_path,
                 scope: SkillScope::Repo,
                 plugin_id: None,
+                ..Default::default()
             },
         ]
     );
@@ -2074,6 +2107,7 @@ async fn loads_skills_when_cwd_is_file_in_repo() {
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::Repo,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }
@@ -2133,6 +2167,7 @@ async fn loads_skills_from_system_cache_when_present() {
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::System,
             plugin_id: None,
+            ..Default::default()
         }]
     );
 }

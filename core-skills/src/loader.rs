@@ -5,6 +5,7 @@ use crate::model::SkillLoadOutcome;
 use crate::model::SkillMetadata;
 use crate::model::SkillPolicy;
 use crate::model::SkillToolDependency;
+use crate::model::SkillType;
 use crate::system::system_cache_root_dir;
 use ody_app_server_protocol::ConfigLayerSource;
 use ody_config::ConfigLayerStack;
@@ -715,6 +716,12 @@ async fn parse_skill_file(
         path_to_skills_md: resolved_path,
         scope,
         plugin_id: plugin_id.map(str::to_string),
+        skill_type: SkillType::default(),
+        triggers: Vec::new(),
+        hidden_in_modes: Vec::new(),
+        disable_model_invocation: false,
+        mermaid: None,
+        d2: None,
     })
 }
 

@@ -98,6 +98,7 @@ async fn installed_extension_uses_host_service_snapshot() -> TestResult {
         path_to_skills_md: skill_path,
         scope: SkillScope::User,
         plugin_id: None,
+        ..Default::default()
     });
     let loaded_skills = Arc::new(outcome);
     let skill_prompt_path = skill_path_string.replace('\\', "/");
