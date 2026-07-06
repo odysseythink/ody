@@ -701,6 +701,21 @@ pub struct Config {
     /// Whether orchestrator-owned skills are exposed to the model.
     pub orchestrator_skills_enabled: bool,
 
+    /// Whether knowledge microagents are loaded from the project.
+    pub knowledge_microagents_enabled: bool,
+
+    /// Maximum number of knowledge skills loaded in a single turn.
+    pub knowledge_max_skills_per_turn: usize,
+
+    /// Maximum total size of knowledge skill contents in bytes.
+    pub knowledge_max_contents_bytes: usize,
+
+    /// Whether model tools are enabled in the host (UI) model.
+    pub host_model_tools_enabled: bool,
+
+    /// Whether model tools are enabled in the executor (subagent) model.
+    pub executor_model_tools_enabled: bool,
+
     /// Whether orchestrator-owned MCP tools are exposed to the model.
     pub orchestrator_mcp_enabled: bool,
 
@@ -3571,6 +3586,31 @@ impl Config {
             .as_ref()
             .and_then(|skills| skills.include_instructions)
             .unwrap_or(true);
+        let knowledge_microagents_enabled = cfg
+            .skills
+            .as_ref()
+            .and_then(|skills| skills.knowledge_microagents_enabled)
+            .unwrap_or(true);
+        let knowledge_max_skills_per_turn = cfg
+            .skills
+            .as_ref()
+            .map(|skills| skills.knowledge_max_skills_per_turn)
+            .unwrap_or(3);
+        let knowledge_max_contents_bytes = cfg
+            .skills
+            .as_ref()
+            .map(|skills| skills.knowledge_max_contents_bytes)
+            .unwrap_or(8_000);
+        let host_model_tools_enabled = cfg
+            .skills
+            .as_ref()
+            .and_then(|skills| skills.host_model_tools_enabled)
+            .unwrap_or(true);
+        let executor_model_tools_enabled = cfg
+            .skills
+            .as_ref()
+            .and_then(|skills| skills.executor_model_tools_enabled)
+            .unwrap_or(true);
         let include_environment_context = cfg.include_environment_context.unwrap_or(true);
         let guardian_policy_config =
             guardian_policy_config_from_requirements(config_layer_stack.requirements_toml())
@@ -3768,6 +3808,11 @@ impl Config {
             include_collaboration_mode_instructions,
             include_skill_instructions,
             orchestrator_skills_enabled,
+            knowledge_microagents_enabled,
+            knowledge_max_skills_per_turn,
+            knowledge_max_contents_bytes,
+            host_model_tools_enabled,
+            executor_model_tools_enabled,
             orchestrator_mcp_enabled,
             include_environment_context,
             // The config.toml omits "_mode" because it's a config file. However, "_mode"

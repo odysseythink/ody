@@ -89,11 +89,11 @@ where
             include_instructions: config.include_skill_instructions,
             bundled_skills_enabled: config.bundled_skills_enabled(),
             orchestrator_skills_enabled: config.orchestrator_skills_enabled,
-            knowledge_microagents_enabled: true,
-            knowledge_max_skills_per_turn: 3,
-            knowledge_max_contents_bytes: 8_000,
-            host_model_tools_enabled: true,
-            executor_model_tools_enabled: true,
+            knowledge_microagents_enabled: config.knowledge_microagents_enabled,
+            knowledge_max_skills_per_turn: config.knowledge_max_skills_per_turn,
+            knowledge_max_contents_bytes: config.knowledge_max_contents_bytes,
+            host_model_tools_enabled: config.host_model_tools_enabled,
+            executor_model_tools_enabled: config.executor_model_tools_enabled,
         },
     );
     Arc::new(builder.build())
