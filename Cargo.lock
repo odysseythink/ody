@@ -8131,6 +8131,7 @@ dependencies = [
  "ody-utils-path-uri",
  "ody-utils-string",
  "pretty_assertions",
+ "regex",
  "schemars 0.8.22",
  "serde",
  "serde_json",

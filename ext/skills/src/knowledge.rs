@@ -6,24 +6,29 @@ use crate::catalog::SkillCatalog;
 use crate::catalog::SkillCatalogEntry;
 
 /// Selects knowledge skills whose triggers match the user text.
-pub struct KnowledgeMicroagentInjector;
+pub(crate) struct KnowledgeMicroagentInjector;
 
 impl KnowledgeMicroagentInjector {
     /// Returns knowledge catalog entries whose triggers appear in `text`, up to
-    /// `max_skills` entries and `max_chars` of matched trigger characters.
+    /// `max_skills` entries and `max_contents_bytes` of selected skill contents
+    /// (name + description bytes).
     ///
     /// Only enabled knowledge skills that are not hidden in `mode` are
     /// considered. Empty triggers never match (such skills behave as inline
     /// skills at load time and are not eligible here).
-    pub fn select(
+    pub(crate) fn select(
         text: &str,
         catalog: &SkillCatalog,
         mode: ModeKind,
         max_skills: usize,
-        max_chars: usize,
+        max_contents_bytes: usize,
     ) -> Vec<SkillCatalogEntry> {
+        if max_skills == 0 || text.is_empty() || max_contents_bytes == 0 {
+            return Vec::new();
+        }
+
         let mut selected = Vec::new();
-        let mut consumed_chars = 0usize;
+        let mut total_bytes = 0usize;
 
         for entry in catalog.entries.iter().filter(|entry| {
             entry.enabled
@@ -44,16 +49,12 @@ impl KnowledgeMicroagentInjector {
                 continue;
             }
 
-            let trigger_chars = entry
-                .triggers
-                .iter()
-                .map(|trigger| trigger.chars().count())
-                .sum::<usize>();
-            let next_consumed = consumed_chars.saturating_add(trigger_chars);
-            if next_consumed > max_chars {
+            let entry_bytes = entry.name.len() + entry.description.len();
+            let next_bytes = total_bytes.saturating_add(entry_bytes);
+            if next_bytes > max_contents_bytes {
                 continue;
             }
-            consumed_chars = next_consumed;
+            total_bytes = next_bytes;
             selected.push(entry.clone());
         }
 
@@ -65,12 +66,16 @@ fn trigger_matches(text: &str, trigger: &str) -> bool {
     if trigger.is_empty() {
         return false;
     }
+
+    let text = text.to_lowercase();
+    let trigger = trigger.to_lowercase();
+
     if trigger.chars().any(is_cjk) {
-        text.contains(trigger)
+        text.contains(&trigger)
     } else {
-        let pattern = format!(r"\b{}\b", regex::escape(trigger));
+        let pattern = format!(r"(?i)\b{}\b", regex::escape(&trigger));
         Regex::new(&pattern)
-            .map(|re| re.is_match(text))
+            .map(|re| re.is_match(&text))
             .unwrap_or(false)
     }
 }
@@ -136,6 +141,20 @@ mod tests {
     }
 
     #[test]
+    fn ascii_trigger_matches_case_insensitively() {
+        let entry = knowledge_entry("review", &["review"]);
+        let selected = KnowledgeMicroagentInjector::select(
+            "Please Review this code",
+            &catalog(vec![entry]),
+            ModeKind::Default,
+            3,
+            8_000,
+        );
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].name, "review");
+    }
+
+    #[test]
     fn ascii_trigger_does_not_match_subword() {
         let entry = knowledge_entry("review", &["review"]);
         let selected = KnowledgeMicroagentInjector::select(
@@ -149,7 +168,7 @@ mod tests {
     }
 
     #[test]
-    fn cjk_trigger_matches_substring() {
+    fn cjk_trigger_matches_substring_case_insensitively() {
         let entry = knowledge_entry("review", &["审查"]);
         let selected = KnowledgeMicroagentInjector::select(
             "请审查这段代码",
@@ -200,9 +219,29 @@ mod tests {
             "one two three",
             &catalog(entries),
             ModeKind::Default,
-            10,
-            8,
+            1,
+            8_000,
         );
-        assert_eq!(selected.len(), 2);
+        assert_eq!(selected.len(), 1);
+    }
+
+    #[test]
+    fn budget_caps_contents_bytes() {
+        let mut large = knowledge_entry("large", &["large"]);
+        large.description = "x".repeat(1_000);
+        let entries = vec![
+            large.clone(),
+            knowledge_entry("small", &["small"]),
+        ];
+        // The large entry consumes more than half the budget, so only it fits.
+        let selected = KnowledgeMicroagentInjector::select(
+            "large small",
+            &catalog(entries),
+            ModeKind::Default,
+            10,
+            1_010,
+        );
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].name, "large");
     }
 }
