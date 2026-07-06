@@ -198,62 +198,6 @@ fn open_desktop_thread_url(url: &str) -> Result<(), String> {
 }
 
 #[cfg(target_os = "windows")]
-fn open_desktop_thread_url(url: &str) -> Result<(), String> {
-    let script = windows_desktop_app_launch_script(url);
-    let output = std::process::Command::new("powershell.exe")
-        .arg("-NoProfile")
-        .arg("-Command")
-        .arg(&script)
-        .output()
-        .map_err(|err| format!("failed to launch Ody Desktop through PowerShell: {err}"))?;
-
-    if output.status.success() {
-        return Ok(());
-    }
-
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    if stderr.is_empty() {
-        Err(format!(
-            "failed to launch Ody Desktop through PowerShell with {}",
-            output.status
-        ))
-    } else {
-        Err(stderr)
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn windows_desktop_app_launch_script(url: &str) -> String {
-    let url = powershell_single_quoted_string(url);
-    format!(
-        r#"
-$ErrorActionPreference = 'Stop'
-$url = {url}
-
-$installLocation = (Get-AppxPackage -Name OpenAI.Ody -ErrorAction SilentlyContinue).InstallLocation
-if ([string]::IsNullOrWhiteSpace($installLocation)) {{
-    Write-Error 'Ody Desktop package is not installed'
-    exit 1
-}}
-
-$appDir = Join-Path $installLocation 'app'
-$exe = Join-Path $appDir 'Ody.exe'
-$app = Join-Path $appDir 'resources\app.asar'
-if (-not (Test-Path $exe)) {{
-    Write-Error "Ody Desktop executable not found at $exe"
-    exit 1
-}}
-if (-not (Test-Path $app)) {{
-    Write-Error "Ody Desktop app bundle not found at $app"
-    exit 1
-}}
-
-Start-Process -FilePath $exe -WorkingDirectory $appDir -ArgumentList @('resources\app.asar', $url)
-"#
-    )
-}
-
-#[cfg(target_os = "windows")]
 fn powershell_single_quoted_string(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }

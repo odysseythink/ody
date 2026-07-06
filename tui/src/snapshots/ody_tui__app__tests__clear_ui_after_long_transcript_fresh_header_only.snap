@@ -2,9 +2,10 @@
 source: tui/src/app/tests.rs
 expression: rendered
 ---
-╭─────────────────────────────────────────────╮
-│ >_ odysseythink ody (v<VERSION>)            │
-│                                             │
-│ model:     gpt-test high   /model to change │
-│ directory: /tmp/project                     │
-╰─────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────╮
+│ Welcome to ODY Code!                                     │
+│                                                          │
+│ model:     gpt-test high                /model to change │
+│ version:   v<VERSION>                                    │
+│ directory: /tmp/project                                  │
+╰──────────────────────────────────────────────────────────╯

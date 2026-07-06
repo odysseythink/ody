@@ -1,6 +1,0 @@
-load("//:defs.bzl", "ody_rust_crate")
-
-ody_rust_crate(
-    name = "cloud-config",
-    crate_name = "ody_cloud_config",
-)

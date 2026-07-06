@@ -158,7 +158,7 @@ impl PinnedTodoWidget {
             if remaining == 0 {
                 break;
             }
-            let (box_str, step_style) = ("□ ", Style::default().cyan().bold());
+            let (box_str, step_style) = ("☐ ", Style::default().cyan().bold());
             let opts = RtOptions::new(wrap_width)
                 .initial_indent(box_str.into())
                 .subsequent_indent("  ".into());
@@ -184,7 +184,7 @@ impl PinnedTodoWidget {
             if remaining == 0 {
                 break;
             }
-            let (box_str, step_style) = ("□ ", Style::default().dim());
+            let (box_str, step_style) = ("☐ ", Style::default().dim());
             let opts = RtOptions::new(wrap_width)
                 .initial_indent(box_str.into())
                 .subsequent_indent("  ".into());

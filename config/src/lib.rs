@@ -40,6 +40,22 @@ pub use cloud_config_bundle::CloudConfigBundleLoader;
 pub use cloud_config_bundle::CloudConfigTomlBundle;
 pub use cloud_config_bundle::CloudRequirementsFragment;
 pub use cloud_config_bundle::CloudRequirementsTomlBundle;
+
+/// Returns the default cloud config bundle loader used by the app.
+///
+/// The backend-delivered enterprise bundle was removed in M1.2, so this
+/// default is a no-op stub that always yields an empty bundle (`Ok(None)`).
+pub fn default_cloud_config_bundle_loader() -> CloudConfigBundleLoader {
+    CloudConfigBundleLoader::default()
+}
+
+/// Returns the default cloud config bundle loader used by storage-related code.
+///
+/// Like [`default_cloud_config_bundle_loader`], this is a no-op stub after M1.2.
+pub fn default_cloud_config_bundle_loader_for_storage() -> CloudConfigBundleLoader {
+    CloudConfigBundleLoader::default()
+}
+
 pub use cloud_config_layers::CloudConfigFragment;
 pub use cloud_config_layers::CloudConfigFragmentSource;
 pub use cloud_config_layers::CloudConfigLayerError;

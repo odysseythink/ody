@@ -30,6 +30,7 @@ use crate::render::line_utils::prefix_lines;
 use crate::render::line_utils::push_owned_lines;
 use crate::render::renderable::Renderable;
 use crate::session_state::ThreadSessionState;
+use crate::style::accent_style;
 use crate::style::proposed_plan_style;
 use crate::style::user_message_style;
 use crate::terminal_hyperlinks::HyperlinkLine;

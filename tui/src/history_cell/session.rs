@@ -14,7 +14,15 @@ pub(crate) fn card_inner_width(width: u16, max_inner_width: usize) -> Option<usi
 
 /// Render `lines` inside a border sized to the widest span in the content.
 pub(crate) fn with_border(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
-    with_border_internal(lines, /*forced_inner_width*/ None)
+    with_border_internal(lines, /*forced_inner_width*/ None, Style::default().dim())
+}
+
+/// Render `lines` inside a border sized to the widest span in the content with a custom border style.
+pub(crate) fn with_border_styled(
+    lines: Vec<Line<'static>>,
+    border_style: Style,
+) -> Vec<Line<'static>> {
+    with_border_internal(lines, /*forced_inner_width*/ None, border_style)
 }
 
 /// Render `lines` inside a border whose inner width is at least `inner_width`.
@@ -26,12 +34,13 @@ pub(crate) fn with_border_with_inner_width(
     lines: Vec<Line<'static>>,
     inner_width: usize,
 ) -> Vec<Line<'static>> {
-    with_border_internal(lines, Some(inner_width))
+    with_border_internal(lines, Some(inner_width), Style::default().dim())
 }
 
 fn with_border_internal(
     lines: Vec<Line<'static>>,
     forced_inner_width: Option<usize>,
+    border_style: Style,
 ) -> Vec<Line<'static>> {
     let max_line_width = lines
         .iter()
@@ -48,7 +57,13 @@ fn with_border_internal(
 
     let mut out = Vec::with_capacity(lines.len() + 2);
     let border_inner_width = content_width + 2;
-    out.push(vec![format!("╭{}╮", "─".repeat(border_inner_width)).dim()].into());
+    out.push(
+        vec![Span::styled(
+            format!("╭{}╮", "─".repeat(border_inner_width)),
+            border_style,
+        )]
+        .into(),
+    );
 
     for line in lines.into_iter() {
         let used_width: usize = line
@@ -57,16 +72,22 @@ fn with_border_internal(
             .sum();
         let span_count = line.spans.len();
         let mut spans: Vec<Span<'static>> = Vec::with_capacity(span_count + 4);
-        spans.push(Span::from("│ ").dim());
+        spans.push(Span::styled("│ ", border_style));
         spans.extend(line);
         if used_width < content_width {
-            spans.push(Span::from(" ".repeat(content_width - used_width)).dim());
+            spans.push(Span::styled(" ".repeat(content_width - used_width), border_style));
         }
-        spans.push(Span::from(" │").dim());
+        spans.push(Span::styled(" │", border_style));
         out.push(Line::from(spans));
     }
 
-    out.push(vec![format!("╰{}╯", "─".repeat(border_inner_width)).dim()].into());
+    out.push(
+        vec![Span::styled(
+            format!("╰{}╯", "─".repeat(border_inner_width)),
+            border_style,
+        )]
+        .into(),
+    );
 
     out
 }
@@ -331,12 +352,9 @@ impl HistoryCell for SessionHeaderHistoryCell {
 
         let make_row = |spans: Vec<Span<'static>>| Line::from(spans);
 
-        // Title line rendered inside the box: ">_ odysseythink ody (vX)"
+        // Title line rendered inside the box in ody-code's "Welcome to ODY Code!" style.
         let title_spans: Vec<Span<'static>> = vec![
-            Span::from(">_ ").dim(),
-            Span::from("odysseythink ody").bold(),
-            Span::from(" ").dim(),
-            Span::from(format!("(v{})", self.version)).dim(),
+            Span::styled("Welcome to ODY Code!", accent_style()),
         ];
 
         const CHANGE_MODEL_HINT_COMMAND: &str = "/model";
@@ -355,9 +373,29 @@ impl HistoryCell for SessionHeaderHistoryCell {
             label_width = label_width
         );
         let reasoning_label = self.reasoning_label();
+        let model_value_width = UnicodeWidthStr::width(self.model.as_str());
+        let reasoning_width = reasoning_label
+            .map(|reasoning| UnicodeWidthStr::width(reasoning) + 1)
+            .unwrap_or(0);
+        let fast_width: usize = if self.show_fast_status {
+            UnicodeWidthStr::width("fast") + 3
+        } else {
+            0
+        };
+        let model_prefix = format!("{model_label} ");
+        let prefix_width = UnicodeWidthStr::width(model_prefix.as_str());
+        let hint = format!("{CHANGE_MODEL_HINT_COMMAND}{CHANGE_MODEL_HINT_EXPLANATION}");
+        let hint_width = UnicodeWidthStr::width(hint.as_str());
+        let used_width = prefix_width + model_value_width + reasoning_width + fast_width;
+        let pad_width = inner_width.saturating_sub(used_width).saturating_sub(hint_width);
+        let pad = if pad_width > 0 {
+            " ".repeat(pad_width)
+        } else {
+            "   ".to_string()
+        };
         let model_spans: Vec<Span<'static>> = {
             let mut spans = vec![
-                Span::from(format!("{model_label} ")).dim(),
+                Span::from(model_prefix).dim(),
                 Span::styled(self.model.clone(), self.model_style),
             ];
             if let Some(reasoning) = reasoning_label {
@@ -368,7 +406,7 @@ impl HistoryCell for SessionHeaderHistoryCell {
                 spans.push("   ".into());
                 spans.push(Span::styled("fast", self.model_style.magenta()));
             }
-            spans.push("   ".dim());
+            spans.push(Span::from(pad).dim());
             spans.push(CHANGE_MODEL_HINT_COMMAND.cyan());
             spans.push(CHANGE_MODEL_HINT_EXPLANATION.dim());
             spans
@@ -381,10 +419,17 @@ impl HistoryCell for SessionHeaderHistoryCell {
         let dir = self.format_directory(Some(dir_max_width));
         let dir_spans = vec![Span::from(dir_prefix).dim(), Span::from(dir)];
 
+        let version_label = format!("{:<label_width$}", "version:");
+        let version_spans = vec![
+            Span::from(format!("{version_label} ")).dim(),
+            Span::from(format!("v{}", self.version)),
+        ];
+
         let mut lines = vec![
             make_row(title_spans),
             make_row(Vec::new()),
             make_row(model_spans),
+            make_row(version_spans),
             make_row(dir_spans),
         ];
 
@@ -396,12 +441,12 @@ impl HistoryCell for SessionHeaderHistoryCell {
             ]));
         }
 
-        with_border(lines)
+        with_border_styled(lines, accent_style())
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
         let mut lines = vec![
-            Line::from(format!("odysseythink ody (v{})", self.version)),
+            Line::from("Welcome to ODY Code!".to_string()),
             Line::from(format!(
                 "model: {}{}",
                 self.model,
@@ -409,6 +454,7 @@ impl HistoryCell for SessionHeaderHistoryCell {
                     .map(|reasoning| format!(" {reasoning}"))
                     .unwrap_or_default()
             )),
+            Line::from(format!("version: v{}", self.version)),
             Line::from(format!(
                 "directory: {}",
                 self.format_directory(/*max_width*/ None)

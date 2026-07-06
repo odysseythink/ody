@@ -5,12 +5,16 @@ use std::path::PathBuf;
 use tokio::sync::Mutex;
 
 /// Session-level plan file artifact. Lives in Plan mode only.
+///
+/// `plans_base_dir` is the directory that contains the `plans/` sub-directory.
+/// Historically this was `ODY_HOME`; it is now the current project directory's
+/// `.ody-code` folder (e.g. `{cwd}/.ody-code`).
 #[derive(Debug)]
 pub struct PlanArtifact {
     state: Mutex<PlanArtifactState>,
     last_manifest_snapshot: Mutex<Option<ManifestSnapshot>>,
     last_plan_text: Mutex<Option<String>>,
-    ody_home: AbsolutePathBuf,
+    plans_base_dir: AbsolutePathBuf,
     thread_id: ody_protocol::ThreadId,
     date: String,
 }
@@ -66,16 +70,16 @@ pub enum PlanArtifactError {
 
 impl PlanArtifact {
     pub fn new_temp(
-        ody_home: AbsolutePathBuf,
+        plans_base_dir: AbsolutePathBuf,
         thread_id: ody_protocol::ThreadId,
         date: &str,
     ) -> Self {
-        let temp_path = allocate_temp_path(&ody_home, &thread_id, date);
+        let temp_path = allocate_temp_path(&plans_base_dir, &thread_id, date);
         Self {
             state: Mutex::new(PlanArtifactState::Temporary { temp_path }),
             last_manifest_snapshot: Mutex::new(None),
             last_plan_text: Mutex::new(None),
-            ody_home,
+            plans_base_dir,
             thread_id,
             date: date.to_string(),
         }
@@ -98,7 +102,7 @@ impl PlanArtifact {
             PlanArtifactState::Temporary { .. } => {
                 let sanitized = sanitize_plan_slug(slug);
                 let final_name = format!("{}-{}.md", self.date, sanitized);
-                let final_path = self.ody_home.as_path().join("plans").join(final_name);
+                let final_path = self.plans_base_dir.as_path().join("plans").join(final_name);
                 *state = PlanArtifactState::Finalized { final_path };
                 Ok(())
             }
@@ -188,7 +192,7 @@ impl PlanArtifact {
     }
 
     pub fn restore_or_create(
-        ody_home: AbsolutePathBuf,
+        plans_base_dir: AbsolutePathBuf,
         thread_id: ody_protocol::ThreadId,
         stored_path: Option<PathBuf>,
         date: &str,
@@ -198,21 +202,21 @@ impl PlanArtifact {
                 state: Mutex::new(PlanArtifactState::Finalized { final_path: path }),
                 last_manifest_snapshot: Mutex::new(None),
                 last_plan_text: Mutex::new(None),
-                ody_home,
+                plans_base_dir,
                 thread_id,
                 date: date.to_string(),
             },
-            _ => Self::new_temp(ody_home, thread_id, date),
+            _ => Self::new_temp(plans_base_dir, thread_id, date),
         }
     }
 }
 
 fn allocate_temp_path(
-    ody_home: &AbsolutePathBuf,
+    plans_base_dir: &AbsolutePathBuf,
     thread_id: &ody_protocol::ThreadId,
     date: &str,
 ) -> PathBuf {
-    let plans_dir = ody_home.as_path().join("plans");
+    let plans_dir = plans_base_dir.as_path().join("plans");
     let filename = format!("tmp-{thread_id}-{date}.md");
     plans_dir.join(filename)
 }
@@ -256,14 +260,14 @@ mod tests {
 
     fn test_artifact(date: &str) -> (PlanArtifact, tempfile::TempDir) {
         let tmp = tempfile::tempdir().unwrap();
-        let ody_home = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
         let thread_id =
             ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
-        (PlanArtifact::new_temp(ody_home, thread_id, date), tmp)
+        (PlanArtifact::new_temp(plans_base_dir, thread_id, date), tmp)
     }
 
     #[test]
-    fn new_temp_allocates_under_ody_home_plans() {
+    fn new_temp_allocates_under_plans_base_dir_plans() {
         let (artifact, tmp) = test_artifact("2026-07-04");
         let path = artifact.path().unwrap();
         assert!(path.starts_with(tmp.path().join("plans")));
@@ -348,14 +352,14 @@ mod tests {
     #[tokio::test]
     async fn restore_or_create_uses_existing_path() {
         let tmp = tempfile::tempdir().unwrap();
-        let ody_home = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
         let existing = tmp.path().join("plans").join("2026-07-04-existing.md");
         std::fs::create_dir_all(existing.parent().unwrap()).unwrap();
         std::fs::write(&existing, "# Existing").unwrap();
         let thread_id =
             ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-000000000002").unwrap();
         let artifact =
-            PlanArtifact::restore_or_create(ody_home, thread_id, Some(existing.clone()), "2026-07-04");
+            PlanArtifact::restore_or_create(plans_base_dir, thread_id, Some(existing.clone()), "2026-07-04");
         assert!(artifact.is_plan_file_path(&existing));
     }
 
@@ -375,10 +379,10 @@ mod tests {
     #[tokio::test]
     async fn write_plan_creates_parent_directory() {
         let tmp = tempfile::tempdir().unwrap();
-        let ody_home = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
         let thread_id =
             ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
-        let artifact = PlanArtifact::new_temp(ody_home, thread_id, "2026-07-04");
+        let artifact = PlanArtifact::new_temp(plans_base_dir, thread_id, "2026-07-04");
         artifact.finalize_name("refactor_auth").await.unwrap();
 
         let outcome = artifact.write_plan("# Plan\n", true).await;
@@ -393,13 +397,13 @@ mod tests {
     #[tokio::test]
     async fn write_plan_failure_falls_back_to_inline_only() {
         let tmp = tempfile::tempdir().unwrap();
-        // Make ody_home a file so create_dir_all(plans) fails.
-        let ody_home_file = tmp.path().join("ody_home_file");
-        std::fs::write(&ody_home_file, "").unwrap();
-        let ody_home = AbsolutePathBuf::from_absolute_path(&ody_home_file).unwrap();
+        // Make plans_base_dir a file so create_dir_all(plans) fails.
+        let plans_base_dir_file = tmp.path().join("plans_base_dir_file");
+        std::fs::write(&plans_base_dir_file, "").unwrap();
+        let plans_base_dir = AbsolutePathBuf::from_absolute_path(&plans_base_dir_file).unwrap();
         let thread_id =
             ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
-        let artifact = PlanArtifact::new_temp(ody_home, thread_id, "2026-07-04");
+        let artifact = PlanArtifact::new_temp(plans_base_dir, thread_id, "2026-07-04");
 
         let outcome = artifact.write_plan("# Plan\n", true).await;
 

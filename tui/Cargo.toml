@@ -31,7 +31,6 @@ ody-app-server-client = { workspace = true }
 ody-app-server-protocol = { workspace = true }
 ody-arg0 = { workspace = true }
 ody-install-context = { workspace = true }
-ody-cloud-config = { workspace = true }
 ody-config = { workspace = true }
 ody-connectors = { workspace = true }
 ody-core-plugins = { workspace = true }

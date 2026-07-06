@@ -1,5 +1,5 @@
 use ody_arg0::Arg0DispatchPaths;
-use ody_cloud_config::cloud_config_bundle_loader;
+use ody_config::default_cloud_config_bundle_loader;
 use ody_config::CloudConfigBundleLoader;
 use ody_config::ConfigLayerStack;
 use ody_config::LoaderOverrides;
@@ -91,7 +91,7 @@ impl ConfigManager {
     }
 
     pub(crate) fn replace_cloud_config_bundle_loader(&self) {
-        let loader = cloud_config_bundle_loader();
+        let loader = default_cloud_config_bundle_loader();
         if let Ok(mut guard) = self.cloud_config_bundle.write() {
             *guard = loader;
         } else {

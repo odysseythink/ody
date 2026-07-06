@@ -60,6 +60,7 @@ use crate::tools::router::ToolRouter;
 use crate::tools::router::ToolRouterParams;
 use ody_features::Feature;
 use ody_mcp::ToolInfo;
+use ody_protocol::config_types::ModeKind;
 use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::dynamic_tools::DynamicToolNamespaceTool;
 use ody_protocol::dynamic_tools::DynamicToolSpec;
@@ -682,7 +683,12 @@ fn add_core_utility_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut
     let features = turn_context.config.features.get();
     let environment_mode = turn_context.tool_environment_mode();
 
-    planned_tools.add(PlanHandler);
+    // update_plan is a TODO-list tool, not part of plan mode. Exposing it in
+    // plan mode causes models to call it to track progress, but it rejects the
+    // call and the model loops back to re-asking the user. Hide it entirely.
+    if turn_context.collaboration_mode.mode != ModeKind::Plan {
+        planned_tools.add(PlanHandler);
+    }
 
     if turn_context.config.experimental_request_user_input_enabled {
         planned_tools.add_with_exposure(

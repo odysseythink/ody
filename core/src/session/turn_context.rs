@@ -775,8 +775,14 @@ impl Session {
             skills_snapshot,
         );
         if turn_context.collaboration_mode.mode == ody_protocol::config_types::ModeKind::Plan {
+            // Plan artifacts are stored in the current project directory so they
+            // are easy to find and version-control alongside the project.
+            let plans_base_dir = AbsolutePathBuf::from_absolute_path(
+                turn_context.cwd.as_path().join(".ody-code"),
+            )
+            .unwrap_or_else(|_| turn_context.config.ody_home.clone());
             let artifact = PlanArtifact::new_temp(
-                turn_context.config.ody_home.clone(),
+                plans_base_dir,
                 self.thread_id(),
                 turn_context.current_date.as_deref().unwrap_or("0000-00-00"),
             );

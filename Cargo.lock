@@ -6385,7 +6385,6 @@ dependencies = [
  "ody-app-server-protocol",
  "ody-app-server-transport",
  "ody-arg0",
- "ody-cloud-config",
  "ody-config",
  "ody-core",
  "ody-core-plugins",
@@ -6759,28 +6758,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ody-cloud-config"
-version = "0.0.0"
-dependencies = [
- "base64 0.22.1",
- "chrono",
- "hmac 0.12.1",
- "ody-config",
- "ody-core",
- "ody-login",
- "ody-otel",
- "ody-protocol",
- "pretty_assertions",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "ody-code-mode"
 version = "0.0.0"
 dependencies = [
@@ -7127,7 +7104,6 @@ dependencies = [
  "ody-app-server-protocol",
  "ody-apply-patch",
  "ody-arg0",
- "ody-cloud-config",
  "ody-config",
  "ody-core",
  "ody-feedback",
@@ -8270,7 +8246,6 @@ dependencies = [
  "ody-app-server-protocol",
  "ody-arg0",
  "ody-cli",
- "ody-cloud-config",
  "ody-config",
  "ody-connectors",
  "ody-core-plugins",

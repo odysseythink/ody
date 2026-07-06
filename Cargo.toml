@@ -20,7 +20,6 @@ members = [
     "code-mode-host",
     "code-mode-protocol",
     "ody-home",
-    "cloud-config",
     "cli",
     "collaboration-mode-templates",
     "connectors",
@@ -139,7 +138,6 @@ ody-async-utils = { path = "async-utils" }
 ody-cli = { path = "cli" }
 ody-client = { path = "ody-client" }
 ody-collaboration-mode-templates = { path = "collaboration-mode-templates" }
-ody-cloud-config = { path = "cloud-config" }
 ody-code-mode = { path = "code-mode" }
 ody-code-mode-protocol = { path = "code-mode-protocol" }
 ody-home = { path = "ody-home" }

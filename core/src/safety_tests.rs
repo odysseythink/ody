@@ -373,10 +373,10 @@ fn default_mode() -> CollaborationMode {
 
 fn plan_artifact_at(path: &std::path::Path) -> crate::plan_artifact::PlanArtifact {
     use ody_utils_absolute_path::AbsolutePathBuf;
-    let ody_home = AbsolutePathBuf::from_absolute_path(path).unwrap();
+    let plans_base_dir = AbsolutePathBuf::from_absolute_path(path).unwrap();
     let thread_id =
         ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
-    crate::plan_artifact::PlanArtifact::new_temp(ody_home, thread_id, "2026-07-04")
+    crate::plan_artifact::PlanArtifact::new_temp(plans_base_dir, thread_id, "2026-07-04")
 }
 
 #[test]

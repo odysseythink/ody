@@ -2,10 +2,11 @@
 source: tui/src/history_cell/tests.rs
 expression: rendered
 ---
-╭───────────────────────────────────────╮
-│ >_ odysseythink ody (vtest)           │
-│                                       │
-│ model:       gpt-5   /model to change │
-│ directory:   /tmp/project             │
-│ permissions: YOLO mode                │
-╰───────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────╮
+│ Welcome to ODY Code!                                     │
+│                                                          │
+│ model:       gpt-5                      /model to change │
+│ version:     vtest                                       │
+│ directory:   /tmp/project                                │
+│ permissions: YOLO mode                                   │
+╰──────────────────────────────────────────────────────────╯

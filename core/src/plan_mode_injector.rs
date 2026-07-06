@@ -172,9 +172,9 @@ mod directive_tests {
 
     fn artifact(date: &str) -> (PlanArtifact, tempfile::TempDir) {
         let tmp = tempfile::tempdir().unwrap();
-        let ody_home = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
         let thread_id = ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
-        (PlanArtifact::new_temp(ody_home, thread_id, date), tmp)
+        (PlanArtifact::new_temp(plans_base_dir, thread_id, date), tmp)
     }
 
     #[tokio::test]
