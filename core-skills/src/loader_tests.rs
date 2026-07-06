@@ -5,6 +5,7 @@ use ody_config::ConfigLayerStack;
 use ody_config::ConfigRequirements;
 use ody_config::ConfigRequirementsToml;
 use ody_exec_server::LOCAL_FS;
+use ody_protocol::config_types::ModeKind;
 use ody_protocol::protocol::Product;
 use ody_protocol::protocol::SkillScope;
 use ody_utils_absolute_path::AbsolutePathBuf;
@@ -2194,4 +2195,42 @@ async fn skill_roots_include_admin_with_lowest_priority() {
     }
     expected.push(SkillScope::Admin);
     assert_eq!(scopes, expected);
+}
+
+#[tokio::test]
+async fn parse_skill_file_extracts_all_new_fields() {
+    let dir = TempDir::new().unwrap();
+    let skill_path = dir
+        .path()
+        .join(".agents")
+        .join("skills")
+        .join("review")
+        .join("SKILL.md");
+    fs::create_dir_all(skill_path.parent().unwrap()).unwrap();
+    fs::write(
+        &skill_path,
+        "---\nname: security-review\ndescription: Review for security issues.\ntype: knowledge\ntriggers:\n  - review\n  - security\nhidden_in_modes:\n  - plan\ndisable_model_invocation: true\n---\n# Security Review\n\n```mermaid\ngraph TD\n  A --> B\n```\n",
+    )
+    .unwrap();
+
+    let fs: Arc<dyn ExecutorFileSystem> = Arc::clone(&LOCAL_FS);
+    let roots = skill_roots_from_layer_stack(
+        fs,
+        &ConfigLayerStack::default(),
+        &AbsolutePathBuf::try_from(dir.path()).unwrap(),
+        /*home_dir*/ None,
+    )
+    .await;
+    let outcome = load_skills_from_roots(roots, None).await;
+
+    let skill = outcome
+        .skills
+        .iter()
+        .find(|s| s.name == "security-review")
+        .expect("skill should be loaded");
+    assert!(matches!(skill.skill_type, SkillType::Knowledge));
+    assert_eq!(skill.triggers, vec!["review", "security"]);
+    assert!(skill.hidden_in_modes.contains(&ModeKind::Plan));
+    assert!(skill.disable_model_invocation);
+    assert!(skill.mermaid.as_ref().unwrap().contains("A --> B"));
 }
