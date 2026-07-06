@@ -101,6 +101,19 @@ impl SkillProviders {
         self
     }
 
+    pub(crate) fn has_host_provider(&self) -> bool {
+        self.sources
+            .iter()
+            .any(|source| source.kind == SkillSourceKind::Host)
+    }
+
+    pub(crate) fn has_executor_provider(&self) -> bool {
+        self.sources
+            .iter()
+            .any(|source| source.kind == SkillSourceKind::Executor)
+    }
+
+    #[allow(dead_code)]
     pub(crate) fn has_orchestrator_provider(&self) -> bool {
         self.sources
             .iter()

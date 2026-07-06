@@ -9,6 +9,7 @@ use ody_protocol::capabilities::SelectedCapabilityRoot;
 use tokio::sync::OnceCell;
 
 use crate::SkillsExtensionConfig;
+use crate::catalog::RuntimeMode;
 use crate::catalog::SkillAuthority;
 use crate::catalog::SkillCatalog;
 use crate::catalog::SkillCatalogEntry;
@@ -203,4 +204,9 @@ pub(crate) struct SkillsTurnState {
     pub(crate) selected_entries: Vec<SkillCatalogEntry>,
     pub(crate) warnings: Vec<String>,
     pub(crate) main_prompts_injected: bool,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct SkillsTurnMode {
+    pub(crate) mode: Option<RuntimeMode>,
 }

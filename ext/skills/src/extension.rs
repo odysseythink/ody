@@ -18,6 +18,8 @@ use ody_extension_api::ToolContributor;
 use ody_extension_api::ToolExecutor;
 use ody_extension_api::TurnInputContext;
 use ody_extension_api::TurnInputContributor;
+use ody_extension_api::TurnLifecycleContributor;
+use ody_extension_api::TurnStartInput;
 use ody_mcp::McpResourceClient;
 use ody_protocol::capabilities::SelectedCapabilityRoot;
 use ody_protocol::protocol::Event;
@@ -41,6 +43,7 @@ use crate::render::truncate_utf8_to_bytes;
 use crate::selection::collect_explicit_skill_mentions;
 use crate::sources::SkillProviders;
 use crate::state::SkillsThreadState;
+use crate::state::SkillsTurnMode;
 use crate::state::SkillsTurnState;
 use crate::tools::skill_tools;
 
@@ -70,6 +73,19 @@ where
                 selected_roots,
                 orchestrator_skills_available,
             ));
+        })
+    }
+}
+
+impl<C> TurnLifecycleContributor for SkillsExtension<C>
+where
+    C: Send + Sync + 'static,
+{
+    fn on_turn_start<'a>(&'a self, input: TurnStartInput<'a>) -> ExtensionFuture<'a, ()> {
+        Box::pin(async move {
+            input.turn_store.insert(SkillsTurnMode {
+                mode: Some(input.collaboration_mode.mode),
+            });
         })
     }
 }
@@ -154,8 +170,9 @@ where
         let Some(thread_state) = thread_store.get::<SkillsThreadState>() else {
             return Vec::new();
         };
-        if !self.providers.has_orchestrator_provider()
-            || !thread_state.orchestrator_skills_enabled()
+        if !thread_state.orchestrator_skills_enabled()
+            && !self.providers.has_host_provider()
+            && !self.providers.has_executor_provider()
         {
             return Vec::new();
         }
@@ -163,6 +180,7 @@ where
         skill_tools(
             self.providers.clone(),
             session_store.get::<McpResourceClient>(),
+            session_store.get::<HostSkillsSnapshot>(),
             thread_state,
         )
     }
@@ -186,6 +204,9 @@ where
 
             let config = thread_state.config();
             let host_snapshot = turn_store.get::<HostSkillsSnapshot>();
+            let turn_mode = turn_store
+                .get::<SkillsTurnMode>()
+                .and_then(|turn_mode| turn_mode.mode);
             let query = SkillListQuery {
                 turn_id: input.turn_id.clone(),
                 executor_roots: thread_state.selected_roots().to_vec(),
@@ -193,7 +214,7 @@ where
                 include_host_skills: true,
                 include_bundled_skills: config.bundled_skills_enabled,
                 include_orchestrator_skills: thread_state.orchestrator_skills_enabled(),
-                mode: None,
+                mode: turn_mode,
                 mcp_resources: session_store.get::<McpResourceClient>(),
             };
             let catalog = self.list_skills(query, &thread_state).await;
@@ -371,6 +392,7 @@ pub fn install_with_providers<C>(
         config_from_host: Arc::new(config_from_host),
     });
     registry.thread_lifecycle_contributor(extension.clone());
+    registry.turn_lifecycle_contributor(extension.clone());
     registry.config_contributor(extension.clone());
     registry.prompt_contributor(extension.clone());
     registry.turn_input_contributor(extension.clone());
