@@ -11,7 +11,10 @@ use ody_core_skills::SkillLoadOutcome;
 use ody_core_skills::SkillMetadata;
 use ody_core_skills::SkillType;
 use ody_core_skills::injection::InjectedHostSkillPrompts;
+use ody_protocol::config_types::CollaborationMode;
 use ody_protocol::config_types::ModeKind;
+use ody_protocol::config_types::Settings;
+use ody_protocol::protocol::TokenUsage;
 use ody_extension_api::ConversationHistory;
 use ody_extension_api::ExtensionData;
 use ody_extension_api::ExtensionEventSink;
@@ -20,6 +23,7 @@ use ody_extension_api::NoopTurnItemEmitter;
 use ody_extension_api::ThreadStartInput;
 use ody_extension_api::ToolCall;
 use ody_extension_api::ToolPayload;
+use ody_extension_api::TurnStartInput;
 use ody_extension_api::TurnInputContext;
 use ody_exec_server::EnvironmentManager;
 use ody_protocol::capabilities::CapabilityRootLocation;
@@ -840,4 +844,235 @@ async fn executor_provider_maps_new_metadata_fields() {
     std::fs::remove_dir_all(test_root).unwrap_or_else(|err| {
         eprintln!("failed to remove temp dir: {err}");
     });
+}
+
+
+#[tokio::test]
+async fn hidden_in_modes_excludes_skill_from_catalog_and_tools() -> TestResult {
+    let read_requests = Arc::new(Mutex::new(Vec::new()));
+    let provider = Arc::new(StaticSkillProvider {
+        catalog: SkillCatalog {
+            entries: vec![
+                test_entry(
+                    SkillSourceKind::Host,
+                    "host",
+                    "host/visible-skill",
+                    "visible-skill/SKILL.md",
+                ),
+                test_entry(
+                    SkillSourceKind::Host,
+                    "host",
+                    "host/hidden-skill",
+                    "hidden-skill/SKILL.md",
+                )
+                .with_hidden_in_modes(vec![ModeKind::Default]),
+            ],
+            warnings: Vec::new(),
+        },
+        read_requests: Arc::clone(&read_requests),
+        list_calls: None,
+        fail_first_list: false,
+    });
+    let providers = SkillProviders::new().with_host_provider(provider);
+    let mut builder = ExtensionRegistryBuilder::new();
+    install_with_providers(&mut builder, providers, skills_extension_config);
+    let registry = builder.build();
+
+    let session_store = ExtensionData::new("session");
+    let thread_store = ExtensionData::new("thread");
+    let session_source = SessionSource::Cli;
+    let config = default_config();
+    registry.thread_lifecycle_contributors()[0]
+        .on_thread_start(ThreadStartInput {
+            config: &config,
+            session_source: &session_source,
+            persistent_thread_state_available: true,
+            environments: &[],
+            session_store: &session_store,
+            thread_store: &thread_store,
+        })
+        .await;
+
+    let turn_store = ExtensionData::new("turn-1");
+    registry.turn_lifecycle_contributors()[0]
+        .on_turn_start(TurnStartInput {
+            turn_id: "turn-1",
+            collaboration_mode: &CollaborationMode {
+                mode: ModeKind::Default,
+                settings: Settings {
+                    model: "test".to_string(),
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                },
+            },
+            token_usage_at_turn_start: &TokenUsage::default(),
+            session_store: &session_store,
+            thread_store: &thread_store,
+            turn_store: &turn_store,
+        })
+        .await;
+
+    let fragments = registry.turn_input_contributors()[0]
+        .contribute(
+            TurnInputContext {
+                turn_id: "turn-1".to_string(),
+                user_input: vec![UserInput::Text {
+                    text: "hello".to_string(),
+                    text_elements: Vec::new(),
+                }],
+                environments: Vec::new(),
+            },
+            &session_store,
+            &thread_store,
+            &turn_store,
+        )
+        .await;
+
+    assert_eq!(1, fragments.len());
+    let rendered = fragments[0].render();
+    assert!(rendered.contains("visible-skill"));
+    assert!(!rendered.contains("hidden-skill"));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn knowledge_skills_are_not_selected_by_explicit_mention() -> TestResult {
+    let read_requests = Arc::new(Mutex::new(Vec::new()));
+    let provider = Arc::new(StaticSkillProvider {
+        catalog: SkillCatalog {
+            entries: vec![test_entry(
+                SkillSourceKind::Host,
+                "host",
+                "host/review",
+                "review/SKILL.md",
+            )
+            .with_skill_type(SkillType::Knowledge)
+            .with_triggers(vec!["review".to_string()])],
+            warnings: Vec::new(),
+        },
+        read_requests: Arc::clone(&read_requests),
+        list_calls: None,
+        fail_first_list: false,
+    });
+    let providers = SkillProviders::new().with_host_provider(provider);
+    let mut builder = ExtensionRegistryBuilder::new();
+    install_with_providers(&mut builder, providers, skills_extension_config);
+    let registry = builder.build();
+
+    let session_store = ExtensionData::new("session");
+    let thread_store = ExtensionData::new("thread");
+    let session_source = SessionSource::Cli;
+    let config = default_config();
+    registry.thread_lifecycle_contributors()[0]
+        .on_thread_start(ThreadStartInput {
+            config: &config,
+            session_source: &session_source,
+            persistent_thread_state_available: true,
+            environments: &[],
+            session_store: &session_store,
+            thread_store: &thread_store,
+        })
+        .await;
+
+    let fragments = registry.turn_input_contributors()[0]
+        .contribute(
+            TurnInputContext {
+                turn_id: "turn-1".to_string(),
+                user_input: vec![UserInput::Text {
+                    text: "$review please".to_string(),
+                    text_elements: Vec::new(),
+                }],
+                environments: Vec::new(),
+            },
+            &session_store,
+            &thread_store,
+            &ExtensionData::new("turn-1"),
+        )
+        .await;
+
+    assert!(fragments.is_empty());
+    assert!(read_requests
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .is_empty());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn skills_list_tool_returns_host_skills_when_host_authority_requested() -> TestResult {
+    let mut outcome = SkillLoadOutcome::default();
+    outcome.skills.push(SkillMetadata {
+        name: "demo".to_string(),
+        description: "Demo skill.".to_string(),
+        short_description: None,
+        interface: None,
+        dependencies: None,
+        policy: None,
+        path_to_skills_md: AbsolutePathBuf::try_from("/tmp/demo/SKILL.md")?,
+        scope: SkillScope::User,
+        plugin_id: None,
+        skill_type: SkillType::default(),
+        triggers: Vec::new(),
+        hidden_in_modes: Vec::new(),
+        disable_model_invocation: false,
+        mermaid: None,
+        d2: None,
+    });
+    let snapshot = Arc::new(HostSkillsSnapshot::new(Arc::new(outcome)));
+
+    let mut builder = ExtensionRegistryBuilder::new();
+    install(&mut builder, skills_extension_config);
+    let registry = builder.build();
+
+    let session_store = ExtensionData::new("session");
+    session_store.insert((*snapshot).clone());
+    let thread_store = ExtensionData::new("thread");
+    let session_source = SessionSource::Cli;
+    let config = default_config();
+    registry.thread_lifecycle_contributors()[0]
+        .on_thread_start(ThreadStartInput {
+            config: &config,
+            session_source: &session_source,
+            persistent_thread_state_available: true,
+            environments: &[],
+            session_store: &session_store,
+            thread_store: &thread_store,
+        })
+        .await;
+
+    let tools = registry.tool_contributors()[0].tools(&session_store, &thread_store);
+    let list_tool = tools
+        .iter()
+        .find(|tool| tool.tool_name().name == "list")
+        .ok_or("skills.list tool should be registered")?;
+    let payload = ToolPayload::Function {
+        arguments: serde_json::json!({"authority": {"kind": "host"}}).to_string(),
+    };
+    let output = list_tool
+        .handle(ToolCall {
+            turn_id: "turn-1".to_string(),
+            call_id: "call-1".to_string(),
+            tool_name: list_tool.tool_name(),
+            model: "gpt-test".to_string(),
+            truncation_policy: TruncationPolicy::Bytes(1_024),
+            conversation_history: ConversationHistory::default(),
+            turn_item_emitter: Arc::new(NoopTurnItemEmitter),
+            environments: Vec::new(),
+            payload: payload.clone(),
+        })
+        .await?;
+    let response = output
+        .post_tool_use_response("call-1", &payload)
+        .ok_or("skills.list should expose structured output")?;
+    let skill_names: Vec<&str> = response["skills"]
+        .as_array()
+        .ok_or("skills should be an array")?
+        .iter()
+        .filter_map(|skill| skill["name"].as_str())
+        .collect();
+    assert_eq!(vec!["demo"], skill_names);
+
+    Ok(())
 }
