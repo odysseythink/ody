@@ -3,6 +3,9 @@ use ody_core_skills::model::SkillType;
 use ody_protocol::config_types::ModeKind;
 use ody_utils_absolute_path::AbsolutePathBuf;
 
+/// Runtime mode used for filtering skill visibility and model invocability.
+pub type RuntimeMode = ModeKind;
+
 /// Source authority that owns a skill package and must be used to read it.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum SkillSourceKind {
@@ -168,6 +171,9 @@ impl SkillCatalogEntry {
 
     pub fn with_skill_type(mut self, skill_type: SkillType) -> Self {
         self.skill_type = skill_type;
+        if matches!(skill_type, SkillType::Knowledge | SkillType::Flow) {
+            self.prompt_visible = false;
+        }
         self
     }
 
@@ -194,6 +200,18 @@ impl SkillCatalogEntry {
     pub fn hidden_from_prompt(mut self) -> Self {
         self.prompt_visible = false;
         self
+    }
+
+    /// Returns whether this entry should appear in the prompt-visible catalog
+    /// for the given runtime mode.
+    pub fn is_visible_in_mode(&self, mode: RuntimeMode) -> bool {
+        self.enabled && self.prompt_visible && !self.hidden_in_modes.contains(&mode)
+    }
+
+    /// Returns whether the model is allowed to invoke this entry in the given
+    /// runtime mode.
+    pub fn is_model_invocable(&self, mode: RuntimeMode) -> bool {
+        self.enabled && !self.disable_model_invocation && !self.hidden_in_modes.contains(&mode)
     }
 
     pub(crate) fn rendered_path(&self) -> &str {
@@ -228,6 +246,16 @@ impl SkillCatalog {
         }
 
         self.entries.push(entry);
+    }
+
+    /// Retains only entries that are visible in the given runtime mode.
+    ///
+    /// Passing `None` leaves the catalog unchanged.
+    pub fn filter_for_mode(&mut self, mode: Option<RuntimeMode>) {
+        let Some(mode) = mode else {
+            return;
+        };
+        self.entries.retain(|entry| entry.is_visible_in_mode(mode));
     }
 }
 
@@ -274,3 +302,6 @@ impl std::fmt::Display for SkillProviderError {
 impl std::error::Error for SkillProviderError {}
 
 pub type SkillProviderResult<T> = Result<T, SkillProviderError>;
+
+#[cfg(test)]
+mod catalog_tests;

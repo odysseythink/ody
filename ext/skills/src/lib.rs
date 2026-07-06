@@ -9,6 +9,7 @@ mod sources;
 mod state;
 mod tools;
 
+pub use catalog::RuntimeMode;
 pub use config::SkillsExtensionConfig;
 pub use extension::install;
 pub use extension::install_with_providers;
