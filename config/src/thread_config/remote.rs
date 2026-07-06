@@ -189,7 +189,6 @@ fn model_provider_from_proto(
         stream_max_retries: provider.stream_max_retries,
         stream_idle_timeout_ms: provider.stream_idle_timeout_ms,
         websocket_connect_timeout_ms: provider.websocket_connect_timeout_ms,
-        requires_odysseythink_auth: provider.requires_odysseythink_auth,
         supports_websockets: provider.supports_websockets,
             capabilities: ProviderCapabilities::default(),
     };
@@ -216,7 +215,6 @@ fn model_provider_to_proto(
         stream_max_retries,
         stream_idle_timeout_ms,
         websocket_connect_timeout_ms,
-        requires_odysseythink_auth,
         supports_websockets,
         capabilities: _capabilities,
     } = provider;
@@ -237,7 +235,6 @@ fn model_provider_to_proto(
         stream_max_retries,
         stream_idle_timeout_ms,
         websocket_connect_timeout_ms,
-        requires_odysseythink_auth,
         supports_websockets,
     }
 }
@@ -476,7 +473,6 @@ mod tests {
                             stream_max_retries: Some(8),
                             stream_idle_timeout_ms: Some(9_000),
                             websocket_connect_timeout_ms: Some(10_000),
-                            requires_odysseythink_auth: false,
                             supports_websockets: true,
                         }],
                         features: HashMap::from([
@@ -539,7 +535,6 @@ mod tests {
             stream_max_retries: Some(8),
             stream_idle_timeout_ms: Some(9_000),
             websocket_connect_timeout_ms: Some(10_000),
-            requires_odysseythink_auth: false,
             supports_websockets: true,
             capabilities: ProviderCapabilities::default(),
         }

@@ -33,7 +33,6 @@ use ody_model_provider_info::GLM_PROVIDER_ID;
 use ody_model_provider_info::KIMI_PROVIDER_ID;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::ProviderCapabilities;
-use ody_model_provider_info::OPENAI_PROVIDER_ID;
 use ody_protocol::config_types::AutoCompactTokenLimitScope;
 use ody_protocol::config_types::ForcedLoginMethod;
 use ody_protocol::config_types::Personality;
@@ -58,7 +57,7 @@ use serde::Serialize;
 use serde_json::Value as JsonValue;
 
 const RESERVED_MODEL_PROVIDER_IDS: [&str; 4] = [
-    OPENAI_PROVIDER_ID,
+    KIMI_PROVIDER_ID,
     KIMI_PROVIDER_ID,
     DEEPSEEK_PROVIDER_ID,
     GLM_PROVIDER_ID,
@@ -633,7 +632,6 @@ impl ConfigToml {
                     stream_max_retries: None,
                     stream_idle_timeout_ms: None,
                     websocket_connect_timeout_ms: None,
-                    requires_odysseythink_auth: false,
                     supports_websockets: false,
                     capabilities: ProviderCapabilities::default(),
                 };

@@ -32,7 +32,6 @@ use ody_login::OdyAuth;
 use ody_model_provider::create_model_provider;
 use ody_model_provider::create_model_provider_with_id;
 use ody_model_provider_info::ModelProviderInfo;
-use ody_model_provider_info::OPENAI_PROVIDER_ID;
 use ody_models_manager::manager::RefreshStrategy;
 use ody_models_manager::manager::SharedModelsManager;
 use ody_protocol::ThreadId;
@@ -394,7 +393,7 @@ impl ThreadManager {
             LocalThreadStoreConfig {
                 ody_home: ody_home.clone(),
                 sqlite_home: ody_home.clone(),
-                default_model_provider_id: OPENAI_PROVIDER_ID.to_string(),
+                default_model_provider_id: ody_model_provider_info::KIMI_PROVIDER_ID.to_string(),
             },
             state_db.clone(),
         ));

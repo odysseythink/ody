@@ -247,8 +247,8 @@ fn permissions_text_for(config: &Config) -> Option<String> {
 async fn status_snapshot_includes_reasoning_details() {
     let temp_home = TempDir::new().expect("temp home");
     let mut config = test_config(&temp_home).await;
-    config.model = Some("gpt-5.1-ody-max".to_string());
-    config.model_provider_id = "odysseythink".to_string();
+    config.model = Some("kimi-for-coding".to_string());
+    config.model_provider_id = "kimi".to_string();
     config.model_reasoning_summary = Some(ReasoningSummary::Detailed);
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
     config
@@ -320,8 +320,8 @@ async fn status_snapshot_includes_reasoning_details() {
 async fn status_permissions_non_default_workspace_write_uses_workspace_label() {
     let temp_home = TempDir::new().expect("temp home");
     let mut config = test_config(&temp_home).await;
-    config.model = Some("gpt-5.1-ody-max".to_string());
-    config.model_provider_id = "odysseythink".to_string();
+    config.model = Some("kimi-for-coding".to_string());
+    config.model_provider_id = "kimi".to_string();
     config
         .permissions
         .approval_policy
@@ -588,7 +588,7 @@ async fn status_permissions_user_defined_profile_shows_name() {
 async fn status_snapshot_shows_active_user_defined_profile() {
     let temp_home = TempDir::new().expect("temp home");
     let mut config = test_config(&temp_home).await;
-    config.model = Some("gpt-5.1-ody-max".to_string());
+    config.model = Some("kimi-for-coding".to_string());
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
     config
         .permissions
@@ -630,65 +630,12 @@ async fn status_snapshot_shows_active_user_defined_profile() {
     assert_snapshot!(sanitized);
 }
 
-#[tokio::test]
-async fn status_model_provider_omits_usage_link_for_non_odysseythink_proxy() {
-    let temp_home = TempDir::new().expect("temp home");
-    let mut config = test_config(&temp_home).await;
-    config.model_provider_id = "odysseythink-proxy".to_string();
-    config.model_provider = ModelProviderInfo {
-        name: "OpenAI Proxy".to_string(),
-        base_url: Some("https://odysseythink-proxy.example/v1".to_string()),
-        requires_odysseythink_auth: true,
-        capabilities: ProviderCapabilities::default(),
-        ..ModelProviderInfo::default()
-    };
-    let usage = TokenUsage::default();
-    let captured_at = chrono::Local
-        .with_ymd_and_hms(2024, 1, 2, 3, 4, 5)
-        .single()
-        .expect("timestamp");
-    let model_slug = get_model_offline_for_tests(config.model.as_deref());
-    let (composite, _handle) = new_status_output_with_rate_limits_handle(
-        &config,
-        /*runtime_model_provider_base_url*/ None,
-        /*remote_connection*/ None,
-        test_status_account_display().as_ref(),
-        /*token_info*/ None,
-        &usage,
-        &None,
-        /*thread_name*/ None,
-        /*forked_from*/ None,
-        /*rate_limits*/ &[],
-        captured_at,
-        &model_slug,
-        /*collaboration_mode*/ None,
-        /*reasoning_effort_override*/ None,
-        "<none>".to_string(),
-        /*refreshing_rate_limits*/ false,
-    );
-
-    let wide_destinations: Vec<String> = composite
-        .display_hyperlink_lines(/*width*/ 120)
-        .into_iter()
-        .flat_map(|line| line.hyperlinks.into_iter())
-        .map(|link| link.destination)
-        .collect();
-    assert_eq!(wide_destinations, Vec::<String>::new());
-
-    let narrow_destinations: Vec<String> = composite
-        .display_hyperlink_lines(/*width*/ 24)
-        .into_iter()
-        .flat_map(|line| line.hyperlinks.into_iter())
-        .map(|link| link.destination)
-        .collect();
-    assert_eq!(narrow_destinations, Vec::<String>::new());
-}
 
 #[tokio::test]
 async fn status_snapshot_shows_auto_review_permissions() {
     let temp_home = TempDir::new().expect("temp home");
     let mut config = test_config(&temp_home).await;
-    config.model = Some("gpt-5.1-ody-max".to_string());
+    config.model = Some("kimi-for-coding".to_string());
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
     config.approvals_reviewer = ApprovalsReviewer::AutoReview;
     config
@@ -781,8 +728,8 @@ async fn status_permissions_full_disk_managed_without_network_is_external_sandbo
 async fn status_snapshot_includes_forked_from() {
     let temp_home = TempDir::new().expect("temp home");
     let mut config = test_config(&temp_home).await;
-    config.model = Some("gpt-5.1-ody-max".to_string());
-    config.model_provider_id = "odysseythink".to_string();
+    config.model = Some("kimi-for-coding".to_string());
+    config.model_provider_id = "kimi".to_string();
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
     let account_display = test_status_account_display();
@@ -834,8 +781,8 @@ async fn status_snapshot_includes_forked_from() {
 async fn status_snapshot_includes_monthly_limit() {
     let temp_home = TempDir::new().expect("temp home");
     let mut config = test_config(&temp_home).await;
-    config.model = Some("gpt-5.1-ody-max".to_string());
-    config.model_provider_id = "odysseythink".to_string();
+    config.model = Some("kimi-for-coding".to_string());
+    config.model_provider_id = "kimi".to_string();
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
     let account_display = test_status_account_display();
@@ -896,8 +843,8 @@ async fn status_snapshot_includes_monthly_limit() {
 async fn status_snapshot_includes_enterprise_monthly_credit_limit() {
     let temp_home = TempDir::new().expect("temp home");
     let mut config = test_config(&temp_home).await;
-    config.model = Some("gpt-5.1-ody-max".to_string());
-    config.model_provider_id = "odysseythink".to_string();
+    config.model = Some("kimi-for-coding".to_string());
+    config.model_provider_id = "kimi".to_string();
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
     let account_display = test_status_account_display();
@@ -970,8 +917,8 @@ async fn status_snapshot_includes_enterprise_monthly_credit_limit() {
 async fn status_snapshot_uses_generic_limit_labels_for_unsupported_windows() {
     let temp_home = TempDir::new().expect("temp home");
     let mut config = test_config(&temp_home).await;
-    config.model = Some("gpt-5.1-ody-max".to_string());
-    config.model_provider_id = "odysseythink".to_string();
+    config.model = Some("kimi-for-coding".to_string());
+    config.model_provider_id = "kimi".to_string();
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
     let account_display = test_status_account_display();
@@ -1228,7 +1175,7 @@ async fn status_snapshot_hides_when_has_no_credits_flag() {
 async fn status_card_token_usage_excludes_cached_tokens() {
     let temp_home = TempDir::new().expect("temp home");
     let mut config = test_config(&temp_home).await;
-    config.model = Some("gpt-5.1-ody-max".to_string());
+    config.model = Some("kimi-for-coding".to_string());
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
     let account_display = test_status_account_display();
@@ -1273,8 +1220,8 @@ async fn status_card_token_usage_excludes_cached_tokens() {
 async fn status_snapshot_truncates_in_narrow_terminal() {
     let temp_home = TempDir::new().expect("temp home");
     let mut config = test_config(&temp_home).await;
-    config.model = Some("gpt-5.1-ody-max".to_string());
-    config.model_provider_id = "odysseythink".to_string();
+    config.model = Some("kimi-for-coding".to_string());
+    config.model_provider_id = "kimi".to_string();
     config.model_reasoning_summary = Some(ReasoningSummary::Detailed);
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
@@ -1338,7 +1285,7 @@ async fn status_snapshot_truncates_in_narrow_terminal() {
 async fn status_snapshot_shows_missing_limits_message() {
     let temp_home = TempDir::new().expect("temp home");
     let mut config = test_config(&temp_home).await;
-    config.model = Some("gpt-5.1-ody-max".to_string());
+    config.model = Some("kimi-for-coding".to_string());
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
     let account_display = test_status_account_display();
@@ -1385,7 +1332,7 @@ async fn status_snapshot_shows_missing_limits_message() {
 async fn status_snapshot_uses_default_reasoning_when_config_empty() {
     let temp_home = TempDir::new().expect("temp home");
     let mut config = test_config(&temp_home).await;
-    config.model = Some("gpt-5.1-ody-max".to_string());
+    config.model = Some("kimi-for-coding".to_string());
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
     let account_display = test_status_account_display();
@@ -1440,7 +1387,7 @@ async fn status_snapshot_uses_default_reasoning_when_config_empty() {
 async fn status_snapshot_shows_refreshing_limits_notice() {
     let temp_home = TempDir::new().expect("temp home");
     let mut config = test_config(&temp_home).await;
-    config.model = Some("gpt-5.1-ody-max".to_string());
+    config.model = Some("kimi-for-coding".to_string());
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
     let usage = TokenUsage {
@@ -1573,7 +1520,7 @@ async fn status_snapshot_includes_credits_and_limits() {
 async fn status_snapshot_shows_unavailable_limits_message() {
     let temp_home = TempDir::new().expect("temp home");
     let mut config = test_config(&temp_home).await;
-    config.model = Some("gpt-5.1-ody-max".to_string());
+    config.model = Some("kimi-for-coding".to_string());
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
     let account_display = test_status_account_display();
@@ -1630,7 +1577,7 @@ async fn status_snapshot_shows_unavailable_limits_message() {
 async fn status_snapshot_treats_refreshing_empty_limits_as_unavailable() {
     let temp_home = TempDir::new().expect("temp home");
     let mut config = test_config(&temp_home).await;
-    config.model = Some("gpt-5.1-ody-max".to_string());
+    config.model = Some("kimi-for-coding".to_string());
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
     let usage = TokenUsage {
@@ -1687,7 +1634,7 @@ async fn status_snapshot_treats_refreshing_empty_limits_as_unavailable() {
 async fn status_snapshot_shows_stale_limits_message() {
     let temp_home = TempDir::new().expect("temp home");
     let mut config = test_config(&temp_home).await;
-    config.model = Some("gpt-5.1-ody-max".to_string());
+    config.model = Some("kimi-for-coding".to_string());
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
     let account_display = test_status_account_display();

@@ -101,10 +101,7 @@ impl OpenAiModelsEndpoint {
 
 impl ModelsEndpointClient for OpenAiModelsEndpoint {
     fn has_command_auth(&self) -> bool {
-        // Under API-key-only auth, the odysseythink provider is always considered
-        // authenticated because the API key lives in AuthManager rather than in
-        // provider_info.auth.
-        self.provider_info.has_command_auth() || self.provider_info.requires_odysseythink_auth
+        self.provider_info.has_command_auth()
     }
 
     fn uses_ody_backend(&self) -> ModelsEndpointFuture<'_, bool> {

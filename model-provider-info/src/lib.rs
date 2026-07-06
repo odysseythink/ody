@@ -32,8 +32,6 @@ const MAX_STREAM_MAX_RETRIES: u64 = 100;
 /// Hard cap for user-configured `request_max_retries`.
 const MAX_REQUEST_MAX_RETRIES: u64 = 100;
 
-const OPENAI_PROVIDER_NAME: &str = "OpenAI";
-pub const OPENAI_PROVIDER_ID: &str = "odysseythink";
 
 // OpenAI-compatible third-party Chat Completions providers.
 const KIMI_PROVIDER_NAME: &str = "Kimi";
@@ -204,12 +202,6 @@ pub struct ModelProviderInfo {
     /// Maximum time (in milliseconds) to wait for a websocket connection attempt before treating
     /// it as failed.
     pub websocket_connect_timeout_ms: Option<u64>,
-    /// Does this provider require an API key? If true,
-    /// user is presented with login screen on first run, and login preference and token/key
-    /// are stored in auth.json. If false (which is the default), login screen is skipped,
-    /// and API key (if needed) comes from the "env_key" environment variable.
-    #[serde(default)]
-    pub requires_odysseythink_auth: bool,
     /// Whether this provider supports the Responses API WebSocket transport.
     #[serde(default)]
     pub supports_websockets: bool,
@@ -234,9 +226,6 @@ impl ModelProviderInfo {
         }
         if self.experimental_bearer_token.is_some() {
             conflicts.push("experimental_bearer_token");
-        }
-        if self.requires_odysseythink_auth {
-            conflicts.push("requires_odysseythink_auth");
         }
 
         if conflicts.is_empty() {
@@ -277,7 +266,7 @@ impl ModelProviderInfo {
     }
 
     pub fn to_api_provider(&self, _auth_mode: Option<AuthMode>) -> OdyResult<ApiProvider> {
-        let default_base_url = "https://api.odysseythink.com/v1";
+        let default_base_url = "https://api.openai.com/v1";
         let base_url = self
             .base_url
             .clone()
@@ -351,55 +340,6 @@ impl ModelProviderInfo {
             .unwrap_or(Duration::from_millis(DEFAULT_WEBSOCKET_CONNECT_TIMEOUT_MS))
     }
 
-    pub fn create_odysseythink_provider(base_url: Option<String>) -> ModelProviderInfo {
-        ModelProviderInfo {
-            name: OPENAI_PROVIDER_NAME.into(),
-            base_url,
-            env_key: None,
-            env_key_instructions: None,
-            experimental_bearer_token: None,
-            auth: None,
-            wire_api: WireApi::Responses,
-            query_params: None,
-            http_headers: Some(
-                [("version".to_string(), env!("CARGO_PKG_VERSION").to_string())]
-                    .into_iter()
-                    .collect(),
-            ),
-            env_http_headers: Some(
-                [
-                    (
-                        "OpenAI-Organization".to_string(),
-                        "OPENAI_ORGANIZATION".to_string(),
-                    ),
-                    ("OpenAI-Project".to_string(), "OPENAI_PROJECT".to_string()),
-                ]
-                .into_iter()
-                .collect(),
-            ),
-            // Use global defaults for retry/timeout unless overridden in config.toml.
-            request_max_retries: None,
-            stream_max_retries: None,
-            stream_idle_timeout_ms: None,
-            websocket_connect_timeout_ms: None,
-            requires_odysseythink_auth: true,
-            supports_websockets: true,
-            capabilities: ProviderCapabilities {
-                supports_websockets: true,
-                supports_remote_compaction: true,
-                namespace_tools: true,
-                image_generation: true,
-                web_search: true,
-                command_auth: false,
-                attestation: false,
-            },
-        }
-    }
-
-    pub fn is_odysseythink(&self) -> bool {
-        self.name == OPENAI_PROVIDER_NAME
-    }
-
     pub fn is_kimi(&self) -> bool {
         self.name == KIMI_PROVIDER_NAME
     }
@@ -422,7 +362,6 @@ impl ModelProviderInfo {
         // detection remains as a compatibility fallback for configs that predate
         // the `capabilities` field.
         self.capabilities.supports_remote_compaction
-            || self.is_odysseythink()
             || is_azure_responses_provider(&self.name, self.base_url.as_deref())
     }
 
@@ -443,8 +382,6 @@ impl ModelProviderInfo {
 
 /// Built-in default provider list.
 pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
-    use ModelProviderInfo as P;
-
     // We do not want to be in the business of adjucating which third-party
     // providers are bundled with Ody CLI, so we only include the OpenAI. 
     // Users are encouraged to add to
@@ -501,7 +438,6 @@ fn create_chat_provider(
         stream_max_retries: None,
         stream_idle_timeout_ms: None,
         websocket_connect_timeout_ms: None,
-        requires_odysseythink_auth: false,
         supports_websockets: false,
         capabilities: ProviderCapabilities {
             supports_websockets: false,

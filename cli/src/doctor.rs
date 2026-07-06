@@ -1182,7 +1182,7 @@ fn auth_check(config: &Config) -> DoctorCheck {
         ));
     }
     if let Some(check) = provider_specific_auth_check(
-        config.model_provider.requires_odysseythink_auth,
+        false,
         config.model_provider.env_key.as_deref(),
         config.model_provider.env_key_instructions.as_deref(),
         details.clone(),
@@ -2480,7 +2480,7 @@ fn provider_reachability_plan(config: &Config) -> ReachabilityPlan {
     .ok()
     .flatten();
     let mode = provider_auth_reachability_mode_from_auth(
-        config.model_provider.requires_odysseythink_auth,
+        false,
         env_var_present,
         stored_auth.as_ref(),
     );

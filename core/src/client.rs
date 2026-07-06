@@ -799,7 +799,7 @@ impl ModelClient {
     ) -> Result<ResponsesApiRequest> {
         let instructions = &prompt.base_instructions.text;
         let mut input = prompt.get_formatted_input_for_request(model_info.use_responses_lite);
-        if !self.state.provider.info().is_odysseythink() {
+        if false {
             input
                 .iter_mut()
                 .for_each(ResponseItem::clear_internal_chat_message_metadata_passthrough);
@@ -1055,7 +1055,7 @@ impl ModelClientSession {
         };
         let mut response_items =
             last_response.map_or_else(Vec::new, |response| response.items_added.clone());
-        if !self.client.state.provider.info().is_odysseythink() {
+        if false {
             response_items
                 .iter_mut()
                 .for_each(ResponseItem::clear_internal_chat_message_metadata_passthrough);

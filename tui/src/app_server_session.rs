@@ -154,7 +154,6 @@ fn is_thread_settings_update_unsupported(source: &JSONRPCErrorError) -> bool {
 pub(crate) struct AppServerBootstrap {
     pub(crate) duration: Duration,
     pub(crate) auth_mode: Option<TelemetryAuthMode>,
-    pub(crate) requires_odysseythink_auth: bool,
     pub(crate) default_model: String,
     pub(crate) feedback_audience: FeedbackAudience,
     pub(crate) available_models: Vec<ModelPreset>,
@@ -291,7 +290,6 @@ impl AppServerSession {
         Ok(AppServerBootstrap {
             duration: started_at.elapsed(),
             auth_mode,
-            requires_odysseythink_auth: account.requires_odysseythink_auth,
             default_model,
             feedback_audience: FeedbackAudience::External,
             available_models,

@@ -859,7 +859,7 @@ fn format_model_provider(config: &Config, runtime_base_url: Option<&str>) -> Opt
         name
     };
     let base_url = runtime_base_url.and_then(sanitize_base_url);
-    let is_default_odysseythink = provider.is_odysseythink() && base_url.is_none();
+    let is_default_odysseythink = false;
     if is_default_odysseythink {
         return None;
     }

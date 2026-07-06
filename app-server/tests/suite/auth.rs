@@ -20,14 +20,9 @@ const DEFAULT_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs
 
 fn create_config_toml_custom_provider(
     ody_home: &std::path::Path,
-    requires_odysseythink_auth: bool,
 ) -> std::io::Result<()> {
     let config_toml = ody_home.join("config.toml");
-    let requires_line = if requires_odysseythink_auth {
-        "requires_odysseythink_auth = true\n"
-    } else {
-        ""
-    };
+    let requires_line = "";
     let contents = format!(
         r#"
 model = "mock-model"
@@ -209,7 +204,7 @@ async fn api_key_supports_auth_status_and_account_read() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_auth_status_with_api_key_when_auth_not_required() -> Result<()> {
     let ody_home = TempDir::new()?;
-    create_config_toml_custom_provider(ody_home.path(), /*requires_odysseythink_auth*/ false)?;
+    create_config_toml_custom_provider(ody_home.path())?;
 
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;

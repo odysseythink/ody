@@ -262,47 +262,34 @@ impl AccountRequestProcessor {
     ) -> Result<GetAuthStatusResponse, JSONRPCErrorError> {
         let include_token = params.include_token.unwrap_or(false);
 
-        // Determine whether auth is required based on the active model provider.
-        // If a custom provider is configured with `requires_odysseythink_auth == false`,
-        // then no auth step is required; otherwise, default to requiring auth.
-        let requires_odysseythink_auth = self.config.model_provider.requires_odysseythink_auth;
-
-        let response = if !requires_odysseythink_auth {
-            GetAuthStatusResponse {
+        let auth = self.auth_manager.auth().await;
+        let response = match auth {
+            Some(auth) => {
+                let auth_mode = auth.api_auth_mode();
+                let (reported_auth_method, token_opt) = {
+                    match auth.get_token() {
+                        Ok(token) if !token.is_empty() => {
+                            let tok = if include_token { Some(token) } else { None };
+                            (Some(auth_mode), tok)
+                        }
+                        Ok(_) => (None, None),
+                        Err(err) => {
+                            tracing::warn!("failed to get token for auth status: {err}");
+                            (None, None)
+                        }
+                    }
+                };
+                GetAuthStatusResponse {
+                    auth_method: reported_auth_method,
+                    auth_token: token_opt,
+                    
+                }
+            }
+            None => GetAuthStatusResponse {
                 auth_method: None,
                 auth_token: None,
-                requires_odysseythink_auth: Some(false),
-            }
-        } else {
-            let auth = self.auth_manager.auth().await;
-            match auth {
-                Some(auth) => {
-                    let auth_mode = auth.api_auth_mode();
-                    let (reported_auth_method, token_opt) = {
-                        match auth.get_token() {
-                            Ok(token) if !token.is_empty() => {
-                                let tok = if include_token { Some(token) } else { None };
-                                (Some(auth_mode), tok)
-                            }
-                            Ok(_) => (None, None),
-                            Err(err) => {
-                                tracing::warn!("failed to get token for auth status: {err}");
-                                (None, None)
-                            }
-                        }
-                    };
-                    GetAuthStatusResponse {
-                        auth_method: reported_auth_method,
-                        auth_token: token_opt,
-                        requires_odysseythink_auth: Some(true),
-                    }
-                }
-                None => GetAuthStatusResponse {
-                    auth_method: None,
-                    auth_token: None,
-                    requires_odysseythink_auth: Some(true),
-                },
-            }
+                
+            },
         };
 
         Ok(response)
@@ -324,7 +311,7 @@ impl AccountRequestProcessor {
 
         Ok(GetAccountResponse {
             account,
-            requires_odysseythink_auth: account_state.requires_odysseythink_auth,
+            
         })
     }
 }

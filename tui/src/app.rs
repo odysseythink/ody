@@ -825,7 +825,7 @@ impl App {
         let auth_mode = bootstrap.auth_mode;
         let api_key_configured = matches!(auth_mode, Some(TelemetryAuthMode::ApiKey));
         let has_ody_backend_auth = api_key_configured;
-        let requires_odysseythink_auth = bootstrap.requires_odysseythink_auth;
+        
         let session_telemetry = SessionTelemetry::new(
             ThreadId::new(),
             model.as_str(),
@@ -1107,7 +1107,7 @@ See the Ody keymap documentation for supported actions and examples."
         // Kick off a non-blocking rate-limit prefetch so the first `/status`
         // already has data and available reset credits can be surfaced, without
         // delaying the initial frame render.
-        if requires_odysseythink_auth && api_key_configured {
+        if api_key_configured {
             let reset_hint_request_id = app.chat_widget.start_rate_limit_reset_startup_check();
             app.refresh_rate_limits(
                 &app_server,

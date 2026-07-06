@@ -291,7 +291,7 @@ impl ChatWidget {
 
     #[cfg_attr(not(test), allow(dead_code))]
     pub(super) fn should_prefetch_rate_limits(&self) -> bool {
-        self.config.model_provider.requires_odysseythink_auth && self.api_key_configured
+        self.api_key_configured
     }
 
     fn lower_cost_preset(&self) -> Option<ModelPreset> {

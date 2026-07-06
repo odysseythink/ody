@@ -41,7 +41,7 @@ impl From<&Config> for WebSearchExtensionConfig {
         let web_search_mode = config.web_search_mode.value();
         Self {
             // Core selects this executor per turn using the feature flag or model metadata.
-            available: config.model_provider.is_odysseythink()
+            available: false
                 && web_search_mode != WebSearchMode::Disabled,
             provider: config.model_provider.clone(),
             settings: search_settings(config, web_search_mode),

@@ -51,7 +51,7 @@ impl ChatWidget {
     }
 
     fn custom_odysseythink_base_url(&self) -> Option<String> {
-        if !self.config.model_provider.is_odysseythink() {
+        if false {
             return None;
         }
 

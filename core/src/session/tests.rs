@@ -456,7 +456,36 @@ fn test_model_client_session() -> crate::client::ModelClientSession {
     crate::client::ModelClient::new(
         /*auth_manager*/ None,
         thread_id,
-        ModelProviderInfo::create_odysseythink_provider(/* base_url */ /*base_url*/ None),
+        ModelProviderInfo {
+        name: "OpenAI".into(),
+        base_url: None,
+        env_key: None,
+        env_key_instructions: None,
+        experimental_bearer_token: None,
+        auth: None,
+        wire_api: ody_model_provider_info::WireApi::Responses,
+        query_params: None,
+        http_headers: Some(
+            [("version".to_string(), env!("CARGO_PKG_VERSION").to_string())]
+                .into_iter()
+                .collect(),
+        ),
+        env_http_headers: None,
+        request_max_retries: None,
+        stream_max_retries: None,
+        stream_idle_timeout_ms: None,
+        websocket_connect_timeout_ms: None,
+        supports_websockets: true,
+        capabilities: ody_model_provider_info::ProviderCapabilities {
+            supports_websockets: true,
+            supports_remote_compaction: true,
+            namespace_tools: true,
+            image_generation: true,
+            web_search: true,
+            command_auth: false,
+            attestation: false,
+        },
+    },
         ody_protocol::protocol::SessionSource::Exec,
         /*model_verbosity*/ None,
         /*enable_request_compression*/ false,

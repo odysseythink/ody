@@ -34,7 +34,6 @@ env_http_headers = { "X-Example-Env-Header" = "EXAMPLE_ENV_VAR" }
         stream_max_retries: None,
         stream_idle_timeout_ms: None,
         websocket_connect_timeout_ms: None,
-        requires_odysseythink_auth: false,
         supports_websockets: false,
             capabilities: ProviderCapabilities::default(),
     };
@@ -106,7 +105,6 @@ fn test_supports_remote_compaction_for_azure_name() {
         stream_max_retries: None,
         stream_idle_timeout_ms: None,
         websocket_connect_timeout_ms: None,
-        requires_odysseythink_auth: false,
         supports_websockets: false,
             capabilities: ProviderCapabilities::default(),
     };
@@ -131,7 +129,6 @@ fn test_supports_remote_compaction_for_non_odysseythink_non_azure_provider() {
         stream_max_retries: None,
         stream_idle_timeout_ms: None,
         websocket_connect_timeout_ms: None,
-        requires_odysseythink_auth: false,
         supports_websockets: false,
             capabilities: ProviderCapabilities::default(),
     };

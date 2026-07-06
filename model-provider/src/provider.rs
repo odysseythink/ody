@@ -67,7 +67,6 @@ impl From<&ModelProviderInfoCapabilities> for ProviderCapabilities {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProviderAccountState {
     pub account: Option<ProviderAccount>,
-    pub requires_odysseythink_auth: bool,
 }
 
 pub type ProviderAccountResult = ody_protocol::error::Result<ProviderAccountState>;
@@ -291,18 +290,8 @@ impl ModelProvider for ConfiguredModelProvider {
     }
 
     fn account_state(&self) -> ProviderAccountResult {
-        let account = if self.info.requires_odysseythink_auth {
-            self.auth_manager
-                .as_ref()
-                .and_then(|auth_manager| auth_manager.auth_cached())
-                .map(|_| ProviderAccount::ApiKey)
-        } else {
-            None
-        };
-
         Ok(ProviderAccountState {
-            account,
-            requires_odysseythink_auth: self.info.requires_odysseythink_auth,
+            account: None,
         })
     }
 
@@ -346,7 +335,7 @@ fn provider_id_for_wire_api(info: &ModelProviderInfo) -> &'static str {
         "deepseek"
     } else if info.is_glm() {
         "glm"
-    } else if info.is_odysseythink() {
+    } else if info.wire_api == ody_model_provider_info::WireApi::Responses {
         "openai-responses"
     } else {
         "chat"
@@ -378,7 +367,6 @@ mod tests {
             stream_max_retries: Some(0),
             stream_idle_timeout_ms: Some(5_000),
             websocket_connect_timeout_ms: None,
-            requires_odysseythink_auth: false,
             supports_websockets: false,
             capabilities: ModelProviderCapabilities::default(),
         }
@@ -408,8 +396,7 @@ mod tests {
                 name: "Custom".to_string(),
                 base_url: Some("http://localhost:1234/v1".to_string()),
                 wire_api: WireApi::Responses,
-                requires_odysseythink_auth: false,
-                ..Default::default()
+                    ..Default::default()
             },
             /*auth_manager*/ None,
         );
@@ -418,8 +405,7 @@ mod tests {
             provider.account_state().unwrap(),
             ProviderAccountState {
                 account: None,
-                requires_odysseythink_auth: false,
-            }
+                }
         );
     }
 

@@ -1269,14 +1269,7 @@ async fn run_ratatui_app(
         !uses_remote_workspace && should_show_trust_screen(&initial_config);
     #[cfg(target_os = "windows")]
     let mut trust_decision_was_made = false;
-    let login_status = if initial_config.model_provider.requires_odysseythink_auth {
-        let Some(app_server) = app_server.as_mut() else {
-            unreachable!("app server should exist when auth is required");
-        };
-        get_login_status(app_server, &initial_config).await?
-    } else {
-        LoginStatus::NotAuthenticated
-    };
+    let login_status = LoginStatus::NotAuthenticated;
     let should_show_onboarding =
         should_show_onboarding(login_status, &initial_config, should_show_trust_screen_flag);
 
@@ -1758,10 +1751,6 @@ async fn get_login_status(
     app_server: &mut AppServerSession,
     config: &Config,
 ) -> color_eyre::Result<LoginStatus> {
-    if !config.model_provider.requires_odysseythink_auth {
-        return Ok(LoginStatus::NotAuthenticated);
-    }
-
     let account = app_server.read_account().await?;
     Ok(match account.account {
         Some(AppServerAccount::ApiKey {}) => LoginStatus::AuthMode(AppServerAuthMode::ApiKey),
@@ -1868,16 +1857,12 @@ fn should_show_onboarding(
         return true;
     }
 
-    should_show_login_screen(login_status, config)
+    should_show_login_screen(login_status, &config)
 }
 
-fn should_show_login_screen(login_status: LoginStatus, config: &Config) -> bool {
+fn should_show_login_screen(login_status: LoginStatus, _config: &Config) -> bool {
     // Only show the login screen for providers that actually require OpenAI auth
     // (OpenAI or equivalents). For local providers, skip login entirely.
-    if !config.model_provider.requires_odysseythink_auth {
-        return false;
-    }
-
     login_status == LoginStatus::NotAuthenticated
 }
 
