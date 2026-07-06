@@ -8,10 +8,14 @@ use crate::catalog::SkillPackageId;
 use crate::catalog::SkillResourceId;
 use crate::catalog::SkillSourceKind;
 
+fn host_authority() -> SkillAuthority {
+    SkillAuthority::new(SkillSourceKind::Host, "host")
+}
+
 fn test_entry(name: &str, skill_type: SkillType) -> SkillCatalogEntry {
     SkillCatalogEntry::new(
         SkillPackageId(format!("pkg/{name}")),
-        SkillAuthority::new(SkillSourceKind::Host, "host"),
+        host_authority(),
         name.to_string(),
         format!("{name} skill"),
         SkillResourceId::new(format!("{name}/SKILL.md")),
@@ -45,6 +49,19 @@ fn knowledge_skills_are_not_prompt_visible_by_default() {
 
     let prompt = test_entry("prompt", SkillType::Prompt);
     assert!(prompt.prompt_visible);
+}
+
+#[test]
+fn flow_skills_are_not_prompt_visible_by_default() {
+    let entry = SkillCatalogEntry::new(
+        SkillPackageId("host/flow".to_string()),
+        host_authority(),
+        "flow",
+        "Flow skill.",
+        SkillResourceId::new("host/flow/SKILL.md"),
+    )
+    .with_skill_type(SkillType::Flow);
+    assert!(!entry.prompt_visible);
 }
 
 #[test]
