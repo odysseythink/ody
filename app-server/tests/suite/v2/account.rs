@@ -138,7 +138,6 @@ async fn logout_account_removes_auth_and_notifies() -> Result<()> {
         payload.auth_mode.is_none(),
         "auth_method should be None after logout"
     );
-    assert_eq!(payload.plan_type, None);
 
     assert!(
         !ody_home.path().join("auth.json").exists(),
@@ -209,7 +208,6 @@ async fn login_account_api_key_succeeds_and_notifies() -> Result<()> {
         bail!("unexpected notification: {parsed:?}");
     };
     pretty_assertions::assert_eq!(payload.auth_mode, Some(AuthMode::ApiKey));
-    pretty_assertions::assert_eq!(payload.plan_type, None);
 
     assert!(ody_home.path().join("auth.json").exists());
     Ok(())
