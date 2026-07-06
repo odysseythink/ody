@@ -933,8 +933,8 @@ async fn hidden_in_modes_excludes_skill_from_turn_input_catalog() -> TestResult 
     assert!(rendered.contains("visible-skill"));
     assert!(!rendered.contains("hidden-skill"));
 
-    // Tools are authority-scoped and not filtered by the current turn mode, so
-    // the hidden skill remains reachable through skills.list.
+    // Tools now also respect mode visibility and disable_model_invocation, so
+    // the hidden skill is gated from skills.list in the current turn mode.
     let tools = registry.tool_contributors()[0].tools(&session_store, &thread_store);
     let list_tool = tools
         .iter()
@@ -967,7 +967,7 @@ async fn hidden_in_modes_excludes_skill_from_turn_input_catalog() -> TestResult 
         .collect();
     names.sort();
 
-    assert_eq!(names, vec!["hidden-skill", "visible-skill"]);
+    assert_eq!(names, vec!["visible-skill"]);
 
     Ok(())
 }
@@ -1109,6 +1109,169 @@ async fn skills_list_tool_returns_host_skills_when_host_authority_requested() ->
         .filter_map(|skill| skill["name"].as_str())
         .collect();
     assert_eq!(vec!["demo"], skill_names);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn knowledge_skill_is_auto_injected_on_trigger_match() -> TestResult {
+    let read_requests = Arc::new(Mutex::new(Vec::new()));
+    let provider = Arc::new(StaticSkillProvider {
+        catalog: SkillCatalog {
+            entries: vec![test_entry(
+                SkillSourceKind::Host,
+                "host",
+                "host/review",
+                "review/SKILL.md",
+            )
+            .with_skill_type(SkillType::Knowledge)
+            .with_triggers(vec!["review".to_string()])],
+            warnings: Vec::new(),
+        },
+        read_requests: Arc::clone(&read_requests),
+        list_calls: None,
+        fail_first_list: false,
+    });
+    let providers = SkillProviders::new().with_host_provider(provider);
+    let mut builder = ExtensionRegistryBuilder::new();
+    install_with_providers(&mut builder, providers, skills_extension_config);
+    let registry = builder.build();
+
+    let session_store = ExtensionData::new("session");
+    let thread_store = ExtensionData::new("thread");
+    let session_source = SessionSource::Cli;
+    let config = default_config();
+    registry.thread_lifecycle_contributors()[0]
+        .on_thread_start(ThreadStartInput {
+            config: &config,
+            session_source: &session_source,
+            persistent_thread_state_available: true,
+            environments: &[],
+            session_store: &session_store,
+            thread_store: &thread_store,
+        })
+        .await;
+
+    let fragments = registry.turn_input_contributors()[0]
+        .contribute(
+            TurnInputContext {
+                turn_id: "turn-1".to_string(),
+                user_input: vec![UserInput::Text {
+                    text: "please review this".to_string(),
+                    text_elements: Vec::new(),
+                }],
+                environments: Vec::new(),
+            },
+            &session_store,
+            &thread_store,
+            &ExtensionData::new("turn-1"),
+        )
+        .await;
+
+    assert_eq!(1, fragments.len());
+    assert!(fragments[0].render().contains("<name>review</name>"));
+    assert_eq!(
+        vec![(
+            SkillAuthority::new(SkillSourceKind::Host, "host"),
+            SkillPackageId("host/review".to_string()),
+            SkillResourceId::new("review/SKILL.md"),
+        )],
+        read_request_keys(&read_requests)
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn disable_model_invocation_blocks_tool_read() -> TestResult {
+    let read_requests = Arc::new(Mutex::new(Vec::new()));
+    let provider = Arc::new(StaticSkillProvider {
+        catalog: SkillCatalog {
+            entries: vec![test_entry(
+                SkillSourceKind::Host,
+                "host",
+                "host/review",
+                "review/SKILL.md",
+            )
+            .with_disable_model_invocation(true)],
+            warnings: Vec::new(),
+        },
+        read_requests: Arc::clone(&read_requests),
+        list_calls: None,
+        fail_first_list: false,
+    });
+    let providers = SkillProviders::new().with_host_provider(provider);
+    let mut builder = ExtensionRegistryBuilder::new();
+    install_with_providers(&mut builder, providers, skills_extension_config);
+    let registry = builder.build();
+
+    let session_store = ExtensionData::new("session");
+    let thread_store = ExtensionData::new("thread");
+    let turn_store = ExtensionData::new("turn-1");
+    let session_source = SessionSource::Cli;
+    let config = default_config();
+    registry.thread_lifecycle_contributors()[0]
+        .on_thread_start(ThreadStartInput {
+            config: &config,
+            session_source: &session_source,
+            persistent_thread_state_available: true,
+            environments: &[],
+            session_store: &session_store,
+            thread_store: &thread_store,
+        })
+        .await;
+    registry.turn_lifecycle_contributors()[0]
+        .on_turn_start(TurnStartInput {
+            turn_id: "turn-1",
+            collaboration_mode: &CollaborationMode {
+                mode: ModeKind::Default,
+                settings: Settings {
+                    model: "test".to_string(),
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                },
+            },
+            token_usage_at_turn_start: &TokenUsage::default(),
+            session_store: &session_store,
+            thread_store: &thread_store,
+            turn_store: &turn_store,
+        })
+        .await;
+
+    let tools = registry.tool_contributors()[0].tools(&session_store, &thread_store);
+    let read_tool = tools
+        .iter()
+        .find(|tool| tool.tool_name().name == "read")
+        .ok_or("skills.read tool should be registered")?;
+    let payload = ToolPayload::Function {
+        arguments: serde_json::json!({
+            "authority": {"kind": "host"},
+            "package": "host/review",
+            "resource": "review/SKILL.md",
+        })
+        .to_string(),
+    };
+    let result = read_tool
+        .handle(ToolCall {
+            turn_id: "turn-1".to_string(),
+            call_id: "call-1".to_string(),
+            tool_name: read_tool.tool_name(),
+            model: "gpt-test".to_string(),
+            truncation_policy: TruncationPolicy::Bytes(1_024),
+            conversation_history: ConversationHistory::default(),
+            turn_item_emitter: Arc::new(NoopTurnItemEmitter),
+            environments: Vec::new(),
+            payload: payload.clone(),
+        })
+        .await;
+    assert!(result.is_err(), "skills.read should fail for a skill with disable_model_invocation");
+    assert!(
+        read_requests
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_empty(),
+        "no read request should be recorded"
+    );
 
     Ok(())
 }
