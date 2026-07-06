@@ -848,7 +848,7 @@ async fn executor_provider_maps_new_metadata_fields() {
 
 
 #[tokio::test]
-async fn hidden_in_modes_excludes_skill_from_catalog_and_tools() -> TestResult {
+async fn hidden_in_modes_excludes_skill_from_turn_input_catalog() -> TestResult {
     let read_requests = Arc::new(Mutex::new(Vec::new()));
     let provider = Arc::new(StaticSkillProvider {
         catalog: SkillCatalog {
@@ -932,6 +932,42 @@ async fn hidden_in_modes_excludes_skill_from_catalog_and_tools() -> TestResult {
     let rendered = fragments[0].render();
     assert!(rendered.contains("visible-skill"));
     assert!(!rendered.contains("hidden-skill"));
+
+    // Tools are authority-scoped and not filtered by the current turn mode, so
+    // the hidden skill remains reachable through skills.list.
+    let tools = registry.tool_contributors()[0].tools(&session_store, &thread_store);
+    let list_tool = tools
+        .iter()
+        .find(|tool| tool.tool_name().name == "list")
+        .ok_or("skills.list tool should be registered")?;
+    let payload = ToolPayload::Function {
+        arguments: serde_json::json!({"authority": {"kind": "host"}}).to_string(),
+    };
+    let output = list_tool
+        .handle(ToolCall {
+            turn_id: "turn-1".to_string(),
+            call_id: "call-1".to_string(),
+            tool_name: list_tool.tool_name(),
+            model: "test".to_string(),
+            truncation_policy: TruncationPolicy::Bytes(1_024),
+            conversation_history: ConversationHistory::default(),
+            turn_item_emitter: Arc::new(NoopTurnItemEmitter),
+            environments: Vec::new(),
+            payload: payload.clone(),
+        })
+        .await?;
+    let response = output
+        .post_tool_use_response("call-1", &payload)
+        .ok_or("skills.list should expose structured output")?;
+    let mut names: Vec<&str> = response["skills"]
+        .as_array()
+        .ok_or("skills should be an array")?
+        .iter()
+        .filter_map(|skill| skill["name"].as_str())
+        .collect();
+    names.sort();
+
+    assert_eq!(names, vec!["hidden-skill", "visible-skill"]);
 
     Ok(())
 }

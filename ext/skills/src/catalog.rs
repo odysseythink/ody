@@ -209,9 +209,13 @@ impl SkillCatalogEntry {
     }
 
     /// Returns whether the model is allowed to invoke this entry in the given
-    /// runtime mode.
+    /// runtime mode. Only `Inline` and `Prompt` skills are model-invocable;
+    /// `Knowledge` and `Flow` skills are triggered through other mechanisms.
     pub fn is_model_invocable(&self, mode: RuntimeMode) -> bool {
-        self.enabled && !self.disable_model_invocation && !self.hidden_in_modes.contains(&mode)
+        self.enabled
+            && !self.disable_model_invocation
+            && !self.hidden_in_modes.contains(&mode)
+            && matches!(self.skill_type, SkillType::Inline | SkillType::Prompt)
     }
 
     pub(crate) fn rendered_path(&self) -> &str {

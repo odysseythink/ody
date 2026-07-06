@@ -74,4 +74,9 @@ fn catalog_filters_by_mode_and_type() {
         .with_disable_model_invocation(true);
     assert!(invocable.is_model_invocable(ModeKind::Default));
     assert!(!not_invocable.is_model_invocable(ModeKind::Default));
+
+    let knowledge = test_entry("knowledge", SkillType::Knowledge);
+    let flow = test_entry("flow", SkillType::Flow);
+    assert!(!knowledge.is_model_invocable(ModeKind::Default));
+    assert!(!flow.is_model_invocable(ModeKind::Default));
 }

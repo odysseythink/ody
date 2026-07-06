@@ -113,13 +113,6 @@ impl SkillProviders {
             .any(|source| source.kind == SkillSourceKind::Executor)
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn has_orchestrator_provider(&self) -> bool {
-        self.sources
-            .iter()
-            .any(|source| source.kind == SkillSourceKind::Orchestrator)
-    }
-
     pub(crate) async fn list_for_turn(&self, query: SkillListQuery) -> SkillCatalog {
         let mode = query.mode;
         let mut catalog = self
