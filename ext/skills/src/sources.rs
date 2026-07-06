@@ -101,21 +101,32 @@ impl SkillProviders {
         self
     }
 
-    pub(crate) fn has_orchestrator_provider(&self) -> bool {
+    pub(crate) fn has_host_provider(&self) -> bool {
         self.sources
             .iter()
-            .any(|source| source.kind == SkillSourceKind::Orchestrator)
+            .any(|source| source.kind == SkillSourceKind::Host)
+    }
+
+    pub(crate) fn has_executor_provider(&self) -> bool {
+        self.sources
+            .iter()
+            .any(|source| source.kind == SkillSourceKind::Executor)
     }
 
     pub(crate) async fn list_for_turn(&self, query: SkillListQuery) -> SkillCatalog {
-        self.list_matching(&query, |source| source.should_list(&query))
-            .await
+        let mode = query.mode;
+        let mut catalog = self
+            .list_matching(&query, |source| source.should_list(&query))
+            .await;
+        catalog.filter_for_mode(mode);
+        catalog
     }
 
     pub(crate) async fn list_orchestrator_for_turn(
         &self,
         query: SkillListQuery,
     ) -> SkillProviderResult<SkillCatalog> {
+        let mode = query.mode;
         let mut catalog = SkillCatalog::default();
 
         for source in self
@@ -132,6 +143,7 @@ impl SkillProviders {
             catalog.extend(source_catalog);
         }
 
+        catalog.filter_for_mode(mode);
         Ok(catalog)
     }
 

@@ -161,6 +161,9 @@ pub fn should_persist_event_msg(ev: &EventMsg) -> bool {
         | EventMsg::CollabAgentInteractionBegin(_)
         | EventMsg::CollabWaitingBegin(_)
         | EventMsg::CollabCloseBegin(_)
-        | EventMsg::CollabResumeBegin(_) => false,
+        | EventMsg::CollabResumeBegin(_)
+        | EventMsg::SkillLoaded(_)
+        | EventMsg::SkillActivated(_)
+        | EventMsg::SkillLoadError(_) => false,
     }
 }

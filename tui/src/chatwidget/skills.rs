@@ -251,6 +251,12 @@ fn protocol_skill_to_core(skill: &ProtocolSkillMetadata) -> Option<SkillMetadata
         path_to_skills_md: skill.path.clone(),
         scope,
         plugin_id: None,
+        skill_type: ody_core_skills::SkillType::default(),
+        triggers: Vec::new(),
+        hidden_in_modes: Vec::new(),
+        disable_model_invocation: false,
+        mermaid: None,
+        d2: None,
     })
 }
 

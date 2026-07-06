@@ -17,6 +17,7 @@ fn make_skill(name: &str, path: &str) -> SkillMetadata {
         path_to_skills_md: test_path_buf(path).abs(),
         scope: ody_protocol::protocol::SkillScope::User,
         plugin_id: None,
+        ..Default::default()
     }
 }
 

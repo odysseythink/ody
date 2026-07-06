@@ -1431,6 +1431,10 @@ pub enum EventMsg {
 
     /// Path-based v2 sub-agent activity.
     SubAgentActivity(SubAgentActivityEvent),
+
+    SkillLoaded(SkillLoadedEvent),
+    SkillActivated(SkillActivatedEvent),
+    SkillLoadError(SkillLoadErrorEvent),
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS, EnumIter)]
@@ -1910,6 +1914,37 @@ impl ErrorEvent {
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct WarningEvent {
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
+pub struct SkillLoadedEvent {
+    pub authority: String,
+    pub package: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum SkillActivationKind {
+    Explicit,
+    Knowledge,
+    Tool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
+pub struct SkillActivatedEvent {
+    pub authority: String,
+    pub package: String,
+    pub name: String,
+    pub activation: SkillActivationKind,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
+pub struct SkillLoadErrorEvent {
+    pub authority: String,
+    pub package: Option<String>,
     pub message: String,
 }
 

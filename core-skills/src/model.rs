@@ -6,9 +6,25 @@ use std::sync::Arc;
 
 use ody_exec_server::ExecutorFileSystem;
 use ody_exec_server::LOCAL_FS;
+use ody_protocol::config_types::ModeKind;
 use ody_protocol::protocol::Product;
 use ody_protocol::protocol::SkillScope;
 use ody_utils_absolute_path::AbsolutePathBuf;
+
+pub type RuntimeMode = ModeKind;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SkillType {
+    /// Injected as a system reminder when explicitly activated.
+    Prompt,
+    /// Can be invoked by user slash or the model Skill tool.
+    #[default]
+    Inline,
+    /// Multi-step workflow skill. Schema-only in T3.1.0.
+    Flow,
+    /// Auto-injected when its triggers match user text.
+    Knowledge,
+}
 use ody_utils_path_uri::PathUri;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -23,6 +39,35 @@ pub struct SkillMetadata {
     pub path_to_skills_md: AbsolutePathBuf,
     pub scope: SkillScope,
     pub plugin_id: Option<String>,
+    // Fields that control how the skill is discovered, triggered, and presented at runtime.
+    pub skill_type: SkillType,
+    pub triggers: Vec<String>,
+    pub hidden_in_modes: Vec<RuntimeMode>,
+    pub disable_model_invocation: bool,
+    pub mermaid: Option<String>,
+    pub d2: Option<String>,
+}
+
+impl Default for SkillMetadata {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            description: String::new(),
+            short_description: None,
+            interface: None,
+            dependencies: None,
+            policy: None,
+            path_to_skills_md: AbsolutePathBuf::try_from("/").unwrap(),
+            scope: SkillScope::User,
+            plugin_id: None,
+            skill_type: SkillType::default(),
+            triggers: Vec::new(),
+            hidden_in_modes: Vec::new(),
+            disable_model_invocation: false,
+            mermaid: None,
+            d2: None,
+        }
+    }
 }
 
 impl SkillMetadata {
@@ -31,6 +76,12 @@ impl SkillMetadata {
             .as_ref()
             .and_then(|policy| policy.allow_implicit_invocation)
             .unwrap_or(true)
+    }
+
+    pub fn is_model_invocable(&self, mode: RuntimeMode) -> bool {
+        !self.disable_model_invocation
+            && !self.hidden_in_modes.contains(&mode)
+            && matches!(self.skill_type, SkillType::Inline | SkillType::Prompt)
     }
 
     pub fn matches_product_restriction_for_product(
@@ -239,3 +290,7 @@ pub fn filter_skill_load_outcome_for_product(
     );
     outcome
 }
+
+#[cfg(test)]
+#[path = "model_tests.rs"]
+mod model_tests;

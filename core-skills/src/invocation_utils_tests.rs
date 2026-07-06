@@ -22,6 +22,7 @@ fn test_skill_metadata(skill_doc_path: AbsolutePathBuf) -> SkillMetadata {
         path_to_skills_md: skill_doc_path,
         scope: ody_protocol::protocol::SkillScope::User,
         plugin_id: None,
+        ..Default::default()
     }
 }
 

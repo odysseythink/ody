@@ -9,6 +9,26 @@ const fn default_enabled() -> bool {
     true
 }
 
+const fn default_max_skills() -> usize {
+    3
+}
+
+const fn default_max_contents_bytes() -> usize {
+    8_000
+}
+
+fn is_default_max_skills(value: &usize) -> bool {
+    *value == default_max_skills()
+}
+
+fn is_default_max_contents_bytes(value: &usize) -> bool {
+    *value == default_max_contents_bytes()
+}
+
+fn is_true(value: &bool) -> bool {
+    *value
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct SkillConfig {
@@ -21,7 +41,7 @@ pub struct SkillConfig {
     pub enabled: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct SkillsConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -33,6 +53,36 @@ pub struct SkillsConfig {
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub config: Vec<SkillConfig>,
+
+    /// Whether knowledge microagents may be loaded from the project.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub knowledge_microagents_enabled: Option<bool>,
+
+    /// Maximum number of knowledge skills that may be loaded in a single turn.
+    #[serde(default = "default_max_skills", skip_serializing_if = "is_default_max_skills")]
+    pub knowledge_max_skills_per_turn: usize,
+
+    /// Maximum total size of knowledge skill contents in bytes.
+    #[serde(
+        default = "default_max_contents_bytes",
+        skip_serializing_if = "is_default_max_contents_bytes"
+    )]
+    pub knowledge_max_contents_bytes: usize,
+
+    /// Whether model tools are enabled in the host (UI) model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_model_tools_enabled: Option<bool>,
+
+    /// Whether model tools are enabled in the executor (subagent) model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub executor_model_tools_enabled: Option<bool>,
+
+    /// Whether to use the legacy core-only host skill injection path.
+    ///
+    /// Defaults to `true` in T3.1.1 for backwards compatibility. Will default to
+    /// `false` in T3.1.2 and be removed in T3.1.3.
+    #[serde(default = "default_enabled", skip_serializing_if = "is_true")]
+    pub legacy_host_skill_injection: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
@@ -45,6 +95,22 @@ pub struct BundledSkillsConfig {
 impl Default for BundledSkillsConfig {
     fn default() -> Self {
         Self { enabled: true }
+    }
+}
+
+impl Default for SkillsConfig {
+    fn default() -> Self {
+        Self {
+            bundled: None,
+            include_instructions: None,
+            config: Vec::new(),
+            knowledge_microagents_enabled: None,
+            knowledge_max_skills_per_turn: default_max_skills(),
+            knowledge_max_contents_bytes: default_max_contents_bytes(),
+            host_model_tools_enabled: None,
+            executor_model_tools_enabled: None,
+            legacy_host_skill_injection: default_enabled(),
+        }
     }
 }
 

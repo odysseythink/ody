@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use ody_core_skills::HostSkillsSnapshot;
@@ -18,18 +19,28 @@ use ody_extension_api::ToolContributor;
 use ody_extension_api::ToolExecutor;
 use ody_extension_api::TurnInputContext;
 use ody_extension_api::TurnInputContributor;
+use ody_extension_api::TurnLifecycleContributor;
+use ody_extension_api::TurnStartInput;
 use ody_mcp::McpResourceClient;
 use ody_protocol::capabilities::SelectedCapabilityRoot;
+use ody_protocol::config_types::ModeKind;
 use ody_protocol::protocol::Event;
 use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::SkillActivatedEvent;
+use ody_protocol::protocol::SkillActivationKind;
+use ody_protocol::protocol::SkillLoadedEvent;
+use ody_protocol::protocol::SkillLoadErrorEvent;
 use ody_protocol::protocol::WarningEvent;
+use ody_protocol::user_input::UserInput;
 
 use crate::SkillsExtensionConfig;
+use crate::catalog::SkillAuthority;
 use crate::catalog::SkillCatalog;
 use crate::catalog::SkillCatalogEntry;
 use crate::catalog::SkillReadResult;
 use crate::catalog::SkillSourceKind;
 use crate::fragments::SkillInstructions;
+use crate::knowledge::KnowledgeMicroagentInjector;
 use crate::provider::HostSkillProvider;
 use crate::provider::SkillListQuery;
 use crate::provider::SkillReadRequest;
@@ -41,6 +52,7 @@ use crate::render::truncate_utf8_to_bytes;
 use crate::selection::collect_explicit_skill_mentions;
 use crate::sources::SkillProviders;
 use crate::state::SkillsThreadState;
+use crate::state::SkillsTurnMode;
 use crate::state::SkillsTurnState;
 use crate::tools::skill_tools;
 
@@ -70,6 +82,22 @@ where
                 selected_roots,
                 orchestrator_skills_available,
             ));
+        })
+    }
+}
+
+impl<C> TurnLifecycleContributor for SkillsExtension<C>
+where
+    C: Send + Sync + 'static,
+{
+    fn on_turn_start<'a>(&'a self, input: TurnStartInput<'a>) -> ExtensionFuture<'a, ()> {
+        Box::pin(async move {
+            input.turn_store.insert(SkillsTurnMode {
+                mode: Some(input.collaboration_mode.mode),
+            });
+            if let Some(thread_state) = input.thread_store.get::<SkillsThreadState>() {
+                thread_state.set_mode(Some(input.collaboration_mode.mode));
+            }
         })
     }
 }
@@ -125,6 +153,7 @@ where
                         include_host_skills: false,
                         include_bundled_skills: config.bundled_skills_enabled,
                         include_orchestrator_skills: thread_state.orchestrator_skills_enabled(),
+                        mode: thread_state.mode(),
                         mcp_resources: session_store.get::<McpResourceClient>(),
                     },
                     &thread_state,
@@ -132,6 +161,19 @@ where
                 .await;
             for warning in &catalog.warnings {
                 self.emit_warning(thread_store.level_id(), warning.clone());
+            }
+            for entry in &catalog.entries {
+                if thread_state.mark_loaded_event_emitted((entry.authority.clone(), entry.id.clone()))
+                {
+                    self.event_sink.emit(Event {
+                        id: thread_store.level_id().to_string(),
+                        msg: EventMsg::SkillLoaded(SkillLoadedEvent {
+                            authority: format!("{}/{}", entry.authority.kind, entry.authority.id),
+                            package: entry.id.0.clone(),
+                            name: entry.name.clone(),
+                        }),
+                    });
+                }
             }
             available_skills_fragment(&catalog)
                 .map(|fragment| PromptFragment::developer_capability(fragment.render()))
@@ -153,16 +195,23 @@ where
         let Some(thread_state) = thread_store.get::<SkillsThreadState>() else {
             return Vec::new();
         };
-        if !self.providers.has_orchestrator_provider()
-            || !thread_state.orchestrator_skills_enabled()
-        {
+        let config = thread_state.config();
+        let has_host = self.providers.has_host_provider() && config.host_model_tools_enabled;
+        let has_executor =
+            self.providers.has_executor_provider() && config.executor_model_tools_enabled;
+        let has_orchestrator = thread_state.orchestrator_skills_enabled();
+        if !has_host && !has_executor && !has_orchestrator {
             return Vec::new();
         }
 
         skill_tools(
             self.providers.clone(),
             session_store.get::<McpResourceClient>(),
+            session_store.get::<HostSkillsSnapshot>(),
             thread_state,
+            has_host,
+            has_executor,
+            has_orchestrator,
         )
     }
 }
@@ -185,6 +234,9 @@ where
 
             let config = thread_state.config();
             let host_snapshot = turn_store.get::<HostSkillsSnapshot>();
+            let turn_mode = turn_store
+                .get::<SkillsTurnMode>()
+                .and_then(|turn_mode| turn_mode.mode);
             let query = SkillListQuery {
                 turn_id: input.turn_id.clone(),
                 executor_roots: thread_state.selected_roots().to_vec(),
@@ -192,6 +244,7 @@ where
                 include_host_skills: true,
                 include_bundled_skills: config.bundled_skills_enabled,
                 include_orchestrator_skills: thread_state.orchestrator_skills_enabled(),
+                mode: turn_mode,
                 mcp_resources: session_store.get::<McpResourceClient>(),
             };
             let catalog = self.list_skills(query, &thread_state).await;
@@ -199,7 +252,28 @@ where
                 self.emit_warning(&input.turn_id, warning.clone());
             }
 
+            let latest_user_text = input
+                .user_input
+                .iter()
+                .filter_map(|user_input| match user_input {
+                    UserInput::Text { text, .. } => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
             let selected_entries = collect_explicit_skill_mentions(&input.user_input, &catalog);
+            let knowledge_entries = if config.knowledge_microagents_enabled {
+                KnowledgeMicroagentInjector::select(
+                    latest_user_text.as_str(),
+                    &catalog,
+                    turn_mode.unwrap_or(ModeKind::Default),
+                    config.knowledge_max_skills_per_turn,
+                    config.knowledge_max_contents_bytes,
+                )
+            } else {
+                Vec::new()
+            };
+
             let mut fragments: Vec<Box<dyn ContextualUserFragment + Send>> = Vec::new();
             if config.include_instructions {
                 let mut turn_catalog = catalog.clone();
@@ -215,6 +289,9 @@ where
             let mut warnings = catalog.warnings.clone();
             let mut main_prompts_injected = false;
             let mut injected_host_skill_prompts = InjectedHostSkillPrompts::default();
+            let mut injected_entries: Vec<&SkillCatalogEntry> = Vec::new();
+
+            // Explicitly selected skills are always injected.
             for entry in &selected_entries {
                 match self
                     .read_main_prompt(entry, host_snapshot.clone(), session_store, &thread_state)
@@ -245,18 +322,85 @@ where
                         if entry.authority.kind == SkillSourceKind::Host {
                             injected_host_skill_prompts.insert_path(entry.main_prompt.as_str());
                         }
+                        injected_entries.push(entry);
                     }
                     Err(message) => {
                         let warning = format!("Failed to load skill `{}`: {message}", entry.name);
-                        self.emit_warning(&input.turn_id, warning.clone());
+                        self.emit_skill_load_error(
+                            &input.turn_id,
+                            &entry.authority,
+                            Some(entry.id.0.clone()),
+                            warning.clone(),
+                        );
+                        warnings.push(warning);
+                    }
+                }
+            }
+
+            // Knowledge microagents are injected up to the configured content budget.
+            let mut knowledge_bytes_used = 0usize;
+            for entry in &knowledge_entries {
+                match self
+                    .read_main_prompt(entry, host_snapshot.clone(), session_store, &thread_state)
+                    .await
+                {
+                    Ok(read_result) => {
+                        let (contents, truncated) =
+                            truncate_main_prompt_contents(read_result.contents.as_str());
+                        if truncated {
+                            let warning = format!(
+                                "Skill `{}` exceeded the main prompt context limit and was truncated.",
+                                entry.name
+                            );
+                            self.emit_warning(&input.turn_id, warning.clone());
+                            warnings.push(warning);
+                        }
+                        let contents_bytes = contents.len();
+                        let next_bytes = knowledge_bytes_used.saturating_add(contents_bytes);
+                        if next_bytes > config.knowledge_max_contents_bytes {
+                            let warning = format!(
+                                "Knowledge skill `{}` skipped: would exceed the knowledge content budget ({} bytes).",
+                                entry.name,
+                                config.knowledge_max_contents_bytes
+                            );
+                            self.emit_warning(&input.turn_id, warning.clone());
+                            warnings.push(warning);
+                            break;
+                        }
+                        knowledge_bytes_used = next_bytes;
+                        let fragment = SkillInstructions {
+                            name: truncate_utf8_to_bytes(&entry.name, MAX_SKILL_NAME_BYTES).0,
+                            path: truncate_utf8_to_bytes(
+                                entry.rendered_path(),
+                                MAX_SKILL_PATH_BYTES,
+                            )
+                            .0,
+                            contents,
+                        };
+                        fragments.push(Box::new(fragment));
+                        main_prompts_injected = true;
+                        if entry.authority.kind == SkillSourceKind::Host {
+                            injected_host_skill_prompts.insert_path(entry.main_prompt.as_str());
+                        }
+                        injected_entries.push(entry);
+                    }
+                    Err(message) => {
+                        let warning = format!("Failed to load skill `{}`: {message}", entry.name);
+                        self.emit_skill_load_error(
+                            &input.turn_id,
+                            &entry.authority,
+                            Some(entry.id.0.clone()),
+                            warning.clone(),
+                        );
                         warnings.push(warning);
                     }
                 }
             }
 
             if let Some(host_snapshot) = &host_snapshot {
-                for entry in selected_entries
+                for entry in injected_entries
                     .iter()
+                    .copied()
                     .filter(|entry| entry.authority.kind != SkillSourceKind::Host)
                 {
                     for host_skill in host_snapshot
@@ -271,9 +415,31 @@ where
                 }
             }
 
+            let mut activated_events_emitted = HashSet::new();
+            for entry in &injected_entries {
+                let key = (entry.authority.clone(), entry.id.clone());
+                if activated_events_emitted.insert(key) {
+                    let activation = if knowledge_entries.iter().any(|k| k == *entry) {
+                        SkillActivationKind::Knowledge
+                    } else {
+                        SkillActivationKind::Explicit
+                    };
+                    self.event_sink.emit(Event {
+                        id: input.turn_id.clone(),
+                        msg: EventMsg::SkillActivated(SkillActivatedEvent {
+                            authority: format!("{}/{}", entry.authority.kind, entry.authority.id),
+                            package: entry.id.0.clone(),
+                            name: entry.name.clone(),
+                            activation,
+                        }),
+                    });
+                }
+            }
+
             turn_store.insert(SkillsTurnState {
                 catalog,
                 selected_entries,
+                knowledge_entries,
                 warnings,
                 main_prompts_injected,
             });
@@ -341,6 +507,23 @@ impl<C> SkillsExtension<C> {
             msg: EventMsg::Warning(WarningEvent { message }),
         });
     }
+
+    fn emit_skill_load_error(
+        &self,
+        turn_id: &str,
+        authority: &SkillAuthority,
+        package: Option<String>,
+        message: String,
+    ) {
+        self.event_sink.emit(Event {
+            id: turn_id.to_string(),
+            msg: EventMsg::SkillLoadError(SkillLoadErrorEvent {
+                authority: format!("{}/{}", authority.kind, authority.id),
+                package,
+                message,
+            }),
+        });
+    }
 }
 
 pub fn install<C>(
@@ -369,6 +552,7 @@ pub fn install_with_providers<C>(
         config_from_host: Arc::new(config_from_host),
     });
     registry.thread_lifecycle_contributor(extension.clone());
+    registry.turn_lifecycle_contributor(extension.clone());
     registry.config_contributor(extension.clone());
     registry.prompt_contributor(extension.clone());
     registry.turn_input_contributor(extension.clone());

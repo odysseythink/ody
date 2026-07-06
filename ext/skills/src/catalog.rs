@@ -1,5 +1,10 @@
 use ody_core_skills::model::SkillDependencies;
+use ody_core_skills::model::SkillType;
+use ody_protocol::config_types::ModeKind;
 use ody_utils_absolute_path::AbsolutePathBuf;
+
+/// Runtime mode used for filtering skill visibility and model invocability.
+pub type RuntimeMode = ModeKind;
 
 /// Source authority that owns a skill package and must be used to read it.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -117,6 +122,10 @@ pub struct SkillCatalogEntry {
     pub dependencies: Option<SkillDependencies>,
     pub enabled: bool,
     pub prompt_visible: bool,
+    pub skill_type: SkillType,
+    pub triggers: Vec<String>,
+    pub hidden_in_modes: Vec<ModeKind>,
+    pub disable_model_invocation: bool,
 }
 
 impl SkillCatalogEntry {
@@ -138,6 +147,10 @@ impl SkillCatalogEntry {
             dependencies: None,
             enabled: true,
             prompt_visible: true,
+            skill_type: SkillType::default(),
+            triggers: Vec::new(),
+            hidden_in_modes: Vec::new(),
+            disable_model_invocation: false,
         }
     }
 
@@ -156,6 +169,29 @@ impl SkillCatalogEntry {
         self
     }
 
+    pub fn with_skill_type(mut self, skill_type: SkillType) -> Self {
+        self.skill_type = skill_type;
+        if matches!(skill_type, SkillType::Knowledge | SkillType::Flow) {
+            self.prompt_visible = false;
+        }
+        self
+    }
+
+    pub fn with_triggers(mut self, triggers: Vec<String>) -> Self {
+        self.triggers = triggers;
+        self
+    }
+
+    pub fn with_hidden_in_modes(mut self, hidden_in_modes: Vec<ModeKind>) -> Self {
+        self.hidden_in_modes = hidden_in_modes;
+        self
+    }
+
+    pub fn with_disable_model_invocation(mut self, disable_model_invocation: bool) -> Self {
+        self.disable_model_invocation = disable_model_invocation;
+        self
+    }
+
     pub fn disabled(mut self) -> Self {
         self.enabled = false;
         self
@@ -164,6 +200,22 @@ impl SkillCatalogEntry {
     pub fn hidden_from_prompt(mut self) -> Self {
         self.prompt_visible = false;
         self
+    }
+
+    /// Returns whether this entry should appear in the prompt-visible catalog
+    /// for the given runtime mode.
+    pub fn is_visible_in_mode(&self, mode: RuntimeMode) -> bool {
+        self.enabled && self.prompt_visible && !self.hidden_in_modes.contains(&mode)
+    }
+
+    /// Returns whether the model is allowed to invoke this entry in the given
+    /// runtime mode. Only `Inline` and `Prompt` skills are model-invocable;
+    /// `Knowledge` and `Flow` skills are triggered through other mechanisms.
+    pub fn is_model_invocable(&self, mode: RuntimeMode) -> bool {
+        self.enabled
+            && !self.disable_model_invocation
+            && !self.hidden_in_modes.contains(&mode)
+            && matches!(self.skill_type, SkillType::Inline | SkillType::Prompt)
     }
 
     pub(crate) fn rendered_path(&self) -> &str {
@@ -198,6 +250,16 @@ impl SkillCatalog {
         }
 
         self.entries.push(entry);
+    }
+
+    /// Retains only entries that are visible in the given runtime mode.
+    ///
+    /// Passing `None` leaves the catalog unchanged.
+    pub fn filter_for_mode(&mut self, mode: Option<RuntimeMode>) {
+        let Some(mode) = mode else {
+            return;
+        };
+        self.entries.retain(|entry| entry.is_visible_in_mode(mode));
     }
 }
 
@@ -244,3 +306,6 @@ impl std::fmt::Display for SkillProviderError {
 impl std::error::Error for SkillProviderError {}
 
 pub type SkillProviderResult<T> = Result<T, SkillProviderError>;
+
+#[cfg(test)]
+mod catalog_tests;

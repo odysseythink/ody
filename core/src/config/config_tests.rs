@@ -331,6 +331,12 @@ enabled = false
             bundled: Some(BundledSkillsConfig { enabled: false }),
             include_instructions: Some(false),
             config: Vec::new(),
+            knowledge_microagents_enabled: None,
+            knowledge_max_skills_per_turn: 3,
+            knowledge_max_contents_bytes: 8_000,
+            host_model_tools_enabled: None,
+            executor_model_tools_enabled: None,
+            legacy_host_skill_injection: true,
         })
     );
 }

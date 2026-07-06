@@ -3176,7 +3176,9 @@ impl Session {
                 developer_sections.push(apps_instructions.render());
             }
         }
-        if turn_context.config.include_skill_instructions {
+        if turn_context.config.include_skill_instructions
+            && turn_context.config.legacy_host_skill_injection
+        {
             let available_skills = build_available_skills(
                 turn_context.turn_skills.snapshot.outcome(),
                 default_skill_metadata_budget(turn_context.model_info.context_window),

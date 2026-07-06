@@ -8113,8 +8113,13 @@ name = "ody-skills"
 version = "0.0.0"
 dependencies = [
  "include_dir",
+ "ody-core-skills",
+ "ody-exec-server",
+ "ody-protocol",
  "ody-utils-absolute-path",
+ "tempfile",
  "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]
@@ -8131,6 +8136,7 @@ dependencies = [
  "ody-utils-path-uri",
  "ody-utils-string",
  "pretty_assertions",
+ "regex",
  "schemars 0.8.22",
  "serde",
  "serde_json",

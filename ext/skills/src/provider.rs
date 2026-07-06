@@ -30,6 +30,7 @@ pub struct SkillListQuery {
     pub include_host_skills: bool,
     pub include_bundled_skills: bool,
     pub include_orchestrator_skills: bool,
+    pub mode: Option<crate::catalog::RuntimeMode>,
     pub mcp_resources: Option<Arc<McpResourceClient>>,
 }
 

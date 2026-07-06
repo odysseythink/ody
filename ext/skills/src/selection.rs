@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use ody_core_skills::SkillType;
 use ody_core_skills::injection::extract_tool_mentions;
 use ody_protocol::user_input::UserInput;
 
@@ -26,15 +27,21 @@ pub(crate) fn collect_explicit_skill_mentions(
     let mut seen = HashSet::new();
     let mut blocked_plain_names = HashSet::new();
 
+    let selectable_entries: Vec<&SkillCatalogEntry> = catalog
+        .entries
+        .iter()
+        .filter(|entry| entry.skill_type != SkillType::Knowledge)
+        .collect();
+
     for input in inputs {
         match input {
             UserInput::Skill { name, path } => {
                 blocked_plain_names.insert(name.clone());
-                select_by_path(catalog, &path.to_string_lossy(), &mut seen, &mut selected);
+                select_by_path(&selectable_entries, &path.to_string_lossy(), &mut seen, &mut selected);
             }
             UserInput::Mention { name, path } if path_is_skill(path) => {
                 blocked_plain_names.insert(name.clone());
-                select_by_path(catalog, path, &mut seen, &mut selected);
+                select_by_path(&selectable_entries, path, &mut seen, &mut selected);
             }
             UserInput::Text { .. } | UserInput::Image { .. } | UserInput::LocalImage { .. } => {}
             UserInput::Mention { .. } => {}
@@ -51,7 +58,7 @@ pub(crate) fn collect_explicit_skill_mentions(
         for path in mentions.paths() {
             if path_is_skill(path) {
                 select_by_path(
-                    catalog,
+                    &selectable_entries,
                     normalize_skill_path(path),
                     &mut seen,
                     &mut selected,
@@ -62,8 +69,7 @@ pub(crate) fn collect_explicit_skill_mentions(
             if blocked_plain_names.contains(name) {
                 continue;
             }
-            if let Some(entry) = catalog
-                .entries
+            if let Some(entry) = selectable_entries
                 .iter()
                 .find(|entry| entry.enabled && entry.name == name)
             {
@@ -76,13 +82,13 @@ pub(crate) fn collect_explicit_skill_mentions(
 }
 
 fn select_by_path(
-    catalog: &SkillCatalog,
+    entries: &[&SkillCatalogEntry],
     path: &str,
     seen: &mut HashSet<SkillCatalogEntryKey>,
     selected: &mut Vec<SkillCatalogEntry>,
 ) {
     let normalized_path = normalize_skill_path(path);
-    for entry in catalog.entries.iter().filter(|entry| entry.enabled) {
+    for entry in entries.iter().filter(|entry| entry.enabled) {
         if entry_matches_path(entry, normalized_path) {
             push_selected(entry, seen, selected);
         }

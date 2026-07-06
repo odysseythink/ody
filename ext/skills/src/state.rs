@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::future::Future;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -9,6 +10,7 @@ use ody_protocol::capabilities::SelectedCapabilityRoot;
 use tokio::sync::OnceCell;
 
 use crate::SkillsExtensionConfig;
+use crate::catalog::RuntimeMode;
 use crate::catalog::SkillAuthority;
 use crate::catalog::SkillCatalog;
 use crate::catalog::SkillCatalogEntry;
@@ -29,6 +31,8 @@ pub(crate) struct SkillsThreadState {
     selected_roots: Vec<SelectedCapabilityRoot>,
     orchestrator_skills_available: bool,
     orchestrator_cache: Mutex<Option<Arc<OrchestratorGenerationCache>>>,
+    mode: Mutex<Option<RuntimeMode>>,
+    loaded_skill_events_emitted: Mutex<HashSet<(SkillAuthority, SkillPackageId)>>,
 }
 
 impl SkillsThreadState {
@@ -42,7 +46,19 @@ impl SkillsThreadState {
             selected_roots,
             orchestrator_skills_available,
             orchestrator_cache: Mutex::new(None),
+            mode: Mutex::new(None),
+            loaded_skill_events_emitted: Mutex::new(HashSet::new()),
         }
+    }
+
+    pub(crate) fn mark_loaded_event_emitted(
+        &self,
+        key: (SkillAuthority, SkillPackageId),
+    ) -> bool {
+        self.loaded_skill_events_emitted
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(key)
     }
 
     pub(crate) fn config(&self) -> SkillsExtensionConfig {
@@ -57,6 +73,20 @@ impl SkillsThreadState {
             .config
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = config;
+    }
+
+    pub(crate) fn set_mode(&self, mode: Option<RuntimeMode>) {
+        *self
+            .mode
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = mode;
+    }
+
+    pub(crate) fn mode(&self) -> Option<RuntimeMode> {
+        *self
+            .mode
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     pub(crate) fn selected_roots(&self) -> &[SelectedCapabilityRoot] {
@@ -201,6 +231,12 @@ impl OrchestratorResourceCache {
 pub(crate) struct SkillsTurnState {
     pub(crate) catalog: SkillCatalog,
     pub(crate) selected_entries: Vec<SkillCatalogEntry>,
+    pub(crate) knowledge_entries: Vec<SkillCatalogEntry>,
     pub(crate) warnings: Vec<String>,
     pub(crate) main_prompts_injected: bool,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct SkillsTurnMode {
+    pub(crate) mode: Option<RuntimeMode>,
 }

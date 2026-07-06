@@ -5,6 +5,7 @@ use crate::model::SkillLoadOutcome;
 use crate::model::SkillMetadata;
 use crate::model::SkillPolicy;
 use crate::model::SkillToolDependency;
+use crate::model::SkillType;
 use crate::system::system_cache_root_dir;
 use ody_app_server_protocol::ConfigLayerSource;
 use ody_config::ConfigLayerStack;
@@ -14,6 +15,7 @@ use ody_config::merge_toml_values;
 use ody_config::project_root_markers_from_config;
 use ody_exec_server::ExecutorFileSystem;
 use ody_exec_server::LOCAL_FS;
+use ody_protocol::config_types::ModeKind;
 use ody_protocol::protocol::Product;
 use ody_protocol::protocol::SkillScope;
 use ody_utils_absolute_path::AbsolutePathBuf;
@@ -44,6 +46,14 @@ struct SkillFrontmatter {
     description: Option<String>,
     #[serde(default)]
     metadata: SkillFrontmatterMetadata,
+    #[serde(default, rename = "type")]
+    skill_type: Option<String>,
+    #[serde(default)]
+    triggers: Option<Vec<String>>,
+    #[serde(default)]
+    hidden_in_modes: Option<Vec<String>>,
+    #[serde(default)]
+    disable_model_invocation: Option<bool>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -705,6 +715,31 @@ async fn parse_skill_file(
 
     let resolved_path = canonicalize_for_skill_identity(fs, path).await;
 
+    let mut skill_type = parsed
+        .skill_type
+        .as_deref()
+        .map(parse_skill_type)
+        .transpose()?
+        .unwrap_or_default();
+    let triggers = normalize_triggers(parsed.triggers);
+    if matches!(skill_type, SkillType::Knowledge) && triggers.is_empty() {
+        tracing::warn!(
+            "knowledge skill '{}' has no triggers; downgrading to inline",
+            name
+        );
+        skill_type = SkillType::Inline;
+    }
+    let hidden_in_modes = parsed
+        .hidden_in_modes
+        .unwrap_or_default()
+        .iter()
+        .map(|raw| parse_hidden_mode(raw))
+        .collect::<Result<Vec<_>, _>>()?;
+    let disable_model_invocation = parsed.disable_model_invocation.unwrap_or(false);
+
+    let mermaid = extract_fenced_block(&contents, "mermaid");
+    let d2 = extract_fenced_block(&contents, "d2");
+
     Ok(SkillMetadata {
         name,
         description,
@@ -715,6 +750,12 @@ async fn parse_skill_file(
         path_to_skills_md: resolved_path,
         scope,
         plugin_id: plugin_id.map(str::to_string),
+        skill_type,
+        triggers,
+        hidden_in_modes,
+        disable_model_invocation,
+        mermaid,
+        d2,
     })
 }
 
@@ -1181,6 +1222,72 @@ fn extract_frontmatter(contents: &str) -> Option<String> {
 
     Some(frontmatter_lines.join("\n"))
 }
+
+fn parse_skill_type(raw: &str) -> Result<SkillType, SkillParseError> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "prompt" => Ok(SkillType::Prompt),
+        "inline" => Ok(SkillType::Inline),
+        "flow" => Ok(SkillType::Flow),
+        "knowledge" => Ok(SkillType::Knowledge),
+        other => Err(SkillParseError::InvalidField {
+            field: "type",
+            reason: format!("unsupported skill type: {other}"),
+        }),
+    }
+}
+
+fn normalize_triggers(triggers: Option<Vec<String>>) -> Vec<String> {
+    let mut normalized: Vec<String> = triggers
+        .unwrap_or_default()
+        .into_iter()
+        .map(|t| t.to_lowercase().trim().to_string())
+        .filter(|t| !t.is_empty())
+        .collect();
+    normalized.sort();
+    normalized.dedup();
+    normalized
+}
+
+fn parse_hidden_mode(raw: &str) -> Result<ModeKind, SkillParseError> {
+    // Deserialize using ModeKind's serde impl so we automatically respect its
+    // declared aliases (e.g. "code", "pair_programming", "execute", "custom"
+    // for ModeKind::Default). If ModeKind gains or loses aliases, this stays in
+    // sync without a manual mapping table.
+    serde_yaml::from_str(raw.trim()).map_err(|_| SkillParseError::InvalidField {
+        field: "hidden_in_modes",
+        reason: format!("unsupported mode: {raw}"),
+    })
+}
+
+fn extract_fenced_block(contents: &str, language: &str) -> Option<String> {
+    let fence_start = format!("```{language}");
+    let mut lines = contents.lines();
+    while let Some(line) = lines.next() {
+        let trimmed = line.trim_start();
+        let Some(rest) = trimmed.strip_prefix(&fence_start) else {
+            continue;
+        };
+        // The opening fence must be followed only by whitespace (or end-of-line),
+        // so ```mermaid does not match a request for ```mermaid2.
+        if !rest.trim().is_empty() {
+            continue;
+        }
+        let body: Vec<&str> = lines
+            .by_ref()
+            .take_while(|line| {
+                let trimmed = line.trim_start();
+                trimmed
+                    .strip_prefix("```")
+                    .map_or(true, |rest| !rest.trim().is_empty())
+            })
+            .collect();
+        if !body.is_empty() {
+            return Some(body.join("\n"));
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 pub(crate) async fn skill_roots_from_layer_stack(
     fs: Arc<dyn ExecutorFileSystem>,
