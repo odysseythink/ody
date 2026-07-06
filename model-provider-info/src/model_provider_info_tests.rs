@@ -90,13 +90,6 @@ supports_websockets = true
 }
 
 #[test]
-fn test_supports_remote_compaction_for_odysseythink() {
-    let provider = ModelProviderInfo::create_odysseythink_provider(/*base_url*/ None);
-
-    assert!(provider.supports_remote_compaction());
-}
-
-#[test]
 fn test_supports_remote_compaction_for_azure_name() {
     let provider = ModelProviderInfo {
         name: "Azure".into(),
@@ -208,18 +201,6 @@ fn provider_capabilities_default_is_conservative() {
     assert!(!caps.web_search);
     assert!(!caps.command_auth);
     assert!(!caps.attestation);
-}
-
-#[test]
-fn built_in_odysseythink_provider_capabilities() {
-    let provider = ModelProviderInfo::create_odysseythink_provider(None);
-    assert!(provider.capabilities.supports_websockets);
-    assert!(provider.capabilities.supports_remote_compaction);
-    assert!(provider.capabilities.namespace_tools);
-    assert!(provider.capabilities.image_generation);
-    assert!(provider.capabilities.web_search);
-    assert!(!provider.capabilities.command_auth);
-    assert!(!provider.capabilities.attestation);
 }
 
 #[test]

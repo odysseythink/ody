@@ -64,6 +64,7 @@ pub(crate) struct BuiltinCommandFlags {
     pub(crate) personality_command_enabled: bool,
     pub(crate) allow_elevate_sandbox: bool,
     pub(crate) side_conversation_active: bool,
+    pub(crate) plan_mode_active: bool,
 }
 
 /// Return the built-ins that should be visible/usable for the current input.
@@ -77,6 +78,7 @@ pub(crate) fn builtins_for_input(flags: BuiltinCommandFlags) -> Vec<(&'static st
         .filter(|(_, cmd)| flags.token_activity_command_enabled || *cmd != SlashCommand::Usage)
         .filter(|(_, cmd)| flags.goal_command_enabled || *cmd != SlashCommand::Goal)
         .filter(|(_, cmd)| flags.personality_command_enabled || *cmd != SlashCommand::Personality)
+        .filter(|(_, cmd)| flags.plan_mode_active || *cmd != SlashCommand::WritingPlan)
         .filter(|(_, cmd)| !flags.side_conversation_active || cmd.available_in_side_conversation())
         .collect()
 }
@@ -173,6 +175,7 @@ mod tests {
             personality_command_enabled: true,
             allow_elevate_sandbox: true,
             side_conversation_active: false,
+            plan_mode_active: false,
         }
     }
 
@@ -214,6 +217,29 @@ mod tests {
         );
     }
 
+
+
+    #[test]
+    fn writing_plan_is_hidden_unless_plan_mode_active() {
+        let mut flags = all_enabled_flags();
+        assert_eq!(
+            builtins_for_input(flags)
+                .into_iter()
+                .find(|(_, command)| *command == SlashCommand::WritingPlan),
+            None
+        );
+
+        flags.plan_mode_active = true;
+        assert_eq!(
+            find_builtin_command("writing-plan", flags),
+            Some(SlashCommand::WritingPlan)
+        );
+        assert!(
+            builtins_for_input(flags)
+                .into_iter()
+                .any(|(_, command)| command == SlashCommand::WritingPlan)
+        );
+    }
     #[test]
     fn service_tier_commands_are_hidden_when_disabled() {
         let mut flags = all_enabled_flags();

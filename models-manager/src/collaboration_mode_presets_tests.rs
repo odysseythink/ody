@@ -15,6 +15,18 @@ fn preset_names_use_mode_display_names() {
 }
 
 #[test]
+fn plan_mode_instructions_anchor_plan_file_to_plans_directory() {
+    let plan_instructions = plan_preset()
+        .developer_instructions
+        .expect("plan preset should include instructions")
+        .expect("plan instructions should be set");
+
+    assert!(plan_instructions.contains(".ody-code/plans/"));
+    assert!(plan_instructions.contains("YYYY-MM-DD-<topic>.md"));
+    assert!(plan_instructions.contains("Do NOT place plan files under `.ody-code/roadmaps/"));
+}
+
+#[test]
 fn default_mode_instructions_replace_mode_names_placeholder() {
     let default_instructions = default_preset()
         .developer_instructions

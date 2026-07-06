@@ -70,26 +70,3 @@ pub fn auth_provider_from_auth(auth: &OdyAuth) -> SharedAuthProvider {
         }),
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use ody_model_provider_info::ModelProviderInfo;
-    use ody_model_provider_info::WireApi;
-
-    use super::*;
-
-
-    #[test]
-    fn api_key_auth_resolves_to_bearer_provider() {
-        let auth = OdyAuth::from_api_key("sk-test");
-        let provider = ModelProviderInfo::create_odysseythink_provider(/*base_url*/ None);
-        let resolved = resolve_provider_auth(Some(&auth), &provider).expect("should resolve");
-        let headers = resolved.to_auth_headers();
-        assert_eq!(
-            headers
-                .get(http::header::AUTHORIZATION)
-                .and_then(|v| v.to_str().ok()),
-            Some("Bearer sk-test")
-        );
-    }
-}

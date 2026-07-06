@@ -50,6 +50,7 @@ pub(crate) struct CommandPopupFlags {
     pub(crate) personality_command_enabled: bool,
     pub(crate) windows_degraded_sandbox_active: bool,
     pub(crate) side_conversation_active: bool,
+    pub(crate) plan_mode_active: bool,
 }
 
 impl From<CommandPopupFlags> for BuiltinCommandFlags {
@@ -64,6 +65,7 @@ impl From<CommandPopupFlags> for BuiltinCommandFlags {
             personality_command_enabled: value.personality_command_enabled,
             allow_elevate_sandbox: value.windows_degraded_sandbox_active,
             side_conversation_active: value.side_conversation_active,
+            plan_mode_active: value.plan_mode_active,
         }
     }
 }
@@ -537,6 +539,7 @@ mod tests {
                 personality_command_enabled: true,
                 windows_degraded_sandbox_active: false,
                 side_conversation_active: false,
+                plan_mode_active: false,
             },
             Vec::new(),
         );
@@ -564,6 +567,7 @@ mod tests {
                 personality_command_enabled: false,
                 windows_degraded_sandbox_active: false,
                 side_conversation_active: false,
+                plan_mode_active: false,
             },
             Vec::new(),
         );
@@ -596,6 +600,7 @@ mod tests {
                 personality_command_enabled: true,
                 windows_degraded_sandbox_active: false,
                 side_conversation_active: false,
+                plan_mode_active: false,
             },
             Vec::new(),
         );

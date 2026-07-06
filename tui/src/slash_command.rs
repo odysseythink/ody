@@ -39,6 +39,7 @@ pub enum SlashCommand {
     Init,
     Compact,
     Plan,
+    WritingPlan,
     Goal,
     Agent,
     Side,
@@ -119,6 +120,7 @@ impl SlashCommand {
             }
             SlashCommand::Personality => "choose a communication style for Ody",
             SlashCommand::Plan => "switch to Plan mode",
+            SlashCommand::WritingPlan => "convert a source file into an execution plan (plan mode only)",
             SlashCommand::Goal => "set or view the goal for a long-running task",
             SlashCommand::Agent | SlashCommand::MultiAgents => "switch the active agent thread",
             SlashCommand::Side | SlashCommand::Btw => {
@@ -156,6 +158,7 @@ impl SlashCommand {
             SlashCommand::Review
                 | SlashCommand::Rename
                 | SlashCommand::Plan
+                | SlashCommand::WritingPlan
                 | SlashCommand::Goal
                 | SlashCommand::Ide
                 | SlashCommand::Keymap
@@ -202,6 +205,7 @@ impl SlashCommand {
             | SlashCommand::Import
             | SlashCommand::Review
             | SlashCommand::Plan
+            | SlashCommand::WritingPlan
             | SlashCommand::Clear
             | SlashCommand::Logout
             | SlashCommand::MemoryDrop
@@ -295,6 +299,15 @@ mod tests {
         assert!(SlashCommand::Raw.available_in_side_conversation());
         assert!(SlashCommand::Raw.supports_inline_args());
         assert!(SlashCommand::App.available_during_task());
+    }
+
+    #[test]
+    fn writing_plan_command_parses_and_returns_command_string() {
+        assert_eq!(SlashCommand::WritingPlan.command(), "writing-plan");
+        assert_eq!(
+            SlashCommand::from_str("writing-plan"),
+            Ok(SlashCommand::WritingPlan)
+        );
     }
 
     #[test]

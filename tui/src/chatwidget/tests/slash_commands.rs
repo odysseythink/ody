@@ -2936,3 +2936,84 @@ async fn compact_queues_user_messages_snapshot() {
         normalize_snapshot_paths(term.backend().vt100().screen().contents())
     );
 }
+
+
+#[tokio::test]
+async fn slash_writing_plan_missing_file_shows_error() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    chat.thread_id = Some(ThreadId::new());
+    let plan_mask = collaboration_modes::plan_mask(chat.model_catalog.as_ref())
+        .expect("expected plan collaboration mode");
+    chat.set_collaboration_mask(plan_mask);
+
+    chat.dispatch_command_with_args(
+        SlashCommand::WritingPlan,
+        "definitely_missing_file_for_test.md".to_string(),
+        Vec::new(),
+    );
+
+    let cells = drain_insert_history(&mut rx);
+    let rendered = cells
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        rendered.contains("writing-plan: invalid source file"),
+        "expected invalid source file error, got {rendered:?}"
+    );
+}
+
+#[tokio::test]
+async fn slash_writing_plan_existing_file_submits_prompt_with_source_and_output_path() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    chat.thread_id = Some(ThreadId::new());
+    let plan_mask = collaboration_modes::plan_mask(chat.model_catalog.as_ref())
+        .expect("expected plan collaboration mode");
+    chat.set_collaboration_mask(plan_mask);
+    let _ = drain_insert_history(&mut rx);
+
+    let dir = tempdir().unwrap();
+    let source_file = dir.path().join("README.md");
+    std::fs::write(&source_file, "# Test").unwrap();
+
+    chat.current_cwd = Some(dir.path().to_path_buf());
+    chat.dispatch_command_with_args(
+        SlashCommand::WritingPlan,
+        source_file.display().to_string(),
+        Vec::new(),
+    );
+
+    let cells = drain_insert_history(&mut rx);
+    let rendered = cells
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        rendered.contains("writing-plan: 执行计划将写入:"),
+        "expected output path notice, got {rendered:?}"
+    );
+
+    match next_submit_op(&mut op_rx) {
+        Op::UserTurn { items, .. } => {
+            let text = items
+                .iter()
+                .map(|item| match item {
+                    UserInput::Text { text, .. } => text.as_str(),
+                    _ => "",
+                })
+                .collect::<Vec<_>>()
+                .join("");
+            assert!(
+                text.contains(&source_file.display().to_string()),
+                "expected prompt to mention source file, got {text:?}"
+            );
+            assert!(
+                text.contains(".ody-code/plans/README.md"),
+                "expected prompt to mention plan output path, got {text:?}"
+            );
+        }
+        other => panic!("expected Op::UserTurn, got {other:?}"),
+    }
+}

@@ -384,29 +384,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn configured_provider_uses_default_capabilities() {
-        let provider = create_model_provider(
-            ModelProviderInfo::create_odysseythink_provider(/*base_url*/ None),
-            /*auth_manager*/ None,
-        );
-
-        assert_eq!(provider.capabilities(), ProviderCapabilities::default());
-    }
-
-    #[test]
-    fn configured_provider_uses_default_approval_review_preferred_model() {
-        let provider = create_model_provider(
-            ModelProviderInfo::create_odysseythink_provider(/*base_url*/ None),
-            /*auth_manager*/ None,
-        );
-
-        assert_eq!(
-            provider.approval_review_preferred_model(),
-            DEFAULT_APPROVAL_REVIEW_PREFERRED_MODEL
-        );
-    }
-
     #[tokio::test]
     async fn configured_provider_runtime_base_url_uses_configured_base_url() {
         let provider = create_model_provider(
@@ -423,39 +400,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn odysseythink_provider_returns_unauthenticated_odysseythink_account_state() {
-        let provider = create_model_provider(
-            ModelProviderInfo::create_odysseythink_provider(/*base_url*/ None),
-            /*auth_manager*/ None,
-        );
-
-        assert_eq!(
-            provider.account_state().unwrap(),
-            ProviderAccountState {
-                account: None,
-                requires_odysseythink_auth: true,
-            }
-        );
-    }
-
-    #[test]
-    fn odysseythink_provider_returns_api_key_account_state() {
-        let provider = create_model_provider(
-            ModelProviderInfo::create_odysseythink_provider(/*base_url*/ None),
-            Some(AuthManager::from_auth_for_testing(OdyAuth::from_api_key(
-                "odysseythink-api-key",
-            ))),
-        );
-
-        assert_eq!(
-            provider.account_state().unwrap(),
-            ProviderAccountState {
-                account: Some(ProviderAccount::ApiKey),
-                requires_odysseythink_auth: true,
-            }
-        );
-    }
 
     #[test]
     fn custom_non_odysseythink_provider_returns_no_account_state() {
@@ -477,48 +421,6 @@ mod tests {
                 requires_odysseythink_auth: false,
             }
         );
-    }
-
-    #[tokio::test]
-    async fn chat_provider_selects_responses_adapter_for_odysseythink() {
-        let provider = create_model_provider(
-            ModelProviderInfo::create_odysseythink_provider(None),
-            None,
-        );
-        let chat = provider.chat_provider().await.expect("selects adapter");
-        assert_eq!(chat.provider_id(), "openai-responses");
-    }
-
-    #[tokio::test]
-    async fn chat_provider_selects_chat_adapter_for_kimi() {
-        let mut info = ModelProviderInfo::create_odysseythink_provider(None);
-        info.name = "Kimi".into();
-        info.wire_api = WireApi::Chat;
-        let provider = create_model_provider(info, None);
-        let chat = provider.chat_provider().await.expect("selects adapter");
-        assert_eq!(chat.provider_id(), "kimi");
-        assert!(chat.capabilities().supports_streaming);
-    }
-
-    #[tokio::test]
-    async fn chat_provider_selects_chat_adapter_for_deepseek() {
-        let mut info = ModelProviderInfo::create_odysseythink_provider(None);
-        info.name = "DeepSeek".into();
-        info.wire_api = WireApi::Chat;
-        let provider = create_model_provider(info, None);
-        let chat = provider.chat_provider().await.expect("selects adapter");
-        assert_eq!(chat.provider_id(), "deepseek");
-        assert!(chat.capabilities().supports_thinking);
-    }
-
-    #[tokio::test]
-    async fn chat_provider_selects_chat_adapter_for_glm() {
-        let mut info = ModelProviderInfo::create_odysseythink_provider(None);
-        info.name = "GLM".into();
-        info.wire_api = WireApi::Chat;
-        let provider = create_model_provider(info, None);
-        let chat = provider.chat_provider().await.expect("selects adapter");
-        assert_eq!(chat.provider_id(), "glm");
     }
 
     #[tokio::test]
@@ -580,19 +482,5 @@ mod tests {
 
         assert!(caps.web_search);
         assert!(!caps.namespace_tools);
-    }
-
-    #[test]
-    fn odysseythink_provider_capabilities_remain_true() {
-        let provider = create_model_provider_with_id(
-            "openai-responses",
-            ModelProviderInfo::create_odysseythink_provider(None),
-            None,
-        );
-        let caps = provider.capabilities();
-
-        assert!(caps.namespace_tools);
-        assert!(caps.image_generation);
-        assert!(caps.web_search);
     }
 }

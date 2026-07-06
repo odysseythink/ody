@@ -101,6 +101,42 @@ impl ChatWidget {
         }
     }
 
+
+
+    /// Return the directory used for plan files in Plan mode.
+    ///
+    /// Mirrors `PlanArtifact` layout: `{cwd}/.ody-code/plans`.
+    fn plan_directory(&self) -> Option<PathBuf> {
+        let cwd = self
+            .current_cwd
+            .clone()
+            .unwrap_or_else(|| self.config.cwd.to_path_buf());
+        Some(cwd.join(".ody-code").join("plans"))
+    }
+
+    fn allocate_writing_plan_path(&self, source_path: &Path) -> Option<PathBuf> {
+        let plans_dir = self.plan_directory()?;
+        let stem = source_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("plan");
+        let base = plans_dir.join(format!("{stem}.md"));
+        if !base.exists() {
+            return Some(base);
+        }
+        let mut suffix = 2;
+        loop {
+            let candidate = plans_dir.join(format!("{stem}_{suffix}.md"));
+            if !candidate.exists() {
+                return Some(candidate);
+            }
+            suffix += 1;
+            if suffix > 999 {
+                return None;
+            }
+        }
+    }
+
     fn request_side_conversation(
         &mut self,
         parent_thread_id: ThreadId,
@@ -478,6 +514,9 @@ impl ChatWidget {
             SlashCommand::MemoryUpdate => {
                 self.add_app_server_stub_message("Memory maintenance");
             }
+            SlashCommand::WritingPlan => {
+                self.add_error_message("Usage: /writing-plan <file path>".to_string());
+            }
             SlashCommand::Mcp => {
                 self.add_mcp_output(McpServerStatusDetail::ToolsAndAuthOnly);
             }
@@ -727,6 +766,50 @@ impl ChatWidget {
                 }
                 let user_message = self.prepared_inline_user_message(
                     args,
+                    text_elements,
+                    local_images,
+                    remote_image_urls,
+                    mention_bindings,
+                    source,
+                );
+                if self.is_session_configured() {
+                    self.reasoning_buffer.clear();
+                    self.full_reasoning_buffer.clear();
+                    self.set_status_header(String::from("Working"));
+                    self.submit_user_message(user_message);
+                } else {
+                    self.queue_user_message(user_message);
+                }
+            }
+            SlashCommand::WritingPlan if !trimmed.is_empty() => {
+                if !self.apply_plan_slash_command() {
+                    return;
+                }
+                let source_path = PathBuf::from(trimmed);
+                if !source_path.exists() || source_path.is_dir() {
+                    self.add_error_message(format!(
+                        "writing-plan: invalid source file: {}",
+                        source_path.display()
+                    ));
+                    return;
+                }
+                let Some(output_path) = self.allocate_writing_plan_path(&source_path) else {
+                    self.add_error_message(
+                        "writing-plan: could not allocate a plan output path.".to_string(),
+                    );
+                    return;
+                };
+                self.add_info_message(
+                    format!("writing-plan: 执行计划将写入: {}", output_path.display()),
+                    None,
+                );
+                let prompt = format!(
+                    "请阅读文件 {} 的内容，并将其转换为一份完整、可执行的执行计划，写入计划文件 {}。",
+                    source_path.display(),
+                    output_path.display()
+                );
+                let user_message = self.prepared_inline_user_message(
+                    prompt,
                     text_elements,
                     local_images,
                     remote_image_urls,
@@ -1024,6 +1107,7 @@ impl ChatWidget {
             personality_command_enabled: self.config.features.enabled(Feature::Personality),
             allow_elevate_sandbox,
             side_conversation_active: self.active_side_conversation,
+            plan_mode_active: false,
         }
     }
 
@@ -1048,6 +1132,7 @@ impl ChatWidget {
             | SlashCommand::Stop
             | SlashCommand::MemoryDrop
             | SlashCommand::MemoryUpdate
+            | SlashCommand::WritingPlan
             | SlashCommand::Mcp
             | SlashCommand::Apps
             | SlashCommand::Plugins
