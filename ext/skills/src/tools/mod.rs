@@ -39,12 +39,18 @@ pub(crate) fn skill_tools(
     mcp_resources: Option<Arc<McpResourceClient>>,
     host_snapshot: Option<Arc<HostSkillsSnapshot>>,
     thread_state: Arc<SkillsThreadState>,
+    host_enabled: bool,
+    executor_enabled: bool,
+    orchestrator_enabled: bool,
 ) -> Vec<Arc<dyn ToolExecutor<ToolCall>>> {
     let context = SkillToolContext {
         providers,
         mcp_resources,
         host_snapshot,
         thread_state,
+        host_enabled,
+        executor_enabled,
+        orchestrator_enabled,
     };
     vec![
         Arc::new(list::ListTool {
@@ -60,12 +66,22 @@ struct SkillToolContext {
     mcp_resources: Option<Arc<McpResourceClient>>,
     host_snapshot: Option<Arc<HostSkillsSnapshot>>,
     thread_state: Arc<SkillsThreadState>,
+    host_enabled: bool,
+    executor_enabled: bool,
+    orchestrator_enabled: bool,
 }
 
 impl SkillToolContext {
     async fn catalog(&self, turn_id: &str, authority: SkillToolAuthority) -> SkillCatalog {
         let mode = self.thread_state.mode();
         match authority {
+            SkillToolAuthority::Host if !self.host_enabled => SkillCatalog::default(),
+            SkillToolAuthority::Executor { .. } if !self.executor_enabled => {
+                SkillCatalog::default()
+            }
+            SkillToolAuthority::Orchestrator if !self.orchestrator_enabled => {
+                SkillCatalog::default()
+            }
             SkillToolAuthority::Host => {
                 self.providers
                     .list_for_turn(SkillListQuery {

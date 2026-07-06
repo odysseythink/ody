@@ -199,10 +199,12 @@ where
         let Some(thread_state) = thread_store.get::<SkillsThreadState>() else {
             return Vec::new();
         };
-        if !thread_state.orchestrator_skills_enabled()
-            && !self.providers.has_host_provider()
-            && !self.providers.has_executor_provider()
-        {
+        let config = thread_state.config();
+        let has_host = self.providers.has_host_provider() && config.host_model_tools_enabled;
+        let has_executor =
+            self.providers.has_executor_provider() && config.executor_model_tools_enabled;
+        let has_orchestrator = thread_state.orchestrator_skills_enabled();
+        if !has_host && !has_executor && !has_orchestrator {
             return Vec::new();
         }
 
@@ -211,6 +213,9 @@ where
             session_store.get::<McpResourceClient>(),
             session_store.get::<HostSkillsSnapshot>(),
             thread_state,
+            has_host,
+            has_executor,
+            has_orchestrator,
         )
     }
 }
@@ -266,13 +271,17 @@ where
                 .collect::<Vec<_>>()
                 .join("\n");
             let selected_entries = collect_explicit_skill_mentions(&input.user_input, &catalog);
-            let knowledge_entries = KnowledgeMicroagentInjector::select(
-                latest_user_text.as_str(),
-                &catalog,
-                turn_mode.unwrap_or(ModeKind::Default),
-                3,
-                8_000,
-            );
+            let knowledge_entries = if config.knowledge_microagents_enabled {
+                KnowledgeMicroagentInjector::select(
+                    latest_user_text.as_str(),
+                    &catalog,
+                    turn_mode.unwrap_or(ModeKind::Default),
+                    config.knowledge_max_skills_per_turn,
+                    config.knowledge_max_contents_bytes,
+                )
+            } else {
+                Vec::new()
+            };
 
             let mut fragments: Vec<Box<dyn ContextualUserFragment + Send>> = Vec::new();
             if config.include_instructions {
