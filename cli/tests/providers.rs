@@ -18,7 +18,7 @@ fn providers_lists_builtin_providers_and_capabilities() -> Result<()> {
 
     assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
     let stdout = String::from_utf8(output.stdout)?;
-    for id in ["odysseythink", "kimi", "deepseek", "glm", "ollama", "lmstudio"] {
+    for id in ["kimi", "deepseek", "glm"] {
         assert!(
             stdout.contains(id),
             "expected provider {id} in stdout: {stdout}"

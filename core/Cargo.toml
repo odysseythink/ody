@@ -136,7 +136,6 @@ ody-shell-escalation = { workspace = true }
 [dev-dependencies]
 assert_cmd = { workspace = true }
 assert_matches = { workspace = true }
-ody-image-generation-extension = { workspace = true }
 ody-home = { workspace = true }
 ody-otel = { workspace = true }
 ody-test-binary-support = { workspace = true }

@@ -284,7 +284,7 @@ async fn compaction_budget_exhaustion_aborts_without_error_or_retry(remote_v2: b
         ])
     };
     let responses = mount_sse_sequence(&server, vec![compact_response]).await;
-    let mut model_provider = built_in_model_providers(/*odysseythink_base_url*/ None)["odysseythink"].clone();
+    let mut model_provider = built_in_model_providers()["odysseythink"].clone();
     model_provider.base_url = Some(format!("{}/v1", server.uri()));
     model_provider.supports_websockets = false;
     if !remote_v2 {
@@ -348,7 +348,7 @@ async fn restates_the_current_remainder_after_compaction() -> Result<()> {
         ],
     )
     .await;
-    let mut model_provider = built_in_model_providers(/*odysseythink_base_url*/ None)["odysseythink"].clone();
+    let mut model_provider = built_in_model_providers()["odysseythink"].clone();
     model_provider.name = "OpenAI-compatible test provider".to_string();
     model_provider.base_url = Some(format!("{}/v1", server.uri()));
     model_provider.supports_websockets = false;

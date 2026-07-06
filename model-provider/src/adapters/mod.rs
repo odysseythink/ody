@@ -5,5 +5,4 @@
 pub mod chat;
 pub(crate) mod common;
 pub mod core;
-pub mod local;
 pub mod responses;

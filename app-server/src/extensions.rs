@@ -75,8 +75,7 @@ where
     ody_memories_extension::install(&mut builder, ody_otel::global());
     ody_mcp_extension::install(&mut builder);
     ody_mcp_extension::install_executor_plugins(&mut builder, environment_manager);
-    ody_web_search_extension::install(&mut builder, auth_manager.clone());
-    ody_image_generation_extension::install(&mut builder, auth_manager);
+    ody_web_search_extension::install(&mut builder, auth_manager);
     let skill_providers = ody_skills_extension::SkillProviders::new()
         .with_executor_provider(executor_skill_provider)
         .with_orchestrator_provider(Arc::new(

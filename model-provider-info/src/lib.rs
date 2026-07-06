@@ -34,8 +34,6 @@ const MAX_REQUEST_MAX_RETRIES: u64 = 100;
 
 const OPENAI_PROVIDER_NAME: &str = "OpenAI";
 pub const OPENAI_PROVIDER_ID: &str = "odysseythink";
-pub const LEGACY_OLLAMA_CHAT_PROVIDER_ID: &str = "ollama-chat";
-pub const OLLAMA_CHAT_PROVIDER_REMOVED_ERROR: &str = "`ollama-chat` is no longer supported.\nHow to fix: replace `ollama-chat` with `ollama` in `model_provider`, `oss_provider`, or `--local-provider`.\nMore info: https://github.com/odysseythink/ody/discussions/7782";
 
 // OpenAI-compatible third-party Chat Completions providers.
 const KIMI_PROVIDER_NAME: &str = "Kimi";
@@ -68,8 +66,6 @@ pub enum WireApi {
     /// Google GenAI API.
     #[schemars(rename = "google_genai")]
     GoogleGenAI,
-    /// Local model servers (Ollama, LM Studio).
-    Local,
 }
 
 impl fmt::Display for WireApi {
@@ -79,7 +75,6 @@ impl fmt::Display for WireApi {
             Self::Chat => "chat",
             Self::AnthropicMessages => "anthropic_messages",
             Self::GoogleGenAI => "google_genai",
-            Self::Local => "local",
         };
         f.write_str(value)
     }
@@ -96,7 +91,6 @@ impl<'de> Deserialize<'de> for WireApi {
             "chat" => Ok(Self::Chat),
             "anthropic_messages" => Ok(Self::AnthropicMessages),
             "google_genai" => Ok(Self::GoogleGenAI),
-            "local" => Ok(Self::Local),
             _ => Err(serde::de::Error::unknown_variant(
                 &value,
                 &["responses", "chat", "anthropic_messages", "google_genai", "local"],
@@ -163,7 +157,6 @@ pub fn default_provider_capabilities_for_wire_api(wire_api: WireApi) -> Provider
             command_auth: false,
             attestation: false,
         },
-        WireApi::Local => ProviderCapabilities::default(),
     }
 }
 
@@ -448,33 +441,15 @@ impl ModelProviderInfo {
     }
 }
 
-pub const DEFAULT_LMSTUDIO_PORT: u16 = 1234;
-pub const DEFAULT_OLLAMA_PORT: u16 = 11434;
-
-pub const LMSTUDIO_OSS_PROVIDER_ID: &str = "lmstudio";
-pub const OLLAMA_OSS_PROVIDER_ID: &str = "ollama";
-
 /// Built-in default provider list.
-pub fn built_in_model_providers(
-    odysseythink_base_url: Option<String>,
-) -> HashMap<String, ModelProviderInfo> {
+pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
     use ModelProviderInfo as P;
-    let odysseythink_provider = P::create_odysseythink_provider(odysseythink_base_url);
 
     // We do not want to be in the business of adjucating which third-party
-    // providers are bundled with Ody CLI, so we only include the OpenAI and
-    // open source ("oss") providers by default. Users are encouraged to add to
+    // providers are bundled with Ody CLI, so we only include the OpenAI. 
+    // Users are encouraged to add to
     // `model_providers` in config.toml to add their own providers.
     [
-        (OPENAI_PROVIDER_ID, odysseythink_provider),
-        (
-            OLLAMA_OSS_PROVIDER_ID,
-            create_oss_provider(DEFAULT_OLLAMA_PORT, WireApi::Local),
-        ),
-        (
-            LMSTUDIO_OSS_PROVIDER_ID,
-            create_oss_provider(DEFAULT_LMSTUDIO_PORT, WireApi::Local),
-        ),
         // OpenAI-compatible third-party Chat Completions providers.
         (KIMI_PROVIDER_ID, create_kimi_provider()),
         (DEEPSEEK_PROVIDER_ID, create_deepseek_provider()),
@@ -502,47 +477,6 @@ pub fn merge_configured_model_providers(
     }
 
     Ok(model_providers)
-}
-
-pub fn create_oss_provider(default_provider_port: u16, wire_api: WireApi) -> ModelProviderInfo {
-    // These ODY_OSS_ environment variables are experimental: we may
-    // switch to reading values from config.toml instead.
-    let default_ody_oss_base_url = format!(
-        "http://localhost:{ody_oss_port}/v1",
-        ody_oss_port = std::env::var("ODY_OSS_PORT")
-            .ok()
-            .filter(|value| !value.trim().is_empty())
-            .and_then(|value| value.parse::<u16>().ok())
-            .unwrap_or(default_provider_port)
-    );
-
-    let ody_oss_base_url = std::env::var("ODY_OSS_BASE_URL")
-        .ok()
-        .filter(|v| !v.trim().is_empty())
-        .unwrap_or(default_ody_oss_base_url);
-    create_oss_provider_with_base_url(&ody_oss_base_url, wire_api)
-}
-
-pub fn create_oss_provider_with_base_url(base_url: &str, wire_api: WireApi) -> ModelProviderInfo {
-    ModelProviderInfo {
-        name: "gpt-oss".into(),
-        base_url: Some(base_url.into()),
-        env_key: None,
-        env_key_instructions: None,
-        experimental_bearer_token: None,
-        auth: None,
-        wire_api,
-        query_params: None,
-        http_headers: None,
-        env_http_headers: None,
-        request_max_retries: None,
-        stream_max_retries: None,
-        stream_idle_timeout_ms: None,
-        websocket_connect_timeout_ms: None,
-        requires_odysseythink_auth: false,
-        supports_websockets: false,
-        capabilities: default_provider_capabilities_for_wire_api(WireApi::Local),
-    }
 }
 
 /// Build an OpenAI-compatible Chat Completions provider (Kimi / DeepSeek / GLM).

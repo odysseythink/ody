@@ -1,0 +1,3 @@
+interface:
+  display_name: "Dispatching Parallel Agents"
+  short_description: "Delegate independent tasks to parallel agents"

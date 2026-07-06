@@ -672,28 +672,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-stream"
-version = "0.3.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b5a71a6f37880a80d1d7f19efd781e4b5de42c88f0722cc13bcb6cc2cfe8476"
-dependencies = [
- "async-stream-impl",
- "futures-core",
- "pin-project-lite",
-]
-
-[[package]]
-name = "async-stream-impl"
-version = "0.3.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7c24de15d275a1ecfd47a380fb4d5ec9bfe0933f309ed5e705b775596a3574d"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
-
-[[package]]
 name = "async-task"
 version = "4.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6399,7 +6377,6 @@ dependencies = [
  "ody-guardian",
  "ody-home",
  "ody-hooks",
- "ody-image-generation-extension",
  "ody-login",
  "ody-mcp",
  "ody-mcp-extension",
@@ -6913,7 +6890,6 @@ dependencies = [
  "ody-git-utils",
  "ody-home",
  "ody-hooks",
- "ody-image-generation-extension",
  "ody-install-context",
  "ody-login",
  "ody-mcp",
@@ -7115,7 +7091,6 @@ dependencies = [
  "ody-utils-absolute-path",
  "ody-utils-cargo-bin",
  "ody-utils-cli",
- "ody-utils-oss",
  "ody-utils-sandbox-summary",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -7396,29 +7371,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ody-image-generation-extension"
-version = "0.0.0"
-dependencies = [
- "http 1.4.0",
- "ody-api",
- "ody-core",
- "ody-extension-api",
- "ody-login",
- "ody-model-provider",
- "ody-model-provider-info",
- "ody-protocol",
- "ody-tools",
- "ody-utils-absolute-path",
- "ody-utils-image",
- "ody-utils-path-uri",
- "pretty_assertions",
- "schemars 0.8.22",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "ody-install-context"
 version = "0.0.0"
 dependencies = [
@@ -7458,20 +7410,6 @@ dependencies = [
  "tempfile",
  "tokio",
  "url",
-]
-
-[[package]]
-name = "ody-lmstudio"
-version = "0.0.0"
-dependencies = [
- "ody-core",
- "ody-model-provider-info",
- "reqwest 0.12.28",
- "serde_json",
- "tokio",
- "tracing",
- "which 8.0.0",
- "wiremock",
 ]
 
 [[package]]
@@ -7776,26 +7714,6 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
-]
-
-[[package]]
-name = "ody-ollama"
-version = "0.0.0"
-dependencies = [
- "assert_matches",
- "async-stream",
- "bytes",
- "futures",
- "memchr",
- "ody-core",
- "ody-model-provider-info",
- "pretty_assertions",
- "reqwest 0.12.28",
- "semver",
- "serde_json",
- "tokio",
- "tracing",
- "wiremock",
 ]
 
 [[package]]
@@ -8277,7 +8195,6 @@ dependencies = [
  "ody-utils-elapsed",
  "ody-utils-fuzzy-match",
  "ody-utils-home-dir",
- "ody-utils-oss",
  "ody-utils-path",
  "ody-utils-path-uri",
  "ody-utils-plugins",
@@ -8430,16 +8347,6 @@ dependencies = [
  "pretty_assertions",
  "serde_json",
  "toml 0.9.11+spec-1.1.0",
-]
-
-[[package]]
-name = "ody-utils-oss"
-version = "0.0.0"
-dependencies = [
- "ody-core",
- "ody-lmstudio",
- "ody-model-provider-info",
- "ody-ollama",
 ]
 
 [[package]]

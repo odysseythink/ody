@@ -13,7 +13,6 @@ use crate::legacy_core::config::ConfigBuilder;
 use crate::legacy_core::config::ConfigOverrides;
 use crate::legacy_core::config::load_config_toml_with_layer_stack;
 
-use crate::legacy_core::config::resolve_oss_provider;
 use crate::legacy_core::config::resolve_profile_v2_config_path;
 use ody_app_server_protocol::Thread as AppServerThread;
 use ody_app_server_protocol::ThreadListParams;
@@ -27,7 +26,6 @@ use ody_exec_server::ExecServerRuntimePaths;
 use ody_protocol::ThreadId;
 use ody_utils_cli::CliConfigOverrides;
 use ody_utils_home_dir::find_ody_home;
-use ody_utils_oss::get_default_model_for_oss_provider;
 use color_eyre::eyre::Result;
 use color_eyre::eyre::WrapErr;
 use color_eyre::eyre::eyre;
@@ -326,17 +324,7 @@ async fn start_app_server_for_archive_command(
     let config_toml = &bootstrap_config.config_toml;
     let cloud_config_bundle = CloudConfigBundleLoader::default();
 
-    let model_provider = if cli.oss {
-        resolve_oss_provider(cli.oss_provider.as_deref(), config_toml)
-    } else {
-        None
-    };
-    let model = cli.model.clone().or_else(|| {
-        model_provider
-            .as_deref()
-            .and_then(get_default_model_for_oss_provider)
-            .map(ToOwned::to_owned)
-    });
+    let model = cli.model.clone();
     let cwd = cli.cwd.clone();
     let config = ConfigBuilder::default()
         .cli_overrides(cli_kv_overrides.clone())
@@ -347,11 +335,10 @@ async fn start_app_server_for_archive_command(
             } else {
                 cwd
             },
-            model_provider,
             ody_self_exe: arg0_paths.ody_self_exe.clone(),
             ody_linux_sandbox_exe: arg0_paths.ody_linux_sandbox_exe.clone(),
             main_execve_wrapper_exe: arg0_paths.main_execve_wrapper_exe.clone(),
-            show_raw_agent_reasoning: cli.oss.then_some(true),
+            show_raw_agent_reasoning: None,
             bypass_hook_trust: cli.bypass_hook_trust.then_some(true),
             ..Default::default()
         })

@@ -24,10 +24,10 @@ expression: "lines[start_idx..].join(\"\\n\")"
   Rust 1.73+, both "symbols" and "debuginfo" stripping options are available. I
   should check whether using these results in a smaller binary. I’ll also skim
   through crates for heavy dependencies in Cargo.toml, including cli, core,
-  exec, linux-sandbox, tui, login, ollama, and mcp.
+  exec, linux-sandbox, tui, login, and mcp.
 
 • Ran for d in ansi-escape apply-patch arg0 cli common core exec execpolicy
-  │ file-search linux-sandbox login mcp-client mcp-server ollama
+  │ file-search linux-sandbox login mcp-client mcp-server 
   │ tui; do echo "--- $d/Cargo.toml"; sed -n '1,200p' $d/Cargo.toml; echo;
   │ … +1 lines
   └ --- ansi-escape/Cargo.toml
@@ -123,7 +123,7 @@ expression: "lines[start_idx..].join(\"\\n\")"
   shared at runtime across executables.
   - Heavy deps (HTTP/TLS): reqwest brings in Hyper, HTTP/2, compressors,
   and a TLS stack (rustls by default; OpenSSL on musl). In core, login, tui,
-  and ollama you enable reqwest with json/stream, which still pulls a large
+  which still pulls a large
   transitive set.
   - Image/terminal stack: ody-tui includes image (with jpeg), ratatui,
   crossterm, and ratatui-image, which together contribute significant code size

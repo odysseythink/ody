@@ -259,8 +259,8 @@ fn image_generation_is_stable_and_enabled_by_default() {
 }
 
 #[test]
-fn image_generation_extension_is_under_development_and_disabled_by_default() {
-    assert_eq!(Feature::ImageGenExt.stage(), Stage::UnderDevelopment);
+fn image_generation_extension_is_removed_and_disabled_by_default() {
+    assert_eq!(Feature::ImageGenExt.stage(), Stage::Removed);
     assert_eq!(Feature::ImageGenExt.default_enabled(), false);
     assert_eq!(feature_for_key("imagegenext"), Some(Feature::ImageGenExt));
 }

@@ -291,23 +291,6 @@ fn model_catalog_for_custom_chat_returns_fallback() {
     );
 }
 
-#[test]
-fn model_catalog_for_local_returns_fallback() {
-    let info = ModelProviderInfo {
-        wire_api: WireApi::Local,
-        ..Default::default()
-    };
-    let catalog = model_catalog_for_provider("ollama", &info)
-        .expect("local provider should return a fallback catalog");
-    assert!(!catalog.models.is_empty());
-    assert!(
-        catalog
-            .models
-            .iter()
-            .any(|m| m.used_fallback_model_metadata),
-        "local fallback model should be marked as fallback"
-    );
-}
 
 #[test]
 fn model_catalog_for_unknown_chat_returns_fallback() {
@@ -353,19 +336,4 @@ fn unknown_chat_provider_has_fallback_catalog_with_capabilities() {
     assert_eq!(model.capabilities.input_modalities, vec![InputModality::Text, InputModality::Image]);
     assert!(model.context_window.is_some());
     assert!(model.max_context_window.is_some());
-}
-
-#[test]
-fn unknown_local_provider_has_text_only_fallback() {
-    let info = ModelProviderInfo {
-        name: "Unknown Local".to_string(),
-        wire_api: WireApi::Local,
-        ..Default::default()
-    };
-    let catalog = model_catalog_for_provider("unknown-local", &info)
-        .expect("Local provider should always have a fallback catalog");
-    let model = &catalog.models[0];
-    assert!(model.capabilities.supports_tools);
-    assert_eq!(model.capabilities.input_modalities, vec![InputModality::Text]);
-    assert!(!model.capabilities.supports_vision);
 }

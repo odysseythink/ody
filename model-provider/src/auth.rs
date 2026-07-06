@@ -75,18 +75,9 @@ pub fn auth_provider_from_auth(auth: &OdyAuth) -> SharedAuthProvider {
 mod tests {
     use ody_model_provider_info::ModelProviderInfo;
     use ody_model_provider_info::WireApi;
-    use ody_model_provider_info::create_oss_provider_with_base_url;
 
     use super::*;
 
-    #[test]
-    fn unauthenticated_auth_provider_adds_no_headers() {
-        let provider =
-            create_oss_provider_with_base_url("http://localhost:11434/v1", WireApi::Responses);
-        let auth = resolve_provider_auth(/*auth*/ None, &provider).expect("auth should resolve");
-
-        assert!(auth.to_auth_headers().is_empty());
-    }
 
     #[test]
     fn api_key_auth_resolves_to_bearer_provider() {

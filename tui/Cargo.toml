@@ -59,7 +59,6 @@ ody-utils-cli = { workspace = true }
 ody-utils-elapsed = { workspace = true }
 ody-utils-fuzzy-match = { workspace = true }
 ody-utils-home-dir = { workspace = true }
-ody-utils-oss = { workspace = true }
 ody-utils-path = { workspace = true }
 ody-utils-path-uri = { workspace = true }
 ody-utils-plugins = { workspace = true }

@@ -7,7 +7,7 @@ use std::hash::Hasher;
 
 use thiserror::Error;
 
-const SYSTEM_SKILLS_DIR: Dir = include_dir::include_dir!("$CARGO_MANIFEST_DIR/src/assets/samples");
+const SYSTEM_SKILLS_DIR: Dir = include_dir::include_dir!("$CARGO_MANIFEST_DIR/src/assets/embedded");
 
 const SYSTEM_SKILLS_DIR_NAME: &str = ".system";
 const SKILLS_DIR_NAME: &str = "skills";
@@ -22,6 +22,13 @@ pub fn system_cache_root_dir(ody_home: &AbsolutePathBuf) -> AbsolutePathBuf {
 }
 
 /// Installs embedded system skills into `ODY_HOME/skills/.system`.
+///
+/// Embedded skills live under `src/assets/embedded` and include both system
+/// helper skills (skill-creator, skill-installer, plugin-creator) and the
+/// ody-code builtin skills (debt-ledger, dispatching-parallel-agents, etc.).
+/// They are copied to disk on first run and then discovered as a system-scope
+/// skill root, so they are available even when `~/.ody-code/skills` is empty
+/// or missing.
 ///
 /// `ody-core-skills` treats `.system` as a system-scope skill root, so skills
 /// installed here are automatically discovered by the unified registry through

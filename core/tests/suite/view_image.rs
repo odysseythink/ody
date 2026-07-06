@@ -1187,7 +1187,7 @@ async fn view_image_tool_errors_when_path_is_directory() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn view_image_tool_turns_invalid_image_into_placeholder() -> anyhow::Result<()> {
+async fn view_image_tool_rejects_non_image_file() -> anyhow::Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
@@ -1195,13 +1195,15 @@ async fn view_image_tool_turns_invalid_image_into_placeholder() -> anyhow::Resul
     let test = builder.build_with_remote_env(&server).await?;
     let TestOdy {
         ody,
+        config,
         session_configured,
         ..
     } = &test;
 
     let rel_path = "assets/invalid-image.json";
+    let abs_path = config.cwd.join(rel_path);
     write_workspace_file(&test, rel_path, br#"{ "message": "hello" }"#.to_vec()).await?;
-    let call_id = "view-image-invalid-placeholder";
+    let call_id = "view-image-invalid-non-image";
     let arguments = serde_json::json!({ "path": rel_path }).to_string();
 
     responses::mount_sse_once(
@@ -1213,7 +1215,7 @@ async fn view_image_tool_turns_invalid_image_into_placeholder() -> anyhow::Resul
         ]),
     )
     .await;
-    let second_mock = responses::mount_sse_once(
+    let mock = responses::mount_sse_once(
         &server,
         sse(vec![
             ev_assistant_message("msg-1", "done"),
@@ -1239,13 +1241,24 @@ async fn view_image_tool_turns_invalid_image_into_placeholder() -> anyhow::Resul
     )
     .await;
 
-    let request = second_mock.single_request();
-    assert_eq!(
-        request.function_call_output(call_id).get("output"),
-        Some(&serde_json::json!([{
-            "type": "input_text",
-            "text": "image content omitted because it could not be processed"
-        }]))
+    let req = mock.single_request();
+    let body_with_tool_output = req.body_json();
+    let output_text = req
+        .function_call_output_content_and_success(call_id)
+        .and_then(|(content, _)| content)
+        .expect("output text present");
+    let expected_prefix = format!(
+        "`{}` is not a recognized image file",
+        abs_path.display()
+    );
+    assert!(
+        output_text.starts_with(&expected_prefix),
+        "expected error to start with `{expected_prefix}` but got `{output_text}`"
+    );
+
+    assert!(
+        find_image_message(&body_with_tool_output).is_none(),
+        "non-image file should not produce an input_image message"
     );
     Ok(())
 }

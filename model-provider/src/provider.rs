@@ -23,7 +23,6 @@ use crate::auth::auth_manager_for_provider;
 use crate::auth::resolve_provider_auth;
 use crate::models_endpoint::OpenAiModelsEndpoint;
 use crate::adapters::chat::ChatAdapter;
-use crate::adapters::local::LocalAdapter;
 use crate::adapters::responses::ResponsesAdapter;
 use crate::chat_provider::ChatProvider;
 
@@ -263,11 +262,7 @@ impl ModelProvider for ConfiguredModelProvider {
                         provider_id_for_wire_api(&self.info),
                     ))
                 }
-                ody_model_provider_info::WireApi::Local => {
-                    Box::new(LocalAdapter::new(provider_id_for_wire_api(&self.info)))
-                }
-                ody_model_provider_info::WireApi::AnthropicMessages
-                | ody_model_provider_info::WireApi::GoogleGenAI => {
+                _ => {
                     return Err(OdyErr::InvalidRequest(format!(
                         "wire api {:?} is not yet supported by chat_provider",
                         self.info.wire_api
@@ -353,21 +348,8 @@ fn provider_id_for_wire_api(info: &ModelProviderInfo) -> &'static str {
         "glm"
     } else if info.is_odysseythink() {
         "openai-responses"
-    } else if info.wire_api == ody_model_provider_info::WireApi::Local {
-        provider_id_for_local(info)
     } else {
         "chat"
-    }
-}
-
-fn provider_id_for_local(info: &ModelProviderInfo) -> &'static str {
-    let name = info.name.to_ascii_lowercase();
-    if name.contains("ollama") {
-        "ollama"
-    } else if name.contains("lmstudio") {
-        "lmstudio"
-    } else {
-        "local"
     }
 }
 
@@ -537,16 +519,6 @@ mod tests {
         let provider = create_model_provider(info, None);
         let chat = provider.chat_provider().await.expect("selects adapter");
         assert_eq!(chat.provider_id(), "glm");
-    }
-
-    #[tokio::test]
-    async fn chat_provider_selects_local_adapter_for_ollama() {
-        let mut info = ModelProviderInfo::create_odysseythink_provider(None);
-        info.name = "ollama".into();
-        info.wire_api = WireApi::Local;
-        let provider = create_model_provider(info, None);
-        let chat = provider.chat_provider().await.expect("selects adapter");
-        assert_eq!(chat.provider_id(), "ollama");
     }
 
     #[tokio::test]

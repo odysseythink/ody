@@ -7,70 +7,6 @@ use std::num::NonZeroU64;
 use tempfile::tempdir;
 
 #[test]
-fn test_deserialize_ollama_model_provider_toml() {
-    let azure_provider_toml = r#"
-name = "Ollama"
-base_url = "http://localhost:11434/v1"
-        "#;
-    let expected_provider = ModelProviderInfo {
-        name: "Ollama".into(),
-        base_url: Some("http://localhost:11434/v1".into()),
-        env_key: None,
-        env_key_instructions: None,
-        experimental_bearer_token: None,
-        auth: None,
-        wire_api: WireApi::Responses,
-        query_params: None,
-        http_headers: None,
-        env_http_headers: None,
-        request_max_retries: None,
-        stream_max_retries: None,
-        stream_idle_timeout_ms: None,
-        websocket_connect_timeout_ms: None,
-        requires_odysseythink_auth: false,
-        supports_websockets: false,
-            capabilities: ProviderCapabilities::default(),
-    };
-
-    let provider: ModelProviderInfo = toml::from_str(azure_provider_toml).unwrap();
-    assert_eq!(expected_provider, provider);
-}
-
-#[test]
-fn test_deserialize_azure_model_provider_toml() {
-    let azure_provider_toml = r#"
-name = "Azure"
-base_url = "https://xxxxx.odysseythink.azure.com/odysseythink"
-env_key = "AZURE_OPENAI_API_KEY"
-query_params = { api-version = "2025-04-01-preview" }
-        "#;
-    let expected_provider = ModelProviderInfo {
-        name: "Azure".into(),
-        base_url: Some("https://xxxxx.odysseythink.azure.com/odysseythink".into()),
-        env_key: Some("AZURE_OPENAI_API_KEY".into()),
-        env_key_instructions: None,
-        experimental_bearer_token: None,
-        auth: None,
-        wire_api: WireApi::Responses,
-        query_params: Some(maplit::hashmap! {
-            "api-version".to_string() => "2025-04-01-preview".to_string(),
-        }),
-        http_headers: None,
-        env_http_headers: None,
-        request_max_retries: None,
-        stream_max_retries: None,
-        stream_idle_timeout_ms: None,
-        websocket_connect_timeout_ms: None,
-        requires_odysseythink_auth: false,
-        supports_websockets: false,
-            capabilities: ProviderCapabilities::default(),
-    };
-
-    let provider: ModelProviderInfo = toml::from_str(azure_provider_toml).unwrap();
-    assert_eq!(expected_provider, provider);
-}
-
-#[test]
 fn test_deserialize_example_model_provider_toml() {
     let azure_provider_toml = r#"
 name = "Example"
@@ -122,7 +58,7 @@ wire_api = "chat"
 
 #[test]
 fn built_in_chat_providers_are_registered() {
-    let providers = built_in_model_providers(/*odysseythink_base_url*/ None);
+    let providers = built_in_model_providers();
     for (id, env_key) in [
         ("kimi", "KIMI_API_KEY"),
         ("deepseek", "DEEPSEEK_API_KEY"),
@@ -248,14 +184,14 @@ fn test_merge_configured_model_providers_adds_custom_provider() {
     let configured_model_providers =
         std::collections::HashMap::from([("custom".to_string(), custom_provider.clone())]);
 
-    let mut expected = built_in_model_providers(/*odysseythink_base_url*/ None);
+    let mut expected = built_in_model_providers();
     let mut expected_custom = custom_provider;
     expected_custom.normalize_capabilities();
     expected.insert("custom".to_string(), expected_custom);
 
     assert_eq!(
         merge_configured_model_providers(
-            built_in_model_providers(/*odysseythink_base_url*/ None),
+            built_in_model_providers(),
             configured_model_providers,
         ),
         Ok(expected)
@@ -365,13 +301,6 @@ refresh_interval_ms = 0
 }
 
 #[test]
-fn built_in_oss_providers_use_local_wire_api() {
-    let providers = built_in_model_providers(/*odysseythink_base_url*/ None);
-    assert_eq!(providers["ollama"].wire_api, WireApi::Local);
-    assert_eq!(providers["lmstudio"].wire_api, WireApi::Local);
-}
-
-#[test]
 fn normalize_capabilities_fills_responses_defaults() {
     let mut provider = ModelProviderInfo {
         wire_api: WireApi::Responses,
@@ -425,7 +354,7 @@ fn normalize_capabilities_respects_explicit_values() {
 
 #[test]
 fn user_defined_provider_gets_wire_api_default_capabilities() {
-    let built_in = built_in_model_providers(None);
+    let built_in = built_in_model_providers();
     let mut configured = HashMap::new();
     configured.insert(
         "my-responses".to_string(),
@@ -447,7 +376,7 @@ fn user_defined_provider_gets_wire_api_default_capabilities() {
 
 #[test]
 fn user_defined_provider_with_explicit_capabilities_is_preserved() {
-    let built_in = built_in_model_providers(None);
+    let built_in = built_in_model_providers();
     let mut configured = HashMap::new();
     configured.insert(
         "my-chat".to_string(),
@@ -477,7 +406,7 @@ fn built_in_reserved_ids_cannot_be_overridden() {
             ..Default::default()
         },
     );
-    let merged = merge_configured_model_providers(built_in_model_providers(None), configured).unwrap();
+    let merged = merge_configured_model_providers(built_in_model_providers(), configured).unwrap();
     let kimi = merged.get(KIMI_PROVIDER_ID).unwrap();
     assert_eq!(kimi.name, "Kimi");
     assert_eq!(kimi.wire_api, WireApi::Chat);

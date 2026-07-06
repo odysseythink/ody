@@ -80,9 +80,7 @@ use ody_mcp::McpPluginAttribution;
 use ody_mcp::McpServerRegistration;
 use ody_mcp::ResolvedMcpCatalog;
 use ody_memories_read::memory_root;
-use ody_model_provider_info::LEGACY_OLLAMA_CHAT_PROVIDER_ID;
 use ody_model_provider_info::ModelProviderInfo;
-use ody_model_provider_info::OLLAMA_CHAT_PROVIDER_REMOVED_ERROR;
 use ody_model_provider_info::built_in_model_providers;
 use ody_model_provider_info::merge_configured_model_providers;
 use ody_models_manager::ModelsManagerConfig;
@@ -2134,21 +2132,7 @@ pub fn set_project_trust_level(
         .apply_blocking()
 }
 
-/// Save the default OSS provider preference to config.toml
-pub fn set_default_oss_provider(ody_home: &Path, provider: &str) -> std::io::Result<()> {
-    ody_config::config_toml::validate_oss_provider(provider)?;
-    use toml_edit::value;
 
-    let edits = [ConfigEdit::SetPath {
-        segments: vec!["oss_provider".to_string()],
-        value: value(provider),
-    }];
-
-    ConfigEditsBuilder::new(ody_home)
-        .with_edits(edits)
-        .apply_blocking()
-        .map_err(|err| std::io::Error::other(format!("failed to persist config.toml: {err}")))
-}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AgentRoleConfig {
@@ -2421,19 +2405,7 @@ fn dedupe_absolute_paths(paths: &mut Vec<AbsolutePathBuf>) {
     paths.retain(|path| seen.insert(path.clone()));
 }
 
-/// Resolves the OSS provider from CLI override or global config.
-/// Returns `None` if no provider is configured at any level.
-pub fn resolve_oss_provider(
-    explicit_provider: Option<&str>,
-    config_toml: &ConfigToml,
-) -> Option<String> {
-    if let Some(provider) = explicit_provider {
-        // Explicit provider specified (e.g., via --local-provider)
-        Some(provider.to_string())
-    } else {
-        config_toml.oss_provider.clone()
-    }
-}
+
 
 /// Resolve the web search mode from explicit config and feature flags.
 fn resolve_web_search_mode(config_toml: &ConfigToml, features: &Features) -> Option<WebSearchMode> {
@@ -3404,7 +3376,7 @@ impl Config {
         }
 
         let model_providers =
-            merge_configured_model_providers(built_in_model_providers(odysseythink_base_url), configured_model_providers)
+            merge_configured_model_providers(built_in_model_providers(), configured_model_providers)
                 .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidData, message))?;
         let model_provider_id = model_provider
             .or(ody_code_provider)
@@ -3413,12 +3385,10 @@ impl Config {
         let model_provider = model_providers
             .get(&model_provider_id)
             .ok_or_else(|| {
-                let message = if model_provider_id == LEGACY_OLLAMA_CHAT_PROVIDER_ID {
-                    OLLAMA_CHAT_PROVIDER_REMOVED_ERROR.to_string()
-                } else {
-                    format!("Model provider `{model_provider_id}` not found")
-                };
-                std::io::Error::new(std::io::ErrorKind::NotFound, message)
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("Model provider `{model_provider_id}` not found"),
+                )
             })?
             .clone();
 

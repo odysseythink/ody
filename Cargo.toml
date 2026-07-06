@@ -42,7 +42,6 @@ members = [
     "ext/extension-api",
     "ext/goal",
     "ext/guardian",
-    "ext/image-generation",
     "ext/memories",
     "ext/mcp",
     "ext/skills",
@@ -51,7 +50,6 @@ members = [
     "file-search",
     "file-watcher",
     "linux-sandbox",
-    "lmstudio",
     "login",
     "ody-mcp",
     "mcp-server",
@@ -60,7 +58,6 @@ members = [
     "model-provider-info",
     "models-manager",
     "network-proxy",
-    "ollama",
     "process-hardening",
     "protocol",
     "prompts",
@@ -90,7 +87,6 @@ members = [
     "utils/sandbox-summary",
     "utils/sleep-inhibitor",
     "utils/approval-presets",
-    "utils/oss",
     "utils/output-truncation",
     "utils/path-utils",
     "utils/plugins",
@@ -155,7 +151,6 @@ ody-execpolicy = { path = "execpolicy" }
 ody-extension-api = { path = "ext/extension-api" }
 ody-goal-extension = { path = "ext/goal" }
 ody-guardian = { path = "ext/guardian" }
-ody-image-generation-extension = { path = "ext/image-generation" }
 ody-experimental-api-macros = { path = "ody-experimental-api-macros" }
 ody-features = { path = "features" }
 ody-feedback = { path = "feedback" }
@@ -166,7 +161,6 @@ ody-git-utils = { path = "git-utils" }
 ody-hooks = { path = "hooks" }
 ody-keyring-store = { path = "keyring-store" }
 ody-linux-sandbox = { path = "linux-sandbox" }
-ody-lmstudio = { path = "lmstudio" }
 ody-login = { path = "login" }
 ody-message-history = { path = "message-history" }
 ody-memories-extension = { path = "ext/memories" }
@@ -179,7 +173,6 @@ ody-mcp-server = { path = "mcp-server" }
 ody-model-provider-info = { path = "model-provider-info" }
 ody-models-manager = { path = "models-manager" }
 ody-network-proxy = { path = "network-proxy" }
-ody-ollama = { path = "ollama" }
 ody-otel = { path = "otel" }
 ody-plugin = { path = "plugin" }
 ody-model-provider = { path = "model-provider" }
@@ -214,7 +207,6 @@ ody-utils-fuzzy-match = { path = "utils/fuzzy-match" }
 ody-utils-home-dir = { path = "utils/home-dir" }
 ody-utils-image = { path = "utils/image" }
 ody-utils-json-to-toml = { path = "utils/json-to-toml" }
-ody-utils-oss = { path = "utils/oss" }
 ody-utils-output-truncation = { path = "utils/output-truncation" }
 ody-utils-path = { path = "utils/path-utils" }
 ody-utils-path-uri = { path = "utils/path-uri" }

@@ -66,7 +66,6 @@ pub struct ConfigProfile {
     // Injects known feature keys into the schema and forbids unknown keys.
     #[schemars(schema_with = "crate::schema::features_schema")]
     pub features: Option<FeaturesToml>,
-    pub oss_provider: Option<String>,
 }
 
 /// TUI settings supported inside a named profile.

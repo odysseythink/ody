@@ -769,9 +769,6 @@
         "model_verbosity": {
           "$ref": "#/definitions/Verbosity"
         },
-        "oss_provider": {
-          "type": "string"
-        },
         "personality": {
           "$ref": "#/definitions/Personality"
         },
@@ -4748,27 +4745,6 @@
             "chat"
           ],
           "type": "string"
-        },
-        {
-          "description": "Anthropic Messages API at `/v1/messages`.",
-          "enum": [
-            "anthropic_messages"
-          ],
-          "type": "string"
-        },
-        {
-          "description": "Google GenAI API.",
-          "enum": [
-            "google_genai"
-          ],
-          "type": "string"
-        },
-        {
-          "description": "Local model servers (Ollama, LM Studio).",
-          "enum": [
-            "local"
-          ],
-          "type": "string"
         }
       ]
     },
@@ -5502,10 +5478,6 @@
         }
       ],
       "description": "Orchestrator-owned feature settings."
-    },
-    "oss_provider": {
-      "description": "Preferred OSS provider for local models, e.g. \"lmstudio\" or \"ollama\".",
-      "type": "string"
     },
     "otel": {
       "allOf": [

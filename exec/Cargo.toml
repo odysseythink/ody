@@ -37,7 +37,6 @@ ody-otel = { workspace = true }
 ody-protocol = { workspace = true }
 ody-utils-absolute-path = { workspace = true }
 ody-utils-cli = { workspace = true }
-ody-utils-oss = { workspace = true }
 ody-utils-sandbox-summary = { workspace = true }
 owo-colors = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

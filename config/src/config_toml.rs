@@ -31,12 +31,8 @@ use ody_features::FeaturesToml;
 use ody_model_provider_info::DEEPSEEK_PROVIDER_ID;
 use ody_model_provider_info::GLM_PROVIDER_ID;
 use ody_model_provider_info::KIMI_PROVIDER_ID;
-use ody_model_provider_info::LEGACY_OLLAMA_CHAT_PROVIDER_ID;
-use ody_model_provider_info::LMSTUDIO_OSS_PROVIDER_ID;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::ProviderCapabilities;
-use ody_model_provider_info::OLLAMA_CHAT_PROVIDER_REMOVED_ERROR;
-use ody_model_provider_info::OLLAMA_OSS_PROVIDER_ID;
 use ody_model_provider_info::OPENAI_PROVIDER_ID;
 use ody_protocol::config_types::AutoCompactTokenLimitScope;
 use ody_protocol::config_types::ForcedLoginMethod;
@@ -61,10 +57,8 @@ use serde::Serialize;
 
 use serde_json::Value as JsonValue;
 
-const RESERVED_MODEL_PROVIDER_IDS: [&str; 6] = [
+const RESERVED_MODEL_PROVIDER_IDS: [&str; 4] = [
     OPENAI_PROVIDER_ID,
-    OLLAMA_OSS_PROVIDER_ID,
-    LMSTUDIO_OSS_PROVIDER_ID,
     KIMI_PROVIDER_ID,
     DEEPSEEK_PROVIDER_ID,
     GLM_PROVIDER_ID,
@@ -583,8 +577,6 @@ pub struct ConfigToml {
 
     pub experimental_compact_prompt_file: Option<AbsolutePathBuf>,
     pub experimental_use_unified_exec_tool: Option<bool>,
-    /// Preferred OSS provider for local models, e.g. "lmstudio" or "ollama".
-    pub oss_provider: Option<String>,
 }
 
 /// Ody-code compatible provider configuration.
@@ -623,7 +615,6 @@ impl ConfigToml {
                     "openai" | "openai_responses" => WireApi::Responses,
                     "anthropic" => WireApi::AnthropicMessages,
                     "google-genai" | "vertexai" => WireApi::GoogleGenAI,
-                    "ollama" | "lmstudio" => WireApi::Local,
                     "kimi" | "deepseek" | "glm" => WireApi::Chat,
                     _ => WireApi::Chat,
                 };
@@ -677,11 +668,6 @@ fn provider_display_name(provider_type: &str) -> String {
         "deepseek" => "DeepSeek".to_string(),
         "glm" => "GLM".to_string(),
         "openai" | "openai_responses" => "OpenAI".to_string(),
-        "anthropic" => "Anthropic".to_string(),
-        "vertexai" => "Vertex AI".to_string(),
-        "google-genai" => "Google GenAI".to_string(),
-        "ollama" => "Ollama".to_string(),
-        "lmstudio" => "LM Studio".to_string(),
         other => {
             let mut chars = other.chars();
             match chars.next() {
@@ -1114,21 +1100,7 @@ where
     Ok(model_providers)
 }
 
-pub fn validate_oss_provider(provider: &str) -> std::io::Result<()> {
-    match provider {
-        LMSTUDIO_OSS_PROVIDER_ID | OLLAMA_OSS_PROVIDER_ID => Ok(()),
-        LEGACY_OLLAMA_CHAT_PROVIDER_ID => Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            OLLAMA_CHAT_PROVIDER_REMOVED_ERROR,
-        )),
-        _ => Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            format!(
-                "Invalid OSS provider '{provider}'. Must be one of: {LMSTUDIO_OSS_PROVIDER_ID}, {OLLAMA_OSS_PROVIDER_ID}"
-            ),
-        )),
-    }
-}
+
 
 #[cfg(test)]
 mod tests {
@@ -1264,38 +1236,6 @@ default_model = "kimi-for-coding"
         let (provider, model) = config.resolve_ody_code_default_model();
         assert_eq!(provider, Some("kimi_gyy".to_string()));
         assert_eq!(model, Some("kimi-for-coding".to_string()));
-    }
-
-    #[test]
-    fn convert_ody_code_ollama_type_is_local() {
-        let config: ConfigToml = toml::from_str(
-            r#"
-[providers.local_ollama]
-type = "ollama"
-"#,
-        )
-        .expect("config should deserialize");
-        let converted = config.convert_ody_code_providers();
-        let provider = converted.get("local_ollama").expect("provider");
-        assert_eq!(provider.wire_api, WireApi::Local);
-        assert_eq!(provider.name, "Ollama");
-        assert_eq!(provider.capabilities, ProviderCapabilities::default());
-    }
-
-    #[test]
-    fn convert_ody_code_lmstudio_type_is_local() {
-        let config: ConfigToml = toml::from_str(
-            r#"
-[providers.local_lmstudio]
-type = "lmstudio"
-"#,
-        )
-        .expect("config should deserialize");
-        let converted = config.convert_ody_code_providers();
-        let provider = converted.get("local_lmstudio").expect("provider");
-        assert_eq!(provider.wire_api, WireApi::Local);
-        assert_eq!(provider.name, "LM Studio");
-        assert_eq!(provider.capabilities, ProviderCapabilities::default());
     }
 
     #[test]

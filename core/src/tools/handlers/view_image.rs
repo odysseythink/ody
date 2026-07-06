@@ -181,6 +181,16 @@ impl ViewImageHandler {
                     abs_path.display()
                 ))
             })?;
+
+        // Reject files that are not recognized images. This prevents text/code files
+        // from being ingested as images and rendered as "Viewed Image" in the UI.
+        if image::guess_format(&file_bytes).is_err() {
+            return Err(FunctionCallError::RespondToModel(format!(
+                "`{}` is not a recognized image file. Use a text-reading tool for non-image files.",
+                abs_path.display()
+            )));
+        }
+
         let event_path = abs_path.clone();
 
         let can_request_original_detail = can_request_original_image_detail(&turn.model_info);
@@ -383,7 +393,8 @@ mod tests {
 
         replace_primary_environment_cwd(&mut turn, image_cwd.clone());
         let image_path = image_cwd.join("image.png");
-        std::fs::write(image_path.as_path(), b"not a real image").expect("write test image");
+        let image = image::ImageBuffer::from_pixel(1, 1, image::Rgba([10u8, 20, 30, 255]));
+        image.save(image_path.as_path()).expect("write test image");
         turn.permission_profile = PermissionProfile::Disabled;
 
         let result = ViewImageHandler::default()
@@ -402,5 +413,41 @@ mod tests {
             .await;
 
         result.expect("explicit high detail should be accepted");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn handle_rejects_non_image_file() {
+        let (session, mut turn) = make_session_and_context().await;
+        let image_dir = tempfile::tempdir().expect("create image temp dir");
+        let image_cwd = image_dir.abs();
+
+        replace_primary_environment_cwd(&mut turn, image_cwd.clone());
+        let file_path = image_cwd.join("notes.json");
+        std::fs::write(file_path.as_path(), br#"{ "message": "hello" }"#)
+            .expect("write test file");
+        turn.permission_profile = PermissionProfile::Disabled;
+
+        let result = ViewImageHandler::default()
+            .handle(ToolInvocation {
+                session: Arc::new(session),
+                turn: Arc::new(turn),
+                cancellation_token: tokio_util::sync::CancellationToken::new(),
+                tracker: Arc::new(Mutex::new(TurnDiffTracker::new())),
+                call_id: "call-view-image".to_string(),
+                tool_name: ody_tools::ToolName::plain("view_image"),
+                source: ToolCallSource::Direct,
+                payload: ToolPayload::Function {
+                    arguments: json!({ "path": "notes.json" }).to_string(),
+                },
+            })
+            .await;
+
+        let Err(FunctionCallError::RespondToModel(message)) = result else {
+            panic!("expected non-image file error");
+        };
+        assert!(
+            message.contains("is not a recognized image file"),
+            "{message}"
+        );
     }
 }

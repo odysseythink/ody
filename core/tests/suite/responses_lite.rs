@@ -6,7 +6,6 @@ use ody_core::config::Config;
 use ody_extension_api::ExtensionRegistry;
 use ody_extension_api::ExtensionRegistryBuilder;
 use ody_features::Feature;
-use ody_image_generation_extension::install as install_image_generation_extension;
 use ody_login::OdyAuth;
 use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::models::ImageDetail;
@@ -27,8 +26,7 @@ const RESPONSES_LITE_HEADER: &str = "x-odysseythink-internal-ody-responses-lite"
 fn responses_extensions(auth: &OdyAuth) -> Arc<ExtensionRegistry<Config>> {
     let auth_manager = ody_core::test_support::auth_manager_from_auth(auth.clone());
     let mut extension_builder = ExtensionRegistryBuilder::<Config>::new();
-    install_web_search_extension(&mut extension_builder, Arc::clone(&auth_manager));
-    install_image_generation_extension(&mut extension_builder, auth_manager);
+    install_web_search_extension(&mut extension_builder, auth_manager);
     Arc::new(extension_builder.build())
 }
 
@@ -41,7 +39,6 @@ fn configure_responses_tools(config: &mut Config) {
             .is_ok()
     );
     assert!(config.features.enable(Feature::ImageGeneration).is_ok());
-    assert!(config.features.disable(Feature::ImageGenExt).is_ok());
 }
 
 fn configure_image_capable_model(model_info: &mut ody_protocol::odysseythink_models::ModelInfo) {
@@ -125,7 +122,7 @@ async fn responses_lite_prepares_images() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn responses_lite_uses_standalone_web_search_and_image_generation() -> Result<()> {
+async fn responses_lite_uses_standalone_web_search() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = responses::start_mock_server().await;
@@ -161,16 +158,12 @@ async fn responses_lite_uses_standalone_web_search_and_image_generation() -> Res
     request
         .tool_by_name("web", "run")
         .context("Responses Lite should expose standalone web search")?;
-    request
-        .tool_by_name("image_gen", "imagegen")
-        .context("Responses Lite should expose standalone image generation")?;
 
     let body = request.body_json();
     let tools = body["tools"]
         .as_array()
         .context("Responses request tools should be an array")?;
     assert!(!has_hosted_tool(tools, "web_search"));
-    assert!(!has_hosted_tool(tools, "image_generation"));
 
     Ok(())
 }
@@ -231,7 +224,7 @@ async fn responses_lite_compact_request_uses_lite_transport_contract() -> Result
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn responses_lite_omits_hosted_tools_without_standalone_extensions() -> Result<()> {
+async fn responses_lite_omits_hosted_web_search_without_standalone_extension() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = responses::start_mock_server().await;
@@ -260,13 +253,12 @@ async fn responses_lite_omits_hosted_tools_without_standalone_extensions() -> Re
         .as_array()
         .context("Responses request tools should be an array")?;
     assert!(!has_hosted_tool(tools, "web_search"));
-    assert!(!has_hosted_tool(tools, "image_generation"));
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn non_lite_uses_hosted_tools_when_standalone_features_are_disabled() -> Result<()> {
+async fn non_lite_uses_hosted_web_search_when_standalone_feature_is_disabled() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = responses::start_mock_server().await;
@@ -293,13 +285,11 @@ async fn non_lite_uses_hosted_tools_when_standalone_features_are_disabled() -> R
     let request = response_mock.single_request();
     assert_eq!(request.header(RESPONSES_LITE_HEADER), None);
     assert!(request.tool_by_name("web", "run").is_none());
-    assert!(request.tool_by_name("image_gen", "imagegen").is_none());
     let body = request.body_json();
     let tools = body["tools"]
         .as_array()
         .context("Responses request tools should be an array")?;
     assert!(has_hosted_tool(tools, "web_search"));
-    assert!(has_hosted_tool(tools, "image_generation"));
 
     Ok(())
 }

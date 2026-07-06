@@ -96,7 +96,7 @@ fn code_mode_custom_tool_output_text(output_item: &Value) -> String {
 
 fn non_odysseythink_model_provider(server: &wiremock::MockServer) -> ModelProviderInfo {
     let mut provider =
-        built_in_model_providers(/* odysseythink_base_url */ /*odysseythink_base_url*/ None)["odysseythink"].clone();
+        built_in_model_providers()["odysseythink"].clone();
     provider.name = "OpenAI (test)".into();
     provider.base_url = Some(format!("{}/v1", server.uri()));
     provider.supports_websockets = false;

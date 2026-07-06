@@ -47,11 +47,6 @@ pub fn default_model_capabilities_for_wire_api(wire_api: WireApi) -> ModelCapabi
             input_modalities: vec![Text, Image],
             ..Default::default()
         },
-        WireApi::Local => ModelCapabilities {
-            supports_tools: true,
-            input_modalities: vec![Text],
-            ..Default::default()
-        },
     }
 }
 
@@ -211,11 +206,11 @@ pub fn model_info_from_slug_with_provider(
 
 /// Build a minimal fallback model descriptor for missing/unknown slugs.
 ///
-/// This is a convenience wrapper that falls back to conservative Local provider
+/// This is a convenience wrapper that falls back to conservative Chat provider
 /// defaults. Prefer `model_info_from_slug_with_provider` when the active
 /// provider is known.
 pub fn model_info_from_slug(slug: &str) -> ModelInfo {
-    model_info_from_slug_with_provider(slug, slug, WireApi::Local, &ProviderCapabilities::default())
+    model_info_from_slug_with_provider(slug, slug, WireApi::Chat, &ProviderCapabilities::default())
 }
 
 /// Bundled or fallback model catalog for a provider.
@@ -261,13 +256,7 @@ pub fn model_catalog_for_provider(
                 .collect();
             Some(ModelsResponse { models })
         }
-        WireApi::Local => {
-            let model = fallback_catalog_model(provider_id, WireApi::Local, 32_768);
-            Some(ModelsResponse {
-                models: vec![model],
-            })
-        }
-        WireApi::Responses | WireApi::AnthropicMessages | WireApi::GoogleGenAI => None,
+        _ => None,
     }
 }
 

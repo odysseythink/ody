@@ -1,6 +1,0 @@
-load("//:defs.bzl", "ody_rust_crate")
-
-ody_rust_crate(
-    name = "lmstudio",
-    crate_name = "ody_lmstudio",
-)

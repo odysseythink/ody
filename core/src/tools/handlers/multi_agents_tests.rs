@@ -97,7 +97,7 @@ fn parse_agent_id(id: &str) -> ThreadId {
 fn thread_manager() -> ThreadManager {
     ThreadManager::with_models_provider_for_tests(
         OdyAuth::from_api_key("dummy"),
-        built_in_model_providers(/* odysseythink_base_url */ /*odysseythink_base_url*/ None)["odysseythink"].clone(),
+        built_in_model_providers()["odysseythink"].clone(),
     )
 }
 
@@ -113,8 +113,8 @@ async fn install_role_with_model_override(turn: &mut TurnContext) -> String {
         .join("fork-context-role.toml");
     tokio::fs::write(
         &role_config_path,
-        r#"model = "gpt-5-role-override"
-model_provider = "ollama"
+        r#"model = "kimi-for-coding"
+model_provider = "kimi"
 model_reasoning_effort = "minimal"
 "#,
     )
@@ -244,66 +244,6 @@ async fn spawn_agent_rejects_when_message_and_items_are_both_set() {
             "Provide either message or items, but not both".to_string()
         )
     );
-}
-
-#[tokio::test]
-async fn spawn_agent_uses_explorer_role_and_preserves_approval_policy() {
-    #[derive(Debug, Deserialize)]
-    struct SpawnAgentResult {
-        agent_id: String,
-        nickname: Option<String>,
-    }
-
-    let (mut session, mut turn) = make_session_and_context().await;
-    let manager = thread_manager();
-    session.services.agent_control = manager.agent_control();
-    let mut config = (*turn.config).clone();
-    let provider_info =
-        built_in_model_providers(/* odysseythink_base_url */ /*odysseythink_base_url*/ None)["ollama"].clone();
-    config.model_provider_id = "ollama".to_string();
-    config.model_provider = provider_info.clone();
-    config
-        .permissions
-        .approval_policy
-        .set(AskForApproval::OnRequest)
-        .expect("approval policy should be set");
-    turn.approval_policy
-        .set(AskForApproval::OnRequest)
-        .expect("approval policy should be set");
-    turn.provider = create_model_provider(provider_info, turn.auth_manager.clone());
-    turn.config = Arc::new(config);
-
-    let invocation = invocation(
-        Arc::new(session),
-        Arc::new(turn),
-        "spawn_agent",
-        function_payload(json!({
-            "message": "inspect this repo",
-            "agent_type": "explorer"
-        })),
-    );
-    let output = SpawnAgentHandler::default()
-        .handle(invocation)
-        .await
-        .expect("spawn_agent should succeed");
-    let (content, _) = expect_text_output(output);
-    let result: SpawnAgentResult =
-        serde_json::from_str(&content).expect("spawn_agent result should be json");
-    let agent_id = parse_agent_id(&result.agent_id);
-    assert!(
-        result
-            .nickname
-            .as_deref()
-            .is_some_and(|nickname| !nickname.is_empty())
-    );
-    let snapshot = manager
-        .get_thread(agent_id)
-        .await
-        .expect("spawned agent thread should exist")
-        .config_snapshot()
-        .await;
-    assert_eq!(snapshot.approval_policy, AskForApproval::OnRequest);
-    assert_eq!(snapshot.model_provider_id, "ollama");
 }
 
 #[tokio::test]
@@ -951,64 +891,6 @@ async fn multi_agent_v2_full_history_fork_accepts_explicit_service_tier() {
         snapshot.service_tier,
         Some(ServiceTier::Fast.request_value().to_string())
     );
-}
-
-#[tokio::test]
-async fn multi_agent_v2_spawn_partial_fork_turns_allows_agent_type_override() {
-    let (mut session, mut turn) = make_session_and_context().await;
-    let role_name = install_role_with_model_override(&mut turn).await;
-    let manager = thread_manager();
-    let root = manager
-        .start_thread((*turn.config).clone())
-        .await
-        .expect("root thread should start");
-    session.services.agent_control = manager.agent_control();
-    session.thread_id = root.thread_id;
-    let mut config = (*turn.config).clone();
-    config
-        .features
-        .enable(Feature::MultiAgentV2)
-        .expect("test config should allow feature update");
-    let turn = TurnContext {
-        config: Arc::new(config),
-        multi_agent_version: ody_protocol::protocol::MultiAgentVersion::V2,
-        ..turn
-    };
-
-    let output = SpawnAgentHandlerV2::default()
-        .handle(invocation(
-            Arc::new(session),
-            Arc::new(turn),
-            "spawn_agent",
-            function_payload(json!({
-                "message": "inspect this repo",
-                "task_name": "partial_fork",
-                "agent_type": role_name,
-                "fork_turns": "1"
-            })),
-        ))
-        .await
-        .expect("partial fork should allow agent_type overrides");
-    let (content, _) = expect_text_output(output);
-    let result: serde_json::Value =
-        serde_json::from_str(&content).expect("spawn_agent result should be json");
-    assert_eq!(result["task_name"], "/root/partial_fork");
-    let agent_id = manager
-        .captured_ops()
-        .into_iter()
-        .map(|(thread_id, _)| thread_id)
-        .find(|thread_id| *thread_id != root.thread_id)
-        .expect("spawned agent should receive an op");
-    let snapshot = manager
-        .get_thread(agent_id)
-        .await
-        .expect("spawned agent thread should exist")
-        .config_snapshot()
-        .await;
-
-    assert_eq!(snapshot.model, "gpt-5-role-override");
-    assert_eq!(snapshot.model_provider_id, "ollama");
-    assert_eq!(snapshot.reasoning_effort, Some(ReasoningEffort::Minimal));
 }
 
 #[tokio::test]

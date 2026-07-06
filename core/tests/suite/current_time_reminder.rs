@@ -188,7 +188,7 @@ async fn current_time_reminder_is_refreshed_after_compaction() -> Result<()> {
         ],
     )
     .await;
-    let mut model_provider = built_in_model_providers(/*odysseythink_base_url*/ None)["odysseythink"].clone();
+    let mut model_provider = built_in_model_providers()["odysseythink"].clone();
     model_provider.name = "OpenAI-compatible test provider".to_string();
     model_provider.base_url = Some(format!("{}/v1", server.uri()));
     model_provider.supports_websockets = false;

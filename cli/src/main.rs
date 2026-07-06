@@ -1873,8 +1873,7 @@ async fn run_debug_prompt_input_command(
         cwd: shared.cwd,
         ody_self_exe: arg0_paths.ody_self_exe,
         ody_linux_sandbox_exe: arg0_paths.ody_linux_sandbox_exe,
-        main_execve_wrapper_exe: arg0_paths.main_execve_wrapper_exe,
-        show_raw_agent_reasoning: shared.oss.then_some(true),
+        main_execve_wrapper_exe: arg0_paths.main_execve_wrapper_exe,        show_raw_agent_reasoning: None,
         ephemeral: Some(true),
         bypass_hook_trust: shared.bypass_hook_trust.then_some(true),
         additional_writable_roots: shared.add_dir,
@@ -3295,7 +3294,6 @@ mod tests {
                 "ody",
                 "resume",
                 "sid",
-                "--oss",
                 "--search",
                 "--sandbox",
                 "workspace-write",
@@ -3315,7 +3313,6 @@ mod tests {
         );
 
         assert_eq!(interactive.model.as_deref(), Some("gpt-5.1-test"));
-        assert!(interactive.oss);
         assert_eq!(interactive.config_profile_v2.as_deref(), Some("my-config"));
         assert_matches!(
             interactive.sandbox_mode,

@@ -195,7 +195,7 @@ pub enum Feature {
     ExternalMigration,
     /// Allow the model to invoke the built-in image generation tool.
     ImageGeneration,
-    /// Replace hosted image generation with the standalone image-generation extension.
+    /// Removed compatibility flag for the standalone image-generation extension.
     ImageGenExt,
     /// Removed compatibility flag for always-on centralized image preparation.
     ResizeAllImages,
@@ -1162,7 +1162,7 @@ pub const FEATURES: &[FeatureSpec] = &[
     FeatureSpec {
         id: Feature::ImageGenExt,
         key: "imagegenext",
-        stage: Stage::UnderDevelopment,
+        stage: Stage::Removed,
         default_enabled: false,
     },
     FeatureSpec {
