@@ -31,3 +31,27 @@ fn skill_metadata_supports_ody_code_aligned_fields() {
     assert!(!meta.is_model_invocable(ModeKind::Default));
     assert!(!meta.is_model_invocable(ModeKind::Plan));
 }
+
+#[test]
+fn skill_metadata_inline_is_model_invocable_by_default() {
+    let path = AbsolutePathBuf::try_from("/tmp/skills/inline/SKILL.md").unwrap();
+    let meta = SkillMetadata {
+        name: "inline-skill".to_string(),
+        description: "An inline skill.".to_string(),
+        short_description: None,
+        interface: None,
+        dependencies: None,
+        policy: None,
+        path_to_skills_md: path,
+        scope: ody_protocol::protocol::SkillScope::User,
+        plugin_id: None,
+        skill_type: SkillType::Inline,
+        triggers: Vec::new(),
+        hidden_in_modes: Vec::new(),
+        disable_model_invocation: false,
+        mermaid: None,
+        d2: None,
+    };
+    assert!(meta.is_model_invocable(ModeKind::Default));
+    assert!(meta.is_model_invocable(ModeKind::Plan));
+}

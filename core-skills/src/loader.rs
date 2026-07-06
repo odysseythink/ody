@@ -1249,28 +1249,40 @@ fn normalize_triggers(triggers: Option<Vec<String>>) -> Vec<String> {
 }
 
 fn parse_hidden_mode(raw: &str) -> Result<ModeKind, SkillParseError> {
-    match raw.trim().to_ascii_lowercase().as_str() {
-        "plan" => Ok(ModeKind::Plan),
-        "default" | "code" | "pair_programming" | "execute" | "custom" => Ok(ModeKind::Default),
-        other => Err(SkillParseError::InvalidField {
-            field: "hidden_in_modes",
-            reason: format!("unsupported mode: {other}"),
-        }),
-    }
+    // Deserialize using ModeKind's serde impl so we automatically respect its
+    // declared aliases (e.g. "code", "pair_programming", "execute", "custom"
+    // for ModeKind::Default). If ModeKind gains or loses aliases, this stays in
+    // sync without a manual mapping table.
+    serde_yaml::from_str(raw.trim()).map_err(|_| SkillParseError::InvalidField {
+        field: "hidden_in_modes",
+        reason: format!("unsupported mode: {raw}"),
+    })
 }
 
 fn extract_fenced_block(contents: &str, language: &str) -> Option<String> {
     let fence_start = format!("```{language}");
     let mut lines = contents.lines();
     while let Some(line) = lines.next() {
-        if line.trim_start().starts_with(&fence_start) {
-            let body: Vec<&str> = lines
-                .by_ref()
-                .take_while(|line| !line.trim_start().starts_with("```"))
-                .collect();
-            if !body.is_empty() {
-                return Some(body.join("\n"));
-            }
+        let trimmed = line.trim_start();
+        let Some(rest) = trimmed.strip_prefix(&fence_start) else {
+            continue;
+        };
+        // The opening fence must be followed only by whitespace (or end-of-line),
+        // so ```mermaid does not match a request for ```mermaid2.
+        if !rest.trim().is_empty() {
+            continue;
+        }
+        let body: Vec<&str> = lines
+            .by_ref()
+            .take_while(|line| {
+                let trimmed = line.trim_start();
+                trimmed
+                    .strip_prefix("```")
+                    .map_or(true, |rest| !rest.trim().is_empty())
+            })
+            .collect();
+        if !body.is_empty() {
+            return Some(body.join("\n"));
         }
     }
     None

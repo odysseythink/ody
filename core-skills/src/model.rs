@@ -39,7 +39,7 @@ pub struct SkillMetadata {
     pub path_to_skills_md: AbsolutePathBuf,
     pub scope: SkillScope,
     pub plugin_id: Option<String>,
-    // new ody-code-aligned fields
+    // Fields that control how the skill is discovered, triggered, and presented at runtime.
     pub skill_type: SkillType,
     pub triggers: Vec<String>,
     pub hidden_in_modes: Vec<RuntimeMode>,

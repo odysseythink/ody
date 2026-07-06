@@ -21,6 +21,7 @@ use ody_extension_api::ThreadStartInput;
 use ody_extension_api::ToolCall;
 use ody_extension_api::ToolPayload;
 use ody_extension_api::TurnInputContext;
+use ody_exec_server::EnvironmentManager;
 use ody_protocol::capabilities::CapabilityRootLocation;
 use ody_protocol::capabilities::SelectedCapabilityRoot;
 use ody_protocol::protocol::Event;
@@ -31,6 +32,7 @@ use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::SkillScope;
 use ody_protocol::protocol::TruncationPolicy;
 use ody_protocol::user_input::UserInput;
+use ody_skills_extension::ExecutorSkillProvider;
 use ody_skills_extension::HostSkillProvider;
 use ody_skills_extension::SkillProviders;
 use ody_skills_extension::SkillsExtensionConfig;
@@ -692,35 +694,6 @@ fn test_entry(
     .with_display_path(format!("skill://{package_id}/SKILL.md"))
 }
 
-fn test_entry_with_metadata(
-    kind: SkillSourceKind,
-    authority_id: &str,
-    name: &str,
-    resource: &str,
-    metadata: SkillMetadata,
-) -> SkillCatalogEntry {
-    let authority = SkillAuthority::new(kind.clone(), authority_id);
-    let resource_id = match kind {
-        SkillSourceKind::Executor => SkillResourceId::environment(
-            resource.to_string(),
-            authority_id,
-            metadata.path_to_skills_md.clone(),
-        ),
-        _ => SkillResourceId::new(resource),
-    };
-    SkillCatalogEntry::new(
-        SkillPackageId(name.to_string()),
-        authority,
-        metadata.name,
-        metadata.description,
-        resource_id,
-    )
-    .with_skill_type(metadata.skill_type)
-    .with_triggers(metadata.triggers)
-    .with_hidden_in_modes(metadata.hidden_in_modes)
-    .with_disable_model_invocation(metadata.disable_model_invocation)
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct TestConfig {
     include_instructions: bool,
@@ -815,31 +788,54 @@ async fn host_provider_maps_new_metadata_fields() {
 
 #[tokio::test]
 async fn executor_provider_maps_new_metadata_fields() {
-    let entry = test_entry_with_metadata(
-        SkillSourceKind::Executor,
-        "env-1",
-        "executor/review",
-        "review/SKILL.md",
-        SkillMetadata {
-            name: "executor-review".to_string(),
-            description: "Executor review.".to_string(),
-            short_description: None,
-            interface: None,
-            dependencies: None,
-            policy: None,
-            path_to_skills_md: AbsolutePathBuf::try_from("/review/SKILL.md").unwrap(),
-            scope: SkillScope::User,
-            plugin_id: None,
-            skill_type: SkillType::Knowledge,
-            triggers: vec!["review".to_string()],
-            hidden_in_modes: vec![ModeKind::Plan],
-            disable_model_invocation: true,
-            mermaid: None,
-            d2: None,
-        },
+    let test_root = test_ody_home();
+    let skill_dir = test_root.join("executor-review");
+    std::fs::create_dir_all(&skill_dir).unwrap();
+    std::fs::write(
+        skill_dir.join("SKILL.md"),
+        "---\nname: executor-review\ndescription: Executor review.\ntype: knowledge\ntriggers:\n  - review\nhidden_in_modes:\n  - plan\ndisable_model_invocation: true\n---\n# Executor Review\n",
+    )
+    .unwrap();
+
+    let provider = ExecutorSkillProvider::new_with_restriction_product(
+        Arc::new(EnvironmentManager::default_for_tests()),
+        /*restriction_product*/ None,
     );
+    let catalog = provider
+        .list(SkillListQuery {
+            turn_id: "turn-1".to_string(),
+            executor_roots: vec![SelectedCapabilityRoot {
+                id: "root-1".to_string(),
+                location: CapabilityRootLocation::Environment {
+                    environment_id: "local".to_string(),
+                    path: test_root.to_string_lossy().into_owned(),
+                },
+            }],
+            host_snapshot: None,
+            include_host_skills: false,
+            include_bundled_skills: true,
+            include_orchestrator_skills: false,
+            mcp_resources: None,
+        })
+        .await
+        .expect("list executor skills");
+
+    assert!(
+        catalog.warnings.is_empty(),
+        "unexpected warnings: {:?}",
+        catalog.warnings
+    );
+    let entry = catalog
+        .entries
+        .iter()
+        .find(|e| e.name == "executor-review")
+        .expect("executor skill should be in catalog");
     assert!(matches!(entry.skill_type, SkillType::Knowledge));
     assert_eq!(entry.triggers, vec!["review"]);
     assert!(entry.hidden_in_modes.contains(&ModeKind::Plan));
     assert!(entry.disable_model_invocation);
+
+    std::fs::remove_dir_all(test_root).unwrap_or_else(|err| {
+        eprintln!("failed to remove temp dir: {err}");
+    });
 }
