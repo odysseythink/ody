@@ -25,6 +25,10 @@ fn is_default_max_contents_bytes(value: &usize) -> bool {
     *value == default_max_contents_bytes()
 }
 
+fn is_true(value: &bool) -> bool {
+    *value
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct SkillConfig {
@@ -72,6 +76,13 @@ pub struct SkillsConfig {
     /// Whether model tools are enabled in the executor (subagent) model.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub executor_model_tools_enabled: Option<bool>,
+
+    /// Whether to use the legacy core-only host skill injection path.
+    ///
+    /// Defaults to `true` in T3.1.1 for backwards compatibility. Will default to
+    /// `false` in T3.1.2 and be removed in T3.1.3.
+    #[serde(default = "default_enabled", skip_serializing_if = "is_true")]
+    pub legacy_host_skill_injection: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema)]

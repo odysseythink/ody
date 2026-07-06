@@ -336,6 +336,7 @@ enabled = false
             knowledge_max_contents_bytes: 8_000,
             host_model_tools_enabled: None,
             executor_model_tools_enabled: None,
+            legacy_host_skill_injection: true,
         })
     );
 }

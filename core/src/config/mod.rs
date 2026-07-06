@@ -698,6 +698,9 @@ pub struct Config {
     /// Whether to inject the `<skills_instructions>` developer block.
     pub include_skill_instructions: bool,
 
+    /// Whether to use the legacy core-only host skill injection path.
+    pub legacy_host_skill_injection: bool,
+
     /// Whether orchestrator-owned skills are exposed to the model.
     pub orchestrator_skills_enabled: bool,
 
@@ -3586,6 +3589,11 @@ impl Config {
             .as_ref()
             .and_then(|skills| skills.include_instructions)
             .unwrap_or(true);
+        let legacy_host_skill_injection = cfg
+            .skills
+            .as_ref()
+            .map(|skills| skills.legacy_host_skill_injection)
+            .unwrap_or(true);
         let knowledge_microagents_enabled = cfg
             .skills
             .as_ref()
@@ -3807,6 +3815,7 @@ impl Config {
             include_apps_instructions,
             include_collaboration_mode_instructions,
             include_skill_instructions,
+            legacy_host_skill_injection,
             orchestrator_skills_enabled,
             knowledge_microagents_enabled,
             knowledge_max_skills_per_turn,
