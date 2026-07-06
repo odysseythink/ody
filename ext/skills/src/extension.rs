@@ -89,6 +89,9 @@ where
             input.turn_store.insert(SkillsTurnMode {
                 mode: Some(input.collaboration_mode.mode),
             });
+            if let Some(thread_state) = input.thread_store.get::<SkillsThreadState>() {
+                thread_state.set_mode(Some(input.collaboration_mode.mode));
+            }
         })
     }
 }

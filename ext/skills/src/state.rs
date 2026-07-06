@@ -30,6 +30,7 @@ pub(crate) struct SkillsThreadState {
     selected_roots: Vec<SelectedCapabilityRoot>,
     orchestrator_skills_available: bool,
     orchestrator_cache: Mutex<Option<Arc<OrchestratorGenerationCache>>>,
+    mode: Mutex<Option<RuntimeMode>>,
 }
 
 impl SkillsThreadState {
@@ -43,6 +44,7 @@ impl SkillsThreadState {
             selected_roots,
             orchestrator_skills_available,
             orchestrator_cache: Mutex::new(None),
+            mode: Mutex::new(None),
         }
     }
 
@@ -58,6 +60,20 @@ impl SkillsThreadState {
             .config
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = config;
+    }
+
+    pub(crate) fn set_mode(&self, mode: Option<RuntimeMode>) {
+        *self
+            .mode
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = mode;
+    }
+
+    pub(crate) fn mode(&self) -> Option<RuntimeMode> {
+        *self
+            .mode
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     pub(crate) fn selected_roots(&self) -> &[SelectedCapabilityRoot] {

@@ -64,6 +64,7 @@ struct SkillToolContext {
 
 impl SkillToolContext {
     async fn catalog(&self, turn_id: &str, authority: SkillToolAuthority) -> SkillCatalog {
+        let mode = self.thread_state.mode();
         match authority {
             SkillToolAuthority::Host => {
                 self.providers
@@ -74,7 +75,7 @@ impl SkillToolContext {
                         include_host_skills: true,
                         include_bundled_skills: false,
                         include_orchestrator_skills: false,
-                        mode: None,
+                        mode,
                         mcp_resources: self.mcp_resources.clone(),
                     })
                     .await
@@ -95,7 +96,7 @@ impl SkillToolContext {
                         include_host_skills: false,
                         include_bundled_skills: false,
                         include_orchestrator_skills: false,
-                        mode: None,
+                        mode,
                         mcp_resources: self.mcp_resources.clone(),
                     })
                     .await
@@ -111,7 +112,7 @@ impl SkillToolContext {
                             include_host_skills: false,
                             include_bundled_skills: false,
                             include_orchestrator_skills: true,
-                            mode: None,
+                            mode,
                             mcp_resources: self.mcp_resources.clone(),
                         }),
                     )

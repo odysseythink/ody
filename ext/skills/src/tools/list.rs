@@ -3,6 +3,7 @@ use ody_extension_api::ToolExecutor;
 use ody_extension_api::ToolExecutorFuture;
 use ody_extension_api::ToolName;
 use ody_extension_api::ToolSpec;
+use ody_protocol::config_types::ModeKind;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -69,11 +70,13 @@ impl ToolExecutor<ToolCall> for ListTool {
             let args: ListArgs = parse_args(&call)?;
             let catalog = self.context.catalog(&call.turn_id, args.authority.clone()).await;
             let authority = args.authority.into_authority();
+            let mode = self.context.thread_state.mode().unwrap_or(ModeKind::Default);
             let response = ListResponse {
                 skills: catalog
                     .entries
                     .into_iter()
                     .filter(|entry| entry.enabled && entry.authority == authority)
+                    .filter(|entry| entry.is_model_invocable(mode))
                     .filter_map(listed_skill)
                     .collect(),
                 warnings: bounded_warnings(catalog.warnings),

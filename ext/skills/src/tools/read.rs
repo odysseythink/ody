@@ -4,6 +4,7 @@ use ody_extension_api::ToolExecutor;
 use ody_extension_api::ToolExecutorFuture;
 use ody_extension_api::ToolName;
 use ody_extension_api::ToolSpec;
+use ody_protocol::config_types::ModeKind;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -62,8 +63,12 @@ impl ToolExecutor<ToolCall> for ReadTool {
             let authority = args.authority.into_authority();
             validate_handle("package", &args.package, MAX_HANDLE_BYTES)?;
             validate_handle("resource", &args.resource, MAX_HANDLE_BYTES)?;
+            let mode = self.context.thread_state.mode().unwrap_or(ModeKind::Default);
             let package_is_available = catalog.entries.iter().any(|entry| {
-                entry.enabled && entry.authority == authority && entry.id.0 == args.package
+                entry.enabled
+                    && entry.authority == authority
+                    && entry.id.0 == args.package
+                    && entry.is_model_invocable(mode)
             });
             if !package_is_available {
                 return Err(FunctionCallError::RespondToModel(
