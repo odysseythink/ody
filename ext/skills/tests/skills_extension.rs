@@ -9,7 +9,9 @@ use ody_core_skills::SKILLS_HOW_TO_USE_WITH_ABSOLUTE_PATHS;
 use ody_core_skills::SKILLS_INTRO_WITH_ABSOLUTE_PATHS;
 use ody_core_skills::SkillLoadOutcome;
 use ody_core_skills::SkillMetadata;
+use ody_core_skills::SkillType;
 use ody_core_skills::injection::InjectedHostSkillPrompts;
+use ody_protocol::config_types::ModeKind;
 use ody_extension_api::ConversationHistory;
 use ody_extension_api::ExtensionData;
 use ody_extension_api::ExtensionEventSink;
@@ -29,6 +31,7 @@ use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::SkillScope;
 use ody_protocol::protocol::TruncationPolicy;
 use ody_protocol::user_input::UserInput;
+use ody_skills_extension::HostSkillProvider;
 use ody_skills_extension::SkillProviders;
 use ody_skills_extension::SkillsExtensionConfig;
 use ody_skills_extension::catalog::SkillAuthority;
@@ -735,4 +738,48 @@ fn read_request_keys(
             )
         })
         .collect()
+}
+
+#[tokio::test]
+async fn host_provider_maps_new_metadata_fields() {
+    let skill_path = AbsolutePathBuf::try_from("/tmp/host-review/SKILL.md").unwrap();
+    let mut outcome = SkillLoadOutcome::default();
+    outcome.skills.push(SkillMetadata {
+        name: "host-review".to_string(),
+        description: "Host review.".to_string(),
+        short_description: None,
+        interface: None,
+        dependencies: None,
+        policy: None,
+        path_to_skills_md: skill_path.clone(),
+        scope: SkillScope::User,
+        plugin_id: None,
+        skill_type: SkillType::Knowledge,
+        triggers: vec!["review".to_string()],
+        hidden_in_modes: vec![ModeKind::Plan],
+        disable_model_invocation: true,
+        mermaid: None,
+        d2: None,
+    });
+    let snapshot = Arc::new(HostSkillsSnapshot::new(Arc::new(outcome)));
+
+    let provider = HostSkillProvider::new();
+    let catalog = provider
+        .list(SkillListQuery {
+            turn_id: "turn-1".to_string(),
+            executor_roots: Vec::new(),
+            host_snapshot: Some(snapshot),
+            include_host_skills: true,
+            include_bundled_skills: true,
+            include_orchestrator_skills: false,
+            mcp_resources: None,
+        })
+        .await
+        .unwrap();
+
+    let entry = catalog.entries.iter().find(|e| e.name == "host-review").unwrap();
+    assert!(matches!(entry.skill_type, SkillType::Knowledge));
+    assert_eq!(entry.triggers, vec!["review"]);
+    assert!(entry.hidden_in_modes.contains(&ModeKind::Plan));
+    assert!(entry.disable_model_invocation);
 }

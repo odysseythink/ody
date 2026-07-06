@@ -1,4 +1,6 @@
 use ody_core_skills::model::SkillDependencies;
+use ody_core_skills::model::SkillType;
+use ody_protocol::config_types::ModeKind;
 use ody_utils_absolute_path::AbsolutePathBuf;
 
 /// Source authority that owns a skill package and must be used to read it.
@@ -117,6 +119,10 @@ pub struct SkillCatalogEntry {
     pub dependencies: Option<SkillDependencies>,
     pub enabled: bool,
     pub prompt_visible: bool,
+    pub skill_type: SkillType,
+    pub triggers: Vec<String>,
+    pub hidden_in_modes: Vec<ModeKind>,
+    pub disable_model_invocation: bool,
 }
 
 impl SkillCatalogEntry {
@@ -138,6 +144,10 @@ impl SkillCatalogEntry {
             dependencies: None,
             enabled: true,
             prompt_visible: true,
+            skill_type: SkillType::default(),
+            triggers: Vec::new(),
+            hidden_in_modes: Vec::new(),
+            disable_model_invocation: false,
         }
     }
 
@@ -153,6 +163,26 @@ impl SkillCatalogEntry {
 
     pub fn with_dependencies(mut self, dependencies: Option<SkillDependencies>) -> Self {
         self.dependencies = dependencies;
+        self
+    }
+
+    pub fn with_skill_type(mut self, skill_type: SkillType) -> Self {
+        self.skill_type = skill_type;
+        self
+    }
+
+    pub fn with_triggers(mut self, triggers: Vec<String>) -> Self {
+        self.triggers = triggers;
+        self
+    }
+
+    pub fn with_hidden_in_modes(mut self, hidden_in_modes: Vec<ModeKind>) -> Self {
+        self.hidden_in_modes = hidden_in_modes;
+        self
+    }
+
+    pub fn with_disable_model_invocation(mut self, disable_model_invocation: bool) -> Self {
+        self.disable_model_invocation = disable_model_invocation;
         self
     }
 

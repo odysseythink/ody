@@ -116,7 +116,11 @@ fn catalog_entry_from_skill(skill: &SkillMetadata, enabled: bool) -> SkillCatalo
     )
     .with_short_description(skill.short_description.clone())
     .with_display_path(display_path)
-    .with_dependencies(skill.dependencies.clone());
+    .with_dependencies(skill.dependencies.clone())
+    .with_skill_type(skill.skill_type)
+    .with_triggers(skill.triggers.clone())
+    .with_hidden_in_modes(skill.hidden_in_modes.clone())
+    .with_disable_model_invocation(skill.disable_model_invocation);
 
     if !enabled {
         entry = entry.disabled();
