@@ -9,6 +9,7 @@ use ody_extension_api::ToolName;
 use ody_extension_api::ToolOutput;
 use ody_extension_api::ToolSpec;
 use ody_extension_api::parse_tool_input_schema;
+use ody_core_skills::HostSkillsSnapshot;
 use ody_mcp::ODY_APPS_MCP_SERVER_NAME;
 use ody_mcp::McpResourceClient;
 use ody_tools::ResponsesApiNamespace;
@@ -36,11 +37,13 @@ const MAX_HANDLE_BYTES: usize = 2_048;
 pub(crate) fn skill_tools(
     providers: SkillProviders,
     mcp_resources: Option<Arc<McpResourceClient>>,
+    host_snapshot: Option<Arc<HostSkillsSnapshot>>,
     thread_state: Arc<SkillsThreadState>,
 ) -> Vec<Arc<dyn ToolExecutor<ToolCall>>> {
     let context = SkillToolContext {
         providers,
         mcp_resources,
+        host_snapshot,
         thread_state,
     };
     vec![
@@ -55,12 +58,48 @@ pub(crate) fn skill_tools(
 struct SkillToolContext {
     providers: SkillProviders,
     mcp_resources: Option<Arc<McpResourceClient>>,
+    host_snapshot: Option<Arc<HostSkillsSnapshot>>,
     thread_state: Arc<SkillsThreadState>,
 }
 
 impl SkillToolContext {
     async fn catalog(&self, turn_id: &str, authority: SkillToolAuthority) -> SkillCatalog {
         match authority {
+            SkillToolAuthority::Host => {
+                self.providers
+                    .list_for_turn(SkillListQuery {
+                        turn_id: turn_id.to_string(),
+                        executor_roots: Vec::new(),
+                        host_snapshot: self.host_snapshot.clone(),
+                        include_host_skills: true,
+                        include_bundled_skills: false,
+                        include_orchestrator_skills: false,
+                        mode: None,
+                        mcp_resources: self.mcp_resources.clone(),
+                    })
+                    .await
+            }
+            SkillToolAuthority::Executor { root_id } => {
+                let executor_roots: Vec<_> = self
+                    .thread_state
+                    .selected_roots()
+                    .iter()
+                    .filter(|root| root.id == root_id)
+                    .cloned()
+                    .collect();
+                self.providers
+                    .list_for_turn(SkillListQuery {
+                        turn_id: turn_id.to_string(),
+                        executor_roots,
+                        host_snapshot: None,
+                        include_host_skills: false,
+                        include_bundled_skills: false,
+                        include_orchestrator_skills: false,
+                        mode: None,
+                        mcp_resources: self.mcp_resources.clone(),
+                    })
+                    .await
+            }
             SkillToolAuthority::Orchestrator => {
                 self.thread_state
                     .orchestrator_catalog_snapshot(
@@ -82,24 +121,34 @@ impl SkillToolContext {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 enum SkillToolAuthority {
+    Host,
+    Executor { root_id: String },
     Orchestrator,
 }
 
 impl SkillToolAuthority {
     fn from_authority(authority: &SkillAuthority) -> Option<Self> {
-        if authority
-            != &SkillAuthority::new(SkillSourceKind::Orchestrator, ODY_APPS_MCP_SERVER_NAME)
-        {
-            return None;
+        match &authority.kind {
+            SkillSourceKind::Host if authority.id == "host" => Some(Self::Host),
+            SkillSourceKind::Executor => Some(Self::Executor {
+                root_id: authority.id.clone(),
+            }),
+            SkillSourceKind::Orchestrator if authority.id == ODY_APPS_MCP_SERVER_NAME => {
+                Some(Self::Orchestrator)
+            }
+            _ => None,
         }
-        Some(Self::Orchestrator)
     }
 
     fn into_authority(self) -> SkillAuthority {
         match self {
+            Self::Host => SkillAuthority::new(SkillSourceKind::Host, "host"),
+            Self::Executor { root_id } => {
+                SkillAuthority::new(SkillSourceKind::Executor, root_id)
+            }
             Self::Orchestrator => {
                 SkillAuthority::new(SkillSourceKind::Orchestrator, ODY_APPS_MCP_SERVER_NAME)
             }

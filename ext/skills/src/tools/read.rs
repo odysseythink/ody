@@ -58,11 +58,10 @@ impl ToolExecutor<ToolCall> for ReadTool {
     fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
         Box::pin(async move {
             let args: ReadArgs = parse_args(&call)?;
+            let catalog = self.context.catalog(&call.turn_id, args.authority.clone()).await;
             let authority = args.authority.into_authority();
             validate_handle("package", &args.package, MAX_HANDLE_BYTES)?;
             validate_handle("resource", &args.resource, MAX_HANDLE_BYTES)?;
-
-            let catalog = self.context.catalog(&call.turn_id, args.authority).await;
             let package_is_available = catalog.entries.iter().any(|entry| {
                 entry.enabled && entry.authority == authority && entry.id.0 == args.package
             });
@@ -82,7 +81,7 @@ impl ToolExecutor<ToolCall> for ReadTool {
                         authority,
                         package: SkillPackageId(args.package),
                         resource: requested_resource.clone(),
-                        host_snapshot: None,
+                        host_snapshot: self.context.host_snapshot.clone(),
                         mcp_resources: self.context.mcp_resources.clone(),
                     },
                 )
