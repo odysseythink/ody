@@ -293,8 +293,7 @@ fn proto_wire_api(wire_api: WireApi) -> proto::WireApi {
         WireApi::Responses => proto::WireApi::Responses,
         WireApi::Chat
         | WireApi::AnthropicMessages
-        | WireApi::GoogleGenAI
-        | WireApi::Local => proto::WireApi::Chat,
+        | WireApi::GoogleGenAI => proto::WireApi::Chat
     }
 }
 

@@ -174,15 +174,6 @@ mod capability_tests {
     }
 
     #[test]
-    fn default_model_capabilities_for_wire_api_local() {
-        let caps = default_model_capabilities_for_wire_api(WireApi::Local);
-        assert!(caps.supports_tools);
-        assert!(!caps.supports_vision);
-        assert_eq!(caps.input_modalities, vec![InputModality::Text]);
-        assert!(!caps.supports_multiple_system_messages);
-    }
-
-    #[test]
     fn model_capabilities_clamped_by_provider_web_search() {
         let provider_caps = ProviderCapabilities {
             web_search: false,

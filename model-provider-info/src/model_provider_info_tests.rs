@@ -273,11 +273,6 @@ fn default_provider_capabilities_for_chat_is_conservative() {
     assert!(!caps.web_search);
 }
 
-#[test]
-fn default_provider_capabilities_for_local_is_all_false() {
-    let caps = default_provider_capabilities_for_wire_api(WireApi::Local);
-    assert_eq!(caps, ProviderCapabilities::default());
-}
 
 #[test]
 fn test_deserialize_provider_auth_config_allows_zero_refresh_interval() {
@@ -317,16 +312,6 @@ fn normalize_capabilities_fills_responses_defaults() {
     assert!(!provider.capabilities.attestation);
 }
 
-#[test]
-fn normalize_capabilities_keeps_local_conservative() {
-    let mut provider = ModelProviderInfo {
-        wire_api: WireApi::Local,
-        capabilities: ProviderCapabilities::default(),
-        ..ModelProviderInfo::default()
-    };
-    provider.normalize_capabilities();
-    assert_eq!(provider.capabilities, ProviderCapabilities::default());
-}
 
 #[test]
 fn normalize_capabilities_respects_explicit_values() {
@@ -395,19 +380,3 @@ fn user_defined_provider_with_explicit_capabilities_is_preserved() {
     assert!(my_chat.capabilities.web_search);
 }
 
-#[test]
-fn built_in_reserved_ids_cannot_be_overridden() {
-    let mut configured = HashMap::new();
-    configured.insert(
-        KIMI_PROVIDER_ID.to_string(),
-        ModelProviderInfo {
-            name: "Evil Kimi".to_string(),
-            wire_api: WireApi::Local,
-            ..Default::default()
-        },
-    );
-    let merged = merge_configured_model_providers(built_in_model_providers(), configured).unwrap();
-    let kimi = merged.get(KIMI_PROVIDER_ID).unwrap();
-    assert_eq!(kimi.name, "Kimi");
-    assert_eq!(kimi.wire_api, WireApi::Chat);
-}

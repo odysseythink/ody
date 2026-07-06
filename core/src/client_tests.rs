@@ -668,38 +668,6 @@ async fn chat_stream_maps_events_to_response_stream() {
     assert!(saw_completed, "Expected Completed event");
 }
 
-#[tokio::test]
-async fn local_wire_api_returns_chat_provider_unsupported() {
-    let provider = create_oss_provider_with_base_url("https://example.com/v1", WireApi::Local);
-    let client = test_model_client_with_provider(provider);
-    let mut session = client.new_session();
-    let prompt = test_prompt_for_chat_provider();
-    let model_info = test_model_info_for_chat_provider();
-    let responses_metadata = test_responses_metadata_for_client(
-        &client,
-        Some("turn-1"),
-        "window-1".into(),
-        None,
-        TestOdyResponsesRequestKind::Turn,
-    );
-    let inference_trace = InferenceTraceContext::disabled();
-
-    let result = session
-        .stream(
-            &prompt,
-            &model_info,
-            &create_test_session_telemetry(),
-            None,
-            ReasoningSummary::None,
-            None,
-            &responses_metadata,
-            &inference_trace,
-        )
-        .await;
-
-    assert!(result.is_err());
-}
-
 fn test_model_client_with_provider(provider: ModelProviderInfo) -> ModelClient {
     let thread_id = ThreadId::new();
     ModelClient::new(
