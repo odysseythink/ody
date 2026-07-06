@@ -2234,3 +2234,97 @@ async fn parse_skill_file_extracts_all_new_fields() {
     assert!(skill.disable_model_invocation);
     assert!(skill.mermaid.as_ref().unwrap().contains("A --> B"));
 }
+
+#[tokio::test]
+async fn parse_skill_file_defaults_to_inline() {
+    let dir = TempDir::new().unwrap();
+    let path = dir
+        .path()
+        .join(".agents")
+        .join("skills")
+        .join("inline")
+        .join("SKILL.md");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(
+        &path,
+        "---\nname: inline-skill\ndescription: Default type.\n---\n# Inline\n",
+    )
+    .unwrap();
+
+    let fs: Arc<dyn ExecutorFileSystem> = Arc::clone(&LOCAL_FS);
+    let roots = skill_roots_from_layer_stack(
+        fs,
+        &ConfigLayerStack::default(),
+        &AbsolutePathBuf::try_from(dir.path()).unwrap(),
+        None,
+    )
+    .await;
+    let outcome = load_skills_from_roots(roots, None).await;
+    let skill = outcome.skills.iter().find(|s| s.name == "inline-skill").unwrap();
+    assert!(matches!(skill.skill_type, SkillType::Inline));
+    assert!(skill.triggers.is_empty());
+    assert!(skill.hidden_in_modes.is_empty());
+    assert!(!skill.disable_model_invocation);
+}
+
+#[tokio::test]
+async fn parse_skill_file_rejects_unsupported_type() {
+    let dir = TempDir::new().unwrap();
+    let path = dir
+        .path()
+        .join(".agents")
+        .join("skills")
+        .join("bad")
+        .join("SKILL.md");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(
+        &path,
+        "---\nname: bad-skill\ndescription: Bad type.\ntype: wizard\n---\n# Bad\n",
+    )
+    .unwrap();
+
+    let fs: Arc<dyn ExecutorFileSystem> = Arc::clone(&LOCAL_FS);
+    let roots = skill_roots_from_layer_stack(
+        fs,
+        &ConfigLayerStack::default(),
+        &AbsolutePathBuf::try_from(dir.path()).unwrap(),
+        None,
+    )
+    .await;
+    let outcome = load_skills_from_roots(roots, None).await;
+    assert!(outcome.skills.iter().all(|s| s.name != "bad-skill"));
+    assert!(outcome.errors.iter().any(|e| e.message.contains("unsupported skill type")));
+}
+
+#[tokio::test]
+async fn parse_skill_file_knowledge_without_triggers_downgrades() {
+    let dir = TempDir::new().unwrap();
+    let path = dir
+        .path()
+        .join(".agents")
+        .join("skills")
+        .join("no-trigger")
+        .join("SKILL.md");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(
+        &path,
+        "---\nname: no-trigger-skill\ndescription: Knowledge with no triggers.\ntype: knowledge\n---\n# No Trigger\n",
+    )
+    .unwrap();
+
+    let fs: Arc<dyn ExecutorFileSystem> = Arc::clone(&LOCAL_FS);
+    let roots = skill_roots_from_layer_stack(
+        fs,
+        &ConfigLayerStack::default(),
+        &AbsolutePathBuf::try_from(dir.path()).unwrap(),
+        None,
+    )
+    .await;
+    let outcome = load_skills_from_roots(roots, None).await;
+    let skill = outcome
+        .skills
+        .iter()
+        .find(|s| s.name == "no-trigger-skill")
+        .expect("skill should load after downgrade");
+    assert!(matches!(skill.skill_type, SkillType::Inline));
+}
