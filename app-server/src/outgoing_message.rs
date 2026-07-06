@@ -807,7 +807,6 @@ mod tests {
                         "secondary": null,
                         "credits": null,
                         "individualLimit": null,
-                        "planType": "plus",
                         "rateLimitReachedType": null
                     }
                 },
@@ -830,7 +829,6 @@ mod tests {
                 "method": "account/updated",
                 "params": {
                     "authMode": "apikey",
-                    "planType": null
                 },
             }),
             serde_json::to_value(jsonrpc_notification)

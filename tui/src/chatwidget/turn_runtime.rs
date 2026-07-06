@@ -171,6 +171,10 @@ impl ChatWidget {
         self.suppressed_exec_calls.clear();
         self.last_unified_wait = None;
         self.unified_exec_wait_streak = None;
+        // Clear the pinned todo when the turn ends. It is a live task-progress
+        // indicator and should not linger after the task is done; leaving it up
+        // can make it appear duplicated alongside post-turn UI.
+        self.bottom_pane.set_pinned_todo(None);
         if !from_replay {
             let body = Notification::agent_turn_preview(&notification_response);
             self.set_ambient_pet_notification(crate::pets::PetNotificationKind::Review, body);

@@ -130,7 +130,6 @@ pub(super) use ody_models_manager::test_support::get_model_offline_for_tests;
 pub(super) use ody_otel::RuntimeMetricsSummary;
 pub(super) use ody_otel::SessionTelemetry;
 pub(super) use ody_protocol::ThreadId;
-pub(super) use ody_protocol::account::PlanType;
 pub(super) use ody_protocol::approvals::GuardianAssessmentAction;
 pub(super) use ody_protocol::approvals::GuardianAssessmentDecisionSource;
 pub(super) use ody_protocol::approvals::GuardianAssessmentEvent;

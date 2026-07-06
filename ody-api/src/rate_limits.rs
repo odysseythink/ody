@@ -1,4 +1,3 @@
-use ody_protocol::account::PlanType;
 use ody_protocol::protocol::CreditsSnapshot;
 use ody_protocol::protocol::RateLimitReachedType;
 use ody_protocol::protocol::RateLimitSnapshot;
@@ -122,7 +121,6 @@ struct RateLimitEventCredits {
 struct RateLimitEvent {
     #[serde(rename = "type")]
     kind: String,
-    plan_type: Option<PlanType>,
     rate_limits: Option<RateLimitEventDetails>,
     credits: Option<RateLimitEventCredits>,
     metered_limit_name: Option<String>,

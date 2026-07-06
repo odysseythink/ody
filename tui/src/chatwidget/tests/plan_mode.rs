@@ -1780,6 +1780,40 @@ async fn plan_update_sets_pinned_todo_widget() {
 }
 
 #[tokio::test]
+async fn plan_update_is_cleared_when_turn_completes() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    let update = UpdatePlanArgs {
+        explanation: Some("Adapting plan".to_string()),
+        plan: vec![
+            PlanItemArg {
+                step: "Explore codebase".into(),
+                status: StepStatus::Completed,
+            },
+            PlanItemArg {
+                step: "Implement feature".into(),
+                status: StepStatus::InProgress,
+            },
+            PlanItemArg {
+                step: "Write tests".into(),
+                status: StepStatus::Pending,
+            },
+        ],
+    };
+    chat.on_plan_update(update);
+    assert!(
+        chat.bottom_pane.pinned_todo_update_args().is_some(),
+        "expected pinned plan to be set on bottom_pane"
+    );
+
+    handle_turn_completed(&mut chat, "turn-1", /*duration_ms*/ None);
+
+    assert!(
+        chat.bottom_pane.pinned_todo_update_args().is_none(),
+        "expected pinned plan to be cleared after turn completion"
+    );
+}
+
+#[tokio::test]
 async fn plan_implementation_reload_reads_plan_from_disk() {
     let (chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
     let default_mask = collaboration_modes::default_mode_mask(chat.model_catalog.as_ref())

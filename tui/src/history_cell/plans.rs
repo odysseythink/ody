@@ -105,7 +105,7 @@ pub(crate) fn render_plan_steps(
 /// Render a user‑friendly plan update styled like a checkbox todo list.
 ///
 /// Only needed in tests now that live plan updates are rendered exclusively
-/// through the bottom-pane `PinnedTodoWidget` to avoid duplicate “Updated Plan”
+/// through the bottom-pane `PinnedTodoWidget` to avoid duplicate “Todo”
 /// UI in the scrolling transcript.
 #[cfg(test)]
 pub(crate) fn new_plan_update(update: UpdatePlanArgs) -> PlanUpdateCell {

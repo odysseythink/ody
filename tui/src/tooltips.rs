@@ -1,6 +1,5 @@
 use ody_features::FEATURES;
 use lazy_static::lazy_static;
-use ody_protocol::account::PlanType;
 use rand::Rng;
 
 const ANNOUNCEMENT_TIP_URL: &str =
@@ -66,7 +65,6 @@ pub(crate) mod announcement {
     use crate::version::ODY_CLI_VERSION;
     use chrono::NaiveDate;
     use chrono::Utc;
-    use ody_protocol::account::PlanType;
     use regex_lite::Regex;
     use serde::Deserialize;
     use std::sync::OnceLock;
@@ -89,7 +87,6 @@ pub(crate) mod announcement {
         to_date: Option<String>,
         version_regex: Option<String>,
         target_app: Option<String>,
-        target_plan_types: Option<Vec<PlanType>>,
         target_oses: Option<Vec<TargetOs>>,
     }
 
@@ -105,7 +102,6 @@ pub(crate) mod announcement {
         to_date: Option<NaiveDate>,
         version_regex: Option<Regex>,
         target_app: String,
-        target_plan_types: Option<Vec<PlanType>>,
         target_oses: Option<Vec<TargetOs>>,
     }
 
@@ -155,7 +151,6 @@ pub(crate) mod announcement {
 
     pub(crate) fn parse_announcement_tip_toml(
         text: &str,
-        plan: Option<PlanType>,
     ) -> Option<String> {
         let announcements = toml::from_str::<AnnouncementTipDocument>(text)
             .map(|doc| doc.announcements)
@@ -168,10 +163,6 @@ pub(crate) mod announcement {
             let Some(tip) = AnnouncementTip::from_raw(raw) else {
                 continue;
             };
-            let plan_matches = tip
-                .target_plan_types
-                .as_ref()
-                .is_none_or(|target_plans| plan.is_some_and(|plan| target_plans.contains(&plan)));
             let os_matches = tip
                 .target_oses
                 .as_ref()
@@ -179,7 +170,6 @@ pub(crate) mod announcement {
             if tip.version_matches(ODY_CLI_VERSION)
                 && tip.date_matches(today)
                 && tip.target_app == "cli"
-                && plan_matches
                 && os_matches
             {
                 latest_match = Some(tip.content);
@@ -207,13 +197,6 @@ pub(crate) mod announcement {
                 Some(pattern) => Some(Regex::new(&pattern).ok()?),
                 None => None,
             };
-            let target_plan_types = raw.target_plan_types;
-            if target_plan_types
-                .as_ref()
-                .is_some_and(|plans| plans.contains(&PlanType::Unknown))
-            {
-                return None;
-            }
             let target_oses = raw.target_oses;
             if target_oses
                 .as_ref()
@@ -228,7 +211,6 @@ pub(crate) mod announcement {
                 to_date,
                 version_regex,
                 target_app: raw.target_app.unwrap_or("cli".to_string()).to_lowercase(),
-                target_plan_types,
                 target_oses,
             })
         }
@@ -298,7 +280,7 @@ to_date = "2000-01-01"
 
         assert_eq!(
             Some("latest match".to_string()),
-            parse_announcement_tip_toml(toml, /*plan*/ None)
+            parse_announcement_tip_toml(toml)
         );
 
         let toml = r#"
@@ -318,7 +300,7 @@ to_date = "2000-01-01"
 
         assert_eq!(
             Some("latest match".to_string()),
-            parse_announcement_tip_toml(toml, /*plan*/ None)
+            parse_announcement_tip_toml(toml)
         );
     }
 
@@ -339,7 +321,7 @@ content = "should not match either "
 target_app = "vsce"
         "#;
 
-        assert_eq!(None, parse_announcement_tip_toml(toml, /*plan*/ None));
+        assert_eq!(None, parse_announcement_tip_toml(toml));
     }
 
     #[test]
@@ -350,7 +332,7 @@ content = 123
 from_date = "2000-01-01"
         "#;
 
-        assert_eq!(None, parse_announcement_tip_toml(toml, /*plan*/ None));
+        assert_eq!(None, parse_announcement_tip_toml(toml));
     }
 
     #[test]
@@ -361,7 +343,6 @@ from_date = "2000-01-01"
 # Dates are UTC, formatted as YYYY-MM-DD. The from_date is inclusive and the to_date is exclusive.
 # version_regex matches against the CLI version (env!("CARGO_PKG_VERSION")); omit to apply to all versions.
 # target_app specify which app should display the announcement (cli, vsce, ...).
-# target_plan_types optionally restricts the announcement to plan types like ["plus", "pro"].
 # target_oses optionally restricts the announcement to operating systems like ["macos", "windows"].
 
 [[announcements]]
@@ -377,57 +358,7 @@ content = "This is a test announcement"
 
         assert_eq!(
             Some("This is a test announcement".to_string()),
-            parse_announcement_tip_toml(toml, /*plan*/ None)
-        );
-    }
-
-    #[test]
-    fn announcement_tip_toml_matches_target_plan_type() {
-        let toml = r#"
-[[announcements]]
-content = "all plans"
-
-[[announcements]]
-content = "pro announcement"
-target_plan_types = ["pro", "enterprise"]
-
-[[announcements]]
-content = "free announcement"
-target_plan_types = ["free"]
-        "#;
-
-        assert_eq!(
-            Some("pro announcement".to_string()),
-            parse_announcement_tip_toml(toml, Some(PlanType::Pro))
-        );
-        assert_eq!(
-            Some("free announcement".to_string()),
-            parse_announcement_tip_toml(toml, Some(PlanType::Free))
-        );
-        assert_eq!(
-            Some("all plans".to_string()),
-            parse_announcement_tip_toml(toml, Some(PlanType::Plus))
-        );
-        assert_eq!(
-            Some("all plans".to_string()),
-            parse_announcement_tip_toml(toml, /*plan*/ None)
-        );
-    }
-
-    #[test]
-    fn announcement_tip_toml_rejects_unknown_target_plan_type() {
-        let toml = r#"
-[[announcements]]
-content = "all plans"
-
-[[announcements]]
-content = "typo announcement"
-target_plan_types = ["prp"]
-        "#;
-
-        assert_eq!(
-            Some("all plans".to_string()),
-            parse_announcement_tip_toml(toml, Some(PlanType::Unknown))
+            parse_announcement_tip_toml(toml)
         );
     }
 
@@ -456,7 +387,7 @@ target_oses = ["windows"]
         };
         assert_eq!(
             Some(expected.to_string()),
-            parse_announcement_tip_toml(toml, /*plan*/ None)
+            parse_announcement_tip_toml(toml)
         );
     }
 
@@ -473,7 +404,7 @@ target_oses = ["amiga"]
 
         assert_eq!(
             Some("all operating systems".to_string()),
-            parse_announcement_tip_toml(toml, /*plan*/ None)
+            parse_announcement_tip_toml(toml)
         );
     }
 }

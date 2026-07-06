@@ -6,7 +6,6 @@ use crate::rate_limits::parse_rate_limit_reached_type;
 use base64::Engine;
 use chrono::DateTime;
 use chrono::Utc;
-use ody_protocol::auth::PlanType;
 use ody_protocol::error::OdyErr;
 use ody_protocol::error::RetryLimitReachedError;
 use ody_protocol::error::UnexpectedResponseError;
@@ -97,7 +96,6 @@ pub fn map_api_error(err: ApiError) -> OdyErr {
                                 .resets_at
                                 .and_then(|seconds| DateTime::<Utc>::from_timestamp(seconds, 0));
                             return OdyErr::UsageLimitReached(UsageLimitReachedError {
-                                plan_type: err.error.plan_type,
                                 resets_at,
                                 rate_limits: rate_limits.map(Box::new),
                                 promo_message,
@@ -207,6 +205,5 @@ struct UsageErrorResponse {
 struct UsageErrorBody {
     #[serde(rename = "type")]
     error_type: Option<String>,
-    plan_type: Option<PlanType>,
     resets_at: Option<i64>,
 }

@@ -22,23 +22,6 @@
       ],
       "type": "object"
     },
-    "PlanType": {
-      "enum": [
-        "free",
-        "go",
-        "plus",
-        "pro",
-        "prolite",
-        "team",
-        "self_serve_business_usage_based",
-        "business",
-        "enterprise_cbp_usage_based",
-        "enterprise",
-        "edu",
-        "unknown"
-      ],
-      "type": "string"
-    },
     "RateLimitReachedType": {
       "enum": [
         "rate_limit_reached",

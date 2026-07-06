@@ -63,7 +63,6 @@ use ody_config::types::McpServerTransportConfig;
 #[cfg(test)]
 use ody_mcp::qualified_mcp_tool_name_prefix;
 use ody_otel::RuntimeMetricsSummary;
-use ody_protocol::account::PlanType;
 use ody_protocol::approvals::ExecPolicyAmendment;
 use ody_protocol::approvals::NetworkPolicyAmendment;
 #[cfg(test)]

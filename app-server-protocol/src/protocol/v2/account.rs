@@ -1,6 +1,5 @@
 use crate::protocol::common::AuthMode;
 use ody_experimental_api_macros::ExperimentalApi;
-use ody_protocol::account::PlanType;
 use ody_protocol::account::ProviderAccount;
 use ody_protocol::protocol::CreditsSnapshot as CoreCreditsSnapshot;
 use ody_protocol::protocol::RateLimitReachedType as CoreRateLimitReachedType;

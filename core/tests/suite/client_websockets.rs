@@ -19,7 +19,6 @@ use ody_otel::TelemetryAuthMode;
 use ody_otel::current_span_w3c_trace_context;
 use ody_protocol::SessionId;
 use ody_protocol::ThreadId;
-use ody_protocol::account::PlanType;
 use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::config_types::ServiceTier;
 use ody_protocol::models::BaseInstructions;
@@ -1215,7 +1214,6 @@ async fn responses_websocket_emits_rate_limit_events() {
 
     let rate_limit_event = json!({
         "type": "ody.rate_limits",
-        "plan_type": "plus",
         "rate_limits": {
             "allowed": true,
             "limit_reached": false,
@@ -1294,7 +1292,6 @@ async fn responses_websocket_emits_rate_limit_events() {
     assert_eq!(primary.used_percent, 42.0);
     assert_eq!(primary.window_minutes, Some(60));
     assert_eq!(primary.resets_at, Some(1_700_000_000));
-    assert_eq!(rate_limits.plan_type, Some(PlanType::Plus));
     let credits = rate_limits.credits.expect("missing credits");
     assert!(credits.has_credits);
     assert!(!credits.unlimited);

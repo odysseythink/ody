@@ -14,7 +14,6 @@ use ody_config::types::McpServerConfig;
 use ody_otel::RuntimeMetricTotals;
 use ody_otel::RuntimeMetricsSummary;
 use ody_protocol::ThreadId;
-use ody_protocol::account::PlanType;
 use ody_protocol::parse_command::ParsedCommand;
 use dirs::home_dir;
 use pretty_assertions::assert_eq;
