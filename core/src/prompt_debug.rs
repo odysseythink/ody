@@ -32,7 +32,7 @@ pub async fn build_prompt_input(
 
     let local_runtime_paths = ExecServerRuntimePaths::from_optional_paths(
         config.ody_self_exe.clone(),
-        config.clone(),
+        None,
     )?;
 
     let thread_store = thread_store_from_config(&config, state_db.clone());

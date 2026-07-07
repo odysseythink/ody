@@ -286,7 +286,7 @@ async fn start_app_server_for_archive_command(
 
     let local_runtime_paths = ExecServerRuntimePaths::from_optional_paths(
         arg0_paths.ody_self_exe.clone(),
-        arg0_paths.clone(),
+        arg0_paths.ody_linux_sandbox_exe.clone(),
     )
     .wrap_err("failed to resolve local runtime paths")?;
     let environment_manager = EnvironmentManager::from_env(Some(local_runtime_paths))

@@ -221,6 +221,7 @@ fn exec_server_env_keeps_command_native_and_carries_sandbox_context() {
         manager: &manager,
         sandbox_cwd: &cwd_uri,
         workspace_roots: std::slice::from_ref(&cwd),
+        ody_linux_sandbox_exe: None,
         use_legacy_landlock: false,
         windows_sandbox_level: ody_protocol::config_types::WindowsSandboxLevel::Disabled,
         windows_sandbox_private_desktop: false,

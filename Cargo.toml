@@ -48,6 +48,7 @@ members = [
     "keyring-store",
     "file-search",
     "file-watcher",
+    "linux-sandbox",
     "ody-mcp",
     "mcp-server",
     "memories/read",
@@ -156,6 +157,7 @@ ody-file-watcher = { path = "file-watcher" }
 ody-git-utils = { path = "git-utils" }
 ody-hooks = { path = "hooks" }
 ody-keyring-store = { path = "keyring-store" }
+ody-linux-sandbox = { path = "linux-sandbox" }
 ody-message-history = { path = "message-history" }
 ody-memories-extension = { path = "ext/memories" }
 ody-web-search-extension = { path = "ext/web-search" }

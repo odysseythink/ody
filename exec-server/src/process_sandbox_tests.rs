@@ -24,7 +24,7 @@ fn sandbox_request_wraps_native_argv_on_executor() {
     let cwd_uri = PathUri::from_abs_path(&cwd);
     let self_exe = std::env::current_exe().expect("current executable");
     let runtime_paths =
-        ExecServerRuntimePaths::new(self_exe.clone()).expect("runtime paths");
+        ExecServerRuntimePaths::new(self_exe.clone(), Some(self_exe)).expect("runtime paths");
     let sandbox = FileSystemSandboxContext::from_permission_profile_with_cwd(
         PermissionProfile::workspace_write(),
         cwd_uri.clone(),

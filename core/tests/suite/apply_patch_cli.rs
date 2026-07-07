@@ -32,8 +32,6 @@ use ody_protocol::protocol::Op;
 use ody_protocol::protocol::SandboxPolicy;
 use ody_protocol::protocol::TurnEnvironmentSelection;
 use ody_protocol::user_input::UserInput;
-#[cfg(target_os = "linux")]
-use ody_sandboxing::landlock::ODY_LINUX_SANDBOX_ARG0;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path_uri::PathUri;
 use core_test_support::PathBufExt;

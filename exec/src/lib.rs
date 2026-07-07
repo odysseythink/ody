@@ -357,6 +357,7 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
         model_provider: model_provider.clone(),
         service_tier: None,
         ody_self_exe: arg0_paths.ody_self_exe.clone(),
+        ody_linux_sandbox_exe: arg0_paths.ody_linux_sandbox_exe.clone(),
         main_execve_wrapper_exe: arg0_paths.main_execve_wrapper_exe.clone(),
         default_zsh_path: None,
         base_instructions: None,
@@ -448,7 +449,7 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
         .collect();
     let local_runtime_paths = ExecServerRuntimePaths::from_optional_paths(
         arg0_paths.ody_self_exe.clone(),
-        arg0_paths.clone(),
+        arg0_paths.ody_linux_sandbox_exe.clone(),
     )?;
     let state_db = ody_core::init_state_db(&config).await;
     let environment_manager = if run_loader_overrides.ignore_user_config {

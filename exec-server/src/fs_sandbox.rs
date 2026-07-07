@@ -22,10 +22,10 @@ use tokio::process::Command;
 
 use crate::ExecServerRuntimePaths;
 use crate::FileSystemSandboxContext;
+use crate::fs_helper::ODY_FS_HELPER_ARG1;
 use crate::fs_helper::FsHelperPayload;
 use crate::fs_helper::FsHelperRequest;
 use crate::fs_helper::FsHelperResponse;
-use crate::fs_helper::ODY_FS_HELPER_ARG1;
 use crate::local_file_system::current_sandbox_cwd;
 use crate::rpc::internal_error;
 use crate::rpc::invalid_request;
@@ -138,6 +138,7 @@ impl FileSystemSandboxRunner {
                     environment_id: None,
                     network: None,
                     sandbox_policy_cwd: &cwd.uri,
+                    ody_linux_sandbox_exe: self.runtime_paths.ody_linux_sandbox_exe.as_deref(),
                     use_legacy_landlock: sandbox_context.use_legacy_landlock,
                     windows_sandbox_level: sandbox_context.windows_sandbox_level,
                     windows_sandbox_private_desktop: sandbox_context
@@ -183,7 +184,9 @@ fn native_workspace_root(root: &PathUri) -> Result<AbsolutePathBuf, JSONRPCError
 
 fn helper_read_roots(runtime_paths: &ExecServerRuntimePaths) -> Vec<AbsolutePathBuf> {
     let mut roots = Vec::new();
-    for path in std::iter::once(runtime_paths.ody_self_exe.as_path()) {
+    for path in std::iter::once(runtime_paths.ody_self_exe.as_path())
+        .chain(runtime_paths.ody_linux_sandbox_exe.as_deref())
+    {
         if let Some(parent) = path.parent()
             && let Ok(root) = AbsolutePathBuf::from_absolute_path(parent)
             && !roots.contains(&root)
@@ -416,7 +419,9 @@ mod tests {
     #[test]
     fn helper_permissions_preserve_existing_writes() {
         let ody_self_exe = std::env::current_exe().expect("current exe");
-        let runtime_paths = ExecServerRuntimePaths::new(ody_self_exe).expect("runtime paths");
+        let runtime_paths =
+            ExecServerRuntimePaths::new(ody_self_exe, /*ody_linux_sandbox_exe*/ None)
+                .expect("runtime paths");
         let cwd = AbsolutePathBuf::from_absolute_path(std::env::temp_dir().as_path())
             .expect("absolute cwd");
         let writable = cwd.join("writable");
@@ -533,7 +538,8 @@ mod tests {
         let path = path.to_string_lossy().into_owned();
         let ody_self_exe = std::env::current_exe().expect("current exe");
         let runtime_paths =
-            ExecServerRuntimePaths::new(ody_self_exe.clone()).expect("runtime paths");
+            ExecServerRuntimePaths::new(ody_self_exe.clone(), Some(ody_self_exe))
+                .expect("runtime paths");
         let runner = FileSystemSandboxRunner::new(runtime_paths);
         let native_cwd = AbsolutePathBuf::current_dir().expect("cwd");
         let cwd = PathUri::from_abs_path(&native_cwd);
@@ -620,7 +626,9 @@ mod tests {
     #[test]
     fn helper_permissions_include_helper_read_root_without_additional_permissions() {
         let ody_self_exe = std::env::current_exe().expect("current exe");
-        let runtime_paths = ExecServerRuntimePaths::new(ody_self_exe).expect("runtime paths");
+        let runtime_paths =
+            ExecServerRuntimePaths::new(ody_self_exe, /*ody_linux_sandbox_exe*/ None)
+                .expect("runtime paths");
         let cwd = AbsolutePathBuf::from_absolute_path(std::env::temp_dir().as_path())
             .expect("absolute cwd");
         let mut policy = restricted_policy(Vec::new());
@@ -642,10 +650,13 @@ mod tests {
     }
 
     #[test]
-    fn helper_permissions_include_runtime_alias_parent() {
+    fn helper_permissions_include_linux_sandbox_alias_parent() {
         let root = tempfile::tempdir().expect("temp dir");
         let ody_self_exe = root.path().join("bin").join("ody");
-        let runtime_paths = ExecServerRuntimePaths::new(ody_self_exe).expect("runtime paths");
+        let ody_linux_sandbox_exe = root.path().join("aliases").join("ody-linux-sandbox");
+        let runtime_paths =
+            ExecServerRuntimePaths::new(ody_self_exe, Some(ody_linux_sandbox_exe))
+                .expect("runtime paths");
         let cwd = AbsolutePathBuf::from_absolute_path(std::env::temp_dir().as_path())
             .expect("absolute cwd");
         let mut policy = restricted_policy(Vec::new());

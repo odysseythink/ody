@@ -154,7 +154,7 @@ pub async fn list_accessible_connectors_from_mcp_tools_with_options_and_status(
     // of constructing a temporary manager here.
     let local_runtime_paths = ExecServerRuntimePaths::from_optional_paths(
         config.ody_self_exe.clone(),
-        config.clone(),
+        None,
     )?;
     let environment_manager =
         EnvironmentManager::from_ody_home(config.ody_home.clone(), Some(local_runtime_paths))

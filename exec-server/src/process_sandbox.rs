@@ -37,7 +37,7 @@ pub(crate) fn prepare_exec_request(
             sandbox: SandboxType::None,
         });
     };
-    let _runtime_paths = runtime_paths
+    let runtime_paths = runtime_paths
         .ok_or_else(|| invalid_params("sandbox runtime paths are not configured".to_string()))?;
     // TODO(jif): Transport permissions before orchestrator-local paths are materialized,
     // then resolve executor-local helper and workspace paths here.
@@ -106,6 +106,7 @@ pub(crate) fn prepare_exec_request(
                 environment_id: None,
                 network: None,
                 sandbox_policy_cwd,
+                ody_linux_sandbox_exe: runtime_paths.ody_linux_sandbox_exe.as_deref(),
                 use_legacy_landlock: sandbox_context.use_legacy_landlock,
                 windows_sandbox_level: sandbox_context.windows_sandbox_level,
                 windows_sandbox_private_desktop: sandbox_context.windows_sandbox_private_desktop,

@@ -1,5 +1,6 @@
 //! Prototype MCP server.
 #![deny(clippy::print_stdout, clippy::print_stderr)]
+#![recursion_limit = "256"]
 
 use std::io::ErrorKind;
 use std::io::Result as IoResult;
@@ -98,7 +99,7 @@ pub async fn run_main(
             config.ody_home.clone(),
             Some(ExecServerRuntimePaths::from_optional_paths(
                 arg0_paths.ody_self_exe.clone(),
-                arg0_paths.clone(),
+                arg0_paths.ody_linux_sandbox_exe.clone(),
             )?),
         )
         .await

@@ -41,6 +41,7 @@ use seatbelt::DenialLogger;
 #[cfg(target_os = "macos")]
 pub async fn run_command_under_seatbelt(
     command: SeatbeltCommand,
+    ody_linux_sandbox_exe: Option<PathBuf>,
     loader_overrides: LoaderOverrides,
 ) -> anyhow::Result<()> {
     let SeatbeltCommand {
@@ -66,6 +67,7 @@ pub async fn run_command_under_seatbelt(
         },
         command,
         config_overrides,
+        ody_linux_sandbox_exe,
         SandboxType::Seatbelt,
         log_denials,
         &allow_unix_sockets,
@@ -76,6 +78,7 @@ pub async fn run_command_under_seatbelt(
 #[cfg(not(target_os = "macos"))]
 pub async fn run_command_under_seatbelt(
     _command: SeatbeltCommand,
+    _ody_linux_sandbox_exe: Option<PathBuf>,
     _loader_overrides: LoaderOverrides,
 ) -> anyhow::Result<()> {
     anyhow::bail!("Seatbelt sandbox is only available on macOS");
@@ -83,6 +86,7 @@ pub async fn run_command_under_seatbelt(
 
 pub async fn run_command_under_landlock(
     command: LandlockCommand,
+    ody_linux_sandbox_exe: Option<PathBuf>,
     loader_overrides: LoaderOverrides,
 ) -> anyhow::Result<()> {
     let LandlockCommand {
@@ -106,6 +110,7 @@ pub async fn run_command_under_landlock(
         },
         command,
         config_overrides,
+        ody_linux_sandbox_exe,
         SandboxType::Landlock,
         /*log_denials*/ false,
         &[],
@@ -115,6 +120,7 @@ pub async fn run_command_under_landlock(
 
 pub async fn run_command_under_windows_sandbox(
     command: WindowsCommand,
+    ody_linux_sandbox_exe: Option<PathBuf>,
     loader_overrides: LoaderOverrides,
 ) -> anyhow::Result<()> {
     let WindowsCommand {
@@ -138,6 +144,7 @@ pub async fn run_command_under_windows_sandbox(
         },
         command,
         config_overrides,
+        ody_linux_sandbox_exe,
         SandboxType::Windows,
         /*log_denials*/ false,
         &[],
@@ -183,6 +190,7 @@ async fn run_command_under_sandbox(
     config_options: DebugSandboxConfigOptions,
     command: Vec<String>,
     config_overrides: CliConfigOverrides,
+    ody_linux_sandbox_exe: Option<PathBuf>,
     sandbox_type: SandboxType,
     log_denials: bool,
     #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
@@ -192,6 +200,7 @@ async fn run_command_under_sandbox(
         config_overrides
             .parse_overrides()
             .map_err(anyhow::Error::msg)?,
+        ody_linux_sandbox_exe,
         config_options,
         /*strict_config*/ false,
     )
@@ -296,6 +305,9 @@ async fn run_command_under_sandbox(
         }
         SandboxType::Landlock => {
             #[expect(clippy::expect_used)]
+            let ody_linux_sandbox_exe = config
+                .ody_linux_sandbox_exe
+                .expect("ody-linux-sandbox executable not found");
             let use_legacy_landlock = config.features.use_legacy_landlock();
             let network_sandbox_policy = runtime_permission_profile.network_sandbox_policy();
             let args = create_linux_sandbox_command_args_for_permission_profile(
@@ -307,8 +319,9 @@ async fn run_command_under_sandbox(
                 allow_network_for_proxy(enforce_managed_network),
             );
             spawn_debug_sandbox_child(
+                ody_linux_sandbox_exe,
                 args,
-
+                Some("ody-linux-sandbox"),
                 cwd.to_path_buf(),
                 network_sandbox_policy,
                 env,
@@ -429,11 +442,13 @@ async fn spawn_debug_sandbox_child(
 
 async fn load_debug_sandbox_config(
     cli_overrides: Vec<(String, TomlValue)>,
+    ody_linux_sandbox_exe: Option<PathBuf>,
     options: DebugSandboxConfigOptions,
     strict_config: bool,
 ) -> anyhow::Result<Config> {
     load_debug_sandbox_config_with_ody_home(
         cli_overrides,
+        ody_linux_sandbox_exe,
         options,
         /*ody_home*/ None,
         strict_config,
@@ -443,6 +458,7 @@ async fn load_debug_sandbox_config(
 
 async fn load_debug_sandbox_config_with_ody_home(
     cli_overrides: Vec<(String, TomlValue)>,
+    ody_linux_sandbox_exe: Option<PathBuf>,
     options: DebugSandboxConfigOptions,
     ody_home: Option<PathBuf>,
     strict_config: bool,
@@ -471,6 +487,7 @@ async fn load_debug_sandbox_config_with_ody_home(
         cli_overrides.clone(),
         ConfigOverrides {
             cwd: cwd.clone(),
+            ody_linux_sandbox_exe: ody_linux_sandbox_exe.clone(),
             ..Default::default()
         },
         ody_home.clone(),
@@ -489,6 +506,7 @@ async fn load_debug_sandbox_config_with_ody_home(
         ConfigOverrides {
             sandbox_mode: Some(SandboxMode::ReadOnly),
             cwd,
+            ody_linux_sandbox_exe,
             ..Default::default()
         },
         ody_home,
@@ -629,6 +647,7 @@ mod tests {
 
         let config = load_debug_sandbox_config_with_ody_home(
             Vec::new(),
+            /*ody_linux_sandbox_exe*/ None,
             DebugSandboxConfigOptions {
                 permissions_profile: None,
                 cwd: None,
@@ -696,6 +715,7 @@ mod tests {
 
         let config = load_debug_sandbox_config_with_ody_home(
             Vec::new(),
+            /*ody_linux_sandbox_exe*/ None,
             DebugSandboxConfigOptions {
                 permissions_profile: None,
                 cwd: None,
@@ -752,6 +772,7 @@ mod tests {
 
         let config = load_debug_sandbox_config_with_ody_home(
             cli_overrides,
+            /*ody_linux_sandbox_exe*/ None,
             DebugSandboxConfigOptions {
                 permissions_profile: None,
                 cwd: None,
@@ -809,6 +830,7 @@ mod tests {
 
         let config = load_debug_sandbox_config_with_ody_home(
             Vec::new(),
+            /*ody_linux_sandbox_exe*/ None,
             DebugSandboxConfigOptions {
                 permissions_profile: None,
                 cwd: None,
@@ -835,6 +857,7 @@ mod tests {
 
         let config = load_debug_sandbox_config_with_ody_home(
             Vec::new(),
+            /*ody_linux_sandbox_exe*/ None,
             DebugSandboxConfigOptions {
                 permissions_profile: Some(":workspace".to_string()),
                 cwd: None,
@@ -873,6 +896,7 @@ mod tests {
 
         let config = load_debug_sandbox_config_with_ody_home(
             Vec::new(),
+            /*ody_linux_sandbox_exe*/ None,
             DebugSandboxConfigOptions {
                 permissions_profile: Some("limited-read-test".to_string()),
                 cwd: None,
@@ -911,6 +935,7 @@ mod tests {
 
         let config = load_debug_sandbox_config_with_ody_home(
             Vec::new(),
+            /*ody_linux_sandbox_exe*/ None,
             DebugSandboxConfigOptions {
                 permissions_profile: Some(":workspace".to_string()),
                 cwd: Some(cwd.path().to_path_buf()),

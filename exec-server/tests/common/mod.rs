@@ -9,7 +9,6 @@ use std::time::Duration;
 use ctor::ctor;
 use ody_exec_server::ExecServerRuntimePaths;
 use ody_exec_server::ODY_FS_HELPER_ARG1;
-use ody_sandboxing::landlock::ODY_LINUX_SANDBOX_ARG0;
 use ody_test_binary_support::TestBinaryDispatchGuard;
 use ody_test_binary_support::TestBinaryDispatchMode;
 use ody_test_binary_support::configure_test_binary_dispatch;
@@ -29,9 +28,6 @@ pub static TEST_BINARY_DISPATCH_GUARD: Option<TestBinaryDispatchGuard> = {
             return TestBinaryDispatchMode::DispatchArg0Only;
         }
         if argv1 == Some(ODY_WINDOWS_SANDBOX_ARG1) {
-            return TestBinaryDispatchMode::DispatchArg0Only;
-        }
-        if exe_name == ODY_LINUX_SANDBOX_ARG0 {
             return TestBinaryDispatchMode::DispatchArg0Only;
         }
         TestBinaryDispatchMode::InstallAliases

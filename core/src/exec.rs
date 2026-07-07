@@ -389,6 +389,7 @@ pub fn build_exec_request(
             environment_id: network_environment_id.as_deref(),
             network: network.as_ref(),
             sandbox_policy_cwd: &sandbox_policy_cwd_uri,
+            ody_linux_sandbox_exe: None,
             use_legacy_landlock,
             windows_sandbox_level,
             windows_sandbox_private_desktop,

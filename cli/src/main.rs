@@ -6,7 +6,9 @@ use clap_complete::generate;
 use ody_arg0::Arg0DispatchPaths;
 use ody_arg0::arg0_dispatch_or_else;
 use ody_exec::Cli as ExecCli;
+use ody_exec::Command as ExecCommand;
 use ody_exec::ReviewArgs;
+use ody_execpolicy::ExecPolicyCheckCommand;
 use ody_rollout_trace::REDUCED_STATE_FILE_NAME;
 use ody_rollout_trace::replay_bundle;
 use ody_state::StateRuntime;
@@ -441,7 +443,6 @@ enum ExecpolicySubcommand {
     Check(ExecPolicyCheckCommand),
 }
 
-#[derive(Debug, Parser)]
 #[derive(Debug, Parser)]
 struct AppServerCommand {
     /// Omit to run the app server; specify a subcommand for tooling.
@@ -1017,6 +1018,8 @@ async fn cli_main(
                     )
                     .await?;
                 }
+                Some(AppServerSubcommand::Proxy(proxy_cli)) => {
+                    let socket_path = match proxy_cli.socket_path {
                         Some(socket_path) => socket_path,
                         None => {
                             let ody_home = find_ody_home()?;
@@ -1201,14 +1204,14 @@ async fn cli_main(
             #[cfg(target_os = "macos")]
             ody_cli::run_command_under_seatbelt(
                 sandbox_cli,
-                arg0_paths.clone(),
+                arg0_paths.ody_linux_sandbox_exe.clone(),
                 loader_overrides,
             )
             .await?;
             #[cfg(target_os = "linux")]
             ody_cli::run_command_under_landlock(
                 sandbox_cli,
-                arg0_paths.clone(),
+                arg0_paths.ody_linux_sandbox_exe.clone(),
                 loader_overrides,
             )
             .await?;
@@ -1420,7 +1423,7 @@ async fn run_exec_server_command(
         .ok_or_else(|| anyhow::anyhow!("Ody executable path is not configured"))?;
     let runtime_paths = ody_exec_server::ExecServerRuntimePaths::new(
         ody_self_exe,
-        arg0_paths.clone(),
+        arg0_paths.ody_linux_sandbox_exe.clone(),
     )?;
     if let Some(base_url) = cmd.remote {
         let environment_id = cmd
@@ -3450,39 +3453,6 @@ mod tests {
             app_server.subcommand,
             Some(AppServerSubcommand::Proxy(AppServerProxyCommand {
                 socket_path: None
-            }))
-        ));
-    }
-
-    #[test]
-    fn app_server_daemon_subcommands_parse() {
-        assert!(matches!(
-            app_server_from_args(
-                [
-                    "ody",
-                    "app-server",
-                    "daemon",
-                    "bootstrap",
-                ]
-                .as_ref()
-            )
-            .subcommand,
-            }))
-        ));
-        assert!(matches!(
-            app_server_from_args(["ody", "app-server", "daemon", "start"].as_ref()).subcommand,
-            }))
-        ));
-        assert!(matches!(
-            app_server_from_args(["ody", "app-server", "daemon", "restart"].as_ref()).subcommand,
-            }))
-        ));
-        assert!(matches!(
-            app_server_from_args(["ody", "app-server", "daemon", "stop"].as_ref()).subcommand,
-            }))
-        ));
-        assert!(matches!(
-            app_server_from_args(["ody", "app-server", "daemon", "version"].as_ref()).subcommand,
             }))
         ));
     }

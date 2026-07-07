@@ -364,8 +364,7 @@ mod tests {
 
     fn test_runtime_paths() -> ExecServerRuntimePaths {
         ExecServerRuntimePaths::new(
-            std::env::current_exe().expect("current exe"),
-        )
+            std::env::current_exe().expect("current exe"), None)
         .expect("runtime paths")
     }
 

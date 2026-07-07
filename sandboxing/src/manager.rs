@@ -2,6 +2,9 @@
 use crate::bwrap::WSL1_BWRAP_WARNING;
 #[cfg(target_os = "linux")]
 use crate::bwrap::is_wsl1;
+use crate::landlock::ODY_LINUX_SANDBOX_ARG0;
+use crate::landlock::allow_network_for_proxy;
+use crate::landlock::create_linux_sandbox_command_args_for_permission_profile;
 use crate::policy_transforms::effective_permission_profile;
 use crate::policy_transforms::should_require_platform_sandbox;
 #[cfg(target_os = "windows")]
@@ -133,6 +136,7 @@ pub struct SandboxTransformRequest<'a> {
     // to make shared ownership explicit across runtime/sandbox plumbing.
     pub network: Option<&'a NetworkProxy>,
     pub sandbox_policy_cwd: &'a PathUri,
+    pub ody_linux_sandbox_exe: Option<&'a Path>,
     pub use_legacy_landlock: bool,
     pub windows_sandbox_level: WindowsSandboxLevel,
     pub windows_sandbox_private_desktop: bool,
@@ -228,7 +232,7 @@ impl std::fmt::Display for SandboxTransformError {
                 "sandbox policy cwd URI `{cwd}` is not valid on this host: {source}"
             ),
             Self::MissingLinuxSandboxExecutable => {
-                write!(f, "Linux sandbox executable not provided")
+                write!(f, "missing ody-linux-sandbox executable path")
             }
             Self::EnvironmentNetworkProxy(err) => {
                 write!(f, "failed to prepare environment network proxy: {err}")
@@ -323,7 +327,8 @@ impl SandboxManager {
             environment_id,
             network,
             sandbox_policy_cwd,
-            use_legacy_landlock: _,
+            ody_linux_sandbox_exe,
+            use_legacy_landlock,
             windows_sandbox_level,
             windows_sandbox_private_desktop,
         } = request;
@@ -372,7 +377,33 @@ impl SandboxManager {
             #[cfg(not(target_os = "macos"))]
             SandboxType::MacosSeatbelt => return Err(SandboxTransformError::SeatbeltUnavailable),
             SandboxType::LinuxSeccomp => {
-                return Err(SandboxTransformError::MissingLinuxSandboxExecutable);
+                let pending = pending_sandboxed_request?;
+                let exe = ody_linux_sandbox_exe
+                    .ok_or(SandboxTransformError::MissingLinuxSandboxExecutable)?;
+                let allow_proxy_network = allow_network_for_proxy(enforce_managed_network);
+                #[cfg(target_os = "linux")]
+                ensure_linux_bubblewrap_is_supported(
+                    &pending.effective_file_system_policy,
+                    use_legacy_landlock,
+                    allow_proxy_network,
+                    is_wsl1(),
+                )?;
+                let mut args = create_linux_sandbox_command_args_for_permission_profile(
+                    os_argv_to_strings(argv),
+                    pending.native_command_cwd.as_path(),
+                    &pending.effective_permission_profile,
+                    pending.native_sandbox_policy_cwd.as_path(),
+                    use_legacy_landlock,
+                    allow_proxy_network,
+                );
+                let mut full_command = Vec::with_capacity(1 + args.len());
+                full_command.push(os_string_to_command_component(exe.as_os_str().to_owned()));
+                full_command.append(&mut args);
+                (
+                    full_command,
+                    Some(linux_sandbox_arg0_override(exe)),
+                    Some(pending),
+                )
             }
             #[cfg(target_os = "windows")]
             SandboxType::WindowsRestrictedToken => (
@@ -645,6 +676,14 @@ fn os_string_to_command_component(value: OsString) -> String {
     value
         .into_string()
         .unwrap_or_else(|value| value.to_string_lossy().into_owned())
+}
+
+fn linux_sandbox_arg0_override(exe: &Path) -> String {
+    if exe.file_name().and_then(|name| name.to_str()) == Some(ODY_LINUX_SANDBOX_ARG0) {
+        os_string_to_command_component(exe.as_os_str().to_owned())
+    } else {
+        ODY_LINUX_SANDBOX_ARG0.to_string()
+    }
 }
 
 #[cfg(test)]

@@ -17,6 +17,7 @@ anyhow = { workspace = true }
 ody-apply-patch = { workspace = true }
 ody-exec-server = { workspace = true }
 ody-install-context = { workspace = true }
+ody-linux-sandbox = { workspace = true }
 ody-sandboxing = { workspace = true }
 ody-shell-escalation = { workspace = true }
 ody-utils-absolute-path = { workspace = true }

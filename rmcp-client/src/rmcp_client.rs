@@ -482,7 +482,7 @@ impl RmcpClient {
             warn!("failed to persist OAuth tokens after initialize: {error}");
         }
 
-        Ok(initialize_result)
+        Ok(Arc::unwrap_or_clone(initialize_result))
     }
 
     pub async fn list_tools(

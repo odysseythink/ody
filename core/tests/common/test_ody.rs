@@ -511,9 +511,14 @@ impl TestOdyBuilder {
             .clone()
             .or_else(|| test_env.exec_server_url.clone());
         #[cfg(target_os = "linux")]
+        let local_runtime_paths = ody_exec_server::ExecServerRuntimePaths::from_optional_paths(
+            std::env::current_exe().ok(),
+            find_ody_linux_sandbox_exe().ok(),
+        )?;
         #[cfg(not(target_os = "linux"))]
         let local_runtime_paths = ody_exec_server::ExecServerRuntimePaths::new(
             std::env::current_exe()?,
+            None,
         )?;
         let environment_manager = Arc::new(if include_local_environment {
             ody_exec_server::EnvironmentManager::create_for_tests_with_local(

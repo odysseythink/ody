@@ -94,6 +94,7 @@ impl ToolOrchestrator {
             use_legacy_landlock: attempt.use_legacy_landlock,
             windows_sandbox_level: attempt.windows_sandbox_level,
             windows_sandbox_private_desktop: attempt.windows_sandbox_private_desktop,
+            ody_linux_sandbox_exe: attempt.ody_linux_sandbox_exe,
             network_denial_cancellation_token: network_approval
                 .as_ref()
                 .map(ActiveNetworkApproval::cancellation_token),
@@ -271,6 +272,7 @@ impl ToolOrchestrator {
                 .config
                 .permissions
                 .windows_sandbox_private_desktop,
+            ody_linux_sandbox_exe: None,
             network_denial_cancellation_token: None,
         };
 
@@ -432,11 +434,6 @@ impl ToolOrchestrator {
                 } else {
                     SandboxType::None
                 };
-                let retry_sandbox = if unsandboxed_allowed {
-                    None
-                } else {
-                    turn_ctx.config.as_ref()
-                };
                 let retry_attempt = SandboxAttempt {
                     sandbox: retry_sandbox,
                     sandbox_requested: retry_sandbox_requested,
@@ -452,6 +449,7 @@ impl ToolOrchestrator {
                         .config
                         .permissions
                         .windows_sandbox_private_desktop,
+                    ody_linux_sandbox_exe: None,
                     network_denial_cancellation_token: None,
                 };
 

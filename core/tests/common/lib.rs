@@ -224,6 +224,8 @@ allow_local_binding = true
 #[cfg(target_os = "linux")]
 fn default_test_overrides() -> ConfigOverrides {
     ConfigOverrides {
+        ody_linux_sandbox_exe: Some(
+            find_ody_linux_sandbox_exe().expect("should find binary for ody-linux-sandbox"),
         ),
         ..ConfigOverrides::default()
     }
@@ -235,6 +237,21 @@ fn default_test_overrides() -> ConfigOverrides {
 }
 
 #[cfg(target_os = "linux")]
+pub fn find_ody_linux_sandbox_exe() -> Result<PathBuf, CargoBinError> {
+    if let Some(path) = TEST_ARG0_PATH_ENTRY
+        .get()
+        .and_then(Option::as_ref)
+        .and_then(|path_entry| path_entry.paths().ody_linux_sandbox_exe.clone())
+    {
+        return Ok(path);
+    }
+
+    if let Ok(path) = std::env::current_exe() {
+        return Ok(path);
+    }
+
+    ody_utils_cargo_bin::cargo_bin("ody-linux-sandbox")
+}
 
 pub async fn wait_for_event<F>(
     ody: &OdyThread,

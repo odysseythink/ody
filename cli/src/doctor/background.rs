@@ -146,10 +146,8 @@ async fn socket_status(socket_path: &Path) -> SocketStatus {
         return SocketStatus::NotRunning;
     }
 
-    match ody_app_server_daemon::probe_app_server_version(socket_path).await {
-        Ok(app_server_version) => SocketStatus::Running(app_server_version),
-        Err(err) => SocketStatus::StaleOrUnreachable(concise_probe_error(&err, socket_path)),
-    }
+    // ody_app_server_daemon was removed with login deletion; stub as unreachable.
+    SocketStatus::StaleOrUnreachable(format!("cannot probe app server version: {}", socket_path.display()))
 }
 
 fn concise_probe_error(err: &anyhow::Error, socket_path: &Path) -> String {

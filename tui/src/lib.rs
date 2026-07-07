@@ -912,7 +912,7 @@ pub async fn run_main(
 
     let local_runtime_paths = ExecServerRuntimePaths::from_optional_paths(
         arg0_paths.ody_self_exe.clone(),
-        arg0_paths.clone(),
+        arg0_paths.ody_linux_sandbox_exe.clone(),
     )?;
     let environment_manager =
         if should_load_configured_environments(&loader_overrides, &app_server_target) {

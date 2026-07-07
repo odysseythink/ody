@@ -73,8 +73,7 @@ fn windows_command_processor() -> String {
 
 fn test_runtime_paths() -> ExecServerRuntimePaths {
     ExecServerRuntimePaths::new(
-        std::env::current_exe().expect("current exe"),
-    )
+        std::env::current_exe().expect("current exe"), None)
     .expect("runtime paths")
 }
 

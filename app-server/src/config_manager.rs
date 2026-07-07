@@ -278,7 +278,7 @@ impl ConfigManager {
 
     fn apply_arg0_paths(&self, config: &mut Config) {
         config.ody_self_exe = self.arg0_paths.ody_self_exe.clone();
-        config = self.arg0_paths.clone();
+        config.ody_linux_sandbox_exe = self.arg0_paths.ody_linux_sandbox_exe.clone();
         config.main_execve_wrapper_exe = self.arg0_paths.main_execve_wrapper_exe.clone();
     }
 

@@ -1,7 +1,6 @@
 // Aggregates all former standalone integration tests as modules.
 use ody_apply_patch::ODY_CORE_APPLY_PATCH_ARG1;
 use ody_exec_server::ODY_FS_HELPER_ARG1;
-use ody_sandboxing::landlock::ODY_LINUX_SANDBOX_ARG0;
 use ody_test_binary_support::TestBinaryDispatchGuard;
 use ody_test_binary_support::TestBinaryDispatchMode;
 use ody_test_binary_support::configure_test_binary_dispatch;
@@ -18,9 +17,6 @@ pub static ODY_ALIASES_TEMP_DIR: Option<TestBinaryDispatchGuard> = {
             return TestBinaryDispatchMode::DispatchArg0Only;
         }
         if argv1 == Some(ODY_FS_HELPER_ARG1) {
-            return TestBinaryDispatchMode::DispatchArg0Only;
-        }
-        if exe_name == ODY_LINUX_SANDBOX_ARG0 {
             return TestBinaryDispatchMode::DispatchArg0Only;
         }
         TestBinaryDispatchMode::InstallAliases

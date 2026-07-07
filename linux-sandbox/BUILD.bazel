@@ -1,0 +1,9 @@
+load("//:defs.bzl", "ody_rust_crate")
+
+ody_rust_crate(
+    name = "linux-sandbox",
+    crate_name = "ody_linux_sandbox",
+    extra_binaries = [
+        "//ody-rs/bwrap:bwrap",
+    ],
+)

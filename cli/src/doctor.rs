@@ -53,6 +53,8 @@ use ody_tui::Cli as TuiCli;
 use ody_utils_cli::CliConfigOverrides;
 use http::HeaderMap;
 use http::HeaderValue;
+use ody_client::default_client::build_reqwest_client;
+use ody_client::default_client::default_headers;
 use serde::Serialize;
 use supports_color::Stream;
 
@@ -306,6 +308,14 @@ impl DoctorCheck {
 /// This is the CLI entry point for ody doctor. It does not repair issues;
 /// failures are represented in the report and cause a non-zero process exit so
 /// scripts can distinguish a clean environment from one that needs attention.
+pub 
+fn load_auth_dot_json(
+    _ody_home: &std::path::Path,
+    _store_mode: ody_config::types::AuthCredentialsStoreMode,
+    _keyring_backend: ody_config::types::AuthKeyringBackendKind,
+) -> anyhow::Result<Option<AuthDotJson>> {
+    Ok(None)
+}
 pub async fn run_doctor(
     command: DoctorCommand,
     root_config_overrides: CliConfigOverrides,
@@ -1589,8 +1599,8 @@ fn sandbox_check(config: &Config, arg0_paths: &Arg0DispatchPaths) -> DoctorCheck
     ));
     push_path_detail(
         &mut details,
-
-        arg0_paths.as_deref(),
+        "Linux sandbox helper",
+        arg0_paths.ody_linux_sandbox_exe.as_deref(),
     );
     push_path_detail(
         &mut details,
@@ -1600,7 +1610,7 @@ fn sandbox_check(config: &Config, arg0_paths: &Arg0DispatchPaths) -> DoctorCheck
 
     let mut status = CheckStatus::Ok;
     let mut summary = "sandbox configuration is readable".to_string();
-    if let Some(helper) = arg0_paths.as_deref()
+    if let Some(helper) = arg0_paths.ody_linux_sandbox_exe.as_deref()
         && !helper.exists()
     {
         status = CheckStatus::Warning;

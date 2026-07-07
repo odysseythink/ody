@@ -932,12 +932,13 @@ pub struct Config {
     /// file: it must be set in code via [`ConfigOverrides`].
     pub ody_self_exe: Option<PathBuf>,
 
-    
+    /// Path to the `ody-linux-sandbox` executable used when
     /// [`ody_sandboxing::SandboxType::LinuxSeccomp`] is used. Note that this
     /// cannot be set in the config file: it must be set in code via
     /// [`ConfigOverrides`].
     ///
-    
+    /// When this program is invoked, arg0 will be set to `ody-linux-sandbox`.
+    pub ody_linux_sandbox_exe: Option<PathBuf>,
 
     /// Path to the `ody-execve-wrapper` executable used for shell
     /// escalation. This cannot be set in the config file: it must be set in
@@ -2359,6 +2360,7 @@ pub struct ConfigOverrides {
     pub model_provider: Option<String>,
     pub service_tier: Option<Option<String>>,
     pub ody_self_exe: Option<PathBuf>,
+    pub ody_linux_sandbox_exe: Option<PathBuf>,
     pub main_execve_wrapper_exe: Option<PathBuf>,
     pub default_zsh_path: Option<AbsolutePathBuf>,
     pub base_instructions: Option<String>,
@@ -2914,6 +2916,7 @@ impl Config {
             model_provider,
             service_tier: service_tier_override,
             ody_self_exe,
+            ody_linux_sandbox_exe,
             main_execve_wrapper_exe,
             default_zsh_path,
             base_instructions,
@@ -3831,6 +3834,7 @@ impl Config {
             bypass_hook_trust,
             file_opener: cfg.file_opener.unwrap_or(UriBasedFileOpener::VsCode),
             ody_self_exe,
+            ody_linux_sandbox_exe,
             main_execve_wrapper_exe,
             zsh_path,
 

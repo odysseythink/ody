@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use ody_apply_patch::ODY_CORE_APPLY_PATCH_ARG1;
 use ody_exec_server::ODY_FS_HELPER_ARG1;
 use ody_install_context::InstallContext;
+use ody_sandboxing::landlock::ODY_LINUX_SANDBOX_ARG0;
 use ody_utils_home_dir::find_ody_home;
 #[cfg(target_os = "windows")]
 use ody_windows_sandbox::ODY_WINDOWS_SANDBOX_ARG1;
@@ -29,6 +30,7 @@ pub struct Arg0DispatchPaths {
     /// a test harness, where `current_exe()` can point at the harness binary
     /// instead of the real Ody CLI.
     pub ody_self_exe: Option<PathBuf>,
+    pub ody_linux_sandbox_exe: Option<PathBuf>,
     pub main_execve_wrapper_exe: Option<PathBuf>,
 }
 
@@ -88,7 +90,10 @@ pub fn arg0_dispatch() -> Option<Arg0PathEntryGuard> {
         }
     }
 
-    if exe_name == APPLY_PATCH_ARG0 || exe_name == MISSPELLED_APPLY_PATCH_ARG0 {
+    if exe_name == ODY_LINUX_SANDBOX_ARG0 {
+        // Safety: [`run_main`] never returns.
+        ody_linux_sandbox::run_main();
+    } else if exe_name == APPLY_PATCH_ARG0 || exe_name == MISSPELLED_APPLY_PATCH_ARG0 {
         ody_apply_patch::main();
     }
 
@@ -183,14 +188,14 @@ fn prepare_path_env_var_with_aliases(
 /// Linux (but not Windows).
 ///
 /// When the current executable is invoked through the hard-link or alias named
-
-/// the sandbox helper. Otherwise we:
+/// `ody-linux-sandbox` we *directly* execute
+/// [`ody_linux_sandbox::run_main`] (which never returns). Otherwise we:
 ///
 /// 1.  Load `.env` values from `~/.ody-code/.env` before creating any threads.
 /// 2.  Spawn a main runtime thread with a controlled stack size.
 /// 3.  Construct a Tokio multi-thread runtime.
 /// 4.  Capture the current executable path and derive the
-
+///     `ody-linux-sandbox` helper path (falling back to the current
 ///     executable if needed) so children can re-invoke the sandbox when running
 ///     on Linux.
 /// 5.  Execute the provided async `main_fn` inside that runtime, forwarding any
@@ -242,6 +247,11 @@ where
 {
     let paths = Arg0DispatchPaths {
         ody_self_exe: current_exe.clone(),
+        ody_linux_sandbox_exe: if cfg!(target_os = "linux") {
+            linux_sandbox_exe_path(path_entry_guard.as_ref(), current_exe)
+        } else {
+            None
+        },
         main_execve_wrapper_exe: path_entry_guard
             .as_ref()
             .and_then(|path_entry| path_entry.paths().main_execve_wrapper_exe.clone()),
@@ -252,6 +262,18 @@ where
     // runtime paths above can point at aliases inside that directory.
     drop(path_entry_guard);
     result
+}
+
+fn linux_sandbox_exe_path(
+    path_entry_guard: Option<&Arg0PathEntryGuard>,
+    current_exe: Option<PathBuf>,
+) -> Option<PathBuf> {
+    // Prefer the `ody-linux-sandbox` alias when available so callers can
+    // re-exec through a path whose basename still triggers arg0 dispatch on
+    // bubblewrap builds that do not support `--argv0`.
+    path_entry_guard
+        .and_then(|path_entry| path_entry.paths().ody_linux_sandbox_exe.clone())
+        .or(current_exe)
 }
 
 fn build_runtime() -> anyhow::Result<tokio::runtime::Runtime> {
@@ -354,6 +376,8 @@ fn prepare_path_entry_for_ody_aliases(
     for filename in &[
         APPLY_PATCH_ARG0,
         MISSPELLED_APPLY_PATCH_ARG0,
+        #[cfg(target_os = "linux")]
+        ODY_LINUX_SANDBOX_ARG0,
         #[cfg(unix)]
         EXECVE_WRAPPER_ARG0,
     ] {
@@ -384,6 +408,16 @@ fn prepare_path_entry_for_ody_aliases(
 
     let paths = Arg0DispatchPaths {
         ody_self_exe: std::env::current_exe().ok(),
+        ody_linux_sandbox_exe: {
+            #[cfg(target_os = "linux")]
+            {
+                Some(path.join(ODY_LINUX_SANDBOX_ARG0))
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                None
+            }
+        },
         main_execve_wrapper_exe: {
             #[cfg(unix)]
             {
@@ -483,13 +517,14 @@ mod tests {
     use super::Arg0PathEntryGuard;
     use super::LOCK_FILENAME;
     use super::janitor_cleanup;
+    use super::linux_sandbox_exe_path;
     #[cfg(unix)]
     use super::run_main_with_arg0_guard;
     #[cfg(unix)]
     use anyhow::ensure;
+    use ody_install_context::OdyPackageLayout;
     use ody_install_context::InstallContext;
     use ody_install_context::InstallMethod;
-    use ody_install_context::OdyPackageLayout;
     use ody_utils_absolute_path::AbsolutePathBuf;
     use pretty_assertions::assert_eq;
     use std::fs;
@@ -545,6 +580,28 @@ mod tests {
             install_context,
             path_dir,
         })
+    }
+
+    #[test]
+    fn linux_sandbox_exe_path_prefers_ody_linux_sandbox_alias() -> std::io::Result<()> {
+        let temp_dir = TempDir::new()?;
+        let lock_file = create_lock(temp_dir.path())?;
+        let alias_path = temp_dir.path().join("ody-linux-sandbox");
+        let path_entry = Arg0PathEntryGuard::new(
+            temp_dir,
+            lock_file,
+            Arg0DispatchPaths {
+                ody_self_exe: Some(PathBuf::from("/usr/bin/ody")),
+                ody_linux_sandbox_exe: Some(alias_path.clone()),
+                main_execve_wrapper_exe: None,
+            },
+        );
+
+        assert_eq!(
+            linux_sandbox_exe_path(Some(&path_entry), Some(PathBuf::from("/usr/bin/ody"))),
+            Some(alias_path),
+        );
+        Ok(())
     }
 
     #[test]
@@ -616,6 +673,7 @@ mod tests {
             lock_file,
             Arg0DispatchPaths {
                 ody_self_exe: Some(PathBuf::from("/usr/bin/ody")),
+                ody_linux_sandbox_exe: Some(alias_path.clone()),
                 main_execve_wrapper_exe: Some(alias_path),
             },
         );
@@ -625,7 +683,8 @@ mod tests {
             Some(PathBuf::from("/usr/bin/ody")),
             |paths| async move {
                 let alias_path = paths
-                    .main_execve_wrapper_exe
+                    .ody_linux_sandbox_exe
+                    .or(paths.main_execve_wrapper_exe)
                     .expect("unix dispatch should create at least one alias path");
                 ensure!(
                     alias_path.exists(),

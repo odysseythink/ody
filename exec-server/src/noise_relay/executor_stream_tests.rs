@@ -39,8 +39,7 @@ async fn processor_exit_reports_closed_virtual_stream() -> Result<()> {
         "stream-1".to_string(),
         /*instance_id*/ 7,
         ConnectionProcessor::new(ExecServerRuntimePaths::new(
-            std::env::current_exe()?,
-        )?),
+            std::env::current_exe()?, None)?),
         physical_outgoing_tx,
         closed_stream_tx,
         executor_transport,
