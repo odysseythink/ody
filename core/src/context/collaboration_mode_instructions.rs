@@ -46,6 +46,13 @@ impl CollaborationModeInstructions {
             instructions: format!("{}\n\n{}", self.instructions, fragment),
         }
     }
+
+    pub(crate) fn with_rigor_invariants(self) -> Self {
+        let fragment = ody_collaboration_mode_templates::PLAN_RIGOR_INVARIANTS;
+        Self {
+            instructions: format!("{}\n\n{}", self.instructions, fragment),
+        }
+    }
 }
 
 fn render_plan_instructions(instructions: &str, split_threshold: Option<usize>) -> String {
@@ -187,6 +194,36 @@ mod tests {
         assert!(
             body.contains("trace one concrete value"),
             "body should contain the end-to-end trace requirement:\n{body}"
+        );
+    }
+
+    #[test]
+    fn composes_rigor_invariants_fragment() {
+        let mode = plan_mode_with_instructions("Plan the work.");
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8))
+            .expect("should produce instructions")
+            .with_rigor_invariants();
+        let body = instructions.body();
+
+        assert!(
+            body.contains("## Shared-signature build-green invariant"),
+            "body should contain Shared-signature section:\n{body}"
+        );
+        assert!(
+            body.contains("## No-placeholders rule"),
+            "body should contain No-placeholders section:\n{body}"
+        );
+        assert!(
+            body.contains("cargo check --workspace --all-targets"),
+            "body should contain whole-tree typecheck command:\n{body}"
+        );
+        assert!(
+            body.contains("TODO"),
+            "body should list TODO as a forbidden placeholder:\n{body}"
+        );
+        assert!(
+            body.contains("TBD"),
+            "body should list TBD as a forbidden placeholder:\n{body}"
         );
     }
 }
