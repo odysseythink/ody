@@ -14,7 +14,7 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-ody-login = { workspace = true }
+ody-client = { workspace = true }
 ody-mcp-server = { workspace = true }
 ody-terminal-detection = { workspace = true }
 ody-utils-cargo-bin = { workspace = true }

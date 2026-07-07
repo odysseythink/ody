@@ -298,7 +298,7 @@ impl AppServerSession {
 
     /// Fetches the current account info without refreshing the auth token.
     ///
-    /// Used by both `bootstrap` (to populate the initial UI) and `get_login_status`
+    /// Used by both `bootstrap` (to populate the initial UI) 
     /// (to check auth mode without the overhead of a full bootstrap).
     pub(crate) async fn read_account(&mut self) -> Result<GetAccountResponse> {
         let account_request_id = self.next_request_id();

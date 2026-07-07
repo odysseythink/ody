@@ -16,7 +16,6 @@ use ody_extension_api::ExtensionEventSink;
 use ody_extension_api::ExtensionRegistry;
 use ody_extension_api::ExtensionRegistryBuilder;
 use ody_goal_extension::GoalService;
-use ody_login::AuthManager;
 use ody_protocol::ThreadId;
 use ody_protocol::error::OdyErr;
 use ody_protocol::protocol::Event;
@@ -30,7 +29,6 @@ use crate::thread_state::ThreadStateManager;
 
 pub(crate) struct ThreadExtensionDependencies {
     pub(crate) event_sink: Arc<dyn ExtensionEventSink>,
-    pub(crate) auth_manager: Arc<AuthManager>,
     pub(crate) state_db: Option<StateDbHandle>,
     pub(crate) analytics_events_client: AnalyticsEventsClient,
     pub(crate) thread_manager: Weak<ThreadManager>,
@@ -50,7 +48,6 @@ where
 {
     let ThreadExtensionDependencies {
         event_sink,
-        auth_manager,
         state_db,
         analytics_events_client,
         thread_manager,
@@ -75,7 +72,7 @@ where
     ody_memories_extension::install(&mut builder, ody_otel::global());
     ody_mcp_extension::install(&mut builder);
     ody_mcp_extension::install_executor_plugins(&mut builder, environment_manager);
-    ody_web_search_extension::install(&mut builder, auth_manager);
+    ody_web_search_extension::install(&mut builder);
     let skill_providers = ody_skills_extension::SkillProviders::new()
         .with_executor_provider(executor_skill_provider)
         .with_orchestrator_provider(Arc::new(

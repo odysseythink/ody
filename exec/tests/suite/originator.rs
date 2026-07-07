@@ -1,7 +1,7 @@
 #![cfg(not(target_os = "windows"))]
 #![allow(clippy::unwrap_used)]
 
-use ody_login::default_client::ODY_INTERNAL_ORIGINATOR_OVERRIDE_ENV_VAR;
+use ody_client::default_client::ODY_INTERNAL_ORIGINATOR_OVERRIDE_ENV_VAR;
 use core_test_support::responses;
 use core_test_support::test_ody_exec::test_ody_exec;
 use wiremock::matchers::header;

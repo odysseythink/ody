@@ -593,9 +593,6 @@
             "remote_compaction_v2": {
               "type": "boolean"
             },
-            "remote_control": {
-              "type": "boolean"
-            },
             "remote_models": {
               "type": "boolean"
             },
@@ -5119,9 +5116,6 @@
           "type": "boolean"
         },
         "remote_compaction_v2": {
-          "type": "boolean"
-        },
-        "remote_control": {
           "type": "boolean"
         },
         "remote_models": {

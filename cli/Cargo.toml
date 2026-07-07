@@ -29,7 +29,6 @@ anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 clap_complete = { workspace = true }
 ody-app-server = { workspace = true }
-ody-app-server-daemon = { workspace = true }
 ody-app-server-protocol = { workspace = true }
 ody-app-server-test-client = { workspace = true, optional = true }
 ody-arg0 = { workspace = true }
@@ -45,7 +44,7 @@ ody-execpolicy = { workspace = true }
 ody-features = { workspace = true }
 ody-git-utils = { workspace = true }
 ody-install-context = { workspace = true }
-ody-login = { workspace = true }
+ody-client = { workspace = true }
 ody-memories-write = { workspace = true }
 ody-mcp = { workspace = true }
 ody-mcp-server = { workspace = true }

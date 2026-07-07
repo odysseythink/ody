@@ -69,10 +69,7 @@ use ody_app_server_protocol::ProcessKillParams;
 use ody_app_server_protocol::ProcessResizePtyParams;
 use ody_app_server_protocol::ProcessSpawnParams;
 use ody_app_server_protocol::ProcessWriteStdinParams;
-use ody_app_server_protocol::RemoteControlClientsListParams;
-use ody_app_server_protocol::RemoteControlClientsRevokeParams;
-use ody_app_server_protocol::RemoteControlPairingStartParams;
-use ody_app_server_protocol::RemoteControlPairingStatusParams;
+
 use ody_app_server_protocol::RequestId;
 use ody_app_server_protocol::ReviewStartParams;
 use ody_app_server_protocol::SendAddCreditsNudgeEmailParams;
@@ -111,7 +108,7 @@ use ody_app_server_protocol::TurnInterruptParams;
 use ody_app_server_protocol::TurnStartParams;
 use ody_app_server_protocol::TurnSteerParams;
 use ody_app_server_protocol::WindowsSandboxSetupStartParams;
-use ody_login::default_client::ODY_INTERNAL_ORIGINATOR_OVERRIDE_ENV_VAR;
+use ody_client::default_client::ODY_INTERNAL_ORIGINATOR_OVERRIDE_ENV_VAR;
 use tokio::process::Command;
 
 pub struct TestAppServer {
@@ -646,81 +643,6 @@ impl TestAppServer {
     ) -> anyhow::Result<i64> {
         let params = Some(serde_json::to_value(params)?);
         self.send_request("experimentalFeature/enablement/set", params)
-            .await
-    }
-
-    /// Send a `remoteControl/enable` JSON-RPC request.
-    pub async fn send_remote_control_enable_request(&mut self) -> anyhow::Result<i64> {
-        self.send_request("remoteControl/enable", /*params*/ None)
-            .await
-    }
-
-    /// Send a runtime-only `remoteControl/enable` JSON-RPC request.
-    pub async fn send_remote_control_ephemeral_enable_request(&mut self) -> anyhow::Result<i64> {
-        self.send_request(
-            "remoteControl/enable",
-            Some(serde_json::json!({ "ephemeral": true })),
-        )
-        .await
-    }
-
-    /// Send a `remoteControl/disable` JSON-RPC request.
-    pub async fn send_remote_control_disable_request(&mut self) -> anyhow::Result<i64> {
-        self.send_request("remoteControl/disable", /*params*/ None)
-            .await
-    }
-
-    /// Send a runtime-only `remoteControl/disable` JSON-RPC request.
-    pub async fn send_remote_control_ephemeral_disable_request(&mut self) -> anyhow::Result<i64> {
-        self.send_request(
-            "remoteControl/disable",
-            Some(serde_json::json!({ "ephemeral": true })),
-        )
-        .await
-    }
-
-    /// Send a `remoteControl/status/read` JSON-RPC request.
-    pub async fn send_remote_control_status_read_request(&mut self) -> anyhow::Result<i64> {
-        self.send_request("remoteControl/status/read", /*params*/ None)
-            .await
-    }
-
-    /// Send a `remoteControl/pairing/start` JSON-RPC request.
-    pub async fn send_remote_control_pairing_start_request(
-        &mut self,
-        params: RemoteControlPairingStartParams,
-    ) -> anyhow::Result<i64> {
-        let params = Some(serde_json::to_value(params)?);
-        self.send_request("remoteControl/pairing/start", params)
-            .await
-    }
-
-    /// Send a `remoteControl/pairing/status` JSON-RPC request.
-    pub async fn send_remote_control_pairing_status_request(
-        &mut self,
-        params: RemoteControlPairingStatusParams,
-    ) -> anyhow::Result<i64> {
-        let params = Some(serde_json::to_value(params)?);
-        self.send_request("remoteControl/pairing/status", params)
-            .await
-    }
-
-    /// Send a `remoteControl/client/list` JSON-RPC request.
-    pub async fn send_remote_control_clients_list_request(
-        &mut self,
-        params: RemoteControlClientsListParams,
-    ) -> anyhow::Result<i64> {
-        let params = Some(serde_json::to_value(params)?);
-        self.send_request("remoteControl/client/list", params).await
-    }
-
-    /// Send a `remoteControl/client/revoke` JSON-RPC request.
-    pub async fn send_remote_control_clients_revoke_request(
-        &mut self,
-        params: RemoteControlClientsRevokeParams,
-    ) -> anyhow::Result<i64> {
-        let params = Some(serde_json::to_value(params)?);
-        self.send_request("remoteControl/client/revoke", params)
             .await
     }
 

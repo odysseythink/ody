@@ -1292,9 +1292,8 @@ async fn usage_command_runs_with_backend_auth_without_api_key_configured() {
 
 #[tokio::test]
 async fn usage_command_runs_with_backend_auth_from_widget_init() {
-    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual_with_auth(
-        /*model_override*/ None, /*api_key_configured*/ false,
-        /*has_ody_backend_auth*/ true,
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(
+        /*model_override*/ None, 
     )
     .await;
 

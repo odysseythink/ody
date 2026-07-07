@@ -7,8 +7,6 @@ use std::sync::Arc;
 use ody_api::ApiError;
 use ody_api::Provider;
 use ody_api::SharedAuthProvider;
-use ody_login::AuthManager;
-use ody_login::OdyAuth;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::ProviderCapabilities as ModelProviderInfoCapabilities;
 use ody_models_manager::manager::OpenAiModelsManager;
@@ -19,7 +17,6 @@ use ody_protocol::account::ProviderAccount;
 use ody_protocol::error::OdyErr;
 use ody_protocol::odysseythink_models::ModelsResponse;
 
-use crate::auth::auth_manager_for_provider;
 use crate::auth::resolve_provider_auth;
 use crate::models_endpoint::OpenAiModelsEndpoint;
 use crate::adapters::chat::ChatAdapter;
@@ -123,17 +120,6 @@ pub trait ModelProvider: fmt::Debug + Send + Sync {
         false
     }
 
-    /// Returns the provider-scoped auth manager, when this provider uses one.
-    ///
-    /// TODO(celia-oai): Make auth manager access internal to this crate so callers
-    /// resolve provider-specific auth only through `ModelProvider`. We first need
-    /// to think through whether Ody should have a unified provider-specific auth
-    /// manager throughout the codebase; that is a larger refactor than this change.
-    fn auth_manager(&self) -> Option<Arc<AuthManager>>;
-
-    /// Returns the current provider-scoped auth value, if one is configured.
-    fn auth(&self) -> ModelProviderFuture<'_, Option<OdyAuth>>;
-
     /// Returns the current app-visible account state for this provider.
     fn account_state(&self) -> ProviderAccountResult;
 
@@ -145,9 +131,8 @@ pub trait ModelProvider: fmt::Debug + Send + Sync {
     /// Returns provider configuration adapted for the API client.
     fn api_provider(&self) -> ModelProviderFuture<'_, ody_protocol::error::Result<Provider>> {
         Box::pin(async move {
-            let auth = self.auth().await;
             self.info()
-                .to_api_provider(auth.as_ref().map(OdyAuth::auth_mode))
+                .to_api_provider(None)
         })
     }
 
@@ -163,8 +148,7 @@ pub trait ModelProvider: fmt::Debug + Send + Sync {
         &self,
     ) -> ModelProviderFuture<'_, ody_protocol::error::Result<SharedAuthProvider>> {
         Box::pin(async move {
-            let auth = self.auth().await;
-            resolve_provider_auth(auth.as_ref(), self.info())
+            resolve_provider_auth(self.info())
         })
     }
 
@@ -190,9 +174,8 @@ pub type SharedModelProvider = Arc<dyn ModelProvider>;
 /// deriving the provider id from the wire API identity.
 pub fn create_model_provider(
     provider_info: ModelProviderInfo,
-    auth_manager: Option<Arc<AuthManager>>,
 ) -> SharedModelProvider {
-    create_model_provider_with_id(provider_id_for_wire_api(&provider_info), provider_info, auth_manager)
+    create_model_provider_with_id(provider_id_for_wire_api(&provider_info), provider_info)
 }
 
 /// Creates the default runtime model provider for configured provider metadata
@@ -200,12 +183,10 @@ pub fn create_model_provider(
 pub fn create_model_provider_with_id(
     provider_id: impl Into<String>,
     provider_info: ModelProviderInfo,
-    auth_manager: Option<Arc<AuthManager>>,
 ) -> SharedModelProvider {
     Arc::new(ConfiguredModelProvider::new(
         provider_id.into(),
         provider_info,
-        auth_manager,
     ))
 }
 
@@ -214,20 +195,16 @@ pub fn create_model_provider_with_id(
 struct ConfiguredModelProvider {
     provider_id: String,
     info: ModelProviderInfo,
-    auth_manager: Option<Arc<AuthManager>>,
 }
 
 impl ConfiguredModelProvider {
     fn new(
         provider_id: String,
         provider_info: ModelProviderInfo,
-        auth_manager: Option<Arc<AuthManager>>,
     ) -> Self {
-        let auth_manager = auth_manager_for_provider(auth_manager, &provider_info);
         Self {
             provider_id,
             info: provider_info,
-            auth_manager,
         }
     }
 }
@@ -244,7 +221,7 @@ impl ModelProvider for ConfiguredModelProvider {
             let api_provider = self.api_provider().await?;
             let auth = self.api_auth().await?;
             let transport = ody_api::ReqwestTransport::new(
-                ody_login::default_client::build_reqwest_client(),
+                ody_client::default_client::build_reqwest_client(),
             );
             let adapter: Box<dyn ChatProvider> = match self.info.wire_api {
                 ody_model_provider_info::WireApi::Responses => {
@@ -276,19 +253,6 @@ impl ModelProvider for ConfiguredModelProvider {
         (&self.info.capabilities).into()
     }
 
-    fn auth_manager(&self) -> Option<Arc<AuthManager>> {
-        self.auth_manager.clone()
-    }
-
-    fn auth(&self) -> ModelProviderFuture<'_, Option<OdyAuth>> {
-        Box::pin(async move {
-            match self.auth_manager.as_ref() {
-                Some(auth_manager) => auth_manager.auth().await,
-                None => None,
-            }
-        })
-    }
-
     fn account_state(&self) -> ProviderAccountResult {
         Ok(ProviderAccountState {
             account: None,
@@ -301,10 +265,7 @@ impl ModelProvider for ConfiguredModelProvider {
         config_model_catalog: Option<ModelsResponse>,
     ) -> SharedModelsManager {
         if let Some(model_catalog) = config_model_catalog {
-            return Arc::new(StaticModelsManager::new(
-                self.auth_manager.clone(),
-                model_catalog,
-            ));
+            return Arc::new(StaticModelsManager::new(model_catalog));
         }
 
         // OpenAI-compatible Chat Completions providers (Kimi / DeepSeek / GLM)
@@ -312,17 +273,15 @@ impl ModelProvider for ConfiguredModelProvider {
         if self.info.is_chat_completions()
             && let Some(catalog) = model_catalog_for_provider(&self.provider_id, &self.info)
         {
-            return Arc::new(StaticModelsManager::new(self.auth_manager.clone(), catalog));
+            return Arc::new(StaticModelsManager::new(catalog));
         }
 
         let endpoint = Arc::new(OpenAiModelsEndpoint::new(
             self.info.clone(),
-            self.auth_manager.clone(),
         ));
         Arc::new(OpenAiModelsManager::new(
             ody_home,
             endpoint,
-            self.auth_manager.clone(),
         ))
     }
 }
@@ -376,7 +335,6 @@ mod tests {
     async fn configured_provider_runtime_base_url_uses_configured_base_url() {
         let provider = create_model_provider(
             provider_for("https://example.test/v1".to_string()),
-            /*auth_manager*/ None,
         );
 
         assert_eq!(
@@ -398,7 +356,6 @@ mod tests {
                 wire_api: WireApi::Responses,
                     ..Default::default()
             },
-            /*auth_manager*/ None,
         );
 
         assert_eq!(
@@ -413,12 +370,7 @@ mod tests {
     async fn configured_provider_uses_provider_bearer_token_for_api_auth() {
         let mut provider_info = provider_for("https://example.test/v1".to_string());
         provider_info.experimental_bearer_token = Some("provider-token".to_string());
-        let provider = create_model_provider(
-            provider_info,
-            Some(AuthManager::from_auth_for_testing(OdyAuth::from_api_key(
-                "odysseythink-api-key",
-            ))),
-        );
+        let provider = create_model_provider(provider_info);
 
         let auth = provider
             .api_auth()
@@ -443,7 +395,7 @@ mod tests {
             wire_api: WireApi::Chat,
             ..Default::default()
         };
-        let provider = create_model_provider_with_id("my-provider", info, None);
+        let provider = create_model_provider_with_id("my-provider", info);
         let manager = provider.models_manager(PathBuf::from("/tmp/ody-models-test"), None);
         let catalog = manager.raw_model_catalog(RefreshStrategy::Offline).await;
 
@@ -463,7 +415,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let provider = create_model_provider_with_id("custom-chat", info, None);
+        let provider = create_model_provider_with_id("custom-chat", info);
         let caps = provider.capabilities();
 
         assert!(caps.web_search);

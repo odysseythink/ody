@@ -70,10 +70,8 @@ use ody_features::Feature;
 use ody_features::unstable_features_warning_event;
 use ody_hooks::Hooks;
 use ody_hooks::HooksConfig;
-use ody_login::AuthManager;
-use ody_login::OdyAuth;
-use ody_login::auth_env_telemetry::collect_auth_env_telemetry;
-use ody_login::default_client::originator;
+
+use ody_client::default_client::originator;
 use ody_mcp::McpConnectionManager;
 use ody_mcp::McpResourceClient;
 use ody_mcp::McpRuntimeContext;
@@ -422,7 +420,6 @@ pub(crate) struct OdySpawnArgs {
     pub(crate) config: Config,
     pub(crate) user_instructions: LoadedUserInstructions,
     pub(crate) installation_id: String,
-    pub(crate) auth_manager: Arc<AuthManager>,
     pub(crate) models_manager: SharedModelsManager,
     pub(crate) environment_manager: Arc<EnvironmentManager>,
     pub(crate) skills_service: Arc<SkillsService>,
@@ -510,7 +507,6 @@ impl Ody {
             mut config,
             user_instructions,
             installation_id,
-            auth_manager,
             models_manager,
             environment_manager,
             skills_service,
@@ -664,7 +660,6 @@ impl Ody {
             config.clone(),
             user_instructions,
             installation_id,
-            auth_manager.clone(),
             models_manager.clone(),
             exec_policy,
             tx_event.clone(),

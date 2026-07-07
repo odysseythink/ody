@@ -3,7 +3,6 @@ use std::sync::Arc;
 use ody_exec_server::EnvironmentManager;
 use ody_exec_server::ExecServerRuntimePaths;
 use ody_extension_api::UserInstructionsProvider;
-use ody_login::AuthManager;
 use ody_protocol::error::OdyErr;
 use ody_protocol::error::Result as OdyResult;
 use ody_protocol::models::ResponseItem;
@@ -31,19 +30,15 @@ pub async fn build_prompt_input(
 ) -> OdyResult<Vec<ResponseItem>> {
     config.ephemeral = true;
 
-    let auth_manager =
-        AuthManager::shared_from_config(&config, /*enable_ody_api_key_env*/ false).await;
-
     let local_runtime_paths = ExecServerRuntimePaths::from_optional_paths(
         config.ody_self_exe.clone(),
-        config.ody_linux_sandbox_exe.clone(),
+        config.clone(),
     )?;
 
     let thread_store = thread_store_from_config(&config, state_db.clone());
     let installation_id = resolve_installation_id(&config.ody_home).await?;
     let thread_manager = ThreadManager::new(
         &config,
-        Arc::clone(&auth_manager),
         SessionSource::Exec,
         Arc::new(
             EnvironmentManager::from_ody_home(

@@ -20,7 +20,7 @@ ody-app-server-protocol = { workspace = true }
 ody-config = { workspace = true }
 ody-core = { workspace = true }
 ody-features = { workspace = true }
-ody-login = { workspace = true }
+ody-client = { workspace = true }
 ody-models-manager = { workspace = true }
 ody-protocol = { workspace = true }
 ody-utils-cargo-bin = { workspace = true }

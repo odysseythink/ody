@@ -4,7 +4,6 @@
 use anyhow::Result;
 use ody_config::types::McpServerConfig;
 use ody_config::types::McpServerTransportConfig;
-use ody_login::OdyAuth;
 use ody_protocol::dynamic_tools::DynamicToolCallOutputContentItem;
 use ody_protocol::dynamic_tools::DynamicToolFunctionSpec;
 use ody_protocol::dynamic_tools::DynamicToolNamespaceSpec;
@@ -320,7 +319,6 @@ async fn app_search_sources_are_hidden_for_api_key_auth() -> Result<()> {
     .await;
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::from_api_key("Test API Key"))
         .with_config(move |config| {
             configure_search_capable_apps(config, apps_server.base_url.as_str())
         });

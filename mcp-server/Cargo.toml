@@ -24,7 +24,7 @@ ody-core = { workspace = true }
 ody-home = { workspace = true }
 ody-exec-server = { workspace = true }
 ody-extension-api = { workspace = true }
-ody-login = { workspace = true }
+ody-client = { workspace = true }
 ody-protocol = { workspace = true }
 ody-utils-cli = { workspace = true }
 ody-utils-json-to-toml = { workspace = true }

@@ -5,7 +5,6 @@ use ody_core::compact::SUMMARIZATION_PROMPT;
 use ody_core::compact::SUMMARY_PREFIX;
 use ody_core::config::Config;
 use ody_features::Feature;
-use ody_login::OdyAuth;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::built_in_model_providers;
 use ody_model_provider_info::ProviderCapabilities;
@@ -2173,7 +2172,6 @@ async fn pre_sampling_compact_runs_on_switch_to_smaller_context_model() {
 
     let model_provider = non_odysseythink_model_provider(&server);
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_model(previous_model)
         .with_config(move |config| {
             config.model_provider = model_provider;
@@ -2275,7 +2273,6 @@ async fn pre_sampling_compact_runs_when_comp_hash_changes() {
 
     let model_provider = non_odysseythink_model_provider(&server);
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_model(previous_model)
         .with_config(move |config| {
             config.model_provider = model_provider;
@@ -2356,7 +2353,6 @@ async fn auto_compaction_feature_disabled_skips_comp_hash_model_switch_compactio
     .await;
     let model_provider = non_odysseythink_model_provider(&server);
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_model(previous_model)
         .with_config(move |config| {
             config.model_provider = model_provider;
@@ -2454,7 +2450,6 @@ async fn pre_sampling_compact_skips_when_either_comp_hash_is_missing() {
 
     let model_provider = non_odysseythink_model_provider(&server);
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_model(model_without_hash)
         .with_config(move |config| {
             config.model_provider = model_provider;
@@ -2559,7 +2554,6 @@ async fn body_after_prefix_model_switch_budget_compacts_with_next_model() {
 
     let model_provider = non_odysseythink_model_provider(&server);
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_model(previous_model)
         .with_config(move |config| {
             config.model_provider = model_provider;
@@ -2653,7 +2647,6 @@ async fn pre_sampling_compact_runs_after_resume_and_switch_to_smaller_model() {
 
     let model_provider = non_odysseythink_model_provider(&server);
     let mut initial_builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_model(previous_model)
         .with_config(move |config| {
             config.model_provider = model_provider;
@@ -2696,7 +2689,6 @@ async fn pre_sampling_compact_runs_after_resume_and_switch_to_smaller_model() {
 
     let model_provider = non_odysseythink_model_provider(&server);
     let mut resumed_builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_model(previous_model)
         .with_config(move |config| {
             config.model_provider = model_provider;
@@ -2774,7 +2766,6 @@ async fn pre_sampling_compact_recovers_comp_hash_after_resume() {
 
     let model_provider = non_odysseythink_model_provider(&server);
     let mut initial_builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_model(previous_model)
         .with_config(move |config| {
             config.model_provider = model_provider;
@@ -2827,7 +2818,6 @@ async fn pre_sampling_compact_recovers_comp_hash_after_resume() {
 
     let model_provider = non_odysseythink_model_provider(&server);
     let mut resumed_builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_model(previous_model)
         .with_config(move |config| {
             config.model_provider = model_provider;
@@ -2901,7 +2891,6 @@ async fn pre_sampling_compact_skips_missing_comp_hash_after_resume() {
 
     let model_provider = non_odysseythink_model_provider(&server);
     let mut initial_builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_model(previous_model)
         .with_config(move |config| {
             config.model_provider = model_provider;
@@ -2952,7 +2941,6 @@ async fn pre_sampling_compact_skips_missing_comp_hash_after_resume() {
 
     let model_provider = non_odysseythink_model_provider(&server);
     let mut resumed_builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_model(previous_model)
         .with_config(move |config| {
             config.model_provider = model_provider;
@@ -4177,7 +4165,6 @@ async fn auto_compact_counts_encrypted_reasoning_before_last_user() {
         mount_compact_json_once(&server, serde_json::json!({ "output": compacted_history })).await;
 
     let ody = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(move |config| {
             set_test_compact_prompt(config);
             config.model_auto_compact_token_limit = Some(300);
@@ -4303,7 +4290,6 @@ async fn auto_compact_runs_when_reasoning_header_clears_between_turns() {
         mount_compact_json_once(&server, serde_json::json!({ "output": compacted_history })).await;
 
     let ody = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(|config| {
             set_test_compact_prompt(config);
             config.model_auto_compact_token_limit = Some(300);
@@ -4491,7 +4477,6 @@ async fn snapshot_request_shape_pre_turn_compaction_strips_incoming_model_switch
 
     let model_provider = non_odysseythink_model_provider(&server);
     let test = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_model(previous_model)
         .with_config(move |config| {
             config.model_provider = model_provider;
@@ -4945,7 +4930,6 @@ async fn remote_v2_compaction_keeps_creation_time_instructions_after_same_path_m
     )?;
     let mut builder = test_ody()
         .with_home(Arc::clone(&home))
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(|config| {
             let _ = config.features.enable(Feature::RemoteCompactionV2);
         });
@@ -5007,7 +4991,6 @@ async fn remote_v2_compaction_keeps_creation_time_instructions_after_same_path_m
     let resumed_cwd = test.config.cwd.clone();
     let mut resume_builder = test_ody()
         .with_home(Arc::clone(&home))
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(move |config| {
             config.cwd = resumed_cwd;
             let _ = config.features.enable(Feature::RemoteCompactionV2);

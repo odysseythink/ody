@@ -9,7 +9,6 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-ody-login = { workspace = true }
 ody-protocol = { workspace = true }
 sentry = { version = "0.46" }
 tracing = { workspace = true }

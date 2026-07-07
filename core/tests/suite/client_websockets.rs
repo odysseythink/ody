@@ -8,7 +8,6 @@ use ody_core::Prompt;
 use ody_core::ResponseEvent;
 use ody_core::X_RESPONSESAPI_INCLUDE_TIMING_METRICS_HEADER;
 use ody_features::Feature;
-use ody_login::OdyAuth;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::WireApi;
 use ody_model_provider_info::ProviderCapabilities;
@@ -190,7 +189,7 @@ async fn responses_websocket_streams_request() {
     );
     assert_eq!(
         handshake.header(USER_AGENT_HEADER),
-        Some(ody_login::default_client::get_ody_user_agent())
+        Some(ody_client::default_client::get_ody_user_agent())
     );
     assert_eq!(
         body["client_metadata"]["x-ody-installation-id"].as_str(),
@@ -272,7 +271,7 @@ async fn responses_websocket_reuses_connection_with_per_turn_trace_payloads() {
     assert_eq!(server.handshakes().len(), 1);
     assert_eq!(
         server.single_handshake().header(USER_AGENT_HEADER),
-        Some(ody_login::default_client::get_ody_user_agent())
+        Some(ody_client::default_client::get_ody_user_agent())
     );
     let connection = server.single_connection();
     assert_eq!(connection.len(), 2);
@@ -363,7 +362,7 @@ async fn responses_websocket_preconnect_reuses_connection() {
     assert_eq!(server.handshakes().len(), 1);
     assert_eq!(
         server.single_handshake().header(USER_AGENT_HEADER),
-        Some(ody_login::default_client::get_ody_user_agent())
+        Some(ody_client::default_client::get_ody_user_agent())
     );
     assert_eq!(
         server.single_handshake().header("x-ody-window-id"),
@@ -406,7 +405,7 @@ async fn responses_websocket_request_prewarm_reuses_connection() {
     assert_eq!(server.handshakes().len(), 1);
     assert_eq!(
         server.single_handshake().header(USER_AGENT_HEADER),
-        Some(ody_login::default_client::get_ody_user_agent())
+        Some(ody_client::default_client::get_ody_user_agent())
     );
     let connection = server.single_connection();
     assert_eq!(connection.len(), 2);
@@ -1505,8 +1504,8 @@ async fn responses_websocket_connection_limit_error_reconnects_and_completes() {
     assert_eq!(
         handshake_user_agents,
         vec![
-            Some(ody_login::default_client::get_ody_user_agent()),
-            Some(ody_login::default_client::get_ody_user_agent()),
+            Some(ody_client::default_client::get_ody_user_agent()),
+            Some(ody_client::default_client::get_ody_user_agent()),
         ]
     );
 
@@ -2162,8 +2161,6 @@ async fn websocket_harness_with_provider_options(
     let model_info = ody_core::test_support::construct_model_info_offline(MODEL, &config);
     let thread_id = ThreadId::new();
     let session_id = SessionId::new();
-    let auth_manager =
-        ody_core::test_support::auth_manager_from_auth(OdyAuth::from_api_key("Test API Key"));
     let exporter = InMemoryMetricExporter::default();
     let metrics = MetricsClient::new(
         MetricsConfig::in_memory("test", "ody-core", env!("CARGO_PKG_VERSION"), exporter)
@@ -2176,7 +2173,7 @@ async fn websocket_harness_with_provider_options(
         model_info.slug.as_str(),
         /*account_id*/ None,
         Some("test@test.com".to_string()),
-        auth_manager.auth_mode().map(TelemetryAuthMode::from),
+        None,
         "test_originator".to_string(),
         /*log_user_prompts*/ false,
         "test".to_string(),

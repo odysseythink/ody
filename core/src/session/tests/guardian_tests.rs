@@ -31,7 +31,6 @@ use ody_protocol::request_permissions::RequestPermissionsArgs;
 use ody_protocol::request_permissions::RequestPermissionsResponse;
 use core_test_support::PathExt;
 use core_test_support::TempDirExt;
-use core_test_support::ody_linux_sandbox_exe_or_skip;
 use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
 use core_test_support::responses::ev_response_created;
@@ -105,14 +104,12 @@ async fn request_permissions_routes_to_guardian_when_reviewer_is_enabled() {
     let config = Arc::new(config);
     let models_manager = models_manager_with_provider(
         config.ody_home.to_path_buf(),
-        Arc::clone(&session.services.auth_manager),
         config.model_provider.clone(),
     );
     session.services.models_manager = models_manager;
     turn_context_raw.config = Arc::clone(&config);
     turn_context_raw.provider = create_model_provider(
         config.model_provider.clone(),
-        turn_context_raw.auth_manager.clone(),
     );
     let session = Arc::new(session);
     let turn_context = Arc::new(turn_context_raw);
@@ -302,7 +299,6 @@ async fn guardian_allows_shell_command_additional_permissions_requests_past_poli
         .expect("test setup should allow enabling request permissions");
     turn_context_raw.permission_profile = ody_protocol::models::PermissionProfile::Disabled;
     let mut config = (*turn_context_raw.config).clone();
-    config.ody_linux_sandbox_exe = ody_linux_sandbox_exe_or_skip!();
     config
         .features
         .enable(Feature::GuardianApproval)
@@ -311,14 +307,12 @@ async fn guardian_allows_shell_command_additional_permissions_requests_past_poli
     let config = Arc::new(config);
     let models_manager = models_manager_with_provider(
         config.ody_home.to_path_buf(),
-        Arc::clone(&session.services.auth_manager),
         config.model_provider.clone(),
     );
     session.services.models_manager = models_manager;
     turn_context_raw.config = Arc::clone(&config);
     turn_context_raw.provider = create_model_provider(
         config.model_provider.clone(),
-        turn_context_raw.auth_manager.clone(),
     );
     let session = Arc::new(session);
     let turn_context = Arc::new(turn_context_raw);
@@ -416,14 +410,12 @@ async fn strict_auto_review_turn_grant_forces_guardian_for_shell_command_policy_
     let config = Arc::new(config);
     let models_manager = models_manager_with_provider(
         config.ody_home.to_path_buf(),
-        Arc::clone(&session.services.auth_manager),
         config.model_provider.clone(),
     );
     session.services.models_manager = models_manager;
     turn_context_raw.config = Arc::clone(&config);
     turn_context_raw.provider = create_model_provider(
         config.model_provider.clone(),
-        turn_context_raw.auth_manager.clone(),
     );
     let session = Arc::new(session);
     let turn_context = Arc::new(turn_context_raw);
@@ -687,10 +679,8 @@ async fn guardian_subagent_does_not_inherit_parent_exec_policy_rules() {
         }
     );
 
-    let auth_manager = AuthManager::from_auth_for_testing(OdyAuth::from_api_key("Test API Key"));
     let models_manager = models_manager_with_provider(
         config.ody_home.to_path_buf(),
-        auth_manager.clone(),
         config.model_provider.clone(),
     );
     let plugins_manager = Arc::new(PluginsManager::new(config.ody_home.to_path_buf()));
@@ -708,7 +698,6 @@ async fn guardian_subagent_does_not_inherit_parent_exec_policy_rules() {
         config,
         user_instructions: Default::default(),
         installation_id: "11111111-1111-4111-8111-111111111111".to_string(),
-        auth_manager,
         models_manager,
         environment_manager: Arc::new(EnvironmentManager::default_for_tests()),
         skills_service,

@@ -12,7 +12,6 @@ use ody_connectors::merge::plugin_connector_to_app_info;
 use ody_connectors::metadata::connector_install_url;
 use ody_connectors::metadata::sanitize_name;
 use ody_features::Feature;
-use ody_login::OdyAuth;
 use ody_mcp::ODY_APPS_MCP_SERVER_NAME;
 use ody_mcp::ToolInfo;
 use pretty_assertions::assert_eq;
@@ -213,7 +212,7 @@ async fn refresh_accessible_connectors_cache_from_mcp_tools_writes_latest_instal
         .await
         .expect("config should load");
     let _ = config.features.set_enabled(Feature::Apps, /*enabled*/ true);
-    let cache_key = accessible_connectors_cache_key(&config, /*auth*/ None);
+    let cache_key = accessible_connectors_cache_key(&config);
     let tools = vec![
         ody_app_tool(
             "calendar_list_events",
@@ -230,7 +229,7 @@ async fn refresh_accessible_connectors_cache_from_mcp_tools_writes_latest_instal
     ];
 
     let cached = with_accessible_connectors_cache_cleared(|| {
-        refresh_accessible_connectors_cache_from_mcp_tools(&config, /*auth*/ None, &tools);
+        refresh_accessible_connectors_cache_from_mcp_tools(&config,  &tools);
         read_cached_accessible_connectors(&cache_key).expect("cache should be populated")
     });
 
@@ -550,13 +549,11 @@ discoverables = [
         .build()
         .await
         .expect("config should load");
-    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
     let plugins_manager = PluginsManager::new(config.ody_home.to_path_buf());
 
-    let discoverable_tools = list_tool_suggest_discoverable_tools_with_auth(
+    let discoverable_tools = list_tool_suggest_discoverable_tools(
         &config,
         &plugins_manager,
-        Some(&auth),
         &[],
         &[],
     )
@@ -587,14 +584,12 @@ apps = true
         .build()
         .await
         .expect("config should load");
-    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
     let loaded_plugin_app_connector_ids = vec!["asdk_app_databricks_workspace".to_string()];
     let plugins_manager = PluginsManager::new(config.ody_home.to_path_buf());
 
-    let discoverable_tools = list_tool_suggest_discoverable_tools_with_auth(
+    let discoverable_tools = list_tool_suggest_discoverable_tools(
         &config,
         &plugins_manager,
-        Some(&auth),
         &[],
         &loaded_plugin_app_connector_ids,
     )

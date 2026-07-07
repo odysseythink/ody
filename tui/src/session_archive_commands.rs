@@ -286,7 +286,7 @@ async fn start_app_server_for_archive_command(
 
     let local_runtime_paths = ExecServerRuntimePaths::from_optional_paths(
         arg0_paths.ody_self_exe.clone(),
-        arg0_paths.ody_linux_sandbox_exe.clone(),
+        arg0_paths.clone(),
     )
     .wrap_err("failed to resolve local runtime paths")?;
     let environment_manager = EnvironmentManager::from_env(Some(local_runtime_paths))
@@ -336,7 +336,6 @@ async fn start_app_server_for_archive_command(
                 cwd
             },
             ody_self_exe: arg0_paths.ody_self_exe.clone(),
-            ody_linux_sandbox_exe: arg0_paths.ody_linux_sandbox_exe.clone(),
             main_execve_wrapper_exe: arg0_paths.main_execve_wrapper_exe.clone(),
             show_raw_agent_reasoning: None,
             bypass_hook_trust: cli.bypass_hook_trust.then_some(true),

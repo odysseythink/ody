@@ -252,38 +252,6 @@ fn apply_patch_responses(
 
 #[cfg(target_os = "linux")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn apply_patch_cli_uses_ody_self_exe_with_linux_sandbox_helper_alias() -> Result<()> {
-    skip_if_no_network!(Ok(()));
-
-    let harness = apply_patch_harness().await?;
-    let ody_linux_sandbox_exe = harness
-        .test()
-        .config
-        .ody_linux_sandbox_exe
-        .as_ref()
-        .expect("linux test config should include ody-linux-sandbox helper");
-    assert_eq!(
-        ody_linux_sandbox_exe
-            .file_name()
-            .and_then(|name| name.to_str()),
-        Some(ODY_LINUX_SANDBOX_ARG0),
-    );
-
-    let patch = "*** Begin Patch\n*** Add File: helper-alias.txt\n+hello\n*** End Patch";
-    let call_id = "apply-helper-alias";
-    mount_apply_patch(&harness, call_id, patch, "done").await;
-
-    harness.submit("please apply helper alias patch").await?;
-
-    let out = harness.apply_patch_output(call_id).await;
-    assert_regex_match(
-        r"(?s)^Exit code: 0.*Success\. Updated the following files:\nA helper-alias\.txt\n?$",
-        &out,
-    );
-    assert_eq!(harness.read_file_text("helper-alias.txt").await?, "hello\n");
-
-    Ok(())
-}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn apply_patch_cli_multiple_operations_integration() -> Result<()> {

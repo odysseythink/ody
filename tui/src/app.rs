@@ -833,7 +833,7 @@ impl App {
             /*account_id*/ None,
             /*account_email*/ None,
             auth_mode,
-            ody_login::default_client::originator().value,
+            ody_client::default_client::originator().value,
             config.otel.log_user_prompt,
             user_agent(),
             serde_json::from_value(serde_json::json!("cli"))

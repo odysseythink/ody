@@ -37,16 +37,14 @@ use ody_app_server_protocol::ThreadListParams;
 use ody_app_server_protocol::ThreadSortKey as AppServerThreadSortKey;
 use ody_app_server_protocol::ThreadSourceKind;
 
+use ody_client::originator;
+use ody_client::set_default_client_residency_requirement;
 use ody_config::CloudConfigBundleLoader;
 use ody_config::ConfigLoadError;
 use ody_config::LoaderOverrides;
 use ody_config::format_config_error_with_source;
 use ody_exec_server::EnvironmentManager;
 use ody_exec_server::ExecServerRuntimePaths;
-use ody_login::AuthConfig;
-use ody_login::default_client::originator;
-use ody_login::default_client::set_default_client_residency_requirement;
-use ody_login::enforce_login_restrictions;
 use ody_protocol::ThreadId;
 use ody_protocol::config_types::AltScreenMode;
 use ody_protocol::config_types::SandboxMode;
@@ -914,7 +912,7 @@ pub async fn run_main(
 
     let local_runtime_paths = ExecServerRuntimePaths::from_optional_paths(
         arg0_paths.ody_self_exe.clone(),
-        arg0_paths.ody_linux_sandbox_exe.clone(),
+        arg0_paths.clone(),
     )?;
     let environment_manager =
         if should_load_configured_environments(&loader_overrides, &app_server_target) {
@@ -966,7 +964,6 @@ pub async fn run_main(
         cwd: cwd_override,
         model_provider: model_provider_override.clone(),
         ody_self_exe: arg0_paths.ody_self_exe.clone(),
-        ody_linux_sandbox_exe: arg0_paths.ody_linux_sandbox_exe.clone(),
         main_execve_wrapper_exe: arg0_paths.main_execve_wrapper_exe.clone(),
         show_raw_agent_reasoning: None,
         bypass_hook_trust: cli.bypass_hook_trust.then_some(true),
@@ -1080,23 +1077,6 @@ pub async fn run_main(
         }
     }
 
-    if !app_server_target.uses_remote_workspace() {
-        let auth_route_config = config.auth_route_config();
-        #[allow(clippy::print_stderr)]
-        if let Err(err) = enforce_login_restrictions(&AuthConfig {
-            ody_home: config.ody_home.to_path_buf(),
-            auth_credentials_store_mode: config.cli_auth_credentials_store_mode,
-            keyring_backend_kind: config.auth_keyring_backend_kind(),
-            forced_login_method: config.forced_login_method,
-            auth_route_config,
-        })
-        .await
-        {
-            eprintln!("{err}");
-            std::process::exit(1);
-        }
-    }
-
     let (tui_file_layer, _tui_file_log_guard) = if config_toml_log_dir_configured {
         let log_dir = config.log_dir.clone();
         std::fs::create_dir_all(&log_dir)?;
@@ -1134,7 +1114,6 @@ pub async fn run_main(
     let feedback = ody_feedback::OdyFeedback::new();
     let feedback_layer = feedback.logger_layer();
     let feedback_metadata_layer = feedback.metadata_layer();
-
 
     let otel_logger_layer = otel.as_ref().and_then(|o| o.logger_layer());
 
@@ -1269,27 +1248,19 @@ async fn run_ratatui_app(
         !uses_remote_workspace && should_show_trust_screen(&initial_config);
     #[cfg(target_os = "windows")]
     let mut trust_decision_was_made = false;
-    let login_status = LoginStatus::NotAuthenticated;
     let should_show_onboarding =
-        should_show_onboarding(login_status, &initial_config, should_show_trust_screen_flag);
+        should_show_onboarding(&initial_config, should_show_trust_screen_flag);
 
     let config = if should_show_onboarding {
-        let show_login_screen = should_show_login_screen(login_status, &initial_config);
         let onboarding_result = run_onboarding_app(
             OnboardingScreenArgs {
-                show_login_screen,
                 show_trust_screen: should_show_trust_screen_flag,
-                login_status,
                 app_server_request_handle: app_server
                     .as_ref()
                     .map(AppServerSession::request_handle),
                 config: initial_config.clone(),
             },
-            if show_login_screen {
-                app_server.as_mut()
-            } else {
-                None
-            },
+            None,
             &mut tui,
         )
         .await?;
@@ -1310,18 +1281,10 @@ async fn run_ratatui_app(
         {
             trust_decision_was_made = onboarding_result.directory_trust_persisted;
         }
-        // If this onboarding run included the login step, always refresh the cloud config bundle
-        // and rebuild config. This avoids missing newly available cloud-managed policy due to login
-        // status detection edge cases.
-        if show_login_screen && !uses_remote_workspace {
-            cloud_config_bundle = CloudConfigBundleLoader::default();
-        }
 
         // If the user made an explicit trust decision, or we showed the login flow, reload config
         // so current process state reflects persisted trust/auth changes.
-        if onboarding_result.directory_trust_persisted
-            || (show_login_screen && !uses_remote_workspace)
-        {
+        if onboarding_result.directory_trust_persisted  {
             load_config_or_exit(
                 cli_kv_overrides.clone(),
                 overrides.clone(),
@@ -1738,26 +1701,6 @@ fn determine_alt_screen_mode(no_alt_screen: bool, tui_alternate_screen: AltScree
     tui_alternate_screen != AltScreenMode::Never
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LoginStatus {
-    AuthMode(AppServerAuthMode),
-    NotAuthenticated,
-}
-
-/// Determines the user's authentication mode using a lightweight account read
-/// rather than a full `bootstrap`, avoiding the model-list fetch and
-/// rate-limit round-trip that `bootstrap` would trigger.
-async fn get_login_status(
-    app_server: &mut AppServerSession,
-    config: &Config,
-) -> color_eyre::Result<LoginStatus> {
-    let account = app_server.read_account().await?;
-    Ok(match account.account {
-        Some(AppServerAccount::ApiKey {}) => LoginStatus::AuthMode(AppServerAuthMode::ApiKey),
-        None => LoginStatus::NotAuthenticated,
-    })
-}
-
 async fn load_config_or_exit(
     cli_kv_overrides: Vec<(String, toml::Value)>,
     overrides: ConfigOverrides,
@@ -1849,7 +1792,6 @@ fn should_show_trust_screen(config: &Config) -> bool {
 }
 
 fn should_show_onboarding(
-    login_status: LoginStatus,
     config: &Config,
     show_trust_screen: bool,
 ) -> bool {
@@ -1857,13 +1799,7 @@ fn should_show_onboarding(
         return true;
     }
 
-    should_show_login_screen(login_status, &config)
-}
-
-fn should_show_login_screen(login_status: LoginStatus, _config: &Config) -> bool {
-    // Only show the login screen for providers that actually require OpenAI auth
-    // (OpenAI or equivalents). For local providers, skip login entirely.
-    login_status == LoginStatus::NotAuthenticated
+    return false;
 }
 
 #[cfg(test)]
@@ -2611,7 +2547,6 @@ mod tests {
             Some("ws://127.0.0.1:8765".to_string()),
             Some(ExecServerRuntimePaths::new(
                 std::env::current_exe().expect("current exe"),
-                /*ody_linux_sandbox_exe*/ None,
             )?),
         )
         .await;

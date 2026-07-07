@@ -20,8 +20,6 @@ use ody_app_server_protocol::PluginSummary;
 use ody_app_server_protocol::RequestId;
 use ody_config::types::AuthCredentialsStoreMode;
 use ody_core::config::set_project_trust_level;
-use ody_login::AuthKeyringBackendKind;
-use ody_login::login_with_api_key;
 use ody_protocol::config_types::TrustLevel;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use pretty_assertions::assert_eq;

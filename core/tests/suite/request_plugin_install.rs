@@ -7,7 +7,6 @@ use ody_config::types::ToolSuggestDiscoverable;
 use ody_config::types::ToolSuggestDiscoverableType;
 use ody_core::config::Config;
 use ody_features::Feature;
-use ody_login::OdyAuth;
 use ody_models_manager::bundled_models_response;
 use ody_protocol::approvals::ElicitationAction;
 use ody_protocol::approvals::ElicitationRequest;
@@ -131,7 +130,6 @@ async fn build_test(
     apps_server: &AppsTestServer,
 ) -> Result<TestOdy> {
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config({
             let apps_base_url = apps_server.base_url.clone();
             move |config| configure_apps_without_search_tool(config, apps_base_url.as_str())
@@ -611,7 +609,6 @@ async fn endpoint_mode_with_no_eligible_candidates_exposes_no_suggestion_tools()
     )
     .await;
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config({
             let apps_base_url = apps_server.base_url.clone();
             move |config| {

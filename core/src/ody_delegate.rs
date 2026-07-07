@@ -51,7 +51,6 @@ use crate::session::SUBMISSION_CHANNEL_CAPACITY;
 use crate::session::emit_subagent_session_started;
 use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
-use ody_login::AuthManager;
 use ody_models_manager::manager::SharedModelsManager;
 use ody_protocol::error::OdyErr;
 use ody_protocol::protocol::InitialHistory;
@@ -68,7 +67,6 @@ use crate::session::completed_session_loop_termination;
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_ody_thread_interactive(
     config: Config,
-    auth_manager: Arc<AuthManager>,
     models_manager: SharedModelsManager,
     parent_session: Arc<Session>,
     parent_ctx: Arc<TurnContext>,
@@ -88,7 +86,6 @@ pub(crate) async fn run_ody_thread_interactive(
         config,
         user_instructions,
         installation_id: parent_session.installation_id.clone(),
-        auth_manager,
         models_manager,
         environment_manager: parent_session
             .services
@@ -184,7 +181,6 @@ pub(crate) async fn run_ody_thread_interactive(
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_ody_thread_one_shot(
     config: Config,
-    auth_manager: Arc<AuthManager>,
     models_manager: SharedModelsManager,
     input: Vec<UserInput>,
     parent_session: Arc<Session>,
@@ -199,7 +195,6 @@ pub(crate) async fn run_ody_thread_one_shot(
     let child_cancel = cancel_token.child_token();
     let io = Box::pin(run_ody_thread_interactive(
         config,
-        auth_manager,
         models_manager,
         parent_session,
         parent_ctx,

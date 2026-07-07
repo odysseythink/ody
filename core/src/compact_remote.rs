@@ -22,7 +22,6 @@ use ody_analytics::CompactionImplementation;
 use ody_analytics::CompactionPhase;
 use ody_analytics::CompactionReason;
 use ody_analytics::CompactionTrigger;
-use ody_app_server_protocol::AuthMode;
 use ody_protocol::error::OdyErr;
 use ody_protocol::error::Result as OdyResult;
 use ody_protocol::items::ContextCompactionItem;
@@ -247,7 +246,7 @@ async fn run_remote_compact_task_inner_impl(
             CompactConversationRequestSettings {
                 effort: turn_context.reasoning_effort.clone(),
                 summary: turn_context.reasoning_summary,
-                service_tier: if sess.services.auth_manager.auth_mode() == Some(AuthMode::ApiKey) {
+                service_tier: if true {
                     None
                 } else {
                     turn_context.config.service_tier.clone()

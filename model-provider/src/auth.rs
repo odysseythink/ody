@@ -3,8 +3,6 @@ use std::sync::Arc;
 use http::HeaderMap;
 use ody_api::AuthProvider;
 use ody_api::SharedAuthProvider;
-use ody_login::AuthManager;
-use ody_login::OdyAuth;
 use ody_model_provider_info::ModelProviderInfo;
 
 use crate::bearer_auth_provider::BearerAuthProvider;
@@ -22,30 +20,14 @@ pub fn unauthenticated_auth_provider() -> SharedAuthProvider {
     Arc::new(UnauthenticatedAuthProvider)
 }
 
-/// Returns the provider-scoped auth manager when this provider uses custom auth.
-///
-/// External bearer auth has been removed, so custom command-backed auth is no
-/// longer supported through `AuthManager`. Providers continue using the
-/// caller-supplied base manager, when present.
-pub(crate) fn auth_manager_for_provider(
-    auth_manager: Option<Arc<AuthManager>>,
-    _provider: &ModelProviderInfo,
-) -> Option<Arc<AuthManager>> {
-    auth_manager
-}
-
 pub(crate) fn resolve_provider_auth(
-    auth: Option<&OdyAuth>,
     provider: &ModelProviderInfo,
 ) -> ody_protocol::error::Result<SharedAuthProvider> {
     if let Some(auth) = bearer_auth_for_provider(provider)? {
         return Ok(Arc::new(auth));
     }
 
-    Ok(match auth {
-        Some(auth) => auth_provider_from_auth(auth),
-        None => unauthenticated_auth_provider(),
-    })
+    Ok(unauthenticated_auth_provider())
 }
 
 fn bearer_auth_for_provider(
@@ -60,13 +42,4 @@ fn bearer_auth_for_provider(
     }
 
     Ok(None)
-}
-
-/// Builds request-header auth for a first-party Ody auth snapshot.
-pub fn auth_provider_from_auth(auth: &OdyAuth) -> SharedAuthProvider {
-    match auth {
-        OdyAuth::ApiKey(_) => Arc::new(BearerAuthProvider {
-            token: auth.get_token().ok(),
-        }),
-    }
 }

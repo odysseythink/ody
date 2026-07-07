@@ -33,7 +33,6 @@ use crate::request_processors::MarketplaceRequestProcessor;
 use crate::request_processors::McpRequestProcessor;
 use crate::request_processors::PluginRequestProcessor;
 use crate::request_processors::ProcessExecRequestProcessor;
-use crate::request_processors::RemoteControlRequestProcessor;
 use crate::request_processors::SearchRequestProcessor;
 use crate::request_processors::ThreadGoalRequestProcessor;
 use crate::request_processors::ThreadRequestProcessor;
@@ -46,7 +45,7 @@ use crate::skills_watcher::SkillsWatcher;
 use crate::thread_state::ConnectionCapabilities;
 use crate::thread_state::ThreadStateManager;
 use crate::transport::AppServerTransport;
-use crate::transport::RemoteControlHandle;
+
 use ody_analytics::AnalyticsEventsClient;
 use ody_analytics::AppServerRpcTransport;
 use ody_app_server_protocol::ClientNotification;
@@ -68,7 +67,6 @@ use ody_exec_server::EnvironmentManager;
 use ody_feedback::OdyFeedback;
 use ody_goal_extension::GoalService;
 use ody_home::OdyHomeUserInstructionsProvider;
-use ody_login::AuthManager;
 
 use ody_protocol::ThreadId;
 use ody_protocol::protocol::SessionSource;
@@ -117,7 +115,6 @@ pub(crate) struct MessageProcessor {
     marketplace_processor: MarketplaceRequestProcessor,
     mcp_processor: McpRequestProcessor,
     plugin_processor: PluginRequestProcessor,
-    remote_control_processor: RemoteControlRequestProcessor,
     search_processor: SearchRequestProcessor,
     thread_goal_processor: ThreadGoalRequestProcessor,
     thread_processor: ThreadRequestProcessor,
@@ -213,10 +210,8 @@ pub(crate) struct MessageProcessorArgs {
     pub(crate) state_db: Option<StateDbHandle>,
     pub(crate) config_warnings: Vec<ConfigWarningNotification>,
     pub(crate) session_source: SessionSource,
-    pub(crate) auth_manager: Arc<AuthManager>,
     pub(crate) installation_id: String,
     pub(crate) rpc_transport: AppServerRpcTransport,
-    pub(crate) remote_control_handle: Option<RemoteControlHandle>,
     pub(crate) plugin_startup_tasks: crate::PluginStartupTasks,
 }
 
@@ -236,10 +231,8 @@ impl MessageProcessor {
             state_db,
             config_warnings,
             session_source,
-            auth_manager,
             installation_id,
             rpc_transport,
-            remote_control_handle,
             plugin_startup_tasks,
         } = args;
         let thread_state_manager = ThreadStateManager::new();
@@ -260,7 +253,6 @@ impl MessageProcessor {
         let thread_manager = Arc::new_cyclic(|thread_manager| {
             ThreadManager::new(
                 config.as_ref(),
-                auth_manager.clone(),
                 session_source,
                 environment_manager,
                 thread_extensions(
@@ -270,7 +262,6 @@ impl MessageProcessor {
                             outgoing.clone(),
                             thread_state_manager.clone(),
                         ),
-                        auth_manager: auth_manager.clone(),
                         state_db: state_db.clone(),
                         analytics_events_client: analytics_events_client.clone(),
                         thread_manager: thread_manager.clone(),
@@ -312,14 +303,12 @@ impl MessageProcessor {
             Arc::new(workspace_settings::WorkspaceSettingsCache::default());
         let app_list_shutdown_token = CancellationToken::new();
         let account_processor = AccountRequestProcessor::new(
-            auth_manager.clone(),
             Arc::clone(&thread_manager),
             outgoing.clone(),
             Arc::clone(&config),
             config_manager.clone(),
         );
         let apps_processor = AppsRequestProcessor::new(
-            auth_manager.clone(),
             Arc::clone(&thread_manager),
             outgoing.clone(),
             config_manager.clone(),
@@ -329,7 +318,6 @@ impl MessageProcessor {
         let catalog_processor = CatalogRequestProcessor::new(
             outgoing.clone(),
             Arc::clone(&skills_watcher),
-            auth_manager.clone(),
             Arc::clone(&thread_manager),
             Arc::clone(&config),
             config_manager.clone(),
@@ -367,19 +355,16 @@ impl MessageProcessor {
             Arc::clone(&thread_manager),
         );
         let mcp_processor = McpRequestProcessor::new(
-            auth_manager.clone(),
             Arc::clone(&thread_manager),
             outgoing.clone(),
             config_manager.clone(),
         );
         let plugin_processor = PluginRequestProcessor::new(
-            auth_manager.clone(),
             Arc::clone(&thread_manager),
             outgoing.clone(),
             config_manager.clone(),
             workspace_settings_cache,
         );
-        let remote_control_processor = RemoteControlRequestProcessor::new(remote_control_handle);
         let search_processor = SearchRequestProcessor::new(outgoing.clone());
         let thread_goal_processor = ThreadGoalRequestProcessor::new(
             Arc::clone(&thread_manager),
@@ -390,7 +375,6 @@ impl MessageProcessor {
             Arc::clone(&goal_service),
         );
         let thread_processor = ThreadRequestProcessor::new(
-            auth_manager.clone(),
             Arc::clone(&thread_manager),
             outgoing.clone(),
             arg0_paths.clone(),
@@ -407,7 +391,6 @@ impl MessageProcessor {
             Arc::clone(&skills_watcher),
         );
         let turn_processor = TurnRequestProcessor::new(
-            auth_manager.clone(),
             Arc::clone(&thread_manager),
             outgoing.clone(),
             analytics_events_client.clone(),
@@ -428,7 +411,6 @@ impl MessageProcessor {
                 .plugins_manager()
                 .maybe_start_plugin_startup_tasks_for_config(
                     &config.plugins_config_input(),
-                    auth_manager,
                     Some(on_effective_plugins_changed),
                 );
         }
@@ -468,7 +450,6 @@ impl MessageProcessor {
             marketplace_processor,
             mcp_processor,
             plugin_processor,
-            remote_control_processor,
             search_processor,
             thread_goal_processor,
             thread_processor,
@@ -873,46 +854,6 @@ impl MessageProcessor {
                     .experimental_feature_enablement_set(request_id.clone(), params)
                     .await
             }
-            ClientRequest::RemoteControlEnable { params, .. } => self
-                .remote_control_processor
-                .enable(
-                    params.is_some_and(|params| params.ephemeral),
-                    app_server_client_name.as_deref(),
-                )
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::RemoteControlDisable { params, .. } => self
-                .remote_control_processor
-                .disable(
-                    params.is_some_and(|params| params.ephemeral),
-                    app_server_client_name.as_deref(),
-                )
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::RemoteControlStatusRead { .. } => self
-                .remote_control_processor
-                .status_read()
-                .map(|response| Some(response.into())),
-            ClientRequest::RemoteControlPairingStart { params, .. } => self
-                .remote_control_processor
-                .pairing_start(params, app_server_client_name.as_deref())
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::RemoteControlPairingStatus { params, .. } => self
-                .remote_control_processor
-                .pairing_status(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::RemoteControlClientsList { params, .. } => self
-                .remote_control_processor
-                .clients_list(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::RemoteControlClientsRevoke { params, .. } => self
-                .remote_control_processor
-                .clients_revoke(params)
-                .await
-                .map(|response| Some(response.into())),
             ClientRequest::ConfigRequirementsRead { params: _, .. } => self
                 .config_processor
                 .config_requirements_read()

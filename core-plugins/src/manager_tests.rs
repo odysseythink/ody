@@ -52,28 +52,6 @@ use toml::Value;
 
 const MAX_CAPABILITY_SUMMARY_DESCRIPTION_LEN: usize = 1024;
 
-#[test]
-fn plugins_manager_tracks_auth_mode() {
-    let tmp = TempDir::new().unwrap();
-    let manager = PluginsManager::new(tmp.path().to_path_buf());
-
-    assert_eq!(manager.auth_mode(), None);
-    assert!(manager.set_auth_mode(Some(AuthMode::ApiKey)));
-    assert_eq!(manager.auth_mode(), Some(AuthMode::ApiKey));
-    assert!(!manager.set_auth_mode(Some(AuthMode::ApiKey)));
-    assert!(manager.set_auth_mode(Some(AuthMode::Unauthenticated)));
-    assert_eq!(manager.auth_mode(), Some(AuthMode::Unauthenticated));
-    assert!(manager.set_auth_mode(/*auth_mode*/ None));
-    assert_eq!(manager.auth_mode(), None);
-
-    let manager_with_auth = PluginsManager::new_with_options(
-        tmp.path().join("auth"),
-        Some(Product::Ody),
-        Some(AuthMode::ApiKey),
-    );
-    assert_eq!(manager_with_auth.auth_mode(), Some(AuthMode::ApiKey));
-}
-
 fn write_auth_projection_plugin(ody_home: &Path, name: &str, include_app: bool) {
     let plugin_root = ody_home
         .join("plugins/cache")
@@ -3184,7 +3162,7 @@ source = "{remote_repo_url}"
     };
     assert_eq!(
         manager
-            .list_tool_suggest_discoverable_plugins(&input, /*auth*/ None)
+            .list_tool_suggest_discoverable_plugins(&input)
             .await
             .expect("initial tool-suggest metadata should load"),
         vec![expected.clone()]
@@ -3204,7 +3182,7 @@ source = "{remote_repo_url}"
 
     assert_eq!(
         manager
-            .list_tool_suggest_discoverable_plugins(&input, /*auth*/ None)
+            .list_tool_suggest_discoverable_plugins(&input)
             .await
             .expect("refreshed tool-suggest metadata should load"),
         vec![ToolSuggestDiscoverablePlugin {

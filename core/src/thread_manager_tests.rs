@@ -275,7 +275,6 @@ async fn shutdown_all_threads_bounded_submits_shutdown_to_every_thread() {
     std::fs::create_dir_all(&config.ody_home).expect("create ody home");
 
     let manager = ThreadManager::with_models_provider_and_home_for_tests(
-        OdyAuth::from_api_key("dummy"),
         config.model_provider.clone(),
         config.ody_home.to_path_buf(),
         Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
@@ -312,7 +311,6 @@ async fn start_thread_keeps_internal_threads_hidden_from_normal_lookups() {
     std::fs::create_dir_all(&config.ody_home).expect("create ody home");
 
     let manager = ThreadManager::with_models_provider_and_home_for_tests(
-        OdyAuth::from_api_key("dummy"),
         config.model_provider.clone(),
         config.ody_home.to_path_buf(),
         Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
@@ -453,7 +451,6 @@ async fn start_thread_seeds_extension_data_for_mcp_and_lifecycle_contributors() 
     extensions.mcp_server_contributor(recorder);
     let manager = ThreadManager::new(
         &config,
-        AuthManager::from_auth_for_testing(OdyAuth::create_dummy_api_key_auth_for_testing()),
         SessionSource::Exec,
         Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
         Arc::new(extensions.build()),
@@ -558,11 +555,8 @@ async fn resume_and_fork_do_not_restore_thread_environments_from_rollout() {
     config.cwd = config.ody_home.abs();
     std::fs::create_dir_all(&config.ody_home).expect("create ody home");
 
-    let auth_manager =
-        AuthManager::from_auth_for_testing(OdyAuth::create_dummy_api_key_auth_for_testing());
     let manager = ThreadManager::new(
         &config,
-        auth_manager.clone(),
         SessionSource::Exec,
         Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
         empty_extension_registry(),
@@ -620,7 +614,6 @@ async fn resume_and_fork_do_not_restore_thread_environments_from_rollout() {
         .resume_thread_from_rollout(
             config.clone(),
             rollout_path.clone(),
-            auth_manager,
             /*parent_trace*/ None,
             /*supports_odysseythink_form_elicitation*/ false,
         )
@@ -679,14 +672,12 @@ async fn explicit_installation_id_skips_ody_home_file() {
     config.cwd = config.ody_home.abs();
     std::fs::create_dir_all(&config.ody_home).expect("create ody home");
 
-    let auth_manager =
-        AuthManager::from_auth_for_testing(OdyAuth::create_dummy_api_key_auth_for_testing());
+
     let installation_id = uuid::Uuid::new_v4().to_string();
     let state_db = init_state_db(&config).await;
     let thread_store = thread_store_from_config(&config, state_db.clone());
     let manager = ThreadManager::new(
         &config,
-        auth_manager,
         SessionSource::Exec,
         Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
         empty_extension_registry(),
@@ -723,11 +714,8 @@ async fn resume_active_thread_from_rollout_returns_running_thread() {
     config.cwd = config.ody_home.abs();
     std::fs::create_dir_all(&config.ody_home).expect("create ody home");
 
-    let auth_manager =
-        AuthManager::from_auth_for_testing(OdyAuth::create_dummy_api_key_auth_for_testing());
     let manager = ThreadManager::new(
         &config,
-        auth_manager.clone(),
         SessionSource::Exec,
         Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
         empty_extension_registry(),
@@ -759,7 +747,6 @@ async fn resume_active_thread_from_rollout_returns_running_thread() {
         .resume_thread_from_rollout(
             config,
             rollout_path,
-            auth_manager,
             /*parent_trace*/ None,
             /*supports_odysseythink_form_elicitation*/ false,
         )
@@ -783,11 +770,8 @@ async fn resume_stopped_thread_from_rollout_spawns_new_thread() {
     config.cwd = config.ody_home.abs();
     std::fs::create_dir_all(&config.ody_home).expect("create ody home");
 
-    let auth_manager =
-        AuthManager::from_auth_for_testing(OdyAuth::create_dummy_api_key_auth_for_testing());
     let manager = ThreadManager::new(
         &config,
-        auth_manager.clone(),
         SessionSource::Exec,
         Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
         empty_extension_registry(),
@@ -824,7 +808,6 @@ async fn resume_stopped_thread_from_rollout_spawns_new_thread() {
         .resume_thread_from_rollout(
             config,
             rollout_path,
-            auth_manager,
             /*parent_trace*/ None,
             /*supports_odysseythink_form_elicitation*/ false,
         )
@@ -848,13 +831,11 @@ async fn resume_stopped_thread_from_rollout_preserves_thread_source() {
     config.cwd = config.ody_home.abs();
     std::fs::create_dir_all(&config.ody_home).expect("create ody home");
 
-    let auth_manager =
-        AuthManager::from_auth_for_testing(OdyAuth::create_dummy_api_key_auth_for_testing());
+
     let state_db = init_state_db(&config).await;
     let thread_store = thread_store_from_config(&config, state_db.clone());
     let manager = ThreadManager::new(
         &config,
-        auth_manager.clone(),
         SessionSource::Exec,
         Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
         empty_extension_registry(),
@@ -903,7 +884,6 @@ async fn resume_stopped_thread_from_rollout_preserves_thread_source() {
         .resume_thread_from_rollout(
             config,
             rollout_path,
-            auth_manager,
             /*parent_trace*/ None,
             /*supports_odysseythink_form_elicitation*/ false,
         )
@@ -938,8 +918,7 @@ async fn rollout_path_resume_and_fork_read_history_through_thread_store() {
     };
     std::fs::create_dir_all(&config.ody_home).expect("create ody home");
 
-    let auth_manager =
-        AuthManager::from_auth_for_testing(OdyAuth::create_dummy_api_key_auth_for_testing());
+
     let state_db = init_state_db(&config).await;
     let thread_store = thread_store_from_config(&config, state_db.clone());
     let in_memory_store = thread_store
@@ -948,7 +927,6 @@ async fn rollout_path_resume_and_fork_read_history_through_thread_store() {
         .expect("configured in-memory store");
     let manager = ThreadManager::new(
         &config,
-        auth_manager.clone(),
         SessionSource::Exec,
         Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
         empty_extension_registry(),
@@ -984,7 +962,6 @@ async fn rollout_path_resume_and_fork_read_history_through_thread_store() {
                 history: vec![RolloutItem::ResponseItem(user_msg("hello"))],
                 rollout_path: Some(rollout_path.clone()),
             }),
-            auth_manager.clone(),
             /*parent_trace*/ None,
             /*supports_odysseythink_form_elicitation*/ false,
         )
@@ -1001,7 +978,6 @@ async fn rollout_path_resume_and_fork_read_history_through_thread_store() {
         .resume_thread_from_rollout(
             config.clone(),
             rollout_path.clone(),
-            auth_manager,
             /*parent_trace*/ None,
             /*supports_odysseythink_form_elicitation*/ false,
         )
@@ -1056,11 +1032,9 @@ async fn new_uses_active_provider_for_model_refresh() {
         cwd: AbsolutePathBuf::current_dir().unwrap_or_else(|_| config.cwd.clone()),
     });
 
-    let auth_manager =
-        AuthManager::from_auth_for_testing(OdyAuth::create_dummy_api_key_auth_for_testing());
+
     let manager = ThreadManager::new(
         &config,
-        auth_manager,
         SessionSource::Exec,
         Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
         empty_extension_registry(),
@@ -1277,12 +1251,10 @@ async fn interrupted_fork_snapshot_does_not_synthesize_turn_id_for_legacy_histor
     config.cwd = config.ody_home.abs();
     std::fs::create_dir_all(&config.ody_home).expect("create ody home");
 
-    let auth_manager =
-        AuthManager::from_auth_for_testing(OdyAuth::create_dummy_api_key_auth_for_testing());
+
     let state_db = init_state_db(&config).await;
     let manager = ThreadManager::new(
         &config,
-        auth_manager.clone(),
         SessionSource::Exec,
         Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
         empty_extension_registry(),
@@ -1302,7 +1274,6 @@ async fn interrupted_fork_snapshot_does_not_synthesize_turn_id_for_legacy_histor
                 RolloutItem::ResponseItem(user_msg("hello")),
                 RolloutItem::ResponseItem(assistant_msg("partial")),
             ]),
-            auth_manager,
             /*parent_trace*/ None,
             /*supports_odysseythink_form_elicitation*/ false,
         )
@@ -1386,12 +1357,10 @@ async fn interrupted_fork_snapshot_preserves_explicit_turn_id() {
     config.cwd = config.ody_home.abs();
     std::fs::create_dir_all(&config.ody_home).expect("create ody home");
 
-    let auth_manager =
-        AuthManager::from_auth_for_testing(OdyAuth::create_dummy_api_key_auth_for_testing());
+
     let state_db = init_state_db(&config).await;
     let manager = ThreadManager::new(
         &config,
-        auth_manager.clone(),
         SessionSource::Exec,
         Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
         empty_extension_registry(),
@@ -1418,7 +1387,6 @@ async fn interrupted_fork_snapshot_preserves_explicit_turn_id() {
                 RolloutItem::ResponseItem(user_msg("hello")),
                 RolloutItem::ResponseItem(assistant_msg("partial")),
             ]),
-            auth_manager,
             /*parent_trace*/ None,
             /*supports_odysseythink_form_elicitation*/ false,
         )
@@ -1485,12 +1453,10 @@ async fn interrupted_fork_snapshot_uses_persisted_mid_turn_history_without_live_
     config.cwd = config.ody_home.abs();
     std::fs::create_dir_all(&config.ody_home).expect("create ody home");
 
-    let auth_manager =
-        AuthManager::from_auth_for_testing(OdyAuth::create_dummy_api_key_auth_for_testing());
+
     let state_db = init_state_db(&config).await;
     let manager = ThreadManager::new(
         &config,
-        auth_manager.clone(),
         SessionSource::Exec,
         Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
         empty_extension_registry(),
@@ -1510,7 +1476,6 @@ async fn interrupted_fork_snapshot_uses_persisted_mid_turn_history_without_live_
                 RolloutItem::ResponseItem(user_msg("hello")),
                 RolloutItem::ResponseItem(assistant_msg("partial")),
             ]),
-            auth_manager,
             /*parent_trace*/ None,
             /*supports_odysseythink_form_elicitation*/ false,
         )

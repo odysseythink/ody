@@ -2,8 +2,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use ody_features::Feature;
-use ody_login::AuthManager;
-use ody_login::OdyAuth;
 use ody_mcp::ToolInfo;
 use ody_model_provider::create_model_provider;
 use ody_protocol::config_types::WebSearchMode;
@@ -245,16 +243,6 @@ fn set_web_search_mode(turn: &mut TurnContext, mode: WebSearchMode) {
             .set(mode)
             .expect("test web search mode should be accepted");
     });
-}
-
-fn use_api_key_auth(turn: &mut TurnContext) {
-    turn.auth_manager = Some(AuthManager::from_auth_for_testing(
-        OdyAuth::create_dummy_api_key_auth_for_testing(),
-    ));
-    turn.provider = create_model_provider(
-        turn.config.model_provider.clone(),
-        turn.auth_manager.clone(),
-    );
 }
 
 struct WebRunExtensionTool;
@@ -1367,7 +1355,6 @@ async fn hosted_tools_follow_provider_auth_model_and_config_gates() {
     api_key_auth.assert_visible_lacks(&["image_generation"]);
 
     let image_generation = probe(|turn| {
-        use_api_key_auth(turn);
         set_feature(turn, Feature::ImageGeneration, /*enabled*/ true);
         turn.model_info.input_modalities = vec![InputModality::Image];
     })
@@ -1392,7 +1379,6 @@ async fn hosted_tools_follow_provider_auth_model_and_config_gates() {
     );
 
     let code_mode_only = probe(|turn| {
-        use_api_key_auth(turn);
         set_features(turn, &[Feature::CodeModeOnly, Feature::MultiAgentV2]);
         set_web_search_mode(turn, WebSearchMode::Live);
         turn.model_info.input_modalities = vec![InputModality::Image];

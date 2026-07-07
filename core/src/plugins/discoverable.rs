@@ -2,7 +2,6 @@ use crate::config::Config;
 use ody_config::types::ToolSuggestDiscoverableType;
 use ody_core_plugins::PluginsManager;
 use ody_core_plugins::ToolSuggestPluginDiscoveryInput;
-use ody_login::OdyAuth;
 use ody_tools::DiscoverablePluginInfo;
 use std::collections::HashSet;
 use tracing::instrument;
@@ -11,7 +10,6 @@ use tracing::instrument;
 pub(crate) async fn list_tool_suggest_discoverable_plugins(
     config: &Config,
     plugins_manager: &PluginsManager,
-    auth: Option<&OdyAuth>,
     loaded_plugin_app_connector_ids: &[String],
 ) -> anyhow::Result<Vec<DiscoverablePluginInfo>> {
     let input = ToolSuggestPluginDiscoveryInput {
@@ -36,7 +34,7 @@ pub(crate) async fn list_tool_suggest_discoverable_plugins(
             .collect::<HashSet<_>>(),
     };
     plugins_manager
-        .list_tool_suggest_discoverable_plugins(&input, auth)
+        .list_tool_suggest_discoverable_plugins(&input)
         .await
         .map(|plugins| {
             plugins

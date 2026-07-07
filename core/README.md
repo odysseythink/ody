@@ -28,7 +28,7 @@ Seatbelt also keeps the legacy default preferences read access
 
 ### Linux
 
-Expects the binary containing `ody-core` to run the equivalent of `ody sandbox` when `arg0` is `ody-linux-sandbox`. See the `ody-arg0` crate for details.
+The binary dispatching logic is handled by the `ody-arg0` crate.
 
 Legacy `SandboxPolicy` / `sandbox_mode` configs are still supported on Linux.
 They can continue to use the legacy Landlock path when the split filesystem

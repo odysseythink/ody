@@ -10,10 +10,7 @@ use ody_core::content_items_to_text;
 use ody_core::detached_memory_responses_metadata;
 use ody_core::resolve_installation_id;
 use ody_features::Feature;
-use ody_login::AuthManager;
-use ody_login::OdyAuth;
-use ody_login::auth_env_telemetry::collect_auth_env_telemetry;
-use ody_login::default_client::originator;
+use ody_client::default_client::originator;
 use ody_model_provider::ModelProvider;
 use ody_model_provider::SharedModelProvider;
 use ody_model_provider::create_model_provider;
@@ -70,7 +67,6 @@ pub(crate) struct MemoryStartupContext {
     thread_id: ThreadId,
     thread: Arc<OdyThread>,
     thread_manager: Arc<ThreadManager>,
-    auth_manager: Arc<AuthManager>,
     provider: SharedModelProvider,
     session_telemetry: SessionTelemetry,
 }
@@ -78,7 +74,6 @@ pub(crate) struct MemoryStartupContext {
 impl MemoryStartupContext {
     pub(crate) fn new(
         thread_manager: Arc<ThreadManager>,
-        auth_manager: Arc<AuthManager>,
         thread_id: ThreadId,
         thread: Arc<OdyThread>,
         config: &Config,
@@ -86,11 +81,9 @@ impl MemoryStartupContext {
     ) -> Self {
         let provider = create_model_provider(
             config.model_provider.clone(),
-            Some(Arc::clone(&auth_manager)),
         );
         Self::new_with_provider(
             thread_manager,
-            auth_manager,
             thread_id,
             thread,
             config,
@@ -102,7 +95,6 @@ impl MemoryStartupContext {
     #[cfg(test)]
     pub(crate) fn new_for_testing(
         thread_manager: Arc<ThreadManager>,
-        auth_manager: Arc<AuthManager>,
         thread_id: ThreadId,
         thread: Arc<OdyThread>,
         config: &Config,
@@ -111,7 +103,6 @@ impl MemoryStartupContext {
     ) -> Self {
         Self::new_with_provider(
             thread_manager,
-            auth_manager,
             thread_id,
             thread,
             config,
@@ -122,43 +113,33 @@ impl MemoryStartupContext {
 
     fn new_with_provider(
         thread_manager: Arc<ThreadManager>,
-        auth_manager: Arc<AuthManager>,
         thread_id: ThreadId,
         thread: Arc<OdyThread>,
         config: &Config,
         source: SessionSource,
         provider: SharedModelProvider,
     ) -> Self {
-        let auth = auth_manager.auth_cached();
-        let auth = auth.as_ref();
-        let auth_mode = auth.map(OdyAuth::auth_mode).map(TelemetryAuthMode::from);
         // Ody backend auth metadata (account id/email) is no longer available.
         let account_id: Option<String> = None;
         let account_email: Option<String> = None;
         let model = config.model.as_deref().unwrap_or("unknown");
-        let auth_env_telemetry = collect_auth_env_telemetry(
-            &config.model_provider,
-            auth_manager.ody_api_key_env_enabled(),
-        );
         let session_telemetry = SessionTelemetry::new(
             thread_id,
             model,
             model,
             account_id,
             account_email,
-            auth_mode,
+            None,
             originator().value,
             config.otel.log_user_prompt,
             user_agent(),
             source,
-        )
-        .with_auth_env(auth_env_telemetry.to_otel_metadata());
+        );
 
         Self {
             thread_id,
             thread,
             thread_manager,
-            auth_manager,
             provider,
             session_telemetry,
         }
@@ -228,7 +209,6 @@ impl MemoryStartupContext {
         let session_id = SessionId::from(self.thread_id);
         let session_id_string = session_id.to_string();
         let model_client = ModelClient::new(
-            Some(Arc::clone(&self.auth_manager)),
             self.thread_id,
             config.model_provider.clone(),
             session_source.clone(),

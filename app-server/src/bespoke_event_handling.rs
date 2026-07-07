@@ -2188,7 +2188,6 @@ mod tests {
     use ody_app_server_protocol::GuardianApprovalReviewStatus;
     use ody_app_server_protocol::JSONRPCErrorError;
     use ody_app_server_protocol::TurnPlanStepStatus;
-    use ody_login::OdyAuth;
     use ody_protocol::AgentPath;
     use ody_protocol::items::HookPromptFragment;
     use ody_protocol::items::build_hook_prompt_message;
@@ -2727,7 +2726,6 @@ mod tests {
         let config = load_default_config_for_test(&ody_home).await;
         let thread_manager = Arc::new(
             ody_core::test_support::thread_manager_with_models_provider_and_home(
-                OdyAuth::create_dummy_api_key_auth_for_testing(),
                 config.model_provider.clone(),
                 config.ody_home.to_path_buf(),
                 Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
@@ -3313,7 +3311,6 @@ mod tests {
         let config = load_default_config_for_test(&ody_home).await;
         let thread_manager = Arc::new(
             ody_core::test_support::thread_manager_with_models_provider_and_home(
-                OdyAuth::create_dummy_api_key_auth_for_testing(),
                 config.model_provider.clone(),
                 config.ody_home.to_path_buf(),
                 Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
@@ -3401,7 +3398,6 @@ mod tests {
         let config = load_default_config_for_test(&ody_home).await;
         let thread_manager = Arc::new(
             ody_core::test_support::thread_manager_with_models_provider_and_home(
-                OdyAuth::create_dummy_api_key_auth_for_testing(),
                 config.model_provider.clone(),
                 config.ody_home.to_path_buf(),
                 Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),

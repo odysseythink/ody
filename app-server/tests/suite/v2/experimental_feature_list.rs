@@ -402,24 +402,6 @@ async fn experimental_feature_enablement_set_only_updates_named_features() -> Re
 }
 
 #[tokio::test]
-async fn experimental_feature_enablement_set_allows_remote_control() -> Result<()> {
-    let ody_home = TempDir::new()?;
-    let mut mcp = TestAppServer::new(ody_home.path()).await?;
-    timeout(DEFAULT_TIMEOUT, mcp.initialize()).await??;
-    let remote_control_enabled = false;
-    let enablement = BTreeMap::from([("remote_control".to_string(), remote_control_enabled)]);
-
-    let actual = set_experimental_feature_enablement(&mut mcp, enablement.clone()).await?;
-
-    assert_eq!(
-        actual,
-        ExperimentalFeatureEnablementSetResponse { enablement }
-    );
-
-    Ok(())
-}
-
-#[tokio::test]
 async fn experimental_feature_enablement_set_empty_map_is_no_op() -> Result<()> {
     let ody_home = TempDir::new()?;
     let mut mcp = TestAppServer::new(ody_home.path()).await?;

@@ -23,7 +23,7 @@ ody-extension-api = { workspace = true }
 ody-home = { workspace = true }
 ody-exec-server = { workspace = true }
 ody-features = { workspace = true }
-ody-login = { workspace = true }
+ody-client = { workspace = true }
 ody-model-provider-info = { workspace = true }
 ody-models-manager = { workspace = true }
 ody-protocol = { workspace = true }

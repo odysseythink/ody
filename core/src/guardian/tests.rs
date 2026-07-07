@@ -235,7 +235,6 @@ async fn guardian_test_session_turn_and_rx(
     let config = Arc::new(config);
     let models_manager = test_support::models_manager_with_provider(
         config.ody_home.to_path_buf(),
-        Arc::clone(&session.services.auth_manager),
         config.model_provider.clone(),
     );
     Arc::get_mut(&mut session)
@@ -245,7 +244,7 @@ async fn guardian_test_session_turn_and_rx(
     let turn_mut = Arc::get_mut(&mut turn).expect("turn should be uniquely owned");
     turn_mut.config = Arc::clone(&config);
     turn_mut.provider =
-        create_model_provider(config.model_provider.clone(), turn_mut.auth_manager.clone());
+        create_model_provider(config.model_provider.clone());
     turn_mut.user_instructions = None;
 
     (session, turn, rx)
@@ -272,12 +271,11 @@ async fn guardian_test_session_and_turn_with_base_url(
     let config = Arc::new(config);
     let models_manager = test_support::models_manager_with_provider(
         config.ody_home.to_path_buf(),
-        Arc::clone(&session.services.auth_manager),
         config.model_provider.clone(),
     );
     session.services.models_manager = models_manager;
     turn.config = Arc::clone(&config);
-    turn.provider = create_model_provider(config.model_provider.clone(), turn.auth_manager.clone());
+    turn.provider = create_model_provider(config.model_provider.clone());
     turn.user_instructions = None;
 
     (Arc::new(session), Arc::new(turn))
@@ -1445,9 +1443,7 @@ async fn guardian_request_model_for_auto_review(
         GuardianTestCatalog::Bundled => {}
         GuardianTestCatalog::ParentOnly => {
             let parent_model = turn.model_info.clone();
-            let auth_manager = Arc::clone(&session.services.auth_manager);
             let models_manager = StaticModelsManager::new(
-                Some(auth_manager),
                 ModelsResponse {
                     models: vec![parent_model],
                 },
@@ -1656,7 +1652,6 @@ async fn guardian_review_request_layout_matches_model_visible_request_snapshot()
     let config = Arc::new(config);
     let models_manager = test_support::models_manager_with_provider(
         config.ody_home.to_path_buf(),
-        Arc::clone(&session.services.auth_manager),
         config.model_provider.clone(),
     );
     session.services.models_manager = models_manager;
@@ -1680,7 +1675,7 @@ async fn guardian_review_request_layout_matches_model_visible_request_snapshot()
     )?;
     session.services.skills_service.clear_cache();
     turn.config = Arc::clone(&config);
-    turn.provider = create_model_provider(config.model_provider.clone(), turn.auth_manager.clone());
+    turn.provider = create_model_provider(config.model_provider.clone());
     let session = Arc::new(session);
     let turn = Arc::new(turn);
     seed_guardian_parent_history(&session, &turn).await;
@@ -2288,7 +2283,6 @@ async fn guardian_review_surfaces_responses_api_errors_in_rejection_reason() -> 
     let config = Arc::new(config);
     let models_manager = test_support::models_manager_with_provider(
         config.ody_home.to_path_buf(),
-        Arc::clone(&session.services.auth_manager),
         config.model_provider.clone(),
     );
     Arc::get_mut(&mut session)
@@ -2298,7 +2292,7 @@ async fn guardian_review_surfaces_responses_api_errors_in_rejection_reason() -> 
     let turn_mut = Arc::get_mut(&mut turn).expect("turn should be uniquely owned");
     turn_mut.config = Arc::clone(&config);
     turn_mut.provider =
-        create_model_provider(config.model_provider.clone(), turn_mut.auth_manager.clone());
+        create_model_provider(config.model_provider.clone());
     turn_mut.user_instructions = None;
 
     seed_guardian_parent_history(&session, &turn).await;

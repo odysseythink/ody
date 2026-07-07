@@ -4,7 +4,6 @@ use ody_config::types::McpServerTransportConfig;
 use ody_core::config::Config;
 use ody_extension_api::ExtensionRegistryBuilder;
 use ody_features::Feature;
-use ody_login::OdyAuth;
 use ody_protocol::ThreadId;
 use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::dynamic_tools::DynamicToolFunctionSpec;
@@ -572,12 +571,9 @@ async fn standalone_web_search_marks_thread_memory_mode_polluted_when_configured
     )
     .await;
 
-    let auth = OdyAuth::from_api_key("dummy");
-    let auth_manager = ody_core::test_support::auth_manager_from_auth(auth.clone());
     let mut extension_builder = ExtensionRegistryBuilder::<Config>::new();
-    install_web_search_extension(&mut extension_builder, auth_manager);
+    install_web_search_extension(&mut extension_builder);
     let mut builder = test_ody()
-        .with_auth(auth)
         .with_extensions(Arc::new(extension_builder.build()))
         .with_config(|config| {
             config

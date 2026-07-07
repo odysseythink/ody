@@ -333,27 +333,6 @@ fn mentions_v2_is_stable_and_enabled_by_default() {
 }
 
 #[test]
-fn remote_control_is_removed_and_disabled_by_default() {
-    assert_eq!(Feature::RemoteControl.stage(), Stage::Removed);
-    assert_eq!(Feature::RemoteControl.default_enabled(), false);
-    assert_eq!(
-        feature_for_key("remote_control"),
-        Some(Feature::RemoteControl)
-    );
-}
-
-#[test]
-fn remote_control_config_is_ignored() {
-    let mut entries = BTreeMap::new();
-    entries.insert("remote_control".to_string(), true);
-
-    let mut features = Features::with_defaults();
-    features.apply_map(&entries);
-
-    assert_eq!(features.enabled(Feature::RemoteControl), false);
-}
-
-#[test]
 fn workspace_dependencies_is_stable_and_enabled_by_default() {
     assert_eq!(Feature::WorkspaceDependencies.stage(), Stage::Stable);
     assert_eq!(Feature::WorkspaceDependencies.default_enabled(), true);

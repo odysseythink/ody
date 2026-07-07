@@ -73,7 +73,7 @@ async fn initialize_probe_does_not_override_originator() -> Result<()> {
     let message = timeout(
         DEFAULT_READ_TIMEOUT,
         mcp.initialize_with_client_info(ClientInfo {
-            name: "ody_app_server_daemon".to_string(),
+            name: "ody_local_client".to_string(),
             title: Some("Ody App Server Daemon".to_string()),
             version: "0.1.0".to_string(),
         }),

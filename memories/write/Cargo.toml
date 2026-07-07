@@ -19,7 +19,7 @@ ody-core = { workspace = true }
 ody-config = { workspace = true }
 ody-features = { workspace = true }
 ody-git-utils = { workspace = true }
-ody-login = { workspace = true }
+ody-client = { workspace = true }
 ody-model-provider = { workspace = true }
 ody-otel = { workspace = true }
 ody-protocol = { workspace = true }

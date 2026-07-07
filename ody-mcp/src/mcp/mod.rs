@@ -21,7 +21,6 @@ use ody_config::McpServerConfig;
 use ody_config::types::AppToolApproval;
 use ody_config::types::AuthKeyringBackendKind;
 use ody_config::types::OAuthCredentialsStoreMode;
-use ody_login::OdyAuth;
 use ody_plugin::PluginCapabilitySummary;
 use ody_protocol::mcp::McpServerInfo;
 use ody_protocol::mcp::Resource;
@@ -118,8 +117,6 @@ pub struct McpConfig {
     pub skill_mcp_dependency_install_enabled: bool,
     /// Approval policy used for MCP tool calls and MCP elicitation requests.
     pub approval_policy: Constrained<AskForApproval>,
-    /// Optional path to `ody-linux-sandbox` for sandboxed MCP tool execution.
-    pub ody_linux_sandbox_exe: Option<PathBuf>,
     /// Whether to use legacy Landlock behavior in the MCP sandbox state.
     pub use_legacy_landlock: bool,
     /// Whether the app MCP integration is enabled by config.
@@ -223,7 +220,7 @@ impl ToolPluginProvenance {
     }
 }
 
-pub fn host_owned_ody_apps_enabled(config: &McpConfig, _auth: Option<&OdyAuth>) -> bool {
+pub fn host_owned_ody_apps_enabled(config: &McpConfig) -> bool {
     // Ody Apps host-owned integration required Ody backend auth, which has
     // been removed.
     let _ = config.apps_enabled;
@@ -236,9 +233,8 @@ pub fn configured_mcp_servers(config: &McpConfig) -> HashMap<String, McpServerCo
 
 pub fn effective_mcp_servers(
     config: &McpConfig,
-    auth: Option<&OdyAuth>,
 ) -> HashMap<String, EffectiveMcpServer> {
-    effective_mcp_servers_from_configured(configured_mcp_servers(config), config, auth)
+    effective_mcp_servers_from_configured(configured_mcp_servers(config), config)
 }
 
 /// Converts a materialized server map to its auth-gated runtime view.
@@ -248,13 +244,12 @@ pub fn effective_mcp_servers(
 pub fn effective_mcp_servers_from_configured(
     configured_servers: HashMap<String, McpServerConfig>,
     config: &McpConfig,
-    auth: Option<&OdyAuth>,
 ) -> HashMap<String, EffectiveMcpServer> {
     let mut servers = configured_servers
         .into_iter()
         .map(|(name, server)| (name, EffectiveMcpServer::configured(server)))
         .collect::<HashMap<_, _>>();
-    if !host_owned_ody_apps_enabled(config, auth) {
+    if !host_owned_ody_apps_enabled(config) {
         servers.remove(ODY_APPS_MCP_SERVER_NAME);
     }
     servers
@@ -266,19 +261,17 @@ pub fn tool_plugin_provenance(config: &McpConfig) -> ToolPluginProvenance {
 
 pub async fn read_mcp_resource(
     config: &McpConfig,
-    auth: Option<&OdyAuth>,
     runtime_context: McpRuntimeContext,
     server: &str,
     uri: &str,
 ) -> anyhow::Result<ReadResourceResult> {
-    let mut mcp_servers = effective_mcp_servers(config, auth);
-    let host_owned_ody_apps_enabled = host_owned_ody_apps_enabled(config, auth);
+    let mut mcp_servers = effective_mcp_servers(config);
+    let host_owned_ody_apps_enabled = host_owned_ody_apps_enabled(config);
     mcp_servers.retain(|name, _| name == server);
     let auth_statuses = compute_auth_statuses(
         mcp_servers.iter(),
         config.mcp_oauth_credentials_store_mode,
         config.auth_keyring_backend_kind,
-        auth,
     )
     .await;
     let (tx_event, rx_event) = unbounded();
@@ -296,13 +289,12 @@ pub async fn read_mcp_resource(
         PermissionProfile::default(),
         runtime_context,
         config.ody_home.clone(),
-        ody_apps_tools_cache_key(auth),
+        ody_apps_tools_cache_key(None::<&()>),
         host_owned_ody_apps_enabled,
         config.prefix_mcp_tool_names,
         config.client_elicitation_capability.clone(),
         /*supports_odysseythink_form_elicitation*/ false,
         tool_plugin_provenance(config),
-        auth,
         /*elicitation_reviewer*/ None,
     )
     .await;
@@ -326,13 +318,12 @@ pub struct McpServerStatusSnapshot {
 
 pub async fn collect_mcp_server_status_snapshot_with_detail(
     config: &McpConfig,
-    auth: Option<&OdyAuth>,
     submit_id: String,
     runtime_context: McpRuntimeContext,
     detail: McpSnapshotDetail,
 ) -> McpServerStatusSnapshot {
-    let mcp_servers = effective_mcp_servers(config, auth);
-    let host_owned_ody_apps_enabled = host_owned_ody_apps_enabled(config, auth);
+    let mcp_servers = effective_mcp_servers(config);
+    let host_owned_ody_apps_enabled = host_owned_ody_apps_enabled(config);
     let tool_plugin_provenance = tool_plugin_provenance(config);
     if mcp_servers.is_empty() {
         return McpServerStatusSnapshot {
@@ -349,7 +340,6 @@ pub async fn collect_mcp_server_status_snapshot_with_detail(
         mcp_servers.iter(),
         config.mcp_oauth_credentials_store_mode,
         config.auth_keyring_backend_kind,
-        auth,
     )
     .await;
 
@@ -371,13 +361,12 @@ pub async fn collect_mcp_server_status_snapshot_with_detail(
         PermissionProfile::default(),
         runtime_context,
         config.ody_home.clone(),
-        ody_apps_tools_cache_key(auth),
+        ody_apps_tools_cache_key(None::<&()>),
         host_owned_ody_apps_enabled,
         config.prefix_mcp_tool_names,
         config.client_elicitation_capability.clone(),
         /*supports_odysseythink_form_elicitation*/ false,
         tool_plugin_provenance,
-        auth,
         /*elicitation_reviewer*/ None,
     )
     .await;

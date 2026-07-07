@@ -228,23 +228,6 @@ pub(super) async fn make_chatwidget_manual(
     tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
     tokio::sync::mpsc::UnboundedReceiver<Op>,
 ) {
-    make_chatwidget_manual_with_auth(
-        model_override,
-        /*api_key_configured*/ false,
-        /*has_ody_backend_auth*/ false,
-    )
-    .await
-}
-
-pub(super) async fn make_chatwidget_manual_with_auth(
-    model_override: Option<&str>,
-    api_key_configured: bool,
-    has_ody_backend_auth: bool,
-) -> (
-    ChatWidget,
-    tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
-    tokio::sync::mpsc::UnboundedReceiver<Op>,
-) {
     let (tx_raw, rx) = unbounded_channel::<AppEvent>();
     let app_event_tx = AppEventSender::new(tx_raw);
     let (op_tx, op_rx) = unbounded_channel::<Op>();
@@ -264,8 +247,8 @@ pub(super) async fn make_chatwidget_manual_with_auth(
         workspace_command_runner: None,
         initial_user_message: None,
         enhanced_keys_supported: false,
-        api_key_configured,
-        has_ody_backend_auth,
+        api_key_configured: false,
+        has_ody_backend_auth: false,
         model_catalog,
         feedback: ody_feedback::OdyFeedback::new(),
         is_first_run: true,

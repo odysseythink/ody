@@ -1,8 +1,6 @@
 use super::*;
 use crate::ModelsManagerConfig;
 use chrono::Utc;
-use ody_login::AuthManager;
-use ody_login::OdyAuth;
 use ody_protocol::odysseythink_models::ModelsResponse;
 use pretty_assertions::assert_eq;
 use serde_json::json;
@@ -128,25 +126,11 @@ fn odysseythink_manager_for_tests(
     ody_home: std::path::PathBuf,
     endpoint_client: Arc<dyn ModelsEndpointClient>,
 ) -> OpenAiModelsManager {
-    odysseythink_manager_for_tests_with_auth(
-        ody_home,
-        endpoint_client,
-        Some(AuthManager::from_auth_for_testing(
-            OdyAuth::create_dummy_api_key_auth_for_testing(),
-        )),
-    )
-}
-
-fn odysseythink_manager_for_tests_with_auth(
-    ody_home: std::path::PathBuf,
-    endpoint_client: Arc<dyn ModelsEndpointClient>,
-    auth_manager: Option<Arc<AuthManager>>,
-) -> OpenAiModelsManager {
-    OpenAiModelsManager::new(ody_home, endpoint_client, auth_manager)
+    OpenAiModelsManager::new(ody_home, endpoint_client)
 }
 
 fn static_manager_for_tests(model_catalog: ModelsResponse) -> StaticModelsManager {
-    StaticModelsManager::new(/*auth_manager*/ None, model_catalog)
+    StaticModelsManager::new(model_catalog)
 }
 
 #[tokio::test]
@@ -300,12 +284,9 @@ async fn refresh_available_models_keeps_merging_for_api_auth() {
         responses: Mutex::new(vec![remote_models.clone()].into()),
         fetch_count: AtomicUsize::new(0),
     });
-    let manager = odysseythink_manager_for_tests_with_auth(
+    let manager = odysseythink_manager_for_tests(
         ody_home.path().to_path_buf(),
         endpoint.clone(),
-        Some(AuthManager::from_auth_for_testing(OdyAuth::from_api_key(
-            "test-api-key",
-        ))),
     );
     let mut expected = load_remote_models_from_file().expect("bundled models should parse");
     expected.extend(remote_models);

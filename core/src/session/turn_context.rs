@@ -106,7 +106,6 @@ pub struct TurnContext {
     pub(crate) trace_id: Option<String>,
     pub(crate) realtime_active: bool,
     pub config: Arc<Config>,
-    pub(crate) auth_manager: Option<Arc<AuthManager>>,
     pub(crate) model_info: ModelInfo,
     pub(crate) session_telemetry: SessionTelemetry,
     pub(crate) provider: SharedModelProvider,
@@ -255,7 +254,6 @@ impl TurnContext {
             trace_id: self.trace_id.clone(),
             realtime_active: self.realtime_active,
             config: Arc::new(config),
-            auth_manager: self.auth_manager.clone(),
             model_info: model_info.clone(),
             session_telemetry: self
                 .session_telemetry
@@ -479,7 +477,6 @@ impl Session {
     pub(crate) fn make_turn_context(
         thread_id: ThreadId,
         session_id: SessionId,
-        auth_manager: Option<Arc<AuthManager>>,
         session_telemetry: &SessionTelemetry,
         provider: ModelProviderInfo,
         session_configuration: &SessionConfiguration,
@@ -505,8 +502,7 @@ impl Session {
             model_info.slug.as_str(),
         );
         let session_source = session_configuration.session_source.clone();
-        let auth_manager_for_context = auth_manager.clone();
-        let provider_for_context = create_model_provider(provider, auth_manager);
+        let provider_for_context = create_model_provider(provider);
         let session_telemetry_for_context = session_telemetry;
         let available_models = models_manager.try_list_models().unwrap_or_default();
         let unified_exec_shell_mode = UnifiedExecShellMode::for_session(
@@ -544,7 +540,6 @@ impl Session {
             trace_id: current_span_trace_id(),
             realtime_active: false,
             config: per_turn_config,
-            auth_manager: auth_manager_for_context,
             model_info,
             session_telemetry: session_telemetry_for_context,
             provider: provider_for_context,
@@ -748,7 +743,6 @@ impl Session {
         let mut turn_context: TurnContext = Self::make_turn_context(
             self.thread_id(),
             self.session_id(),
-            Some(Arc::clone(&self.services.auth_manager)),
             &self.services.session_telemetry,
             session_configuration.provider.clone(),
             &session_configuration,

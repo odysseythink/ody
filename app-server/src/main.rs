@@ -53,13 +53,9 @@ struct AppServerArgs {
     #[arg(long = "disable-plugin-startup-tasks-for-tests", hide = true)]
     disable_plugin_startup_tasks_for_tests: bool,
 
-    /// Enable remote control for this app-server process without changing persistence.
-    #[arg(long = "remote-control", hide = true)]
-    remote_control: bool,
 }
 
 fn main() -> anyhow::Result<()> {
-    let remote_control_disabled = ody_app_server::take_remote_control_disabled_env();
     arg0_dispatch_or_else(move |arg0_paths: Arg0DispatchPaths| async move {
         let AppServerArgs {
             config_overrides,
@@ -69,7 +65,6 @@ fn main() -> anyhow::Result<()> {
             strict_config,
             #[cfg(debug_assertions)]
             disable_plugin_startup_tasks_for_tests,
-            remote_control,
         } = AppServerArgs::parse();
         let loader_overrides = if disable_managed_config_from_debug_env() {
             LoaderOverrides::without_managed_config_for_tests()
@@ -85,12 +80,6 @@ fn main() -> anyhow::Result<()> {
         if disable_plugin_startup_tasks_for_tests {
             runtime_options.plugin_startup_tasks = PluginStartupTasks::Skip;
         }
-        runtime_options.remote_control_startup_mode =
-            match (remote_control, remote_control_disabled) {
-                (true, _) => ody_app_server::RemoteControlStartupMode::EnabledEphemeral,
-                (false, true) => ody_app_server::RemoteControlStartupMode::DisabledEphemeral,
-                (false, false) => ody_app_server::RemoteControlStartupMode::ResolvePersisted,
-            };
 
         run_main_with_transport_options(
             arg0_paths,

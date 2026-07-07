@@ -190,9 +190,8 @@ impl RequestPluginInstallHandler {
             .as_ref()
             .is_some_and(|response| response.action == ElicitationAction::Accept);
 
-        let auth = session.services.auth_manager.auth().await;
         let completed = if user_confirmed {
-            verify_request_plugin_install_completed(&session, &turn, &tool, auth.as_ref()).await
+            verify_request_plugin_install_completed(&session, &turn, &tool).await
         } else {
             false
         };
@@ -311,13 +310,11 @@ async fn verify_request_plugin_install_completed(
     session: &crate::session::session::Session,
     turn: &crate::session::turn_context::TurnContext,
     tool: &DiscoverableTool,
-    auth: Option<&ody_login::OdyAuth>,
 ) -> bool {
     match tool {
         DiscoverableTool::Connector(connector) => refresh_missing_requested_connectors(
             session,
             turn,
-            auth,
             std::slice::from_ref(&connector.id),
             connector.id.as_str(),
         )
@@ -336,7 +333,6 @@ async fn verify_request_plugin_install_completed(
             let _ = refresh_missing_requested_connectors(
                 session,
                 turn,
-                auth,
                 &plugin.app_connector_ids,
                 plugin.id.as_str(),
             )
@@ -350,7 +346,6 @@ async fn verify_request_plugin_install_completed(
 async fn refresh_missing_requested_connectors(
     session: &crate::session::session::Session,
     turn: &crate::session::turn_context::TurnContext,
-    auth: Option<&ody_login::OdyAuth>,
     expected_connector_ids: &[String],
     tool_id: &str,
 ) -> Option<Vec<AppInfo>> {
@@ -376,7 +371,6 @@ async fn refresh_missing_requested_connectors(
             );
             connectors::refresh_accessible_connectors_cache_from_mcp_tools(
                 &turn.config,
-                auth,
                 &mcp_tools,
             );
             Some(accessible_connectors)

@@ -24,7 +24,6 @@ use ody_core::config::Config;
 use ody_exec_server::CreateDirectoryOptions;
 use ody_exec_server::Environment;
 use ody_exec_server::HttpRequestParams;
-use ody_login::OdyAuth;
 use ody_mcp::MCP_SANDBOX_STATE_META_CAPABILITY;
 use ody_models_manager::manager::RefreshStrategy;
 use ody_utils_path_uri::LegacyAppPathString;
@@ -1689,7 +1688,6 @@ async fn stdio_image_responses_are_sanitized_for_text_only_model() -> anyhow::Re
     let rmcp_test_server_bin = remote_aware_stdio_server_bin()?;
 
     let fixture = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(move |config| {
             insert_mcp_server(
                 config,

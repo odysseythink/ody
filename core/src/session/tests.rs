@@ -28,7 +28,6 @@ use ody_core_skills::HostSkillsSnapshot;
 use core_test_support::test_ody::local_selections;
 
 use ody_features::Feature;
-use ody_login::OdyAuth;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_models_manager::bundled_models_response;
 use ody_models_manager::model_info;
@@ -454,7 +453,6 @@ fn test_model_client_session() -> crate::client::ModelClientSession {
     let thread_id = ThreadId::try_from("00000000-0000-4000-8000-000000000001")
         .expect("test thread id should be valid");
     crate::client::ModelClient::new(
-        /*auth_manager*/ None,
         thread_id,
         ModelProviderInfo {
         name: "OpenAI".into(),
@@ -1786,8 +1784,7 @@ async fn record_inter_agent_communication_sets_turn_id_in_rollout_and_resume() {
 
 #[tokio::test]
 async fn prepares_image_failures_before_history_insertion() {
-    let (session, turn_context, _rx) = make_session_and_context_with_auth_and_config_and_rx(
-        OdyAuth::from_api_key("Test API Key"),
+    let (session, turn_context, _rx) = make_session_and_context_and_config_and_rx(
         Vec::new(),
         |config| {
             let _ = config.features.enable(Feature::ItemIds);
@@ -4861,10 +4858,8 @@ async fn session_new_fails_when_zsh_fork_enabled_without_packaged_zsh() {
     config.zsh_path = None;
     let config = Arc::new(config);
 
-    let auth_manager = AuthManager::from_auth_for_testing(OdyAuth::from_api_key("Test API Key"));
     let models_manager = models_manager_with_provider(
         config.ody_home.to_path_buf(),
-        auth_manager.clone(),
         config.model_provider.clone(),
     );
     let model = get_model_offline_for_tests(config.model.as_deref());
@@ -4925,7 +4920,6 @@ async fn session_new_fails_when_zsh_fork_enabled_without_packaged_zsh() {
         Arc::clone(&config),
         /*user_instructions*/ None,
         "11111111-1111-4111-8111-111111111111".to_string(),
-        auth_manager,
         models_manager,
         Arc::new(ExecPolicyManager::default()),
         tx_event,
@@ -4968,10 +4962,8 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
     let config = build_test_config(ody_home.path()).await;
     let config = Arc::new(config);
     let thread_id = ThreadId::default();
-    let auth_manager = AuthManager::from_auth_for_testing(OdyAuth::from_api_key("Test API Key"));
     let models_manager = models_manager_with_provider(
         config.ody_home.to_path_buf(),
-        auth_manager.clone(),
         config.model_provider.clone(),
     );
     let agent_control = AgentControl::default();
@@ -5074,7 +5066,6 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
         shell_zsh_path: None,
         main_execve_wrapper_exe: config.main_execve_wrapper_exe.clone(),
         analytics_events_client: AnalyticsEventsClient::new(
-            Arc::clone(&auth_manager),
             String::new(),
             config.analytics_enabled,
         ),
@@ -5086,7 +5077,6 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
         user_shell: Arc::new(default_user_shell()),
         show_raw_agent_reasoning: config.show_raw_agent_reasoning,
         exec_policy,
-        auth_manager: auth_manager.clone(),
         session_telemetry: session_telemetry.clone(),
         models_manager: Arc::clone(&models_manager),
         tool_approvals: Mutex::new(ApprovalStore::default()),
@@ -5117,7 +5107,6 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
         attestation_provider: None,
         time_provider: Arc::new(crate::current_time::SystemTimeProvider),
         model_client: ModelClient::new(
-            Some(auth_manager.clone()),
             thread_id,
             session_configuration.provider.clone(),
             session_configuration.session_source.clone(),
@@ -5153,7 +5142,6 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
     let turn_context = Session::make_turn_context(
         thread_id,
         SessionId::from(thread_id),
-        Some(Arc::clone(&auth_manager)),
         &session_telemetry,
         session_configuration.provider.clone(),
         &session_configuration,
@@ -5217,10 +5205,8 @@ async fn make_session_with_config_and_rx(
     let mut config = build_test_config(ody_home.path()).await;
     mutator(&mut config);
     let config = Arc::new(config);
-    let auth_manager = AuthManager::from_auth_for_testing(OdyAuth::from_api_key("Test API Key"));
     let models_manager = models_manager_with_provider(
         config.ody_home.to_path_buf(),
-        auth_manager.clone(),
         config.model_provider.clone(),
     );
     let model = get_model_offline_for_tests(config.model.as_deref());
@@ -5283,7 +5269,6 @@ async fn make_session_with_config_and_rx(
         Arc::clone(&config),
         /*user_instructions*/ None,
         "11111111-1111-4111-8111-111111111111".to_string(),
-        auth_manager,
         models_manager,
         Arc::new(ExecPolicyManager::default()),
         tx_event,
@@ -5323,10 +5308,8 @@ async fn make_session_with_history_source_and_agent_control_and_rx(
     let mut config = build_test_config(ody_home.path()).await;
     config.ephemeral = true;
     let config = Arc::new(config);
-    let auth_manager = AuthManager::from_auth_for_testing(OdyAuth::from_api_key("Test API Key"));
     let models_manager = models_manager_with_provider(
         config.ody_home.to_path_buf(),
-        auth_manager.clone(),
         config.model_provider.clone(),
     );
     let model = get_model_offline_for_tests(config.model.as_deref());
@@ -5389,7 +5372,6 @@ async fn make_session_with_history_source_and_agent_control_and_rx(
         Arc::clone(&config),
         /*user_instructions*/ None,
         "11111111-1111-4111-8111-111111111111".to_string(),
-        auth_manager,
         models_manager,
         Arc::new(ExecPolicyManager::default()),
         tx_event,
@@ -6993,8 +6975,7 @@ async fn shutdown_and_wait_shuts_down_tracked_ephemeral_guardian_review() {
         .expect("ephemeral guardian review should receive a shutdown op");
 }
 
-async fn make_session_and_context_with_auth_and_config_and_rx<F>(
-    auth: OdyAuth,
+async fn make_session_and_context_and_config_and_rx<F>(
     dynamic_tools: Vec<DynamicToolSpec>,
     configure_config: F,
 ) -> (
@@ -7006,8 +6987,7 @@ where
     F: FnOnce(&mut Config),
 {
     let ody_home = tempfile::tempdir().expect("create temp dir");
-    make_session_and_context_with_auth_config_home_and_rx(
-        auth,
+    make_session_and_context_config_home_and_rx(
         dynamic_tools,
         ody_home.path(),
         configure_config,
@@ -7015,8 +6995,7 @@ where
     .await
 }
 
-async fn make_session_and_context_with_auth_config_home_and_rx<F>(
-    auth: OdyAuth,
+async fn make_session_and_context_config_home_and_rx<F>(
     dynamic_tools: Vec<DynamicToolSpec>,
     ody_home: &Path,
     configure_config: F,
@@ -7034,10 +7013,8 @@ where
     let state_db = None;
     let config = Arc::new(config);
     let thread_id = ThreadId::default();
-    let auth_manager = AuthManager::from_auth_for_testing(auth);
     let models_manager = models_manager_with_provider(
         config.ody_home.to_path_buf(),
-        auth_manager.clone(),
         config.model_provider.clone(),
     );
     let agent_control = AgentControl::default();
@@ -7139,7 +7116,6 @@ where
         shell_zsh_path: None,
         main_execve_wrapper_exe: config.main_execve_wrapper_exe.clone(),
         analytics_events_client: AnalyticsEventsClient::new(
-            Arc::clone(&auth_manager),
             String::new(),
             config.analytics_enabled,
         ),
@@ -7151,7 +7127,6 @@ where
         user_shell: Arc::new(default_user_shell()),
         show_raw_agent_reasoning: config.show_raw_agent_reasoning,
         exec_policy,
-        auth_manager: Arc::clone(&auth_manager),
         session_telemetry: session_telemetry.clone(),
         models_manager: Arc::clone(&models_manager),
         tool_approvals: Mutex::new(ApprovalStore::default()),
@@ -7182,7 +7157,6 @@ where
         attestation_provider: None,
         time_provider: Arc::new(crate::current_time::SystemTimeProvider),
         model_client: ModelClient::new(
-            Some(Arc::clone(&auth_manager)),
             thread_id,
             session_configuration.provider.clone(),
             session_configuration.session_source.clone(),
@@ -7218,7 +7192,6 @@ where
     let turn_context = Arc::new(Session::make_turn_context(
         thread_id,
         SessionId::from(thread_id),
-        Some(Arc::clone(&auth_manager)),
         &session_telemetry,
         session_configuration.provider.clone(),
         &session_configuration,
@@ -7265,8 +7238,7 @@ pub(crate) async fn make_session_and_context_with_dynamic_tools_and_rx(
     Arc<TurnContext>,
     async_channel::Receiver<Event>,
 ) {
-    make_session_and_context_with_auth_and_config_and_rx(
-        OdyAuth::from_api_key("Test API Key"),
+    make_session_and_context_and_config_and_rx(
         dynamic_tools,
         |_config| {},
     )
@@ -7644,8 +7616,7 @@ async fn build_initial_context_uses_previous_realtime_state() {
 async fn make_multi_agent_v2_usage_hint_test_session(
     enable_multi_agent_v2: bool,
 ) -> (Arc<Session>, Arc<TurnContext>) {
-    let (session, turn_context, _rx_event) = make_session_and_context_with_auth_and_config_and_rx(
-        OdyAuth::from_api_key("Test API Key"),
+    let (session, turn_context, _rx_event) = make_session_and_context_and_config_and_rx(
         Vec::new(),
         |config| {
             if enable_multi_agent_v2 {
@@ -7903,8 +7874,7 @@ async fn build_initial_context_omits_multi_agent_v2_usage_hints_when_feature_dis
 
 #[tokio::test]
 async fn build_initial_context_omits_multi_agent_v2_usage_hints_when_hint_is_empty() {
-    let (session, turn_context, _rx_event) = make_session_and_context_with_auth_and_config_and_rx(
-        OdyAuth::from_api_key("Test API Key"),
+    let (session, turn_context, _rx_event) = make_session_and_context_and_config_and_rx(
         Vec::new(),
         |config| {
             let _ = config.features.enable(Feature::MultiAgentV2);

@@ -11,7 +11,6 @@ use crate::context::SubagentNotification;
 use crate::init_state_db;
 use assert_matches::assert_matches;
 use ody_features::Feature;
-use ody_login::OdyAuth;
 use ody_protocol::AgentPath;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::models::ContentItem;
@@ -112,7 +111,6 @@ impl AgentControlHarness {
     async fn new_with_config(home: TempDir, config: Config) -> Self {
         let state_db = init_state_db(&config).await;
         let manager = ThreadManager::with_models_provider_home_and_state_for_tests(
-            OdyAuth::from_api_key("dummy"),
             config.model_provider.clone(),
             config.ody_home.to_path_buf(),
             std::sync::Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
@@ -698,7 +696,6 @@ async fn resume_agent_from_rollout_does_not_reopen_v2_descendants() {
     assert_eq!(report.timed_out, Vec::<ThreadId>::new());
 
     let resumed_manager = ThreadManager::with_models_provider_home_and_state_for_tests(
-        OdyAuth::from_api_key("dummy"),
         harness.config.model_provider.clone(),
         harness.config.ody_home.to_path_buf(),
         std::sync::Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
@@ -1585,7 +1582,6 @@ async fn spawn_agent_respects_max_threads_limit() {
     )])
     .await;
     let manager = ThreadManager::with_models_provider_and_home_for_tests(
-        OdyAuth::from_api_key("dummy"),
         config.model_provider.clone(),
         config.ody_home.to_path_buf(),
         std::sync::Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
@@ -1637,7 +1633,6 @@ async fn spawn_agent_releases_slot_after_shutdown() {
     )])
     .await;
     let manager = ThreadManager::with_models_provider_and_home_for_tests(
-        OdyAuth::from_api_key("dummy"),
         config.model_provider.clone(),
         config.ody_home.to_path_buf(),
         std::sync::Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
@@ -1680,7 +1675,6 @@ async fn spawn_agent_limit_shared_across_clones() {
     )])
     .await;
     let manager = ThreadManager::with_models_provider_and_home_for_tests(
-        OdyAuth::from_api_key("dummy"),
         config.model_provider.clone(),
         config.ody_home.to_path_buf(),
         std::sync::Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
@@ -1725,7 +1719,6 @@ async fn resume_agent_respects_max_threads_limit() {
     )])
     .await;
     let manager = ThreadManager::with_models_provider_and_home_for_tests(
-        OdyAuth::from_api_key("dummy"),
         config.model_provider.clone(),
         config.ody_home.to_path_buf(),
         std::sync::Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
@@ -1781,7 +1774,6 @@ async fn resume_agent_releases_slot_after_resume_failure() {
     )])
     .await;
     let manager = ThreadManager::with_models_provider_and_home_for_tests(
-        OdyAuth::from_api_key("dummy"),
         config.model_provider.clone(),
         config.ody_home.to_path_buf(),
         std::sync::Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
@@ -2187,7 +2179,6 @@ async fn resume_thread_subagent_restores_stored_metadata() {
         .expect("test config should allow sqlite");
     let state_db = init_state_db(&config).await;
     let manager = ThreadManager::with_models_provider_home_and_state_for_tests(
-        OdyAuth::from_api_key("dummy"),
         config.model_provider.clone(),
         config.ody_home.to_path_buf(),
         std::sync::Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
@@ -2512,7 +2503,6 @@ async fn list_agent_subtree_thread_ids_includes_anonymous_and_closed_descendants
 async fn list_agent_subtree_thread_ids_finds_live_descendants_of_unloaded_root() {
     let (_home, config) = test_config().await;
     let manager = ThreadManager::with_models_provider_home_and_state_for_tests(
-        OdyAuth::from_api_key("dummy"),
         config.model_provider.clone(),
         config.ody_home.to_path_buf(),
         std::sync::Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),

@@ -80,16 +80,6 @@ fn find_span_event_by_name_attr<'a>(
         .expect("span event should exist")
 }
 
-fn auth_env_metadata() -> AuthEnvTelemetryMetadata {
-    AuthEnvTelemetryMetadata {
-        odysseythink_api_key_env_present: true,
-        ody_api_key_env_present: false,
-        ody_api_key_env_enabled: true,
-        provider_env_key_name: Some("configured".to_string()),
-        provider_env_key_present: Some(true),
-    }
-}
-
 #[test]
 fn otel_export_routing_policy_routes_user_prompt_log_and_trace_events() {
     let log_exporter = InMemoryLogExporter::default();
@@ -496,8 +486,7 @@ fn otel_export_routing_policy_routes_api_request_auth_observability() {
             /*log_user_prompts*/ true,
             "tty".to_string(),
             SessionSource::Cli,
-        )
-        .with_auth_env(auth_env_metadata());
+        );
         let root_span = tracing::info_span!("root");
         let _root_guard = root_span.enter();
         manager.conversation_starts(
@@ -673,8 +662,7 @@ fn otel_export_routing_policy_routes_websocket_connect_auth_observability() {
             /*log_user_prompts*/ true,
             "tty".to_string(),
             SessionSource::Cli,
-        )
-        .with_auth_env(auth_env_metadata());
+        );
         let root_span = tracing::info_span!("root");
         let _root_guard = root_span.enter();
         manager.record_websocket_connect(
@@ -784,8 +772,7 @@ fn otel_export_routing_policy_routes_websocket_request_transport_observability()
             /*log_user_prompts*/ true,
             "tty".to_string(),
             SessionSource::Cli,
-        )
-        .with_auth_env(auth_env_metadata());
+        );
         let root_span = tracing::info_span!("root");
         let _root_guard = root_span.enter();
         manager.record_websocket_request(

@@ -164,7 +164,6 @@ struct GuardianReviewSessionReuseKey {
     compact_prompt: Option<String>,
     cwd: AbsolutePathBuf,
     mcp_servers: Constrained<HashMap<String, McpServerConfig>>,
-    ody_linux_sandbox_exe: Option<PathBuf>,
     main_execve_wrapper_exe: Option<PathBuf>,
     zsh_path: Option<PathBuf>,
     features: ManagedFeatures,
@@ -192,7 +191,6 @@ impl GuardianReviewSessionReuseKey {
             compact_prompt: spawn_config.compact_prompt.clone(),
             cwd: spawn_config.cwd.clone(),
             mcp_servers: spawn_config.mcp_servers.clone(),
-            ody_linux_sandbox_exe: spawn_config.ody_linux_sandbox_exe.clone(),
             main_execve_wrapper_exe: spawn_config.main_execve_wrapper_exe.clone(),
             zsh_path: spawn_config.zsh_path.clone(),
             features: spawn_config.features.clone(),
@@ -664,7 +662,6 @@ async fn spawn_guardian_review_session(
     };
     let ody = Box::pin(run_ody_thread_interactive(
         spawn_config,
-        parent_session.services.auth_manager.clone(),
         parent_session.services.models_manager.clone(),
         Arc::clone(parent_session),
         Arc::clone(parent_turn),

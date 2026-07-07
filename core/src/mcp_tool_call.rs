@@ -708,10 +708,8 @@ async fn refresh_ody_apps_after_connector_auth(sess: &Session, turn_context: &Tu
 
     match mcp_tools_result {
         Ok(mcp_tools) => {
-            let auth = sess.services.auth_manager.auth().await;
             connectors::refresh_accessible_connectors_cache_from_mcp_tools(
                 &turn_context.config,
-                auth.as_ref(),
                 &mcp_tools,
             );
         }
@@ -745,7 +743,6 @@ async fn augment_mcp_tool_request_meta_with_sandbox_state(
     let permission_profile = turn_context.permission_profile();
     let sandbox_state = serde_json::to_value(SandboxState {
         permission_profile: Some(permission_profile),
-        ody_linux_sandbox_exe: turn_context.config.ody_linux_sandbox_exe.clone(),
         sandbox_cwd,
         use_legacy_landlock: turn_context.config.features.use_legacy_landlock(),
     })?;

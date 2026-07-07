@@ -12,8 +12,6 @@ use crate::test_support::TestOdyResponsesRequestKind;
 use crate::test_support::responses_metadata as test_responses_metadata;
 use ody_api::ApiError;
 use ody_api::ResponseEvent;
-use ody_login::AuthManager;
-use ody_login::OdyAuth;
 use ody_model_provider::SharedModelProvider;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::WireApi;
@@ -66,7 +64,6 @@ fn test_model_client(session_source: SessionSource) -> ModelClient {
     let provider = create_oss_provider_with_base_url("https://example.com/v1", WireApi::Responses);
     let thread_id = ThreadId::new();
     ModelClient::new(
-        /*auth_manager*/ None,
         thread_id,
         provider,
         session_source,
@@ -545,12 +542,8 @@ fn model_client_with_counting_attestation(
     }
 
     let attestation_calls = Arc::new(AtomicUsize::new(0));
-    let (auth_manager, provider) = if odysseythink_provider {
-        (
-            Some(AuthManager::from_auth_for_testing(
-                OdyAuth::create_dummy_api_key_auth_for_testing(),
-            )),
-            ModelProviderInfo {
+    let provider = if odysseythink_provider {
+        ModelProviderInfo {
             name: "OpenAI".into(),
             base_url: Some("https://api.odysseythink.com/v1".to_string()),
             env_key: None,
@@ -582,13 +575,9 @@ fn model_client_with_counting_attestation(
         },
         )
     } else {
-        (
-            None,
-            create_oss_provider_with_base_url("https://example.com/v1", WireApi::Responses),
-        )
+        create_oss_provider_with_base_url("https://example.com/v1", WireApi::Responses)
     };
     let model_client = ModelClient::new(
-        auth_manager,
         ThreadId::new(),
         provider,
         SessionSource::Exec,
@@ -700,7 +689,6 @@ async fn chat_stream_maps_events_to_response_stream() {
 fn test_model_client_with_provider(provider: ModelProviderInfo) -> ModelClient {
     let thread_id = ThreadId::new();
     ModelClient::new(
-        /*auth_manager*/ None,
         thread_id,
         provider,
         SessionSource::Cli,

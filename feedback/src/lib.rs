@@ -11,7 +11,6 @@ use std::time::Duration;
 
 use anyhow::Result;
 use anyhow::anyhow;
-use ody_login::AuthEnvTelemetry;
 use ody_protocol::ThreadId;
 use ody_protocol::protocol::SessionSource;
 use tracing::Event;
@@ -123,39 +122,7 @@ pub fn emit_feedback_request_tags(tags: &FeedbackRequestTags<'_>) {
     );
 }
 
-pub fn emit_feedback_request_tags_with_auth_env(
-    tags: &FeedbackRequestTags<'_>,
-    auth_env: &AuthEnvTelemetry,
-) {
-    let snapshot = FeedbackRequestSnapshot::from_tags(tags);
-    tracing::info!(
-        target: FEEDBACK_TAGS_TARGET,
-        endpoint = tracing::field::debug(snapshot.endpoint),
-        auth_header_attached = tracing::field::debug(snapshot.auth_header_attached),
-        auth_header_name = tracing::field::debug(snapshot.auth_header_name),
-        auth_mode = tracing::field::debug(snapshot.auth_mode),
-        auth_retry_after_unauthorized = tracing::field::debug(&snapshot.auth_retry_after_unauthorized),
-        auth_recovery_mode = tracing::field::debug(snapshot.auth_recovery_mode),
-        auth_recovery_phase = tracing::field::debug(snapshot.auth_recovery_phase),
-        auth_connection_reused = tracing::field::debug(&snapshot.auth_connection_reused),
-        auth_request_id = tracing::field::debug(snapshot.auth_request_id),
-        auth_cf_ray = tracing::field::debug(snapshot.auth_cf_ray),
-        auth_error = tracing::field::debug(snapshot.auth_error),
-        auth_error_code = tracing::field::debug(snapshot.auth_error_code),
-        auth_recovery_followup_success = tracing::field::debug(&snapshot.auth_recovery_followup_success),
-        auth_recovery_followup_status = tracing::field::debug(&snapshot.auth_recovery_followup_status),
-        auth_env_odysseythink_api_key_present = tracing::field::debug(auth_env.odysseythink_api_key_env_present),
-        auth_env_ody_api_key_present = tracing::field::debug(auth_env.ody_api_key_env_present),
-        auth_env_ody_api_key_enabled = tracing::field::debug(auth_env.ody_api_key_env_enabled),
-        // Custom provider `env_key` is arbitrary config text, so emit only a safe bucket.
-        auth_env_provider_key_name = tracing::field::debug(
-            auth_env.provider_env_key_name.as_deref().unwrap_or("")
-        ),
-        auth_env_provider_key_present = tracing::field::debug(
-            &auth_env.provider_env_key_present.map_or_else(String::new, |value| value.to_string())
-        ),
-    );
-}
+
 
 #[derive(Clone)]
 pub struct OdyFeedback {

@@ -2,13 +2,10 @@ use super::cache::ModelsCacheManager;
 use crate::collaboration_mode_presets::builtin_collaboration_mode_presets;
 use crate::config::ModelsManagerConfig;
 use crate::model_info;
-use ody_app_server_protocol::AuthMode;
-use ody_login::AuthManager;
 use ody_protocol::config_types::CollaborationModeMask;
 use ody_protocol::error::Result as CoreResult;
 use ody_protocol::odysseythink_models::ModelInfo;
 use ody_protocol::odysseythink_models::ModelPreset;
-use ody_protocol::odysseythink_models::ModelVisibility;
 use ody_protocol::odysseythink_models::ModelsResponse;
 use std::fmt;
 use std::future::Future;
@@ -110,9 +107,6 @@ pub trait ModelsManager: fmt::Debug + Send + Sync {
     /// Returns an error if the internal lock cannot be acquired.
     fn try_get_remote_models(&self) -> Result<Vec<ModelInfo>, TryLockError>;
 
-    /// Return the auth manager used for picker filtering.
-    fn auth_manager(&self) -> Option<&AuthManager>;
-
     /// Build picker-ready presets from the active catalog snapshot.
     fn build_available_models(&self, mut remote_models: Vec<ModelInfo>) -> Vec<ModelPreset> {
         remote_models.sort_by_key(|model| model.priority);
@@ -197,14 +191,12 @@ pub struct OpenAiModelsManager {
     etag: RwLock<Option<String>>,
     cache_manager: ModelsCacheManager,
     endpoint_client: SharedModelsEndpointClient,
-    auth_manager: Option<Arc<AuthManager>>,
 }
 
 /// Static model manager backed by an authoritative in-process catalog.
 #[derive(Debug)]
 pub struct StaticModelsManager {
     remote_models: Vec<ModelInfo>,
-    auth_manager: Option<Arc<AuthManager>>,
 }
 
 impl OpenAiModelsManager {
@@ -212,7 +204,6 @@ impl OpenAiModelsManager {
     pub fn new(
         ody_home: PathBuf,
         endpoint_client: Arc<dyn ModelsEndpointClient>,
-        auth_manager: Option<Arc<AuthManager>>,
     ) -> Self {
         let cache_path = ody_home.join(MODEL_CACHE_FILE);
         let cache_manager = ModelsCacheManager::new(cache_path, DEFAULT_MODEL_CACHE_TTL);
@@ -222,17 +213,15 @@ impl OpenAiModelsManager {
             etag: RwLock::new(None),
             cache_manager,
             endpoint_client,
-            auth_manager,
         }
     }
 }
 
 impl StaticModelsManager {
     /// Construct a static model manager from an authoritative catalog.
-    pub fn new(auth_manager: Option<Arc<AuthManager>>, model_catalog: ModelsResponse) -> Self {
+    pub fn new(model_catalog: ModelsResponse) -> Self {
         Self {
             remote_models: model_catalog.models,
-            auth_manager,
         }
     }
 }
@@ -254,10 +243,6 @@ impl ModelsManager for OpenAiModelsManager {
 
     fn try_get_remote_models(&self) -> Result<Vec<ModelInfo>, TryLockError> {
         Ok(self.remote_models.try_read()?.clone())
-    }
-
-    fn auth_manager(&self) -> Option<&AuthManager> {
-        self.auth_manager.as_deref()
     }
 
     fn list_collaboration_modes(&self) -> Vec<CollaborationModeMask> {
@@ -405,10 +390,6 @@ impl ModelsManager for StaticModelsManager {
 
     fn try_get_remote_models(&self) -> Result<Vec<ModelInfo>, TryLockError> {
         Ok(self.remote_models.clone())
-    }
-
-    fn auth_manager(&self) -> Option<&AuthManager> {
-        self.auth_manager.as_deref()
     }
 
     fn list_collaboration_modes(&self) -> Vec<CollaborationModeMask> {

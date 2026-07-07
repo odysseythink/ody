@@ -3,17 +3,17 @@ use std::sync::atomic::Ordering;
 
 use axum::http::HeaderValue;
 use ody_analytics::AppServerRpcTransport;
-use ody_login::default_client::SetOriginatorError;
-use ody_login::default_client::USER_AGENT_SUFFIX;
-use ody_login::default_client::get_ody_user_agent;
-use ody_login::default_client::set_default_client_residency_requirement;
-use ody_login::default_client::set_default_originator;
+use ody_client::default_client::SetOriginatorError;
+use ody_client::default_client::USER_AGENT_SUFFIX;
+use ody_client::default_client::get_ody_user_agent;
+use ody_client::default_client::set_default_client_residency_requirement;
+use ody_client::default_client::set_default_originator;
 
 use super::*;
 use crate::message_processor::ConnectionSessionState;
 use crate::message_processor::InitializedConnectionSessionState;
 
-const NON_ORIGINATING_CLIENT_NAMES: &[&str] = &["ody_app_server_daemon", "ody-backend"];
+const NON_ORIGINATING_CLIENT_NAMES: &[&str] = &["ody-backend"];
 
 #[derive(Clone)]
 pub(crate) struct InitializeRequestProcessor {

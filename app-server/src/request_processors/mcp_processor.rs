@@ -4,7 +4,6 @@ const MCP_TOOL_THREAD_ID_META_KEY: &str = "threadId";
 
 #[derive(Clone)]
 pub(crate) struct McpRequestProcessor {
-    auth_manager: Arc<AuthManager>,
     thread_manager: Arc<ThreadManager>,
     outgoing: Arc<OutgoingMessageSender>,
     config_manager: ConfigManager,
@@ -12,13 +11,11 @@ pub(crate) struct McpRequestProcessor {
 
 impl McpRequestProcessor {
     pub(crate) fn new(
-        auth_manager: Arc<AuthManager>,
         thread_manager: Arc<ThreadManager>,
         outgoing: Arc<OutgoingMessageSender>,
         config_manager: ConfigManager,
     ) -> Self {
         Self {
-            auth_manager,
             thread_manager,
             outgoing,
             config_manager,
@@ -120,11 +117,10 @@ impl McpRequestProcessor {
             timeout_secs,
         } = params;
 
-        let auth = self.auth_manager.auth().await;
         let effective_servers = self
             .thread_manager
             .mcp_manager()
-            .effective_servers(&config, auth.as_ref())
+            .effective_servers(&config)
             .await;
         let Some(server) = effective_servers
             .get(&name)
@@ -226,7 +222,6 @@ impl McpRequestProcessor {
                     .await
             }
         };
-        let auth = self.auth_manager.auth().await;
         let environment_manager = self.thread_manager.environment_manager();
         // This status path has no turn-selected environment. Use config cwd
         // as the local stdio fallback; named environment stdio MCPs must
@@ -240,7 +235,6 @@ impl McpRequestProcessor {
                 request,
                 params,
                 mcp_config,
-                auth,
                 runtime_context,
             )
             .await;
@@ -253,14 +247,12 @@ impl McpRequestProcessor {
         request_id: ConnectionRequestId,
         params: ListMcpServerStatusParams,
         mcp_config: ody_mcp::McpConfig,
-        auth: Option<OdyAuth>,
         runtime_context: McpRuntimeContext,
     ) {
         let result = Self::list_mcp_server_status_response(
             request_id.request_id.to_string(),
             params,
             mcp_config,
-            auth,
             runtime_context,
         )
         .await;
@@ -271,7 +263,6 @@ impl McpRequestProcessor {
         request_id: String,
         params: ListMcpServerStatusParams,
         mcp_config: ody_mcp::McpConfig,
-        auth: Option<OdyAuth>,
         runtime_context: McpRuntimeContext,
     ) -> Result<ListMcpServerStatusResponse, JSONRPCErrorError> {
         let detail = match params.detail.unwrap_or(McpServerStatusDetail::Full) {
@@ -281,7 +272,6 @@ impl McpRequestProcessor {
 
         let snapshot = collect_mcp_server_status_snapshot_with_detail(
             &mcp_config,
-            auth.as_ref(),
             request_id,
             runtime_context,
             detail,
@@ -379,7 +369,6 @@ impl McpRequestProcessor {
             .mcp_manager()
             .runtime_config(&config)
             .await;
-        let auth = self.auth_manager.auth().await;
         let environment_manager = self.thread_manager.environment_manager();
         // This threadless resource-read path has no turn cwd or turn-selected
         // environment. Use config cwd only as the local stdio fallback; named
@@ -391,7 +380,6 @@ impl McpRequestProcessor {
         tokio::spawn(async move {
             let result = read_mcp_resource_without_thread(
                 &mcp_config,
-                auth.as_ref(),
                 runtime_context,
                 &server,
                 &uri,

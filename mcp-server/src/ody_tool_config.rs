@@ -166,7 +166,6 @@ impl OdyToolCallParam {
             approval_policy: approval_policy.map(Into::into),
             sandbox_mode: sandbox.map(Into::into),
             ody_self_exe: arg0_paths.ody_self_exe.clone(),
-            ody_linux_sandbox_exe: arg0_paths.ody_linux_sandbox_exe.clone(),
             main_execve_wrapper_exe: arg0_paths.main_execve_wrapper_exe.clone(),
             base_instructions,
             developer_instructions,

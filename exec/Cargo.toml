@@ -31,7 +31,7 @@ ody-config = { workspace = true }
 ody-core = { workspace = true }
 ody-feedback = { workspace = true }
 ody-git-utils = { workspace = true }
-ody-login = { workspace = true }
+ody-client = { workspace = true }
 ody-model-provider-info = { workspace = true }
 ody-otel = { workspace = true }
 ody-protocol = { workspace = true }

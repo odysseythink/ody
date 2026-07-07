@@ -344,7 +344,6 @@ fn validate_dynamic_tools(tools: &[DynamicToolSpec]) -> Result<(), String> {
 
 #[derive(Clone)]
 pub(crate) struct ThreadRequestProcessor {
-    pub(super) auth_manager: Arc<AuthManager>,
     pub(super) thread_manager: Arc<ThreadManager>,
     pub(super) outgoing: Arc<OutgoingMessageSender>,
     pub(super) arg0_paths: Arg0DispatchPaths,
@@ -376,7 +375,6 @@ enum RunningThreadResumeResult {
 impl ThreadRequestProcessor {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
-        auth_manager: Arc<AuthManager>,
         thread_manager: Arc<ThreadManager>,
         outgoing: Arc<OutgoingMessageSender>,
         arg0_paths: Arg0DispatchPaths,
@@ -393,7 +391,6 @@ impl ThreadRequestProcessor {
         skills_watcher: Arc<SkillsWatcher>,
     ) -> Self {
         Self {
-            auth_manager,
             thread_manager,
             outgoing,
             arg0_paths,
@@ -1315,7 +1312,6 @@ impl ThreadRequestProcessor {
             approvals_reviewer: approvals_reviewer
                 .map(ody_app_server_protocol::ApprovalsReviewer::to_core),
             sandbox_mode: sandbox.map(SandboxMode::to_core),
-            ody_linux_sandbox_exe: self.arg0_paths.ody_linux_sandbox_exe.clone(),
             main_execve_wrapper_exe: self.arg0_paths.main_execve_wrapper_exe.clone(),
             base_instructions,
             developer_instructions,
@@ -2659,7 +2655,6 @@ impl ThreadRequestProcessor {
             .resume_thread_with_history(
                 config,
                 thread_history,
-                self.auth_manager.clone(),
                 self.request_trace_context(&request_id).await,
                 supports_odysseythink_form_elicitation,
             )

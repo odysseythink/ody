@@ -8,8 +8,6 @@ use ody_config::types::MemoriesConfig;
 use ody_features::Feature;
 use ody_git_utils::diff_since_latest_init;
 use ody_git_utils::reset_git_repository;
-use ody_login::AuthManager;
-use ody_login::OdyAuth;
 use ody_model_provider::ModelProvider;
 use ody_model_provider::ModelProviderFuture;
 use ody_model_provider::ProviderAccountResult;
@@ -423,8 +421,7 @@ async fn run_memory_phase_one_model_request_test(
     let test = build_test_ody_with_memories_config(server, Arc::clone(&home), memories).await?;
     let provider = Arc::new(MockMemoryModelProvider::new(
         test.config.model_provider.clone(),
-        Some(test.thread_manager.auth_manager()),
-    ));
+            ));
     let db = test
         .ody
         .state_db()
@@ -464,8 +461,7 @@ async fn run_memory_phase_two_model_request_test(
     let test = build_test_ody_with_memories_config(server, home.clone(), memories).await?;
     let provider = Arc::new(MockMemoryModelProvider::new(
         test.config.model_provider.clone(),
-        Some(test.thread_manager.auth_manager()),
-    ));
+            ));
     let db = test
         .ody
         .state_db()
@@ -550,7 +546,6 @@ async fn trigger_memories_startup(test: &TestOdy) {
         .expect("test config should allow feature update");
     start_memories_startup_task(
         Arc::clone(&test.thread_manager),
-        test.thread_manager.auth_manager(),
         test.session_configured.thread_id,
         Arc::clone(&test.ody),
         Arc::new(config),
@@ -571,7 +566,6 @@ async fn memory_startup_context_with_provider(
     let config = Arc::new(config);
     let context = Arc::new(MemoryStartupContext::new_for_testing(
         Arc::clone(&test.thread_manager),
-        test.thread_manager.auth_manager(),
         test.session_configured.thread_id,
         Arc::clone(&test.ody),
         config.as_ref(),
@@ -591,9 +585,9 @@ struct MockMemoryModelProvider {
 }
 
 impl MockMemoryModelProvider {
-    fn new(info: ModelProviderInfo, auth_manager: Option<Arc<AuthManager>>) -> Self {
+    fn new(info: ModelProviderInfo) -> Self {
         Self {
-            delegate: create_model_provider(info, auth_manager),
+            delegate: create_model_provider(info),
         }
     }
 }
@@ -615,15 +609,6 @@ impl ModelProvider for MockMemoryModelProvider {
 
     fn memory_consolidation_preferred_model(&self) -> &'static str {
         MOCK_PROVIDER_PHASE_TWO_MODEL
-    }
-
-    fn auth_manager(&self) -> Option<Arc<AuthManager>> {
-        self.delegate.auth_manager()
-    }
-
-    fn auth(&self) -> ModelProviderFuture<'_, Option<OdyAuth>> {
-        let delegate = Arc::clone(&self.delegate);
-        Box::pin(async move { delegate.auth().await })
     }
 
     fn account_state(&self) -> ProviderAccountResult {

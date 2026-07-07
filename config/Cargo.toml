@@ -19,6 +19,7 @@ workspace = true
 anyhow = { workspace = true }
 base64 = { workspace = true }
 ody-app-server-protocol = { workspace = true }
+ody-client = { workspace = true }
 ody-execpolicy = { workspace = true }
 ody-features = { workspace = true }
 ody-file-system = { workspace = true }

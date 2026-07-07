@@ -1,6 +1,5 @@
 use anyhow::Context;
 use ody_core_skills::config_rules::skill_config_rules_from_stack;
-use ody_login::OdyAuth;
 use ody_plugin::PluginId;
 use std::collections::HashSet;
 use tracing::warn;
@@ -67,7 +66,6 @@ impl PluginsManager {
     pub async fn list_tool_suggest_discoverable_plugins(
         &self,
         input: &ToolSuggestPluginDiscoveryInput,
-        _auth: Option<&OdyAuth>,
     ) -> anyhow::Result<Vec<ToolSuggestDiscoverablePlugin>> {
         if !input.plugins.plugins_enabled {
             return Ok(Vec::new());

@@ -3,7 +3,6 @@ use crate::test_ody::test_ody;
 use anyhow::Result;
 use ody_core::config::Config;
 use ody_features::Feature;
-use ody_login::OdyAuth;
 use ody_models_manager::bundled_models_response;
 use serde_json::Value;
 use serde_json::json;
@@ -197,14 +196,12 @@ pub fn configure_search_capable_apps(config: &mut Config, apps_base_url: &str) {
 pub fn apps_enabled_builder(apps_base_url: impl Into<String>) -> TestOdyBuilder {
     let apps_base_url = apps_base_url.into();
     test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(move |config| configure_apps(config, apps_base_url.as_str()))
 }
 
 pub fn search_capable_apps_builder(apps_base_url: impl Into<String>) -> TestOdyBuilder {
     let apps_base_url = apps_base_url.into();
     test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(move |config| configure_search_capable_apps(config, apps_base_url.as_str()))
 }
 

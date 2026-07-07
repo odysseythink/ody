@@ -1,8 +1,6 @@
 use super::*;
 use ody_feedback::FeedbackRequestTags;
 use ody_feedback::emit_feedback_request_tags;
-use ody_feedback::emit_feedback_request_tags_with_auth_env;
-use ody_login::AuthEnvTelemetry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -77,15 +75,7 @@ fn emit_feedback_request_tags_records_sentry_feedback_fields() {
         })
         .set_default();
 
-    let auth_env = AuthEnvTelemetry {
-        odysseythink_api_key_env_present: true,
-        ody_api_key_env_present: false,
-        ody_api_key_env_enabled: true,
-        provider_env_key_name: Some("configured".to_string()),
-        provider_env_key_present: Some(true),
-    };
-
-    emit_feedback_request_tags_with_auth_env(
+    emit_feedback_request_tags(
         &FeedbackRequestTags {
             endpoint: "/responses",
             auth_header_attached: true,
@@ -102,7 +92,6 @@ fn emit_feedback_request_tags_records_sentry_feedback_fields() {
             auth_recovery_followup_success: Some(true),
             auth_recovery_followup_status: Some(200),
         },
-        &auth_env,
     );
 
     let tags = tags.lock().unwrap().clone();
@@ -315,16 +304,7 @@ fn emit_feedback_request_tags_preserves_auth_env_fields_for_legacy_emitters() {
         })
         .set_default();
 
-    let auth_env = AuthEnvTelemetry {
-        odysseythink_api_key_env_present: true,
-        ody_api_key_env_present: true,
-        ody_api_key_env_enabled: true,
-        provider_env_key_name: Some("configured".to_string()),
-        provider_env_key_present: Some(true),
-    };
-
-    emit_feedback_request_tags_with_auth_env(
-        &FeedbackRequestTags {
+    emit_feedback_request_tags(&FeedbackRequestTags {
             endpoint: "/responses",
             auth_header_attached: true,
             auth_header_name: Some("authorization"),
@@ -340,7 +320,6 @@ fn emit_feedback_request_tags_preserves_auth_env_fields_for_legacy_emitters() {
             auth_recovery_followup_success: Some(true),
             auth_recovery_followup_status: Some(200),
         },
-        &auth_env,
     );
     emit_feedback_request_tags(&FeedbackRequestTags {
         endpoint: "/responses",

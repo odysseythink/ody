@@ -16,7 +16,6 @@ use ody_extension_api::ExtensionRegistryBuilder;
 use ody_extension_api::ThreadLifecycleContributor;
 use ody_extension_api::ThreadStartInput;
 use ody_extension_api::ToolContributor;
-use ody_login::AuthManager;
 use ody_model_provider::create_model_provider;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_protocol::config_types::WebSearchContextSize;
@@ -26,7 +25,6 @@ use crate::tool::WebSearchTool;
 
 #[derive(Clone)]
 struct WebSearchExtension {
-    auth_manager: Arc<AuthManager>,
 }
 
 #[derive(Clone)]
@@ -130,15 +128,14 @@ impl ToolContributor for WebSearchExtension {
             session_id: session_store.level_id().to_string(),
             provider: create_model_provider(
                 config.provider.clone(),
-                Some(self.auth_manager.clone()),
             ),
             settings: config.settings.clone(),
         })]
     }
 }
 
-pub fn install(registry: &mut ExtensionRegistryBuilder<Config>, auth_manager: Arc<AuthManager>) {
-    let extension = Arc::new(WebSearchExtension { auth_manager });
+pub fn install(registry: &mut ExtensionRegistryBuilder<Config>) {
+    let extension = Arc::new(WebSearchExtension {});
     registry.thread_lifecycle_contributor(extension.clone());
     registry.config_contributor(extension.clone());
     registry.tool_contributor(extension);
@@ -149,11 +146,9 @@ mod tests {
     use ody_extension_api::ExtensionData;
     use ody_extension_api::ExtensionRegistryBuilder;
     use ody_extension_api::ToolName;
-    use ody_login::OdyAuth;
     use ody_model_provider_info::ModelProviderInfo;
     use pretty_assertions::assert_eq;
 
-    use super::AuthManager;
     use super::Config;
     use super::WebSearchExtensionConfig;
     use super::external_web_access_for_mode;

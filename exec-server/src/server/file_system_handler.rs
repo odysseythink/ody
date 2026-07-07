@@ -270,7 +270,6 @@ mod tests {
         let temp_dir = tempfile::tempdir().expect("tempdir");
         let runtime_paths = ExecServerRuntimePaths::new(
             std::env::current_exe().expect("current exe"),
-            /*ody_linux_sandbox_exe*/ None,
         )
         .expect("runtime paths");
         let handler = FileSystemHandler::new(runtime_paths);

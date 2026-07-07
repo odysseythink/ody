@@ -38,7 +38,6 @@ pub(super) async fn spawn_review_thread(
 
     let review_prompt = resolved.prompt.clone();
     let provider = parent_turn_context.provider.clone();
-    let auth_manager = parent_turn_context.auth_manager.clone();
     let model_info = review_model_info.clone();
 
     // Build per‑turn client with the requested model/family.
@@ -50,8 +49,8 @@ pub(super) async fn spawn_review_thread(
         .permissions
         .shell_environment_policy
         .clone();
-    per_turn_config.ody_linux_sandbox_exe =
-        parent_turn_context.config.ody_linux_sandbox_exe.clone();
+    per_turn_config =
+        parent_turn_context.config.clone();
     per_turn_config.compact_prompt = parent_turn_context.config.compact_prompt.clone();
     if let Err(err) = per_turn_config.web_search_mode.set(review_web_search_mode) {
         let fallback_value = per_turn_config.web_search_mode.value();
@@ -67,7 +66,6 @@ pub(super) async fn spawn_review_thread(
         .session_telemetry
         .clone()
         .with_model(model.as_str(), review_model_info.slug.as_str());
-    let auth_manager_for_context = auth_manager.clone();
     let provider_for_context = provider.clone();
     let session_telemetry_for_context = session_telemetry.clone();
     let reasoning_effort = per_turn_config.model_reasoning_effort.clone();
@@ -110,7 +108,6 @@ pub(super) async fn spawn_review_thread(
         trace_id: current_span_trace_id(),
         realtime_active: parent_turn_context.realtime_active,
         config: per_turn_config,
-        auth_manager: auth_manager_for_context,
         model_info: model_info.clone(),
         session_telemetry: session_telemetry_for_context,
         provider: provider_for_context,

@@ -13,7 +13,6 @@ use crate::runtime::emit_duration;
 use crate::tools::MCP_TOOLS_CACHE_WRITE_DURATION_METRIC;
 use crate::tools::ToolInfo;
 use anyhow::Context;
-use ody_login::OdyAuth;
 use ody_protocol::mcp::McpServerInfo;
 use ody_utils_plugins::mcp_connector::sanitize_name;
 use serde::Deserialize;
@@ -28,7 +27,7 @@ pub struct OdyAppsToolsCacheKey {
     pub(crate) is_workspace_account: bool,
 }
 
-pub fn ody_apps_tools_cache_key(_auth: Option<&OdyAuth>) -> OdyAppsToolsCacheKey {
+pub fn ody_apps_tools_cache_key<T>(_auth: Option<&T>) -> OdyAppsToolsCacheKey {
     // Personalized Ody Apps metadata is no longer available; the cache key
     // always reflects an unpersonalized, non-workspace state.
     OdyAppsToolsCacheKey {

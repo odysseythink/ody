@@ -822,13 +822,9 @@ async fn resume_conversation(
     config: &Config,
     path: std::path::PathBuf,
 ) -> Arc<OdyThread> {
-    let auth_manager = ody_core::test_support::auth_manager_from_auth(
-        ody_login::OdyAuth::from_api_key("dummy"),
-    );
     Box::pin(manager.resume_thread_from_rollout(
         config.clone(),
         path,
-        auth_manager,
         /*parent_trace*/ None,
         /*supports_odysseythink_form_elicitation*/ false,
     ))

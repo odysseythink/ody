@@ -11,8 +11,6 @@ use ody_exec_server::EnvironmentManager;
 use ody_extension_api::LoadUserInstructionsFuture;
 use ody_extension_api::LoadedUserInstructions;
 use ody_extension_api::UserInstructionsProvider;
-use ody_login::AuthManager;
-use ody_login::OdyAuth;
 use ody_model_provider::create_model_provider;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_models_manager::bundled_models_response;
@@ -63,29 +61,18 @@ pub fn set_deterministic_process_ids(enabled: bool) {
     unified_exec::set_deterministic_process_ids_for_tests(enabled);
 }
 
-pub fn auth_manager_from_auth(auth: OdyAuth) -> Arc<AuthManager> {
-    AuthManager::from_auth_for_testing(auth)
-}
-
-pub fn auth_manager_from_auth_with_home(auth: OdyAuth, ody_home: PathBuf) -> Arc<AuthManager> {
-    AuthManager::from_auth_for_testing_with_home(auth, ody_home)
-}
-
 pub fn thread_manager_with_models_provider(
-    auth: OdyAuth,
     provider: ModelProviderInfo,
 ) -> ThreadManager {
-    ThreadManager::with_models_provider_for_tests(auth, provider)
+    ThreadManager::with_models_provider_for_tests(provider)
 }
 
 pub fn thread_manager_with_models_provider_and_home(
-    auth: OdyAuth,
     provider: ModelProviderInfo,
     ody_home: PathBuf,
     environment_manager: Arc<EnvironmentManager>,
 ) -> ThreadManager {
     ThreadManager::with_models_provider_and_home_for_tests(
-        auth,
         provider,
         ody_home,
         environment_manager,
@@ -93,14 +80,12 @@ pub fn thread_manager_with_models_provider_and_home(
 }
 
 pub fn thread_manager_with_models_provider_home_and_state(
-    auth: OdyAuth,
     provider: ModelProviderInfo,
     ody_home: PathBuf,
     environment_manager: Arc<EnvironmentManager>,
     state_db: Option<crate::StateDbHandle>,
 ) -> ThreadManager {
     ThreadManager::with_models_provider_home_and_state_for_tests(
-        auth,
         provider,
         ody_home,
         environment_manager,
@@ -127,7 +112,6 @@ pub async fn resume_thread_from_rollout_with_user_shell_override(
     thread_manager: &ThreadManager,
     config: Config,
     rollout_path: PathBuf,
-    auth_manager: Arc<AuthManager>,
     user_shell_override: crate::shell::Shell,
     supports_odysseythink_form_elicitation: bool,
 ) -> ody_protocol::error::Result<crate::NewThread> {
@@ -135,7 +119,6 @@ pub async fn resume_thread_from_rollout_with_user_shell_override(
         .resume_thread_from_rollout_with_user_shell_override_for_tests(
             config,
             rollout_path,
-            auth_manager,
             user_shell_override,
             supports_odysseythink_form_elicitation,
         )
@@ -144,10 +127,9 @@ pub async fn resume_thread_from_rollout_with_user_shell_override(
 
 pub fn models_manager_with_provider(
     ody_home: PathBuf,
-    auth_manager: Arc<AuthManager>,
     provider: ModelProviderInfo,
 ) -> SharedModelsManager {
-    let provider = create_model_provider(provider, Some(auth_manager));
+    let provider = create_model_provider(provider);
     provider.models_manager(ody_home, /*config_model_catalog*/ None)
 }
 

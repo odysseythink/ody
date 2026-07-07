@@ -64,7 +64,6 @@ async fn reconnect_reuses_registration_until_url_is_rejected() -> Result<()> {
         config,
         ExecServerRuntimePaths::new(
             std::env::current_exe()?,
-            /*ody_linux_sandbox_exe*/ None,
         )?,
     ));
 

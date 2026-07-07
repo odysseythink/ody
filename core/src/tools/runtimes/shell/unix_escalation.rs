@@ -199,7 +199,6 @@ pub(super) async fn try_run_zsh_fork(
         arg0,
         sandbox_policy_cwd,
         windows_sandbox_workspace_roots,
-        ody_linux_sandbox_exe: ctx.turn.config.ody_linux_sandbox_exe.clone(),
         use_legacy_landlock: ctx.turn.config.features.use_legacy_landlock(),
     };
     let main_execve_wrapper_exe = ctx
@@ -312,7 +311,6 @@ pub(crate) async fn prepare_unified_exec_zsh_fork(
         arg0: exec_request.arg0.clone(),
         sandbox_policy_cwd,
         windows_sandbox_workspace_roots: exec_request.windows_sandbox_workspace_roots.clone(),
-        ody_linux_sandbox_exe: ctx.turn.config.ody_linux_sandbox_exe.clone(),
         use_legacy_landlock: ctx.turn.config.features.use_legacy_landlock(),
     };
     let escalation_policy = CoreShellActionProvider {
@@ -821,7 +819,6 @@ struct CoreShellCommandExecutor {
     arg0: Option<String>,
     sandbox_policy_cwd: AbsolutePathBuf,
     windows_sandbox_workspace_roots: Vec<AbsolutePathBuf>,
-    ody_linux_sandbox_exe: Option<PathBuf>,
     use_legacy_landlock: bool,
 }
 
@@ -1024,7 +1021,6 @@ impl CoreShellCommandExecutor {
             environment_id: self.network_environment_id.as_deref(),
             network: self.network.as_ref(),
             sandbox_policy_cwd: &sandbox_policy_cwd,
-            ody_linux_sandbox_exe: self.ody_linux_sandbox_exe.as_deref(),
             use_legacy_landlock: self.use_legacy_landlock,
             windows_sandbox_level: self.windows_sandbox_level,
             windows_sandbox_private_desktop: false,

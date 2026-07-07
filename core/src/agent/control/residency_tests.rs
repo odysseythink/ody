@@ -5,7 +5,6 @@ use crate::config::Config;
 use crate::config::test_config;
 use crate::thread_manager::ThreadManagerState;
 use ody_features::Feature;
-use ody_login::OdyAuth;
 use ody_protocol::ThreadId;
 use ody_protocol::error::OdyErr;
 use ody_protocol::protocol::EventMsg;
@@ -27,7 +26,6 @@ async fn residency_slot_reservation_unloads_oldest_idle_v2_agent() {
     config.ody_home = temp_home.path().to_path_buf().try_into().unwrap();
     config.cwd = temp_home.path().to_path_buf().try_into().unwrap();
     let manager = ThreadManager::with_models_provider_and_home_for_tests(
-        OdyAuth::from_api_key("dummy"),
         config.model_provider.clone(),
         config.ody_home.to_path_buf(),
         Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
@@ -73,7 +71,6 @@ async fn interrupted_v2_agent_is_lost_after_residency_eviction() {
     config.ody_home = temp_home.path().to_path_buf().try_into().unwrap();
     config.cwd = temp_home.path().to_path_buf().try_into().unwrap();
     let manager = ThreadManager::with_models_provider_and_home_for_tests(
-        OdyAuth::from_api_key("dummy"),
         config.model_provider.clone(),
         config.ody_home.to_path_buf(),
         Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),

@@ -88,7 +88,7 @@ pub use config_requirements::NetworkUnixSocketPermissionsToml;
 pub use config_requirements::PluginRequirementsToml;
 pub use config_requirements::RemoteSandboxConfigToml;
 pub use config_requirements::RequirementSource;
-pub use config_requirements::ResidencyRequirement;
+pub use ody_client::ResidencyRequirement;
 pub use config_requirements::SandboxModeRequirement;
 pub use config_requirements::Sourced;
 pub use config_requirements::WebSearchModeRequirement;

@@ -5,7 +5,6 @@ use ody_config::McpServerConfig;
 use ody_config::McpServerTransportConfig;
 use ody_config::types::AuthKeyringBackendKind;
 use ody_config::types::OAuthCredentialsStoreMode;
-use ody_login::OdyAuth;
 use ody_protocol::protocol::McpAuthStatus;
 use ody_rmcp_client::OAuthProviderError;
 use ody_rmcp_client::determine_streamable_http_auth_status;
@@ -132,7 +131,6 @@ pub async fn compute_auth_statuses<'a, I>(
     servers: I,
     store_mode: OAuthCredentialsStoreMode,
     keyring_backend_kind: AuthKeyringBackendKind,
-    auth: Option<&OdyAuth>,
 ) -> HashMap<String, McpAuthStatusEntry>
 where
     I: IntoIterator<Item = (&'a String, &'a EffectiveMcpServer)>,
@@ -143,7 +141,6 @@ where
         // Runtime auth for the Ody Apps MCP server only existed for Ody backend
         // auth, which has been removed.
         let has_runtime_auth = false;
-        let _ = auth;
         async move {
             let auth_status = match config.as_ref() {
                 Some(config) => {

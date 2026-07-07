@@ -307,8 +307,6 @@ impl CommandExecRequestProcessor {
             justification: None,
             arg0: None,
         };
-
-        let ody_linux_sandbox_exe = self.arg0_paths.ody_linux_sandbox_exe.clone();
         let outgoing = self.outgoing.clone();
         let request_for_task = request.clone();
         let started_network_proxy_for_task = started_network_proxy;
@@ -324,7 +322,6 @@ impl CommandExecRequestProcessor {
             &effective_permission_profile,
             &sandbox_cwd,
             windows_sandbox_workspace_roots.as_slice(),
-            &ody_linux_sandbox_exe,
             use_legacy_landlock,
         )
         .map_err(|err| internal_error(format!("exec failed: {err}")))?;

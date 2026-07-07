@@ -179,7 +179,7 @@ async fn apply_role_preserves_unspecified_keys() {
         TomlValue::String("base-model".to_string()),
     )])
     .await;
-    config.ody_linux_sandbox_exe = Some(PathBuf::from("/tmp/ody-linux-sandbox"));
+
     config.main_execve_wrapper_exe = Some(PathBuf::from("/tmp/ody-execve-wrapper"));
     let role_path = write_role_config(
         &home,
@@ -203,8 +203,8 @@ async fn apply_role_preserves_unspecified_keys() {
     assert_eq!(config.model.as_deref(), Some("base-model"));
     assert_eq!(config.model_reasoning_effort, Some(ReasoningEffort::High));
     assert_eq!(
-        config.ody_linux_sandbox_exe,
-        Some(PathBuf::from("/tmp/ody-linux-sandbox"))
+        config,
+
     );
     assert_eq!(
         config.main_execve_wrapper_exe,

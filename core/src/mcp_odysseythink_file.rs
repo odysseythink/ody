@@ -11,7 +11,6 @@
 
 use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
-use ody_login::OdyAuth;
 use serde_json::Value as JsonValue;
 
 pub(crate) async fn rewrite_mcp_tool_arguments_for_odysseythink_files(
@@ -30,7 +29,6 @@ pub(crate) async fn rewrite_mcp_tool_arguments_for_odysseythink_files(
     let Some(arguments) = arguments_value.as_object() else {
         return Ok(Some(arguments_value));
     };
-    let auth = sess.services.auth_manager.auth().await;
     let mut rewritten_arguments = arguments.clone();
 
     for field_name in odysseythink_file_input_params {
@@ -38,7 +36,7 @@ pub(crate) async fn rewrite_mcp_tool_arguments_for_odysseythink_files(
             continue;
         };
         let Some(uploaded_value) =
-            rewrite_argument_value_for_odysseythink_files(turn_context, auth.as_ref(), field_name, value)
+            rewrite_argument_value_for_odysseythink_files(turn_context, field_name, value)
                 .await?
         else {
             continue;
@@ -55,7 +53,6 @@ pub(crate) async fn rewrite_mcp_tool_arguments_for_odysseythink_files(
 
 async fn rewrite_argument_value_for_odysseythink_files(
     turn_context: &TurnContext,
-    auth: Option<&OdyAuth>,
     field_name: &str,
     value: &JsonValue,
 ) -> Result<Option<JsonValue>, String> {
@@ -63,7 +60,6 @@ async fn rewrite_argument_value_for_odysseythink_files(
         JsonValue::String(file_path) => {
             let rewritten = build_uploaded_argument_value(
                 turn_context,
-                auth,
                 field_name,
                 /*index*/ None,
                 file_path,
@@ -79,7 +75,6 @@ async fn rewrite_argument_value_for_odysseythink_files(
                 };
                 let rewritten = build_uploaded_argument_value(
                     turn_context,
-                    auth,
                     field_name,
                     Some(index),
                     file_path,
@@ -95,7 +90,6 @@ async fn rewrite_argument_value_for_odysseythink_files(
 
 async fn build_uploaded_argument_value(
     _turn_context: &TurnContext,
-    _auth: Option<&OdyAuth>,
     field_name: &str,
     index: Option<usize>,
     file_path: &str,

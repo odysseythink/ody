@@ -43,14 +43,6 @@ use ody_install_context::OdyPackageLayout;
 use ody_install_context::InstallContext;
 use ody_install_context::InstallMethod;
 use ody_install_context::StandalonePlatform;
-use ody_login::AuthDotJson;
-use ody_login::AuthManager;
-use ody_login::ODY_API_KEY_ENV_VAR;
-use ody_login::OdyAuth;
-use ody_login::OPENAI_API_KEY_ENV_VAR;
-use ody_login::default_client::build_reqwest_client;
-use ody_login::default_client::default_headers;
-use ody_login::load_auth_dot_json;
 use ody_model_provider::create_model_provider;
 use ody_protocol::protocol::AskForApproval;
 use ody_terminal_detection::Multiplexer;
@@ -90,6 +82,18 @@ use updates::updates_check;
 
 const OPENAI_BETA_HEADER: &str = "OpenAI-Beta";
 const RESPONSES_WEBSOCKETS_V2_BETA_HEADER_VALUE: &str = "responses_websockets=2026-02-06";
+
+// Environment variable names for API key auth (previously from ody-login).
+const OPENAI_API_KEY_ENV_VAR: &str = "OPENAI_API_KEY";
+const ODY_API_KEY_ENV_VAR: &str = "ODY_API_KEY";
+
+/// Minimal representation of an auth.json file (previously from ody-login).
+#[derive(Debug, Clone)]
+#[allow(non_camel_case_types)]
+struct AuthDotJson {
+    auth_mode: Option<ody_app_server_protocol::AuthMode>,
+    odysseythink_api_key: Option<String>,
+}
 const WEBSOCKET_IMMEDIATE_CLOSE_GRACE: Duration = Duration::from_millis(250);
 const SLOW_CHECK_PROGRESS_THRESHOLD: Duration = Duration::from_secs(2);
 const SLOW_CHECK_PROGRESS_INTERVAL: Duration = Duration::from_secs(1);
@@ -348,8 +352,6 @@ async fn build_report(
     let config_result = load_config(root_config_overrides, interactive, arg0_paths).await;
     match &config_result {
         Ok(config) => {
-            let auth_manager =
-                AuthManager::shared_from_config(config, /*enable_ody_api_key_env*/ true).await;
             let reachability_plan = provider_reachability_plan(config);
             let (
                 config_check,
@@ -374,7 +376,7 @@ async fn build_report(
                 run_async_check(
                     "websocket",
                     progress.clone(),
-                    websocket_reachability_check(config, Some(auth_manager)),
+                    websocket_reachability_check(config),
                 ),
                 run_async_check("MCP", progress.clone(), mcp_check(config)),
                 async {
@@ -539,7 +541,6 @@ fn config_overrides_from_interactive(
         cwd: interactive.cwd.clone(),
         model_provider: None,
         ody_self_exe: arg0_paths.ody_self_exe.clone(),
-        ody_linux_sandbox_exe: arg0_paths.ody_linux_sandbox_exe.clone(),
         main_execve_wrapper_exe: arg0_paths.main_execve_wrapper_exe.clone(),
         show_raw_agent_reasoning: None,
         additional_writable_roots: interactive.add_dir.clone(),
@@ -1311,7 +1312,7 @@ fn provider_specific_auth_check(
     }
 }
 
-fn stored_auth_mode(auth: &ody_login::AuthDotJson) -> &'static str {
+fn stored_auth_mode(auth: &AuthDotJson) -> &'static str {
     match stored_auth_mode_value(auth) {
         ody_app_server_protocol::AuthMode::ApiKey => "api_key",
         ody_app_server_protocol::AuthMode::Unauthenticated => "unauthenticated",
@@ -1588,8 +1589,8 @@ fn sandbox_check(config: &Config, arg0_paths: &Arg0DispatchPaths) -> DoctorCheck
     ));
     push_path_detail(
         &mut details,
-        "ody-linux-sandbox helper",
-        arg0_paths.ody_linux_sandbox_exe.as_deref(),
+
+        arg0_paths.as_deref(),
     );
     push_path_detail(
         &mut details,
@@ -1599,7 +1600,7 @@ fn sandbox_check(config: &Config, arg0_paths: &Arg0DispatchPaths) -> DoctorCheck
 
     let mut status = CheckStatus::Ok;
     let mut summary = "sandbox configuration is readable".to_string();
-    if let Some(helper) = arg0_paths.ody_linux_sandbox_exe.as_deref()
+    if let Some(helper) = arg0_paths.as_deref()
         && !helper.exists()
     {
         status = CheckStatus::Warning;
@@ -2220,7 +2221,6 @@ fn is_rollout_file(path: &Path) -> bool {
 
 async fn websocket_reachability_check(
     config: &Config,
-    auth_manager: Option<Arc<AuthManager>>,
 ) -> DoctorCheck {
     let provider = &config.model_provider;
     let mut details = vec![
@@ -2246,13 +2246,7 @@ async fn websocket_reachability_check(
         provider.websocket_connect_timeout().as_millis()
     ));
 
-    let runtime_provider = create_model_provider(provider.clone(), auth_manager);
-    let auth = runtime_provider.auth().await;
-    details.push(format!(
-        "auth mode: {}",
-        auth.as_ref().map(auth_mode_name).unwrap_or("none")
-    ));
-
+    let runtime_provider = create_model_provider(provider.clone());
     let api_provider = match runtime_provider.api_provider().await {
         Ok(api_provider) => api_provider,
         Err(err) => {
@@ -2385,13 +2379,6 @@ fn websocket_error_detail(err: &ApiError) -> String {
         | ApiError::InvalidRequest { .. }
         | ApiError::CyberPolicy { .. }
         | ApiError::ServerOverloaded => format!("handshake error: {err}"),
-    }
-}
-
-fn auth_mode_name(auth: &OdyAuth) -> &'static str {
-    match auth.auth_mode() {
-        ody_app_server_protocol::AuthMode::ApiKey => "api_key",
-        ody_app_server_protocol::AuthMode::Unauthenticated => "unauthenticated",
     }
 }
 

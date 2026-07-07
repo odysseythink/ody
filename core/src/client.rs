@@ -62,9 +62,7 @@ use ody_api::build_session_headers;
 use ody_api::create_text_param_for_request;
 use ody_api::response_create_client_metadata;
 use ody_app_server_protocol::AuthMode;
-use ody_login::AuthManager;
-use ody_login::OdyAuth;
-use ody_login::default_client::build_reqwest_client;
+use ody_client::default_client::build_reqwest_client;
 use ody_otel::SessionTelemetry;
 use ody_otel::current_span_w3c_trace_context;
 
@@ -113,9 +111,7 @@ use crate::feedback_tags;
 use crate::responses_metadata::OdyResponsesMetadata;
 use crate::responses_metadata::subagent_header_value;
 use ody_feedback::FeedbackRequestTags;
-use ody_feedback::emit_feedback_request_tags_with_auth_env;
-use ody_login::auth_env_telemetry::AuthEnvTelemetry;
-use ody_login::auth_env_telemetry::collect_auth_env_telemetry;
+use ody_feedback::emit_feedback_request_tags;
 use ody_model_provider::SharedModelProvider;
 use ody_model_provider::create_model_provider;
 use ody_model_provider::adapters::core::prompt_to_chat_request;
@@ -186,7 +182,6 @@ fn reasoning_effort_for_request(effort: ReasoningEffortConfig) -> ReasoningEffor
 struct ModelClientState {
     thread_id: ThreadId,
     provider: SharedModelProvider,
-    auth_env_telemetry: AuthEnvTelemetry,
     session_source: SessionSource,
     model_verbosity: Option<VerbosityConfig>,
     enable_request_compression: bool,
@@ -204,7 +199,7 @@ struct ModelClientState {
 /// Keeping this as a single bundle ensures prewarm and normal request paths
 /// share the same auth/provider setup flow.
 struct CurrentClientSetup {
-    auth: Option<OdyAuth>,
+    auth: Option<&'static str>,
     api_provider: ApiProvider,
     api_auth: SharedAuthProvider,
 }
@@ -385,7 +380,6 @@ impl ModelClient {
     /// All arguments are expected to be stable for the lifetime of a Ody session. Per-turn values
     /// are passed to [`ModelClientSession::stream`] (and other turn-scoped methods) explicitly.
     pub fn new(
-        auth_manager: Option<Arc<AuthManager>>,
         thread_id: ThreadId,
         provider_info: ModelProviderInfo,
         session_source: SessionSource,
@@ -396,19 +390,12 @@ impl ModelClient {
         item_ids_enabled: bool,
         attestation_provider: Option<Arc<dyn AttestationProvider>>,
     ) -> Self {
-        let model_provider = create_model_provider(provider_info, auth_manager);
-        let ody_api_key_env_enabled = model_provider
-            .auth_manager()
-            .as_ref()
-            .is_some_and(|manager| manager.ody_api_key_env_enabled());
-        let auth_env_telemetry =
-            collect_auth_env_telemetry(model_provider.info(), ody_api_key_env_enabled);
+        let model_provider = create_model_provider(provider_info);
         let include_attestation = model_provider.supports_attestation();
         Self {
             state: Arc::new(ModelClientState {
                 thread_id,
                 provider: model_provider,
-                auth_env_telemetry,
                 session_source,
                 model_verbosity,
                 enable_request_compression,
@@ -448,10 +435,6 @@ impl ModelClient {
             websocket_session: self.take_cached_websocket_session(),
             turn_state: Arc::new(OnceLock::new()),
         }
-    }
-
-    pub(crate) fn auth_manager(&self) -> Option<Arc<AuthManager>> {
-        self.state.provider.auth_manager()
     }
 
     fn take_cached_websocket_session(&self) -> WebsocketSession {
@@ -518,12 +501,11 @@ impl ModelClient {
         let request_telemetry = Self::build_request_telemetry(
             session_telemetry,
             AuthRequestTelemetryContext::new(
-                client_setup.auth.as_ref().map(OdyAuth::auth_mode),
+                None,
                 client_setup.api_auth.as_ref(),
                 PendingUnauthorizedRetry::default(),
             ),
             RequestRouteTelemetry::for_endpoint(RESPONSES_COMPACT_ENDPOINT),
-            self.state.auth_env_telemetry.clone(),
         );
         let request = self.build_responses_request(
             &client_setup.api_provider,
@@ -649,12 +631,11 @@ impl ModelClient {
         let request_telemetry = Self::build_request_telemetry(
             session_telemetry,
             AuthRequestTelemetryContext::new(
-                client_setup.auth.as_ref().map(OdyAuth::auth_mode),
+                None,
                 client_setup.api_auth.as_ref(),
                 PendingUnauthorizedRetry::default(),
             ),
             RequestRouteTelemetry::for_endpoint(MEMORIES_SUMMARIZE_ENDPOINT),
-            self.state.auth_env_telemetry.clone(),
         );
         let client =
             ApiMemoriesClient::new(transport, client_setup.api_provider, client_setup.api_auth)
@@ -748,13 +729,11 @@ impl ModelClient {
         session_telemetry: &SessionTelemetry,
         auth_context: AuthRequestTelemetryContext,
         request_route_telemetry: RequestRouteTelemetry,
-        auth_env_telemetry: AuthEnvTelemetry,
     ) -> Arc<dyn RequestTelemetry> {
         let telemetry = Arc::new(ApiTelemetry::new(
             session_telemetry.clone(),
             auth_context,
             request_route_telemetry,
-            auth_env_telemetry,
         ));
         let request_telemetry: Arc<dyn RequestTelemetry> = telemetry;
         request_telemetry
@@ -876,11 +855,10 @@ impl ModelClient {
     /// This centralizes setup used by both prewarm and normal request paths so they stay in
     /// lockstep when auth/provider resolution changes.
     async fn current_client_setup(&self) -> Result<CurrentClientSetup> {
-        let auth = self.state.provider.auth().await;
         let api_provider = self.state.provider.api_provider().await?;
         let api_auth = self.state.provider.api_auth().await?;
         Ok(CurrentClientSetup {
-            auth,
+            auth: None::<&str>,
             api_provider,
             api_auth,
         })
@@ -905,7 +883,6 @@ impl ModelClient {
             session_telemetry,
             auth_context,
             request_route_telemetry,
-            self.state.auth_env_telemetry.clone(),
         );
         let websocket_connect_timeout = self.state.provider.info().websocket_connect_timeout();
         let start = Instant::now();
@@ -913,7 +890,7 @@ impl ModelClient {
             websocket_connect_timeout,
             ApiWebSocketResponsesClient::new(api_provider, api_auth).connect(
                 headers,
-                ody_login::default_client::default_headers(),
+                ody_client::default_client::default_headers(),
                 /*turn_state*/ None,
                 Some(websocket_telemetry),
             ),
@@ -946,7 +923,7 @@ impl ModelClient {
             response_debug.auth_error.as_deref(),
             response_debug.auth_error_code.as_deref(),
         );
-        emit_feedback_request_tags_with_auth_env(
+        emit_feedback_request_tags(
             &FeedbackRequestTags {
                 endpoint: request_route_telemetry.endpoint,
                 auth_header_attached: auth_context.auth_header_attached,
@@ -968,7 +945,6 @@ impl ModelClient {
                     .then_some(status)
                     .flatten(),
             },
-            &self.state.auth_env_telemetry,
         );
         result
     }
@@ -1135,7 +1111,7 @@ impl ModelClientSession {
             ))
         })?;
         let auth_context = AuthRequestTelemetryContext::new(
-            client_setup.auth.as_ref().map(OdyAuth::auth_mode),
+            None,
             client_setup.api_auth.as_ref(),
             PendingUnauthorizedRetry::default(),
         );
@@ -1257,7 +1233,7 @@ impl ModelClientSession {
         loop {
             let client_setup = self.client.current_client_setup().await?;
             let request_auth_context = AuthRequestTelemetryContext::new(
-                client_setup.auth.as_ref().map(OdyAuth::auth_mode),
+                None,
                 client_setup.api_auth.as_ref(),
                 pending_retry,
             );
@@ -1383,13 +1359,11 @@ impl ModelClientSession {
         session_telemetry: &SessionTelemetry,
         auth_context: AuthRequestTelemetryContext,
         request_route_telemetry: RequestRouteTelemetry,
-        auth_env_telemetry: AuthEnvTelemetry,
     ) -> (Arc<dyn RequestTelemetry>, Arc<dyn SseTelemetry>) {
         let telemetry = Arc::new(ApiTelemetry::new(
             session_telemetry.clone(),
             auth_context,
             request_route_telemetry,
-            auth_env_telemetry,
         ));
         let request_telemetry: Arc<dyn RequestTelemetry> = telemetry.clone();
         let sse_telemetry: Arc<dyn SseTelemetry> = telemetry;
@@ -1401,13 +1375,11 @@ impl ModelClientSession {
         session_telemetry: &SessionTelemetry,
         auth_context: AuthRequestTelemetryContext,
         request_route_telemetry: RequestRouteTelemetry,
-        auth_env_telemetry: AuthEnvTelemetry,
     ) -> Arc<dyn WebsocketTelemetry> {
         let telemetry = Arc::new(ApiTelemetry::new(
             session_telemetry.clone(),
             auth_context,
             request_route_telemetry,
-            auth_env_telemetry,
         ));
         let websocket_telemetry: Arc<dyn WebsocketTelemetry> = telemetry;
         websocket_telemetry
@@ -1548,7 +1520,7 @@ impl ModelClientSession {
     ) -> Result<ResponseStream> {
         let client_setup = self.client.current_client_setup().await?;
         let auth_context = AuthRequestTelemetryContext::new(
-            client_setup.auth.as_ref().map(OdyAuth::auth_mode),
+            None,
             client_setup.api_auth.as_ref(),
             PendingUnauthorizedRetry::default(),
         );
@@ -1556,7 +1528,6 @@ impl ModelClientSession {
             session_telemetry,
             auth_context,
             RequestRouteTelemetry::for_endpoint(CHAT_COMPLETIONS_ENDPOINT),
-            self.client.state.auth_env_telemetry.clone(),
         );
 
         let chat_provider = self.client.state.provider.chat_provider().await.map_err(|err| {
@@ -2179,7 +2150,6 @@ struct ApiTelemetry {
     session_telemetry: SessionTelemetry,
     auth_context: AuthRequestTelemetryContext,
     request_route_telemetry: RequestRouteTelemetry,
-    auth_env_telemetry: AuthEnvTelemetry,
 }
 
 impl ApiTelemetry {
@@ -2187,13 +2157,11 @@ impl ApiTelemetry {
         session_telemetry: SessionTelemetry,
         auth_context: AuthRequestTelemetryContext,
         request_route_telemetry: RequestRouteTelemetry,
-        auth_env_telemetry: AuthEnvTelemetry,
     ) -> Self {
         Self {
             session_telemetry,
             auth_context,
             request_route_telemetry,
-            auth_env_telemetry,
         }
     }
 }
@@ -2227,7 +2195,7 @@ impl RequestTelemetry for ApiTelemetry {
             debug.auth_error.as_deref(),
             debug.auth_error_code.as_deref(),
         );
-        emit_feedback_request_tags_with_auth_env(
+        emit_feedback_request_tags(
             &FeedbackRequestTags {
                 endpoint: self.request_route_telemetry.endpoint,
                 auth_header_attached: self.auth_context.auth_header_attached,
@@ -2251,7 +2219,6 @@ impl RequestTelemetry for ApiTelemetry {
                     .then_some(status)
                     .flatten(),
             },
-            &self.auth_env_telemetry,
         );
     }
 }
@@ -2281,7 +2248,7 @@ impl WebsocketTelemetry for ApiTelemetry {
             error_message.as_deref(),
             connection_reused,
         );
-        emit_feedback_request_tags_with_auth_env(
+        emit_feedback_request_tags(
             &FeedbackRequestTags {
                 endpoint: self.request_route_telemetry.endpoint,
                 auth_header_attached: self.auth_context.auth_header_attached,
@@ -2305,7 +2272,6 @@ impl WebsocketTelemetry for ApiTelemetry {
                     .then_some(status)
                     .flatten(),
             },
-            &self.auth_env_telemetry,
         );
     }
 

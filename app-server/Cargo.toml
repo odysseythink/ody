@@ -50,7 +50,8 @@ ody-skills-extension = { workspace = true }
 ody-utils-cli = { workspace = true }
 ody-utils-pty = { workspace = true }
 ody-file-search = { workspace = true }
-ody-login = { workspace = true }
+ody-client = { workspace = true }
+
 ody-memories-extension = { workspace = true }
 ody-web-search-extension = { workspace = true }
 ody-memories-write = { workspace = true }

@@ -49,7 +49,6 @@ const SUPPORTED_EXPERIMENTAL_FEATURE_ENABLEMENT: &[&str] = &[
     "auth_elicitation",
     "memories",
     "mentions_v2",
-    "remote_control",
     "remote_plugin",
     "tool_suggest",
 ];
@@ -158,7 +157,7 @@ impl ConfigRequestProcessor {
         &self,
     ) -> Result<ModelProviderCapabilitiesReadResponse, JSONRPCErrorError> {
         let config = self.load_latest_config(/*fallback_cwd*/ None).await?;
-        let provider = create_model_provider(config.model_provider, /*auth_manager*/ None);
+        let provider = create_model_provider(config.model_provider);
         let capabilities = provider.capabilities();
         Ok(ModelProviderCapabilitiesReadResponse {
             namespace_tools: capabilities.namespace_tools,
@@ -363,7 +362,6 @@ fn map_requirements_toml_to_api(requirements: ConfigRequirementsToml) -> ConfigR
         }),
         allow_managed_hooks_only: requirements.allow_managed_hooks_only,
         allow_appshots: requirements.allow_appshots,
-        allow_remote_control: requirements.allow_remote_control,
         computer_use: requirements
             .computer_use
             .map(map_computer_use_requirements_to_api),
@@ -616,16 +614,6 @@ mod tests {
 
         assert_eq!(mapped.allow_appshots, Some(false));
         assert_eq!(mapped.hooks, None);
-    }
-
-    #[test]
-    fn requirements_api_includes_allow_remote_control() {
-        let mapped = map_requirements_toml_to_api(ConfigRequirementsToml {
-            allow_remote_control: Some(false),
-            ..ConfigRequirementsToml::default()
-        });
-
-        assert_eq!(mapped.allow_remote_control, Some(false));
     }
 
     #[test]

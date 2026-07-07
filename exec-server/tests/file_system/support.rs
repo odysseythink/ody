@@ -49,7 +49,7 @@ pub(crate) async fn create_file_system_context(
             let helper_paths = test_ody_helper_paths()?;
             let runtime_paths = ExecServerRuntimePaths::new(
                 helper_paths.ody_exe.clone(),
-                helper_paths.ody_linux_sandbox_exe.clone(),
+                helper_paths.clone(),
             )?;
             Ok(FileSystemContext {
                 file_system: Arc::new(LocalFileSystem::with_runtime_paths(runtime_paths)),

@@ -32,7 +32,6 @@ use ody_extension_api::UserInstructionsProvider;
 use ody_extension_api::empty_extension_registry;
 use ody_features::Feature;
 use ody_home::OdyHomeUserInstructionsProvider;
-use ody_login::OdyAuth;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::built_in_model_providers;
 use ody_model_provider_info::ProviderCapabilities;
@@ -267,7 +266,6 @@ pub fn turn_permission_fields(
 
 pub struct TestOdyBuilder {
     config_mutators: Vec<Box<ConfigMutator>>,
-    auth: OdyAuth,
     pre_build_hooks: Vec<Box<PreBuildHook>>,
     workspace_setups: Vec<Box<WorkspaceSetup>>,
     home: Option<Arc<TempDir>>,
@@ -286,11 +284,6 @@ impl TestOdyBuilder {
         T: FnOnce(&mut Config) + Send + 'static,
     {
         self.config_mutators.push(Box::new(mutator));
-        self
-    }
-
-    pub fn with_auth(mut self, auth: OdyAuth) -> Self {
-        self.auth = auth;
         self
     }
 
@@ -518,15 +511,9 @@ impl TestOdyBuilder {
             .clone()
             .or_else(|| test_env.exec_server_url.clone());
         #[cfg(target_os = "linux")]
-        let ody_linux_sandbox_exe = Some(
-            crate::find_ody_linux_sandbox_exe()
-                .context("should find binary for ody-linux-sandbox")?,
-        );
         #[cfg(not(target_os = "linux"))]
-        let ody_linux_sandbox_exe = None;
         let local_runtime_paths = ody_exec_server::ExecServerRuntimePaths::new(
             std::env::current_exe()?,
-            ody_linux_sandbox_exe,
         )?;
         let environment_manager = Arc::new(if include_local_environment {
             ody_exec_server::EnvironmentManager::create_for_tests_with_local(
@@ -568,7 +555,6 @@ impl TestOdyBuilder {
         test_env: TestEnv,
         environment_manager: Arc<ody_exec_server::EnvironmentManager>,
     ) -> anyhow::Result<TestOdy> {
-        let auth = self.auth.clone();
         let state_db = ody_core::init_state_db(&config).await;
         let thread_store = thread_store_from_config(&config, state_db.clone());
         let installation_id = resolve_installation_id(&config.ody_home).await?;
@@ -580,7 +566,6 @@ impl TestOdyBuilder {
             });
         let thread_manager = ThreadManager::new(
             &config,
-            ody_core::test_support::auth_manager_from_auth(auth.clone()),
             SessionSource::Exec,
             Arc::clone(&environment_manager),
             Arc::clone(&self.extensions),
@@ -597,13 +582,11 @@ impl TestOdyBuilder {
 
         let new_conversation = match (resume_from, user_shell_override) {
             (Some(path), Some(user_shell_override)) => {
-                let auth_manager = ody_core::test_support::auth_manager_from_auth(auth);
                 Box::pin(
                     ody_core::test_support::resume_thread_from_rollout_with_user_shell_override(
                         thread_manager.as_ref(),
                         config.clone(),
                         path,
-                        auth_manager,
                         user_shell_override,
                         self.supports_odysseythink_form_elicitation,
                     ),
@@ -611,11 +594,9 @@ impl TestOdyBuilder {
                 .await?
             }
             (Some(path), None) => {
-                let auth_manager = ody_core::test_support::auth_manager_from_auth(auth);
                 Box::pin(thread_manager.resume_thread_from_rollout(
                     config.clone(),
                     path,
-                    auth_manager,
                     /*parent_trace*/ None,
                     self.supports_odysseythink_form_elicitation,
                 ))
@@ -1186,7 +1167,6 @@ pub fn test_ody() -> TestOdyBuilder {
                 .disable(Feature::Apps)
                 .expect("test config should allow Apps override");
         })],
-        auth: OdyAuth::from_api_key("dummy"),
         pre_build_hooks: vec![],
         workspace_setups: vec![],
         home: None,

@@ -8,9 +8,8 @@ use ody_core::config::Config;
 use ody_exec_server::EnvironmentManager;
 use ody_extension_api::empty_extension_registry;
 use ody_home::OdyHomeUserInstructionsProvider;
-use ody_login::AuthManager;
-use ody_login::default_client::USER_AGENT_SUFFIX;
-use ody_login::default_client::get_ody_user_agent;
+use ody_client::default_client::USER_AGENT_SUFFIX;
+use ody_client::default_client::get_ody_user_agent;
 use ody_protocol::ThreadId;
 use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::Submission;
@@ -58,17 +57,11 @@ impl MessageProcessor {
         installation_id: String,
     ) -> Self {
         let outgoing = Arc::new(outgoing);
-        let auth_manager = AuthManager::shared_from_config(
-            config.as_ref(),
-            /*enable_ody_api_key_env*/ false,
-        )
-        .await;
         let user_instructions_provider = Arc::new(OdyHomeUserInstructionsProvider::new(
             config.ody_home.clone(),
         ));
         let thread_manager = Arc::new(ThreadManager::new(
             config.as_ref(),
-            auth_manager,
             SessionSource::Mcp,
             environment_manager,
             empty_extension_registry(),

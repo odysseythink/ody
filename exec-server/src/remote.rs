@@ -608,47 +608,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn register_environment_posts_with_auth_provider_headers() {
-        let server = MockServer::start().await;
-        let executor_public_key = NoiseChannelIdentity::generate()
-            .expect("identity")
-            .public_key();
-        Mock::given(method("POST"))
-            .and(path("/cloud/environment/environment-requested/register"))
-            .and(header("authorization", "Bearer registry-token"))
-            .and(header("x-ody-account-id", "workspace-123"))
-            .and(body_partial_json(serde_json::json!({
-                "security_profile": NOISE_RELAY_SECURITY_PROFILE,
-                "executor_public_key": executor_public_key.clone(),
-            })))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "environment_id": "environment-requested",
-                "url": "wss://rendezvous.test/cloud-agent/default/ws/environment/environment-requested?role=environment&sig=abc",
-                "security_profile": NOISE_RELAY_SECURITY_PROFILE,
-                "executor_registration_id": "registration-1",
-            })))
-            .mount(&server)
-            .await;
-        let client = EnvironmentRegistryClient::new(server.uri(), static_registry_auth_provider())
-            .expect("client");
-
-        let response = client
-            .register_environment("environment-requested", &executor_public_key)
-            .await
-            .expect("register environment");
-
-        assert_eq!(
-            response,
-            EnvironmentRegistryRegistrationResponse {
-                environment_id: "environment-requested".to_string(),
-                url: "wss://rendezvous.test/cloud-agent/default/ws/environment/environment-requested?role=environment&sig=abc".to_string(),
-                security_profile: NOISE_RELAY_SECURITY_PROFILE.to_string(),
-                executor_registration_id: "registration-1".to_string(),
-            }
-        );
-    }
-
-    #[tokio::test]
     async fn noise_connect_provider_requests_and_validates_a_full_bundle() {
         let server = MockServer::start().await;
         let harness_public_key = NoiseChannelIdentity::generate()
@@ -725,44 +684,6 @@ mod tests {
         assert!(matches!(
             error,
             ExecServerError::EnvironmentRegistryRequest(error) if error.is_timeout()
-        ));
-    }
-
-    #[tokio::test]
-    async fn register_environment_does_not_follow_redirects_with_auth_headers() {
-        let server = MockServer::start().await;
-        let executor_public_key = NoiseChannelIdentity::generate()
-            .expect("identity")
-            .public_key();
-        Mock::given(method("POST"))
-            .and(path("/cloud/environment/environment-requested/register"))
-            .and(header("authorization", "Bearer registry-token"))
-            .respond_with(
-                ResponseTemplate::new(302)
-                    .insert_header("location", format!("{}/redirect-target", server.uri())),
-            )
-            .mount(&server)
-            .await;
-        Mock::given(path("/redirect-target"))
-            .and(header("authorization", "Bearer registry-token"))
-            .respond_with(ResponseTemplate::new(200))
-            .expect(0)
-            .mount(&server)
-            .await;
-        let client = EnvironmentRegistryClient::new(server.uri(), static_registry_auth_provider())
-            .expect("client");
-
-        let error = client
-            .register_environment("environment-requested", &executor_public_key)
-            .await
-            .expect_err("redirect response should not be followed");
-
-        assert!(matches!(
-            error,
-            ExecServerError::EnvironmentRegistryHttp {
-                status: StatusCode::FOUND,
-                ..
-            }
         ));
     }
 

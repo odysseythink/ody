@@ -50,7 +50,6 @@ use ody_core_skills::SkillMetadata;
 use ody_core_skills::config_rules::SkillConfigRules;
 use ody_core_skills::config_rules::skill_config_rules_from_stack;
 use ody_hooks::plugin_hook_declarations;
-use ody_login::AuthManager;
 use ody_plugin::AppConnectorId;
 use ody_plugin::PluginCapabilitySummary;
 use ody_plugin::PluginId;
@@ -1148,7 +1147,6 @@ impl PluginsManager {
     pub fn maybe_start_plugin_startup_tasks_for_config(
         self: &Arc<Self>,
         config: &PluginsConfigInput,
-        _auth_manager: Arc<AuthManager>,
         _on_effective_plugins_changed: Option<Arc<dyn Fn() + Send + Sync + 'static>>,
     ) {
         if config.plugins_enabled {

@@ -1,7 +1,6 @@
 use super::*;
 
 pub(crate) struct AppsRequestProcessor {
-    auth_manager: Arc<AuthManager>,
     thread_manager: Arc<ThreadManager>,
     outgoing: Arc<OutgoingMessageSender>,
     config_manager: ConfigManager,
@@ -12,7 +11,6 @@ pub(crate) struct AppsRequestProcessor {
 
 impl AppsRequestProcessor {
     pub(crate) fn new(
-        auth_manager: Arc<AuthManager>,
         thread_manager: Arc<ThreadManager>,
         outgoing: Arc<OutgoingMessageSender>,
         config_manager: ConfigManager,
@@ -21,7 +19,6 @@ impl AppsRequestProcessor {
     ) -> Self {
         let shutdown_drop_guard = shutdown_token.clone().drop_guard();
         Self {
-            auth_manager,
             thread_manager,
             outgoing,
             config_manager,
@@ -64,7 +61,6 @@ impl AppsRequestProcessor {
                 .set_enabled(Feature::Apps, thread.enabled(Feature::Apps));
         }
 
-        let auth = self.auth_manager.auth().await;
         if !config
             .features
             .apps_enabled_for_auth(false)
@@ -76,7 +72,7 @@ impl AppsRequestProcessor {
         }
 
         if !self
-            .workspace_ody_plugins_enabled(&config, auth.as_ref())
+            .workspace_ody_plugins_enabled(&config)
             .await
         {
             return Ok(Some(AppsListResponse {
@@ -337,11 +333,9 @@ impl AppsRequestProcessor {
     async fn workspace_ody_plugins_enabled(
         &self,
         config: &Config,
-        auth: Option<&OdyAuth>,
     ) -> bool {
         match workspace_settings::ody_plugins_enabled_for_workspace(
             config,
-            auth,
             Some(&self.workspace_settings_cache),
         )
         .await

@@ -16,7 +16,7 @@ mod sqlite_metrics;
 pub mod state_db;
 
 pub(crate) mod default_client {
-    pub use ody_login::default_client::*;
+    pub use ody_client::default_client::*;
 }
 
 pub(crate) use ody_protocol::protocol;

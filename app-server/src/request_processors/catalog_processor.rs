@@ -6,7 +6,6 @@ use futures::StreamExt;
 pub(crate) struct CatalogRequestProcessor {
     pub(super) outgoing: Arc<OutgoingMessageSender>,
     pub(super) skills_watcher: Arc<SkillsWatcher>,
-    pub(super) auth_manager: Arc<AuthManager>,
     pub(super) thread_manager: Arc<ThreadManager>,
     pub(super) config: Arc<Config>,
     pub(super) config_manager: ConfigManager,
@@ -100,7 +99,6 @@ impl CatalogRequestProcessor {
     pub(crate) fn new(
         outgoing: Arc<OutgoingMessageSender>,
         skills_watcher: Arc<SkillsWatcher>,
-        auth_manager: Arc<AuthManager>,
         thread_manager: Arc<ThreadManager>,
         config: Arc<Config>,
         config_manager: ConfigManager,
@@ -109,7 +107,6 @@ impl CatalogRequestProcessor {
         Self {
             outgoing,
             skills_watcher,
-            auth_manager,
             thread_manager,
             config,
             config_manager,
@@ -226,11 +223,9 @@ impl CatalogRequestProcessor {
     async fn workspace_ody_plugins_enabled(
         &self,
         config: &Config,
-        auth: Option<&OdyAuth>,
     ) -> bool {
         match workspace_settings::ody_plugins_enabled_for_workspace(
             config,
-            auth,
             Some(&self.workspace_settings_cache),
         )
         .await
@@ -332,9 +327,8 @@ impl CatalogRequestProcessor {
             }
             None => self.load_latest_config(/*fallback_cwd*/ None).await?,
         };
-        let auth = self.auth_manager.auth().await;
         let workspace_ody_plugins_enabled = self
-            .workspace_ody_plugins_enabled(&config, auth.as_ref())
+            .workspace_ody_plugins_enabled(&config)
             .await;
 
         let data = FEATURES
@@ -487,9 +481,8 @@ impl CatalogRequestProcessor {
         };
 
         let config = self.load_latest_config(/*fallback_cwd*/ None).await?;
-        let auth = self.auth_manager.auth().await;
         let workspace_ody_plugins_enabled = self
-            .workspace_ody_plugins_enabled(&config, auth.as_ref())
+            .workspace_ody_plugins_enabled(&config)
             .await;
         let skills_service = self.thread_manager.skills_service();
         let plugins_manager = self.thread_manager.plugins_manager();
@@ -593,7 +586,6 @@ impl CatalogRequestProcessor {
             cwds
         };
 
-        let auth = self.auth_manager.auth().await;
         let plugins_manager = self.thread_manager.plugins_manager();
         let mut data = Vec::new();
         for cwd in cwds {
@@ -622,7 +614,7 @@ impl CatalogRequestProcessor {
                 }
             };
             let workspace_ody_plugins_enabled = self
-                .workspace_ody_plugins_enabled(&config, auth.as_ref())
+                .workspace_ody_plugins_enabled(&config)
                 .await;
             let plugins_enabled =
                 config.features.enabled(Feature::Plugins) && workspace_ody_plugins_enabled;

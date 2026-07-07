@@ -10,6 +10,8 @@ eventsource-stream = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
 opentelemetry = { workspace = true }
+ody-terminal-detection = { workspace = true }
+os_info = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true, features = ["json", "rustls-tls-native-roots", "stream"] }
 rustls = { workspace = true }

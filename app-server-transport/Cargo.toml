@@ -25,7 +25,8 @@ clap = { workspace = true, features = ["derive"] }
 ody-api = { workspace = true }
 ody-app-server-protocol = { workspace = true }
 ody-core = { workspace = true }
-ody-login = { workspace = true }
+ody-client = { workspace = true }
+
 ody-model-provider = { workspace = true }
 ody-state = { workspace = true }
 ody-uds = { workspace = true }

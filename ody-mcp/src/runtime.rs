@@ -22,7 +22,6 @@ use serde::Serialize;
 pub struct SandboxState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub permission_profile: Option<PermissionProfile>,
-    pub ody_linux_sandbox_exe: Option<PathBuf>,
     pub sandbox_cwd: PathUri,
     #[serde(default)]
     pub use_legacy_landlock: bool,

@@ -3,7 +3,6 @@
 use ody_config::CONFIG_TOML_FILE;
 use ody_core::NewThread;
 use ody_features::Feature;
-use ody_login::OdyAuth;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::InitialHistory;
 use ody_protocol::protocol::WarningEvent;
@@ -32,11 +31,8 @@ async fn emits_warning_when_unstable_features_enabled_via_config() {
     );
 
     let thread_manager = ody_core::test_support::thread_manager_with_models_provider(
-        OdyAuth::from_api_key("test"),
         config.model_provider.clone(),
     );
-    let auth_manager =
-        ody_core::test_support::auth_manager_from_auth(OdyAuth::from_api_key("test"));
 
     let NewThread {
         thread: conversation,
@@ -45,7 +41,6 @@ async fn emits_warning_when_unstable_features_enabled_via_config() {
         .resume_thread_with_history(
             config.clone(),
             InitialHistory::New,
-            auth_manager,
             /*parent_trace*/ None,
             /*supports_odysseythink_form_elicitation*/ false,
         )
@@ -79,11 +74,8 @@ async fn suppresses_warning_when_configured() {
     );
 
     let thread_manager = ody_core::test_support::thread_manager_with_models_provider(
-        OdyAuth::from_api_key("test"),
         config.model_provider.clone(),
     );
-    let auth_manager =
-        ody_core::test_support::auth_manager_from_auth(OdyAuth::from_api_key("test"));
 
     let NewThread {
         thread: conversation,
@@ -92,7 +84,6 @@ async fn suppresses_warning_when_configured() {
         .resume_thread_with_history(
             config.clone(),
             InitialHistory::New,
-            auth_manager,
             /*parent_trace*/ None,
             /*supports_odysseythink_form_elicitation*/ false,
         )

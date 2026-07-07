@@ -28,7 +28,6 @@ pub use chat_provider::Usage;
 pub use chat_provider::clamp_thinking_effort;
 pub use chat_provider::transport_error;
 
-pub use auth::auth_provider_from_auth;
 pub use auth::unauthenticated_auth_provider;
 pub use bearer_auth_provider::BearerAuthProvider;
 pub use bearer_auth_provider::BearerAuthProvider as CoreAuthProvider;

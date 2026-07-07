@@ -13,6 +13,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // This fixture is always a Windows executable, so it neither invokes nor
     // needs the separate Linux sandbox binary.
     let runtime_paths =
-        ExecServerRuntimePaths::new(current_exe, /*ody_linux_sandbox_exe*/ None)?;
+        ExecServerRuntimePaths::new(current_exe)?;
     ody_exec_server::run_main("ws://127.0.0.1:0", runtime_paths).await
 }

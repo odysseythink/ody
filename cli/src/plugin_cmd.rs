@@ -18,8 +18,6 @@ use ody_core_plugins::marketplace::MarketplacePluginAuthPolicy;
 use ody_core_plugins::marketplace::MarketplacePluginInstallPolicy;
 use ody_core_plugins::marketplace::MarketplacePluginSource;
 use ody_core_plugins::marketplace::find_marketplace_manifest_path;
-use ody_login::OdyAuth;
-use ody_login::auth::read_ody_api_key_from_env;
 use ody_plugin::PluginId;
 use ody_plugin::validate_plugin_segment;
 use ody_utils_cli::CliConfigOverrides;
@@ -561,22 +559,13 @@ async fn load_plugin_command_context(
     })
 }
 
-pub(crate) async fn load_cli_auth_mode(config: &Config) -> Option<AuthMode> {
-    if let Some(api_key) = read_ody_api_key_from_env() {
-        return Some(OdyAuth::from_api_key(&api_key).api_auth_mode());
-    }
-
-    let auth_route_config = config.auth_route_config();
-    OdyAuth::from_auth_storage(
-        &config.ody_home,
-        config.cli_auth_credentials_store_mode,
-        config.auth_keyring_backend_kind(),
-        auth_route_config.as_ref(),
-    )
-    .await
-    .ok()
-    .flatten()
-    .map(|auth| auth.api_auth_mode())
+pub(crate) async fn load_cli_auth_mode(_config: &Config) -> Option<AuthMode> {
+    // Auth storage from the old ody-login crate has been removed.
+    // Only API key from environment is supported.
+    let api_key = std::env::var("ODY_API_KEY")
+        .ok()
+        .or_else(|| std::env::var("OPENAI_API_KEY").ok())?;
+    (!api_key.is_empty()).then_some(AuthMode::ApiKey)
 }
 
 struct PluginSelection {

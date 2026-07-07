@@ -7,7 +7,6 @@ use ody_core::OdyThread;
 use ody_core::ThreadManager;
 use ody_core::config::Config;
 use ody_features::Feature;
-use ody_login::AuthManager;
 use ody_protocol::ThreadId;
 use ody_protocol::protocol::SessionSource;
 use std::sync::Arc;
@@ -19,7 +18,6 @@ use tracing::warn;
 /// subagent sessions.
 pub fn start_memories_startup_task(
     thread_manager: Arc<ThreadManager>,
-    auth_manager: Arc<AuthManager>,
     thread_id: ThreadId,
     thread: Arc<OdyThread>,
     config: Arc<Config>,
@@ -34,7 +32,6 @@ pub fn start_memories_startup_task(
 
     let context = Arc::new(MemoryStartupContext::new(
         thread_manager,
-        Arc::clone(&auth_manager),
         thread_id,
         thread,
         config.as_ref(),

@@ -12,7 +12,7 @@ It provides:
 
 This crate owns the transport, protocol, and filesystem/process handlers. The
 top-level `ody` binary owns hidden helper dispatch for sandboxed
-filesystem operations and `ody-linux-sandbox`.
+filesystem operations.
 
 ## Transport
 

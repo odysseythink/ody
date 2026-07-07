@@ -36,7 +36,6 @@ use crate::state::RunningTask;
 use crate::state::TaskKind;
 use ody_analytics::TurnProfileFact;
 use ody_analytics::TurnTokenUsageFact;
-use ody_login::AuthManager;
 use ody_models_manager::manager::SharedModelsManager;
 use ody_otel::SessionTelemetry;
 use ody_otel::TURN_E2E_DURATION_METRIC;
@@ -192,10 +191,6 @@ impl SessionTaskContext {
 
     pub(crate) fn turn_extension_data(&self) -> Arc<ExtensionData> {
         Arc::clone(&self.turn_extension_data)
-    }
-
-    pub(crate) fn auth_manager(&self) -> Arc<AuthManager> {
-        Arc::clone(&self.session.services.auth_manager)
     }
 
     pub(crate) fn models_manager(&self) -> SharedModelsManager {

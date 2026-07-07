@@ -14,7 +14,7 @@ use ody_extension_api::ToolName;
 use ody_extension_api::ToolOutput;
 use ody_extension_api::ToolSpec;
 use ody_extension_api::parse_tool_input_schema_without_compaction;
-use ody_login::default_client::build_reqwest_client;
+use ody_client::default_client::build_reqwest_client;
 use ody_model_provider::SharedModelProvider;
 use ody_protocol::items::WebSearchItem;
 use ody_protocol::models::WebSearchAction;

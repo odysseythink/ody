@@ -12,7 +12,6 @@ use ody_rmcp_client::perform_oauth_login_silent;
 
 #[derive(Clone)]
 pub(crate) struct PluginRequestProcessor {
-    auth_manager: Arc<AuthManager>,
     thread_manager: Arc<ThreadManager>,
     outgoing: Arc<OutgoingMessageSender>,
     config_manager: ConfigManager,
@@ -202,14 +201,12 @@ fn is_valid_remote_plugin_id(plugin_id: &str) -> bool {
 
 impl PluginRequestProcessor {
     pub(crate) fn new(
-        auth_manager: Arc<AuthManager>,
         thread_manager: Arc<ThreadManager>,
         outgoing: Arc<OutgoingMessageSender>,
         config_manager: ConfigManager,
         workspace_settings_cache: Arc<workspace_settings::WorkspaceSettingsCache>,
     ) -> Self {
         Self {
-            auth_manager,
             thread_manager,
             outgoing,
             config_manager,
@@ -366,11 +363,9 @@ impl PluginRequestProcessor {
     async fn workspace_ody_plugins_enabled(
         &self,
         config: &Config,
-        auth: Option<&OdyAuth>,
     ) -> bool {
         match workspace_settings::ody_plugins_enabled_for_workspace(
             config,
-            auth,
             Some(&self.workspace_settings_cache),
         )
         .await
@@ -409,15 +404,13 @@ impl PluginRequestProcessor {
         if !config.features.enabled(Feature::Plugins) {
             return Ok(empty_response());
         }
-        let auth = self.auth_manager.auth().await;
         if !self
-            .workspace_ody_plugins_enabled(&config, auth.as_ref())
+            .workspace_ody_plugins_enabled(&config)
             .await
         {
             return Ok(empty_response());
         }
-        let auth_mode = auth.as_ref().map(OdyAuth::api_auth_mode);
-        plugins_manager.set_auth_mode(auth_mode);
+        plugins_manager.set_auth_mode(None);
         let plugins_input = config.plugins_config_input();
         // The remote hosted plugin catalog (global/created-by-me remote marketplaces, remote
         // "vertical" collections) has been removed; plugin/list now always serves local
@@ -537,14 +530,13 @@ impl PluginRequestProcessor {
         if !config.features.enabled(Feature::Plugins) {
             return Ok(empty_response());
         }
-        let auth = self.auth_manager.auth().await;
         if !self
-            .workspace_ody_plugins_enabled(&config, auth.as_ref())
+            .workspace_ody_plugins_enabled(&config)
             .await
         {
             return Ok(empty_response());
         }
-        plugins_manager.set_auth_mode(auth.as_ref().map(OdyAuth::api_auth_mode));
+        plugins_manager.set_auth_mode(None);
 
         let plugins_input = config.plugins_config_input();
 
@@ -679,8 +671,7 @@ impl PluginRequestProcessor {
 
         let config = self.load_latest_config(config_cwd).await?;
         let plugins_input = config.plugins_config_input();
-        let auth = self.auth_manager.auth().await;
-        plugins_manager.set_auth_mode(auth.as_ref().map(OdyAuth::api_auth_mode));
+        plugins_manager.set_auth_mode(None);
 
         let plugin = match read_source {
             Ok(marketplace_path) => {
@@ -847,10 +838,9 @@ impl PluginRequestProcessor {
         };
         let config_cwd = marketplace_path.as_path().parent().map(Path::to_path_buf);
         let config = self.load_latest_config(config_cwd.clone()).await?;
-        let auth = self.auth_manager.auth().await;
 
         if !self
-            .workspace_ody_plugins_enabled(&config, auth.as_ref())
+            .workspace_ody_plugins_enabled(&config)
             .await
         {
             return Err(invalid_request(
@@ -891,7 +881,7 @@ impl PluginRequestProcessor {
 
         let plugin_mcp_servers = load_plugin_mcp_servers(
             result.installed_path.as_path(),
-            auth.as_ref().map(OdyAuth::auth_mode),
+            None,
         )
         .await;
         if !plugin_mcp_servers.is_empty() {
@@ -905,7 +895,7 @@ impl PluginRequestProcessor {
         let apps_needing_auth = self
             .plugin_apps_needing_auth_for_install(
                 &config,
-                auth.as_ref().is_some_and(OdyAuth::is_api_key_auth),
+                false,
                 &result.plugin_id.as_key(),
                 &plugin_apps,
             )

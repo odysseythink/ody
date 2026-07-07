@@ -612,7 +612,6 @@ async fn remote_model_friendly_personality_instructions_with_feature() -> anyhow
     let resp_mock = mount_sse_once(&server, sse_completed("resp-1")).await;
 
     let mut builder = test_ody()
-        .with_auth(ody_login::OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(|config| {
             config
                 .features
@@ -732,7 +731,6 @@ async fn user_turn_personality_remote_model_template_includes_update_message() -
     .await;
 
     let mut builder = test_ody()
-        .with_auth(ody_login::OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(|config| {
             config
                 .features

@@ -1,6 +1,5 @@
 use anyhow::Result;
 use ody_features::Feature;
-use ody_login::OdyAuth;
 use ody_models_manager::manager::RefreshStrategy;
 use ody_protocol::config_types::ApprovalsReviewer;
 use ody_protocol::config_types::ReasoningSummary;
@@ -109,7 +108,6 @@ async fn remote_model_override_uses_catalog_model_for_strict_auto_review() -> Re
     .await;
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(|config| {
             config.model = Some("gpt-5.4".to_string());
             config.approvals_reviewer = ApprovalsReviewer::User;

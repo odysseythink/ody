@@ -3,8 +3,8 @@ pub use crate::auth::RefreshTokenFailedError;
 pub use crate::auth::RefreshTokenFailedReason;
 use crate::exec_output::ExecToolCallOutput;
 use crate::network_policy::NetworkPolicyDecisionPayload;
-use crate::protocol::OdyErrorInfo;
 use crate::protocol::ErrorEvent;
+use crate::protocol::OdyErrorInfo;
 use crate::protocol::RateLimitReachedType;
 use crate::protocol::RateLimitSnapshot;
 use crate::protocol::TruncationPolicy;
@@ -132,7 +132,8 @@ pub enum OdyErr {
     /// Sandbox error
     #[error("sandbox error: {0}")]
     Sandbox(#[from] SandboxErr),
-    #[error("ody-linux-sandbox was required but not provided")]
+
+    #[error("Linux sandbox executable not provided")]
     LandlockSandboxExecutableNotProvided,
     #[error("unsupported operation: {0}")]
     UnsupportedOperation(String),
@@ -216,9 +217,9 @@ impl OdyErr {
     pub fn to_ody_protocol_error(&self) -> OdyErrorInfo {
         match self {
             OdyErr::ContextWindowExceeded => OdyErrorInfo::ContextWindowExceeded,
-            OdyErr::UsageLimitReached(_)
-            | OdyErr::QuotaExceeded
-            | OdyErr::UsageNotIncluded => OdyErrorInfo::UsageLimitExceeded,
+            OdyErr::UsageLimitReached(_) | OdyErr::QuotaExceeded | OdyErr::UsageNotIncluded => {
+                OdyErrorInfo::UsageLimitExceeded
+            }
             OdyErr::ServerOverloaded => OdyErrorInfo::ServerOverloaded,
             OdyErr::CyberPolicy { .. } => OdyErrorInfo::CyberPolicy,
             OdyErr::RetryLimit(_) => OdyErrorInfo::ResponseTooManyFailedAttempts {

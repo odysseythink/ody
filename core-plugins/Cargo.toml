@@ -21,7 +21,6 @@ ody-core-skills = { workspace = true }
 ody-exec-server = { workspace = true }
 ody-git-utils = { workspace = true }
 ody-hooks = { workspace = true }
-ody-login = { workspace = true }
 ody-mcp = { workspace = true }
 ody-model-provider = { workspace = true }
 ody-otel = { workspace = true }

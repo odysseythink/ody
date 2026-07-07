@@ -126,7 +126,7 @@ use ody_app_server_protocol::UserInput;
 use ody_app_server_protocol::WebSearchAction;
 use ody_git_utils::collect_git_info;
 use ody_git_utils::get_git_repo_root;
-use ody_login::default_client::originator;
+use ody_client::default_client::originator;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::config_types::Personality;
 use ody_protocol::config_types::ReasoningSummary;

@@ -113,8 +113,7 @@ mod tests {
     use ody_exec_server::EnvironmentManager;
     use ody_extension_api::NoopExtensionEventSink;
     use ody_home::OdyHomeUserInstructionsProvider;
-    use ody_login::AuthManager;
-    use ody_login::OdyAuth;
+    use ody_protocol::protocol::SessionSource;
     use ody_protocol::protocol::SessionSource;
     use ody_utils_absolute_path::AbsolutePathBuf;
     use pretty_assertions::assert_eq;
@@ -210,7 +209,6 @@ mod tests {
             )
             .await?;
 
-        let auth_manager = AuthManager::from_auth_for_testing(OdyAuth::from_api_key("dummy"));
         let state_db = init_state_db(&good_config)
             .await
             .expect("refresh tests require state db");
@@ -225,14 +223,12 @@ mod tests {
         let thread_manager = Arc::new_cyclic(|thread_manager| {
             ThreadManager::new(
                 &good_config,
-                auth_manager.clone(),
                 SessionSource::Exec,
                 Arc::clone(&environment_manager),
                 thread_extensions(
                     guardian_agent_spawner(thread_manager.clone()),
                     ThreadExtensionDependencies {
                         event_sink: Arc::new(NoopExtensionEventSink),
-                        auth_manager: auth_manager.clone(),
                         state_db: Some(state_db.clone()),
                         analytics_events_client: ody_analytics::AnalyticsEventsClient::disabled(),
                         thread_manager: thread_manager.clone(),

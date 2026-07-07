@@ -1361,11 +1361,6 @@ pub(crate) async fn built_tools(
         None
     };
     let tool_suggest_is_enabled = tool_suggest_enabled(turn_context);
-    let auth = if tool_suggest_is_enabled {
-        sess.services.auth_manager.auth().await
-    } else {
-        None
-    };
     // Endpoint-backed (remote catalog) plugin recommendations have been removed; tool suggest
     // always falls back to the legacy local-discovery path below now.
     let endpoint_recommended_plugin_candidates: Option<Vec<ody_tools::DiscoverableTool>> = None;
@@ -1386,10 +1381,9 @@ pub(crate) async fn built_tools(
                     if let Some(accessible_connectors) =
                         accessible_connectors_with_enabled_state.as_ref()
                     {
-                        match connectors::list_tool_suggest_discoverable_tools_with_auth(
+                        match connectors::list_tool_suggest_discoverable_tools(
                             &turn_context.config,
                             sess.services.plugins_manager.as_ref(),
-                            auth.as_ref(),
                             accessible_connectors.as_slice(),
                             &loaded_plugin_app_connector_ids,
                         )
@@ -2065,7 +2059,7 @@ async fn try_run_sampling_request(
         approval_policy = turn_context.approval_policy.value(),
         sandbox_policy = &turn_context.sandbox_policy(),
         effort = turn_context.reasoning_effort,
-        auth_mode = sess.services.auth_manager.auth_mode(),
+        auth_mode = None::<&str>,
         features = sess.features.enabled_features(),
     );
     let inference_trace = sess.services.rollout_thread_trace.inference_trace_context(

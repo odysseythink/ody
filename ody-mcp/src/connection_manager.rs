@@ -45,7 +45,6 @@ use ody_config::Constrained;
 use ody_config::McpServerTransportConfig;
 use ody_config::types::AuthKeyringBackendKind;
 use ody_config::types::OAuthCredentialsStoreMode;
-use ody_login::OdyAuth;
 use ody_protocol::mcp::CallToolResult;
 use ody_protocol::mcp::McpServerInfo;
 use ody_protocol::models::PermissionProfile;
@@ -136,7 +135,6 @@ impl McpConnectionManager {
         client_elicitation_capability: ElicitationCapability,
         supports_odysseythink_form_elicitation: bool,
         tool_plugin_provenance: ToolPluginProvenance,
-        auth: Option<&OdyAuth>,
         elicitation_reviewer: Option<ElicitationReviewerHandle>,
     ) -> Self {
         let mut required_servers = mcp_servers
@@ -158,7 +156,6 @@ impl McpConnectionManager {
         // Ody Apps auth provider only applied for Ody backend auth, which has
         // been removed along with the legacy Ody Apps OAuth flow.
         let ody_apps_auth_provider: Option<ody_api::SharedAuthProvider> = None;
-        let _ = auth;
         let mcp_servers = mcp_servers.clone();
         for (server_name, server) in mcp_servers
             .into_iter()

@@ -311,19 +311,17 @@ impl Session {
         keyring_backend_kind: AuthKeyringBackendKind,
         elicitation_reviewer: Option<ElicitationReviewerHandle>,
     ) {
-        let auth = self.services.auth_manager.auth().await;
         let config = self.get_config().await;
         let mcp_config = self.runtime_mcp_config(config.as_ref()).await;
         let tool_plugin_provenance = ody_mcp::tool_plugin_provenance(&mcp_config);
         let mcp_servers =
-            effective_mcp_servers_from_configured(mcp_servers, &mcp_config, auth.as_ref());
+            effective_mcp_servers_from_configured(mcp_servers, &mcp_config);
         let host_owned_ody_apps_enabled =
-            host_owned_ody_apps_enabled(&mcp_config, auth.as_ref());
+            host_owned_ody_apps_enabled(&mcp_config);
         let auth_statuses = compute_auth_statuses(
             mcp_servers.iter(),
             store_mode,
             keyring_backend_kind,
-            auth.as_ref(),
         )
         .await;
         let environment_manager = self.services.turn_environments.environment_manager();
@@ -358,7 +356,7 @@ impl Session {
             turn_context.permission_profile(),
             mcp_runtime_context,
             config.ody_home.to_path_buf(),
-            ody_apps_tools_cache_key(auth.as_ref()),
+            ody_apps_tools_cache_key(None::<&String>),
             host_owned_ody_apps_enabled,
             mcp_config.prefix_mcp_tool_names,
             mcp_config.client_elicitation_capability,
@@ -366,7 +364,6 @@ impl Session {
                 .supports_odysseythink_form_elicitation
                 .load(std::sync::atomic::Ordering::Relaxed),
             tool_plugin_provenance,
-            auth.as_ref(),
             elicitation_reviewer,
         )
         .await;

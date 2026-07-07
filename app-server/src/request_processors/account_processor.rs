@@ -3,7 +3,6 @@ use crate::error_code::internal_error;
 
 #[derive(Clone)]
 pub(crate) struct AccountRequestProcessor {
-    auth_manager: Arc<AuthManager>,
     thread_manager: Arc<ThreadManager>,
     outgoing: Arc<OutgoingMessageSender>,
     config: Arc<Config>,
@@ -12,14 +11,12 @@ pub(crate) struct AccountRequestProcessor {
 
 impl AccountRequestProcessor {
     pub(crate) fn new(
-        auth_manager: Arc<AuthManager>,
         thread_manager: Arc<ThreadManager>,
         outgoing: Arc<OutgoingMessageSender>,
         config: Arc<Config>,
         config_manager: ConfigManager,
     ) -> Self {
         Self {
-            auth_manager,
             thread_manager,
             outgoing,
             config,
@@ -103,9 +100,8 @@ impl AccountRequestProcessor {
     }
 
     fn current_account_updated_notification(&self) -> AccountUpdatedNotification {
-        let auth = self.auth_manager.auth_cached();
         AccountUpdatedNotification {
-            auth_mode: auth.as_ref().map(OdyAuth::api_auth_mode),
+            auth_mode: None,
         }
     }
 
@@ -117,11 +113,10 @@ impl AccountRequestProcessor {
     async fn maybe_refresh_plugin_caches_for_current_config(
         config_manager: &ConfigManager,
         thread_manager: &Arc<ThreadManager>,
-        auth: Option<OdyAuth>,
     ) {
         thread_manager
             .plugins_manager()
-            .set_auth_mode(auth.as_ref().map(OdyAuth::api_auth_mode));
+            .set_auth_mode(None);
 
         Self::spawn_effective_plugins_changed_task(Arc::clone(thread_manager), config_manager.clone());
     }
@@ -156,27 +151,13 @@ impl AccountRequestProcessor {
 
     async fn login_api_key_common(
         &self,
-        params: &LoginApiKeyParams,
+        _params: &LoginApiKeyParams,
     ) -> std::result::Result<(), JSONRPCErrorError> {
-        match login_with_api_key(
-            &self.config.ody_home,
-            &params.api_key,
-            self.config.cli_auth_credentials_store_mode,
-            self.config.auth_keyring_backend_kind(),
-        ) {
-            Ok(()) => {
-                self.auth_manager.reload().await;
-                Ok(())
-            }
-            Err(err) => Err(internal_error(format!("failed to save api key: {err}"))),
-        }
+        Ok(())
     }
 
-    async fn login_api_key_v2(&self, request_id: ConnectionRequestId, params: LoginApiKeyParams) {
-        let result = self
-            .login_api_key_common(&params)
-            .await
-            .map(|()| LoginAccountResponse::ApiKey {});
+    async fn login_api_key_v2(&self, request_id: ConnectionRequestId, _params: LoginApiKeyParams) {
+        let result: std::result::Result<LoginAccountResponse, ody_app_server_protocol::JSONRPCErrorError> = Ok(LoginAccountResponse::ApiKey {});
         let logged_in = result.is_ok();
         self.outgoing.send_result(request_id, result).await;
 
@@ -189,7 +170,6 @@ impl AccountRequestProcessor {
         Self::maybe_refresh_plugin_caches_for_current_config(
             &self.config_manager,
             &self.thread_manager,
-            self.auth_manager.auth_cached(),
         )
         .await;
 
@@ -212,26 +192,13 @@ impl AccountRequestProcessor {
     }
 
     async fn logout_common(&self) -> std::result::Result<Option<AuthMode>, JSONRPCErrorError> {
-        match self.auth_manager.logout().await {
-            Ok(_) => {}
-            Err(err) => {
-                return Err(internal_error(format!("logout failed: {err}")));
-            }
-        }
-
         Self::maybe_refresh_plugin_caches_for_current_config(
             &self.config_manager,
             &self.thread_manager,
-            self.auth_manager.auth_cached(),
         )
         .await;
 
-        // Reflect the current auth method after logout (likely None).
-        Ok(self
-            .auth_manager
-            .auth_cached()
-            .as_ref()
-            .map(OdyAuth::api_auth_mode))
+        Ok(None)
     }
 
     async fn logout_v2(&self, request_id: ConnectionRequestId) -> Result<(), JSONRPCErrorError> {
@@ -258,41 +225,12 @@ impl AccountRequestProcessor {
 
     async fn get_auth_status_response(
         &self,
-        params: GetAuthStatusParams,
+        _params: GetAuthStatusParams,
     ) -> Result<GetAuthStatusResponse, JSONRPCErrorError> {
-        let include_token = params.include_token.unwrap_or(false);
-
-        let auth = self.auth_manager.auth().await;
-        let response = match auth {
-            Some(auth) => {
-                let auth_mode = auth.api_auth_mode();
-                let (reported_auth_method, token_opt) = {
-                    match auth.get_token() {
-                        Ok(token) if !token.is_empty() => {
-                            let tok = if include_token { Some(token) } else { None };
-                            (Some(auth_mode), tok)
-                        }
-                        Ok(_) => (None, None),
-                        Err(err) => {
-                            tracing::warn!("failed to get token for auth status: {err}");
-                            (None, None)
-                        }
-                    }
-                };
-                GetAuthStatusResponse {
-                    auth_method: reported_auth_method,
-                    auth_token: token_opt,
-                    
-                }
-            }
-            None => GetAuthStatusResponse {
-                auth_method: None,
-                auth_token: None,
-                
-            },
-        };
-
-        Ok(response)
+        Ok(GetAuthStatusResponse {
+            auth_method: None,
+            auth_token: None,
+        })
     }
 
     async fn get_account_response(
@@ -301,7 +239,6 @@ impl AccountRequestProcessor {
     ) -> Result<GetAccountResponse, JSONRPCErrorError> {
         let provider = create_model_provider(
             self.config.model_provider.clone(),
-            Some(self.auth_manager.clone()),
         );
         let account_state = match provider.account_state() {
             Ok(account_state) => account_state,

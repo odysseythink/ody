@@ -17,7 +17,7 @@ anyhow = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 ody-file-search = { workspace = true }
 ody-git-utils = { workspace = true }
-ody-login = { workspace = true }
+ody-client = { workspace = true }
 ody-otel = { workspace = true }
 ody-protocol = { workspace = true }
 ody-state = { workspace = true }

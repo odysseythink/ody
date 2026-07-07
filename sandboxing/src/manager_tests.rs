@@ -7,6 +7,7 @@ use super::SandboxType;
 use super::SandboxablePreference;
 use super::get_platform_sandbox;
 use super::with_managed_mitm_ca_readable_root;
+use dunce::canonicalize;
 use ody_protocol::config_types::WindowsSandboxLevel;
 use ody_protocol::models::AdditionalPermissionProfile;
 use ody_protocol::models::FileSystemPermissions;
@@ -20,7 +21,6 @@ use ody_protocol::permissions::FileSystemSpecialPath;
 use ody_protocol::permissions::NetworkSandboxPolicy;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path_uri::PathUri;
-use dunce::canonicalize;
 use pretty_assertions::assert_eq;
 use std::collections::HashMap;
 use tempfile::TempDir;
@@ -100,7 +100,6 @@ fn unsandboxed_transform_preserves_foreign_cwd_and_unrestricted_file_system_poli
             environment_id: None,
             network: None,
             sandbox_policy_cwd: &cwd_uri,
-            ody_linux_sandbox_exe: None,
             use_legacy_landlock: false,
             windows_sandbox_level: WindowsSandboxLevel::Disabled,
             windows_sandbox_private_desktop: false,
@@ -155,7 +154,6 @@ fn transform_additional_permissions_enable_network_for_external_sandbox() {
             environment_id: None,
             network: None,
             sandbox_policy_cwd: &cwd_uri,
-            ody_linux_sandbox_exe: None,
             use_legacy_landlock: false,
             windows_sandbox_level: WindowsSandboxLevel::Disabled,
             windows_sandbox_private_desktop: false,
@@ -225,7 +223,6 @@ fn transform_additional_permissions_preserves_denied_entries() {
             environment_id: None,
             network: None,
             sandbox_policy_cwd: &cwd_uri,
-            ody_linux_sandbox_exe: None,
             use_legacy_landlock: false,
             windows_sandbox_level: WindowsSandboxLevel::Disabled,
             windows_sandbox_private_desktop: false,
@@ -300,9 +297,7 @@ fn managed_mitm_ca_bundle_becomes_readable_for_restricted_sandbox() {
 }
 
 #[cfg(target_os = "linux")]
-fn transform_linux_seccomp_request(
-    ody_linux_sandbox_exe: &std::path::Path,
-) -> super::SandboxExecRequest {
+fn transform_linux_seccomp_request() -> super::SandboxExecRequest {
     let manager = SandboxManager::new();
     let cwd = AbsolutePathBuf::current_dir().expect("current dir");
     let cwd_uri = PathUri::from_abs_path(&cwd);
@@ -322,7 +317,6 @@ fn transform_linux_seccomp_request(
             environment_id: None,
             network: None,
             sandbox_policy_cwd: &cwd_uri,
-            ody_linux_sandbox_exe: Some(ody_linux_sandbox_exe),
             use_legacy_landlock: false,
             windows_sandbox_level: WindowsSandboxLevel::Disabled,
             windows_sandbox_private_desktop: false,
@@ -402,22 +396,15 @@ fn wsl1_allows_non_bubblewrap_linux_paths() {
 #[cfg(target_os = "linux")]
 #[test]
 fn transform_linux_seccomp_preserves_helper_path_in_arg0_when_available() {
-    let ody_linux_sandbox_exe = std::path::PathBuf::from("/tmp/ody-linux-sandbox");
-    let exec_request = transform_linux_seccomp_request(&ody_linux_sandbox_exe);
+    let exec_request = transform_linux_seccomp_request(&None);
 
-    assert_eq!(
-        exec_request.arg0,
-        Some(ody_linux_sandbox_exe.to_string_lossy().into_owned())
-    );
+    assert_eq!(exec_request.arg0, None);
 }
 
 #[cfg(target_os = "linux")]
 #[test]
 fn transform_linux_seccomp_uses_helper_alias_when_launcher_is_not_helper_path() {
-    let ody_linux_sandbox_exe = std::path::PathBuf::from("/tmp/ody");
-    let exec_request = transform_linux_seccomp_request(&ody_linux_sandbox_exe);
-
-    assert_eq!(exec_request.arg0, Some("ody-linux-sandbox".to_string()));
+    let exec_request = transform_linux_seccomp_request(&None);
 }
 
 #[cfg(target_os = "windows")]
@@ -512,7 +499,6 @@ fn transform_for_direct_spawn_windows_materializes_inner_helper() {
                     environment_id: None,
                     network: None,
                     sandbox_policy_cwd: &cwd_uri,
-                    ody_linux_sandbox_exe: None,
                     use_legacy_landlock: false,
                     windows_sandbox_level: WindowsSandboxLevel::Elevated,
                     windows_sandbox_private_desktop: false,

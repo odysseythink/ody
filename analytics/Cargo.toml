@@ -15,7 +15,7 @@ workspace = true
 [dependencies]
 ody-app-server-protocol = { workspace = true }
 ody-git-utils = { workspace = true }
-ody-login = { workspace = true }
+ody-client = { workspace = true }
 ody-model-provider = { workspace = true }
 ody-plugin = { workspace = true }
 ody-protocol = { workspace = true }

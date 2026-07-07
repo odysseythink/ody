@@ -8,16 +8,13 @@ use ody_core::resolve_installation_id;
 use ody_core::thread_store_from_config;
 use ody_extension_api::empty_extension_registry;
 use ody_features::Feature;
-use ody_login::AuthManager;
-use ody_login::OdyAuth;
-use ody_login::default_client::originator;
+use ody_client::default_client::originator;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::WireApi;
 use ody_model_provider_info::built_in_model_providers;
 use ody_model_provider_info::ProviderCapabilities;
 use ody_models_manager::bundled_models_response;
 use ody_otel::SessionTelemetry;
-use ody_otel::TelemetryAuthMode;
 use ody_protocol::ThreadId;
 use ody_protocol::config_types::CollaborationMode;
 use ody_protocol::config_types::ModeKind;
@@ -382,7 +379,6 @@ async fn response_item_ids_are_sent_for_all_remote_v2_compaction_requests() -> a
     )
     .await;
     let test = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(|config| {
             let _ = config.features.enable(Feature::ItemIds);
             let _ = config.features.enable(Feature::RemoteCompactionV2);
@@ -1008,7 +1004,7 @@ async fn includes_session_id_thread_id_and_model_headers_in_request() {
     )
     .await;
 
-    let mut builder = test_ody().with_auth(OdyAuth::from_api_key("Test API Key"));
+    let mut builder = test_ody();
     let test = builder
         .build(&server)
         .await
@@ -1133,7 +1129,6 @@ async fn send_provider_auth_request(server: &MockServer, auth: ModelProviderAuth
         stream_max_retries: Some(0),
         stream_idle_timeout_ms: Some(5_000),
         websocket_connect_timeout_ms: None,
-        requires_odysseythink_auth: false,
         supports_websockets: false,
             capabilities: ProviderCapabilities::default(),
     };
@@ -1163,9 +1158,6 @@ async fn send_provider_auth_request(server: &MockServer, auth: ModelProviderAuth
         SessionSource::Exec,
     );
     let client = ModelClient::new(
-        Some(AuthManager::from_auth_for_testing(OdyAuth::from_api_key(
-            "unused-api-key",
-        ))),
         thread_id,
         provider,
         SessionSource::Exec,
@@ -1222,7 +1214,6 @@ async fn includes_base_instructions_override_in_request() {
     .await;
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::from_api_key("Test API Key"))
         .with_config(|config| {
             config.base_instructions = Some("test instructions".to_string());
         });
@@ -1291,10 +1282,6 @@ async fn prefers_apikey_when_config_prefers_apikey() {
 
     // Init session
     let ody_home = TempDir::new().unwrap();
-    // Only API key auth is supported now.
-    let auth_manager =
-        AuthManager::from_auth_for_testing(OdyAuth::from_api_key("sk-test-key"));
-
     let mut config = load_default_config_for_test(&ody_home).await;
     config.model_provider = model_provider;
     let installation_id = resolve_installation_id(&config.ody_home)
@@ -1302,7 +1289,6 @@ async fn prefers_apikey_when_config_prefers_apikey() {
         .expect("resolve installation id");
     let thread_manager = ThreadManager::new(
         &config,
-        auth_manager,
         SessionSource::Exec,
         Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
         empty_extension_registry(),
@@ -1348,7 +1334,6 @@ async fn includes_user_instructions_message_in_request() {
     .await;
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::from_api_key("Test API Key"))
         .with_pre_build_hook(|home| {
             std::fs::write(home.join("AGENTS.md"), "be nice").expect("write global instructions");
         });
@@ -1432,7 +1417,6 @@ async fn omits_apps_guidance_for_api_key_auth_even_when_feature_enabled() {
     .await;
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::from_api_key("Test API Key"))
         .with_config(move |config| {
             config
                 .features
@@ -1489,7 +1473,6 @@ async fn omits_apps_guidance_when_configured_off() {
     .await;
 
     let mut builder = test_ody()
-        .with_auth(create_dummy_ody_auth())
         .with_config(move |config| {
             config
                 .features
@@ -1592,7 +1575,6 @@ async fn skills_append_to_developer_message() {
     let ody_home_path = ody_home.path().to_path_buf();
     let mut builder = test_ody()
         .with_home(ody_home.clone())
-        .with_auth(OdyAuth::from_api_key("Test API Key"))
         .with_config(move |config| {
             config.cwd = ody_home_path.abs();
         });
@@ -1669,7 +1651,6 @@ async fn skills_use_aliases_in_developer_message_under_budget_pressure() {
     let ody_home_path = ody_home.path().to_path_buf();
     let mut builder = test_ody()
         .with_home(ody_home.clone())
-        .with_auth(OdyAuth::from_api_key("Test API Key"))
         .with_config(move |config| {
             config.cwd = ody_home_path.abs();
             let user_config_path = ody_home_path.join("config.toml").abs();
@@ -2349,7 +2330,6 @@ async fn includes_developer_instructions_message_in_request() {
     )
     .await;
     let mut builder = test_ody()
-        .with_auth(OdyAuth::from_api_key("Test API Key"))
         .with_pre_build_hook(|home| {
             std::fs::write(home.join("AGENTS.md"), "be nice").expect("write global instructions");
         })
@@ -2479,15 +2459,13 @@ async fn azure_responses_request_includes_store_and_reasoning_ids() {
     let model_info =
         ody_core::test_support::construct_model_info_offline(model.as_str(), &config);
     let thread_id = ThreadId::new();
-    let auth_manager =
-        ody_core::test_support::auth_manager_from_auth(OdyAuth::from_api_key("Test API Key"));
     let session_telemetry = SessionTelemetry::new(
         thread_id,
         model.as_str(),
         model_info.slug.as_str(),
         /*account_id*/ None,
         Some("test@test.com".to_string()),
-        auth_manager.auth_mode().map(TelemetryAuthMode::from),
+        None,
         "test_originator".to_string(),
         /*log_user_prompts*/ false,
         "test".to_string(),
@@ -2495,7 +2473,6 @@ async fn azure_responses_request_includes_store_and_reasoning_ids() {
     );
 
     let client = ModelClient::new(
-        /*auth_manager*/ None,
         thread_id,
         provider.clone(),
         SessionSource::Exec,
@@ -2658,7 +2635,6 @@ async fn token_count_includes_rate_limits_snapshot() {
     provider.supports_websockets = false;
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::from_api_key("test"))
         .with_config(move |config| {
             config.model_provider = provider;
         });
@@ -3087,7 +3063,6 @@ async fn azure_overrides_assign_properties_used_for_responses_url() {
 
     // Init session
     let mut builder = test_ody()
-        .with_auth(create_dummy_ody_auth())
         .with_config(move |config| {
             config.model_provider = provider;
         });
@@ -3169,14 +3144,12 @@ async fn env_var_overrides_loaded_auth() {
         stream_max_retries: None,
         stream_idle_timeout_ms: None,
         websocket_connect_timeout_ms: None,
-        requires_odysseythink_auth: false,
         supports_websockets: false,
             capabilities: ProviderCapabilities::default(),
     };
 
     // Init session
     let mut builder = test_ody()
-        .with_auth(create_dummy_ody_auth())
         .with_config(move |config| {
             config.model_provider = provider;
         });
@@ -3201,10 +3174,6 @@ async fn env_var_overrides_loaded_auth() {
         .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
-}
-
-fn create_dummy_ody_auth() -> OdyAuth {
-    OdyAuth::create_dummy_api_key_auth_for_testing()
 }
 
 /// Scenario:
@@ -3235,7 +3204,7 @@ async fn history_dedupes_streamed_and_final_messages_across_turns() {
 
     let request_log = mount_sse_sequence(&server, vec![sse1.clone(), sse1.clone(), sse1]).await;
 
-    let mut builder = test_ody().with_auth(OdyAuth::from_api_key("Test API Key"));
+    let mut builder = test_ody();
     let ody = builder
         .build(&server)
         .await

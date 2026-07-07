@@ -2,8 +2,7 @@
 //!
 //! When this CLI is invoked normally, it parses the standard `ody-exec` CLI
 //! options and launches the non-interactive Ody agent. However, if it is
-//! invoked with arg0 as `ody-linux-sandbox`, we instead treat the invocation
-//! as a request to run the logic for the standalone `ody-linux-sandbox`
+
 //! executable (i.e., parse any -s args and then run a *sandboxed* command under
 //! Landlock + seccomp.
 //!

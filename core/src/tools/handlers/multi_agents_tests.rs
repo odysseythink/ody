@@ -17,8 +17,6 @@ use crate::tools::handlers::multi_agents_v2::WaitAgentHandler as WaitAgentHandle
 use crate::turn_diff_tracker::TurnDiffTracker;
 use ody_extension_api::empty_extension_registry;
 use ody_features::Feature;
-use ody_login::AuthManager;
-use ody_login::OdyAuth;
 use ody_model_provider::create_model_provider;
 use ody_model_provider_info::built_in_model_providers;
 use ody_protocol::AgentPath;
@@ -96,7 +94,6 @@ fn parse_agent_id(id: &str) -> ThreadId {
 
 fn thread_manager() -> ThreadManager {
     ThreadManager::with_models_provider_for_tests(
-        OdyAuth::from_api_key("dummy"),
         built_in_model_providers()["odysseythink"].clone(),
     )
 }
@@ -2697,7 +2694,6 @@ async fn resume_agent_restores_closed_agent_and_accepts_send_input() {
                 phase: None,
                 internal_chat_message_metadata_passthrough: None,
             })]),
-            AuthManager::from_auth_for_testing(OdyAuth::from_api_key("dummy")),
             /*parent_trace*/ None,
             /*supports_odysseythink_form_elicitation*/ false,
         )
@@ -3806,7 +3802,6 @@ async fn multi_agent_v2_interrupt_agent_accepts_unloaded_task_name_target() {
         .await
         .expect("sqlite state db should initialize");
     let manager = ThreadManager::with_models_provider_home_and_state_for_tests(
-        OdyAuth::from_api_key("dummy"),
         config.model_provider.clone(),
         config.ody_home.to_path_buf(),
         Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
@@ -4136,7 +4131,6 @@ async fn tool_handlers_cascade_close_and_resume_and_keep_explicitly_closed_subtr
     let state_db = init_state_db(&config).await;
     let manager = ThreadManager::new(
         &config,
-        AuthManager::from_auth_for_testing(OdyAuth::from_api_key("dummy")),
         SessionSource::Exec,
         Arc::new(ody_exec_server::EnvironmentManager::default_for_tests()),
         empty_extension_registry(),
@@ -4369,7 +4363,7 @@ async fn build_agent_spawn_config_uses_turn_context_values() {
         use_profile: true,
         ..ShellEnvironmentPolicy::default()
     };
-    config.ody_linux_sandbox_exe = Some(PathBuf::from("/bin/echo"));
+    config = Some(PathBuf::from("/bin/echo"));
     turn.config = Arc::new(config);
     let temp_dir = tempfile::tempdir().expect("temp dir");
     #[allow(deprecated)]

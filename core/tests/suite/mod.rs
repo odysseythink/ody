@@ -8,7 +8,7 @@ use ody_test_binary_support::configure_test_binary_dispatch;
 use ctor::ctor;
 
 // This code runs before any other tests are run.
-// It allows the test binary to behave like ody and dispatch to apply_patch and ody-linux-sandbox
+
 // based on the arg0.
 // NOTE: this doesn't work on ARM
 #[ctor]

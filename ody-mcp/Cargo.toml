@@ -20,7 +20,6 @@ ody-async-utils = { workspace = true }
 ody-api = { workspace = true }
 ody-config = { workspace = true }
 ody-exec-server = { workspace = true }
-ody-login = { workspace = true }
 ody-model-provider = { workspace = true }
 ody-otel = { workspace = true }
 ody-plugin = { workspace = true }

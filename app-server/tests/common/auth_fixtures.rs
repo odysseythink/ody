@@ -4,9 +4,7 @@ use anyhow::Context;
 use anyhow::Result;
 use ody_app_server_protocol::AuthMode;
 use ody_config::types::AuthCredentialsStoreMode;
-use ody_login::AuthDotJson;
-use ody_login::AuthKeyringBackendKind;
-use ody_login::save_auth;
+use std::fs;
 
 /// Builder for writing a fake auth.json in tests using API-key auth.
 #[derive(Debug, Clone)]
@@ -45,18 +43,14 @@ impl ApiKeyAuthFixture {
 pub fn write_api_key_auth(
     ody_home: &Path,
     fixture: ApiKeyAuthFixture,
-    cli_auth_credentials_store_mode: AuthCredentialsStoreMode,
+    _cli_auth_credentials_store_mode: AuthCredentialsStoreMode,
 ) -> Result<()> {
-    let auth = AuthDotJson {
-        auth_mode: Some(AuthMode::ApiKey),
-        odysseythink_api_key: Some(fixture.api_key),
-    };
+    let auth = serde_json::json!({
+        "auth_mode": "api_key",
+        "odysseythink_api_key": fixture.api_key,
+    });
 
-    save_auth(
-        ody_home,
-        &auth,
-        cli_auth_credentials_store_mode,
-        AuthKeyringBackendKind::default(),
-    )
-    .context("write auth.json")
+    let auth_path = ody_home.join("auth.json");
+    fs::write(&auth_path, serde_json::to_vec_pretty(&auth)?)
+        .context("write auth.json")
 }

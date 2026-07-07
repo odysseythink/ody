@@ -7,7 +7,6 @@ use ody_exec_server::CreateDirectoryOptions;
 use ody_exec_server::LOCAL_ENVIRONMENT_ID;
 use ody_exec_server::REMOTE_ENVIRONMENT_ID;
 use ody_exec_server::RemoveOptions;
-use ody_login::OdyAuth;
 use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::odysseythink_models::ConfigShellToolType;
@@ -1403,7 +1402,6 @@ async fn view_image_tool_returns_unsupported_message_for_text_only_model() -> an
     .await;
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(|config| {
             config.model = Some(model_slug.to_string());
         });

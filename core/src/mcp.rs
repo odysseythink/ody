@@ -8,7 +8,6 @@ use ody_extension_api::ExtensionDataInit;
 use ody_extension_api::ExtensionRegistry;
 use ody_extension_api::McpServerContribution;
 use ody_extension_api::McpServerContributionContext;
-use ody_login::OdyAuth;
 use ody_mcp::EffectiveMcpServer;
 use ody_mcp::McpConfig;
 use ody_mcp::McpPluginAttribution;
@@ -179,9 +178,8 @@ impl McpManager {
     pub async fn effective_servers(
         &self,
         config: &Config,
-        auth: Option<&OdyAuth>,
     ) -> HashMap<String, EffectiveMcpServer> {
         let mcp_config = self.runtime_config(config).await;
-        effective_mcp_servers(&mcp_config, auth)
+        effective_mcp_servers(&mcp_config)
     }
 }

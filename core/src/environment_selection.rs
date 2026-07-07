@@ -310,7 +310,6 @@ mod tests {
     fn test_runtime_paths() -> ExecServerRuntimePaths {
         ExecServerRuntimePaths::new(
             std::env::current_exe().expect("current exe"),
-            /*ody_linux_sandbox_exe*/ None,
         )
         .expect("runtime paths")
     }

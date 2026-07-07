@@ -73,8 +73,7 @@ use ody_features::NetworkProxyConfigToml;
 use ody_features::TokenBudgetConfigToml;
 use ody_git_utils::resolve_root_git_project_for_trust;
 use ody_install_context::InstallContext;
-use ody_login::AuthManagerConfig;
-use ody_login::AuthRouteConfig;
+use ody_client::AuthRouteConfig;
 use ody_mcp::McpConfig;
 use ody_mcp::McpPluginAttribution;
 use ody_mcp::McpServerRegistration;
@@ -933,13 +932,12 @@ pub struct Config {
     /// file: it must be set in code via [`ConfigOverrides`].
     pub ody_self_exe: Option<PathBuf>,
 
-    /// Path to the `ody-linux-sandbox` executable. This must be set if
+    
     /// [`ody_sandboxing::SandboxType::LinuxSeccomp`] is used. Note that this
     /// cannot be set in the config file: it must be set in code via
     /// [`ConfigOverrides`].
     ///
-    /// When this program is invoked, arg0 will be set to `ody-linux-sandbox`.
-    pub ody_linux_sandbox_exe: Option<PathBuf>,
+    
 
     /// Path to the `ody-execve-wrapper` executable used for shell
     /// escalation. This cannot be set in the config file: it must be set in
@@ -1201,24 +1199,6 @@ pub enum TerminalResizeReflowMaxRows {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct TerminalResizeReflowConfig {
     pub max_rows: TerminalResizeReflowMaxRows,
-}
-
-impl AuthManagerConfig for Config {
-    fn ody_home(&self) -> PathBuf {
-        self.ody_home.to_path_buf()
-    }
-
-    fn cli_auth_credentials_store_mode(&self) -> AuthCredentialsStoreMode {
-        self.cli_auth_credentials_store_mode
-    }
-
-    fn auth_keyring_backend_kind(&self) -> AuthKeyringBackendKind {
-        Config::auth_keyring_backend_kind(self)
-    }
-
-    fn auth_route_config(&self) -> Option<AuthRouteConfig> {
-        Config::auth_route_config(self)
-    }
 }
 
 #[derive(Clone, Default)]
@@ -1565,7 +1545,6 @@ impl Config {
                 .features
                 .enabled(Feature::SkillMcpDependencyInstall),
             approval_policy: self.permissions.approval_policy.clone(),
-            ody_linux_sandbox_exe: self.ody_linux_sandbox_exe.clone(),
             use_legacy_landlock: self.features.use_legacy_landlock(),
             apps_enabled: self.features.enabled(Feature::Apps),
             prefix_mcp_tool_names: self.prefix_mcp_tool_names(),
@@ -1704,7 +1683,7 @@ impl Config {
     /// designed to use [AskForApproval::Never] exclusively.
     ///
     /// Further, [ConfigOverrides] contains some options that are not supported
-    /// in [ConfigToml], such as `cwd`, `ody_self_exe`, `ody_linux_sandbox_exe`, and
+    /// in [ConfigToml], such as `cwd`, `ody_self_exe`, and
     /// `main_execve_wrapper_exe`.
     pub async fn load_with_cli_overrides_and_harness_overrides(
         cli_overrides: Vec<(String, TomlValue)>,
@@ -2132,8 +2111,6 @@ pub fn set_project_trust_level(
         .apply_blocking()
 }
 
-
-
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AgentRoleConfig {
     /// Human-facing role documentation used in spawn tool guidance.
@@ -2382,7 +2359,6 @@ pub struct ConfigOverrides {
     pub model_provider: Option<String>,
     pub service_tier: Option<Option<String>>,
     pub ody_self_exe: Option<PathBuf>,
-    pub ody_linux_sandbox_exe: Option<PathBuf>,
     pub main_execve_wrapper_exe: Option<PathBuf>,
     pub default_zsh_path: Option<AbsolutePathBuf>,
     pub base_instructions: Option<String>,
@@ -2404,8 +2380,6 @@ fn dedupe_absolute_paths(paths: &mut Vec<AbsolutePathBuf>) {
     let mut seen = HashSet::new();
     paths.retain(|path| seen.insert(path.clone()));
 }
-
-
 
 /// Resolve the web search mode from explicit config and feature flags.
 fn resolve_web_search_mode(config_toml: &ConfigToml, features: &Features) -> Option<WebSearchMode> {
@@ -2910,7 +2884,6 @@ impl Config {
             web_search_mode: mut constrained_web_search_mode,
             allow_managed_hooks_only: _,
             allow_appshots: _,
-            allow_remote_control: _,
             computer_use: _,
             feature_requirements,
             managed_hooks: _,
@@ -2941,7 +2914,6 @@ impl Config {
             model_provider,
             service_tier: service_tier_override,
             ody_self_exe,
-            ody_linux_sandbox_exe,
             main_execve_wrapper_exe,
             default_zsh_path,
             base_instructions,
@@ -3859,7 +3831,6 @@ impl Config {
             bypass_hook_trust,
             file_opener: cfg.file_opener.unwrap_or(UriBasedFileOpener::VsCode),
             ody_self_exe,
-            ody_linux_sandbox_exe,
             main_execve_wrapper_exe,
             zsh_path,
 

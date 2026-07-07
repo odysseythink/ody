@@ -10,7 +10,7 @@ use ody_core::config::ConfigBuilder;
 use ody_core::resolve_installation_id;
 use ody_exec_server::EnvironmentManager;
 use ody_exec_server::ExecServerRuntimePaths;
-use ody_login::default_client::set_default_client_residency_requirement;
+use ody_client::default_client::set_default_client_residency_requirement;
 use ody_utils_cli::CliConfigOverrides;
 
 use rmcp::model::ClientNotification;
@@ -98,7 +98,7 @@ pub async fn run_main(
             config.ody_home.clone(),
             Some(ExecServerRuntimePaths::from_optional_paths(
                 arg0_paths.ody_self_exe.clone(),
-                arg0_paths.ody_linux_sandbox_exe.clone(),
+                arg0_paths.clone(),
             )?),
         )
         .await

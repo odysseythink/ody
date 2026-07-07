@@ -68,8 +68,7 @@ pub use ody_extension_api::empty_extension_registry;
 pub use ody_features::Feature;
 pub use ody_features::Features;
 pub use ody_home::OdyHomeUserInstructionsProvider;
-pub use ody_login::AuthManager;
-pub use ody_login::default_client::set_default_originator;
+pub use ody_client::default_client::set_default_originator;
 
 pub use ody_model_provider_info::built_in_model_providers;
 pub use ody_models_manager::manager::RefreshStrategy;

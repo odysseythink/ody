@@ -4,7 +4,6 @@ use std::sync::Arc;
 use ody_core::ModelClient;
 use ody_core::Prompt;
 use ody_core::ResponseEvent;
-use ody_login::OdyAuth;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::WireApi;
 use ody_model_provider_info::ProviderCapabilities;
@@ -120,7 +119,6 @@ async fn responses_stream_includes_subagent_header_on_review() {
     );
 
     let client = ModelClient::new(
-        /*auth_manager*/ None,
         thread_id,
         provider.clone(),
         session_source.clone(),
@@ -252,7 +250,6 @@ async fn responses_stream_includes_subagent_header_on_other() {
     );
 
     let client = ModelClient::new(
-        /*auth_manager*/ None,
         thread_id,
         provider.clone(),
         session_source.clone(),
@@ -349,7 +346,7 @@ async fn responses_respects_model_info_overrides_from_config() {
 
     let thread_id = ThreadId::new();
     let auth_mode =
-        ody_core::test_support::auth_manager_from_auth(OdyAuth::from_api_key("Test API Key"))
+        None
             .auth_mode()
             .map(TelemetryAuthMode::from);
     let session_source =
@@ -370,7 +367,6 @@ async fn responses_respects_model_info_overrides_from_config() {
     );
 
     let client = ModelClient::new(
-        /*auth_manager*/ None,
         thread_id,
         provider.clone(),
         session_source.clone(),

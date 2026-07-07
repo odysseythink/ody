@@ -7,7 +7,6 @@ use std::time::Instant;
 
 use anyhow::Result;
 use ody_features::Feature;
-use ody_login::OdyAuth;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::Op;
 use core_test_support::apps_test_server::SEARCH_CALENDAR_CREATE_TOOL;
@@ -120,7 +119,6 @@ async fn build_analytics_plugin_test_ody(
 ) -> Result<TestOdy> {
     let mut builder = test_ody()
         .with_home(ody_home)
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_model("gpt-5.2")
         .with_config(move |config| {
         });
@@ -199,7 +197,6 @@ async fn explicit_plugin_mentions_use_mcp_for_api_key_dual_surface_plugins() -> 
 
     let mut builder = test_ody()
         .with_home(ody_home)
-        .with_auth(OdyAuth::from_api_key("Test API Key"))
         .with_config(move |config| {
             config
                 .features
@@ -334,7 +331,7 @@ async fn explicit_plugin_mentions_track_plugin_used_analytics() -> Result<()> {
     );
     assert_eq!(
         event["event_params"]["product_client_id"],
-        serde_json::json!(ody_login::default_client::originator().value)
+        serde_json::json!(ody_client::default_client::originator().value)
     );
     assert_eq!(event["event_params"]["model_slug"], "gpt-5.2");
     assert!(event["event_params"]["thread_id"].as_str().is_some());

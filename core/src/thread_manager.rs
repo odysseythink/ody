@@ -27,8 +27,6 @@ use ody_extension_api::LoadedUserInstructions;
 use ody_extension_api::UserInstructionsProvider;
 use ody_extension_api::empty_extension_registry;
 use ody_features::Feature;
-use ody_login::AuthManager;
-use ody_login::OdyAuth;
 use ody_model_provider::create_model_provider;
 use ody_model_provider::create_model_provider_with_id;
 use ody_model_provider_info::ModelProviderInfo;
@@ -206,7 +204,6 @@ pub(crate) struct ResumeThreadWithHistoryOptions {
 pub(crate) struct ThreadManagerState {
     threads: Arc<RwLock<HashMap<ThreadId, Arc<OdyThread>>>>,
     thread_created_tx: broadcast::Sender<ThreadId>,
-    auth_manager: Arc<AuthManager>,
     models_manager: SharedModelsManager,
     environment_manager: Arc<EnvironmentManager>,
     skills_service: Arc<SkillsService>,
@@ -227,12 +224,10 @@ pub(crate) struct ThreadManagerState {
 
 pub fn build_models_manager(
     config: &Config,
-    auth_manager: Arc<AuthManager>,
 ) -> SharedModelsManager {
     let provider = create_model_provider_with_id(
         config.model_provider_id.clone(),
         config.model_provider.clone(),
-        Some(auth_manager),
     );
     provider.models_manager(
         config.ody_home.to_path_buf(),
@@ -265,7 +260,6 @@ impl ThreadManager {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         config: &Config,
-        auth_manager: Arc<AuthManager>,
         session_source: SessionSource,
         environment_manager: Arc<EnvironmentManager>,
         extensions: Arc<ExtensionRegistry<Config>>,
@@ -283,7 +277,7 @@ impl ThreadManager {
         let plugins_manager = Arc::new(PluginsManager::new_with_options(
             ody_home.to_path_buf(),
             restriction_product,
-            auth_manager.get_api_auth_mode(),
+            None,
         ));
         let mcp_manager = Arc::new(McpManager::new_with_extensions(
             Arc::clone(&plugins_manager),
@@ -298,7 +292,7 @@ impl ThreadManager {
             state: Arc::new(ThreadManagerState {
                 threads: Arc::new(RwLock::new(HashMap::new())),
                 thread_created_tx,
-                models_manager: build_models_manager(config, auth_manager.clone()),
+                models_manager: build_models_manager(config),
                 environment_manager,
                 skills_service,
                 plugins_manager,
@@ -308,7 +302,6 @@ impl ThreadManager {
                 thread_store,
                 attestation_provider,
                 external_time_provider,
-                auth_manager,
                 session_source,
                 installation_id,
                 analytics_events_client,
@@ -320,10 +313,9 @@ impl ThreadManager {
         }
     }
 
-    /// Construct with a dummy AuthManager containing the provided OdyAuth.
+    /// Construct with a provider for tests.
     /// Used for integration tests: should not be used by ordinary business logic.
     pub(crate) fn with_models_provider_for_tests(
-        auth: OdyAuth,
         provider: ModelProviderInfo,
     ) -> Self {
         set_thread_manager_test_mode_for_tests(/*enabled*/ true);
@@ -334,7 +326,6 @@ impl ThreadManager {
         std::fs::create_dir_all(&ody_home)
             .unwrap_or_else(|err| panic!("temp ody home dir create failed: {err}"));
         let mut manager = Self::with_models_provider_and_home_for_tests(
-            auth,
             provider,
             ody_home.clone(),
             Arc::new(EnvironmentManager::default_for_tests()),
@@ -343,16 +334,14 @@ impl ThreadManager {
         manager
     }
 
-    /// Construct with a dummy AuthManager containing the provided OdyAuth and ody home.
+    /// Construct with a provider and ody home for tests.
     /// Used for integration tests: should not be used by ordinary business logic.
     pub(crate) fn with_models_provider_and_home_for_tests(
-        auth: OdyAuth,
         provider: ModelProviderInfo,
         ody_home: PathBuf,
         environment_manager: Arc<EnvironmentManager>,
     ) -> Self {
         Self::with_models_provider_home_and_state_for_tests(
-            auth,
             provider,
             ody_home,
             environment_manager,
@@ -361,14 +350,12 @@ impl ThreadManager {
     }
 
     pub(crate) fn with_models_provider_home_and_state_for_tests(
-        auth: OdyAuth,
         provider: ModelProviderInfo,
         ody_home: PathBuf,
         environment_manager: Arc<EnvironmentManager>,
         state_db: Option<StateDbHandle>,
     ) -> Self {
         set_thread_manager_test_mode_for_tests(/*enabled*/ true);
-        let auth_manager = AuthManager::from_auth_for_testing(auth);
         let installation_id = uuid::Uuid::new_v4().to_string();
         let skills_ody_home = match AbsolutePathBuf::from_absolute_path_checked(&ody_home) {
             Ok(ody_home) => ody_home,
@@ -379,7 +366,7 @@ impl ThreadManager {
         let plugins_manager = Arc::new(PluginsManager::new_with_options(
             ody_home.clone(),
             restriction_product,
-            auth_manager.get_api_auth_mode(),
+            None,
         ));
         let mcp_manager = Arc::new(McpManager::new(Arc::clone(&plugins_manager)));
         let skills_service = Arc::new(SkillsService::new_with_restriction_product(
@@ -401,7 +388,7 @@ impl ThreadManager {
             state: Arc::new(ThreadManagerState {
                 threads: Arc::new(RwLock::new(HashMap::new())),
                 thread_created_tx,
-                models_manager: create_model_provider(provider, Some(auth_manager.clone()))
+                models_manager: create_model_provider(provider)
                     .models_manager(ody_home, /*config_model_catalog*/ None),
                 environment_manager,
                 skills_service,
@@ -414,7 +401,6 @@ impl ThreadManager {
                 thread_store,
                 attestation_provider: None,
                 external_time_provider: None,
-                auth_manager,
                 session_source: SessionSource::Exec,
                 installation_id,
                 analytics_events_client: None,
@@ -428,10 +414,6 @@ impl ThreadManager {
 
     pub fn session_source(&self) -> SessionSource {
         self.state.session_source.clone()
-    }
-
-    pub fn auth_manager(&self) -> Arc<AuthManager> {
-        self.state.auth_manager.clone()
     }
 
     pub fn skills_service(&self) -> Arc<SkillsService> {
@@ -642,7 +624,6 @@ impl ThreadManager {
         Box::pin(self.state.spawn_thread_with_source(
             options.config,
             options.initial_history,
-            Arc::clone(&self.state.auth_manager),
             agent_control,
             session_source,
             /*parent_thread_id*/ None,
@@ -702,7 +683,6 @@ impl ThreadManager {
         &self,
         config: Config,
         rollout_path: PathBuf,
-        auth_manager: Arc<AuthManager>,
         parent_trace: Option<W3cTraceContext>,
         supports_odysseythink_form_elicitation: bool,
     ) -> OdyResult<NewThread> {
@@ -710,7 +690,6 @@ impl ThreadManager {
         Box::pin(self.resume_thread_with_history(
             config,
             initial_history,
-            auth_manager,
             parent_trace,
             supports_odysseythink_form_elicitation,
         ))
@@ -722,7 +701,6 @@ impl ThreadManager {
         &self,
         config: Config,
         initial_history: InitialHistory,
-        auth_manager: Arc<AuthManager>,
         parent_trace: Option<W3cTraceContext>,
         supports_odysseythink_form_elicitation: bool,
     ) -> OdyResult<NewThread> {
@@ -737,7 +715,6 @@ impl ThreadManager {
         Box::pin(self.state.spawn_thread_with_source(
             config,
             initial_history,
-            auth_manager,
             agent_control,
             session_source,
             /*parent_thread_id*/ None,
@@ -770,7 +747,6 @@ impl ThreadManager {
         Box::pin(self.state.spawn_thread(
             config,
             InitialHistory::New,
-            Arc::clone(&self.state.auth_manager),
             agent_control,
             /*parent_thread_id*/ None,
             /*forked_from_thread_id*/ None,
@@ -790,7 +766,6 @@ impl ThreadManager {
         &self,
         config: Config,
         rollout_path: PathBuf,
-        auth_manager: Arc<AuthManager>,
         user_shell_override: crate::shell::Shell,
         supports_odysseythink_form_elicitation: bool,
     ) -> OdyResult<NewThread> {
@@ -806,7 +781,6 @@ impl ThreadManager {
         Box::pin(self.state.spawn_thread_with_source(
             config,
             initial_history,
-            auth_manager,
             agent_control,
             session_source,
             /*parent_thread_id*/ None,
@@ -990,7 +964,6 @@ impl ThreadManager {
         Box::pin(self.state.spawn_thread(
             config,
             history,
-            Arc::clone(&self.state.auth_manager),
             agent_control,
             /*parent_thread_id*/ None,
             source_thread_id,
@@ -1248,7 +1221,6 @@ impl ThreadManagerState {
         Box::pin(self.spawn_thread_with_source(
             config,
             InitialHistory::New,
-            Arc::clone(&self.auth_manager),
             agent_control,
             session_source,
             parent_thread_id,
@@ -1286,7 +1258,6 @@ impl ThreadManagerState {
         Box::pin(self.spawn_thread_with_source(
             config,
             initial_history,
-            Arc::clone(&self.auth_manager),
             agent_control,
             session_source,
             parent_thread_id,
@@ -1325,7 +1296,6 @@ impl ThreadManagerState {
         Box::pin(self.spawn_thread_with_source(
             config,
             initial_history,
-            Arc::clone(&self.auth_manager),
             agent_control,
             session_source,
             parent_thread_id,
@@ -1350,7 +1320,6 @@ impl ThreadManagerState {
         &self,
         config: Config,
         initial_history: InitialHistory,
-        auth_manager: Arc<AuthManager>,
         agent_control: AgentControl,
         parent_thread_id: Option<ThreadId>,
         forked_from_thread_id: Option<ThreadId>,
@@ -1366,7 +1335,6 @@ impl ThreadManagerState {
         Box::pin(self.spawn_thread_with_source(
             config,
             initial_history,
-            auth_manager,
             agent_control,
             self.session_source.clone(),
             parent_thread_id,
@@ -1390,7 +1358,6 @@ impl ThreadManagerState {
         &self,
         config: Config,
         initial_history: InitialHistory,
-        auth_manager: Arc<AuthManager>,
         agent_control: AgentControl,
         session_source: SessionSource,
         parent_thread_id: Option<ThreadId>,
@@ -1449,7 +1416,6 @@ impl ThreadManagerState {
             config,
             user_instructions,
             installation_id: self.installation_id.clone(),
-            auth_manager,
             models_manager: Arc::clone(&self.models_manager),
             environment_manager: Arc::clone(&self.environment_manager),
             skills_service: Arc::clone(&self.skills_service),

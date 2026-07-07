@@ -35,9 +35,7 @@ use ody_app_server_protocol::RequestId;
 use ody_app_server_protocol::ServerNotification;
 use ody_app_server_protocol::ServerRequest;
 use ody_app_server_protocol::ServerResponse;
-use ody_login::AuthManager;
-use ody_login::OdyAuth;
-use ody_login::default_client::create_client;
+use ody_client::default_client::create_client;
 use ody_plugin::PluginTelemetryMetadata;
 use ody_protocol::request_permissions::RequestPermissionsResponse;
 use std::collections::HashSet;
@@ -119,14 +117,14 @@ fn analytics_capture_file_from_env() -> Option<PathBuf> {
 }
 
 impl AnalyticsEventsQueue {
-    fn new(auth_manager: Arc<AuthManager>, destination: AnalyticsEventsDestination) -> Self {
+    fn new(destination: AnalyticsEventsDestination) -> Self {
         let (sender, mut receiver) = mpsc::channel(ANALYTICS_EVENTS_QUEUE_SIZE);
         tokio::spawn(async move {
             let mut reducer = AnalyticsReducer::default();
             while let Some(input) = receiver.recv().await {
                 let mut events = Vec::new();
                 reducer.ingest(input, &mut events).await;
-                send_track_events(&auth_manager, &destination, events).await;
+                send_track_events(&destination, events).await;
             }
         });
         Self {
@@ -179,14 +177,13 @@ impl AnalyticsEventsQueue {
 
 impl AnalyticsEventsClient {
     pub fn new(
-        auth_manager: Arc<AuthManager>,
         base_url: String,
         analytics_enabled: Option<bool>,
     ) -> Self {
         let destination = AnalyticsEventsDestination::from_base_url(base_url);
         Self {
             queue: (analytics_enabled != Some(false))
-                .then(|| AnalyticsEventsQueue::new(Arc::clone(&auth_manager), destination)),
+                .then(|| AnalyticsEventsQueue::new(destination)),
         }
     }
 
@@ -496,26 +493,13 @@ impl AnalyticsEventsClient {
 }
 
 async fn send_track_events(
-    auth_manager: &AuthManager,
-    destination: &AnalyticsEventsDestination,
-    events: Vec<TrackEventRequest>,
+    _destination: &AnalyticsEventsDestination,
+    _events: Vec<TrackEventRequest>,
 ) {
-    if events.is_empty() {
-        return;
-    }
-
-    let Some(auth) = auth_manager.auth().await else {
-        return;
-    };
-    // Analytics events are only emitted for Ody backend auth, which has been
+    // Analytics events are only emitted for the Ody backend auth, which has been
     // removed along with the legacy OAuth flow.
-    let _ = auth;
-    return;
-
-    #[allow(unreachable_code)]
-    for events in track_event_request_batches(events) {
-        send_track_events_request(&auth, destination, events).await;
-    }
+    let _ = track_event_request_batches;
+    let _ = send_track_events_request;
 }
 
 fn track_event_request_batches(events: Vec<TrackEventRequest>) -> Vec<Vec<TrackEventRequest>> {
@@ -541,47 +525,13 @@ fn track_event_request_batches(events: Vec<TrackEventRequest>) -> Vec<Vec<TrackE
     batches
 }
 
+#[allow(dead_code)]
 async fn send_track_events_request(
-    auth: &OdyAuth,
-    destination: &AnalyticsEventsDestination,
-    events: Vec<TrackEventRequest>,
+    _destination: &AnalyticsEventsDestination,
+    _events: Vec<TrackEventRequest>,
 ) {
-    if events.is_empty() {
-        return;
-    }
-
-    let payload = TrackEventsRequest { events };
-
-    #[cfg(debug_assertions)]
-    if capture_track_events_request(destination, &payload) {
-        return;
-    }
-
-    let url = match destination {
-        AnalyticsEventsDestination::Http { url } => url,
-        #[cfg(debug_assertions)]
-        AnalyticsEventsDestination::CaptureFile { .. } => return,
-    };
-    let response = create_client()
-        .post(url)
-        .timeout(ANALYTICS_EVENTS_TIMEOUT)
-        .headers(ody_model_provider::auth_provider_from_auth(auth).to_auth_headers())
-        .header("Content-Type", "application/json")
-        .json(&payload)
-        .send()
-        .await;
-
-    match response {
-        Ok(response) if response.status().is_success() => {}
-        Ok(response) => {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            tracing::warn!("events failed with status {status}: {body}");
-        }
-        Err(err) => {
-            tracing::warn!("failed to send events request: {err}");
-        }
-    }
+    // Analytics events are only emitted for the Ody backend auth, which has
+    // been removed along with the legacy OAuth flow.
 }
 
 #[cfg(debug_assertions)]

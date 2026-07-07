@@ -2,9 +2,7 @@ use anyhow::Context;
 use anyhow::Result;
 use chrono::Utc;
 use ody_config::config_toml::RealtimeWsVersion;
-use ody_core::test_support::auth_manager_from_auth;
-use ody_login::OdyAuth;
-use ody_login::OPENAI_API_KEY_ENV_VAR;
+
 use ody_protocol::ThreadId;
 use ody_protocol::models::ContentItem;
 use ody_protocol::models::ResponseItem;
@@ -1300,7 +1298,7 @@ async fn conversation_start_preflight_failure_emits_realtime_error_only() -> Res
     skip_if_no_network!(Ok(()));
 
     let server = start_websocket_server(vec![]).await;
-    let mut builder = test_ody().with_auth(OdyAuth::create_dummy_api_key_auth_for_testing());
+    let mut builder = test_ody();
     let test = builder.build_with_websocket_server(&server).await?;
 
     test.ody
@@ -2287,7 +2285,6 @@ async fn conversation_startup_context_current_thread_selects_many_turns_by_budge
         .resume_thread_with_history(
             test.config.clone(),
             InitialHistory::Forked(history),
-            auth_manager_from_auth(OdyAuth::from_api_key("dummy")),
             /*parent_trace*/ None,
             /*supports_odysseythink_form_elicitation*/ false,
         )

@@ -71,10 +71,8 @@ use ody_core::format_exec_policy_error_with_source;
 use ody_core::path_utils;
 use ody_feedback::OdyFeedback;
 use ody_git_utils::get_git_repo_root;
-use ody_login::AuthConfig;
-use ody_login::default_client::set_default_client_residency_requirement;
-use ody_login::default_client::set_default_originator;
-use ody_login::enforce_login_restrictions;
+use ody_client::default_client::set_default_client_residency_requirement;
+use ody_client::default_client::set_default_originator;
 use ody_otel::set_parent_from_context;
 use ody_otel::traceparent_context_from_env;
 use ody_protocol::SessionId;
@@ -342,7 +340,6 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
 
     let model_provider = None;
 
-
     let model = model_cli_arg; // No model specified will use the default.
 
     let overrides = ConfigOverrides {
@@ -360,7 +357,6 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
         model_provider: model_provider.clone(),
         service_tier: None,
         ody_self_exe: arg0_paths.ody_self_exe.clone(),
-        ody_linux_sandbox_exe: arg0_paths.ody_linux_sandbox_exe.clone(),
         main_execve_wrapper_exe: arg0_paths.main_execve_wrapper_exe.clone(),
         default_zsh_path: None,
         base_instructions: None,
@@ -404,20 +400,6 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
     }
 
     set_default_client_residency_requirement(config.enforce_residency.value());
-
-    let auth_route_config = config.auth_route_config();
-    if let Err(err) = enforce_login_restrictions(&AuthConfig {
-        ody_home: config.ody_home.to_path_buf(),
-        auth_credentials_store_mode: config.cli_auth_credentials_store_mode,
-        keyring_backend_kind: config.auth_keyring_backend_kind(),
-        forced_login_method: config.forced_login_method,
-        auth_route_config,
-    })
-    .await
-    {
-        eprintln!("{err}");
-        std::process::exit(1);
-    }
 
     let otel = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         ody_core::otel_init::build_provider(
@@ -466,7 +448,7 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
         .collect();
     let local_runtime_paths = ExecServerRuntimePaths::from_optional_paths(
         arg0_paths.ody_self_exe.clone(),
-        arg0_paths.ody_linux_sandbox_exe.clone(),
+        arg0_paths.clone(),
     )?;
     let state_db = ody_core::init_state_db(&config).await;
     let environment_manager = if run_loader_overrides.ignore_user_config {

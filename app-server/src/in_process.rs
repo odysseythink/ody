@@ -84,7 +84,6 @@ use ody_core::config::Config;
 use ody_core::resolve_installation_id;
 use ody_exec_server::EnvironmentManager;
 use ody_feedback::OdyFeedback;
-use ody_login::AuthManager;
 use ody_protocol::protocol::SessionSource;
 pub use ody_rollout::StateDbHandle;
 pub use ody_state::log_db::LogDbLayer;
@@ -379,11 +378,8 @@ async fn start_uninitialized(args: InProcessStartArgs) -> IoResult<InProcessClie
 
     let runtime_handle = tokio::spawn(async move {
         let (outgoing_tx, mut outgoing_rx) = mpsc::channel::<OutgoingEnvelope>(channel_capacity);
-        let auth_manager =
-            AuthManager::shared_from_config(args.config.as_ref(), args.enable_ody_api_key_env)
-                .await;
         let analytics_events_client =
-            analytics_events_client_from_config(Arc::clone(&auth_manager), args.config.as_ref());
+            analytics_events_client_from_config(args.config.as_ref());
         let outgoing_message_sender = Arc::new(OutgoingMessageSender::new(
             outgoing_tx,
             analytics_events_client.clone(),
@@ -435,10 +431,8 @@ async fn start_uninitialized(args: InProcessStartArgs) -> IoResult<InProcessClie
                 state_db: args.state_db,
                 config_warnings: args.config_warnings,
                 session_source: args.session_source,
-                auth_manager,
                 installation_id,
                 rpc_transport: AppServerRpcTransport::InProcess,
-                remote_control_handle: None,
                 plugin_startup_tasks: crate::PluginStartupTasks::Start,
             }));
             let mut thread_created_rx = processor.thread_created_receiver();

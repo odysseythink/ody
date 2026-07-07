@@ -23,8 +23,7 @@ use ody_api::RealtimeWebsocketWriter;
 use ody_api::map_api_error;
 use ody_config::config_toml::RealtimeWsMode;
 use ody_config::config_toml::RealtimeWsVersion;
-use ody_login::OdyAuth;
-use ody_login::default_client::default_headers;
+use ody_client::default_client::default_headers;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_protocol::error::OdyErr;
 use ody_protocol::error::Result as OdyResult;
@@ -734,12 +733,6 @@ async fn prepare_realtime_start(
     params: ConversationStartParams,
 ) -> OdyResult<PreparedRealtimeConversationStart> {
     let provider = sess.provider().await;
-    let auth_manager = sess
-        .services
-        .model_client
-        .auth_manager()
-        .unwrap_or_else(|| Arc::clone(&sess.services.auth_manager));
-    let auth = auth_manager.auth().await;
     let config = sess.get_config().await;
     let transport = params
         .transport
@@ -775,7 +768,7 @@ async fn prepare_realtime_start(
     let requested_realtime_session_id = session_config.session_id.clone();
     let extra_headers = match transport {
         ConversationStartTransport::Websocket => {
-            let realtime_api_key = realtime_api_key(auth.as_ref(), &provider)?;
+            let realtime_api_key = realtime_api_key(&provider)?;
             realtime_request_headers(
                 requested_realtime_session_id.as_deref(),
                 Some(realtime_api_key.as_str()),
@@ -1139,17 +1132,13 @@ fn escape_xml_text(input: &str) -> String {
         .replace('>', "&gt;")
 }
 
-fn realtime_api_key(auth: Option<&OdyAuth>, provider: &ModelProviderInfo) -> OdyResult<String> {
+fn realtime_api_key(provider: &ModelProviderInfo) -> OdyResult<String> {
     if let Some(api_key) = provider.api_key()? {
         return Ok(api_key);
     }
 
     if let Some(token) = provider.experimental_bearer_token.clone() {
         return Ok(token);
-    }
-
-    if let Some(api_key) = auth.and_then(OdyAuth::api_key) {
-        return Ok(api_key.to_string());
     }
 
     Err(OdyErr::InvalidRequest(

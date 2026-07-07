@@ -103,10 +103,7 @@ fn usage_limit_reached_error_formats_rate_limit_reached_types() {
 #[test]
 fn server_overloaded_maps_to_protocol() {
     let err = OdyErr::ServerOverloaded;
-    assert_eq!(
-        err.to_ody_protocol_error(),
-        OdyErrorInfo::ServerOverloaded
-    );
+    assert_eq!(err.to_ody_protocol_error(), OdyErrorInfo::ServerOverloaded);
 }
 
 #[test]

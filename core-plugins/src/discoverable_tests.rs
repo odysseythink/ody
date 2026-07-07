@@ -14,7 +14,6 @@ use crate::test_support::write_odysseythink_api_curated_marketplace;
 use crate::test_support::write_odysseythink_curated_marketplace;
 use ody_app_server_protocol::AuthMode;
 use ody_config::CONFIG_TOML_FILE;
-use ody_login::OdyAuth;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use pretty_assertions::assert_eq;
 use std::collections::HashSet;
@@ -34,11 +33,9 @@ async fn returns_api_curated_fallback_plugins_for_direct_provider_auth() {
     let plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
     let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
     plugins_manager.set_auth_mode(Some(AuthMode::ApiKey));
-    let auth = OdyAuth::from_api_key("test-api-key");
     let discoverable_plugins = list_discoverable_plugins(
         &plugins_manager,
         discovery_input(plugins, &[], &[], &[]),
-        Some(&auth),
     )
     .await;
 
@@ -69,7 +66,6 @@ async fn returns_microsoft_fallback_plugins() {
     let discoverable_plugins = list_discoverable_plugins(
         &plugins_manager,
         discovery_input(plugins, &[], &[], &[]),
-        /*auth*/ None,
     )
     .await;
 
@@ -109,7 +105,6 @@ async fn reprojects_cached_skill_availability_for_current_config() {
     let initial = list_discoverable_plugins(
         &plugins_manager,
         discovery_input(plugins, &[], &[], &[]),
-        /*auth*/ None,
     )
     .await;
     assert_eq!(initial, vec![expected.clone()]);
@@ -125,7 +120,6 @@ enabled = false
     let after_skill_disabled = list_discoverable_plugins(
         &plugins_manager,
         discovery_input(plugins, &[], &[], &[]),
-        /*auth*/ None,
     )
     .await;
     assert_eq!(
@@ -152,7 +146,6 @@ async fn does_not_advertise_skills_when_skill_loading_fails() {
     let discoverable_plugins = list_discoverable_plugins(
         &plugins_manager,
         discovery_input(plugins, &[], &[], &[]),
-        /*auth*/ None,
     )
     .await;
 
@@ -198,7 +191,7 @@ async fn clear_cache_invalidates_cached_tool_suggest_metadata() {
         mcp_server_names: vec!["sample-docs".to_string()],
         app_connector_ids: vec!["connector_calendar".to_string()],
     }];
-    let initial = list_discoverable_plugins(&plugins_manager, input.clone(), /*auth*/ None).await;
+    let initial = list_discoverable_plugins(&plugins_manager, input.clone()).await;
     assert_eq!(initial, expected_cached);
 
     write_file(
@@ -209,11 +202,11 @@ async fn clear_cache_invalidates_cached_tool_suggest_metadata() {
 }"#,
     );
     let before_reload =
-        list_discoverable_plugins(&plugins_manager, input.clone(), /*auth*/ None).await;
+        list_discoverable_plugins(&plugins_manager, input.clone()).await;
     assert_eq!(before_reload, expected_cached);
 
     plugins_manager.clear_cache();
-    let after_reload = list_discoverable_plugins(&plugins_manager, input, /*auth*/ None).await;
+    let after_reload = list_discoverable_plugins(&plugins_manager, input).await;
     assert_eq!(
         after_reload,
         vec![ToolSuggestDiscoverablePlugin {
@@ -263,7 +256,6 @@ source = "/tmp/{marketplace_name}"
     let discoverable_plugins = list_discoverable_plugins(
         &plugins_manager,
         discovery_input(plugins, &[], &[], &[]),
-        /*auth*/ None,
     )
     .await;
 
@@ -290,7 +282,6 @@ async fn normalizes_description() {
     let discoverable_plugins = list_discoverable_plugins(
         &plugins_manager,
         discovery_input(plugins, &[], &[], &[]),
-        /*auth*/ None,
     )
     .await;
 
@@ -320,7 +311,6 @@ async fn omits_installed_curated_plugins() {
     let discoverable_plugins = list_discoverable_plugins(
         &plugins_manager,
         discovery_input(plugins, &[], &[], &[]),
-        /*auth*/ None,
     )
     .await;
 
@@ -374,7 +364,6 @@ async fn omits_not_available_curated_plugins() {
     let discoverable_plugins = list_discoverable_plugins(
         &plugins_manager,
         discovery_input(plugins, &[], &[], &[]),
-        /*auth*/ None,
     )
     .await;
 
@@ -426,7 +415,6 @@ async fn does_not_reload_marketplace_per_plugin() {
     let discoverable_plugins = list_discoverable_plugins(
         &plugins_manager,
         discovery_input(plugins, &[], &[], &[]),
-        /*auth*/ None,
     )
     .await;
 
@@ -463,7 +451,6 @@ async fn does_not_expand_local_plugins_by_installed_apps() {
     let discoverable_plugins = list_discoverable_plugins(
         &plugins_manager,
         discovery_input(plugins, &[], &[], &[]),
-        /*auth*/ None,
     )
     .await;
 
@@ -500,7 +487,6 @@ async fn does_not_read_local_plugins_for_loaded_apps() {
     let discoverable_plugins = list_discoverable_plugins(
         &plugins_manager,
         discovery_input(plugins, &[], &[], &[hubspot_app_id]),
-        /*auth*/ None,
     )
     .await;
 
@@ -575,7 +561,6 @@ source = "/tmp/{sales_marketplace_name}"
     let discoverable_plugins = list_discoverable_plugins(
         &plugins_manager,
         discovery_input(plugins, &[], &[], &[]),
-        /*auth*/ None,
     )
     .await;
 
@@ -599,10 +584,9 @@ fn discovery_input(
 async fn list_discoverable_plugins(
     plugins_manager: &PluginsManager,
     input: ToolSuggestPluginDiscoveryInput,
-    auth: Option<&OdyAuth>,
 ) -> Vec<ToolSuggestDiscoverablePlugin> {
     plugins_manager
-        .list_tool_suggest_discoverable_plugins(&input, auth)
+        .list_tool_suggest_discoverable_plugins(&input)
         .await
         .expect("discoverable plugins should load")
 }

@@ -1334,7 +1334,6 @@ fn ody_apps_auth_failure_metadata() -> McpToolApprovalMetadata {
 }
 
 async fn install_host_owned_ody_apps_manager(session: &Session, turn_context: &TurnContext) {
-    let auth = session.services.auth_manager.auth().await;
     let manager = ody_mcp::McpConnectionManager::new(
         &HashMap::new(),
         turn_context.config.mcp_oauth_credentials_store_mode,
@@ -2421,14 +2420,12 @@ async fn guardian_mode_skips_auto_when_annotations_do_not_require_approval() {
     let config = Arc::new(config);
     let models_manager = models_manager_with_provider(
         config.ody_home.to_path_buf(),
-        Arc::clone(&session.services.auth_manager),
         config.model_provider.clone(),
     );
     session.services.models_manager = models_manager;
     turn_context.config = Arc::clone(&config);
     turn_context.provider = create_model_provider(
         config.model_provider.clone(),
-        turn_context.auth_manager.clone(),
     );
 
     let session = Arc::new(session);
@@ -2708,14 +2705,12 @@ async fn guardian_mode_mcp_denial_returns_rationale_message() {
     let config = Arc::new(config);
     let models_manager = models_manager_with_provider(
         config.ody_home.to_path_buf(),
-        Arc::clone(&session.services.auth_manager),
         config.model_provider.clone(),
     );
     session.services.models_manager = models_manager;
     turn_context.config = Arc::clone(&config);
     turn_context.provider = create_model_provider(
         config.model_provider.clone(),
-        turn_context.auth_manager.clone(),
     );
 
     let session = Arc::new(session);
@@ -2918,9 +2913,7 @@ async fn approve_mode_skips_guardian_in_every_permission_mode() {
         AskForApproval::Never,
     ] {
         let (mut session, mut turn_context) = make_session_and_context().await;
-        turn_context.auth_manager = Some(crate::test_support::auth_manager_from_auth(
-            ody_login::OdyAuth::create_dummy_api_key_auth_for_testing(),
-        ));
+        turn_context.auth_manager = None;
         turn_context
             .approval_policy
             .set(approval_policy)
@@ -2931,14 +2924,12 @@ async fn approve_mode_skips_guardian_in_every_permission_mode() {
         let config = Arc::new(config);
         let models_manager = models_manager_with_provider(
             config.ody_home.to_path_buf(),
-            Arc::clone(&session.services.auth_manager),
             config.model_provider.clone(),
         );
         session.services.models_manager = models_manager;
         turn_context.config = Arc::clone(&config);
         turn_context.provider = create_model_provider(
             config.model_provider.clone(),
-            turn_context.auth_manager.clone(),
         );
 
         let session = Arc::new(session);

@@ -207,7 +207,6 @@ mod reload {
             cwd: Some(config.cwd.to_path_buf()),
             model_provider: preserve_current_provider.then(|| config.model_provider_id.clone()),
             service_tier: preserve_current_service_tier.then(|| config.service_tier.clone()),
-            ody_linux_sandbox_exe: config.ody_linux_sandbox_exe.clone(),
             main_execve_wrapper_exe: config.main_execve_wrapper_exe.clone(),
             ..Default::default()
         }

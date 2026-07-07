@@ -4,7 +4,6 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use ody_features::Feature;
-use ody_login::OdyAuth;
 use ody_protocol::config_types::ServiceTier;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::Op;
@@ -35,30 +34,13 @@ enum Mode {
 }
 
 #[derive(Clone, Copy, Debug)]
-enum AuthCase {
-    DummyApiKey,
-    ApiKey,
-}
-
-impl AuthCase {
-    fn build(self) -> OdyAuth {
-        match self {
-            AuthCase::DummyApiKey => OdyAuth::create_dummy_api_key_auth_for_testing(),
-            AuthCase::ApiKey => OdyAuth::from_api_key("dummy"),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
 struct RunSettings {
-    auth: AuthCase,
     service_tier_fast: bool,
 }
 
 impl Default for RunSettings {
     fn default() -> Self {
         Self {
-            auth: AuthCase::DummyApiKey,
             service_tier_fast: false,
         }
     }
@@ -153,7 +135,6 @@ async fn remote_compaction_parity_v2_api_key_sends_service_tier_upgrade() -> Res
         steps: TOOL_MIX,
     };
     let settings = RunSettings {
-        auth: AuthCase::ApiKey,
         service_tier_fast: true,
     };
     let legacy = run_manual_session(&scenario, Mode::Legacy, settings).await?;
@@ -508,7 +489,6 @@ async fn build_harness_inner(
 ) -> Result<TestOdyHarness> {
     fs::create_dir_all(FIXED_CWD)?;
     let mut builder = test_ody()
-        .with_auth(settings.auth.build())
         .with_pre_build_hook(|home| {
             fs::write(home.join("AGENTS.md"), USER_INSTRUCTIONS)
                 .expect("write global instructions");

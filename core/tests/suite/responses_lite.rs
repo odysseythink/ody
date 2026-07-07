@@ -6,7 +6,6 @@ use ody_core::config::Config;
 use ody_extension_api::ExtensionRegistry;
 use ody_extension_api::ExtensionRegistryBuilder;
 use ody_features::Feature;
-use ody_login::OdyAuth;
 use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::models::ImageDetail;
 use ody_protocol::odysseythink_models::InputModality;
@@ -23,10 +22,9 @@ use serde_json::Value;
 
 const RESPONSES_LITE_HEADER: &str = "x-odysseythink-internal-ody-responses-lite";
 
-fn responses_extensions(auth: &OdyAuth) -> Arc<ExtensionRegistry<Config>> {
-    let auth_manager = ody_core::test_support::auth_manager_from_auth(auth.clone());
+fn responses_extensions() -> Arc<ExtensionRegistry<Config>> {
     let mut extension_builder = ExtensionRegistryBuilder::<Config>::new();
-    install_web_search_extension(&mut extension_builder, auth_manager);
+    install_web_search_extension(&mut extension_builder);
     Arc::new(extension_builder.build())
 }
 
@@ -134,12 +132,9 @@ async fn responses_lite_uses_standalone_web_search() -> Result<()> {
         ]),
     )
     .await;
-
-    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
-    let extensions = responses_extensions(&auth);
+    let extensions = responses_extensions();
 
     let mut builder = test_ody()
-        .with_auth(auth)
         .with_extensions(extensions)
         .with_model_info_override("gpt-5.4", |model_info| {
             model_info.use_responses_lite = true;
@@ -238,7 +233,6 @@ async fn responses_lite_omits_hosted_web_search_without_standalone_extension() -
     .await;
 
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_model_info_override("gpt-5.4", |model_info| {
             model_info.use_responses_lite = true;
             configure_image_capable_model(model_info);
@@ -271,10 +265,8 @@ async fn non_lite_uses_hosted_web_search_when_standalone_feature_is_disabled() -
     )
     .await;
 
-    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
-    let extensions = responses_extensions(&auth);
+    let extensions = responses_extensions();
     let mut builder = test_ody()
-        .with_auth(auth)
         .with_extensions(extensions)
         .with_model_info_override("gpt-5.4", configure_image_capable_model)
         .with_config(configure_responses_tools);

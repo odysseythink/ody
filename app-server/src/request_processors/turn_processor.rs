@@ -66,7 +66,6 @@ fn validate_response_item_image_urls(items: &[ResponseItem]) -> Result<(), JSONR
 
 #[derive(Clone)]
 pub(crate) struct TurnRequestProcessor {
-    auth_manager: Arc<AuthManager>,
     thread_manager: Arc<ThreadManager>,
     outgoing: Arc<OutgoingMessageSender>,
     analytics_events_client: AnalyticsEventsClient,
@@ -122,7 +121,6 @@ struct ThreadSettingsBuildParams {
 impl TurnRequestProcessor {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
-        auth_manager: Arc<AuthManager>,
         thread_manager: Arc<ThreadManager>,
         outgoing: Arc<OutgoingMessageSender>,
         analytics_events_client: AnalyticsEventsClient,
@@ -136,7 +134,6 @@ impl TurnRequestProcessor {
         skills_watcher: Arc<SkillsWatcher>,
     ) -> Self {
         Self {
-            auth_manager,
             thread_manager,
             outgoing,
             analytics_events_client,
@@ -542,7 +539,6 @@ impl TurnRequestProcessor {
             let config_snapshot = thread.config_snapshot().await;
             ody_memories_write::start_memories_startup_task(
                 Arc::clone(&self.thread_manager),
-                Arc::clone(&self.auth_manager),
                 thread_id,
                 Arc::clone(&thread),
                 thread.config().await,
@@ -677,7 +673,6 @@ impl TurnRequestProcessor {
                             .unwrap_or_else(|| snapshot.workspace_roots.clone()),
                     ),
                     default_permissions: Some(permissions),
-                    ody_linux_sandbox_exe: self.arg0_paths.ody_linux_sandbox_exe.clone(),
                     main_execve_wrapper_exe: self.arg0_paths.main_execve_wrapper_exe.clone(),
                     ..Default::default()
                 };

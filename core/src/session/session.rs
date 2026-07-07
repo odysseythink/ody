@@ -474,7 +474,6 @@ impl Session {
         config: Arc<Config>,
         user_instructions: Option<ody_extension_api::UserInstructions>,
         installation_id: String,
-        auth_manager: Arc<AuthManager>,
         models_manager: SharedModelsManager,
         exec_policy: Arc<ExecPolicyManager>,
         tx_event: Sender<Event>,
@@ -635,25 +634,22 @@ impl Session {
             session_init.ephemeral = config.ephemeral,
         ));
 
-        let auth_manager_clone = Arc::clone(&auth_manager);
         let config_for_mcp = Arc::clone(&config);
         let mcp_manager_for_mcp = Arc::clone(&mcp_manager);
         let mcp_thread_init_for_startup = &mcp_thread_init;
         let auth_and_mcp_fut = async move {
-            let auth = auth_manager_clone.auth().await;
             let mcp_config = mcp_manager_for_mcp
                 .runtime_config_for_thread(&config_for_mcp, mcp_thread_init_for_startup)
                 .await;
-            let mcp_servers = ody_mcp::effective_mcp_servers(&mcp_config, auth.as_ref());
+            let mcp_servers = ody_mcp::effective_mcp_servers(&mcp_config);
             let tool_plugin_provenance = ody_mcp::tool_plugin_provenance(&mcp_config);
             let auth_statuses = compute_auth_statuses(
                 mcp_servers.iter(),
                 config_for_mcp.mcp_oauth_credentials_store_mode,
                 config_for_mcp.auth_keyring_backend_kind(),
-                auth.as_ref(),
             )
             .await;
-            (auth, mcp_servers, auth_statuses, tool_plugin_provenance)
+            (mcp_servers, auth_statuses, tool_plugin_provenance)
         }
         .instrument(info_span!(
             "session_init.auth_mcp",
@@ -664,7 +660,7 @@ impl Session {
         let (
             thread_persistence_result,
             state_db_ctx,
-            (auth, mcp_servers, auth_statuses, tool_plugin_provenance),
+            (mcp_servers, auth_statuses, tool_plugin_provenance),
         ) = tokio::join!(thread_persistence_fut, state_db_fut, auth_and_mcp_fut);
 
         let mut live_thread_init =
@@ -751,28 +747,21 @@ impl Session {
                 });
             }
 
-            let auth = auth.as_ref();
-            let auth_mode = auth.map(OdyAuth::auth_mode).map(TelemetryAuthMode::from);
             let originator = originator().value;
             let terminal_type = user_agent();
             let session_model = session_configuration.collaboration_mode.model().to_string();
-            let auth_env_telemetry = collect_auth_env_telemetry(
-                &session_configuration.provider,
-                auth_manager.ody_api_key_env_enabled(),
-            );
             let mut session_telemetry = SessionTelemetry::new(
                 thread_id,
                 session_model.as_str(),
                 session_model.as_str(),
                 None,
                 None,
-                auth_mode,
+                None,
                 originator.clone(),
                 config.otel.log_user_prompt,
                 terminal_type.clone(),
                 session_configuration.session_source.clone(),
-            )
-            .with_auth_env(auth_env_telemetry.to_otel_metadata());
+            );
             if let Some(service_name) = session_configuration.metrics_service_name.as_deref() {
                 session_telemetry = session_telemetry.with_metrics_service_name(service_name);
             }
@@ -780,7 +769,7 @@ impl Session {
                 conversation_id: Some(thread_id.to_string()),
                 app_version: Some(env!("CARGO_PKG_VERSION").to_string()),
                 user_account_id: None,
-                auth_mode: auth_mode.map(|mode| mode.to_string()),
+                auth_mode: None,
                 originator: Some(originator),
                 user_email: None,
                 terminal_type: Some(terminal_type),
@@ -966,11 +955,10 @@ impl Session {
             }
 
             let analytics_events_client = analytics_events_client.unwrap_or_else(|| {
+                // The remote hosted plugin/Apps catalog config field this used to be
+                // sourced from has been removed; analytics telemetry is unrelated to that
+                // catalog, so keep using a neutral historical default endpoint here.
                 AnalyticsEventsClient::new(
-                    Arc::clone(&auth_manager),
-                    // The remote hosted plugin/Apps catalog config field this used to be
-                    // sourced from has been removed; analytics telemetry is unrelated to that
-                    // catalog, so keep using a neutral historical default endpoint here.
                     "https://api.odysseythink.com/v1".to_string(),
                     config.analytics_enabled,
                 )
@@ -1021,7 +1009,6 @@ impl Session {
                 user_shell: Arc::new(default_shell),
                 show_raw_agent_reasoning: config.show_raw_agent_reasoning,
                 exec_policy,
-                auth_manager: Arc::clone(&auth_manager),
                 session_telemetry,
                 models_manager: Arc::clone(&models_manager),
                 tool_approvals: Mutex::new(ApprovalStore::default()),
@@ -1050,7 +1037,6 @@ impl Session {
                 attestation_provider: attestation_provider.clone(),
                 time_provider,
                 model_client: ModelClient::new(
-                    Some(Arc::clone(&auth_manager)),
                     thread_id,
                     session_configuration.provider.clone(),
                     session_configuration.session_source.clone(),
@@ -1176,7 +1162,7 @@ impl Session {
                 session_configuration.permission_profile(),
                 mcp_runtime_context,
                 config.ody_home.to_path_buf(),
-                ody_apps_tools_cache_key(auth),
+                ody_apps_tools_cache_key(None::<&String>),
                 host_owned_ody_apps_enabled,
                 config.prefix_mcp_tool_names(),
                 client_elicitation_capability,
@@ -1184,7 +1170,6 @@ impl Session {
                     .supports_odysseythink_form_elicitation
                     .load(std::sync::atomic::Ordering::Relaxed),
                 tool_plugin_provenance,
-                auth,
                 Some(sess.mcp_elicitation_reviewer()),
             )
             .instrument(info_span!(

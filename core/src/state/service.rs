@@ -28,7 +28,6 @@ use ody_extension_api::ExtensionData;
 use ody_extension_api::ExtensionDataInit;
 use ody_extension_api::ExtensionRegistry;
 use ody_hooks::Hooks;
-use ody_login::AuthManager;
 use ody_mcp::McpConnectionManager;
 use ody_models_manager::manager::SharedModelsManager;
 use ody_otel::SessionTelemetry;
@@ -56,7 +55,6 @@ pub(crate) struct SessionServices {
     pub(crate) user_shell: Arc<crate::shell::Shell>,
     pub(crate) show_raw_agent_reasoning: bool,
     pub(crate) exec_policy: Arc<ExecPolicyManager>,
-    pub(crate) auth_manager: Arc<AuthManager>,
     pub(crate) models_manager: SharedModelsManager,
     pub(crate) session_telemetry: SessionTelemetry,
     pub(crate) tool_approvals: Mutex<ApprovalStore>,

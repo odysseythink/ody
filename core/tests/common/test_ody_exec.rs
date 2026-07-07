@@ -1,4 +1,3 @@
-use ody_login::ODY_API_KEY_ENV_VAR;
 use std::path::Path;
 use tempfile::TempDir;
 use wiremock::MockServer;
@@ -17,7 +16,7 @@ impl TestOdyExecBuilder {
         cmd.current_dir(self.cwd.path())
             .env("ODY_HOME", self.home.path())
             .env("ODY_SQLITE_HOME", self.home.path())
-            .env(ODY_API_KEY_ENV_VAR, "dummy");
+            .env("ODY_API_KEY", "dummy");
         cmd
     }
     pub fn cmd_with_server(&self, server: &MockServer) -> assert_cmd::Command {

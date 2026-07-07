@@ -26,7 +26,6 @@ use ody_config::types::ApprovalsReviewer;
 use ody_config::types::ToolSuggestDiscoverableType;
 use ody_core_plugins::PluginsManager;
 use ody_features::Feature;
-use ody_login::OdyAuth;
 use ody_mcp::ODY_APPS_MCP_SERVER_NAME;
 use ody_mcp::MCP_TOOL_ODY_APPS_META_KEY;
 use ody_mcp::McpConnectionManager;
@@ -83,16 +82,15 @@ pub(crate) async fn list_accessible_and_enabled_connectors_from_manager(
 }
 
 #[instrument(level = "trace", skip_all)]
-pub(crate) async fn list_tool_suggest_discoverable_tools_with_auth(
+pub(crate) async fn list_tool_suggest_discoverable_tools(
     config: &Config,
     plugins_manager: &PluginsManager,
-    auth: Option<&OdyAuth>,
     accessible_connectors: &[AppInfo],
     loaded_plugin_app_connector_ids: &[String],
 ) -> anyhow::Result<Vec<DiscoverableTool>> {
     let connector_ids = tool_suggest_connector_ids(config, loaded_plugin_app_connector_ids);
     let directory_connectors = ody_connectors::merge::merge_plugin_connectors(
-        cached_directory_connectors_for_tool_suggest_with_auth(config, auth).await,
+        cached_directory_connectors_for_tool_suggest(config).await,
         connector_ids.iter().cloned(),
     );
     let discoverable_connectors =
@@ -106,7 +104,6 @@ pub(crate) async fn list_tool_suggest_discoverable_tools_with_auth(
     let discoverable_plugins = list_tool_suggest_discoverable_plugins(
         config,
         plugins_manager,
-        auth,
         loaded_plugin_app_connector_ids,
     )
     .await?
@@ -126,14 +123,13 @@ pub async fn list_cached_accessible_connectors_from_mcp_tools(
 
 pub(crate) fn refresh_accessible_connectors_cache_from_mcp_tools(
     config: &Config,
-    auth: Option<&OdyAuth>,
     mcp_tools: &[ToolInfo],
 ) {
     if !config.features.enabled(Feature::Apps) {
         return;
     }
 
-    let cache_key = accessible_connectors_cache_key(config, auth);
+    let cache_key = accessible_connectors_cache_key(config);
     let accessible_connectors = accessible_connectors_for_app_list_from_mcp_tools(mcp_tools);
     write_cached_accessible_connectors(cache_key, &accessible_connectors);
 }
@@ -158,7 +154,7 @@ pub async fn list_accessible_connectors_from_mcp_tools_with_options_and_status(
     // of constructing a temporary manager here.
     let local_runtime_paths = ExecServerRuntimePaths::from_optional_paths(
         config.ody_self_exe.clone(),
-        config.ody_linux_sandbox_exe.clone(),
+        config.clone(),
     )?;
     let environment_manager =
         EnvironmentManager::from_ody_home(config.ody_home.clone(), Some(local_runtime_paths))
@@ -203,7 +199,6 @@ pub async fn list_accessible_connectors_from_mcp_tools_with_mcp_manager(
 
 fn accessible_connectors_cache_key(
     _config: &Config,
-    _auth: Option<&OdyAuth>,
 ) -> AccessibleConnectorsCacheKey {
     // Account-specific connector metadata is no longer available.
     AccessibleConnectorsCacheKey {
@@ -274,9 +269,8 @@ fn tool_suggest_connector_ids(
 }
 
 #[instrument(level = "trace", skip_all)]
-async fn cached_directory_connectors_for_tool_suggest_with_auth(
+async fn cached_directory_connectors_for_tool_suggest(
     _config: &Config,
-    _auth: Option<&OdyAuth>,
 ) -> Vec<AppInfo> {
     // Remote directory connectors are no longer available.
     Vec::new()

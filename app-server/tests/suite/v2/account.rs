@@ -14,8 +14,6 @@ use ody_app_server_protocol::LogoutAccountResponse;
 use ody_app_server_protocol::RequestId;
 use ody_app_server_protocol::ServerNotification;
 use ody_config::types::AuthCredentialsStoreMode;
-use ody_login::AuthKeyringBackendKind;
-use ody_login::login_with_api_key;
 use pretty_assertions::assert_eq;
 use std::path::Path;
 use std::time::Duration;
@@ -105,11 +103,13 @@ async fn logout_account_removes_auth_and_notifies() -> Result<()> {
     let ody_home = TempDir::new()?;
     create_config_toml(ody_home.path(), CreateConfigTomlParams::default())?;
 
-    login_with_api_key(
-        ody_home.path(),
-        "sk-test-key",
-        AuthCredentialsStoreMode::File,
-        AuthKeyringBackendKind::default(),
+    // Login is bypassed for the test; write auth.json directly.
+    std::fs::write(
+        ody_home.path().join("auth.json"),
+        serde_json::json!({
+            "auth_mode": "api_key",
+            "odysseythink_api_key": "sk-test-key",
+        }).to_string(),
     )?;
     assert!(ody_home.path().join("auth.json").exists());
 

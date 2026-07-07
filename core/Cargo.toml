@@ -40,7 +40,7 @@ ody-extension-api = { workspace = true }
 ody-features = { workspace = true }
 ody-feedback = { workspace = true }
 ody-file-system = { workspace = true }
-ody-login = { workspace = true }
+ody-client = { workspace = true }
 ody-memories-read = { workspace = true }
 ody-mcp = { workspace = true }
 ody-model-provider-info = { workspace = true }

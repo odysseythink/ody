@@ -40,7 +40,7 @@ ody-features = { workspace = true }
 ody-feedback = { workspace = true }
 ody-file-search = { workspace = true }
 ody-git-utils = { workspace = true }
-ody-login = { workspace = true }
+ody-client = { workspace = true }
 ody-message-history = { workspace = true }
 ody-model-provider = { workspace = true }
 ody-model-provider-info = { workspace = true }

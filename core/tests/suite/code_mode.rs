@@ -10,7 +10,6 @@ use ody_core::config::CurrentTimeReminderConfig;
 use ody_extension_api::ExtensionRegistryBuilder;
 use ody_features::CurrentTimeSource;
 use ody_features::Feature;
-use ody_login::OdyAuth;
 use ody_models_manager::bundled_models_response;
 use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::dynamic_tools::DynamicToolCallOutputContentItem;
@@ -273,12 +272,9 @@ text(result);
     )
     .await;
 
-    let auth = OdyAuth::from_api_key("dummy");
-    let auth_manager = ody_core::test_support::auth_manager_from_auth(auth.clone());
     let mut extension_builder = ExtensionRegistryBuilder::<Config>::new();
-    install_web_search_extension(&mut extension_builder, auth_manager);
+    install_web_search_extension(&mut extension_builder);
     let mut builder = test_ody()
-        .with_auth(auth)
         .with_extensions(Arc::new(extension_builder.build()))
         .with_model("test-gpt-5.1-ody")
         .with_config(move |config| {
@@ -573,7 +569,6 @@ if (!tool) {
 
     let apps_base_url = apps_server.base_url.clone();
     let mut builder = test_ody()
-        .with_auth(OdyAuth::create_dummy_api_key_auth_for_testing())
         .with_config(move |config| {
             config
                 .features

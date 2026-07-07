@@ -6,7 +6,6 @@ use std::time::Duration;
 
 use anyhow::Result;
 use ody_features::Feature;
-use ody_login::OdyAuth;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::odysseythink_models::ModelsResponse;
 use ody_protocol::protocol::AskForApproval;
@@ -46,9 +45,7 @@ async fn refresh_models_on_models_etag_mismatch_and_avoid_duplicate_models_fetch
     )
     .await;
 
-    let auth = OdyAuth::create_dummy_api_key_auth_for_testing();
     let mut builder = test_ody()
-        .with_auth(auth)
         .with_model("gpt-5.2")
         .with_config(|config| {
             // Keep this test deterministic: no request retries, and a small stream retry budget.

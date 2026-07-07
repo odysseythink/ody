@@ -15,8 +15,6 @@ workspace = true
 [dependencies]
 ody-api = { workspace = true }
 ody-client = { workspace = true }
-ody-feedback = { workspace = true }
-ody-login = { workspace = true }
 ody-model-provider-info = { workspace = true }
 ody-models-manager = { workspace = true }
 ody-otel = { workspace = true }

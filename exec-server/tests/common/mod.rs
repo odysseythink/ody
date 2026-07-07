@@ -6,13 +6,13 @@ use std::process::Command;
 use std::process::Stdio;
 use std::time::Duration;
 
-use ody_exec_server::ODY_FS_HELPER_ARG1;
+use ctor::ctor;
 use ody_exec_server::ExecServerRuntimePaths;
+use ody_exec_server::ODY_FS_HELPER_ARG1;
 use ody_sandboxing::landlock::ODY_LINUX_SANDBOX_ARG0;
 use ody_test_binary_support::TestBinaryDispatchGuard;
 use ody_test_binary_support::TestBinaryDispatchMode;
 use ody_test_binary_support::configure_test_binary_dispatch;
-use ctor::ctor;
 
 pub(crate) mod exec_server;
 
@@ -43,15 +43,7 @@ pub static TEST_BINARY_DISPATCH_GUARD: Option<TestBinaryDispatchGuard> = {
 
 pub(crate) fn current_test_binary_helper_paths() -> anyhow::Result<(PathBuf, Option<PathBuf>)> {
     let current_exe = env::current_exe()?;
-    let ody_linux_sandbox_exe = if cfg!(target_os = "linux") {
-        TEST_BINARY_DISPATCH_GUARD
-            .as_ref()
-            .and_then(|guard| guard.paths().ody_linux_sandbox_exe.clone())
-            .or_else(|| Some(current_exe.clone()))
-    } else {
-        None
-    };
-    Ok((current_exe, ody_linux_sandbox_exe))
+    Ok((current_exe))
 }
 
 fn maybe_run_delayed_output_after_exit_from_test_binary() {
@@ -164,10 +156,7 @@ fn maybe_run_exec_server_from_test_binary(guard: Option<&TestBinaryDispatchGuard
             std::process::exit(1);
         }
     };
-    let runtime_paths = match ExecServerRuntimePaths::new(
-        current_exe.clone(),
-        linux_sandbox_exe(guard, &current_exe),
-    ) {
+    let runtime_paths = match ExecServerRuntimePaths::new(current_exe.clone()) {
         Ok(runtime_paths) => runtime_paths,
         Err(error) => {
             eprintln!("failed to configure exec-server runtime paths: {error}");
@@ -184,8 +173,7 @@ fn maybe_run_exec_server_from_test_binary(guard: Option<&TestBinaryDispatchGuard
             std::process::exit(1);
         }
     };
-    let exit_code = match runtime.block_on(ody_exec_server::run_main(&listen_url, runtime_paths))
-    {
+    let exit_code = match runtime.block_on(ody_exec_server::run_main(&listen_url, runtime_paths)) {
         Ok(()) => 0,
         Err(error) => {
             eprintln!("exec-server failed: {error}");
@@ -193,22 +181,4 @@ fn maybe_run_exec_server_from_test_binary(guard: Option<&TestBinaryDispatchGuard
         }
     };
     std::process::exit(exit_code);
-}
-
-fn linux_sandbox_exe(
-    guard: Option<&TestBinaryDispatchGuard>,
-    current_exe: &std::path::Path,
-) -> Option<PathBuf> {
-    #[cfg(target_os = "linux")]
-    {
-        guard
-            .and_then(|guard| guard.paths().ody_linux_sandbox_exe.clone())
-            .or_else(|| Some(current_exe.to_path_buf()))
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        let _ = guard;
-        let _ = current_exe;
-        None
-    }
 }

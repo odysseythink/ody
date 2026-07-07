@@ -5,12 +5,12 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use anyhow::anyhow;
+use futures::SinkExt;
+use futures::StreamExt;
 use ody_app_server_protocol::JSONRPCMessage;
 use ody_app_server_protocol::JSONRPCNotification;
 use ody_app_server_protocol::JSONRPCRequest;
 use ody_app_server_protocol::RequestId;
-use futures::SinkExt;
-use futures::StreamExt;
 use tempfile::TempDir;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
@@ -50,7 +50,6 @@ impl Drop for ExecServerHarness {
 
 pub(crate) struct TestOdyHelperPaths {
     pub(crate) ody_exe: PathBuf,
-    pub(crate) ody_linux_sandbox_exe: Option<PathBuf>,
 }
 
 pub(crate) struct DisconnectableWebSocketProxy {
@@ -68,10 +67,9 @@ impl Drop for DisconnectableWebSocketProxy {
 }
 
 pub(crate) fn test_ody_helper_paths() -> anyhow::Result<TestOdyHelperPaths> {
-    let (helper_binary, ody_linux_sandbox_exe) = super::current_test_binary_helper_paths()?;
+    let (helper_binary) = super::current_test_binary_helper_paths()?;
     Ok(TestOdyHelperPaths {
         ody_exe: helper_binary,
-        ody_linux_sandbox_exe,
     })
 }
 

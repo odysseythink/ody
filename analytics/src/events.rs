@@ -25,7 +25,7 @@ use crate::facts::TurnSubmissionType;
 use crate::now_unix_millis;
 use ody_app_server_protocol::OdyErrorInfo;
 use ody_app_server_protocol::CommandExecutionSource;
-use ody_login::default_client::originator;
+use ody_client::default_client::originator;
 use ody_plugin::PluginTelemetryMetadata;
 use ody_protocol::approvals::NetworkApprovalProtocol;
 use ody_protocol::models::AdditionalPermissionProfile;

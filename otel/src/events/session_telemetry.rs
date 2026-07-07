@@ -108,11 +108,6 @@ pub struct SessionTelemetry {
 pub const PLAN_RESOLVED_METRIC: &str = "ody.plan_resolved";
 
 impl SessionTelemetry {
-    pub fn with_auth_env(mut self, auth_env: AuthEnvTelemetryMetadata) -> Self {
-        self.metadata.auth_env = auth_env;
-        self
-    }
-
     pub fn with_model(mut self, model: &str, slug: &str) -> Self {
         self.metadata.model = model.to_owned();
         self.metadata.slug = slug.to_owned();

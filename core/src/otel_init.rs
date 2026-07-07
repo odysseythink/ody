@@ -2,7 +2,7 @@ use crate::config::Config;
 use ody_config::types::OtelExporterKind as Kind;
 use ody_config::types::OtelHttpProtocol as Protocol;
 use ody_features::Feature;
-use ody_login::default_client::originator;
+use ody_client::default_client::originator;
 use ody_otel::OtelExporter;
 use ody_otel::OtelHttpProtocol;
 use ody_otel::OtelProvider;
