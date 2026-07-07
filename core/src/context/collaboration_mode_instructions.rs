@@ -39,6 +39,13 @@ impl CollaborationModeInstructions {
             instructions: format!("{}\n\n{}", self.instructions, fragment),
         }
     }
+
+    pub(crate) fn with_rigor_selfreview(self) -> Self {
+        let fragment = ody_collaboration_mode_templates::PLAN_RIGOR_SELFREVIEW;
+        Self {
+            instructions: format!("{}\n\n{}", self.instructions, fragment),
+        }
+    }
 }
 
 fn render_plan_instructions(instructions: &str, split_threshold: Option<usize>) -> String {
@@ -151,6 +158,35 @@ mod tests {
         assert!(
             body.contains("## Spec-coverage table"),
             "body should contain Spec-coverage table section:\n{body}"
+        );
+    }
+
+    #[test]
+    fn composes_rigor_selfreview_fragment() {
+        let mode = plan_mode_with_instructions("Plan the work.");
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8))
+            .expect("should produce instructions")
+            .with_rigor_selfreview();
+        let body = instructions.body();
+
+        for (n, label) in [
+            (1, "Spec-coverage table"),
+            (2, "Placeholder scan"),
+            (3, "No phantom tasks"),
+            (4, "Dependency soundness"),
+            (5, "Caller & build soundness"),
+            (6, "Test-the-risk"),
+            (7, "Type consistency"),
+        ] {
+            assert!(
+                body.contains(&format!("{n}. {label}")),
+                "body should contain self-review item {n} ({label}):\n{body}"
+            );
+        }
+
+        assert!(
+            body.contains("trace one concrete value"),
+            "body should contain the end-to-end trace requirement:\n{body}"
         );
     }
 }
