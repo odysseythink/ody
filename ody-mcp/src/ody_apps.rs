@@ -24,7 +24,7 @@ use sha1::Sha1;
 pub struct OdyAppsToolsCacheKey {
     pub(crate) account_id: Option<String>,
     pub(crate) user_id: Option<String>,
-    pub(crate) is_workspace_account: bool,
+    pub(crate) is_workspace_plan: bool,
 }
 
 pub fn ody_apps_tools_cache_key<T>(_auth: Option<&T>) -> OdyAppsToolsCacheKey {
@@ -33,7 +33,7 @@ pub fn ody_apps_tools_cache_key<T>(_auth: Option<&T>) -> OdyAppsToolsCacheKey {
     OdyAppsToolsCacheKey {
         account_id: None,
         user_id: None,
-        is_workspace_account: false,
+        is_workspace_plan: false,
     }
 }
 

@@ -13,7 +13,6 @@ use ody_models_manager::manager::OpenAiModelsManager;
 use ody_models_manager::manager::SharedModelsManager;
 use ody_models_manager::manager::StaticModelsManager;
 use ody_models_manager::model_info::model_catalog_for_provider;
-use ody_protocol::account::ProviderAccount;
 use ody_protocol::error::OdyErr;
 use ody_protocol::odysseythink_models::ModelsResponse;
 
@@ -62,9 +61,7 @@ impl From<&ModelProviderInfoCapabilities> for ProviderCapabilities {
 
 /// Current app-visible account state for a model provider.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProviderAccountState {
-    pub account: Option<ProviderAccount>,
-}
+pub struct ProviderAccountState;
 
 pub type ProviderAccountResult = ody_protocol::error::Result<ProviderAccountState>;
 
@@ -254,9 +251,7 @@ impl ModelProvider for ConfiguredModelProvider {
     }
 
     fn account_state(&self) -> ProviderAccountResult {
-        Ok(ProviderAccountState {
-            account: None,
-        })
+        Ok(ProviderAccountState)
     }
 
     fn models_manager(
@@ -360,9 +355,7 @@ mod tests {
 
         assert_eq!(
             provider.account_state().unwrap(),
-            ProviderAccountState {
-                account: None,
-                }
+            ProviderAccountState
         );
     }
 

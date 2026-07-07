@@ -83,7 +83,7 @@ impl KnownPlan {
         }
     }
 
-    pub fn is_workspace_account(self) -> bool {
+    pub fn is_workspace_plan(self) -> bool {
         matches!(
             self,
             Self::Team

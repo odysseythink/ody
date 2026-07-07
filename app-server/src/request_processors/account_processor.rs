@@ -240,15 +240,13 @@ impl AccountRequestProcessor {
         let provider = create_model_provider(
             self.config.model_provider.clone(),
         );
-        let account_state = match provider.account_state() {
-            Ok(account_state) => account_state,
-            Err(err) => return Err(invalid_request(err.to_string())),
-        };
-        let account = account_state.account.map(Account::from);
+        provider
+            .account_state()
+            .map_err(|err| invalid_request(err.to_string()))?;
+        let account: Option<Account> = None;
 
         Ok(GetAccountResponse {
             account,
-            
         })
     }
 }

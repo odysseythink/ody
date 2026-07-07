@@ -32,7 +32,7 @@ pub struct ConnectorDirectoryCacheKey {
     base_url: String,
     account_id: Option<String>,
     user_id: Option<String>,
-    is_workspace_account: bool,
+    is_workspace_plan: bool,
 }
 
 impl ConnectorDirectoryCacheKey {
@@ -40,13 +40,13 @@ impl ConnectorDirectoryCacheKey {
         base_url: String,
         account_id: Option<String>,
         user_id: Option<String>,
-        is_workspace_account: bool,
+        is_workspace_plan: bool,
     ) -> Self {
         Self {
             base_url,
             account_id,
             user_id,
-            is_workspace_account,
+            is_workspace_plan,
         }
     }
 }
@@ -134,7 +134,7 @@ fn unexpired_directory_connectors_in_memory(
 
 pub async fn list_all_connectors_with_options<F, Fut>(
     cache_context: ConnectorDirectoryCacheContext,
-    is_workspace_account: bool,
+    is_workspace_plan: bool,
     force_refetch: bool,
     mut fetch_page: F,
 ) -> anyhow::Result<Vec<AppInfo>>
@@ -150,7 +150,7 @@ where
     }
 
     let mut apps = list_directory_connectors(&mut fetch_page).await?;
-    if is_workspace_account {
+    if is_workspace_plan {
         apps.extend(list_workspace_connectors(&mut fetch_page).await?);
     }
 
@@ -484,7 +484,7 @@ mod tests {
             "https://example.com".to_string(),
             Some(format!("account-{id}")),
             Some(format!("user-{id}")),
-            /*is_workspace_account*/ true,
+            /*is_workspace_plan*/ true,
         )
     }
 
@@ -529,7 +529,7 @@ mod tests {
 
         let first = list_all_connectors_with_options(
             cache_context.clone(),
-            /*is_workspace_account*/ false,
+            /*is_workspace_plan*/ false,
             /*force_refetch*/ false,
             move |_path| {
                 let call_counter = Arc::clone(&call_counter);
@@ -546,7 +546,7 @@ mod tests {
 
         let second = list_all_connectors_with_options(
             cache_context,
-            /*is_workspace_account*/ false,
+            /*is_workspace_plan*/ false,
             /*force_refetch*/ false,
             move |_path| async move {
                 anyhow::bail!("cache should have been used");
@@ -574,7 +574,7 @@ mod tests {
 
         let connectors = list_all_connectors_with_options(
             cache_context,
-            /*is_workspace_account*/ true,
+            /*is_workspace_plan*/ true,
             /*force_refetch*/ true,
             move |path| {
                 let call_counter = Arc::clone(&call_counter);
@@ -652,7 +652,7 @@ mod tests {
 
         let first = list_all_connectors_with_options(
             cache_context.clone(),
-            /*is_workspace_account*/ false,
+            /*is_workspace_plan*/ false,
             /*force_refetch*/ false,
             move |_path| {
                 let call_counter = Arc::clone(&call_counter);
@@ -692,7 +692,7 @@ mod tests {
 
         list_all_connectors_with_options(
             cache_context.clone(),
-            /*is_workspace_account*/ false,
+            /*is_workspace_plan*/ false,
             /*force_refetch*/ false,
             move |_path| {
                 let call_counter = Arc::clone(&call_counter);
@@ -721,7 +721,7 @@ mod tests {
 
         let refreshed = list_all_connectors_with_options(
             cache_context,
-            /*is_workspace_account*/ false,
+            /*is_workspace_plan*/ false,
             /*force_refetch*/ false,
             move |_path| {
                 let call_counter = Arc::clone(&refreshed_calls);

@@ -37,7 +37,7 @@ const CONNECTORS_READY_TIMEOUT_ON_EMPTY_TOOLS: Duration = Duration::from_secs(30
 #[derive(Clone, PartialEq, Eq)]
 struct AccessibleConnectorsCacheKey {
     account_id: Option<String>,
-    is_workspace_account: bool,
+    is_workspace_plan: bool,
 }
 
 #[derive(Clone)]
@@ -203,7 +203,7 @@ fn accessible_connectors_cache_key(
     // Account-specific connector metadata is no longer available.
     AccessibleConnectorsCacheKey {
         account_id: None,
-        is_workspace_account: false,
+        is_workspace_plan: false,
     }
 }
 

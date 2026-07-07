@@ -1,4 +1,3 @@
-pub mod account;
 mod agent_path;
 pub mod auth;
 mod session_id;

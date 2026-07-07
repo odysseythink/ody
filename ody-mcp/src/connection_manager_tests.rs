@@ -86,7 +86,7 @@ fn create_ody_apps_tools_cache_context(
         user_key: OdyAppsToolsCacheKey {
             account_id: account_id.map(ToOwned::to_owned),
             user_id: user_id.map(ToOwned::to_owned),
-            is_workspace_account: false,
+            is_workspace_plan: false,
         },
     }
 }
@@ -1293,7 +1293,7 @@ async fn no_local_runtime_fails_local_stdio_but_keeps_local_http_server() {
         OdyAppsToolsCacheKey {
             account_id: None,
             user_id: None,
-            is_workspace_account: false,
+            is_workspace_plan: false,
         },
         /*host_owned_ody_apps_enabled*/ false,
         /*prefix_mcp_tool_names*/ true,

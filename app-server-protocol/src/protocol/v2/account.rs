@@ -1,6 +1,5 @@
 use crate::protocol::common::AuthMode;
 use ody_experimental_api_macros::ExperimentalApi;
-use ody_protocol::account::ProviderAccount;
 use ody_protocol::protocol::CreditsSnapshot as CoreCreditsSnapshot;
 use ody_protocol::protocol::RateLimitReachedType as CoreRateLimitReachedType;
 use ody_protocol::protocol::RateLimitSnapshot as CoreRateLimitSnapshot;
@@ -20,12 +19,6 @@ pub enum Account {
     #[serde(rename = "apiKey", rename_all = "camelCase")]
     #[ts(rename = "apiKey", rename_all = "camelCase")]
     ApiKey {},
-}
-
-impl From<ProviderAccount> for Account {
-    fn from(_account: ProviderAccount) -> Self {
-        Self::ApiKey {}
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS, ExperimentalApi)]
