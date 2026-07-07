@@ -1149,8 +1149,6 @@ async fn send_provider_auth_request(server: &MockServer, auth: ModelProviderAuth
         thread_id,
         model.as_str(),
         model_info.slug.as_str(),
-        /*account_id*/ None,
-        Some("test@test.com".to_string()),
         /*auth_mode*/ None,
         "test_originator".to_string(),
         /*log_user_prompts*/ false,
@@ -2459,17 +2457,15 @@ async fn azure_responses_request_includes_store_and_reasoning_ids() {
         ody_core::test_support::construct_model_info_offline(model.as_str(), &config);
     let thread_id = ThreadId::new();
     let session_telemetry = SessionTelemetry::new(
-        thread_id,
-        model.as_str(),
-        model_info.slug.as_str(),
-        /*account_id*/ None,
-        Some("test@test.com".to_string()),
-        None,
-        "test_originator".to_string(),
-        /*log_user_prompts*/ false,
-        "test".to_string(),
-        SessionSource::Exec,
-    );
+    thread_id,
+    model.as_str(),
+    model_info.slug.as_str(),
+    None,
+    "test_originator".to_string(),
+    /*log_user_prompts*/ false,
+    "test".to_string(),
+    SessionSource::Exec,
+);
 
     let client = ModelClient::new(
         thread_id,

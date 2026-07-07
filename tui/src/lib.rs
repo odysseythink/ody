@@ -27,9 +27,7 @@ use ody_app_server_client::InProcessClientStartArgs;
 use ody_app_server_client::RemoteAppServerClient;
 use ody_app_server_client::RemoteAppServerConnectArgs;
 pub use ody_app_server_client::RemoteAppServerEndpoint;
-use ody_app_server_protocol::Account as AppServerAccount;
 use ody_app_server_protocol::AskForApproval;
-use ody_app_server_protocol::AuthMode as AppServerAuthMode;
 use ody_app_server_protocol::ConfigWarningNotification;
 use ody_app_server_protocol::Thread as AppServerThread;
 use ody_app_server_protocol::ThreadListCwdFilter;
@@ -191,7 +189,6 @@ mod width;
 #[cfg(any(target_os = "windows", test))]
 mod windows_sandbox;
 mod workspace_command;
-mod workspace_messages;
 
 mod wrapping;
 

@@ -23,8 +23,6 @@ fn manager_attaches_metadata_tags_to_metrics() -> Result<()> {
         ThreadId::new(),
         "gpt-5.1",
         "gpt-5.1",
-        Some("account-id".to_string()),
-        /*account_email*/ None,
         Some(TelemetryAuthMode::ApiKey),
         "test_originator".to_string(),
         /*log_user_prompts*/ true,
@@ -80,17 +78,15 @@ fn manager_attaches_metadata_tags_to_metrics() -> Result<()> {
 fn manager_allows_disabling_metadata_tags() -> Result<()> {
     let (metrics, exporter) = build_metrics_with_defaults(&[])?;
     let manager = SessionTelemetry::new(
-        ThreadId::new(),
-        "gpt-4o",
-        "gpt-4o",
-        Some("account-id".to_string()),
-        /*account_email*/ None,
-        Some(TelemetryAuthMode::ApiKey),
-        "test_originator".to_string(),
-        /*log_user_prompts*/ true,
-        "tty".to_string(),
-        SessionSource::Cli,
-    )
+      ThreadId::new(),
+      "gpt-4o",
+      "gpt-4o",
+      Some(TelemetryAuthMode::ApiKey),
+      "test_originator".to_string(),
+      /*log_user_prompts*/ true,
+      "tty".to_string(),
+      SessionSource::Cli,
+  )
     .with_metrics_without_metadata_tags(metrics);
 
     manager.counter(
@@ -125,17 +121,15 @@ fn manager_allows_disabling_metadata_tags() -> Result<()> {
 fn manager_attaches_optional_service_name_tag() -> Result<()> {
     let (metrics, exporter) = build_metrics_with_defaults(&[])?;
     let manager = SessionTelemetry::new(
-        ThreadId::new(),
-        "gpt-5.1",
-        "gpt-5.1",
-        /*account_id*/ None,
-        /*account_email*/ None,
-        /*auth_mode*/ None,
-        "test_originator".to_string(),
-        /*log_user_prompts*/ false,
-        "tty".to_string(),
-        SessionSource::Cli,
-    )
+    ThreadId::new(),
+    "gpt-5.1",
+    "gpt-5.1",
+    /*auth_mode*/ None,
+    "test_originator".to_string(),
+    /*log_user_prompts*/ false,
+    "tty".to_string(),
+    SessionSource::Cli,
+)
     .with_metrics_service_name("my_app_server_client")
     .with_metrics(metrics);
 
@@ -169,17 +163,15 @@ fn manager_attaches_optional_service_name_tag() -> Result<()> {
 fn manager_records_plugin_install_suggestion_metric() -> Result<()> {
     let (metrics, exporter) = build_metrics_with_defaults(&[])?;
     let manager = SessionTelemetry::new(
-        ThreadId::new(),
-        "gpt-5.1",
-        "gpt-5.1",
-        Some("account-id".to_string()),
-        /*account_email*/ None,
-        Some(TelemetryAuthMode::ApiKey),
-        "test_originator".to_string(),
-        /*log_user_prompts*/ false,
-        "tty".to_string(),
-        SessionSource::Cli,
-    )
+    ThreadId::new(),
+    "gpt-5.1",
+    "gpt-5.1",
+    Some(TelemetryAuthMode::ApiKey),
+    "test_originator".to_string(),
+    /*log_user_prompts*/ false,
+    "tty".to_string(),
+    SessionSource::Cli,
+)
     .with_metrics_without_metadata_tags(metrics);
 
     manager.record_plugin_install_suggestion(
@@ -223,17 +215,15 @@ fn manager_records_plugin_install_suggestion_metric() -> Result<()> {
 fn manager_records_plugin_install_elicitation_sent_metric() -> Result<()> {
     let (metrics, exporter) = build_metrics_with_defaults(&[])?;
     let manager = SessionTelemetry::new(
-        ThreadId::new(),
-        "gpt-5.1",
-        "gpt-5.1",
-        Some("account-id".to_string()),
-        /*account_email*/ None,
-        Some(TelemetryAuthMode::ApiKey),
-        "test_originator".to_string(),
-        /*log_user_prompts*/ false,
-        "tty".to_string(),
-        SessionSource::Cli,
-    )
+    ThreadId::new(),
+    "gpt-5.1",
+    "gpt-5.1",
+    Some(TelemetryAuthMode::ApiKey),
+    "test_originator".to_string(),
+    /*log_user_prompts*/ false,
+    "tty".to_string(),
+    SessionSource::Cli,
+)
     .with_metrics_without_metadata_tags(metrics);
 
     manager.record_plugin_install_elicitation_sent("plugin", "slack@odysseythink-curated", "Slack");
@@ -266,17 +256,15 @@ fn manager_records_plugin_install_elicitation_sent_metric() -> Result<()> {
 fn manager_records_plan_resolved_counter_with_outcome_tag() -> Result<()> {
     let (metrics, exporter) = build_metrics_with_defaults(&[])?;
     let manager = SessionTelemetry::new(
-        ThreadId::new(),
-        "gpt-5.1",
-        "gpt-5.1",
-        Some("account-id".to_string()),
-        /*account_email*/ None,
-        Some(TelemetryAuthMode::ApiKey),
-        "test_originator".to_string(),
-        /*log_user_prompts*/ true,
-        "tty".to_string(),
-        SessionSource::Cli,
-    )
+    ThreadId::new(),
+    "gpt-5.1",
+    "gpt-5.1",
+    Some(TelemetryAuthMode::ApiKey),
+    "test_originator".to_string(),
+    /*log_user_prompts*/ true,
+    "tty".to_string(),
+    SessionSource::Cli,
+)
     .with_metrics(metrics);
 
     manager.record_plan_resolved("implement_fresh_context");

@@ -10,12 +10,7 @@
 
 use std::path::PathBuf;
 
-use ody_app_server_protocol::AddCreditsNudgeCreditType;
-use ody_app_server_protocol::AddCreditsNudgeEmailStatus;
 use ody_app_server_protocol::AppInfo;
-use ody_app_server_protocol::ConsumeAccountRateLimitResetCreditResponse;
-use ody_app_server_protocol::GetAccountRateLimitsResponse;
-use ody_app_server_protocol::GetAccountTokenUsageResponse;
 use ody_app_server_protocol::MarketplaceAddResponse;
 use ody_app_server_protocol::MarketplaceRemoveResponse;
 use ody_app_server_protocol::MarketplaceUpgradeResponse;
@@ -109,29 +104,6 @@ pub(crate) struct PluginRemoteSectionError {
     pub(crate) section_id: String,
     pub(crate) label: String,
     pub(crate) message: String,
-}
-
-/// Distinguishes why a rate-limit refresh was requested so the completion
-/// handler can route the result correctly.
-///
-/// A `StartupPrefetch` fires once, concurrently with the rest of TUI init, and
-/// updates the cached snapshots and any available reset-credit notice (no
-/// status card to finalize). A `StatusCommand` is tied to a specific `/status`
-/// invocation and must call `finish_status_rate_limit_refresh` when done so the
-/// card stops showing a "refreshing" state. A `UsageMenu` refreshes a cached
-/// zero reset count so the disabled menu entry can become available without a
-/// restart.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum RateLimitRefreshOrigin {
-    /// Eagerly fetched after bootstrap for `/status` data and reset availability.
-    StartupPrefetch { reset_hint_request_id: u64 },
-    /// User-initiated via `/status`; the `request_id` correlates with the
-    /// status card that should be updated when the fetch completes.
-    StatusCommand { request_id: u64 },
-    /// User reopened `/usage` while the cached reset-credit count was zero.
-    UsageMenu { request_id: u64 },
-    /// Refresh requested after a reset credit was successfully consumed.
-    ResetConsume { request_id: u64 },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -237,7 +209,7 @@ pub(crate) enum AppEvent {
     /// background tasks, rollout flush, or child process cleanup).
     Exit(ExitMode),
 
-    /// Request app-server account logout, then exit after it succeeds.
+    /// Request app-server logout, then exit after it succeeds.
     Logout,
 
     /// Request to exit the application due to a fatal error.
@@ -270,11 +242,6 @@ pub(crate) enum AppEvent {
         matches: Vec<FileMatch>,
     },
 
-    /// Refresh account rate limits in the background.
-    RefreshRateLimits {
-        origin: RateLimitRefreshOrigin,
-    },
-
     /// Open the current thread goal summary/action menu.
     OpenThreadGoalMenu {
         thread_id: ThreadId,
@@ -301,68 +268,6 @@ pub(crate) enum AppEvent {
     /// Clear the current thread goal.
     ClearThreadGoal {
         thread_id: ThreadId,
-    },
-
-    /// Result of refreshing rate limits.
-    RateLimitsLoaded {
-        origin: RateLimitRefreshOrigin,
-        result: Result<GetAccountRateLimitsResponse, String>,
-    },
-
-    /// Open the default token-activity view selected from the `/usage` menu.
-    OpenTokenActivity,
-
-    /// Open the reset-credit flow selected from the `/usage` menu.
-    OpenRateLimitResetCredits,
-
-    /// Result of reading the current reset-credit balance.
-    RateLimitResetCreditsLoaded {
-        request_id: u64,
-        result: Result<GetAccountRateLimitsResponse, String>,
-    },
-
-    /// Consume one reset credit using a stable idempotency key.
-    ConsumeRateLimitResetCredit {
-        idempotency_key: String,
-    },
-
-    /// Result of consuming one reset credit.
-    RateLimitResetCreditConsumed {
-        request_id: u64,
-        idempotency_key: String,
-        result: Result<ConsumeAccountRateLimitResetCreditResponse, String>,
-    },
-
-    /// Fetch account-wide token activity for a `/usage` history card.
-    RefreshTokenActivity {
-        request_id: u64,
-    },
-
-    /// Result of fetching account-wide token activity.
-    TokenActivityLoaded {
-        request_id: u64,
-        result: Result<GetAccountTokenUsageResponse, String>,
-    },
-
-    /// Fetch workspace messages for the status-line headline item.
-    RefreshStatusLineWorkspaceHeadline {
-        request_id: u64,
-    },
-
-    /// Commit settled asynchronous usage output after active-output barriers clear.
-    CommitPendingUsageOutput,
-
-    /// Commit settled asynchronous usage output after stream shutdown.
-    CommitPendingUsageOutputAfterStreamShutdown,
-
-    /// Send a user-confirmed request to notify the workspace owner.
-    SendAddCreditsNudgeEmail {
-        credit_type: AddCreditsNudgeCreditType,
-    },
-
-    /// Result of notifying the workspace owner.
-    AddCreditsNudgeEmailFinished {
-        result: Result<AddCreditsNudgeEmailStatus, String>,
     },
 
     /// Result of prefetching connectors.
@@ -1005,11 +910,6 @@ pub(crate) enum AppEvent {
     StatusLineGitSummaryUpdated {
         cwd: PathBuf,
         summary: crate::chatwidget::StatusLineGitSummary,
-    },
-    /// Async update of the workspace notification headline for status line rendering.
-    StatusLineWorkspaceHeadlineUpdated {
-        request_id: u64,
-        result: Result<crate::workspace_messages::WorkspaceHeadlineFetchResult, String>,
     },
     /// Apply a user-confirmed status-line item ordering/selection.
     StatusLineSetup {

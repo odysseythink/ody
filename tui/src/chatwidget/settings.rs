@@ -203,15 +203,13 @@ impl ChatWidget {
         self.has_ody_backend_auth
     }
 
-    pub(crate) fn update_account_state(
+    pub(crate) fn update_auth_state(
         &mut self,
         api_key_configured: bool,
         has_ody_backend_auth: bool,
     ) {
-        // Account-update notifications are the identity boundary. The visible account fields can
-        // be identical across two accounts, so always invalidate account-scoped requests and data.
-        self.clear_pending_token_activity_refreshes();
-        self.clear_pending_rate_limit_reset_requests();
+        // Auth-update notifications are the identity boundary. The visible auth fields can
+        // be identical across two auth states, so always invalidate auth-scoped requests and data.
         self.ody_rate_limit_reached_type = None;
         self.rate_limit_warnings = RateLimitWarningState::default();
         self.rate_limit_switch_prompt = RateLimitSwitchPromptState::Idle;
@@ -225,16 +223,10 @@ impl ChatWidget {
         if had_refreshing_status_outputs {
             self.request_redraw();
         }
-        self.status_line_workspace_headline = None;
-        self.status_line_workspace_headline_pending_request_id = None;
-        self.status_line_workspace_headline_last_requested_at = None;
-        self.status_line_workspace_messages_disabled = false;
         self.api_key_configured = api_key_configured;
         self.has_ody_backend_auth = has_ody_backend_auth;
         self.bottom_pane
             .set_connectors_enabled(self.connectors_enabled());
-        self.bottom_pane
-            .set_token_activity_command_enabled(has_ody_backend_auth);
         self.refresh_status_surfaces();
     }
 

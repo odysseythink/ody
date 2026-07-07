@@ -47,7 +47,7 @@ async fn first_turn_after_external_login_does_not_inject_recommended_plugins() -
     timeout(DEFAULT_READ_TIMEOUT, app_server.initialize()).await??;
 
     let login_id = app_server
-        .send_login_account_api_key_request("sk-test-key")
+        .send_login_api_key_request("sk-test-key")
         .await?;
     let login_response: JSONRPCResponse = timeout(
         DEFAULT_READ_TIMEOUT,

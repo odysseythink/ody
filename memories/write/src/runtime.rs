@@ -119,16 +119,11 @@ impl MemoryStartupContext {
         source: SessionSource,
         provider: SharedModelProvider,
     ) -> Self {
-        // Ody backend auth metadata (account id/email) is no longer available.
-        let account_id: Option<String> = None;
-        let account_email: Option<String> = None;
         let model = config.model.as_deref().unwrap_or("unknown");
         let session_telemetry = SessionTelemetry::new(
             thread_id,
             model,
             model,
-            account_id,
-            account_email,
             None,
             originator().value,
             config.otel.log_user_prompt,

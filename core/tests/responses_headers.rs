@@ -107,8 +107,6 @@ async fn responses_stream_includes_subagent_header_on_review() {
         thread_id,
         model.as_str(),
         model_info.slug.as_str(),
-        /*account_id*/ None,
-        Some("test@test.com".to_string()),
         Some(auth_mode),
         "test_originator".to_string(),
         /*log_user_prompts*/ false,
@@ -234,17 +232,15 @@ async fn responses_stream_includes_subagent_header_on_other() {
         ody_core::test_support::construct_model_info_offline(model.as_str(), &config);
 
     let session_telemetry = SessionTelemetry::new(
-        thread_id,
-        model.as_str(),
-        model_info.slug.as_str(),
-        /*account_id*/ None,
-        Some("test@test.com".to_string()),
-        Some(auth_mode),
-        "test_originator".to_string(),
-        /*log_user_prompts*/ false,
-        "test".to_string(),
-        session_source.clone(),
-    );
+    thread_id,
+    model.as_str(),
+    model_info.slug.as_str(),
+    Some(auth_mode),
+    "test_originator".to_string(),
+    /*log_user_prompts*/ false,
+    "test".to_string(),
+    session_source.clone(),
+);
 
     let client = ModelClient::new(
         thread_id,

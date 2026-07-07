@@ -8,7 +8,6 @@ use ody_protocol::protocol::SpendControlLimitSnapshot as CoreSpendControlLimitSn
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use std::collections::HashMap;
 use ts_rs::TS;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
@@ -53,146 +52,6 @@ pub struct LogoutResponse {}
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub struct GetRateLimitsResponse {
-    /// Backward-compatible single-bucket view; mirrors the historical payload.
-    pub rate_limits: RateLimitSnapshot,
-    /// Multi-bucket view keyed by metered `limit_id` (for example, `ody`).
-    pub rate_limits_by_limit_id: Option<HashMap<String, RateLimitSnapshot>>,
-    pub rate_limit_reset_credits: Option<RateLimitResetCreditsSummary>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct RateLimitResetCreditsSummary {
-    pub available_count: i64,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct ConsumeRateLimitResetCreditParams {
-    /// Identifies one logical reset attempt. A UUID is recommended; reuse the same value when
-    /// retrying that attempt.
-    pub idempotency_key: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct ConsumeRateLimitResetCreditResponse {
-    pub outcome: ConsumeRateLimitResetCreditOutcome,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/", rename_all = "camelCase")]
-pub enum ConsumeRateLimitResetCreditOutcome {
-    /// A reset credit was consumed and the eligible rate-limit windows were reset.
-    Reset,
-    /// No current rate-limit window is eligible for a reset.
-    NothingToReset,
-    /// The workspace has no earned reset credits available.
-    NoCredit,
-    /// The same idempotency key already completed a reset successfully.
-    AlreadyRedeemed,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct GetTokenUsageResponse {
-    pub summary: TokenUsageSummary,
-    pub daily_usage_buckets: Option<Vec<TokenUsageDailyBucket>>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct GetWorkspaceMessagesResponse {
-    /// Whether the workspace-message backend route is available for this client.
-    pub feature_enabled: bool,
-    /// Active workspace messages returned by the backend.
-    pub messages: Vec<WorkspaceMessage>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct WorkspaceMessage {
-    pub message_id: String,
-    pub message_type: WorkspaceMessageType,
-    pub message_body: String,
-    /// Unix timestamp (in seconds) when the message was created.
-    #[ts(type = "number | null")]
-    pub created_at: Option<i64>,
-    /// Unix timestamp (in seconds) when the message was archived.
-    #[ts(type = "number | null")]
-    pub archived_at: Option<i64>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "snake_case")]
-#[ts(export_to = "v2/", rename_all = "snake_case")]
-pub enum WorkspaceMessageType {
-    Headline,
-    Announcement,
-    #[serde(other)]
-    Unknown,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct TokenUsageSummary {
-    pub lifetime_tokens: Option<i64>,
-    pub peak_daily_tokens: Option<i64>,
-    pub longest_running_turn_sec: Option<i64>,
-    pub current_streak_days: Option<i64>,
-    pub longest_streak_days: Option<i64>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct TokenUsageDailyBucket {
-    pub start_date: String,
-    pub tokens: i64,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct SendAddCreditsNudgeEmailParams {
-    pub credit_type: AddCreditsNudgeCreditType,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "snake_case")]
-#[ts(export_to = "v2/", rename_all = "snake_case")]
-pub enum AddCreditsNudgeCreditType {
-    Credits,
-    UsageLimit,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct SendAddCreditsNudgeEmailResponse {
-    pub status: AddCreditsNudgeEmailStatus,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "snake_case")]
-#[ts(export_to = "v2/", rename_all = "snake_case")]
-pub enum AddCreditsNudgeEmailStatus {
-    Sent,
-    CooldownActive,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
 pub struct GetAuthStateParams {
     /// When `true`, requests a proactive token refresh before returning.
     ///
@@ -205,7 +64,7 @@ pub struct GetAuthStateParams {
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct GetAuthStateResponse {
-    pub account: Option<AuthState>,
+    pub auth_state: Option<AuthState>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]

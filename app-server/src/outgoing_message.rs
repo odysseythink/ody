@@ -725,7 +725,7 @@ mod tests {
     #[test]
     fn verify_server_notification_serialization() {
         let notification =
-            ServerNotification::AccountLoginCompleted(LoginCompletedNotification {
+            ServerNotification::LoginCompleted(LoginCompletedNotification {
                 login_id: Some(Uuid::nil().to_string()),
                 success: true,
                 error: None,
@@ -750,7 +750,7 @@ mod tests {
     #[test]
     fn verify_account_login_completed_notification_serialization() {
         let notification =
-            ServerNotification::AccountLoginCompleted(LoginCompletedNotification {
+            ServerNotification::LoginCompleted(LoginCompletedNotification {
                 login_id: Some(Uuid::nil().to_string()),
                 success: true,
                 error: None,
@@ -775,7 +775,7 @@ mod tests {
     #[test]
     fn verify_account_rate_limits_notification_serialization() {
         let notification =
-            ServerNotification::AccountRateLimitsUpdated(RateLimitsUpdatedNotification {
+            ServerNotification::RateLimitsUpdated(RateLimitsUpdatedNotification {
                 rate_limits: RateLimitSnapshot {
                     limit_id: Some("ody".to_string()),
                     limit_name: None,
@@ -819,7 +819,7 @@ mod tests {
 
     #[test]
     fn verify_account_updated_notification_serialization() {
-        let notification = ServerNotification::AccountUpdated(AuthUpdatedNotification {
+        let notification = ServerNotification::AuthUpdated(AuthUpdatedNotification {
             auth_mode: Some(AuthMode::ApiKey),
         });
 

@@ -8,6 +8,16 @@ use crate::tools::context::ToolCallSource;
 use crate::tools::context::ToolOutput;
 use crate::tools::context::ToolPayload;
 use crate::turn_diff_tracker::TurnDiffTracker;
+use core_test_support::PathExt;
+use core_test_support::TempDirExt;
+use core_test_support::responses::ev_assistant_message;
+use core_test_support::responses::ev_completed;
+use core_test_support::responses::ev_response_created;
+use core_test_support::responses::mount_response_once;
+use core_test_support::responses::mount_sse_once;
+use core_test_support::responses::sse;
+use core_test_support::responses::sse_response;
+use core_test_support::responses::start_mock_server;
 use ody_app_server_protocol::ConfigLayerSource;
 use ody_config::ConfigLayerEntry;
 use ody_config::ConfigRequirements;
@@ -29,16 +39,6 @@ use ody_protocol::request_permissions::PermissionGrantScope;
 use ody_protocol::request_permissions::RequestPermissionProfile;
 use ody_protocol::request_permissions::RequestPermissionsArgs;
 use ody_protocol::request_permissions::RequestPermissionsResponse;
-use core_test_support::PathExt;
-use core_test_support::TempDirExt;
-use core_test_support::responses::ev_assistant_message;
-use core_test_support::responses::ev_completed;
-use core_test_support::responses::ev_response_created;
-use core_test_support::responses::mount_response_once;
-use core_test_support::responses::mount_sse_once;
-use core_test_support::responses::sse;
-use core_test_support::responses::sse_response;
-use core_test_support::responses::start_mock_server;
 use pretty_assertions::assert_eq;
 use std::fs;
 use std::sync::Arc;
@@ -102,15 +102,11 @@ async fn request_permissions_routes_to_guardian_when_reviewer_is_enabled() {
     config.approvals_reviewer = ApprovalsReviewer::AutoReview;
     config.model_provider.base_url = Some(format!("{}/v1", server.uri()));
     let config = Arc::new(config);
-    let models_manager = models_manager_with_provider(
-        config.ody_home.to_path_buf(),
-        config.model_provider.clone(),
-    );
+    let models_manager =
+        models_manager_with_provider(config.ody_home.to_path_buf(), config.model_provider.clone());
     session.services.models_manager = models_manager;
     turn_context_raw.config = Arc::clone(&config);
-    turn_context_raw.provider = create_model_provider(
-        config.model_provider.clone(),
-    );
+    turn_context_raw.provider = create_model_provider(config.model_provider.clone());
     let session = Arc::new(session);
     let turn_context = Arc::new(turn_context_raw);
 
@@ -188,18 +184,14 @@ async fn request_permissions_guardian_review_stops_when_cancelled() {
     config.approvals_reviewer = ApprovalsReviewer::AutoReview;
     config.model_provider.base_url = Some(format!("{}/v1", server.uri()));
     let config = Arc::new(config);
-    let models_manager = models_manager_with_provider(
-        config.ody_home.to_path_buf(),
-        config.model_provider.clone(),
-    );
+    let models_manager =
+        models_manager_with_provider(config.ody_home.to_path_buf(), config.model_provider.clone());
     Arc::get_mut(&mut session)
         .expect("single session ref")
         .services
         .models_manager = models_manager;
     turn_context_raw.config = Arc::clone(&config);
-    turn_context_raw.provider = create_model_provider(
-        config.model_provider.clone(),
-    );
+    turn_context_raw.provider = create_model_provider(config.model_provider.clone());
 
     let requested_permissions = RequestPermissionProfile {
         network: Some(NetworkPermissions {
@@ -303,15 +295,11 @@ async fn guardian_allows_shell_command_additional_permissions_requests_past_poli
         .expect("test setup should allow enabling guardian approvals");
     config.model_provider.base_url = Some(format!("{}/v1", server.uri()));
     let config = Arc::new(config);
-    let models_manager = models_manager_with_provider(
-        config.ody_home.to_path_buf(),
-        config.model_provider.clone(),
-    );
+    let models_manager =
+        models_manager_with_provider(config.ody_home.to_path_buf(), config.model_provider.clone());
     session.services.models_manager = models_manager;
     turn_context_raw.config = Arc::clone(&config);
-    turn_context_raw.provider = create_model_provider(
-        config.model_provider.clone(),
-    );
+    turn_context_raw.provider = create_model_provider(config.model_provider.clone());
     let session = Arc::new(session);
     let turn_context = Arc::new(turn_context_raw);
     let expiration_ms: u64 = if cfg!(windows) { 2_500 } else { 1_000 };
@@ -406,15 +394,11 @@ async fn strict_auto_review_turn_grant_forces_guardian_for_shell_command_policy_
     config.approvals_reviewer = ApprovalsReviewer::User;
     config.model_provider.base_url = Some(format!("{}/v1", server.uri()));
     let config = Arc::new(config);
-    let models_manager = models_manager_with_provider(
-        config.ody_home.to_path_buf(),
-        config.model_provider.clone(),
-    );
+    let models_manager =
+        models_manager_with_provider(config.ody_home.to_path_buf(), config.model_provider.clone());
     session.services.models_manager = models_manager;
     turn_context_raw.config = Arc::clone(&config);
-    turn_context_raw.provider = create_model_provider(
-        config.model_provider.clone(),
-    );
+    turn_context_raw.provider = create_model_provider(config.model_provider.clone());
     let session = Arc::new(session);
     let turn_context = Arc::new(turn_context_raw);
 
@@ -677,10 +661,8 @@ async fn guardian_subagent_does_not_inherit_parent_exec_policy_rules() {
         }
     );
 
-    let models_manager = models_manager_with_provider(
-        config.ody_home.to_path_buf(),
-        config.model_provider.clone(),
-    );
+    let models_manager =
+        models_manager_with_provider(config.ody_home.to_path_buf(), config.model_provider.clone());
     let plugins_manager = Arc::new(PluginsManager::new(config.ody_home.to_path_buf()));
     let skills_service = Arc::new(SkillsService::new(
         config.ody_home.clone(),
@@ -730,8 +712,7 @@ async fn guardian_subagent_does_not_inherit_parent_exec_policy_rules() {
     .expect("spawn guardian subagent");
 
     assert_eq!(
-        ody
-            .session
+        ody.session
             .services
             .exec_policy
             .current()

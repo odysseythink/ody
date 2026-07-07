@@ -76,8 +76,6 @@ fn test_session_telemetry(config: &Config, model: &str) -> SessionTelemetry {
         ThreadId::new(),
         model,
         model_info.slug.as_str(),
-        /*account_id*/ None,
-        /*account_email*/ None,
         /*auth_mode*/ None,
         "test_originator".to_string(),
         /*log_user_prompts*/ false,

@@ -1176,8 +1176,6 @@ fn sandbox_outcome_event_records_outcome() {
         ThreadId::new(),
         "gpt-5.5",
         "gpt-5.5",
-        /*account_id*/ None,
-        /*account_email*/ None,
         Some(TelemetryAuthMode::ApiKey),
         "Ody_Desktop".to_string(),
         /*log_user_prompts*/ false,

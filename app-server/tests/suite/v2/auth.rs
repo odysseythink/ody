@@ -3,8 +3,8 @@ use anyhow::bail;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
 
-use ody_app_server_protocol::AuthState;
 use ody_app_server_protocol::AuthMode;
+use ody_app_server_protocol::AuthState;
 use ody_app_server_protocol::GetAuthStateParams;
 use ody_app_server_protocol::GetAuthStateResponse;
 use ody_app_server_protocol::JSONRPCError;
@@ -97,9 +97,8 @@ shell_snapshot = false
     std::fs::write(config_toml, contents)
 }
 
-
 #[tokio::test]
-async fn logout_account_removes_auth_and_notifies() -> Result<()> {
+async fn logout_removes_auth_and_notifies() -> Result<()> {
     let ody_home = TempDir::new()?;
     create_config_toml(ody_home.path(), CreateConfigTomlParams::default())?;
 
@@ -109,15 +108,15 @@ async fn logout_account_removes_auth_and_notifies() -> Result<()> {
         serde_json::json!({
             "auth_mode": "api_key",
             "odysseythink_api_key": "sk-test-key",
-        }).to_string(),
+        })
+        .to_string(),
     )?;
     assert!(ody_home.path().join("auth.json").exists());
 
-    let mut mcp =
-        TestAppServer::new_with_env(ody_home.path(), &[("OPENAI_API_KEY", None)]).await?;
+    let mut mcp = TestAppServer::new_with_env(ody_home.path(), &[("OPENAI_API_KEY", None)]).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
 
-    let id = mcp.send_logout_account_request().await?;
+    let id = mcp.send_logout_request().await?;
     let resp: JSONRPCResponse = timeout(
         DEFAULT_READ_TIMEOUT,
         mcp.read_stream_until_response_message(RequestId::Integer(id)),
@@ -131,7 +130,7 @@ async fn logout_account_removes_auth_and_notifies() -> Result<()> {
     )
     .await??;
     let parsed: ServerNotification = note.try_into()?;
-    let ServerNotification::AccountUpdated(payload) = parsed else {
+    let ServerNotification::AuthUpdated(payload) = parsed else {
         bail!("unexpected notification: {parsed:?}");
     };
     assert!(
@@ -145,7 +144,7 @@ async fn logout_account_removes_auth_and_notifies() -> Result<()> {
     );
 
     let get_id = mcp
-        .send_get_account_request(GetAuthStateParams {
+        .send_get_auth_state_request(GetAuthStateParams {
             refresh_token: false,
         })
         .await?;
@@ -155,28 +154,19 @@ async fn logout_account_removes_auth_and_notifies() -> Result<()> {
     )
     .await??;
     let account: GetAuthStateResponse = to_response(get_resp)?;
-    assert_eq!(account.account, None);
+    assert_eq!(account.auth_state, None);
     Ok(())
 }
 
-
-
-
-
-
-
-
 #[tokio::test]
-async fn login_account_api_key_succeeds_and_notifies() -> Result<()> {
+async fn login_api_key_succeeds_and_notifies() -> Result<()> {
     let ody_home = TempDir::new()?;
     create_config_toml(ody_home.path(), CreateConfigTomlParams::default())?;
 
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
 
-    let req_id = mcp
-        .send_login_account_api_key_request("sk-test-key")
-        .await?;
+    let req_id = mcp.send_login_api_key_request("sk-test-key").await?;
     let resp: JSONRPCResponse = timeout(
         DEFAULT_READ_TIMEOUT,
         mcp.read_stream_until_response_message(RequestId::Integer(req_id)),
@@ -191,7 +181,7 @@ async fn login_account_api_key_succeeds_and_notifies() -> Result<()> {
     )
     .await??;
     let parsed: ServerNotification = note.try_into()?;
-    let ServerNotification::AccountLoginCompleted(payload) = parsed else {
+    let ServerNotification::LoginCompleted(payload) = parsed else {
         bail!("unexpected notification: {parsed:?}");
     };
     pretty_assertions::assert_eq!(payload.login_id, None);
@@ -204,7 +194,7 @@ async fn login_account_api_key_succeeds_and_notifies() -> Result<()> {
     )
     .await??;
     let parsed: ServerNotification = note.try_into()?;
-    let ServerNotification::AccountUpdated(payload) = parsed else {
+    let ServerNotification::AuthUpdated(payload) = parsed else {
         bail!("unexpected notification: {parsed:?}");
     };
     pretty_assertions::assert_eq!(payload.auth_mode, Some(AuthMode::ApiKey));
@@ -214,7 +204,7 @@ async fn login_account_api_key_succeeds_and_notifies() -> Result<()> {
 }
 
 #[tokio::test]
-async fn get_account_no_auth() -> Result<()> {
+async fn get_auth_state_no_auth() -> Result<()> {
     let ody_home = TempDir::new()?;
     create_config_toml(
         ody_home.path(),
@@ -224,14 +214,13 @@ async fn get_account_no_auth() -> Result<()> {
         },
     )?;
 
-    let mut mcp =
-        TestAppServer::new_with_env(ody_home.path(), &[("OPENAI_API_KEY", None)]).await?;
+    let mut mcp = TestAppServer::new_with_env(ody_home.path(), &[("OPENAI_API_KEY", None)]).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
 
     let params = GetAuthStateParams {
         refresh_token: false,
     };
-    let request_id = mcp.send_get_account_request(params).await?;
+    let request_id = mcp.send_get_auth_state_request(params).await?;
 
     let resp: JSONRPCResponse = timeout(
         DEFAULT_READ_TIMEOUT,
@@ -240,12 +229,12 @@ async fn get_account_no_auth() -> Result<()> {
     .await??;
     let account: GetAuthStateResponse = to_response(resp)?;
 
-    assert_eq!(account.account, None, "expected no account");
+    assert_eq!(account.auth_state, None, "expected no account");
     Ok(())
 }
 
 #[tokio::test]
-async fn get_account_with_api_key() -> Result<()> {
+async fn get_auth_state_with_api_key() -> Result<()> {
     let ody_home = TempDir::new()?;
     create_config_toml(
         ody_home.path(),
@@ -258,9 +247,7 @@ async fn get_account_with_api_key() -> Result<()> {
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
 
-    let req_id = mcp
-        .send_login_account_api_key_request("sk-test-key")
-        .await?;
+    let req_id = mcp.send_login_api_key_request("sk-test-key").await?;
     let resp: JSONRPCResponse = timeout(
         DEFAULT_READ_TIMEOUT,
         mcp.read_stream_until_response_message(RequestId::Integer(req_id)),
@@ -271,7 +258,7 @@ async fn get_account_with_api_key() -> Result<()> {
     let params = GetAuthStateParams {
         refresh_token: false,
     };
-    let request_id = mcp.send_get_account_request(params).await?;
+    let request_id = mcp.send_get_auth_state_request(params).await?;
 
     let resp: JSONRPCResponse = timeout(
         DEFAULT_READ_TIMEOUT,
@@ -281,14 +268,14 @@ async fn get_account_with_api_key() -> Result<()> {
     let received: GetAuthStateResponse = to_response(resp)?;
 
     let expected = GetAuthStateResponse {
-        account: Some(AuthState::ApiKey {}),
+        auth_state: Some(AuthState::ApiKey {}),
     };
     assert_eq!(received, expected);
     Ok(())
 }
 
 #[tokio::test]
-async fn get_account_when_auth_not_required() -> Result<()> {
+async fn get_auth_state_when_auth_not_required() -> Result<()> {
     let ody_home = TempDir::new()?;
     create_config_toml(
         ody_home.path(),
@@ -304,7 +291,7 @@ async fn get_account_when_auth_not_required() -> Result<()> {
     let params = GetAuthStateParams {
         refresh_token: false,
     };
-    let request_id = mcp.send_get_account_request(params).await?;
+    let request_id = mcp.send_get_auth_state_request(params).await?;
 
     let resp: JSONRPCResponse = timeout(
         DEFAULT_READ_TIMEOUT,
@@ -313,11 +300,7 @@ async fn get_account_when_auth_not_required() -> Result<()> {
     .await??;
     let received: GetAuthStateResponse = to_response(resp)?;
 
-    let expected = GetAuthStateResponse {
-        account: None,
-    };
+    let expected = GetAuthStateResponse { auth_state: None };
     assert_eq!(received, expected);
     Ok(())
 }
-
-

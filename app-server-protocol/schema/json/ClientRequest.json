@@ -5,13 +5,6 @@
       "description": "A path that is guaranteed to be absolute and normalized (though it is not guaranteed to be canonicalized or exist on the filesystem).\n\nIMPORTANT: When deserializing an `AbsolutePathBuf`, a base path must be set using [AbsolutePathBufGuard::new]. If no base path is set, the deserialization will fail unless the path being deserialized is already absolute.",
       "type": "string"
     },
-    "AddCreditsNudgeCreditType": {
-      "enum": [
-        "credits",
-        "usage_limit"
-      ],
-      "type": "string"
-    },
     "AdditionalContextEntry": {
       "properties": {
         "kind": {
@@ -540,18 +533,6 @@
         "keyPath",
         "mergeStrategy",
         "value"
-      ],
-      "type": "object"
-    },
-    "ConsumeRateLimitResetCreditParams": {
-      "properties": {
-        "idempotencyKey": {
-          "description": "Identifies one logical reset attempt. A UUID is recommended; reuse the same value when retrying that attempt.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "idempotencyKey"
       ],
       "type": "object"
     },
@@ -3248,17 +3229,6 @@
       "required": [
         "id",
         "location"
-      ],
-      "type": "object"
-    },
-    "SendAddCreditsNudgeEmailParams": {
-      "properties": {
-        "creditType": {
-          "$ref": "#/definitions/AddCreditsNudgeCreditType"
-        }
-      },
-      "required": [
-        "creditType"
       ],
       "type": "object"
     },
@@ -6255,123 +6225,6 @@
         "method"
       ],
       "title": "Auth/logoutRequest",
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/definitions/RequestId"
-        },
-        "method": {
-          "enum": [
-            "rateLimits/read"
-          ],
-          "title": "RateLimits/readRequestMethod",
-          "type": "string"
-        },
-        "params": {
-          "type": "null"
-        }
-      },
-      "required": [
-        "id",
-        "method"
-      ],
-      "title": "RateLimits/readRequest",
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/definitions/RequestId"
-        },
-        "method": {
-          "enum": [
-            "rateLimitResetCredit/consume"
-          ],
-          "title": "RateLimitResetCredit/consumeRequestMethod",
-          "type": "string"
-        },
-        "params": {
-          "$ref": "#/definitions/ConsumeRateLimitResetCreditParams"
-        }
-      },
-      "required": [
-        "id",
-        "method",
-        "params"
-      ],
-      "title": "RateLimitResetCredit/consumeRequest",
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/definitions/RequestId"
-        },
-        "method": {
-          "enum": [
-            "usage/read"
-          ],
-          "title": "Usage/readRequestMethod",
-          "type": "string"
-        },
-        "params": {
-          "type": "null"
-        }
-      },
-      "required": [
-        "id",
-        "method"
-      ],
-      "title": "Usage/readRequest",
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/definitions/RequestId"
-        },
-        "method": {
-          "enum": [
-            "workspaceMessages/read"
-          ],
-          "title": "WorkspaceMessages/readRequestMethod",
-          "type": "string"
-        },
-        "params": {
-          "type": "null"
-        }
-      },
-      "required": [
-        "id",
-        "method"
-      ],
-      "title": "WorkspaceMessages/readRequest",
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/definitions/RequestId"
-        },
-        "method": {
-          "enum": [
-            "usage/sendAddCreditsNudgeEmail"
-          ],
-          "title": "Usage/sendAddCreditsNudgeEmailRequestMethod",
-          "type": "string"
-        },
-        "params": {
-          "$ref": "#/definitions/SendAddCreditsNudgeEmailParams"
-        }
-      },
-      "required": [
-        "id",
-        "method",
-        "params"
-      ],
-      "title": "Usage/sendAddCreditsNudgeEmailRequest",
       "type": "object"
     },
     {

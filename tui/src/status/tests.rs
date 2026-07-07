@@ -11,7 +11,7 @@ use crate::history_cell::HistoryCell;
 use crate::legacy_core::config::Config;
 use crate::legacy_core::config::ConfigBuilder;
 use crate::legacy_core::config::PermissionProfileSnapshot;
-use crate::status::StatusAccountDisplay;
+use crate::status::StatusAuthDisplay;
 use crate::status::remote_connection::RemoteConnectionStatus;
 use crate::test_support::PathBufExt;
 use crate::test_support::test_path_buf;
@@ -27,8 +27,6 @@ use ody_app_server_protocol::RateLimitSnapshot;
 use ody_app_server_protocol::RateLimitWindow;
 use ody_app_server_protocol::SpendControlLimitSnapshot;
 use ody_config::LoaderOverrides;
-use ody_model_provider_info::ModelProviderInfo;
-use ody_model_provider_info::ProviderCapabilities;
 use ody_models_manager::test_support::construct_model_info_offline_for_tests;
 use ody_models_manager::test_support::get_model_offline_for_tests;
 use ody_protocol::ThreadId;
@@ -144,8 +142,8 @@ fn set_workspace_cwd(config: &mut Config, cwd: AbsolutePathBuf) {
         .set_workspace_roots(config.workspace_roots.clone());
 }
 
-fn test_status_account_display() -> Option<StatusAccountDisplay> {
-    Some(StatusAccountDisplay::ApiKey)
+fn test_status_auth_display() -> Option<StatusAuthDisplay> {
+    Some(StatusAuthDisplay::ApiKey)
 }
 
 fn token_info_for(model_slug: &str, config: &Config, usage: &TokenUsage) -> TokenUsageInfo {
@@ -218,7 +216,7 @@ fn permissions_text_for(config: &Config) -> Option<String> {
     let model_slug = get_model_offline_for_tests(config.model.as_deref());
     let composite = new_status_output(
         config,
-        test_status_account_display().as_ref(),
+        test_status_auth_display().as_ref(),
         /*token_info*/ None,
         &usage,
         &None,
@@ -256,7 +254,7 @@ async fn status_snapshot_includes_reasoning_details() {
         .set_permission_profile(PermissionProfile::workspace_write())
         .expect("set permission profile");
 
-    let account_display = test_status_account_display();
+    let auth_display = test_status_auth_display();
     let usage = TokenUsage {
         input_tokens: 1_200,
         cached_input_tokens: 200,
@@ -294,7 +292,7 @@ async fn status_snapshot_includes_reasoning_details() {
     let reasoning_effort_override = Some(Some(ReasoningEffort::High));
     let composite = new_status_output(
         &config,
-        account_display.as_ref(),
+        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -608,7 +606,7 @@ async fn status_snapshot_shows_active_user_defined_profile() {
 
     let composite = new_status_output(
         &config,
-        test_status_account_display().as_ref(),
+        test_status_auth_display().as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -656,7 +654,7 @@ async fn status_snapshot_shows_auto_review_permissions() {
 
     let composite = new_status_output(
         &config,
-        test_status_account_display().as_ref(),
+        test_status_auth_display().as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -732,7 +730,7 @@ async fn status_snapshot_includes_forked_from() {
     config.model_provider_id = "kimi".to_string();
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
-    let account_display = test_status_account_display();
+    let auth_display = test_status_auth_display();
     let usage = TokenUsage {
         input_tokens: 800,
         cached_input_tokens: 0,
@@ -755,7 +753,7 @@ async fn status_snapshot_includes_forked_from() {
 
     let composite = new_status_output(
         &config,
-        account_display.as_ref(),
+        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &Some(session_id),
@@ -785,7 +783,7 @@ async fn status_snapshot_includes_monthly_limit() {
     config.model_provider_id = "kimi".to_string();
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
-    let account_display = test_status_account_display();
+    let auth_display = test_status_auth_display();
     let usage = TokenUsage {
         input_tokens: 800,
         cached_input_tokens: 0,
@@ -817,7 +815,7 @@ async fn status_snapshot_includes_monthly_limit() {
     let token_info = token_info_for(&model_slug, &config, &usage);
     let composite = new_status_output(
         &config,
-        account_display.as_ref(),
+        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -847,7 +845,7 @@ async fn status_snapshot_includes_enterprise_monthly_credit_limit() {
     config.model_provider_id = "kimi".to_string();
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
-    let account_display = test_status_account_display();
+    let auth_display = test_status_auth_display();
     let usage = TokenUsage {
         input_tokens: 800,
         cached_input_tokens: 0,
@@ -879,7 +877,7 @@ async fn status_snapshot_includes_enterprise_monthly_credit_limit() {
     let token_info = token_info_for(&model_slug, &config, &usage);
     let composite = new_status_output(
         &config,
-        account_display.as_ref(),
+        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -921,7 +919,7 @@ async fn status_snapshot_uses_generic_limit_labels_for_unsupported_windows() {
     config.model_provider_id = "kimi".to_string();
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
-    let account_display = test_status_account_display();
+    let auth_display = test_status_auth_display();
     let usage = TokenUsage {
         input_tokens: 800,
         cached_input_tokens: 0,
@@ -957,7 +955,7 @@ async fn status_snapshot_uses_generic_limit_labels_for_unsupported_windows() {
     let token_info = token_info_for(&model_slug, &config, &usage);
     let composite = new_status_output(
         &config,
-        account_display.as_ref(),
+        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -983,7 +981,7 @@ async fn status_snapshot_uses_generic_limit_labels_for_unsupported_windows() {
 async fn status_snapshot_shows_unlimited_credits() {
     let temp_home = TempDir::new().expect("temp home");
     let config = test_config(&temp_home).await;
-    let account_display = test_status_account_display();
+    let auth_display = test_status_auth_display();
     let usage = TokenUsage::default();
     let captured_at = chrono::Local
         .with_ymd_and_hms(2024, 2, 3, 4, 5, 6)
@@ -1007,7 +1005,7 @@ async fn status_snapshot_shows_unlimited_credits() {
     let token_info = token_info_for(&model_slug, &config, &usage);
     let composite = new_status_output(
         &config,
-        account_display.as_ref(),
+        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -1032,7 +1030,7 @@ async fn status_snapshot_shows_unlimited_credits() {
 async fn status_snapshot_shows_positive_credits() {
     let temp_home = TempDir::new().expect("temp home");
     let config = test_config(&temp_home).await;
-    let account_display = test_status_account_display();
+    let auth_display = test_status_auth_display();
     let usage = TokenUsage::default();
     let captured_at = chrono::Local
         .with_ymd_and_hms(2024, 3, 4, 5, 6, 7)
@@ -1056,7 +1054,7 @@ async fn status_snapshot_shows_positive_credits() {
     let token_info = token_info_for(&model_slug, &config, &usage);
     let composite = new_status_output(
         &config,
-        account_display.as_ref(),
+        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -1081,7 +1079,7 @@ async fn status_snapshot_shows_positive_credits() {
 async fn status_snapshot_hides_zero_credits() {
     let temp_home = TempDir::new().expect("temp home");
     let config = test_config(&temp_home).await;
-    let account_display = test_status_account_display();
+    let auth_display = test_status_auth_display();
     let usage = TokenUsage::default();
     let captured_at = chrono::Local
         .with_ymd_and_hms(2024, 4, 5, 6, 7, 8)
@@ -1105,7 +1103,7 @@ async fn status_snapshot_hides_zero_credits() {
     let token_info = token_info_for(&model_slug, &config, &usage);
     let composite = new_status_output(
         &config,
-        account_display.as_ref(),
+        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -1128,7 +1126,7 @@ async fn status_snapshot_hides_zero_credits() {
 async fn status_snapshot_hides_when_has_no_credits_flag() {
     let temp_home = TempDir::new().expect("temp home");
     let config = test_config(&temp_home).await;
-    let account_display = test_status_account_display();
+    let auth_display = test_status_auth_display();
     let usage = TokenUsage::default();
     let captured_at = chrono::Local
         .with_ymd_and_hms(2024, 5, 6, 7, 8, 9)
@@ -1152,7 +1150,7 @@ async fn status_snapshot_hides_when_has_no_credits_flag() {
     let token_info = token_info_for(&model_slug, &config, &usage);
     let composite = new_status_output(
         &config,
-        account_display.as_ref(),
+        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -1178,7 +1176,7 @@ async fn status_card_token_usage_excludes_cached_tokens() {
     config.model = Some("kimi-for-coding".to_string());
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
-    let account_display = test_status_account_display();
+    let auth_display = test_status_auth_display();
     let usage = TokenUsage {
         input_tokens: 1_200,
         cached_input_tokens: 200,
@@ -1196,7 +1194,7 @@ async fn status_card_token_usage_excludes_cached_tokens() {
     let token_info = token_info_for(&model_slug, &config, &usage);
     let composite = new_status_output(
         &config,
-        account_display.as_ref(),
+        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -1225,7 +1223,7 @@ async fn status_snapshot_truncates_in_narrow_terminal() {
     config.model_reasoning_summary = Some(ReasoningSummary::Detailed);
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
-    let account_display = test_status_account_display();
+    let auth_display = test_status_auth_display();
     let usage = TokenUsage {
         input_tokens: 1_200,
         cached_input_tokens: 200,
@@ -1258,7 +1256,7 @@ async fn status_snapshot_truncates_in_narrow_terminal() {
     let reasoning_effort_override = Some(Some(ReasoningEffort::High));
     let composite = new_status_output(
         &config,
-        account_display.as_ref(),
+        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -1288,7 +1286,7 @@ async fn status_snapshot_shows_missing_limits_message() {
     config.model = Some("kimi-for-coding".to_string());
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
-    let account_display = test_status_account_display();
+    let auth_display = test_status_auth_display();
     let usage = TokenUsage {
         input_tokens: 500,
         cached_input_tokens: 0,
@@ -1306,7 +1304,7 @@ async fn status_snapshot_shows_missing_limits_message() {
     let token_info = token_info_for(&model_slug, &config, &usage);
     let composite = new_status_output(
         &config,
-        account_display.as_ref(),
+        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -1335,7 +1333,7 @@ async fn status_snapshot_uses_default_reasoning_when_config_empty() {
     config.model = Some("kimi-for-coding".to_string());
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
-    let account_display = test_status_account_display();
+    let auth_display = test_status_auth_display();
     let usage = TokenUsage {
         input_tokens: 500,
         cached_input_tokens: 0,
@@ -1359,7 +1357,7 @@ async fn status_snapshot_uses_default_reasoning_when_config_empty() {
         &config,
         /*runtime_model_provider_base_url*/ None,
         Some(&remote_connection),
-        account_display.as_ref(),
+        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -1424,7 +1422,7 @@ async fn status_snapshot_shows_refreshing_limits_notice() {
     let token_info = token_info_for(&model_slug, &config, &usage);
     let composite = new_status_output_with_rate_limits(
         &config,
-        /*account_display*/ None,
+        /*auth_display*/ None,
         Some(&token_info),
         &usage,
         &None,
@@ -1454,7 +1452,7 @@ async fn status_snapshot_includes_credits_and_limits() {
     config.model = Some("gpt-5.1-ody".to_string());
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
-    let account_display = test_status_account_display();
+    let auth_display = test_status_auth_display();
     let usage = TokenUsage {
         input_tokens: 1_500,
         cached_input_tokens: 100,
@@ -1494,7 +1492,7 @@ async fn status_snapshot_includes_credits_and_limits() {
     let token_info = token_info_for(&model_slug, &config, &usage);
     let composite = new_status_output(
         &config,
-        account_display.as_ref(),
+        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -1523,7 +1521,7 @@ async fn status_snapshot_shows_unavailable_limits_message() {
     config.model = Some("kimi-for-coding".to_string());
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
-    let account_display = test_status_account_display();
+    let auth_display = test_status_auth_display();
     let usage = TokenUsage {
         input_tokens: 500,
         cached_input_tokens: 0,
@@ -1551,7 +1549,7 @@ async fn status_snapshot_shows_unavailable_limits_message() {
     let token_info = token_info_for(&model_slug, &config, &usage);
     let composite = new_status_output(
         &config,
-        account_display.as_ref(),
+        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -1607,7 +1605,7 @@ async fn status_snapshot_treats_refreshing_empty_limits_as_unavailable() {
     let token_info = token_info_for(&model_slug, &config, &usage);
     let composite = new_status_output_with_rate_limits(
         &config,
-        /*account_display*/ None,
+        /*auth_display*/ None,
         Some(&token_info),
         &usage,
         &None,
@@ -1637,7 +1635,7 @@ async fn status_snapshot_shows_stale_limits_message() {
     config.model = Some("kimi-for-coding".to_string());
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
-    let account_display = test_status_account_display();
+    let auth_display = test_status_auth_display();
     let usage = TokenUsage {
         input_tokens: 1_200,
         cached_input_tokens: 200,
@@ -1674,7 +1672,7 @@ async fn status_snapshot_shows_stale_limits_message() {
     let token_info = token_info_for(&model_slug, &config, &usage);
     let composite = new_status_output(
         &config,
-        account_display.as_ref(),
+        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -1703,7 +1701,7 @@ async fn status_snapshot_cached_limits_hide_credits_without_flag() {
     config.model = Some("gpt-5.1-ody".to_string());
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
-    let account_display = test_status_account_display();
+    let auth_display = test_status_auth_display();
     let usage = TokenUsage {
         input_tokens: 900,
         cached_input_tokens: 200,
@@ -1744,7 +1742,7 @@ async fn status_snapshot_cached_limits_hide_credits_without_flag() {
     let token_info = token_info_for(&model_slug, &config, &usage);
     let composite = new_status_output(
         &config,
-        account_display.as_ref(),
+        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -1772,7 +1770,7 @@ async fn status_context_window_uses_last_usage() {
     let mut config = test_config(&temp_home).await;
     config.model_context_window = Some(272_000);
 
-    let account_display = test_status_account_display();
+    let auth_display = test_status_auth_display();
     let total_usage = TokenUsage {
         input_tokens: 12_800,
         cached_input_tokens: 0,
@@ -1801,7 +1799,7 @@ async fn status_context_window_uses_last_usage() {
     };
     let composite = new_status_output(
         &config,
-        account_display.as_ref(),
+        auth_display.as_ref(),
         Some(&token_info),
         &total_usage,
         &None,

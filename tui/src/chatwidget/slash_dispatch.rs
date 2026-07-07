@@ -36,7 +36,6 @@ const SIDE_SLASH_COMMAND_UNAVAILABLE_HINT: &str =
     "Press Ctrl+C to return to the main thread first.";
 const GOAL_USAGE_HINT: &str = "Example: /goal improve benchmark coverage";
 const RAW_USAGE: &str = "Usage: /raw [on|off]";
-const USAGE_API_KEY_LOGIN_REQUIRED: &str = "Configure an API key with `ody login <provider>` to use /usage.";
 
 impl ChatWidget {
     /// Dispatch a bare slash command and record its staged local-history entry.
@@ -465,24 +464,9 @@ impl ChatWidget {
                 self.add_hooks_output();
             }
             SlashCommand::Status => {
-                if self.should_prefetch_rate_limits() {
-                    let request_id = self.next_status_refresh_request_id;
-                    self.next_status_refresh_request_id =
-                        self.next_status_refresh_request_id.wrapping_add(1);
-                    self.add_status_output(/*refreshing_rate_limits*/ true, Some(request_id));
-                    self.app_event_tx.send(AppEvent::RefreshRateLimits {
-                        origin: RateLimitRefreshOrigin::StatusCommand { request_id },
-                    });
-                } else {
-                    self.add_status_output(
-                        /*refreshing_rate_limits*/ false, /*request_id*/ None,
-                    );
-                }
-            }
-            SlashCommand::Usage => {
-                if self.ensure_usage_command_available() {
-                    self.open_usage_menu();
-                }
+                self.add_status_output(
+                    /*refreshing_rate_limits*/ false, /*request_id*/ None,
+                );
             }
             SlashCommand::Ide => {
                 self.handle_ide_command();
@@ -706,16 +690,6 @@ impl ChatWidget {
         } = prepared;
         let trimmed = args.trim();
         match cmd {
-            SlashCommand::Usage => {
-                if self.ensure_usage_command_available() {
-                    match tokens::TokenActivityView::parse(trimmed) {
-                        Some(view) => self.add_token_activity_output(view),
-                        None => self.add_error_message(
-                            "Usage: /usage [daily|weekly|cumulative]".to_string(),
-                        ),
-                    }
-                }
-            }
             SlashCommand::Ide => {
                 self.handle_ide_command_args(trimmed);
             }
@@ -1101,7 +1075,6 @@ impl ChatWidget {
             collaboration_modes_enabled: self.collaboration_modes_enabled(),
             connectors_enabled: self.connectors_enabled(),
             plugins_command_enabled: self.config.features.enabled(Feature::Plugins),
-            token_activity_command_enabled: self.has_ody_backend_auth,
             goal_command_enabled: self.config.features.enabled(Feature::Goals),
             service_tier_commands_enabled: self.fast_mode_enabled(),
             personality_command_enabled: self.config.features.enabled(Feature::Personality),
@@ -1111,14 +1084,6 @@ impl ChatWidget {
         }
     }
 
-    fn ensure_usage_command_available(&mut self) -> bool {
-        if self.has_ody_backend_auth {
-            return true;
-        }
-        self.add_error_message(USAGE_API_KEY_LOGIN_REQUIRED.to_string());
-        false
-    }
-
     fn queued_command_drain_result(&self, cmd: SlashCommand) -> QueueDrain {
         if self.is_user_turn_pending_or_running() || !self.bottom_pane.no_modal_or_popup_active() {
             return QueueDrain::Stop;
@@ -1126,7 +1091,6 @@ impl ChatWidget {
         match cmd {
             SlashCommand::Ide
             | SlashCommand::Status
-            | SlashCommand::Usage
             | SlashCommand::DebugConfig
             | SlashCommand::Ps
             | SlashCommand::Stop

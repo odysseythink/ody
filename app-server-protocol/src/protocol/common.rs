@@ -905,7 +905,7 @@ client_request_definitions! {
         response: v2::WindowsSandboxReadinessResponse,
     },
 
-    LoginAccount => "auth/login/start" {
+    Login => "auth/login/start" {
         params: v2::LoginParams,
         inspect_params: true,
         serialization: global("auth"),
@@ -913,40 +913,10 @@ client_request_definitions! {
     },
 
 
-    LogoutAccount => "auth/logout" {
+    Logout => "auth/logout" {
         params: #[ts(type = "undefined")] #[serde(skip_serializing_if = "Option::is_none")] Option<()>,
         serialization: global("auth"),
         response: v2::LogoutResponse,
-    },
-
-    GetAccountRateLimits => "rateLimits/read" {
-        params: #[ts(type = "undefined")] #[serde(skip_serializing_if = "Option::is_none")] Option<()>,
-        serialization: None,
-        response: v2::GetRateLimitsResponse,
-    },
-
-    ConsumeAccountRateLimitResetCredit => "rateLimitResetCredit/consume" {
-        params: v2::ConsumeRateLimitResetCreditParams,
-        serialization: global("auth"),
-        response: v2::ConsumeRateLimitResetCreditResponse,
-    },
-
-    GetAccountTokenUsage => "usage/read" {
-        params: #[ts(type = "undefined")] #[serde(skip_serializing_if = "Option::is_none")] Option<()>,
-        serialization: None,
-        response: v2::GetTokenUsageResponse,
-    },
-
-    GetWorkspaceMessages => "workspaceMessages/read" {
-        params: #[ts(type = "undefined")] #[serde(skip_serializing_if = "Option::is_none")] Option<()>,
-        serialization: None,
-        response: v2::GetWorkspaceMessagesResponse,
-    },
-
-    SendAddCreditsNudgeEmail => "usage/sendAddCreditsNudgeEmail" {
-        params: v2::SendAddCreditsNudgeEmailParams,
-        serialization: global("auth"),
-        response: v2::SendAddCreditsNudgeEmailResponse,
     },
 
     FeedbackUpload => "feedback/upload" {
@@ -1048,7 +1018,7 @@ client_request_definitions! {
         response: v2::ConfigRequirementsReadResponse,
     },
 
-    GetAccount => "auth/read" {
+    GetAuthState => "auth/read" {
         params: v2::GetAuthStateParams,
         serialization: global("auth"),
         response: v2::GetAuthStateResponse,
@@ -1065,7 +1035,7 @@ client_request_definitions! {
         serialization: None,
         response: v1::GitDiffToRemoteResponse,
     },
-    /// DEPRECATED in favor of GetAccount
+    /// DEPRECATED in favor of GetAuthState
     GetAuthStatus {
         params: v1::GetAuthStatusParams,
         serialization: global("auth"),
@@ -1555,8 +1525,8 @@ server_notification_definitions! {
     McpToolCallProgress => "item/mcpToolCall/progress" (v2::McpToolCallProgressNotification),
     McpServerOauthLoginCompleted => "mcpServer/oauthLogin/completed" (v2::McpServerOauthLoginCompletedNotification),
     McpServerStatusUpdated => "mcpServer/startupStatus/updated" (v2::McpServerStatusUpdatedNotification),
-    AccountUpdated => "auth/updated" (v2::AuthUpdatedNotification),
-    AccountRateLimitsUpdated => "rateLimits/updated" (v2::RateLimitsUpdatedNotification),
+    AuthUpdated => "auth/updated" (v2::AuthUpdatedNotification),
+    RateLimitsUpdated => "rateLimits/updated" (v2::RateLimitsUpdatedNotification),
     AppListUpdated => "app/list/updated" (v2::AppListUpdatedNotification),
     ExternalAgentConfigImportProgress => "externalAgentConfig/import/progress" (v2::ExternalAgentConfigImportProgressNotification),
     ExternalAgentConfigImportCompleted => "externalAgentConfig/import/completed" (v2::ExternalAgentConfigImportCompletedNotification),
@@ -1601,7 +1571,7 @@ server_notification_definitions! {
     #[serde(rename = "auth/login/completed")]
     #[ts(rename = "auth/login/completed")]
     #[strum(serialize = "auth/login/completed")]
-    AccountLoginCompleted(v2::LoginCompletedNotification),
+    LoginCompleted(v2::LoginCompletedNotification),
 
 }
 
@@ -1859,14 +1829,14 @@ mod tests {
             Some(ClientRequestSerializationScope::GlobalSharedRead("config"))
         );
 
-        let account_read = ClientRequest::GetAccount {
+        let auth_state_read = ClientRequest::GetAuthState {
             request_id: request_id(),
             params: v2::GetAuthStateParams {
                 refresh_token: false,
             },
         };
         assert_eq!(
-            account_read.serialization_scope(),
+            auth_state_read.serialization_scope(),
             Some(ClientRequestSerializationScope::Global("auth"))
         );
 
@@ -1909,17 +1879,6 @@ mod tests {
         assert_eq!(
             marketplace_remove.serialization_scope(),
             Some(ClientRequestSerializationScope::Global("config"))
-        );
-
-        let add_credits_nudge = ClientRequest::SendAddCreditsNudgeEmail {
-            request_id: request_id(),
-            params: v2::SendAddCreditsNudgeEmailParams {
-                credit_type: v2::AddCreditsNudgeCreditType::Credits,
-            },
-        };
-        assert_eq!(
-            add_credits_nudge.serialization_scope(),
-            Some(ClientRequestSerializationScope::Global("auth"))
         );
 
         let environment_add = ClientRequest::EnvironmentAdd {
@@ -2349,60 +2308,6 @@ mod tests {
     }
 
     #[test]
-    fn serialize_get_account_rate_limits() -> Result<()> {
-        let request = ClientRequest::GetAccountRateLimits {
-            request_id: RequestId::Integer(1),
-            params: None,
-        };
-        assert_eq!(request.id(), &RequestId::Integer(1));
-        assert_eq!(request.method(), "rateLimits/read");
-        assert_eq!(
-            json!({
-                "method": "rateLimits/read",
-                "id": 1,
-            }),
-            serde_json::to_value(&request)?,
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn serialize_get_account_token_usage() -> Result<()> {
-        let request = ClientRequest::GetAccountTokenUsage {
-            request_id: RequestId::Integer(1),
-            params: None,
-        };
-        assert_eq!(request.id(), &RequestId::Integer(1));
-        assert_eq!(request.method(), "usage/read");
-        assert_eq!(
-            json!({
-                "method": "usage/read",
-                "id": 1,
-            }),
-            serde_json::to_value(&request)?,
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn serialize_get_workspace_messages() -> Result<()> {
-        let request = ClientRequest::GetWorkspaceMessages {
-            request_id: RequestId::Integer(1),
-            params: None,
-        };
-        assert_eq!(request.id(), &RequestId::Integer(1));
-        assert_eq!(request.method(), "workspaceMessages/read");
-        assert_eq!(
-            json!({
-                "method": "workspaceMessages/read",
-                "id": 1,
-            }),
-            serde_json::to_value(&request)?,
-        );
-        Ok(())
-    }
-
-    #[test]
     fn serialize_client_response() -> Result<()> {
         let cwd = absolute_path("/tmp");
         let response = ClientResponse::ThreadStart {
@@ -2436,11 +2341,9 @@ mod tests {
                 service_tier: None,
                 cwd,
                 runtime_workspace_roots: Vec::new(),
-                instruction_sources: vec![
-                    ody_utils_path_uri::LegacyAppPathString::from_abs_path(&absolute_path(
-                        "/tmp/AGENTS.md",
-                    )),
-                ],
+                instruction_sources: vec![ody_utils_path_uri::LegacyAppPathString::from_abs_path(
+                    &absolute_path("/tmp/AGENTS.md"),
+                )],
                 approval_policy: v2::AskForApproval::OnFailure,
                 approvals_reviewer: v2::ApprovalsReviewer::User,
                 sandbox: v2::SandboxPolicy::DangerFullAccess,
@@ -2520,8 +2423,8 @@ mod tests {
     }
 
     #[test]
-    fn serialize_account_login_api_key() -> Result<()> {
-        let request = ClientRequest::LoginAccount {
+    fn serialize_login_api_key() -> Result<()> {
+        let request = ClientRequest::Login {
             request_id: RequestId::Integer(2),
             params: v2::LoginParams::ApiKey {
                 api_key: "secret".to_string(),
@@ -2542,8 +2445,8 @@ mod tests {
     }
 
     #[test]
-    fn serialize_account_logout() -> Result<()> {
-        let request = ClientRequest::LogoutAccount {
+    fn serialize_logout() -> Result<()> {
+        let request = ClientRequest::Logout {
             request_id: RequestId::Integer(5),
             params: None,
         };
@@ -2558,8 +2461,8 @@ mod tests {
     }
 
     #[test]
-    fn serialize_get_account() -> Result<()> {
-        let request = ClientRequest::GetAccount {
+    fn serialize_get_auth_state() -> Result<()> {
+        let request = ClientRequest::GetAuthState {
             request_id: RequestId::Integer(6),
             params: v2::GetAuthStateParams {
                 refresh_token: false,
@@ -2573,7 +2476,7 @@ mod tests {
             }),
             serde_json::to_value(&request)?,
         );
-        let request = ClientRequest::GetAccount {
+        let request = ClientRequest::GetAuthState {
             request_id: RequestId::Integer(7),
             params: v2::GetAuthStateParams {
                 refresh_token: true,
@@ -2593,7 +2496,7 @@ mod tests {
     }
 
     #[test]
-    fn account_serializes_fields_in_camel_case() -> Result<()> {
+    fn auth_state_serializes_fields_in_camel_case() -> Result<()> {
         let api_key = v2::AuthState::ApiKey {};
         assert_eq!(
             json!({

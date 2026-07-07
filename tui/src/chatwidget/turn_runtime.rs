@@ -51,9 +51,6 @@ impl ChatWidget {
         self.turn_lifecycle.start(Instant::now());
         self.transcript.reset_turn_flags();
         self.adaptive_chunking.reset();
-        if self.plan_stream_controller.take().is_some() {
-            self.request_pending_usage_output_insertion_after_stream_shutdown();
-        }
         self.turn_runtime_metrics = RuntimeMetricsSummary::default();
         self.session_telemetry.reset_runtime_metrics();
         self.bottom_pane.clear_quit_shortcut_hint();
@@ -124,11 +121,9 @@ impl ChatWidget {
                 self.add_boxed_history(cell);
             }
             if let Some(source) = source {
-                self.note_stream_consolidation_queued();
                 self.app_event_tx
                     .send(AppEvent::ConsolidateProposedPlan(source));
             }
-            self.request_pending_usage_output_insertion_after_stream_shutdown();
         }
         self.flush_unified_exec_wait_streak();
         if !from_replay {
@@ -333,7 +328,6 @@ impl ChatWidget {
         self.adaptive_chunking.reset();
         self.stream_controller = None;
         self.plan_stream_controller = None;
-        self.request_pending_usage_output_insertion_after_stream_shutdown();
         self.status_state.pending_status_indicator_restore = false;
         self.clear_cancel_edit();
         self.request_status_line_branch_refresh();
@@ -412,13 +406,9 @@ impl ChatWidget {
                         .to_string(),
                 );
             }
-            Some(RateLimitReachedType::WorkspaceMemberCreditsDepleted) => {
+            Some(RateLimitReachedType::WorkspaceMemberCreditsDepleted)
+            | Some(RateLimitReachedType::WorkspaceMemberUsageLimitReached) => {
                 self.on_error(message);
-                self.open_workspace_owner_nudge_prompt(AddCreditsNudgeCreditType::Credits);
-            }
-            Some(RateLimitReachedType::WorkspaceMemberUsageLimitReached) => {
-                self.on_error(message);
-                self.open_workspace_owner_nudge_prompt(AddCreditsNudgeCreditType::UsageLimit);
             }
             Some(RateLimitReachedType::RateLimitReached) | None => {
                 self.on_error(message);

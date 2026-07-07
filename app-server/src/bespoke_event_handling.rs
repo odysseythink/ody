@@ -1644,7 +1644,7 @@ async fn handle_token_count_event(
     }
     if let Some(rate_limits) = rate_limits {
         outgoing
-            .send_server_notification(ServerNotification::AccountRateLimitsUpdated(
+            .send_server_notification(ServerNotification::RateLimitsUpdated(
                 RateLimitsUpdatedNotification {
                     rate_limits: rate_limits.into(),
                 },
@@ -3774,7 +3774,7 @@ mod tests {
         let second = recv_broadcast_message(&mut rx).await?;
         match second {
             OutgoingMessage::AppServerNotification(
-                ServerNotification::AccountRateLimitsUpdated(payload),
+                ServerNotification::RateLimitsUpdated(payload),
             ) => {
                 assert_eq!(payload.rate_limits.limit_id.as_deref(), Some("ody"));
                 assert_eq!(payload.rate_limits.limit_name, None);

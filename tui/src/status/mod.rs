@@ -6,14 +6,14 @@
 //!
 //! `rate_limits` is the main integration point for status-line usage-limit items: it converts raw
 //! window snapshots into local-time labels and classifies data as available, stale, or missing.
-mod account;
+mod auth;
 mod card;
 mod format;
 mod helpers;
 mod rate_limits;
 pub(crate) mod remote_connection;
 
-pub(crate) use account::StatusAccountDisplay;
+pub(crate) use auth::StatusAuthDisplay;
 pub(crate) use card::StatusHistoryHandle;
 #[cfg(test)]
 pub(crate) use card::new_status_output;

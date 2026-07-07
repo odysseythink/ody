@@ -926,9 +926,7 @@ pub(crate) fn request_method_name(request: &ClientRequest) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ody_app_server_protocol::AccountUpdatedNotification;
     use ody_app_server_protocol::ConfigRequirementsReadResponse;
-    use ody_app_server_protocol::GetAccountResponse;
     use ody_app_server_protocol::JSONRPCMessage;
     use ody_app_server_protocol::JSONRPCRequest;
     use ody_app_server_protocol::JSONRPCResponse;

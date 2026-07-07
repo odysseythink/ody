@@ -755,8 +755,6 @@ impl Session {
                 session_model.as_str(),
                 session_model.as_str(),
                 None,
-                None,
-                None,
                 originator.clone(),
                 config.otel.log_user_prompt,
                 terminal_type.clone(),

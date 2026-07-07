@@ -1,8 +1,8 @@
 use anyhow::Result;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
-use ody_app_server_protocol::AuthState;
 use ody_app_server_protocol::AuthMode;
+use ody_app_server_protocol::AuthState;
 use ody_app_server_protocol::GetAuthStateParams;
 use ody_app_server_protocol::GetAuthStateResponse;
 use ody_app_server_protocol::GetAuthStatusParams;
@@ -18,9 +18,7 @@ use tokio::time::timeout;
 // processing auth RPCs under load.
 const DEFAULT_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 
-fn create_config_toml_custom_provider(
-    ody_home: &std::path::Path,
-) -> std::io::Result<()> {
+fn create_config_toml_custom_provider(ody_home: &std::path::Path) -> std::io::Result<()> {
     let config_toml = ody_home.join("config.toml");
     let requires_line = "";
     let contents = format!(
@@ -54,9 +52,17 @@ fn create_config_toml(ody_home: &std::path::Path) -> std::io::Result<()> {
 model = "mock-model"
 approval_policy = "never"
 sandbox_mode = "danger-full-access"
+model_provider = "mock_provider"
 
 [features]
 shell_snapshot = false
+
+[model_providers.mock_provider]
+name = "Mock provider for test"
+base_url = "http://127.0.0.1:0/v1"
+wire_api = "responses"
+request_max_retries = 0
+stream_max_retries = 0
 "#,
     )
 }
@@ -72,16 +78,24 @@ model = "mock-model"
 approval_policy = "never"
 sandbox_mode = "danger-full-access"
 forced_login_method = "{forced_method}"
+model_provider = "mock_provider"
 
 [features]
 shell_snapshot = false
+
+[model_providers.mock_provider]
+name = "Mock provider for test"
+base_url = "http://127.0.0.1:0/v1"
+wire_api = "responses"
+request_max_retries = 0
+stream_max_retries = 0
 "#
     );
     std::fs::write(config_toml, contents)
 }
 
 async fn login_with_api_key_via_request(mcp: &mut TestAppServer, api_key: &str) -> Result<()> {
-    let request_id = mcp.send_login_account_api_key_request(api_key).await?;
+    let request_id = mcp.send_login_api_key_request(api_key).await?;
 
     let resp: JSONRPCResponse = timeout(
         DEFAULT_READ_TIMEOUT,
@@ -98,8 +112,7 @@ async fn get_auth_status_no_auth() -> Result<()> {
     let ody_home = TempDir::new()?;
     create_config_toml(ody_home.path())?;
 
-    let mut mcp =
-        TestAppServer::new_with_env(ody_home.path(), &[("OPENAI_API_KEY", None)]).await?;
+    let mut mcp = TestAppServer::new_with_env(ody_home.path(), &[("OPENAI_API_KEY", None)]).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
 
     let request_id = mcp
@@ -149,7 +162,7 @@ async fn get_auth_status_with_api_key() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn api_key_supports_auth_status_and_account_read() -> Result<()> {
+async fn api_key_supports_auth_status_and_auth_state_read() -> Result<()> {
     let ody_home = TempDir::new()?;
     create_config_toml(ody_home.path())?;
 
@@ -180,7 +193,7 @@ async fn api_key_supports_auth_status_and_account_read() -> Result<()> {
     );
 
     let request_id = mcp
-        .send_get_account_request(GetAuthStateParams {
+        .send_get_auth_state_request(GetAuthStateParams {
             refresh_token: false,
         })
         .await?;
@@ -192,7 +205,7 @@ async fn api_key_supports_auth_status_and_account_read() -> Result<()> {
     assert_eq!(
         to_response::<GetAuthStateResponse>(response)?,
         GetAuthStateResponse {
-            account: Some(AuthState::ApiKey {}),
+            auth_state: Some(AuthState::ApiKey {}),
         }
     );
 
@@ -222,8 +235,8 @@ async fn get_auth_status_with_api_key_when_auth_not_required() -> Result<()> {
     )
     .await??;
     let status: GetAuthStatusResponse = to_response(resp)?;
-    assert_eq!(status.auth_method, None, "expected no auth method");
-    assert_eq!(status.auth_token, None, "expected no token");
+    assert_eq!(status.auth_method, Some(AuthMode::ApiKey));
+    assert_eq!(status.auth_token, Some("sk-test-key".to_string()));
     Ok(())
 }
 
@@ -296,9 +309,7 @@ async fn login_api_key_succeeds_when_forced_api() -> Result<()> {
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
 
-    let request_id = mcp
-        .send_login_account_api_key_request("sk-test-key")
-        .await?;
+    let request_id = mcp.send_login_api_key_request("sk-test-key").await?;
 
     let resp: JSONRPCResponse = timeout(
         DEFAULT_READ_TIMEOUT,

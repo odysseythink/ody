@@ -27,12 +27,12 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use url::Url;
 
-use super::account::StatusAccountDisplay;
+use super::auth::StatusAuthDisplay;
 use super::format::FieldFormatter;
 use super::format::line_display_width;
 use super::format::push_label;
 use super::format::truncate_line_to_width;
-use super::helpers::compose_account_display;
+use super::helpers::compose_auth_display;
 use super::helpers::compose_model_display;
 use super::helpers::format_directory_display;
 use super::helpers::format_tokens_compact;
@@ -107,7 +107,7 @@ struct StatusHistoryCell {
     collaboration_mode: Option<String>,
     model_provider: Option<String>,
     remote_connection: Option<RemoteConnectionStatus>,
-    account: Option<StatusAccountDisplay>,
+    auth_display: Option<StatusAuthDisplay>,
     thread_name: Option<String>,
     session_id: Option<String>,
     forked_from: Option<String>,
@@ -119,7 +119,7 @@ struct StatusHistoryCell {
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn new_status_output(
     config: &Config,
-    account_display: Option<&StatusAccountDisplay>,
+    auth_display: Option<&StatusAuthDisplay>,
     token_info: Option<&TokenUsageInfo>,
     total_usage: &TokenUsage,
     session_id: &Option<ThreadId>,
@@ -134,7 +134,7 @@ pub(crate) fn new_status_output(
     let snapshots = rate_limits.map(std::slice::from_ref).unwrap_or_default();
     new_status_output_with_rate_limits(
         config,
-        account_display,
+        auth_display,
         token_info,
         total_usage,
         session_id,
@@ -153,7 +153,7 @@ pub(crate) fn new_status_output(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn new_status_output_with_rate_limits(
     config: &Config,
-    account_display: Option<&StatusAccountDisplay>,
+    auth_display: Option<&StatusAuthDisplay>,
     token_info: Option<&TokenUsageInfo>,
     total_usage: &TokenUsage,
     session_id: &Option<ThreadId>,
@@ -170,7 +170,7 @@ pub(crate) fn new_status_output_with_rate_limits(
         config,
         /*runtime_model_provider_base_url*/ None,
         /*remote_connection*/ None,
-        account_display,
+        auth_display,
         token_info,
         total_usage,
         session_id,
@@ -192,7 +192,7 @@ pub(crate) fn new_status_output_with_rate_limits_handle(
     config: &Config,
     runtime_model_provider_base_url: Option<&str>,
     remote_connection: Option<&RemoteConnectionStatus>,
-    account_display: Option<&StatusAccountDisplay>,
+    auth_display: Option<&StatusAuthDisplay>,
     token_info: Option<&TokenUsageInfo>,
     total_usage: &TokenUsage,
     session_id: &Option<ThreadId>,
@@ -211,7 +211,7 @@ pub(crate) fn new_status_output_with_rate_limits_handle(
         config,
         runtime_model_provider_base_url,
         remote_connection,
-        account_display,
+        auth_display,
         token_info,
         total_usage,
         session_id,
@@ -238,7 +238,7 @@ impl StatusHistoryCell {
         config: &Config,
         runtime_model_provider_base_url: Option<&str>,
         remote_connection: Option<&RemoteConnectionStatus>,
-        account_display: Option<&StatusAccountDisplay>,
+        auth_display: Option<&StatusAuthDisplay>,
         token_info: Option<&TokenUsageInfo>,
         total_usage: &TokenUsage,
         session_id: &Option<ThreadId>,
@@ -311,7 +311,7 @@ impl StatusHistoryCell {
             workspace_root_suffix.as_deref(),
         );
         let model_provider = format_model_provider(config, runtime_model_provider_base_url);
-        let account = compose_account_display(account_display);
+        let auth_display_value = compose_auth_display(auth_display);
         let session_id = session_id.as_ref().map(std::string::ToString::to_string);
         let forked_from = forked_from.map(|id| id.to_string());
         let default_usage = TokenUsage::default();
@@ -351,7 +351,7 @@ impl StatusHistoryCell {
                 collaboration_mode: collaboration_mode.map(ToString::to_string),
                 model_provider,
                 remote_connection: remote_connection.cloned(),
-                account,
+                auth_display: auth_display_value,
                 thread_name,
                 session_id,
                 forked_from,
@@ -408,7 +408,7 @@ impl StatusHistoryCell {
                 if rows_data.is_empty() {
                     return vec![formatter.line(
                         "Limits",
-                        vec![Span::from("not available for this account").dim()],
+                        vec![Span::from("not available").dim()],
                     )];
                 }
 
@@ -431,7 +431,7 @@ impl StatusHistoryCell {
             StatusRateLimitData::Unavailable => {
                 vec![formatter.line(
                     "Limits",
-                    vec![Span::from("not available for this account").dim()],
+                    vec![Span::from("not available").dim()],
                 )]
             }
             StatusRateLimitData::Missing => {
@@ -710,7 +710,7 @@ impl HistoryCell for StatusHistoryCell {
             return Vec::new();
         }
 
-        let account_value = self.account.as_ref().map(|_| "API key configured".to_string());
+        let auth_value = self.auth_display.as_ref().map(|_| "API key configured".to_string());
 
         let mut labels: Vec<String> = vec!["Model", "Directory", "Permissions", "Agents.md"]
             .into_iter()
@@ -733,8 +733,8 @@ impl HistoryCell for StatusHistoryCell {
         if self.model_provider.is_some() {
             push_label(&mut labels, &mut seen, "Model provider");
         }
-        if account_value.is_some() {
-            push_label(&mut labels, &mut seen, "Account");
+        if auth_value.is_some() {
+            push_label(&mut labels, &mut seen, "Auth");
         }
         if thread_name.is_some() {
             push_label(&mut labels, &mut seen, "Thread name");
@@ -793,8 +793,8 @@ impl HistoryCell for StatusHistoryCell {
         lines.push(formatter.line("Permissions", vec![Span::from(self.permissions.clone())]));
         lines.push(formatter.line("Agents.md", vec![Span::from(agents_summary)]));
 
-        if let Some(account_value) = account_value {
-            lines.push(formatter.line("Account", vec![Span::from(account_value)]));
+        if let Some(auth_value) = auth_value {
+            lines.push(formatter.line("Auth", vec![Span::from(auth_value)]));
         }
 
         if let Some(thread_name) = thread_name {

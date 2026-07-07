@@ -19,7 +19,7 @@ use crate::outgoing_message::ConnectionId;
 use crate::outgoing_message::ConnectionRequestId;
 use crate::outgoing_message::OutgoingMessageSender;
 use crate::outgoing_message::RequestContext;
-use crate::request_processors::AccountRequestProcessor;
+use crate::request_processors::AuthRequestProcessor;
 use crate::request_processors::AppsRequestProcessor;
 use crate::request_processors::CatalogRequestProcessor;
 use crate::request_processors::CommandExecRequestProcessor;
@@ -101,7 +101,7 @@ pub(crate) struct MessageProcessor {
     outgoing: Arc<OutgoingMessageSender>,
     models_refresh_worker: ModelsRefreshWorker,
     skills_watcher: Arc<SkillsWatcher>,
-    account_processor: AccountRequestProcessor,
+    auth_processor: AuthRequestProcessor,
     apps_processor: AppsRequestProcessor,
     catalog_processor: CatalogRequestProcessor,
     command_exec_processor: CommandExecRequestProcessor,
@@ -302,7 +302,7 @@ impl MessageProcessor {
         let workspace_settings_cache =
             Arc::new(workspace_settings::WorkspaceSettingsCache::default());
         let app_list_shutdown_token = CancellationToken::new();
-        let account_processor = AccountRequestProcessor::new(
+        let auth_processor = AuthRequestProcessor::new(
             Arc::clone(&thread_manager),
             outgoing.clone(),
             Arc::clone(&config),
@@ -436,7 +436,7 @@ impl MessageProcessor {
             outgoing,
             models_refresh_worker,
             skills_watcher,
-            account_processor,
+            auth_processor,
             apps_processor,
             catalog_processor,
             command_exec_processor,
@@ -1222,40 +1222,17 @@ impl MessageProcessor {
                     .windows_sandbox_setup_start(&request_id, params)
                     .await
             }
-            ClientRequest::LoginAccount { params, .. } => {
-                self.account_processor
-                    .login_account(request_id.clone(), params)
-                    .await
+            ClientRequest::Login { params, .. } => {
+                self.auth_processor.login(request_id.clone(), params).await
             }
-            ClientRequest::LogoutAccount { .. } => {
-                self.account_processor
-                    .logout_account(request_id.clone())
-                    .await
+            ClientRequest::Logout { .. } => {
+                self.auth_processor.logout(request_id.clone()).await
             }
-            ClientRequest::GetAccount { params, .. } => {
-                self.account_processor.get_account(params).await
+            ClientRequest::GetAuthState { params, .. } => {
+                self.auth_processor.get_auth_state(params).await
             }
             ClientRequest::GetAuthStatus { params, .. } => {
-                self.account_processor.get_auth_status(params).await
-            }
-            ClientRequest::GetAccountRateLimits { .. } => {
-                self.account_processor.get_account_rate_limits().await
-            }
-            ClientRequest::ConsumeAccountRateLimitResetCredit { params, .. } => {
-                self.account_processor
-                    .consume_account_rate_limit_reset_credit(params)
-                    .await
-            }
-            ClientRequest::GetAccountTokenUsage { .. } => {
-                self.account_processor.get_account_token_usage().await
-            }
-            ClientRequest::GetWorkspaceMessages { .. } => {
-                self.account_processor.get_workspace_messages().await
-            }
-            ClientRequest::SendAddCreditsNudgeEmail { params, .. } => {
-                self.account_processor
-                    .send_add_credits_nudge_email(params)
-                    .await
+                self.auth_processor.get_auth_status(params).await
             }
             ClientRequest::GitDiffToRemote { params, .. } => {
                 self.git_processor.git_diff_to_remote(params).await

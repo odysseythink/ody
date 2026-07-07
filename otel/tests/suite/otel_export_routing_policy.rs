@@ -111,8 +111,6 @@ fn otel_export_routing_policy_routes_user_prompt_log_and_trace_events() {
             ThreadId::new(),
             "gpt-5.1",
             "gpt-5.1",
-            Some("account-id".to_string()),
-            Some("engineer@example.com".to_string()),
             Some(TelemetryAuthMode::ApiKey),
             "ody_exec".to_string(),
             /*log_user_prompts*/ true,
@@ -152,10 +150,7 @@ fn otel_export_routing_policy_routes_user_prompt_log_and_trace_events() {
         prompt_log_attrs.get("prompt").map(String::as_str),
         Some("super secret prompt")
     );
-    assert_eq!(
-        prompt_log_attrs.get("user.email").map(String::as_str),
-        Some("engineer@example.com")
-    );
+    assert!(!prompt_log_attrs.contains_key("user.email"));
 
     let spans = span_exporter.get_finished_spans().expect("span export");
     assert_eq!(spans.len(), 1);
@@ -219,17 +214,15 @@ fn otel_export_routing_policy_routes_tool_result_log_and_trace_events() {
     tracing::subscriber::with_default(subscriber, || {
         tracing::callsite::rebuild_interest_cache();
         let manager = SessionTelemetry::new(
-            ThreadId::new(),
-            "gpt-5.1",
-            "gpt-5.1",
-            Some("account-id".to_string()),
-            Some("engineer@example.com".to_string()),
-            Some(TelemetryAuthMode::ApiKey),
-            "ody_exec".to_string(),
-            /*log_user_prompts*/ true,
-            "tty".to_string(),
-            SessionSource::Cli,
-        );
+    ThreadId::new(),
+    "gpt-5.1",
+    "gpt-5.1",
+    Some(TelemetryAuthMode::ApiKey),
+    "ody_exec".to_string(),
+    /*log_user_prompts*/ true,
+    "tty".to_string(),
+    SessionSource::Cli,
+);
         let root_span = tracing::info_span!("root");
         let _root_guard = root_span.enter();
         manager.tool_result_with_tags(
@@ -330,17 +323,15 @@ fn otel_export_routing_policy_routes_auth_recovery_log_and_trace_events() {
     tracing::subscriber::with_default(subscriber, || {
         tracing::callsite::rebuild_interest_cache();
         let manager = SessionTelemetry::new(
-            ThreadId::new(),
-            "gpt-5.1",
-            "gpt-5.1",
-            Some("account-id".to_string()),
-            Some("engineer@example.com".to_string()),
-            Some(TelemetryAuthMode::ApiKey),
-            "ody_exec".to_string(),
-            /*log_user_prompts*/ true,
-            "tty".to_string(),
-            SessionSource::Cli,
-        );
+    ThreadId::new(),
+    "gpt-5.1",
+    "gpt-5.1",
+    Some(TelemetryAuthMode::ApiKey),
+    "ody_exec".to_string(),
+    /*log_user_prompts*/ true,
+    "tty".to_string(),
+    SessionSource::Cli,
+);
         let root_span = tracing::info_span!("root");
         let _root_guard = root_span.enter();
         manager.record_auth_recovery(
@@ -479,14 +470,19 @@ fn otel_export_routing_policy_routes_api_request_auth_observability() {
             ThreadId::new(),
             "gpt-5.1",
             "gpt-5.1",
-            Some("account-id".to_string()),
-            Some("engineer@example.com".to_string()),
             Some(TelemetryAuthMode::ApiKey),
             "ody_exec".to_string(),
             /*log_user_prompts*/ true,
             "tty".to_string(),
             SessionSource::Cli,
-        );
+        )
+        .with_auth_env(AuthEnvTelemetryMetadata {
+            odysseythink_api_key_env_present: true,
+            ody_api_key_env_present: false,
+            ody_api_key_env_enabled: true,
+            provider_env_key_name: Some("configured".to_string()),
+            provider_env_key_present: Some(true),
+        });
         let root_span = tracing::info_span!("root");
         let _root_guard = root_span.enter();
         manager.conversation_starts(
@@ -655,14 +651,19 @@ fn otel_export_routing_policy_routes_websocket_connect_auth_observability() {
             ThreadId::new(),
             "gpt-5.1",
             "gpt-5.1",
-            Some("account-id".to_string()),
-            Some("engineer@example.com".to_string()),
             Some(TelemetryAuthMode::ApiKey),
             "ody_exec".to_string(),
             /*log_user_prompts*/ true,
             "tty".to_string(),
             SessionSource::Cli,
-        );
+        )
+        .with_auth_env(AuthEnvTelemetryMetadata {
+            odysseythink_api_key_env_present: true,
+            ody_api_key_env_present: false,
+            ody_api_key_env_enabled: true,
+            provider_env_key_name: Some("configured".to_string()),
+            provider_env_key_present: Some(true),
+        });
         let root_span = tracing::info_span!("root");
         let _root_guard = root_span.enter();
         manager.record_websocket_connect(
@@ -765,14 +766,19 @@ fn otel_export_routing_policy_routes_websocket_request_transport_observability()
             ThreadId::new(),
             "gpt-5.1",
             "gpt-5.1",
-            Some("account-id".to_string()),
-            Some("engineer@example.com".to_string()),
             Some(TelemetryAuthMode::ApiKey),
             "ody_exec".to_string(),
             /*log_user_prompts*/ true,
             "tty".to_string(),
             SessionSource::Cli,
-        );
+        )
+        .with_auth_env(AuthEnvTelemetryMetadata {
+            odysseythink_api_key_env_present: true,
+            ody_api_key_env_present: false,
+            ody_api_key_env_enabled: true,
+            provider_env_key_name: Some("configured".to_string()),
+            provider_env_key_present: Some(true),
+        });
         let root_span = tracing::info_span!("root");
         let _root_guard = root_span.enter();
         manager.record_websocket_request(

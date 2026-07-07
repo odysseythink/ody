@@ -73,16 +73,11 @@ impl App {
             ServerNotification::McpServerStatusUpdated(_) => {
                 self.refresh_mcp_startup_expected_servers_from_config();
             }
-            ServerNotification::AccountRateLimitsUpdated(notification) => {
-                self.chat_widget
-                    .on_rolling_rate_limit_snapshot(notification.rate_limits.clone());
-                return;
-            }
-            ServerNotification::AccountUpdated(notification) => {
+            ServerNotification::AuthUpdated(notification) => {
                 let api_key_configured = matches!(notification.auth_mode, Some(AuthMode::ApiKey));
-                let has_ody_backend_auth = false;
+                let has_ody_backend_auth = api_key_configured;
                 self.chat_widget
-                    .update_account_state(api_key_configured, has_ody_backend_auth);
+                    .update_auth_state(api_key_configured, has_ody_backend_auth);
                 return;
             }
             ServerNotification::ExternalAgentConfigImportCompleted(_) => {

@@ -23,7 +23,7 @@
     }
   },
   "properties": {
-    "account": {
+    "authState": {
       "anyOf": [
         {
           "$ref": "#/definitions/AuthState"

@@ -4838,8 +4838,6 @@ fn test_session_telemetry(config: &Config, model: &str) -> SessionTelemetry {
         ThreadId::new(),
         model,
         model_info.slug.as_str(),
-        /*account_id*/ None,
-        /*account_email*/ None,
         /*auth_mode*/ None,
         "test_originator".to_string(),
         /*log_user_prompts*/ false,
@@ -5532,32 +5530,11 @@ async fn queued_rollback_syncs_overlay_and_clears_deferred_history() {
     app.deferred_history_lines = vec![Line::from("stale buffered line").into()];
     app.backtrack.overlay_preview_active = true;
     app.backtrack.nth_user_message = 1;
-    app.chat_widget
-        .update_account_state(/*api_key_configured*/ false, /*has_ody_backend_auth*/ true);
-    app.chat_widget
-        .set_composer_text("/usage daily".to_string(), Vec::new(), Vec::new());
-    app.chat_widget
-        .handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    app.chat_widget
-        .handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    app.chat_widget
-        .handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    let pending_usage = app
-        .chat_widget
-        .active_cell_transcript_lines(/*width*/ 80)
-        .expect("pending usage transcript");
-    assert!(lines_to_single_string(&pending_usage).contains("Token activity\n   Loading..."));
-
     let changed = app.apply_non_pending_thread_rollback(/*num_turns*/ 1);
 
     assert!(changed);
     assert!(app.backtrack_render_pending);
     assert!(app.deferred_history_lines.is_empty());
-    assert!(
-        app.chat_widget
-            .active_cell_transcript_lines(/*width*/ 80)
-            .is_none_or(|lines| !lines_to_single_string(&lines).contains("Token activity"))
-    );
     assert_eq!(app.backtrack.nth_user_message, 0);
     let user_messages: Vec<String> = app
         .transcript_cells
@@ -5574,38 +5551,6 @@ async fn queued_rollback_syncs_overlay_and_clears_deferred_history() {
         _ => panic!("expected transcript overlay"),
     };
     assert_eq!(overlay_cell_count, app.transcript_cells.len());
-}
-
-#[tokio::test]
-async fn late_usage_result_can_follow_finalized_plan() {
-    let (mut app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
-    app.chat_widget
-        .add_token_activity_output(crate::chatwidget::TokenActivityView::Daily);
-    let request_id = match app_event_rx.try_recv() {
-        Ok(AppEvent::RefreshTokenActivity { request_id }) => request_id,
-        other => panic!("expected token activity refresh request, got {other:?}"),
-    };
-
-    app.chat_widget.note_stream_consolidation_queued();
-    app.transcript_cells
-        .push(Arc::new(history_cell::new_proposed_plan_stream(
-            vec![Line::from("finalized plan")],
-            /*is_stream_continuation*/ false,
-        )));
-    app.chat_widget.note_stream_consolidation_completed();
-
-    assert!(
-        app.chat_widget.finish_token_activity_refresh(
-            request_id,
-            Err("token activity unavailable".to_string()),
-        )
-    );
-    assert!(!app.pending_usage_output_insertion_blocked());
-    assert!(
-        app.chat_widget
-            .take_completed_token_activity_output()
-            .is_some()
-    );
 }
 
 #[tokio::test]

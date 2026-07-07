@@ -244,8 +244,6 @@ fn test_session_telemetry_without_metadata() -> SessionTelemetry {
         ThreadId::new(),
         "gpt-5.4",
         "gpt-5.4",
-        /*account_id*/ None,
-        /*account_email*/ None,
         /*auth_mode*/ None,
         "test_originator".to_string(),
         /*log_user_prompts*/ false,
@@ -3889,17 +3887,15 @@ fn session_telemetry(
     session_source: SessionSource,
 ) -> SessionTelemetry {
     SessionTelemetry::new(
-        conversation_id,
-        get_model_offline_for_tests(config.model.as_deref()).as_str(),
-        model_info.slug.as_str(),
-        /*account_id*/ None,
-        Some("test@test.com".to_string()),
-        Some(TelemetryAuthMode::ApiKey),
-        "test_originator".to_string(),
-        /*log_user_prompts*/ false,
-        "test".to_string(),
-        session_source,
-    )
+              conversation_id,
+              get_model_offline_for_tests(config.model.as_deref()).as_str(),
+              model_info.slug.as_str(),
+              Some(TelemetryAuthMode::ApiKey),
+              "test_originator".to_string(),
+              /*log_user_prompts*/ false,
+              "test".to_string(),
+              session_source,
+          )
 }
 
 fn model_with_default_service_tier(default_service_tier: Option<&str>) -> ModelInfo {

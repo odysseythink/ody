@@ -135,8 +135,6 @@ fn test_session_telemetry() -> SessionTelemetry {
         ThreadId::new(),
         "gpt-test",
         "gpt-test",
-        /*account_id*/ None,
-        /*account_email*/ None,
         /*auth_mode*/ None,
         "test-originator".to_string(),
         /*log_user_prompts*/ false,
@@ -702,17 +700,15 @@ fn test_model_client_with_provider(provider: ModelProviderInfo) -> ModelClient {
 
 fn create_test_session_telemetry() -> SessionTelemetry {
     SessionTelemetry::new(
-        ThreadId::new(),
-        "test-model",
-        "test-model",
-        None,
-        None,
-        None,
-        "test-originator".to_string(),
-        false,
-        "test-terminal".to_string(),
-        SessionSource::Cli,
-    )
+      ThreadId::new(),
+      "test-model",
+      "test-model",
+      None,
+      "test-originator".to_string(),
+      false,
+      "test-terminal".to_string(),
+      SessionSource::Cli,
+  )
 }
 
 fn test_prompt_for_chat_provider() -> crate::client_common::Prompt {

@@ -27,8 +27,6 @@ pub(super) use crate::token_usage::TokenUsage;
 pub(super) use crate::token_usage::TokenUsageInfo;
 pub(super) use crate::tui::FrameRequester;
 pub(super) use assert_matches::assert_matches;
-pub(super) use ody_app_server_protocol::AddCreditsNudgeCreditType;
-pub(super) use ody_app_server_protocol::AddCreditsNudgeEmailStatus;
 pub(super) use ody_app_server_protocol::AdditionalFileSystemPermissions as AppServerAdditionalFileSystemPermissions;
 pub(super) use ody_app_server_protocol::AdditionalNetworkPermissions as AppServerAdditionalNetworkPermissions;
 pub(super) use ody_app_server_protocol::AdditionalPermissionProfile as AppServerAdditionalPermissionProfile;
@@ -254,7 +252,6 @@ mod status_and_layout;
 mod status_command_tests;
 mod status_surface_previews;
 mod terminal_title;
-mod usage;
 
 pub(crate) use helpers::make_chatwidget_manual_with_sender;
 pub(crate) use helpers::set_api_key_auth;

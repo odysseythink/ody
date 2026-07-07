@@ -12,13 +12,16 @@ use crate::service_tier_resolution;
 use crate::session_state::MessageHistoryMetadata;
 use crate::session_state::ThreadSessionState;
 use crate::terminal_visualization_instructions::with_terminal_visualization_instructions;
+use color_eyre::eyre::ContextCompat;
+use color_eyre::eyre::Result;
+use color_eyre::eyre::WrapErr;
 use ody_app_server_client::AppServerClient;
 use ody_app_server_client::AppServerEvent;
 use ody_app_server_client::AppServerPath;
 use ody_app_server_client::AppServerRequestHandle;
 use ody_app_server_client::TypedRequestError;
-use ody_app_server_protocol::Account;
 use ody_app_server_protocol::AskForApproval;
+use ody_app_server_protocol::AuthState;
 use ody_app_server_protocol::ClientRequest;
 use ody_app_server_protocol::ConfigBatchWriteParams;
 use ody_app_server_protocol::ConfigWriteResponse;
@@ -27,16 +30,14 @@ use ody_app_server_protocol::ExternalAgentConfigDetectResponse;
 use ody_app_server_protocol::ExternalAgentConfigImportParams;
 use ody_app_server_protocol::ExternalAgentConfigImportResponse;
 use ody_app_server_protocol::ExternalAgentConfigMigrationItem;
-use ody_app_server_protocol::GetAccountParams;
-use ody_app_server_protocol::GetAccountRateLimitsResponse;
-use ody_app_server_protocol::GetAccountResponse;
+use ody_app_server_protocol::GetAuthStateParams;
+use ody_app_server_protocol::GetAuthStateResponse;
 use ody_app_server_protocol::JSONRPCErrorError;
-use ody_app_server_protocol::LogoutAccountResponse;
+use ody_app_server_protocol::LogoutResponse;
 use ody_app_server_protocol::MemoryResetResponse;
 use ody_app_server_protocol::Model as ApiModel;
 use ody_app_server_protocol::ModelListParams;
 use ody_app_server_protocol::ModelListResponse;
-use ody_app_server_protocol::RateLimitSnapshot;
 use ody_app_server_protocol::RequestId;
 use ody_app_server_protocol::ReviewDelivery;
 use ody_app_server_protocol::ReviewStartParams;
@@ -118,9 +119,6 @@ use ody_protocol::odysseythink_models::ModelUpgrade;
 use ody_protocol::odysseythink_models::ReasoningEffortPreset;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path_uri::PathUri;
-use color_eyre::eyre::ContextCompat;
-use color_eyre::eyre::Result;
-use color_eyre::eyre::WrapErr;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -232,10 +230,7 @@ impl AppServerSession {
         matches!(&self.client, AppServerClient::InProcess(_))
     }
 
-    pub(crate) fn ody_home_path(
-        &self,
-        local_ody_home: &AbsolutePathBuf,
-    ) -> Option<AppServerPath> {
+    pub(crate) fn ody_home_path(&self, local_ody_home: &AbsolutePathBuf) -> Option<AppServerPath> {
         self.client.ody_home(local_ody_home)
     }
 
@@ -248,7 +243,7 @@ impl AppServerSession {
 
     pub(crate) async fn bootstrap(&mut self, config: &Config) -> Result<AppServerBootstrap> {
         let started_at = Instant::now();
-        let account = self.read_account().await?;
+        let auth_state = self.read_auth_state().await?;
         let model_request_id = self.next_request_id();
         let models: ModelListResponse = self
             .client
@@ -283,8 +278,8 @@ impl AppServerSession {
         self.default_model = Some(default_model.clone());
         self.available_models = available_models.clone();
 
-        let auth_mode = match account.account {
-            Some(Account::ApiKey {}) => Some(TelemetryAuthMode::ApiKey),
+        let auth_mode = match auth_state.auth_state {
+            Some(AuthState::ApiKey {}) => Some(TelemetryAuthMode::ApiKey),
             None => None,
         };
         Ok(AppServerBootstrap {
@@ -296,21 +291,21 @@ impl AppServerSession {
         })
     }
 
-    /// Fetches the current account info without refreshing the auth token.
+    /// Fetches the current auth state without refreshing the auth token.
     ///
-    /// Used by both `bootstrap` (to populate the initial UI) 
+    /// Used by both `bootstrap` (to populate the initial UI)
     /// (to check auth mode without the overhead of a full bootstrap).
-    pub(crate) async fn read_account(&mut self) -> Result<GetAccountResponse> {
-        let account_request_id = self.next_request_id();
+    pub(crate) async fn read_auth_state(&mut self) -> Result<GetAuthStateResponse> {
+        let request_id = self.next_request_id();
         self.client
-            .request_typed(ClientRequest::GetAccount {
-                request_id: account_request_id,
-                params: GetAccountParams {
+            .request_typed(ClientRequest::GetAuthState {
+                request_id,
+                params: GetAuthStateParams {
                     refresh_token: false,
                 },
             })
             .await
-            .map_err(|err| bootstrap_request_error("account/read failed during TUI bootstrap", err))
+            .map_err(|err| bootstrap_request_error("auth/read failed during TUI bootstrap", err))
     }
 
     pub(crate) async fn external_agent_config_detect(
@@ -897,16 +892,16 @@ impl AppServerSession {
             .wrap_err("thread/goal/clear failed in TUI")
     }
 
-    pub(crate) async fn logout_account(&mut self) -> Result<()> {
+    pub(crate) async fn logout(&mut self) -> Result<()> {
         let request_id = self.next_request_id();
-        let _: LogoutAccountResponse = self
+        let _: LogoutResponse = self
             .client
-            .request_typed(ClientRequest::LogoutAccount {
+            .request_typed(ClientRequest::Logout {
                 request_id,
                 params: None,
             })
             .await
-            .wrap_err("account/logout failed in TUI")?;
+            .wrap_err("auth/logout failed in TUI")?;
         Ok(())
     }
 
@@ -1233,9 +1228,7 @@ fn sandbox_mode_from_permission_profile(
     cwd: &std::path::Path,
 ) -> Option<ody_app_server_protocol::SandboxMode> {
     match permission_profile {
-        PermissionProfile::Disabled => {
-            Some(ody_app_server_protocol::SandboxMode::DangerFullAccess)
-        }
+        PermissionProfile::Disabled => Some(ody_app_server_protocol::SandboxMode::DangerFullAccess),
         PermissionProfile::External { .. } => None,
         PermissionProfile::Managed { .. } => {
             let file_system_policy = permission_profile.file_system_sandbox_policy();
@@ -1647,26 +1640,6 @@ async fn thread_session_state_from_thread_response(
     })
 }
 
-pub(crate) fn app_server_rate_limit_snapshots(
-    response: GetAccountRateLimitsResponse,
-) -> Vec<RateLimitSnapshot> {
-    let primary_limit_id = response.rate_limits.limit_id.clone();
-    let mut snapshots = vec![response.rate_limits];
-    if let Some(by_limit_id) = response.rate_limits_by_limit_id {
-        snapshots.extend(by_limit_id.into_iter().filter_map(|(limit_id, snapshot)| {
-            if primary_limit_id.as_deref().is_some_and(|primary_limit_id| {
-                primary_limit_id == limit_id
-                    || Some(primary_limit_id) == snapshot.limit_id.as_deref()
-            }) {
-                None
-            } else {
-                Some(snapshot)
-            }
-        }));
-    }
-    snapshots
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1702,44 +1675,6 @@ mod tests {
             .build()
             .await
             .expect("config should build")
-    }
-
-    fn rate_limit_snapshot(limit_id: &str) -> RateLimitSnapshot {
-        RateLimitSnapshot {
-            limit_id: Some(limit_id.to_string()),
-            limit_name: None,
-            primary: Some(ody_app_server_protocol::RateLimitWindow {
-                used_percent: 0,
-                window_duration_mins: Some(10_080),
-                resets_at: None,
-            }),
-            secondary: None,
-            credits: None,
-            individual_limit: None,
-            rate_limit_reached_type: None,
-        }
-    }
-
-    #[test]
-    fn app_server_rate_limit_snapshots_deduplicates_top_level_limit_from_map() {
-        let response = GetAccountRateLimitsResponse {
-            rate_limits: rate_limit_snapshot("ody"),
-            rate_limits_by_limit_id: Some(HashMap::from([
-                ("ody".to_string(), rate_limit_snapshot("ody")),
-                ("other".to_string(), rate_limit_snapshot("other")),
-            ])),
-            rate_limit_reset_credits: None,
-        };
-
-        let snapshots = app_server_rate_limit_snapshots(response);
-
-        assert_eq!(
-            snapshots
-                .iter()
-                .map(|snapshot| snapshot.limit_id.as_deref())
-                .collect::<Vec<_>>(),
-            vec![Some("ody"), Some("other")]
-        );
     }
 
     #[test]
@@ -2485,5 +2420,4 @@ mod tests {
 
         assert_eq!(session.forked_from_id, Some(forked_from_id));
     }
-
 }

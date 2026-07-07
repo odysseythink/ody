@@ -2822,7 +2822,7 @@ async fn read_notification_with_timeout<T: DeserializeOwned>(
 }
 
 async fn login_with_api_key(mcp: &mut TestAppServer, api_key: &str) -> Result<()> {
-    let request_id = mcp.send_login_account_api_key_request(api_key).await?;
+    let request_id = mcp.send_login_api_key_request(api_key).await?;
     let response: JSONRPCResponse = timeout(
         DEFAULT_TIMEOUT,
         mcp.read_stream_until_response_message(RequestId::Integer(request_id)),

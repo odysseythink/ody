@@ -110,9 +110,9 @@ pub(crate) struct RateLimitSnapshotDisplay {
 /// Display-ready credits state extracted from protocol snapshots.
 #[derive(Debug, Clone)]
 pub(crate) struct CreditsSnapshotDisplay {
-    /// Whether credits tracking is enabled for the account.
+    /// Whether credits tracking is enabled for the workspace.
     pub has_credits: bool,
-    /// Whether the account has unlimited credits.
+    /// Whether the workspace has unlimited credits.
     pub unlimited: bool,
     /// Raw balance text as provided by the backend.
     pub balance: Option<String>,
@@ -358,9 +358,9 @@ pub(crate) fn format_status_limit_summary(percent_remaining: f64) -> String {
 }
 
 /// Builds a single `StatusRateLimitRow` for credits when the snapshot indicates
-/// that the account has credit tracking enabled. When credits are unlimited we
+/// that the workspace has credit tracking enabled. When credits are unlimited we
 /// show that fact explicitly; otherwise we render the rounded balance in
-/// credits. Accounts with credits = 0 skip this section entirely.
+/// credits. Workspaces with credits = 0 skip this section entirely.
 fn credit_status_row(credits: &CreditsSnapshotDisplay) -> Option<StatusRateLimitRow> {
     if !credits.has_credits {
         return None;

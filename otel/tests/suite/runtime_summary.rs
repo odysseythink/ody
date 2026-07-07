@@ -24,8 +24,6 @@ fn runtime_metrics_summary_collects_tool_api_and_streaming_metrics() -> Result<(
         ThreadId::new(),
         "gpt-5.1",
         "gpt-5.1",
-        Some("account-id".to_string()),
-        /*account_email*/ None,
         Some(TelemetryAuthMode::ApiKey),
         "test_originator".to_string(),
         /*log_user_prompts*/ true,

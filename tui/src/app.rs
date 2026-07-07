@@ -13,7 +13,6 @@ use crate::app_event::HistoryLookupResponse;
 use crate::app_event::PermissionProfileSelection;
 use crate::app_event::PluginLocation;
 use crate::app_event::PluginRemoteSectionError;
-use crate::app_event::RateLimitRefreshOrigin;
 #[cfg(target_os = "windows")]
 use crate::app_event::WindowsSandboxEnableMode;
 use crate::app_event_sender::AppEventSender;
@@ -21,7 +20,6 @@ use crate::app_server_session::AppServerBootstrap;
 use crate::app_server_session::AppServerSession;
 use crate::app_server_session::AppServerStartedThread;
 use crate::app_server_session::TurnPermissionsOverride;
-use crate::app_server_session::app_server_rate_limit_snapshots;
 use crate::bottom_pane::AppLinkViewParams;
 use crate::bottom_pane::ApprovalRequest;
 use crate::bottom_pane::FeedbackAudience;
@@ -83,7 +81,6 @@ use crate::workspace_command::WorkspaceCommandRunner;
 use ody_ansi_escape::ansi_escape_line;
 use ody_app_server_client::AppServerRequestHandle;
 use ody_app_server_client::TypedRequestError;
-use ody_app_server_protocol::AddCreditsNudgeCreditType;
 use ody_app_server_protocol::AskForApproval;
 use ody_app_server_protocol::ClientRequest;
 use ody_app_server_protocol::OdyErrorInfo as AppServerOdyErrorInfo;
@@ -94,7 +91,6 @@ use ody_app_server_protocol::ConfigValueWriteParams;
 use ody_app_server_protocol::ConfigWriteResponse;
 use ody_app_server_protocol::FeedbackUploadParams;
 use ody_app_server_protocol::FeedbackUploadResponse;
-use ody_app_server_protocol::GetAccountRateLimitsResponse;
 use ody_app_server_protocol::HooksListEntry;
 use ody_app_server_protocol::ListMcpServerStatusParams;
 use ody_app_server_protocol::ListMcpServerStatusResponse;
@@ -114,7 +110,6 @@ use ody_app_server_protocol::PluginReadResponse;
 use ody_app_server_protocol::PluginUninstallParams;
 use ody_app_server_protocol::PluginUninstallResponse;
 use ody_app_server_protocol::SandboxMode as AppServerSandboxMode;
-use ody_app_server_protocol::SendAddCreditsNudgeEmailParams;
 use ody_app_server_protocol::ServerNotification;
 use ody_app_server_protocol::ServerRequest;
 use ody_app_server_protocol::SkillErrorInfo;
@@ -830,8 +825,6 @@ impl App {
             ThreadId::new(),
             model.as_str(),
             model.as_str(),
-            /*account_id*/ None,
-            /*account_email*/ None,
             auth_mode,
             ody_client::default_client::originator().value,
             config.otel.log_user_prompt,
@@ -1104,18 +1097,6 @@ See the Ody keymap documentation for supported actions and examples."
             "tui startup initial frame scheduled"
         );
         app.refresh_startup_skills(&app_server);
-        // Kick off a non-blocking rate-limit prefetch so the first `/status`
-        // already has data and available reset credits can be surfaced, without
-        // delaying the initial frame render.
-        if api_key_configured {
-            let reset_hint_request_id = app.chat_widget.start_rate_limit_reset_startup_check();
-            app.refresh_rate_limits(
-                &app_server,
-                RateLimitRefreshOrigin::StartupPrefetch {
-                    reset_hint_request_id,
-                },
-            );
-        }
 
         let mut listen_for_app_server_events = true;
         let mut waiting_for_initial_session_configured = wait_for_initial_session_configured;

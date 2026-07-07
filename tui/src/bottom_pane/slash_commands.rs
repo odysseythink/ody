@@ -58,7 +58,6 @@ pub(crate) struct BuiltinCommandFlags {
     pub(crate) collaboration_modes_enabled: bool,
     pub(crate) connectors_enabled: bool,
     pub(crate) plugins_command_enabled: bool,
-    pub(crate) token_activity_command_enabled: bool,
     pub(crate) service_tier_commands_enabled: bool,
     pub(crate) goal_command_enabled: bool,
     pub(crate) personality_command_enabled: bool,
@@ -75,7 +74,6 @@ pub(crate) fn builtins_for_input(flags: BuiltinCommandFlags) -> Vec<(&'static st
         .filter(|(_, cmd)| flags.collaboration_modes_enabled || *cmd != SlashCommand::Plan)
         .filter(|(_, cmd)| flags.connectors_enabled || *cmd != SlashCommand::Apps)
         .filter(|(_, cmd)| flags.plugins_command_enabled || *cmd != SlashCommand::Plugins)
-        .filter(|(_, cmd)| flags.token_activity_command_enabled || *cmd != SlashCommand::Usage)
         .filter(|(_, cmd)| flags.goal_command_enabled || *cmd != SlashCommand::Goal)
         .filter(|(_, cmd)| flags.personality_command_enabled || *cmd != SlashCommand::Personality)
         .filter(|(_, cmd)| flags.plan_mode_active || *cmd != SlashCommand::WritingPlan)
@@ -118,7 +116,6 @@ pub(crate) fn find_builtin_command(name: &str, flags: BuiltinCommandFlags) -> Op
             .then_some(SlashCommand::Goal)
     })?;
     builtins_for_input(BuiltinCommandFlags {
-        token_activity_command_enabled: true,
         side_conversation_active: false,
         ..flags
     })
@@ -169,7 +166,6 @@ mod tests {
             collaboration_modes_enabled: true,
             connectors_enabled: true,
             plugins_command_enabled: true,
-            token_activity_command_enabled: true,
             service_tier_commands_enabled: true,
             goal_command_enabled: true,
             personality_command_enabled: true,
@@ -294,28 +290,6 @@ mod tests {
     }
 
     #[test]
-    fn usage_command_is_hidden_from_input_when_account_token_activity_is_disabled() {
-        let mut flags = all_enabled_flags();
-        flags.token_activity_command_enabled = false;
-        assert_eq!(
-            builtins_for_input(flags)
-                .into_iter()
-                .find(|(_, command)| *command == SlashCommand::Usage),
-            None
-        );
-    }
-
-    #[test]
-    fn usage_command_exact_lookup_still_resolves_when_account_token_activity_is_disabled() {
-        let mut flags = all_enabled_flags();
-        flags.token_activity_command_enabled = false;
-        assert_eq!(
-            find_builtin_command("usage", flags),
-            Some(SlashCommand::Usage)
-        );
-    }
-
-    #[test]
     fn side_conversation_hides_commands_without_side_flag() {
         let commands = builtins_for_input(BuiltinCommandFlags {
             side_conversation_active: true,
@@ -334,7 +308,6 @@ mod tests {
                 SlashCommand::Diff,
                 SlashCommand::Mention,
                 SlashCommand::Status,
-                SlashCommand::Usage,
             ]
         );
     }

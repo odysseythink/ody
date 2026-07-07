@@ -1656,7 +1656,7 @@ impl OdyClient {
 
     fn login_account_api_key(&mut self, api_key: String) -> Result<LoginResponse> {
         let request_id = self.request_id();
-        let request = ClientRequest::LoginAccount {
+        let request = ClientRequest::Login {
             request_id: request_id.clone(),
             params: ody_app_server_protocol::LoginParams::ApiKey { api_key },
         };
@@ -1719,7 +1719,7 @@ impl OdyClient {
 
             if let Ok(server_notification) = ServerNotification::try_from(notification) {
                 match server_notification {
-                    ServerNotification::AccountLoginCompleted(completion) => {
+                    ServerNotification::LoginCompleted(completion) => {
                         if completion.login_id.as_deref() == Some(expected_login_id) {
                             return Ok(completion);
                         }
@@ -1729,7 +1729,7 @@ impl OdyClient {
                             completion.login_id
                         );
                     }
-                    ServerNotification::AccountRateLimitsUpdated(snapshot) => {
+                    ServerNotification::RateLimitsUpdated(snapshot) => {
                         println!("< rateLimitsUpdated notification: {snapshot:?}");
                     }
                     _ => {}

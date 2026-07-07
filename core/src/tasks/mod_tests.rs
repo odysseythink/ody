@@ -29,8 +29,6 @@ fn test_session_telemetry() -> SessionTelemetry {
         ThreadId::new(),
         "gpt-5.4",
         "gpt-5.4",
-        /*account_id*/ None,
-        /*account_email*/ None,
         /*auth_mode*/ None,
         "test_originator".to_string(),
         /*log_user_prompts*/ false,
