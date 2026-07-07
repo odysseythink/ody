@@ -905,52 +905,47 @@ client_request_definitions! {
         response: v2::WindowsSandboxReadinessResponse,
     },
 
-    LoginAccount => "account/login/start" {
-        params: v2::LoginAccountParams,
+    LoginAccount => "auth/login/start" {
+        params: v2::LoginParams,
         inspect_params: true,
-        serialization: global("account-auth"),
-        response: v2::LoginAccountResponse,
+        serialization: global("auth"),
+        response: v2::LoginResponse,
     },
 
-    CancelLoginAccount => "account/login/cancel" {
-        params: v2::CancelLoginAccountParams,
-        serialization: global("account-auth"),
-        response: v2::CancelLoginAccountResponse,
-    },
 
-    LogoutAccount => "account/logout" {
+    LogoutAccount => "auth/logout" {
         params: #[ts(type = "undefined")] #[serde(skip_serializing_if = "Option::is_none")] Option<()>,
-        serialization: global("account-auth"),
-        response: v2::LogoutAccountResponse,
+        serialization: global("auth"),
+        response: v2::LogoutResponse,
     },
 
-    GetAccountRateLimits => "account/rateLimits/read" {
+    GetAccountRateLimits => "rateLimits/read" {
         params: #[ts(type = "undefined")] #[serde(skip_serializing_if = "Option::is_none")] Option<()>,
         serialization: None,
-        response: v2::GetAccountRateLimitsResponse,
+        response: v2::GetRateLimitsResponse,
     },
 
-    ConsumeAccountRateLimitResetCredit => "account/rateLimitResetCredit/consume" {
-        params: v2::ConsumeAccountRateLimitResetCreditParams,
-        serialization: global("account-auth"),
-        response: v2::ConsumeAccountRateLimitResetCreditResponse,
+    ConsumeAccountRateLimitResetCredit => "rateLimitResetCredit/consume" {
+        params: v2::ConsumeRateLimitResetCreditParams,
+        serialization: global("auth"),
+        response: v2::ConsumeRateLimitResetCreditResponse,
     },
 
-    GetAccountTokenUsage => "account/usage/read" {
+    GetAccountTokenUsage => "usage/read" {
         params: #[ts(type = "undefined")] #[serde(skip_serializing_if = "Option::is_none")] Option<()>,
         serialization: None,
-        response: v2::GetAccountTokenUsageResponse,
+        response: v2::GetTokenUsageResponse,
     },
 
-    GetWorkspaceMessages => "account/workspaceMessages/read" {
+    GetWorkspaceMessages => "workspaceMessages/read" {
         params: #[ts(type = "undefined")] #[serde(skip_serializing_if = "Option::is_none")] Option<()>,
         serialization: None,
         response: v2::GetWorkspaceMessagesResponse,
     },
 
-    SendAddCreditsNudgeEmail => "account/sendAddCreditsNudgeEmail" {
+    SendAddCreditsNudgeEmail => "usage/sendAddCreditsNudgeEmail" {
         params: v2::SendAddCreditsNudgeEmailParams,
-        serialization: global("account-auth"),
+        serialization: global("auth"),
         response: v2::SendAddCreditsNudgeEmailResponse,
     },
 
@@ -1053,10 +1048,10 @@ client_request_definitions! {
         response: v2::ConfigRequirementsReadResponse,
     },
 
-    GetAccount => "account/read" {
-        params: v2::GetAccountParams,
-        serialization: global("account-auth"),
-        response: v2::GetAccountResponse,
+    GetAccount => "auth/read" {
+        params: v2::GetAuthStateParams,
+        serialization: global("auth"),
+        response: v2::GetAuthStateResponse,
     },
 
     /// DEPRECATED APIs below
@@ -1073,7 +1068,7 @@ client_request_definitions! {
     /// DEPRECATED in favor of GetAccount
     GetAuthStatus {
         params: v1::GetAuthStatusParams,
-        serialization: global("account-auth"),
+        serialization: global("auth"),
         response: v1::GetAuthStatusResponse,
     },
     // Legacy fuzzy search cancellation is intentionally concurrent: clients reuse a
@@ -1560,8 +1555,8 @@ server_notification_definitions! {
     McpToolCallProgress => "item/mcpToolCall/progress" (v2::McpToolCallProgressNotification),
     McpServerOauthLoginCompleted => "mcpServer/oauthLogin/completed" (v2::McpServerOauthLoginCompletedNotification),
     McpServerStatusUpdated => "mcpServer/startupStatus/updated" (v2::McpServerStatusUpdatedNotification),
-    AccountUpdated => "account/updated" (v2::AccountUpdatedNotification),
-    AccountRateLimitsUpdated => "account/rateLimits/updated" (v2::AccountRateLimitsUpdatedNotification),
+    AccountUpdated => "auth/updated" (v2::AuthUpdatedNotification),
+    AccountRateLimitsUpdated => "rateLimits/updated" (v2::RateLimitsUpdatedNotification),
     AppListUpdated => "app/list/updated" (v2::AppListUpdatedNotification),
     ExternalAgentConfigImportProgress => "externalAgentConfig/import/progress" (v2::ExternalAgentConfigImportProgressNotification),
     ExternalAgentConfigImportCompleted => "externalAgentConfig/import/completed" (v2::ExternalAgentConfigImportCompletedNotification),
@@ -1603,10 +1598,10 @@ server_notification_definitions! {
     WindowsWorldWritableWarning => "windows/worldWritableWarning" (v2::WindowsWorldWritableWarningNotification),
     WindowsSandboxSetupCompleted => "windowsSandbox/setupCompleted" (v2::WindowsSandboxSetupCompletedNotification),
 
-    #[serde(rename = "account/login/completed")]
-    #[ts(rename = "account/login/completed")]
-    #[strum(serialize = "account/login/completed")]
-    AccountLoginCompleted(v2::AccountLoginCompletedNotification),
+    #[serde(rename = "auth/login/completed")]
+    #[ts(rename = "auth/login/completed")]
+    #[strum(serialize = "auth/login/completed")]
+    AccountLoginCompleted(v2::LoginCompletedNotification),
 
 }
 
@@ -1866,13 +1861,13 @@ mod tests {
 
         let account_read = ClientRequest::GetAccount {
             request_id: request_id(),
-            params: v2::GetAccountParams {
+            params: v2::GetAuthStateParams {
                 refresh_token: false,
             },
         };
         assert_eq!(
             account_read.serialization_scope(),
-            Some(ClientRequestSerializationScope::Global("account-auth"))
+            Some(ClientRequestSerializationScope::Global("auth"))
         );
 
         let thread_goal_set = ClientRequest::ThreadGoalSet {
@@ -1924,7 +1919,7 @@ mod tests {
         };
         assert_eq!(
             add_credits_nudge.serialization_scope(),
-            Some(ClientRequestSerializationScope::Global("account-auth"))
+            Some(ClientRequestSerializationScope::Global("auth"))
         );
 
         let environment_add = ClientRequest::EnvironmentAdd {
@@ -2360,10 +2355,10 @@ mod tests {
             params: None,
         };
         assert_eq!(request.id(), &RequestId::Integer(1));
-        assert_eq!(request.method(), "account/rateLimits/read");
+        assert_eq!(request.method(), "rateLimits/read");
         assert_eq!(
             json!({
-                "method": "account/rateLimits/read",
+                "method": "rateLimits/read",
                 "id": 1,
             }),
             serde_json::to_value(&request)?,
@@ -2378,10 +2373,10 @@ mod tests {
             params: None,
         };
         assert_eq!(request.id(), &RequestId::Integer(1));
-        assert_eq!(request.method(), "account/usage/read");
+        assert_eq!(request.method(), "usage/read");
         assert_eq!(
             json!({
-                "method": "account/usage/read",
+                "method": "usage/read",
                 "id": 1,
             }),
             serde_json::to_value(&request)?,
@@ -2396,10 +2391,10 @@ mod tests {
             params: None,
         };
         assert_eq!(request.id(), &RequestId::Integer(1));
-        assert_eq!(request.method(), "account/workspaceMessages/read");
+        assert_eq!(request.method(), "workspaceMessages/read");
         assert_eq!(
             json!({
-                "method": "account/workspaceMessages/read",
+                "method": "workspaceMessages/read",
                 "id": 1,
             }),
             serde_json::to_value(&request)?,
@@ -2528,13 +2523,13 @@ mod tests {
     fn serialize_account_login_api_key() -> Result<()> {
         let request = ClientRequest::LoginAccount {
             request_id: RequestId::Integer(2),
-            params: v2::LoginAccountParams::ApiKey {
+            params: v2::LoginParams::ApiKey {
                 api_key: "secret".to_string(),
             },
         };
         assert_eq!(
             json!({
-                "method": "account/login/start",
+                "method": "auth/login/start",
                 "id": 2,
                 "params": {
                     "type": "apiKey",
@@ -2554,7 +2549,7 @@ mod tests {
         };
         assert_eq!(
             json!({
-                "method": "account/logout",
+                "method": "auth/logout",
                 "id": 5,
             }),
             serde_json::to_value(&request)?,
@@ -2566,13 +2561,13 @@ mod tests {
     fn serialize_get_account() -> Result<()> {
         let request = ClientRequest::GetAccount {
             request_id: RequestId::Integer(6),
-            params: v2::GetAccountParams {
+            params: v2::GetAuthStateParams {
                 refresh_token: false,
             },
         };
         assert_eq!(
             json!({
-                "method": "account/read",
+                "method": "auth/read",
                 "id": 6,
                 "params": {}
             }),
@@ -2580,13 +2575,13 @@ mod tests {
         );
         let request = ClientRequest::GetAccount {
             request_id: RequestId::Integer(7),
-            params: v2::GetAccountParams {
+            params: v2::GetAuthStateParams {
                 refresh_token: true,
             },
         };
         assert_eq!(
             json!({
-                "method": "account/read",
+                "method": "auth/read",
                 "id": 7,
                 "params": {
                     "refreshToken": true
@@ -2599,7 +2594,7 @@ mod tests {
 
     #[test]
     fn account_serializes_fields_in_camel_case() -> Result<()> {
-        let api_key = v2::Account::ApiKey {};
+        let api_key = v2::AuthState::ApiKey {};
         assert_eq!(
             json!({
                 "type": "apiKey",

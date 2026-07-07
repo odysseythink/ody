@@ -1,6 +1,6 @@
 mod shared;
 
-mod account;
+mod auth;
 mod apps;
 mod attestation;
 mod collaboration_mode;
@@ -26,7 +26,7 @@ mod thread_data;
 mod turn;
 mod windows_sandbox;
 
-pub use account::*;
+pub use auth::*;
 pub use apps::*;
 pub use attestation::*;
 pub use collaboration_mode::*;

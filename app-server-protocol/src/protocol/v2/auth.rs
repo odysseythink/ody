@@ -15,7 +15,7 @@ use ts_rs::TS;
 #[serde(tag = "type", rename_all = "camelCase")]
 #[ts(tag = "type")]
 #[ts(export_to = "v2/")]
-pub enum Account {
+pub enum AuthState {
     #[serde(rename = "apiKey", rename_all = "camelCase")]
     #[ts(rename = "apiKey", rename_all = "camelCase")]
     ApiKey {},
@@ -25,7 +25,7 @@ pub enum Account {
 #[serde(tag = "type")]
 #[ts(tag = "type")]
 #[ts(export_to = "v2/")]
-pub enum LoginAccountParams {
+pub enum LoginParams {
     #[serde(rename = "apiKey", rename_all = "camelCase")]
     #[ts(rename = "apiKey", rename_all = "camelCase")]
     ApiKey {
@@ -39,116 +39,21 @@ pub enum LoginAccountParams {
 #[serde(tag = "type", rename_all = "camelCase")]
 #[ts(tag = "type")]
 #[ts(export_to = "v2/")]
-pub enum LoginAccountResponse {
+pub enum LoginResponse {
     #[serde(rename = "apiKey", rename_all = "camelCase")]
     #[ts(rename = "apiKey", rename_all = "camelCase")]
     ApiKey {},
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct CancelLoginAccountParams {
-    pub login_id: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub enum CancelLoginAccountStatus {
-    Canceled,
-    NotFound,
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub struct CancelLoginAccountResponse {
-    pub status: CancelLoginAccountStatus,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct AccountSessionsAddParams {
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub switch_to_added_account: bool,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct AccountSessionsListParams {
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub refresh_workspace_metadata: bool,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct AccountSessionsLogoutParams {
-    pub session_id: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct AccountSessionsSwitchParams {
-    pub session_id: String,
-    pub account_id: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct AccountSessionsResponse {
-    pub active_session_id: Option<String>,
-    pub sessions: Vec<AccountSession>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct AccountSession {
-    pub session_id: String,
-    pub email: Option<String>,
-    pub user_id: Option<String>,
-    pub display_name: Option<String>,
-    pub image_url: Option<String>,
-    pub last_used_at: i64,
-    pub is_active: bool,
-    pub selected_workspace_account_id: Option<String>,
-    pub workspaces: Vec<AccountSessionWorkspace>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct AccountSessionWorkspace {
-    pub account_id: String,
-    pub name: Option<String>,
-    pub image_url: Option<String>,
-    pub kind: Option<AccountSessionWorkspaceKind>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub enum AccountSessionWorkspaceKind {
-    Personal,
-    Workspace,
-}
+pub struct LogoutResponse {}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub struct LogoutAccountResponse {}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub struct GetAccountRateLimitsResponse {
+pub struct GetRateLimitsResponse {
     /// Backward-compatible single-bucket view; mirrors the historical payload.
     pub rate_limits: RateLimitSnapshot,
     /// Multi-bucket view keyed by metered `limit_id` (for example, `ody`).
@@ -166,7 +71,7 @@ pub struct RateLimitResetCreditsSummary {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub struct ConsumeAccountRateLimitResetCreditParams {
+pub struct ConsumeRateLimitResetCreditParams {
     /// Identifies one logical reset attempt. A UUID is recommended; reuse the same value when
     /// retrying that attempt.
     pub idempotency_key: String,
@@ -175,19 +80,19 @@ pub struct ConsumeAccountRateLimitResetCreditParams {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub struct ConsumeAccountRateLimitResetCreditResponse {
-    pub outcome: ConsumeAccountRateLimitResetCreditOutcome,
+pub struct ConsumeRateLimitResetCreditResponse {
+    pub outcome: ConsumeRateLimitResetCreditOutcome,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/", rename_all = "camelCase")]
-pub enum ConsumeAccountRateLimitResetCreditOutcome {
+pub enum ConsumeRateLimitResetCreditOutcome {
     /// A reset credit was consumed and the eligible rate-limit windows were reset.
     Reset,
     /// No current rate-limit window is eligible for a reset.
     NothingToReset,
-    /// The account has no earned reset credits available.
+    /// The workspace has no earned reset credits available.
     NoCredit,
     /// The same idempotency key already completed a reset successfully.
     AlreadyRedeemed,
@@ -196,9 +101,9 @@ pub enum ConsumeAccountRateLimitResetCreditOutcome {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub struct GetAccountTokenUsageResponse {
-    pub summary: AccountTokenUsageSummary,
-    pub daily_usage_buckets: Option<Vec<AccountTokenUsageDailyBucket>>,
+pub struct GetTokenUsageResponse {
+    pub summary: TokenUsageSummary,
+    pub daily_usage_buckets: Option<Vec<TokenUsageDailyBucket>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
@@ -239,7 +144,7 @@ pub enum WorkspaceMessageType {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub struct AccountTokenUsageSummary {
+pub struct TokenUsageSummary {
     pub lifetime_tokens: Option<i64>,
     pub peak_daily_tokens: Option<i64>,
     pub longest_running_turn_sec: Option<i64>,
@@ -250,7 +155,7 @@ pub struct AccountTokenUsageSummary {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub struct AccountTokenUsageDailyBucket {
+pub struct TokenUsageDailyBucket {
     pub start_date: String,
     pub tokens: i64,
 }
@@ -288,7 +193,7 @@ pub enum AddCreditsNudgeEmailStatus {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub struct GetAccountParams {
+pub struct GetAuthStateParams {
     /// When `true`, requests a proactive token refresh before returning.
     ///
     /// This flag is no longer used; API key auth does not require a refresh flow.
@@ -299,14 +204,14 @@ pub struct GetAccountParams {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub struct GetAccountResponse {
-    pub account: Option<Account>,
+pub struct GetAuthStateResponse {
+    pub account: Option<AuthState>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub struct AccountUpdatedNotification {
+pub struct AuthUpdatedNotification {
     pub auth_mode: Option<AuthMode>,
 }
 
@@ -315,10 +220,10 @@ pub struct AccountUpdatedNotification {
 #[ts(export_to = "v2/")]
 /// Sparse rolling rate-limit update.
 ///
-/// Clients should merge available values into the most recent `account/rateLimits/read` response
-/// or refetch that snapshot. Nullable account metadata may be unavailable in a rolling update and
+/// Clients should merge available values into the most recent `rateLimits/read` response
+/// or refetch that snapshot. Nullable auth metadata may be unavailable in a rolling update and
 /// does not clear a previously observed value.
-pub struct AccountRateLimitsUpdatedNotification {
+pub struct RateLimitsUpdatedNotification {
     pub rate_limits: RateLimitSnapshot,
 }
 
@@ -467,7 +372,7 @@ impl From<CoreSpendControlLimitSnapshot> for SpendControlLimitSnapshot {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub struct AccountLoginCompletedNotification {
+pub struct LoginCompletedNotification {
     // Use plain String for identifiers to avoid TS/JSON Schema quirks around uuid-specific types.
     // Convert to/from UUIDs at the application layer as needed.
     pub login_id: Option<String>,
@@ -480,8 +385,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn login_account_params_rejects_legacy_provider() {
+    fn login_params_rejects_legacy_provider() {
         let json = r#"{"type":"legacy-provider","odyStreamlinedLogin":false}"#;
-        assert!(serde_json::from_str::<LoginAccountParams>(json).is_err());
+        assert!(serde_json::from_str::<LoginParams>(json).is_err());
     }
 }
