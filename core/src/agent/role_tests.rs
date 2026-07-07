@@ -203,10 +203,6 @@ async fn apply_role_preserves_unspecified_keys() {
     assert_eq!(config.model.as_deref(), Some("base-model"));
     assert_eq!(config.model_reasoning_effort, Some(ReasoningEffort::High));
     assert_eq!(
-        config,
-
-    );
-    assert_eq!(
         config.main_execve_wrapper_exe,
         Some(PathBuf::from("/tmp/ody-execve-wrapper"))
     );

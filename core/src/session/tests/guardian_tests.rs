@@ -190,7 +190,6 @@ async fn request_permissions_guardian_review_stops_when_cancelled() {
     let config = Arc::new(config);
     let models_manager = models_manager_with_provider(
         config.ody_home.to_path_buf(),
-        Arc::clone(&session.services.auth_manager),
         config.model_provider.clone(),
     );
     Arc::get_mut(&mut session)
@@ -200,7 +199,6 @@ async fn request_permissions_guardian_review_stops_when_cancelled() {
     turn_context_raw.config = Arc::clone(&config);
     turn_context_raw.provider = create_model_provider(
         config.model_provider.clone(),
-        turn_context_raw.auth_manager.clone(),
     );
 
     let requested_permissions = RequestPermissionProfile {

@@ -67,7 +67,7 @@ impl Drop for DisconnectableWebSocketProxy {
 }
 
 pub(crate) fn test_ody_helper_paths() -> anyhow::Result<TestOdyHelperPaths> {
-    let (helper_binary) = super::current_test_binary_helper_paths()?;
+    let (helper_binary, _ody_linux_sandbox_exe) = super::current_test_binary_helper_paths()?;
     Ok(TestOdyHelperPaths {
         ody_exe: helper_binary,
     })

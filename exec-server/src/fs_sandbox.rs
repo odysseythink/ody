@@ -138,7 +138,7 @@ impl FileSystemSandboxRunner {
                     environment_id: None,
                     network: None,
                     sandbox_policy_cwd: &cwd.uri,
-                    ody_linux_sandbox_exe: self.runtime_paths.ody_linux_sandbox_exe.as_deref(),
+                    linux_sandbox_exe: self.runtime_paths.ody_linux_sandbox_exe.as_deref(),
                     use_legacy_landlock: sandbox_context.use_legacy_landlock,
                     windows_sandbox_level: sandbox_context.windows_sandbox_level,
                     windows_sandbox_private_desktop: sandbox_context

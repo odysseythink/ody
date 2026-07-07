@@ -114,7 +114,6 @@ mod tests {
     use ody_extension_api::NoopExtensionEventSink;
     use ody_home::OdyHomeUserInstructionsProvider;
     use ody_protocol::protocol::SessionSource;
-    use ody_protocol::protocol::SessionSource;
     use ody_utils_absolute_path::AbsolutePathBuf;
     use pretty_assertions::assert_eq;
     use std::sync::atomic::AtomicUsize;

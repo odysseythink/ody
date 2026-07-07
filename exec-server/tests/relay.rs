@@ -98,8 +98,8 @@ async fn remote_environment_routes_encrypted_exec_server_rpc() -> Result<()> {
         .mount(&registry)
         .await;
 
-    let (ody_exe) = common::current_test_binary_helper_paths()?;
-    let runtime_paths = ExecServerRuntimePaths::new(ody_exe)?;
+    let (ody_exe, _ody_linux_sandbox_exe) = common::current_test_binary_helper_paths()?;
+    let runtime_paths = ExecServerRuntimePaths::new(ody_exe, None)?;
     let config = RemoteEnvironmentConfig::new(
         registry.uri(),
         ENVIRONMENT_ID.to_string(),

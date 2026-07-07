@@ -1352,14 +1352,13 @@ async fn install_host_owned_ody_apps_manager(session: &Session, turn_context: &T
             },
         ),
         turn_context.config.ody_home.to_path_buf(),
-        ody_mcp::ody_apps_tools_cache_key(auth.as_ref()),
+        ody_mcp::ody_apps_tools_cache_key(None::<&String>),
         /*host_owned_ody_apps_enabled*/ true,
         turn_context.config.prefix_mcp_tool_names(),
         rmcp::model::ElicitationCapability::default(),
         /*supports_odysseythink_form_elicitation*/ false,
         ody_mcp::ToolPluginProvenance::default(),
-        auth.as_ref(),
-        /*elicitation_reviewer*/ None,
+        None,
     )
     .await;
     session
@@ -2913,7 +2912,6 @@ async fn approve_mode_skips_guardian_in_every_permission_mode() {
         AskForApproval::Never,
     ] {
         let (mut session, mut turn_context) = make_session_and_context().await;
-        turn_context.auth_manager = None;
         turn_context
             .approval_policy
             .set(approval_policy)

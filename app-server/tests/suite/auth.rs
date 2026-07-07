@@ -176,7 +176,6 @@ async fn api_key_supports_auth_status_and_account_read() -> Result<()> {
         GetAuthStatusResponse {
             auth_method: Some(AuthMode::ApiKey),
             auth_token: Some("sk-test-key".to_string()),
-            requires_odysseythink_auth: Some(true),
         }
     );
 
@@ -194,7 +193,6 @@ async fn api_key_supports_auth_status_and_account_read() -> Result<()> {
         to_response::<GetAccountResponse>(response)?,
         GetAccountResponse {
             account: Some(Account::ApiKey {}),
-            requires_odysseythink_auth: true,
         }
     );
 
@@ -226,11 +224,6 @@ async fn get_auth_status_with_api_key_when_auth_not_required() -> Result<()> {
     let status: GetAuthStatusResponse = to_response(resp)?;
     assert_eq!(status.auth_method, None, "expected no auth method");
     assert_eq!(status.auth_token, None, "expected no token");
-    assert_eq!(
-        status.requires_odysseythink_auth,
-        Some(false),
-        "requires_odysseythink_auth should be false",
-    );
     Ok(())
 }
 
@@ -290,7 +283,6 @@ async fn get_auth_status_with_api_key_refresh_requested() -> Result<()> {
         GetAuthStatusResponse {
             auth_method: Some(AuthMode::ApiKey),
             auth_token: Some("sk-test-key".to_string()),
-            requires_odysseythink_auth: Some(true),
         }
     );
     Ok(())

@@ -15,7 +15,7 @@ use ody_api::ResponseEvent;
 use ody_model_provider::SharedModelProvider;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::WireApi;
-use ody_model_provider_info::create_oss_provider_with_base_url;
+use ody_model_provider_info::create_kimi_provider;
 use ody_otel::SessionTelemetry;
 use ody_protocol::ThreadId;
 use ody_protocol::models::ContentItem;
@@ -61,7 +61,7 @@ use ody_protocol::config_types::ReasoningSummary;
 const TEST_INSTALLATION_ID: &str = "11111111-1111-4111-8111-111111111111";
 
 fn test_model_client(session_source: SessionSource) -> ModelClient {
-    let provider = create_oss_provider_with_base_url("https://example.com/v1", WireApi::Responses);
+    let provider = create_kimi_provider();
     let thread_id = ThreadId::new();
     ModelClient::new(
         thread_id,
@@ -572,10 +572,9 @@ fn model_client_with_counting_attestation(
                 command_auth: false,
                 attestation: false,
             },
-        },
-        )
+        }
     } else {
-        create_oss_provider_with_base_url("https://example.com/v1", WireApi::Responses)
+        create_kimi_provider()
     };
     let model_client = ModelClient::new(
         ThreadId::new(),

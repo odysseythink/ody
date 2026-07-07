@@ -178,7 +178,6 @@ where
 
 fn run_realtime_conversation_test_in_subprocess(
     test_name: &str,
-    odysseythink_api_key: Option<&str>,
 ) -> Result<()> {
     let mut command = Command::new(std::env::current_exe()?);
     command
@@ -189,14 +188,6 @@ fn run_realtime_conversation_test_in_subprocess(
     // route that connection away from the test server in Bazel environments.
     for &key in ody_network_proxy::PROXY_ENV_KEYS {
         command.env_remove(key);
-    }
-    match odysseythink_api_key {
-        Some(odysseythink_api_key) => {
-            command.env(OPENAI_API_KEY_ENV_VAR, odysseythink_api_key);
-        }
-        None => {
-            command.env_remove(OPENAI_API_KEY_ENV_VAR);
-        }
     }
     let output = command.output()?;
     assert!(
@@ -1291,7 +1282,6 @@ async fn conversation_start_preflight_failure_emits_realtime_error_only() -> Res
     if std::env::var_os(REALTIME_CONVERSATION_TEST_SUBPROCESS_ENV_VAR).is_none() {
         return run_realtime_conversation_test_in_subprocess(
             "suite::realtime_conversation::conversation_start_preflight_failure_emits_realtime_error_only",
-            /*odysseythink_api_key*/ None,
         );
     }
 

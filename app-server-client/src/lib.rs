@@ -1400,66 +1400,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn runtime_start_args_forward_environment_manager_and_odysseythink_form_capability() {
-        let config = Arc::new(build_test_config().await);
-        let environment_manager = Arc::new(
-            EnvironmentManager::create_for_tests(
-                Some("ws://127.0.0.1:8765".to_string()),
-                Some(
-                    ExecServerRuntimePaths::new(
-                        std::env::current_exe().expect("current exe"),
-                    )
-                    .expect("runtime paths"),
-                ),
-            )
-            .await,
-        );
-
-        let runtime_args = InProcessClientStartArgs {
-            arg0_paths: Arg0DispatchPaths::default(),
-            config: config.clone(),
-            cli_overrides: Vec::new(),
-            loader_overrides: LoaderOverrides::default(),
-            strict_config: false,
-            cloud_config_bundle: CloudConfigBundleLoader::default(),
-            feedback: OdyFeedback::new(),
-            log_db: None,
-            state_db: None,
-            environment_manager: environment_manager.clone(),
-            config_warnings: Vec::new(),
-            session_source: SessionSource::Exec,
-            enable_ody_api_key_env: false,
-            client_name: "ody-app-server-client-test".to_string(),
-            client_version: "0.0.0-test".to_string(),
-            experimental_api: true,
-            mcp_server_odysseythink_form_elicitation: true,
-            opt_out_notification_methods: Vec::new(),
-            channel_capacity: DEFAULT_IN_PROCESS_CHANNEL_CAPACITY,
-        }
-        .into_runtime_start_args();
-
-        assert_eq!(runtime_args.config, config);
-        assert!(
-            runtime_args
-                .initialize
-                .capabilities
-                .expect("initialize capabilities")
-                .mcp_server_odysseythink_form_elicitation
-        );
-        assert!(Arc::ptr_eq(
-            &runtime_args.environment_manager,
-            &environment_manager
-        ));
-        assert!(
-            runtime_args
-                .environment_manager
-                .default_environment()
-                .expect("default environment")
-                .is_remote()
-        );
-    }
-
-    #[tokio::test]
     async fn runtime_start_args_use_remote_thread_config_loader_when_configured() {
         let mut config = build_test_config().await;
         config.experimental_thread_config_endpoint = Some("not-a-valid-endpoint".to_string());

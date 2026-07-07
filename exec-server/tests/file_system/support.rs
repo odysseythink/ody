@@ -47,10 +47,7 @@ pub(crate) async fn create_file_system_context(
     match implementation {
         FileSystemImplementation::Local => {
             let helper_paths = test_ody_helper_paths()?;
-            let runtime_paths = ExecServerRuntimePaths::new(
-                helper_paths.ody_exe.clone(),
-                helper_paths.clone(),
-            )?;
+            let runtime_paths = ExecServerRuntimePaths::new(helper_paths.ody_exe.clone(), None)?;
             Ok(FileSystemContext {
                 file_system: Arc::new(LocalFileSystem::with_runtime_paths(runtime_paths)),
                 _helper_paths: Some(helper_paths),

@@ -241,7 +241,6 @@ async fn get_account_no_auth() -> Result<()> {
     let account: GetAccountResponse = to_response(resp)?;
 
     assert_eq!(account.account, None, "expected no account");
-    assert_eq!(account.requires_odysseythink_auth, true);
     Ok(())
 }
 
@@ -283,7 +282,6 @@ async fn get_account_with_api_key() -> Result<()> {
 
     let expected = GetAccountResponse {
         account: Some(Account::ApiKey {}),
-        requires_odysseythink_auth: true,
     };
     assert_eq!(received, expected);
     Ok(())
@@ -317,7 +315,6 @@ async fn get_account_when_auth_not_required() -> Result<()> {
 
     let expected = GetAccountResponse {
         account: None,
-        requires_odysseythink_auth: false,
     };
     assert_eq!(received, expected);
     Ok(())

@@ -136,7 +136,7 @@ pub struct SandboxTransformRequest<'a> {
     // to make shared ownership explicit across runtime/sandbox plumbing.
     pub network: Option<&'a NetworkProxy>,
     pub sandbox_policy_cwd: &'a PathUri,
-    pub ody_linux_sandbox_exe: Option<&'a Path>,
+    pub linux_sandbox_exe: Option<&'a Path>,
     pub use_legacy_landlock: bool,
     pub windows_sandbox_level: WindowsSandboxLevel,
     pub windows_sandbox_private_desktop: bool,
@@ -327,7 +327,7 @@ impl SandboxManager {
             environment_id,
             network,
             sandbox_policy_cwd,
-            ody_linux_sandbox_exe,
+            linux_sandbox_exe,
             use_legacy_landlock,
             windows_sandbox_level,
             windows_sandbox_private_desktop,
@@ -378,7 +378,7 @@ impl SandboxManager {
             SandboxType::MacosSeatbelt => return Err(SandboxTransformError::SeatbeltUnavailable),
             SandboxType::LinuxSeccomp => {
                 let pending = pending_sandboxed_request?;
-                let exe = ody_linux_sandbox_exe
+                let exe = linux_sandbox_exe
                     .ok_or(SandboxTransformError::MissingLinuxSandboxExecutable)?;
                 let allow_proxy_network = allow_network_for_proxy(enforce_managed_network);
                 #[cfg(target_os = "linux")]

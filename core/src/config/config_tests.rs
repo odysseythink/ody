@@ -8791,12 +8791,6 @@ async fn active_project_does_not_match_configured_alias_for_canonical_cwd() -> a
     Ok(())
 }
 
-#[test]
-
-#[test]
-
-#[tokio::test]
-
 #[tokio::test]
 async fn test_untrusted_project_gets_workspace_write_sandbox() -> anyhow::Result<()> {
     let config_with_untrusted = r#"

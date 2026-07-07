@@ -467,7 +467,6 @@ async fn prefetch_rate_limits_is_gated_on_api_key_auth_provider() {
     set_api_key_auth(&mut chat);
     assert!(chat.should_prefetch_rate_limits());
 
-    chat.config.model_provider.requires_odysseythink_auth = false;
     assert!(!chat.should_prefetch_rate_limits());
 
     chat.prefetch_rate_limits();

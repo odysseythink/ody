@@ -94,7 +94,7 @@ fn parse_agent_id(id: &str) -> ThreadId {
 
 fn thread_manager() -> ThreadManager {
     ThreadManager::with_models_provider_for_tests(
-        built_in_model_providers()["odysseythink"].clone(),
+        built_in_model_providers()["kimi"].clone(),
     )
 }
 
@@ -4363,7 +4363,7 @@ async fn build_agent_spawn_config_uses_turn_context_values() {
         use_profile: true,
         ..ShellEnvironmentPolicy::default()
     };
-    config = Some(PathBuf::from("/bin/echo"));
+    config.ody_linux_sandbox_exe = Some(PathBuf::from("/bin/echo"));
     turn.config = Arc::new(config);
     let temp_dir = tempfile::tempdir().expect("temp dir");
     #[allow(deprecated)]

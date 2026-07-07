@@ -192,7 +192,7 @@ async fn smoke_one(
         ..Default::default()
     };
 
-    let provider = create_model_provider_with_id(provider_id, info, None);
+    let provider = create_model_provider_with_id(provider_id, info);
     let chat = provider
         .chat_provider()
         .await

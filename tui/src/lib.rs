@@ -2547,6 +2547,7 @@ mod tests {
             Some("ws://127.0.0.1:8765".to_string()),
             Some(ExecServerRuntimePaths::new(
                 std::env::current_exe().expect("current exe"),
+                /*ody_linux_sandbox_exe*/ None,
             )?),
         )
         .await;
