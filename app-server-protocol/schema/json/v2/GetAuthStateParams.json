@@ -6,6 +6,6 @@
       "type": "boolean"
     }
   },
-  "title": "GetAccountParams",
+  "title": "GetAuthStateParams",
   "type": "object"
 }

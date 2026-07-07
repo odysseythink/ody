@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "definitions": {
-    "Account": {
+    "AuthState": {
       "oneOf": [
         {
           "properties": {
@@ -9,14 +9,14 @@
               "enum": [
                 "apiKey"
               ],
-              "title": "ApiKeyAccountType",
+              "title": "ApiKeyAuthStateType",
               "type": "string"
             }
           },
           "required": [
             "type"
           ],
-          "title": "ApiKeyAccount",
+          "title": "ApiKeyAuthState",
           "type": "object"
         }
       ]
@@ -26,20 +26,14 @@
     "account": {
       "anyOf": [
         {
-          "$ref": "#/definitions/Account"
+          "$ref": "#/definitions/AuthState"
         },
         {
           "type": "null"
         }
       ]
-    },
-    "requiresOdysseythinkAuth": {
-      "type": "boolean"
     }
   },
-  "required": [
-    "requiresOdysseythinkAuth"
-  ],
-  "title": "GetAccountResponse",
+  "title": "GetAuthStateResponse",
   "type": "object"
 }

@@ -5,56 +5,6 @@
       "description": "A path that is guaranteed to be absolute and normalized (though it is not guaranteed to be canonicalized or exist on the filesystem).\n\nIMPORTANT: When deserializing an `AbsolutePathBuf`, a base path must be set using [AbsolutePathBufGuard::new]. If no base path is set, the deserialization will fail unless the path being deserialized is already absolute.",
       "type": "string"
     },
-    "AccountLoginCompletedNotification": {
-      "properties": {
-        "error": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "loginId": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "success": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "success"
-      ],
-      "type": "object"
-    },
-    "AccountRateLimitsUpdatedNotification": {
-      "description": "Sparse rolling rate-limit update.\n\nClients should merge available values into the most recent `account/rateLimits/read` response or refetch that snapshot. Nullable account metadata may be unavailable in a rolling update and does not clear a previously observed value.",
-      "properties": {
-        "rateLimits": {
-          "$ref": "#/definitions/RateLimitSnapshot"
-        }
-      },
-      "required": [
-        "rateLimits"
-      ],
-      "type": "object"
-    },
-    "AccountUpdatedNotification": {
-      "properties": {
-        "authMode": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/AuthMode"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "type": "object"
-    },
     "ActivePermissionProfile": {
       "properties": {
         "extends": {
@@ -503,6 +453,21 @@
           "type": "string"
         }
       ]
+    },
+    "AuthUpdatedNotification": {
+      "properties": {
+        "authMode": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AuthMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
     },
     "AutoReviewDecisionSource": {
       "description": "[UNSTABLE] Source that produced a terminal approval auto-review decision.",
@@ -2164,6 +2129,29 @@
     "LegacyAppPathString": {
       "type": "string"
     },
+    "LoginCompletedNotification": {
+      "properties": {
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loginId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "success": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "success"
+      ],
+      "type": "object"
+    },
     "McpServerOauthLoginCompletedNotification": {
       "properties": {
         "error": {
@@ -2937,6 +2925,18 @@
       },
       "required": [
         "usedPercent"
+      ],
+      "type": "object"
+    },
+    "RateLimitsUpdatedNotification": {
+      "description": "Sparse rolling rate-limit update.\n\nClients should merge available values into the most recent `rateLimits/read` response or refetch that snapshot. Nullable auth metadata may be unavailable in a rolling update and does not clear a previously observed value.",
+      "properties": {
+        "rateLimits": {
+          "$ref": "#/definitions/RateLimitSnapshot"
+        }
+      },
+      "required": [
+        "rateLimits"
       ],
       "type": "object"
     },
@@ -6281,40 +6281,40 @@
       "properties": {
         "method": {
           "enum": [
-            "account/updated"
+            "auth/updated"
           ],
-          "title": "Account/updatedNotificationMethod",
+          "title": "Auth/updatedNotificationMethod",
           "type": "string"
         },
         "params": {
-          "$ref": "#/definitions/AccountUpdatedNotification"
+          "$ref": "#/definitions/AuthUpdatedNotification"
         }
       },
       "required": [
         "method",
         "params"
       ],
-      "title": "Account/updatedNotification",
+      "title": "Auth/updatedNotification",
       "type": "object"
     },
     {
       "properties": {
         "method": {
           "enum": [
-            "account/rateLimits/updated"
+            "rateLimits/updated"
           ],
-          "title": "Account/rateLimits/updatedNotificationMethod",
+          "title": "RateLimits/updatedNotificationMethod",
           "type": "string"
         },
         "params": {
-          "$ref": "#/definitions/AccountRateLimitsUpdatedNotification"
+          "$ref": "#/definitions/RateLimitsUpdatedNotification"
         }
       },
       "required": [
         "method",
         "params"
       ],
-      "title": "Account/rateLimits/updatedNotification",
+      "title": "RateLimits/updatedNotification",
       "type": "object"
     },
     {
@@ -6883,20 +6883,20 @@
       "properties": {
         "method": {
           "enum": [
-            "account/login/completed"
+            "auth/login/completed"
           ],
-          "title": "Account/login/completedNotificationMethod",
+          "title": "Auth/login/completedNotificationMethod",
           "type": "string"
         },
         "params": {
-          "$ref": "#/definitions/AccountLoginCompletedNotification"
+          "$ref": "#/definitions/LoginCompletedNotification"
         }
       },
       "required": [
         "method",
         "params"
       ],
-      "title": "Account/login/completedNotification",
+      "title": "Auth/login/completedNotification",
       "type": "object"
     }
   ],

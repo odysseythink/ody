@@ -189,17 +189,6 @@
       ],
       "type": "object"
     },
-    "CancelLoginAccountParams": {
-      "properties": {
-        "loginId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "loginId"
-      ],
-      "type": "object"
-    },
     "CapabilityRootLocation": {
       "description": "Location used to resolve a selected capability root.",
       "oneOf": [
@@ -554,7 +543,7 @@
       ],
       "type": "object"
     },
-    "ConsumeAccountRateLimitResetCreditParams": {
+    "ConsumeRateLimitResetCreditParams": {
       "properties": {
         "idempotencyKey": {
           "description": "Identifies one logical reset attempt. A UUID is recommended; reuse the same value when retrying that attempt.",
@@ -1223,7 +1212,7 @@
       ],
       "type": "object"
     },
-    "GetAccountParams": {
+    "GetAuthStateParams": {
       "properties": {
         "refreshToken": {
           "description": "When `true`, requests a proactive token refresh before returning.\n\nThis flag is no longer used; API key auth does not require a refresh flow.",
@@ -1432,7 +1421,7 @@
       ],
       "type": "string"
     },
-    "LoginAccountParams": {
+    "LoginParams": {
       "oneOf": [
         {
           "properties": {
@@ -1443,7 +1432,7 @@
               "enum": [
                 "apiKey"
               ],
-              "title": "ApiKeyLoginAccountParamsType",
+              "title": "ApiKeyLoginParamsType",
               "type": "string"
             }
           },
@@ -1451,7 +1440,7 @@
             "apiKey",
             "type"
           ],
-          "title": "ApiKeyLoginAccountParams",
+          "title": "ApiKeyLoginParams",
           "type": "object"
         }
       ]
@@ -6228,13 +6217,13 @@
         },
         "method": {
           "enum": [
-            "account/login/start"
+            "auth/login/start"
           ],
-          "title": "Account/login/startRequestMethod",
+          "title": "Auth/login/startRequestMethod",
           "type": "string"
         },
         "params": {
-          "$ref": "#/definitions/LoginAccountParams"
+          "$ref": "#/definitions/LoginParams"
         }
       },
       "required": [
@@ -6242,7 +6231,7 @@
         "method",
         "params"
       ],
-      "title": "Account/login/startRequest",
+      "title": "Auth/login/startRequest",
       "type": "object"
     },
     {
@@ -6252,13 +6241,59 @@
         },
         "method": {
           "enum": [
-            "account/login/cancel"
+            "auth/logout"
           ],
-          "title": "Account/login/cancelRequestMethod",
+          "title": "Auth/logoutRequestMethod",
           "type": "string"
         },
         "params": {
-          "$ref": "#/definitions/CancelLoginAccountParams"
+          "type": "null"
+        }
+      },
+      "required": [
+        "id",
+        "method"
+      ],
+      "title": "Auth/logoutRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "rateLimits/read"
+          ],
+          "title": "RateLimits/readRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "id",
+        "method"
+      ],
+      "title": "RateLimits/readRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "rateLimitResetCredit/consume"
+          ],
+          "title": "RateLimitResetCredit/consumeRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/ConsumeRateLimitResetCreditParams"
         }
       },
       "required": [
@@ -6266,7 +6301,7 @@
         "method",
         "params"
       ],
-      "title": "Account/login/cancelRequest",
+      "title": "RateLimitResetCredit/consumeRequest",
       "type": "object"
     },
     {
@@ -6276,9 +6311,9 @@
         },
         "method": {
           "enum": [
-            "account/logout"
+            "usage/read"
           ],
-          "title": "Account/logoutRequestMethod",
+          "title": "Usage/readRequestMethod",
           "type": "string"
         },
         "params": {
@@ -6289,7 +6324,7 @@
         "id",
         "method"
       ],
-      "title": "Account/logoutRequest",
+      "title": "Usage/readRequest",
       "type": "object"
     },
     {
@@ -6299,9 +6334,9 @@
         },
         "method": {
           "enum": [
-            "account/rateLimits/read"
+            "workspaceMessages/read"
           ],
-          "title": "Account/rateLimits/readRequestMethod",
+          "title": "WorkspaceMessages/readRequestMethod",
           "type": "string"
         },
         "params": {
@@ -6312,7 +6347,7 @@
         "id",
         "method"
       ],
-      "title": "Account/rateLimits/readRequest",
+      "title": "WorkspaceMessages/readRequest",
       "type": "object"
     },
     {
@@ -6322,79 +6357,9 @@
         },
         "method": {
           "enum": [
-            "account/rateLimitResetCredit/consume"
+            "usage/sendAddCreditsNudgeEmail"
           ],
-          "title": "Account/rateLimitResetCredit/consumeRequestMethod",
-          "type": "string"
-        },
-        "params": {
-          "$ref": "#/definitions/ConsumeAccountRateLimitResetCreditParams"
-        }
-      },
-      "required": [
-        "id",
-        "method",
-        "params"
-      ],
-      "title": "Account/rateLimitResetCredit/consumeRequest",
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/definitions/RequestId"
-        },
-        "method": {
-          "enum": [
-            "account/usage/read"
-          ],
-          "title": "Account/usage/readRequestMethod",
-          "type": "string"
-        },
-        "params": {
-          "type": "null"
-        }
-      },
-      "required": [
-        "id",
-        "method"
-      ],
-      "title": "Account/usage/readRequest",
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/definitions/RequestId"
-        },
-        "method": {
-          "enum": [
-            "account/workspaceMessages/read"
-          ],
-          "title": "Account/workspaceMessages/readRequestMethod",
-          "type": "string"
-        },
-        "params": {
-          "type": "null"
-        }
-      },
-      "required": [
-        "id",
-        "method"
-      ],
-      "title": "Account/workspaceMessages/readRequest",
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/definitions/RequestId"
-        },
-        "method": {
-          "enum": [
-            "account/sendAddCreditsNudgeEmail"
-          ],
-          "title": "Account/sendAddCreditsNudgeEmailRequestMethod",
+          "title": "Usage/sendAddCreditsNudgeEmailRequestMethod",
           "type": "string"
         },
         "params": {
@@ -6406,7 +6371,7 @@
         "method",
         "params"
       ],
-      "title": "Account/sendAddCreditsNudgeEmailRequest",
+      "title": "Usage/sendAddCreditsNudgeEmailRequest",
       "type": "object"
     },
     {
@@ -6706,13 +6671,13 @@
         },
         "method": {
           "enum": [
-            "account/read"
+            "auth/read"
           ],
-          "title": "Account/readRequestMethod",
+          "title": "Auth/readRequestMethod",
           "type": "string"
         },
         "params": {
-          "$ref": "#/definitions/GetAccountParams"
+          "$ref": "#/definitions/GetAuthStateParams"
         }
       },
       "required": [
@@ -6720,7 +6685,7 @@
         "method",
         "params"
       ],
-      "title": "Account/readRequest",
+      "title": "Auth/readRequest",
       "type": "object"
     },
     {

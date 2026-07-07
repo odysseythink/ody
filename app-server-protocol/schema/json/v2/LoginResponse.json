@@ -3,24 +3,20 @@
   "oneOf": [
     {
       "properties": {
-        "apiKey": {
-          "type": "string"
-        },
         "type": {
           "enum": [
             "apiKey"
           ],
-          "title": "ApiKeyv2::LoginAccountParamsType",
+          "title": "ApiKeyv2::LoginResponseType",
           "type": "string"
         }
       },
       "required": [
-        "apiKey",
         "type"
       ],
-      "title": "ApiKeyv2::LoginAccountParams",
+      "title": "ApiKeyv2::LoginResponse",
       "type": "object"
     }
   ],
-  "title": "LoginAccountParams"
+  "title": "LoginResponse"
 }

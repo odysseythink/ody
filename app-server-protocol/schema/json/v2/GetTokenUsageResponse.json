@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "definitions": {
-    "AccountTokenUsageDailyBucket": {
+    "TokenUsageDailyBucket": {
       "properties": {
         "startDate": {
           "type": "string"
@@ -17,7 +17,7 @@
       ],
       "type": "object"
     },
-    "AccountTokenUsageSummary": {
+    "TokenUsageSummary": {
       "properties": {
         "currentStreakDays": {
           "format": "int64",
@@ -61,7 +61,7 @@
   "properties": {
     "dailyUsageBuckets": {
       "items": {
-        "$ref": "#/definitions/AccountTokenUsageDailyBucket"
+        "$ref": "#/definitions/TokenUsageDailyBucket"
       },
       "type": [
         "array",
@@ -69,12 +69,12 @@
       ]
     },
     "summary": {
-      "$ref": "#/definitions/AccountTokenUsageSummary"
+      "$ref": "#/definitions/TokenUsageSummary"
     }
   },
   "required": [
     "summary"
   ],
-  "title": "GetAccountTokenUsageResponse",
+  "title": "GetTokenUsageResponse",
   "type": "object"
 }

@@ -32,6 +32,18 @@
       ],
       "type": "string"
     },
+    "RateLimitResetCreditsSummary": {
+      "properties": {
+        "availableCount": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "availableCount"
+      ],
+      "type": "object"
+    },
     "RateLimitSnapshot": {
       "properties": {
         "credits": {
@@ -151,15 +163,39 @@
       "type": "object"
     }
   },
-  "description": "Sparse rolling rate-limit update.\n\nClients should merge available values into the most recent `account/rateLimits/read` response or refetch that snapshot. Nullable account metadata may be unavailable in a rolling update and does not clear a previously observed value.",
   "properties": {
+    "rateLimitResetCredits": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RateLimitResetCreditsSummary"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "rateLimits": {
-      "$ref": "#/definitions/RateLimitSnapshot"
+      "allOf": [
+        {
+          "$ref": "#/definitions/RateLimitSnapshot"
+        }
+      ],
+      "description": "Backward-compatible single-bucket view; mirrors the historical payload."
+    },
+    "rateLimitsByLimitId": {
+      "additionalProperties": {
+        "$ref": "#/definitions/RateLimitSnapshot"
+      },
+      "description": "Multi-bucket view keyed by metered `limit_id` (for example, `ody`).",
+      "type": [
+        "object",
+        "null"
+      ]
     }
   },
   "required": [
     "rateLimits"
   ],
-  "title": "AccountRateLimitsUpdatedNotification",
+  "title": "GetRateLimitsResponse",
   "type": "object"
 }

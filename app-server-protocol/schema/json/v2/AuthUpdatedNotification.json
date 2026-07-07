@@ -33,6 +33,6 @@
       ]
     }
   },
-  "title": "AccountUpdatedNotification",
+  "title": "AuthUpdatedNotification",
   "type": "object"
 }

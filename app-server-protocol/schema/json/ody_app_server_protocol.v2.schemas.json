@@ -5,138 +5,6 @@
       "description": "A path that is guaranteed to be absolute and normalized (though it is not guaranteed to be canonicalized or exist on the filesystem).\n\nIMPORTANT: When deserializing an `AbsolutePathBuf`, a base path must be set using [AbsolutePathBufGuard::new]. If no base path is set, the deserialization will fail unless the path being deserialized is already absolute.",
       "type": "string"
     },
-    "Account": {
-      "oneOf": [
-        {
-          "properties": {
-            "type": {
-              "enum": [
-                "apiKey"
-              ],
-              "title": "ApiKeyAccountType",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type"
-          ],
-          "title": "ApiKeyAccount",
-          "type": "object"
-        }
-      ]
-    },
-    "AccountLoginCompletedNotification": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "properties": {
-        "error": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "loginId": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "success": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "success"
-      ],
-      "title": "AccountLoginCompletedNotification",
-      "type": "object"
-    },
-    "AccountRateLimitsUpdatedNotification": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "description": "Sparse rolling rate-limit update.\n\nClients should merge available values into the most recent `account/rateLimits/read` response or refetch that snapshot. Nullable account metadata may be unavailable in a rolling update and does not clear a previously observed value.",
-      "properties": {
-        "rateLimits": {
-          "$ref": "#/definitions/RateLimitSnapshot"
-        }
-      },
-      "required": [
-        "rateLimits"
-      ],
-      "title": "AccountRateLimitsUpdatedNotification",
-      "type": "object"
-    },
-    "AccountTokenUsageDailyBucket": {
-      "properties": {
-        "startDate": {
-          "type": "string"
-        },
-        "tokens": {
-          "format": "int64",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "startDate",
-        "tokens"
-      ],
-      "type": "object"
-    },
-    "AccountTokenUsageSummary": {
-      "properties": {
-        "currentStreakDays": {
-          "format": "int64",
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "lifetimeTokens": {
-          "format": "int64",
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "longestRunningTurnSec": {
-          "format": "int64",
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "longestStreakDays": {
-          "format": "int64",
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "peakDailyTokens": {
-          "format": "int64",
-          "type": [
-            "integer",
-            "null"
-          ]
-        }
-      },
-      "type": "object"
-    },
-    "AccountUpdatedNotification": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "properties": {
-        "authMode": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/AuthMode"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "title": "AccountUpdatedNotification",
-      "type": "object"
-    },
     "ActivePermissionProfile": {
       "properties": {
         "extends": {
@@ -986,6 +854,43 @@
         }
       ]
     },
+    "AuthState": {
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "enum": [
+                "apiKey"
+              ],
+              "title": "ApiKeyAuthStateType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "ApiKeyAuthState",
+          "type": "object"
+        }
+      ]
+    },
+    "AuthUpdatedNotification": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "authMode": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AuthMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "title": "AuthUpdatedNotification",
+      "type": "object"
+    },
     "AutoCompactTokenLimitScope": {
       "description": "Selects which part of the active context is charged against `model_auto_compact_token_limit`.",
       "oneOf": [
@@ -1030,39 +935,6 @@
         "start"
       ],
       "type": "object"
-    },
-    "CancelLoginAccountParams": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "properties": {
-        "loginId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "loginId"
-      ],
-      "title": "CancelLoginAccountParams",
-      "type": "object"
-    },
-    "CancelLoginAccountResponse": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "properties": {
-        "status": {
-          "$ref": "#/definitions/CancelLoginAccountStatus"
-        }
-      },
-      "required": [
-        "status"
-      ],
-      "title": "CancelLoginAccountResponse",
-      "type": "object"
-    },
-    "CancelLoginAccountStatus": {
-      "enum": [
-        "canceled",
-        "notFound"
-      ],
-      "type": "string"
     },
     "CapabilityRootLocation": {
       "description": "Location used to resolve a selected capability root.",
@@ -2686,13 +2558,13 @@
             },
             "method": {
               "enum": [
-                "account/login/start"
+                "auth/login/start"
               ],
-              "title": "Account/login/startRequestMethod",
+              "title": "Auth/login/startRequestMethod",
               "type": "string"
             },
             "params": {
-              "$ref": "#/definitions/LoginAccountParams"
+              "$ref": "#/definitions/LoginParams"
             }
           },
           "required": [
@@ -2700,7 +2572,7 @@
             "method",
             "params"
           ],
-          "title": "Account/login/startRequest",
+          "title": "Auth/login/startRequest",
           "type": "object"
         },
         {
@@ -2710,13 +2582,59 @@
             },
             "method": {
               "enum": [
-                "account/login/cancel"
+                "auth/logout"
               ],
-              "title": "Account/login/cancelRequestMethod",
+              "title": "Auth/logoutRequestMethod",
               "type": "string"
             },
             "params": {
-              "$ref": "#/definitions/CancelLoginAccountParams"
+              "type": "null"
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "title": "Auth/logoutRequest",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/RequestId"
+            },
+            "method": {
+              "enum": [
+                "rateLimits/read"
+              ],
+              "title": "RateLimits/readRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "title": "RateLimits/readRequest",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/RequestId"
+            },
+            "method": {
+              "enum": [
+                "rateLimitResetCredit/consume"
+              ],
+              "title": "RateLimitResetCredit/consumeRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/ConsumeRateLimitResetCreditParams"
             }
           },
           "required": [
@@ -2724,7 +2642,7 @@
             "method",
             "params"
           ],
-          "title": "Account/login/cancelRequest",
+          "title": "RateLimitResetCredit/consumeRequest",
           "type": "object"
         },
         {
@@ -2734,9 +2652,9 @@
             },
             "method": {
               "enum": [
-                "account/logout"
+                "usage/read"
               ],
-              "title": "Account/logoutRequestMethod",
+              "title": "Usage/readRequestMethod",
               "type": "string"
             },
             "params": {
@@ -2747,7 +2665,7 @@
             "id",
             "method"
           ],
-          "title": "Account/logoutRequest",
+          "title": "Usage/readRequest",
           "type": "object"
         },
         {
@@ -2757,9 +2675,9 @@
             },
             "method": {
               "enum": [
-                "account/rateLimits/read"
+                "workspaceMessages/read"
               ],
-              "title": "Account/rateLimits/readRequestMethod",
+              "title": "WorkspaceMessages/readRequestMethod",
               "type": "string"
             },
             "params": {
@@ -2770,7 +2688,7 @@
             "id",
             "method"
           ],
-          "title": "Account/rateLimits/readRequest",
+          "title": "WorkspaceMessages/readRequest",
           "type": "object"
         },
         {
@@ -2780,79 +2698,9 @@
             },
             "method": {
               "enum": [
-                "account/rateLimitResetCredit/consume"
+                "usage/sendAddCreditsNudgeEmail"
               ],
-              "title": "Account/rateLimitResetCredit/consumeRequestMethod",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/definitions/ConsumeAccountRateLimitResetCreditParams"
-            }
-          },
-          "required": [
-            "id",
-            "method",
-            "params"
-          ],
-          "title": "Account/rateLimitResetCredit/consumeRequest",
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/definitions/RequestId"
-            },
-            "method": {
-              "enum": [
-                "account/usage/read"
-              ],
-              "title": "Account/usage/readRequestMethod",
-              "type": "string"
-            },
-            "params": {
-              "type": "null"
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "title": "Account/usage/readRequest",
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/definitions/RequestId"
-            },
-            "method": {
-              "enum": [
-                "account/workspaceMessages/read"
-              ],
-              "title": "Account/workspaceMessages/readRequestMethod",
-              "type": "string"
-            },
-            "params": {
-              "type": "null"
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "title": "Account/workspaceMessages/readRequest",
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/definitions/RequestId"
-            },
-            "method": {
-              "enum": [
-                "account/sendAddCreditsNudgeEmail"
-              ],
-              "title": "Account/sendAddCreditsNudgeEmailRequestMethod",
+              "title": "Usage/sendAddCreditsNudgeEmailRequestMethod",
               "type": "string"
             },
             "params": {
@@ -2864,7 +2712,7 @@
             "method",
             "params"
           ],
-          "title": "Account/sendAddCreditsNudgeEmailRequest",
+          "title": "Usage/sendAddCreditsNudgeEmailRequest",
           "type": "object"
         },
         {
@@ -3164,13 +3012,13 @@
             },
             "method": {
               "enum": [
-                "account/read"
+                "auth/read"
               ],
-              "title": "Account/readRequestMethod",
+              "title": "Auth/readRequestMethod",
               "type": "string"
             },
             "params": {
-              "$ref": "#/definitions/GetAccountParams"
+              "$ref": "#/definitions/GetAuthStateParams"
             }
           },
           "required": [
@@ -3178,7 +3026,7 @@
             "method",
             "params"
           ],
-          "title": "Account/readRequest",
+          "title": "Auth/readRequest",
           "type": "object"
         },
         {
@@ -4615,7 +4463,7 @@
       ],
       "type": "object"
     },
-    "ConsumeAccountRateLimitResetCreditOutcome": {
+    "ConsumeRateLimitResetCreditOutcome": {
       "oneOf": [
         {
           "description": "A reset credit was consumed and the eligible rate-limit windows were reset.",
@@ -4632,7 +4480,7 @@
           "type": "string"
         },
         {
-          "description": "The account has no earned reset credits available.",
+          "description": "The workspace has no earned reset credits available.",
           "enum": [
             "noCredit"
           ],
@@ -4647,7 +4495,7 @@
         }
       ]
     },
-    "ConsumeAccountRateLimitResetCreditParams": {
+    "ConsumeRateLimitResetCreditParams": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "properties": {
         "idempotencyKey": {
@@ -4658,20 +4506,20 @@
       "required": [
         "idempotencyKey"
       ],
-      "title": "ConsumeAccountRateLimitResetCreditParams",
+      "title": "ConsumeRateLimitResetCreditParams",
       "type": "object"
     },
-    "ConsumeAccountRateLimitResetCreditResponse": {
+    "ConsumeRateLimitResetCreditResponse": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "properties": {
         "outcome": {
-          "$ref": "#/definitions/ConsumeAccountRateLimitResetCreditOutcome"
+          "$ref": "#/definitions/ConsumeRateLimitResetCreditOutcome"
         }
       },
       "required": [
         "outcome"
       ],
-      "title": "ConsumeAccountRateLimitResetCreditResponse",
+      "title": "ConsumeRateLimitResetCreditResponse",
       "type": "object"
     },
     "ContentItem": {
@@ -6373,7 +6221,7 @@
       "title": "FuzzyFileSearchSessionUpdatedNotification",
       "type": "object"
     },
-    "GetAccountParams": {
+    "GetAuthStateParams": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "properties": {
         "refreshToken": {
@@ -6381,10 +6229,27 @@
           "type": "boolean"
         }
       },
-      "title": "GetAccountParams",
+      "title": "GetAuthStateParams",
       "type": "object"
     },
-    "GetAccountRateLimitsResponse": {
+    "GetAuthStateResponse": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "account": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AuthState"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "title": "GetAuthStateResponse",
+      "type": "object"
+    },
+    "GetRateLimitsResponse": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "properties": {
         "rateLimitResetCredits": {
@@ -6419,38 +6284,15 @@
       "required": [
         "rateLimits"
       ],
-      "title": "GetAccountRateLimitsResponse",
+      "title": "GetRateLimitsResponse",
       "type": "object"
     },
-    "GetAccountResponse": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "properties": {
-        "account": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Account"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "requiresOdysseythinkAuth": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "requiresOdysseythinkAuth"
-      ],
-      "title": "GetAccountResponse",
-      "type": "object"
-    },
-    "GetAccountTokenUsageResponse": {
+    "GetTokenUsageResponse": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "properties": {
         "dailyUsageBuckets": {
           "items": {
-            "$ref": "#/definitions/AccountTokenUsageDailyBucket"
+            "$ref": "#/definitions/TokenUsageDailyBucket"
           },
           "type": [
             "array",
@@ -6458,13 +6300,13 @@
           ]
         },
         "summary": {
-          "$ref": "#/definitions/AccountTokenUsageSummary"
+          "$ref": "#/definitions/TokenUsageSummary"
         }
       },
       "required": [
         "summary"
       ],
-      "title": "GetAccountTokenUsageResponse",
+      "title": "GetTokenUsageResponse",
       "type": "object"
     },
     "GetWorkspaceMessagesResponse": {
@@ -7582,7 +7424,32 @@
       ],
       "type": "string"
     },
-    "LoginAccountParams": {
+    "LoginCompletedNotification": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loginId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "success": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "success"
+      ],
+      "title": "LoginCompletedNotification",
+      "type": "object"
+    },
+    "LoginParams": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "oneOf": [
         {
@@ -7594,7 +7461,7 @@
               "enum": [
                 "apiKey"
               ],
-              "title": "ApiKeyv2::LoginAccountParamsType",
+              "title": "ApiKeyv2::LoginParamsType",
               "type": "string"
             }
           },
@@ -7602,13 +7469,13 @@
             "apiKey",
             "type"
           ],
-          "title": "ApiKeyv2::LoginAccountParams",
+          "title": "ApiKeyv2::LoginParams",
           "type": "object"
         }
       ],
-      "title": "LoginAccountParams"
+      "title": "LoginParams"
     },
-    "LoginAccountResponse": {
+    "LoginResponse": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "oneOf": [
         {
@@ -7617,22 +7484,22 @@
               "enum": [
                 "apiKey"
               ],
-              "title": "ApiKeyv2::LoginAccountResponseType",
+              "title": "ApiKeyv2::LoginResponseType",
               "type": "string"
             }
           },
           "required": [
             "type"
           ],
-          "title": "ApiKeyv2::LoginAccountResponse",
+          "title": "ApiKeyv2::LoginResponse",
           "type": "object"
         }
       ],
-      "title": "LoginAccountResponse"
+      "title": "LoginResponse"
     },
-    "LogoutAccountResponse": {
+    "LogoutResponse": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "LogoutAccountResponse",
+      "title": "LogoutResponse",
       "type": "object"
     },
     "ManagedHooksRequirements": {
@@ -10576,6 +10443,20 @@
       ],
       "type": "object"
     },
+    "RateLimitsUpdatedNotification": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "Sparse rolling rate-limit update.\n\nClients should merge available values into the most recent `rateLimits/read` response or refetch that snapshot. Nullable auth metadata may be unavailable in a rolling update and does not clear a previously observed value.",
+      "properties": {
+        "rateLimits": {
+          "$ref": "#/definitions/RateLimitSnapshot"
+        }
+      },
+      "required": [
+        "rateLimits"
+      ],
+      "title": "RateLimitsUpdatedNotification",
+      "type": "object"
+    },
     "RawResponseItemCompletedNotification": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "properties": {
@@ -12890,40 +12771,40 @@
           "properties": {
             "method": {
               "enum": [
-                "account/updated"
+                "auth/updated"
               ],
-              "title": "Account/updatedNotificationMethod",
+              "title": "Auth/updatedNotificationMethod",
               "type": "string"
             },
             "params": {
-              "$ref": "#/definitions/AccountUpdatedNotification"
+              "$ref": "#/definitions/AuthUpdatedNotification"
             }
           },
           "required": [
             "method",
             "params"
           ],
-          "title": "Account/updatedNotification",
+          "title": "Auth/updatedNotification",
           "type": "object"
         },
         {
           "properties": {
             "method": {
               "enum": [
-                "account/rateLimits/updated"
+                "rateLimits/updated"
               ],
-              "title": "Account/rateLimits/updatedNotificationMethod",
+              "title": "RateLimits/updatedNotificationMethod",
               "type": "string"
             },
             "params": {
-              "$ref": "#/definitions/AccountRateLimitsUpdatedNotification"
+              "$ref": "#/definitions/RateLimitsUpdatedNotification"
             }
           },
           "required": [
             "method",
             "params"
           ],
-          "title": "Account/rateLimits/updatedNotification",
+          "title": "RateLimits/updatedNotification",
           "type": "object"
         },
         {
@@ -13492,20 +13373,20 @@
           "properties": {
             "method": {
               "enum": [
-                "account/login/completed"
+                "auth/login/completed"
               ],
-              "title": "Account/login/completedNotificationMethod",
+              "title": "Auth/login/completedNotificationMethod",
               "type": "string"
             },
             "params": {
-              "$ref": "#/definitions/AccountLoginCompletedNotification"
+              "$ref": "#/definitions/LoginCompletedNotification"
             }
           },
           "required": [
             "method",
             "params"
           ],
-          "title": "Account/login/completedNotification",
+          "title": "Auth/login/completedNotification",
           "type": "object"
         }
       ],
@@ -17034,6 +16915,62 @@
         "reasoningOutputTokens",
         "totalTokens"
       ],
+      "type": "object"
+    },
+    "TokenUsageDailyBucket": {
+      "properties": {
+        "startDate": {
+          "type": "string"
+        },
+        "tokens": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "startDate",
+        "tokens"
+      ],
+      "type": "object"
+    },
+    "TokenUsageSummary": {
+      "properties": {
+        "currentStreakDays": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "lifetimeTokens": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "longestRunningTurnSec": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "longestStreakDays": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "peakDailyTokens": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
       "type": "object"
     },
     "Tool": {

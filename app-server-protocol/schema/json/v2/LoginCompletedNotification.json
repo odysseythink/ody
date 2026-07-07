@@ -20,6 +20,6 @@
   "required": [
     "success"
   ],
-  "title": "AccountLoginCompletedNotification",
+  "title": "LoginCompletedNotification",
   "type": "object"
 }

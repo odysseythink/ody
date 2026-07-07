@@ -9,6 +9,6 @@
   "required": [
     "idempotencyKey"
   ],
-  "title": "ConsumeAccountRateLimitResetCreditParams",
+  "title": "ConsumeRateLimitResetCreditParams",
   "type": "object"
 }

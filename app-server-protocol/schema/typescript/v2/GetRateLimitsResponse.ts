@@ -4,7 +4,7 @@
 import type { RateLimitResetCreditsSummary } from "./RateLimitResetCreditsSummary";
 import type { RateLimitSnapshot } from "./RateLimitSnapshot";
 
-export type GetAccountRateLimitsResponse = {
+export type GetRateLimitsResponse = {
 /**
  * Backward-compatible single-bucket view; mirrors the historical payload.
  */
