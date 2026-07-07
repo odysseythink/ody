@@ -693,9 +693,9 @@ fn now_unix_timestamp_ms() -> u64 {
 mod tests {
     use std::time::Duration;
 
-    use ody_app_server_protocol::AccountLoginCompletedNotification;
-    use ody_app_server_protocol::AccountRateLimitsUpdatedNotification;
-    use ody_app_server_protocol::AccountUpdatedNotification;
+    use ody_app_server_protocol::LoginCompletedNotification;
+    use ody_app_server_protocol::RateLimitsUpdatedNotification;
+    use ody_app_server_protocol::AuthUpdatedNotification;
     use ody_app_server_protocol::ApplyPatchApprovalParams;
     use ody_app_server_protocol::AuthMode;
     use ody_app_server_protocol::CommandExecutionApprovalDecision;
@@ -725,7 +725,7 @@ mod tests {
     #[test]
     fn verify_server_notification_serialization() {
         let notification =
-            ServerNotification::AccountLoginCompleted(AccountLoginCompletedNotification {
+            ServerNotification::AccountLoginCompleted(LoginCompletedNotification {
                 login_id: Some(Uuid::nil().to_string()),
                 success: true,
                 error: None,
@@ -734,7 +734,7 @@ mod tests {
         let jsonrpc_notification = OutgoingMessage::AppServerNotification(notification);
         assert_eq!(
             json!({
-                "method": "account/login/completed",
+                "method": "auth/login/completed",
                 "params": {
                     "loginId": Uuid::nil().to_string(),
                     "success": true,
@@ -750,7 +750,7 @@ mod tests {
     #[test]
     fn verify_account_login_completed_notification_serialization() {
         let notification =
-            ServerNotification::AccountLoginCompleted(AccountLoginCompletedNotification {
+            ServerNotification::AccountLoginCompleted(LoginCompletedNotification {
                 login_id: Some(Uuid::nil().to_string()),
                 success: true,
                 error: None,
@@ -759,7 +759,7 @@ mod tests {
         let jsonrpc_notification = OutgoingMessage::AppServerNotification(notification);
         assert_eq!(
             json!({
-                "method": "account/login/completed",
+                "method": "auth/login/completed",
                 "params": {
                     "loginId": Uuid::nil().to_string(),
                     "success": true,
@@ -775,7 +775,7 @@ mod tests {
     #[test]
     fn verify_account_rate_limits_notification_serialization() {
         let notification =
-            ServerNotification::AccountRateLimitsUpdated(AccountRateLimitsUpdatedNotification {
+            ServerNotification::AccountRateLimitsUpdated(RateLimitsUpdatedNotification {
                 rate_limits: RateLimitSnapshot {
                     limit_id: Some("ody".to_string()),
                     limit_name: None,
@@ -794,7 +794,7 @@ mod tests {
         let jsonrpc_notification = OutgoingMessage::AppServerNotification(notification);
         assert_eq!(
             json!({
-                "method": "account/rateLimits/updated",
+                "method": "rateLimits/updated",
                 "params": {
                         "rateLimits": {
                         "limitId": "ody",
@@ -819,14 +819,14 @@ mod tests {
 
     #[test]
     fn verify_account_updated_notification_serialization() {
-        let notification = ServerNotification::AccountUpdated(AccountUpdatedNotification {
+        let notification = ServerNotification::AccountUpdated(AuthUpdatedNotification {
             auth_mode: Some(AuthMode::ApiKey),
         });
 
         let jsonrpc_notification = OutgoingMessage::AppServerNotification(notification);
         assert_eq!(
             json!({
-                "method": "account/updated",
+                "method": "auth/updated",
                 "params": {
                     "authMode": "apikey",
                 },

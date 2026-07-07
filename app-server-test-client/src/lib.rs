@@ -25,7 +25,7 @@ use anyhow::bail;
 use clap::ArgAction;
 use clap::Parser;
 use clap::Subcommand;
-use ody_app_server_protocol::AccountLoginCompletedNotification;
+use ody_app_server_protocol::LoginCompletedNotification;
 use ody_app_server_protocol::AskForApproval;
 use ody_app_server_protocol::ClientInfo;
 use ody_app_server_protocol::ClientRequest;
@@ -44,7 +44,7 @@ use ody_app_server_protocol::JSONRPCMessage;
 use ody_app_server_protocol::JSONRPCNotification;
 use ody_app_server_protocol::JSONRPCRequest;
 use ody_app_server_protocol::JSONRPCResponse;
-use ody_app_server_protocol::LoginAccountResponse;
+use ody_app_server_protocol::LoginResponse;
 use ody_app_server_protocol::ModelListParams;
 use ody_app_server_protocol::ModelListResponse;
 use ody_app_server_protocol::RequestId;
@@ -1121,9 +1121,9 @@ async fn test_login(endpoint: &Endpoint, config_overrides: &[String]) -> Result<
         let api_key = std::env::var("OPENAI_API_KEY")
             .unwrap_or_else(|_| "sk-test-dummy-key".to_string());
         let login_response = client.login_account_api_key(api_key)?;
-        println!("< account/login/start response: {login_response:?}");
+        println!("< auth/login/start response: {login_response:?}");
 
-        if matches!(login_response, LoginAccountResponse::ApiKey {}) {
+        if matches!(login_response, LoginResponse::ApiKey {}) {
             println!("API key login accepted by app-server.");
             Ok(())
         } else {
@@ -1654,14 +1654,14 @@ impl OdyClient {
         self.send_request(request, request_id, "turn/start")
     }
 
-    fn login_account_api_key(&mut self, api_key: String) -> Result<LoginAccountResponse> {
+    fn login_account_api_key(&mut self, api_key: String) -> Result<LoginResponse> {
         let request_id = self.request_id();
         let request = ClientRequest::LoginAccount {
             request_id: request_id.clone(),
-            params: ody_app_server_protocol::LoginAccountParams::ApiKey { api_key },
+            params: ody_app_server_protocol::LoginParams::ApiKey { api_key },
         };
 
-        self.send_request(request, request_id, "account/login/start")
+        self.send_request(request, request_id, "auth/login/start")
     }
 
     fn model_list(&mut self, params: ModelListParams) -> Result<ModelListResponse> {
@@ -1713,7 +1713,7 @@ impl OdyClient {
     fn wait_for_account_login_completion(
         &mut self,
         expected_login_id: &str,
-    ) -> Result<AccountLoginCompletedNotification> {
+    ) -> Result<LoginCompletedNotification> {
         loop {
             let notification = self.next_notification()?;
 
@@ -1725,12 +1725,12 @@ impl OdyClient {
                         }
 
                         println!(
-                            "[ignoring account/login/completed for unexpected login_id: {:?}]",
+                            "[ignoring auth/login/completed for unexpected login_id: {:?}]",
                             completion.login_id
                         );
                     }
                     ServerNotification::AccountRateLimitsUpdated(snapshot) => {
-                        println!("< accountRateLimitsUpdated notification: {snapshot:?}");
+                        println!("< rateLimitsUpdated notification: {snapshot:?}");
                     }
                     _ => {}
                 }

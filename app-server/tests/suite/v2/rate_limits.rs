@@ -31,7 +31,7 @@ async fn get_account_rate_limits_returns_not_supported() -> Result<()> {
     assert_eq!(error.error.code, INTERNAL_ERROR_CODE);
     assert_eq!(
         error.error.message,
-        "account/rateLimits/read is not supported in this build"
+        "rateLimits/read is not supported in this build"
     );
 
     Ok(())
@@ -61,7 +61,7 @@ async fn send_add_credits_nudge_email_returns_not_supported() -> Result<()> {
     assert_eq!(error.error.code, INTERNAL_ERROR_CODE);
     assert_eq!(
         error.error.message,
-        "account/sendAddCreditsNudgeEmail is not supported in this build"
+        "usage/sendAddCreditsNudgeEmail is not supported in this build"
     );
 
     Ok(())

@@ -1232,11 +1232,6 @@ impl MessageProcessor {
                     .logout_account(request_id.clone())
                     .await
             }
-            ClientRequest::CancelLoginAccount { .. } => {
-                Err(invalid_request(
-                    "account/login/cancel is no longer supported",
-                ))
-            }
             ClientRequest::GetAccount { params, .. } => {
                 self.account_processor.get_account(params).await
             }

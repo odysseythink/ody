@@ -1,6 +1,6 @@
 use anyhow::Result;
 use app_test_support::TestAppServer;
-use ody_app_server_protocol::ConsumeAccountRateLimitResetCreditParams;
+use ody_app_server_protocol::ConsumeRateLimitResetCreditParams;
 use ody_app_server_protocol::JSONRPCError;
 use ody_app_server_protocol::RequestId;
 use pretty_assertions::assert_eq;
@@ -17,7 +17,7 @@ async fn consume_rate_limit_reset_credit_returns_not_supported() -> Result<()> {
 
     let consume_id = mcp
         .send_consume_account_rate_limit_reset_credit_request(
-            ConsumeAccountRateLimitResetCreditParams {
+            ConsumeRateLimitResetCreditParams {
                 idempotency_key: "request-1".to_string(),
             },
         )
@@ -26,7 +26,7 @@ async fn consume_rate_limit_reset_credit_returns_not_supported() -> Result<()> {
     assert_eq!(consume_error.error.code, INTERNAL_ERROR_CODE);
     assert_eq!(
         consume_error.error.message,
-        "account/rateLimitResetCredit/consume is not supported in this build"
+        "rateLimitResetCredit/consume is not supported in this build"
     );
     Ok(())
 }

@@ -11,7 +11,7 @@ use crate::thread_state::TurnSummary;
 use crate::thread_state::resolve_server_request_on_thread_listener;
 use crate::thread_status::ThreadWatchActiveGuard;
 use crate::thread_status::ThreadWatchManager;
-use ody_app_server_protocol::AccountRateLimitsUpdatedNotification;
+use ody_app_server_protocol::RateLimitsUpdatedNotification;
 use ody_app_server_protocol::AdditionalPermissionProfile as V2AdditionalPermissionProfile;
 use ody_app_server_protocol::OdyErrorInfo as V2OdyErrorInfo;
 use ody_app_server_protocol::CommandAction as V2ParsedCommand;
@@ -1645,7 +1645,7 @@ async fn handle_token_count_event(
     if let Some(rate_limits) = rate_limits {
         outgoing
             .send_server_notification(ServerNotification::AccountRateLimitsUpdated(
-                AccountRateLimitsUpdatedNotification {
+                RateLimitsUpdatedNotification {
                     rate_limits: rate_limits.into(),
                 },
             ))

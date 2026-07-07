@@ -10,7 +10,7 @@ use ody_app_server_protocol::ItemCompletedNotification;
 use ody_app_server_protocol::ItemStartedNotification;
 use ody_app_server_protocol::JSONRPCError;
 use ody_app_server_protocol::JSONRPCResponse;
-use ody_app_server_protocol::LoginAccountResponse;
+use ody_app_server_protocol::LoginResponse;
 use ody_app_server_protocol::RequestId;
 use ody_app_server_protocol::ThreadItem;
 use ody_app_server_protocol::ThreadRealtimeAppendAudioParams;
@@ -2828,8 +2828,8 @@ async fn login_with_api_key(mcp: &mut TestAppServer, api_key: &str) -> Result<()
         mcp.read_stream_until_response_message(RequestId::Integer(request_id)),
     )
     .await??;
-    let login: LoginAccountResponse = to_response(response)?;
-    assert_eq!(login, LoginAccountResponse::ApiKey {});
+    let login: LoginResponse = to_response(response)?;
+    assert_eq!(login, LoginResponse::ApiKey {});
 
     Ok(())
 }

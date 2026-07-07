@@ -13,7 +13,6 @@ use tokio::process::ChildStdout;
 
 use anyhow::Context;
 use ody_app_server_protocol::AppsListParams;
-use ody_app_server_protocol::CancelLoginAccountParams;
 use ody_app_server_protocol::ClientInfo;
 use ody_app_server_protocol::ClientNotification;
 use ody_app_server_protocol::CollaborationModeListParams;
@@ -24,7 +23,7 @@ use ody_app_server_protocol::CommandExecWriteParams;
 use ody_app_server_protocol::ConfigBatchWriteParams;
 use ody_app_server_protocol::ConfigReadParams;
 use ody_app_server_protocol::ConfigValueWriteParams;
-use ody_app_server_protocol::ConsumeAccountRateLimitResetCreditParams;
+use ody_app_server_protocol::ConsumeRateLimitResetCreditParams;
 use ody_app_server_protocol::ExperimentalFeatureListParams;
 use ody_app_server_protocol::FeedbackUploadParams;
 use ody_app_server_protocol::FsCopyParams;
@@ -36,7 +35,7 @@ use ody_app_server_protocol::FsRemoveParams;
 use ody_app_server_protocol::FsUnwatchParams;
 use ody_app_server_protocol::FsWatchParams;
 use ody_app_server_protocol::FsWriteFileParams;
-use ody_app_server_protocol::GetAccountParams;
+use ody_app_server_protocol::GetAuthStateParams;
 use ody_app_server_protocol::GetAuthStatusParams;
 use ody_app_server_protocol::GetConversationSummaryParams;
 use ody_app_server_protocol::HooksListParams;
@@ -49,7 +48,7 @@ use ody_app_server_protocol::JSONRPCNotification;
 use ody_app_server_protocol::JSONRPCRequest;
 use ody_app_server_protocol::JSONRPCResponse;
 use ody_app_server_protocol::ListMcpServerStatusParams;
-use ody_app_server_protocol::LoginAccountParams;
+use ody_app_server_protocol::LoginParams;
 use ody_app_server_protocol::MarketplaceAddParams;
 use ody_app_server_protocol::MarketplaceRemoveParams;
 use ody_app_server_protocol::MarketplaceUpgradeParams;
@@ -377,17 +376,17 @@ impl TestAppServer {
 
     /// Send an `account/rateLimits/read` JSON-RPC request.
     pub async fn send_get_account_rate_limits_request(&mut self) -> anyhow::Result<i64> {
-        self.send_request("account/rateLimits/read", /*params*/ None)
+        self.send_request("rateLimits/read", /*params*/ None)
             .await
     }
 
     /// Send an `account/rateLimitResetCredit/consume` JSON-RPC request.
     pub async fn send_consume_account_rate_limit_reset_credit_request(
         &mut self,
-        params: ConsumeAccountRateLimitResetCreditParams,
+        params: ConsumeRateLimitResetCreditParams,
     ) -> anyhow::Result<i64> {
         self.send_request(
-            "account/rateLimitResetCredit/consume",
+            "rateLimitResetCredit/consume",
             Some(serde_json::to_value(params)?),
         )
         .await
@@ -399,24 +398,24 @@ impl TestAppServer {
         params: SendAddCreditsNudgeEmailParams,
     ) -> anyhow::Result<i64> {
         let params = Some(serde_json::to_value(params)?);
-        self.send_request("account/sendAddCreditsNudgeEmail", params)
+        self.send_request("usage/sendAddCreditsNudgeEmail", params)
             .await
     }
 
     /// Send an `account/read` JSON-RPC request.
     pub async fn send_get_account_request(
         &mut self,
-        params: GetAccountParams,
+        params: GetAuthStateParams,
     ) -> anyhow::Result<i64> {
         let params = Some(serde_json::to_value(params)?);
-        self.send_request("account/read", params).await
+        self.send_request("auth/read", params).await
     }
 
     /// Send an `account/login/start` JSON-RPC request with an API key.
     pub async fn send_api_key_login_request(&mut self, api_key: String) -> anyhow::Result<i64> {
-        let params = LoginAccountParams::ApiKey { api_key };
+        let params = LoginParams::ApiKey { api_key };
         let params = Some(serde_json::to_value(params)?);
-        self.send_request("account/login/start", params).await
+        self.send_request("auth/login/start", params).await
     }
 
     /// Send a `feedback/upload` JSON-RPC request.
@@ -1156,7 +1155,7 @@ impl TestAppServer {
 
     /// Send an `account/logout` JSON-RPC request.
     pub async fn send_logout_account_request(&mut self) -> anyhow::Result<i64> {
-        self.send_request("account/logout", /*params*/ None).await
+        self.send_request("auth/logout", /*params*/ None).await
     }
 
     /// Send an `account/login/start` JSON-RPC request for API key login.
@@ -1168,16 +1167,7 @@ impl TestAppServer {
             "type": "apiKey",
             "apiKey": api_key,
         });
-        self.send_request("account/login/start", Some(params)).await
-    }
-
-    /// Send an `account/login/cancel` JSON-RPC request.
-    pub async fn send_cancel_login_account_request(
-        &mut self,
-        params: CancelLoginAccountParams,
-    ) -> anyhow::Result<i64> {
-        let params = Some(serde_json::to_value(params)?);
-        self.send_request("account/login/cancel", params).await
+        self.send_request("auth/login/start", Some(params)).await
     }
 
     /// Send a `fuzzyFileSearch` JSON-RPC request.

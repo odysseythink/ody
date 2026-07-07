@@ -2898,8 +2898,8 @@ permissionProfile?: string | null};
             })
             .collect();
         let missing_client_request_methods: Vec<String> = [
-            "account/logout",
-            "account/rateLimits/read",
+            "auth/logout",
+            "rateLimits/read",
             "config/mcpServer/reload",
             "configRequirements/read",
             "fuzzyFileSearch",

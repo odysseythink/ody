@@ -3,14 +3,14 @@ use anyhow::bail;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
 
-use ody_app_server_protocol::Account;
+use ody_app_server_protocol::AuthState;
 use ody_app_server_protocol::AuthMode;
-use ody_app_server_protocol::GetAccountParams;
-use ody_app_server_protocol::GetAccountResponse;
+use ody_app_server_protocol::GetAuthStateParams;
+use ody_app_server_protocol::GetAuthStateResponse;
 use ody_app_server_protocol::JSONRPCError;
 use ody_app_server_protocol::JSONRPCResponse;
-use ody_app_server_protocol::LoginAccountResponse;
-use ody_app_server_protocol::LogoutAccountResponse;
+use ody_app_server_protocol::LoginResponse;
+use ody_app_server_protocol::LogoutResponse;
 use ody_app_server_protocol::RequestId;
 use ody_app_server_protocol::ServerNotification;
 use ody_config::types::AuthCredentialsStoreMode;
@@ -123,11 +123,11 @@ async fn logout_account_removes_auth_and_notifies() -> Result<()> {
         mcp.read_stream_until_response_message(RequestId::Integer(id)),
     )
     .await??;
-    let _ok: LogoutAccountResponse = to_response(resp)?;
+    let _ok: LogoutResponse = to_response(resp)?;
 
     let note = timeout(
         DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_notification_message("account/updated"),
+        mcp.read_stream_until_notification_message("auth/updated"),
     )
     .await??;
     let parsed: ServerNotification = note.try_into()?;
@@ -145,7 +145,7 @@ async fn logout_account_removes_auth_and_notifies() -> Result<()> {
     );
 
     let get_id = mcp
-        .send_get_account_request(GetAccountParams {
+        .send_get_account_request(GetAuthStateParams {
             refresh_token: false,
         })
         .await?;
@@ -154,7 +154,7 @@ async fn logout_account_removes_auth_and_notifies() -> Result<()> {
         mcp.read_stream_until_response_message(RequestId::Integer(get_id)),
     )
     .await??;
-    let account: GetAccountResponse = to_response(get_resp)?;
+    let account: GetAuthStateResponse = to_response(get_resp)?;
     assert_eq!(account.account, None);
     Ok(())
 }
@@ -182,12 +182,12 @@ async fn login_account_api_key_succeeds_and_notifies() -> Result<()> {
         mcp.read_stream_until_response_message(RequestId::Integer(req_id)),
     )
     .await??;
-    let login: LoginAccountResponse = to_response(resp)?;
-    assert_eq!(login, LoginAccountResponse::ApiKey {});
+    let login: LoginResponse = to_response(resp)?;
+    assert_eq!(login, LoginResponse::ApiKey {});
 
     let note = timeout(
         DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_notification_message("account/login/completed"),
+        mcp.read_stream_until_notification_message("auth/login/completed"),
     )
     .await??;
     let parsed: ServerNotification = note.try_into()?;
@@ -200,7 +200,7 @@ async fn login_account_api_key_succeeds_and_notifies() -> Result<()> {
 
     let note = timeout(
         DEFAULT_READ_TIMEOUT,
-        mcp.read_stream_until_notification_message("account/updated"),
+        mcp.read_stream_until_notification_message("auth/updated"),
     )
     .await??;
     let parsed: ServerNotification = note.try_into()?;
@@ -228,7 +228,7 @@ async fn get_account_no_auth() -> Result<()> {
         TestAppServer::new_with_env(ody_home.path(), &[("OPENAI_API_KEY", None)]).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
 
-    let params = GetAccountParams {
+    let params = GetAuthStateParams {
         refresh_token: false,
     };
     let request_id = mcp.send_get_account_request(params).await?;
@@ -238,7 +238,7 @@ async fn get_account_no_auth() -> Result<()> {
         mcp.read_stream_until_response_message(RequestId::Integer(request_id)),
     )
     .await??;
-    let account: GetAccountResponse = to_response(resp)?;
+    let account: GetAuthStateResponse = to_response(resp)?;
 
     assert_eq!(account.account, None, "expected no account");
     Ok(())
@@ -266,9 +266,9 @@ async fn get_account_with_api_key() -> Result<()> {
         mcp.read_stream_until_response_message(RequestId::Integer(req_id)),
     )
     .await??;
-    let _login_ok = to_response::<LoginAccountResponse>(resp)?;
+    let _login_ok = to_response::<LoginResponse>(resp)?;
 
-    let params = GetAccountParams {
+    let params = GetAuthStateParams {
         refresh_token: false,
     };
     let request_id = mcp.send_get_account_request(params).await?;
@@ -278,10 +278,10 @@ async fn get_account_with_api_key() -> Result<()> {
         mcp.read_stream_until_response_message(RequestId::Integer(request_id)),
     )
     .await??;
-    let received: GetAccountResponse = to_response(resp)?;
+    let received: GetAuthStateResponse = to_response(resp)?;
 
-    let expected = GetAccountResponse {
-        account: Some(Account::ApiKey {}),
+    let expected = GetAuthStateResponse {
+        account: Some(AuthState::ApiKey {}),
     };
     assert_eq!(received, expected);
     Ok(())
@@ -301,7 +301,7 @@ async fn get_account_when_auth_not_required() -> Result<()> {
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
 
-    let params = GetAccountParams {
+    let params = GetAuthStateParams {
         refresh_token: false,
     };
     let request_id = mcp.send_get_account_request(params).await?;
@@ -311,9 +311,9 @@ async fn get_account_when_auth_not_required() -> Result<()> {
         mcp.read_stream_until_response_message(RequestId::Integer(request_id)),
     )
     .await??;
-    let received: GetAccountResponse = to_response(resp)?;
+    let received: GetAuthStateResponse = to_response(resp)?;
 
-    let expected = GetAccountResponse {
+    let expected = GetAuthStateResponse {
         account: None,
     };
     assert_eq!(received, expected);

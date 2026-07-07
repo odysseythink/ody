@@ -27,7 +27,7 @@ impl AccountRequestProcessor {
     pub(crate) async fn login_account(
         &self,
         request_id: ConnectionRequestId,
-        params: LoginAccountParams,
+        params: LoginParams,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         self.login_v2(request_id, params).await.map(|()| None)
     }
@@ -41,7 +41,7 @@ impl AccountRequestProcessor {
 
     pub(crate) async fn get_account(
         &self,
-        params: GetAccountParams,
+        params: GetAuthStateParams,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         self.get_account_response(params)
             .await
@@ -61,7 +61,7 @@ impl AccountRequestProcessor {
         &self,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         Err(internal_error(
-            "account/rateLimits/read is not supported in this build",
+            "rateLimits/read is not supported in this build",
         ))
     }
 
@@ -69,7 +69,7 @@ impl AccountRequestProcessor {
         &self,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         Err(internal_error(
-            "account/usage/read is not supported in this build",
+            "usage/read is not supported in this build",
         ))
     }
 
@@ -77,7 +77,7 @@ impl AccountRequestProcessor {
         &self,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         Err(internal_error(
-            "account/workspaceMessages/read is not supported in this build",
+            "workspaceMessages/read is not supported in this build",
         ))
     }
 
@@ -86,21 +86,21 @@ impl AccountRequestProcessor {
         _params: SendAddCreditsNudgeEmailParams,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         Err(internal_error(
-            "account/sendAddCreditsNudgeEmail is not supported in this build",
+            "usage/sendAddCreditsNudgeEmail is not supported in this build",
         ))
     }
 
     pub(crate) async fn consume_account_rate_limit_reset_credit(
         &self,
-        _params: ConsumeAccountRateLimitResetCreditParams,
+        _params: ConsumeRateLimitResetCreditParams,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         Err(internal_error(
-            "account/rateLimitResetCredit/consume is not supported in this build",
+            "rateLimitResetCredit/consume is not supported in this build",
         ))
     }
 
-    fn current_account_updated_notification(&self) -> AccountUpdatedNotification {
-        AccountUpdatedNotification {
+    fn current_account_updated_notification(&self) -> AuthUpdatedNotification {
+        AuthUpdatedNotification {
             auth_mode: None,
         }
     }
@@ -138,10 +138,10 @@ impl AccountRequestProcessor {
     async fn login_v2(
         &self,
         request_id: ConnectionRequestId,
-        params: LoginAccountParams,
+        params: LoginParams,
     ) -> Result<(), JSONRPCErrorError> {
         match params {
-            LoginAccountParams::ApiKey { api_key } => {
+            LoginParams::ApiKey { api_key } => {
                 self.login_api_key_v2(request_id, LoginApiKeyParams { api_key })
                     .await;
             }
@@ -157,7 +157,7 @@ impl AccountRequestProcessor {
     }
 
     async fn login_api_key_v2(&self, request_id: ConnectionRequestId, _params: LoginApiKeyParams) {
-        let result: std::result::Result<LoginAccountResponse, ody_app_server_protocol::JSONRPCErrorError> = Ok(LoginAccountResponse::ApiKey {});
+        let result: std::result::Result<LoginResponse, ody_app_server_protocol::JSONRPCErrorError> = Ok(LoginResponse::ApiKey {});
         let logged_in = result.is_ok();
         self.outgoing.send_result(request_id, result).await;
 
@@ -173,7 +173,7 @@ impl AccountRequestProcessor {
         )
         .await;
 
-        let payload_login_completed = AccountLoginCompletedNotification {
+        let payload_login_completed = LoginCompletedNotification {
             login_id: None,
             success: true,
             error: None,
@@ -208,11 +208,11 @@ impl AccountRequestProcessor {
                 .as_ref()
                 .ok()
                 .cloned()
-                .map(|auth_mode| AccountUpdatedNotification {
+                .map(|auth_mode| AuthUpdatedNotification {
                     auth_mode,
                 });
         self.outgoing
-            .send_result(request_id, result.map(|_| LogoutAccountResponse {}))
+            .send_result(request_id, result.map(|_| LogoutResponse {}))
             .await;
 
         if let Some(payload) = account_updated {
@@ -235,17 +235,17 @@ impl AccountRequestProcessor {
 
     async fn get_account_response(
         &self,
-        _params: GetAccountParams,
-    ) -> Result<GetAccountResponse, JSONRPCErrorError> {
+        _params: GetAuthStateParams,
+    ) -> Result<GetAuthStateResponse, JSONRPCErrorError> {
         let provider = create_model_provider(
             self.config.model_provider.clone(),
         );
         provider
             .account_state()
             .map_err(|err| invalid_request(err.to_string()))?;
-        let account: Option<Account> = None;
+        let account: Option<AuthState> = None;
 
-        Ok(GetAccountResponse {
+        Ok(GetAuthStateResponse {
             account,
         })
     }

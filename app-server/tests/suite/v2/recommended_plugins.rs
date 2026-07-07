@@ -3,7 +3,7 @@ use app_test_support::TestAppServer;
 use app_test_support::to_response;
 use app_test_support::write_mock_responses_config_toml_simple;
 use ody_app_server_protocol::JSONRPCResponse;
-use ody_app_server_protocol::LoginAccountResponse;
+use ody_app_server_protocol::LoginResponse;
 use ody_app_server_protocol::RequestId;
 use ody_app_server_protocol::ThreadStartParams;
 use ody_app_server_protocol::ThreadStartResponse;
@@ -55,8 +55,8 @@ async fn first_turn_after_external_login_does_not_inject_recommended_plugins() -
     )
     .await??;
     assert_eq!(
-        to_response::<LoginAccountResponse>(login_response)?,
-        LoginAccountResponse::ApiKey {}
+        to_response::<LoginResponse>(login_response)?,
+        LoginResponse::ApiKey {}
     );
 
     let thread_id = app_server

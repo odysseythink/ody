@@ -1,14 +1,14 @@
 use anyhow::Result;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
-use ody_app_server_protocol::Account;
+use ody_app_server_protocol::AuthState;
 use ody_app_server_protocol::AuthMode;
-use ody_app_server_protocol::GetAccountParams;
-use ody_app_server_protocol::GetAccountResponse;
+use ody_app_server_protocol::GetAuthStateParams;
+use ody_app_server_protocol::GetAuthStateResponse;
 use ody_app_server_protocol::GetAuthStatusParams;
 use ody_app_server_protocol::GetAuthStatusResponse;
 use ody_app_server_protocol::JSONRPCResponse;
-use ody_app_server_protocol::LoginAccountResponse;
+use ody_app_server_protocol::LoginResponse;
 use ody_app_server_protocol::RequestId;
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
@@ -88,8 +88,8 @@ async fn login_with_api_key_via_request(mcp: &mut TestAppServer, api_key: &str) 
         mcp.read_stream_until_response_message(RequestId::Integer(request_id)),
     )
     .await??;
-    let response: LoginAccountResponse = to_response(resp)?;
-    assert_eq!(response, LoginAccountResponse::ApiKey {});
+    let response: LoginResponse = to_response(resp)?;
+    assert_eq!(response, LoginResponse::ApiKey {});
     Ok(())
 }
 
@@ -180,7 +180,7 @@ async fn api_key_supports_auth_status_and_account_read() -> Result<()> {
     );
 
     let request_id = mcp
-        .send_get_account_request(GetAccountParams {
+        .send_get_account_request(GetAuthStateParams {
             refresh_token: false,
         })
         .await?;
@@ -190,9 +190,9 @@ async fn api_key_supports_auth_status_and_account_read() -> Result<()> {
     )
     .await??;
     assert_eq!(
-        to_response::<GetAccountResponse>(response)?,
-        GetAccountResponse {
-            account: Some(Account::ApiKey {}),
+        to_response::<GetAuthStateResponse>(response)?,
+        GetAuthStateResponse {
+            account: Some(AuthState::ApiKey {}),
         }
     );
 
@@ -305,7 +305,7 @@ async fn login_api_key_succeeds_when_forced_api() -> Result<()> {
         mcp.read_stream_until_response_message(RequestId::Integer(request_id)),
     )
     .await??;
-    let response: LoginAccountResponse = to_response(resp)?;
-    assert_eq!(response, LoginAccountResponse::ApiKey {});
+    let response: LoginResponse = to_response(resp)?;
+    assert_eq!(response, LoginResponse::ApiKey {});
     Ok(())
 }
