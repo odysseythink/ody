@@ -32,6 +32,13 @@ impl CollaborationModeInstructions {
 
         Some(Self { instructions: rendered })
     }
+
+    pub(crate) fn with_rigor_coverage(self) -> Self {
+        let fragment = ody_collaboration_mode_templates::PLAN_RIGOR_COVERAGE;
+        Self {
+            instructions: format!("{}\n\n{}", self.instructions, fragment),
+        }
+    }
 }
 
 fn render_plan_instructions(instructions: &str, split_threshold: Option<usize>) -> String {
@@ -128,5 +135,22 @@ mod tests {
         let instructions = CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8))
             .expect("should produce instructions");
         assert_eq!(instructions.body(), "Stay focused.");
+    }
+
+    #[test]
+    fn composes_rigor_coverage_fragment() {
+        let mode = plan_mode_with_instructions("Plan the work.");
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8))
+            .expect("should produce instructions")
+            .with_rigor_coverage();
+        let body = instructions.body();
+        assert!(
+            body.contains("## Dependency Overview"),
+            "body should contain Dependency Overview section:\n{body}"
+        );
+        assert!(
+            body.contains("## Spec-coverage table"),
+            "body should contain Spec-coverage table section:\n{body}"
+        );
     }
 }
