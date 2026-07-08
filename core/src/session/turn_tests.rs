@@ -65,3 +65,46 @@ async fn plan_mode_uses_contributed_turn_item_for_last_agent_message() {
         Some("plan contributed assistant text")
     );
 }
+
+use ody_protocol::ThreadId;
+use ody_protocol::config_types::ModeKind;
+use ody_utils_absolute_path::AbsolutePathBuf;
+use crate::plan_artifact::PlanArtifact;
+use crate::plan_mode_injector::ReminderKind;
+
+#[tokio::test]
+async fn plan_mode_records_full_reminder_at_turn_five() {
+    let (sess, tc, rx) = crate::session::tests::make_session_and_context_with_rx().await;
+    let mut tc = tc;
+    let tc_mut = Arc::get_mut(&mut tc).expect("turn context arc should be unique in test");
+    tc_mut.collaboration_mode.mode = ModeKind::Plan;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+    let thread_id = ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
+    let artifact = PlanArtifact::new_temp(plans_base_dir, thread_id, "2026-07-04");
+    artifact.finalize_name("topic").await.unwrap();
+    tc_mut.plan_artifact = Some(Arc::new(artifact));
+
+    let plan_markdown = "## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 1 | core.md | models | pending |\n";
+    let mut client_session = crate::session::tests::test_model_client_session();
+
+    for _ in 1..=5 {
+        run_plan_mode_after_turn(&sess, &tc, &mut client_session, plan_markdown)
+            .await
+            .expect("after-plan hook should succeed");
+    }
+
+    // Drain events and find the full reminder.
+    let mut found_full = false;
+    while let Ok(event) = rx.try_recv() {
+        if let ody_protocol::protocol::EventMsg::RawResponseItem(raw) = event.msg {
+            if let ody_protocol::models::ResponseItem::Message { content, .. } = raw.item {
+                if content.iter().any(|c| matches!(c, ody_protocol::models::ContentItem::InputText { text } if text.contains("## Plan-mode rigor reminder (full)"))) {
+                    found_full = true;
+                }
+            }
+        }
+    }
+    assert!(found_full, "a full rigor reminder should be recorded by turn 5");
+}

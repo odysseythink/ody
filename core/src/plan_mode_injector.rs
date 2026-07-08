@@ -143,6 +143,46 @@ impl PlanModeInjector {
             .unwrap_or(0.5);
         ratio > 0.0 && context_usage_ratio >= ratio
     }
+
+    /// Advances the per-plan turn counter, selects a rigor reminder if one is due,
+    /// renders it, and records the injection back into the artifact.
+    ///
+    /// Returns `Some((kind, rendered_text))` when a reminder should be injected,
+    /// or `None` when the cadence says no reminder is due this turn.
+    pub fn render_reminder_if_due(
+        artifact: &PlanArtifact,
+        plan_mode_config: Option<&PlanModeConfigToml>,
+    ) -> Option<(ReminderKind, String)> {
+        let current_turn = artifact.next_plan_mode_turn();
+        let (last_full_turn, last_any_turn) = artifact.last_reminder_turns();
+
+        // Before the first full reminder has been injected, suppress sparse
+        // reminders so the initial full contract (already present in context)
+        // isn't diluted by partial pointers ahead of the first scheduled full
+        // refresh. When full refresh is disabled (`full_refresh_turns == 0`),
+        // leave `last_any_turn` untouched so sparse cadence starts normally.
+        let full_refresh = plan_mode_config
+            .and_then(|c| c.full_refresh_turns)
+            .unwrap_or(5);
+        let last_any_turn_for_selection = if full_refresh > 0 && last_full_turn == Some(0) {
+            Some(current_turn.saturating_sub(1))
+        } else {
+            last_any_turn
+        };
+
+        let kind = select_reminder(
+            current_turn,
+            last_full_turn,
+            last_any_turn_for_selection,
+            plan_mode_config,
+        )?;
+        let text = match kind {
+            ReminderKind::Full => render_full_reminder(),
+            ReminderKind::Sparse => render_sparse_reminder(),
+        };
+        artifact.record_reminder_injected(kind == ReminderKind::Full, current_turn);
+        Some((kind, text))
+    }
 }
 
 pub fn render_directive(directive: &PlanModeDirective, index_path: &Path) -> Option<String> {
@@ -451,6 +491,49 @@ mod directive_tests {
             select_reminder(10, Some(5), Some(5), Some(&no_sparse)),
             Some(ReminderKind::Full),
             "dedup_min=0 should still allow full reminders when due"
+        );
+    }
+
+    #[test]
+    fn render_reminder_if_due_follows_full_sparse_cadence() {
+        let tmp = tempfile::tempdir().unwrap();
+        let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let thread_id = ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
+        let artifact = PlanArtifact::new_temp(plans_base_dir, thread_id, "2026-07-04");
+        let config = PlanModeConfigToml::default();
+
+        // Turns 1-4: nothing is due.
+        for _ in 1..=4 {
+            assert_eq!(
+                PlanModeInjector::render_reminder_if_due(&artifact, Some(&config)),
+                None,
+                "no reminder before turn 5"
+            );
+        }
+
+        // Turn 5: full reminder.
+        let (kind, text) = PlanModeInjector::render_reminder_if_due(&artifact, Some(&config))
+            .expect("turn 5 should emit a full reminder");
+        assert_eq!(kind, ReminderKind::Full);
+        assert!(
+            text.contains("## Plan-mode rigor reminder (full)"),
+            "full reminder should carry the full heading:\n{text}"
+        );
+
+        // Turn 6: deduplicated after full at turn 5.
+        assert_eq!(
+            PlanModeInjector::render_reminder_if_due(&artifact, Some(&config)),
+            None,
+            "turn 6 should be deduplicated"
+        );
+
+        // Turn 7: sparse reminder.
+        let (kind, text) = PlanModeInjector::render_reminder_if_due(&artifact, Some(&config))
+            .expect("turn 7 should emit a sparse reminder");
+        assert_eq!(kind, ReminderKind::Sparse);
+        assert!(
+            text.contains("## Plan-mode rigor reminder"),
+            "sparse reminder should carry the sparse heading:\n{text}"
         );
     }
 }

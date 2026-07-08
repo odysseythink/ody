@@ -447,7 +447,7 @@ async fn interrupting_regular_turn_waiting_on_startup_prewarm_emits_turn_aborted
     assert!(duration_ms.is_some());
 }
 
-fn test_model_client_session() -> crate::client::ModelClientSession {
+pub(crate) fn test_model_client_session() -> crate::client::ModelClientSession {
     let thread_id = ThreadId::try_from("00000000-0000-4000-8000-000000000001")
         .expect("test thread id should be valid");
     crate::client::ModelClient::new(
@@ -6971,7 +6971,7 @@ async fn shutdown_and_wait_shuts_down_tracked_ephemeral_guardian_review() {
         .expect("ephemeral guardian review should receive a shutdown op");
 }
 
-async fn make_session_and_context_and_config_and_rx<F>(
+pub(crate) async fn make_session_and_context_and_config_and_rx<F>(
     dynamic_tools: Vec<DynamicToolSpec>,
     configure_config: F,
 ) -> (
@@ -7004,7 +7004,15 @@ where
     F: FnOnce(&mut Config),
 {
     let (tx_event, rx_event) = async_channel::unbounded();
-    let mut config = build_test_config(ody_home).await;
+    let mut config = ConfigBuilder::without_managed_config_for_tests()
+        .ody_home(ody_home.to_path_buf())
+        .harness_overrides(ConfigOverrides {
+            model_provider: Some("kimi".to_string()),
+            ..Default::default()
+        })
+        .build()
+        .await
+        .expect("load test config with built-in provider");
     configure_config(&mut config);
     let state_db = None;
     let config = Arc::new(config);

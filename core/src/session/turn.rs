@@ -11,6 +11,7 @@ use crate::context::InternalContextSource;
 use crate::context::InternalModelContextFragment;
 use crate::plan_artifact::sanitize_plan_slug;
 use crate::plan_mode_injector::PlanModeInjector;
+use crate::plan_mode_injector::ReminderKind;
 use crate::plan_mode_injector::render_directive;
 use crate::client::ModelClientSession;
 use crate::client_common::Prompt;
@@ -1128,6 +1129,20 @@ async fn run_plan_mode_after_turn(
     ) {
         let source = InternalContextSource::from_static("plan_mode_directive");
         let fragment = InternalModelContextFragment::new(source, directive_text);
+        let item: ResponseItem = ContextualUserFragment::into(fragment);
+        sess.record_conversation_items(turn_context, std::slice::from_ref(&item))
+            .await;
+    }
+
+    // Periodic rigor-tier reminder reinjection (P2.3).
+    if let Some((reminder_kind, reminder_text)) =
+        PlanModeInjector::render_reminder_if_due(artifact, plan_mode_config)
+    {
+        let source = InternalContextSource::from_static(match reminder_kind {
+            ReminderKind::Full => "plan_mode_full_reminder",
+            ReminderKind::Sparse => "plan_mode_sparse_reminder",
+        });
+        let fragment = InternalModelContextFragment::new(source, reminder_text);
         let item: ResponseItem = ContextualUserFragment::into(fragment);
         sess.record_conversation_items(turn_context, std::slice::from_ref(&item))
             .await;

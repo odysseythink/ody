@@ -2,6 +2,7 @@ use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path::write_atomically;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Mutex as StdMutex;
 use tokio::sync::Mutex;
 
 /// Session-level plan file artifact. Lives in Plan mode only.
@@ -14,6 +15,12 @@ pub struct PlanArtifact {
     state: Mutex<PlanArtifactState>,
     last_manifest_snapshot: Mutex<Option<ManifestSnapshot>>,
     last_plan_text: Mutex<Option<String>>,
+    /// 1-based count of plan-mode after-turn calls for this artifact.
+    plan_mode_turn_count: StdMutex<usize>,
+    /// Turn at which the last full reminder was injected; `Some(0)` means "before turn 1".
+    last_full_turn: StdMutex<Option<usize>>,
+    /// Turn at which any reminder was last injected; `Some(0)` means "before turn 1".
+    last_any_turn: StdMutex<Option<usize>>,
     plans_base_dir: AbsolutePathBuf,
     thread_id: ody_protocol::ThreadId,
     date: String,
@@ -79,6 +86,9 @@ impl PlanArtifact {
             state: Mutex::new(PlanArtifactState::Temporary { temp_path }),
             last_manifest_snapshot: Mutex::new(None),
             last_plan_text: Mutex::new(None),
+            plan_mode_turn_count: StdMutex::new(0),
+            last_full_turn: StdMutex::new(Some(0)),
+            last_any_turn: StdMutex::new(Some(0)),
             plans_base_dir,
             thread_id,
             date: date.to_string(),
@@ -154,6 +164,31 @@ impl PlanArtifact {
         }
     }
 
+    /// Returns the next 1-based plan-mode turn number and advances the counter.
+    pub fn next_plan_mode_turn(&self) -> usize {
+        let mut guard = self
+            .plan_mode_turn_count
+            .lock()
+            .expect("plan_mode_turn_count poisoned");
+        *guard += 1;
+        *guard
+    }
+
+    /// Returns `(last_full_turn, last_any_turn)` for reminder-cadence selection.
+    pub fn last_reminder_turns(&self) -> (Option<usize>, Option<usize>) {
+        let full = *self.last_full_turn.lock().expect("last_full_turn poisoned");
+        let any = *self.last_any_turn.lock().expect("last_any_turn poisoned");
+        (full, any)
+    }
+
+    /// Records that a reminder was injected at `turn`. `full` is `true` for a full reminder.
+    pub fn record_reminder_injected(&self, full: bool, turn: usize) {
+        if full {
+            *self.last_full_turn.lock().expect("last_full_turn poisoned") = Some(turn);
+        }
+        *self.last_any_turn.lock().expect("last_any_turn poisoned") = Some(turn);
+    }
+
     pub fn last_plan_text(&self) -> Option<String> {
         self.last_plan_text.try_lock().ok()?.clone()
     }
@@ -202,6 +237,9 @@ impl PlanArtifact {
                 state: Mutex::new(PlanArtifactState::Finalized { final_path: path }),
                 last_manifest_snapshot: Mutex::new(None),
                 last_plan_text: Mutex::new(None),
+                plan_mode_turn_count: StdMutex::new(0),
+                last_full_turn: StdMutex::new(Some(0)),
+                last_any_turn: StdMutex::new(Some(0)),
                 plans_base_dir,
                 thread_id,
                 date: date.to_string(),
