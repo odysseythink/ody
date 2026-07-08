@@ -12,7 +12,7 @@ pub(crate) const COMPACT_LOGO_HEIGHT: usize = 6;
 pub(crate) const LOGO_FULL: [&str; FULL_LOGO_HEIGHT] = [
     "       ██                   ██           ",
     "       ████      ███      ████           ",
-    "        ████     ███     █████           ",
+    "        ████     ███     ████            ",
     "         █████          ████             ",
     "            █████    █████               ",
     "               ████████                  ",

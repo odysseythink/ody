@@ -11053,9 +11053,34 @@ split_threshold = 16
     assert_eq!(plan_mode.split_threshold, Some(16));
 }
 
+fn test_config_toml_with_language(language: &str) -> ConfigToml {
+    toml::from_str(&format!(
+        r#"
+model_provider = "test"
+model = "test/gpt-4"
+language = "{language}"
+
+[model_providers.test]
+name = "Test"
+base_url = "https://api.test.com/v1"
+"#
+    ))
+    .expect("valid toml")
+}
+
 #[tokio::test]
 async fn language_config_defaults_to_none() {
-    let config_toml: ConfigToml = toml::from_str("").expect("valid toml");
+    let config_toml: ConfigToml = toml::from_str(
+        r#"
+model_provider = "test"
+model = "test/gpt-4"
+
+[model_providers.test]
+name = "Test"
+base_url = "https://api.test.com/v1"
+"#,
+    )
+    .expect("valid toml");
     let ody_home = tempdir().unwrap();
     let config = Config::load_from_base_config_with_overrides(
         config_toml,
@@ -11070,7 +11095,7 @@ async fn language_config_defaults_to_none() {
 
 #[tokio::test]
 async fn language_config_is_loaded_and_injected_into_base_instructions() {
-    let config_toml: ConfigToml = toml::from_str(r#"language = "zh""#).expect("valid toml");
+    let config_toml = test_config_toml_with_language("zh");
     let ody_home = tempdir().unwrap();
     let config = Config::load_from_base_config_with_overrides(
         config_toml,
@@ -11090,8 +11115,14 @@ async fn language_config_is_loaded_and_injected_into_base_instructions() {
 async fn language_config_is_appended_to_existing_base_instructions() {
     let config_toml: ConfigToml = toml::from_str(
         r#"
+model_provider = "test"
+model = "test/gpt-4"
 language = "es"
 instructions = "Be concise"
+
+[model_providers.test]
+name = "Test"
+base_url = "https://api.test.com/v1"
 "#,
     )
     .expect("valid toml");
@@ -11111,7 +11142,18 @@ instructions = "Be concise"
 
 #[tokio::test]
 async fn language_config_is_trimmed_when_injected() {
-    let config_toml: ConfigToml = toml::from_str(r#"language = "  fr  ""#).expect("valid toml");
+    let config_toml: ConfigToml = toml::from_str(
+        r#"
+model_provider = "test"
+model = "test/gpt-4"
+language = "  fr  "
+
+[model_providers.test]
+name = "Test"
+base_url = "https://api.test.com/v1"
+"#,
+    )
+    .expect("valid toml");
     let ody_home = tempdir().unwrap();
     let config = Config::load_from_base_config_with_overrides(
         config_toml,
@@ -11129,7 +11171,7 @@ async fn language_config_is_trimmed_when_injected() {
 
 #[tokio::test]
 async fn language_auto_uses_detected_system_language() {
-    let config_toml: ConfigToml = toml::from_str(r#"language = "auto""#).expect("valid toml");
+    let config_toml = test_config_toml_with_language("auto");
     let ody_home = tempdir().unwrap();
     let config = Config::load_from_base_config_with_overrides(
         config_toml,
