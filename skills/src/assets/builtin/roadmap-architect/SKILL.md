@@ -57,6 +57,15 @@ a sub-phase touches >~8 distinct files/modules, mixes shared-infra changes with 
 independently-shippable pieces under one heading ("migrate all builtin tools"). Each split sub-phase must be
 independently testable.
 
+**Execution-context budget (premise).** Assume the AI that *executes* each sub-phase runs in a ~256k-token
+context window, and that usable working budget sits well below that nominal number — the source it must read,
+its own reasoning, the diffs it emits, and test/tool output all accumulate over many turns. Split so a
+sub-phase's *entire execution* fits with comfortable headroom; treat 256k as a ceiling to stay well under, not
+a size to fill. Concretely: if executing one sub-phase would force the executor to read so much source that it
+must compact/summarize mid-task, the phase is too big — that mid-task compaction is a prime cause of the
+silent scope-drop this skill exists to prevent. Re-scale the number if the target executor's real window
+differs (some models are 200k, some 1M).
+
 **B. The three mode-decision criteria** (this software's real mode semantics):
 
 | Mode | When a sub-task belongs here | Why |
@@ -92,6 +101,8 @@ Update the roadmap's overview table, dependency section, and `Last Updated` line
 ## Step 3 — Self-review (reproduce as checkboxes in your reply)
 
 - [ ] Every oversized phase split; no sub-phase bundles independently-shippable work.
+- [ ] No sub-phase's execution footprint (source it must read + diffs + test output) would force the executor
+      to compact mid-task — each fits one working session with headroom under the ~256k ceiling.
 - [ ] Every `Depends on:` points at an EARLIER sub-phase and is backed by a real grep/Read, not a guess.
 - [ ] Parallelism stated explicitly per phase (don't leave "can these run together?" unanswered).
 - [ ] Every sub-task has exactly one mode tag with a code-grounded one-line reason.
