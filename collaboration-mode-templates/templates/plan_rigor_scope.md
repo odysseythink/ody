@@ -1,4 +1,4 @@
-## Rigor tier addendum: Out-of-scope / false-positive discipline
+## Out-of-scope / false-positive discipline
 
 In addition to the source-grounding mandate above, every rigor-tier plan MUST include an explicit `## Out-of-scope` section that lists name-matches which LOOK like the target concept but are a DIFFERENT concept. This prevents over-deletion.
 
