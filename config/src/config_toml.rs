@@ -150,6 +150,14 @@ const fn default_split_plan_compaction_ratio() -> Option<f64> {
     Some(0.5)
 }
 
+const fn default_full_refresh_turns() -> Option<usize> {
+    Some(5)
+}
+
+const fn default_dedup_min_turns() -> Option<usize> {
+    Some(2)
+}
+
 fn default_plan_mode_config() -> Option<PlanModeConfigToml> {
     Some(PlanModeConfigToml::default())
 }
@@ -179,6 +187,14 @@ pub struct PlanModeConfigToml {
     /// triggered when a plan part boundary is crossed. 0.0 disables.
     #[serde(default = "default_split_plan_compaction_ratio")]
     pub split_plan_compaction_ratio: Option<f64>,
+    /// Number of plan-mode turns between full rigor-contract reinjections.
+    /// 0 disables full reinjection.
+    #[serde(default = "default_full_refresh_turns")]
+    pub full_refresh_turns: Option<usize>,
+    /// Minimum number of turns between any two rigor reminders (full or sparse).
+    /// 0 disables sparse reminders.
+    #[serde(default = "default_dedup_min_turns")]
+    pub dedup_min_turns: Option<usize>,
 }
 
 impl Default for PlanModeConfigToml {
@@ -191,6 +207,8 @@ impl Default for PlanModeConfigToml {
             reasoning_effort: None,
             split_threshold: default_split_threshold(),
             split_plan_compaction_ratio: default_split_plan_compaction_ratio(),
+            full_refresh_turns: default_full_refresh_turns(),
+            dedup_min_turns: default_dedup_min_turns(),
         }
     }
 }
@@ -1289,6 +1307,32 @@ type = "openai"
         assert_eq!(plan_mode.split_threshold, Some(8));
         assert!(plan_mode.model.is_none());
         assert!(plan_mode.reasoning_effort.is_none());
+    }
+
+    #[test]
+    fn plan_mode_defaults_include_cadence() {
+        let config: ConfigToml = toml::from_str("").expect("empty config should deserialize");
+        let plan_mode = config
+            .plan_mode
+            .expect("default plan_mode table should be present");
+        assert_eq!(plan_mode.full_refresh_turns, Some(5));
+        assert_eq!(plan_mode.dedup_min_turns, Some(2));
+    }
+
+    #[test]
+    fn plan_mode_deserializes_cadence_fields() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[plan_mode]
+full_refresh_turns = 3
+dedup_min_turns = 1
+"#,
+        )
+        .expect("plan_mode config should deserialize");
+
+        let plan_mode = config.plan_mode.expect("plan_mode should be present");
+        assert_eq!(plan_mode.full_refresh_turns, Some(3));
+        assert_eq!(plan_mode.dedup_min_turns, Some(1));
     }
 
     #[test]
