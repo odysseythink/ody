@@ -467,7 +467,7 @@ impl OdyThread {
         if self.ody.session.reference_context_item().await.is_none() {
             self.ody
                 .session
-                .record_context_updates_and_set_reference_context_item(turn_context.as_ref())
+                .record_context_updates_and_set_reference_context_item(turn_context.as_ref(), None)
                 .await;
         }
         self.ody

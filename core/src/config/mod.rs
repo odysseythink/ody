@@ -674,6 +674,9 @@ pub struct Config {
     /// Base instructions override.
     pub base_instructions: Option<String>,
 
+    /// Preferred language for model responses in the TUI transcript.
+    pub language: Option<String>,
+
     /// Developer instructions override injected as a separate message.
     pub developer_instructions: Option<String>,
 
@@ -3524,6 +3527,15 @@ impl Config {
         let base_instructions = base_instructions
             .or(file_base_instructions)
             .or(cfg.instructions.clone());
+        let base_instructions = if let Some(language) = cfg.language.as_ref() {
+            let language_instruction = format!(
+                "\n\nRespond to the user in {}.",
+                language.trim()
+            );
+            Some(base_instructions.unwrap_or_default() + &language_instruction)
+        } else {
+            base_instructions
+        };
         let developer_instructions = developer_instructions.or(cfg.developer_instructions);
         let include_permissions_instructions = cfg.include_permissions_instructions.unwrap_or(true);
         let include_apps_instructions = cfg.include_apps_instructions.unwrap_or(true);
@@ -3753,6 +3765,7 @@ impl Config {
             enforce_residency: enforce_residency.value,
             notify: cfg.notify,
             base_instructions,
+            language: cfg.language.clone(),
             personality,
             developer_instructions,
             compact_prompt,

@@ -11052,3 +11052,77 @@ split_threshold = 16
     assert_eq!(plan_mode.model, Some("kimi-k2-thinking".to_string()));
     assert_eq!(plan_mode.split_threshold, Some(16));
 }
+
+#[tokio::test]
+async fn language_config_defaults_to_none() {
+    let config_toml: ConfigToml = toml::from_str("").expect("valid toml");
+    let ody_home = tempdir().unwrap();
+    let config = Config::load_from_base_config_with_overrides(
+        config_toml,
+        ConfigOverrides::default(),
+        ody_home.abs(),
+    )
+    .await
+    .expect("load config");
+    assert_eq!(config.language, None);
+    assert_eq!(config.base_instructions, None);
+}
+
+#[tokio::test]
+async fn language_config_is_loaded_and_injected_into_base_instructions() {
+    let config_toml: ConfigToml = toml::from_str(r#"language = "zh""#).expect("valid toml");
+    let ody_home = tempdir().unwrap();
+    let config = Config::load_from_base_config_with_overrides(
+        config_toml,
+        ConfigOverrides::default(),
+        ody_home.abs(),
+    )
+    .await
+    .expect("load config");
+    assert_eq!(config.language.as_deref(), Some("zh"));
+    assert_eq!(
+        config.base_instructions.as_deref(),
+        Some("\n\nRespond to the user in zh.")
+    );
+}
+
+#[tokio::test]
+async fn language_config_is_appended_to_existing_base_instructions() {
+    let config_toml: ConfigToml = toml::from_str(
+        r#"
+language = "es"
+instructions = "Be concise"
+"#,
+    )
+    .expect("valid toml");
+    let ody_home = tempdir().unwrap();
+    let config = Config::load_from_base_config_with_overrides(
+        config_toml,
+        ConfigOverrides::default(),
+        ody_home.abs(),
+    )
+    .await
+    .expect("load config");
+    assert_eq!(
+        config.base_instructions.as_deref(),
+        Some("Be concise\n\nRespond to the user in es.")
+    );
+}
+
+#[tokio::test]
+async fn language_config_is_trimmed_when_injected() {
+    let config_toml: ConfigToml = toml::from_str(r#"language = "  fr  ""#).expect("valid toml");
+    let ody_home = tempdir().unwrap();
+    let config = Config::load_from_base_config_with_overrides(
+        config_toml,
+        ConfigOverrides::default(),
+        ody_home.abs(),
+    )
+    .await
+    .expect("load config");
+    assert_eq!(config.language.as_deref(), Some("  fr  "));
+    assert_eq!(
+        config.base_instructions.as_deref(),
+        Some("\n\nRespond to the user in fr.")
+    );
+}

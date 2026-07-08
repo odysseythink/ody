@@ -283,6 +283,11 @@ pub struct ConfigToml {
     /// System instructions.
     pub instructions: Option<String>,
 
+    /// Preferred language for model responses in the TUI transcript.
+    /// When set, a short instruction is appended to the base instructions
+    /// asking the model to respond in this language.
+    pub language: Option<String>,
+
     /// Developer instructions inserted as a `developer` role message.
     #[serde(default)]
     pub developer_instructions: Option<String>,
@@ -1381,5 +1386,11 @@ split_threshold = 16
         "#;
         let cfg: PlanModeConfigToml = toml::from_str(toml).unwrap();
         assert_eq!(cfg.split_plan_compaction_ratio, Some(0.0));
+    }
+
+    #[test]
+    fn deserialize_language_field() {
+        let cfg: ConfigToml = toml::from_str(r#"language = "zh""#).unwrap();
+        assert_eq!(cfg.language.as_deref(), Some("zh"));
     }
 }

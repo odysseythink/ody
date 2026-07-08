@@ -9,8 +9,10 @@ use crate::SkillInjections;
 use crate::build_skill_injections;
 use crate::context::InternalContextSource;
 use crate::context::InternalModelContextFragment;
+use crate::plan_artifact::PlanArtifact;
 use crate::plan_artifact::sanitize_plan_slug;
 use crate::plan_mode_injector::PlanModeInjector;
+use ody_config::config_toml::PlanModeTier;
 use crate::plan_mode_injector::ReminderKind;
 use crate::plan_mode_injector::render_directive;
 use crate::client::ModelClientSession;
@@ -170,8 +172,23 @@ pub(crate) async fn run_turn(
         return Ok(None);
     }
 
-    sess.record_context_updates_and_set_reference_context_item(turn_context.as_ref())
-        .await;
+    sess.record_context_updates_and_set_reference_context_item(
+        turn_context.as_ref(),
+        user_prompt.as_deref(),
+    )
+    .await;
+
+    if let Some(switch_message) = handle_plan_mode_tier_switch(
+        &sess,
+        turn_context.as_ref(),
+        user_prompt.as_deref(),
+    )
+    .await
+    {
+        let item: ResponseItem = ContextualUserFragment::into(switch_message);
+        sess.record_conversation_items(turn_context.as_ref(), std::slice::from_ref(&item))
+            .await;
+    }
 
     let Some((injection_items, explicitly_enabled_connectors)) =
         build_skills_and_plugins(&sess, turn_context.as_ref(), &input, &cancellation_token).await
@@ -1083,6 +1100,34 @@ async fn run_auto_compact(
 }
 
 #[instrument(level = "trace", skip_all)]
+
+
+/// If the user's message is an explicit `/plan-tier` command, apply the switch
+/// and return a developer confirmation fragment.
+async fn handle_plan_mode_tier_switch(
+    _sess: &Arc<Session>,
+    turn_context: &TurnContext,
+    user_prompt: Option<&str>,
+) -> Option<InternalModelContextFragment> {
+    let artifact = turn_context.plan_artifact.as_ref()?;
+    let prompt = user_prompt?;
+    let new_tier = crate::plan_mode_tier_selector::parse_tier_switch_command(prompt)?;
+
+    artifact.set_plan_mode_tier(new_tier);
+    tracing::debug!(tier = ?new_tier, "plan-mode tier switched by user command");
+
+    let confirmation = format!(
+        "Plan-mode tier switched to {} for this session.",
+        match new_tier {
+            PlanModeTier::Auto => "auto (heuristic)",
+            PlanModeTier::Concise => "concise",
+            PlanModeTier::Rigor => "rigor",
+        }
+    );
+    let source = InternalContextSource::from_static("plan_mode_tier_switch");
+    Some(InternalModelContextFragment::new(source, confirmation))
+}
+
 async fn run_plan_mode_after_turn(
     sess: &Arc<Session>,
     turn_context: &Arc<TurnContext>,

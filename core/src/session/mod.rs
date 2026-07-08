@@ -3402,7 +3402,7 @@ impl Session {
         let (window_number, window_ids) = window?;
         let world_state = self.build_world_state(turn_context).await;
         let context_items = self
-            .build_initial_context_with_world_state(turn_context, &world_state)
+            .build_initial_context_with_world_state(turn_context, &world_state, None)
             .await;
         let turn_context_item = turn_context.to_turn_context_item();
         let replacement_history = context_items;
@@ -3453,6 +3453,7 @@ impl Session {
     pub(crate) async fn record_context_updates_and_set_reference_context_item(
         &self,
         turn_context: &TurnContext,
+        user_prompt: Option<&str>,
     ) {
         let reference_context_item = {
             let state = self.state.lock().await;
@@ -3464,7 +3465,7 @@ impl Session {
         let world_state = self.build_world_state(turn_context).await;
         let mut context_items = if should_inject_full_context {
             let context_items = self
-                .build_initial_context_with_world_state(turn_context, &world_state)
+                .build_initial_context_with_world_state(turn_context, &world_state, user_prompt)
                 .await;
             self.state
                 .lock()

@@ -94,6 +94,16 @@ Use the `request_user_input` tool only for decisions that materially change the 
    * Provide 2–4 mutually exclusive options + a recommended default.
    * If unanswered, proceed with the recommended option and record it as an assumption in the final plan.
 
+## Concise-tier autonomy
+
+When the user's request is brief or leaves implementation details unstated (the **concise** plan tier), bias heavily toward moving forward without clarification:
+
+1. **Resolve discoverable unknowns by exploration.** Search the repo, configs, schemas, and existing code to answer factual questions before asking the user. Do not ask "where is X?" or "which component should we use?" when exploration can provide the answer.
+2. **Choose labelled defaults for true preferences.** If a question is about taste, priority, or trade-offs that cannot be derived from the environment, pick a reasonable default and record it in the final plan under `Assumptions` with the exact label `Assumption: <default chosen>`. Do not mark it as TBD or "to be confirmed with the user."
+3. **Do not block finalization.** The plan must be decision-complete and contain a `<proposed_plan>` block even when the original prompt was terse. If a default could materially change the outcome, note the trade-off briefly in `Assumptions` and proceed with the chosen default.
+
+This rule overrides the general "bias toward questions over guessing" guidance only when operating in the concise tier; in the standard and rigorous tiers, continue to ask material clarifying questions as usual.
+
 ## Finalization rule
 
 Only output the final plan when it is decision complete and leaves no decisions to the implementer.

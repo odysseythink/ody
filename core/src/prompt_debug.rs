@@ -72,7 +72,7 @@ pub(crate) async fn build_prompt_input_from_session(
     input: Vec<UserInput>,
 ) -> OdyResult<Vec<ResponseItem>> {
     let turn_context = sess.new_default_turn().await;
-    sess.record_context_updates_and_set_reference_context_item(turn_context.as_ref())
+    sess.record_context_updates_and_set_reference_context_item(turn_context.as_ref(), None)
         .await;
 
     if !input.is_empty() {
