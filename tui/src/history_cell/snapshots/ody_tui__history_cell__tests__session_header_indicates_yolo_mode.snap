@@ -1,12 +1,24 @@
 ---
 source: tui/src/history_cell/tests.rs
+assertion_line: 1552
 expression: rendered
 ---
-╭──────────────────────────────────────────────────────────╮
-│ Welcome to ODY Code!                                     │
-│                                                          │
-│ model:       gpt-5                      /model to change │
-│ version:     vtest                                       │
-│ directory:   /tmp/project                                │
-│ permissions: YOLO mode                                   │
-╰──────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────────────────────────╮
+│                         ██                   ██                              │
+│                         ████      ███      ████                              │
+│                          ████     ███     █████                              │
+│                           █████          ████                                │
+│                              █████    █████                                  │
+│                                 ████████                                     │
+│                                   ████                                       │
+│                                   ████                                       │
+│                                   ████                                       │
+│                                   ████                                       │
+│                                                                              │
+│ Welcome to ODY Code!                                                         │
+│                                                                              │
+│ model:       gpt-5                                          /model to change │
+│ version:     vtest                                                           │
+│ directory:   /tmp/project                                                    │
+│ permissions: YOLO mode                                                       │
+╰──────────────────────────────────────────────────────────────────────────────╯

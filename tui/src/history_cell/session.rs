@@ -484,13 +484,15 @@ impl HistoryCell for SessionHeaderHistoryCell {
             Span::from(format!("v{}", self.version)),
         ];
 
-        let mut lines = vec![
-            make_row(title_spans),
-            make_row(Vec::new()),
-            make_row(model_spans),
-            make_row(version_spans),
-            make_row(dir_spans),
-        ];
+        let logo_lines = render_logo_for_width(inner_width);
+        let mut lines = Vec::with_capacity(logo_lines.len() + 6);
+        lines.extend(logo_lines);
+        lines.push(make_row(Vec::new()));
+        lines.push(make_row(title_spans));
+        lines.push(make_row(Vec::new()));
+        lines.push(make_row(model_spans));
+        lines.push(make_row(version_spans));
+        lines.push(make_row(dir_spans));
 
         if self.yolo_mode {
             let permissions_label = format!("{PERMISSIONS_LABEL:<label_width$}");

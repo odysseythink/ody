@@ -19,6 +19,8 @@ use dirs::home_dir;
 use pretty_assertions::assert_eq;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use ratatui::text::Text;
+use ratatui::widgets::Paragraph;
 use serde_json::json;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -2604,4 +2606,76 @@ fn consolidation_walker_replaces_agent_message_cells() {
         transcript_cells[1].as_any().is::<AgentMarkdownCell>(),
         "second cell should be AgentMarkdownCell"
     );
+}
+
+
+fn render_cell_to_buffer(cell: &dyn HistoryCell, width: u16, height: u16) -> Buffer {
+    let area = Rect::new(0, 0, width, height);
+    let mut buf = Buffer::empty(area);
+    Paragraph::new(Text::from(cell.display_lines(width))).render(area, &mut buf);
+    buf
+}
+
+fn buffer_rows_containing(buf: &Buffer, needle: &str) -> Vec<u16> {
+    (0..buf.area.height)
+        .filter(|&y| {
+            let row: String = (0..buf.area.width)
+                .map(|x| buf[(x, y)].symbol().to_string())
+                .collect();
+            row.contains(needle)
+        })
+        .collect()
+}
+
+fn sample_session_header() -> SessionHeaderHistoryCell {
+    SessionHeaderHistoryCell::new(
+        "claude-4-sonnet".to_string(),
+        None,
+        false,
+        test_cwd(),
+        "0.1.0",
+    )
+}
+
+#[test]
+fn session_header_renders_full_logo_at_80_cols() {
+    let cell = sample_session_header();
+    let buf = render_cell_to_buffer(&cell, 80, 24);
+    let title_rows = buffer_rows_containing(&buf, "Welcome");
+    let block_rows = buffer_rows_containing(&buf, "█");
+
+    assert_eq!(title_rows.len(), 1, "title should render on one row at 80 cols");
+    assert!(!block_rows.is_empty(), "expected full logo block characters");
+    assert!(
+        block_rows[0] < title_rows[0],
+        "logo should appear above the title"
+    );
+}
+
+#[test]
+fn session_header_renders_compact_logo_at_40_cols() {
+    let cell = sample_session_header();
+    let buf = render_cell_to_buffer(&cell, 40, 24);
+    let title_rows = buffer_rows_containing(&buf, "Welcome");
+    let block_rows = buffer_rows_containing(&buf, "█");
+    let compact_rows = buffer_rows_containing(&buf, "      ██       ██");
+
+    assert_eq!(title_rows.len(), 1);
+    assert!(!block_rows.is_empty(), "expected compact logo block characters");
+    assert!(
+        !compact_rows.is_empty(),
+        "expected compact logo shape at 40 cols"
+    );
+    assert!(block_rows[0] < title_rows[0], "logo should appear above the title");
+}
+
+#[test]
+fn session_header_hides_logo_below_compact_width() {
+    let cell = sample_session_header();
+    let buf = render_cell_to_buffer(&cell, 16, 24);
+    let block_rows = buffer_rows_containing(&buf, "█");
+    let title_rows = buffer_rows_containing(&buf, "Welcome");
+
+    assert!(block_rows.is_empty(), "expected no logo blocks at 16 cols");
+    assert!(!title_rows.is_empty(), "title should still render without logo");
 }
