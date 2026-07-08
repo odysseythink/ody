@@ -4,12 +4,71 @@ use super::*;
 
 pub(crate) const SESSION_HEADER_MAX_INNER_WIDTH: usize = usize::MAX; // Just an eyeballed value
 
+pub(crate) const FULL_LOGO_WIDTH: usize = 41;
+pub(crate) const FULL_LOGO_HEIGHT: usize = 10;
+pub(crate) const COMPACT_LOGO_WIDTH: usize = 17;
+pub(crate) const COMPACT_LOGO_HEIGHT: usize = 6;
+
+pub(crate) const LOGO_FULL: [&str; FULL_LOGO_HEIGHT] = [
+    "       ██                   ██           ",
+    "       ████      ███      ████           ",
+    "        ████     ███     █████           ",
+    "         █████          ████             ",
+    "            █████    █████               ",
+    "               ████████                  ",
+    "                 ████                    ",
+    "                 ████                    ",
+    "                 ████                    ",
+    "                 ████                    ",
+];
+
+pub(crate) const LOGO_COMPACT: [&str; COMPACT_LOGO_HEIGHT] = [
+    "      ██       ██",
+    "      ███  █  ███",
+    "       ███   ███ ",
+    "        ███████  ",
+    "          ███    ",
+    "          ███    ",
+];
+
 pub(crate) fn card_inner_width(width: u16, max_inner_width: usize) -> Option<usize> {
     if width < 4 {
         return None;
     }
     let inner_width = std::cmp::min(width.saturating_sub(4) as usize, max_inner_width);
     Some(inner_width)
+}
+
+/// Render the Ody ASCII logo centered for the given inner card width.
+/// Returns an empty vector when the width cannot accommodate even the
+/// compact logo (17 columns).
+pub(crate) fn render_logo_for_width(inner_width: usize) -> Vec<Line<'static>> {
+    if inner_width < COMPACT_LOGO_WIDTH {
+        return Vec::new();
+    }
+    let (lines, logo_width) = if inner_width >= FULL_LOGO_WIDTH {
+        (&LOGO_FULL[..], FULL_LOGO_WIDTH)
+    } else {
+        (&LOGO_COMPACT[..], COMPACT_LOGO_WIDTH)
+    };
+    let left_pad = (inner_width - logo_width) / 2;
+    let pad_span = if left_pad > 0 {
+        Some(Span::from(" ".repeat(left_pad)).dim())
+    } else {
+        None
+    };
+    let accent = accent_style();
+    lines
+        .iter()
+        .map(|line| {
+            let mut spans = Vec::with_capacity(2);
+            if let Some(pad) = &pad_span {
+                spans.push(pad.clone());
+            }
+            spans.push(Span::styled((*line).to_string(), accent));
+            Line::from(spans)
+        })
+        .collect()
 }
 
 /// Render `lines` inside a border sized to the widest span in the content.
@@ -464,5 +523,71 @@ impl HistoryCell for SessionHeaderHistoryCell {
             lines.push(Line::from("permissions: YOLO mode"));
         }
         lines
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn line_content(line: &Line<'static>) -> String {
+        line.spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect()
+    }
+
+    #[test]
+    fn logo_renderer_returns_empty_for_narrow_width() {
+        let lines = render_logo_for_width(16);
+        assert!(lines.is_empty());
+    }
+
+    #[test]
+    fn logo_renderer_returns_compact_logo_at_minimum_width() {
+        let lines = render_logo_for_width(17);
+        assert_eq!(lines.len(), COMPACT_LOGO_HEIGHT);
+        assert_eq!(line_content(&lines[0]), LOGO_COMPACT[0]);
+    }
+
+    #[test]
+    fn logo_renderer_center_pads_compact_logo() {
+        let inner_width = 40;
+        let lines = render_logo_for_width(inner_width);
+        assert_eq!(lines.len(), COMPACT_LOGO_HEIGHT);
+        let left_pad = (inner_width - COMPACT_LOGO_WIDTH) / 2; // 11
+        let expected_prefix = " ".repeat(left_pad);
+        let first = line_content(&lines[0]);
+        assert!(first.starts_with(&expected_prefix));
+        assert!(first.ends_with(LOGO_COMPACT[0]));
+    }
+
+    #[test]
+    fn logo_renderer_returns_full_logo_at_exact_width() {
+        let lines = render_logo_for_width(41);
+        assert_eq!(lines.len(), FULL_LOGO_HEIGHT);
+        assert_eq!(line_content(&lines[0]), LOGO_FULL[0]);
+    }
+
+    #[test]
+    fn logo_renderer_center_pads_full_logo() {
+        let inner_width = 80;
+        let lines = render_logo_for_width(inner_width);
+        assert_eq!(lines.len(), FULL_LOGO_HEIGHT);
+        let left_pad = (inner_width - FULL_LOGO_WIDTH) / 2; // 19
+        let expected_prefix = " ".repeat(left_pad);
+        let first = line_content(&lines[0]);
+        assert!(first.starts_with(&expected_prefix));
+        assert!(first.ends_with(LOGO_FULL[0]));
+    }
+
+    #[test]
+    fn logo_renderer_uses_accent_style_for_logo_lines() {
+        let lines = render_logo_for_width(41);
+        for line in &lines {
+            let logo_span = line.spans.last().expect("logo span");
+            assert_eq!(logo_span.style, accent_style());
+        }
     }
 }
