@@ -1,4 +1,4 @@
-## Rigor tier addendum: Source-grounding mandate
+## Source-grounding mandate
 
 Every rigor-tier plan MUST ground every listed change, dependency, and out-of-scope carve-out in actual source evidence. Do not infer scope from names, paths, or phase titles.
 

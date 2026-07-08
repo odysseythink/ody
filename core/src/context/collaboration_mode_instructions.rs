@@ -53,6 +53,13 @@ impl CollaborationModeInstructions {
             instructions: format!("{}\n\n{}", self.instructions, fragment),
         }
     }
+
+    pub(crate) fn with_rigor_grounding(self) -> Self {
+        let fragment = ody_collaboration_mode_templates::PLAN_RIGOR_GROUNDING;
+        Self {
+            instructions: format!("{}\n\n{}", self.instructions, fragment),
+        }
+    }
 }
 
 fn render_plan_instructions(instructions: &str, split_threshold: Option<usize>) -> String {
@@ -224,6 +231,36 @@ mod tests {
         assert!(
             body.contains("TBD"),
             "body should list TBD as a forbidden placeholder:\n{body}"
+        );
+    }
+
+    #[test]
+    fn composes_rigor_grounding_fragment() {
+        let mode = plan_mode_with_instructions("Plan the work.");
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8))
+            .expect("should produce instructions")
+            .with_rigor_grounding();
+        let body = instructions.body();
+
+        assert!(
+            body.contains("## Source-grounding mandate"),
+            "body should contain Source-grounding mandate section:\n{body}"
+        );
+        assert!(
+            body.contains("Read") && body.contains("Grep"),
+            "body should mandate Read and Grep verification:\n{body}"
+        );
+        assert!(
+            body.contains("Never infer scope from names"),
+            "body should contain the anti-name-inference rule:\n{body}"
+        );
+        assert!(
+            body.contains("[C:INFERRED]"),
+            "body should contain the inferred-assumption label:\n{body}"
+        );
+        assert!(
+            body.contains("creator_account_user_id"),
+            "body should include the external-schema carve-out example:\n{body}"
         );
     }
 }
