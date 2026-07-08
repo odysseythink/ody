@@ -200,6 +200,51 @@ You are writing a rigor-tier plan. Keep the following artifacts current:
     .to_string()
 }
 
+/// Kind of rigor-tier reminder that may be reinjected into a plan-mode session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReminderKind {
+    Full,
+    Sparse,
+}
+
+/// Selects the reminder kind (if any) for the current plan-mode turn.
+///
+/// `last_full_turn` is the turn at which a full reminder was last injected;
+/// `last_any_turn` is the turn at which any reminder (full or sparse) was
+/// last injected. The caller is responsible for updating both values after
+/// injecting a reminder. Returns `None` when no reminder is due.
+pub fn select_reminder(
+    current_turn: usize,
+    last_full_turn: Option<usize>,
+    last_any_turn: Option<usize>,
+    config: Option<&PlanModeConfigToml>,
+) -> Option<ReminderKind> {
+    let full_refresh = config
+        .and_then(|c| c.full_refresh_turns)
+        .unwrap_or(5);
+    let dedup_min = config
+        .and_then(|c| c.dedup_min_turns)
+        .unwrap_or(2);
+
+    if full_refresh > 0 {
+        let full_due = last_full_turn
+            .map_or(true, |last| current_turn.saturating_sub(last) >= full_refresh);
+        if full_due {
+            return Some(ReminderKind::Full);
+        }
+    }
+
+    if dedup_min > 0 {
+        let sparse_due = last_any_turn
+            .map_or(true, |last| current_turn.saturating_sub(last) >= dedup_min);
+        if sparse_due {
+            return Some(ReminderKind::Sparse);
+        }
+    }
+
+    None
+}
+
 #[cfg(test)]
 mod directive_tests {
     use super::*;
@@ -351,5 +396,61 @@ mod directive_tests {
                 "sparse reminder should mention {artifact}:\n{reminder}"
             );
         }
+    }
+
+    #[test]
+    fn select_reminder_defaults_to_full_every_five_turns() {
+        let config = PlanModeConfigToml::default();
+        assert_eq!(
+            select_reminder(5, None, None, Some(&config)),
+            Some(ReminderKind::Full),
+            "turn 5 should trigger the first full reminder"
+        );
+    }
+
+    #[test]
+    fn select_reminder_sparse_between_full_injections() {
+        let config = PlanModeConfigToml::default();
+        // After a full injection at turn 5, turn 7 is the first turn a sparse reminder is allowed.
+        assert_eq!(
+            select_reminder(7, Some(5), Some(5), Some(&config)),
+            Some(ReminderKind::Sparse),
+            "turn 7 should trigger a sparse reminder after full at turn 5"
+        );
+        assert_eq!(
+            select_reminder(6, Some(5), Some(5), Some(&config)),
+            None,
+            "turn 6 should be deduplicated after full at turn 5"
+        );
+    }
+
+    #[test]
+    fn select_reminder_respects_zero_to_disable() {
+        let no_full = PlanModeConfigToml {
+            full_refresh_turns: Some(0),
+            dedup_min_turns: Some(2),
+            ..Default::default()
+        };
+        assert_eq!(
+            select_reminder(5, None, None, Some(&no_full)),
+            Some(ReminderKind::Sparse),
+            "full_refresh=0 should fall back to sparse when sparse is due"
+        );
+
+        let no_sparse = PlanModeConfigToml {
+            full_refresh_turns: Some(5),
+            dedup_min_turns: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(
+            select_reminder(7, Some(5), Some(5), Some(&no_sparse)),
+            None,
+            "dedup_min=0 should disable sparse reminders"
+        );
+        assert_eq!(
+            select_reminder(10, Some(5), Some(5), Some(&no_sparse)),
+            Some(ReminderKind::Full),
+            "dedup_min=0 should still allow full reminders when due"
+        );
     }
 }
