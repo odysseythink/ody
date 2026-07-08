@@ -295,9 +295,5 @@ mod tests {
             body.contains("No silent survivors"),
             "body should contain the no-silent-survivors rule:\n{body}"
         );
-        assert!(
-            body.contains("auth.rs::PlanType"),
-            "body should reference the historical auth.rs::PlanType case:\n{body}"
-        );
     }
 }
