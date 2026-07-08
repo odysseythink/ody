@@ -1,3 +1,4 @@
+use ody_config::config_toml::PlanModeTier;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path::write_atomically;
 use std::path::Path;
@@ -21,6 +22,7 @@ pub struct PlanArtifact {
     last_full_turn: StdMutex<Option<usize>>,
     /// Turn at which any reminder was last injected; `Some(0)` means "before turn 1".
     last_any_turn: StdMutex<Option<usize>>,
+    current_tier: StdMutex<Option<PlanModeTier>>,
     plans_base_dir: AbsolutePathBuf,
     thread_id: ody_protocol::ThreadId,
     date: String,
@@ -89,6 +91,7 @@ impl PlanArtifact {
             plan_mode_turn_count: StdMutex::new(0),
             last_full_turn: StdMutex::new(Some(0)),
             last_any_turn: StdMutex::new(Some(0)),
+            current_tier: StdMutex::new(None),
             plans_base_dir,
             thread_id,
             date: date.to_string(),
@@ -189,6 +192,16 @@ impl PlanArtifact {
         *self.last_any_turn.lock().expect("last_any_turn poisoned") = Some(turn);
     }
 
+    /// Returns the tier resolved at session start, if any.
+    pub fn plan_mode_tier(&self) -> Option<PlanModeTier> {
+        *self.current_tier.lock().expect("current_tier poisoned")
+    }
+
+    /// Records the resolved tier.
+    pub fn set_plan_mode_tier(&self, tier: PlanModeTier) {
+        *self.current_tier.lock().expect("current_tier poisoned") = Some(tier);
+    }
+
     pub fn last_plan_text(&self) -> Option<String> {
         self.last_plan_text.try_lock().ok()?.clone()
     }
@@ -240,6 +253,7 @@ impl PlanArtifact {
                 plan_mode_turn_count: StdMutex::new(0),
                 last_full_turn: StdMutex::new(Some(0)),
                 last_any_turn: StdMutex::new(Some(0)),
+                current_tier: StdMutex::new(None),
                 plans_base_dir,
                 thread_id,
                 date: date.to_string(),
@@ -533,4 +547,21 @@ mod tests {
         let part_file = stem_dir.join("core.md");
         assert!(artifact.is_plan_file_path(&part_file));
     }
+
+#[test]
+fn default_plan_mode_tier_is_none() {
+    let (artifact, _tmp) = test_artifact("2026-07-04");
+    assert_eq!(artifact.plan_mode_tier(), None);
+}
+
+#[test]
+fn plan_mode_tier_round_trip() {
+    let (artifact, _tmp) = test_artifact("2026-07-04");
+    artifact.set_plan_mode_tier(PlanModeTier::Rigor);
+    assert_eq!(artifact.plan_mode_tier(), Some(PlanModeTier::Rigor));
+
+    artifact.set_plan_mode_tier(PlanModeTier::Concise);
+    assert_eq!(artifact.plan_mode_tier(), Some(PlanModeTier::Concise));
+}
+
 }

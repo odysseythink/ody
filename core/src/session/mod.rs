@@ -3042,7 +3042,7 @@ impl Session {
         turn_context: &TurnContext,
     ) -> Vec<ResponseItem> {
         let world_state = self.build_world_state(turn_context).await;
-        self.build_initial_context_with_world_state(turn_context, &world_state)
+        self.build_initial_context_with_world_state(turn_context, &world_state, None)
             .await
     }
 
@@ -3062,6 +3062,7 @@ impl Session {
         &self,
         turn_context: &TurnContext,
         world_state: &WorldState,
+        user_prompt: Option<&str>,
     ) -> Vec<ResponseItem> {
         let mut developer_sections = Vec::<String>::with_capacity(8);
         let mut contextual_user_sections = Vec::<String>::with_capacity(2);
@@ -3129,6 +3130,9 @@ impl Session {
                 CollaborationModeInstructions::from_collaboration_mode(
                     &collaboration_mode,
                     turn_context.config.plan_mode.as_ref().and_then(|pm| pm.split_threshold),
+                    user_prompt,
+                    turn_context.config.plan_mode.as_ref(),
+                    turn_context.plan_artifact.as_deref(),
                 )
         {
             developer_sections.push(collab_instructions.render());

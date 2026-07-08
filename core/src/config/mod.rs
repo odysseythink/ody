@@ -2655,6 +2655,68 @@ fn resolve_optional_prompt_text(
     }
 }
 
+/// Map a BCP-47 / POSIX locale string to a human-readable language name
+/// suitable for a model instruction.
+pub(crate) fn map_locale_to_language(locale: &str) -> Option<String> {
+    let primary = locale
+        .split(|c| c == '-' || c == '_')
+        .next()?
+        .to_lowercase();
+    let name = match primary.as_str() {
+        "ar" => "Arabic",
+        "cs" => "Czech",
+        "de" => "German",
+        "el" => "Greek",
+        "en" => "English",
+        "es" => "Spanish",
+        "fr" => "French",
+        "he" => "Hebrew",
+        "hi" => "Hindi",
+        "id" => "Indonesian",
+        "it" => "Italian",
+        "ja" => "Japanese",
+        "ko" => "Korean",
+        "ms" => "Malay",
+        "nl" => "Dutch",
+        "pl" => "Polish",
+        "pt" => "Portuguese",
+        "ru" => "Russian",
+        "sv" => "Swedish",
+        "th" => "Thai",
+        "tr" => "Turkish",
+        "uk" => "Ukrainian",
+        "vi" => "Vietnamese",
+        "zh" => "Chinese",
+        _ => return None,
+    };
+    Some(name.to_string())
+}
+
+/// Detect the user's preferred language from the system locale.
+fn detect_system_language() -> Option<String> {
+    sys_locale::get_locale().and_then(|locale| map_locale_to_language(&locale))
+}
+
+#[cfg(test)]
+mod language_tests {
+    use super::*;
+
+    #[test]
+    fn map_locale_to_language_maps_common_locales() {
+        assert_eq!(map_locale_to_language("zh-Hans_CN").as_deref(), Some("Chinese"));
+        assert_eq!(map_locale_to_language("en-US").as_deref(), Some("English"));
+        assert_eq!(map_locale_to_language("ja_JP").as_deref(), Some("Japanese"));
+        assert_eq!(map_locale_to_language("ko-KR").as_deref(), Some("Korean"));
+        assert_eq!(map_locale_to_language("fr_FR").as_deref(), Some("French"));
+        assert_eq!(map_locale_to_language("de").as_deref(), Some("German"));
+    }
+
+    #[test]
+    fn map_locale_to_language_returns_none_for_unknown_locale() {
+        assert_eq!(map_locale_to_language("xx-XX"), None);
+    }
+}
+
 fn code_mode_toml_config(features: Option<&FeaturesToml>) -> Option<&CodeModeConfigToml> {
     match features?.code_mode.as_ref()? {
         FeatureToml::Enabled(_) => None,
@@ -3527,11 +3589,16 @@ impl Config {
         let base_instructions = base_instructions
             .or(file_base_instructions)
             .or(cfg.instructions.clone());
-        let base_instructions = if let Some(language) = cfg.language.as_ref() {
-            let language_instruction = format!(
-                "\n\nRespond to the user in {}.",
-                language.trim()
-            );
+        let effective_language = cfg.language.as_ref().and_then(|language| {
+            let language = language.trim();
+            if language.eq_ignore_ascii_case("auto") {
+                detect_system_language()
+            } else {
+                Some(language.to_string())
+            }
+        });
+        let base_instructions = if let Some(language) = effective_language {
+            let language_instruction = format!("\n\nRespond to the user in {language}.");
             Some(base_instructions.unwrap_or_default() + &language_instruction)
         } else {
             base_instructions

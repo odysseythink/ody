@@ -69,6 +69,9 @@ fn build_collaboration_mode_update_item(
             CollaborationModeInstructions::from_collaboration_mode(
                 &next.collaboration_mode,
                 next.config.plan_mode.as_ref().and_then(|pm| pm.split_threshold),
+                None,
+                next.config.plan_mode.as_ref(),
+                next.plan_artifact.as_deref(),
             )?
             .render(),
         )

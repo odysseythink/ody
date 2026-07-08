@@ -155,6 +155,8 @@ pub(crate) async fn run_turn(
     prewarmed_client_session: Option<ModelClientSession>,
     cancellation_token: CancellationToken,
 ) -> OdyResult<Option<String>> {
+    let user_prompt = extract_user_prompt_text(&input);
+
     let mut client_session =
         prewarmed_client_session.unwrap_or_else(|| sess.services.model_client.new_session());
     // TODO(ccunningham): Pre-turn compaction runs before context updates and the
@@ -1097,6 +1099,16 @@ async fn run_auto_compact(
         .await?;
     }
     Ok(())
+}
+
+fn extract_user_prompt_text(input: &[TurnInput]) -> Option<String> {
+    input.iter().find_map(|turn_input| match turn_input {
+        TurnInput::UserInput { content, .. } => content.iter().find_map(|ui| match ui {
+            ody_protocol::user_input::UserInput::Text { text, .. } => Some(text.clone()),
+            _ => None,
+        }),
+        _ => None,
+    })
 }
 
 #[instrument(level = "trace", skip_all)]

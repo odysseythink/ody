@@ -130,6 +130,21 @@ pub enum PlanContextIsolation {
     On,
 }
 
+
+/// Plan-mode contract tier: concise conversational contract vs. full rigor contract.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+#[schemars(deny_unknown_fields)]
+pub enum PlanModeTier {
+    /// Let the heuristic scorer decide.
+    #[default]
+    Auto,
+    /// Always use the concise conversational contract.
+    Concise,
+    /// Always use the full rigor contract with reminders.
+    Rigor,
+}
+
 const fn default_plan_enforcement() -> Option<PlanEnforcement> {
     Some(PlanEnforcement::Strict)
 }
@@ -195,6 +210,9 @@ pub struct PlanModeConfigToml {
     /// 0 disables sparse reminders.
     #[serde(default = "default_dedup_min_turns")]
     pub dedup_min_turns: Option<usize>,
+    /// Explicit plan-mode tier override.  means use the heuristic scorer (Auto).
+    #[serde(default)]
+    pub tier: Option<PlanModeTier>,
 }
 
 impl Default for PlanModeConfigToml {
@@ -209,6 +227,7 @@ impl Default for PlanModeConfigToml {
             split_plan_compaction_ratio: default_split_plan_compaction_ratio(),
             full_refresh_turns: default_full_refresh_turns(),
             dedup_min_turns: default_dedup_min_turns(),
+            tier: None,
         }
     }
 }

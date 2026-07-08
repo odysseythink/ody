@@ -11126,3 +11126,21 @@ async fn language_config_is_trimmed_when_injected() {
         Some("\n\nRespond to the user in fr.")
     );
 }
+
+#[tokio::test]
+async fn language_auto_uses_detected_system_language() {
+    let config_toml: ConfigToml = toml::from_str(r#"language = "auto""#).expect("valid toml");
+    let ody_home = tempdir().unwrap();
+    let config = Config::load_from_base_config_with_overrides(
+        config_toml,
+        ConfigOverrides::default(),
+        ody_home.abs(),
+    )
+    .await
+    .expect("load config");
+    assert_eq!(config.language.as_deref(), Some("auto"));
+    let expected = sys_locale::get_locale()
+        .and_then(|locale| map_locale_to_language(&locale))
+        .map(|lang| format!("\n\nRespond to the user in {lang}."));
+    assert_eq!(config.base_instructions, expected);
+}
