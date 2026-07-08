@@ -12,6 +12,7 @@ use ratatui::widgets::Wrap;
 use std::cell::Cell;
 
 use crate::ascii_animation::AsciiAnimation;
+use crate::frames::LOGO_VARIANTS;
 use crate::key_hint::KeyBindingListExt;
 use crate::onboarding::keys;
 use crate::onboarding::onboarding_screen::KeyboardHandler;
@@ -55,7 +56,11 @@ impl WelcomeWidget {
     ) -> Self {
         Self {
             is_logged_in,
-            animation: AsciiAnimation::new(request_frame),
+            animation: AsciiAnimation::with_variants(
+                request_frame,
+                LOGO_VARIANTS,
+                /*variant_idx*/ 0,
+            ),
             animations_enabled,
             animations_suppressed: Cell::new(false),
             layout_area: Cell::new(None),
@@ -215,6 +220,56 @@ mod tests {
         assert_ne!(
             before, after,
             "expected ctrl+shift+. to switch welcome animation variant"
+        );
+    }
+
+    use crate::frames::FRAMES_LOGO;
+
+    #[test]
+    fn welcome_renders_logo_animation() {
+        let widget = WelcomeWidget::new(
+            /*is_logged_in*/ false,
+            FrameRequester::test_dummy(),
+            /*animations_enabled*/ true,
+        );
+        let area = Rect::new(0, 0, MIN_ANIMATION_WIDTH, MIN_ANIMATION_HEIGHT);
+        let mut buf = Buffer::empty(area);
+        (&widget).render(area, &mut buf);
+
+        let has_logo_blocks = ["█", "▓", "▒"].iter().any(|&ch| {
+            (0..buf.area.height).any(|y| {
+                let row: String = (0..buf.area.width)
+                    .map(|x| buf[(x, y)].symbol().to_string())
+                    .collect();
+                row.contains(ch)
+            })
+        });
+        assert!(has_logo_blocks, "expected logo block characters in welcome animation");
+    }
+
+    #[test]
+    fn welcome_uses_single_logo_variant() {
+        let mut widget = WelcomeWidget::new(
+            /*is_logged_in*/ false,
+            FrameRequester::test_dummy(),
+            /*animations_enabled*/ true,
+        );
+        let before = widget.animation.current_frame();
+        assert!(
+            FRAMES_LOGO.contains(&before),
+            "expected initial frame to be a logo frame"
+        );
+
+        // ctrl+. should not switch to a different variant because there is only one.
+        widget.handle_key_event(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::CONTROL));
+        let after = widget.animation.current_frame();
+        assert!(
+            FRAMES_LOGO.contains(&after),
+            "expected frame after ctrl+. to still be a logo frame"
+        );
+        assert_eq!(
+            before, after,
+            "expected no variant change for a single-variant animation within one tick"
         );
     }
 }
