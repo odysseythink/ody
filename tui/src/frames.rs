@@ -1,4 +1,6 @@
 use std::time::Duration;
+#[cfg(test)]
+use unicode_width::UnicodeWidthStr;
 
 // Embed animation frames for each variant at compile time.
 macro_rules! frames_for {
@@ -55,6 +57,15 @@ pub(crate) const FRAMES_VBARS: [&str; 36] = frames_for!("vbars");
 pub(crate) const FRAMES_SHAPES: [&str; 36] = frames_for!("shapes");
 pub(crate) const FRAMES_SLUG: [&str; 36] = frames_for!("slug");
 
+pub(crate) const FRAMES_LOGO: [&str; 4] = [
+    include_str!("../frames/logo/frame_1.txt"),
+    include_str!("../frames/logo/frame_2.txt"),
+    include_str!("../frames/logo/frame_3.txt"),
+    include_str!("../frames/logo/frame_4.txt"),
+];
+
+pub(crate) const LOGO_VARIANTS: &[&[&str]] = &[&FRAMES_LOGO];
+
 pub(crate) const ALL_VARIANTS: &[&[&str]] = &[
     &FRAMES_DEFAULT,
     &FRAMES_ODY,
@@ -69,3 +80,31 @@ pub(crate) const ALL_VARIANTS: &[&[&str]] = &[
 ];
 
 pub(crate) const FRAME_TICK_DEFAULT: Duration = Duration::from_millis(80);
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn logo_variant_has_expected_frame_count() {
+        assert_eq!(FRAMES_LOGO.len(), 4);
+        assert_eq!(LOGO_VARIANTS.len(), 1);
+        assert_eq!(LOGO_VARIANTS[0].len(), FRAMES_LOGO.len());
+    }
+
+    #[test]
+    fn logo_frames_have_consistent_dimensions() {
+        for frame in FRAMES_LOGO {
+            let lines: Vec<_> = frame.lines().collect();
+            assert_eq!(lines.len(), 10, "every logo frame must be 10 rows");
+            for line in &lines {
+                assert_eq!(
+                    UnicodeWidthStr::width(*line),
+                    41,
+                    "every logo frame line must be 41 columns"
+                );
+            }
+        }
+    }
+}
