@@ -179,6 +179,27 @@ pub fn render_full_reminder() -> String {
     )
 }
 
+/// Renders a condensed rigor-tier plan-mode reminder.
+///
+/// Use between full reinjections to keep the contract alive without
+/// repeating the full text every turn.
+pub fn render_sparse_reminder() -> String {
+    r#"## Plan-mode rigor reminder
+
+You are writing a rigor-tier plan. Keep the following artifacts current:
+
+- Dependency Overview
+- Spec-coverage table
+- Self-review checklist (all seven items)
+- Shared-signature build-green invariant
+- No-placeholders rule
+- Source-grounding mandate
+- Out-of-scope / false-positive discipline
+- Rename-vs-delete decision prompt
+"#
+    .to_string()
+}
+
 #[cfg(test)]
 mod directive_tests {
     use super::*;
@@ -306,5 +327,29 @@ mod directive_tests {
             reminder.contains("trace one concrete value"),
             "full reminder should contain end-to-end trace requirement:\n{reminder}"
         );
+    }
+
+    #[test]
+    fn sparse_reminder_lists_key_artifacts() {
+        let reminder = render_sparse_reminder();
+        assert!(
+            reminder.contains("## Plan-mode rigor reminder"),
+            "sparse reminder should have a heading:\n{reminder}"
+        );
+        for artifact in [
+            "Dependency Overview",
+            "Spec-coverage table",
+            "Self-review checklist",
+            "Shared-signature build-green invariant",
+            "No-placeholders rule",
+            "Source-grounding mandate",
+            "Out-of-scope",
+            "Rename-vs-delete",
+        ] {
+            assert!(
+                reminder.contains(artifact),
+                "sparse reminder should mention {artifact}:\n{reminder}"
+            );
+        }
     }
 }
