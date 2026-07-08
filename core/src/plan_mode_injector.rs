@@ -163,6 +163,22 @@ pub fn render_directive(directive: &PlanModeDirective, index_path: &Path) -> Opt
     }
 }
 
+/// Renders the full rigor-tier plan-mode reminder.
+///
+/// Re-injects all rigor fragments so the model keeps the complete contract
+/// in context during a long planning session.
+pub fn render_full_reminder() -> String {
+    format!(
+        "## Plan-mode rigor reminder (full)\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}",
+        ody_collaboration_mode_templates::PLAN_RIGOR_COVERAGE,
+        ody_collaboration_mode_templates::PLAN_RIGOR_SELFREVIEW,
+        ody_collaboration_mode_templates::PLAN_RIGOR_INVARIANTS,
+        ody_collaboration_mode_templates::PLAN_RIGOR_GROUNDING,
+        ody_collaboration_mode_templates::PLAN_RIGOR_SCOPE,
+        ody_collaboration_mode_templates::PLAN_RIGOR_RENAME,
+    )
+}
+
 #[cfg(test)]
 mod directive_tests {
     use super::*;
@@ -269,5 +285,26 @@ mod directive_tests {
         assert!(PlanModeInjector::should_trigger_compaction(true, Some(&config), 0.6));
         assert!(!PlanModeInjector::should_trigger_compaction(true, Some(&config), 0.4));
         assert!(!PlanModeInjector::should_trigger_compaction(false, Some(&config), 0.9));
+    }
+
+    #[test]
+    fn full_reminder_contains_selfreview_and_coverage() {
+        let reminder = render_full_reminder();
+        assert!(
+            reminder.contains("## Rigor tier addendum: Self-review checklist"),
+            "full reminder should contain self-review fragment:\n{reminder}"
+        );
+        assert!(
+            reminder.contains("## Rigor tier addendum: Dependency Overview + Spec-coverage"),
+            "full reminder should contain coverage fragment:\n{reminder}"
+        );
+        assert!(
+            reminder.contains("## Spec-coverage table"),
+            "full reminder should contain spec-coverage requirement:\n{reminder}"
+        );
+        assert!(
+            reminder.contains("trace one concrete value"),
+            "full reminder should contain end-to-end trace requirement:\n{reminder}"
+        );
     }
 }
