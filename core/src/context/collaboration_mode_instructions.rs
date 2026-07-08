@@ -60,6 +60,13 @@ impl CollaborationModeInstructions {
             instructions: format!("{}\n\n{}", self.instructions, fragment),
         }
     }
+
+    pub(crate) fn with_rigor_rename(self) -> Self {
+        let fragment = ody_collaboration_mode_templates::PLAN_RIGOR_RENAME;
+        Self {
+            instructions: format!("{}\n\n{}", self.instructions, fragment),
+        }
+    }
 }
 
 fn render_plan_instructions(instructions: &str, split_threshold: Option<usize>) -> String {
@@ -261,6 +268,36 @@ mod tests {
         assert!(
             body.contains("creator_account_user_id"),
             "body should include the external-schema carve-out example:\n{body}"
+        );
+    }
+
+    #[test]
+    fn composes_rigor_rename_fragment() {
+        let mode = plan_mode_with_instructions("Plan the work.");
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8))
+            .expect("should produce instructions")
+            .with_rigor_rename();
+        let body = instructions.body();
+
+        assert!(
+            body.contains("## Rename-vs-delete decision prompt"),
+            "body should contain Rename-vs-delete section:\n{body}"
+        );
+        assert!(
+            body.contains("Delete") && body.contains("Rename") && body.contains("Carve out"),
+            "body should list all three per-hit actions:\n{body}"
+        );
+        assert!(
+            body.contains("one-line reason"),
+            "body should require a one-line reason:\n{body}"
+        );
+        assert!(
+            body.contains("No silent survivors"),
+            "body should contain the no-silent-survivors rule:\n{body}"
+        );
+        assert!(
+            body.contains("auth.rs::PlanType"),
+            "body should reference the historical auth.rs::PlanType case:\n{body}"
         );
     }
 }
