@@ -67,6 +67,13 @@ impl CollaborationModeInstructions {
             instructions: format!("{}\n\n{}", self.instructions, fragment),
         }
     }
+
+    pub(crate) fn with_rigor_scope(self) -> Self {
+        let fragment = ody_collaboration_mode_templates::PLAN_RIGOR_SCOPE;
+        Self {
+            instructions: format!("{}\n\n{}", self.instructions, fragment),
+        }
+    }
 }
 
 fn render_plan_instructions(instructions: &str, split_threshold: Option<usize>) -> String {
@@ -294,6 +301,40 @@ mod tests {
         assert!(
             body.contains("No silent survivors"),
             "body should contain the no-silent-survivors rule:\n{body}"
+        );
+    }
+
+    #[test]
+    fn composes_rigor_scope_fragment() {
+        let mode = plan_mode_with_instructions("Plan the work.");
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8))
+            .expect("should produce instructions")
+            .with_rigor_scope();
+        let body = instructions.body();
+
+        assert!(
+            body.contains("## Out-of-scope / false-positive discipline"),
+            "body should contain Out-of-scope / false-positive discipline section:\n{body}"
+        );
+        assert!(
+            body.contains("## Out-of-scope"),
+            "body should contain the mandatory Out-of-scope section heading:\n{body}"
+        );
+        assert!(
+            body.contains("false-positive"),
+            "body should mention false-positive discipline:\n{body}"
+        );
+        assert!(
+            body.contains("windows-sandbox-rs"),
+            "body should include the windows-sandbox carve-out example:\n{body}"
+        );
+        assert!(
+            body.contains("ext/goal/accounting.rs"),
+            "body should include the token-accounting carve-out example:\n{body}"
+        );
+        assert!(
+            body.contains("creator_account_user_id"),
+            "body should include the external-schema carve-out example:\n{body}"
         );
     }
 }
