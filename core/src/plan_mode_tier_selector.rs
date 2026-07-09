@@ -115,7 +115,21 @@ fn heuristic_score(prompt: &str, threshold: usize) -> (usize, String) {
         factors.push("high_impact_match=1".to_string());
     }
 
-    // F4 — prompt length (cheap byte-length proxy).
+    // F4 — concept removal/rename is high-risk and needs rigor even for short prompts.
+    let lower = prompt.to_lowercase();
+    let concept_words = ["concept", "概念"];
+    let has_concept = concept_words.iter().any(|w| lower.contains(w));
+    let removal_words = [
+        "remove", "delete", "rename", "refactor",
+        "拿掉", "移除", "删除", "删掉", "重命名", "重构",
+    ];
+    let has_removal = removal_words.iter().any(|w| lower.contains(w));
+    if has_concept && has_removal {
+        score += 60;
+        factors.push("concept_remove_or_rename".to_string());
+    }
+
+    // F5 — prompt length (cheap byte-length proxy).
     let token_estimate = prompt.len() / 4;
     if token_estimate > 512 {
         score += 15;

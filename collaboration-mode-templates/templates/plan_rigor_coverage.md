@@ -2,7 +2,7 @@
 
 In addition to the conversational plan requirements above, every rigor-tier plan MUST include the following two artifacts. Do not skip them even if the plan is small.
 
-## Dependency Overview
+## Dependency graph
 
 Before writing task detail, produce a dependency graph for the plan:
 

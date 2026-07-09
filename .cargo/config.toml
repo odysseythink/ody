@@ -24,3 +24,4 @@ linker = "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools
 # call chains in agent control and guardian tests. Use 4 MiB to match the
 # effective headroom on Linux and stay below the Windows link-time 8 MiB.
 RUST_MIN_STACK = "4194304"
+RUSTY_V8_ARCHIVE = "/Users/ranwei/Downloads/librusty_v8_release_aarch64-apple-darwin.a.gz"

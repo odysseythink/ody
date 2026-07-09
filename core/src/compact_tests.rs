@@ -166,6 +166,67 @@ fn collect_user_messages_filters_legacy_warnings() {
     assert_eq!(vec![compacted_user_message("real user message")], collected);
 }
 
+fn summary_message(text: &str) -> ResponseItem {
+    ResponseItem::Message {
+        id: None,
+        role: "user".to_string(),
+        content: vec![ContentItem::InputText {
+            text: format!("{SUMMARY_PREFIX}\n{text}"),
+        }],
+        phase: None,
+        internal_chat_message_metadata_passthrough: None,
+    }
+}
+
+#[test]
+fn collect_user_messages_skips_messages_before_last_summary() {
+    // Regression: user messages folded into a prior compaction summary must not
+    // be re-preserved verbatim, otherwise old, already-resolved topics persist
+    // across every compaction cycle and pull the model off-topic.
+    let items = vec![
+        user_message("old topic question one"),
+        user_message("old topic question two"),
+        summary_message("previous summary"),
+        user_message("new topic question"),
+    ];
+
+    let collected = collect_user_messages(&items);
+
+    assert_eq!(vec![compacted_user_message("new topic question")], collected);
+}
+
+#[test]
+fn collect_user_messages_keeps_only_after_the_last_summary() {
+    // With multiple summaries only messages after the most recent one survive.
+    let items = vec![
+        user_message("topic A"),
+        summary_message("summary one"),
+        user_message("topic B"),
+        summary_message("summary two"),
+        user_message("topic C"),
+    ];
+
+    let collected = collect_user_messages(&items);
+
+    assert_eq!(vec![compacted_user_message("topic C")], collected);
+}
+
+#[test]
+fn collect_user_messages_without_summary_keeps_all() {
+    // No summary present: behavior is unchanged (collect every real user message).
+    let items = vec![user_message("first"), user_message("second")];
+
+    let collected = collect_user_messages(&items);
+
+    assert_eq!(
+        vec![
+            compacted_user_message("first"),
+            compacted_user_message("second"),
+        ],
+        collected
+    );
+}
+
 #[test]
 fn build_token_limited_compacted_history_truncates_overlong_user_messages() {
     // Use a small truncation limit so the test remains fast while still validating

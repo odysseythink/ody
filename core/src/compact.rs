@@ -468,7 +468,26 @@ pub(crate) struct CompactedUserMessage {
 }
 
 pub(crate) fn collect_user_messages(items: &[ResponseItem]) -> Vec<CompactedUserMessage> {
-    items
+    // Only preserve user messages that are not already represented by the most
+    // recent compaction summary. Everything before the last summary has been
+    // folded into it, so re-preserving those messages verbatim would let old,
+    // already-resolved topics persist across every compaction cycle (their
+    // assistant answers are dropped, leaving a wall of disembodied questions
+    // that pulls the model off-topic). Start collecting just after the last
+    // summary marker; if there is none, keep the previous behavior of scanning
+    // the whole history.
+    let start = items
+        .iter()
+        .rposition(|item| {
+            matches!(
+                crate::event_mapping::parse_turn_item(item),
+                Some(TurnItem::UserMessage(user)) if is_summary_message(&user.message())
+            )
+        })
+        .map(|idx| idx + 1)
+        .unwrap_or(0);
+
+    items[start..]
         .iter()
         .filter_map(|item| match crate::event_mapping::parse_turn_item(item) {
             Some(TurnItem::UserMessage(user)) => {

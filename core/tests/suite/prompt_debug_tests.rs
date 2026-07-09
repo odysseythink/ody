@@ -40,6 +40,7 @@ async fn build_prompt_input_includes_context_and_user_message() -> Result<()> {
         }],
         /*state_db*/ None,
         user_instructions_provider,
+        /*plan_mode*/ false,
     )
     .await?;
 

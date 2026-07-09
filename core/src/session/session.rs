@@ -467,6 +467,26 @@ impl Session {
         self.services.agent_control.session_id()
     }
 
+    /// Debug-only: apply a collaboration-mode update directly to the session configuration.
+    #[cfg(debug_assertions)]
+    pub(crate) async fn apply_debug_collaboration_mode(
+        &self,
+        collaboration_mode: CollaborationMode,
+    ) -> OdyResult<()> {
+        let updates = SessionSettingsUpdate {
+            collaboration_mode: Some(collaboration_mode),
+            ..Default::default()
+        };
+        let mut state = self.state.lock().await;
+        match state.session_configuration.clone().apply(&updates) {
+            Ok(next) => {
+                state.session_configuration = next;
+                Ok(())
+            }
+            Err(err) => Err(OdyErr::InvalidRequest(err.to_string())),
+        }
+    }
+
     #[instrument(name = "session_init", level = "info", skip_all)]
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn new(

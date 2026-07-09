@@ -3,6 +3,9 @@ use std::sync::Arc;
 use ody_exec_server::EnvironmentManager;
 use ody_exec_server::ExecServerRuntimePaths;
 use ody_extension_api::UserInstructionsProvider;
+use ody_protocol::config_types::CollaborationMode;
+use ody_protocol::config_types::ModeKind;
+use ody_protocol::config_types::Settings;
 use ody_protocol::error::OdyErr;
 use ody_protocol::error::Result as OdyResult;
 use ody_protocol::models::ResponseItem;
@@ -27,6 +30,7 @@ pub async fn build_prompt_input(
     input: Vec<UserInput>,
     state_db: Option<StateDbHandle>,
     user_instructions_provider: Arc<dyn UserInstructionsProvider>,
+    plan_mode: bool,
 ) -> OdyResult<Vec<ResponseItem>> {
     config.ephemeral = true;
 
@@ -57,7 +61,29 @@ pub async fn build_prompt_input(
         /*attestation_provider*/ None,
         /*external_time_provider*/ None,
     );
-    let thread = thread_manager.start_thread(config).await?;
+    let thread = thread_manager.start_thread(config.clone()).await?;
+
+    if plan_mode {
+        let plan_mode_settings = Settings {
+            model: config.model.clone().unwrap_or_default(),
+            reasoning_effort: config.model_reasoning_effort.clone(),
+            developer_instructions: Some(ody_collaboration_mode_templates::PLAN.to_string()),
+        };
+        let plan_collaboration_mode = CollaborationMode {
+            mode: ModeKind::Plan,
+            settings: plan_mode_settings,
+        };
+        let updates = crate::session::session::SessionSettingsUpdate {
+            collaboration_mode: Some(plan_collaboration_mode.clone()),
+            ..Default::default()
+        };
+        let _ = thread
+            .thread
+            .ody
+            .session
+            .apply_debug_collaboration_mode(plan_collaboration_mode)
+            .await;
+    }
 
     let output = build_prompt_input_from_session(thread.thread.ody.session.as_ref(), input).await;
     let shutdown = thread.thread.shutdown_and_wait().await;
@@ -71,8 +97,12 @@ pub(crate) async fn build_prompt_input_from_session(
     sess: &Session,
     input: Vec<UserInput>,
 ) -> OdyResult<Vec<ResponseItem>> {
+    let user_prompt = input.iter().find_map(|u| match u {
+        UserInput::Text { text, .. } => Some(text.as_str()),
+        _ => None,
+    });
     let turn_context = sess.new_default_turn().await;
-    sess.record_context_updates_and_set_reference_context_item(turn_context.as_ref(), None)
+    sess.record_context_updates_and_set_reference_context_item(turn_context.as_ref(), user_prompt)
         .await;
 
     if !input.is_empty() {

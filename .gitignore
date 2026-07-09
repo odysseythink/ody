@@ -11,3 +11,4 @@
 # Git worktrees
 .worktrees/
 .worktrees/
+scripts/

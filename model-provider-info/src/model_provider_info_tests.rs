@@ -213,6 +213,50 @@ fn built_in_kimi_provider_capabilities() {
 }
 
 #[test]
+fn is_kimi_matches_case_insensitive_name_alias_and_base_url() {
+    // Exact canonical name.
+    assert!(create_kimi_provider().is_kimi());
+
+    // Case-insensitive name.
+    let mut lower = create_kimi_provider();
+    lower.name = "kimi".to_string();
+    assert!(lower.is_kimi());
+
+    // Common alias.
+    let mut moonshot = create_kimi_provider();
+    moonshot.name = "Moonshot".to_string();
+    assert!(moonshot.is_kimi());
+
+    // Detected via base_url even when the name is a custom label.
+    let mut custom = create_kimi_provider();
+    custom.name = "My Coding Model".to_string();
+    custom.base_url = Some("https://api.moonshot.ai/v1".to_string());
+    assert!(custom.is_kimi());
+
+    // Unrelated provider is not misclassified.
+    let mut other = create_kimi_provider();
+    other.name = "OpenAI".to_string();
+    other.base_url = Some("https://api.openai.com/v1".to_string());
+    assert!(!other.is_kimi());
+}
+
+#[test]
+fn deepseek_and_glm_detection_is_relaxed() {
+    let mut deepseek = create_deepseek_provider();
+    deepseek.name = "deepseek".to_string();
+    assert!(deepseek.is_deepseek());
+
+    let mut glm = create_glm_provider();
+    glm.name = "zhipu".to_string();
+    assert!(glm.is_glm());
+
+    let mut glm_url = create_glm_provider();
+    glm_url.name = "Custom".to_string();
+    glm_url.base_url = Some("https://open.bigmodel.cn/api/paas/v4".to_string());
+    assert!(glm_url.is_glm());
+}
+
+#[test]
 fn test_deserialize_provider_capabilities() {
     let provider_toml = r#"
 name = "Custom"

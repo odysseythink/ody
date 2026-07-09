@@ -23,6 +23,7 @@ use ody_utils_cli::ProfileV2Name;
 use ody_utils_cli::SharedCliOptions;
 use owo_colors::OwoColorize;
 use serde::Serialize;
+use serde::Deserialize;
 use std::collections::HashSet;
 use std::io::IsTerminal;
 use std::io::Write;
@@ -239,6 +240,12 @@ struct DebugAppServerSendMessageV2Command {
     user_message: String,
 }
 
+#[derive(Debug, clap::ValueEnum, Clone, Copy)]
+enum DebugPromptInputMode {
+    Default,
+    Plan,
+}
+
 #[derive(Debug, Parser)]
 struct DebugPromptInputCommand {
     /// Optional user prompt to append after session context.
@@ -248,6 +255,10 @@ struct DebugPromptInputCommand {
     /// Optional image(s) to attach to the user prompt.
     #[arg(long = "image", short = 'i', value_name = "FILE", value_delimiter = ',', num_args = 1..)]
     images: Vec<PathBuf>,
+
+    /// Collaboration mode to use when building the prompt input.
+    #[arg(long = "mode", value_enum, default_value_t = DebugPromptInputMode::Default)]
+    mode: DebugPromptInputMode,
 }
 
 #[derive(Debug, Parser)]
@@ -1673,6 +1684,7 @@ async fn run_debug_prompt_input_command(
         input,
         /*state_db*/ None,
         user_instructions_provider,
+        matches!(cmd.mode, DebugPromptInputMode::Plan),
     )
     .await?;
     println!("{}", serde_json::to_string_pretty(&prompt_input)?);
