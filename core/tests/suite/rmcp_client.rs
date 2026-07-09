@@ -447,7 +447,7 @@ async fn odysseythink_form_capability_updates_for_loaded_thread() -> anyhow::Res
 
     fixture
         .ody
-        .set_odysseythink_form_elicitation_support(/*supported*/ true)
+        .set_form_elicitation_support(/*supported*/ true)
         .await?;
     let supported = call_structured_tool(
         &server,
@@ -479,7 +479,7 @@ async fn assert_odysseythink_form_capability_advertisement(expected: bool) -> an
         );
     });
     if expected {
-        builder = builder.with_odysseythink_form_elicitation();
+        builder = builder.with_form_elicitation();
     }
     let fixture = builder.build(&server).await?;
     wait_for_mcp_server(&fixture.ody, server_name).await?;

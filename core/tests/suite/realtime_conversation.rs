@@ -2276,7 +2276,7 @@ async fn conversation_startup_context_current_thread_selects_many_turns_by_budge
             test.config.clone(),
             InitialHistory::Forked(history),
             /*parent_trace*/ None,
-            /*supports_odysseythink_form_elicitation*/ false,
+            /*supports_form_elicitation*/ false,
         )
         .await?;
     let ody = resumed_thread.thread;

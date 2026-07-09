@@ -106,7 +106,7 @@ async fn emits_warning_when_resumed_model_differs() {
             config.clone(),
             initial_history,
             /*parent_trace*/ None,
-            /*supports_odysseythink_form_elicitation*/ false,
+            /*supports_form_elicitation*/ false,
         )
         .await
         .expect("resume conversation");

@@ -97,13 +97,13 @@ pub async fn start_thread_with_user_shell_override(
     thread_manager: &ThreadManager,
     config: Config,
     user_shell_override: crate::shell::Shell,
-    supports_odysseythink_form_elicitation: bool,
+    supports_form_elicitation: bool,
 ) -> ody_protocol::error::Result<crate::NewThread> {
     thread_manager
         .start_thread_with_user_shell_override_for_tests(
             config,
             user_shell_override,
-            supports_odysseythink_form_elicitation,
+            supports_form_elicitation,
         )
         .await
 }
@@ -113,14 +113,14 @@ pub async fn resume_thread_from_rollout_with_user_shell_override(
     config: Config,
     rollout_path: PathBuf,
     user_shell_override: crate::shell::Shell,
-    supports_odysseythink_form_elicitation: bool,
+    supports_form_elicitation: bool,
 ) -> ody_protocol::error::Result<crate::NewThread> {
     thread_manager
         .resume_thread_from_rollout_with_user_shell_override_for_tests(
             config,
             rollout_path,
             user_shell_override,
-            supports_odysseythink_form_elicitation,
+            supports_form_elicitation,
         )
         .await
 }

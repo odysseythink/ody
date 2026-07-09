@@ -42,7 +42,7 @@ async fn emits_warning_when_unstable_features_enabled_via_config() {
             config.clone(),
             InitialHistory::New,
             /*parent_trace*/ None,
-            /*supports_odysseythink_form_elicitation*/ false,
+            /*supports_form_elicitation*/ false,
         )
         .await
         .expect("spawn conversation");
@@ -85,7 +85,7 @@ async fn suppresses_warning_when_configured() {
             config.clone(),
             InitialHistory::New,
             /*parent_trace*/ None,
-            /*supports_odysseythink_form_elicitation*/ false,
+            /*supports_form_elicitation*/ false,
         )
         .await
         .expect("spawn conversation");

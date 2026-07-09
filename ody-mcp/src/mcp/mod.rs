@@ -293,7 +293,7 @@ pub async fn read_mcp_resource(
         host_owned_ody_apps_enabled,
         config.prefix_mcp_tool_names,
         config.client_elicitation_capability.clone(),
-        /*supports_odysseythink_form_elicitation*/ false,
+        /*supports_form_elicitation*/ false,
         tool_plugin_provenance(config),
         /*elicitation_reviewer*/ None,
     )
@@ -365,7 +365,7 @@ pub async fn collect_mcp_server_status_snapshot_with_detail(
         host_owned_ody_apps_enabled,
         config.prefix_mcp_tool_names,
         config.client_elicitation_capability.clone(),
-        /*supports_odysseythink_form_elicitation*/ false,
+        /*supports_form_elicitation*/ false,
         tool_plugin_provenance,
         /*elicitation_reviewer*/ None,
     )

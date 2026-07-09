@@ -6,7 +6,7 @@ use crate::ody_apps::load_startup_cached_ody_apps_tools_snapshot;
 use crate::ody_apps::read_cached_ody_apps_tools;
 use crate::ody_apps::write_cached_ody_apps_tools;
 use crate::ody_apps::write_cached_ody_apps_tools_if_needed;
-use crate::declared_odysseythink_file_input_param_names;
+use crate::declared_file_input_param_names;
 use crate::elicitation::ElicitationRequestManager;
 use crate::elicitation::elicitation_is_rejected_by_policy;
 use crate::rmcp_client::AsyncManagedClient;
@@ -132,7 +132,7 @@ fn declared_odysseythink_file_fields_treat_names_literally() {
     let meta = meta.as_object().expect("meta object");
 
     assert_eq!(
-        declared_odysseythink_file_input_param_names(Some(meta)),
+        declared_file_input_param_names(Some(meta)),
         vec![
             "file".to_string(),
             "input_file".to_string(),
@@ -1298,7 +1298,7 @@ async fn no_local_runtime_fails_local_stdio_but_keeps_local_http_server() {
         /*host_owned_ody_apps_enabled*/ false,
         /*prefix_mcp_tool_names*/ true,
         ElicitationCapability::default(),
-        /*supports_odysseythink_form_elicitation*/ false,
+        /*supports_form_elicitation*/ false,
         ToolPluginProvenance::default(),
         /*auth*/ None,
     )

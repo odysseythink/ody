@@ -361,7 +361,7 @@ impl Session {
             mcp_config.prefix_mcp_tool_names,
             mcp_config.client_elicitation_capability,
             self.services
-                .supports_odysseythink_form_elicitation
+                .supports_form_elicitation
                 .load(std::sync::atomic::Ordering::Relaxed),
             tool_plugin_provenance,
             elicitation_reviewer,
@@ -428,13 +428,13 @@ impl Session {
         .await;
     }
 
-    pub(crate) async fn set_odysseythink_form_elicitation_support(
+    pub(crate) async fn set_form_elicitation_support(
         &self,
         supported: bool,
     ) -> anyhow::Result<()> {
         if self
             .services
-            .supports_odysseythink_form_elicitation
+            .supports_form_elicitation
             .load(std::sync::atomic::Ordering::Relaxed)
             == supported
         {
@@ -450,7 +450,7 @@ impl Session {
             auth_keyring_backend_kind: serde_json::to_value(config.auth_keyring_backend_kind())?,
         };
         self.services
-            .supports_odysseythink_form_elicitation
+            .supports_form_elicitation
             .store(supported, std::sync::atomic::Ordering::Relaxed);
         *self.pending_mcp_server_refresh_config.lock().await = Some(refresh_config);
         Ok(())

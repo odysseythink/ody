@@ -44,7 +44,7 @@ use ody_mcp::McpPermissionPromptAutoApproveContext;
 use ody_mcp::SandboxState;
 use ody_mcp::auth_elicitation_completed_result;
 use ody_mcp::build_auth_elicitation_plan;
-use ody_mcp::declared_odysseythink_file_input_param_names;
+use ody_mcp::declared_file_input_param_names;
 use ody_mcp::mcp_permission_prompt_is_auto_approved;
 use ody_otel::sanitize_metric_tag_value;
 use ody_protocol::items::McpToolCallError;
@@ -1542,7 +1542,7 @@ fn odysseythink_file_input_params_for_server(
     meta: Option<&serde_json::Map<String, serde_json::Value>>,
 ) -> Option<Vec<String>> {
     (server == ODY_APPS_MCP_SERVER_NAME)
-        .then_some(declared_odysseythink_file_input_param_names(meta))
+        .then_some(declared_file_input_param_names(meta))
         .filter(|params| !params.is_empty())
 }
 

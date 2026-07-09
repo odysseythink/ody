@@ -1607,7 +1607,7 @@ impl OdyClient {
                             .map(|method| (*method).to_string())
                             .collect(),
                     ),
-                    mcp_server_odysseythink_form_elicitation: false,
+                    mcp_server_form_elicitation: false,
                 }),
             },
         };

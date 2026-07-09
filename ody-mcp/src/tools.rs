@@ -61,7 +61,7 @@ impl ToolInfo {
     }
 }
 
-pub fn declared_odysseythink_file_input_param_names(
+pub fn declared_file_input_param_names(
     meta: Option<&Map<String, JsonValue>>,
 ) -> Vec<String> {
     let Some(meta) = meta else {
@@ -117,7 +117,7 @@ impl ToolFilter {
 /// used by execution. Keep cache entries raw and call this at manager return
 /// boundaries.
 pub(crate) fn tool_with_model_visible_input_schema(tool: &Tool) -> Tool {
-    let file_params = declared_odysseythink_file_input_param_names(tool.meta.as_deref());
+    let file_params = declared_file_input_param_names(tool.meta.as_deref());
     if file_params.is_empty() {
         return tool.clone();
     }

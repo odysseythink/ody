@@ -290,7 +290,7 @@ impl MemoryStartupContext {
                 parent_trace: None,
                 environments,
                 thread_extension_init: Default::default(),
-                supports_odysseythink_form_elicitation: false,
+                supports_form_elicitation: false,
             })
             .await?;
 

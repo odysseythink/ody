@@ -274,7 +274,7 @@ pub struct TestOdyBuilder {
     exec_server_url: Option<String>,
     extensions: Arc<ExtensionRegistry<Config>>,
     user_instructions_provider: Option<Arc<dyn UserInstructionsProvider>>,
-    supports_odysseythink_form_elicitation: bool,
+    supports_form_elicitation: bool,
     external_time_provider: Option<Arc<dyn TimeProvider>>,
 }
 
@@ -367,8 +367,8 @@ impl TestOdyBuilder {
         self
     }
 
-    pub fn with_odysseythink_form_elicitation(mut self) -> Self {
-        self.supports_odysseythink_form_elicitation = true;
+    pub fn with_form_elicitation(mut self) -> Self {
+        self.supports_form_elicitation = true;
         self
     }
 
@@ -593,7 +593,7 @@ impl TestOdyBuilder {
                         config.clone(),
                         path,
                         user_shell_override,
-                        self.supports_odysseythink_form_elicitation,
+                        self.supports_form_elicitation,
                     ),
                 )
                 .await?
@@ -603,7 +603,7 @@ impl TestOdyBuilder {
                     config.clone(),
                     path,
                     /*parent_trace*/ None,
-                    self.supports_odysseythink_form_elicitation,
+                    self.supports_form_elicitation,
                 ))
                 .await?
             }
@@ -613,7 +613,7 @@ impl TestOdyBuilder {
                         thread_manager.as_ref(),
                         config.clone(),
                         user_shell_override,
-                        self.supports_odysseythink_form_elicitation,
+                        self.supports_form_elicitation,
                     ),
                 )
                 .await?
@@ -631,7 +631,7 @@ impl TestOdyBuilder {
                         parent_trace: None,
                         environments,
                         thread_extension_init: Default::default(),
-                        supports_odysseythink_form_elicitation: self.supports_odysseythink_form_elicitation,
+                        supports_form_elicitation: self.supports_form_elicitation,
                     }),
                 )
                 .await?
@@ -1180,7 +1180,7 @@ pub fn test_ody() -> TestOdyBuilder {
         exec_server_url: None,
         extensions: empty_extension_registry(),
         user_instructions_provider: None,
-        supports_odysseythink_form_elicitation: false,
+        supports_form_elicitation: false,
         external_time_provider: None,
     }
 }

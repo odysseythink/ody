@@ -505,7 +505,7 @@ impl Session {
         mcp_manager: Arc<McpManager>,
         extensions: Arc<ody_extension_api::ExtensionRegistry<crate::config::Config>>,
         thread_extension_init: ExtensionDataInit,
-        supports_odysseythink_form_elicitation: bool,
+        supports_form_elicitation: bool,
         agent_control: AgentControl,
         environment_manager: Arc<EnvironmentManager>,
         inherited_environments: Option<TurnEnvironmentSnapshot>,
@@ -1041,8 +1041,8 @@ impl Session {
                 session_extension_data,
                 thread_extension_data,
                 mcp_thread_init,
-                supports_odysseythink_form_elicitation: std::sync::atomic::AtomicBool::new(
-                    supports_odysseythink_form_elicitation,
+                supports_form_elicitation: std::sync::atomic::AtomicBool::new(
+                    supports_form_elicitation,
                 ),
                 agent_control,
                 network_proxy: arc_swap::ArcSwapOption::from(network_proxy.map(Arc::new)),
@@ -1185,7 +1185,7 @@ impl Session {
                 config.prefix_mcp_tool_names(),
                 client_elicitation_capability,
                 sess.services
-                    .supports_odysseythink_form_elicitation
+                    .supports_form_elicitation
                     .load(std::sync::atomic::Ordering::Relaxed),
                 tool_plugin_provenance,
                 Some(sess.mcp_elicitation_reviewer()),

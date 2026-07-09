@@ -336,10 +336,10 @@ impl OdyThread {
             .await
     }
 
-    pub async fn set_odysseythink_form_elicitation_support(&self, supported: bool) -> anyhow::Result<()> {
+    pub async fn set_form_elicitation_support(&self, supported: bool) -> anyhow::Result<()> {
         self.ody
             .session
-            .set_odysseythink_form_elicitation_support(supported)
+            .set_form_elicitation_support(supported)
             .await
     }
 

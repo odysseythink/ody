@@ -110,9 +110,9 @@ pub(crate) async fn run_ody_thread_interactive(
         parent_trace: None,
         environment_selections: parent_ctx.environments.to_selections(),
         thread_extension_init: ody_extension_api::ExtensionDataInit::default(),
-        supports_odysseythink_form_elicitation: parent_session
+        supports_form_elicitation: parent_session
             .services
-            .supports_odysseythink_form_elicitation
+            .supports_form_elicitation
             .load(std::sync::atomic::Ordering::Relaxed),
         analytics_events_client: Some(parent_session.services.analytics_events_client.clone()),
         thread_store: Arc::clone(&parent_session.services.thread_store),

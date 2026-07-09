@@ -67,7 +67,7 @@ pub(crate) struct SessionServices {
     pub(crate) extensions: Arc<ExtensionRegistry<crate::config::Config>>,
     pub(crate) session_extension_data: ExtensionData,
     pub(crate) thread_extension_data: ExtensionData,
-    pub(crate) supports_odysseythink_form_elicitation: AtomicBool,
+    pub(crate) supports_form_elicitation: AtomicBool,
     pub(crate) mcp_thread_init: ExtensionDataInit,
     pub(crate) agent_control: AgentControl,
     pub(crate) network_proxy: ArcSwapOption<StartedNetworkProxy>,

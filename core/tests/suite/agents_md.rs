@@ -445,7 +445,7 @@ async fn loads_user_instructions_without_a_primary_environment() -> Result<()> {
             parent_trace: None,
             environments: Vec::new(),
             thread_extension_init: Default::default(),
-            supports_odysseythink_form_elicitation: false,
+            supports_form_elicitation: false,
         })
         .await?;
     assert_eq!(provider.load_count(), 2);
@@ -661,7 +661,7 @@ async fn multi_environment_thread_loads_every_project_and_keeps_creation_snapsho
                 },
             ],
             thread_extension_init: Default::default(),
-            supports_odysseythink_form_elicitation: false,
+            supports_form_elicitation: false,
         })
         .await?;
     assert_eq!(provider.load_count(), 2);

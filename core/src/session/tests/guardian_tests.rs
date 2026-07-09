@@ -701,7 +701,7 @@ async fn guardian_subagent_does_not_inherit_parent_exec_policy_rules() {
         parent_trace: None,
         environment_selections: Vec::new(),
         thread_extension_init: ody_extension_api::ExtensionDataInit::default(),
-        supports_odysseythink_form_elicitation: false,
+        supports_form_elicitation: false,
         analytics_events_client: None,
         thread_store,
         attestation_provider: None,

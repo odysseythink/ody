@@ -154,7 +154,7 @@ impl TurnRequestProcessor {
         params: TurnStartParams,
         app_server_client_name: Option<String>,
         app_server_client_version: Option<String>,
-        supports_odysseythink_form_elicitation: bool,
+        supports_form_elicitation: bool,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         validate_user_input_image_urls(&params.input)?;
         self.turn_start_inner(
@@ -162,7 +162,7 @@ impl TurnRequestProcessor {
             params,
             app_server_client_name,
             app_server_client_version,
-            /*supports_odysseythink_form_elicitation*/ supports_odysseythink_form_elicitation,
+            /*supports_form_elicitation*/ supports_form_elicitation,
         )
         .await
         .map(|response| Some(response.into()))
@@ -441,7 +441,7 @@ impl TurnRequestProcessor {
         params: TurnStartParams,
         app_server_client_name: Option<String>,
         app_server_client_version: Option<String>,
-        supports_odysseythink_form_elicitation: bool,
+        supports_form_elicitation: bool,
     ) -> Result<TurnStartResponse, JSONRPCErrorError> {
         let (thread_id, thread) =
             self.load_thread(&params.thread_id)
@@ -469,7 +469,7 @@ impl TurnRequestProcessor {
             self.track_error_response(&request_id, error, /*error_type*/ None);
         })?;
         thread
-            .set_odysseythink_form_elicitation_support(supports_odysseythink_form_elicitation)
+            .set_form_elicitation_support(supports_form_elicitation)
             .await
             .map_err(|err| {
                 internal_error(format!(
@@ -1228,7 +1228,7 @@ impl TurnRequestProcessor {
                 }),
                 /*thread_source*/ None,
                 self.request_trace_context(request_id).await,
-                /*supports_odysseythink_form_elicitation*/ false,
+                /*supports_form_elicitation*/ false,
             )
             .await
             .map_err(|err| {

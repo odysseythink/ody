@@ -43,7 +43,7 @@ struct TestToolServer {
     tools: Arc<Vec<Tool>>,
     resources: Arc<Vec<Resource>>,
     resource_templates: Arc<Vec<ResourceTemplate>>,
-    supports_odysseythink_form_elicitation: Arc<AtomicBool>,
+    supports_form_elicitation: Arc<AtomicBool>,
 }
 
 const MEMO_URI: &str = "memo://ody/example-note";
@@ -106,7 +106,7 @@ impl TestToolServer {
             tools: Arc::new(tools),
             resources: Arc::new(resources),
             resource_templates: Arc::new(resource_templates),
-            supports_odysseythink_form_elicitation: Arc::new(AtomicBool::new(false)),
+            supports_form_elicitation: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -445,7 +445,7 @@ impl ServerHandler for TestToolServer {
         request: InitializeRequestParams,
         context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
     ) -> Result<InitializeResult, McpError> {
-        self.supports_odysseythink_form_elicitation.store(
+        self.supports_form_elicitation.store(
             request
                 .capabilities
                 .extensions
@@ -544,7 +544,7 @@ impl ServerHandler for TestToolServer {
         match request.name.as_ref() {
             "client_capabilities" => Ok(Self::structured_result(json!({
                 "supportsOpenaiFormElicitation": self
-                    .supports_odysseythink_form_elicitation
+                    .supports_form_elicitation
                     .load(Ordering::Relaxed),
             }))),
             "sandbox_meta" => Ok(Self::structured_result(serde_json::Value::Object(

@@ -104,7 +104,7 @@ impl Service<RoleClient> for ElicitationClientService {
                 if request.method == OPENAI_FORM_METHOD && self.supports_odysseythink_form =>
             {
                 let response = self
-                    .create_elicitation(odysseythink_form_elicitation(request)?, context)
+                    .create_elicitation(form_elicitation(request)?, context)
                     .await?;
                 Ok(ClientResult::CustomResult(elicitation_response_result(
                     response,
@@ -139,7 +139,7 @@ impl Service<RoleClient> for ElicitationClientService {
     }
 }
 
-fn odysseythink_form_elicitation(request: CustomRequest) -> Result<Elicitation, rmcp::ErrorData> {
+fn form_elicitation(request: CustomRequest) -> Result<Elicitation, rmcp::ErrorData> {
     let params = request
         .params_as::<OpenAiFormRequestParams>()
         .map_err(|err| rmcp::ErrorData::invalid_params(err.to_string(), None))?
@@ -236,7 +236,7 @@ mod tests {
 
     #[test]
     fn parses_odysseythink_form_custom_requests() {
-        let elicitation = odysseythink_form_elicitation(CustomRequest::new(
+        let elicitation = form_elicitation(CustomRequest::new(
             OPENAI_FORM_METHOD,
             Some(json!({
                 "message": "Select a template",

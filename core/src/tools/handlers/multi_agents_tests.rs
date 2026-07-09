@@ -2695,7 +2695,7 @@ async fn resume_agent_restores_closed_agent_and_accepts_send_input() {
                 internal_chat_message_metadata_passthrough: None,
             })]),
             /*parent_trace*/ None,
-            /*supports_odysseythink_form_elicitation*/ false,
+            /*supports_form_elicitation*/ false,
         )
         .await
         .expect("start thread");

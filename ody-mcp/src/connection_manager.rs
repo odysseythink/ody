@@ -133,7 +133,7 @@ impl McpConnectionManager {
         host_owned_ody_apps_enabled: bool,
         prefix_mcp_tool_names: bool,
         client_elicitation_capability: ElicitationCapability,
-        supports_odysseythink_form_elicitation: bool,
+        supports_form_elicitation: bool,
         tool_plugin_provenance: ToolPluginProvenance,
         elicitation_reviewer: Option<ElicitationReviewerHandle>,
     ) -> Self {
@@ -209,7 +209,7 @@ impl McpConnectionManager {
                 runtime_context.clone(),
                 runtime_auth_provider,
                 client_elicitation_capability.clone(),
-                supports_odysseythink_form_elicitation,
+                supports_form_elicitation,
             );
             clients.insert(server_name.clone(), async_managed_client.clone());
             let tx_event = tx_event.clone();

@@ -1356,7 +1356,7 @@ async fn install_host_owned_ody_apps_manager(session: &Session, turn_context: &T
         /*host_owned_ody_apps_enabled*/ true,
         turn_context.config.prefix_mcp_tool_names(),
         rmcp::model::ElicitationCapability::default(),
-        /*supports_odysseythink_form_elicitation*/ false,
+        /*supports_form_elicitation*/ false,
         ody_mcp::ToolPluginProvenance::default(),
         None,
     )
