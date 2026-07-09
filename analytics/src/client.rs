@@ -525,13 +525,15 @@ fn track_event_request_batches(events: Vec<TrackEventRequest>) -> Vec<Vec<TrackE
     batches
 }
 
-#[allow(dead_code)]
 async fn send_track_events_request(
-    _destination: &AnalyticsEventsDestination,
-    _events: Vec<TrackEventRequest>,
+    destination: &AnalyticsEventsDestination,
+    events: Vec<TrackEventRequest>,
 ) {
     // Analytics events are only emitted for the Ody backend auth, which has
-    // been removed along with the legacy OAuth flow.
+    // been removed along with the legacy OAuth flow. Keep the capture-file
+    // path working so tests can verify serialization.
+    let payload = TrackEventsRequest { events };
+    capture_track_events_request(destination, &payload);
 }
 
 #[cfg(debug_assertions)]
