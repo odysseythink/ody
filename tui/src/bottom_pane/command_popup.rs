@@ -627,4 +627,65 @@ mod tests {
             "expected no /debug* command in popup menu, got {cmds:?}"
         );
     }
+    #[test]
+    fn writing_plan_command_visible_in_popup_when_plan_mode_active() {
+        let mut popup = CommandPopup::new(
+            CommandPopupFlags {
+                collaboration_modes_enabled: true,
+                connectors_enabled: false,
+                plugins_command_enabled: false,
+                service_tier_commands_enabled: false,
+                goal_command_enabled: false,
+                personality_command_enabled: true,
+                windows_degraded_sandbox_active: false,
+                side_conversation_active: false,
+                plan_mode_active: true,
+            },
+            Vec::new(),
+        );
+        popup.on_composer_text_change("/writ".to_string());
+        let cmds: Vec<String> = popup
+            .filtered_items()
+            .into_iter()
+            .map(|item| match item {
+                CommandItem::Builtin(cmd) => cmd.command().to_string(),
+                CommandItem::ServiceTier(command) => command.name,
+            })
+            .collect();
+        assert!(
+            cmds.iter().any(|cmd| cmd == "writing-plan"),
+            "expected '/writing-plan' to be visible when plan mode active, got {cmds:?}"
+        );
+    }
+
+    #[test]
+    fn writing_plan_command_hidden_in_popup_when_plan_mode_inactive() {
+        let mut popup = CommandPopup::new(
+            CommandPopupFlags {
+                collaboration_modes_enabled: true,
+                connectors_enabled: false,
+                plugins_command_enabled: false,
+                service_tier_commands_enabled: false,
+                goal_command_enabled: false,
+                personality_command_enabled: true,
+                windows_degraded_sandbox_active: false,
+                side_conversation_active: false,
+                plan_mode_active: false,
+            },
+            Vec::new(),
+        );
+        popup.on_composer_text_change("/writ".to_string());
+        let cmds: Vec<String> = popup
+            .filtered_items()
+            .into_iter()
+            .map(|item| match item {
+                CommandItem::Builtin(cmd) => cmd.command().to_string(),
+                CommandItem::ServiceTier(command) => command.name,
+            })
+            .collect();
+        assert!(
+            !cmds.iter().any(|cmd| cmd == "writing-plan"),
+            "expected '/writing-plan' to be hidden when plan mode inactive, got {cmds:?}"
+        );
+    }
 }

@@ -710,6 +710,8 @@ impl ChatWidget {
                 .insert(self.plan_mode_nudge_scope());
         }
         self.active_collaboration_mask = Some(mask);
+        self.bottom_pane
+            .set_plan_mode_active(self.active_mode_kind() == ModeKind::Plan);
         self.update_collaboration_mode_indicator();
         self.refresh_plan_mode_nudge();
         self.refresh_model_dependent_surfaces();

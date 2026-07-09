@@ -386,6 +386,11 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    pub fn set_plan_mode_active(&mut self, active: bool) {
+        self.composer.set_plan_mode_active(active);
+        self.request_redraw();
+    }
+
     pub fn set_connectors_enabled(&mut self, enabled: bool) {
         self.composer.set_connectors_enabled(enabled);
     }

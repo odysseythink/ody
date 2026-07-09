@@ -380,6 +380,7 @@ pub(crate) struct ChatComposer {
     personality_command_enabled: bool,
     windows_degraded_sandbox_active: bool,
     side_conversation_active: bool,
+    plan_mode_active: bool,
     history_search: Option<HistorySearchSession>,
     submit_keys: Vec<KeyBinding>,
     queue_keys: Vec<KeyBinding>,
@@ -446,7 +447,7 @@ impl ChatComposer {
             personality_command_enabled: self.personality_command_enabled,
             allow_elevate_sandbox: self.windows_degraded_sandbox_active,
             side_conversation_active: self.side_conversation_active,
-            plan_mode_active: false,
+            plan_mode_active: self.plan_mode_active,
         }
     }
 
@@ -544,6 +545,7 @@ impl ChatComposer {
             personality_command_enabled: false,
             windows_degraded_sandbox_active: false,
             side_conversation_active: false,
+            plan_mode_active: false,
             history_search: None,
             submit_keys: vec![key_hint::plain(KeyCode::Enter)],
             queue_keys: vec![key_hint::plain(KeyCode::Tab)],
@@ -619,6 +621,10 @@ impl ChatComposer {
 
     pub fn set_collaboration_modes_enabled(&mut self, enabled: bool) {
         self.collaboration_modes_enabled = enabled;
+    }
+
+    pub fn set_plan_mode_active(&mut self, active: bool) {
+        self.plan_mode_active = active;
     }
 
     pub fn set_connectors_enabled(&mut self, enabled: bool) {

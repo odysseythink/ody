@@ -2,12 +2,12 @@
 
 In addition to the conversational plan requirements above, every rigor-tier plan MUST include the following two artifacts. Do not skip them even if the plan is small.
 
-## Dependency graph
+## Dependency Overview
 
-Before writing task detail, produce a dependency graph for the plan:
+Before writing task detail, produce a dependency overview for the plan:
 
 - List every task as a node.
-- Draw edges only from an EARLIER task to a LATER task (a task may only use symbols/artifacts that an earlier task has already created).
+- Draw `Depends on:` edges only from an EARLIER task to a LATER task (a task may only use symbols/artifacts that an earlier task has already created).
 - Group independent tasks into phases. Tasks inside the same phase that have no mutual dependency may run in parallel.
 - If a task changes a shared signature / type / interface / struct field, that SAME task must update every caller (including tests) and end with a whole-tree typecheck.
 - Do not reference a type, function, file, or constant that is defined only by a later task.
