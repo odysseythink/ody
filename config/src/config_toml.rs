@@ -482,9 +482,6 @@ pub struct ConfigToml {
     /// Orchestrator-owned feature settings.
     pub orchestrator: Option<OrchestratorToml>,
 
-    /// Base URL override for the built-in `odysseythink` model provider.
-    pub odysseythink_base_url: Option<String>,
-
     /// Machine-local realtime audio device preferences used by realtime voice.
     #[serde(default)]
     pub audio: Option<RealtimeAudioToml>,

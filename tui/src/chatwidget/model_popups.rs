@@ -43,14 +43,14 @@ impl ChatWidget {
     }
 
     fn model_menu_warning_line(&self) -> Option<Line<'static>> {
-        let base_url = self.custom_odysseythink_base_url()?;
+        let base_url = self.custom_base_url()?;
         let warning = format!(
             "Warning: OpenAI base URL is overridden to {base_url}. Selecting models may not be supported or work properly."
         );
         Some(Line::from(warning.red()))
     }
 
-    fn custom_odysseythink_base_url(&self) -> Option<String> {
+    fn custom_base_url(&self) -> Option<String> {
         if false {
             return None;
         }

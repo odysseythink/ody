@@ -30,7 +30,7 @@ async fn tmux_split_preserves_fresh_session_composer_row_after_resize_reflow() -
     let ody_home = tempdir()?;
     let server = MockServer::start().await;
     let _response_mock = responses::mount_sse_once(&server, resize_reflow_sse()).await;
-    let odysseythink_base_url_config = format!("odysseythink_base_url=\"{}/v1\"", server.uri());
+    let kimi_base_url_config = format!("model_providers.kimi.base_url=\"{}/v1\"", server.uri());
     write_config(ody_home.path(), &repo_root)?;
     write_auth(ody_home.path())?;
 
@@ -61,7 +61,7 @@ async fn tmux_split_preserves_fresh_session_composer_row_after_resize_reflow() -
             .arg("-c")
             .arg("analytics.enabled=false")
             .arg("-c")
-            .arg(&odysseythink_base_url_config)
+            .arg(&kimi_base_url_config)
             .arg("--no-alt-screen")
             .arg("-C")
             .arg(&repo_root)
@@ -197,7 +197,7 @@ async fn tmux_width_resize_restore_keeps_visible_content_anchored() -> Result<()
     let ody_home = tempdir()?;
     let server = MockServer::start().await;
     let _response_mock = responses::mount_sse_once(&server, resize_reflow_sse()).await;
-    let odysseythink_base_url_config = format!("odysseythink_base_url=\"{}/v1\"", server.uri());
+    let kimi_base_url_config = format!("model_providers.kimi.base_url=\"{}/v1\"", server.uri());
     write_config(ody_home.path(), &repo_root)?;
     write_auth(ody_home.path())?;
 
@@ -228,7 +228,7 @@ async fn tmux_width_resize_restore_keeps_visible_content_anchored() -> Result<()
             .arg("-c")
             .arg("analytics.enabled=false")
             .arg("-c")
-            .arg(&odysseythink_base_url_config)
+            .arg(&kimi_base_url_config)
             .arg("--no-alt-screen")
             .arg("-C")
             .arg(&repo_root)
@@ -317,7 +317,7 @@ async fn run_repeated_resize_smoke() -> Result<()> {
     let ody_home = tempdir()?;
     let server = MockServer::start().await;
     let _response_mock = responses::mount_sse_once(&server, resize_reflow_sse()).await;
-    let odysseythink_base_url_config = format!("odysseythink_base_url=\"{}/v1\"", server.uri());
+    let kimi_base_url_config = format!("model_providers.kimi.base_url=\"{}/v1\"", server.uri());
     write_config(ody_home.path(), &repo_root)?;
     write_auth(ody_home.path())?;
 
@@ -348,7 +348,7 @@ async fn run_repeated_resize_smoke() -> Result<()> {
             .arg("-c")
             .arg("analytics.enabled=false")
             .arg("-c")
-            .arg(&odysseythink_base_url_config)
+            .arg(&kimi_base_url_config)
             .arg("--no-alt-screen")
             .arg("-C")
             .arg(&repo_root)

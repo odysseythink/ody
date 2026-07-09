@@ -3400,11 +3400,6 @@ impl Config {
             agent_roles::load_agent_roles(fs, &cfg, &config_layer_stack, &mut startup_warnings)
                 .await?;
 
-        let odysseythink_base_url = cfg
-            .odysseythink_base_url
-            .clone()
-            .filter(|value| !value.is_empty());
-
         let (ody_code_provider, ody_code_model) = cfg.resolve_ody_code_default_model();
         let ody_code_providers = cfg.convert_ody_code_providers();
         validate_reserved_model_provider_ids(&ody_code_providers).map_err(|message| {

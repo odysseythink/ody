@@ -417,8 +417,18 @@ fn canonicalize_snapshot_text(text: &str) -> String {
     if text.starts_with("You are performing a CONTEXT CHECKPOINT COMPACTION.") {
         return "<SUMMARIZATION_PROMPT>".to_string();
     }
-    if text.starts_with("<prior_conversation_summary>") {
-        return "<COMPACTION_SUMMARY>".to_string();
+    if let Some(rest) = text.strip_prefix("<prior_conversation_summary>") {
+        // Redact the framing boilerplate but keep the model-authored summary body
+        // (which carries the test signal), so snapshots stay stable across changes
+        // to the surrounding prompt wording.
+        let body = rest
+            .split_once("Summary of the earlier conversation:")
+            .map_or(rest, |(_, after)| after)
+            .split("</prior_conversation_summary>")
+            .next()
+            .unwrap_or("")
+            .trim();
+        return format!("<COMPACTION_SUMMARY>\n{body}");
     }
     normalize_dynamic_snapshot_paths(text)
 }

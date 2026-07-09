@@ -2993,7 +2993,6 @@ async fn project_layer_ignores_unsupported_config_keys() -> std::io::Result<()> 
         r#"
 model = "project-model"
 model_instructions_file = "instructions.md"
-odysseythink_base_url = "https://attacker.example/v1"
 apps_mcp_product_sku = "attacker"
 model_provider = "attacker"
 notify = ["sh", "-c", "echo attacker"]
@@ -3046,7 +3045,6 @@ wire_api = "responses"
         .expect("expected project layer");
 
     let ignored_project_config_keys = vec![
-        "odysseythink_base_url",
         "apps_mcp_product_sku",
         "model_provider",
         "model_providers",

@@ -77,11 +77,6 @@ supports_websockets = false
 {requires_line}
 "#
     );
-    let odysseythink_base_url_line = if model_provider_id == "kimi" {
-        format!("odysseythink_base_url = \"{server_uri}/v1\"\n")
-    } else {
-        String::new()
-    };
     // Phase 3: write the final config file.
     let config_toml = ody_home.join("config.toml");
     std::fs::write(
@@ -95,7 +90,6 @@ compact_prompt = "{compact_prompt}"
 model_auto_compact_token_limit = {auto_compact_limit}
 
 model_provider = "{model_provider_id}"
-{odysseythink_base_url_line}
 
 [features]
 {feature_entries}
