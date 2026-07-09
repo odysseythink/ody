@@ -467,8 +467,8 @@ impl Session {
         self.services.agent_control.session_id()
     }
 
-    /// Debug-only: apply a collaboration-mode update directly to the session configuration.
-    #[cfg(debug_assertions)]
+    /// Apply a collaboration-mode update directly to the session configuration.
+    /// Used by the `debug prompt` diagnostics path (compiled into release builds too).
     pub(crate) async fn apply_debug_collaboration_mode(
         &self,
         collaboration_mode: CollaborationMode,

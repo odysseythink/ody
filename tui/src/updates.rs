@@ -17,6 +17,7 @@ use serde::Deserialize;
 use std::path::Path;
 
 use crate::version::ODY_CLI_VERSION;
+use ody_client::default_client::create_client;
 
 pub(crate) use crate::updates_cache::dismiss_version;
 

@@ -531,9 +531,12 @@ async fn send_track_events_request(
 ) {
     // Analytics events are only emitted for the Ody backend auth, which has
     // been removed along with the legacy OAuth flow. Keep the capture-file
-    // path working so tests can verify serialization.
+    // path working so tests can verify serialization (debug builds only).
     let payload = TrackEventsRequest { events };
+    #[cfg(debug_assertions)]
     capture_track_events_request(destination, &payload);
+    #[cfg(not(debug_assertions))]
+    let _ = (destination, payload);
 }
 
 #[cfg(debug_assertions)]
