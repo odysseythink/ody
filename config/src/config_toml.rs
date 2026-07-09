@@ -56,8 +56,7 @@ use serde::Serialize;
 
 use serde_json::Value as JsonValue;
 
-const RESERVED_MODEL_PROVIDER_IDS: [&str; 4] = [
-    KIMI_PROVIDER_ID,
+const RESERVED_MODEL_PROVIDER_IDS: [&str; 3] = [
     KIMI_PROVIDER_ID,
     DEEPSEEK_PROVIDER_ID,
     GLM_PROVIDER_ID,
@@ -369,7 +368,7 @@ pub struct ConfigToml {
 
     /// User-defined provider entries that extend the built-in list. Built-in
     /// IDs cannot be overridden.
-    #[serde(default, deserialize_with = "deserialize_model_providers")]
+    #[serde(default)]
     pub model_providers: HashMap<String, ModelProviderInfo>,
 
     /// Ody-code compatible provider entries keyed by provider id.
@@ -696,6 +695,48 @@ impl ConfigToml {
             },
             None => (self.default_provider.clone(), None),
         }
+    }
+
+    /// Merge `providers` (ody-code canonical) and `model_providers` (legacy).
+    ///
+    /// `providers` takes precedence: if the same alias is defined in both,
+    /// the ody-code entry wins. Legacy entries are kept as-is so that fields
+    /// that cannot be expressed in `OdyCodeProviderConfig` (e.g. `auth`,
+    /// `env_http_headers`) are not lost.
+    pub fn normalized_providers(&self) -> HashMap<String, ModelProviderInfo> {
+        let mut result = self.model_providers.clone();
+        for (id, provider) in self.convert_ody_code_providers() {
+            result.insert(id, provider);
+        }
+        result
+    }
+
+    /// Resolve the effective default `(provider_id, model_name)`.
+    ///
+    /// Priority:
+    /// 1. `default_provider` / `default_model` (ody-code canonical).
+    /// 2. Legacy `model` / `model_provider`.
+    /// 3. Legacy `model_provider` alone.
+    pub fn normalized_default_model(&self) -> (Option<String>, Option<String>) {
+        if let Some(default_model) = &self.default_model {
+            return match default_model.split_once('/') {
+                Some((provider, model)) => {
+                    (Some(provider.to_string()), Some(model.to_string()))
+                }
+                None => (self.default_provider.clone(), Some(default_model.clone())),
+            };
+        }
+
+        if let Some(model) = &self.model {
+            return match model.split_once('/') {
+                Some((provider, model_name)) => {
+                    (Some(provider.to_string()), Some(model_name.to_string()))
+                }
+                None => (self.model_provider.clone(), Some(model.clone())),
+            };
+        }
+
+        (self.model_provider.clone(), None)
     }
 }
 
@@ -1126,18 +1167,6 @@ pub fn validate_model_providers(
     Ok(())
 }
 
-fn deserialize_model_providers<'de, D>(
-    deserializer: D,
-) -> Result<HashMap<String, ModelProviderInfo>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let model_providers = HashMap::<String, ModelProviderInfo>::deserialize(deserializer)?;
-    validate_model_providers(&model_providers).map_err(serde::de::Error::custom)?;
-    Ok(model_providers)
-}
-
-
 
 #[cfg(test)]
 mod tests {
@@ -1150,6 +1179,21 @@ mod tests {
         let config: ConfigToml = toml::from_str(r#"legacy_base_url = "https://example.com""#)
             .expect("should ignore unknown key");
         let _ = config;
+    }
+
+    #[test]
+    fn legacy_model_providers_deserialize_without_reserved_validation() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[model_providers.kimi]
+name = "Custom Kimi"
+wire_api = "chat"
+"#,
+        )
+        .expect("legacy model_providers should deserialize even when using a reserved id");
+
+        assert!(config.model_providers.contains_key("kimi"));
+        assert_eq!(config.model_providers["kimi"].name, "Custom Kimi");
     }
 
     #[test]
@@ -1246,6 +1290,92 @@ type = "openai"
                 .contains("reserved built-in provider IDs"),
             "error should mention reserved built-in provider IDs"
         );
+    }
+
+    #[test]
+    fn normalized_providers_prefers_providers_over_model_providers() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[providers.foo]
+type = "kimi"
+base_url = "https://providers.example.com"
+
+[model_providers.foo]
+name = "Foo Legacy"
+base_url = "https://legacy.example.com"
+wire_api = "chat"
+"#,
+        )
+        .expect("config should deserialize");
+
+        let result = config.normalized_providers();
+        let foo = result.get("foo").expect("foo provider");
+        assert_eq!(foo.base_url, Some("https://providers.example.com".to_string()));
+        assert_eq!(foo.name, "Kimi");
+    }
+
+    #[test]
+    fn normalized_providers_preserves_legacy_model_providers() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[model_providers.corp]
+name = "Corp"
+wire_api = "chat"
+base_url = "http://corp.example.com"
+"#,
+        )
+        .expect("config should deserialize");
+
+        let result = config.normalized_providers();
+        let corp = result.get("corp").expect("corp provider");
+        assert_eq!(corp.base_url, Some("http://corp.example.com".to_string()));
+        assert_eq!(corp.wire_api, WireApi::Chat);
+        assert_eq!(corp.name, "Corp");
+    }
+
+    #[test]
+    fn normalized_default_model_prefers_default_model() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+default_model = "kimi_gyy/kimi-for-coding"
+model = "gpt-5"
+model_provider = "openai"
+"#,
+        )
+        .expect("config should deserialize");
+
+        let (provider, model) = config.normalized_default_model();
+        assert_eq!(provider, Some("kimi_gyy".to_string()));
+        assert_eq!(model, Some("kimi-for-coding".to_string()));
+    }
+
+    #[test]
+    fn normalized_default_model_falls_back_to_legacy_model() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+model = "kimi_gyy/kimi-for-coding"
+model_provider = "openai"
+"#,
+        )
+        .expect("config should deserialize");
+
+        let (provider, model) = config.normalized_default_model();
+        assert_eq!(provider, Some("kimi_gyy".to_string()));
+        assert_eq!(model, Some("kimi-for-coding".to_string()));
+    }
+
+    #[test]
+    fn normalized_default_model_uses_legacy_model_provider_alone() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+model_provider = "openai"
+"#,
+        )
+        .expect("config should deserialize");
+
+        let (provider, model) = config.normalized_default_model();
+        assert_eq!(provider, Some("openai".to_string()));
+        assert_eq!(model, None);
     }
 
     #[test]
