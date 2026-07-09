@@ -701,6 +701,7 @@ mod thread_processor_behavior_tests {
                         session_provider.clone(),
                     )]),
                     features: BTreeMap::from([("plugins".to_string(), false)]),
+                    ..Default::default()
                 }),
             ])),
         );

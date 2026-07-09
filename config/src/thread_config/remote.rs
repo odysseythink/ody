@@ -143,8 +143,11 @@ fn session_thread_config_from_proto(
         .collect::<Result<HashMap<_, _>, _>>()?;
 
     Ok(SessionThreadConfig {
-        model_provider: config.model_provider,
+        model_provider: config.model_provider.clone(),
         model_providers,
+        default_provider: config.model_provider,
+        default_model: None,
+        providers: HashMap::new(),
         features: config.features.into_iter().collect::<BTreeMap<_, _>>(),
     })
 }
@@ -497,6 +500,9 @@ mod tests {
             ThreadConfigSource::Session(SessionThreadConfig {
                 model_provider: Some("local".to_string()),
                 model_providers: HashMap::from([("local".to_string(), expected_provider())]),
+                default_provider: Some("local".to_string()),
+                default_model: None,
+                providers: HashMap::new(),
                 features: BTreeMap::from([
                     ("plugins".to_string(), false),
                     ("tools".to_string(), true),

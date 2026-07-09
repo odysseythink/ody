@@ -7,9 +7,12 @@ use ody_app_server_protocol::ConfigLayerSource;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use thiserror::Error;
+use serde::Deserialize;
+use serde::Serialize;
 use toml::Value as TomlValue;
 
 use crate::ConfigLayerEntry;
+use crate::config_toml::OdyCodeProviderConfig;
 
 mod remote;
 
@@ -23,10 +26,28 @@ pub struct ThreadConfigContext {
 }
 
 /// Config values owned by the service that starts or manages the session.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct SessionThreadConfig {
+    /// Legacy: use `default_provider` / `default_model` instead.
     pub model_provider: Option<String>,
+
+    /// Legacy provider entries kept for compatibility.
+    #[serde(default)]
     pub model_providers: HashMap<String, ModelProviderInfo>,
+
+    /// Ody-code compatible default provider id.
+    #[serde(default)]
+    pub default_provider: Option<String>,
+
+    /// Ody-code compatible default model in the form `provider_id/model_name`.
+    #[serde(default)]
+    pub default_model: Option<String>,
+
+    /// Ody-code compatible provider entries keyed by provider alias.
+    #[serde(default)]
+    pub providers: HashMap<String, OdyCodeProviderConfig>,
+
+    #[serde(default)]
     pub features: BTreeMap<String, bool>,
 }
 
@@ -177,27 +198,87 @@ fn is_empty_table(config: &TomlValue) -> bool {
     config.as_table().is_some_and(toml::map::Map::is_empty)
 }
 
+/// Normalize a `SessionThreadConfig` after deserialization.
+///
+/// If canonical fields are missing but legacy fields are present, the legacy
+/// values are copied into canonical fields without attempting a lossy reverse
+/// conversion of `model_providers` into `OdyCodeProviderConfig`.
+pub fn normalize_session_thread_config(config: SessionThreadConfig) -> SessionThreadConfig {
+    let mut normalized = config;
+    if normalized.default_provider.is_none() {
+        normalized.default_provider = normalized.model_provider.clone();
+    }
+    normalized
+}
+
+fn session_thread_config_from_toml(
+    value: TomlValue,
+) -> Result<SessionThreadConfig, ThreadConfigLoadError> {
+    let config: SessionThreadConfig =
+        SessionThreadConfig::deserialize(value).map_err(|err| {
+            ThreadConfigLoadError::new(
+                ThreadConfigLoadErrorCode::Parse,
+                /*status_code*/ None,
+                format!("failed to parse session thread config TOML: {err}"),
+            )
+        })?;
+    Ok(normalize_session_thread_config(config))
+}
+
 fn session_thread_config_to_toml(
     config: SessionThreadConfig,
 ) -> Result<TomlValue, ThreadConfigLoadError> {
     let mut table = toml::map::Map::new();
 
-    if let Some(model_provider) = config.model_provider {
-        table.insert(
-            "model_provider".to_string(),
-            TomlValue::String(model_provider),
-        );
-    }
+    // If canonical ody-code fields are present, write only those. Otherwise fall
+    // back to legacy fields so that lossy provider features (auth, env_http_headers)
+    // are not dropped.
+    let use_canonical = config.default_provider.is_some()
+        || config.default_model.is_some()
+        || !config.providers.is_empty();
 
-    if !config.model_providers.is_empty() {
-        let model_providers = TomlValue::try_from(config.model_providers).map_err(|err| {
-            ThreadConfigLoadError::new(
-                ThreadConfigLoadErrorCode::Parse,
-                /*status_code*/ None,
-                format!("failed to convert session model providers to config TOML: {err}"),
-            )
-        })?;
-        table.insert("model_providers".to_string(), model_providers);
+    if use_canonical {
+        if let Some(default_provider) = config.default_provider {
+            table.insert(
+                "default_provider".to_string(),
+                TomlValue::String(default_provider),
+            );
+        }
+        if let Some(default_model) = config.default_model {
+            table.insert(
+                "default_model".to_string(),
+                TomlValue::String(default_model),
+            );
+        }
+        if !config.providers.is_empty() {
+            let providers = TomlValue::try_from(config.providers).map_err(|err| {
+                ThreadConfigLoadError::new(
+                    ThreadConfigLoadErrorCode::Parse,
+                    /*status_code*/ None,
+                    format!("failed to convert session providers to config TOML: {err}"),
+                )
+            })?;
+            table.insert("providers".to_string(), providers);
+        }
+    } else {
+        if let Some(model_provider) = config.model_provider {
+            table.insert(
+                "model_provider".to_string(),
+                TomlValue::String(model_provider),
+            );
+        }
+        if !config.model_providers.is_empty() {
+            let model_providers = TomlValue::try_from(config.model_providers).map_err(|err| {
+                ThreadConfigLoadError::new(
+                    ThreadConfigLoadErrorCode::Parse,
+                    /*status_code*/ None,
+                    format!(
+                        "failed to convert session model providers to config TOML: {err}"
+                    ),
+                )
+            })?;
+            table.insert("model_providers".to_string(), model_providers);
+        }
     }
 
     if !config.features.is_empty() {
@@ -228,6 +309,7 @@ use ody_model_provider_info::ProviderCapabilities;
                 model_provider: Some("local".to_string()),
                 model_providers: HashMap::from([("local".to_string(), test_provider("local"))]),
                 features: BTreeMap::from([("plugins".to_string(), false)]),
+                ..Default::default()
             }),
             ThreadConfigSource::User(UserThreadConfig::default()),
         ]);
@@ -247,6 +329,7 @@ use ody_model_provider_info::ProviderCapabilities;
                     model_provider: Some("local".to_string()),
                     model_providers: HashMap::from([("local".to_string(), test_provider("local"))]),
                     features: BTreeMap::from([("plugins".to_string(), false)]),
+                    ..Default::default()
                 }),
                 ThreadConfigSource::User(UserThreadConfig::default()),
             ]
@@ -264,6 +347,7 @@ use ody_model_provider_info::ProviderCapabilities;
                 model_provider: Some("local".to_string()),
                 model_providers: HashMap::from([("local".to_string(), provider)]),
                 features: BTreeMap::from([("plugins".to_string(), false)]),
+                ..Default::default()
             }),
         ]);
         let layers = loader
@@ -320,5 +404,54 @@ use ody_model_provider_info::ProviderCapabilities;
             supports_websockets: true,
             capabilities: ProviderCapabilities::default(),
         }
+    }
+
+    #[test]
+    fn session_thread_config_roundtrip_with_providers() {
+        let config = SessionThreadConfig {
+            default_provider: Some("local".to_string()),
+            default_model: Some("local/gpt-4o".to_string()),
+            providers: HashMap::from([(
+                "local".to_string(),
+                OdyCodeProviderConfig {
+                    r#type: "openai".to_string(),
+                    api_key: Some("sk-test".to_string()),
+                    base_url: Some("http://localhost:8061/v1".to_string()),
+                    ..Default::default()
+                },
+            )]),
+            features: BTreeMap::from([("plugins".to_string(), false)]),
+            ..Default::default()
+        };
+
+        let toml = session_thread_config_to_toml(config.clone())
+            .expect("serialize session thread config");
+        let parsed = session_thread_config_from_toml(toml)
+            .expect("deserialize session thread config");
+
+        assert_eq!(parsed, config);
+    }
+
+    #[test]
+    fn session_thread_config_reads_legacy_model_providers() {
+        let toml_str = r#"
+model_provider = "local"
+
+[model_providers.local]
+name = "Local"
+wire_api = "responses"
+base_url = "http://127.0.0.1:8061/api/ody"
+"#;
+        let toml_value: TomlValue = toml::from_str(toml_str).expect("parse TOML");
+        let config = session_thread_config_from_toml(toml_value)
+            .expect("deserialize legacy session thread config");
+
+        assert_eq!(config.model_provider, Some("local".to_string()));
+        assert_eq!(config.default_provider, Some("local".to_string()));
+        assert!(config.model_providers.contains_key("local"));
+        assert_eq!(
+            config.model_providers["local"].base_url,
+            Some("http://127.0.0.1:8061/api/ody".to_string())
+        );
     }
 }
