@@ -16,9 +16,13 @@ workspace = true
 ody-api = { workspace = true }
 ody-app-server-protocol = { workspace = true }
 ody-protocol = { workspace = true }
+dirs = { workspace = true }
+gethostname = { workspace = true }
 http = { workspace = true }
+os_info = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
 ody-utils-absolute-path = { workspace = true }

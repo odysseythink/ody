@@ -358,6 +358,8 @@ async fn process_chat_sse(
     }
 
     // Emit accumulated output items, then the terminal Completed event.
+    let produced_text = !assistant_text.is_empty();
+    let produced_reasoning = !reasoning_text.is_empty();
     if !reasoning_text.is_empty() {
         let item = ResponseItem::Reasoning {
             id: None,
@@ -416,6 +418,21 @@ async fn process_chat_sse(
         {
             return;
         }
+    }
+
+    // Flag degenerate completions: the stream closed without any content,
+    // reasoning, or tool call. This is the shape that silently ends a turn
+    // (e.g. Kimi returning a near-empty completion), so surface it for
+    // diagnosis without needing full SSE tracing.
+    if !produced_text && !produced_reasoning && !has_tool_calls {
+        tracing::warn!(
+            target: "ody_api::sse::chat",
+            vendor = ?vendor,
+            finish_reason = ?finish_reason,
+            response_id = ?response_id,
+            "chat stream completed with no output items (empty completion): model \
+             returned neither content, reasoning, nor tool calls"
+        );
     }
 
     // A turn ends unless the model requested tool calls (in which case the
