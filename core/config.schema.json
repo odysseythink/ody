@@ -1610,11 +1610,6 @@
           "minimum": 0.0,
           "type": "integer"
         },
-        "requires_odysseythink_auth": {
-          "default": false,
-          "description": "Does this provider require an API key? If true, user is presented with login screen on first run, and login preference and token/key are stored in auth.json. If false (which is the default), login screen is skipped, and API key (if needed) comes from the \"env_key\" environment variable.",
-          "type": "boolean"
-        },
         "stream_idle_timeout_ms": {
           "description": "Idle timeout (in milliseconds) to wait for activity on a streaming response before treating the connection as lost.",
           "format": "uint64",
@@ -2423,6 +2418,13 @@
           "default": "off",
           "description": "Whether to isolate Plan mode conversations from the main thread context."
         },
+        "dedup_min_turns": {
+          "default": 2,
+          "description": "Minimum number of turns between any two rigor reminders (full or sparse). 0 disables sparse reminders.",
+          "format": "uint",
+          "minimum": 0.0,
+          "type": "integer"
+        },
         "enforcement": {
           "allOf": [
             {
@@ -2431,6 +2433,13 @@
           ],
           "default": "strict",
           "description": "Enforcement level for Plan mode write protections."
+        },
+        "full_refresh_turns": {
+          "default": 5,
+          "description": "Number of plan-mode turns between full rigor-contract reinjections. 0 disables full reinjection.",
+          "format": "uint",
+          "minimum": 0.0,
+          "type": "integer"
         },
         "model": {
           "description": "Optional model alias to use exclusively in Plan mode.",
@@ -2461,9 +2470,44 @@
           "format": "uint",
           "minimum": 0.0,
           "type": "integer"
+        },
+        "tier": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/PlanModeTier"
+            }
+          ],
+          "default": null,
+          "description": "Explicit plan-mode tier override.  means use the heuristic scorer (Auto)."
         }
       },
       "type": "object"
+    },
+    "PlanModeTier": {
+      "description": "Plan-mode contract tier: concise conversational contract vs. full rigor contract.",
+      "oneOf": [
+        {
+          "description": "Let the heuristic scorer decide.",
+          "enum": [
+            "auto"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Always use the concise conversational contract.",
+          "enum": [
+            "concise"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Always use the full rigor contract with reminders.",
+          "enum": [
+            "rigor"
+          ],
+          "type": "string"
+        }
+      ]
     },
     "PluginConfig": {
       "additionalProperties": false,
@@ -4742,6 +4786,20 @@
             "chat"
           ],
           "type": "string"
+        },
+        {
+          "description": "Anthropic Messages API at `/v1/messages`.",
+          "enum": [
+            "anthropic_messages"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Google GenAI API.",
+          "enum": [
+            "google_genai"
+          ],
+          "type": "string"
         }
       ]
     },
@@ -5326,6 +5384,10 @@
       "description": "System instructions.",
       "type": "string"
     },
+    "language": {
+      "description": "Preferred language for model responses in the TUI transcript. When set, a short instruction is appended to the base instructions asking the model to respond in this language.",
+      "type": "string"
+    },
     "log_dir": {
       "allOf": [
         {
@@ -5461,10 +5523,6 @@
       },
       "type": "array"
     },
-    "odysseythink_base_url": {
-      "description": "Base URL override for the built-in `odysseythink` model provider.",
-      "type": "string"
-    },
     "orchestrator": {
       "allOf": [
         {
@@ -5506,12 +5564,15 @@
       ],
       "default": {
         "context_isolation": "off",
+        "dedup_min_turns": 2,
         "enforcement": "strict",
+        "full_refresh_turns": 5,
         "model": null,
         "persist_plan_file": true,
         "reasoning_effort": null,
         "split_plan_compaction_ratio": 0.5,
-        "split_threshold": 8
+        "split_threshold": 8,
+        "tier": null
       },
       "description": "Plan mode settings."
     },
