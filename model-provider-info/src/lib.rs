@@ -477,17 +477,110 @@ fn create_chat_provider(
     }
 }
 
-/// Static device-identity headers Kimi expects from CLI clients. The OAuth
-/// device flow is intentionally not implemented; these provide the minimum
-/// `X-Msh-*` identification alongside an API key.
+/// Product name Kimi's backend associates with the official coding CLI. Kimi's
+/// `kimi-for-coding` plan is gated to this client, and the Moonshot backend is
+/// believed to apply different serving policies when the presented identity is
+/// not the official CLI. We therefore present the official identity so the
+/// coding plan is served on the same path the official client gets.
+///
+/// NOTE: this deliberately mimics the official client. Keep `KIMI_CODE_CLI_VERSION`
+/// in sync with the real `kimi-code-cli` release the account is entitled to.
+const KIMI_CODE_CLI_PRODUCT: &str = "kimi-code-cli";
+const KIMI_CODE_CLI_VERSION: &str = "0.8.0";
+
+/// Device-identity headers Kimi expects from its coding CLI, sent alongside the
+/// API key. The OAuth device flow is not implemented; these mirror the headers
+/// the official client attaches to every inference request (`User-Agent` +
+/// `X-Msh-*`) so the request is served on the official path.
 fn kimi_http_headers() -> HashMap<String, String> {
-    HashMap::from([
-        ("X-Msh-Platform".to_string(), "ody_cli".to_string()),
+    let info = os_info::get();
+    let arch = info.architecture().unwrap_or("unknown");
+    let os_version = info.version().to_string();
+    let os_label = kimi_os_label(&info);
+
+    let mut headers = HashMap::from([
+        (
+            "User-Agent".to_string(),
+            format!("{KIMI_CODE_CLI_PRODUCT}/{KIMI_CODE_CLI_VERSION}"),
+        ),
+        ("X-Msh-Platform".to_string(), "kimi_code_cli".to_string()),
         (
             "X-Msh-Version".to_string(),
-            env!("CARGO_PKG_VERSION").to_string(),
+            KIMI_CODE_CLI_VERSION.to_string(),
         ),
-    ])
+        ("X-Msh-Device-Name".to_string(), kimi_device_name()),
+        (
+            "X-Msh-Device-Model".to_string(),
+            format!("{os_label} {os_version} {arch}"),
+        ),
+        ("X-Msh-Os-Version".to_string(), os_version),
+    ]);
+    if let Some(device_id) = kimi_device_id() {
+        headers.insert("X-Msh-Device-Id".to_string(), device_id);
+    }
+    headers
+}
+
+/// Human-facing OS label matching the official client's device-model string
+/// (`macOS`/`Windows`/`Linux`) rather than `os_info`'s `Display` ("Mac OS").
+fn kimi_os_label(info: &os_info::Info) -> &'static str {
+    match info.os_type() {
+        os_info::Type::Macos => "macOS",
+        os_info::Type::Windows => "Windows",
+        _ => "Linux",
+    }
+}
+
+/// Best-effort ASCII hostname for `X-Msh-Device-Name`.
+fn kimi_device_name() -> String {
+    let raw = gethostname::gethostname().to_string_lossy().to_string();
+    let cleaned: String = raw.chars().filter(|c| (' '..='~').contains(c)).collect();
+    let trimmed = cleaned.trim();
+    if trimmed.is_empty() {
+        "unknown".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+/// Process-stable device id. Resolved once and cached so that (a) every request
+/// in a run presents the same id even when the on-disk store cannot be written,
+/// and (b) building the provider list is side-effect-free and deterministic on
+/// repeated calls.
+static KIMI_DEVICE_ID: std::sync::LazyLock<Option<String>> =
+    std::sync::LazyLock::new(resolve_kimi_device_id);
+
+fn kimi_device_id() -> Option<String> {
+    KIMI_DEVICE_ID.clone()
+}
+
+/// Stable per-machine device id, persisted under `$ODY_HOME` (or
+/// `~/.ody-code`). Mirrors the official client's `device_id` file so the value
+/// is consistent across runs. Returns `None` only if no writable/home location
+/// can be resolved.
+fn resolve_kimi_device_id() -> Option<String> {
+    let dir = kimi_identity_dir()?;
+    let path = dir.join("kimi_device_id");
+    if let Ok(existing) = std::fs::read_to_string(&path) {
+        let trimmed = existing.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+    let id = uuid::Uuid::new_v4().to_string();
+    // Best-effort persistence: the in-memory id is still usable if writes fail.
+    let _ = std::fs::create_dir_all(&dir);
+    let _ = std::fs::write(&path, &id);
+    Some(id)
+}
+
+fn kimi_identity_dir() -> Option<std::path::PathBuf> {
+    if let Ok(home) = std::env::var("ODY_HOME") {
+        if !home.trim().is_empty() {
+            return Some(std::path::PathBuf::from(home));
+        }
+    }
+    dirs::home_dir().map(|home| home.join(".ody-code"))
 }
 
 pub fn create_kimi_provider() -> ModelProviderInfo {

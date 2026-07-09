@@ -7554,17 +7554,21 @@ dependencies = [
 name = "ody-model-provider-info"
 version = "0.0.0"
 dependencies = [
+ "dirs",
+ "gethostname",
  "http 1.4.2",
  "maplit",
  "ody-api",
  "ody-app-server-protocol",
  "ody-protocol",
  "ody-utils-absolute-path",
+ "os_info",
  "pretty_assertions",
  "schemars 0.8.22",
  "serde",
  "tempfile",
  "toml 0.9.12+spec-1.1.0",
+ "uuid",
 ]
 
 [[package]]

@@ -67,6 +67,7 @@ impl<T: HttpTransport> ChatCompletionsClient<T> {
         options: ChatCompletionsOptions,
     ) -> Result<ResponseStream, ApiError> {
         let vendor = request.vendor;
+        log_outgoing_identity_headers_once(&self.session.provider().headers);
         let body = EncodedJsonBody::encode(&request.to_wire()).map_err(|e| {
             ApiError::Stream(format!("failed to encode chat completions request: {e}"))
         })?;
@@ -100,4 +101,33 @@ impl<T: HttpTransport> ChatCompletionsClient<T> {
             vendor,
         ))
     }
+}
+
+/// Log the identity headers (User-Agent, `X-Msh-*`, …) we send on chat
+/// completions requests exactly once per process, so the client's presented
+/// identity can be diagnosed without enabling full request tracing. Secret
+/// headers (authorization / api keys) are redacted.
+fn log_outgoing_identity_headers_once(headers: &HeaderMap) {
+    use std::sync::Once;
+    static LOG_ONCE: Once = Once::new();
+    LOG_ONCE.call_once(|| {
+        let redacted: Vec<(String, String)> = headers
+            .iter()
+            .map(|(name, value)| {
+                let name = name.as_str().to_string();
+                let lower = name.to_ascii_lowercase();
+                let value = if lower == "authorization" || lower.contains("api-key") {
+                    "<redacted>".to_string()
+                } else {
+                    value.to_str().unwrap_or("<non-ascii>").to_string()
+                };
+                (name, value)
+            })
+            .collect();
+        tracing::debug!(
+            target: "ody_api::chat",
+            headers = ?redacted,
+            "chat completions outgoing provider headers (logged once)"
+        );
+    });
 }

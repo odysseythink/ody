@@ -147,6 +147,20 @@ use tracing::warn;
 /// - If the model sends only an assistant message, we record it in the
 ///   conversation history and consider the turn complete.
 ///
+/// Maximum number of times a single turn will re-prompt the model after it
+/// returns a degenerate empty completion (no assistant message and no tool
+/// call). Chat-wire providers such as Kimi occasionally do this right when the
+/// model should have acted; silently ending the turn strands the task.
+const MAX_EMPTY_COMPLETION_RETRIES: u8 = 1;
+
+/// User-visible nudge appended when the model returns an empty completion, to
+/// coax it into either finishing with a message or issuing the tool call it
+/// omitted.
+const EMPTY_COMPLETION_NUDGE: &str =
+    "Your previous response was empty — no message and no tool call. Continue the task: \
+either take the next concrete action (call the appropriate tool) or, if the task is \
+already complete, reply with a short summary of what you did.";
+
 pub(crate) async fn run_turn(
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
@@ -223,6 +237,7 @@ pub(crate) async fn run_turn(
 
     let mut last_agent_message: Option<String> = None;
     let mut stop_hook_active = false;
+    let mut empty_completion_retries: u8 = 0;
     // Although from the perspective of ody.rs, TurnDiffTracker has the lifecycle of a Task which contains
     // many turns, from the perspective of the user, it is a single turn.
     let display_roots = turn_diff_display_roots(turn_context.as_ref()).await;
@@ -411,6 +426,34 @@ pub(crate) async fn run_turn(
                 }
 
                 if !needs_follow_up {
+                    // Chat-wire providers (notably Kimi) occasionally return a
+                    // degenerate empty completion: no assistant message and no
+                    // tool call, right when the model should have acted. Ending
+                    // the turn silently strands the task, so nudge once before
+                    // giving up.
+                    if sampling_request_last_agent_message.is_none()
+                        && empty_completion_retries < MAX_EMPTY_COMPLETION_RETRIES
+                    {
+                        empty_completion_retries += 1;
+                        warn!(
+                            turn_id = %turn_context.sub_id,
+                            attempt = empty_completion_retries,
+                            "model returned an empty completion (no message, no tool call); reprompting"
+                        );
+                        let nudge = ResponseItem::Message {
+                            id: Some(uuid::Uuid::new_v4().to_string()),
+                            role: "user".to_string(),
+                            content: vec![ContentItem::InputText {
+                                text: EMPTY_COMPLETION_NUDGE.to_string(),
+                            }],
+                            phase: None,
+                            internal_chat_message_metadata_passthrough: None,
+                        };
+                        sess.record_conversation_items(&turn_context, std::slice::from_ref(&nudge))
+                            .await;
+                        can_drain_pending_input = false;
+                        continue;
+                    }
                     last_agent_message = sampling_request_last_agent_message;
                     let stop_outcome = run_turn_stop_hooks(
                         &sess,
