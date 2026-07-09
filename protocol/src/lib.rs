@@ -21,7 +21,7 @@ pub mod memory_citation;
 pub mod models;
 pub mod network_policy;
 pub mod num_format;
-pub mod odysseythink_models;
+pub mod model_metadata;
 pub mod parse_command;
 pub mod permissions;
 pub mod plan_tool;
