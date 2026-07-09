@@ -8,7 +8,7 @@ use ody_model_provider_info::ModelProviderInfo;
 use crate::bearer_auth_provider::BearerAuthProvider;
 
 // Some providers are meant to send no auth headers. Examples include local OSS
-// providers and custom test providers with `requires_odysseythink_auth = false`.
+// providers and custom test providers with `requires_openai_auth = false`.
 #[derive(Clone, Debug)]
 struct UnauthenticatedAuthProvider;
 

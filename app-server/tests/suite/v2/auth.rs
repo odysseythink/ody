@@ -28,7 +28,7 @@ struct CreateConfigTomlParams {
     forced_method: Option<String>,
     forced_workspace_id: Option<String>,
     forced_workspace_ids: Option<Vec<String>>,
-    requires_odysseythink_auth: Option<bool>,
+    requires_openai_auth: Option<bool>,
     base_url: Option<String>,
     model_provider_id: Option<String>,
     extra_provider_config: Option<String>,
@@ -56,8 +56,8 @@ fn create_config_toml(ody_home: &Path, params: CreateConfigTomlParams) -> std::i
     } else {
         String::new()
     };
-    let requires_line = match params.requires_odysseythink_auth {
-        Some(true) => "requires_odysseythink_auth = true\n".to_string(),
+    let requires_line = match params.requires_openai_auth {
+        Some(true) => "requires_openai_auth = true\n".to_string(),
         Some(false) => String::new(),
         None => String::new(),
     };
@@ -209,7 +209,7 @@ async fn get_auth_state_no_auth() -> Result<()> {
     create_config_toml(
         ody_home.path(),
         CreateConfigTomlParams {
-            requires_odysseythink_auth: Some(true),
+            requires_openai_auth: Some(true),
             ..Default::default()
         },
     )?;
@@ -239,7 +239,7 @@ async fn get_auth_state_with_api_key() -> Result<()> {
     create_config_toml(
         ody_home.path(),
         CreateConfigTomlParams {
-            requires_odysseythink_auth: Some(true),
+            requires_openai_auth: Some(true),
             ..Default::default()
         },
     )?;
@@ -280,7 +280,7 @@ async fn get_auth_state_when_auth_not_required() -> Result<()> {
     create_config_toml(
         ody_home.path(),
         CreateConfigTomlParams {
-            requires_odysseythink_auth: Some(false),
+            requires_openai_auth: Some(false),
             ..Default::default()
         },
     )?;

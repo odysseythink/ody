@@ -272,7 +272,7 @@ fn smoke_config_overrides(responses_base_url: &str) -> Result<Vec<String>> {
             "model_providers.{MOCK_PROVIDER_ID}.wire_api={}",
             quoted("responses")?
         ),
-        format!("model_providers.{MOCK_PROVIDER_ID}.requires_odysseythink_auth=false"),
+        format!("model_providers.{MOCK_PROVIDER_ID}.requires_openai_auth=false"),
         format!("model_providers.{MOCK_PROVIDER_ID}.request_max_retries=0"),
         format!("model_providers.{MOCK_PROVIDER_ID}.stream_max_retries=0"),
     ])

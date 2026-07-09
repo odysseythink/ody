@@ -39,7 +39,7 @@ async fn selected_executor_plugin_exposes_its_stdio_mcp_only_to_that_thread() ->
         &responses_server.uri(),
         &BTreeMap::new(),
         /*auto_compact_limit*/ 1024,
-        /*requires_odysseythink_auth*/ None,
+        /*requires_openai_auth*/ None,
         "mock_provider",
         "compact",
     )?;

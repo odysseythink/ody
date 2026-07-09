@@ -236,7 +236,7 @@ fn model_provider_to_proto(
         stream_idle_timeout_ms,
         websocket_connect_timeout_ms,
         supports_websockets,
-        requires_odysseythink_auth: false,
+        requires_openai_auth: false,
     }
 }
 
@@ -475,7 +475,7 @@ mod tests {
                             stream_idle_timeout_ms: Some(9_000),
                             websocket_connect_timeout_ms: Some(10_000),
                             supports_websockets: true,
-                            requires_odysseythink_auth: false,
+                            requires_openai_auth: false,
                         }],
                         features: HashMap::from([
                             ("plugins".to_string(), false),

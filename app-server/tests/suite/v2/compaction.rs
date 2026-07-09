@@ -76,7 +76,7 @@ async fn auto_compaction_local_emits_started_and_completed_items() -> Result<()>
         &server.uri(),
         &BTreeMap::default(),
         AUTO_COMPACT_LIMIT,
-        /*requires_odysseythink_auth*/ None,
+        /*requires_openai_auth*/ None,
         "mock_provider",
         COMPACT_PROMPT,
     )?;
@@ -266,7 +266,7 @@ async fn thread_compact_start_triggers_compaction_and_returns_empty_response() -
         &server.uri(),
         &BTreeMap::default(),
         AUTO_COMPACT_LIMIT,
-        /*requires_odysseythink_auth*/ None,
+        /*requires_openai_auth*/ None,
         "mock_provider",
         COMPACT_PROMPT,
     )?;
@@ -316,7 +316,7 @@ async fn thread_compact_start_rejects_invalid_thread_id() -> Result<()> {
         &server.uri(),
         &BTreeMap::default(),
         AUTO_COMPACT_LIMIT,
-        /*requires_odysseythink_auth*/ None,
+        /*requires_openai_auth*/ None,
         "mock_provider",
         COMPACT_PROMPT,
     )?;
@@ -352,7 +352,7 @@ async fn thread_compact_start_rejects_unknown_thread_id() -> Result<()> {
         &server.uri(),
         &BTreeMap::default(),
         AUTO_COMPACT_LIMIT,
-        /*requires_odysseythink_auth*/ None,
+        /*requires_openai_auth*/ None,
         "mock_provider",
         COMPACT_PROMPT,
     )?;

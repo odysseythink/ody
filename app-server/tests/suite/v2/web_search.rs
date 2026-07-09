@@ -311,7 +311,7 @@ wire_api = "responses"
 request_max_retries = 0
 stream_max_retries = 0
 supports_websockets = false
-requires_odysseythink_auth = true
+requires_openai_auth = true
 "#
         ),
     )

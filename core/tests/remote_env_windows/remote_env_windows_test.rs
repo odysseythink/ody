@@ -265,7 +265,7 @@ async fn app_server_starts_thread_with_windows_environment_native_cwd() -> Resul
                 &server.uri(),
                 &BTreeMap::new(),
                 100_000,
-                /*requires_odysseythink_auth*/ None,
+                /*requires_openai_auth*/ None,
                 "mock",
                 "compact",
             )?;
