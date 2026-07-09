@@ -1,8 +1,11 @@
+use std::collections::HashMap;
+
 use ody_utils_absolute_path::AbsolutePathBuf;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::config_toml::OdyCodeProviderConfig;
 use crate::config_toml::ToolsToml;
 use crate::types::AnalyticsConfigToml;
 use crate::types::ApprovalsReviewer;
@@ -29,6 +32,18 @@ pub struct ConfigProfile {
     /// The key in the `model_providers` map identifying the
     /// [`ModelProviderInfo`] to use.
     pub model_provider: Option<String>,
+
+    /// Ody-code compatible default provider id.
+    #[serde(default)]
+    pub default_provider: Option<String>,
+
+    /// Ody-code compatible default model in the form `provider_id/model_name`.
+    #[serde(default)]
+    pub default_model: Option<String>,
+
+    /// Ody-code compatible provider entries keyed by provider alias.
+    #[serde(default)]
+    pub providers: Option<HashMap<String, OdyCodeProviderConfig>>,
     pub approval_policy: Option<AskForApproval>,
     pub approvals_reviewer: Option<ApprovalsReviewer>,
     pub sandbox_mode: Option<SandboxMode>,
@@ -77,3 +92,32 @@ pub struct ProfileTui {
     #[serde(default)]
     pub session_picker_view: Option<SessionPickerViewMode>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn config_profile_deserializes_ody_code_providers() {
+        let profile: ConfigProfile = toml::from_str(
+            r#"
+default_provider = "kimi_gyy"
+default_model = "kimi_gyy/kimi-for-coding"
+
+[providers.kimi_gyy]
+type = "kimi"
+api_key = "sk-test"
+"#,
+        )
+        .expect("profile with providers should deserialize");
+
+        assert_eq!(profile.default_provider, Some("kimi_gyy".to_string()));
+        assert_eq!(profile.default_model, Some("kimi_gyy/kimi-for-coding".to_string()));
+        assert!(profile.providers.as_ref().unwrap().contains_key("kimi_gyy"));
+        assert_eq!(
+            profile.providers.unwrap()["kimi_gyy"].r#type,
+            "kimi"
+        );
+    }
+}
+
