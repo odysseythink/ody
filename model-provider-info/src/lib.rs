@@ -364,7 +364,10 @@ impl ModelProviderInfo {
     }
 
     pub fn is_kimi(&self) -> bool {
-        self.matches_provider(&["kimi", "moonshot"], &["moonshot"])
+        // Kimi is reachable at two hosts: the public `api.moonshot.ai` and the
+        // coding endpoint `api.kimi.com`. Match both so detection does not rely
+        // solely on the display name resolving to "Kimi".
+        self.matches_provider(&["kimi", "moonshot"], &["moonshot", "kimi.com"])
     }
 
     pub fn is_deepseek(&self) -> bool {

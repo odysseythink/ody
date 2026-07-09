@@ -1103,7 +1103,7 @@ pub fn validate_reserved_model_provider_ids(
     } else {
         Err(format!(
             "model_providers contains reserved built-in provider IDs: {}. \
-Built-in providers cannot be overridden. Rename your custom provider (for example, `odysseythink-custom`).",
+Built-in providers cannot be overridden. Rename your custom provider (for example, `kimi-custom`).",
             conflicts.join(", ")
         ))
     }
@@ -1231,7 +1231,7 @@ base_url = "https://api.openai.com/v1"
     fn ody_code_providers_reject_reserved_ids() {
         let config: ConfigToml = toml::from_str(
             r#"
-[providers.odysseythink]
+[providers.kimi]
 type = "openai"
 "#,
         )

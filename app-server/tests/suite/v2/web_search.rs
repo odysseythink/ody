@@ -298,13 +298,13 @@ fn create_config_toml(ody_home: &Path, server_uri: &str) -> std::io::Result<()> 
 model = "mock-model"
 approval_policy = "never"
 sandbox_mode = "read-only"
-model_provider = "odysseythink-custom"
+model_provider = "kimi-custom"
 legacy_base_url = "{server_uri}"
 
 [features]
 standalone_web_search = true
 
-[model_providers.odysseythink-custom]
+[model_providers.kimi-custom]
 name = "OpenAI"
 base_url = "{server_uri}/api/ody"
 wire_api = "responses"

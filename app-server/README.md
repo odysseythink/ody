@@ -296,7 +296,7 @@ Start a fresh thread when you need a new Ody conversation.
     "thread": {
         "id": "thr_123",
         "preview": "",
-        "modelProvider": "odysseythink",
+        "modelProvider": "kimi",
         "createdAt": 1730910000
     }
 } }
@@ -386,8 +386,8 @@ Example:
 } }
 { "id": 20, "result": {
     "data": [
-        { "id": "thr_a", "preview": "Create a TUI", "modelProvider": "odysseythink", "createdAt": 1730831111, "updatedAt": 1730831111, "recencyAt": 1730831111, "status": { "type": "notLoaded" }, "agentNickname": "Atlas", "agentRole": "explorer" },
-        { "id": "thr_b", "preview": "Fix tests", "modelProvider": "odysseythink", "createdAt": 1730750000, "updatedAt": 1730750000, "recencyAt": 1730750000, "status": { "type": "notLoaded" } }
+        { "id": "thr_a", "preview": "Create a TUI", "modelProvider": "kimi", "createdAt": 1730831111, "updatedAt": 1730831111, "recencyAt": 1730831111, "status": { "type": "notLoaded" }, "agentNickname": "Atlas", "agentRole": "explorer" },
+        { "id": "thr_b", "preview": "Fix tests", "modelProvider": "kimi", "createdAt": 1730750000, "updatedAt": 1730750000, "recencyAt": 1730750000, "status": { "type": "notLoaded" } }
     ],
     "nextCursor": "opaque-token-or-null",
     "backwardsCursor": "opaque-token-or-null"

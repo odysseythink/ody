@@ -81,6 +81,10 @@ use ody_mcp::ResolvedMcpCatalog;
 use ody_memories_read::memory_root;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::built_in_model_providers;
+#[cfg(test)]
+use ody_model_provider_info::ProviderCapabilities;
+#[cfg(test)]
+use ody_model_provider_info::WireApi;
 use ody_model_provider_info::merge_configured_model_providers;
 use ody_models_manager::ModelsManagerConfig;
 use ody_protocol::config_types::AltScreenMode;
@@ -309,15 +313,74 @@ fn resolve_mcp_oauth_credentials_store_mode(
 }
 
 #[cfg(test)]
+/// Returns a test provider configuration that mimics the legacy full-capability
+/// Responses provider so unit tests relying on attestation, remote compaction,
+/// namespaced tools, image generation, and web search continue to pass.
+pub(crate) fn test_provider() -> ModelProviderInfo {
+    ModelProviderInfo {
+        name: "Test Provider".into(),
+        base_url: Some("http://localhost:1234/v1".into()),
+        env_key: None,
+        env_key_instructions: None,
+        experimental_bearer_token: None,
+        auth: None,
+        wire_api: WireApi::Responses,
+        query_params: None,
+        http_headers: None,
+        env_http_headers: None,
+        request_max_retries: None,
+        stream_max_retries: None,
+        stream_idle_timeout_ms: None,
+        websocket_connect_timeout_ms: None,
+        supports_websockets: true,
+        capabilities: ProviderCapabilities {
+            supports_websockets: true,
+            supports_remote_compaction: true,
+            namespace_tools: true,
+            image_generation: true,
+            web_search: true,
+            command_auth: false,
+            attestation: false,
+        },
+    }
+}
+
+#[cfg(test)]
+pub(crate) async fn test_config_for_ody_home(ody_home: &Path) -> Config {
+    let ody_home = AbsolutePathBuf::from_absolute_path(ody_home)
+        .expect("ody home path should resolve to an absolute path");
+    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("core crate should reside in a workspace");
+    let model_catalog = AbsolutePathBuf::from_absolute_path(
+        workspace_root.join("models-manager").join("models.json"),
+    )
+    .expect("workspace model catalog fixture should resolve");
+
+    std::fs::create_dir_all(&ody_home).expect("create ody home directory");
+    let mut toml = ConfigToml::default();
+    toml.model_provider = Some("test".to_string());
+    toml.model_providers = std::collections::HashMap::from([(
+        "test".to_string(),
+        test_provider(),
+    )]);
+    toml.model_catalog_json = Some(model_catalog);
+    let mut config_contents = toml::to_string(&toml).expect("test config should serialize to TOML");
+    config_contents.push_str("\n[features]\nfast_mode = true\n");
+    std::fs::write(ody_home.join(crate::config::CONFIG_TOML_FILE), config_contents)
+        .expect("write test config.toml");
+
+    ConfigBuilder::without_managed_config_for_tests()
+        .ody_home(ody_home.to_path_buf())
+        .build()
+        .await
+        .expect("load default test config")
+}
+
+#[cfg(test)]
 pub(crate) async fn test_config() -> Config {
     let ody_home = tempfile::tempdir().expect("create temp dir");
-    Config::load_from_base_config_with_overrides(
-        ConfigToml::default(),
-        ConfigOverrides::default(),
-        AbsolutePathBuf::from_absolute_path(ody_home.path()).expect("temp dir should resolve"),
-    )
-    .await
-    .expect("load default test config")
+    test_config_for_ody_home(ody_home.path()).await
 }
 
 /// Application configuration loaded from disk and merged with overrides.
@@ -2901,7 +2964,7 @@ fn validate_multi_agent_v2_tool_namespace(namespace: Option<&str>) -> std::io::R
 
 impl Config {
     #[cfg(test)]
-    async fn load_from_base_config_with_overrides(
+    pub(crate) async fn load_from_base_config_with_overrides(
         cfg: ConfigToml,
         overrides: ConfigOverrides,
         ody_home: AbsolutePathBuf,

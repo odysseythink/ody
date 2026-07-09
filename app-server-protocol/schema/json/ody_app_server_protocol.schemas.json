@@ -2728,7 +2728,7 @@
           "description": "Opt into receiving experimental API methods and fields.",
           "type": "boolean"
         },
-        "mcpServerOdysseythinkFormElicitation": {
+        "mcpServerFormElicitation": {
           "description": "Allow downstream MCP servers to request OpenAI extended form elicitations.",
           "type": "boolean"
         },
@@ -15960,7 +15960,7 @@
             "type": "string"
           },
           "modelProvider": {
-            "description": "Model provider used for this thread (for example, 'odysseythink').",
+            "description": "Model provider used for this thread (for example, 'kimi').",
             "type": "string"
           },
           "name": {

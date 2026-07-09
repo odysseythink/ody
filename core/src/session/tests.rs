@@ -28,6 +28,7 @@ use ody_core_skills::HostSkillsSnapshot;
 use core_test_support::test_ody::local_selections;
 
 use ody_features::Feature;
+use ody_model_provider::create_model_provider;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_models_manager::bundled_models_response;
 use ody_models_manager::model_info;
@@ -3873,11 +3874,7 @@ fn text_block(s: &str) -> serde_json::Value {
 }
 
 async fn build_test_config(ody_home: &Path) -> Config {
-    ConfigBuilder::without_managed_config_for_tests()
-        .ody_home(ody_home.to_path_buf())
-        .build()
-        .await
-        .expect("load default test config")
+    crate::config::test_config_for_ody_home(ody_home).await
 }
 
 fn session_telemetry(
@@ -4854,10 +4851,8 @@ async fn session_new_fails_when_zsh_fork_enabled_without_packaged_zsh() {
     config.zsh_path = None;
     let config = Arc::new(config);
 
-    let models_manager = models_manager_with_provider(
-        config.ody_home.to_path_buf(),
-        config.model_provider.clone(),
-    );
+    let models_manager = create_model_provider(config.model_provider.clone())
+        .models_manager(config.ody_home.to_path_buf(), config.model_catalog.clone());
     let model = get_model_offline_for_tests(config.model.as_deref());
     let model_info =
         construct_model_info_offline_for_tests(model.as_str(), &config.to_models_manager_config());
@@ -4958,10 +4953,8 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
     let config = build_test_config(ody_home.path()).await;
     let config = Arc::new(config);
     let thread_id = ThreadId::default();
-    let models_manager = models_manager_with_provider(
-        config.ody_home.to_path_buf(),
-        config.model_provider.clone(),
-    );
+    let models_manager = create_model_provider(config.model_provider.clone())
+        .models_manager(config.ody_home.to_path_buf(), config.model_catalog.clone());
     let agent_control = AgentControl::default();
     let exec_policy = Arc::new(ExecPolicyManager::default());
     let (agent_status_tx, _agent_status_rx) = watch::channel(AgentStatus::PendingInit);
@@ -5201,10 +5194,8 @@ async fn make_session_with_config_and_rx(
     let mut config = build_test_config(ody_home.path()).await;
     mutator(&mut config);
     let config = Arc::new(config);
-    let models_manager = models_manager_with_provider(
-        config.ody_home.to_path_buf(),
-        config.model_provider.clone(),
-    );
+    let models_manager = create_model_provider(config.model_provider.clone())
+        .models_manager(config.ody_home.to_path_buf(), config.model_catalog.clone());
     let model = get_model_offline_for_tests(config.model.as_deref());
     let model_info =
         construct_model_info_offline_for_tests(model.as_str(), &config.to_models_manager_config());
@@ -5304,10 +5295,8 @@ async fn make_session_with_history_source_and_agent_control_and_rx(
     let mut config = build_test_config(ody_home.path()).await;
     config.ephemeral = true;
     let config = Arc::new(config);
-    let models_manager = models_manager_with_provider(
-        config.ody_home.to_path_buf(),
-        config.model_provider.clone(),
-    );
+    let models_manager = create_model_provider(config.model_provider.clone())
+        .models_manager(config.ody_home.to_path_buf(), config.model_catalog.clone());
     let model = get_model_offline_for_tests(config.model.as_deref());
     let model_info =
         construct_model_info_offline_for_tests(model.as_str(), &config.to_models_manager_config());
@@ -7017,10 +7006,8 @@ where
     let state_db = None;
     let config = Arc::new(config);
     let thread_id = ThreadId::default();
-    let models_manager = models_manager_with_provider(
-        config.ody_home.to_path_buf(),
-        config.model_provider.clone(),
-    );
+    let models_manager = create_model_provider(config.model_provider.clone())
+        .models_manager(config.ody_home.to_path_buf(), config.model_catalog.clone());
     let agent_control = AgentControl::default();
     let exec_policy = Arc::new(ExecPolicyManager::default());
     let (agent_status_tx, _agent_status_rx) = watch::channel(AgentStatus::PendingInit);

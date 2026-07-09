@@ -233,6 +233,15 @@ fn is_kimi_matches_case_insensitive_name_alias_and_base_url() {
     custom.base_url = Some("https://api.moonshot.ai/v1".to_string());
     assert!(custom.is_kimi());
 
+    // The coding endpoint `api.kimi.com` must be detected from the base_url
+    // alone, so a provider named e.g. `kimi_gyy` still resolves to the Kimi
+    // catalog (real context window) instead of falling back to synthetic
+    // metadata that disables auto-compaction.
+    let mut coding = create_kimi_provider();
+    coding.name = "kimi_gyy".to_string();
+    coding.base_url = Some("https://api.kimi.com/coding/v1".to_string());
+    assert!(coding.is_kimi());
+
     // Unrelated provider is not misclassified.
     let mut other = create_kimi_provider();
     other.name = "OpenAI".to_string();

@@ -1587,7 +1587,7 @@ Run ody doctor without --summary for detailed diagnostics.
             checks: vec![
                 DoctorCheck::new("config.load", "config", CheckStatus::Ok, "config loaded")
                     .detail("model: gpt-5.5")
-                    .detail("model provider: odysseythink")
+                    .detail("model provider: kimi")
                     .detail("feature flags enabled: 3")
                     .detail("enabled feature flags: shell_tool, memories, goals")
                     .detail("feature flag overrides: memories=true"),

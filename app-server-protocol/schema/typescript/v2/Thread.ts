@@ -30,7 +30,7 @@ preview: string,
  */
 ephemeral: boolean,
 /**
- * Model provider used for this thread (for example, 'odysseythink').
+ * Model provider used for this thread (for example, 'kimi').
  */
 modelProvider: string,
 /**

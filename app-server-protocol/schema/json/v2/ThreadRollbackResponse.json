@@ -868,7 +868,7 @@
           "type": "string"
         },
         "modelProvider": {
-          "description": "Model provider used for this thread (for example, 'odysseythink').",
+          "description": "Model provider used for this thread (for example, 'kimi').",
           "type": "string"
         },
         "name": {

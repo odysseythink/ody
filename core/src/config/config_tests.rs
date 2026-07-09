@@ -5383,10 +5383,15 @@ async fn responses_websocket_features_do_not_change_wire_api() -> std::io::Resul
         let ody_home = TempDir::new()?;
         let mut entries = BTreeMap::new();
         entries.insert(feature_key.to_string(), true);
-        let cfg = ConfigToml {
+        let mut cfg = ConfigToml {
             features: Some(FeaturesToml::from(entries)),
             ..Default::default()
         };
+        cfg.model_provider = Some("test".to_string());
+        cfg.model_providers = std::collections::HashMap::from([(
+            "test".to_string(),
+            super::test_provider(),
+        )]);
 
         let config = Config::load_from_base_config_with_overrides(
             cfg,
@@ -8178,7 +8183,7 @@ approval_policy = "untrusted"
 [analytics]
 enabled = true
 
-[model_providers.odysseythink-custom]
+[model_providers.kimi-custom]
 name = "OpenAI custom"
 base_url = "https://api.odysseythink.com/v1"
 env_key = "OPENAI_API_KEY"
@@ -8197,7 +8202,7 @@ model_reasoning_summary = "detailed"
 
 [profiles.gpt3]
 model = "gpt-3.5-turbo"
-model_provider = "odysseythink-custom"
+model_provider = "kimi-custom"
 
 [profiles.zdr]
 model = "o3"
