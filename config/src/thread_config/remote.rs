@@ -9,6 +9,8 @@ use ody_model_provider_info::WireApi;
 use ody_protocol::config_types::ModelProviderAuthInfo;
 use ody_utils_absolute_path::AbsolutePathBuf;
 
+use crate::config_toml::OdyCodeOAuthRef;
+use crate::config_toml::OdyCodeProviderConfig;
 use super::SessionThreadConfig;
 use super::ThreadConfigContext;
 use super::ThreadConfigLoadError;
@@ -142,14 +144,51 @@ fn session_thread_config_from_proto(
         .map(model_provider_from_proto)
         .collect::<Result<HashMap<_, _>, _>>()?;
 
+    let providers = config
+        .providers
+        .into_iter()
+        .map(|(id, provider)| {
+            ody_code_provider_from_proto(provider).map(|provider| (id, provider))
+        })
+        .collect::<Result<HashMap<_, _>, _>>()?;
+
     Ok(SessionThreadConfig {
         model_provider: config.model_provider.clone(),
         model_providers,
-        default_provider: config.model_provider,
-        default_model: None,
-        providers: HashMap::new(),
+        default_provider: config.default_provider.clone().or(config.model_provider.clone()),
+        default_model: config.default_model,
+        providers,
         features: config.features.into_iter().collect::<BTreeMap<_, _>>(),
     })
+}
+
+fn ody_code_provider_from_proto(
+    provider: proto::OdyCodeProviderConfig,
+) -> Result<OdyCodeProviderConfig, ThreadConfigLoadError> {
+    if provider.r#type.is_empty() {
+        return Err(parse_error(
+            "remote thread config returned provider without a type",
+        ));
+    }
+
+    Ok(OdyCodeProviderConfig {
+        r#type: provider.r#type,
+        api_key: provider.api_key,
+        base_url: provider.base_url,
+        default_model: provider.default_model,
+        oauth: provider.oauth.map(ody_code_oauth_ref_from_proto),
+        env: provider.env,
+        custom_headers: provider.custom_headers,
+    })
+}
+
+fn ody_code_oauth_ref_from_proto(
+    oauth: proto::OdyCodeOAuthRef,
+) -> OdyCodeOAuthRef {
+    OdyCodeOAuthRef {
+        storage: oauth.storage,
+        key: oauth.key,
+    }
 }
 
 fn model_provider_from_proto(
@@ -196,6 +235,49 @@ fn model_provider_from_proto(
             capabilities: ProviderCapabilities::default(),
     };
     Ok((id, info))
+}
+
+#[cfg(test)]
+fn session_thread_config_to_proto(config: SessionThreadConfig) -> proto::SessionThreadConfig {
+    proto::SessionThreadConfig {
+        model_provider: config.model_provider,
+        model_providers: config
+            .model_providers
+            .into_iter()
+            .map(|(id, provider)| model_provider_to_proto(id, provider))
+            .collect(),
+        default_provider: config.default_provider,
+        default_model: config.default_model,
+        providers: config
+            .providers
+            .into_iter()
+            .map(|(id, provider)| (id, ody_code_provider_to_proto(provider)))
+            .collect(),
+        features: config.features.into_iter().collect(),
+    }
+}
+
+#[cfg(test)]
+fn ody_code_provider_to_proto(
+    provider: OdyCodeProviderConfig,
+) -> proto::OdyCodeProviderConfig {
+    proto::OdyCodeProviderConfig {
+        r#type: provider.r#type,
+        api_key: provider.api_key,
+        base_url: provider.base_url,
+        default_model: provider.default_model,
+        oauth: provider.oauth.map(ody_code_oauth_ref_to_proto),
+        env: provider.env,
+        custom_headers: provider.custom_headers,
+    }
+}
+
+#[cfg(test)]
+fn ody_code_oauth_ref_to_proto(oauth: OdyCodeOAuthRef) -> proto::OdyCodeOAuthRef {
+    proto::OdyCodeOAuthRef {
+        storage: oauth.storage,
+        key: oauth.key,
+    }
 }
 
 #[cfg(test)]
@@ -430,6 +512,39 @@ mod tests {
         let (id, actual) = model_provider_from_proto(proto).expect("model provider from proto");
 
         assert_eq!(id, "local");
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn session_thread_config_proto_roundtrips_with_canonical_fields() {
+        let expected = SessionThreadConfig {
+            default_provider: Some("local".to_string()),
+            default_model: Some("local/gpt-4o".to_string()),
+            providers: HashMap::from([(
+                "local".to_string(),
+                OdyCodeProviderConfig {
+                    r#type: "openai".to_string(),
+                    api_key: Some("sk-test".to_string()),
+                    base_url: Some("http://localhost:8061/v1".to_string()),
+                    default_model: Some("gpt-4o".to_string()),
+                    oauth: Some(OdyCodeOAuthRef {
+                        storage: "keyring".to_string(),
+                        key: "local".to_string(),
+                    }),
+                    env: HashMap::from([("FOO".to_string(), "bar".to_string())]),
+                    custom_headers: HashMap::from([(
+                        "X-Test".to_string(),
+                        "enabled".to_string(),
+                    )]),
+                },
+            )]),
+            features: BTreeMap::from([("plugins".to_string(), false)]),
+            ..Default::default()
+        };
+
+        let proto = session_thread_config_to_proto(expected.clone());
+        let actual = session_thread_config_from_proto(proto).expect("from proto");
+
         assert_eq!(actual, expected);
     }
 
