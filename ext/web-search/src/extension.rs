@@ -39,7 +39,9 @@ impl From<&Config> for WebSearchExtensionConfig {
         let web_search_mode = config.web_search_mode.value();
         Self {
             // Core selects this executor per turn using the feature flag or model metadata.
-            available: false
+            // Register the tool whenever the provider claims web-search support and the user
+            // has not explicitly disabled web search.
+            available: config.model_provider.capabilities.web_search
                 && web_search_mode != WebSearchMode::Disabled,
             provider: config.model_provider.clone(),
             settings: search_settings(config, web_search_mode),

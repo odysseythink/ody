@@ -23,7 +23,7 @@ use ody_exec_server::LOCAL_FS;
 use ody_features::Feature;
 use ody_model_provider::create_model_provider;
 
-use ody_model_provider_info::KIMI_PROVIDER_ID;
+use crate::config::TEST_PROVIDER_ID;
 use ody_models_manager::manager::StaticModelsManager;
 use ody_network_proxy::NetworkProxyConfig;
 use ody_protocol::ThreadId;
@@ -1533,7 +1533,7 @@ async fn guardian_review_uses_model_catalog_override_when_preferred_review_model
     );
     assert_eq!(
         analytics_result.guardian_model_provider_id.as_deref(),
-        Some(KIMI_PROVIDER_ID)
+        Some(TEST_PROVIDER_ID)
     );
 
     Ok(())
@@ -1571,7 +1571,7 @@ async fn guardian_review_uses_preferred_review_model_without_model_catalog_overr
     );
     assert_eq!(
         analytics_result.guardian_model_provider_id.as_deref(),
-        Some(KIMI_PROVIDER_ID)
+        Some(TEST_PROVIDER_ID)
     );
 
     Ok(())
@@ -1609,7 +1609,7 @@ async fn guardian_review_records_missing_auto_review_model_in_analytics_metadata
     );
     assert_eq!(
         analytics_result.guardian_model_provider_id.as_deref(),
-        Some(KIMI_PROVIDER_ID)
+        Some(TEST_PROVIDER_ID)
     );
 
     Ok(())

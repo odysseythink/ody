@@ -48,12 +48,13 @@ pub fn to_response_event(event: ChatEvent) -> Vec<ResponseEvent> {
         ChatEvent::ToolCall(ToolCall {
             id,
             name,
+            namespace,
             arguments,
         }) => {
             vec![ResponseEvent::OutputItemDone(ResponseItem::FunctionCall {
                 id: None,
                 name,
-                namespace: None,
+                namespace,
                 arguments: arguments.to_string(),
                 call_id: id,
                 internal_chat_message_metadata_passthrough: None,
@@ -201,6 +202,8 @@ fn tools_from_spec(tool: &ToolSpec) -> Vec<ToolDefinition> {
                 name: tool.name.clone(),
                 description: tool.description.clone(),
                 schema: schema_to_value(&tool.parameters),
+                namespace: None,
+                namespace_description: None,
             }]
         }
         ToolSpec::Namespace(namespace) => namespace
@@ -211,6 +214,8 @@ fn tools_from_spec(tool: &ToolSpec) -> Vec<ToolDefinition> {
                     name: tool.name.clone(),
                     description: tool.description.clone(),
                     schema: schema_to_value(&tool.parameters),
+                    namespace: Some(namespace.name.clone()),
+                    namespace_description: Some(namespace.description.clone()),
                 }),
             })
             .collect(),
@@ -223,6 +228,8 @@ fn tools_from_spec(tool: &ToolSpec) -> Vec<ToolDefinition> {
                 name: "tool_search".to_string(),
                 description: description.clone(),
                 schema: schema_to_value(parameters),
+                namespace: None,
+                namespace_description: None,
             }]
         }
         ToolSpec::Freeform(tool) => {
@@ -230,6 +237,8 @@ fn tools_from_spec(tool: &ToolSpec) -> Vec<ToolDefinition> {
                 name: tool.name.clone(),
                 description: tool.description.clone(),
                 schema: serde_json::json!({}),
+                namespace: None,
+                namespace_description: None,
             }]
         }
         // Responses-only built-in tools have no Chat Completions equivalent;
@@ -268,6 +277,7 @@ fn response_item_to_messages(item: ResponseItem) -> Vec<Message> {
         }
         ResponseItem::FunctionCall {
             name,
+            namespace,
             arguments,
             call_id,
             ..
@@ -278,6 +288,7 @@ fn response_item_to_messages(item: ResponseItem) -> Vec<Message> {
                 tool_calls: vec![ToolCall {
                     id: call_id,
                     name,
+                    namespace,
                     arguments: serde_json::from_str(&arguments).unwrap_or_default(),
                 }],
                 tool_call_id: None,
@@ -412,6 +423,7 @@ mod tests {
         let events = to_response_event(ChatEvent::ToolCall(ToolCall {
             id: "call_1".into(),
             name: "read".into(),
+            namespace: None,
             arguments: serde_json::json!({"path": "/tmp"}),
         }));
         assert_eq!(events.len(), 1);

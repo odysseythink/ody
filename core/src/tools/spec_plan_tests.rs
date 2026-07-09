@@ -1058,6 +1058,11 @@ async fn multi_agent_feature_selects_one_agent_tool_family() {
     let v1 = probe(|turn| {
         set_feature(turn, Feature::Collab, /*enabled*/ true);
         set_feature(turn, Feature::MultiAgentV2, /*enabled*/ false);
+        // The bundled test catalog marks every model as supporting the search
+        // tool, which causes the V1 multi-agent tools to be deferred rather than
+        // model-visible. Force search-tool support off for this assertion so the
+        // test exercises the V1 visible-namespace path.
+        turn.model_info.supports_search_tool = false;
     })
     .await;
     v1.assert_visible_contains(&[MULTI_AGENT_V1_NAMESPACE]);

@@ -37,6 +37,7 @@ use ody_protocol::config_types::CollaborationModeMask;
 use ody_protocol::error::OdyErr;
 use ody_protocol::error::Result as OdyResult;
 use ody_protocol::model_metadata::ModelPreset;
+use ody_protocol::model_metadata::ModelsResponse;
 use ody_protocol::protocol::Event;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::InitialHistory;
@@ -318,6 +319,13 @@ impl ThreadManager {
     pub(crate) fn with_models_provider_for_tests(
         provider: ModelProviderInfo,
     ) -> Self {
+        Self::with_models_provider_and_catalog_for_tests(provider, None)
+    }
+
+    pub(crate) fn with_models_provider_and_catalog_for_tests(
+        provider: ModelProviderInfo,
+        model_catalog: Option<ModelsResponse>,
+    ) -> Self {
         set_thread_manager_test_mode_for_tests(/*enabled*/ true);
         let ody_home = std::env::temp_dir().join(format!(
             "ody-thread-manager-test-{}",
@@ -325,10 +333,12 @@ impl ThreadManager {
         ));
         std::fs::create_dir_all(&ody_home)
             .unwrap_or_else(|err| panic!("temp ody home dir create failed: {err}"));
-        let mut manager = Self::with_models_provider_and_home_for_tests(
+        let mut manager = Self::with_models_provider_home_and_catalog_for_tests(
             provider,
             ody_home.clone(),
             Arc::new(EnvironmentManager::default_for_tests()),
+            None,
+            model_catalog,
         );
         manager._test_ody_home_guard = Some(TempOdyHomeGuard { path: ody_home });
         manager
@@ -354,6 +364,22 @@ impl ThreadManager {
         ody_home: PathBuf,
         environment_manager: Arc<EnvironmentManager>,
         state_db: Option<StateDbHandle>,
+    ) -> Self {
+        Self::with_models_provider_home_and_catalog_for_tests(
+            provider,
+            ody_home,
+            environment_manager,
+            state_db,
+            None,
+        )
+    }
+
+    pub(crate) fn with_models_provider_home_and_catalog_for_tests(
+        provider: ModelProviderInfo,
+        ody_home: PathBuf,
+        environment_manager: Arc<EnvironmentManager>,
+        state_db: Option<StateDbHandle>,
+        model_catalog: Option<ModelsResponse>,
     ) -> Self {
         set_thread_manager_test_mode_for_tests(/*enabled*/ true);
         let installation_id = uuid::Uuid::new_v4().to_string();
@@ -389,7 +415,7 @@ impl ThreadManager {
                 threads: Arc::new(RwLock::new(HashMap::new())),
                 thread_created_tx,
                 models_manager: create_model_provider(provider)
-                    .models_manager(ody_home, /*config_model_catalog*/ None),
+                    .models_manager(ody_home, model_catalog),
                 environment_manager,
                 skills_service,
                 plugins_manager,

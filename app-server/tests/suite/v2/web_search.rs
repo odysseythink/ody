@@ -291,6 +291,9 @@ async fn search_request_body(server: &MockServer) -> Result<Value> {
 }
 
 fn create_config_toml(ody_home: &Path, server_uri: &str) -> std::io::Result<()> {
+    let catalog_path = ody_home.join("models.json");
+    write_mock_model_catalog(&catalog_path)?;
+
     std::fs::write(
         ody_home.join("config.toml"),
         format!(
@@ -300,6 +303,7 @@ approval_policy = "never"
 sandbox_mode = "read-only"
 model_provider = "kimi-custom"
 legacy_base_url = "{server_uri}"
+model_catalog_json = "{catalog}"
 
 [features]
 standalone_web_search = true
@@ -312,7 +316,26 @@ request_max_retries = 0
 stream_max_retries = 0
 supports_websockets = false
 requires_openai_auth = true
-"#
+"#,
+            catalog = catalog_path.to_string_lossy().replace('\\', "\\\\")
         ),
+    )
+}
+
+fn write_mock_model_catalog(path: &Path) -> std::io::Result<()> {
+    let mut catalog = ody_models_manager::bundled_models_response()
+        .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err.to_string()))?;
+    let mut model = catalog
+        .models
+        .into_iter()
+        .next()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "empty catalog"))?;
+    model.slug = "mock-model".to_string();
+    model.display_name = "mock-model".to_string();
+    model.supports_search_tool = true;
+    catalog.models = vec![model];
+    std::fs::write(
+        path,
+        serde_json::to_vec(&catalog).expect("model catalog should serialize"),
     )
 }

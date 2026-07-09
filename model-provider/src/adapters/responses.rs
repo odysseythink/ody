@@ -16,7 +16,10 @@ use ody_api::{
     ResponsesOptions, SharedAuthProvider, create_text_param_for_request,
 };
 use ody_client::HttpTransport;
-use ody_protocol::models::ResponseItem;
+use ody_protocol::models::{
+    ContentItem, FunctionCallOutputContentItem, FunctionCallOutputPayload, ResponseItem,
+};
+use ody_tools::default_namespace_description;
 
 /// Adapter for the OpenAI Responses API.
 pub struct ResponsesAdapter<T: HttpTransport> {
@@ -69,14 +72,13 @@ fn build_api_request(request: ChatRequest) -> Result<ResponsesApiRequest, ChatPr
         .messages
         .into_iter()
         .filter(|m| !matches!(m.role, crate::chat_provider::Role::System))
-        .map(message_to_response_item)
-        .collect::<Result<Vec<_>, _>>()?;
-
-    let tools = request
-        .tools
+        .map(message_to_response_items)
+        .collect::<Result<Vec<Vec<_>>, _>>()?
         .into_iter()
-        .map(tool_definition_to_value)
-        .collect::<Result<Vec<_>, _>>()?;
+        .flatten()
+        .collect();
+
+    let tools = build_tools(request.tools)?;
 
     let reasoning = reasoning_for_request(request.thinking_effort)?;
     let text = create_text_param_for_request(
@@ -146,15 +148,35 @@ fn content_to_text(content: &[crate::chat_provider::ContentPart]) -> String {
         .join("")
 }
 
-fn message_to_response_item(
+fn message_to_response_items(
     message: crate::chat_provider::Message,
-) -> Result<ResponseItem, ChatProviderError> {
+) -> Result<Vec<ResponseItem>, ChatProviderError> {
     use crate::chat_provider::{ContentPart, Role};
+
+    // Tool results are emitted as the Responses-API function_call_output item
+    // so the model can correlate them with the original tool call.
+    if message.role == Role::Tool {
+        if let Some(call_id) = message.tool_call_id {
+            let output = tool_message_output(&message.content);
+            return Ok(vec![ResponseItem::FunctionCallOutput {
+                id: None,
+                call_id,
+                output,
+                internal_chat_message_metadata_passthrough: None,
+            }]);
+        }
+        // A tool message without a call_id cannot be represented on the wire;
+        // drop it rather than sending misleading text to the model.
+        return Err(ChatProviderError::Unsupported {
+            capability: "tool message without call_id".into(),
+        });
+    }
+
     let role = match message.role {
         Role::User => "user",
         Role::Developer => "developer",
         Role::Assistant => "assistant",
-        Role::Tool => "user",
+        Role::Tool => unreachable!("handled above"),
         Role::System => {
             return Err(ChatProviderError::Unsupported {
                 capability: "system message in input".into(),
@@ -166,22 +188,18 @@ fn message_to_response_item(
     let mut content = Vec::new();
     for part in message.content {
         match part {
-            ContentPart::Text(text) => {
-                content.push(ody_protocol::models::ContentItem::InputText { text })
-            }
+            ContentPart::Text(text) => content.push(ContentItem::InputText { text }),
             ContentPart::Image { mime, bytes } => {
                 // Preserve images as base64 data URLs so the Responses API can
                 // consume them. The mime type was recovered when normalizing the
                 // original ResponseItem; re-encode as a base64 data URL.
                 let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-                content.push(ody_protocol::models::ContentItem::InputImage {
+                content.push(ContentItem::InputImage {
                     image_url: format!("data:{mime};base64,{b64}"),
                     detail: None,
                 });
             }
-            ContentPart::Reasoning(text) => {
-                content.push(ody_protocol::models::ContentItem::InputText { text })
-            }
+            ContentPart::Reasoning(text) => content.push(ContentItem::InputText { text }),
             ContentPart::ToolResult {
                 tool_call_id,
                 content: parts,
@@ -194,7 +212,7 @@ fn message_to_response_item(
                     })
                     .collect::<Vec<_>>()
                     .join("");
-                content.push(ody_protocol::models::ContentItem::InputText {
+                content.push(ContentItem::InputText {
                     text: format!("tool result ({}): {}", tool_call_id, text),
                 });
             }
@@ -207,9 +225,7 @@ fn message_to_response_item(
         content
             .into_iter()
             .map(|item| match item {
-                ody_protocol::models::ContentItem::InputText { text } => {
-                    ody_protocol::models::ContentItem::OutputText { text }
-                }
+                ContentItem::InputText { text } => ContentItem::OutputText { text },
                 other => other,
             })
             .collect()
@@ -217,27 +233,134 @@ fn message_to_response_item(
         content
     };
 
-    Ok(ResponseItem::Message {
-        id: None,
-        role,
-        content,
-        phase: None,
-        internal_chat_message_metadata_passthrough: None,
-    })
+    let mut items = Vec::new();
+    if !content.is_empty() || message.role != Role::Assistant {
+        items.push(ResponseItem::Message {
+            id: None,
+            role,
+            content,
+            phase: None,
+            internal_chat_message_metadata_passthrough: None,
+        });
+    }
+
+    // Emit FunctionCall items for assistant tool_calls.
+    if message.role == Role::Assistant {
+        for tc in message.tool_calls {
+            items.push(ResponseItem::FunctionCall {
+                id: None,
+                name: tc.name,
+                namespace: tc.namespace,
+                arguments: tc.arguments.to_string(),
+                call_id: tc.id,
+                internal_chat_message_metadata_passthrough: None,
+            });
+        }
+    }
+
+    Ok(items)
 }
 
-fn tool_definition_to_value(
-    def: crate::chat_provider::ToolDefinition,
-) -> Result<serde_json::Value, ChatProviderError> {
-    Ok(serde_json::json!({
-        "type": "function",
-        "function": {
-            "name": def.name,
-            "description": def.description,
-            "parameters": def.schema,
-            "strict": true,
+fn tool_message_output(
+    content: &[crate::chat_provider::ContentPart],
+) -> FunctionCallOutputPayload {
+    let mut items = Vec::new();
+    for part in content {
+        match part {
+            crate::chat_provider::ContentPart::Text(text) => {
+                items.push(FunctionCallOutputContentItem::InputText { text: text.clone() });
+            }
+            crate::chat_provider::ContentPart::Image { mime, bytes } => {
+                let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+                items.push(FunctionCallOutputContentItem::InputImage {
+                    image_url: format!("data:{mime};base64,{b64}"),
+                    detail: None,
+                });
+            }
+            crate::chat_provider::ContentPart::Reasoning(text) => {
+                items.push(FunctionCallOutputContentItem::InputText { text: text.clone() });
+            }
+            crate::chat_provider::ContentPart::ToolResult { .. } => {
+                // Nested tool results are unexpected here; ignore them.
+            }
         }
-    }))
+    }
+    if items.is_empty() {
+        FunctionCallOutputPayload::from_text("".to_string())
+    } else {
+        FunctionCallOutputPayload::from_content_items(items)
+    }
+}
+
+fn build_tools(
+    defs: Vec<crate::chat_provider::ToolDefinition>,
+) -> Result<Vec<serde_json::Value>, ChatProviderError> {
+    enum Entry {
+        Tool(serde_json::Value),
+        Namespace {
+            name: String,
+            description: Option<String>,
+            tools: Vec<serde_json::Value>,
+        },
+    }
+
+    let mut entries: Vec<Entry> = Vec::new();
+    for def in defs {
+        let child = function_tool_value(&def.name, &def.description, &def.schema);
+        if let Some(namespace) = def.namespace {
+            if let Some(Entry::Namespace { name, tools, .. }) = entries.iter_mut().find(|e| {
+                matches!(
+                    e,
+                    Entry::Namespace { name: existing, .. } if existing == &namespace
+                )
+            }) {
+                let _ = name;
+                tools.push(child);
+            } else {
+                entries.push(Entry::Namespace {
+                    name: namespace,
+                    description: def.namespace_description,
+                    tools: vec![child],
+                });
+            }
+        } else {
+            entries.push(Entry::Tool(child));
+        }
+    }
+
+    Ok(entries
+        .into_iter()
+        .map(|entry| match entry {
+            Entry::Tool(value) => value,
+            Entry::Namespace {
+                name,
+                description,
+                tools,
+            } => {
+                let description = description.unwrap_or_else(|| default_namespace_description(&name));
+                serde_json::json!({
+                    "type": "namespace",
+                    "name": name,
+                    "description": description,
+                    "tools": tools,
+                })
+            }
+        })
+        .collect())
+}
+
+fn function_tool_value(
+    name: &str,
+    description: &str,
+    schema: &serde_json::Value,
+) -> serde_json::Value {
+    serde_json::json!({
+        "type": "function",
+        "name": name,
+        "description": description,
+        "parameters": schema,
+        "strict": true,
+    })
 }
 
 #[async_trait::async_trait]
@@ -320,6 +443,8 @@ mod tests {
                 name: "read_file".into(),
                 description: "read a file".into(),
                 schema: serde_json::json!({"type": "object"}),
+                namespace: None,
+                namespace_description: None,
             }],
             ..Default::default()
         };

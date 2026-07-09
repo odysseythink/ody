@@ -65,6 +65,7 @@ fn chat_completion_roundtrip() {
             tool_calls: vec![ToolCall {
                 id: "call_1".into(),
                 name: "read_file".into(),
+                namespace: None,
                 arguments: serde_json::json!({"path": "/tmp"}),
             }],
             tool_call_id: None,

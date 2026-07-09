@@ -156,6 +156,7 @@ fn normalize_response_item(item: ResponseItem) -> Result<Vec<ChatEvent>, ChatPro
         ResponseItem::FunctionCall {
             call_id,
             name,
+            namespace,
             arguments,
             ..
         } => {
@@ -163,6 +164,7 @@ fn normalize_response_item(item: ResponseItem) -> Result<Vec<ChatEvent>, ChatPro
             Ok(vec![ChatEvent::ToolCall(ToolCall {
                 id: call_id,
                 name,
+                namespace,
                 arguments: parsed,
             })])
         }

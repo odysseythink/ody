@@ -305,7 +305,7 @@ fn message_to_response_items(message: crate::chat_provider::Message) -> Vec<Resp
             name: tc.name,
             arguments: tc.arguments.to_string(),
             call_id: tc.id,
-            namespace: None,
+            namespace: tc.namespace,
             internal_chat_message_metadata_passthrough: None,
         });
     }
@@ -320,13 +320,20 @@ fn tool_definition_to_value(
     // expects; it will rewrite this into the nested Chat Completions shape on the
     // wire. Emitting the nested shape here causes `convert_tools` to drop the name,
     // which providers such as Kimi reject as an invalid function name.
-    Ok(serde_json::json!({
+    let mut tool = serde_json::json!({
         "type": "function",
         "name": def.name,
         "description": def.description,
         "parameters": def.schema,
         "strict": true,
-    }))
+    });
+    if let Some(namespace) = def.namespace {
+        tool
+            .as_object_mut()
+            .expect("tool value is an object")
+            .insert("namespace".to_string(), serde_json::Value::String(namespace));
+    }
+    Ok(tool)
 }
 
 /// Some Chat Completions providers (notably Kimi/Moonshot) reject function names
@@ -553,6 +560,8 @@ mod tests {
                 name: "read_file".into(),
                 description: "Read a file".into(),
                 schema: serde_json::json!({"type": "object"}),
+                namespace: None,
+                namespace_description: None,
             }],
             ..Default::default()
         };
@@ -583,6 +592,7 @@ mod tests {
             vec![ChatEvent::ToolCall(ToolCall {
                 id: "call_1".into(),
                 name: "read_file".into(),
+                namespace: None,
                 arguments: serde_json::json!({"path": "/tmp"}),
             })]
         );

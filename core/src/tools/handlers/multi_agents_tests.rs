@@ -19,6 +19,7 @@ use ody_extension_api::empty_extension_registry;
 use ody_features::Feature;
 use ody_model_provider::create_model_provider;
 use ody_model_provider_info::built_in_model_providers;
+use ody_models_manager::bundled_models_response;
 use ody_protocol::AgentPath;
 use ody_protocol::ThreadId;
 use ody_protocol::config_types::ApprovalsReviewer;
@@ -93,8 +94,9 @@ fn parse_agent_id(id: &str) -> ThreadId {
 }
 
 fn thread_manager() -> ThreadManager {
-    ThreadManager::with_models_provider_for_tests(
-        built_in_model_providers()["kimi"].clone(),
+    ThreadManager::with_models_provider_and_catalog_for_tests(
+        crate::config::test_provider(),
+        Some(bundled_models_response().expect("bundled model catalog should parse")),
     )
 }
 
@@ -4395,7 +4397,10 @@ async fn build_agent_spawn_config_uses_turn_context_values() {
     expected.base_instructions = Some(base_instructions.text);
     expected.model = Some(turn.model_info.slug.clone());
     expected.model_provider = turn.provider.info().clone();
-    expected.model_reasoning_effort = turn.reasoning_effort.clone();
+    expected.model_reasoning_effort = turn
+        .reasoning_effort
+        .clone()
+        .or_else(|| turn.model_info.default_reasoning_level.clone());
     expected.model_reasoning_summary = Some(turn.reasoning_summary);
     expected.developer_instructions = turn.developer_instructions.clone();
     #[allow(deprecated)]
@@ -4430,7 +4435,10 @@ async fn build_agent_resume_config_clears_base_instructions() {
     expected.base_instructions = None;
     expected.model = Some(turn.model_info.slug.clone());
     expected.model_provider = turn.provider.info().clone();
-    expected.model_reasoning_effort = turn.reasoning_effort.clone();
+    expected.model_reasoning_effort = turn
+        .reasoning_effort
+        .clone()
+        .or_else(|| turn.model_info.default_reasoning_level.clone());
     expected.model_reasoning_summary = Some(turn.reasoning_summary);
     expected.developer_instructions = turn.developer_instructions.clone();
     #[allow(deprecated)]

@@ -313,6 +313,12 @@ fn resolve_mcp_oauth_credentials_store_mode(
 }
 
 #[cfg(test)]
+/// Provider ID used by the shared test config fixture. Tests that assert on the
+/// configured provider ID should use this constant so they stay in sync with
+/// the fixture even though the built-in default provider has changed.
+pub(crate) const TEST_PROVIDER_ID: &str = "test";
+
+#[cfg(test)]
 /// Returns a test provider configuration that mimics the legacy full-capability
 /// Responses provider so unit tests relying on attestation, remote compaction,
 /// namespaced tools, image generation, and web search continue to pass.
@@ -359,9 +365,9 @@ pub(crate) async fn test_config_for_ody_home(ody_home: &Path) -> Config {
 
     std::fs::create_dir_all(&ody_home).expect("create ody home directory");
     let mut toml = ConfigToml::default();
-    toml.model_provider = Some("test".to_string());
+    toml.model_provider = Some(TEST_PROVIDER_ID.to_string());
     toml.model_providers = std::collections::HashMap::from([(
-        "test".to_string(),
+        TEST_PROVIDER_ID.to_string(),
         test_provider(),
     )]);
     toml.model_catalog_json = Some(model_catalog);

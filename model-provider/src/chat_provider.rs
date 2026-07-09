@@ -84,12 +84,19 @@ pub struct ToolDefinition {
     pub name: String,
     pub description: String,
     pub schema: serde_json::Value,
+    /// Optional namespace for Responses-API namespaced tools.
+    /// Chat Completions providers flatten this into the function name.
+    pub namespace: Option<String>,
+    /// Optional description for the namespace when `namespace` is set.
+    pub namespace_description: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ToolCall {
     pub id: String,
     pub name: String,
+    /// Optional namespace for Responses-API namespaced tools.
+    pub namespace: Option<String>,
     pub arguments: serde_json::Value,
 }
 

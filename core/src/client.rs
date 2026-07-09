@@ -1789,7 +1789,12 @@ fn map_chat_stream(
                         internal_chat_message_metadata_passthrough: None,
                     }));
                 }
-                Ok(ChatEvent::ToolCall(ToolCall { id, name, arguments })) => {
+                Ok(ChatEvent::ToolCall(ToolCall {
+                    id,
+                    name,
+                    namespace,
+                    arguments,
+                })) => {
                     if let Some(text) = assistant_text.take() {
                         events.push(ResponseEvent::OutputItemDone(ResponseItem::Message {
                             id: None,
@@ -1811,7 +1816,7 @@ fn map_chat_stream(
                     events.push(ResponseEvent::OutputItemDone(ResponseItem::FunctionCall {
                         id: None,
                         name,
-                        namespace: None,
+                        namespace,
                         arguments: arguments.to_string(),
                         call_id: id,
                         internal_chat_message_metadata_passthrough: None,
