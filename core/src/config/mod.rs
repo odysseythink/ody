@@ -31,7 +31,6 @@ use ody_config::config_toml::RealtimeAudioConfig;
 use ody_config::config_toml::RealtimeConfig;
 use ody_config::config_toml::ThreadStoreToml;
 use ody_config::config_toml::validate_model_providers;
-use ody_config::config_toml::validate_reserved_model_provider_ids;
 use ody_config::loader::load_config_layers_state;
 use ody_config::loader::project_trust_key;
 use ody_config::permissions_toml::PermissionsToml;
@@ -3003,8 +3002,6 @@ impl Config {
             ));
         }
 
-        validate_model_providers(&cfg.model_providers)
-            .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidInput, message))?;
         let orchestrator = cfg.orchestrator.as_ref();
         let orchestrator_skills_enabled =
             resolve_orchestrator_feature_enabled(orchestrator.and_then(|value| value.skills.as_ref()));
@@ -3469,21 +3466,17 @@ impl Config {
             agent_roles::load_agent_roles(fs, &cfg, &config_layer_stack, &mut startup_warnings)
                 .await?;
 
-        let (ody_code_provider, ody_code_model) = cfg.resolve_ody_code_default_model();
-        let ody_code_providers = cfg.convert_ody_code_providers();
-        validate_reserved_model_provider_ids(&ody_code_providers).map_err(|message| {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, message)
-        })?;
-        let mut configured_model_providers = cfg.model_providers;
-        for (key, provider) in ody_code_providers {
-            configured_model_providers.entry(key).or_insert(provider);
-        }
+        let configured_model_providers = cfg.normalized_providers();
+        let (default_provider, default_model) = cfg.normalized_default_model();
+
+        validate_model_providers(&configured_model_providers)
+            .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidData, message))?;
 
         let model_providers =
             merge_configured_model_providers(built_in_model_providers(), configured_model_providers)
                 .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidData, message))?;
         let model_provider_id = model_provider
-            .or(ody_code_provider)
+            .or(default_provider)
             .or(cfg.model_provider)
             .unwrap_or_else(|| "kimi".to_string());
         let model_provider = model_providers
@@ -3614,7 +3607,7 @@ impl Config {
 
         let forced_login_method = cfg.forced_login_method;
 
-        let model = model.or(ody_code_model).or(cfg.model);
+        let model = model.or(default_model).or(cfg.model);
         let notices = cfg.notice.unwrap_or_default();
         let service_tier = match service_tier_override {
             Some(Some(service_tier)) => Some(service_tier),

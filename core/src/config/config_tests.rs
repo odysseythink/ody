@@ -702,9 +702,9 @@ async fn load_current_time_reminder_config(config_toml: &str) -> std::io::Result
     .await
 }
 
-#[test]
-fn rejects_provider_auth_with_env_key() {
-    let err = toml::from_str::<ConfigToml>(
+#[tokio::test]
+async fn rejects_provider_auth_with_env_key() {
+    let cfg = toml::from_str::<ConfigToml>(
         r#"
 [model_providers.corp]
 name = "Corp"
@@ -714,6 +714,14 @@ env_key = "CORP_TOKEN"
 command = "print-token"
 "#,
     )
+    .expect("config should deserialize");
+
+    let err = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides::default(),
+        tempdir().unwrap().abs(),
+    )
+    .await
     .unwrap_err();
 
     assert!(
@@ -11191,3 +11199,93 @@ async fn language_auto_uses_detected_system_language() {
         .map(|lang| format!("\n\nRespond to the user in {lang}."));
     assert_eq!(config.base_instructions, expected);
 }
+
+
+#[tokio::test]
+async fn load_config_providers_override_model_providers_silently() -> std::io::Result<()> {
+    let cfg = toml::from_str::<ConfigToml>(
+        r#"
+[providers.foo]
+type = "openai"
+base_url = "https://providers.example.com"
+
+[model_providers.foo]
+name = "Foo Legacy"
+base_url = "https://legacy.example.com"
+wire_api = "chat"
+"#,
+    )
+    .expect("config should deserialize");
+
+    let config = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides::default(),
+        tempdir().expect("tempdir").abs(),
+    )
+    .await?;
+
+    let foo = config.model_providers.get("foo").expect("foo provider");
+    assert_eq!(
+        foo.base_url,
+        Some("https://providers.example.com".to_string())
+    );
+    assert_eq!(foo.name, "OpenAI");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn load_config_rejects_reserved_provider_alias() -> std::io::Result<()> {
+    let cfg = toml::from_str::<ConfigToml>(
+        r#"
+[providers.kimi]
+type = "kimi"
+api_key = "sk-test"
+"#,
+    )
+    .expect("config should deserialize");
+
+    let error = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides::default(),
+        tempdir().expect("tempdir").abs(),
+    )
+    .await
+    .expect_err("reserved provider id should fail");
+
+    assert!(
+        error.to_string().contains("reserved built-in provider IDs"),
+        "unexpected error: {error}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn load_config_prefers_default_model_over_legacy_model() -> std::io::Result<()> {
+    let cfg = toml::from_str::<ConfigToml>(
+        r#"
+default_model = "kimi_gyy/kimi-for-coding"
+model = "gpt-5"
+model_provider = "openai"
+
+[providers.kimi_gyy]
+type = "kimi"
+api_key = "sk-test"
+"#,
+    )
+    .expect("config should deserialize");
+
+    let config = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides::default(),
+        tempdir().expect("tempdir").abs(),
+    )
+    .await?;
+
+    assert_eq!(config.model_provider_id, "kimi_gyy");
+    assert_eq!(config.model, Some("kimi-for-coding".to_string()));
+
+    Ok(())
+}
+
