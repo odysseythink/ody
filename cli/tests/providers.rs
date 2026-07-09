@@ -49,3 +49,40 @@ fn providers_json_lists_providers() -> Result<()> {
     assert!(ids.contains(&"kimi"));
     Ok(())
 }
+
+#[test]
+fn providers_command_includes_user_configured_alias() -> Result<()> {
+    let ody_home = TempDir::new()?;
+    std::fs::write(
+        ody_home.path().join("config.toml"),
+        r#"
+[providers.my_kimi]
+type = "kimi"
+api_key = "sk-test"
+"#,
+    )?;
+
+    let output = ody_command(ody_home.path())?
+        .args(["providers", "--json"])
+        .output()?;
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout)?;
+    let value: serde_json::Value = serde_json::from_str(&stdout)?;
+    let arr = value.as_array().expect("providers should be a JSON array");
+    let ids: Vec<&str> = arr
+        .iter()
+        .filter_map(|e| e["provider_id"].as_str())
+        .collect();
+    assert!(
+        ids.contains(&"my_kimi"),
+        "expected my_kimi in providers output: {stdout}"
+    );
+
+    Ok(())
+}
+
