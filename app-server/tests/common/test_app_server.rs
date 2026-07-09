@@ -203,12 +203,54 @@ impl TestAppServer {
         Self::new_with_program_env_and_args(ody_home, &program, env_overrides, args).await
     }
 
+    /// Write a default test config that uses a Responses provider with the bundled
+    /// model catalog, mirroring the legacy odysseythink test setup. This keeps
+    /// integration tests isolated from the built-in default provider (now Kimi).
+    fn write_default_test_config_if_missing(ody_home: &Path) -> std::io::Result<()> {
+        let config_path = ody_home.join("config.toml");
+        if config_path.exists() {
+            return Ok(());
+        }
+
+        // Copy the bundled model catalog into the temp ody home so the config
+        // can reference it with a stable absolute path.
+        const BUNDLED_CATALOG: &str = include_str!("../../../models-manager/models.json");
+        let catalog_path = ody_home.join("models.json");
+        std::fs::write(&catalog_path, BUNDLED_CATALOG)?;
+
+        std::fs::write(
+            config_path,
+            format!(
+                r#"
+model_provider = "test"
+model_catalog_json = "{catalog}"
+
+[model_providers.test]
+name = "Test Provider"
+base_url = "http://localhost:1234/v1"
+wire_api = "responses"
+supports_websockets = true
+
+[model_providers.test.capabilities]
+supports_websockets = true
+supports_remote_compaction = true
+namespace_tools = true
+image_generation = true
+web_search = true
+"#,
+                catalog = catalog_path.to_string_lossy().replace('\\', "\\\\")
+            ),
+        )
+    }
+
     async fn new_with_program_env_and_args(
         ody_home: &Path,
         program: &Path,
         env_overrides: &[(&str, Option<&str>)],
         args: &[&str],
     ) -> anyhow::Result<Self> {
+        Self::write_default_test_config_if_missing(ody_home)?;
+
         let mut cmd = Command::new(program);
 
         cmd.stdin(Stdio::piped());
