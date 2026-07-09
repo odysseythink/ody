@@ -1,9 +1,9 @@
 use anyhow::Result;
 use ody_core::config::Config;
 use ody_features::Feature;
-use ody_protocol::odysseythink_models::ModelInfo;
-use ody_protocol::odysseythink_models::ReasoningEffort;
-use ody_protocol::odysseythink_models::ReasoningEffortPreset;
+use ody_protocol::model_metadata::ModelInfo;
+use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffortPreset;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::MULTI_AGENT_MODE_OPEN_TAG;
 use ody_protocol::protocol::Op;

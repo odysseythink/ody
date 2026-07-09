@@ -9,7 +9,7 @@ use ody_models_manager::manager::OpenAiModelsManager;
 use ody_models_manager::manager::SharedModelsManager;
 use ody_protocol::error::OdyErr;
 use ody_protocol::error::Result as CoreResult;
-use ody_protocol::odysseythink_models::ModelInfo;
+use ody_protocol::model_metadata::ModelInfo;
 use pretty_assertions::assert_eq;
 use tempfile::tempdir;
 use tokio::sync::Notify;

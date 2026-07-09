@@ -14,7 +14,7 @@ use ody_models_manager::manager::ModelsEndpointClient;
 use ody_models_manager::manager::ModelsEndpointFuture;
 use ody_protocol::error::OdyErr;
 use ody_protocol::error::Result as CoreResult;
-use ody_protocol::odysseythink_models::ModelInfo;
+use ody_protocol::model_metadata::ModelInfo;
 use ody_response_debug_context::extract_response_debug_context;
 use ody_response_debug_context::telemetry_transport_error_message;
 use tokio::time::timeout;

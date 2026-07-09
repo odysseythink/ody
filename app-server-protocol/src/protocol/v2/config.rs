@@ -10,7 +10,7 @@ use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::config_types::Verbosity;
 use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::config_types::WebSearchToolConfig;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use schemars::JsonSchema;
 use serde::Deserialize;

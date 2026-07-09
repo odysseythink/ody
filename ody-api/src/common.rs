@@ -2,7 +2,7 @@ use crate::error::ApiError;
 use ody_protocol::config_types::ReasoningSummary as ReasoningSummaryConfig;
 use ody_protocol::config_types::Verbosity as VerbosityConfig;
 use ody_protocol::models::ResponseItem;
-use ody_protocol::odysseythink_models::ReasoningEffort as ReasoningEffortConfig;
+use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
 use ody_protocol::protocol::ModelVerification;
 use ody_protocol::protocol::RateLimitSnapshot;
 use ody_protocol::protocol::TokenUsage;

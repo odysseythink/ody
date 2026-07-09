@@ -44,7 +44,7 @@ use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::config_types::WebSearchToolConfig;
 use ody_protocol::config_types::WindowsSandboxLevel;
 use ody_protocol::models::PermissionProfile;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::permissions::NetworkSandboxPolicy;
 use ody_protocol::protocol::AskForApproval;
 use ody_utils_absolute_path::AbsolutePathBuf;

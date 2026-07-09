@@ -3,7 +3,7 @@
 use std::sync::LazyLock;
 
 use ody_models_manager::bundled_models_response;
-use ody_protocol::odysseythink_models::ModelPreset;
+use ody_protocol::model_metadata::ModelPreset;
 pub(crate) use ody_utils_absolute_path::test_support::PathBufExt;
 pub(crate) use ody_utils_absolute_path::test_support::test_path_buf;
 use serde::Serialize;

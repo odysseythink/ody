@@ -73,8 +73,8 @@ signal to remove stale memories derived only from those resources.
 }
 
 mod stage_one {
-    pub(super) const REASONING_EFFORT: ody_protocol::odysseythink_models::ReasoningEffort =
-        ody_protocol::odysseythink_models::ReasoningEffort::Low;
+    pub(super) const REASONING_EFFORT: ody_protocol::model_metadata::ReasoningEffort =
+        ody_protocol::model_metadata::ReasoningEffort::Low;
     pub(super) const CONCURRENCY_LIMIT: usize = 8;
     pub(super) const JOB_LEASE_SECONDS: i64 = 3_600;
     pub(super) const JOB_RETRY_DELAY_SECONDS: i64 = 3_600;
@@ -97,8 +97,8 @@ mod stage_one {
 }
 
 mod stage_two {
-    pub(super) const REASONING_EFFORT: ody_protocol::odysseythink_models::ReasoningEffort =
-        ody_protocol::odysseythink_models::ReasoningEffort::Medium;
+    pub(super) const REASONING_EFFORT: ody_protocol::model_metadata::ReasoningEffort =
+        ody_protocol::model_metadata::ReasoningEffort::Medium;
     pub(super) const JOB_LEASE_SECONDS: i64 = 3_600;
     pub(super) const JOB_RETRY_DELAY_SECONDS: i64 = 3_600;
     pub(super) const JOB_HEARTBEAT_SECONDS: u64 = 90;

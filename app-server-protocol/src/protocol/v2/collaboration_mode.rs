@@ -1,6 +1,6 @@
 use ody_protocol::config_types::CollaborationModeMask as CoreCollaborationModeMask;
 use ody_protocol::config_types::ModeKind;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;

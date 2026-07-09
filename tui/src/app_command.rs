@@ -16,7 +16,7 @@ use ody_protocol::config_types::ReasoningSummary as ReasoningSummaryConfig;
 use ody_protocol::config_types::WindowsSandboxLevel;
 use ody_protocol::models::ActivePermissionProfile;
 use ody_protocol::models::PermissionProfile;
-use ody_protocol::odysseythink_models::ReasoningEffort as ReasoningEffortConfig;
+use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
 use ody_protocol::request_permissions::RequestPermissionsResponse;
 use serde::Serialize;
 use serde_json::Value;

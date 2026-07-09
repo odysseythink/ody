@@ -1,7 +1,7 @@
 use crate::config::MultiAgentV2Config;
 use crate::session::turn_context::TurnContext;
 use ody_protocol::config_types::MultiAgentMode;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::protocol::MultiAgentVersion;
 use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::SubAgentSource;

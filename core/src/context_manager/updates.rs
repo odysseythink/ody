@@ -15,7 +15,7 @@ use ody_protocol::config_types::MultiAgentMode;
 use ody_protocol::config_types::Personality;
 use ody_protocol::models::ContentItem;
 use ody_protocol::models::ResponseItem;
-use ody_protocol::odysseythink_models::ModelInfo;
+use ody_protocol::model_metadata::ModelInfo;
 use ody_protocol::protocol::TurnContextItem;
 
 fn build_permissions_update_item(

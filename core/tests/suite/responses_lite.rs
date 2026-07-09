@@ -8,7 +8,7 @@ use ody_extension_api::ExtensionRegistryBuilder;
 use ody_features::Feature;
 use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::models::ImageDetail;
-use ody_protocol::odysseythink_models::InputModality;
+use ody_protocol::model_metadata::InputModality;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::Op;
 use ody_protocol::user_input::UserInput;
@@ -39,7 +39,7 @@ fn configure_responses_tools(config: &mut Config) {
     assert!(config.features.enable(Feature::ImageGeneration).is_ok());
 }
 
-fn configure_image_capable_model(model_info: &mut ody_protocol::odysseythink_models::ModelInfo) {
+fn configure_image_capable_model(model_info: &mut ody_protocol::model_metadata::ModelInfo) {
     model_info.input_modalities = vec![InputModality::Text, InputModality::Image];
 }
 

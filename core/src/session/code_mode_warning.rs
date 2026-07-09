@@ -1,6 +1,6 @@
 use ody_features::Feature;
 use ody_features::Features;
-use ody_protocol::odysseythink_models::ModelInfo;
+use ody_protocol::model_metadata::ModelInfo;
 
 pub(super) fn unsupported_code_mode_warning(
     model_info: &ModelInfo,

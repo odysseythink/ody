@@ -37,7 +37,7 @@ use ody_api::ResponseEvent;
 use ody_protocol::ThreadId;
 use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::models::ResponseItem;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::ReviewDecision;
 use ody_protocol::protocol::SandboxPolicy;

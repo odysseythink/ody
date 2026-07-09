@@ -6,7 +6,7 @@ use ody_protocol::config_types::ForcedLoginMethod;
 use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::config_types::SandboxMode;
 use ody_protocol::config_types::Verbosity;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::parse_command::ParsedCommand;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::FileChange;

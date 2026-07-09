@@ -123,9 +123,9 @@ fn reasoning_for_request(
         return Ok(None);
     }
     let api_effort = match effort {
-        ThinkingEffort::Low => ody_protocol::odysseythink_models::ReasoningEffort::Low,
-        ThinkingEffort::Medium => ody_protocol::odysseythink_models::ReasoningEffort::Medium,
-        ThinkingEffort::High => ody_protocol::odysseythink_models::ReasoningEffort::High,
+        ThinkingEffort::Low => ody_protocol::model_metadata::ReasoningEffort::Low,
+        ThinkingEffort::Medium => ody_protocol::model_metadata::ReasoningEffort::Medium,
+        ThinkingEffort::High => ody_protocol::model_metadata::ReasoningEffort::High,
         _ => unreachable!("clamp_thinking_effort should not return unsupported effort"),
     };
     Ok(Some(Reasoning {

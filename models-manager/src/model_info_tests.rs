@@ -1,7 +1,7 @@
 use super::*;
 use crate::ModelsManagerConfig;
 use ody_model_provider_info::ModelProviderInfo;
-use ody_protocol::odysseythink_models::InputModality;
+use ody_protocol::model_metadata::InputModality;
 use pretty_assertions::assert_eq;
 
 #[test]
@@ -79,7 +79,7 @@ fn model_context_window_uses_model_value_without_override() {
 
 #[test]
 fn model_catalog_for_provider_lists_known_chat_vendors() {
-    use ody_protocol::odysseythink_models::ModelVisibility;
+    use ody_protocol::model_metadata::ModelVisibility;
 
     for (provider, expected_slug) in [
         ("kimi", "kimi-k2-0711"),
@@ -133,8 +133,8 @@ mod capability_tests {
     use super::ModelCapabilities;
     use super::ProviderCapabilities;
     use super::WireApi;
-    use ody_protocol::odysseythink_models::InputModality;
-    use ody_protocol::odysseythink_models::WebSearchToolType;
+    use ody_protocol::model_metadata::InputModality;
+    use ody_protocol::model_metadata::WebSearchToolType;
     use pretty_assertions::assert_eq;
 
     #[test]

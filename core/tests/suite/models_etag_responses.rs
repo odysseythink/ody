@@ -7,7 +7,7 @@ use std::time::Duration;
 use anyhow::Result;
 use ody_features::Feature;
 use ody_protocol::models::PermissionProfile;
-use ody_protocol::odysseythink_models::ModelsResponse;
+use ody_protocol::model_metadata::ModelsResponse;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::Op;

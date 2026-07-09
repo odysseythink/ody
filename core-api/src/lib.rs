@@ -86,7 +86,7 @@ pub use ody_protocol::dynamic_tools::DynamicToolNamespaceTool;
 pub use ody_protocol::dynamic_tools::DynamicToolSpec;
 pub use ody_protocol::error::Result as OdyResult;
 pub use ody_protocol::models::PermissionProfile;
-pub use ody_protocol::odysseythink_models::ModelPreset;
+pub use ody_protocol::model_metadata::ModelPreset;
 pub use ody_protocol::protocol::AskForApproval;
 pub use ody_protocol::protocol::EventMsg;
 pub use ody_protocol::protocol::InitialHistory;

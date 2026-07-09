@@ -1,6 +1,6 @@
 use chrono::DateTime;
 use chrono::Utc;
-use ody_protocol::odysseythink_models::ModelInfo;
+use ody_protocol::model_metadata::ModelInfo;
 use serde::Deserialize;
 use serde::Serialize;
 use std::io;

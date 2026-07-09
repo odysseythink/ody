@@ -17,7 +17,7 @@ use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::config_types::ServiceTier;
 use ody_protocol::error::OdyErr;
 use ody_protocol::models::PermissionProfile;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::HookEventName;
 use ody_protocol::protocol::HookRunStatus;

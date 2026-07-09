@@ -8,7 +8,7 @@ use crate::service_tier_resolution;
 use ody_features::Feature;
 use ody_protocol::config_types::SERVICE_TIER_DEFAULT_REQUEST_VALUE;
 use ody_protocol::config_types::ServiceTier;
-use ody_protocol::odysseythink_models::SPEED_TIER_FAST;
+use ody_protocol::model_metadata::SPEED_TIER_FAST;
 
 impl ChatWidget {
     pub(crate) fn set_service_tier(&mut self, service_tier: Option<String>) {

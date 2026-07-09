@@ -14,7 +14,7 @@ use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::config_types::SandboxMode;
 use ody_protocol::config_types::Verbosity;
 use ody_protocol::config_types::WebSearchMode;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::protocol::AskForApproval;
 
 /// Collection of common configuration options that a user can define as a unit

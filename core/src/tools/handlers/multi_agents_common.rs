@@ -14,8 +14,8 @@ use ody_protocol::ThreadId;
 use ody_protocol::error::OdyErr;
 use ody_protocol::models::BaseInstructions;
 use ody_protocol::models::ResponseInputItem;
-use ody_protocol::odysseythink_models::ReasoningEffort;
-use ody_protocol::odysseythink_models::ReasoningEffortPreset;
+use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffortPreset;
 use ody_protocol::protocol::CollabAgentRef;
 use ody_protocol::protocol::CollabAgentStatusEntry;
 use ody_protocol::protocol::Op;
@@ -381,7 +381,7 @@ pub(crate) async fn apply_spawn_agent_service_tier(
 }
 
 fn find_spawn_agent_model_name(
-    available_models: &[ody_protocol::odysseythink_models::ModelPreset],
+    available_models: &[ody_protocol::model_metadata::ModelPreset],
     requested_model: &str,
 ) -> Result<String, FunctionCallError> {
     available_models

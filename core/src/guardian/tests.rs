@@ -32,7 +32,7 @@ use ody_protocol::config_types::ApprovalsReviewer;
 use ody_protocol::models::ContentItem;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::models::ResponseItem;
-use ody_protocol::odysseythink_models::ModelsResponse;
+use ody_protocol::model_metadata::ModelsResponse;
 use ody_protocol::permissions::FileSystemAccessMode;
 use ody_protocol::permissions::FileSystemPath;
 use ody_protocol::permissions::FileSystemSandboxEntry;
@@ -2883,7 +2883,7 @@ async fn guardian_review_session_config_preserves_parent_network_proxy() {
         &parent_config,
         /*live_network_config*/ None,
         "parent-active-model",
-        Some(ody_protocol::odysseythink_models::ReasoningEffort::Low),
+        Some(ody_protocol::model_metadata::ReasoningEffort::Low),
     )
     .expect("guardian config");
 
@@ -2894,7 +2894,7 @@ async fn guardian_review_session_config_preserves_parent_network_proxy() {
     );
     assert_eq!(
         guardian_config.model_reasoning_effort,
-        Some(ody_protocol::odysseythink_models::ReasoningEffort::Low)
+        Some(ody_protocol::model_metadata::ReasoningEffort::Low)
     );
     assert_eq!(
         guardian_config.permissions.approval_policy,

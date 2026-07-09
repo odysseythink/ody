@@ -19,7 +19,7 @@ use strum_macros::EnumIter;
 use ts_rs::TS;
 use wildmatch::WildMatchPattern;
 
-use crate::odysseythink_models::ReasoningEffort;
+use crate::model_metadata::ReasoningEffort;
 
 /// Selects which part of the active context is charged against
 /// `model_auto_compact_token_limit`.

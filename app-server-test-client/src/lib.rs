@@ -70,7 +70,7 @@ use ody_core::config::Config;
 use ody_otel::OtelProvider;
 use ody_otel::current_span_w3c_trace_context;
 use ody_protocol::dynamic_tools::normalize_dynamic_tool_specs;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::protocol::W3cTraceContext;
 use ody_utils_cli::CliConfigOverrides;
 use serde::Serialize;

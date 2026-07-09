@@ -1,4 +1,4 @@
-use ody_protocol::odysseythink_models::ModelPreset;
+use ody_protocol::model_metadata::ModelPreset;
 use std::convert::Infallible;
 
 #[derive(Debug, Clone)]

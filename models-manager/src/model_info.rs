@@ -2,15 +2,15 @@ use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::ProviderCapabilities;
 use ody_model_provider_info::WireApi;
 use ody_protocol::config_types::ReasoningSummary;
-use ody_protocol::odysseythink_models::InputModality;
-use ody_protocol::odysseythink_models::ModelCapabilities;
-use ody_protocol::odysseythink_models::ModelInfo;
-use ody_protocol::odysseythink_models::ModelInstructionsVariables;
-use ody_protocol::odysseythink_models::ModelMessages;
-use ody_protocol::odysseythink_models::ModelVisibility;
-use ody_protocol::odysseythink_models::ModelsResponse;
-use ody_protocol::odysseythink_models::TruncationMode;
-use ody_protocol::odysseythink_models::TruncationPolicyConfig;
+use ody_protocol::model_metadata::InputModality;
+use ody_protocol::model_metadata::ModelCapabilities;
+use ody_protocol::model_metadata::ModelInfo;
+use ody_protocol::model_metadata::ModelInstructionsVariables;
+use ody_protocol::model_metadata::ModelMessages;
+use ody_protocol::model_metadata::ModelVisibility;
+use ody_protocol::model_metadata::ModelsResponse;
+use ody_protocol::model_metadata::TruncationMode;
+use ody_protocol::model_metadata::TruncationPolicyConfig;
 
 use crate::config::ModelsManagerConfig;
 use ody_utils_output_truncation::approx_bytes_for_tokens;
@@ -25,7 +25,7 @@ const PERSONALITY_PLACEHOLDER: &str = "{{ personality }}";
 
 /// Model capability fallback when no user config or built-in catalog value exists.
 pub fn default_model_capabilities_for_wire_api(wire_api: WireApi) -> ModelCapabilities {
-    use ody_protocol::odysseythink_models::InputModality::{Image, Text};
+    use ody_protocol::model_metadata::InputModality::{Image, Text};
     match wire_api {
         WireApi::Responses => ModelCapabilities {
             supports_tools: true,
@@ -61,7 +61,7 @@ pub fn resolve_model_capabilities(
     built_in: Option<&ModelCapabilities>,
     model_slug: &str,
 ) -> ModelCapabilities {
-    use ody_protocol::odysseythink_models::WebSearchToolType;
+    use ody_protocol::model_metadata::WebSearchToolType;
 
     let mut caps = if let Some(configured) = configured {
         tracing::debug!(model = %model_slug, "model capabilities from user config");

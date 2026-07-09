@@ -16,7 +16,7 @@ use ody_app_server_protocol::UserInput as V2UserInput;
 use ody_protocol::config_types::CollaborationMode;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::config_types::Settings;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use core_test_support::responses;
 use serde_json::json;
 use tokio::time::timeout;

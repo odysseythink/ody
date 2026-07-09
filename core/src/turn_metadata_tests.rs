@@ -10,7 +10,7 @@ use ody_analytics::CompactionPhase;
 use ody_analytics::CompactionReason;
 use ody_analytics::CompactionTrigger;
 use ody_protocol::models::PermissionProfile;
-use ody_protocol::odysseythink_models::ReasoningEffort as ReasoningEffortConfig;
+use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
 use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::SubAgentSource;
 use ody_protocol::protocol::ThreadSource;

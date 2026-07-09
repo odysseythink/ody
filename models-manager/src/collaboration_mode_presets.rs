@@ -3,7 +3,7 @@ use ody_collaboration_mode_templates::PLAN as COLLABORATION_MODE_PLAN;
 use ody_protocol::config_types::CollaborationModeMask;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::config_types::TUI_VISIBLE_COLLABORATION_MODES;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_utils_template::Template;
 use std::sync::LazyLock;
 

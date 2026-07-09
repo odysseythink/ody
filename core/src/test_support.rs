@@ -20,8 +20,8 @@ use ody_models_manager::test_support::construct_model_info_offline_for_tests;
 use ody_models_manager::test_support::get_model_offline_for_tests;
 use ody_protocol::ThreadId;
 use ody_protocol::config_types::CollaborationModeMask;
-use ody_protocol::odysseythink_models::ModelInfo;
-use ody_protocol::odysseythink_models::ModelPreset;
+use ody_protocol::model_metadata::ModelInfo;
+use ody_protocol::model_metadata::ModelPreset;
 use ody_protocol::protocol::SessionSource;
 use once_cell::sync::Lazy;
 

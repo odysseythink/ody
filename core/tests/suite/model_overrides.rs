@@ -1,4 +1,4 @@
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::Op;
 use core_test_support::responses::start_mock_server;

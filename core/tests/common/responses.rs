@@ -9,7 +9,7 @@ use anyhow::Result;
 use base64::Engine;
 use ody_protocol::models::ContentItem;
 use ody_protocol::models::ResponseItem;
-use ody_protocol::odysseythink_models::ModelsResponse;
+use ody_protocol::model_metadata::ModelsResponse;
 use futures::SinkExt;
 use futures::StreamExt;
 use serde_json::Value;

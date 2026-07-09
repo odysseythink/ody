@@ -20,7 +20,7 @@ use std::borrow::Cow;
 use crate::session::turn_context::TurnContext;
 use ody_features::Feature;
 use ody_protocol::exec_output::ExecToolCallOutput;
-use ody_protocol::odysseythink_models::ToolMode;
+use ody_protocol::model_metadata::ToolMode;
 use ody_tools::ToolName;
 use ody_utils_output_truncation::TruncationPolicy;
 use ody_utils_output_truncation::formatted_truncate_text;

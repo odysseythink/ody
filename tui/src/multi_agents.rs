@@ -14,7 +14,7 @@ use ody_app_server_protocol::CollabAgentToolCallStatus;
 use ody_app_server_protocol::SubAgentActivityKind;
 use ody_app_server_protocol::ThreadItem;
 use ody_protocol::ThreadId;
-use ody_protocol::odysseythink_models::ReasoningEffort as ReasoningEffortConfig;
+use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 #[cfg(target_os = "macos")]

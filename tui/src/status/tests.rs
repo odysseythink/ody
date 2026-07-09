@@ -36,7 +36,7 @@ use ody_protocol::models::ActivePermissionProfile;
 use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_WORKSPACE;
 use ody_protocol::models::ManagedFileSystemPermissions;
 use ody_protocol::models::PermissionProfile;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::permissions::FileSystemAccessMode;
 use ody_protocol::permissions::FileSystemPath;
 use ody_protocol::permissions::FileSystemSandboxEntry;

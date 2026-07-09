@@ -1,11 +1,11 @@
 use ody_features::Feature;
 use ody_features::Features;
 use ody_protocol::config_types::ModeKind;
-use ody_protocol::odysseythink_models::ConfigShellToolType;
-use ody_protocol::odysseythink_models::ModelInfo;
-use ody_protocol::odysseythink_models::ModelVisibility;
-use ody_protocol::odysseythink_models::TruncationPolicyConfig;
-use ody_protocol::odysseythink_models::ModelCapabilities;
+use ody_protocol::model_metadata::ConfigShellToolType;
+use ody_protocol::model_metadata::ModelInfo;
+use ody_protocol::model_metadata::ModelVisibility;
+use ody_protocol::model_metadata::TruncationPolicyConfig;
+use ody_protocol::model_metadata::ModelCapabilities;
 use pretty_assertions::assert_eq;
 
 use super::*;
@@ -43,7 +43,7 @@ fn model_with_shell_type(shell_type: ConfigShellToolType) -> ModelInfo {
         comp_hash: None,
         effective_context_window_percent: 95,
         experimental_supported_tools: Vec::new(),
-        input_modalities: ody_protocol::odysseythink_models::default_input_modalities(),
+        input_modalities: ody_protocol::model_metadata::default_input_modalities(),
         used_fallback_model_metadata: false,
         supports_search_tool: false,
         use_responses_lite: false,

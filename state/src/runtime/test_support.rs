@@ -5,7 +5,7 @@ use chrono::Utc;
 #[cfg(test)]
 use ody_protocol::ThreadId;
 #[cfg(test)]
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 #[cfg(test)]
 use ody_protocol::protocol::AskForApproval;
 #[cfg(test)]

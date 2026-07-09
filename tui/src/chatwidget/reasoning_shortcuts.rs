@@ -13,8 +13,8 @@
 //! advertised order.
 
 use ody_protocol::config_types::ModeKind;
-use ody_protocol::odysseythink_models::ModelPreset;
-use ody_protocol::odysseythink_models::ReasoningEffort as ReasoningEffortConfig;
+use ody_protocol::model_metadata::ModelPreset;
+use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
 use crossterm::event::KeyEvent;
 
 use super::ChatWidget;

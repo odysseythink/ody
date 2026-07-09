@@ -26,7 +26,7 @@ use ody_app_server_protocol::SkillsListResponse;
 use ody_app_server_protocol::ThreadGoalStatus;
 use ody_file_search::FileMatch;
 use ody_protocol::ThreadId;
-use ody_protocol::odysseythink_models::ModelPreset;
+use ody_protocol::model_metadata::ModelPreset;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_approval_presets::ApprovalPreset;
 
@@ -44,7 +44,7 @@ use ody_plugin::PluginCapabilitySummary;
 use ody_protocol::config_types::CollaborationModeMask;
 use ody_protocol::config_types::Personality;
 use ody_protocol::models::ActivePermissionProfile;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 
 use crate::history_cell::HistoryCell;
 

@@ -6,7 +6,7 @@ use ody_config::types::McpServerTransportConfig;
 use ody_config::types::SessionPickerViewMode;
 use ody_protocol::config_types::SERVICE_TIER_DEFAULT_REQUEST_VALUE;
 use ody_protocol::config_types::ServiceTier;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use pretty_assertions::assert_eq;
 #[cfg(unix)]
 use std::os::unix::fs::symlink;

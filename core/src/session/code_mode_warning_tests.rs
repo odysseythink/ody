@@ -2,8 +2,8 @@ use super::unsupported_code_mode_warning;
 use ody_features::Feature;
 use ody_features::Features;
 use ody_models_manager::model_info::model_info_from_slug;
-use ody_protocol::odysseythink_models::ModelInfo;
-use ody_protocol::odysseythink_models::ToolMode;
+use ody_protocol::model_metadata::ModelInfo;
+use ody_protocol::model_metadata::ToolMode;
 use pretty_assertions::assert_eq;
 
 const MODEL_SLUG: &str = "test-model";

@@ -23,7 +23,7 @@ use ody_git_utils::get_head_commit_hash;
 use ody_protocol::ThreadId;
 use ody_protocol::config_types::WindowsSandboxLevel;
 use ody_protocol::models::PermissionProfile;
-use ody_protocol::odysseythink_models::ReasoningEffort as ReasoningEffortConfig;
+use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
 use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::ThreadSource;
 use ody_utils_absolute_path::AbsolutePathBuf;

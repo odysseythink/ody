@@ -1,7 +1,7 @@
 use crate::legacy_core::config::Config;
 use ody_features::Feature;
 use ody_protocol::config_types::SERVICE_TIER_DEFAULT_REQUEST_VALUE;
-use ody_protocol::odysseythink_models::ModelPreset;
+use ody_protocol::model_metadata::ModelPreset;
 
 pub(crate) fn configured_service_tier(config: &Config) -> Option<String> {
     config.service_tier.clone().or_else(|| {

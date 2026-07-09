@@ -31,7 +31,7 @@ use ody_protocol::models::PermissionProfile;
 use ody_protocol::models::ResponseInputItem;
 use ody_protocol::models::ResponseItem;
 use ody_protocol::models::SandboxEnforcement;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::protocol::AgentStatus;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::EventMsg;

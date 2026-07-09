@@ -50,7 +50,7 @@ use ody_protocol::models::FunctionCallOutputPayload;
 use ody_protocol::models::ImageDetail;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::models::SandboxEnforcement;
-use ody_protocol::odysseythink_models::ModelServiceTier;
+use ody_protocol::model_metadata::ModelServiceTier;
 use ody_protocol::permissions::FileSystemAccessMode;
 use ody_protocol::permissions::FileSystemPath;
 use ody_protocol::permissions::FileSystemSandboxEntry;

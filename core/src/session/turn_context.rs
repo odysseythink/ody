@@ -10,7 +10,7 @@ use ody_model_provider::create_model_provider;
 use ody_protocol::SessionId;
 use ody_protocol::ThreadId;
 use ody_protocol::models::AdditionalPermissionProfile;
-use ody_protocol::odysseythink_models::ModelInfo;
+use ody_protocol::model_metadata::ModelInfo;
 use ody_protocol::protocol::MultiAgentVersion;
 use ody_protocol::protocol::TurnEnvironmentSelection;
 use ody_sandboxing::compatibility_sandbox_policy_for_permission_profile;

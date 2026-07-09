@@ -11,7 +11,7 @@ pub use ody_app_server_protocol::AuthMode;
 
 /// Load the bundled model catalog shipped with `ody-models-manager`.
 pub fn bundled_models_response()
--> std::result::Result<ody_protocol::odysseythink_models::ModelsResponse, serde_json::Error> {
+-> std::result::Result<ody_protocol::model_metadata::ModelsResponse, serde_json::Error> {
     serde_json::from_str(include_str!("../models.json"))
 }
 

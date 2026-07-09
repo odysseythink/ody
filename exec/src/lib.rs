@@ -1128,7 +1128,7 @@ fn session_configured_from_thread_response(
     permission_profile: PermissionProfile,
     active_permission_profile: Option<ody_protocol::models::ActivePermissionProfile>,
     cwd: AbsolutePathBuf,
-    reasoning_effort: Option<ody_protocol::odysseythink_models::ReasoningEffort>,
+    reasoning_effort: Option<ody_protocol::model_metadata::ReasoningEffort>,
 ) -> Result<SessionConfiguredEvent, String> {
     let session_id = SessionId::from_string(session_id)
         .map_err(|err| format!("session id `{session_id}` is invalid: {err}"))?;

@@ -19,7 +19,7 @@ use ody_protocol::capabilities::SelectedCapabilityRoot;
 use ody_protocol::models::ContentItem;
 use ody_protocol::models::ReasoningItemReasoningSummary;
 use ody_protocol::models::ResponseItem;
-use ody_protocol::odysseythink_models::ModelsResponse;
+use ody_protocol::model_metadata::ModelsResponse;
 use ody_protocol::protocol::AgentMessageEvent;
 use ody_protocol::protocol::InitialHistory;
 use ody_protocol::protocol::InternalSessionSource;

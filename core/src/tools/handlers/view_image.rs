@@ -6,7 +6,7 @@ use ody_protocol::models::FunctionCallOutputContentItem;
 use ody_protocol::models::FunctionCallOutputPayload;
 use ody_protocol::models::ImageDetail;
 use ody_protocol::models::ResponseInputItem;
-use ody_protocol::odysseythink_models::InputModality;
+use ody_protocol::model_metadata::InputModality;
 use ody_utils_image::data_url_from_bytes;
 use serde::Deserialize;
 

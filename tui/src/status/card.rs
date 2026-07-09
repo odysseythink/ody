@@ -18,7 +18,7 @@ use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_DANGER_FULL_ACCESS;
 use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_READ_ONLY;
 use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_WORKSPACE;
 use ody_protocol::models::PermissionProfile;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_sandbox_summary::summarize_permission_profile;
 use ratatui::prelude::*;

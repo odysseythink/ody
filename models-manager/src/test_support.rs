@@ -5,8 +5,8 @@
 use crate::ModelsManagerConfig;
 use crate::bundled_models_response;
 use crate::manager::construct_model_info_from_candidates;
-use ody_protocol::odysseythink_models::ModelInfo;
-use ody_protocol::odysseythink_models::ModelPreset;
+use ody_protocol::model_metadata::ModelInfo;
+use ody_protocol::model_metadata::ModelPreset;
 
 /// Get model identifier without consulting remote state or cache.
 pub fn get_model_offline_for_tests(model: Option<&str>) -> String {

@@ -1,8 +1,8 @@
 use super::*;
-use ody_protocol::odysseythink_models::ModelPreset;
-use ody_protocol::odysseythink_models::ModelServiceTier;
-use ody_protocol::odysseythink_models::ReasoningEffort;
-use ody_protocol::odysseythink_models::ReasoningEffortPreset;
+use ody_protocol::model_metadata::ModelPreset;
+use ody_protocol::model_metadata::ModelServiceTier;
+use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffortPreset;
 use ody_tools::JsonSchemaPrimitiveType;
 use ody_tools::JsonSchemaType;
 use pretty_assertions::assert_eq;

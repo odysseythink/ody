@@ -1,6 +1,6 @@
 use ody_protocol::config_types::WebSearchConfig;
 use ody_protocol::config_types::WebSearchMode;
-use ody_protocol::odysseythink_models::WebSearchToolType;
+use ody_protocol::model_metadata::WebSearchToolType;
 use ody_tools::ToolSpec;
 
 const WEB_SEARCH_TEXT_AND_IMAGE_CONTENT_TYPES: [&str; 2] = ["text", "image"];

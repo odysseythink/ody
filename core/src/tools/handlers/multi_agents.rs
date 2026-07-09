@@ -21,7 +21,7 @@ use crate::tools::registry::CoreToolRuntime;
 use crate::tools::registry::ToolExecutor;
 use ody_protocol::ThreadId;
 use ody_protocol::models::ResponseInputItem;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::protocol::CollabAgentInteractionBeginEvent;
 use ody_protocol::protocol::CollabAgentInteractionEndEvent;
 use ody_protocol::protocol::CollabAgentRef;

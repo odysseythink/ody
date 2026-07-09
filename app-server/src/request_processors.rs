@@ -343,7 +343,7 @@ use ody_protocol::error::Result as OdyResult;
 #[cfg(test)]
 use ody_protocol::items::TurnItem;
 use ody_protocol::models::ResponseItem;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 #[cfg(test)]
 use ody_protocol::permissions::FileSystemSandboxPolicy;
 use ody_protocol::protocol::AgentStatus;

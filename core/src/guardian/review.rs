@@ -668,7 +668,7 @@ pub(crate) fn spawn_approval_request_review(
 pub(super) struct GuardianReviewSessionConfig {
     pub(super) spawn_config: crate::config::Config,
     model: String,
-    reasoning_effort: Option<ody_protocol::odysseythink_models::ReasoningEffort>,
+    reasoning_effort: Option<ody_protocol::model_metadata::ReasoningEffort>,
     default_review_model_id: String,
     catalog_contains_auto_review: bool,
     model_overridden: bool,
@@ -692,7 +692,7 @@ pub(super) async fn guardian_review_session_config(
     let default_review_model_id = turn.provider.approval_review_preferred_model();
     let preferred_reasoning_effort = |supports_low: bool, fallback| {
         if supports_low {
-            Some(ody_protocol::odysseythink_models::ReasoningEffort::Low)
+            Some(ody_protocol::model_metadata::ReasoningEffort::Low)
         } else {
             fallback
         }
@@ -712,7 +712,7 @@ pub(super) async fn guardian_review_session_config(
             preset
                 .supported_reasoning_efforts
                 .iter()
-                .any(|effort| effort.effort == ody_protocol::odysseythink_models::ReasoningEffort::Low),
+                .any(|effort| effort.effort == ody_protocol::model_metadata::ReasoningEffort::Low),
             Some(preset.default_reasoning_effort.clone()),
         );
         (review_model_id.to_string(), reasoning_effort)
@@ -721,7 +721,7 @@ pub(super) async fn guardian_review_session_config(
             turn.model_info
                 .supported_reasoning_levels
                 .iter()
-                .any(|preset| preset.effort == ody_protocol::odysseythink_models::ReasoningEffort::Low),
+                .any(|preset| preset.effort == ody_protocol::model_metadata::ReasoningEffort::Low),
             turn.reasoning_effort
                 .clone()
                 .or_else(|| turn.model_info.default_reasoning_level.clone()),

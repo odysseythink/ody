@@ -1,4 +1,4 @@
-use ody_protocol::odysseythink_models::ModelsResponse;
+use ody_protocol::model_metadata::ModelsResponse;
 
 #[derive(Debug, Clone, Default)]
 pub struct ModelsManagerConfig {

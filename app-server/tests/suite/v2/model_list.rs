@@ -13,7 +13,7 @@ use ody_app_server_protocol::ModelServiceTier;
 use ody_app_server_protocol::ModelUpgradeInfo;
 use ody_app_server_protocol::ReasoningEffortOption;
 use ody_app_server_protocol::RequestId;
-use ody_protocol::odysseythink_models::ModelPreset;
+use ody_protocol::model_metadata::ModelPreset;
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 use tokio::time::timeout;

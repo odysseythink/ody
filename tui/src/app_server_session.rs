@@ -112,11 +112,11 @@ use ody_protocol::config_types::SERVICE_TIER_DEFAULT_REQUEST_VALUE;
 use ody_protocol::models::ActivePermissionProfile;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::models::ResponseItem;
-use ody_protocol::odysseythink_models::ModelAvailabilityNux;
-use ody_protocol::odysseythink_models::ModelPreset;
-use ody_protocol::odysseythink_models::ModelServiceTier;
-use ody_protocol::odysseythink_models::ModelUpgrade;
-use ody_protocol::odysseythink_models::ReasoningEffortPreset;
+use ody_protocol::model_metadata::ModelAvailabilityNux;
+use ody_protocol::model_metadata::ModelPreset;
+use ody_protocol::model_metadata::ModelServiceTier;
+use ody_protocol::model_metadata::ModelUpgrade;
+use ody_protocol::model_metadata::ReasoningEffortPreset;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path_uri::PathUri;
 use std::collections::HashMap;
@@ -697,7 +697,7 @@ impl AppServerSession {
         permissions_override: TurnPermissionsOverride,
         workspace_roots: &[AbsolutePathBuf],
         model: String,
-        effort: Option<ody_protocol::odysseythink_models::ReasoningEffort>,
+        effort: Option<ody_protocol::model_metadata::ReasoningEffort>,
         summary: Option<ody_protocol::config_types::ReasoningSummary>,
         service_tier: Option<Option<String>>,
         collaboration_mode: Option<ody_protocol::config_types::CollaborationMode>,
@@ -1600,7 +1600,7 @@ async fn thread_session_state_from_thread_response(
     cwd: AbsolutePathBuf,
     runtime_workspace_roots: Vec<AbsolutePathBuf>,
     instruction_source_paths: Vec<PathUri>,
-    reasoning_effort: Option<ody_protocol::odysseythink_models::ReasoningEffort>,
+    reasoning_effort: Option<ody_protocol::model_metadata::ReasoningEffort>,
     config: &Config,
 ) -> Result<ThreadSessionState, String> {
     let thread_id = ThreadId::from_string(thread_id)
@@ -1657,7 +1657,7 @@ mod tests {
     use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_READ_ONLY;
     use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_WORKSPACE;
     use ody_protocol::models::ManagedFileSystemPermissions;
-    use ody_protocol::odysseythink_models::ReasoningEffort;
+    use ody_protocol::model_metadata::ReasoningEffort;
     use ody_protocol::permissions::FileSystemAccessMode;
     use ody_protocol::permissions::FileSystemPath;
     use ody_protocol::permissions::FileSystemSandboxEntry;

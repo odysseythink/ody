@@ -13,7 +13,7 @@ use crate::tools::registry::CoreToolRuntime;
 use crate::tools::registry::ToolExecutor;
 use ody_protocol::AgentPath;
 use ody_protocol::models::ResponseInputItem;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::protocol::CollabWaitingBeginEvent;
 use ody_protocol::protocol::CollabWaitingEndEvent;
 use ody_protocol::protocol::InterAgentCommunication;

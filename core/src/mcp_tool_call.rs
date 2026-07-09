@@ -66,7 +66,7 @@ use ody_protocol::mcp_approval_meta::TOOL_DESCRIPTION_KEY as MCP_TOOL_APPROVAL_T
 use ody_protocol::mcp_approval_meta::TOOL_PARAMS_DISPLAY_KEY as MCP_TOOL_APPROVAL_TOOL_PARAMS_DISPLAY_KEY;
 use ody_protocol::mcp_approval_meta::TOOL_PARAMS_KEY as MCP_TOOL_APPROVAL_TOOL_PARAMS_KEY;
 use ody_protocol::mcp_approval_meta::TOOL_TITLE_KEY as MCP_TOOL_APPROVAL_TOOL_TITLE_KEY;
-use ody_protocol::odysseythink_models::InputModality;
+use ody_protocol::model_metadata::InputModality;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::McpInvocation;
 use ody_protocol::protocol::ReviewDecision;

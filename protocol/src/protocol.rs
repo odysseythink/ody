@@ -46,7 +46,7 @@ use crate::models::ResponseItem;
 use crate::models::SandboxEnforcement;
 use crate::models::WebSearchAction;
 use crate::num_format::format_with_separators;
-use crate::odysseythink_models::ReasoningEffort as ReasoningEffortConfig;
+use crate::model_metadata::ReasoningEffort as ReasoningEffortConfig;
 use crate::parse_command::ParsedCommand;
 use crate::plan_tool::UpdatePlanArgs;
 use crate::request_permissions::RequestPermissionsEvent;
@@ -3189,11 +3189,11 @@ pub enum TruncationPolicy {
     Tokens(usize),
 }
 
-impl From<crate::odysseythink_models::TruncationPolicyConfig> for TruncationPolicy {
-    fn from(config: crate::odysseythink_models::TruncationPolicyConfig) -> Self {
+impl From<crate::model_metadata::TruncationPolicyConfig> for TruncationPolicy {
+    fn from(config: crate::model_metadata::TruncationPolicyConfig) -> Self {
         match config.mode {
-            crate::odysseythink_models::TruncationMode::Bytes => Self::Bytes(config.limit as usize),
-            crate::odysseythink_models::TruncationMode::Tokens => Self::Tokens(config.limit as usize),
+            crate::model_metadata::TruncationMode::Bytes => Self::Bytes(config.limit as usize),
+            crate::model_metadata::TruncationMode::Tokens => Self::Tokens(config.limit as usize),
         }
     }
 }

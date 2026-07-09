@@ -5,7 +5,7 @@ use crate::skills_load_input_from_config;
 use ody_config::ConfigLayerStackOrdering;
 use ody_core_plugins::PluginsManager;
 use ody_protocol::config_types::ServiceTier;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_utils_absolute_path::test_support::PathExt;
 use pretty_assertions::assert_eq;
 use std::fs;

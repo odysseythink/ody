@@ -1,5 +1,5 @@
 use crate::memory_extensions_root;
-use ody_protocol::odysseythink_models::ModelInfo;
+use ody_protocol::model_metadata::ModelInfo;
 use ody_utils_output_truncation::TruncationPolicy;
 use ody_utils_output_truncation::truncate_text;
 use ody_utils_template::Template;

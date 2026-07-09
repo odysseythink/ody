@@ -14,7 +14,7 @@ use ody_protocol::models::FunctionCallOutputContentItem;
 use ody_protocol::models::FunctionCallOutputPayload;
 use ody_protocol::models::ImageDetail;
 use ody_protocol::models::ResponseItem;
-use ody_protocol::odysseythink_models::InputModality;
+use ody_protocol::model_metadata::InputModality;
 use ody_protocol::protocol::InterAgentCommunication;
 use ody_protocol::protocol::TokenUsage;
 use ody_protocol::protocol::TokenUsageInfo;

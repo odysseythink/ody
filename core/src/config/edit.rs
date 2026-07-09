@@ -9,7 +9,7 @@ use ody_features::FEATURES;
 use ody_protocol::config_types::Personality;
 use ody_protocol::config_types::ServiceTier;
 use ody_protocol::config_types::TrustLevel;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;

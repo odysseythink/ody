@@ -7,7 +7,7 @@ use ody_protocol::ThreadId;
 use ody_protocol::dynamic_tools::DynamicToolSpec;
 use ody_protocol::models::BaseInstructions;
 use ody_protocol::models::PermissionProfile;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::GitInfo;
 use ody_protocol::protocol::MultiAgentVersion;

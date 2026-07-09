@@ -1,8 +1,8 @@
 use super::shared::v2_enum_from_core;
-use ody_protocol::odysseythink_models::InputModality;
-use ody_protocol::odysseythink_models::ModelAvailabilityNux as CoreModelAvailabilityNux;
-use ody_protocol::odysseythink_models::ReasoningEffort;
-use ody_protocol::odysseythink_models::default_input_modalities;
+use ody_protocol::model_metadata::InputModality;
+use ody_protocol::model_metadata::ModelAvailabilityNux as CoreModelAvailabilityNux;
+use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::model_metadata::default_input_modalities;
 use ody_protocol::protocol::ModelRerouteReason as CoreModelRerouteReason;
 use ody_protocol::protocol::ModelVerification as CoreModelVerification;
 use schemars::JsonSchema;

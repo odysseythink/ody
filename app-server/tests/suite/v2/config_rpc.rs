@@ -29,7 +29,7 @@ use ody_protocol::config_types::TrustLevel;
 use ody_protocol::config_types::WebSearchContextSize;
 use ody_protocol::config_types::WebSearchLocation;
 use ody_protocol::config_types::WebSearchToolConfig;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use pretty_assertions::assert_eq;
 use serde_json::json;

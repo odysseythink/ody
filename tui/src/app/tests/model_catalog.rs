@@ -1,7 +1,7 @@
 use super::*;
 use assert_matches::assert_matches;
 use ody_config::types::ModelAvailabilityNuxConfig;
-use ody_protocol::odysseythink_models::ModelAvailabilityNux;
+use ody_protocol::model_metadata::ModelAvailabilityNux;
 use pretty_assertions::assert_eq;
 use tokio::sync::mpsc::unbounded_channel;
 

@@ -1,6 +1,6 @@
 use crate::ModelsManagerConfig;
 use crate::manager::ModelsManager;
-use ody_protocol::odysseythink_models::TruncationPolicyConfig;
+use ody_protocol::model_metadata::TruncationPolicyConfig;
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 

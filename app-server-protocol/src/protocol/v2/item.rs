@@ -20,7 +20,7 @@ use ody_protocol::memory_citation::MemoryCitation as CoreMemoryCitation;
 use ody_protocol::memory_citation::MemoryCitationEntry as CoreMemoryCitationEntry;
 use ody_protocol::models::MessagePhase;
 use ody_protocol::models::ResponseItem;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::parse_command::ParsedCommand as CoreParsedCommand;
 use ody_protocol::protocol::AgentStatus as CoreAgentStatus;
 use ody_protocol::protocol::ExecCommandSource as CoreExecCommandSource;

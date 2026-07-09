@@ -1,7 +1,7 @@
 use ody_protocol::models::DEFAULT_IMAGE_DETAIL;
 use ody_protocol::models::FunctionCallOutputContentItem;
 use ody_protocol::models::ImageDetail;
-use ody_protocol::odysseythink_models::ModelInfo;
+use ody_protocol::model_metadata::ModelInfo;
 
 pub fn can_request_original_image_detail(model_info: &ModelInfo) -> bool {
     model_info.supports_image_detail_original

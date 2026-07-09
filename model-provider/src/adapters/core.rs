@@ -110,9 +110,9 @@ pub fn is_terminal(event: &ResponseEvent) -> bool {
 
 /// Convert a reasoning-effort config into the normalized chat effort.
 fn map_effort(
-    effort: Option<&ody_protocol::odysseythink_models::ReasoningEffort>,
+    effort: Option<&ody_protocol::model_metadata::ReasoningEffort>,
 ) -> crate::chat_provider::ThinkingEffort {
-    use ody_protocol::odysseythink_models::ReasoningEffort as Effort;
+    use ody_protocol::model_metadata::ReasoningEffort as Effort;
     match effort {
         None | Some(Effort::None) => crate::chat_provider::ThinkingEffort::Off,
         Some(Effort::Minimal) | Some(Effort::Low) => crate::chat_provider::ThinkingEffort::Low,
@@ -133,7 +133,7 @@ fn map_effort(
 pub fn prompt_to_chat_request(
     model: &str,
     prompt: &dyn Prompt,
-    effort: Option<ody_protocol::odysseythink_models::ReasoningEffort>,
+    effort: Option<ody_protocol::model_metadata::ReasoningEffort>,
 ) -> ChatRequest {
     let formatted = prompt.get_formatted_input_for_request(/*use_responses_lite*/ false);
     let mut messages = Vec::new();

@@ -1,7 +1,7 @@
 use super::*;
 use crate::ModelsManagerConfig;
 use chrono::Utc;
-use ody_protocol::odysseythink_models::ModelsResponse;
+use ody_protocol::model_metadata::ModelsResponse;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use std::collections::VecDeque;

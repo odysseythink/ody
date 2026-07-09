@@ -6,8 +6,8 @@ use ody_app_server_protocol::ModelUpgradeInfo;
 use ody_app_server_protocol::ReasoningEffortOption;
 use ody_core::ThreadManager;
 use ody_models_manager::manager::RefreshStrategy;
-use ody_protocol::odysseythink_models::ModelPreset;
-use ody_protocol::odysseythink_models::ReasoningEffortPreset;
+use ody_protocol::model_metadata::ModelPreset;
+use ody_protocol::model_metadata::ReasoningEffortPreset;
 
 pub async fn supported_models(
     thread_manager: Arc<ThreadManager>,

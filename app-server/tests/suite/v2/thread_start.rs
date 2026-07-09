@@ -28,7 +28,7 @@ use ody_exec_server::LOCAL_FS;
 use ody_git_utils::resolve_root_git_project_for_trust;
 use ody_protocol::config_types::SERVICE_TIER_DEFAULT_REQUEST_VALUE;
 use ody_protocol::config_types::TrustLevel;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;

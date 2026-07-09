@@ -148,10 +148,10 @@ use ody_protocol::config_types::WindowsSandboxLevel;
 use ody_protocol::models::ActivePermissionProfile;
 use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_WORKSPACE;
 use ody_protocol::models::PermissionProfile;
-use ody_protocol::odysseythink_models::ModelAvailabilityNux;
-use ody_protocol::odysseythink_models::ModelPreset;
-use ody_protocol::odysseythink_models::ModelUpgrade;
-use ody_protocol::odysseythink_models::ReasoningEffort as ReasoningEffortConfig;
+use ody_protocol::model_metadata::ModelAvailabilityNux;
+use ody_protocol::model_metadata::ModelPreset;
+use ody_protocol::model_metadata::ModelUpgrade;
+use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
 #[cfg(target_os = "windows")]
 use ody_protocol::permissions::FileSystemSandboxKind;
 use ody_rollout::StateDbHandle;

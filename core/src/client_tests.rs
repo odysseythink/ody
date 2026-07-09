@@ -20,9 +20,9 @@ use ody_otel::SessionTelemetry;
 use ody_protocol::ThreadId;
 use ody_protocol::models::ContentItem;
 use ody_protocol::models::ResponseItem;
-use ody_protocol::odysseythink_models::ModelInfo;
-use ody_protocol::odysseythink_models::ReasoningEffort;
-use ody_protocol::odysseythink_models::ModelCapabilities;
+use ody_protocol::model_metadata::ModelInfo;
+use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::model_metadata::ModelCapabilities;
 use ody_protocol::protocol::InternalSessionSource;
 use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::SubAgentSource;
@@ -735,8 +735,8 @@ fn test_model_info_for_chat_provider() -> ModelInfo {
         description: None,
         default_reasoning_level: None,
         supported_reasoning_levels: Vec::new(),
-        shell_type: ody_protocol::odysseythink_models::ConfigShellToolType::Default,
-        visibility: ody_protocol::odysseythink_models::ModelVisibility::List,
+        shell_type: ody_protocol::model_metadata::ConfigShellToolType::Default,
+        visibility: ody_protocol::model_metadata::ModelVisibility::List,
         supported_in_api: true,
         priority: 0,
         additional_speed_tiers: Vec::new(),
@@ -751,8 +751,8 @@ fn test_model_info_for_chat_provider() -> ModelInfo {
         support_verbosity: false,
         default_verbosity: None,
         apply_patch_tool_type: None,
-        web_search_tool_type: ody_protocol::odysseythink_models::WebSearchToolType::Text,
-        truncation_policy: ody_protocol::odysseythink_models::TruncationPolicyConfig::bytes(1_000_000),
+        web_search_tool_type: ody_protocol::model_metadata::WebSearchToolType::Text,
+        truncation_policy: ody_protocol::model_metadata::TruncationPolicyConfig::bytes(1_000_000),
         supports_parallel_tool_calls: false,
         supports_image_detail_original: false,
         context_window: None,

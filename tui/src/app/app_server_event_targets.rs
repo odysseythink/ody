@@ -206,7 +206,7 @@ mod tests {
     use ody_protocol::config_types::CollaborationMode;
     use ody_protocol::config_types::ModeKind;
     use ody_protocol::config_types::Settings;
-    use ody_protocol::odysseythink_models::ReasoningEffort;
+    use ody_protocol::model_metadata::ReasoningEffort;
     use pretty_assertions::assert_eq;
 
     fn test_thread_settings() -> ThreadSettings {

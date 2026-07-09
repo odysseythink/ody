@@ -2,7 +2,7 @@ use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
 use ody_protocol::ThreadId;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::SandboxPolicy;
 use ody_protocol::protocol::SessionSource;
@@ -531,7 +531,7 @@ mod tests {
     use chrono::DateTime;
     use chrono::Utc;
     use ody_protocol::ThreadId;
-    use ody_protocol::odysseythink_models::ReasoningEffort;
+    use ody_protocol::model_metadata::ReasoningEffort;
     use pretty_assertions::assert_eq;
     use std::path::PathBuf;
 

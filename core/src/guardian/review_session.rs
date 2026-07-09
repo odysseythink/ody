@@ -15,7 +15,7 @@ use ody_protocol::config_types::Personality;
 use ody_protocol::config_types::ReasoningSummary as ReasoningSummaryConfig;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::models::ResponseItem;
-use ody_protocol::odysseythink_models::ReasoningEffort as ReasoningEffortConfig;
+use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::OdyErrorInfo;
 use ody_protocol::protocol::ErrorEvent;
@@ -991,7 +991,7 @@ pub(crate) fn build_guardian_review_session_config(
     parent_config: &Config,
     live_network_config: Option<ody_network_proxy::NetworkProxyConfig>,
     active_model: &str,
-    reasoning_effort: Option<ody_protocol::odysseythink_models::ReasoningEffort>,
+    reasoning_effort: Option<ody_protocol::model_metadata::ReasoningEffort>,
 ) -> anyhow::Result<Config> {
     let mut guardian_config = parent_config.clone();
     guardian_config.model = Some(active_model.to_string());

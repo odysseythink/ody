@@ -74,7 +74,7 @@ use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::config_types::Settings;
 use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_DANGER_FULL_ACCESS;
 use ody_protocol::models::ImageDetail;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::protocol::MULTI_AGENT_MODE_OPEN_TAG;
 use ody_protocol::user_input::MAX_USER_INPUT_TEXT_CHARS;
 use ody_utils_absolute_path::test_support::PathExt;

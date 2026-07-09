@@ -73,7 +73,7 @@ use ody_protocol::mcp::ResourceTemplate;
 use ody_protocol::models::ManagedFileSystemPermissions;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::models::local_image_label_text;
-use ody_protocol::odysseythink_models::ReasoningEffort as ReasoningEffortConfig;
+use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
 use ody_protocol::permissions::NetworkSandboxPolicy;
 use ody_protocol::plan_tool::PlanItemArg;
 use ody_protocol::plan_tool::StepStatus;

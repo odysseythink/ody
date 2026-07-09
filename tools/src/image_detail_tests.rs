@@ -2,7 +2,7 @@ use super::*;
 use ody_protocol::models::DEFAULT_IMAGE_DETAIL;
 use ody_protocol::models::FunctionCallOutputContentItem;
 use ody_protocol::models::ImageDetail;
-use ody_protocol::odysseythink_models::ModelInfo;
+use ody_protocol::model_metadata::ModelInfo;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 

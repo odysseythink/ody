@@ -2,8 +2,8 @@ use ody_features::Feature;
 use ody_features::Features;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::config_types::TUI_VISIBLE_COLLABORATION_MODES;
-use ody_protocol::odysseythink_models::ConfigShellToolType;
-use ody_protocol::odysseythink_models::ModelInfo;
+use ody_protocol::model_metadata::ConfigShellToolType;
+use ody_protocol::model_metadata::ModelInfo;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use std::path::PathBuf;
 

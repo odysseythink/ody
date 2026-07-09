@@ -8,7 +8,7 @@ use ody_protocol::config_types::MultiAgentMode;
 use ody_protocol::config_types::Personality;
 use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::models::ImageDetail;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::plan_tool::PlanItemArg as CorePlanItemArg;
 use ody_protocol::plan_tool::StepStatus as CorePlanStepStatus;
 use ody_protocol::user_input::ByteRange as CoreByteRange;

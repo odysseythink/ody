@@ -49,7 +49,7 @@ pub(crate) struct ThreadSessionState {
     pub(crate) cwd: AbsolutePathBuf,
     pub(crate) runtime_workspace_roots: Vec<AbsolutePathBuf>,
     pub(crate) instruction_source_paths: Vec<PathUri>,
-    pub(crate) reasoning_effort: Option<ody_protocol::odysseythink_models::ReasoningEffort>,
+    pub(crate) reasoning_effort: Option<ody_protocol::model_metadata::ReasoningEffort>,
     pub(crate) collaboration_mode: Option<Box<CollaborationMode>>,
     pub(crate) personality: Option<Personality>,
     pub(crate) message_history: Option<MessageHistoryMetadata>,

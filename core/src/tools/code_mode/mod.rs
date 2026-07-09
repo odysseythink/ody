@@ -31,7 +31,7 @@ use crate::tools::parallel::ToolCallRuntime;
 use crate::tools::router::ToolCall;
 use crate::tools::router::ToolCallSource;
 use crate::unified_exec::resolve_max_tokens;
-use ody_protocol::odysseythink_models::ToolMode;
+use ody_protocol::model_metadata::ToolMode;
 use ody_tools::ToolName;
 use ody_utils_output_truncation::TruncationPolicy;
 use ody_utils_output_truncation::formatted_truncate_text_content_items_with_policy;

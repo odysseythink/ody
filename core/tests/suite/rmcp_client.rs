@@ -30,14 +30,14 @@ use ody_utils_path_uri::LegacyAppPathString;
 
 use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::models::PermissionProfile;
-use ody_protocol::odysseythink_models::ConfigShellToolType;
-use ody_protocol::odysseythink_models::InputModality;
-use ody_protocol::odysseythink_models::ModelInfo;
-use ody_protocol::odysseythink_models::ModelVisibility;
-use ody_protocol::odysseythink_models::ModelsResponse;
-use ody_protocol::odysseythink_models::ReasoningEffortPreset;
-use ody_protocol::odysseythink_models::TruncationPolicyConfig;
-use ody_protocol::odysseythink_models::ModelCapabilities;
+use ody_protocol::model_metadata::ConfigShellToolType;
+use ody_protocol::model_metadata::InputModality;
+use ody_protocol::model_metadata::ModelInfo;
+use ody_protocol::model_metadata::ModelVisibility;
+use ody_protocol::model_metadata::ModelsResponse;
+use ody_protocol::model_metadata::ReasoningEffortPreset;
+use ody_protocol::model_metadata::TruncationPolicyConfig;
+use ody_protocol::model_metadata::ModelCapabilities;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::McpInvocation;
@@ -1623,7 +1623,7 @@ async fn stdio_image_responses_are_sanitized_for_text_only_model() -> anyhow::Re
                 description: Some("Test model without image input support".to_string()),
                 default_reasoning_level: None,
                 supported_reasoning_levels: vec![ReasoningEffortPreset {
-                    effort: ody_protocol::odysseythink_models::ReasoningEffort::Medium,
+                    effort: ody_protocol::model_metadata::ReasoningEffort::Medium,
                     description: "Medium".to_string(),
                 }],
                 shell_type: ConfigShellToolType::Default,

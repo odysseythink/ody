@@ -232,7 +232,7 @@ mod tests {
     use anyhow::Result;
     use ody_protocol::ThreadId;
     use ody_protocol::models::PermissionProfile;
-    use ody_protocol::odysseythink_models::ReasoningEffort;
+    use ody_protocol::model_metadata::ReasoningEffort;
     use ody_protocol::protocol::AskForApproval;
     use ody_protocol::protocol::EventMsg;
     use ody_protocol::protocol::SessionConfiguredEvent;

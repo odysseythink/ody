@@ -36,7 +36,7 @@ use ody_protocol::models::ReasoningItemContent;
 use ody_protocol::models::ReasoningItemReasoningSummary;
 use ody_protocol::models::ResponseItem;
 use ody_protocol::models::WebSearchAction;
-use ody_protocol::odysseythink_models::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::Op;
 use ody_protocol::protocol::RolloutItem;

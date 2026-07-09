@@ -1,4 +1,4 @@
-use ody_protocol::odysseythink_models::ModelPreset;
+use ody_protocol::model_metadata::ModelPreset;
 use ody_tools::JsonSchema;
 use ody_tools::ResponsesApiNamespace;
 use ody_tools::ResponsesApiNamespaceTool;

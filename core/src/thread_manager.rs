@@ -36,7 +36,7 @@ use ody_protocol::ThreadId;
 use ody_protocol::config_types::CollaborationModeMask;
 use ody_protocol::error::OdyErr;
 use ody_protocol::error::Result as OdyResult;
-use ody_protocol::odysseythink_models::ModelPreset;
+use ody_protocol::model_metadata::ModelPreset;
 use ody_protocol::protocol::Event;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::InitialHistory;
