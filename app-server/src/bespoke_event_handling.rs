@@ -2273,7 +2273,7 @@ mod tests {
             parent_thread_id: None,
             preview: "fallback preview".to_string(),
             name: Some("Rollback thread".to_string()),
-            model_provider: "odysseythink".to_string(),
+            model_provider: "kimi".to_string(),
             model: None,
             reasoning_effort: None,
             created_at,

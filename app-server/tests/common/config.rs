@@ -77,7 +77,7 @@ supports_websockets = false
 {requires_line}
 "#
     );
-    let odysseythink_base_url_line = if model_provider_id == "odysseythink" {
+    let odysseythink_base_url_line = if model_provider_id == "kimi" {
         format!("odysseythink_base_url = \"{server_uri}/v1\"\n")
     } else {
         String::new()

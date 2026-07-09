@@ -48,7 +48,7 @@ pub(crate) struct Session {
 
 #[derive(Clone)]
 pub(crate) struct SessionConfiguration {
-    /// Provider identifier ("odysseythink", "openrouter", ...).
+    /// Provider identifier ("kimi", "openrouter", ...).
     pub(super) provider: ModelProviderInfo,
 
     pub(super) collaboration_mode: CollaborationMode,

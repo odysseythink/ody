@@ -474,7 +474,7 @@ mod thread_processor_behavior_tests {
             parent_thread_id: None,
             preview: "preview".to_string(),
             name: None,
-            model_provider: "odysseythink".to_string(),
+            model_provider: "kimi".to_string(),
             model: None,
             reasoning_effort: None,
             created_at: created_at.with_timezone(&Utc),
@@ -755,7 +755,7 @@ mod thread_processor_behavior_tests {
         };
         let config_snapshot = ThreadConfigSnapshot {
             model: "gpt-5".to_string(),
-            model_provider_id: "odysseythink".to_string(),
+            model_provider_id: "kimi".to_string(),
             service_tier: Some("flex".to_string()),
             approval_policy: ody_protocol::protocol::AskForApproval::OnRequest,
             approvals_reviewer: ody_protocol::config_types::ApprovalsReviewer::User,

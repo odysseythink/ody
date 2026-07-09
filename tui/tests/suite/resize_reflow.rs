@@ -465,7 +465,7 @@ fn write_config(ody_home: &Path, repo_root: &Path) -> Result<()> {
     let repo_root_display = repo_root.display();
     let config = format!(
         r#"model = "gpt-5.4"
-model_provider = "odysseythink"
+model_provider = "kimi"
 suppress_unstable_features_warning = true
 
 [projects."{repo_root_display}"]

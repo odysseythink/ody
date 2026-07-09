@@ -228,6 +228,53 @@ fn collect_user_messages_without_summary_keeps_all() {
 }
 
 #[test]
+fn summary_text_is_framed_as_prior_background_with_authoritative_latest_message() {
+    // Regression for post-compaction topic drift: the retained summary must be
+    // structurally marked as prior background and must end by pointing the model
+    // at the user's most recent message, not the summary's leftover agenda. This
+    // mirrors the runtime construction in `run_auto_compact`.
+    let summary_text =
+        format!("{SUMMARY_PREFIX}\n{body}\n{SUMMARY_FOOTER}", body = "Remaining Work: finish task X");
+
+    // Detection still works: the summary remains anchored by SUMMARY_PREFIX.
+    assert!(is_summary_message(&summary_text));
+    // Opened and closed by an explicit structural marker distinct from live user turns.
+    assert!(summary_text.starts_with("<prior_conversation_summary>"));
+    assert!(summary_text.contains("</prior_conversation_summary>"));
+    // The last guidance (placed for recency) redirects to the newest user message
+    // and discourages resuming the summary's leftover agenda by default.
+    assert!(summary_text.contains("most recent message"));
+    assert!(SUMMARY_FOOTER.contains("do not resume the summary's leftover agenda"));
+}
+
+#[test]
+fn build_compacted_history_keeps_framed_summary_last_and_detectable() {
+    let summary_text = format!("{SUMMARY_PREFIX}\nbody\n{SUMMARY_FOOTER}");
+    let history = build_compacted_history(
+        Vec::new(),
+        &[compacted_user_message("newest question")],
+        &summary_text,
+    );
+
+    let last = history.last().expect("summary present");
+    match last {
+        ResponseItem::Message { role, content, .. } => {
+            assert_eq!(role, "user");
+            let text: String = content
+                .iter()
+                .filter_map(|c| match c {
+                    ContentItem::InputText { text } => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect();
+            assert!(is_summary_message(&text));
+            assert!(text.contains("</prior_conversation_summary>"));
+        }
+        other => panic!("expected summary user message, got {other:?}"),
+    }
+}
+
+#[test]
 fn build_token_limited_compacted_history_truncates_overlong_user_messages() {
     // Use a small truncation limit so the test remains fast while still validating
     // that oversized user content is truncated.

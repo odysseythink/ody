@@ -6690,7 +6690,7 @@ async fn for_config_writes_selected_user_config_file() -> anyhow::Result<()> {
     let ody_home = TempDir::new()?;
     let base_config = ody_home.path().join(CONFIG_TOML_FILE);
     let selected_config = ody_home.path().join("work.config.toml");
-    tokio::fs::write(&base_config, r#"model_provider = "odysseythink""#).await?;
+    tokio::fs::write(&base_config, r#"model_provider = "kimi""#).await?;
     tokio::fs::write(&selected_config, r#"model = "gpt-old""#).await?;
 
     let config = ConfigBuilder::without_managed_config_for_tests()
@@ -6714,7 +6714,7 @@ async fn for_config_writes_selected_user_config_file() -> anyhow::Result<()> {
     assert_eq!(selected.model_reasoning_effort, Some(ReasoningEffort::High));
     assert_eq!(
         tokio::fs::read_to_string(&base_config).await?,
-        r#"model_provider = "odysseythink""#
+        r#"model_provider = "kimi""#
     );
 
     Ok(())
@@ -8190,7 +8190,7 @@ websocket_connect_timeout_ms = 15000
 
 [profiles.o3]
 model = "o3"
-model_provider = "odysseythink"
+model_provider = "kimi"
 approval_policy = "never"
 model_reasoning_effort = "high"
 model_reasoning_summary = "detailed"
@@ -8201,7 +8201,7 @@ model_provider = "odysseythink-custom"
 
 [profiles.zdr]
 model = "o3"
-model_provider = "odysseythink"
+model_provider = "kimi"
 approval_policy = "on-failure"
 
 [profiles.zdr.analytics]
@@ -8209,7 +8209,7 @@ enabled = false
 
 [profiles.gpt5]
 model = "gpt-5.4"
-model_provider = "odysseythink"
+model_provider = "kimi"
 approval_policy = "on-failure"
 model_reasoning_effort = "high"
 model_reasoning_summary = "detailed"

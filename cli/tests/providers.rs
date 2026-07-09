@@ -46,6 +46,6 @@ fn providers_json_lists_providers() -> Result<()> {
         .filter_map(|e| e["provider_id"].as_str())
         .collect();
     assert!(ids.contains(&"kimi"));
-    assert!(ids.contains(&"odysseythink"));
+    assert!(ids.contains(&"kimi"));
     Ok(())
 }

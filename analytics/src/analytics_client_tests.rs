@@ -182,7 +182,7 @@ fn sample_thread_with_metadata(
         parent_thread_id,
         preview: "first prompt".to_string(),
         ephemeral,
-        model_provider: "odysseythink".to_string(),
+        model_provider: "kimi".to_string(),
         created_at: 1,
         updated_at: 2,
         recency_at: Some(2),
@@ -214,7 +214,7 @@ fn sample_thread_start_response(
             /*parent_thread_id*/ None,
         ),
         model: model.to_string(),
-        model_provider: "odysseythink".to_string(),
+        model_provider: "kimi".to_string(),
         service_tier: None,
         cwd: test_path_buf("/tmp").abs(),
         runtime_workspace_roots: Vec::new(),
@@ -279,7 +279,7 @@ fn sample_thread_resume_response_with_source(
             parent_thread_id,
         ),
         model: model.to_string(),
-        model_provider: "odysseythink".to_string(),
+        model_provider: "kimi".to_string(),
         service_tier: None,
         cwd: test_path_buf("/tmp").abs(),
         runtime_workspace_roots: Vec::new(),
@@ -394,7 +394,7 @@ fn sample_turn_resolved_config(thread_id: &str, turn_id: &str) -> TurnResolvedCo
         ephemeral: false,
         session_source: SessionSource::Exec,
         model: "gpt-5".to_string(),
-        model_provider: "odysseythink".to_string(),
+        model_provider: "kimi".to_string(),
         permission_profile: CorePermissionProfile::read_only(),
         permission_profile_cwd: PathBuf::from("/tmp"),
         reasoning_effort: None,
@@ -2006,7 +2006,7 @@ async fn guardian_review_event_ingests_custom_fact_with_optional_target_item() {
                     guardian_catalog_contains_auto_review: Some(false),
                     guardian_review_model_overridden: Some(false),
                     guardian_review_model_override: None,
-                    guardian_model_provider_id: Some("odysseythink".to_string()),
+                    guardian_model_provider_id: Some("kimi".to_string()),
                     had_prior_review_context: None,
                     review_timeout_ms: 90_000,
                     tool_call_count: None,
@@ -2091,7 +2091,7 @@ async fn guardian_review_event_ingests_custom_fact_with_optional_target_item() {
     );
     assert_eq!(
         payload[0]["event_params"]["guardian_model_provider_id"],
-        "odysseythink"
+        "kimi"
     );
 }
 
@@ -3666,7 +3666,7 @@ fn turn_event_serializes_expected_shape() {
             subagent_source: None,
             parent_thread_id: None,
             model: Some("gpt-5".to_string()),
-            model_provider: "odysseythink".to_string(),
+            model_provider: "kimi".to_string(),
             sandbox_policy: Some("read_only"),
             reasoning_effort: Some("high".to_string()),
             reasoning_summary: Some("detailed".to_string()),
@@ -3738,7 +3738,7 @@ fn turn_event_serializes_expected_shape() {
                 "subagent_source": null,
                 "parent_thread_id": null,
                 "model": "gpt-5",
-                "model_provider": "odysseythink",
+                "model_provider": "kimi",
                 "sandbox_policy": "read_only",
                 "reasoning_effort": "high",
                 "reasoning_summary": "detailed",

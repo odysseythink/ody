@@ -417,10 +417,8 @@ fn canonicalize_snapshot_text(text: &str) -> String {
     if text.starts_with("You are performing a CONTEXT CHECKPOINT COMPACTION.") {
         return "<SUMMARIZATION_PROMPT>".to_string();
     }
-    if text.starts_with("Another language model started to solve this problem")
-        && let Some((_, summary)) = text.split_once('\n')
-    {
-        return format!("<COMPACTION_SUMMARY>\n{summary}");
+    if text.starts_with("<prior_conversation_summary>") {
+        return "<COMPACTION_SUMMARY>".to_string();
     }
     normalize_dynamic_snapshot_paths(text)
 }

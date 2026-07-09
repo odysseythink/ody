@@ -279,7 +279,7 @@ fn sample_thread(thread_id: &str) -> Thread {
         parent_thread_id: None,
         preview: "first prompt".to_string(),
         ephemeral: false,
-        model_provider: "odysseythink".to_string(),
+        model_provider: "kimi".to_string(),
         created_at: 1,
         updated_at: 2,
         recency_at: Some(2),
@@ -301,7 +301,7 @@ fn sample_thread_start_response() -> ClientResponsePayload {
     ClientResponsePayload::ThreadStart(ThreadStartResponse {
         thread: sample_thread("thread-1"),
         model: "gpt-5".to_string(),
-        model_provider: "odysseythink".to_string(),
+        model_provider: "kimi".to_string(),
         service_tier: None,
         cwd: test_path_buf("/tmp").abs(),
         runtime_workspace_roots: Vec::new(),
@@ -319,7 +319,7 @@ fn sample_thread_resume_response() -> ClientResponsePayload {
     ClientResponsePayload::ThreadResume(ThreadResumeResponse {
         thread: sample_thread("thread-2"),
         model: "gpt-5".to_string(),
-        model_provider: "odysseythink".to_string(),
+        model_provider: "kimi".to_string(),
         service_tier: None,
         cwd: test_path_buf("/tmp").abs(),
         runtime_workspace_roots: Vec::new(),
@@ -338,7 +338,7 @@ fn sample_thread_fork_response() -> ClientResponsePayload {
     ClientResponsePayload::ThreadFork(ThreadForkResponse {
         thread: sample_thread("thread-3"),
         model: "gpt-5".to_string(),
-        model_provider: "odysseythink".to_string(),
+        model_provider: "kimi".to_string(),
         service_tier: None,
         cwd: test_path_buf("/tmp").abs(),
         runtime_workspace_roots: Vec::new(),

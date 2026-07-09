@@ -661,7 +661,7 @@ impl TestOdyBuilder {
             // a test explicitly opts into websocket coverage.
             supports_websockets: false,
             capabilities: ProviderCapabilities::default(),
-            ..built_in_model_providers()["odysseythink"].clone()
+            ..built_in_model_providers()["kimi"].clone()
         };
         let cwd = Arc::new(TempDir::new()?);
         for hook in self.pre_build_hooks.drain(..) {

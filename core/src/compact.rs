@@ -48,6 +48,7 @@ use tracing::error;
 use ody_model_provider_info::ModelProviderInfo;
 
 pub use ody_prompts::SUMMARIZATION_PROMPT;
+pub use ody_prompts::SUMMARY_FOOTER;
 pub use ody_prompts::SUMMARY_PREFIX;
 const COMPACT_USER_MESSAGE_MAX_TOKENS: usize = 20_000;
 
@@ -298,7 +299,12 @@ async fn run_compact_task_inner_impl(
     let history_snapshot = sess.clone_history().await;
     let history_items = history_snapshot.raw_items();
     let summary_suffix = get_last_assistant_message_from_turn(history_items).unwrap_or_default();
-    let summary_text = format!("{SUMMARY_PREFIX}\n{summary_suffix}");
+    // Frame the summary as prior background (opened by SUMMARY_PREFIX's
+    // `<prior_conversation_summary>` tag) and close it with SUMMARY_FOOTER, whose
+    // trailing guidance — placed last for recency — tells the resuming model that
+    // the user's most recent message, not this summary's leftover agenda, is the
+    // authoritative current request. This is the fix for post-compaction topic drift.
+    let summary_text = format!("{SUMMARY_PREFIX}\n{summary_suffix}\n{SUMMARY_FOOTER}");
     let user_messages = collect_user_messages(history_items);
 
     let mut new_history = build_compacted_history(Vec::new(), &user_messages, &summary_text);

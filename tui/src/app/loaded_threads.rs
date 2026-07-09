@@ -133,7 +133,7 @@ mod tests {
             parent_thread_id: None,
             preview: String::new(),
             ephemeral: false,
-            model_provider: "odysseythink".to_string(),
+            model_provider: "kimi".to_string(),
             created_at: 0,
             updated_at: 0,
             recency_at: Some(0),

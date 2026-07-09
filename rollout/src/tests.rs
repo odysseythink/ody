@@ -1578,7 +1578,7 @@ async fn test_model_provider_filter_selects_only_matching_sessions() -> Result<(
         odysseythink_id,
         /*num_records*/ 1,
         Some(SessionSource::VSCode),
-        Some("odysseythink"),
+        Some("kimi"),
     )?;
     write_session_file_with_provider(
         home,
@@ -1599,7 +1599,7 @@ async fn test_model_provider_filter_selects_only_matching_sessions() -> Result<(
 
     let odysseythink_id_str = odysseythink_id.to_string();
     let none_id_str = none_id.to_string();
-    let odysseythink_filter = provider_vec(&["odysseythink"]);
+    let odysseythink_filter = provider_vec(&["kimi"]);
     let odysseythink_sessions = get_threads(
         home,
         /*page_size*/ 10,
@@ -1608,7 +1608,7 @@ async fn test_model_provider_filter_selects_only_matching_sessions() -> Result<(
         NO_SOURCE_FILTER,
         Some(odysseythink_filter.as_slice()),
         /*cwd_filters*/ None,
-        "odysseythink",
+        "kimi",
     )
     .await?;
     assert_eq!(odysseythink_sessions.items.len(), 2);
@@ -1629,7 +1629,7 @@ async fn test_model_provider_filter_selects_only_matching_sessions() -> Result<(
         NO_SOURCE_FILTER,
         Some(beta_filter.as_slice()),
         /*cwd_filters*/ None,
-        "odysseythink",
+        "kimi",
     )
     .await?;
     assert_eq!(beta_sessions.items.len(), 1);
@@ -1649,7 +1649,7 @@ async fn test_model_provider_filter_selects_only_matching_sessions() -> Result<(
         NO_SOURCE_FILTER,
         Some(unknown_filter.as_slice()),
         /*cwd_filters*/ None,
-        "odysseythink",
+        "kimi",
     )
     .await?;
     assert!(unknown_sessions.items.is_empty());
@@ -1662,7 +1662,7 @@ async fn test_model_provider_filter_selects_only_matching_sessions() -> Result<(
         NO_SOURCE_FILTER,
         /*model_providers*/ None,
         /*cwd_filters*/ None,
-        "odysseythink",
+        "kimi",
     )
     .await?;
     assert_eq!(all_sessions.items.len(), 3);

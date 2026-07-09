@@ -2493,7 +2493,7 @@ fn provider_reachability_plan(config: &Config) -> ReachabilityPlan {
 fn default_reachability_plan() -> ReachabilityPlan {
     provider_reachability_plan_from_parts(
         ProviderAuthReachabilityMode::ApiKey,
-        "odysseythink",
+        "kimi",
         "OpenAI",
         /*provider_base_url*/ None,
         /*provider_query_params*/ None,
@@ -3450,7 +3450,7 @@ mod tests {
     fn provider_reachability_api_key_uses_odysseythink_endpoint() {
         let plan = provider_reachability_plan_from_parts(
             ProviderAuthReachabilityMode::ApiKey,
-            "odysseythink",
+            "kimi",
             "OpenAI",
             /*provider_base_url*/ None,
             /*provider_query_params*/ None,
@@ -3513,7 +3513,7 @@ mod tests {
         });
         let plan = provider_reachability_plan_from_parts(
             ProviderAuthReachabilityMode::ApiKey,
-            "odysseythink",
+            "kimi",
             "OpenAI",
             Some(&format!("http://{addr}/xxxx")),
             /*provider_query_params*/ None,
@@ -3552,7 +3552,7 @@ mod tests {
         });
         let plan = provider_reachability_plan_from_parts(
             ProviderAuthReachabilityMode::ApiKey,
-            "odysseythink",
+            "kimi",
             "OpenAI",
             Some(&format!("http://{addr}/v1")),
             /*provider_query_params*/ None,

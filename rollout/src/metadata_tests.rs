@@ -46,7 +46,7 @@ async fn extract_metadata_from_rollout_uses_session_meta() {
         agent_path: None,
         agent_nickname: None,
         agent_role: None,
-        model_provider: Some("odysseythink".to_string()),
+        model_provider: Some("kimi".to_string()),
         base_instructions: None,
         dynamic_tools: None,
         memory_mode: None,
@@ -64,13 +64,13 @@ async fn extract_metadata_from_rollout_uses_session_meta() {
     let mut file = File::create(&path).expect("create rollout");
     writeln!(file, "{json}").expect("write rollout");
 
-    let outcome = extract_metadata_from_rollout(&path, "odysseythink")
+    let outcome = extract_metadata_from_rollout(&path, "kimi")
         .await
         .expect("extract");
 
     let builder = builder_from_session_meta(&session_meta_line, path.as_path()).expect("builder");
-    let mut expected = builder.build("odysseythink");
-    apply_rollout_item(&mut expected, &rollout_line.item, "odysseythink");
+    let mut expected = builder.build("kimi");
+    apply_rollout_item(&mut expected, &rollout_line.item, "kimi");
     expected.updated_at = file_modified_time_utc(&path).await.expect("mtime");
     expected.recency_at = expected.updated_at;
 
@@ -102,7 +102,7 @@ async fn extract_metadata_from_rollout_returns_latest_memory_mode() {
         agent_path: None,
         agent_nickname: None,
         agent_role: None,
-        model_provider: Some("odysseythink".to_string()),
+        model_provider: Some("kimi".to_string()),
         base_instructions: None,
         dynamic_tools: None,
         memory_mode: None,
@@ -139,7 +139,7 @@ async fn extract_metadata_from_rollout_returns_latest_memory_mode() {
         .expect("write rollout line");
     }
 
-    let outcome = extract_metadata_from_rollout(&path, "odysseythink")
+    let outcome = extract_metadata_from_rollout(&path, "kimi")
         .await
         .expect("extract");
 

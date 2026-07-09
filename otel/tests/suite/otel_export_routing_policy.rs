@@ -486,7 +486,7 @@ fn otel_export_routing_policy_routes_api_request_auth_observability() {
         let root_span = tracing::info_span!("root");
         let _root_guard = root_span.enter();
         manager.conversation_starts(
-            "odysseythink",
+            "kimi",
             /*reasoning_effort*/ None,
             ReasoningSummary::Auto,
             /*context_window*/ None,

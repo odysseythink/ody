@@ -3309,7 +3309,7 @@ mod tests {
         let params = thread_list_params(
             Some(String::from("cursor-1")),
             cwd_filter.as_deref(),
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             ThreadSortKey::UpdatedAt,
             /*include_non_interactive*/ false,
         );
@@ -3378,7 +3378,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -3642,7 +3642,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -3714,7 +3714,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -3746,7 +3746,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -3765,7 +3765,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -3791,7 +3791,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -3812,7 +3812,7 @@ mod tests {
         let state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -3835,7 +3835,7 @@ mod tests {
         let state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -3853,7 +3853,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -3873,7 +3873,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -3904,7 +3904,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -3924,7 +3924,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -3952,7 +3952,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -3980,7 +3980,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -4008,7 +4008,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -4042,7 +4042,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -4064,7 +4064,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -4093,7 +4093,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -4130,7 +4130,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -4183,7 +4183,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -4207,7 +4207,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -4275,7 +4275,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -4305,7 +4305,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -4341,7 +4341,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -4381,7 +4381,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -4425,7 +4425,7 @@ mod tests {
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -4459,7 +4459,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -4490,7 +4490,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -4512,7 +4512,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -4545,7 +4545,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -4584,7 +4584,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -4617,7 +4617,7 @@ session_picker_view = "dense"
         let state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ false,
             Some(PathBuf::from("/tmp/project")),
             SessionPickerAction::Resume,
@@ -4647,7 +4647,7 @@ session_picker_view = "dense"
         let state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ false,
             Some(PathBuf::from("/tmp/project")),
             SessionPickerAction::Resume,
@@ -4692,7 +4692,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             show_all,
             filter_cwd,
             SessionPickerAction::Resume,
@@ -4781,7 +4781,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -4839,7 +4839,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -4880,7 +4880,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ false,
             Some(PathBuf::from(
                 "/Users/felipe.coury/code/ody.fcoury-session-picker/ody-rs",
@@ -4932,7 +4932,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -5001,7 +5001,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -5039,7 +5039,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -5091,7 +5091,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -5145,7 +5145,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -5205,7 +5205,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -5239,7 +5239,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -5274,7 +5274,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -5316,7 +5316,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -5354,7 +5354,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ false,
             Some(PathBuf::from("/tmp/project")),
             SessionPickerAction::Resume,
@@ -5388,7 +5388,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             Some(PathBuf::from("/tmp/project")),
             SessionPickerAction::Resume,
@@ -5453,7 +5453,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -5512,7 +5512,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -5574,7 +5574,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -5599,7 +5599,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -5643,7 +5643,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -5682,7 +5682,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -5725,7 +5725,7 @@ session_picker_view = "dense"
             parent_thread_id: None,
             preview: String::from("remote thread"),
             ephemeral: false,
-            model_provider: String::from("odysseythink"),
+            model_provider: String::from("kimi"),
             created_at: 1,
             updated_at: 2,
             recency_at: Some(2),
@@ -5761,7 +5761,7 @@ session_picker_view = "dense"
             parent_thread_id: None,
             preview: String::from("preview"),
             ephemeral: false,
-            model_provider: String::from("odysseythink"),
+            model_provider: String::from("kimi"),
             created_at: 1,
             updated_at: 2,
             recency_at: Some(2),
@@ -5832,7 +5832,7 @@ session_picker_view = "dense"
             parent_thread_id: None,
             preview: String::from("preview"),
             ephemeral: false,
-            model_provider: String::from("odysseythink"),
+            model_provider: String::from("kimi"),
             created_at: 1,
             updated_at: 2,
             recency_at: Some(2),
@@ -5891,7 +5891,7 @@ session_picker_view = "dense"
             parent_thread_id: None,
             preview: String::from("preview"),
             ephemeral: false,
-            model_provider: String::from("odysseythink"),
+            model_provider: String::from("kimi"),
             created_at: 1,
             updated_at: 2,
             recency_at: Some(2),
@@ -5938,7 +5938,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -5980,7 +5980,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -6022,7 +6022,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -6060,7 +6060,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -6101,7 +6101,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -6217,7 +6217,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -6235,7 +6235,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -6258,7 +6258,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -6290,7 +6290,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,
@@ -6310,7 +6310,7 @@ session_picker_view = "dense"
         let mut state = PickerState::new(
             FrameRequester::test_dummy(),
             loader,
-            ProviderFilter::MatchDefault(String::from("odysseythink")),
+            ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ true,
             /*filter_cwd*/ None,
             SessionPickerAction::Resume,

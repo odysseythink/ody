@@ -5588,7 +5588,7 @@ mod tests {
                 thread_source: None,
                 thread_name: None,
                 model: "ody-mini-latest".to_string(),
-                model_provider_id: "odysseythink".to_string(),
+                model_provider_id: "kimi".to_string(),
                 service_tier: None,
                 approval_policy: AskForApproval::Never,
                 approvals_reviewer: ApprovalsReviewer::User,
@@ -5609,7 +5609,7 @@ mod tests {
                 "session_id": "67e55044-10b1-426f-9247-bb680e5fe0c7",
                 "thread_id": "67e55044-10b1-426f-9247-bb680e5fe0c8",
                 "model": "ody-mini-latest",
-                "model_provider_id": "odysseythink",
+                "model_provider_id": "kimi",
                 "approval_policy": "never",
                 "approvals_reviewer": "user",
                 "permission_profile": permission_profile,
@@ -5628,7 +5628,7 @@ mod tests {
         let value = json!({
             "session_id": "67e55044-10b1-426f-9247-bb680e5fe0c8",
             "model": "ody-mini-latest",
-            "model_provider_id": "odysseythink",
+            "model_provider_id": "kimi",
             "approval_policy": "never",
             "approvals_reviewer": "user",
             "sandbox_policy": {

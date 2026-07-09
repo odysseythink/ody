@@ -249,7 +249,7 @@ async fn non_odysseythink_responses_requests_omit_item_passthrough_metadata() {
     )
     .await;
     let mut provider =
-        built_in_model_providers()["odysseythink"].clone();
+        built_in_model_providers()["kimi"].clone();
     provider.name = "Test Responses".to_string();
     provider.base_url = Some(format!("{}/v1", server.uri()));
     provider.supports_websockets = false;
@@ -1275,7 +1275,7 @@ async fn prefers_apikey_when_config_prefers_apikey() {
         base_url: Some(format!("{}/v1", server.uri())),
         supports_websockets: false,
         capabilities: ProviderCapabilities::default(),
-        ..built_in_model_providers()["odysseythink"].clone()
+        ..built_in_model_providers()["kimi"].clone()
     };
 
     // Init session
@@ -2625,7 +2625,7 @@ async fn token_count_includes_rate_limits_snapshot() {
         .await;
 
     let mut provider =
-        built_in_model_providers()["odysseythink"].clone();
+        built_in_model_providers()["kimi"].clone();
     provider.base_url = Some(format!("{}/v1", server.uri()));
     provider.supports_websockets = false;
 

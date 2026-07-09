@@ -40,7 +40,7 @@ pub async fn maybe_migrate_personality(
     let model_provider_id = config_toml
         .model_provider
         .clone()
-        .unwrap_or_else(|| "odysseythink".to_string());
+        .unwrap_or_else(|| "kimi".to_string());
 
     if !has_recorded_sessions(ody_home, model_provider_id.as_str(), state_db).await? {
         create_marker(&marker_path).await?;
