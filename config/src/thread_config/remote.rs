@@ -484,6 +484,7 @@ mod tests {
                             ("plugins".to_string(), false),
                             ("tools".to_string(), true),
                         ]),
+                        ..Default::default()
                     },
                 )),
             },

@@ -26,6 +26,9 @@ message SessionThreadConfig {
   optional string model_provider = 1;
   repeated ModelProvider model_providers = 2;
   map<string, bool> features = 3;
+  optional string default_provider = 4;
+  optional string default_model = 5;
+  map<string, OdyCodeProviderConfig> providers = 6;
 }
 
 message UserThreadConfig {}
@@ -66,4 +69,19 @@ enum WireApi {
   WIRE_API_UNSPECIFIED = 0;
   WIRE_API_RESPONSES = 1;
   WIRE_API_CHAT = 2;
+}
+
+message OdyCodeProviderConfig {
+  string type = 1;
+  optional string api_key = 2;
+  optional string base_url = 3;
+  optional string default_model = 4;
+  optional OdyCodeOAuthRef oauth = 5;
+  map<string, string> env = 6;
+  map<string, string> custom_headers = 7;
+}
+
+message OdyCodeOAuthRef {
+  string storage = 1;
+  string key = 2;
 }

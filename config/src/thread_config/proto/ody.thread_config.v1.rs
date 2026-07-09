@@ -36,6 +36,15 @@ pub struct SessionThreadConfig {
     pub model_providers: ::prost::alloc::vec::Vec<ModelProvider>,
     #[prost(map = "string, bool", tag = "3")]
     pub features: ::std::collections::HashMap<::prost::alloc::string::String, bool>,
+    #[prost(string, optional, tag = "4")]
+    pub default_provider: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "5")]
+    pub default_model: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(map = "string, message", tag = "6")]
+    pub providers: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        OdyCodeProviderConfig,
+    >,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct UserThreadConfig {}
@@ -124,6 +133,34 @@ impl WireApi {
         }
     }
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OdyCodeProviderConfig {
+    #[prost(string, tag = "1")]
+    pub r#type: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "2")]
+    pub api_key: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "3")]
+    pub base_url: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "4")]
+    pub default_model: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(message, optional, tag = "5")]
+    pub oauth: ::core::option::Option<OdyCodeOAuthRef>,
+    #[prost(map = "string, string", tag = "6")]
+    pub env: ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    #[prost(map = "string, string", tag = "7")]
+    pub custom_headers: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        ::prost::alloc::string::String,
+    >,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct OdyCodeOAuthRef {
+    #[prost(string, tag = "1")]
+    pub storage: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub key: ::prost::alloc::string::String,
+}
+
 /// Generated client implementations.
 pub mod thread_config_loader_client {
     #![allow(
