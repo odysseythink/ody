@@ -261,6 +261,8 @@ You are writing a rigor-tier plan. Keep the following artifacts current:
 - Source-grounding mandate
 - Out-of-scope / false-positive discipline
 - Rename-vs-delete decision prompt
+
+Quality bar: the plan must stay concrete enough to execute with zero follow-up — complete code in every step (not pseudocode or "similar to Task N"), exact commands with expected output, and per-task tests that assert the actual risk being changed.
 "#
     .to_string()
 }
@@ -461,6 +463,24 @@ mod directive_tests {
                 "sparse reminder should mention {artifact}:\n{reminder}"
             );
         }
+    }
+
+    #[test]
+    fn sparse_reminder_restates_the_complete_code_quality_bar() {
+        // The sparse reminder is what actually reaches long plan-mode sessions between
+        // full reinjections (see `select_reminder`: full only fires once, at turn 5).
+        // If it only names artifact categories without restating the concrete
+        // "no pseudocode, complete code" bar, a long session can drift toward the
+        // base template's "compress/omit" guidance and stop writing full code per task.
+        let reminder = render_sparse_reminder();
+        assert!(
+            reminder.contains("zero follow-up"),
+            "sparse reminder should restate the zero-follow-up execution bar:\n{reminder}"
+        );
+        assert!(
+            reminder.contains("complete code in every step"),
+            "sparse reminder should restate the complete-code-per-step requirement:\n{reminder}"
+        );
     }
 
     #[test]
