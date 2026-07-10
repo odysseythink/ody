@@ -1,0 +1,14 @@
+---
+source: tui/src/bottom_pane/chat_composer.rs
+assertion_line: 4666
+expression: terminal.backend()
+---
+"                                                                                                                        "
+"› Ask Ody to do anything                                                                                                "
+"                                                                                                                        "
+"                                                                                                                        "
+"                                                                                                                        "
+"                                                                                                                        "
+"                                                                                                                        "
+"                                                                                                                        "
+"  ? for shortcuts · 【 Plan  (shift+tab to cycle)】                                                  100% context left  " Hidden by multi-width symbols: [(21, " "), (50, " ")]

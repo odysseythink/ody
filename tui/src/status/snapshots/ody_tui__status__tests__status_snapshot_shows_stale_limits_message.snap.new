@@ -1,0 +1,22 @@
+---
+source: tui/src/status/tests.rs
+assertion_line: 1694
+expression: sanitized
+---
+/status
+
+╭─────────────────────────────────────────────────────────────────────────────╮
+│  >_ odysseythink ody (v0.0.0)                                               │
+│  Model:            kimi-for-coding (reasoning none)                         │
+│  Model provider:   Kimi                                                     │
+│  Directory: [[workspace]]                                                   │
+│  Permissions:      Custom (workspace with network access, Ask for approval) │
+│  Agents.md:        <none>                                                   │
+│  Auth:             API key configured                                       │
+│                                                                             │
+│  Token usage:      1.9K total  (1K input + 900 output)                      │
+│  Context window:   100% left (2.25K used / 272K)                            │
+│  5h limit:         [██████░░░░░░░░░░░░░░] 28% left (resets 03:14)           │
+│  Weekly limit:     [████████████░░░░░░░░] 60% left (resets 03:34)           │
+│  Warning:          limits may be stale - start new turn to refresh.         │
+╰─────────────────────────────────────────────────────────────────────────────╯
