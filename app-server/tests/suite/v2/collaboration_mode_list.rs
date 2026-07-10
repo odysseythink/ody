@@ -15,6 +15,7 @@ use ody_app_server_protocol::CollaborationModeListResponse;
 use ody_app_server_protocol::CollaborationModeMask;
 use ody_app_server_protocol::JSONRPCResponse;
 use ody_app_server_protocol::RequestId;
+use ody_protocol::config_types::ModeKind;
 use ody_core::test_support::builtin_collaboration_mode_presets;
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
@@ -55,5 +56,12 @@ async fn list_collaboration_modes_returns_presets() -> Result<()> {
         })
         .collect();
     assert_eq!(expected, items);
+
+    let modes: Vec<Option<ModeKind>> = items.iter().map(|item| item.mode).collect();
+    assert!(
+        modes.contains(&Some(ModeKind::Design)),
+        "collaboration mode list must include Design; got {:?}",
+        modes
+    );
     Ok(())
 }
