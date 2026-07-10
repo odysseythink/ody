@@ -2,6 +2,8 @@ use crate::function_tool::FunctionCallError;
 use crate::safety::PlanGateDecision;
 use crate::safety::SafetyCheck;
 use crate::safety::assess_patch_safety;
+use crate::safety::design_mode_write_denied_message;
+use crate::safety::is_read_only_session_mode;
 use crate::safety::plan_mode_gate_for_patch;
 use crate::safety::plan_mode_write_denied_message;
 use crate::session::turn_context::TurnContext;
@@ -59,13 +61,25 @@ pub(crate) fn apply_plan_mode_patch_gate(
     action: ApplyPatchAction,
     plan_artifact: Option<&crate::plan_artifact::PlanArtifact>,
 ) -> Option<InternalApplyPatchInvocation> {
-    if mode.mode != ModeKind::Plan {
+    if !is_read_only_session_mode(mode.mode) {
         return None;
     }
     match plan_mode_gate_for_patch(mode, enforcement, &action, plan_artifact) {
-        PlanGateDecision::Deny { reason } => Some(InternalApplyPatchInvocation::Output(Err(
-            FunctionCallError::RespondToModel(format!("Plan mode: {reason}")),
-        ))),
+        PlanGateDecision::Deny { .. } => {
+            let path = action
+                .changes()
+                .keys()
+                .next()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| PathBuf::from("unknown file"));
+            let message = match mode.mode {
+                ModeKind::Design => design_mode_write_denied_message(&path),
+                _ => plan_mode_write_denied_message(&path),
+            };
+            Some(InternalApplyPatchInvocation::Output(Err(
+                FunctionCallError::RespondToModel(format!("Plan mode: {message}")),
+            )))
+        }
         PlanGateDecision::Ask { reason } => Some(InternalApplyPatchInvocation::DelegateToRuntime(
             ApplyPatchRuntimeInvocation {
                 action,
@@ -85,7 +99,7 @@ pub(crate) async fn apply_patch(
     file_system_sandbox_policy: &FileSystemSandboxPolicy,
     action: ApplyPatchAction,
 ) -> InternalApplyPatchInvocation {
-    if turn_context.collaboration_mode.mode == ModeKind::Plan {
+    if is_read_only_session_mode(turn_context.collaboration_mode.mode) {
         let enforcement = resolve_plan_enforcement(&turn_context.config);
         match plan_mode_gate_for_patch(
             &turn_context.collaboration_mode,
@@ -100,7 +114,10 @@ pub(crate) async fn apply_patch(
                     .next()
                     .map(|p| p.to_path_buf())
                     .unwrap_or_else(|| PathBuf::from("unknown file"));
-                let message = plan_mode_write_denied_message(&path);
+                let message = match turn_context.collaboration_mode.mode {
+                    ModeKind::Design => design_mode_write_denied_message(&path),
+                    _ => plan_mode_write_denied_message(&path),
+                };
                 return InternalApplyPatchInvocation::Output(Err(
                     FunctionCallError::RespondToModel(message),
                 ));
