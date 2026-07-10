@@ -6,11 +6,11 @@ use std::path::PathBuf;
 use std::sync::Mutex as StdMutex;
 use tokio::sync::Mutex;
 
-/// Session-level plan file artifact. Lives in Plan mode only.
+/// Session-level plan/design file artifact. Lives in Plan or Design mode.
 ///
-/// `plans_base_dir` is the directory that contains the `plans/` sub-directory.
-/// Historically this was `ODY_HOME`; it is now the current project directory's
-/// `.ody-code` folder (e.g. `{cwd}/.ody-code`).
+/// `plans_base_dir` is the directory that contains the `plans/` or `designs/`
+/// sub-directory. Historically this was `ODY_HOME`; it is now the current
+/// project directory's `.ody-code` folder (e.g. `{cwd}/.ody-code`).
 #[derive(Debug)]
 pub struct PlanArtifact {
     state: Mutex<PlanArtifactState>,
@@ -92,6 +92,7 @@ impl PlanArtifact {
     }
 
     /// Design-mode artifact rooted under `<base>/designs/`.
+    #[allow(dead_code)] // symmetric counterpart to `new_plan`; reserved for D3/D4 call sites.
     pub fn new_design(
         plans_base_dir: AbsolutePathBuf,
         thread_id: ody_protocol::ThreadId,
@@ -397,6 +398,38 @@ mod tests {
         assert!(artifact.is_plan_file_path(&final_path));
         let stem_dir = final_path.with_extension("");
         assert!(artifact.is_plan_file_path(&stem_dir.join("core.md")));
+    }
+
+    #[test]
+    fn infer_subdir_designs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let design_path = tmp.path().join("designs").join("2026-07-04-auth.md");
+        assert_eq!(infer_subdir(&base, &design_path), "designs");
+    }
+
+    #[test]
+    fn infer_subdir_plans() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let plan_path = tmp.path().join("plans").join("2026-07-04-auth.md");
+        assert_eq!(infer_subdir(&base, &plan_path), "plans");
+    }
+
+    #[tokio::test]
+    async fn restore_or_create_uses_design_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let existing = tmp.path().join("designs").join("2026-07-04-existing.md");
+        std::fs::create_dir_all(existing.parent().unwrap()).unwrap();
+        std::fs::write(&existing, "# Existing").unwrap();
+        let thread_id =
+            ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-000000000002").unwrap();
+        let artifact =
+            PlanArtifact::restore_or_create(base, thread_id, Some(existing.clone()), "2026-07-04");
+        assert!(artifact.is_plan_file_path(&existing));
+        let path = artifact.path().unwrap();
+        assert!(path.starts_with(tmp.path().join("designs")));
     }
 
     #[test]
