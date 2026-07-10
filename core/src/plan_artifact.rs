@@ -24,6 +24,9 @@ pub struct PlanArtifact {
     last_any_turn: StdMutex<Option<usize>>,
     current_tier: StdMutex<Option<PlanModeTier>>,
     plans_base_dir: AbsolutePathBuf,
+    /// Sub-directory under `plans_base_dir` that holds this artifact's files
+    /// (e.g. `"plans"` for Plan mode, `"designs"` for Design mode).
+    subdir: &'static str,
     thread_id: ody_protocol::ThreadId,
     date: String,
 }
@@ -78,12 +81,32 @@ pub enum PlanArtifactError {
 }
 
 impl PlanArtifact {
-    pub fn new_temp(
+    /// Plan-mode artifact rooted under `<base>/plans/`.
+    #[allow(dead_code)] // symmetric counterpart to `new_design`; reserved for D4+ call sites.
+    pub fn new_plan(
         plans_base_dir: AbsolutePathBuf,
         thread_id: ody_protocol::ThreadId,
         date: &str,
     ) -> Self {
-        let temp_path = allocate_temp_path(&plans_base_dir, &thread_id, date);
+        Self::new_temp(plans_base_dir, thread_id, date)
+    }
+
+    /// Design-mode artifact rooted under `<base>/designs/`.
+    pub fn new_design(
+        plans_base_dir: AbsolutePathBuf,
+        thread_id: ody_protocol::ThreadId,
+        date: &str,
+    ) -> Self {
+        Self::with_subdir(plans_base_dir, "designs", thread_id, date)
+    }
+
+    fn with_subdir(
+        plans_base_dir: AbsolutePathBuf,
+        subdir: &'static str,
+        thread_id: ody_protocol::ThreadId,
+        date: &str,
+    ) -> Self {
+        let temp_path = allocate_temp_path(&plans_base_dir, subdir, &thread_id, date);
         Self {
             state: Mutex::new(PlanArtifactState::Temporary { temp_path }),
             last_manifest_snapshot: Mutex::new(None),
@@ -93,9 +116,18 @@ impl PlanArtifact {
             last_any_turn: StdMutex::new(Some(0)),
             current_tier: StdMutex::new(None),
             plans_base_dir,
+            subdir,
             thread_id,
             date: date.to_string(),
         }
+    }
+
+    pub fn new_temp(
+        plans_base_dir: AbsolutePathBuf,
+        thread_id: ody_protocol::ThreadId,
+        date: &str,
+    ) -> Self {
+        Self::with_subdir(plans_base_dir, "plans", thread_id, date)
     }
 
     pub fn path(&self) -> Option<PathBuf> {
@@ -115,7 +147,7 @@ impl PlanArtifact {
             PlanArtifactState::Temporary { .. } => {
                 let sanitized = sanitize_plan_slug(slug);
                 let final_name = format!("{}-{}.md", self.date, sanitized);
-                let final_path = self.plans_base_dir.as_path().join("plans").join(final_name);
+                let final_path = self.plans_base_dir.as_path().join(self.subdir).join(final_name);
                 *state = PlanArtifactState::Finalized { final_path };
                 Ok(())
             }
@@ -212,6 +244,8 @@ impl PlanArtifact {
         Some(path.with_file_name(stem))
     }
 
+    /// Returns true if `target` is this artifact's main file or a part file
+    /// under its stem sub-directory. Applies to both plan and design artifacts.
     pub fn is_plan_file_path(&self, target: &Path) -> bool {
         let Some(plan_path) = self.path() else {
             return false;
@@ -246,18 +280,22 @@ impl PlanArtifact {
         date: &str,
     ) -> Self {
         match stored_path {
-            Some(path) if path.exists() => Self {
-                state: Mutex::new(PlanArtifactState::Finalized { final_path: path }),
-                last_manifest_snapshot: Mutex::new(None),
-                last_plan_text: Mutex::new(None),
-                plan_mode_turn_count: StdMutex::new(0),
-                last_full_turn: StdMutex::new(Some(0)),
-                last_any_turn: StdMutex::new(Some(0)),
-                current_tier: StdMutex::new(None),
-                plans_base_dir,
-                thread_id,
-                date: date.to_string(),
-            },
+            Some(path) if path.exists() => {
+                let subdir = infer_subdir(&plans_base_dir, &path);
+                Self {
+                    state: Mutex::new(PlanArtifactState::Finalized { final_path: path }),
+                    last_manifest_snapshot: Mutex::new(None),
+                    last_plan_text: Mutex::new(None),
+                    plan_mode_turn_count: StdMutex::new(0),
+                    last_full_turn: StdMutex::new(Some(0)),
+                    last_any_turn: StdMutex::new(Some(0)),
+                    current_tier: StdMutex::new(None),
+                    plans_base_dir,
+                    subdir,
+                    thread_id,
+                    date: date.to_string(),
+                }
+            }
             _ => Self::new_temp(plans_base_dir, thread_id, date),
         }
     }
@@ -265,12 +303,22 @@ impl PlanArtifact {
 
 fn allocate_temp_path(
     plans_base_dir: &AbsolutePathBuf,
+    subdir: &str,
     thread_id: &ody_protocol::ThreadId,
     date: &str,
 ) -> PathBuf {
-    let plans_dir = plans_base_dir.as_path().join("plans");
+    let plans_dir = plans_base_dir.as_path().join(subdir);
     let filename = format!("tmp-{thread_id}-{date}.md");
     plans_dir.join(filename)
+}
+
+fn infer_subdir(plans_base_dir: &AbsolutePathBuf, path: &Path) -> &'static str {
+    let base = plans_base_dir.as_path();
+    if path.starts_with(base.join("designs")) {
+        "designs"
+    } else {
+        "plans"
+    }
 }
 
 /// Sanitize a user prompt into a plan file slug.
@@ -326,6 +374,29 @@ mod tests {
         assert!(path
             .to_string_lossy()
             .contains("tmp-00000000-0000-0000-0000-000000000001-2026-07-04.md"));
+    }
+
+    #[tokio::test]
+    async fn new_design_allocates_under_designs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let thread_id =
+            ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
+        let artifact = PlanArtifact::new_design(base, thread_id, "2026-07-04");
+
+        let temp_path = artifact.path().unwrap();
+        assert!(temp_path.starts_with(tmp.path().join("designs")));
+
+        artifact.finalize_name("auth_flow").await.unwrap();
+        let final_path = artifact.path().unwrap();
+        assert!(final_path.starts_with(tmp.path().join("designs")));
+        assert!(final_path
+            .to_string_lossy()
+            .ends_with("2026-07-04-auth_flow.md"));
+
+        assert!(artifact.is_plan_file_path(&final_path));
+        let stem_dir = final_path.with_extension("");
+        assert!(artifact.is_plan_file_path(&stem_dir.join("core.md")));
     }
 
     #[test]

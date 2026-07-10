@@ -33,10 +33,16 @@ For each task:
 
 ### Step 3: Complete Development
 
-After all tasks complete and verified:
-- Announce: "I'm using the finishing-a-development-branch skill to complete this work."
-- **REQUIRED SUB-SKILL:** Use gpowers:finishing-a-development-branch
-- Follow that skill to verify tests, present options, execute choice
+**Precondition:** All tasks in the plan are marked `completed` with passing verification commands.
+
+When Step 3 is reached:
+1. **Announce transition:** "Tasks complete. Moving to finishing-a-development-branch skill for final handoff."
+2. **Check plan status:** Verify every task shows `completed` (not `in_progress` or `pending`).
+3. **Call finishing-a-development-branch:** Use the referenced skill to present options (merge/PR/cleanup) and execute the user's choice.
+   - **Do NOT:** Skip this step or assume work is done after verification passes.
+   - **Do NOT:** Send empty responses. Always announce which skill you're transitioning to.
+
+If a task remains `pending` or `in_progress`, return to Step 2 and complete it first.
 
 ## When to Stop and Ask for Help
 
@@ -47,6 +53,25 @@ After all tasks complete and verified:
 - Verification fails repeatedly
 
 **Ask for clarification rather than guessing.**
+
+### Blocker Handling Protocol
+
+When you encounter a blocker:
+
+1. **Assess severity:** Is this an obvious local fix (e.g., `ModeKind` match arm, typo in instructions, straightforward compilation error) vs. a true architectural issue?
+   - **Obvious local fix:** Apply the fix directly and continue. Do NOT STOP for trivial fixes.
+   - **True blocker:** Missing dependency, fundamental design conflict, unclear scope — STOP.
+
+2. **When you STOP:** Always emit a clear message with:
+   - **What stopped you:** Exact error message or blocker description
+   - **Why you stopped:** Reference the specific STOP condition from above
+   - **What you need:** Explicit question for the user (e.g., "Should I patch this match arm, or is Design mode not ready?")
+
+3. **Do NOT send empty responses.** If uncertain whether to STOP or continue, output the uncertainty verbatim:
+   ```
+   Encountered [blocker]. This appears to be [local fix / true blocker]. 
+   Proceeding [or: Stopping — need your input on:] [specific question].
+   ```
 
 ## When to Revisit Earlier Steps
 

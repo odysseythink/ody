@@ -1780,7 +1780,7 @@ async fn plan_update_sets_pinned_todo_widget() {
 }
 
 #[tokio::test]
-async fn plan_update_is_cleared_when_turn_completes() {
+async fn plan_update_persists_after_turn_completes() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     let update = UpdatePlanArgs {
         explanation: Some("Adapting plan".to_string()),
@@ -1808,8 +1808,8 @@ async fn plan_update_is_cleared_when_turn_completes() {
     handle_turn_completed(&mut chat, "turn-1", /*duration_ms*/ None);
 
     assert!(
-        chat.bottom_pane.pinned_todo_update_args().is_none(),
-        "expected pinned plan to be cleared after turn completion"
+        chat.bottom_pane.pinned_todo_update_args().is_some(),
+        "expected pinned plan to remain visible after turn completion"
     );
 }
 
