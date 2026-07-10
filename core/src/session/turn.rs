@@ -1269,9 +1269,11 @@ async fn run_plan_mode_after_turn(
     }
 
     // Periodic rigor-tier reminder reinjection (P2.3).
-    if let Some((reminder_kind, reminder_text)) =
-        PlanModeInjector::render_reminder_if_due(artifact, plan_mode_config)
-    {
+    if let Some((reminder_kind, reminder_text)) = PlanModeInjector::render_reminder_if_due(
+        artifact,
+        plan_mode_config,
+        turn_context.collaboration_mode.mode,
+    ) {
         let source = InternalContextSource::from_static(match reminder_kind {
             ReminderKind::Full => "plan_mode_full_reminder",
             ReminderKind::Sparse => "plan_mode_sparse_reminder",

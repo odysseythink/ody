@@ -1,6 +1,7 @@
 use crate::plan_artifact::{ManifestSnapshot, PartRow, PartStatus, PlanArtifact};
 use crate::plan_mode_injector::parts_manifest::{normalize_part_path, parse_parts_manifest, RowStatus};
 use ody_config::config_toml::PlanModeConfigToml;
+use ody_protocol::config_types::ModeKind;
 use std::path::Path;
 use tracing::warn;
 
@@ -149,10 +150,19 @@ impl PlanModeInjector {
     ///
     /// Returns `Some((kind, rendered_text))` when a reminder should be injected,
     /// or `None` when the cadence says no reminder is due this turn.
+    ///
+    /// Only `ModeKind::Plan` has a rigor tier. This must stay mode-gated even if a
+    /// future caller (e.g. a widened Design after-turn hook) reuses this function for
+    /// other read-only modes — the reminder text is hard-coded Plan rigor-tier content
+    /// (`render_full_reminder`/`render_sparse_reminder`) and must never reach Design.
     pub fn render_reminder_if_due(
         artifact: &PlanArtifact,
         plan_mode_config: Option<&PlanModeConfigToml>,
+        mode: ModeKind,
     ) -> Option<(ReminderKind, String)> {
+        if mode != ModeKind::Plan {
+            return None;
+        }
         let current_turn = artifact.next_plan_mode_turn();
         let (last_full_turn, last_any_turn) = artifact.last_reminder_turns();
 
@@ -505,15 +515,16 @@ mod directive_tests {
         // Turns 1-4: nothing is due.
         for _ in 1..=4 {
             assert_eq!(
-                PlanModeInjector::render_reminder_if_due(&artifact, Some(&config)),
+                PlanModeInjector::render_reminder_if_due(&artifact, Some(&config), ModeKind::Plan),
                 None,
                 "no reminder before turn 5"
             );
         }
 
         // Turn 5: full reminder.
-        let (kind, text) = PlanModeInjector::render_reminder_if_due(&artifact, Some(&config))
-            .expect("turn 5 should emit a full reminder");
+        let (kind, text) =
+            PlanModeInjector::render_reminder_if_due(&artifact, Some(&config), ModeKind::Plan)
+                .expect("turn 5 should emit a full reminder");
         assert_eq!(kind, ReminderKind::Full);
         assert!(
             text.contains("## Plan-mode rigor reminder (full)"),
@@ -522,18 +533,44 @@ mod directive_tests {
 
         // Turn 6: deduplicated after full at turn 5.
         assert_eq!(
-            PlanModeInjector::render_reminder_if_due(&artifact, Some(&config)),
+            PlanModeInjector::render_reminder_if_due(&artifact, Some(&config), ModeKind::Plan),
             None,
             "turn 6 should be deduplicated"
         );
 
         // Turn 7: sparse reminder.
-        let (kind, text) = PlanModeInjector::render_reminder_if_due(&artifact, Some(&config))
-            .expect("turn 7 should emit a sparse reminder");
+        let (kind, text) =
+            PlanModeInjector::render_reminder_if_due(&artifact, Some(&config), ModeKind::Plan)
+                .expect("turn 7 should emit a sparse reminder");
         assert_eq!(kind, ReminderKind::Sparse);
         assert!(
             text.contains("## Plan-mode rigor reminder"),
             "sparse reminder should carry the sparse heading:\n{text}"
         );
+    }
+
+    #[test]
+    fn render_reminder_if_due_never_fires_for_design_mode() {
+        // D4 will widen the after-turn hook's mode gate from `== Plan` to
+        // `is_read_only_session_mode` (which admits Design). This function's own
+        // mode guard must independently block Design so that hard-coded Plan
+        // rigor-tier text ("Self-review checklist", "Shared-signature build-green
+        // invariant") can never leak into a Design session, regardless of how the
+        // call site is gated.
+        let tmp = tempfile::tempdir().unwrap();
+        let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let thread_id = ThreadId::from_string("00000000-0000-0000-0000-000000000002").unwrap();
+        let artifact = PlanArtifact::new_design(plans_base_dir, thread_id, "2026-07-10");
+        let config = PlanModeConfigToml::default();
+
+        // Turn 5 is exactly when Plan mode would emit a full reminder (see the
+        // cadence test above). Design must stay silent at every one of these turns.
+        for _ in 1..=7 {
+            assert_eq!(
+                PlanModeInjector::render_reminder_if_due(&artifact, Some(&config), ModeKind::Design),
+                None,
+                "Design mode must never receive a Plan rigor-tier reminder"
+            );
+        }
     }
 }
