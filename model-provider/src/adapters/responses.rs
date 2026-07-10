@@ -467,18 +467,31 @@ mod tests {
 
     #[test]
     fn normalize_completed_emits_usage_then_finish() {
-        let event = ody_api::ResponseEvent::Completed {
-            response_id: "r_1".into(),
-            token_usage: Some(TokenUsage {
-                input_tokens: 10,
-                output_tokens: 20,
-                cached_input_tokens: 0,
-                reasoning_output_tokens: 0,
-                total_tokens: 30,
-            }),
-            end_turn: Some(true),
-        };
-        let chat = common::normalize_response_event(event).expect("normalizes");
+        // A non-empty completion produces output before the terminal
+        // `Completed` event; without any prior output the provider treats the
+        // completion as empty and surfaces a retryable error instead of
+        // `Usage`/`Finish`.
+        let mut state = common::NormalizeState::default();
+        common::normalize_response_event_with_state(
+            ody_api::ResponseEvent::OutputTextDelta("hi".into()),
+            &mut state,
+        )
+        .expect("text delta normalizes");
+        let chat = common::normalize_response_event_with_state(
+            ody_api::ResponseEvent::Completed {
+                response_id: "r_1".into(),
+                token_usage: Some(TokenUsage {
+                    input_tokens: 10,
+                    output_tokens: 20,
+                    cached_input_tokens: 0,
+                    reasoning_output_tokens: 0,
+                    total_tokens: 30,
+                }),
+                end_turn: Some(true),
+            },
+            &mut state,
+        )
+        .expect("normalizes");
         assert_eq!(chat.len(), 2);
         assert_eq!(
             chat[0],

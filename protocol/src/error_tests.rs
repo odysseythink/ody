@@ -577,3 +577,26 @@ fn usage_limit_reached_with_promo_message() {
         assert_eq!(err.to_string(), expected);
     });
 }
+
+#[test]
+fn empty_completion_stream_is_recognized() {
+    let err = OdyErr::Stream("empty_completion: no output".to_string(), None);
+    assert!(err.is_empty_completion());
+}
+
+#[test]
+fn empty_completion_prefix_must_be_exact() {
+    // Must-survive: messages that contain the substring but are NOT the provider marker.
+    let err = OdyErr::Stream("not_empty_completion: ...".to_string(), None);
+    assert!(!err.is_empty_completion());
+
+    let err = OdyErr::Stream("empty_completion_log: ...".to_string(), None);
+    assert!(!err.is_empty_completion());
+}
+
+#[test]
+fn non_stream_errors_are_not_empty_completion() {
+    assert!(!OdyErr::TurnAborted.is_empty_completion());
+    assert!(!OdyErr::RequestTimeout.is_empty_completion());
+    assert!(!OdyErr::ContextWindowExceeded.is_empty_completion());
+}

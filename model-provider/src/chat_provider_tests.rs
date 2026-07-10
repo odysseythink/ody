@@ -93,3 +93,18 @@ fn provider_capabilities_thinking_effort_clamp() {
     let clamped = clamp_thinking_effort(ThinkingEffort::Max, &caps.thinking_effort);
     assert_eq!(clamped, Some(ThinkingEffort::High));
 }
+
+#[test]
+fn empty_completion_error_maps_to_retryable_stream_error() {
+    let err = ChatProviderError::Provider {
+        code: "empty_completion".into(),
+        message: "assistant returned no text and no tool call".into(),
+    };
+    let ody_err = err.to_ody_err();
+    assert!(ody_err.is_retryable());
+    assert!(
+        ody_err.to_string().contains("empty_completion"),
+        "error message should identify empty completion: {}",
+        ody_err
+    );
+}

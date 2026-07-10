@@ -213,6 +213,26 @@ impl OdyErr {
         (self as &dyn std::any::Any).downcast_ref::<T>()
     }
 
+    /// Detects the retryable empty-completion marker produced by `ody-model-provider`.
+    ///
+    /// The provider maps a degenerate empty completion (no assistant text and no
+    /// tool call) to `OdyErr::Stream("empty_completion: ...", None)`. This is
+    /// intentionally a message-prefix check on `OdyErr::Stream` rather than a new
+    /// `OdyErr` variant, to avoid churning every match site in the workspace.
+    ///
+    /// The marker is the word `empty_completion` either on its own or followed by
+    /// the colon separator the provider emits (`"empty_completion: {message}"`).
+    /// Matching on `":"` avoids falsely recognizing lookalikes such as
+    /// `"empty_completion_log"`.
+    pub fn is_empty_completion(&self) -> bool {
+        match self {
+            OdyErr::Stream(msg, _) => {
+                msg == "empty_completion" || msg.starts_with("empty_completion:")
+            }
+            _ => false,
+        }
+    }
+
     /// Translate core error to client-facing protocol error.
     pub fn to_ody_protocol_error(&self) -> OdyErrorInfo {
         match self {

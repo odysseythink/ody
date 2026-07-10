@@ -19,6 +19,7 @@ use serde_json::Value;
 pub(crate) struct NormalizeState {
     pub saw_text_delta: bool,
     pub saw_message_added: bool,
+    pub saw_output: bool,
 }
 
 /// Normalize a single `ResponseEvent` into zero or more provider-neutral events.
@@ -42,6 +43,9 @@ pub(crate) fn normalize_response_event_with_state(
         ResponseEvent::Created => Ok(vec![ChatEvent::Start]),
         ResponseEvent::OutputTextDelta(delta) => {
             state.saw_text_delta = true;
+            if !delta.is_empty() {
+                state.saw_output = true;
+            }
             Ok(vec![ChatEvent::ContentPart(ContentPart::Text(delta))])
         }
         ResponseEvent::OutputItemAdded(item) => {
@@ -51,6 +55,10 @@ pub(crate) fn normalize_response_event_with_state(
             normalize_response_item(item)
         }
         ResponseEvent::OutputItemDone(item) => {
+            // Any delivered item (message snapshot, tool call, reasoning, ...)
+            // represents real model output, so a subsequent terminal `Completed`
+            // must not be classified as an empty completion.
+            state.saw_output = true;
             // A message-level `OutputItemDone` carries the full snapshot. If we
             // already received text for this item (either as deltas or in the
             // added event), downstream will reconstruct the final text from the
@@ -75,6 +83,9 @@ pub(crate) fn normalize_response_event_with_state(
             })))])
         }
         ResponseEvent::ReasoningContentDelta { delta, .. } => {
+            if !delta.is_empty() {
+                state.saw_output = true;
+            }
             Ok(vec![ChatEvent::ReasoningPart(delta)])
         }
         ResponseEvent::Completed {
@@ -82,6 +93,22 @@ pub(crate) fn normalize_response_event_with_state(
             end_turn,
             ..
         } => {
+            // Detect a degenerate empty completion: the turn finished (or the
+            // API did not signal an incomplete/paused turn) without producing
+            // any text, reasoning, or tool call. Chat-wire providers such as
+            // Kimi occasionally do this right when the model should have acted;
+            // surfacing it as a retryable error lets the request- and turn-level
+            // retry loops recover instead of silently ending the turn.
+            // `end_turn == Some(false)` means the response is incomplete/paused
+            // (more output is expected), so it is intentionally excluded. Both
+            // `Some(true)` and `None` (APIs that do not populate `end_turn`)
+            // are treated as terminal stops.
+            if end_turn != Some(false) && !state.saw_output {
+                return Err(ChatProviderError::Provider {
+                    code: "empty_completion".into(),
+                    message: "assistant returned no text and no tool call".into(),
+                });
+            }
             let mut events = Vec::new();
             if let Some(u) = token_usage {
                 let usage = Usage {
@@ -355,5 +382,136 @@ mod tests {
         .expect("normalizes");
         assert_eq!(done.len(), 1);
         assert!(matches!(&done[0], ChatEvent::ContentPart(ContentPart::Text(t)) if t == "done"));
+    }
+
+    #[test]
+    fn empty_completion_when_no_output_and_end_turn() {
+        let mut state = NormalizeState::default();
+        let created = normalize_response_event_with_state(ResponseEvent::Created, &mut state)
+            .expect("created normalizes");
+        assert_eq!(created.len(), 1);
+
+        let err = normalize_response_event_with_state(
+            ResponseEvent::Completed {
+                response_id: "resp_1".into(),
+                token_usage: None,
+                end_turn: Some(true),
+            },
+            &mut state,
+        )
+        .expect_err("empty completion with end_turn=true should error");
+        assert_eq!(
+            err,
+            ChatProviderError::Provider {
+                code: "empty_completion".into(),
+                message: "assistant returned no text and no tool call".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn empty_completion_when_no_output_and_end_turn_unspecified() {
+        // Chat-wire providers (and the test SSE helpers) often omit `end_turn`
+        // on `response.completed`, leaving it as `None`. That terminal-but-
+        // unspecified case must still be detected as an empty completion.
+        let mut state = NormalizeState::default();
+        normalize_response_event_with_state(ResponseEvent::Created, &mut state)
+            .expect("created normalizes");
+        let err = normalize_response_event_with_state(
+            ResponseEvent::Completed {
+                response_id: "resp_1".into(),
+                token_usage: None,
+                end_turn: None,
+            },
+            &mut state,
+        )
+        .expect_err("empty completion with end_turn=None should error");
+        assert_eq!(
+            err,
+            ChatProviderError::Provider {
+                code: "empty_completion".into(),
+                message: "assistant returned no text and no tool call".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn non_empty_completion_with_text_delta_is_allowed() {
+        let mut state = NormalizeState::default();
+        normalize_response_event_with_state(
+            ResponseEvent::OutputTextDelta("hi".into()),
+            &mut state,
+        )
+        .expect("text delta normalizes");
+        let completed = normalize_response_event_with_state(
+            ResponseEvent::Completed {
+                response_id: "resp_1".into(),
+                token_usage: None,
+                end_turn: Some(true),
+            },
+            &mut state,
+        )
+        .expect("completion with text delta is normal");
+        assert!(matches!(
+            completed.as_slice(),
+            [ChatEvent::Finish {
+                reason: FinishReason::Stop,
+                ..
+            }]
+        ));
+    }
+
+    #[test]
+    fn non_empty_completion_with_tool_call_is_allowed() {
+        let mut state = NormalizeState::default();
+        normalize_response_event_with_state(
+            ResponseEvent::OutputItemDone(ResponseItem::FunctionCall {
+                id: None,
+                name: "read_file".into(),
+                namespace: None,
+                arguments: r#"{"path":"/tmp"}"#.into(),
+                call_id: "call_1".into(),
+                internal_chat_message_metadata_passthrough: None,
+            }),
+            &mut state,
+        )
+        .expect("tool call normalizes");
+        let completed = normalize_response_event_with_state(
+            ResponseEvent::Completed {
+                response_id: "resp_1".into(),
+                token_usage: None,
+                end_turn: Some(true),
+            },
+            &mut state,
+        )
+        .expect("completion with tool call is normal");
+        assert!(matches!(
+            completed.as_slice(),
+            [ChatEvent::Finish {
+                reason: FinishReason::Stop,
+                ..
+            }]
+        ));
+    }
+
+    #[test]
+    fn incomplete_end_turn_does_not_trigger_empty_completion() {
+        let mut state = NormalizeState::default();
+        let completed = normalize_response_event_with_state(
+            ResponseEvent::Completed {
+                response_id: "resp_1".into(),
+                token_usage: None,
+                end_turn: Some(false),
+            },
+            &mut state,
+        )
+        .expect("end_turn=false should not be treated as empty completion");
+        assert!(matches!(
+            completed.as_slice(),
+            [ChatEvent::Finish {
+                reason: FinishReason::Other(_),
+                ..
+            }]
+        ));
     }
 }

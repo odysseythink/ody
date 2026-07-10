@@ -244,6 +244,7 @@ impl ChatProviderError {
                     status: StatusCode::INTERNAL_SERVER_ERROR,
                     request_id: None,
                 }),
+                "empty_completion" => OdyErr::Stream(format!("empty_completion: {message}"), None),
                 "retryable" | "stream" => OdyErr::Stream(message.clone(), None),
                 status_code => {
                     if let Ok(code) = status_code.parse::<u16>()

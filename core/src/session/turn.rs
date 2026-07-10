@@ -7,14 +7,6 @@ use std::sync::atomic::Ordering;
 
 use crate::SkillInjections;
 use crate::build_skill_injections;
-use crate::context::InternalContextSource;
-use crate::context::InternalModelContextFragment;
-use crate::plan_artifact::PlanArtifact;
-use crate::plan_artifact::sanitize_plan_slug;
-use crate::plan_mode_injector::PlanModeInjector;
-use ody_config::config_toml::PlanModeTier;
-use crate::plan_mode_injector::ReminderKind;
-use crate::plan_mode_injector::render_directive;
 use crate::client::ModelClientSession;
 use crate::client_common::Prompt;
 use crate::client_common::ResponseEvent;
@@ -26,6 +18,8 @@ use crate::compact_remote::run_inline_remote_auto_compact_task;
 use crate::compact_remote_v2::run_inline_remote_auto_compact_task as run_inline_remote_auto_compact_task_v2;
 use crate::connectors;
 use crate::context::ContextualUserFragment;
+use crate::context::InternalContextSource;
+use crate::context::InternalModelContextFragment;
 use crate::feedback_tags;
 use crate::hook_runtime::inspect_pending_input;
 use crate::hook_runtime::record_additional_contexts;
@@ -43,6 +37,11 @@ use crate::mentions::build_skill_name_counts;
 use crate::mentions::collect_explicit_app_ids;
 use crate::mentions::collect_explicit_plugin_mentions;
 use crate::mentions::collect_tool_mentions_from_messages;
+use crate::plan_artifact::PlanArtifact;
+use crate::plan_artifact::sanitize_plan_slug;
+use crate::plan_mode_injector::PlanModeInjector;
+use crate::plan_mode_injector::ReminderKind;
+use crate::plan_mode_injector::render_directive;
 use crate::plugins::build_plugin_injections;
 use crate::responses_metadata::OdyResponsesMetadata;
 use crate::responses_metadata::OdyResponsesRequestKind;
@@ -76,6 +75,9 @@ use crate::tools::spec_plan::tool_suggest_enabled;
 use crate::turn_diff_tracker::TurnDiffTracker;
 use crate::turn_timing::record_turn_ttft_metric;
 use crate::util::error_or_panic;
+use futures::future::BoxFuture;
+use futures::prelude::*;
+use futures::stream::FuturesOrdered;
 use ody_analytics::AppInvocation;
 use ody_analytics::CompactionPhase;
 use ody_analytics::CompactionReason;
@@ -83,6 +85,7 @@ use ody_analytics::InvocationType;
 use ody_analytics::TurnResolvedConfigFact;
 use ody_analytics::build_track_events_context;
 use ody_async_utils::OrCancelExt;
+use ody_config::config_toml::PlanModeTier;
 use ody_core_skills::injection::InjectedHostSkillPrompts;
 use ody_extension_api::TurnInputContext;
 use ody_extension_api::TurnInputEnvironment;
@@ -103,9 +106,9 @@ use ody_protocol::models::ResponseInputItem;
 use ody_protocol::models::ResponseItem;
 use ody_protocol::protocol::AgentMessageContentDeltaEvent;
 use ody_protocol::protocol::AgentReasoningSectionBreakEvent;
-use ody_protocol::protocol::OdyErrorInfo;
 use ody_protocol::protocol::ErrorEvent;
 use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::OdyErrorInfo;
 use ody_protocol::protocol::PlanDeltaEvent;
 use ody_protocol::protocol::ReasoningContentDeltaEvent;
 use ody_protocol::protocol::ReasoningRawContentDeltaEvent;
@@ -120,11 +123,9 @@ use ody_utils_stream_parser::AssistantTextStreamParser;
 use ody_utils_stream_parser::ProposedPlanSegment;
 use ody_utils_stream_parser::extract_proposed_plan_text;
 use ody_utils_stream_parser::strip_citations;
-use futures::future::BoxFuture;
-use futures::prelude::*;
-use futures::stream::FuturesOrdered;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
+use tracing::debug;
 use tracing::error;
 use tracing::field;
 use tracing::info;
@@ -147,17 +148,19 @@ use tracing::warn;
 /// - If the model sends only an assistant message, we record it in the
 ///   conversation history and consider the turn complete.
 ///
-/// Maximum number of times a single turn will re-prompt the model after it
-/// returns a degenerate empty completion (no assistant message and no tool
-/// call). Chat-wire providers such as Kimi occasionally do this right when the
-/// model should have acted; silently ending the turn strands the task.
-const MAX_EMPTY_COMPLETION_RETRIES: u8 = 1;
+/// Maximum number of times a single turn will continue after the model returns
+/// a degenerate empty completion (no assistant message and no tool call). The
+/// provider adapter flags these as `empty_completion` errors; for each one the
+/// turn loop appends a steering nudge and re-samples instead of silently ending
+/// the turn. Chat-wire providers such as Kimi occasionally emit empty
+/// completions right when the model should have acted, and silently ending the
+/// turn strands the task.
+const MAX_TURN_CONTINUATION_RETRIES: u8 = 3;
 
 /// User-visible nudge appended when the model returns an empty completion, to
 /// coax it into either finishing with a message or issuing the tool call it
 /// omitted.
-const EMPTY_COMPLETION_NUDGE: &str =
-    "Your previous response was empty — no message and no tool call. Continue the task: \
+const EMPTY_COMPLETION_NUDGE: &str = "Your previous response was empty — no message and no tool call. Continue the task: \
 either take the next concrete action (call the appropriate tool) or, if the task is \
 already complete, reply with a short summary of what you did.";
 
@@ -194,12 +197,8 @@ pub(crate) async fn run_turn(
     )
     .await;
 
-    if let Some(switch_message) = handle_plan_mode_tier_switch(
-        &sess,
-        turn_context.as_ref(),
-        user_prompt.as_deref(),
-    )
-    .await
+    if let Some(switch_message) =
+        handle_plan_mode_tier_switch(&sess, turn_context.as_ref(), user_prompt.as_deref()).await
     {
         let item: ResponseItem = ContextualUserFragment::into(switch_message);
         sess.record_conversation_items(turn_context.as_ref(), std::slice::from_ref(&item))
@@ -238,6 +237,13 @@ pub(crate) async fn run_turn(
     let mut last_agent_message: Option<String> = None;
     let mut stop_hook_active = false;
     let mut empty_completion_retries: u8 = 0;
+    // Whether the turn has produced any actionable output (an agent message or a
+    // tool-call-driven follow-up) before a given sampling response. This
+    // distinguishes a mid-task empty completion (worth steering with a nudge)
+    // from a first-response empty completion, which is treated as a normal
+    // (if degenerate) end of turn so single-shot completions keep finishing
+    // cleanly.
+    let mut turn_had_activity: bool = false;
     // Although from the perspective of ody.rs, TurnDiffTracker has the lifecycle of a Task which contains
     // many turns, from the perspective of the user, it is a single turn.
     let display_roots = turn_diff_display_roots(turn_context.as_ref()).await;
@@ -336,6 +342,9 @@ pub(crate) async fn run_turn(
                     needs_follow_up: model_needs_follow_up,
                     last_agent_message: sampling_request_last_agent_message,
                 } = sampling_request_output;
+                if sampling_request_last_agent_message.is_some() || model_needs_follow_up {
+                    turn_had_activity = true;
+                }
                 can_drain_pending_input = true;
                 let (has_pending_input, token_status, estimated_token_count) = async {
                     let has_pending_input =
@@ -426,34 +435,6 @@ pub(crate) async fn run_turn(
                 }
 
                 if !needs_follow_up {
-                    // Chat-wire providers (notably Kimi) occasionally return a
-                    // degenerate empty completion: no assistant message and no
-                    // tool call, right when the model should have acted. Ending
-                    // the turn silently strands the task, so nudge once before
-                    // giving up.
-                    if sampling_request_last_agent_message.is_none()
-                        && empty_completion_retries < MAX_EMPTY_COMPLETION_RETRIES
-                    {
-                        empty_completion_retries += 1;
-                        warn!(
-                            turn_id = %turn_context.sub_id,
-                            attempt = empty_completion_retries,
-                            "model returned an empty completion (no message, no tool call); reprompting"
-                        );
-                        let nudge = ResponseItem::Message {
-                            id: Some(uuid::Uuid::new_v4().to_string()),
-                            role: "user".to_string(),
-                            content: vec![ContentItem::InputText {
-                                text: EMPTY_COMPLETION_NUDGE.to_string(),
-                            }],
-                            phase: None,
-                            internal_chat_message_metadata_passthrough: None,
-                        };
-                        sess.record_conversation_items(&turn_context, std::slice::from_ref(&nudge))
-                            .await;
-                        can_drain_pending_input = false;
-                        continue;
-                    }
                     last_agent_message = sampling_request_last_agent_message;
                     let stop_outcome = run_turn_stop_hooks(
                         &sess,
@@ -526,6 +507,58 @@ pub(crate) async fn run_turn(
                 sess.send_event(&turn_context, event).await;
                 break;
             }
+            Err(e)
+                if e.is_empty_completion()
+                    && turn_had_activity
+                    && empty_completion_retries < MAX_TURN_CONTINUATION_RETRIES =>
+            {
+                empty_completion_retries += 1;
+                warn!(
+                    turn_id = %turn_context.sub_id,
+                    attempt = empty_completion_retries,
+                    max = MAX_TURN_CONTINUATION_RETRIES,
+                    "model returned an empty completion mid-task; continuing with nudge"
+                );
+                let nudge = ResponseItem::Message {
+                    id: Some(uuid::Uuid::new_v4().to_string()),
+                    role: "user".to_string(),
+                    content: vec![ContentItem::InputText {
+                        text: EMPTY_COMPLETION_NUDGE.to_string(),
+                    }],
+                    phase: None,
+                    internal_chat_message_metadata_passthrough: None,
+                };
+                sess.record_conversation_items(&turn_context, std::slice::from_ref(&nudge))
+                    .await;
+                can_drain_pending_input = false;
+                continue;
+            }
+            Err(e) if e.is_empty_completion() && turn_had_activity => {
+                warn!(
+                    turn_id = %turn_context.sub_id,
+                    max = MAX_TURN_CONTINUATION_RETRIES,
+                    "model returned an empty completion too many times; ending turn with error"
+                );
+                let error = e.to_ody_protocol_error();
+                sess.emit_turn_error_lifecycle(turn_context.as_ref(), error.clone())
+                    .await;
+                sess.track_turn_ody_error(turn_context.as_ref(), &e);
+                let event = EventMsg::Error(e.to_error_event(Some(
+                    "The model returned an empty response too many times".to_string(),
+                )));
+                sess.send_event(&turn_context, event).await;
+                break;
+            }
+            Err(e) if e.is_empty_completion() => {
+                // Empty completion with no prior turn activity: treat it as a
+                // normal (if degenerate) end of turn rather than steering, so a
+                // single-shot completion keeps finishing the turn cleanly.
+                debug!(
+                    turn_id = %turn_context.sub_id,
+                    "model returned an empty completion with no prior turn activity; ending turn"
+                );
+                break;
+            }
             Err(e) => {
                 info!("Turn error: {e:#}");
                 let error = e.to_ody_protocol_error();
@@ -594,19 +627,18 @@ async fn run_hooks_and_record_inputs(
     blocked_input && !accepted_user_input
 }
 
-async fn finalize_plan_artifact_name(
-    turn_context: &TurnContext,
-    input: &[TurnInput],
-) {
+async fn finalize_plan_artifact_name(turn_context: &TurnContext, input: &[TurnInput]) {
     let Some(artifact) = &turn_context.plan_artifact else {
         return;
     };
 
     let first_text = input.iter().find_map(|item| match item {
-        TurnInput::UserInput { content, .. } => content.iter().find_map(|user_input| match user_input {
-            UserInput::Text { text, .. } if !text.trim().is_empty() => Some(text.as_str()),
-            _ => None,
-        }),
+        TurnInput::UserInput { content, .. } => {
+            content.iter().find_map(|user_input| match user_input {
+                UserInput::Text { text, .. } if !text.trim().is_empty() => Some(text.as_str()),
+                _ => None,
+            })
+        }
         _ => None,
     });
 
@@ -1156,7 +1188,6 @@ fn extract_user_prompt_text(input: &[TurnInput]) -> Option<String> {
 
 #[instrument(level = "trace", skip_all)]
 
-
 /// If the user's message is an explicit `/plan-tier` command, apply the switch
 /// and return a developer confirmation fragment.
 async fn handle_plan_mode_tier_switch(
@@ -1225,7 +1256,10 @@ async fn run_plan_mode_after_turn(
 
     if let Some(directive_text) = render_directive(
         &result.directive,
-        artifact.path().as_deref().unwrap_or_else(|| Path::new("plan.md")),
+        artifact
+            .path()
+            .as_deref()
+            .unwrap_or_else(|| Path::new("plan.md")),
     ) {
         let source = InternalContextSource::from_static("plan_mode_directive");
         let fragment = InternalModelContextFragment::new(source, directive_text);
@@ -1404,6 +1438,14 @@ async fn run_sampling_request(
             }
             Err(err) => err,
         };
+
+        // An empty completion must surface to the turn loop so it can steer the
+        // model with a nudge. Reconnecting the same prompt (the stream-retry
+        // path) would just yield another empty completion, so bypass the
+        // SSE-reconnect retry for this marker and let `run_turn` continue it.
+        if err.is_empty_completion() {
+            return Err(err);
+        }
 
         if original_input.is_none() {
             original_input = Some(prompt.input);
@@ -2657,13 +2699,9 @@ async fn try_run_sampling_request(
     if turn_context.collaboration_mode.mode == ModeKind::Plan {
         if let Some(artifact) = turn_context.plan_artifact.as_ref() {
             if let Some(plan_markdown) = artifact.last_plan_text() {
-                if let Err(err) = run_plan_mode_after_turn(
-                    &sess,
-                    &turn_context,
-                    client_session,
-                    &plan_markdown,
-                )
-                .await
+                if let Err(err) =
+                    run_plan_mode_after_turn(&sess, &turn_context, client_session, &plan_markdown)
+                        .await
                 {
                     if matches!(err, OdyErr::TurnAborted) {
                         return Err(err);
