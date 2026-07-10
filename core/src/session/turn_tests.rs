@@ -90,7 +90,7 @@ async fn plan_mode_records_full_reminder_at_turn_five() {
     let mut client_session = crate::session::tests::test_model_client_session();
 
     for _ in 1..=5 {
-        run_plan_mode_after_turn(&sess, &tc, &mut client_session, plan_markdown)
+        run_session_mode_after_turn(&sess, &tc, &mut client_session, plan_markdown)
             .await
             .expect("after-plan hook should succeed");
     }
@@ -107,4 +107,64 @@ async fn plan_mode_records_full_reminder_at_turn_five() {
         }
     }
     assert!(found_full, "a full rigor reminder should be recorded by turn 5");
+}
+
+#[tokio::test]
+async fn design_turn_constructs_artifact_under_designs_dir() {
+    let (sess, _tc, _rx) = crate::session::tests::make_session_and_context_with_rx().await;
+    let mut collaboration_mode = sess.collaboration_mode().await;
+    collaboration_mode.mode = ModeKind::Design;
+    {
+        let mut state = sess.state.lock().await;
+        state.session_configuration.collaboration_mode = collaboration_mode;
+    }
+
+    let turn_context = sess.new_default_turn().await;
+    let artifact = turn_context
+        .plan_artifact
+        .as_ref()
+        .expect("design artifact should be constructed for Design turns");
+    let path = artifact.path().expect("design artifact should have a temp path");
+    assert!(
+        path.components()
+            .any(|c| c.as_os_str() == "designs"),
+        "design artifact path should be rooted under a `designs/` dir: {path:?}"
+    );
+}
+
+#[tokio::test]
+async fn design_after_turn_injects_design_split_directive() {
+    let (sess, tc, rx) = crate::session::tests::make_session_and_context_with_rx().await;
+    let mut tc = tc;
+    let tc_mut = Arc::get_mut(&mut tc).expect("turn context arc should be unique in test");
+    tc_mut.collaboration_mode.mode = ModeKind::Design;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+    let thread_id = ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
+    let artifact = PlanArtifact::new_design(plans_base_dir, thread_id, "2026-07-04");
+    artifact.finalize_name("topic").await.unwrap();
+    tc_mut.plan_artifact = Some(Arc::new(artifact));
+
+    let design_markdown = "## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 1 | core.md | data models | pending |\n";
+    let mut client_session = crate::session::tests::test_model_client_session();
+
+    run_session_mode_after_turn(&sess, &tc, &mut client_session, design_markdown)
+        .await
+        .expect("after-turn hook should succeed for design");
+
+    let mut found_directive = false;
+    while let Ok(event) = rx.try_recv() {
+        if let ody_protocol::protocol::EventMsg::RawResponseItem(raw) = event.msg {
+            if let ody_protocol::models::ResponseItem::Message { content, .. } = raw.item {
+                if content.iter().any(|c| matches!(c, ody_protocol::models::ContentItem::InputText { text } if text.to_lowercase().contains("one part per turn") && text.contains("core.md"))) {
+                    found_directive = true;
+                }
+            }
+        }
+    }
+    assert!(
+        found_directive,
+        "design after-turn hook should record a design split directive mentioning one part per turn and core.md"
+    );
 }

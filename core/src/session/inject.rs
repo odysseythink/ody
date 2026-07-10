@@ -3,10 +3,10 @@ use super::session::Session;
 use super::turn_context::TurnContext;
 use crate::ody_thread::TryStartTurnIfIdleError;
 use crate::ody_thread::TryStartTurnIfIdleRejectionReason;
+use crate::safety::is_read_only_session_mode;
 use crate::state::ActiveTurn;
 use crate::state::TurnState;
 use crate::tasks::RegularTask;
-use ody_protocol::config_types::ModeKind;
 use ody_protocol::models::ResponseItem;
 use std::sync::Arc;
 
@@ -55,7 +55,7 @@ impl Session {
                 input,
             ));
         }
-        if self.collaboration_mode().await.mode == ModeKind::Plan {
+        if is_read_only_session_mode(self.collaboration_mode().await.mode) {
             return Err(TryStartTurnIfIdleError::new(
                 TryStartTurnIfIdleRejectionReason::PlanMode,
                 input,
@@ -86,7 +86,7 @@ impl Session {
         let turn_context = self
             .new_default_turn_with_sub_id(uuid::Uuid::new_v4().to_string())
             .await;
-        if turn_context.collaboration_mode.mode == ModeKind::Plan {
+        if is_read_only_session_mode(turn_context.collaboration_mode.mode) {
             self.clear_reserved_idle_turn(&turn_state).await;
             self.maybe_start_turn_for_pending_work().await;
             return Err(TryStartTurnIfIdleError::new(

@@ -768,18 +768,29 @@ impl Session {
             sub_id,
             skills_snapshot,
         );
-        if turn_context.collaboration_mode.mode == ody_protocol::config_types::ModeKind::Plan {
-            // Plan artifacts are stored in the current project directory so they
-            // are easy to find and version-control alongside the project.
-            let plans_base_dir = AbsolutePathBuf::from_absolute_path(
+        // `plan_artifact` carries the artifact for whichever read-only session
+        // mode is active (Plan → `<base>/plans/`, Design → `<base>/designs/`).
+        // The field name is retained for compatibility; it is not Plan-specific.
+        let mode = turn_context.collaboration_mode.mode;
+        if mode == ody_protocol::config_types::ModeKind::Plan
+            || mode == ody_protocol::config_types::ModeKind::Design
+        {
+            // Artifacts are stored in the current project directory so they are
+            // easy to find and version-control alongside the project.
+            let base_dir = AbsolutePathBuf::from_absolute_path(
                 turn_context.cwd.as_path().join(".ody-code"),
             )
             .unwrap_or_else(|_| turn_context.config.ody_home.clone());
-            let artifact = PlanArtifact::new_temp(
-                plans_base_dir,
-                self.thread_id(),
-                turn_context.current_date.as_deref().unwrap_or("0000-00-00"),
-            );
+            let date = turn_context.current_date.as_deref().unwrap_or("0000-00-00");
+            let artifact = match mode {
+                ody_protocol::config_types::ModeKind::Plan => {
+                    PlanArtifact::new_temp(base_dir, self.thread_id(), date)
+                }
+                ody_protocol::config_types::ModeKind::Design => {
+                    PlanArtifact::new_design(base_dir, self.thread_id(), date)
+                }
+                _ => unreachable!("guarded by the surrounding if"),
+            };
             if let Some(snapshot) = self.plan_mode_last_manifest_snapshot().await {
                 artifact.set_last_manifest_snapshot(snapshot);
             }

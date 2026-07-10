@@ -47,6 +47,7 @@ use crate::responses_metadata::OdyResponsesMetadata;
 use crate::responses_metadata::OdyResponsesRequestKind;
 use crate::responses_retry::ResponsesStreamRequest;
 use crate::responses_retry::handle_retryable_response_stream_error;
+use crate::safety::is_read_only_session_mode;
 use crate::session::PreviousTurnSettings;
 use crate::session::TurnInput;
 use crate::session::session::Session;
@@ -1214,7 +1215,7 @@ async fn handle_plan_mode_tier_switch(
     Some(InternalModelContextFragment::new(source, confirmation))
 }
 
-async fn run_plan_mode_after_turn(
+async fn run_session_mode_after_turn(
     sess: &Arc<Session>,
     turn_context: &Arc<TurnContext>,
     client_session: &mut ModelClientSession,
@@ -1223,6 +1224,7 @@ async fn run_plan_mode_after_turn(
     let Some(artifact) = turn_context.plan_artifact.as_ref() else {
         return Ok(());
     };
+    let mode = turn_context.collaboration_mode.mode;
 
     let plan_mode_config = turn_context.config.plan_mode.as_ref();
     let result = PlanModeInjector::after_plan_turn(artifact, plan_markdown, plan_mode_config);
@@ -1260,19 +1262,26 @@ async fn run_plan_mode_after_turn(
             .path()
             .as_deref()
             .unwrap_or_else(|| Path::new("plan.md")),
+        mode,
     ) {
-        let source = InternalContextSource::from_static("plan_mode_directive");
+        let tag = if mode == ModeKind::Design {
+            "design_mode_directive"
+        } else {
+            "plan_mode_directive"
+        };
+        let source = InternalContextSource::from_static(tag);
         let fragment = InternalModelContextFragment::new(source, directive_text);
         let item: ResponseItem = ContextualUserFragment::into(fragment);
         sess.record_conversation_items(turn_context, std::slice::from_ref(&item))
             .await;
     }
 
-    // Periodic rigor-tier reminder reinjection (P2.3).
+    // Periodic rigor-tier reminder reinjection (P2.3). Plan-only:
+    // render_reminder_if_due self-guards `mode != Plan → None`.
     if let Some((reminder_kind, reminder_text)) = PlanModeInjector::render_reminder_if_due(
         artifact,
         plan_mode_config,
-        turn_context.collaboration_mode.mode,
+        mode,
     ) {
         let source = InternalContextSource::from_static(match reminder_kind {
             ReminderKind::Full => "plan_mode_full_reminder",
@@ -2698,12 +2707,16 @@ async fn try_run_sampling_request(
         }
     }
 
-    if turn_context.collaboration_mode.mode == ModeKind::Plan {
+    if is_read_only_session_mode(turn_context.collaboration_mode.mode) {
         if let Some(artifact) = turn_context.plan_artifact.as_ref() {
             if let Some(plan_markdown) = artifact.last_plan_text() {
-                if let Err(err) =
-                    run_plan_mode_after_turn(&sess, &turn_context, client_session, &plan_markdown)
-                        .await
+                if let Err(err) = run_session_mode_after_turn(
+                    &sess,
+                    &turn_context,
+                    client_session,
+                    &plan_markdown,
+                )
+                .await
                 {
                     if matches!(err, OdyErr::TurnAborted) {
                         return Err(err);
@@ -2711,7 +2724,7 @@ async fn try_run_sampling_request(
                     let error = err.to_ody_protocol_error();
                     sess.emit_turn_error_lifecycle(turn_context.as_ref(), error.clone())
                         .await;
-                    error!(error = ?error, "Failed to run plan-mode after-turn hook");
+                    error!(error = ?error, "Failed to run session-mode after-turn hook");
                 }
             }
         }

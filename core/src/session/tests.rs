@@ -9197,6 +9197,32 @@ async fn try_start_turn_if_idle_rejects_plan_mode_without_injecting() {
 }
 
 #[tokio::test]
+async fn try_start_turn_if_idle_rejects_design_mode_without_injecting() {
+    let (sess, _tc, _rx) = make_session_and_context_with_rx().await;
+    let mut collaboration_mode = sess.collaboration_mode().await;
+    collaboration_mode.mode = ModeKind::Design;
+    {
+        let mut state = sess.state.lock().await;
+        state.session_configuration.collaboration_mode = collaboration_mode;
+    }
+
+    let item = user_message("synthetic idle input");
+    let err = sess
+        .try_start_turn_if_idle(vec![item.clone()])
+        .await
+        .expect_err("design mode should reject automatic idle input");
+
+    // Design reuses the PlanMode rejection reason to avoid protocol churn (D4 step 4).
+    assert_eq!(TryStartTurnIfIdleRejectionReason::PlanMode, err.reason());
+    assert_eq!(vec![item], err.into_input());
+    assert!(sess.active_turn.lock().await.is_none());
+    assert_eq!(
+        Vec::<TurnInput>::new(),
+        sess.input_queue.get_pending_input(&sess.active_turn).await
+    );
+}
+
+#[tokio::test]
 async fn try_start_turn_if_idle_rejects_pending_trigger_turn_without_injecting() {
     let (sess, _tc, _rx) = make_session_and_context_with_rx().await;
     sess.input_queue

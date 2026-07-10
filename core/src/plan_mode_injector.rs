@@ -195,21 +195,36 @@ impl PlanModeInjector {
     }
 }
 
-pub fn render_directive(directive: &PlanModeDirective, index_path: &Path) -> Option<String> {
+pub fn render_directive(
+    directive: &PlanModeDirective,
+    index_path: &Path,
+    mode: ModeKind,
+) -> Option<String> {
     let _ = index_path;
-    match directive {
-        PlanModeDirective::StartSplit { next_part } => Some(format!(
+    match (mode, directive) {
+        (ModeKind::Design, PlanModeDirective::StartSplit { next_part }) => Some(format!(
+            "This design has been split into multiple parts. Write only the first pending part this turn: {} (scope: {}). Place it under the design's `<stem>/` directory. One part per turn — do not write other parts yet.",
+            next_part.relative_path, next_part.scope
+        )),
+        (ModeKind::Design, PlanModeDirective::ContinueSplit { next_part }) => Some(format!(
+            "Good progress. The next pending design part is: {} (scope: {}). Write only this part under the `<stem>/` directory in the current turn. One part per turn.",
+            next_part.relative_path, next_part.scope
+        )),
+        (ModeKind::Design, PlanModeDirective::FinalReview) => Some(
+            "All design parts are marked done. Before asking for final approval, run a cross-file consistency review across the index and every `<stem>/` part, then present the final design for approval.".to_string()
+        ),
+        (_, PlanModeDirective::StartSplit { next_part }) => Some(format!(
             "This plan has been split into multiple parts. Focus this turn on writing only the first pending part: {} (scope: {}). Do not write other parts yet.",
             next_part.relative_path, next_part.scope
         )),
-        PlanModeDirective::ContinueSplit { next_part } => Some(format!(
+        (_, PlanModeDirective::ContinueSplit { next_part }) => Some(format!(
             "Good progress. The next pending part is: {} (scope: {}). Write only this part in the current turn.",
             next_part.relative_path, next_part.scope
         )),
-        PlanModeDirective::FinalReview => Some(
+        (_, PlanModeDirective::FinalReview) => Some(
             "All parts are marked done. Before finalizing the plan, review the parts for consistency, then output the final <proposed_plan> summary in the index file.".to_string()
         ),
-        PlanModeDirective::None => None,
+        (_, PlanModeDirective::None) => None,
     }
 }
 
@@ -572,5 +587,67 @@ mod directive_tests {
                 "Design mode must never receive a Plan rigor-tier reminder"
             );
         }
+    }
+
+    #[test]
+    fn render_directive_plan_keeps_existing_copy() {
+        let dir = PlanModeDirective::StartSplit {
+            next_part: PartTarget {
+                relative_path: "core.md".into(),
+                scope: "models".into(),
+            },
+        };
+        let text = render_directive(&dir, Path::new("plan.md"), ModeKind::Plan).expect("plan start");
+        assert!(text.contains("split into multiple parts"), "{text}");
+        assert!(text.contains("core.md"), "{text}");
+        assert!(text.contains("models"), "{text}");
+    }
+
+    #[test]
+    fn render_directive_design_start_split_one_part_per_turn() {
+        let dir = PlanModeDirective::StartSplit {
+            next_part: PartTarget {
+                relative_path: "core.md".into(),
+                scope: "data models".into(),
+            },
+        };
+        let text =
+            render_directive(&dir, Path::new("design.md"), ModeKind::Design).expect("design start");
+        assert!(text.contains("core.md"), "{text}");
+        assert!(text.contains("data models"), "{text}");
+        assert!(text.to_lowercase().contains("one part per turn"), "{text}");
+        assert!(
+            !text.contains("Self-review checklist"),
+            "design copy must not carry plan rigor: {text}"
+        );
+    }
+
+    #[test]
+    fn render_directive_design_continue_split_mentions_stem() {
+        let dir = PlanModeDirective::ContinueSplit {
+            next_part: PartTarget {
+                relative_path: "api.md".into(),
+                scope: "endpoints".into(),
+            },
+        };
+        let text = render_directive(&dir, Path::new("design.md"), ModeKind::Design)
+            .expect("design continue");
+        assert!(text.contains("api.md"), "{text}");
+        assert!(text.to_lowercase().contains("stem"), "{text}");
+    }
+
+    #[test]
+    fn render_directive_design_final_review_mentions_cross_file() {
+        let text = render_directive(
+            &PlanModeDirective::FinalReview,
+            Path::new("design.md"),
+            ModeKind::Design,
+        )
+        .expect("design final review");
+        assert!(text.to_lowercase().contains("cross-file"), "{text}");
+        assert!(
+            !text.contains("<proposed_plan>"),
+            "design final review must not ask for a plan summary: {text}"
+        );
     }
 }
