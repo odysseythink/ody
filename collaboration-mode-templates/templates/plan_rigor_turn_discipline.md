@@ -1,0 +1,163 @@
+## Rigor tier addendum: Turn discipline (when to call ExitPlanMode)
+
+Plan mode sessions must follow strict turn discipline to avoid loops and ensure clear approval gates.
+
+### Turn ending rules (non-split plans)
+
+Every turn in a non-split plan must end with exactly ONE of:
+
+1. **AskUserQuestion** — if you need clarification
+   - Use when a material ambiguity remains that prevents you from writing the plan.
+   - One question per turn; wait for the answer before proceeding.
+   - Do NOT mention "the plan" (user cannot see it yet).
+
+2. **ExitPlanMode** — when the plan is decision-complete
+   - Use when the plan is ready for user approval.
+   - Include the full plan content in the `<proposed_plan>` block.
+   - Never ask about approval via text — that is ExitPlanMode's job.
+
+**Never mix them in one turn:** Do not call AskUserQuestion and ExitPlanMode in the same turn.
+
+### Turn ending rules (split plans)
+
+Split plans have different discipline because parts are written sequentially:
+
+**While parts are pending:**
+- Write ONE part file per turn
+- Flip its manifest row to `done` in the index
+- Do NOT call AskUserQuestion or ExitPlanMode
+- Stop naturally; injection will direct to next part
+
+**After all parts are done:**
+- Do cross-file consistency review (no additional parts written)
+- Call ExitPlanMode to request approval
+
+### Specific rules
+
+#### Rule 1: Do NOT ask about approval via text
+- ❌ "Is this plan OK?" (in plain text)
+- ❌ "Shall I proceed with this plan?" (in AskUserQuestion)
+- ✅ "Do you prefer Approach A or B?" (in AskUserQuestion, to clarify spec)
+- ✅ `<proposed_plan>` block (ExitPlanMode's job)
+
+#### Rule 2: Do NOT reference "the plan" in AskUserQuestion
+- ❌ "Does the plan cover enough detail?"
+- ❌ "Should the plan include X?"
+- ✅ "Should we include caching in the implementation?"
+
+Why? The user cannot see the plan until you call ExitPlanMode. Asking about the plan confuses them.
+
+#### Rule 3: AskUserQuestion expects multiple choice
+When using AskUserQuestion, provide 2-4 meaningful options:
+- ✅ Options are mutually exclusive (user picks one)
+- ✅ Each option materially changes the spec/plan
+- ❌ Options include filler ("Other: specify"); avoid generic catch-alls
+
+#### Rule 4: ExitPlanMode includes the full plan
+- Wrap the plan in `<proposed_plan>` tags
+- Include everything (not incremental chunks)
+- Never output more than one `<proposed_plan>` block per turn
+
+#### Rule 5: If the user rejects the plan
+- User responds without selecting an option (stays in plan mode)
+- Revise the plan based on their feedback
+- Output a new `<proposed_plan>` (complete replacement, not delta)
+
+### Example turn sequence (non-split plan)
+
+**Turn 1:**
+```
+Goal: Implement search redesign.
+...
+Should we use Elasticsearch or a database query builder for the search index?
+
+- Option A: Elasticsearch (more powerful, external dependency)
+- Option B: Database query builder (simpler, built-in)
+```
+→ Ends with AskUserQuestion
+
+**Turn 2:**
+```
+User selected Option B.
+...
+<proposed_plan>
+# Search Redesign — Implementation Plan
+... (complete plan)
+</proposed_plan>
+```
+→ Ends with ExitPlanMode (implied by `<proposed_plan>` block)
+
+**Turn 3 (if user has feedback):**
+```
+User: "This looks good but add a performance test."
+...
+<proposed_plan>
+# Search Redesign — Implementation Plan
+... (plan WITH added performance test task)
+</proposed_plan>
+```
+→ Ends with ExitPlanMode again (complete replacement)
+
+### Example turn sequence (split plan)
+
+**Turn 1:**
+```
+<proposed_plan>
+# Design Mode — Implementation Plan (Index)
+
+**Goal:** ...
+
+## Parts
+| # | File | Scope | Status |
+|---|---|---|---|
+| 1 | design-mode/protocol.md | Protocol types | pending |
+| 2 | design-mode/config.md | Config + instructions | pending |
+| 3 | design-mode/schema.md | Schema + tests | pending |
+</proposed_plan>
+```
+→ Stops (no AskUserQuestion, no ExitPlanMode yet — injection will direct next)
+
+**Turn 2:**
+```
+## Part 1 (from previous turn's injection)
+
+### Task 1: Verify ModeKind::Design...
+...
+
+(Flip Part 1 row to `done` in index)
+```
+→ Stops (no AskUserQuestion, no ExitPlanMode yet)
+
+**Turn 3:**
+```
+## Part 2 (from injection)
+...
+(Flip Part 2 row to `done` in index)
+```
+→ Stops
+
+**Turn 4:**
+```
+## Part 3 (final part from injection)
+...
+(Flip Part 3 row to `done` in index)
+
+---
+
+Cross-file consistency review: all dependencies valid ✓
+
+<proposed_plan>
+# Design Mode — Implementation Plan
+
+[Full index + all parts combined for user approval]
+</proposed_plan>
+```
+→ Ends with ExitPlanMode (now all parts are done)
+
+### When to ignore these rules
+
+**Rare exceptions (use sparingly):**
+- If the user explicitly says "just execute this," you may skip ExitPlanMode (but this is outside plan mode).
+- If the user changes their mind mid-plan and asks to abort, stop and exit plan mode.
+
+Otherwise, always follow the turn discipline.

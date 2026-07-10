@@ -44,12 +44,17 @@ impl CollaborationModeInstructions {
             let tier = resolve_plan_mode_tier(user_prompt, plan_mode_config, plan_artifact);
             if tier == PlanModeTier::Rigor {
                 this = this
+                    .with_rigor_workflow()
                     .with_rigor_coverage()
+                    .with_rigor_task_skeleton()
                     .with_rigor_selfreview()
                     .with_rigor_invariants()
                     .with_rigor_grounding()
                     .with_rigor_scope()
-                    .with_rigor_rename();
+                    .with_rigor_rename()
+                    .with_rigor_risks()
+                    .with_rigor_split()
+                    .with_rigor_turn_discipline();
             }
         }
 
@@ -93,6 +98,41 @@ impl CollaborationModeInstructions {
 
     pub(crate) fn with_rigor_scope(self) -> Self {
         let fragment = ody_collaboration_mode_templates::PLAN_RIGOR_SCOPE;
+        Self {
+            instructions: format!("{}\n\n{}", self.instructions, fragment),
+        }
+    }
+
+    pub(crate) fn with_rigor_workflow(self) -> Self {
+        let fragment = ody_collaboration_mode_templates::PLAN_RIGOR_WORKFLOW;
+        Self {
+            instructions: format!("{}\n\n{}", self.instructions, fragment),
+        }
+    }
+
+    pub(crate) fn with_rigor_task_skeleton(self) -> Self {
+        let fragment = ody_collaboration_mode_templates::PLAN_RIGOR_TASK_SKELETON;
+        Self {
+            instructions: format!("{}\n\n{}", self.instructions, fragment),
+        }
+    }
+
+    pub(crate) fn with_rigor_risks(self) -> Self {
+        let fragment = ody_collaboration_mode_templates::PLAN_RIGOR_RISKS;
+        Self {
+            instructions: format!("{}\n\n{}", self.instructions, fragment),
+        }
+    }
+
+    pub(crate) fn with_rigor_split(self) -> Self {
+        let fragment = ody_collaboration_mode_templates::PLAN_RIGOR_SPLIT;
+        Self {
+            instructions: format!("{}\n\n{}", self.instructions, fragment),
+        }
+    }
+
+    pub(crate) fn with_rigor_turn_discipline(self) -> Self {
+        let fragment = ody_collaboration_mode_templates::PLAN_RIGOR_TURN_DISCIPLINE;
         Self {
             instructions: format!("{}\n\n{}", self.instructions, fragment),
         }
@@ -498,10 +538,16 @@ fn rigor_tier_composes_all_fragments() {
     assert!(body.contains("## Source-grounding mandate"));
     assert!(body.contains("## Out-of-scope / false-positive discipline"));
     assert!(body.contains("## Rename-vs-delete decision prompt"));
+    assert!(body.contains(
+        "## Rigor tier addendum: Large plan splitting & Parts manifest"
+    ));
+    assert!(body.contains(
+        "## Rigor tier addendum: Turn discipline (when to call ExitPlanMode)"
+    ));
 }
 
 #[test]
-fn concise_tier_omits_rigor_fragments() {
+fn all_prompts_now_generate_rigor_tier_with_workflow() {
     let mode = plan_mode_with_instructions("Plan the work.");
     let instructions = CollaborationModeInstructions::from_collaboration_mode(
         &mode,
@@ -512,35 +558,29 @@ fn concise_tier_omits_rigor_fragments() {
     )
     .expect("should produce instructions");
     let body = instructions.body();
-    assert!(!body.contains("## Rigor tier addendum"));
-    assert!(!body.contains("## Dependency Overview"));
+    // After removing heuristic tier selector, all prompts generate Rigor tier
+    assert!(body.contains("## Rigor tier addendum: Structured workflow"));
+    assert!(body.contains("## Dependency Overview"));
 }
 
 #[test]
-fn split_threshold_still_rendered_in_both_tiers() {
+fn split_threshold_rendered_with_rigor_fragments() {
     let mode = plan_mode_with_instructions(
         "Split plans larger than {{ split_threshold }} tasks."
     );
 
-    let concise = CollaborationModeInstructions::from_collaboration_mode(
+    let instructions = CollaborationModeInstructions::from_collaboration_mode(
         &mode,
         Some(12),
         Some("fix typo"),
         None,
         None,
     )
-    .expect("should produce concise instructions");
-    assert_eq!(concise.body(), "Split plans larger than 12 tasks.");
-
-    let rigor = CollaborationModeInstructions::from_collaboration_mode(
-        &mode,
-        Some(12),
-        Some("refactor and migrate and delete and rename"),
-        None,
-        None,
-    )
-    .expect("should produce rigor instructions");
-    assert!(rigor.body().contains("Split plans larger than 12 tasks."));
+    .expect("should produce instructions");
+    let body = instructions.body();
+    // Both cases now include split_threshold rendering + rigor fragments
+    assert!(body.contains("Split plans larger than 12 tasks."));
+    assert!(body.contains("## Rigor tier addendum: Structured workflow"));
 }
 
 #[test]
