@@ -23,6 +23,7 @@ mod ody_thread;
 mod compact_remote;
 mod compact_remote_v2;
 mod config_lock;
+mod design_completeness;
 pub use ody_thread::BackgroundTerminalInfo;
 pub use ody_thread::OdyThread;
 pub use ody_thread::OdyThreadSettingsOverrides;
