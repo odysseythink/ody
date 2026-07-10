@@ -40,6 +40,7 @@ use crate::exec_policy::ExecPolicyManager;
 use crate::image_preparation::prepare_response_items;
 use crate::parse_turn_item;
 use crate::plan_artifact::ManifestSnapshot;
+use crate::plan_artifact::PlanArtifact;
 use crate::realtime_conversation::RealtimeConversationManager;
 use crate::session::turn_context::TurnEnvironment;
 use crate::session_prefix::format_inter_agent_completion_message;
@@ -209,6 +210,7 @@ use ody_protocol::exec_output::StreamOutput;
 
 mod code_mode_warning;
 mod config_lock;
+mod design_handoff;
 mod handlers;
 mod inject;
 mod input_queue;
@@ -1194,12 +1196,17 @@ impl Session {
         state.plan_mode_last_manifest_snapshot()
     }
 
-    pub(crate) async fn set_plan_mode_last_manifest_snapshot(
-        &self,
-        snapshot: ManifestSnapshot,
-    ) {
+   pub(crate) async fn set_plan_mode_last_manifest_snapshot(
+       &self,
+       snapshot: ManifestSnapshot,
+   ) {
+       let mut state = self.state.lock().await;
+       state.set_plan_mode_last_manifest_snapshot(snapshot);
+   }
+
+    pub(crate) async fn set_last_design_artifact(&self, artifact: Arc<PlanArtifact>) {
         let mut state = self.state.lock().await;
-        state.set_plan_mode_last_manifest_snapshot(snapshot);
+        state.set_last_design_artifact(artifact);
     }
 
     pub(crate) async fn auto_compact_window_snapshot(&self) -> AutoCompactWindowSnapshot {

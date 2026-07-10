@@ -1,12 +1,14 @@
 //! Session-wide mutable state.
 
 use crate::plan_artifact::ManifestSnapshot;
+use crate::plan_artifact::PlanArtifact;
 use ody_protocol::models::AdditionalPermissionProfile;
 use ody_protocol::models::ResponseItem;
 use ody_sandboxing::policy_transforms::merge_permission_profiles;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::sync::Arc;
 
 use super::AdditionalContextStore;
 use super::auto_compact_window::AutoCompactWindow;
@@ -45,6 +47,7 @@ pub(crate) struct SessionState {
     granted_permissions_by_environment_id: HashMap<String, AdditionalPermissionProfile>,
     next_turn_is_first: bool,
     plan_mode_last_manifest_snapshot: Option<ManifestSnapshot>,
+    last_design_artifact: Option<Arc<PlanArtifact>>,
 }
 
 impl SessionState {
@@ -67,6 +70,7 @@ impl SessionState {
             granted_permissions_by_environment_id: HashMap::new(),
             next_turn_is_first: true,
             plan_mode_last_manifest_snapshot: None,
+            last_design_artifact: None,
         }
     }
 
@@ -313,6 +317,18 @@ impl SessionState {
         snapshot: ManifestSnapshot,
     ) {
         self.plan_mode_last_manifest_snapshot = Some(snapshot);
+    }
+
+    pub(crate) fn last_design_artifact(&self) -> Option<Arc<PlanArtifact>> {
+        self.last_design_artifact.clone()
+    }
+
+    pub(crate) fn set_last_design_artifact(&mut self, artifact: Arc<PlanArtifact>) {
+        self.last_design_artifact = Some(artifact);
+    }
+
+    pub(crate) fn clear_last_design_artifact(&mut self) {
+        self.last_design_artifact = None;
     }
 }
 
