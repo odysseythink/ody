@@ -129,11 +129,11 @@ pub fn plan_mode_gate_for_patch(
     }
 }
 
-const PLAN_MODE_EXEC_DENIED_REASON: &str = "Plan mode is read-only by default. This command may modify files; finish planning and switch to Default mode to run it. [plan-mode-blocked]";
+const PLAN_MODE_EXEC_DENIED_REASON: &str = "Plan mode is read-only by default. This command may modify files; finish planning and switch to Default mode to run it. [plan-mode-blocked] If you were trying to save your plan: you don't need to — placing a <proposed_plan> block in your reply already persists it to the assigned plan file automatically.";
 const PLAN_MODE_EXEC_ASK_REASON: &str =
     "This command may modify files while in Plan mode. Please confirm before running.";
 
-const DESIGN_MODE_EXEC_DENIED_REASON: &str = "Design mode is read-only. This command may modify files; finish designing and switch to Plan or Default mode to run it. [design-mode-blocked]";
+const DESIGN_MODE_EXEC_DENIED_REASON: &str = "Design mode is read-only. This command may modify files; finish designing and switch to Plan or Default mode to run it. [design-mode-blocked] If you were trying to save your design: use the file-write tool instead of a shell command — writes to the assigned design file path are allowed even in Design mode.";
 const DESIGN_MODE_EXEC_ASK_REASON: &str =
     "This command may modify files while in Design mode. Please confirm before running.";
 
