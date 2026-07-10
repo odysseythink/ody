@@ -1,6 +1,12 @@
 use super::*;
 use crate::agents_md::LoadedAgentsMd;
+use crate::context::InternalContextSource;
+use crate::context::InternalModelContextFragment;
+use crate::session::design_handoff::HandoffDecision;
+use crate::session::design_handoff::evaluate_design_exit;
 use crate::plan_artifact::PlanArtifact;
+use ody_config::config_toml::PlanEnforcement;
+use ody_protocol::config_types::ModeKind;
 use crate::environment_selection::TurnEnvironmentSnapshot;
 use crate::shell_snapshot::ShellSnapshotFile;
 use ody_core_skills::HostSkillsSnapshot;
@@ -586,10 +592,66 @@ impl Session {
         updates: SessionSettingsUpdate,
     ) -> OdyResult<Arc<TurnContext>> {
         let notify_config_contributors = !self.services.extensions.config_contributors().is_empty();
-        let update_result: OdyResult<_> = {
-            let mut state = self.state.lock().await;
-            match state.session_configuration.clone().apply(&updates) {
-                Ok(next) => {
+
+        // Two-phase commit for any edge leaving Design mode: capture the cached
+        // artifact + enforcement under the lock, release it, await the file read
+        // + completeness gate, then re-lock to commit `next` (Allow) or drop it
+        // (Veto). The reminder is threaded out so it can be injected into the
+        // freshly-built turn below, before the first Plan turn reads context.
+        enum EdgeOutcome {
+            Proceed {
+                next: SessionConfiguration,
+                permission_profile_changed: bool,
+                previous_config: Option<crate::config::Config>,
+                new_config: Option<crate::config::Config>,
+                reminder: Option<String>,
+            },
+        }
+
+        let update_result: OdyResult<EdgeOutcome> = {
+            // ---- phase 1: capture under lock ----
+            let captured = {
+                let state = self.state.lock().await;
+                let previous_mode = state.session_configuration.collaboration_mode.mode;
+                let next = match state.session_configuration.clone().apply(&updates) {
+                    Ok(next) => next,
+                    Err(err) => return Err(OdyErr::InvalidRequest(err.to_string())),
+                };
+                let new_mode = next.collaboration_mode.mode;
+                let edge = previous_mode == ModeKind::Design && new_mode != ModeKind::Design;
+                let artifact = if edge { state.last_design_artifact() } else { None };
+                let enforcement = state
+                    .session_configuration
+                    .original_config_do_not_use
+                    .plan_mode
+                    .as_ref()
+                    .and_then(|plan_mode| plan_mode.enforcement)
+                    .unwrap_or(PlanEnforcement::Strict);
+                (next, edge, artifact, enforcement)
+            }; // lock dropped
+            let (next, edge, artifact, enforcement) = captured;
+
+            // ---- phase 2: async gate (no lock held) ----
+            let decision = if edge {
+                evaluate_design_exit(artifact, next.collaboration_mode.mode, enforcement).await
+            } else {
+                HandoffDecision::Allow { reminder: None }
+            };
+
+            // ---- phase 3: re-lock, commit or veto ----
+            match decision {
+                HandoffDecision::Veto { missing_report } => {
+                    // No new mode committed: surface the missing-sections list as
+                    // hidden model context on the current (still-Design) turn.
+                    let source = InternalContextSource::from_static("design_handoff");
+                    let fragment =
+                        InternalModelContextFragment::new(source, missing_report.clone());
+                    let item: ResponseItem = ContextualUserFragment::into(fragment);
+                    self.inject_no_new_turn(vec![item], None).await;
+                    Err(OdyErr::InvalidRequest(missing_report))
+                }
+                HandoffDecision::Allow { reminder } => {
+                    let mut state = self.state.lock().await;
                     let previous_permission_profile =
                         state.session_configuration.permission_profile();
                     let next_permission_profile = next.permission_profile();
@@ -606,33 +668,39 @@ impl Session {
                             .update_selections(next.environment_selections());
                     }
                     state.session_configuration = next.clone();
-                    Ok((
+                    drop(state);
+                    Ok(EdgeOutcome::Proceed {
                         next,
                         permission_profile_changed,
                         previous_config,
                         new_config,
-                    ))
+                        reminder,
+                    })
                 }
-                Err(err) => Err(OdyErr::InvalidRequest(err.to_string())),
             }
         };
 
-        let (session_configuration, permission_profile_changed, previous_config, new_config) =
-            match update_result {
-                Ok(update) => update,
-                Err(err) => {
-                    let message = err.to_string();
-                    self.send_event_raw(Event {
-                        id: sub_id.clone(),
-                        msg: EventMsg::Error(ErrorEvent {
-                            message: message.clone(),
-                            ody_error_info: Some(OdyErrorInfo::BadRequest),
-                        }),
-                    })
-                    .await;
-                    return Err(OdyErr::InvalidRequest(message));
-                }
-            };
+        let EdgeOutcome::Proceed {
+            next: session_configuration,
+            permission_profile_changed,
+            previous_config,
+            new_config,
+            reminder,
+        } = match update_result {
+            Ok(outcome) => outcome,
+            Err(err) => {
+                let message = err.to_string();
+                self.send_event_raw(Event {
+                    id: sub_id.clone(),
+                    msg: EventMsg::Error(ErrorEvent {
+                        message: message.clone(),
+                        ody_error_info: Some(OdyErrorInfo::BadRequest),
+                    }),
+                })
+                .await;
+                return Err(OdyErr::InvalidRequest(message));
+            }
+        };
         self.emit_config_changed_contributors(previous_config.as_ref(), new_config.as_ref());
 
         if permission_profile_changed {
@@ -640,13 +708,26 @@ impl Session {
                 .await;
         }
 
-        Ok(self
+        let turn_context = self
             .new_turn_from_configuration(
                 sub_id,
                 session_configuration,
                 updates.final_output_json_schema,
             )
-            .await)
+            .await;
+
+        // Edge-time injection (D6-4): no `pending_*` state, so consume-once is
+        // guaranteed — the reminder lives only in this call and lands in history
+        // before the caller starts the first Plan turn.
+        if let Some(text) = reminder {
+            let source = InternalContextSource::from_static("design_handoff");
+            let fragment = InternalModelContextFragment::new(source, text);
+            let item: ResponseItem = ContextualUserFragment::into(fragment);
+            self.record_conversation_items(turn_context.as_ref(), std::slice::from_ref(&item))
+                .await;
+        }
+
+        Ok(turn_context)
     }
 
     async fn new_turn_from_configuration(
@@ -791,10 +872,14 @@ impl Session {
                 }
                 _ => unreachable!("guarded by the surrounding if"),
             };
-            if let Some(snapshot) = self.plan_mode_last_manifest_snapshot().await {
-                artifact.set_last_manifest_snapshot(snapshot);
+           if let Some(snapshot) = self.plan_mode_last_manifest_snapshot().await {
+               artifact.set_last_manifest_snapshot(snapshot);
+           }
+            let artifact_arc = Arc::new(artifact);
+            if mode == ody_protocol::config_types::ModeKind::Design {
+                self.set_last_design_artifact(Arc::clone(&artifact_arc)).await;
             }
-            turn_context.plan_artifact = Some(Arc::new(artifact));
+            turn_context.plan_artifact = Some(artifact_arc);
         }
         turn_context.realtime_active = self.conversation.running_state().await.is_some();
 
