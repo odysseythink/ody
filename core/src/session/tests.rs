@@ -1,5 +1,9 @@
 use super::turn_context::TurnEnvironment;
 use super::*;
+use crate::plan_artifact::PlanArtifact;
+use ody_config::config_toml::PlanEnforcement;
+use ody_config::config_toml::PlanModeConfigToml;
+use ody_utils_absolute_path::AbsolutePathBuf;
 use crate::ody_thread::TryStartTurnIfIdleRejectionReason;
 use crate::config::ConfigBuilder;
 use crate::config::ConfigOverrides;
@@ -10355,3 +10359,296 @@ async fn session_start_hooks_require_project_trust_without_config_toml() -> std:
 
     Ok(())
 }
+
+const COMPLETE_DESIGN: &str = concat!(
+    "# Feature Design\n\n",
+    "## Scope\n",
+    "In scope: the core behaviour. Out of scope: the UI polish. ",
+    "This line pads the document beyond the minimum content length so ",
+    "the structural gate does not trip on an otherwise complete design.\n\n",
+    "## Architecture\n",
+    "The approach is to reuse the existing pipeline and add a stage.\n\n",
+    "## Data Models\n",
+    "struct DesignState {{ sections: Vec<String> }}\n\n",
+    "## Algorithms\n",
+    "implementation notes: walk the sections and tally coverage.\n\n",
+    "## Error Handling\n",
+    "failure scenarios and graceful degradation are handled inline.\n\n",
+    "## Self-Review\n",
+    "audit checklist reviewed against the rubric.\n\n",
+    "## User Approval\n",
+    "user final approval captured before handoff.\n\n",
+    "## Reuse Analysis\n",
+    "component reuse survey of existing components follows.\n",
+);
+
+const INCOMPLETE_DESIGN: &str = "# Feature Design\n\n## Scope\nShort.\n";
+
+fn design_mode(model: &str) -> CollaborationMode {
+    CollaborationMode {
+        mode: ModeKind::Design,
+        settings: Settings {
+            model: model.to_string(),
+            reasoning_effort: None,
+            developer_instructions: None,
+        },
+    }
+}
+
+fn plan_mode(model: &str) -> CollaborationMode {
+    CollaborationMode {
+        mode: ModeKind::Plan,
+        settings: Settings {
+            model: model.to_string(),
+            reasoning_effort: None,
+            developer_instructions: None,
+        },
+    }
+}
+
+fn default_mode(model: &str) -> CollaborationMode {
+    CollaborationMode {
+        mode: ModeKind::Default,
+        settings: Settings {
+            model: model.to_string(),
+            reasoning_effort: None,
+            developer_instructions: None,
+        },
+    }
+}
+
+async fn seed_design_artifact(session: &Arc<Session>, content: &str) -> PathBuf {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    // Leak the tempdir so the path outlives this helper for the duration of
+    // the test (the artifact only needs a readable file on disk).
+    let base_path = tmp.path().to_path_buf();
+    std::mem::forget(tmp);
+    let base = AbsolutePathBuf::from_absolute_path(&base_path).expect("absolute base");
+    let artifact = PlanArtifact::new_design(base, session.thread_id(), "2026-07-11");
+    artifact.finalize_name("handoff").await.expect("finalize");
+    let path = artifact.path().expect("finalized path");
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).expect("mkdir");
+    }
+    std::fs::write(&path, content).expect("write design");
+    session.set_last_design_artifact(Arc::new(artifact)).await;
+    path
+}
+
+async fn enter_design(session: &Arc<Session>) {
+    let model = session.collaboration_mode().await.settings.model;
+    session
+        .new_turn_with_sub_id(
+            "enter-design".to_string(),
+            SessionSettingsUpdate {
+                collaboration_mode: Some(design_mode(&model)),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("enter design mode");
+}
+
+async fn switch_to(
+    session: &Arc<Session>,
+    mode: CollaborationMode,
+) -> Result<Arc<TurnContext>, OdyErr> {
+    session
+        .new_turn_with_sub_id(
+            "switch".to_string(),
+            SessionSettingsUpdate {
+                collaboration_mode: Some(mode),
+                ..Default::default()
+            },
+        )
+        .await
+}
+
+async fn handoff_bodies_async(session: &Arc<Session>) -> Vec<String> {
+    let history = session.clone_history().await;
+    history
+        .raw_items()
+        .iter()
+        .filter_map(|item| {
+            let ResponseItem::Message { content, .. } = item else {
+                return None;
+            };
+            let mut text = String::new();
+            for c in content {
+                if let ContentItem::InputText { text: t } = c {
+                    text.push_str(t);
+                }
+            }
+            if text.contains("source=\"design_handoff\"") {
+                Some(text)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+async fn drain_errors(rx: &async_channel::Receiver<Event>) -> Vec<ErrorEvent> {
+    let mut errors = Vec::new();
+    while let Ok(event) = rx.try_recv() {
+        if let EventMsg::Error(err) = event.msg {
+            errors.push(err);
+        }
+    }
+    errors
+}
+
+#[tokio::test]
+async fn design_to_plan_complete_injects_handoff() {
+    let (session, _tc, _rx) = make_session_and_context_with_rx().await;
+    enter_design(&session).await;
+    let path = seed_design_artifact(&session, COMPLETE_DESIGN).await;
+    let model = session.collaboration_mode().await.settings.model;
+
+    let result = switch_to(&session, plan_mode(&model)).await;
+    assert!(result.is_ok(), "complete design should allow the switch");
+    assert_eq!(session.collaboration_mode().await.mode, ModeKind::Plan);
+
+    let bodies = handoff_bodies_async(&session).await;
+    assert_eq!(bodies.len(), 1, "exactly one handoff fragment");
+    let body = &bodies[0];
+    assert!(body.contains("handed off"));
+    assert!(body.contains("designs"));
+    assert!(body.contains(&path.display().to_string()));
+    assert!(!body.contains("Selected approach"));
+}
+
+#[tokio::test]
+async fn design_to_plan_incomplete_strict_vetoes() {
+    let (session, _tc, rx) = make_session_and_context_with_rx().await;
+    enter_design(&session).await;
+    seed_design_artifact(&session, INCOMPLETE_DESIGN).await;
+    let model = session.collaboration_mode().await.settings.model;
+
+    let result = switch_to(&session, plan_mode(&model)).await;
+    assert!(result.is_err(), "strict + incomplete must veto");
+    assert_eq!(
+        session.collaboration_mode().await.mode,
+        ModeKind::Design,
+        "mode must stay Design on veto"
+    );
+
+    let bodies = handoff_bodies_async(&session).await;
+    assert_eq!(bodies.len(), 1, "veto injects a missing-list fragment");
+    assert!(bodies[0].contains("Missing sections"));
+
+    let errors = drain_errors(&rx).await;
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.ody_error_info == Some(OdyErrorInfo::BadRequest)),
+        "veto must emit Error{{BadRequest}}"
+    );
+}
+
+#[tokio::test]
+async fn design_to_plan_incomplete_advisory_allows_with_soft_note() {
+    let (session, _tc, _rx) = make_session_and_context_with_rx().await;
+    {
+        let mut state = session.state.lock().await;
+        let mut config = (*state.session_configuration.original_config_do_not_use).clone();
+        config.plan_mode = Some(PlanModeConfigToml {
+            enforcement: Some(PlanEnforcement::Advisory),
+            ..Default::default()
+        });
+        state.session_configuration.original_config_do_not_use = Arc::new(config);
+    }
+    enter_design(&session).await;
+    seed_design_artifact(&session, INCOMPLETE_DESIGN).await;
+    let model = session.collaboration_mode().await.settings.model;
+
+    let result = switch_to(&session, plan_mode(&model)).await;
+    assert!(result.is_ok(), "advisory allows incomplete");
+    assert_eq!(session.collaboration_mode().await.mode, ModeKind::Plan);
+    let bodies = handoff_bodies_async(&session).await;
+    assert_eq!(bodies.len(), 1);
+    assert!(bodies[0].contains("may be incomplete"));
+}
+
+#[tokio::test]
+async fn design_to_plan_incomplete_ask_allows_with_strong_note() {
+    let (session, _tc, _rx) = make_session_and_context_with_rx().await;
+    {
+        let mut state = session.state.lock().await;
+        let mut config = (*state.session_configuration.original_config_do_not_use).clone();
+        config.plan_mode = Some(PlanModeConfigToml {
+            enforcement: Some(PlanEnforcement::Ask),
+            ..Default::default()
+        });
+        state.session_configuration.original_config_do_not_use = Arc::new(config);
+    }
+    enter_design(&session).await;
+    seed_design_artifact(&session, INCOMPLETE_DESIGN).await;
+    let model = session.collaboration_mode().await.settings.model;
+
+    let result = switch_to(&session, plan_mode(&model)).await;
+    assert!(result.is_ok(), "ask allows incomplete");
+    let bodies = handoff_bodies_async(&session).await;
+    assert_eq!(bodies.len(), 1);
+    assert!(bodies[0].contains("WARNING"));
+}
+
+#[tokio::test]
+async fn design_to_default_complete_no_reminder() {
+    let (session, _tc, _rx) = make_session_and_context_with_rx().await;
+    enter_design(&session).await;
+    seed_design_artifact(&session, COMPLETE_DESIGN).await;
+    let model = session.collaboration_mode().await.settings.model;
+
+    let result = switch_to(&session, default_mode(&model)).await;
+    assert!(result.is_ok());
+    assert_eq!(session.collaboration_mode().await.mode, ModeKind::Default);
+    let bodies = handoff_bodies_async(&session).await;
+    assert!(bodies.is_empty(), "no reminder when target is not Plan");
+}
+
+#[tokio::test]
+async fn design_to_default_incomplete_strict_vetoes() {
+    let (session, _tc, _rx) = make_session_and_context_with_rx().await;
+    enter_design(&session).await;
+    seed_design_artifact(&session, INCOMPLETE_DESIGN).await;
+    let model = session.collaboration_mode().await.settings.model;
+
+    let result = switch_to(&session, default_mode(&model)).await;
+    assert!(result.is_err(), "gate guards every Design exit");
+    assert_eq!(session.collaboration_mode().await.mode, ModeKind::Design);
+}
+
+#[tokio::test]
+async fn reentry_fires_handoff_again() {
+    let (session, _tc, _rx) = make_session_and_context_with_rx().await;
+    enter_design(&session).await;
+    seed_design_artifact(&session, COMPLETE_DESIGN).await;
+    let model = session.collaboration_mode().await.settings.model;
+    switch_to(&session, plan_mode(&model)).await.expect("first");
+
+    // Back into Design, then out to Plan again.
+    switch_to(&session, design_mode(&model)).await.expect("reenter");
+    seed_design_artifact(&session, COMPLETE_DESIGN).await;
+    switch_to(&session, plan_mode(&model)).await.expect("second");
+
+    let bodies = handoff_bodies_async(&session).await;
+    assert_eq!(bodies.len(), 2, "handoff fires on every Design→Plan edge");
+}
+
+#[tokio::test]
+async fn missing_artifact_is_incomplete_fail_safe() {
+    let (session, _tc, _rx) = make_session_and_context_with_rx().await;
+    enter_design(&session).await;
+    // Deliberately do NOT seed a cached artifact.
+    let model = session.collaboration_mode().await.settings.model;
+
+    let result = switch_to(&session, plan_mode(&model)).await;
+    assert!(result.is_err(), "unreadable/missing artifact == incomplete");
+    assert_eq!(session.collaboration_mode().await.mode, ModeKind::Design);
+}
+
+// Cross-reference: the `selected_label = Some` rendering path is covered by
+// `design_handoff::tests::render_includes_selected_label_when_some` (Task 3).
+#[allow(dead_code)]
+fn render_handoff_reminder_selected_label_some_cross_reference() {}
