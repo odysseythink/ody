@@ -469,6 +469,63 @@ impl Session {
 
     /// Apply a collaboration-mode update directly to the session configuration.
     /// Used by the `debug prompt` diagnostics path (compiled into release builds too).
+    /// Runs the Design→Plan handoff gate for a mode update and commits the new
+    /// configuration when allowed. Shared by `new_turn_with_sub_id` (which also
+    /// injects the reminder) and the debug path (which has no `TurnContext`, so
+    /// reminder injection is deferred). Returns the gate's [`HandoffDecision`].
+    pub(crate) async fn apply_mode_update_with_handoff(
+        &self,
+        updates: SessionSettingsUpdate,
+    ) -> OdyResult<crate::session::design_handoff::HandoffDecision> {
+        use crate::session::design_handoff::HandoffDecision;
+        use ody_config::config_toml::PlanEnforcement;
+        use ody_protocol::config_types::ModeKind;
+
+        let captured = {
+            let state = self.state.lock().await;
+            let previous_mode = state.session_configuration.collaboration_mode.mode;
+            let next = match state.session_configuration.clone().apply(&updates) {
+                Ok(next) => next,
+                Err(err) => return Err(OdyErr::InvalidRequest(err.to_string())),
+            };
+            let new_mode = next.collaboration_mode.mode;
+            let edge = previous_mode == ModeKind::Design && new_mode != ModeKind::Design;
+            let artifact = if edge { state.last_design_artifact() } else { None };
+            let enforcement = state
+                .session_configuration
+                .original_config_do_not_use
+                .plan_mode
+                .as_ref()
+                .and_then(|plan_mode| plan_mode.enforcement)
+                .unwrap_or(PlanEnforcement::Strict);
+            (next, edge, artifact, enforcement)
+        };
+        let (next, edge, artifact, enforcement) = captured;
+        let decision = if edge {
+            crate::session::design_handoff::evaluate_design_exit(
+                artifact,
+                next.collaboration_mode.mode,
+                enforcement,
+            )
+            .await
+        } else {
+            HandoffDecision::Allow { reminder: None }
+        };
+        match decision {
+            HandoffDecision::Veto { missing_report } => {
+                Err(OdyErr::InvalidRequest(missing_report))
+            }
+            HandoffDecision::Allow { reminder } => {
+                let mut state = self.state.lock().await;
+                state.session_configuration = next;
+                drop(state);
+                Ok(HandoffDecision::Allow { reminder })
+            }
+        }
+    }
+
+    /// Apply a collaboration-mode update directly to the session configuration.
+    /// Used by the `debug prompt` diagnostics path (compiled into release builds too).
     pub(crate) async fn apply_debug_collaboration_mode(
         &self,
         collaboration_mode: CollaborationMode,
@@ -477,14 +534,9 @@ impl Session {
             collaboration_mode: Some(collaboration_mode),
             ..Default::default()
         };
-        let mut state = self.state.lock().await;
-        match state.session_configuration.clone().apply(&updates) {
-            Ok(next) => {
-                state.session_configuration = next;
-                Ok(())
-            }
-            Err(err) => Err(OdyErr::InvalidRequest(err.to_string())),
-        }
+        self.apply_mode_update_with_handoff(updates)
+            .await
+            .map(|_| ())
     }
 
     #[instrument(name = "session_init", level = "info", skip_all)]
