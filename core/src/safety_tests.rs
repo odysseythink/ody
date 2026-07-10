@@ -379,6 +379,25 @@ fn plan_artifact_at(path: &std::path::Path) -> crate::plan_artifact::PlanArtifac
     crate::plan_artifact::PlanArtifact::new_temp(plans_base_dir, thread_id, "2026-07-04")
 }
 
+fn design_mode() -> CollaborationMode {
+    CollaborationMode {
+        mode: ModeKind::Design,
+        settings: Settings {
+            model: "test".to_string(),
+            reasoning_effort: None,
+            developer_instructions: None,
+        },
+    }
+}
+
+fn design_artifact_at(path: &std::path::Path) -> crate::plan_artifact::PlanArtifact {
+    use ody_utils_absolute_path::AbsolutePathBuf;
+    let plans_base_dir = AbsolutePathBuf::from_absolute_path(path).unwrap();
+    let thread_id =
+        ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
+    crate::plan_artifact::PlanArtifact::new_design(plans_base_dir, thread_id, "2026-07-04")
+}
+
 #[test]
 fn plan_gate_strict_denies_patch_in_plan_mode() {
     let tmp = TempDir::new().unwrap();
@@ -547,6 +566,96 @@ fn plan_mode_write_denied_message_includes_marker_and_path() {
 }
 
 #[test]
+fn design_gate_strict_denies_patch_in_design_mode() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("file.txt");
+    let action = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&path.abs()),
+        "hello".to_string(),
+    );
+    let decision = plan_mode_gate_for_patch(&design_mode(), PlanEnforcement::Strict, &action, None);
+    assert!(matches!(decision, PlanGateDecision::Deny { .. }));
+    if let PlanGateDecision::Deny { reason } = decision {
+        assert!(reason.contains("[design-mode-blocked]"), "reason: {reason}");
+    }
+}
+
+#[test]
+fn design_gate_strict_allows_whitelisted_design_file() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = design_artifact_at(tmp.path());
+    let design_path = artifact.path().unwrap();
+    let action = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&design_path.abs()),
+        "# Design\n".to_string(),
+    );
+    let decision =
+        plan_mode_gate_for_patch(&design_mode(), PlanEnforcement::Strict, &action, Some(&artifact));
+    assert_eq!(decision, PlanGateDecision::Allow);
+}
+
+#[test]
+fn design_gate_strict_allows_whitelisted_stem_subdirectory_md() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = design_artifact_at(tmp.path());
+    let design_path = artifact.path().unwrap();
+    let stem_dir = design_path.with_extension("");
+    let sub_path = stem_dir.join("subsystem.md");
+    let action = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&sub_path.abs()),
+        "## Subsystem\n".to_string(),
+    );
+    let decision =
+        plan_mode_gate_for_patch(&design_mode(), PlanEnforcement::Strict, &action, Some(&artifact));
+    assert_eq!(decision, PlanGateDecision::Allow);
+}
+
+#[test]
+fn design_gate_ask_forces_approval_in_design_mode() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("file.txt");
+    let action = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&path.abs()),
+        "hello".to_string(),
+    );
+    let decision = plan_mode_gate_for_patch(&design_mode(), PlanEnforcement::Ask, &action, None);
+    assert!(matches!(decision, PlanGateDecision::Ask { .. }));
+}
+
+#[test]
+fn design_gate_advisory_allows_patch_in_design_mode() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("file.txt");
+    let action = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&path.abs()),
+        "hello".to_string(),
+    );
+    let decision = plan_mode_gate_for_patch(&design_mode(), PlanEnforcement::Advisory, &action, None);
+    assert_eq!(decision, PlanGateDecision::Allow);
+}
+
+#[test]
+fn design_gate_allows_default_mode_regardless_of_enforcement() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("file.txt");
+    let action = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&path.abs()),
+        "hello".to_string(),
+    );
+    for enforcement in [PlanEnforcement::Strict, PlanEnforcement::Ask, PlanEnforcement::Advisory] {
+        let decision = plan_mode_gate_for_patch(&default_mode(), enforcement, &action, None);
+        assert_eq!(decision, PlanGateDecision::Allow, "Default mode should never be gated");
+    }
+}
+
+#[test]
+fn design_mode_write_denied_message_includes_marker_and_path() {
+    let msg = design_mode_write_denied_message(std::path::Path::new("src/main.rs"));
+    assert!(msg.contains(DESIGN_MODE_REJECTION_MARKER));
+    assert!(msg.contains("src/main.rs"));
+}
+
+#[test]
 fn plan_mode_exec_denied_message_includes_marker_and_command() {
     let msg = plan_mode_exec_denied_message("git commit");
     assert!(msg.contains(PLAN_MODE_REJECTION_MARKER));
@@ -662,4 +771,85 @@ fn plan_gate_exec_default_mode_zero_regression() {
             );
         }
     }
+}
+
+#[test]
+fn design_gate_exec_read_only_allowed_in_strict() {
+    let cases = vec![
+        vec_str(&["ls"]),
+        vec_str(&["cat", "file.txt"]),
+        vec_str(&["grep", "TODO", "src"]),
+        vec_str(&["rg", "TODO"]),
+        vec_str(&["find", ".", "-name", "x"]),
+        vec_str(&["git", "status"]),
+        vec_str(&["git", "diff"]),
+        vec_str(&["bash", "-lc", "git status && grep TODO src"]),
+    ];
+    for cmd in cases {
+        assert_eq!(
+            plan_mode_gate_for_exec(&design_mode(), PlanEnforcement::Strict, &cmd),
+            PlanGateDecision::Allow,
+            "expected {cmd:?} to be read-only in Design mode"
+        );
+    }
+}
+
+#[test]
+fn design_gate_exec_known_write_strict_denies() {
+    let cases = vec![
+        vec_str(&["rm", "-rf", "/"]),
+        vec_str(&["cp", "a", "b"]),
+        vec_str(&["bash", "-lc", "echo x > file.txt"]),
+        vec_str(&["git", "commit", "-m", "x"]),
+    ];
+    for cmd in cases {
+        let decision = plan_mode_gate_for_exec(&design_mode(), PlanEnforcement::Strict, &cmd);
+        assert!(
+            matches!(decision, PlanGateDecision::Deny { .. }),
+            "expected {cmd:?} to be denied in Design mode strict"
+        );
+        if let PlanGateDecision::Deny { reason } = decision {
+            assert!(reason.contains("[design-mode-blocked]"), "reason: {reason}");
+        }
+    }
+}
+
+#[test]
+fn design_gate_exec_indeterminate_strict_asks() {
+    let cases = vec![
+        vec_str(&["cargo", "check"]),
+        vec_str(&["python", "script.py"]),
+        vec_str(&["bash", "-lc", "some-tool --analyze"]),
+    ];
+    for cmd in cases {
+        let decision = plan_mode_gate_for_exec(&design_mode(), PlanEnforcement::Strict, &cmd);
+        assert!(
+            matches!(decision, PlanGateDecision::Ask { .. }),
+            "expected {cmd:?} to require approval in Design mode strict"
+        );
+        if let PlanGateDecision::Ask { reason } = decision {
+            assert!(
+                reason.contains("Design mode"),
+                "ask reason should mention Design mode: {reason}"
+            );
+        }
+    }
+}
+
+#[test]
+fn design_gate_exec_advisory_allows_everything() {
+    for cmd in [vec_str(&["rm", "-rf", "/"]), vec_str(&["cargo", "check"])] {
+        assert_eq!(
+            plan_mode_gate_for_exec(&design_mode(), PlanEnforcement::Advisory, &cmd),
+            PlanGateDecision::Allow,
+            "advisory should behave like prompt-only Design mode"
+        );
+    }
+}
+
+#[test]
+fn design_mode_exec_denied_message_includes_marker_and_command() {
+    let msg = design_mode_exec_denied_message("git commit");
+    assert!(msg.contains(DESIGN_MODE_REJECTION_MARKER));
+    assert!(msg.contains("git commit"));
 }

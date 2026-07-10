@@ -26,6 +26,8 @@ mod realtime_end_instructions;
 mod realtime_start_instructions;
 mod realtime_start_with_instructions;
 mod recommended_plugins_instructions;
+#[cfg(test)]
+mod rigor_fragment_graph;
 mod rollout_budget;
 mod subagent_notification;
 mod token_budget_context;

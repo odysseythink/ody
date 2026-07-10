@@ -49,12 +49,31 @@ pub enum PlanGateDecision {
 /// consumers (e.g. the TUI footer) can detect them without parsing prose.
 pub const PLAN_MODE_REJECTION_MARKER: &str = "[plan-mode-blocked]";
 
+/// Stable marker appended to Design-mode rejection messages so that downstream
+/// consumers can detect them without parsing prose. Kept distinct from the
+/// Plan marker so Design-mode denials do not trigger Plan-mode-specific UI.
+pub const DESIGN_MODE_REJECTION_MARKER: &str = "[design-mode-blocked]";
+
 const PLAN_MODE_WRITE_DENIED_REASON: &str = "Plan mode is read-only by default. Finish planning and switch to Default mode to apply patches. [plan-mode-blocked]";
+
+const DESIGN_MODE_WRITE_DENIED_REASON: &str = "Design mode is read-only. Finish designing and switch to Plan or Default mode to make changes. [design-mode-blocked]";
 
 /// Returns a human-readable Plan-mode patch-denial message that includes the
 /// rejected file path and the stable rejection marker.
 pub fn plan_mode_write_denied_message(path: &std::path::Path) -> String {
     format!("{PLAN_MODE_WRITE_DENIED_REASON} (file: {})", path.display())
+}
+
+/// Returns a human-readable Design-mode patch-denial message that includes the
+/// rejected file path and the stable rejection marker.
+pub fn design_mode_write_denied_message(path: &std::path::Path) -> String {
+    format!("{DESIGN_MODE_WRITE_DENIED_REASON} (file: {})", path.display())
+}
+
+/// Returns true for session modes that are read-only by default and must be
+/// gated against patch writes and potentially-mutating exec commands.
+pub(crate) const fn is_read_only_session_mode(m: ModeKind) -> bool {
+    matches!(m, ModeKind::Plan | ModeKind::Design)
 }
 
 /// Plan-mode front gate for `apply_patch`. Runs before `assess_patch_safety` so that
@@ -69,7 +88,7 @@ pub fn plan_mode_gate_for_patch(
     action: &ApplyPatchAction,
     plan_artifact: Option<&PlanArtifact>,
 ) -> PlanGateDecision {
-    if mode.mode != ModeKind::Plan {
+    if !is_read_only_session_mode(mode.mode) {
         return PlanGateDecision::Allow;
     }
     if action.is_empty() {
@@ -94,12 +113,17 @@ pub fn plan_mode_gate_for_patch(
         return PlanGateDecision::Allow;
     }
 
+    let denied_reason = match mode.mode {
+        ModeKind::Design => DESIGN_MODE_WRITE_DENIED_REASON,
+        _ => PLAN_MODE_WRITE_DENIED_REASON,
+    };
+
     match enforcement {
         PlanEnforcement::Strict => PlanGateDecision::Deny {
-            reason: PLAN_MODE_WRITE_DENIED_REASON.to_string(),
+            reason: denied_reason.to_string(),
         },
         PlanEnforcement::Ask => PlanGateDecision::Ask {
-            reason: PLAN_MODE_WRITE_DENIED_REASON.to_string(),
+            reason: denied_reason.to_string(),
         },
         PlanEnforcement::Advisory => PlanGateDecision::Allow,
     }
@@ -109,10 +133,20 @@ const PLAN_MODE_EXEC_DENIED_REASON: &str = "Plan mode is read-only by default. T
 const PLAN_MODE_EXEC_ASK_REASON: &str =
     "This command may modify files while in Plan mode. Please confirm before running.";
 
+const DESIGN_MODE_EXEC_DENIED_REASON: &str = "Design mode is read-only. This command may modify files; finish designing and switch to Plan or Default mode to run it. [design-mode-blocked]";
+const DESIGN_MODE_EXEC_ASK_REASON: &str =
+    "This command may modify files while in Design mode. Please confirm before running.";
+
 /// Returns a human-readable Plan-mode exec-denial message that includes the
 /// rejected command and the stable rejection marker.
 pub fn plan_mode_exec_denied_message(command: &str) -> String {
     format!("{PLAN_MODE_EXEC_DENIED_REASON} (command: {command})")
+}
+
+/// Returns a human-readable Design-mode exec-denial message that includes the
+/// rejected command and the stable rejection marker.
+pub fn design_mode_exec_denied_message(command: &str) -> String {
+    format!("{DESIGN_MODE_EXEC_DENIED_REASON} (command: {command})")
 }
 
 #[derive(Debug, PartialEq)]
@@ -130,25 +164,36 @@ pub fn plan_mode_gate_for_exec(
     enforcement: PlanEnforcement,
     command: &[String],
 ) -> PlanGateDecision {
-    if mode.mode != ModeKind::Plan {
+    if !is_read_only_session_mode(mode.mode) {
         return PlanGateDecision::Allow;
     }
 
     let command_for_display = command.join(" ");
+    let (denied_message, ask_reason) = match mode.mode {
+        ModeKind::Design => (
+            design_mode_exec_denied_message(&command_for_display),
+            DESIGN_MODE_EXEC_ASK_REASON.to_string(),
+        ),
+        _ => (
+            plan_mode_exec_denied_message(&command_for_display),
+            PLAN_MODE_EXEC_ASK_REASON.to_string(),
+        ),
+    };
+
     match classify_command_for_plan_mode(command) {
         PlanModeExecClassification::ReadOnly => PlanGateDecision::Allow,
         PlanModeExecClassification::KnownWrite => match enforcement {
             PlanEnforcement::Strict => PlanGateDecision::Deny {
-                reason: plan_mode_exec_denied_message(&command_for_display),
+                reason: denied_message,
             },
             PlanEnforcement::Ask => PlanGateDecision::Ask {
-                reason: PLAN_MODE_EXEC_ASK_REASON.to_string(),
+                reason: ask_reason,
             },
             PlanEnforcement::Advisory => PlanGateDecision::Allow,
         },
         PlanModeExecClassification::Indeterminate => match enforcement {
             PlanEnforcement::Strict | PlanEnforcement::Ask => PlanGateDecision::Ask {
-                reason: PLAN_MODE_EXEC_ASK_REASON.to_string(),
+                reason: ask_reason,
             },
             PlanEnforcement::Advisory => PlanGateDecision::Allow,
         },

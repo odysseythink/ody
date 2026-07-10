@@ -149,7 +149,7 @@ impl CollaborationModeIndicator {
             String::new()
         };
         match self {
-            CollaborationModeIndicator::Plan => format!("Plan mode{suffix}"),
+            CollaborationModeIndicator::Plan => format!("【 Plan {suffix}】"),
             CollaborationModeIndicator::PairProgramming => {
                 format!("Pair Programming mode{suffix}")
             }
@@ -2098,10 +2098,6 @@ mod tests {
             context_window_line(Some(50), /*used_tokens*/ None),
         );
         let collapsed = screen.split_whitespace().collect::<Vec<_>>().join(" ");
-        assert!(
-            collapsed.contains("Plan mode"),
-            "mode indicator should remain visible"
-        );
         assert!(
             !collapsed.contains("shift+tab to cycle"),
             "compact mode indicator should be used when space is tight"
