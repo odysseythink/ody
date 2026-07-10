@@ -37,8 +37,6 @@ use crate::mentions::build_skill_name_counts;
 use crate::mentions::collect_explicit_app_ids;
 use crate::mentions::collect_explicit_plugin_mentions;
 use crate::mentions::collect_tool_mentions_from_messages;
-use crate::plan_artifact::PlanArtifact;
-use crate::plan_artifact::sanitize_plan_slug;
 use crate::plan_mode_injector::PlanModeInjector;
 use crate::plan_mode_injector::ReminderKind;
 use crate::plan_mode_injector::render_directive;
@@ -622,33 +620,7 @@ async fn run_hooks_and_record_inputs(
             .await;
         }
     }
-    if accepted_user_input {
-        finalize_plan_artifact_name(turn_context, input).await;
-    }
     blocked_input && !accepted_user_input
-}
-
-async fn finalize_plan_artifact_name(turn_context: &TurnContext, input: &[TurnInput]) {
-    let Some(artifact) = &turn_context.plan_artifact else {
-        return;
-    };
-
-    let first_text = input.iter().find_map(|item| match item {
-        TurnInput::UserInput { content, .. } => {
-            content.iter().find_map(|user_input| match user_input {
-                UserInput::Text { text, .. } if !text.trim().is_empty() => Some(text.as_str()),
-                _ => None,
-            })
-        }
-        _ => None,
-    });
-
-    let Some(text) = first_text else {
-        return;
-    };
-
-    let slug = sanitize_plan_slug(text);
-    let _ = artifact.finalize_name(&slug).await;
 }
 
 #[instrument(level = "trace", skip_all)]

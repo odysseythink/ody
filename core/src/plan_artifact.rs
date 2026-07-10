@@ -140,18 +140,32 @@ impl PlanArtifact {
         }
     }
 
+    /// Explicit override for the title-based auto-finalization `write_plan` does
+    /// on its first persisted write. No production call site left after that
+    /// change (finalization is now driven by the plan's own title); kept as a
+    /// public escape hatch and heavily used by tests to pre-finalize an artifact
+    /// to a known path.
+    #[allow(dead_code)]
     pub async fn finalize_name(&self, slug: &str) -> Result<(), PlanArtifactError> {
         let mut state = self.state.lock().await;
         match &*state {
             PlanArtifactState::Finalized { .. } => Err(PlanArtifactError::AlreadyFinalized),
             PlanArtifactState::InlineOnly => Ok(()),
             PlanArtifactState::Temporary { .. } => {
-                let sanitized = sanitize_plan_slug(slug);
-                let final_name = format!("{}-{}.md", self.date, sanitized);
-                let final_path = self.plans_base_dir.as_path().join(self.subdir).join(final_name);
-                *state = PlanArtifactState::Finalized { final_path };
+                self.apply_finalized_name(&mut state, slug);
                 Ok(())
             }
+        }
+    }
+
+    /// Rewrites `state` in place to `Finalized` using `slug`. No-op unless
+    /// `state` is still `Temporary`. Caller must already hold the lock.
+    fn apply_finalized_name(&self, state: &mut PlanArtifactState, slug: &str) {
+        if matches!(state, PlanArtifactState::Temporary { .. }) {
+            let sanitized = sanitize_plan_slug(slug);
+            let final_name = format!("{}-{}.md", self.date, sanitized);
+            let final_path = self.plans_base_dir.as_path().join(self.subdir).join(final_name);
+            *state = PlanArtifactState::Finalized { final_path };
         }
     }
 
@@ -164,6 +178,13 @@ impl PlanArtifact {
             *state = PlanArtifactState::InlineOnly;
             return PlanWriteOutcome::InlineOnly;
         }
+
+        // First real write: name the file from the plan's own title instead of
+        // leaving it under the `tmp-<thread_id>-<date>.md` placeholder. A later
+        // write (e.g. a split plan's part turns) sees `Finalized` already and
+        // `apply_finalized_name` is a no-op, so the path stays stable.
+        let slug = slug_from_markdown_title(markdown).unwrap_or_else(|| "plan".to_string());
+        self.apply_finalized_name(&mut state, &slug);
 
         let path = match &*state {
             PlanArtifactState::Temporary { temp_path } => temp_path.clone(),
@@ -332,6 +353,11 @@ pub(crate) fn sanitize_plan_slug(prompt: &str) -> String {
     }
 }
 
+/// Upper bound on a sanitized slug's length. Without this, slugifying an
+/// unbounded input (e.g. a whole user prompt embedding full file paths)
+/// produces filenames hundreds of characters long.
+const MAX_SLUG_LEN: usize = 60;
+
 // Reuse the existing slug sanitizer used by plugins.
 fn sanitize_name(name: &str) -> String {
     let mut normalized = String::with_capacity(name.len());
@@ -344,13 +370,48 @@ fn sanitize_name(name: &str) -> String {
     }
     let normalized = normalized.trim_matches('-');
     if normalized.is_empty() {
-        "app".to_string()
-    } else {
-        normalized
-            .split('-')
-            .filter(|segment| !segment.is_empty())
-            .collect::<Vec<_>>()
-            .join("_")
+        return "app".to_string();
+    }
+    let joined = normalized
+        .split('-')
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>()
+        .join("_");
+    truncate_slug(&joined, MAX_SLUG_LEN)
+}
+
+/// Truncates a `_`-joined slug to at most `max_len` bytes without cutting a
+/// word in half. The sanitized alphabet is ASCII-only, so byte indices are
+/// always char boundaries.
+fn truncate_slug(slug: &str, max_len: usize) -> String {
+    if slug.len() <= max_len {
+        return slug.to_string();
+    }
+    let truncated = &slug[..max_len];
+    match truncated.rfind('_') {
+        Some(idx) if idx > 0 => truncated[..idx].to_string(),
+        _ => truncated.trim_end_matches('_').to_string(),
+    }
+}
+
+/// Extracts a short slug from the plan/design markdown's own title line
+/// (`# <Feature> Implementation Plan`, mandated by the plan/design prompt
+/// contracts as the first line of every plan). This lets the model name its
+/// own plan file — mirroring ody-code's "invent your own filename" contract
+/// — instead of mechanically slugifying the entire raw user prompt, which has
+/// no natural length bound and can embed whole file paths verbatim.
+fn slug_from_markdown_title(markdown: &str) -> Option<String> {
+    let title_line = markdown
+        .lines()
+        .map(str::trim)
+        .find(|line| line.starts_with('#'))?;
+    let title = title_line.trim_start_matches('#').trim();
+    if title.is_empty() {
+        return None;
+    }
+    match sanitize_name(title).as_str() {
+        "" | "app" => None,
+        _ => Some(sanitize_name(title)),
     }
 }
 
@@ -451,6 +512,74 @@ mod tests {
     #[test]
     fn sanitize_plan_slug_non_ascii_fallback() {
         assert_eq!(sanitize_plan_slug("你好世界"), "plan");
+    }
+
+    #[test]
+    fn sanitize_plan_slug_truncates_long_input() {
+        // Regression: naming used to slugify the *entire* raw user prompt with no
+        // length cap, so a /writing-plan prompt embedding two absolute file paths
+        // produced 150+ char filenames. `sanitize_name` must cap output length
+        // regardless of caller.
+        let long_prompt = "请阅读文件 .ody-code/designs/2026-07-10-d6-design-plan-handoff.md 的内容，并将其转换为一份完整、可执行的执行计划，写入计划文件 /Users/ranwei/workspace/rust_work/ody-rs/.ody-code/plans/2026-07-10-d6-design-plan-handoff.md。";
+        let slug = sanitize_plan_slug(long_prompt);
+        assert!(
+            slug.len() <= 60,
+            "slug should be capped at 60 chars, got {} chars: {slug}",
+            slug.len()
+        );
+        assert!(
+            !slug.ends_with('_'),
+            "truncation should not leave a trailing separator: {slug}"
+        );
+    }
+
+    #[tokio::test]
+    async fn write_plan_finalizes_name_from_markdown_title_not_raw_prompt() {
+        // Mirrors ody-code's "invent your own filename" contract: the plan's own
+        // title (which the rigor-tier header mandates as `# <Feature> Implementation
+        // Plan`) names the file, not a mechanical slugify of the user's raw prompt.
+        let (artifact, tmp) = test_artifact("2026-07-10");
+        let markdown = "# D6 Design to Plan Handoff Implementation Plan\n\n**Goal:** ...";
+        let outcome = artifact.write_plan(markdown, true).await;
+        let path = match outcome {
+            PlanWriteOutcome::Written { path } => path,
+            other => panic!("expected Written, got {other:?}"),
+        };
+        assert!(path.starts_with(tmp.path().join("plans")));
+        assert_eq!(
+            path.file_name().unwrap().to_str().unwrap(),
+            "2026-07-10-d6_design_to_plan_handoff_implementation_plan.md"
+        );
+    }
+
+    #[tokio::test]
+    async fn write_plan_falls_back_to_plan_slug_when_markdown_has_no_title() {
+        let (artifact, _tmp) = test_artifact("2026-07-10");
+        let outcome = artifact.write_plan("no heading here, just prose", true).await;
+        let path = match outcome {
+            PlanWriteOutcome::Written { path } => path,
+            other => panic!("expected Written, got {other:?}"),
+        };
+        assert_eq!(
+            path.file_name().unwrap().to_str().unwrap(),
+            "2026-07-10-plan.md"
+        );
+    }
+
+    #[tokio::test]
+    async fn write_plan_does_not_refinalize_an_already_finalized_artifact() {
+        let (artifact, _tmp) = test_artifact("2026-07-10");
+        artifact.finalize_name("explicit_name").await.unwrap();
+        let outcome = artifact
+            .write_plan("# A Totally Different Title\n\nbody", true)
+            .await;
+        let path = match outcome {
+            PlanWriteOutcome::Written { path } => path,
+            other => panic!("expected Written, got {other:?}"),
+        };
+        // Already-finalized paths (e.g. split-plan part turns re-writing the index)
+        // must stay stable — the title on a later write must not rename the file.
+        assert!(path.to_string_lossy().ends_with("explicit_name.md"));
     }
 
     #[test]
