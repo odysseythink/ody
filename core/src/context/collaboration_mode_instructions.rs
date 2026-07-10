@@ -28,8 +28,10 @@ impl CollaborationModeInstructions {
             .as_ref()
             .filter(|instructions| !instructions.is_empty())?;
 
-        let rendered = if collaboration_mode.mode == ModeKind::Plan
-            && instructions.contains(SPLIT_THRESHOLD_TEMPLATE_KEY)
+        let rendered = if matches!(
+            collaboration_mode.mode,
+            ModeKind::Plan | ModeKind::Design
+        ) && instructions.contains(SPLIT_THRESHOLD_TEMPLATE_KEY)
         {
             render_plan_instructions(instructions, split_threshold)
         } else {
@@ -191,6 +193,62 @@ mod tests {
         let instructions = CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8), None, None, None)
             .expect("should produce instructions");
         assert_eq!(instructions.body(), "Split plans larger than 8 tasks.");
+    }
+
+    #[test]
+    fn renders_split_threshold_placeholder_for_design_mode() {
+        let mode = CollaborationMode {
+            mode: ModeKind::Design,
+            settings: Settings {
+                model: "test-model".to_string(),
+                reasoning_effort: None,
+                developer_instructions: Some(
+                    "Split designs larger than {{ split_threshold }} subsystems.".to_string(),
+                ),
+            },
+        };
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            None,
+            None,
+            None,
+        )
+        .expect("should produce instructions");
+        assert_eq!(
+            instructions.body(),
+            "Split designs larger than 8 subsystems."
+        );
+    }
+
+    #[test]
+    fn design_mode_does_not_compose_plan_rigor_fragments() {
+        let mode = CollaborationMode {
+            mode: ModeKind::Design,
+            settings: Settings {
+                model: "test-model".to_string(),
+                reasoning_effort: None,
+                developer_instructions: Some("Design the work.".to_string()),
+            },
+        };
+        let config = PlanModeConfigToml {
+            tier: Some(PlanModeTier::Rigor),
+            ..Default::default()
+        };
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            None,
+            Some(&config),
+            None,
+        )
+        .expect("should produce instructions");
+        let body = instructions.body();
+        assert_eq!(body, "Design the work.");
+        assert!(
+            !body.contains("## Dependency Overview"),
+            "design mode must not compose plan rigor fragments:\n{body}"
+        );
     }
 
     #[test]

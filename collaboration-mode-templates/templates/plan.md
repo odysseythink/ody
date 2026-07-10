@@ -155,3 +155,7 @@ Example `## Parts` table:
 | 3 | `ui.md` | rendering | pending |
 
 If the user stays in Plan mode and asks for revisions after a prior `<proposed_plan>`, any new `<proposed_plan>` must be a complete replacement. If the user indicates that the prior plan is not acceptable but does not provide enough information to produce a complete replacement, address the concern and continue planning without producing a `<proposed_plan>` block. If the follow-up neither requires changes nor calls the plan into question (e.g. clarifying question), answer it before the block, then reproduce the prior `<proposed_plan>` unchanged.
+
+## Plan file location
+
+Persist plan output to the project's `.ody-code/plans/` directory. Use the filename format `YYYY-MM-DD-<topic>.md` (for example `2026-07-10-search-redesign.md`). Do NOT place plan files under `.ody-code/roadmaps/` or any other location.

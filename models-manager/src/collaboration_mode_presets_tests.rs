@@ -27,6 +27,53 @@ fn plan_mode_instructions_anchor_plan_file_to_plans_directory() {
 }
 
 #[test]
+fn design_preset_uses_design_mode_and_name() {
+    let preset = design_preset();
+    assert_eq!(preset.name, ModeKind::Design.display_name());
+    assert_eq!(preset.name, "Design");
+    assert_eq!(preset.mode, Some(ModeKind::Design));
+    assert_eq!(preset.model, None);
+    assert_eq!(
+        preset.reasoning_effort,
+        Some(Some(ReasoningEffort::Medium))
+    );
+}
+
+#[test]
+fn design_mode_instructions_anchor_design_file_to_designs_directory() {
+    let design_instructions = design_preset()
+        .developer_instructions
+        .expect("design preset should include instructions")
+        .expect("design instructions should be set");
+
+    assert!(design_instructions.contains(".ody-code/designs/"));
+    assert!(design_instructions.contains("YYYY-MM-DD-<topic>.md"));
+    assert!(
+        !design_instructions.contains(".ody-code/roadmaps/"),
+        "design instructions must not point at the roadmaps directory"
+    );
+    // Hard exit gates must be referenced so the model cannot skip them.
+    assert!(design_instructions.contains("<HARD-GATE>"));
+    assert!(design_instructions.contains("## Reuse Analysis"));
+    assert!(design_instructions.contains("## Self-Review"));
+    assert!(design_instructions.contains("[C:UPSTREAM]"));
+}
+
+#[test]
+fn builtin_presets_include_design_between_plan_and_default() {
+    let presets = builtin_collaboration_mode_presets();
+    let modes: Vec<Option<ModeKind>> = presets.into_iter().map(|preset| preset.mode).collect();
+    assert_eq!(
+        modes,
+        vec![
+            Some(ModeKind::Plan),
+            Some(ModeKind::Design),
+            Some(ModeKind::Default),
+        ]
+    );
+}
+
+#[test]
 fn default_mode_instructions_replace_mode_names_placeholder() {
     let default_instructions = default_preset()
         .developer_instructions
