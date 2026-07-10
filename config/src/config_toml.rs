@@ -176,7 +176,10 @@ fn default_plan_mode_config() -> Option<PlanModeConfigToml> {
     Some(PlanModeConfigToml::default())
 }
 
-/// Settings scoped to Plan mode.
+/// Settings scoped to Plan mode and Design mode.
+///
+/// Design mode shares these controls because it uses the same read-only
+/// enforcement, splitting threshold, and compaction semantics as Plan mode.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct PlanModeConfigToml {
