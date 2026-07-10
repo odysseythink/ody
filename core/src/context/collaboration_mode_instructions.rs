@@ -222,6 +222,33 @@ mod tests {
     }
 
     #[test]
+    fn design_split_threshold_uses_default_when_config_absent() {
+        let mode = CollaborationMode {
+            mode: ModeKind::Design,
+            settings: Settings {
+                model: "test-model".to_string(),
+                reasoning_effort: None,
+                developer_instructions: Some(
+                    "Split designs larger than {{ split_threshold }} subsystems.".to_string(),
+                ),
+            },
+        };
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("should produce instructions");
+        assert_eq!(
+            instructions.body(),
+            "Split designs larger than 8 subsystems.",
+            "when split_threshold is None, Design mode should fall back to the same default as Plan mode"
+        );
+    }
+
+    #[test]
     fn design_mode_does_not_compose_plan_rigor_fragments() {
         let mode = CollaborationMode {
             mode: ModeKind::Design,
