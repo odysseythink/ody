@@ -222,7 +222,7 @@ pub fn render_directive(
             next_part.relative_path, next_part.scope
         )),
         (_, PlanModeDirective::FinalReview) => Some(
-            "All parts are marked done. Before finalizing the plan, review the parts for consistency, then output the final <proposed_plan> summary in the index file.".to_string()
+            "All parts are marked done. Before finalizing the plan, review the parts for consistency, then call the submit_plan tool with the final plan markdown as the only action to persist it and end the turn.".to_string()
         ),
         (_, PlanModeDirective::None) => None,
     }
@@ -666,7 +666,7 @@ mod directive_tests {
         .expect("design final review");
         assert!(text.to_lowercase().contains("cross-file"), "{text}");
         assert!(
-            !text.contains("<proposed_plan>"),
+            !text.contains("submit_plan"),
             "design final review must not ask for a plan summary: {text}"
         );
     }

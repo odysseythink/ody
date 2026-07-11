@@ -190,4 +190,4 @@ If the user stays in Plan mode and asks for revisions after a prior `<proposed_p
 
 Persist plan output to the project's `.ody-code/plans/` directory. Use the filename format `YYYY-MM-DD-<topic>.md` (for example `2026-07-10-search-redesign.md`). Do NOT place plan files under `.ody-code/roadmaps/` or any other location.
 
-Persistence is automatic: placing a `<proposed_plan>` block in your reply saves it to the assigned plan file for you. Do not run shell commands or any write tool to save the plan yourself — those writes are blocked in Plan mode and are unnecessary.
+Persistence is automatic: calling `submit_plan` with the plan markdown saves it to the assigned plan file for you. Do not run shell commands or any write tool to save the plan yourself — those writes are blocked in Plan mode and are unnecessary.

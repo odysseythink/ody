@@ -1,4 +1,4 @@
-## Rigor tier addendum: Turn discipline (when to call ExitPlanMode)
+## Rigor tier addendum: Turn discipline (when to submit the plan)
 
 Plan mode sessions must follow strict turn discipline to avoid loops and ensure clear approval gates.
 
@@ -11,10 +11,10 @@ Every turn in a non-split plan must end with exactly ONE of:
    - One question per turn; wait for the answer before proceeding.
    - Do NOT mention "the plan" (user cannot see it yet).
 
-2. **ExitPlanMode** — when the plan is decision-complete
+2. **submit_plan** — when the plan is decision-complete
    - Use when the plan is ready for user approval.
-   - Include the full plan content in the `<proposed_plan>` block.
-   - Never ask about approval via text — that is ExitPlanMode's job.
+   - Call the `submit_plan` tool with the full plan markdown as the `plan` argument.
+   - Never ask about approval via text — that is `submit_plan`'s job.
 
 **Never mix them in one turn:** Do not call AskUserQuestion and ExitPlanMode in the same turn.
 
@@ -30,7 +30,7 @@ Split plans have different discipline because parts are written sequentially:
 
 **After all parts are done:**
 - Do cross-file consistency review (no additional parts written)
-- Call ExitPlanMode to request approval
+- Call `submit_plan` to request approval
 
 ### Specific rules
 
@@ -38,7 +38,7 @@ Split plans have different discipline because parts are written sequentially:
 - ❌ "Is this plan OK?" (in plain text)
 - ❌ "Shall I proceed with this plan?" (in AskUserQuestion)
 - ✅ "Do you prefer Approach A or B?" (in AskUserQuestion, to clarify spec)
-- ✅ `<proposed_plan>` block (ExitPlanMode's job)
+- ✅ Call `submit_plan` with the final plan markdown (submit_plan's job)
 
 #### Rule 2: Do NOT reference "the plan" in AskUserQuestion
 - ❌ "Does the plan cover enough detail?"
@@ -53,15 +53,15 @@ When using AskUserQuestion, provide 2-4 meaningful options:
 - ✅ Each option materially changes the spec/plan
 - ❌ Options include filler ("Other: specify"); avoid generic catch-alls
 
-#### Rule 4: ExitPlanMode includes the full plan
-- Wrap the plan in `<proposed_plan>` tags
+#### Rule 4: submit_plan includes the full plan
+- Pass the full plan markdown as the `plan` argument to `submit_plan`
 - Include everything (not incremental chunks)
-- Never output more than one `<proposed_plan>` block per turn
+- Never call `submit_plan` more than once per turn
 
 #### Rule 5: If the user rejects the plan
 - User responds without selecting an option (stays in plan mode)
 - Revise the plan based on their feedback
-- Output a new `<proposed_plan>` (complete replacement, not delta)
+- Call `submit_plan` with a new complete plan markdown (complete replacement, not delta)
 
 ### Example turn sequence (non-split plan)
 

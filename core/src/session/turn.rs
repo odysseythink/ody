@@ -359,6 +359,21 @@ pub(crate) async fn run_turn(
                 let needs_follow_up = model_needs_follow_up || has_pending_input;
                 let token_limit_reached = token_status.token_limit_reached;
 
+                // Plan-mode terminal tool: if submit_plan finalized the plan during this
+                // sampling response, end the turn cleanly. The after-turn hook already ran
+                // inside run_sampling_request (turn.rs:2682). Skip stop hooks — submit_plan
+                // is the intentional terminal action, so we must not let a stop hook
+                // re-inject continuation and undo terminality.
+                if turn_context.collaboration_mode.mode == ModeKind::Plan
+                    && turn_context
+                        .plan_artifact
+                        .as_ref()
+                        .is_some_and(|artifact| artifact.take_submitted())
+                {
+                    last_agent_message = sampling_request_last_agent_message;
+                    break;
+                }
+
                 trace!(
                     turn_id = %turn_context.sub_id,
                     total_usage_tokens = token_status.active_context_tokens,
@@ -1904,23 +1919,14 @@ async fn handle_plan_segments(
                 sess.send_event(turn_context, EventMsg::AgentMessageContentDelta(event))
                     .await;
             }
-            ProposedPlanSegment::ProposedPlanStart => {
-                if !state.plan_item_state.completed {
-                    state.plan_item_state.start(sess, turn_context).await;
-                }
+            ProposedPlanSegment::ProposedPlanStart
+            | ProposedPlanSegment::ProposedPlanEnd
+            | ProposedPlanSegment::ProposedPlanDelta(_) => {
+                // Intentionally strip inline <proposed_plan> tags. Plan mode
+                // finalization is now exclusively via the submit_plan tool; any
+                // remaining inline tag is treated as ordinary text and does not
+                // start/complete a PlanItem or persist a plan.
             }
-            ProposedPlanSegment::ProposedPlanDelta(delta) => {
-                if !state.plan_item_state.completed {
-                    if !state.plan_item_state.started {
-                        state.plan_item_state.start(sess, turn_context).await;
-                    }
-                    state
-                        .plan_item_state
-                        .push_delta(sess, turn_context, &delta)
-                        .await;
-                }
-            }
-            ProposedPlanSegment::ProposedPlanEnd => {}
         }
     }
 }
@@ -2096,7 +2102,9 @@ async fn handle_assistant_item_done_in_plan_mode(
     if let ResponseItem::Message { role, .. } = item
         && role == "assistant"
     {
-        maybe_complete_plan_item_from_message(sess, turn_context, state, item).await;
+        // Inline <proposed_plan> blocks are no longer a terminal source; the
+        // submit_plan tool is the only way to finalize. Do not complete a
+        // PlanItem from message content.
 
         let mut finalized_facts = None;
         if let Some(mut finalized_turn_item) = finalize_non_tool_response_item(

@@ -643,6 +643,12 @@ fn add_core_utility_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut
         planned_tools.add(PlanHandler);
     }
 
+    // submit_plan is the explicit terminal action for Plan mode; exposing it
+    // outside Plan mode would let non-plan turns end themselves via a tool.
+    if turn_context.collaboration_mode.mode == ModeKind::Plan {
+        planned_tools.add_with_exposure(SubmitPlanHandler, ToolExposure::DirectModelOnly);
+    }
+
     if turn_context.config.experimental_request_user_input_enabled {
         planned_tools.add_with_exposure(
             RequestUserInputHandler {

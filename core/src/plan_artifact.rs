@@ -3,6 +3,8 @@ use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path::write_atomically;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Mutex as StdMutex;
 use tokio::sync::Mutex;
 
@@ -14,6 +16,7 @@ use tokio::sync::Mutex;
 #[derive(Debug)]
 pub struct PlanArtifact {
     state: Mutex<PlanArtifactState>,
+    submitted: AtomicBool,
     last_manifest_snapshot: Mutex<Option<ManifestSnapshot>>,
     last_plan_text: Mutex<Option<String>>,
     /// 1-based count of plan-mode after-turn calls for this artifact.
@@ -110,6 +113,7 @@ impl PlanArtifact {
         let temp_path = allocate_temp_path(&plans_base_dir, subdir, &thread_id, date);
         Self {
             state: Mutex::new(PlanArtifactState::Temporary { temp_path }),
+            submitted: AtomicBool::new(false),
             last_manifest_snapshot: Mutex::new(None),
             last_plan_text: Mutex::new(None),
             plan_mode_turn_count: StdMutex::new(0),
@@ -121,6 +125,19 @@ impl PlanArtifact {
             thread_id,
             date: date.to_string(),
         }
+    }
+
+
+    /// Mark the plan as submitted. Plan-mode turn loop will end the turn on
+    /// the next `take_submitted` check.
+    pub fn mark_submitted(&self) {
+        self.submitted.store(true, Ordering::Release);
+    }
+
+    /// Take the submitted flag. Returns true exactly once after
+    /// `mark_submitted` was called, resetting it to false.
+    pub fn take_submitted(&self) -> bool {
+        self.submitted.swap(false, Ordering::AcqRel)
     }
 
     pub fn new_temp(
@@ -306,6 +323,7 @@ impl PlanArtifact {
                 let subdir = infer_subdir(&plans_base_dir, &path);
                 Self {
                     state: Mutex::new(PlanArtifactState::Finalized { final_path: path }),
+                    submitted: AtomicBool::new(false),
                     last_manifest_snapshot: Mutex::new(None),
                     last_plan_text: Mutex::new(None),
                     plan_mode_turn_count: StdMutex::new(0),
@@ -438,6 +456,15 @@ mod tests {
             .contains("tmp-00000000-0000-0000-0000-000000000001-2026-07-04.md"));
     }
 
+
+    #[test]
+    fn submitted_flag_defaults_false_and_toggles_once() {
+        let (artifact, _tmp) = test_artifact("2026-07-04");
+        assert!(!artifact.take_submitted());
+        artifact.mark_submitted();
+        assert!(artifact.take_submitted());
+        assert!(!artifact.take_submitted());
+    }
     #[tokio::test]
     async fn new_design_allocates_under_designs() {
         let tmp = tempfile::tempdir().unwrap();
