@@ -2425,7 +2425,7 @@
     },
     "PlanModeConfigToml": {
       "additionalProperties": false,
-      "description": "Settings scoped to Plan mode.",
+      "description": "Settings scoped to Plan mode and Design mode.\n\nDesign mode shares these controls because it uses the same read-only enforcement, splitting threshold, and compaction semantics as Plan mode.",
       "properties": {
         "context_isolation": {
           "allOf": [

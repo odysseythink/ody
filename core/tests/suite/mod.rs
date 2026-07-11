@@ -37,6 +37,7 @@ mod auto_review;
 mod client;
 mod client_websockets;
 mod code_mode;
+mod design_mode;
 mod ody_delegate;
 mod collaboration_instructions;
 mod compact;
