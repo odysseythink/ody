@@ -39,6 +39,7 @@ pub enum SlashCommand {
     Init,
     Compact,
     Plan,
+    Design,
     WritingPlan,
     Goal,
     Agent,
@@ -118,6 +119,7 @@ impl SlashCommand {
             }
             SlashCommand::Personality => "choose a communication style for Ody",
             SlashCommand::Plan => "switch to Plan mode",
+            SlashCommand::Design => "switch to Design mode",
             SlashCommand::WritingPlan => "convert a source file into an execution plan (plan mode only)",
             SlashCommand::Goal => "set or view the goal for a long-running task",
             SlashCommand::Agent | SlashCommand::MultiAgents => "switch the active agent thread",
@@ -156,6 +158,7 @@ impl SlashCommand {
             SlashCommand::Review
                 | SlashCommand::Rename
                 | SlashCommand::Plan
+                | SlashCommand::Design
                 | SlashCommand::WritingPlan
                 | SlashCommand::Goal
                 | SlashCommand::Ide
@@ -201,6 +204,7 @@ impl SlashCommand {
             | SlashCommand::Import
             | SlashCommand::Review
             | SlashCommand::Plan
+            | SlashCommand::Design
             | SlashCommand::WritingPlan
             | SlashCommand::Clear
             | SlashCommand::Logout
@@ -294,6 +298,16 @@ mod tests {
         assert!(SlashCommand::Raw.available_in_side_conversation());
         assert!(SlashCommand::Raw.supports_inline_args());
         assert!(SlashCommand::App.available_during_task());
+    }
+
+    #[test]
+    #[test]
+    fn design_command_parses_and_describes() {
+        assert_eq!(SlashCommand::Design.command(), "design");
+        assert_eq!(SlashCommand::from_str("design"), Ok(SlashCommand::Design));
+        assert_eq!(SlashCommand::Design.description(), "switch to Design mode");
+        assert!(!SlashCommand::Design.available_during_task());
+        assert!(SlashCommand::Design.supports_inline_args());
     }
 
     #[test]

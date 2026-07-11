@@ -100,6 +100,26 @@ impl ChatWidget {
         }
     }
 
+    fn apply_design_slash_command(&mut self) -> bool {
+        if !self.collaboration_modes_enabled() {
+            self.add_info_message(
+                "Collaboration modes are disabled.".to_string(),
+                Some("Enable collaboration modes to use /design.".to_string()),
+            );
+            return false;
+        }
+        if let Some(mask) = collaboration_modes::design_mask(self.model_catalog.as_ref()) {
+            self.set_collaboration_mask_from_user_action(mask);
+            true
+        } else {
+            self.add_info_message(
+                "Design mode unavailable right now.".to_string(),
+                /*hint*/ None,
+            );
+            false
+        }
+    }
+
 
 
     /// Return the directory used for plan files in Plan mode.
@@ -111,6 +131,18 @@ impl ChatWidget {
             .clone()
             .unwrap_or_else(|| self.config.cwd.to_path_buf());
         Some(cwd.join(".ody-code").join("plans"))
+    }
+
+    /// Return the directory used for design files in Design mode.
+    ///
+    /// Mirrors `PlanArtifact` layout: `{cwd}/.ody-code/designs`.
+    #[allow(dead_code)]
+    fn design_directory(&self) -> Option<PathBuf> {
+        let cwd = self
+            .current_cwd
+            .clone()
+            .unwrap_or_else(|| self.config.cwd.to_path_buf());
+        Some(cwd.join(".ody-code").join("designs"))
     }
 
     fn allocate_writing_plan_path(&self, source_path: &Path) -> Option<PathBuf> {
@@ -313,6 +345,9 @@ impl ChatWidget {
             }
             SlashCommand::Plan => {
                 self.apply_plan_slash_command();
+            }
+            SlashCommand::Design => {
+                self.apply_design_slash_command();
             }
             SlashCommand::Goal => {
                 if !self.config.features.enabled(Feature::Goals) {
@@ -755,6 +790,27 @@ impl ChatWidget {
                     self.queue_user_message(user_message);
                 }
             }
+            SlashCommand::Design if !trimmed.is_empty() => {
+                if !self.apply_design_slash_command() {
+                    return;
+                }
+                let user_message = self.prepared_inline_user_message(
+                    args,
+                    text_elements,
+                    local_images,
+                    remote_image_urls,
+                    mention_bindings,
+                    source,
+                );
+                if self.is_session_configured() {
+                    self.reasoning_buffer.clear();
+                    self.full_reasoning_buffer.clear();
+                    self.set_status_header(String::from("Working"));
+                    self.submit_user_message(user_message);
+                } else {
+                    self.queue_user_message(user_message);
+                }
+            }
             SlashCommand::WritingPlan if !trimmed.is_empty() => {
                 if !self.apply_plan_slash_command() {
                     return;
@@ -1121,6 +1177,7 @@ impl ChatWidget {
             | SlashCommand::Model
             | SlashCommand::Personality
             | SlashCommand::Plan
+            | SlashCommand::Design
             | SlashCommand::Goal
             | SlashCommand::Side
             | SlashCommand::Btw
