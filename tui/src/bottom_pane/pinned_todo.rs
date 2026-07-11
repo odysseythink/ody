@@ -88,14 +88,35 @@ impl PinnedTodoWidget {
     }
 
     /// Render the plan content into a vector of lines at the given width.
+    ///
+    /// The returned height is kept stable as task statuses change: when the widget is first shown
+    /// we lock to `min(max_lines, full_content_height)` and pad with blank lines if the live
+    /// folded view becomes shorter. An empty plan (no tasks) hides the widget entirely.
     fn display_lines(&self, width: u16) -> Vec<ratatui::text::Line<'static>> {
+        // No tasks: don't take up any space.
+        if self.plan.is_empty() {
+            return vec![];
+        }
+
         let full = render_plan_steps(width, self.explanation.as_deref(), &self.plan);
 
-        if self.expanded || full.len() <= self.max_lines {
+        if self.expanded {
             return full;
         }
 
-        self.folded_lines(width, full.len())
+        let target = full.len().min(self.max_lines);
+        let mut lines = if full.len() <= self.max_lines {
+            full
+        } else {
+            self.folded_lines(width, full.len())
+        };
+
+        // Keep the height fixed while tasks are being completed.
+        while lines.len() < target {
+            lines.push(Line::from(""));
+        }
+
+        lines
     }
 
     /// Build a compact folded view when the plan has too many lines.
@@ -320,7 +341,7 @@ mod tests {
         assert_eq!(widget.desired_height(80), 3);
 
         widget.clear();
-        assert_eq!(widget.desired_height(80), 2); // header + (no steps provided)
+        assert_eq!(widget.desired_height(80), 0); // empty plan -> hidden
     }
 
     #[test]
@@ -347,6 +368,94 @@ mod tests {
             widget.desired_height(80) <= 8,
             "folded pinned plan must not exceed max_lines: got {}",
             widget.desired_height(80)
+        );
+    }
+
+    #[test]
+    fn fixed_height_for_short_plan_when_all_completed() {
+        let steps = vec![
+            PlanItemArg {
+                step: "Step one".to_string(),
+                status: StepStatus::Completed,
+            },
+            PlanItemArg {
+                step: "Step two".to_string(),
+                status: StepStatus::InProgress,
+            },
+            PlanItemArg {
+                step: "Step three".to_string(),
+                status: StepStatus::Pending,
+            },
+        ];
+
+        let initial = PinnedTodoWidget {
+            explanation: None,
+            plan: steps.clone(),
+            max_lines: 8,
+            expanded: false,
+        };
+        let initial_height = initial.desired_height(80);
+        assert_eq!(initial_height, 4); // 1 header + 3 steps
+
+        let all_done = PinnedTodoWidget {
+            explanation: None,
+            plan: steps
+                .into_iter()
+                .map(|s| PlanItemArg {
+                    status: StepStatus::Completed,
+                    ..s
+                })
+                .collect(),
+            max_lines: 8,
+            expanded: false,
+        };
+        assert_eq!(
+            all_done.desired_height(80),
+            initial_height,
+            "short plan height must stay fixed after all tasks complete"
+        );
+    }
+
+    #[test]
+    fn fixed_height_for_long_plan_when_all_completed() {
+        let steps: Vec<PlanItemArg> = (0..20)
+            .map(|i| PlanItemArg {
+                step: format!("Step {i}"),
+                status: if i < 10 {
+                    StepStatus::Completed
+                } else if i == 10 {
+                    StepStatus::InProgress
+                } else {
+                    StepStatus::Pending
+                },
+            })
+            .collect();
+
+        let initial = PinnedTodoWidget {
+            explanation: None,
+            plan: steps.clone(),
+            max_lines: 8,
+            expanded: false,
+        };
+        let initial_height = initial.desired_height(80);
+        assert_eq!(initial_height, 8);
+
+        let all_done = PinnedTodoWidget {
+            explanation: None,
+            plan: steps
+                .into_iter()
+                .map(|s| PlanItemArg {
+                    status: StepStatus::Completed,
+                    ..s
+                })
+                .collect(),
+            max_lines: 8,
+            expanded: false,
+        };
+        assert_eq!(
+            all_done.desired_height(80),
+            initial_height,
+            "long plan height must stay at max_lines after all tasks complete"
         );
     }
 
