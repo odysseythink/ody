@@ -2,30 +2,30 @@ use super::*;
 use crate::agents_md::LoadedAgentsMd;
 use crate::context::InternalContextSource;
 use crate::context::InternalModelContextFragment;
+use crate::environment_selection::TurnEnvironmentSnapshot;
+use crate::plan_artifact::PlanArtifact;
 use crate::session::design_handoff::HandoffDecision;
 use crate::session::design_handoff::evaluate_design_exit;
-use crate::plan_artifact::PlanArtifact;
-use ody_config::config_toml::PlanEnforcement;
-use ody_protocol::config_types::ModeKind;
-use crate::environment_selection::TurnEnvironmentSnapshot;
 use crate::shell_snapshot::ShellSnapshotFile;
+use futures::FutureExt;
+use futures::future::BoxFuture;
+use futures::future::Shared;
+use ody_config::config_toml::PlanEnforcement;
 use ody_core_skills::HostSkillsSnapshot;
 use ody_file_system::FileSystemSandboxContext;
 use ody_model_provider::SharedModelProvider;
 use ody_model_provider::create_model_provider;
 use ody_protocol::SessionId;
 use ody_protocol::ThreadId;
-use ody_protocol::models::AdditionalPermissionProfile;
+use ody_protocol::config_types::ModeKind;
 use ody_protocol::model_metadata::ModelInfo;
+use ody_protocol::models::AdditionalPermissionProfile;
 use ody_protocol::protocol::MultiAgentVersion;
 use ody_protocol::protocol::TurnEnvironmentSelection;
 use ody_sandboxing::compatibility_sandbox_policy_for_permission_profile;
 use ody_sandboxing::policy_transforms::effective_file_system_sandbox_policy;
 use ody_sandboxing::policy_transforms::effective_network_sandbox_policy;
 use ody_utils_path_uri::PathUri;
-use futures::FutureExt;
-use futures::future::BoxFuture;
-use futures::future::Shared;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use tracing::instrument;
@@ -203,10 +203,7 @@ impl TurnContext {
     }
 
     pub(crate) fn apps_enabled(&self) -> bool {
-        self.config
-            .features
-            .apps_enabled_for_auth(false)
-            && self.config.orchestrator_mcp_enabled
+        self.config.features.apps_enabled_for_auth(false) && self.config.orchestrator_mcp_enabled
     }
 
     pub(crate) fn tool_environment_mode(&self) -> ToolEnvironmentMode {
@@ -619,7 +616,11 @@ impl Session {
                 };
                 let new_mode = next.collaboration_mode.mode;
                 let edge = previous_mode == ModeKind::Design && new_mode != ModeKind::Design;
-                let artifact = if edge { state.last_design_artifact() } else { None };
+                let artifact = if edge {
+                    state.last_design_artifact()
+                } else {
+                    None
+                };
                 let enforcement = state
                     .session_configuration
                     .original_config_do_not_use
@@ -858,10 +859,9 @@ impl Session {
         {
             // Artifacts are stored in the current project directory so they are
             // easy to find and version-control alongside the project.
-            let base_dir = AbsolutePathBuf::from_absolute_path(
-                turn_context.cwd.as_path().join(".ody-code"),
-            )
-            .unwrap_or_else(|_| turn_context.config.ody_home.clone());
+            let base_dir =
+                AbsolutePathBuf::from_absolute_path(turn_context.cwd.as_path().join(".ody-code"))
+                    .unwrap_or_else(|_| turn_context.config.ody_home.clone());
             let date = turn_context.current_date.as_deref().unwrap_or("0000-00-00");
             let artifact = match mode {
                 ody_protocol::config_types::ModeKind::Plan => {
@@ -872,12 +872,13 @@ impl Session {
                 }
                 _ => unreachable!("guarded by the surrounding if"),
             };
-           if let Some(snapshot) = self.plan_mode_last_manifest_snapshot().await {
-               artifact.set_last_manifest_snapshot(snapshot);
-           }
+            if let Some(snapshot) = self.plan_mode_last_manifest_snapshot().await {
+                artifact.set_last_manifest_snapshot(snapshot);
+            }
             let artifact_arc = Arc::new(artifact);
             if mode == ody_protocol::config_types::ModeKind::Design {
-                self.set_last_design_artifact(Arc::clone(&artifact_arc)).await;
+                self.set_last_design_artifact(Arc::clone(&artifact_arc))
+                    .await;
             }
             turn_context.plan_artifact = Some(artifact_arc);
         }

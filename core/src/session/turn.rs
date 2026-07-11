@@ -119,9 +119,6 @@ use ody_tools::ToolName;
 use ody_tools::filter_request_plugin_install_discoverable_tools_for_client;
 use ody_utils_stream_parser::AssistantTextChunk;
 use ody_utils_stream_parser::AssistantTextStreamParser;
-use ody_utils_stream_parser::ProposedPlanSegment;
-use ody_utils_stream_parser::extract_proposed_plan_text;
-use ody_utils_stream_parser::strip_citations;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use tracing::debug;
@@ -1265,11 +1262,9 @@ async fn run_session_mode_after_turn(
 
     // Periodic rigor-tier reminder reinjection (P2.3). Plan-only:
     // render_reminder_if_due self-guards `mode != Plan → None`.
-    if let Some((reminder_kind, reminder_text)) = PlanModeInjector::render_reminder_if_due(
-        artifact,
-        plan_mode_config,
-        mode,
-    ) {
+    if let Some((reminder_kind, reminder_text)) =
+        PlanModeInjector::render_reminder_if_due(artifact, plan_mode_config, mode)
+    {
         let source = InternalContextSource::from_static(match reminder_kind {
             ReminderKind::Full => "plan_mode_full_reminder",
             ReminderKind::Sparse => "plan_mode_sparse_reminder",
@@ -1599,14 +1594,6 @@ struct SamplingRequestResult {
 /// Ephemeral per-response state for streaming a single proposed plan.
 /// This is intentionally not persisted or stored in session/state since it
 /// only exists while a response is actively streaming. The final plan text
-/// is extracted from the completed assistant message.
-/// Tracks a single proposed plan item across a streaming response.
-struct ProposedPlanItemState {
-    item_id: String,
-    started: bool,
-    completed: bool,
-}
-
 /// Aggregated state used only while streaming a plan-mode response.
 /// Includes per-item parsers, deferred agent message bookkeeping, and the plan item lifecycle.
 struct PlanModeStreamState {
@@ -1616,17 +1603,14 @@ struct PlanModeStreamState {
     started_agent_message_items: HashSet<String>,
     /// Leading whitespace buffered until we see non-whitespace text for an item.
     leading_whitespace_by_item: HashMap<String, String>,
-    /// Tracks plan item lifecycle while streaming plan output.
-    plan_item_state: ProposedPlanItemState,
 }
 
 impl PlanModeStreamState {
-    fn new(turn_id: &str) -> Self {
+    fn new(_turn_id: &str) -> Self {
         Self {
             pending_agent_message_items: HashMap::new(),
             started_agent_message_items: HashSet::new(),
             leading_whitespace_by_item: HashMap::new(),
-            plan_item_state: ProposedPlanItemState::new(turn_id),
         }
     }
 }
@@ -1681,81 +1665,6 @@ impl AssistantMessageStreamParsers {
     }
 }
 
-impl ProposedPlanItemState {
-    fn new(turn_id: &str) -> Self {
-        Self {
-            item_id: format!("{turn_id}-plan"),
-            started: false,
-            completed: false,
-        }
-    }
-
-    async fn start(&mut self, sess: &Session, turn_context: &TurnContext) {
-        if self.started || self.completed {
-            return;
-        }
-        self.started = true;
-        let item = TurnItem::Plan(PlanItem {
-            id: self.item_id.clone(),
-            text: String::new(),
-            plan_file_path: turn_context
-                .plan_artifact
-                .as_ref()
-                .and_then(|artifact| artifact.path().map(PathBuf::from)),
-        });
-        sess.emit_turn_item_started(turn_context, &item).await;
-    }
-
-    async fn push_delta(&mut self, sess: &Session, turn_context: &TurnContext, delta: &str) {
-        if self.completed {
-            return;
-        }
-        if delta.is_empty() {
-            return;
-        }
-        let event = PlanDeltaEvent {
-            thread_id: sess.thread_id.to_string(),
-            turn_id: turn_context.sub_id.clone(),
-            item_id: self.item_id.clone(),
-            delta: delta.to_string(),
-        };
-        sess.send_event(turn_context, EventMsg::PlanDelta(event))
-            .await;
-    }
-
-    async fn complete_with_text(
-        &mut self,
-        sess: &Session,
-        turn_context: &TurnContext,
-        text: String,
-    ) {
-        if self.completed || !self.started {
-            return;
-        }
-        self.completed = true;
-
-        if let Some(artifact) = &turn_context.plan_artifact {
-            let persist = turn_context
-                .config
-                .plan_mode
-                .as_ref()
-                .and_then(|pm| pm.persist_plan_file)
-                .unwrap_or(true);
-            let _ = artifact.write_plan(&text, persist).await;
-        }
-
-        let item = TurnItem::Plan(PlanItem {
-            id: self.item_id.clone(),
-            text,
-            plan_file_path: turn_context
-                .plan_artifact
-                .as_ref()
-                .and_then(|artifact| artifact.path().map(PathBuf::from)),
-        });
-        sess.emit_turn_item_completed(turn_context, item).await;
-    }
-}
-
 /// In plan mode we defer agent message starts until the parser emits non-plan
 /// text. The parser buffers each line until it can rule out a tag prefix, so
 /// plan-only outputs never show up as empty assistant messages.
@@ -1776,6 +1685,36 @@ async fn maybe_emit_pending_agent_message_start(
     }
 }
 
+async fn emit_streamed_assistant_text_delta(
+    sess: &Session,
+    turn_context: &TurnContext,
+    plan_mode_state: Option<&mut PlanModeStreamState>,
+    item_id: &str,
+    parsed: ParsedAssistantTextDelta,
+) {
+    if parsed.is_empty() {
+        return;
+    }
+    if !parsed.citations.is_empty() {
+        // Citation extraction is intentionally local for now; we strip citations from display text
+        // but do not yet surface them in protocol events.
+        let _citations = parsed.citations;
+    }
+    if parsed.visible_text.is_empty() {
+        return;
+    }
+    if let Some(state) = plan_mode_state {
+        maybe_emit_pending_agent_message_start(sess, turn_context, state, item_id).await;
+    }
+    let event = AgentMessageContentDeltaEvent {
+        thread_id: sess.thread_id.to_string(),
+        turn_id: turn_context.sub_id.clone(),
+        item_id: item_id.to_string(),
+        delta: parsed.visible_text,
+    };
+    sess.send_event(turn_context, EventMsg::AgentMessageContentDelta(event))
+        .await;
+}
 /// Agent messages are text-only today; concatenate all text entries.
 fn agent_message_text(item: &ody_protocol::items::AgentMessageItem) -> String {
     item.content
@@ -1874,97 +1813,6 @@ pub(super) fn realtime_text_for_event(msg: &EventMsg) -> Option<(String, Option<
     }
 }
 
-/// Split the stream into normal assistant text vs. proposed plan content.
-/// Normal text becomes AgentMessage deltas; plan content becomes PlanDelta +
-/// TurnItem::Plan.
-async fn handle_plan_segments(
-    sess: &Session,
-    turn_context: &TurnContext,
-    state: &mut PlanModeStreamState,
-    item_id: &str,
-    segments: Vec<ProposedPlanSegment>,
-) {
-    for segment in segments {
-        match segment {
-            ProposedPlanSegment::Normal(delta) => {
-                if delta.is_empty() {
-                    continue;
-                }
-                let has_non_whitespace = delta.chars().any(|ch| !ch.is_whitespace());
-                if !has_non_whitespace && !state.started_agent_message_items.contains(item_id) {
-                    let entry = state
-                        .leading_whitespace_by_item
-                        .entry(item_id.to_string())
-                        .or_default();
-                    entry.push_str(&delta);
-                    continue;
-                }
-                let delta = if !state.started_agent_message_items.contains(item_id) {
-                    if let Some(prefix) = state.leading_whitespace_by_item.remove(item_id) {
-                        format!("{prefix}{delta}")
-                    } else {
-                        delta
-                    }
-                } else {
-                    delta
-                };
-                maybe_emit_pending_agent_message_start(sess, turn_context, state, item_id).await;
-
-                let event = AgentMessageContentDeltaEvent {
-                    thread_id: sess.thread_id.to_string(),
-                    turn_id: turn_context.sub_id.clone(),
-                    item_id: item_id.to_string(),
-                    delta,
-                };
-                sess.send_event(turn_context, EventMsg::AgentMessageContentDelta(event))
-                    .await;
-            }
-            ProposedPlanSegment::ProposedPlanStart
-            | ProposedPlanSegment::ProposedPlanEnd
-            | ProposedPlanSegment::ProposedPlanDelta(_) => {
-                // Intentionally strip inline <proposed_plan> tags. Plan mode
-                // finalization is now exclusively via the submit_plan tool; any
-                // remaining inline tag is treated as ordinary text and does not
-                // start/complete a PlanItem or persist a plan.
-            }
-        }
-    }
-}
-
-async fn emit_streamed_assistant_text_delta(
-    sess: &Session,
-    turn_context: &TurnContext,
-    plan_mode_state: Option<&mut PlanModeStreamState>,
-    item_id: &str,
-    parsed: ParsedAssistantTextDelta,
-) {
-    if parsed.is_empty() {
-        return;
-    }
-    if !parsed.citations.is_empty() {
-        // Citation extraction is intentionally local for now; we strip citations from display text
-        // but do not yet surface them in protocol events.
-        let _citations = parsed.citations;
-    }
-    if let Some(state) = plan_mode_state {
-        if !parsed.plan_segments.is_empty() {
-            handle_plan_segments(sess, turn_context, state, item_id, parsed.plan_segments).await;
-        }
-        return;
-    }
-    if parsed.visible_text.is_empty() {
-        return;
-    }
-    let event = AgentMessageContentDeltaEvent {
-        thread_id: sess.thread_id.to_string(),
-        turn_id: turn_context.sub_id.clone(),
-        item_id: item_id.to_string(),
-        delta: parsed.visible_text,
-    };
-    sess.send_event(turn_context, EventMsg::AgentMessageContentDelta(event))
-        .await;
-}
-
 /// Flush buffered assistant text parser state when an assistant message item ends.
 async fn flush_assistant_text_segments_for_item(
     sess: &Session,
@@ -1993,35 +1841,6 @@ async fn flush_assistant_text_segments_all(
             parsed,
         )
         .await;
-    }
-}
-
-/// Emit completion for plan items by parsing the finalized assistant message.
-async fn maybe_complete_plan_item_from_message(
-    sess: &Session,
-    turn_context: &TurnContext,
-    state: &mut PlanModeStreamState,
-    item: &ResponseItem,
-) {
-    if let ResponseItem::Message { role, content, .. } = item
-        && role == "assistant"
-    {
-        let mut text = String::new();
-        for entry in content {
-            if let ContentItem::OutputText { text: chunk } = entry {
-                text.push_str(chunk);
-            }
-        }
-        if let Some(plan_text) = extract_proposed_plan_text(&text) {
-            let (plan_text, _citations) = strip_citations(&plan_text);
-            if !state.plan_item_state.started {
-                state.plan_item_state.start(sess, turn_context).await;
-            }
-            state
-                .plan_item_state
-                .complete_with_text(sess, turn_context, plan_text)
-                .await;
-        }
     }
 }
 
@@ -2102,10 +1921,6 @@ async fn handle_assistant_item_done_in_plan_mode(
     if let ResponseItem::Message { role, .. } = item
         && role == "assistant"
     {
-        // Inline <proposed_plan> blocks are no longer a terminal source; the
-        // submit_plan tool is the only way to finalize. Do not complete a
-        // PlanItem from message content.
-
         let mut finalized_facts = None;
         if let Some(mut finalized_turn_item) = finalize_non_tool_response_item(
             sess,

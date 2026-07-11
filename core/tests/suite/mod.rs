@@ -1,10 +1,10 @@
 // Aggregates all former standalone integration tests as modules.
+use ctor::ctor;
 use ody_apply_patch::ODY_CORE_APPLY_PATCH_ARG1;
 use ody_exec_server::ODY_FS_HELPER_ARG1;
 use ody_test_binary_support::TestBinaryDispatchGuard;
 use ody_test_binary_support::TestBinaryDispatchMode;
 use ody_test_binary_support::configure_test_binary_dispatch;
-use ctor::ctor;
 
 // This code runs before any other tests are run.
 
@@ -37,8 +37,6 @@ mod auto_review;
 mod client;
 mod client_websockets;
 mod code_mode;
-mod design_mode;
-mod ody_delegate;
 mod collaboration_instructions;
 mod compact;
 mod compact_remote;
@@ -46,6 +44,7 @@ mod compact_remote_parity;
 mod compact_resume_fork;
 mod current_time_reminder;
 mod deprecation_notice;
+mod design_mode;
 mod exec;
 mod exec_policy;
 mod fork_thread;
@@ -69,6 +68,7 @@ mod models_cache_ttl;
 mod models_etag_responses;
 mod multi_agent_mode;
 mod network_approval;
+mod ody_delegate;
 mod otel;
 mod override_updates;
 mod pending_input;
@@ -110,6 +110,7 @@ mod sqlite_state;
 mod stream_error_allows_next_turn;
 mod stream_no_completed;
 mod subagent_notifications;
+mod submit_plan;
 mod token_budget;
 mod tool_harness;
 mod tool_parallelism;

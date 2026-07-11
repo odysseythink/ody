@@ -1,9 +1,10 @@
 ---
 source: tui/src/chatwidget/tests/status_and_layout.rs
+assertion_line: 2243
 expression: normalized_backend_snapshot(terminal.backend())
 ---
 "                                                                                "
 "                                                                                "
 "› Ask Ody to do anything                                                        "
 "                                                                                "
-"  gpt-5.3-ody medium                            Plan mode (shift+tab to cycle)  "
+"  gpt-5.3-ody medium                           【 Plan  (shift+tab to cycle)】  " Hidden by multi-width symbols: [(48, " "), (77, " ")]

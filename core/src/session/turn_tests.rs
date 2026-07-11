@@ -66,11 +66,11 @@ async fn plan_mode_uses_contributed_turn_item_for_last_agent_message() {
     );
 }
 
+use crate::plan_artifact::PlanArtifact;
+use crate::plan_mode_injector::ReminderKind;
 use ody_protocol::ThreadId;
 use ody_protocol::config_types::ModeKind;
 use ody_utils_absolute_path::AbsolutePathBuf;
-use crate::plan_artifact::PlanArtifact;
-use crate::plan_mode_injector::ReminderKind;
 
 #[tokio::test]
 async fn plan_mode_records_full_reminder_at_turn_five() {
@@ -106,7 +106,10 @@ async fn plan_mode_records_full_reminder_at_turn_five() {
             }
         }
     }
-    assert!(found_full, "a full rigor reminder should be recorded by turn 5");
+    assert!(
+        found_full,
+        "a full rigor reminder should be recorded by turn 5"
+    );
 }
 
 #[tokio::test]
@@ -124,10 +127,11 @@ async fn design_turn_constructs_artifact_under_designs_dir() {
         .plan_artifact
         .as_ref()
         .expect("design artifact should be constructed for Design turns");
-    let path = artifact.path().expect("design artifact should have a temp path");
+    let path = artifact
+        .path()
+        .expect("design artifact should have a temp path");
     assert!(
-        path.components()
-            .any(|c| c.as_os_str() == "designs"),
+        path.components().any(|c| c.as_os_str() == "designs"),
         "design artifact path should be rooted under a `designs/` dir: {path:?}"
     );
 }

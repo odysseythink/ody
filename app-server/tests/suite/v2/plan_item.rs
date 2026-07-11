@@ -4,6 +4,8 @@ use anyhow::bail;
 use app_test_support::TestAppServer;
 use app_test_support::create_mock_responses_server_sequence_unchecked;
 use app_test_support::to_response;
+use core_test_support::responses;
+use core_test_support::skip_if_no_network;
 use ody_app_server_protocol::ItemCompletedNotification;
 use ody_app_server_protocol::ItemStartedNotification;
 use ody_app_server_protocol::JSONRPCMessage;
@@ -23,8 +25,6 @@ use ody_features::Feature;
 use ody_protocol::config_types::CollaborationMode;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::config_types::Settings;
-use core_test_support::responses;
-use core_test_support::skip_if_no_network;
 use pretty_assertions::assert_eq;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -36,16 +36,14 @@ use wiremock::MockServer;
 const DEFAULT_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn plan_mode_uses_proposed_plan_block_for_plan_item() -> Result<()> {
+async fn plan_mode_submit_plan_emits_plan_item() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let plan_block = "<proposed_plan>\n# Final plan\n- first\n- second\n</proposed_plan>\n";
-    let full_message = format!("Preface\n{plan_block}Postscript");
+    let plan_markdown = "# Final plan\n- first\n- second\n";
+    let args = serde_json::json!({"plan": plan_markdown}).to_string();
     let responses = vec![responses::sse(vec![
         responses::ev_response_created("resp-1"),
-        responses::ev_message_item_added("msg-1", ""),
-        responses::ev_output_text_delta(&full_message),
-        responses::ev_assistant_message("msg-1", &full_message),
+        responses::ev_function_call("call-submit-plan", "submit_plan", &args),
         responses::ev_completed("resp-1"),
     ])];
     let server = create_mock_responses_server_sequence_unchecked(responses).await;
@@ -64,36 +62,52 @@ async fn plan_mode_uses_proposed_plan_block_for_plan_item() -> Result<()> {
     assert_eq!(turn_completed.turn.id, turn.id);
     assert_eq!(turn_completed.turn.status, TurnStatus::Completed);
 
-    let expected_plan = ThreadItem::Plan {
-        id: format!("{}-plan", turn.id),
-        text: "# Final plan\n- first\n- second\n".to_string(),
-        plan_file_path: None,
-    };
+    // The single PlanDelta from submit_plan should carry the full plan text.
     let expected_plan_id = format!("{}-plan", turn.id);
+    assert!(
+        plan_deltas
+            .iter()
+            .all(|delta| delta.item_id == expected_plan_id),
+        "all plan deltas must belong to the same plan item"
+    );
     let streamed_plan = plan_deltas
         .iter()
         .map(|delta| delta.delta.as_str())
         .collect::<String>();
-    assert_eq!(streamed_plan, "# Final plan\n- first\n- second\n");
-    assert!(
-        plan_deltas
-            .iter()
-            .all(|delta| delta.item_id == expected_plan_id)
-    );
-    let plan_items = completed_items
+    assert_eq!(streamed_plan, plan_markdown);
+
+    let plan_items: Vec<_> = completed_items
         .iter()
         .filter_map(|item| match item {
             ThreadItem::Plan { .. } => Some(item.clone()),
             _ => None,
         })
-        .collect::<Vec<_>>();
-    assert_eq!(plan_items, vec![expected_plan]);
+        .collect();
+    assert_eq!(plan_items.len(), 1, "expected exactly one Plan item");
+
+    let plan_item = &plan_items[0];
+    let ThreadItem::Plan {
+        id,
+        text,
+        plan_file_path,
+    } = plan_item
+    else {
+        unreachable!();
+    };
+    assert_eq!(id, &expected_plan_id);
+    assert_eq!(text, &plan_markdown);
     assert!(
-        completed_items
-            .iter()
-            .any(|item| matches!(item, ThreadItem::AgentMessage { .. })),
-        "agent message items should still be emitted alongside the plan item"
+        plan_file_path.is_some(),
+        "submit_plan must set plan_file_path"
     );
+    let plan_path = plan_file_path.as_ref().unwrap();
+    assert!(
+        plan_path.starts_with(ody_home.path()),
+        "plan path {plan_path:?} should be under ody_home"
+    );
+    assert!(plan_path.exists(), "plan file {plan_path:?} should exist");
+    let persisted = tokio::fs::read_to_string(plan_path).await?;
+    assert_eq!(persisted, plan_markdown, "persisted plan should match");
 
     Ok(())
 }

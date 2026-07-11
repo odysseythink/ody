@@ -1427,5 +1427,4 @@ async fn hosted_tools_follow_provider_auth_model_and_config_gates() {
     )
     .await;
     standalone_web_search.assert_visible_lacks(&["web_search"]);
-
 }

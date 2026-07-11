@@ -84,3 +84,13 @@ assumes you know which fragment you're editing and why.
 - **Copy-pasting TASK_SKELETON's no-placeholders section instead of referencing INVARIANTS.**
   They already overlap; a third near-duplicate makes future edits need three synced updates
   instead of two.
+
+## Plan mode `submit_plan` migration
+
+The following files were updated as part of switching Plan-mode finalization from inline `<proposed_plan>` blocks to the explicit `submit_plan` tool. When editing these files, keep the two mechanisms from drifting out of sync:
+
+- `collaboration-mode-templates/templates/plan.md` — Finalization rule and persistence paragraph now require calling `submit_plan`; `<proposed_plan>` is no longer a persistence/terminal source.
+- `collaboration-mode-templates/templates/plan_rigor_turn_discipline.md` — Rule 4 now says `submit_plan` includes the full plan markdown as the `plan` argument.
+- `core/src/plan_mode_injector.rs` — FinalReview directive now tells the model to call `submit_plan` with the final plan markdown.
+- `core/src/safety.rs` — Plan-mode exec-denied reason text now references `submit_plan` instead of `<proposed_plan>`.
+- `core/src/session/turn.rs` — Inline `<proposed_plan>` tags are stripped from streaming text and do not start or complete a `PlanItem`; finalization is handled exclusively by the `submit_plan` handler.

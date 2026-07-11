@@ -124,6 +124,34 @@ async fn plan_mode_nudge_narrow_snapshot() {
 }
 
 #[tokio::test]
+async fn plan_mode_empty_delta_plan_item_renders_plan_file() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    let plan_markdown = "- Step 1\n- Step 2\n";
+    let plan_path = std::path::PathBuf::from("/tmp/plan.md");
+
+    // Simulate the submit_plan tool path: a single PlanDelta is emitted as
+    // part of the tool call, then ItemCompleted arrives with the full text.
+    // We test the boundary where no streaming delta was buffered in the UI
+    // before completion (empty plan_delta_buffer).
+    chat.on_plan_item_completed(plan_markdown.to_string(), Some(plan_path.clone()));
+
+    let rendered = drain_insert_history(&mut rx);
+    let flat: String = rendered
+        .iter()
+        .flat_map(|lines| lines.iter().map(|l| l.to_string()))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        flat.contains("- Step 1"),
+        "expected plan markdown in history, got {flat:?}"
+    );
+    assert!(
+        flat.contains("Plan file: /tmp/plan.md"),
+        "expected plan file path indicator in history, got {flat:?}"
+    );
+}
+
+#[tokio::test]
 async fn plan_implementation_popup_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
     chat.on_plan_item_completed("- Step 1\n- Step 2\n".to_string(), None);
@@ -210,10 +238,7 @@ async fn plan_implementation_popup_prefers_disk_plan_over_memory_text() {
     let plan_path = dir.path().join("handoff-plan.md");
     std::fs::write(&plan_path, "- Disk step 1\n- Disk step 2\n").unwrap();
 
-    chat.on_plan_item_completed(
-        "- Memory step\n".to_string(),
-        Some(plan_path.clone()),
-    );
+    chat.on_plan_item_completed("- Memory step\n".to_string(), Some(plan_path.clone()));
     let _ = drain_insert_history(&mut rx);
     chat.open_plan_implementation_prompt();
 
@@ -1348,10 +1373,15 @@ async fn enter_submits_when_plan_stream_is_not_active() {
 #[tokio::test]
 async fn collab_mode_shift_tab_cycles_only_when_idle() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.set_feature_enabled(Feature::CollaborationModes, /*enabled*/ true);
 
     let initial = chat.current_collaboration_mode().clone();
     chat.handle_key_event(KeyEvent::from(KeyCode::BackTab));
     assert_eq!(chat.active_collaboration_mode_kind(), ModeKind::Plan);
+    assert_eq!(chat.current_collaboration_mode(), &initial);
+
+    chat.handle_key_event(KeyEvent::from(KeyCode::BackTab));
+    assert_eq!(chat.active_collaboration_mode_kind(), ModeKind::Design);
     assert_eq!(chat.current_collaboration_mode(), &initial);
 
     chat.handle_key_event(KeyEvent::from(KeyCode::BackTab));
@@ -1886,7 +1916,6 @@ async fn plan_implementation_reload_disables_clear_context_when_disk_read_fails(
     assert!(params.items[1].actions.is_empty());
 }
 
-
 #[tokio::test]
 async fn plan_implementation_popup_with_options_shows_approve_items() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
@@ -1897,13 +1926,34 @@ async fn plan_implementation_popup_with_options_shows_approve_items() {
     chat.open_plan_implementation_prompt();
 
     let popup = render_bottom_popup(&chat, /*width*/ 80);
-    assert!(popup.contains("Approve Option A"), "expected Approve Option A, got {popup}");
-    assert!(popup.contains("Approve Option B"), "expected Approve Option B, got {popup}");
-    assert!(popup.contains("Refactor incrementally"), "expected summary A, got {popup}");
-    assert!(popup.contains("Rewrite in one go"), "expected summary B, got {popup}");
-    assert!(popup.contains("Revise plan"), "expected Revise plan, got {popup}");
-    assert!(popup.contains("Reject plan"), "expected Reject plan, got {popup}");
-    assert!(popup.contains("Continue planning"), "expected Continue planning, got {popup}");
+    assert!(
+        popup.contains("Approve Option A"),
+        "expected Approve Option A, got {popup}"
+    );
+    assert!(
+        popup.contains("Approve Option B"),
+        "expected Approve Option B, got {popup}"
+    );
+    assert!(
+        popup.contains("Refactor incrementally"),
+        "expected summary A, got {popup}"
+    );
+    assert!(
+        popup.contains("Rewrite in one go"),
+        "expected summary B, got {popup}"
+    );
+    assert!(
+        popup.contains("Revise plan"),
+        "expected Revise plan, got {popup}"
+    );
+    assert!(
+        popup.contains("Reject plan"),
+        "expected Reject plan, got {popup}"
+    );
+    assert!(
+        popup.contains("Continue planning"),
+        "expected Continue planning, got {popup}"
+    );
 }
 
 #[tokio::test]
@@ -1937,9 +1987,18 @@ async fn plan_implementation_popup_without_options_falls_back_to_three_items() {
     );
 
     assert_eq!(params.items.len(), 3);
-    assert_eq!(params.items[0].name, plan_implementation::PLAN_IMPLEMENTATION_YES);
-    assert_eq!(params.items[1].name, plan_implementation::PLAN_IMPLEMENTATION_CLEAR_CONTEXT);
-    assert_eq!(params.items[2].name, plan_implementation::PLAN_IMPLEMENTATION_NO);
+    assert_eq!(
+        params.items[0].name,
+        plan_implementation::PLAN_IMPLEMENTATION_YES
+    );
+    assert_eq!(
+        params.items[1].name,
+        plan_implementation::PLAN_IMPLEMENTATION_CLEAR_CONTEXT
+    );
+    assert_eq!(
+        params.items[2].name,
+        plan_implementation::PLAN_IMPLEMENTATION_NO
+    );
 }
 
 #[tokio::test]
@@ -2045,7 +2104,11 @@ async fn plan_implementation_revise_feedback_submits_plan_mode_message() {
     chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     let event = rx.try_recv().expect("expected AppEvent");
-    let AppEvent::SubmitUserMessageWithMode { text, collaboration_mode } = event else {
+    let AppEvent::SubmitUserMessageWithMode {
+        text,
+        collaboration_mode,
+    } = event
+    else {
         panic!("expected SubmitUserMessageWithMode, got {event:?}");
     };
     assert_eq!(text, "add tests");
