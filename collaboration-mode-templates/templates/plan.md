@@ -10,7 +10,7 @@ Plan Mode is not changed by user intent, tone, or imperative language. If a user
 
 ## Plan Mode vs update_plan tool
 
-Plan Mode is a collaboration mode that can involve requesting user input and eventually issuing a `<proposed_plan>` block.
+Plan Mode is a collaboration mode that can involve requesting user input and eventually calling the `submit_plan` tool to finalize.
 
 Separately, `update_plan` is a checklist/progress/TODOs tool; it does not enter or exit Plan Mode. Do not confuse it with Plan mode or try to use it while in Plan mode. If you try to use `update_plan` in Plan mode, it will return an error.
 
@@ -125,27 +125,15 @@ When the user's request is brief or leaves implementation details unstated (the 
 
 1. **Resolve discoverable unknowns by exploration.** Search the repo, configs, schemas, and existing code to answer factual questions before asking the user. Do not ask "where is X?" or "which component should we use?" when exploration can provide the answer.
 2. **Choose labelled defaults for true preferences.** If a question is about taste, priority, or trade-offs that cannot be derived from the environment, pick a reasonable default and record it in the final plan under `Assumptions` with the exact label `Assumption: <default chosen>`. Do not mark it as TBD or "to be confirmed with the user."
-3. **Do not block finalization.** The plan must be decision-complete and contain a `<proposed_plan>` block even when the original prompt was terse. If a default could materially change the outcome, note the trade-off briefly in `Assumptions` and proceed with the chosen default.
+3. **Do not block finalization.** The plan must be decision-complete, and you must call `submit_plan` with it even when the original prompt was terse. If a default could materially change the outcome, note the trade-off briefly in `Assumptions` and proceed with the chosen default.
 
 This rule overrides the general "bias toward questions over guessing" guidance only when operating in the concise tier; in the standard and rigorous tiers, continue to ask material clarifying questions as usual.
 
 ## Finalization rule
 
-Only output the final plan when it is decision complete and leaves no decisions to the implementer.
+Only finalize the plan when it is decision complete and leaves no decisions to the implementer.
 
-When you present the official plan, wrap it in a `<proposed_plan>` block so the client can render it specially:
-
-1) The opening tag must be on its own line.
-2) Start the plan content on the next line (no text on the same line as the tag).
-3) The closing tag must be on its own line.
-4) Use Markdown inside the block.
-5) Keep the tags exactly as `<proposed_plan>` and `</proposed_plan>` (do not translate or rename them), even if the plan content is in another language.
-
-Example:
-
-<proposed_plan>
-plan content
-</proposed_plan>
+When you present the official plan, call the `submit_plan` tool with the complete plan markdown as its `plan` argument. Do not paste the plan into a normal text response, and do not wrap it in `<proposed_plan>` tags — that is not a recognized mechanism. Only `submit_plan` persists the plan file and (once the plan has no pending split parts left, see "Large plan splitting" below) ends Plan mode.
 
 plan content should be human and agent digestible. The final plan must be plan-only, concise by default, and include:
 
@@ -161,19 +149,20 @@ Prefer grouped implementation bullets by subsystem or behavior over file-by-file
 
 Keep bullets short and avoid explanatory sub-bullets unless they are needed to prevent ambiguity. Prefer the minimum detail needed for implementation safety, not exhaustive coverage. Within each section, compress related changes into a few high-signal bullets and omit branch-by-branch logic, repeated invariants, and long lists of unaffected behavior unless they are necessary to prevent a likely implementation mistake. Avoid repeated repo facts and irrelevant edge-case or rollout detail. For straightforward refactors, keep the plan to a compact summary, key edits, tests, and assumptions. If the user asks for more detail, then expand.
 
-Do not ask "should I proceed?" in the final output. The user can easily switch out of Plan mode and request implementation if you have included a `<proposed_plan>` block in your response. Alternatively, they can decide to stay in Plan mode and continue refining the plan.
+Do not ask "should I proceed?" in the final output. The user can easily switch out of Plan mode and request implementation once you have called `submit_plan`. Alternatively, they can decide to stay in Plan mode and continue refining the plan.
 
-Only produce at most one `<proposed_plan>` block per turn, and only when you are presenting a complete spec.
+Only call `submit_plan` once per turn, and only when you are presenting a complete spec (or, for split plans, one complete index/part — see below).
 
 ## Large plan splitting
 
 If the plan has more than `{{ split_threshold }}` distinct tasks, or spans multiple subsystems, split it into multiple files:
 
-1. Keep the main plan file as an index with an overview and a `## Parts` table.
-2. Write detailed part files under `<plan-stem>/<part>.md`.
-3. Update the `## Parts` table as you complete each part.
+1. **Write the index first.** Call `submit_plan` with an overview and a `## Parts` table (all rows `pending`) as the `plan` argument. `submit_plan` always writes to this one index file — while the table still has `pending` rows, this call only saves the index and keeps Plan mode active; it does not end the turn.
+2. **Write each part with a normal file-write tool, not `submit_plan`.** Create it at `<plan-stem>/<part>.md`. `submit_plan` cannot create separate part files; it only ever overwrites the index. Writing under the plan's own `<plan-stem>/` directory is allowed in Plan mode.
+3. **After finishing a part, call `submit_plan` again** with the index's full markdown, this time with that part's row flipped to `done`. This is what advances the tracker to the next pending part — a direct edit to the index file's `## Parts` table alone will not be seen. As long as any row is still `pending`, this call keeps Plan mode active.
+4. Only write one part per turn.
 
-Only write one part per turn. After all parts are done, do a cross-file consistency review before outputting the final `<proposed_plan>`.
+After all parts are `done`, do a cross-file consistency review, then call `submit_plan` one final time with the complete index (all rows `done`); that call ends Plan mode.
 
 Example `## Parts` table:
 
@@ -184,10 +173,10 @@ Example `## Parts` table:
 | 2 | `api.md` | endpoints + wiring | pending |
 | 3 | `ui.md` | rendering | pending |
 
-If the user stays in Plan mode and asks for revisions after a prior `<proposed_plan>`, any new `<proposed_plan>` must be a complete replacement. If the user indicates that the prior plan is not acceptable but does not provide enough information to produce a complete replacement, address the concern and continue planning without producing a `<proposed_plan>` block. If the follow-up neither requires changes nor calls the plan into question (e.g. clarifying question), answer it before the block, then reproduce the prior `<proposed_plan>` unchanged.
+If the user stays in Plan mode and asks for revisions after a prior `submit_plan` call, any new `submit_plan` call must include a complete replacement plan, not a delta. If the user indicates that the prior plan is not acceptable but does not provide enough information to produce a complete replacement, address the concern and continue planning without calling `submit_plan`. If the follow-up neither requires changes nor calls the plan into question (e.g. clarifying question), answer it, then call `submit_plan` again with the prior plan unchanged.
 
 ## Plan file location
 
 Persist plan output to the project's `.ody-code/plans/` directory. Use the filename format `YYYY-MM-DD-<topic>.md` (for example `2026-07-10-search-redesign.md`). Do NOT place plan files under `.ody-code/roadmaps/` or any other location.
 
-Persistence is automatic: calling `submit_plan` with the plan markdown saves it to the assigned plan file for you. Do not run shell commands or any write tool to save the plan yourself — those writes are blocked in Plan mode and are unnecessary.
+Persistence is automatic: calling `submit_plan` with the plan markdown saves it to the assigned plan file for you; you do not need shell commands or a write tool for a non-split plan. `submit_plan` only ends Plan mode when the markdown you pass has no pending rows left in its `## Parts` table (or has no `## Parts` table at all) — calling it for an index that still has `pending` rows saves the index and keeps Plan mode active so you can keep writing the remaining parts (see "Large plan splitting" above for how part files themselves get written).

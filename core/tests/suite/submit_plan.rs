@@ -8,6 +8,7 @@ use core_test_support::responses::ResponsesRequest;
 use core_test_support::responses::ev_completed;
 use core_test_support::responses::ev_function_call;
 use core_test_support::responses::ev_response_created;
+use core_test_support::responses::mount_sse_sequence;
 use core_test_support::responses::sse;
 use core_test_support::responses::start_mock_server;
 use core_test_support::skip_if_no_network;
@@ -214,6 +215,118 @@ async fn submit_plan_terminal_does_not_trigger_second_sampling() -> anyhow::Resu
         responses_count, 1,
         "submit_plan should end the turn after a single /responses request"
     );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn submit_plan_split_pending_part_does_not_end_turn() -> anyhow::Result<()> {
+    skip_if_no_network!(Ok(()));
+
+    let server = start_mock_server().await;
+
+    let mut builder = test_ody();
+    let TestOdy {
+        ody,
+        cwd,
+        session_configured,
+        ..
+    } = builder.build(&server).await?;
+
+    // First call: an index-only submission whose `## Parts` manifest still has a
+    // pending row. This must NOT mark the plan submitted, or Plan mode ends before
+    // the remaining parts are ever written (the exact regression this test guards).
+    let index_call_id = "submit-plan-index";
+    let index_markdown = "# Split Plan\n\n## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 1 | part1.md | scope one | pending |\n";
+    let index_args = json!({"plan": index_markdown}).to_string();
+    let first_response = sse(vec![
+        ev_response_created("resp-1"),
+        ev_function_call(index_call_id, "submit_plan", &index_args),
+        ev_completed("resp-1"),
+    ]);
+
+    // Second call: the same manifest with the part now marked done. This is the
+    // real terminal submission.
+    let final_call_id = "submit-plan-final";
+    let final_markdown = "# Split Plan\n\n## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 1 | part1.md | scope one | done |\n";
+    let final_args = json!({"plan": final_markdown}).to_string();
+    let second_response = sse(vec![
+        ev_response_created("resp-2"),
+        ev_function_call(final_call_id, "submit_plan", &final_args),
+        ev_completed("resp-2"),
+    ]);
+
+    let response_mock =
+        mount_sse_sequence(&server, vec![first_response, second_response]).await;
+
+    let (sandbox_policy, permission_profile) =
+        turn_permission_fields(PermissionProfile::Disabled, cwd.path());
+
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "please make a split plan".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(cwd.abs())),
+            approval_policy: Some(AskForApproval::Never),
+            sandbox_policy: Some(sandbox_policy),
+            permission_profile,
+            collaboration_mode: Some(CollaborationMode {
+                mode: ModeKind::Plan,
+                settings: Settings {
+                    model: session_configured.model.clone(),
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                },
+            }),
+            ..Default::default()
+        },
+    })
+    .await?;
+
+    let index_completed = wait_for_event_match(&ody, |event| match event {
+        EventMsg::ItemCompleted(ody_protocol::protocol::ItemCompletedEvent {
+            item: TurnItem::Plan(item),
+            ..
+        }) => Some(item.clone()),
+        _ => None,
+    })
+    .await;
+    assert_eq!(index_completed.text, index_markdown);
+
+    // The turn must keep going: a second /responses request is only made if the
+    // first submit_plan call did not end the turn.
+    let final_completed = wait_for_event_match(&ody, |event| match event {
+        EventMsg::ItemCompleted(ody_protocol::protocol::ItemCompletedEvent {
+            item: TurnItem::Plan(item),
+            ..
+        }) => Some(item.clone()),
+        _ => None,
+    })
+    .await;
+    assert_eq!(final_completed.text, final_markdown);
+
+    let requests = response_mock.requests();
+    assert_eq!(
+        requests.len(),
+        2,
+        "expected exactly one follow-up sampling request after the pending-part submit_plan call"
+    );
+
+    let (index_output, index_success) = call_output(&requests[0], index_call_id);
+    assert_eq!(index_success, Some(true));
+    assert_ne!(
+        index_output, "Plan submitted",
+        "an index/part call with pending rows must not report the terminal message"
+    );
+
+    let (final_output, final_success) = call_output(&requests[1], final_call_id);
+    assert_eq!(final_output, "Plan submitted");
+    assert_eq!(final_success, Some(true));
 
     Ok(())
 }

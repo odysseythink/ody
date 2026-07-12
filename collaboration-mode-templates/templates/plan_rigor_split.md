@@ -50,22 +50,23 @@ The index file must include a `## Parts` table listing all part files and their 
 
 ### Writing protocol for split plans
 
-1. **Write the index first:**
+1. **Write the index first, via `submit_plan`:**
    - Title, Goal, Architecture, Tech Stack, Execution note
    - File Structure (all files mentioned across all parts)
    - Dependency Overview (full DAG across all tasks)
    - Risks & Open Questions
    - Spec-coverage table
    - Parts manifest (all rows `pending`)
-   - End your turn after writing the index
+   - Call `submit_plan` with this markdown as the `plan` argument. `submit_plan` always writes to the index file; while any row is `pending`, this call saves the index and keeps Plan mode active — it does not end the turn, so you do not need to do anything else to "end" this step.
 
-2. **Each subsequent turn: write ONE part file**
+2. **Each subsequent turn: write ONE part file with a normal file-write tool (not `submit_plan`)**
    - Create the part file at exactly `<index-stem>/<part-name>.md`
    - Include: part header → its tasks → its local Self-Review (7 items)
-   - After finishing the part, flip its manifest row from `pending` to `done` in the **index file**
-   - Do NOT write any other part file
-   - Do NOT call ExitPlanMode or AskUserQuestion yet
-   - Stop after the flip
+   - `submit_plan` cannot create this file — it only ever overwrites the index — so use your normal file-write tool. Writing under the plan's own `<index-stem>/` directory is allowed in Plan mode.
+   - After finishing the part, call `submit_plan` again with the index's full markdown, this time with that part's row flipped from `pending` to `done`. This re-submission is what advances the tracker — a direct edit to the index's `## Parts` table alone will not be seen.
+   - Do NOT write any other part file this turn
+   - Do NOT call `submit_plan` with a plan that has zero pending rows yet — that would end Plan mode before the remaining parts are written
+   - Stop after the `submit_plan` call that flips the row
 
 3. **Turn discipline during split:**
    - Injection will direct you to the next `pending` part
@@ -74,7 +75,7 @@ The index file must include a `## Parts` table listing all part files and their 
 
 4. **After all parts are done:**
    - Do a final cross-file consistency review (check cross-file dependencies, confirm no symbols are used before definition)
-   - Call ExitPlanMode to request approval
+   - Call `submit_plan` with the complete index (all rows `done`) to request approval — only this final call, once no rows are `pending`, ends Plan mode
 
 ### Cross-file dependencies
 
@@ -102,7 +103,7 @@ Each part file must end with its own Self-Review section:
 - [ ] 7. Type consistency: types/signatures match earlier tasks (within this part and cross-file).
 ```
 
-### Cross-file final review (in index file, before ExitPlanMode)
+### Cross-file final review (in index file, before the final `submit_plan` call)
 
 Once all parts are done, review:
 - Do all cross-file dependencies reference valid earlier parts/tasks?
@@ -173,6 +174,6 @@ Part 3: Schema + Verification (Fixtures + tests)
 ...
 ```
 
-**After Part 1 is done:** Flip its row to `done` in the index and stop.
+**After Part 1 is done:** call `submit_plan` again with the index markdown, Part 1's row flipped to `done`, then stop.
 
 **Next turn:** Injection directs to Part 2, which may reference Part 1's tasks.

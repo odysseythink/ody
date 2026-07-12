@@ -542,7 +542,7 @@ fn rigor_tier_composes_all_fragments() {
         "## Rigor tier addendum: Large plan splitting & Parts manifest"
     ));
     assert!(body.contains(
-        "## Rigor tier addendum: Turn discipline (when to call ExitPlanMode)"
+        "## Rigor tier addendum: Turn discipline (when to submit the plan)"
     ));
 }
 

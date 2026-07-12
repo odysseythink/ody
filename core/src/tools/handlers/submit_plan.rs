@@ -1,5 +1,7 @@
 use crate::function_tool::FunctionCallError;
 use crate::plan_artifact::PlanWriteOutcome;
+use crate::plan_mode_injector::parts_manifest::RowStatus;
+use crate::plan_mode_injector::parts_manifest::parse_parts_manifest;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolPayload;
@@ -21,6 +23,7 @@ use ody_tools::ToolSpec;
 use std::path::PathBuf;
 
 const PLAN_SUBMITTED_MESSAGE: &str = "Plan submitted";
+const PLAN_PART_SAVED_MESSAGE: &str = "Plan part saved. This plan is split into multiple parts and pending parts remain — stay in Plan mode and keep writing them one per turn; do not treat this call as final.";
 
 #[derive(Debug)]
 pub struct SubmitPlanHandler;
@@ -122,6 +125,20 @@ impl SubmitPlanHandler {
                 .await;
         }
 
+        // A split plan (see `## Parts` table, `plan_mode_injector`) writes its index and
+        // each part through this same tool. Only the call that leaves no pending rows
+        // is the real terminal submission — an index/part call with pending rows must
+        // not end the Plan-mode turn, or the remaining parts are never written (the
+        // model gets stranded outside Plan mode after the first `submit_plan` call).
+        let has_pending_parts = parse_parts_manifest(&args.plan)
+            .manifest
+            .is_some_and(|manifest| {
+                manifest
+                    .rows
+                    .iter()
+                    .any(|row| row.status == RowStatus::Pending)
+            });
+
         session
             .emit_turn_item_completed(
                 turn.as_ref(),
@@ -133,10 +150,15 @@ impl SubmitPlanHandler {
             )
             .await;
 
-        artifact.mark_submitted();
+        let message = if has_pending_parts {
+            PLAN_PART_SAVED_MESSAGE
+        } else {
+            artifact.mark_submitted();
+            PLAN_SUBMITTED_MESSAGE
+        };
 
         Ok(boxed_tool_output(FunctionToolOutput::from_text(
-            PLAN_SUBMITTED_MESSAGE.to_string(),
+            message.to_string(),
             Some(true),
         )))
     }

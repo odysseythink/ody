@@ -16,21 +16,22 @@ Every turn in a non-split plan must end with exactly ONE of:
    - Call the `submit_plan` tool with the full plan markdown as the `plan` argument.
    - Never ask about approval via text — that is `submit_plan`'s job.
 
-**Never mix them in one turn:** Do not call AskUserQuestion and ExitPlanMode in the same turn.
+**Never mix them in one turn:** Do not call AskUserQuestion and `submit_plan` in the same turn.
 
 ### Turn ending rules (split plans)
 
-Split plans have different discipline because parts are written sequentially:
+Split plans have different discipline because parts are written sequentially. `submit_plan` always writes to the single index file — it can never create a part file — so writing a part and updating the index's manifest are two different actions:
 
 **While parts are pending:**
-- Write ONE part file per turn
-- Flip its manifest row to `done` in the index
-- Do NOT call AskUserQuestion or ExitPlanMode
-- Stop naturally; injection will direct to next part
+- Write ONE part file per turn, with a normal file-write tool (not `submit_plan`), at `<index-stem>/<part-name>.md`
+- Then call `submit_plan` with the index's full markdown, that part's manifest row flipped to `done`
+- As long as any row in the markdown you pass to `submit_plan` is still `pending`, that call saves the index and keeps Plan mode active — it does not end the turn
+- Do NOT call AskUserQuestion this turn
+- Stop after the `submit_plan` call that flips the row; injection will direct you to the next pending part
 
 **After all parts are done:**
 - Do cross-file consistency review (no additional parts written)
-- Call `submit_plan` to request approval
+- Call `submit_plan` with the index markdown showing every row `done` — this is the call that requests approval and ends Plan mode
 
 ### Specific rules
 
@@ -45,7 +46,7 @@ Split plans have different discipline because parts are written sequentially:
 - ❌ "Should the plan include X?"
 - ✅ "Should we include caching in the implementation?"
 
-Why? The user cannot see the plan until you call ExitPlanMode. Asking about the plan confuses them.
+Why? The user cannot see the plan until you call `submit_plan` with no pending parts left. Asking about the plan confuses them.
 
 #### Rule 3: AskUserQuestion expects multiple choice
 When using AskUserQuestion, provide 2-4 meaningful options:
@@ -53,9 +54,9 @@ When using AskUserQuestion, provide 2-4 meaningful options:
 - ✅ Each option materially changes the spec/plan
 - ❌ Options include filler ("Other: specify"); avoid generic catch-alls
 
-#### Rule 4: submit_plan includes the full plan
-- Pass the full plan markdown as the `plan` argument to `submit_plan`
-- Include everything (not incremental chunks)
+#### Rule 4: submit_plan always carries the full index
+- Pass the full index markdown as the `plan` argument to `submit_plan`, every time — including incremental row flips during a split
+- Include everything the index should currently contain (not a delta against the previous call)
 - Never call `submit_plan` more than once per turn
 
 #### Rule 5: If the user rejects the plan
@@ -80,29 +81,29 @@ Should we use Elasticsearch or a database query builder for the search index?
 ```
 User selected Option B.
 ...
-<proposed_plan>
+```
+→ Calls `submit_plan` with:
+```
 # Search Redesign — Implementation Plan
 ... (complete plan)
-</proposed_plan>
 ```
-→ Ends with ExitPlanMode (implied by `<proposed_plan>` block)
+→ No `## Parts` table, so this call ends Plan mode (approval requested)
 
 **Turn 3 (if user has feedback):**
 ```
 User: "This looks good but add a performance test."
-...
-<proposed_plan>
+```
+→ Calls `submit_plan` again with:
+```
 # Search Redesign — Implementation Plan
 ... (plan WITH added performance test task)
-</proposed_plan>
 ```
-→ Ends with ExitPlanMode again (complete replacement)
+→ Complete replacement, ends Plan mode again
 
 ### Example turn sequence (split plan)
 
-**Turn 1:**
+**Turn 1:** Call `submit_plan` with:
 ```
-<proposed_plan>
 # Design Mode — Implementation Plan (Index)
 
 **Goal:** ...
@@ -113,51 +114,35 @@ User: "This looks good but add a performance test."
 | 1 | design-mode/protocol.md | Protocol types | pending |
 | 2 | design-mode/config.md | Config + instructions | pending |
 | 3 | design-mode/schema.md | Schema + tests | pending |
-</proposed_plan>
 ```
-→ Stops (no AskUserQuestion, no ExitPlanMode yet — injection will direct next)
+→ 3 rows are `pending`, so this call saves the index only — Plan mode stays active, no AskUserQuestion. Injection will direct to Part 1.
 
 **Turn 2:**
+- Write `design-mode/protocol.md` with a normal file-write tool:
 ```
 ## Part 1 (from previous turn's injection)
 
 ### Task 1: Verify ModeKind::Design...
 ...
-
-(Flip Part 1 row to `done` in index)
 ```
-→ Stops (no AskUserQuestion, no ExitPlanMode yet)
+- Then call `submit_plan` with the index markdown, Part 1's row flipped to `done` (Parts 2-3 still `pending`)
+→ Still 2 rows `pending`, so Plan mode stays active. Injection directs to Part 2.
 
 **Turn 3:**
-```
-## Part 2 (from injection)
-...
-(Flip Part 2 row to `done` in index)
-```
-→ Stops
+- Write `design-mode/config.md`
+- Call `submit_plan` with the index markdown, Parts 1-2 `done` (Part 3 still `pending`)
+→ Still 1 row `pending`, Plan mode stays active. Injection directs to Part 3.
 
 **Turn 4:**
-```
-## Part 3 (final part from injection)
-...
-(Flip Part 3 row to `done` in index)
-
----
-
-Cross-file consistency review: all dependencies valid ✓
-
-<proposed_plan>
-# Design Mode — Implementation Plan
-
-[Full index + all parts combined for user approval]
-</proposed_plan>
-```
-→ Ends with ExitPlanMode (now all parts are done)
+- Write `design-mode/schema.md` (final part)
+- Cross-file consistency review: all dependencies valid ✓
+- Call `submit_plan` with the index markdown, all 3 rows `done`
+→ No rows `pending`, so this call ends Plan mode (approval requested)
 
 ### When to ignore these rules
 
 **Rare exceptions (use sparingly):**
-- If the user explicitly says "just execute this," you may skip ExitPlanMode (but this is outside plan mode).
+- If the user explicitly says "just execute this," you may skip calling `submit_plan` (but this is outside plan mode).
 - If the user changes their mind mid-plan and asks to abort, stop and exit plan mode.
 
 Otherwise, always follow the turn discipline.
