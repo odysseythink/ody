@@ -3,6 +3,7 @@
 use super::*;
 use crate::app_event::AppEvent;
 use crate::chatwidget::rate_limits::RATE_LIMIT_SWITCH_PROMPT_VIEW_ID;
+use ody_protocol::config_types::DesignAuditLevel;
 
 impl ChatWidget {
     /// Set the approval policy in the widget's config copy.
@@ -557,17 +558,131 @@ impl ChatWidget {
                 settings: settings.clone(),
             };
         }
-        self.active_collaboration_mask = Some(CollaborationModeMask {
+        let mut mask = CollaborationModeMask {
             name: mode_kind.display_name().to_string(),
             mode: Some(mode_kind),
             model: Some(settings.model.clone()),
             reasoning_effort: Some(settings.reasoning_effort.clone()),
             developer_instructions: Some(settings.developer_instructions),
-            design_audit_level: None,
-        });
+            design_audit_level: Some(settings.design_audit_level),
+        };
+        if self.ensure_design_audit_level(&mut mask, None) {
+            return;
+        }
+        self.active_collaboration_mask = Some(mask);
         self.update_collaboration_mode_indicator();
         self.refresh_plan_mode_nudge();
         self.refresh_model_dependent_surfaces();
+    }
+
+    /// Ensure a design-mode mask carries an audit level before it is applied.
+    ///
+    /// If the mask is for Design mode and has no audit level, this method either
+    /// reuses the level from the currently active design mask or opens the picker.
+    /// Returns `true` when the caller should stop and wait for the picker.
+    pub(super) fn ensure_design_audit_level(
+        &mut self,
+        mask: &mut CollaborationModeMask,
+        pending_user_message: Option<UserMessage>,
+    ) -> bool {
+        if mask.mode != Some(ModeKind::Design) {
+            return false;
+        }
+        if mask.design_audit_level.flatten().is_some() {
+            return false;
+        }
+        // Reuse the audit level from the active design mask, if any.
+        if let Some(level) = self
+            .active_collaboration_mask
+            .as_ref()
+            .and_then(|m| m.design_audit_level)
+            .flatten()
+        {
+            mask.design_audit_level = Some(Some(level));
+            return false;
+        }
+        self.open_design_audit_level_picker(mask.clone(), pending_user_message);
+        true
+    }
+
+    pub(super) fn open_design_audit_level_picker(
+        &mut self,
+        base_mask: CollaborationModeMask,
+        pending_user_message: Option<UserMessage>,
+    ) {
+        fn make_action(
+            level: DesignAuditLevel,
+            pending_user_message: Option<UserMessage>,
+            base_mask: CollaborationModeMask,
+        ) -> SelectionAction {
+            Box::new(move |tx: &AppEventSender| {
+                let mut mask = base_mask.clone();
+                mask.design_audit_level = Some(Some(level));
+                tx.send(AppEvent::SetDesignCollaborationMask {
+                    mask,
+                    pending_user_message: pending_user_message.clone(),
+                });
+            })
+        }
+
+        let items = vec![
+            SelectionItem {
+                name: "Basic".to_string(),
+                description: Some(
+                    "Trust clearly-stated user facts; verify only load-bearing assumptions."
+                        .to_string(),
+                ),
+                actions: vec![make_action(
+                    DesignAuditLevel::Basic,
+                    pending_user_message.clone(),
+                    base_mask.clone(),
+                )],
+                is_default: false,
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "Standard".to_string(),
+                description: Some(
+                    "Verify every assumption that would be expensive if wrong; record the rest."
+                        .to_string(),
+                ),
+                actions: vec![make_action(
+                    DesignAuditLevel::Standard,
+                    pending_user_message.clone(),
+                    base_mask.clone(),
+                )],
+                is_default: true,
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+            SelectionItem {
+                name: "Deep".to_string(),
+                description: Some(
+                    "Verify nearly everything against sources; treat the repo and upstream as the only ground truth."
+                        .to_string(),
+                ),
+                actions: vec![make_action(
+                    DesignAuditLevel::Deep,
+                    pending_user_message.clone(),
+                    base_mask.clone(),
+                )],
+                is_default: false,
+                dismiss_on_select: true,
+                ..Default::default()
+            },
+        ];
+
+        self.bottom_pane.show_selection_view(SelectionViewParams {
+            view_id: Some("design_audit_level_picker"),
+            title: Some("Select Design Audit Level".to_string()),
+            subtitle: Some("Choose how rigorously assumptions are verified.".to_string()),
+            footer_hint: Some(standard_popup_hint_line()),
+            items,
+            initial_selected_idx: Some(1),
+            ..Default::default()
+        });
+        self.request_redraw();
     }
 
     pub(super) fn model_display_name(&self) -> &str {
@@ -663,10 +778,13 @@ impl ChatWidget {
             return;
         }
 
-        if let Some(next_mask) = collaboration_modes::next_mask(
+        if let Some(mut next_mask) = collaboration_modes::next_mask(
             self.model_catalog.as_ref(),
             self.active_collaboration_mask.as_ref(),
         ) {
+            if self.ensure_design_audit_level(&mut next_mask, None) {
+                return;
+            }
             self.set_collaboration_mask_from_user_action(next_mask);
         }
     }
@@ -710,6 +828,9 @@ impl ChatWidget {
         if mask.mode == Some(ModeKind::Plan) {
             self.dismissed_plan_mode_nudge_scopes
                 .insert(self.plan_mode_nudge_scope());
+        }
+        if self.ensure_design_audit_level(&mut mask, None) {
+            return;
         }
         self.active_collaboration_mask = Some(mask);
         self.bottom_pane

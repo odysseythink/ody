@@ -1,6 +1,8 @@
 use super::*;
 use crate::bottom_pane::slash_commands::BuiltinCommandFlags;
 use crate::bottom_pane::slash_commands::builtins_for_input;
+use ody_protocol::ThreadId;
+use ody_protocol::config_types::Settings;
 use pretty_assertions::assert_eq;
 
 fn all_enabled_flags() -> BuiltinCommandFlags {
@@ -116,22 +118,103 @@ async fn design_mode_with_configured_audit_level_skips_picker() {
 
 #[tokio::test]
 async fn shift_tab_cycles_through_design_mode() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.set_feature_enabled(Feature::CollaborationModes, /*enabled*/ true);
 
     // Default -> Plan -> Design
     chat.handle_key_event(KeyEvent::from(KeyCode::BackTab));
     assert_eq!(chat.active_collaboration_mode_kind(), ModeKind::Plan);
+
+    // Plan -> Design opens the audit level picker first.
     chat.handle_key_event(KeyEvent::from(KeyCode::BackTab));
-    assert_eq!(chat.active_collaboration_mode_kind(), ModeKind::Design);
+    assert!(chat.bottom_pane.has_active_view());
+    assert_eq!(
+        chat.bottom_pane.active_view_id(),
+        Some("design_audit_level_picker")
+    );
+
+    // Select Standard to enter Design mode.
+    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+    let mut found_mask = None;
+    while let Ok(event) = rx.try_recv() {
+        if let AppEvent::SetDesignCollaborationMask { mask, .. } = event {
+            found_mask = Some(mask);
+        }
+    }
+    let mask = found_mask.expect("expected SetDesignCollaborationMask event");
+    assert_eq!(mask.mode, Some(ModeKind::Design));
+    assert_eq!(
+        mask.design_audit_level,
+        Some(Some(DesignAuditLevel::Standard))
+    );
+}
+
+#[tokio::test]
+async fn session_configured_in_design_mode_opens_audit_level_picker() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.set_feature_enabled(Feature::CollaborationModes, /*enabled*/ true);
+
+    let thread_id = ThreadId::new();
+    let configured = crate::session_state::ThreadSessionState {
+        thread_id,
+        forked_from_id: None,
+        fork_parent_title: None,
+        thread_name: None,
+        model: "test-model".to_string(),
+        model_provider_id: "test-provider".to_string(),
+        service_tier: None,
+        approval_policy: ody_app_server_protocol::AskForApproval::Never,
+        approvals_reviewer: ody_protocol::config_types::ApprovalsReviewer::User,
+        permission_profile: ody_protocol::models::PermissionProfile::read_only(),
+        active_permission_profile: None,
+        cwd: test_path_buf("/home/user/project").abs(),
+        runtime_workspace_roots: Vec::new(),
+        instruction_source_paths: Vec::new(),
+        reasoning_effort: Some(ody_protocol::model_metadata::ReasoningEffort::Medium),
+        collaboration_mode: Some(Box::new(ody_protocol::config_types::CollaborationMode {
+            mode: ModeKind::Design,
+            settings: Settings {
+                model: "test-model".to_string(),
+                reasoning_effort: Some(ody_protocol::model_metadata::ReasoningEffort::Medium),
+                developer_instructions: Some("design instructions".to_string()),
+                design_audit_level: None,
+            },
+        })),
+        personality: None,
+        message_history: None,
+        network_proxy: None,
+        rollout_path: None,
+    };
+    chat.handle_thread_session(configured);
+
+    assert!(chat.bottom_pane.has_active_view());
+    assert_eq!(
+        chat.bottom_pane.active_view_id(),
+        Some("design_audit_level_picker")
+    );
+
+    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+    let mut found_mask = None;
+    while let Ok(event) = rx.try_recv() {
+        if let AppEvent::SetDesignCollaborationMask { mask, .. } = event {
+            found_mask = Some(mask);
+        }
+    }
+    let mask = found_mask.expect("expected SetDesignCollaborationMask event");
+    assert_eq!(mask.mode, Some(ModeKind::Design));
+    assert_eq!(
+        mask.design_audit_level,
+        Some(Some(DesignAuditLevel::Standard))
+    );
 }
 
 #[tokio::test]
 async fn design_mode_renders_design_footer_label() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.set_feature_enabled(Feature::CollaborationModes, /*enabled*/ true);
-    let design_mask = collaboration_modes::design_mask(chat.model_catalog.as_ref())
+    let mut design_mask = collaboration_modes::design_mask(chat.model_catalog.as_ref())
         .expect("expected design collaboration mode");
+    design_mask.design_audit_level = Some(Some(DesignAuditLevel::Standard));
     chat.set_collaboration_mask(design_mask);
 
     assert_eq!(chat.active_collaboration_mode_kind(), ModeKind::Design);

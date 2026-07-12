@@ -1372,7 +1372,7 @@ async fn enter_submits_when_plan_stream_is_not_active() {
 
 #[tokio::test]
 async fn collab_mode_shift_tab_cycles_only_when_idle() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.set_feature_enabled(Feature::CollaborationModes, /*enabled*/ true);
 
     let initial = chat.current_collaboration_mode().clone();
@@ -1380,7 +1380,22 @@ async fn collab_mode_shift_tab_cycles_only_when_idle() {
     assert_eq!(chat.active_collaboration_mode_kind(), ModeKind::Plan);
     assert_eq!(chat.current_collaboration_mode(), &initial);
 
+    // Plan -> Design opens the audit level picker first.
     chat.handle_key_event(KeyEvent::from(KeyCode::BackTab));
+    assert!(chat.bottom_pane.has_active_view());
+    assert_eq!(
+        chat.bottom_pane.active_view_id(),
+        Some("design_audit_level_picker")
+    );
+    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+    let mut design_mask = None;
+    while let Ok(event) = rx.try_recv() {
+        if let AppEvent::SetDesignCollaborationMask { mask, .. } = event {
+            design_mask = Some(mask);
+        }
+    }
+    let design_mask = design_mask.expect("expected SetDesignCollaborationMask event");
+    chat.set_collaboration_mask(design_mask);
     assert_eq!(chat.active_collaboration_mode_kind(), ModeKind::Design);
     assert_eq!(chat.current_collaboration_mode(), &initial);
 

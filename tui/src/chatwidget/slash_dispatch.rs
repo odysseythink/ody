@@ -14,7 +14,6 @@ use crate::bottom_pane::slash_commands::SlashCommandItem;
 use crate::bottom_pane::slash_commands::find_slash_command;
 use crate::goal_display::GOAL_USAGE;
 use crate::goal_files::GoalDraft;
-use ody_protocol::config_types::DesignAuditLevel;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SlashCommandDispatchSource {
@@ -118,106 +117,17 @@ impl ChatWidget {
             );
             return DesignSlashResult::Failed;
         }
-        let Some(mask) = collaboration_modes::design_mask(self.model_catalog.as_ref()) else {
+        let Some(mut mask) = collaboration_modes::design_mask(self.model_catalog.as_ref()) else {
             self.add_info_message("Design mode unavailable right now.".to_string(), None);
             return DesignSlashResult::Failed;
         };
 
-        if mask.design_audit_level.flatten().is_some() {
-            self.set_collaboration_mask_from_user_action(mask);
-            return DesignSlashResult::ModeSet;
+        if self.ensure_design_audit_level(&mut mask, pending_user_message) {
+            return DesignSlashResult::PickerShown;
         }
 
-        // If the user is already in a Design mask that carries a selected audit level,
-        // re-apply it instead of prompting again.
-        if let Some(active_mask) = self.active_collaboration_mask.as_ref().filter(|m| {
-            m.mode == Some(ModeKind::Design) && m.design_audit_level.flatten().is_some()
-        }) {
-            self.set_collaboration_mask_from_user_action(active_mask.clone());
-            return DesignSlashResult::ModeSet;
-        }
-
-        self.open_design_audit_level_picker(pending_user_message);
-        DesignSlashResult::PickerShown
-    }
-
-    fn open_design_audit_level_picker(&mut self, pending_user_message: Option<UserMessage>) {
-        let base_mask = collaboration_modes::design_mask(self.model_catalog.as_ref())
-            .expect("design mode should be available");
-
-        fn make_action(
-            level: DesignAuditLevel,
-            pending_user_message: Option<UserMessage>,
-            base_mask: CollaborationModeMask,
-        ) -> SelectionAction {
-            Box::new(move |tx: &AppEventSender| {
-                let mut mask = base_mask.clone();
-                mask.design_audit_level = Some(Some(level));
-                tx.send(AppEvent::SetDesignCollaborationMask {
-                    mask,
-                    pending_user_message: pending_user_message.clone(),
-                });
-            })
-        }
-
-        let items = vec![
-            SelectionItem {
-                name: "Basic".to_string(),
-                description: Some(
-                    "Trust clearly-stated user facts; verify only load-bearing assumptions."
-                        .to_string(),
-                ),
-                actions: vec![make_action(
-                    DesignAuditLevel::Basic,
-                    pending_user_message.clone(),
-                    base_mask.clone(),
-                )],
-                is_default: false,
-                dismiss_on_select: true,
-                ..Default::default()
-            },
-            SelectionItem {
-                name: "Standard".to_string(),
-                description: Some(
-                    "Verify every assumption that would be expensive if wrong; record the rest."
-                        .to_string(),
-                ),
-                actions: vec![make_action(
-                    DesignAuditLevel::Standard,
-                    pending_user_message.clone(),
-                    base_mask.clone(),
-                )],
-                is_default: true,
-                dismiss_on_select: true,
-                ..Default::default()
-            },
-            SelectionItem {
-                name: "Deep".to_string(),
-                description: Some(
-                    "Verify nearly everything against sources; treat the repo and upstream as the only ground truth."
-                        .to_string(),
-                ),
-                actions: vec![make_action(
-                    DesignAuditLevel::Deep,
-                    pending_user_message.clone(),
-                    base_mask.clone(),
-                )],
-                is_default: false,
-                dismiss_on_select: true,
-                ..Default::default()
-            },
-        ];
-
-        self.bottom_pane.show_selection_view(SelectionViewParams {
-            view_id: Some("design_audit_level_picker"),
-            title: Some("Select Design Audit Level".to_string()),
-            subtitle: Some("Choose how rigorously assumptions are verified.".to_string()),
-            footer_hint: Some(standard_popup_hint_line()),
-            items,
-            initial_selected_idx: Some(1),
-            ..Default::default()
-        });
-        self.request_redraw();
+        self.set_collaboration_mask_from_user_action(mask);
+        DesignSlashResult::ModeSet
     }
 
     /// Return the directory used for plan files in Plan mode.
