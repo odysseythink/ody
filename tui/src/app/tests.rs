@@ -34,6 +34,8 @@ use crate::legacy_core::config::ConfigBuilder;
 use crate::legacy_core::config::ConfigOverrides;
 use crate::legacy_core::config::PermissionProfileSnapshot;
 use crate::legacy_core::config::TerminalResizeReflowMaxRows;
+use crossterm::event::KeyModifiers;
+use insta::assert_snapshot;
 use ody_app_server_client::AppServerPath;
 use ody_app_server_protocol::AdditionalFileSystemPermissions;
 use ody_app_server_protocol::AdditionalNetworkPermissions;
@@ -98,8 +100,6 @@ use ody_protocol::protocol::MAX_THREAD_GOAL_OBJECTIVE_CHARS;
 use ody_protocol::request_permissions::RequestPermissionProfile;
 use ody_protocol::user_input::TextElement;
 use ody_utils_absolute_path::AbsolutePathBuf;
-use crossterm::event::KeyModifiers;
-use insta::assert_snapshot;
 use pretty_assertions::assert_eq;
 use ratatui::prelude::Line;
 use std::path::Path;
@@ -520,6 +520,7 @@ async fn replay_thread_snapshot_restores_draft_and_queued_input() {
             model: None,
             reasoning_effort: None,
             developer_instructions: None,
+            design_audit_level: None,
         },
     );
     let expected_input_state = app
@@ -942,6 +943,7 @@ async fn replay_thread_snapshot_restores_collaboration_mode_for_draft_submit() {
             model: Some("gpt-restored".to_string()),
             reasoning_effort: Some(Some(ReasoningEffortConfig::High)),
             developer_instructions: None,
+            design_audit_level: None,
         });
     app.chat_widget
         .apply_external_edit("draft prompt".to_string());
@@ -963,6 +965,7 @@ async fn replay_thread_snapshot_restores_collaboration_mode_for_draft_submit() {
             model: Some("gpt-replacement".to_string()),
             reasoning_effort: Some(Some(ReasoningEffortConfig::Low)),
             developer_instructions: None,
+            design_audit_level: None,
         });
     while new_op_rx.try_recv().is_ok() {}
 
@@ -1003,6 +1006,7 @@ async fn replay_thread_snapshot_restores_collaboration_mode_for_draft_submit() {
                         model: "gpt-restored".to_string(),
                         reasoning_effort: Some(ReasoningEffortConfig::High),
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 })
             );
@@ -1026,6 +1030,7 @@ async fn replay_thread_snapshot_restores_collaboration_mode_without_input() {
             model: Some("gpt-restored".to_string()),
             reasoning_effort: Some(Some(ReasoningEffortConfig::High)),
             developer_instructions: None,
+            design_audit_level: None,
         });
     let input_state = app
         .chat_widget
@@ -1044,6 +1049,7 @@ async fn replay_thread_snapshot_restores_collaboration_mode_without_input() {
             model: Some("gpt-replacement".to_string()),
             reasoning_effort: Some(Some(ReasoningEffortConfig::Low)),
             developer_instructions: None,
+            design_audit_level: None,
         });
 
     app.replay_thread_snapshot(
@@ -5395,25 +5401,22 @@ async fn replace_chat_widget_reseeds_collab_agent_metadata_for_replay() {
             session: None,
             turns: Vec::new(),
             events: vec![ThreadBufferedEvent::Notification(
-                ServerNotification::ItemStarted(
-                    ody_app_server_protocol::ItemStartedNotification {
-                        thread_id: "thread-1".to_string(),
-                        turn_id: "turn-1".to_string(),
-                        started_at_ms: 0,
-                        item: ThreadItem::CollabAgentToolCall {
-                            id: "wait-1".to_string(),
-                            tool: ody_app_server_protocol::CollabAgentTool::Wait,
-                            status:
-                                ody_app_server_protocol::CollabAgentToolCallStatus::InProgress,
-                            sender_thread_id: ThreadId::new().to_string(),
-                            receiver_thread_ids: vec![receiver_thread_id.to_string()],
-                            prompt: None,
-                            model: None,
-                            reasoning_effort: None,
-                            agents_states: HashMap::new(),
-                        },
+                ServerNotification::ItemStarted(ody_app_server_protocol::ItemStartedNotification {
+                    thread_id: "thread-1".to_string(),
+                    turn_id: "turn-1".to_string(),
+                    started_at_ms: 0,
+                    item: ThreadItem::CollabAgentToolCall {
+                        id: "wait-1".to_string(),
+                        tool: ody_app_server_protocol::CollabAgentTool::Wait,
+                        status: ody_app_server_protocol::CollabAgentToolCallStatus::InProgress,
+                        sender_thread_id: ThreadId::new().to_string(),
+                        receiver_thread_ids: vec![receiver_thread_id.to_string()],
+                        prompt: None,
+                        model: None,
+                        reasoning_effort: None,
+                        agents_states: HashMap::new(),
                     },
-                ),
+                }),
             )],
             input_state: None,
         },
@@ -5759,6 +5762,7 @@ async fn override_turn_context_sends_thread_settings_update() {
                 model: "gpt-5.4".to_string(),
                 reasoning_effort: Some(ReasoningEffortConfig::High),
                 developer_instructions: None,
+                design_audit_level: None,
             },
         };
         let op = AppCommand::override_turn_context(
@@ -5903,6 +5907,7 @@ async fn thread_setting_update_params_sync_model_and_default_reasoning() {
             model: Some("gpt-plan".to_string()),
             reasoning_effort: Some(Some(ReasoningEffortConfig::Medium)),
             developer_instructions: None,
+            design_audit_level: None,
         });
     app.on_update_reasoning_effort(Some(ReasoningEffortConfig::High));
 
@@ -5935,6 +5940,7 @@ async fn inactive_thread_settings_notification_updates_cached_collaboration_mode
             model: "gpt-plan".to_string(),
             reasoning_effort: Some(ReasoningEffortConfig::High),
             developer_instructions: Some("draft a plan first".to_string()),
+            design_audit_level: None,
         },
     };
 

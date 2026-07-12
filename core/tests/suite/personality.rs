@@ -1,24 +1,3 @@
-use ody_config::types::Personality;
-use ody_features::Feature;
-use ody_models_manager::manager::RefreshStrategy;
-use ody_models_manager::manager::SharedModelsManager;
-use ody_protocol::config_types::ReasoningSummary;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::model_metadata::ConfigShellToolType;
-use ody_protocol::model_metadata::ModelInfo;
-use ody_protocol::model_metadata::ModelInstructionsVariables;
-use ody_protocol::model_metadata::ModelMessages;
-use ody_protocol::model_metadata::ModelVisibility;
-use ody_protocol::model_metadata::ModelsResponse;
-use ody_protocol::model_metadata::ReasoningEffort;
-use ody_protocol::model_metadata::ReasoningEffortPreset;
-use ody_protocol::model_metadata::TruncationPolicyConfig;
-use ody_protocol::model_metadata::default_input_modalities;
-use ody_protocol::model_metadata::ModelCapabilities;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
 use core_test_support::load_default_config_for_test;
 use core_test_support::responses::mount_models_once;
 use core_test_support::responses::mount_sse_once;
@@ -31,6 +10,27 @@ use core_test_support::test_ody::local_selections;
 use core_test_support::test_ody::test_ody;
 use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event;
+use ody_config::types::Personality;
+use ody_features::Feature;
+use ody_models_manager::manager::RefreshStrategy;
+use ody_models_manager::manager::SharedModelsManager;
+use ody_protocol::config_types::ReasoningSummary;
+use ody_protocol::model_metadata::ConfigShellToolType;
+use ody_protocol::model_metadata::ModelCapabilities;
+use ody_protocol::model_metadata::ModelInfo;
+use ody_protocol::model_metadata::ModelInstructionsVariables;
+use ody_protocol::model_metadata::ModelMessages;
+use ody_protocol::model_metadata::ModelVisibility;
+use ody_protocol::model_metadata::ModelsResponse;
+use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffortPreset;
+use ody_protocol::model_metadata::TruncationPolicyConfig;
+use ody_protocol::model_metadata::default_input_modalities;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 use tokio::time::Duration;
@@ -82,6 +82,7 @@ fn read_only_text_turn_with_personality(
                     model,
                     reasoning_effort: test.config.model_reasoning_effort.clone(),
                     developer_instructions: None,
+                    design_audit_level: None,
                 },
             }),
             ..Default::default()
@@ -117,8 +118,7 @@ async fn base_instructions_override_disables_personality_template() {
     config.personality = Some(Personality::Friendly);
     config.base_instructions = Some("override instructions".to_string());
 
-    let model_info =
-        ody_core::test_support::construct_model_info_offline("gpt-5.3-ody", &config);
+    let model_info = ody_core::test_support::construct_model_info_offline("gpt-5.3-ody", &config);
 
     assert_eq!(model_info.base_instructions, "override instructions");
     assert_eq!(
@@ -133,14 +133,12 @@ async fn user_turn_personality_none_does_not_add_update_message() -> anyhow::Res
 
     let server = start_mock_server().await;
     let resp_mock = mount_sse_once(&server, sse_completed("resp-1")).await;
-    let mut builder = test_ody()
-        .with_model("gpt-5.3-ody")
-        .with_config(|config| {
-            config
-                .features
-                .enable(Feature::Personality)
-                .expect("test config should allow feature update");
-        });
+    let mut builder = test_ody().with_model("gpt-5.3-ody").with_config(|config| {
+        config
+            .features
+            .enable(Feature::Personality)
+            .expect("test config should allow feature update");
+    });
     let test = builder.build(&server).await?;
 
     test.ody
@@ -172,15 +170,13 @@ async fn config_personality_some_sets_instructions_template() -> anyhow::Result<
 
     let server = start_mock_server().await;
     let resp_mock = mount_sse_once(&server, sse_completed("resp-1")).await;
-    let mut builder = test_ody()
-        .with_model("gpt-5.3-ody")
-        .with_config(|config| {
-            config
-                .features
-                .enable(Feature::Personality)
-                .expect("test config should allow feature update");
-            config.personality = Some(Personality::Friendly);
-        });
+    let mut builder = test_ody().with_model("gpt-5.3-ody").with_config(|config| {
+        config
+            .features
+            .enable(Feature::Personality)
+            .expect("test config should allow feature update");
+        config.personality = Some(Personality::Friendly);
+    });
     let test = builder.build(&server).await?;
 
     test.ody
@@ -219,15 +215,13 @@ async fn config_personality_none_sends_no_personality() -> anyhow::Result<()> {
 
     let server = start_mock_server().await;
     let resp_mock = mount_sse_once(&server, sse_completed("resp-1")).await;
-    let mut builder = test_ody()
-        .with_model("gpt-5.3-ody")
-        .with_config(|config| {
-            config
-                .features
-                .enable(Feature::Personality)
-                .expect("test config should allow feature update");
-            config.personality = Some(Personality::None);
-        });
+    let mut builder = test_ody().with_model("gpt-5.3-ody").with_config(|config| {
+        config
+            .features
+            .enable(Feature::Personality)
+            .expect("test config should allow feature update");
+        config.personality = Some(Personality::None);
+    });
     let test = builder.build(&server).await?;
 
     test.ody
@@ -273,14 +267,12 @@ async fn default_personality_is_pragmatic_without_config_toml() -> anyhow::Resul
 
     let server = start_mock_server().await;
     let resp_mock = mount_sse_once(&server, sse_completed("resp-1")).await;
-    let mut builder = test_ody()
-        .with_model("gpt-5.3-ody")
-        .with_config(|config| {
-            config
-                .features
-                .enable(Feature::Personality)
-                .expect("test config should allow feature update");
-        });
+    let mut builder = test_ody().with_model("gpt-5.3-ody").with_config(|config| {
+        config
+            .features
+            .enable(Feature::Personality)
+            .expect("test config should allow feature update");
+    });
     let test = builder.build(&server).await?;
 
     test.ody
@@ -459,8 +451,7 @@ async fn instructions_uses_base_if_feature_disabled() -> anyhow::Result<()> {
         .expect("test config should allow feature update");
     config.personality = Some(Personality::Friendly);
 
-    let model_info =
-        ody_core::test_support::construct_model_info_offline("gpt-5.3-ody", &config);
+    let model_info = ody_core::test_support::construct_model_info_offline("gpt-5.3-ody", &config);
     assert_eq!(
         model_info.get_model_instructions(config.personality),
         model_info.base_instructions
@@ -599,7 +590,7 @@ async fn remote_model_friendly_personality_instructions_with_feature() -> anyhow
         tool_mode: None,
         multi_agent_version: None,
         capabilities: ModelCapabilities::default(),
-};
+    };
 
     let _models_mock = mount_models_once(
         &server,
@@ -611,15 +602,14 @@ async fn remote_model_friendly_personality_instructions_with_feature() -> anyhow
 
     let resp_mock = mount_sse_once(&server, sse_completed("resp-1")).await;
 
-    let mut builder = test_ody()
-        .with_config(|config| {
-            config
-                .features
-                .enable(Feature::Personality)
-                .expect("test config should allow feature update");
-            config.model = Some(remote_slug.to_string());
-            config.personality = Some(Personality::Friendly);
-        });
+    let mut builder = test_ody().with_config(|config| {
+        config
+            .features
+            .enable(Feature::Personality)
+            .expect("test config should allow feature update");
+        config.model = Some(remote_slug.to_string());
+        config.personality = Some(Personality::Friendly);
+    });
     let test = builder.build(&server).await?;
 
     wait_for_model_available(&test.thread_manager.get_models_manager(), remote_slug).await;
@@ -714,7 +704,7 @@ async fn user_turn_personality_remote_model_template_includes_update_message() -
         tool_mode: None,
         multi_agent_version: None,
         capabilities: ModelCapabilities::default(),
-};
+    };
 
     let _models_mock = mount_models_once(
         &server,
@@ -730,14 +720,13 @@ async fn user_turn_personality_remote_model_template_includes_update_message() -
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_config(|config| {
-            config
-                .features
-                .enable(Feature::Personality)
-                .expect("test config should allow feature update");
-            config.model = Some("gpt-5.3-ody".to_string());
-        });
+    let mut builder = test_ody().with_config(|config| {
+        config
+            .features
+            .enable(Feature::Personality)
+            .expect("test config should allow feature update");
+        config.model = Some("gpt-5.3-ody".to_string());
+    });
     let test = builder.build(&server).await?;
 
     wait_for_model_available(&test.thread_manager.get_models_manager(), remote_slug).await;

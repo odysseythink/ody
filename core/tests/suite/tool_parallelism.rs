@@ -6,11 +6,6 @@ use std::fs;
 use std::time::Duration;
 use std::time::Instant;
 
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
 use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
 use core_test_support::responses::ev_function_call;
@@ -27,6 +22,11 @@ use core_test_support::test_ody::TestOdy;
 use core_test_support::test_ody::test_ody;
 use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
@@ -57,6 +57,7 @@ async fn run_turn(test: &TestOdy, prompt: &str) -> anyhow::Result<()> {
                         model: session_model,
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()
@@ -382,6 +383,7 @@ async fn shell_tools_start_before_response_completed_when_stream_delayed() -> an
                         model: session_model,
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()

@@ -14,6 +14,8 @@ use app_test_support::format_with_current_shell_display;
 use app_test_support::to_response;
 use app_test_support::write_mock_responses_config_toml_simple;
 use app_test_support::write_models_cache;
+use core_test_support::responses;
+use core_test_support::skip_if_no_network;
 use ody_app_server::INPUT_TOO_LARGE_ERROR_CODE;
 use ody_app_server::INVALID_PARAMS_ERROR_CODE;
 use ody_app_server_protocol::AdditionalContextEntry;
@@ -72,14 +74,12 @@ use ody_protocol::config_types::MultiAgentMode;
 use ody_protocol::config_types::Personality;
 use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::config_types::Settings;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_DANGER_FULL_ACCESS;
 use ody_protocol::models::ImageDetail;
-use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::protocol::MULTI_AGENT_MODE_OPEN_TAG;
 use ody_protocol::user_input::MAX_USER_INPUT_TEXT_CHARS;
 use ody_utils_absolute_path::test_support::PathExt;
-use core_test_support::responses;
-use core_test_support::skip_if_no_network;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
@@ -1301,6 +1301,7 @@ async fn turn_start_accepts_collaboration_mode_override_v2() -> Result<()> {
             model: "mock-model-collab".to_string(),
             reasoning_effort: Some(ReasoningEffort::High),
             developer_instructions: None,
+            design_audit_level: None,
         },
     };
 
@@ -1391,6 +1392,7 @@ async fn turn_start_uses_thread_feature_overrides_for_request_user_input_tool_de
             model: "mock-model-collab".to_string(),
             reasoning_effort: Some(ReasoningEffort::High),
             developer_instructions: None,
+            design_audit_level: None,
         },
     };
 
@@ -2228,12 +2230,7 @@ async fn turn_start_updates_sandbox_and_cwd_between_turns_v2() -> Result<()> {
         create_final_assistant_message_sse_response("done second")?,
     ];
     let server = create_mock_responses_server_sequence(responses).await;
-    create_config_toml(
-        &ody_home,
-        &server.uri(),
-        "untrusted",
-        &BTreeMap::default(),
-    )?;
+    create_config_toml(&ody_home, &server.uri(), "untrusted", &BTreeMap::default())?;
 
     let mut mcp = TestAppServer::new(&ody_home).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
@@ -2688,12 +2685,7 @@ async fn turn_start_file_change_approval_v2() -> Result<()> {
         create_final_assistant_message_sse_response("patch applied")?,
     ];
     let server = create_mock_responses_server_sequence(responses).await;
-    create_config_toml(
-        &ody_home,
-        &server.uri(),
-        "untrusted",
-        &BTreeMap::default(),
-    )?;
+    create_config_toml(&ody_home, &server.uri(), "untrusted", &BTreeMap::default())?;
 
     let mut mcp = TestAppServer::new(&ody_home).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
@@ -3684,12 +3676,7 @@ async fn turn_start_file_change_approval_accept_for_session_persists_v2() -> Res
         create_final_assistant_message_sse_response("patch 2 applied")?,
     ];
     let server = create_mock_responses_server_sequence(responses).await;
-    create_config_toml(
-        &ody_home,
-        &server.uri(),
-        "untrusted",
-        &BTreeMap::default(),
-    )?;
+    create_config_toml(&ody_home, &server.uri(), "untrusted", &BTreeMap::default())?;
 
     let mut mcp = TestAppServer::new(&ody_home).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
@@ -3857,12 +3844,7 @@ async fn turn_start_file_change_approval_decline_v2() -> Result<()> {
         create_final_assistant_message_sse_response("patch declined")?,
     ];
     let server = create_mock_responses_server_sequence(responses).await;
-    create_config_toml(
-        &ody_home,
-        &server.uri(),
-        "untrusted",
-        &BTreeMap::default(),
-    )?;
+    create_config_toml(&ody_home, &server.uri(), "untrusted", &BTreeMap::default())?;
 
     let mut mcp = TestAppServer::new(&ody_home).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;

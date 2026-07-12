@@ -587,6 +587,7 @@ async fn plan_mode_inline_proposed_plan_is_stripped_and_does_not_emit_plan_item(
             model: session_configured.model.clone(),
             reasoning_effort: None,
             developer_instructions: None,
+            design_audit_level: None,
         },
     };
 
@@ -655,6 +656,7 @@ async fn plan_mode_strips_plan_from_agent_messages() -> anyhow::Result<()> {
             model: session_configured.model.clone(),
             reasoning_effort: None,
             developer_instructions: None,
+            design_audit_level: None,
         },
     };
 

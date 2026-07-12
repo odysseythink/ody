@@ -3,6 +3,7 @@ use crate::plan_artifact::PlanArtifact;
 use crate::plan_mode_tier_selector::PlanModeTierSelector;
 use ody_config::config_toml::{PlanModeConfigToml, PlanModeTier};
 use ody_protocol::config_types::CollaborationMode;
+use ody_protocol::config_types::DesignAuditLevel;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::protocol::COLLABORATION_MODE_CLOSE_TAG;
 use ody_protocol::protocol::COLLABORATION_MODE_OPEN_TAG;
@@ -28,17 +29,17 @@ impl CollaborationModeInstructions {
             .as_ref()
             .filter(|instructions| !instructions.is_empty())?;
 
-        let rendered = if matches!(
-            collaboration_mode.mode,
-            ModeKind::Plan | ModeKind::Design
-        ) && instructions.contains(SPLIT_THRESHOLD_TEMPLATE_KEY)
+        let rendered = if matches!(collaboration_mode.mode, ModeKind::Plan | ModeKind::Design)
+            && instructions.contains(SPLIT_THRESHOLD_TEMPLATE_KEY)
         {
             render_plan_instructions(instructions, split_threshold)
         } else {
             instructions.clone()
         };
 
-        let mut this = Self { instructions: rendered };
+        let mut this = Self {
+            instructions: rendered,
+        };
 
         if collaboration_mode.mode == ModeKind::Plan {
             let tier = resolve_plan_mode_tier(user_prompt, plan_mode_config, plan_artifact);
@@ -56,6 +57,11 @@ impl CollaborationModeInstructions {
                     .with_rigor_split()
                     .with_rigor_turn_discipline();
             }
+        }
+
+        if collaboration_mode.mode == ModeKind::Design {
+            let level = plan_artifact.and_then(|a| a.design_audit_level());
+            this = this.with_design_audit_level(level);
         }
 
         Some(this)
@@ -135,6 +141,26 @@ impl CollaborationModeInstructions {
         let fragment = ody_collaboration_mode_templates::PLAN_RIGOR_TURN_DISCIPLINE;
         Self {
             instructions: format!("{}\n\n{}", self.instructions, fragment),
+        }
+    }
+
+    fn with_design_audit_level(self, level: Option<DesignAuditLevel>) -> Self {
+        let fragment = match level {
+            Some(level) => format!(
+                "## Step 0 — Audit level (host-selected)\n\
+                 The user has selected audit level: **{level}** [C:USER]. Verify assumptions according to this level:\n\
+                 - **Basic** — verify only load-bearing assumptions (architecture, security, data, ops).\n\
+                 - **Standard** — verify every assumption that would be expensive if wrong; record the rest in `## Assumptions & Unverified Items`.\n\
+                 - **Deep** — verify nearly everything against sources; treat the repo and upstream as the only ground truth.\n\n\
+                 Do NOT ask the user to choose the audit level again."
+            ),
+            None => format!(
+                "## Step 0 — Audit level (host-managed, not selected)\n\
+                 No audit level was selected by the host. Default to **Basic** and record `Assumption: audit tier = Basic (auto mode)` in the design's Assumptions section. Do NOT ask the user to choose the level unless these instructions explicitly say no level was selected."
+            ),
+        };
+        Self {
+            instructions: format!("{}\n\n{}", fragment, self.instructions),
         }
     }
 }
@@ -221,17 +247,23 @@ mod tests {
                 model: "test-model".to_string(),
                 reasoning_effort: None,
                 developer_instructions: Some(instructions.to_string()),
+                design_audit_level: None,
             },
         }
     }
 
     #[test]
     fn renders_split_threshold_placeholder() {
-        let mode = plan_mode_with_instructions(
-            "Split plans larger than {{ split_threshold }} tasks."
-        );
-        let instructions = CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8), None, None, None)
-            .expect("should produce instructions");
+        let mode =
+            plan_mode_with_instructions("Split plans larger than {{ split_threshold }} tasks.");
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            None,
+            None,
+            None,
+        )
+        .expect("should produce instructions");
         assert_eq!(instructions.body(), "Split plans larger than 8 tasks.");
     }
 
@@ -245,6 +277,7 @@ mod tests {
                 developer_instructions: Some(
                     "Split designs larger than {{ split_threshold }} subsystems.".to_string(),
                 ),
+                design_audit_level: None,
             },
         };
         let instructions = CollaborationModeInstructions::from_collaboration_mode(
@@ -255,9 +288,14 @@ mod tests {
             None,
         )
         .expect("should produce instructions");
-        assert_eq!(
-            instructions.body(),
-            "Split designs larger than 8 subsystems."
+        let body = instructions.body();
+        assert!(
+            body.contains("Split designs larger than 8 subsystems."),
+            "body should contain rendered design instructions:\n{body}"
+        );
+        assert!(
+            body.contains("## Step 0 — Audit level"),
+            "body should include the host-managed audit level fragment:\n{body}"
         );
     }
 
@@ -271,20 +309,20 @@ mod tests {
                 developer_instructions: Some(
                     "Split designs larger than {{ split_threshold }} subsystems.".to_string(),
                 ),
+                design_audit_level: None,
             },
         };
-        let instructions = CollaborationModeInstructions::from_collaboration_mode(
-            &mode,
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("should produce instructions");
-        assert_eq!(
-            instructions.body(),
-            "Split designs larger than 8 subsystems.",
-            "when split_threshold is None, Design mode should fall back to the same default as Plan mode"
+        let instructions =
+            CollaborationModeInstructions::from_collaboration_mode(&mode, None, None, None, None)
+                .expect("should produce instructions");
+        let body = instructions.body();
+        assert!(
+            body.contains("Split designs larger than 8 subsystems."),
+            "when split_threshold is None, Design mode should fall back to the same default as Plan mode:\n{body}"
+        );
+        assert!(
+            body.contains("## Step 0 — Audit level"),
+            "body should include the host-managed audit level fragment:\n{body}"
         );
     }
 
@@ -296,6 +334,7 @@ mod tests {
                 model: "test-model".to_string(),
                 reasoning_effort: None,
                 developer_instructions: Some("Design the work.".to_string()),
+                design_audit_level: None,
             },
         };
         let config = PlanModeConfigToml {
@@ -311,7 +350,14 @@ mod tests {
         )
         .expect("should produce instructions");
         let body = instructions.body();
-        assert_eq!(body, "Design the work.");
+        assert!(
+            body.contains("Design the work."),
+            "design mode should preserve the base instructions:\n{body}"
+        );
+        assert!(
+            body.contains("## Step 0 — Audit level"),
+            "body should include the host-managed audit level fragment:\n{body}"
+        );
         assert!(
             !body.contains("## Dependency Overview"),
             "design mode must not compose plan rigor fragments:\n{body}"
@@ -326,10 +372,17 @@ mod tests {
                 model: "test-model".to_string(),
                 reasoning_effort: None,
                 developer_instructions: Some("Hello {{ split_threshold }}".to_string()),
+                design_audit_level: None,
             },
         };
-        let instructions = CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8), None, None, None)
-            .expect("should produce instructions");
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            None,
+            None,
+            None,
+        )
+        .expect("should produce instructions");
         // Default mode should not attempt to render the plan placeholder.
         assert_eq!(instructions.body(), "Hello {{ split_threshold }}");
     }
@@ -337,17 +390,29 @@ mod tests {
     #[test]
     fn no_placeholder_passes_through_unchanged() {
         let mode = plan_mode_with_instructions("Stay focused.");
-        let instructions = CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8), None, None, None)
-            .expect("should produce instructions");
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            None,
+            None,
+            None,
+        )
+        .expect("should produce instructions");
         assert_eq!(instructions.body(), "Stay focused.");
     }
 
     #[test]
     fn composes_rigor_coverage_fragment() {
         let mode = plan_mode_with_instructions("Plan the work.");
-        let instructions = CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8), None, None, None)
-            .expect("should produce instructions")
-            .with_rigor_coverage();
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            None,
+            None,
+            None,
+        )
+        .expect("should produce instructions")
+        .with_rigor_coverage();
         let body = instructions.body();
         assert!(
             body.contains("## Dependency Overview"),
@@ -362,9 +427,15 @@ mod tests {
     #[test]
     fn composes_rigor_selfreview_fragment() {
         let mode = plan_mode_with_instructions("Plan the work.");
-        let instructions = CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8), None, None, None)
-            .expect("should produce instructions")
-            .with_rigor_selfreview();
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            None,
+            None,
+            None,
+        )
+        .expect("should produce instructions")
+        .with_rigor_selfreview();
         let body = instructions.body();
 
         for (n, label) in [
@@ -391,9 +462,15 @@ mod tests {
     #[test]
     fn composes_rigor_invariants_fragment() {
         let mode = plan_mode_with_instructions("Plan the work.");
-        let instructions = CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8), None, None, None)
-            .expect("should produce instructions")
-            .with_rigor_invariants();
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            None,
+            None,
+            None,
+        )
+        .expect("should produce instructions")
+        .with_rigor_invariants();
         let body = instructions.body();
 
         assert!(
@@ -421,9 +498,15 @@ mod tests {
     #[test]
     fn composes_rigor_grounding_fragment() {
         let mode = plan_mode_with_instructions("Plan the work.");
-        let instructions = CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8), None, None, None)
-            .expect("should produce instructions")
-            .with_rigor_grounding();
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            None,
+            None,
+            None,
+        )
+        .expect("should produce instructions")
+        .with_rigor_grounding();
         let body = instructions.body();
 
         assert!(
@@ -451,9 +534,15 @@ mod tests {
     #[test]
     fn composes_rigor_rename_fragment() {
         let mode = plan_mode_with_instructions("Plan the work.");
-        let instructions = CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8), None, None, None)
-            .expect("should produce instructions")
-            .with_rigor_rename();
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            None,
+            None,
+            None,
+        )
+        .expect("should produce instructions")
+        .with_rigor_rename();
         let body = instructions.body();
 
         assert!(
@@ -477,9 +566,15 @@ mod tests {
     #[test]
     fn composes_rigor_scope_fragment() {
         let mode = plan_mode_with_instructions("Plan the work.");
-        let instructions = CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8), None, None, None)
-            .expect("should produce instructions")
-            .with_rigor_scope();
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            None,
+            None,
+            None,
+        )
+        .expect("should produce instructions")
+        .with_rigor_scope();
         let body = instructions.body();
 
         assert!(
@@ -508,10 +603,10 @@ mod tests {
         );
     }
 
-#[test]
-fn rigor_tier_composes_all_fragments() {
-    let mode = plan_mode_with_instructions("Plan the work.");
-    let prompt = r#"
+    #[test]
+    fn rigor_tier_composes_all_fragments() {
+        let mode = plan_mode_with_instructions("Plan the work.");
+        let prompt = r#"
 1. Refactor auth
 2. Migrate payments
 3. Remove account concept
@@ -523,109 +618,170 @@ fn rigor_tier_composes_all_fragments() {
 9. Update connectors/ody-mcp
 10. Sweep insta snapshots
 "#;
-    let instructions = CollaborationModeInstructions::from_collaboration_mode(
-        &mode,
-        Some(8),
-        Some(prompt),
-        None,
-        None,
-    )
-    .expect("should produce instructions");
-    let body = instructions.body();
-    assert!(body.contains("## Dependency Overview"));
-    assert!(body.contains("## Spec-coverage table"));
-    assert!(body.contains("## Shared-signature build-green invariant"));
-    assert!(body.contains("## Source-grounding mandate"));
-    assert!(body.contains("## Out-of-scope / false-positive discipline"));
-    assert!(body.contains("## Rename-vs-delete decision prompt"));
-    assert!(body.contains(
-        "## Rigor tier addendum: Large plan splitting & Parts manifest"
-    ));
-    assert!(body.contains(
-        "## Rigor tier addendum: Turn discipline (when to submit the plan)"
-    ));
-}
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            Some(prompt),
+            None,
+            None,
+        )
+        .expect("should produce instructions");
+        let body = instructions.body();
+        assert!(body.contains("## Dependency Overview"));
+        assert!(body.contains("## Spec-coverage table"));
+        assert!(body.contains("## Shared-signature build-green invariant"));
+        assert!(body.contains("## Source-grounding mandate"));
+        assert!(body.contains("## Out-of-scope / false-positive discipline"));
+        assert!(body.contains("## Rename-vs-delete decision prompt"));
+        assert!(body.contains("## Rigor tier addendum: Large plan splitting & Parts manifest"));
+        assert!(body.contains("## Rigor tier addendum: Turn discipline (when to submit the plan)"));
+    }
 
-#[test]
-fn all_prompts_now_generate_rigor_tier_with_workflow() {
-    let mode = plan_mode_with_instructions("Plan the work.");
-    let instructions = CollaborationModeInstructions::from_collaboration_mode(
-        &mode,
-        Some(8),
-        Some("fix typo in README"),
-        None,
-        None,
-    )
-    .expect("should produce instructions");
-    let body = instructions.body();
-    // After removing heuristic tier selector, all prompts generate Rigor tier
-    assert!(body.contains("## Rigor tier addendum: Structured workflow"));
-    assert!(body.contains("## Dependency Overview"));
-}
+    #[test]
+    fn all_prompts_now_generate_rigor_tier_with_workflow() {
+        let mode = plan_mode_with_instructions("Plan the work.");
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            Some("fix typo in README"),
+            None,
+            None,
+        )
+        .expect("should produce instructions");
+        let body = instructions.body();
+        // After removing heuristic tier selector, all prompts generate Rigor tier
+        assert!(body.contains("## Rigor tier addendum: Structured workflow"));
+        assert!(body.contains("## Dependency Overview"));
+    }
 
-#[test]
-fn split_threshold_rendered_with_rigor_fragments() {
-    let mode = plan_mode_with_instructions(
-        "Split plans larger than {{ split_threshold }} tasks."
-    );
+    #[test]
+    fn split_threshold_rendered_with_rigor_fragments() {
+        let mode =
+            plan_mode_with_instructions("Split plans larger than {{ split_threshold }} tasks.");
 
-    let instructions = CollaborationModeInstructions::from_collaboration_mode(
-        &mode,
-        Some(12),
-        Some("fix typo"),
-        None,
-        None,
-    )
-    .expect("should produce instructions");
-    let body = instructions.body();
-    // Both cases now include split_threshold rendering + rigor fragments
-    assert!(body.contains("Split plans larger than 12 tasks."));
-    assert!(body.contains("## Rigor tier addendum: Structured workflow"));
-}
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(12),
+            Some("fix typo"),
+            None,
+            None,
+        )
+        .expect("should produce instructions");
+        let body = instructions.body();
+        // Both cases now include split_threshold rendering + rigor fragments
+        assert!(body.contains("Split plans larger than 12 tasks."));
+        assert!(body.contains("## Rigor tier addendum: Structured workflow"));
+    }
 
-#[test]
-fn config_override_rigor_applies_without_prompt() {
-    let mode = plan_mode_with_instructions("Plan the work.");
-    let config = PlanModeConfigToml {
-        tier: Some(PlanModeTier::Rigor),
-        ..Default::default()
-    };
-    let instructions = CollaborationModeInstructions::from_collaboration_mode(
-        &mode,
-        Some(8),
-        None,
-        Some(&config),
-        None,
-    )
-    .expect("should produce instructions");
-    assert!(instructions.body().contains("## Dependency Overview"));
-}
+    #[test]
+    fn config_override_rigor_applies_without_prompt() {
+        let mode = plan_mode_with_instructions("Plan the work.");
+        let config = PlanModeConfigToml {
+            tier: Some(PlanModeTier::Rigor),
+            ..Default::default()
+        };
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            None,
+            Some(&config),
+            None,
+        )
+        .expect("should produce instructions");
+        assert!(instructions.body().contains("## Dependency Overview"));
+    }
 
-#[test]
-fn artifact_tier_reused_without_prompt() {
-    use ody_protocol::ThreadId;
-    use ody_utils_absolute_path::AbsolutePathBuf;
+    #[test]
+    fn artifact_tier_reused_without_prompt() {
+        use ody_protocol::ThreadId;
+        use ody_utils_absolute_path::AbsolutePathBuf;
 
-    let mode = plan_mode_with_instructions("Plan the work.");
-    let tmp = tempfile::tempdir().unwrap();
-    let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
-    let thread_id = ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
-    let artifact = crate::plan_artifact::PlanArtifact::new_temp(
-        plans_base_dir,
-        thread_id,
-        "2026-07-04",
-    );
-    artifact.set_plan_mode_tier(PlanModeTier::Rigor);
+        let mode = plan_mode_with_instructions("Plan the work.");
+        let tmp = tempfile::tempdir().unwrap();
+        let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let thread_id = ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
+        let artifact =
+            crate::plan_artifact::PlanArtifact::new_temp(plans_base_dir, thread_id, "2026-07-04");
+        artifact.set_plan_mode_tier(PlanModeTier::Rigor);
 
-    let instructions = CollaborationModeInstructions::from_collaboration_mode(
-        &mode,
-        Some(8),
-        None,
-        None,
-        Some(&artifact),
-    )
-    .expect("should produce instructions");
-    assert!(instructions.body().contains("## Dependency Overview"));
-}
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            None,
+            None,
+            Some(&artifact),
+        )
+        .expect("should produce instructions");
+        assert!(instructions.body().contains("## Dependency Overview"));
+    }
 
+    #[test]
+    fn design_mode_injects_selected_audit_level() {
+        use ody_protocol::ThreadId;
+        use ody_utils_absolute_path::AbsolutePathBuf;
+
+        let mode = CollaborationMode {
+            mode: ModeKind::Design,
+            settings: Settings {
+                model: "test-model".to_string(),
+                reasoning_effort: None,
+                developer_instructions: Some("Design the work.".to_string()),
+                design_audit_level: None,
+            },
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let thread_id = ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
+        let artifact =
+            crate::plan_artifact::PlanArtifact::new_temp(plans_base_dir, thread_id, "2026-07-04");
+        artifact.set_design_audit_level(DesignAuditLevel::Deep);
+
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            None,
+            None,
+            Some(&artifact),
+        )
+        .expect("should produce instructions");
+        let body = instructions.body();
+        assert!(
+            body.contains("**Deep**"),
+            "body should contain the selected audit level:\n{body}"
+        );
+        assert!(
+            body.contains("Do NOT ask the user to choose the audit level again"),
+            "body should tell the model not to re-prompt for the audit level:\n{body}"
+        );
+    }
+
+    #[test]
+    fn design_mode_without_level_keeps_fallback() {
+        let mode = CollaborationMode {
+            mode: ModeKind::Design,
+            settings: Settings {
+                model: "test-model".to_string(),
+                reasoning_effort: None,
+                developer_instructions: Some("Design the work.".to_string()),
+                design_audit_level: None,
+            },
+        };
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            None,
+            None,
+            None,
+        )
+        .expect("should produce instructions");
+        let body = instructions.body();
+        assert!(
+            body.contains("Default to **Basic**"),
+            "body should default to Basic when no audit level is selected:\n{body}"
+        );
+        assert!(
+            body.contains("Assumption: audit tier = Basic (auto mode)"),
+            "body should record the auto-mode assumption:\n{body}"
+        );
+    }
 }

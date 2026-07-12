@@ -877,6 +877,9 @@ impl Session {
             }
             let artifact_arc = Arc::new(artifact);
             if mode == ody_protocol::config_types::ModeKind::Design {
+                if let Some(level) = turn_context.collaboration_mode.settings.design_audit_level {
+                    artifact_arc.set_design_audit_level(level);
+                }
                 self.set_last_design_artifact(Arc::clone(&artifact_arc))
                     .await;
             }

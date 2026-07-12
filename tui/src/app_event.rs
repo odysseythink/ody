@@ -43,8 +43,8 @@ use ody_features::Feature;
 use ody_plugin::PluginCapabilitySummary;
 use ody_protocol::config_types::CollaborationModeMask;
 use ody_protocol::config_types::Personality;
-use ody_protocol::models::ActivePermissionProfile;
 use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::models::ActivePermissionProfile;
 
 use crate::history_cell::HistoryCell;
 
@@ -861,6 +861,13 @@ pub(crate) enum AppEvent {
     /// Switch the active collaboration mask without submitting a user message.
     /// Used by the Plan mode rejection action to return to Default mode.
     SetCollaborationMask(CollaborationModeMask),
+
+    /// Switch to Design collaboration mode with a selected audit level and optionally
+    /// submit a queued inline user message.
+    SetDesignCollaborationMask {
+        mask: CollaborationModeMask,
+        pending_user_message: Option<UserMessage>,
+    },
 
     /// Open a text input overlay for revising the current plan.
     /// The feedback text is submitted back to the model in Plan mode.

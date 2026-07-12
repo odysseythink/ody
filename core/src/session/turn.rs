@@ -91,6 +91,7 @@ use ody_extension_api::TurnInputEnvironment;
 use ody_features::Feature;
 use ody_git_utils::get_git_repo_root_with_fs;
 use ody_protocol::config_types::AutoCompactTokenLimitScope;
+use ody_protocol::config_types::DesignAuditLevel;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::config_types::ServiceTier;
 use ody_protocol::error::OdyErr;
@@ -195,6 +196,14 @@ pub(crate) async fn run_turn(
 
     if let Some(switch_message) =
         handle_plan_mode_tier_switch(&sess, turn_context.as_ref(), user_prompt.as_deref()).await
+    {
+        let item: ResponseItem = ContextualUserFragment::into(switch_message);
+        sess.record_conversation_items(turn_context.as_ref(), std::slice::from_ref(&item))
+            .await;
+    }
+
+    if let Some(switch_message) =
+        handle_design_audit_level_switch(&sess, turn_context.as_ref(), user_prompt.as_deref()).await
     {
         let item: ResponseItem = ContextualUserFragment::into(switch_message);
         sess.record_conversation_items(turn_context.as_ref(), std::slice::from_ref(&item))
@@ -1196,6 +1205,30 @@ async fn handle_plan_mode_tier_switch(
         }
     );
     let source = InternalContextSource::from_static("plan_mode_tier_switch");
+    Some(InternalModelContextFragment::new(source, confirmation))
+}
+
+async fn handle_design_audit_level_switch(
+    _sess: &Arc<Session>,
+    turn_context: &TurnContext,
+    user_prompt: Option<&str>,
+) -> Option<InternalModelContextFragment> {
+    let artifact = turn_context.plan_artifact.as_ref()?;
+    let prompt = user_prompt?;
+    let new_level = crate::design_audit_level_selector::parse_design_audit_level_command(prompt)?;
+
+    artifact.set_design_audit_level(new_level);
+    tracing::debug!(level = ?new_level, "design audit level switched by user command");
+
+    let confirmation = format!(
+        "Design audit level switched to {} for this session.",
+        match new_level {
+            DesignAuditLevel::Basic => "basic",
+            DesignAuditLevel::Standard => "standard",
+            DesignAuditLevel::Deep => "deep",
+        }
+    );
+    let source = InternalContextSource::from_static("design_audit_level_switch");
     Some(InternalModelContextFragment::new(source, confirmation))
 }
 

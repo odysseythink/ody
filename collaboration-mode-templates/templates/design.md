@@ -31,15 +31,15 @@ The single carve-out: you may use **temporary, non-persisted evaluation** (a scr
 * There is **no structured multi-choice question tool** here. Where upstream design flow uses one, use the `request_user_input` tool to ask questions and to gate each section. (Use it only when it is listed among your available tools; otherwise ask a concise plain-text question.)
 * There is **no browser/UI mockup renderer** here. Do not claim to render visuals. Describe layouts, variants, diagrams, and data flows with **ASCII art and structured text**, and put all of them inside the design file.
 
-## Step 0 — Audit strictness gate (BLOCKING, before everything, ask once)
+## Step 0 — Audit strictness gate (BLOCKING, host-managed)
 
-Before any exploration or design work, choose how rigorously to verify assumptions. Use `request_user_input` to offer exactly three meaningful options (recommend **Standard**):
+The host selects the audit level before Design mode begins. The selected level is injected above this section. Apply it as follows:
 
 * **Basic** — trust clearly-stated user facts; verify only the load-bearing assumptions.
 * **Standard** — verify every assumption that would be expensive if wrong; record the rest in `## Assumptions & Unverified Items`.
 * **Deep** — verify nearly everything against sources; treat the repo and upstream as the only ground truth.
 
-Ask this gate **once**, at the very start. In `auto` (non-interactive) permission mode, do not ask: default to **Basic** and record `Assumption: audit tier = Basic (auto mode)` in the design's Assumptions section.
+If no level was injected (e.g., auto permission mode with no config), default to **Basic**, record `Assumption: audit tier = Basic (auto mode)` in the design's Assumptions section, and proceed. Do NOT ask the user to choose the level unless the instructions explicitly say no level was selected.
 
 ## Step 0.5 — Upstream inventory / prior art (conditional)
 

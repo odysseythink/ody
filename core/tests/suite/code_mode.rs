@@ -3,27 +3,6 @@
 use anyhow::Result;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
-use ody_config::types::McpServerConfig;
-use ody_config::types::McpServerTransportConfig;
-use ody_core::config::Config;
-use ody_core::config::CurrentTimeReminderConfig;
-use ody_extension_api::ExtensionRegistryBuilder;
-use ody_features::CurrentTimeSource;
-use ody_features::Feature;
-use ody_models_manager::bundled_models_response;
-use ody_protocol::config_types::WebSearchMode;
-use ody_protocol::dynamic_tools::DynamicToolCallOutputContentItem;
-use ody_protocol::dynamic_tools::DynamicToolFunctionSpec;
-use ody_protocol::dynamic_tools::DynamicToolNamespaceSpec;
-use ody_protocol::dynamic_tools::DynamicToolNamespaceTool;
-use ody_protocol::dynamic_tools::DynamicToolResponse;
-use ody_protocol::dynamic_tools::DynamicToolSpec;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
-use ody_web_search_extension::install as install_web_search_extension;
 use core_test_support::apps_test_server::AppsTestServer;
 use core_test_support::apps_test_server::AppsTestToolLoading;
 use core_test_support::apps_test_server::DIRECT_CALENDAR_APP_ONLY_TOOL;
@@ -51,6 +30,27 @@ use image::DynamicImage;
 use image::GenericImageView;
 use image::ImageBuffer;
 use image::Rgba;
+use ody_config::types::McpServerConfig;
+use ody_config::types::McpServerTransportConfig;
+use ody_core::config::Config;
+use ody_core::config::CurrentTimeReminderConfig;
+use ody_extension_api::ExtensionRegistryBuilder;
+use ody_features::CurrentTimeSource;
+use ody_features::Feature;
+use ody_models_manager::bundled_models_response;
+use ody_protocol::config_types::WebSearchMode;
+use ody_protocol::dynamic_tools::DynamicToolCallOutputContentItem;
+use ody_protocol::dynamic_tools::DynamicToolFunctionSpec;
+use ody_protocol::dynamic_tools::DynamicToolNamespaceSpec;
+use ody_protocol::dynamic_tools::DynamicToolNamespaceTool;
+use ody_protocol::dynamic_tools::DynamicToolResponse;
+use ody_protocol::dynamic_tools::DynamicToolSpec;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
+use ody_web_search_extension::install as install_web_search_extension;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -305,10 +305,7 @@ text(result);
     let search_body = search_request
         .body_json::<Value>()
         .expect("search request body should be JSON");
-    assert_eq!(
-        search_body["model"],
-        serde_json::json!("test-gpt-5.1-ody")
-    );
+    assert_eq!(search_body["model"], serde_json::json!("test-gpt-5.1-ody"));
     assert_eq!(
         search_body["commands"],
         serde_json::json!({
@@ -568,31 +565,30 @@ if (!tool) {
     .await;
 
     let apps_base_url = apps_server.base_url.clone();
-    let mut builder = test_ody()
-        .with_config(move |config| {
-            config
-                .features
-                .enable(Feature::Apps)
-                .expect("test config should allow feature update");
-            config
-                .features
-                .enable(Feature::CodeMode)
-                .expect("test config should allow feature update");
-            config
-                .features
-                .enable(Feature::CodeModeOnly)
-                .expect("test config should allow feature update");
-            let mut model_catalog =
-                bundled_models_response().expect("bundled models.json should parse");
-            let model = model_catalog
-                .models
-                .iter_mut()
-                .find(|model| model.slug == "gpt-5.4")
-                .expect("gpt-5.4 exists in bundled models.json");
-            config.model = Some("gpt-5.4".to_string());
-            model.supports_search_tool = true;
-            config.model_catalog = Some(model_catalog);
-        });
+    let mut builder = test_ody().with_config(move |config| {
+        config
+            .features
+            .enable(Feature::Apps)
+            .expect("test config should allow feature update");
+        config
+            .features
+            .enable(Feature::CodeMode)
+            .expect("test config should allow feature update");
+        config
+            .features
+            .enable(Feature::CodeModeOnly)
+            .expect("test config should allow feature update");
+        let mut model_catalog =
+            bundled_models_response().expect("bundled models.json should parse");
+        let model = model_catalog
+            .models
+            .iter_mut()
+            .find(|model| model.slug == "gpt-5.4")
+            .expect("gpt-5.4 exists in bundled models.json");
+        config.model = Some("gpt-5.4".to_string());
+        model.supports_search_tool = true;
+        config.model_catalog = Some(model_catalog);
+    });
     let test = builder.build(&server).await?;
     test.submit_turn("inspect tools in code mode only").await?;
 
@@ -695,8 +691,8 @@ text(JSON.stringify({{
     )
     .await;
 
-    let mut builder = search_capable_apps_builder(apps_server.base_url.clone())
-        .with_config(|config| {
+    let mut builder =
+        search_capable_apps_builder(apps_server.base_url.clone()).with_config(|config| {
             config
                 .features
                 .enable(Feature::CodeMode)
@@ -3512,6 +3508,7 @@ text(
                         model: test.session_configured.model.clone(),
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()

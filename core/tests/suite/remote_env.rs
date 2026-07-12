@@ -1,5 +1,28 @@
 use anyhow::Context;
 use anyhow::Result;
+use core_test_support::PathBufExt;
+use core_test_support::PathExt;
+use core_test_support::TestEnvironment;
+use core_test_support::get_remote_test_env;
+use core_test_support::responses::ev_apply_patch_custom_tool_call;
+use core_test_support::responses::ev_assistant_message;
+use core_test_support::responses::ev_completed;
+use core_test_support::responses::ev_function_call;
+use core_test_support::responses::ev_response_created;
+use core_test_support::responses::mount_sse_once;
+use core_test_support::responses::mount_sse_sequence;
+use core_test_support::responses::sse;
+use core_test_support::responses::start_mock_server;
+use core_test_support::skip_if_no_network;
+use core_test_support::skip_if_wine_exec;
+use core_test_support::test_ody::TestOdy;
+use core_test_support::test_ody::local;
+use core_test_support::test_ody::test_env;
+use core_test_support::test_ody::test_ody;
+use core_test_support::wait_for_event;
+use core_test_support::wait_for_event_match;
+use futures::SinkExt;
+use futures::StreamExt;
 use ody_config::types::ApprovalsReviewer;
 use ody_core::config::Constrained;
 use ody_exec_server::CopyOptions;
@@ -31,29 +54,6 @@ use ody_protocol::request_user_input::RequestUserInputResponse;
 use ody_protocol::user_input::UserInput;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path_uri::PathUri;
-use core_test_support::PathBufExt;
-use core_test_support::PathExt;
-use core_test_support::TestEnvironment;
-use core_test_support::get_remote_test_env;
-use core_test_support::responses::ev_apply_patch_custom_tool_call;
-use core_test_support::responses::ev_assistant_message;
-use core_test_support::responses::ev_completed;
-use core_test_support::responses::ev_function_call;
-use core_test_support::responses::ev_response_created;
-use core_test_support::responses::mount_sse_once;
-use core_test_support::responses::mount_sse_sequence;
-use core_test_support::responses::sse;
-use core_test_support::responses::start_mock_server;
-use core_test_support::skip_if_no_network;
-use core_test_support::skip_if_wine_exec;
-use core_test_support::test_ody::TestOdy;
-use core_test_support::test_ody::local;
-use core_test_support::test_ody::test_ody;
-use core_test_support::test_ody::test_env;
-use core_test_support::wait_for_event;
-use core_test_support::wait_for_event_match;
-use futures::SinkExt;
-use futures::StreamExt;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
@@ -113,6 +113,7 @@ async fn submit_turn_with_approval_and_environments(
                         model: test.session_configured.model.clone(),
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()
@@ -1613,10 +1614,7 @@ async fn remote_test_env_copy_preserves_symlink_source() -> Result<()> {
     let test_env = test_env().await?;
     let file_system = test_env.environment().get_filesystem();
 
-    let root = PathBuf::from(format!(
-        "/tmp/ody-remote-copy-link-{}",
-        std::process::id()
-    ));
+    let root = PathBuf::from(format!("/tmp/ody-remote-copy-link-{}", std::process::id()));
     let allowed_dir = root.join("allowed");
     let outside_file = root.join("outside").join("outside.txt");
     let source_symlink = allowed_dir.join("link");

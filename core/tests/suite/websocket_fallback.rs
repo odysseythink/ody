@@ -1,10 +1,4 @@
 use anyhow::Result;
-use ody_model_provider_info::WireApi;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
 use core_test_support::TempDirExt;
 use core_test_support::responses;
 use core_test_support::responses::ev_completed;
@@ -17,6 +11,12 @@ use core_test_support::test_ody::TestOdy;
 use core_test_support::test_ody::local_selections;
 use core_test_support::test_ody::test_ody;
 use core_test_support::test_ody::turn_permission_fields;
+use ody_model_provider_info::WireApi;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use tokio::time::Duration;
 use tokio::time::timeout;
@@ -153,32 +153,32 @@ async fn websocket_fallback_hides_first_websocket_retry_stream_error() -> Result
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::Disabled, cwd.path());
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
-                environments: Some(local_selections(cwd.abs())),
-                approval_policy: Some(AskForApproval::Never),
-                sandbox_policy: Some(sandbox_policy),
-                permission_profile,
-                collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
-                    mode: ody_protocol::config_types::ModeKind::Default,
-                    settings: ody_protocol::config_types::Settings {
-                        model: session_configured.model.clone(),
-                        reasoning_effort: None,
-                        developer_instructions: None,
-                    },
-                }),
-                ..Default::default()
-            },
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(cwd.abs())),
+            approval_policy: Some(AskForApproval::Never),
+            sandbox_policy: Some(sandbox_policy),
+            permission_profile,
+            collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
+                mode: ody_protocol::config_types::ModeKind::Default,
+                settings: ody_protocol::config_types::Settings {
+                    model: session_configured.model.clone(),
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                    design_audit_level: None,
+                },
+            }),
+            ..Default::default()
+        },
+    })
+    .await?;
 
     let mut stream_error_messages = Vec::new();
     loop {

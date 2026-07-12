@@ -25,6 +25,7 @@ fn plan_preset() -> CollaborationModeMask {
         model: None,
         reasoning_effort: Some(Some(ReasoningEffort::Medium)),
         developer_instructions: Some(Some(COLLABORATION_MODE_PLAN.to_string())),
+        design_audit_level: None,
     }
 }
 
@@ -35,6 +36,7 @@ fn design_preset() -> CollaborationModeMask {
         model: None,
         reasoning_effort: Some(Some(ReasoningEffort::Medium)),
         developer_instructions: Some(Some(COLLABORATION_MODE_DESIGN.to_string())),
+        design_audit_level: None,
     }
 }
 
@@ -45,6 +47,7 @@ fn default_preset() -> CollaborationModeMask {
         model: None,
         reasoning_effort: None,
         developer_instructions: Some(Some(default_mode_instructions())),
+        design_audit_level: None,
     }
 }
 

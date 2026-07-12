@@ -1,4 +1,5 @@
 use super::*;
+use core_test_support::PathExt;
 use ody_config::config_toml::PlanEnforcement;
 use ody_protocol::config_types::{CollaborationMode, ModeKind, Settings};
 use ody_protocol::models::PermissionProfile;
@@ -10,7 +11,6 @@ use ody_protocol::protocol::FileSystemSpecialPath;
 use ody_protocol::protocol::GranularApprovalConfig;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path_uri::PathUri;
-use core_test_support::PathExt;
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 
@@ -356,6 +356,7 @@ fn plan_mode() -> CollaborationMode {
             model: "test".to_string(),
             reasoning_effort: None,
             developer_instructions: None,
+            design_audit_level: None,
         },
     }
 }
@@ -367,6 +368,7 @@ fn default_mode() -> CollaborationMode {
             model: "test".to_string(),
             reasoning_effort: None,
             developer_instructions: None,
+            design_audit_level: None,
         },
     }
 }
@@ -386,6 +388,7 @@ fn design_mode() -> CollaborationMode {
             model: "test".to_string(),
             reasoning_effort: None,
             developer_instructions: None,
+            design_audit_level: None,
         },
     }
 }
@@ -442,9 +445,17 @@ fn plan_gate_allows_default_mode_regardless_of_enforcement() {
         &PathUri::from_abs_path(&path.abs()),
         "hello".to_string(),
     );
-    for enforcement in [PlanEnforcement::Strict, PlanEnforcement::Ask, PlanEnforcement::Advisory] {
+    for enforcement in [
+        PlanEnforcement::Strict,
+        PlanEnforcement::Ask,
+        PlanEnforcement::Advisory,
+    ] {
         let decision = plan_mode_gate_for_patch(&default_mode(), enforcement, &action, None);
-        assert_eq!(decision, PlanGateDecision::Allow, "Default mode should never be gated");
+        assert_eq!(
+            decision,
+            PlanGateDecision::Allow,
+            "Default mode should never be gated"
+        );
     }
 }
 
@@ -457,7 +468,12 @@ fn plan_gate_strict_allows_whitelisted_plan_file() {
         &PathUri::from_abs_path(&plan_path.abs()),
         "# Plan\n".to_string(),
     );
-    let decision = plan_mode_gate_for_patch(&plan_mode(), PlanEnforcement::Strict, &action, Some(&artifact));
+    let decision = plan_mode_gate_for_patch(
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &action,
+        Some(&artifact),
+    );
     assert_eq!(decision, PlanGateDecision::Allow);
 }
 
@@ -472,7 +488,12 @@ fn plan_gate_strict_allows_whitelisted_stem_subdirectory_md() {
         &PathUri::from_abs_path(&sub_path.abs()),
         "## Subsystem\n".to_string(),
     );
-    let decision = plan_mode_gate_for_patch(&plan_mode(), PlanEnforcement::Strict, &action, Some(&artifact));
+    let decision = plan_mode_gate_for_patch(
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &action,
+        Some(&artifact),
+    );
     assert_eq!(decision, PlanGateDecision::Allow);
 }
 
@@ -487,7 +508,12 @@ fn plan_gate_strict_denies_non_md_in_stem_subdirectory() {
         &PathUri::from_abs_path(&sub_path.abs()),
         "fn main() {}\n".to_string(),
     );
-    let decision = plan_mode_gate_for_patch(&plan_mode(), PlanEnforcement::Strict, &action, Some(&artifact));
+    let decision = plan_mode_gate_for_patch(
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &action,
+        Some(&artifact),
+    );
     assert!(matches!(decision, PlanGateDecision::Deny { .. }));
 }
 
@@ -497,16 +523,21 @@ fn plan_gate_strict_denies_sibling_stem_subdirectory_md() {
     let artifact = plan_artifact_at(tmp.path());
     let plan_path = artifact.path().unwrap();
     let stem_dir = plan_path.with_extension("");
-    let sibling_stem = stem_dir
-        .parent()
-        .unwrap()
-        .join(format!("{}-sibling", stem_dir.file_name().unwrap().to_string_lossy()));
+    let sibling_stem = stem_dir.parent().unwrap().join(format!(
+        "{}-sibling",
+        stem_dir.file_name().unwrap().to_string_lossy()
+    ));
     let sub_path = sibling_stem.join("subsystem.md");
     let action = ApplyPatchAction::new_add_for_test(
         &PathUri::from_abs_path(&sub_path.abs()),
         "## Sibling subsystem\n".to_string(),
     );
-    let decision = plan_mode_gate_for_patch(&plan_mode(), PlanEnforcement::Strict, &action, Some(&artifact));
+    let decision = plan_mode_gate_for_patch(
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &action,
+        Some(&artifact),
+    );
     assert!(matches!(decision, PlanGateDecision::Deny { .. }));
 }
 
@@ -526,7 +557,12 @@ fn plan_gate_strict_denies_mixed_whitelist_and_non_whitelist_changes() {
         &PathUri::from_abs_path(&outside.abs()),
         "outside".to_string(),
     );
-    let decision = plan_mode_gate_for_patch(&plan_mode(), PlanEnforcement::Strict, &action, Some(&artifact));
+    let decision = plan_mode_gate_for_patch(
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &action,
+        Some(&artifact),
+    );
     assert!(matches!(decision, PlanGateDecision::Deny { .. }));
 }
 
@@ -539,7 +575,12 @@ fn plan_gate_strict_denies_non_whitelisted_file_even_with_artifact() {
         &PathUri::from_abs_path(&other_path.abs()),
         "hello".to_string(),
     );
-    let decision = plan_mode_gate_for_patch(&plan_mode(), PlanEnforcement::Strict, &action, Some(&artifact));
+    let decision = plan_mode_gate_for_patch(
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &action,
+        Some(&artifact),
+    );
     assert!(matches!(decision, PlanGateDecision::Deny { .. }));
 }
 
@@ -552,9 +593,18 @@ fn plan_gate_allows_default_mode_regardless_of_artifact() {
         &PathUri::from_abs_path(&plan_path.abs()),
         "# Plan\n".to_string(),
     );
-    for enforcement in [PlanEnforcement::Strict, PlanEnforcement::Ask, PlanEnforcement::Advisory] {
-        let decision = plan_mode_gate_for_patch(&default_mode(), enforcement, &action, Some(&artifact));
-        assert_eq!(decision, PlanGateDecision::Allow, "Default mode should never be gated");
+    for enforcement in [
+        PlanEnforcement::Strict,
+        PlanEnforcement::Ask,
+        PlanEnforcement::Advisory,
+    ] {
+        let decision =
+            plan_mode_gate_for_patch(&default_mode(), enforcement, &action, Some(&artifact));
+        assert_eq!(
+            decision,
+            PlanGateDecision::Allow,
+            "Default mode should never be gated"
+        );
     }
 }
 
@@ -589,8 +639,12 @@ fn design_gate_strict_allows_whitelisted_design_file() {
         &PathUri::from_abs_path(&design_path.abs()),
         "# Design\n".to_string(),
     );
-    let decision =
-        plan_mode_gate_for_patch(&design_mode(), PlanEnforcement::Strict, &action, Some(&artifact));
+    let decision = plan_mode_gate_for_patch(
+        &design_mode(),
+        PlanEnforcement::Strict,
+        &action,
+        Some(&artifact),
+    );
     assert_eq!(decision, PlanGateDecision::Allow);
 }
 
@@ -605,8 +659,12 @@ fn design_gate_strict_allows_whitelisted_stem_subdirectory_md() {
         &PathUri::from_abs_path(&sub_path.abs()),
         "## Subsystem\n".to_string(),
     );
-    let decision =
-        plan_mode_gate_for_patch(&design_mode(), PlanEnforcement::Strict, &action, Some(&artifact));
+    let decision = plan_mode_gate_for_patch(
+        &design_mode(),
+        PlanEnforcement::Strict,
+        &action,
+        Some(&artifact),
+    );
     assert_eq!(decision, PlanGateDecision::Allow);
 }
 
@@ -630,7 +688,8 @@ fn design_gate_advisory_allows_patch_in_design_mode() {
         &PathUri::from_abs_path(&path.abs()),
         "hello".to_string(),
     );
-    let decision = plan_mode_gate_for_patch(&design_mode(), PlanEnforcement::Advisory, &action, None);
+    let decision =
+        plan_mode_gate_for_patch(&design_mode(), PlanEnforcement::Advisory, &action, None);
     assert_eq!(decision, PlanGateDecision::Allow);
 }
 
@@ -642,9 +701,17 @@ fn design_gate_allows_default_mode_regardless_of_enforcement() {
         &PathUri::from_abs_path(&path.abs()),
         "hello".to_string(),
     );
-    for enforcement in [PlanEnforcement::Strict, PlanEnforcement::Ask, PlanEnforcement::Advisory] {
+    for enforcement in [
+        PlanEnforcement::Strict,
+        PlanEnforcement::Ask,
+        PlanEnforcement::Advisory,
+    ] {
         let decision = plan_mode_gate_for_patch(&default_mode(), enforcement, &action, None);
-        assert_eq!(decision, PlanGateDecision::Allow, "Default mode should never be gated");
+        assert_eq!(
+            decision,
+            PlanGateDecision::Allow,
+            "Default mode should never be gated"
+        );
     }
 }
 

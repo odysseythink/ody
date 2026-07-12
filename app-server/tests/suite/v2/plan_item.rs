@@ -162,6 +162,7 @@ async fn start_plan_mode_turn(mcp: &mut TestAppServer) -> Result<ody_app_server_
             model: "mock-model".to_string(),
             reasoning_effort: None,
             developer_instructions: None,
+            design_audit_level: None,
         },
     };
     let turn_req = mcp

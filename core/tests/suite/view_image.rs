@@ -3,32 +3,6 @@
 use anyhow::Context;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
-use ody_exec_server::CreateDirectoryOptions;
-use ody_exec_server::LOCAL_ENVIRONMENT_ID;
-use ody_exec_server::REMOTE_ENVIRONMENT_ID;
-use ody_exec_server::RemoveOptions;
-use ody_protocol::config_types::ReasoningSummary;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::model_metadata::ConfigShellToolType;
-use ody_protocol::model_metadata::InputModality;
-use ody_protocol::model_metadata::ModelInfo;
-use ody_protocol::model_metadata::ModelVisibility;
-use ody_protocol::model_metadata::ModelsResponse;
-use ody_protocol::model_metadata::ReasoningEffort;
-use ody_protocol::model_metadata::ReasoningEffortPreset;
-use ody_protocol::model_metadata::TruncationPolicyConfig;
-use ody_protocol::model_metadata::ModelCapabilities;
-use ody_protocol::permissions::FileSystemAccessMode;
-use ody_protocol::permissions::FileSystemPath;
-use ody_protocol::permissions::FileSystemSandboxEntry;
-use ody_protocol::permissions::FileSystemSandboxPolicy;
-use ody_protocol::permissions::NetworkSandboxPolicy;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::TurnEnvironmentSelection;
-use ody_protocol::user_input::UserInput;
-use ody_utils_path_uri::PathUri;
 use core_test_support::PathBufExt;
 use core_test_support::PathExt;
 use core_test_support::get_remote_test_env;
@@ -53,6 +27,32 @@ use image::GenericImageView;
 use image::ImageBuffer;
 use image::Rgba;
 use image::load_from_memory;
+use ody_exec_server::CreateDirectoryOptions;
+use ody_exec_server::LOCAL_ENVIRONMENT_ID;
+use ody_exec_server::REMOTE_ENVIRONMENT_ID;
+use ody_exec_server::RemoveOptions;
+use ody_protocol::config_types::ReasoningSummary;
+use ody_protocol::model_metadata::ConfigShellToolType;
+use ody_protocol::model_metadata::InputModality;
+use ody_protocol::model_metadata::ModelCapabilities;
+use ody_protocol::model_metadata::ModelInfo;
+use ody_protocol::model_metadata::ModelVisibility;
+use ody_protocol::model_metadata::ModelsResponse;
+use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffortPreset;
+use ody_protocol::model_metadata::TruncationPolicyConfig;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::permissions::FileSystemAccessMode;
+use ody_protocol::permissions::FileSystemPath;
+use ody_protocol::permissions::FileSystemSandboxEntry;
+use ody_protocol::permissions::FileSystemSandboxPolicy;
+use ody_protocol::permissions::NetworkSandboxPolicy;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::TurnEnvironmentSelection;
+use ody_protocol::user_input::UserInput;
+use ody_utils_path_uri::PathUri;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
@@ -90,6 +90,7 @@ fn disabled_user_turn(test: &TestOdy, items: Vec<UserInput>, model: String) -> O
                     model,
                     reasoning_effort: None,
                     developer_instructions: None,
+                    design_audit_level: None,
                 },
             }),
             ..Default::default()
@@ -206,16 +207,15 @@ async fn assert_user_turn_local_image_resizes_to(
 
     let session_model = session_configured.model.clone();
 
-    ody
-        .submit(disabled_user_turn(
-            &test,
-            vec![UserInput::LocalImage {
-                path: abs_path.clone(),
-                detail: None,
-            }],
-            session_model,
-        ))
-        .await?;
+    ody.submit(disabled_user_turn(
+        &test,
+        vec![UserInput::LocalImage {
+            path: abs_path.clone(),
+            detail: None,
+        }],
+        session_model,
+    ))
+    .await?;
 
     wait_for_event_with_timeout(
         ody,
@@ -324,16 +324,15 @@ async fn view_image_tool_attaches_local_image() -> anyhow::Result<()> {
 
     let session_model = session_configured.model.clone();
 
-    ody
-        .submit(disabled_user_turn(
-            &test,
-            vec![UserInput::Text {
-                text: "please add the screenshot".into(),
-                text_elements: Vec::new(),
-            }],
-            session_model,
-        ))
-        .await?;
+    ody.submit(disabled_user_turn(
+        &test,
+        vec![UserInput::Text {
+            text: "please add the screenshot".into(),
+            text_elements: Vec::new(),
+        }],
+        session_model,
+    ))
+    .await?;
 
     let mut item_started = None;
     let mut item_completed = None;
@@ -715,16 +714,15 @@ async fn view_image_tool_can_preserve_original_resolution_when_requested_on_gpt5
 
     let session_model = session_configured.model.clone();
 
-    ody
-        .submit(disabled_user_turn(
-            &test,
-            vec![UserInput::Text {
-                text: "please add the original screenshot".into(),
-                text_elements: Vec::new(),
-            }],
-            session_model,
-        ))
-        .await?;
+    ody.submit(disabled_user_turn(
+        &test,
+        vec![UserInput::Text {
+            text: "please add the original screenshot".into(),
+            text_elements: Vec::new(),
+        }],
+        session_model,
+    ))
+    .await?;
 
     wait_for_event_with_timeout(
         ody,
@@ -804,16 +802,15 @@ async fn view_image_tool_errors_clearly_for_unsupported_detail_values() -> anyho
 
     let session_model = session_configured.model.clone();
 
-    ody
-        .submit(disabled_user_turn(
-            &test,
-            vec![UserInput::Text {
-                text: "please attach the image at low detail".into(),
-                text_elements: Vec::new(),
-            }],
-            session_model,
-        ))
-        .await?;
+    ody.submit(disabled_user_turn(
+        &test,
+        vec![UserInput::Text {
+            text: "please attach the image at low detail".into(),
+            text_elements: Vec::new(),
+        }],
+        session_model,
+    ))
+    .await?;
 
     wait_for_event_with_timeout(
         ody,
@@ -884,16 +881,15 @@ async fn view_image_tool_treats_null_detail_as_omitted() -> anyhow::Result<()> {
 
     let session_model = session_configured.model.clone();
 
-    ody
-        .submit(disabled_user_turn(
-            &test,
-            vec![UserInput::Text {
-                text: "please attach the image with a null detail".into(),
-                text_elements: Vec::new(),
-            }],
-            session_model,
-        ))
-        .await?;
+    ody.submit(disabled_user_turn(
+        &test,
+        vec![UserInput::Text {
+            text: "please attach the image with a null detail".into(),
+            text_elements: Vec::new(),
+        }],
+        session_model,
+    ))
+    .await?;
 
     wait_for_event_with_timeout(
         ody,
@@ -974,16 +970,15 @@ async fn view_image_tool_resizes_when_model_lacks_original_detail_support() -> a
 
     let session_model = session_configured.model.clone();
 
-    ody
-        .submit(disabled_user_turn(
-            &test,
-            vec![UserInput::Text {
-                text: "please add the screenshot".into(),
-                text_elements: Vec::new(),
-            }],
-            session_model,
-        ))
-        .await?;
+    ody.submit(disabled_user_turn(
+        &test,
+        vec![UserInput::Text {
+            text: "please add the screenshot".into(),
+            text_elements: Vec::new(),
+        }],
+        session_model,
+    ))
+    .await?;
 
     wait_for_event_with_timeout(
         ody,
@@ -1068,16 +1063,15 @@ async fn view_image_tool_does_not_force_original_resolution_with_capability_only
 
     let session_model = session_configured.model.clone();
 
-    ody
-        .submit(disabled_user_turn(
-            &test,
-            vec![UserInput::Text {
-                text: "please add the screenshot".into(),
-                text_elements: Vec::new(),
-            }],
-            session_model,
-        ))
-        .await?;
+    ody.submit(disabled_user_turn(
+        &test,
+        vec![UserInput::Text {
+            text: "please add the screenshot".into(),
+            text_elements: Vec::new(),
+        }],
+        session_model,
+    ))
+    .await?;
 
     wait_for_event_with_timeout(
         ody,
@@ -1150,16 +1144,15 @@ async fn view_image_tool_errors_when_path_is_directory() -> anyhow::Result<()> {
 
     let session_model = session_configured.model.clone();
 
-    ody
-        .submit(disabled_user_turn(
-            &test,
-            vec![UserInput::Text {
-                text: "please attach the folder".into(),
-                text_elements: Vec::new(),
-            }],
-            session_model,
-        ))
-        .await?;
+    ody.submit(disabled_user_turn(
+        &test,
+        vec![UserInput::Text {
+            text: "please attach the folder".into(),
+            text_elements: Vec::new(),
+        }],
+        session_model,
+    ))
+    .await?;
 
     wait_for_event_with_timeout(
         ody,
@@ -1223,16 +1216,15 @@ async fn view_image_tool_rejects_non_image_file() -> anyhow::Result<()> {
     )
     .await;
 
-    ody
-        .submit(disabled_user_turn(
-            &test,
-            vec![UserInput::Text {
-                text: "please inspect the image".into(),
-                text_elements: Vec::new(),
-            }],
-            session_configured.model.clone(),
-        ))
-        .await?;
+    ody.submit(disabled_user_turn(
+        &test,
+        vec![UserInput::Text {
+            text: "please inspect the image".into(),
+            text_elements: Vec::new(),
+        }],
+        session_configured.model.clone(),
+    ))
+    .await?;
     wait_for_event_with_timeout(
         ody,
         |event| matches!(event, EventMsg::TurnComplete(_)),
@@ -1246,10 +1238,7 @@ async fn view_image_tool_rejects_non_image_file() -> anyhow::Result<()> {
         .function_call_output_content_and_success(call_id)
         .and_then(|(content, _)| content)
         .expect("output text present");
-    let expected_prefix = format!(
-        "`{}` is not a recognized image file",
-        abs_path.display()
-    );
+    let expected_prefix = format!("`{}` is not a recognized image file", abs_path.display());
     assert!(
         output_text.starts_with(&expected_prefix),
         "expected error to start with `{expected_prefix}` but got `{output_text}`"
@@ -1298,16 +1287,15 @@ async fn view_image_tool_errors_when_file_missing() -> anyhow::Result<()> {
 
     let session_model = session_configured.model.clone();
 
-    ody
-        .submit(disabled_user_turn(
-            &test,
-            vec![UserInput::Text {
-                text: "please attach the missing image".into(),
-                text_elements: Vec::new(),
-            }],
-            session_model,
-        ))
-        .await?;
+    ody.submit(disabled_user_turn(
+        &test,
+        vec![UserInput::Text {
+            text: "please attach the missing image".into(),
+            text_elements: Vec::new(),
+        }],
+        session_model,
+    ))
+    .await?;
 
     wait_for_event_with_timeout(
         ody,
@@ -1392,7 +1380,7 @@ async fn view_image_tool_returns_unsupported_message_for_text_only_model() -> an
         effective_context_window_percent: 95,
         experimental_supported_tools: Vec::new(),
         capabilities: ModelCapabilities::default(),
-};
+    };
     mount_models_once(
         &server,
         ModelsResponse {
@@ -1401,10 +1389,9 @@ async fn view_image_tool_returns_unsupported_message_for_text_only_model() -> an
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_config(|config| {
-            config.model = Some(model_slug.to_string());
-        });
+    let mut builder = test_ody().with_config(|config| {
+        config.model = Some(model_slug.to_string());
+    });
     let test = builder.build_with_remote_env(&server).await?;
     let TestOdy { ody, .. } = &test;
 
@@ -1433,16 +1420,15 @@ async fn view_image_tool_returns_unsupported_message_for_text_only_model() -> an
     ]);
     let mock = responses::mount_sse_once(&server, second_response).await;
 
-    ody
-        .submit(disabled_user_turn(
-            &test,
-            vec![UserInput::Text {
-                text: "please attach the image".into(),
-                text_elements: Vec::new(),
-            }],
-            model_slug.to_string(),
-        ))
-        .await?;
+    ody.submit(disabled_user_turn(
+        &test,
+        vec![UserInput::Text {
+            text: "please attach the image".into(),
+            text_elements: Vec::new(),
+        }],
+        model_slug.to_string(),
+    ))
+    .await?;
 
     wait_for_event_with_timeout(
         ody,
@@ -1504,16 +1490,15 @@ async fn replaces_invalid_local_image_after_bad_request() -> anyhow::Result<()> 
 
     let session_model = session_configured.model.clone();
 
-    ody
-        .submit(disabled_user_turn(
-            &test,
-            vec![UserInput::LocalImage {
-                path: abs_path.clone(),
-                detail: None,
-            }],
-            session_model,
-        ))
-        .await?;
+    ody.submit(disabled_user_turn(
+        &test,
+        vec![UserInput::LocalImage {
+            path: abs_path.clone(),
+            detail: None,
+        }],
+        session_model,
+    ))
+    .await?;
 
     wait_for_event_with_timeout(
         &ody,

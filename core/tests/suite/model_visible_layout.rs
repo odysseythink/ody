@@ -3,13 +3,6 @@ use std::fs;
 use std::sync::Arc;
 
 use anyhow::Result;
-use ody_config::types::Personality;
-use ody_features::Feature;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
 use core_test_support::PathBufExt;
 use core_test_support::context_snapshot;
 use core_test_support::context_snapshot::ContextSnapshotOptions;
@@ -26,6 +19,13 @@ use core_test_support::skip_if_no_network;
 use core_test_support::test_ody::test_ody;
 use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event;
+use ody_config::types::Personality;
+use ody_features::Feature;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
 use serde_json::json;
 
 const PRETURN_CONTEXT_DIFF_CWD: &str = "PRETURN_CONTEXT_DIFF_CWD";
@@ -100,15 +100,13 @@ async fn snapshot_model_visible_layout_turn_overrides() -> Result<()> {
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_model("gpt-5.3-ody")
-        .with_config(|config| {
-            config
-                .features
-                .enable(Feature::Personality)
-                .expect("test config should allow feature update");
-            config.personality = Some(Personality::Pragmatic);
-        });
+    let mut builder = test_ody().with_model("gpt-5.3-ody").with_config(|config| {
+        config
+            .features
+            .enable(Feature::Personality)
+            .expect("test config should allow feature update");
+        config.personality = Some(Personality::Pragmatic);
+    });
     let test = builder.build(&server).await?;
     let preturn_context_diff_cwd = test.cwd_path().join(PRETURN_CONTEXT_DIFF_CWD);
     fs::create_dir_all(&preturn_context_diff_cwd)?;
@@ -137,6 +135,7 @@ async fn snapshot_model_visible_layout_turn_overrides() -> Result<()> {
                         model: test.session_configured.model.clone(),
                         reasoning_effort: test.config.model_reasoning_effort.clone(),
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()
@@ -173,6 +172,7 @@ async fn snapshot_model_visible_layout_turn_overrides() -> Result<()> {
                         model: test.session_configured.model.clone(),
                         reasoning_effort: test.config.model_reasoning_effort.clone(),
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()
@@ -263,6 +263,7 @@ async fn snapshot_model_visible_layout_cwd_change_does_not_refresh_agents() -> R
                         model: test.session_configured.model.clone(),
                         reasoning_effort: test.config.model_reasoning_effort.clone(),
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()
@@ -296,6 +297,7 @@ async fn snapshot_model_visible_layout_cwd_change_does_not_refresh_agents() -> R
                         model: test.session_configured.model.clone(),
                         reasoning_effort: test.config.model_reasoning_effort.clone(),
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()
@@ -359,18 +361,17 @@ async fn snapshot_model_visible_layout_resume_with_personality_change() -> Resul
         ]),
     )
     .await;
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "seed resume history".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "seed resume history".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
     let initial_request = initial_mock.single_request();
 
@@ -422,6 +423,7 @@ async fn snapshot_model_visible_layout_resume_with_personality_change() -> Resul
                         model: resumed.session_configured.model.clone(),
                         reasoning_effort: resumed.config.model_reasoning_effort.clone(),
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()
@@ -474,18 +476,17 @@ async fn snapshot_model_visible_layout_resume_override_matches_rollout_model() -
         ]),
     )
     .await;
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "seed resume history".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "seed resume history".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
     let initial_request = initial_mock.single_request();
 

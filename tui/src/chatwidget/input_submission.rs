@@ -62,7 +62,7 @@ impl ChatWidget {
         }
     }
 
-    pub(super) fn submit_user_message(&mut self, user_message: UserMessage) {
+    pub(crate) fn submit_user_message(&mut self, user_message: UserMessage) {
         let _accepted = self.submit_user_message_with_history_record(
             user_message,
             UserMessageHistoryRecord::UserMessageText,

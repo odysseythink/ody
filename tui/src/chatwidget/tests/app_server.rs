@@ -28,6 +28,7 @@ fn thread_settings_for_test(
                     model: model.to_string(),
                     reasoning_effort: Some(ReasoningEffortConfig::High),
                     developer_instructions: None,
+                    design_audit_level: None,
                 },
             },
             multi_agent_mode: Default::default(),
@@ -988,7 +989,9 @@ async fn live_app_server_model_verification_renders_warning() {
     assert!(rendered.contains("multiple flags for possible cybersecurity risk"));
     assert!(rendered.contains("extra safety checks are on"));
     assert!(rendered.contains("Trusted Access for Cyber"));
-    assert!(rendered.contains("https://help.odysseythink.com/en/articles/trusted-access-for-cyber"));
+    assert!(
+        rendered.contains("https://help.odysseythink.com/en/articles/trusted-access-for-cyber")
+    );
 }
 
 #[tokio::test]

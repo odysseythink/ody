@@ -34,9 +34,9 @@ use ody_protocol::ThreadId;
 use ody_protocol::config_types::CollaborationMode;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::config_types::Settings;
-use ody_protocol::protocol::OdyErrorInfo;
 use ody_protocol::protocol::Event;
 use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::OdyErrorInfo;
 use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::SubAgentSource;
 use ody_protocol::protocol::ThreadGoalStatus;
@@ -1427,6 +1427,7 @@ fn default_collaboration_mode() -> CollaborationMode {
             model: "gpt-5".to_string(),
             reasoning_effort: None,
             developer_instructions: None,
+            design_audit_level: None,
         },
     }
 }

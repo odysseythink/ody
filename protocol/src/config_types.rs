@@ -78,6 +78,32 @@ pub enum Verbosity {
     High,
 }
 
+/// Audit level for Design mode. Determines how rigorously assumptions are verified.
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, TS,
+)]
+#[serde(rename_all = "snake_case")]
+#[schemars(deny_unknown_fields)]
+pub enum DesignAuditLevel {
+    /// Trust clearly-stated user facts; verify only load-bearing assumptions.
+    #[default]
+    Basic,
+    /// Verify every assumption that would be expensive if wrong.
+    Standard,
+    /// Verify nearly everything against sources.
+    Deep,
+}
+
+impl fmt::Display for DesignAuditLevel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Basic => write!(f, "Basic"),
+            Self::Standard => write!(f, "Standard"),
+            Self::Deep => write!(f, "Deep"),
+        }
+    }
+}
+
 #[derive(
     Deserialize, Debug, Clone, Copy, PartialEq, Default, Serialize, Display, JsonSchema, TS,
 )]
@@ -613,7 +639,8 @@ pub enum ModeKind {
     Execute,
 }
 
-pub const TUI_VISIBLE_COLLABORATION_MODES: [ModeKind; 3] = [ModeKind::Default, ModeKind::Plan, ModeKind::Design];
+pub const TUI_VISIBLE_COLLABORATION_MODES: [ModeKind; 3] =
+    [ModeKind::Default, ModeKind::Plan, ModeKind::Design];
 
 impl ModeKind {
     pub const fn display_name(self) -> &'static str {
@@ -676,6 +703,7 @@ impl CollaborationMode {
             reasoning_effort: effort.unwrap_or_else(|| settings.reasoning_effort.clone()),
             developer_instructions: developer_instructions
                 .unwrap_or_else(|| settings.developer_instructions.clone()),
+            design_audit_level: settings.design_audit_level.clone(),
         };
 
         CollaborationMode {
@@ -703,6 +731,10 @@ impl CollaborationMode {
                     .developer_instructions
                     .clone()
                     .unwrap_or_else(|| settings.developer_instructions.clone()),
+                design_audit_level: mask
+                    .design_audit_level
+                    .clone()
+                    .unwrap_or_else(|| settings.design_audit_level.clone()),
             },
         }
     }
@@ -714,6 +746,7 @@ pub struct Settings {
     pub model: String,
     pub reasoning_effort: Option<ReasoningEffort>,
     pub developer_instructions: Option<String>,
+    pub design_audit_level: Option<DesignAuditLevel>,
 }
 
 /// A mask for collaboration mode settings, allowing partial updates.
@@ -725,6 +758,7 @@ pub struct CollaborationModeMask {
     pub model: Option<String>,
     pub reasoning_effort: Option<Option<ReasoningEffort>>,
     pub developer_instructions: Option<Option<String>>,
+    pub design_audit_level: Option<Option<DesignAuditLevel>>,
 }
 
 #[cfg(test)]
@@ -740,6 +774,7 @@ mod tests {
                 model: "gpt-5.2-ody".to_string(),
                 reasoning_effort: Some(ReasoningEffort::High),
                 developer_instructions: Some("stay focused".to_string()),
+                design_audit_level: Some(DesignAuditLevel::Standard),
             },
         };
         let mask = CollaborationModeMask {
@@ -748,6 +783,7 @@ mod tests {
             model: None,
             reasoning_effort: Some(None),
             developer_instructions: Some(None),
+            design_audit_level: Some(None),
         };
 
         let expected = CollaborationMode {
@@ -756,6 +792,7 @@ mod tests {
                 model: "gpt-5.2-ody".to_string(),
                 reasoning_effort: None,
                 developer_instructions: None,
+                design_audit_level: None,
             },
         };
         assert_eq!(expected, mode.apply_mask(&mask));
@@ -904,11 +941,135 @@ mod tests {
 
     #[test]
     fn forced_login_method_serializes_api_only() {
-        assert_eq!(serde_json::to_string(&ForcedLoginMethod::Api).unwrap(), "\"api\"");
+        assert_eq!(
+            serde_json::to_string(&ForcedLoginMethod::Api).unwrap(),
+            "\"api\""
+        );
     }
 
     #[test]
     fn forced_login_method_rejects_unknown_methods() {
         assert!(serde_json::from_str::<ForcedLoginMethod>("\"legacy\"").is_err());
+    }
+
+    #[test]
+    fn design_audit_level_defaults_to_basic() {
+        assert_eq!(DesignAuditLevel::default(), DesignAuditLevel::Basic);
+    }
+
+    #[test]
+    fn design_audit_level_serializes_and_deserializes() {
+        for level in [
+            DesignAuditLevel::Basic,
+            DesignAuditLevel::Standard,
+            DesignAuditLevel::Deep,
+        ] {
+            let json = serde_json::to_string(&level).expect("serialize level");
+            let deserialized: DesignAuditLevel =
+                serde_json::from_str(&json).expect("deserialize level");
+            assert_eq!(level, deserialized);
+        }
+    }
+
+    #[test]
+    fn design_audit_level_deserializes_snake_case() {
+        assert_eq!(
+            serde_json::from_str::<DesignAuditLevel>("\"basic\"").unwrap(),
+            DesignAuditLevel::Basic
+        );
+        assert_eq!(
+            serde_json::from_str::<DesignAuditLevel>("\"standard\"").unwrap(),
+            DesignAuditLevel::Standard
+        );
+        assert_eq!(
+            serde_json::from_str::<DesignAuditLevel>("\"deep\"").unwrap(),
+            DesignAuditLevel::Deep
+        );
+    }
+
+    #[test]
+    fn design_audit_level_display_outputs_pascal_case() {
+        assert_eq!(DesignAuditLevel::Basic.to_string(), "Basic");
+        assert_eq!(DesignAuditLevel::Standard.to_string(), "Standard");
+        assert_eq!(DesignAuditLevel::Deep.to_string(), "Deep");
+    }
+
+    #[test]
+    fn apply_mask_sets_design_audit_level() {
+        let mode = CollaborationMode {
+            mode: ModeKind::Default,
+            settings: Settings {
+                model: "gpt-5.2-ody".to_string(),
+                reasoning_effort: None,
+                developer_instructions: None,
+                design_audit_level: Some(DesignAuditLevel::Basic),
+            },
+        };
+        let mask = CollaborationModeMask {
+            name: "SetLevel".to_string(),
+            mode: Some(ModeKind::Design),
+            model: None,
+            reasoning_effort: None,
+            developer_instructions: None,
+            design_audit_level: Some(Some(DesignAuditLevel::Deep)),
+        };
+
+        let applied = mode.apply_mask(&mask);
+        assert_eq!(applied.mode, ModeKind::Design);
+        assert_eq!(
+            applied.settings.design_audit_level,
+            Some(DesignAuditLevel::Deep)
+        );
+    }
+
+    #[test]
+    fn apply_mask_keeps_design_audit_level_when_unspecified() {
+        let mode = CollaborationMode {
+            mode: ModeKind::Default,
+            settings: Settings {
+                model: "gpt-5.2-ody".to_string(),
+                reasoning_effort: None,
+                developer_instructions: None,
+                design_audit_level: Some(DesignAuditLevel::Standard),
+            },
+        };
+        let mask = CollaborationModeMask {
+            name: "KeepLevel".to_string(),
+            mode: None,
+            model: None,
+            reasoning_effort: None,
+            developer_instructions: None,
+            design_audit_level: None,
+        };
+
+        let applied = mode.apply_mask(&mask);
+        assert_eq!(
+            applied.settings.design_audit_level,
+            Some(DesignAuditLevel::Standard)
+        );
+    }
+
+    #[test]
+    fn apply_mask_clears_design_audit_level() {
+        let mode = CollaborationMode {
+            mode: ModeKind::Default,
+            settings: Settings {
+                model: "gpt-5.2-ody".to_string(),
+                reasoning_effort: None,
+                developer_instructions: None,
+                design_audit_level: Some(DesignAuditLevel::Deep),
+            },
+        };
+        let mask = CollaborationModeMask {
+            name: "ClearLevel".to_string(),
+            mode: None,
+            model: None,
+            reasoning_effort: None,
+            developer_instructions: None,
+            design_audit_level: Some(None),
+        };
+
+        let applied = mode.apply_mask(&mask);
+        assert_eq!(applied.settings.design_audit_level, None);
     }
 }

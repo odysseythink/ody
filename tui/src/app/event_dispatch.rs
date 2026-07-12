@@ -251,9 +251,11 @@ impl App {
                 let start = trailing_run_start::<history_cell::ProposedPlanStreamCell>(
                     &self.transcript_cells,
                 );
-                let consolidated: Arc<dyn HistoryCell> = Arc::new(
-                    history_cell::new_proposed_plan(source, &self.config.cwd, None),
-                );
+                let consolidated: Arc<dyn HistoryCell> = Arc::new(history_cell::new_proposed_plan(
+                    source,
+                    &self.config.cwd,
+                    None,
+                ));
 
                 if start < end {
                     self.transcript_cells
@@ -1020,15 +1022,13 @@ impl App {
 
                     self.chat_widget.show_windows_sandbox_setup_status();
                     tokio::task::spawn_blocking(move || {
-                        if let Err(err) =
-                            ody_windows_sandbox::run_windows_sandbox_legacy_preflight(
-                                &permission_profile,
-                                workspace_roots.as_slice(),
-                                ody_home.as_path(),
-                                command_cwd.as_path(),
-                                &env_map,
-                            )
-                        {
+                        if let Err(err) = ody_windows_sandbox::run_windows_sandbox_legacy_preflight(
+                            &permission_profile,
+                            workspace_roots.as_slice(),
+                            ody_home.as_path(),
+                            command_cwd.as_path(),
+                            &env_map,
+                        ) {
                             session_telemetry.counter(
                                 "ody.windows_sandbox.legacy_setup_preflight_failed",
                                 /*inc*/ 1,
@@ -1772,8 +1772,20 @@ impl App {
             AppEvent::SetCollaborationMask(mask) => {
                 self.chat_widget.set_collaboration_mask(mask);
             }
+            AppEvent::SetDesignCollaborationMask {
+                mask,
+                pending_user_message,
+            } => {
+                self.chat_widget.set_collaboration_mask(mask);
+                self.chat_widget
+                    .add_info_message("Design mode: ON".to_string(), None);
+                if let Some(user_message) = pending_user_message {
+                    self.chat_widget.submit_user_message(user_message);
+                }
+            }
             AppEvent::OpenPlanRevisionPrompt { collaboration_mode } => {
-                self.chat_widget.show_plan_revision_prompt(collaboration_mode);
+                self.chat_widget
+                    .show_plan_revision_prompt(collaboration_mode);
             }
             AppEvent::ManageSkillsClosed => {
                 self.chat_widget.handle_manage_skills_closed();

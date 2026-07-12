@@ -3,17 +3,6 @@
 use core_test_support::test_ody::local_selections;
 use std::collections::HashMap;
 
-use ody_features::Feature;
-use ody_protocol::config_types::CollaborationMode;
-use ody_protocol::config_types::ModeKind;
-use ody_protocol::config_types::Settings;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::request_user_input::RequestUserInputAnswer;
-use ody_protocol::request_user_input::RequestUserInputResponse;
-use ody_protocol::user_input::UserInput;
 use core_test_support::TempDirExt;
 use core_test_support::responses;
 use core_test_support::responses::ResponsesRequest;
@@ -30,6 +19,17 @@ use core_test_support::test_ody::test_ody;
 use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event;
 use core_test_support::wait_for_event_match;
+use ody_features::Feature;
+use ody_protocol::config_types::CollaborationMode;
+use ody_protocol::config_types::ModeKind;
+use ody_protocol::config_types::Settings;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::request_user_input::RequestUserInputAnswer;
+use ody_protocol::request_user_input::RequestUserInputResponse;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
@@ -142,32 +142,32 @@ async fn request_user_input_round_trip_for_mode(
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::Disabled, cwd.path());
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "please confirm".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
-                environments: Some(local_selections(cwd.abs())),
-                approval_policy: Some(AskForApproval::Never),
-                sandbox_policy: Some(sandbox_policy),
-                permission_profile,
-                collaboration_mode: Some(CollaborationMode {
-                    mode,
-                    settings: Settings {
-                        model: session_configured.model.clone(),
-                        reasoning_effort: None,
-                        developer_instructions: None,
-                    },
-                }),
-                ..Default::default()
-            },
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "please confirm".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(cwd.abs())),
+            approval_policy: Some(AskForApproval::Never),
+            sandbox_policy: Some(sandbox_policy),
+            permission_profile,
+            collaboration_mode: Some(CollaborationMode {
+                mode,
+                settings: Settings {
+                    model: session_configured.model.clone(),
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                    design_audit_level: None,
+                },
+            }),
+            ..Default::default()
+        },
+    })
+    .await?;
 
     let request = wait_for_event_match(&ody, |event| match event {
         EventMsg::RequestUserInput(request) => Some(request.clone()),
@@ -203,12 +203,11 @@ async fn request_user_input_round_trip_for_mode(
         },
     );
     let response = RequestUserInputResponse { answers };
-    ody
-        .submit(Op::UserInputAnswer {
-            id: request.turn_id.clone(),
-            response,
-        })
-        .await?;
+    ody.submit(Op::UserInputAnswer {
+        id: request.turn_id.clone(),
+        response,
+    })
+    .await?;
 
     wait_for_event(&ody, |event| matches!(event, EventMsg::TokenCount(_))).await;
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
@@ -286,32 +285,32 @@ async fn request_user_input_interrupt_emits_deferred_token_count() -> anyhow::Re
 
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::Disabled, cwd.path());
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "please confirm".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
-                environments: Some(local_selections(cwd.abs())),
-                approval_policy: Some(AskForApproval::Never),
-                sandbox_policy: Some(sandbox_policy),
-                permission_profile,
-                collaboration_mode: Some(CollaborationMode {
-                    mode: ModeKind::Plan,
-                    settings: Settings {
-                        model: session_configured.model,
-                        reasoning_effort: None,
-                        developer_instructions: None,
-                    },
-                }),
-                ..Default::default()
-            },
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "please confirm".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(cwd.abs())),
+            approval_policy: Some(AskForApproval::Never),
+            sandbox_policy: Some(sandbox_policy),
+            permission_profile,
+            collaboration_mode: Some(CollaborationMode {
+                mode: ModeKind::Plan,
+                settings: Settings {
+                    model: session_configured.model,
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                    design_audit_level: None,
+                },
+            }),
+            ..Default::default()
+        },
+    })
+    .await?;
 
     let request = wait_for_event_match(&ody, |event| match event {
         EventMsg::RequestUserInput(request) => Some(request.clone()),
@@ -390,25 +389,24 @@ where
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::Disabled, cwd.path());
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "please confirm".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
-                environments: Some(local_selections(cwd.abs())),
-                approval_policy: Some(AskForApproval::Never),
-                sandbox_policy: Some(sandbox_policy),
-                permission_profile,
-                collaboration_mode: Some(collaboration_mode),
-                ..Default::default()
-            },
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "please confirm".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(cwd.abs())),
+            approval_policy: Some(AskForApproval::Never),
+            sandbox_policy: Some(sandbox_policy),
+            permission_profile,
+            collaboration_mode: Some(collaboration_mode),
+            ..Default::default()
+        },
+    })
+    .await?;
 
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
 
@@ -431,6 +429,7 @@ async fn request_user_input_rejected_in_execute_mode_alias() -> anyhow::Result<(
             model,
             reasoning_effort: None,
             developer_instructions: None,
+            design_audit_level: None,
         },
     })
     .await
@@ -444,6 +443,7 @@ async fn request_user_input_rejected_in_default_mode_by_default() -> anyhow::Res
             model,
             reasoning_effort: None,
             developer_instructions: None,
+            design_audit_level: None,
         },
     })
     .await
@@ -462,6 +462,7 @@ async fn request_user_input_rejected_in_pair_mode_alias() -> anyhow::Result<()> 
             model,
             reasoning_effort: None,
             developer_instructions: None,
+            design_audit_level: None,
         },
     })
     .await

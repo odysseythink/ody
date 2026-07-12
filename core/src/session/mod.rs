@@ -72,6 +72,9 @@ use ody_features::unstable_features_warning_event;
 use ody_hooks::Hooks;
 use ody_hooks::HooksConfig;
 
+use futures::future::BoxFuture;
+use futures::future::Shared;
+use futures::prelude::*;
 use ody_client::default_client::originator;
 use ody_mcp::McpConnectionManager;
 use ody_mcp::McpResourceClient;
@@ -103,14 +106,14 @@ use ody_protocol::dynamic_tools::DynamicToolSpec;
 use ody_protocol::items::TurnItem;
 use ody_protocol::items::UserMessageItem;
 use ody_protocol::mcp::CallToolResult;
+use ody_protocol::model_metadata::ModelInfo;
+use ody_protocol::model_metadata::ModelPreset;
 use ody_protocol::models::ActivePermissionProfile;
 use ody_protocol::models::AdditionalPermissionProfile;
 use ody_protocol::models::BaseInstructions;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::models::SandboxEnforcement;
 use ody_protocol::models::format_allow_prefixes;
-use ody_protocol::model_metadata::ModelInfo;
-use ody_protocol::model_metadata::ModelPreset;
 use ody_protocol::permissions::FileSystemSandboxPolicy;
 use ody_protocol::permissions::NetworkSandboxPolicy;
 use ody_protocol::protocol::AdditionalContextEntry;
@@ -156,9 +159,6 @@ use ody_thread_store::ResumeThreadParams;
 use ody_thread_store::ThreadPersistenceMetadata;
 use ody_thread_store::ThreadStore;
 use ody_utils_path_uri::PathUri;
-use futures::future::BoxFuture;
-use futures::future::Shared;
-use futures::prelude::*;
 use rmcp::model::ElicitationCapability;
 use rmcp::model::FormElicitationCapability;
 use rmcp::model::ListResourceTemplatesResult;
@@ -186,7 +186,6 @@ use tracing::warn;
 use uuid::Uuid;
 
 use crate::client::ModelClient;
-use crate::ody_thread::ThreadConfigSnapshot;
 #[cfg(test)]
 use crate::compact::collect_user_messages;
 use crate::config::Config;
@@ -197,6 +196,7 @@ use crate::config::PermissionProfileState;
 use crate::config::StartedNetworkProxy;
 use crate::config::resolve_web_search_mode_for_turn;
 use crate::context_manager::ContextManager;
+use crate::ody_thread::ThreadConfigSnapshot;
 use crate::thread_rollout_truncation::initial_history_has_prior_user_turns;
 use ody_config::CONFIG_TOML_FILE;
 use ody_config::ConfigLayerSource;
@@ -353,13 +353,12 @@ use ody_protocol::config_types::CollaborationMode;
 use ody_protocol::config_types::Personality;
 use ody_protocol::config_types::ReasoningSummary as ReasoningSummaryConfig;
 use ody_protocol::config_types::WindowsSandboxLevel;
+use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
 use ody_protocol::models::LocalImagePreparation;
 use ody_protocol::models::ResponseInputItem;
 use ody_protocol::models::ResponseItem;
-use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
 use ody_protocol::protocol::ApplyPatchApprovalRequestEvent;
 use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::OdyErrorInfo;
 use ody_protocol::protocol::CompactedItem;
 use ody_protocol::protocol::DeprecationNoticeEvent;
 use ody_protocol::protocol::ErrorEvent;
@@ -374,6 +373,7 @@ use ody_protocol::protocol::ModelVerification;
 use ody_protocol::protocol::ModelVerificationEvent;
 use ody_protocol::protocol::NetworkApprovalContext;
 use ody_protocol::protocol::NonSteerableTurnKind;
+use ody_protocol::protocol::OdyErrorInfo;
 use ody_protocol::protocol::Op;
 use ody_protocol::protocol::RateLimitSnapshot;
 use ody_protocol::protocol::RequestUserInputEvent;
@@ -613,6 +613,7 @@ impl Ody {
                 model: model.clone(),
                 reasoning_effort: config.model_reasoning_effort.clone(),
                 developer_instructions: None,
+                design_audit_level: None,
             },
         };
         let service_tier = get_service_tier(
@@ -1196,13 +1197,10 @@ impl Session {
         state.plan_mode_last_manifest_snapshot()
     }
 
-   pub(crate) async fn set_plan_mode_last_manifest_snapshot(
-       &self,
-       snapshot: ManifestSnapshot,
-   ) {
-       let mut state = self.state.lock().await;
-       state.set_plan_mode_last_manifest_snapshot(snapshot);
-   }
+    pub(crate) async fn set_plan_mode_last_manifest_snapshot(&self, snapshot: ManifestSnapshot) {
+        let mut state = self.state.lock().await;
+        state.set_plan_mode_last_manifest_snapshot(snapshot);
+    }
 
     pub(crate) async fn set_last_design_artifact(&self, artifact: Arc<PlanArtifact>) {
         let mut state = self.state.lock().await;
@@ -1644,12 +1642,7 @@ impl Session {
                 })
                 .collect::<Vec<_>>();
             if user_config_paths.is_empty() {
-                vec![
-                    state
-                        .session_configuration
-                        .ody_home
-                        .join(CONFIG_TOML_FILE),
-                ]
+                vec![state.session_configuration.ody_home.join(CONFIG_TOML_FILE)]
             } else {
                 user_config_paths
             }
@@ -3136,7 +3129,11 @@ impl Session {
             && let Some(collab_instructions) =
                 CollaborationModeInstructions::from_collaboration_mode(
                     &collaboration_mode,
-                    turn_context.config.plan_mode.as_ref().and_then(|pm| pm.split_threshold),
+                    turn_context
+                        .config
+                        .plan_mode
+                        .as_ref()
+                        .and_then(|pm| pm.split_threshold),
                     user_prompt,
                     turn_context.config.plan_mode.as_ref(),
                     turn_context.plan_artifact.as_deref(),

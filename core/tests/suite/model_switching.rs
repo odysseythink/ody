@@ -1,26 +1,4 @@
 use anyhow::Result;
-use ody_config::types::Personality;
-use ody_features::Feature;
-use ody_models_manager::manager::RefreshStrategy;
-use ody_protocol::config_types::ReasoningSummary;
-use ody_protocol::config_types::SERVICE_TIER_DEFAULT_REQUEST_VALUE;
-use ody_protocol::config_types::ServiceTier;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::model_metadata::ConfigShellToolType;
-use ody_protocol::model_metadata::InputModality;
-use ody_protocol::model_metadata::ModelInfo;
-use ody_protocol::model_metadata::ModelServiceTier;
-use ody_protocol::model_metadata::ModelVisibility;
-use ody_protocol::model_metadata::ModelsResponse;
-use ody_protocol::model_metadata::ReasoningEffort;
-use ody_protocol::model_metadata::ReasoningEffortPreset;
-use ody_protocol::model_metadata::TruncationPolicyConfig;
-use ody_protocol::model_metadata::default_input_modalities;
-use ody_protocol::model_metadata::ModelCapabilities;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
 use core_test_support::responses::ev_completed_with_tokens;
 use core_test_support::responses::ev_image_generation_call;
 use core_test_support::responses::ev_response_created;
@@ -36,6 +14,28 @@ use core_test_support::test_ody::local_selections;
 use core_test_support::test_ody::test_ody;
 use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event;
+use ody_config::types::Personality;
+use ody_features::Feature;
+use ody_models_manager::manager::RefreshStrategy;
+use ody_protocol::config_types::ReasoningSummary;
+use ody_protocol::config_types::SERVICE_TIER_DEFAULT_REQUEST_VALUE;
+use ody_protocol::config_types::ServiceTier;
+use ody_protocol::model_metadata::ConfigShellToolType;
+use ody_protocol::model_metadata::InputModality;
+use ody_protocol::model_metadata::ModelCapabilities;
+use ody_protocol::model_metadata::ModelInfo;
+use ody_protocol::model_metadata::ModelServiceTier;
+use ody_protocol::model_metadata::ModelVisibility;
+use ody_protocol::model_metadata::ModelsResponse;
+use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffortPreset;
+use ody_protocol::model_metadata::TruncationPolicyConfig;
+use ody_protocol::model_metadata::default_input_modalities;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use std::path::Path;
 use std::path::PathBuf;
@@ -60,6 +60,7 @@ fn read_only_user_turn(test: &TestOdy, items: Vec<UserInput>, model: String) -> 
                     model,
                     reasoning_effort: test.config.model_reasoning_effort.clone(),
                     developer_instructions: None,
+                    design_audit_level: None,
                 },
             }),
             ..Default::default()
@@ -219,14 +220,12 @@ async fn model_and_personality_change_only_appends_model_instructions() -> Resul
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_model("gpt-5.3-ody")
-        .with_config(|config| {
-            config
-                .features
-                .enable(Feature::Personality)
-                .expect("test config should allow feature update");
-        });
+    let mut builder = test_ody().with_model("gpt-5.3-ody").with_config(|config| {
+        config
+            .features
+            .enable(Feature::Personality)
+            .expect("test config should allow feature update");
+    });
     let test = builder.build(&server).await?;
     let next_model = "exp-ody-personality";
 
@@ -497,10 +496,9 @@ async fn model_change_from_image_to_text_strips_prior_image_content() -> Result<
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_config(move |config| {
-            config.model = Some(image_model_slug.to_string());
-        });
+    let mut builder = test_ody().with_config(move |config| {
+        config.model = Some(image_model_slug.to_string());
+    });
     let test = builder.build(&server).await?;
     let models_manager = test.thread_manager.get_models_manager();
     let _ = models_manager
@@ -596,10 +594,9 @@ async fn generated_image_is_replayed_for_image_capable_models() -> Result<()> {
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_config(move |config| {
-            config.model = Some(image_model_slug.to_string());
-        });
+    let mut builder = test_ody().with_config(move |config| {
+        config.model = Some(image_model_slug.to_string());
+    });
     let test = builder.build(&server).await?;
     let saved_path = image_generation_artifact_path(
         test.ody_home_path(),
@@ -709,10 +706,9 @@ async fn model_change_from_generated_image_to_text_preserves_prior_generated_ima
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_config(move |config| {
-            config.model = Some(image_model_slug.to_string());
-        });
+    let mut builder = test_ody().with_config(move |config| {
+        config.model = Some(image_model_slug.to_string());
+    });
     let test = builder.build(&server).await?;
     let saved_path = image_generation_artifact_path(
         test.ody_home_path(),
@@ -824,10 +820,9 @@ async fn thread_rollback_after_generated_image_drops_entire_image_turn_history()
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_config(move |config| {
-            config.model = Some(image_model_slug.to_string());
-        });
+    let mut builder = test_ody().with_config(move |config| {
+        config.model = Some(image_model_slug.to_string());
+    });
     let test = builder.build(&server).await?;
     let saved_path = image_generation_artifact_path(
         test.ody_home_path(),
@@ -852,13 +847,8 @@ async fn thread_rollback_after_generated_image_drops_entire_image_turn_history()
         .await?;
     wait_for_event(&test.ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
-    test.ody
-        .submit(Op::ThreadRollback { num_turns: 1 })
-        .await?;
-    wait_for_event(&test.ody, |ev| {
-        matches!(ev, EventMsg::ThreadRolledBack(_))
-    })
-    .await;
+    test.ody.submit(Op::ThreadRollback { num_turns: 1 }).await?;
+    wait_for_event(&test.ody, |ev| matches!(ev, EventMsg::ThreadRolledBack(_))).await;
 
     test.ody
         .submit(read_only_user_turn(
@@ -959,7 +949,7 @@ async fn model_switch_to_smaller_model_updates_token_context_window() -> Result<
         effective_context_window_percent,
         experimental_supported_tools: Vec::new(),
         capabilities: ModelCapabilities::default(),
-};
+    };
     let mut smaller_model = base_model.clone();
     smaller_model.slug = smaller_model_slug.to_string();
     smaller_model.display_name = "Smaller Model".to_string();
@@ -989,10 +979,9 @@ async fn model_switch_to_smaller_model_updates_token_context_window() -> Result<
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_config(|config| {
-            config.model = Some(large_model_slug.to_string());
-        });
+    let mut builder = test_ody().with_config(|config| {
+        config.model = Some(large_model_slug.to_string());
+    });
     let test = builder.build(&server).await?;
 
     let models_manager = test.thread_manager.get_models_manager();

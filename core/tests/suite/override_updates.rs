@@ -1,4 +1,10 @@
 use anyhow::Result;
+use core_test_support::TempDirExt;
+use core_test_support::responses::start_mock_server;
+use core_test_support::skip_if_no_network;
+use core_test_support::test_ody::local_selections;
+use core_test_support::test_ody::test_ody;
+use core_test_support::wait_for_event;
 use ody_core::config::Constrained;
 use ody_protocol::config_types::CollaborationMode;
 use ody_protocol::config_types::ModeKind;
@@ -6,12 +12,6 @@ use ody_protocol::config_types::Settings;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::Op;
-use core_test_support::TempDirExt;
-use core_test_support::responses::start_mock_server;
-use core_test_support::skip_if_no_network;
-use core_test_support::test_ody::local_selections;
-use core_test_support::test_ody::test_ody;
-use core_test_support::wait_for_event;
 use tempfile::TempDir;
 
 fn collab_mode_with_instructions(instructions: Option<&str>) -> CollaborationMode {
@@ -21,6 +21,7 @@ fn collab_mode_with_instructions(instructions: Option<&str>) -> CollaborationMod
             model: "gpt-5.4".to_string(),
             reasoning_effort: None,
             developer_instructions: instructions.map(str::to_string),
+            design_audit_level: None,
         },
     }
 }

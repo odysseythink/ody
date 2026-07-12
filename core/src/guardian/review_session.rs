@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::anyhow;
+use futures::future::BoxFuture;
 use ody_analytics::GuardianReviewAnalyticsResult;
 use ody_analytics::GuardianReviewSessionAnalyticsParams;
 use ody_analytics::GuardianReviewSessionKind;
@@ -13,28 +14,26 @@ use ody_protocol::ThreadId;
 use ody_protocol::config_types::AutoCompactTokenLimitScope;
 use ody_protocol::config_types::Personality;
 use ody_protocol::config_types::ReasoningSummary as ReasoningSummaryConfig;
+use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::models::ResponseItem;
-use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
 use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::OdyErrorInfo;
 use ody_protocol::protocol::ErrorEvent;
 use ody_protocol::protocol::Event;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::InitialHistory;
+use ody_protocol::protocol::OdyErrorInfo;
 use ody_protocol::protocol::Op;
 use ody_protocol::protocol::RolloutItem;
 use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::SubAgentSource;
 use ody_protocol::protocol::TokenUsage;
-use futures::future::BoxFuture;
 use serde_json::Value;
 use tokio::sync::Mutex;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
-use crate::ody_delegate::run_ody_thread_interactive;
 use crate::config::Config;
 use crate::config::Constrained;
 use crate::config::ManagedFeatures;
@@ -42,6 +41,7 @@ use crate::config::NetworkProxySpec;
 use crate::config::Permissions;
 use crate::context::ContextualUserFragment;
 use crate::context::GuardianFollowupReviewReminder;
+use crate::ody_delegate::run_ody_thread_interactive;
 use crate::session::Ody;
 use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
@@ -823,6 +823,7 @@ async fn run_review_on_session(
                         model: params.model.clone(),
                         reasoning_effort: params.reasoning_effort.clone(),
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()

@@ -1,50 +1,3 @@
-use ody_config::ConfigLayerStack;
-use ody_core::ModelClient;
-use ody_core::NewThread;
-use ody_core::Prompt;
-use ody_core::ResponseEvent;
-use ody_core::ThreadManager;
-use ody_core::resolve_installation_id;
-use ody_core::thread_store_from_config;
-use ody_extension_api::empty_extension_registry;
-use ody_features::Feature;
-use ody_client::default_client::originator;
-use ody_model_provider_info::ModelProviderInfo;
-use ody_model_provider_info::WireApi;
-use ody_model_provider_info::built_in_model_providers;
-use ody_model_provider_info::ProviderCapabilities;
-use ody_models_manager::bundled_models_response;
-use ody_otel::SessionTelemetry;
-use ody_protocol::ThreadId;
-use ody_protocol::config_types::CollaborationMode;
-use ody_protocol::config_types::ModeKind;
-use ody_protocol::config_types::ModelProviderAuthInfo;
-use ody_protocol::config_types::ReasoningSummary;
-use ody_protocol::config_types::Settings;
-use ody_protocol::config_types::Verbosity;
-use ody_protocol::error::OdyErr;
-use ody_protocol::models::ContentItem;
-use ody_protocol::models::DEFAULT_IMAGE_DETAIL;
-use ody_protocol::models::FunctionCallOutputContentItem;
-use ody_protocol::models::FunctionCallOutputPayload;
-use ody_protocol::models::ImageDetail;
-use ody_protocol::models::LocalShellAction;
-use ody_protocol::models::LocalShellExecAction;
-use ody_protocol::models::LocalShellStatus;
-use ody_protocol::models::MessagePhase;
-use ody_protocol::models::ReasoningItemContent;
-use ody_protocol::models::ReasoningItemReasoningSummary;
-use ody_protocol::models::ResponseItem;
-use ody_protocol::models::WebSearchAction;
-use ody_protocol::model_metadata::ReasoningEffort;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::RolloutItem;
-use ody_protocol::protocol::RolloutLine;
-use ody_protocol::protocol::SessionMeta;
-use ody_protocol::protocol::SessionMetaLine;
-use ody_protocol::protocol::SessionSource;
-use ody_protocol::user_input::UserInput;
 use core_test_support::PathBufExt;
 use core_test_support::TestOdyResponsesRequestKind;
 use core_test_support::apps_test_server::AppsTestServer;
@@ -70,6 +23,53 @@ use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
 use dunce::canonicalize as normalize_path;
 use futures::StreamExt;
+use ody_client::default_client::originator;
+use ody_config::ConfigLayerStack;
+use ody_core::ModelClient;
+use ody_core::NewThread;
+use ody_core::Prompt;
+use ody_core::ResponseEvent;
+use ody_core::ThreadManager;
+use ody_core::resolve_installation_id;
+use ody_core::thread_store_from_config;
+use ody_extension_api::empty_extension_registry;
+use ody_features::Feature;
+use ody_model_provider_info::ModelProviderInfo;
+use ody_model_provider_info::ProviderCapabilities;
+use ody_model_provider_info::WireApi;
+use ody_model_provider_info::built_in_model_providers;
+use ody_models_manager::bundled_models_response;
+use ody_otel::SessionTelemetry;
+use ody_protocol::ThreadId;
+use ody_protocol::config_types::CollaborationMode;
+use ody_protocol::config_types::ModeKind;
+use ody_protocol::config_types::ModelProviderAuthInfo;
+use ody_protocol::config_types::ReasoningSummary;
+use ody_protocol::config_types::Settings;
+use ody_protocol::config_types::Verbosity;
+use ody_protocol::error::OdyErr;
+use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::models::ContentItem;
+use ody_protocol::models::DEFAULT_IMAGE_DETAIL;
+use ody_protocol::models::FunctionCallOutputContentItem;
+use ody_protocol::models::FunctionCallOutputPayload;
+use ody_protocol::models::ImageDetail;
+use ody_protocol::models::LocalShellAction;
+use ody_protocol::models::LocalShellExecAction;
+use ody_protocol::models::LocalShellStatus;
+use ody_protocol::models::MessagePhase;
+use ody_protocol::models::ReasoningItemContent;
+use ody_protocol::models::ReasoningItemReasoningSummary;
+use ody_protocol::models::ResponseItem;
+use ody_protocol::models::WebSearchAction;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::RolloutItem;
+use ody_protocol::protocol::RolloutLine;
+use ody_protocol::protocol::SessionMeta;
+use ody_protocol::protocol::SessionMetaLine;
+use ody_protocol::protocol::SessionSource;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use std::io::Write;
@@ -248,8 +248,7 @@ async fn non_odysseythink_responses_requests_omit_item_passthrough_metadata() {
         sse(vec![ev_response_created("resp1"), ev_completed("resp1")]),
     )
     .await;
-    let mut provider =
-        built_in_model_providers()["kimi"].clone();
+    let mut provider = built_in_model_providers()["kimi"].clone();
     provider.name = "Test Responses".to_string();
     provider.base_url = Some(format!("{}/v1", server.uri()));
     provider.supports_websockets = false;
@@ -263,19 +262,18 @@ async fn non_odysseythink_responses_requests_omit_item_passthrough_metadata() {
         .unwrap()
         .ody;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
 
     let body = response_mock.single_request().body_json();
@@ -631,19 +629,18 @@ async fn resume_includes_initial_messages_and_sends_prior_items() {
     assert_eq!(initial_json, expected_initial_json);
 
     // 2) Submit new input; the request body must include the prior items, then initial context, then new user input.
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     let request = resp_mock.single_request();
@@ -1013,19 +1010,18 @@ async fn includes_session_id_thread_id_and_model_headers_in_request() {
     let expected_session_id = test.session_configured.session_id;
     let expected_thread_id = test.session_configured.thread_id;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -1130,7 +1126,7 @@ async fn send_provider_auth_request(server: &MockServer, auth: ModelProviderAuth
         stream_idle_timeout_ms: Some(5_000),
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
-            capabilities: ProviderCapabilities::default(),
+        capabilities: ProviderCapabilities::default(),
     };
 
     let ody_home = TempDir::new().unwrap();
@@ -1142,8 +1138,7 @@ async fn send_provider_auth_request(server: &MockServer, auth: ModelProviderAuth
     let model = ody_core::test_support::get_model_offline(config.model.as_deref());
     config.model = Some(model.clone());
     let config = Arc::new(config);
-    let model_info =
-        ody_core::test_support::construct_model_info_offline(model.as_str(), &config);
+    let model_info = ody_core::test_support::construct_model_info_offline(model.as_str(), &config);
     let thread_id = ThreadId::new();
     let session_telemetry = SessionTelemetry::new(
         thread_id,
@@ -1211,29 +1206,27 @@ async fn includes_base_instructions_override_in_request() {
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_config(|config| {
-            config.base_instructions = Some("test instructions".to_string());
-        });
+    let mut builder = test_ody().with_config(|config| {
+        config.base_instructions = Some("test instructions".to_string());
+    });
     let ody = builder
         .build(&server)
         .await
         .expect("create new conversation")
         .ody;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -1303,19 +1296,18 @@ async fn prefers_apikey_when_config_prefers_apikey() {
         .await
         .expect("create new conversation");
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 }
@@ -1331,29 +1323,27 @@ async fn includes_user_instructions_message_in_request() {
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_pre_build_hook(|home| {
-            std::fs::write(home.join("AGENTS.md"), "be nice").expect("write global instructions");
-        });
+    let mut builder = test_ody().with_pre_build_hook(|home| {
+        std::fs::write(home.join("AGENTS.md"), "be nice").expect("write global instructions");
+    });
     let ody = builder
         .build(&server)
         .await
         .expect("create new conversation")
         .ody;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -1414,32 +1404,30 @@ async fn omits_apps_guidance_for_api_key_auth_even_when_feature_enabled() {
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_config(move |config| {
-            config
-                .features
-                .enable(Feature::Apps)
-                .expect("test config should allow feature update");
-        });
+    let mut builder = test_ody().with_config(move |config| {
+        config
+            .features
+            .enable(Feature::Apps)
+            .expect("test config should allow feature update");
+    });
     let ody = builder
         .build(&server)
         .await
         .expect("create new conversation")
         .ody;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -1470,33 +1458,31 @@ async fn omits_apps_guidance_when_configured_off() {
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_config(move |config| {
-            config
-                .features
-                .enable(Feature::Apps)
-                .expect("test config should allow feature update");
-            config.include_apps_instructions = false;
-        });
+    let mut builder = test_ody().with_config(move |config| {
+        config
+            .features
+            .enable(Feature::Apps)
+            .expect("test config should allow feature update");
+        config.include_apps_instructions = false;
+    });
     let ody = builder
         .build(&server)
         .await
         .expect("create new conversation")
         .ody;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -1526,19 +1512,18 @@ async fn omits_environment_context_when_configured_off() {
         .expect("create new conversation")
         .ody;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -1582,19 +1567,18 @@ async fn skills_append_to_developer_message() {
         .expect("create new conversation")
         .ody;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -1664,19 +1648,18 @@ async fn skills_use_aliases_in_developer_message_under_budget_pressure() {
         .expect("create new conversation")
         .ody;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -1725,19 +1708,18 @@ async fn includes_configured_effort_in_request() -> anyhow::Result<()> {
         .build(&server)
         .await?;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -1767,19 +1749,18 @@ async fn includes_no_effort_in_request() -> anyhow::Result<()> {
     .await;
     let TestOdy { ody, .. } = test_ody().with_model("gpt-5.4").build(&server).await?;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -1810,19 +1791,18 @@ async fn includes_default_reasoning_effort_in_request_when_defined_by_model_info
     .await;
     let TestOdy { ody, .. } = test_ody().with_model("gpt-5.4").build(&server).await?;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -1858,32 +1838,32 @@ async fn user_turn_collaboration_mode_overrides_model_and_effort() -> anyhow::Re
             model: "gpt-5.4".to_string(),
             reasoning_effort: Some(ReasoningEffort::High),
             developer_instructions: None,
+            design_audit_level: None,
         },
     };
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
-                environments: Some(local_selections(config.cwd.clone())),
-                approval_policy: Some(config.permissions.approval_policy.value()),
-                sandbox_policy: Some(config.legacy_sandbox_policy()),
-                summary: Some(
-                    config
-                        .model_reasoning_summary
-                        .unwrap_or(ReasoningSummary::Auto),
-                ),
-                collaboration_mode: Some(collaboration_mode),
-                ..Default::default()
-            },
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(config.cwd.clone())),
+            approval_policy: Some(config.permissions.approval_policy.value()),
+            sandbox_policy: Some(config.legacy_sandbox_policy()),
+            summary: Some(
+                config
+                    .model_reasoning_summary
+                    .unwrap_or(ReasoningSummary::Auto),
+            ),
+            collaboration_mode: Some(collaboration_mode),
+            ..Default::default()
+        },
+    })
+    .await?;
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -1917,19 +1897,18 @@ async fn configured_reasoning_summary_is_sent() -> anyhow::Result<()> {
         .build(&server)
         .await?;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -1973,18 +1952,17 @@ async fn responses_lite_sets_all_turns_context_and_disables_parallel_tool_calls(
         .build(&server)
         .await?;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -2035,33 +2013,33 @@ async fn user_turn_explicit_reasoning_summary_overrides_model_catalog_default() 
         .build(&server)
         .await?;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
-                environments: Some(local_selections(config.cwd.clone())),
-                approval_policy: Some(config.permissions.approval_policy.value()),
-                sandbox_policy: Some(config.legacy_sandbox_policy()),
-                summary: Some(ReasoningSummary::Concise),
-                collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
-                    mode: ody_protocol::config_types::ModeKind::Default,
-                    settings: ody_protocol::config_types::Settings {
-                        model: session_configured.model,
-                        reasoning_effort: None,
-                        developer_instructions: None,
-                    },
-                }),
-                ..Default::default()
-            },
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(config.cwd.clone())),
+            approval_policy: Some(config.permissions.approval_policy.value()),
+            sandbox_policy: Some(config.legacy_sandbox_policy()),
+            summary: Some(ReasoningSummary::Concise),
+            collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
+                mode: ody_protocol::config_types::ModeKind::Default,
+                settings: ody_protocol::config_types::Settings {
+                    model: session_configured.model,
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                    design_audit_level: None,
+                },
+            }),
+            ..Default::default()
+        },
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -2095,19 +2073,18 @@ async fn reasoning_summary_is_omitted_when_disabled() -> anyhow::Result<()> {
         .build(&server)
         .await?;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -2153,19 +2130,18 @@ async fn reasoning_summary_none_overrides_model_catalog_default() -> anyhow::Res
         .build(&server)
         .await?;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -2192,19 +2168,18 @@ async fn includes_default_verbosity_in_request() -> anyhow::Result<()> {
     .await;
     let TestOdy { ody, .. } = test_ody().with_model("gpt-5.4").build(&server).await?;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -2240,19 +2215,18 @@ async fn configured_verbosity_not_sent_for_models_without_support() -> anyhow::R
         .build(&server)
         .await?;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -2287,19 +2261,18 @@ async fn configured_verbosity_is_sent() -> anyhow::Result<()> {
         .build(&server)
         .await?;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -2340,19 +2313,18 @@ async fn includes_developer_instructions_message_in_request() {
         .expect("create new conversation")
         .ody;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -2441,7 +2413,7 @@ async fn azure_responses_request_includes_store_and_reasoning_ids() {
         stream_idle_timeout_ms: Some(5_000),
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
-            capabilities: ProviderCapabilities::default(),
+        capabilities: ProviderCapabilities::default(),
     };
 
     let ody_home = TempDir::new().unwrap();
@@ -2453,19 +2425,18 @@ async fn azure_responses_request_includes_store_and_reasoning_ids() {
     let model = ody_core::test_support::get_model_offline(config.model.as_deref());
     config.model = Some(model.clone());
     let config = Arc::new(config);
-    let model_info =
-        ody_core::test_support::construct_model_info_offline(model.as_str(), &config);
+    let model_info = ody_core::test_support::construct_model_info_offline(model.as_str(), &config);
     let thread_id = ThreadId::new();
     let session_telemetry = SessionTelemetry::new(
-    thread_id,
-    model.as_str(),
-    model_info.slug.as_str(),
-    None,
-    "test_originator".to_string(),
-    /*log_user_prompts*/ false,
-    "test".to_string(),
-    SessionSource::Exec,
-);
+        thread_id,
+        model.as_str(),
+        model_info.slug.as_str(),
+        None,
+        "test_originator".to_string(),
+        /*log_user_prompts*/ false,
+        "test".to_string(),
+        SessionSource::Exec,
+    );
 
     let client = ModelClient::new(
         thread_id,
@@ -2624,34 +2595,31 @@ async fn token_count_includes_rate_limits_snapshot() {
         .mount(&server)
         .await;
 
-    let mut provider =
-        built_in_model_providers()["kimi"].clone();
+    let mut provider = built_in_model_providers()["kimi"].clone();
     provider.base_url = Some(format!("{}/v1", server.uri()));
     provider.supports_websockets = false;
 
-    let mut builder = test_ody()
-        .with_config(move |config| {
-            config.model_provider = provider;
-        });
+    let mut builder = test_ody().with_config(move |config| {
+        config.model_provider = provider;
+    });
     let ody = builder
         .build(&server)
         .await
         .expect("create conversation")
         .ody;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     let token_event = wait_for_event(
         &ody,
@@ -2857,33 +2825,31 @@ async fn context_window_error_sets_total_tokens_to_model_window() -> anyhow::Res
         .build(&server)
         .await?;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "seed turn".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "seed turn".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "trigger context window".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "trigger context window".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
 
     let token_event = wait_for_event(&ody, |event| {
         matches!(
@@ -2957,18 +2923,17 @@ async fn incomplete_response_emits_content_filter_error_message() -> anyhow::Res
         })
         .build(&server)
         .await?;
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "trigger incomplete".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "trigger incomplete".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
 
     let error_event = wait_for_event(&ody, |ev| matches!(ev, EventMsg::Error(_))).await;
     assert!(
@@ -3052,33 +3017,31 @@ async fn azure_overrides_assign_properties_used_for_responses_url() {
         stream_idle_timeout_ms: None,
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
-            capabilities: ProviderCapabilities::default(),
+        capabilities: ProviderCapabilities::default(),
     };
 
     // Init session
-    let mut builder = test_ody()
-        .with_config(move |config| {
-            config.model_provider = provider;
-        });
+    let mut builder = test_ody().with_config(move |config| {
+        config.model_provider = provider;
+    });
     let ody = builder
         .build(&server)
         .await
         .expect("create new conversation")
         .ody;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 }
@@ -3139,33 +3102,31 @@ async fn env_var_overrides_loaded_auth() {
         stream_idle_timeout_ms: None,
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
-            capabilities: ProviderCapabilities::default(),
+        capabilities: ProviderCapabilities::default(),
     };
 
     // Init session
-    let mut builder = test_ody()
-        .with_config(move |config| {
-            config.model_provider = provider;
-        });
+    let mut builder = test_ody().with_config(move |config| {
+        config.model_provider = provider;
+    });
     let ody = builder
         .build(&server)
         .await
         .expect("create new conversation")
         .ody;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 }
@@ -3206,51 +3167,48 @@ async fn history_dedupes_streamed_and_final_messages_across_turns() {
         .ody;
 
     // Turn 1: user sends U1; wait for completion.
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "U1".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "U1".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     // Turn 2: user sends U2; wait for completion.
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "U2".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "U2".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     // Turn 3: user sends U3; wait for completion.
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "U3".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "U3".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     // Inspect the three captured requests.

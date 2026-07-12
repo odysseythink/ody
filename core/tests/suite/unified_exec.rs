@@ -6,18 +6,6 @@ use std::sync::OnceLock;
 
 use anyhow::Context;
 use anyhow::Result;
-use ody_exec_server::CreateDirectoryOptions;
-use ody_features::Feature;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::models::ResponseItem;
-use ody_protocol::permissions::NetworkSandboxPolicy;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::ExecCommandSource;
-use ody_protocol::protocol::ExecCommandStatus;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
-use ody_utils_path_uri::PathUri;
 use core_test_support::TempDirExt;
 use core_test_support::assert_regex_match;
 use core_test_support::managed_network_requirements_loader;
@@ -42,6 +30,18 @@ use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event;
 use core_test_support::wait_for_event_match;
 use core_test_support::wait_for_event_with_timeout;
+use ody_exec_server::CreateDirectoryOptions;
+use ody_features::Feature;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::models::ResponseItem;
+use ody_protocol::permissions::NetworkSandboxPolicy;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::ExecCommandSource;
+use ody_protocol::protocol::ExecCommandStatus;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
+use ody_utils_path_uri::PathUri;
 use pretty_assertions::assert_eq;
 use regex_lite::Regex;
 use serde_json::Value;
@@ -214,6 +214,7 @@ async fn submit_unified_exec_turn(
                         model: session_model,
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()
@@ -287,32 +288,32 @@ async fn unified_exec_intercepts_apply_patch_exec_command() -> Result<()> {
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::Disabled, &cwd);
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "apply patch via unified exec".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
-                environments: Some(local_selections(cwd)),
-                approval_policy: Some(AskForApproval::Never),
-                sandbox_policy: Some(sandbox_policy),
-                permission_profile,
-                collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
-                    mode: ody_protocol::config_types::ModeKind::Default,
-                    settings: ody_protocol::config_types::Settings {
-                        model: session_model,
-                        reasoning_effort: None,
-                        developer_instructions: None,
-                    },
-                }),
-                ..Default::default()
-            },
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "apply patch via unified exec".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(cwd)),
+            approval_policy: Some(AskForApproval::Never),
+            sandbox_policy: Some(sandbox_policy),
+            permission_profile,
+            collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
+                mode: ody_protocol::config_types::ModeKind::Default,
+                settings: ody_protocol::config_types::Settings {
+                    model: session_model,
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                    design_audit_level: None,
+                },
+            }),
+            ..Default::default()
+        },
+    })
+    .await?;
 
     let mut saw_patch_begin = false;
     let mut patch_end = None;
@@ -2429,32 +2430,32 @@ async fn unified_exec_keeps_long_running_session_after_turn_end() -> Result<()> 
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::Disabled, turn_cwd.as_path());
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "keep unified exec process after turn end".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
-                environments: Some(local_selections(turn_cwd)),
-                approval_policy: Some(AskForApproval::Never),
-                sandbox_policy: Some(sandbox_policy),
-                permission_profile,
-                collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
-                    mode: ody_protocol::config_types::ModeKind::Default,
-                    settings: ody_protocol::config_types::Settings {
-                        model: session_model,
-                        reasoning_effort: None,
-                        developer_instructions: None,
-                    },
-                }),
-                ..Default::default()
-            },
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "keep unified exec process after turn end".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(turn_cwd)),
+            approval_policy: Some(AskForApproval::Never),
+            sandbox_policy: Some(sandbox_policy),
+            permission_profile,
+            collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
+                mode: ody_protocol::config_types::ModeKind::Default,
+                settings: ody_protocol::config_types::Settings {
+                    model: session_model,
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                    design_audit_level: None,
+                },
+            }),
+            ..Default::default()
+        },
+    })
+    .await?;
 
     let begin_event = wait_for_event_match(&ody, |msg| match msg {
         EventMsg::ExecCommandBegin(ev) if ev.call_id == call_id => Some(ev.clone()),
@@ -2532,32 +2533,32 @@ async fn unified_exec_interrupt_preserves_long_running_session() -> Result<()> {
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::Disabled, turn_cwd.as_path());
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "interrupt long-running unified exec".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
-                environments: Some(local_selections(turn_cwd)),
-                approval_policy: Some(AskForApproval::Never),
-                sandbox_policy: Some(sandbox_policy),
-                permission_profile,
-                collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
-                    mode: ody_protocol::config_types::ModeKind::Default,
-                    settings: ody_protocol::config_types::Settings {
-                        model: session_model,
-                        reasoning_effort: None,
-                        developer_instructions: None,
-                    },
-                }),
-                ..Default::default()
-            },
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "interrupt long-running unified exec".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(turn_cwd)),
+            approval_policy: Some(AskForApproval::Never),
+            sandbox_policy: Some(sandbox_policy),
+            permission_profile,
+            collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
+                mode: ody_protocol::config_types::ModeKind::Default,
+                settings: ody_protocol::config_types::Settings {
+                    model: session_model,
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                    design_audit_level: None,
+                },
+            }),
+            ..Default::default()
+        },
+    })
+    .await?;
 
     let _begin_event = wait_for_event_match(&ody, |msg| match msg {
         EventMsg::ExecCommandBegin(ev) if ev.call_id == call_id => Some(ev.clone()),
@@ -3015,32 +3016,32 @@ async fn unified_exec_runs_under_sandbox() -> Result<()> {
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::read_only(), turn_cwd.as_path());
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "summarize large output".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
-                environments: Some(local_selections(turn_cwd)),
-                approval_policy: Some(AskForApproval::Never),
-                sandbox_policy: Some(sandbox_policy),
-                permission_profile,
-                collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
-                    mode: ody_protocol::config_types::ModeKind::Default,
-                    settings: ody_protocol::config_types::Settings {
-                        model: session_model,
-                        reasoning_effort: None,
-                        developer_instructions: None,
-                    },
-                }),
-                ..Default::default()
-            },
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "summarize large output".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(turn_cwd)),
+            approval_policy: Some(AskForApproval::Never),
+            sandbox_policy: Some(sandbox_policy),
+            permission_profile,
+            collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
+                mode: ody_protocol::config_types::ModeKind::Default,
+                settings: ody_protocol::config_types::Settings {
+                    model: session_model,
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                    design_audit_level: None,
+                },
+            }),
+            ..Default::default()
+        },
+    })
+    .await?;
 
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
 
@@ -3137,32 +3138,32 @@ async fn unified_exec_enforces_glob_deny_read_policy() -> Result<()> {
     let turn_cwd = cwd.abs();
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::read_only(), turn_cwd.as_path());
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "read the fixture files".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
-                environments: Some(local_selections(turn_cwd)),
-                approval_policy: Some(AskForApproval::Never),
-                sandbox_policy: Some(sandbox_policy),
-                permission_profile,
-                collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
-                    mode: ody_protocol::config_types::ModeKind::Default,
-                    settings: ody_protocol::config_types::Settings {
-                        model: session_model,
-                        reasoning_effort: None,
-                        developer_instructions: None,
-                    },
-                }),
-                ..Default::default()
-            },
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "read the fixture files".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(turn_cwd)),
+            approval_policy: Some(AskForApproval::Never),
+            sandbox_policy: Some(sandbox_policy),
+            permission_profile,
+            collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
+                mode: ody_protocol::config_types::ModeKind::Default,
+                settings: ody_protocol::config_types::Settings {
+                    model: session_model,
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                    design_audit_level: None,
+                },
+            }),
+            ..Default::default()
+        },
+    })
+    .await?;
 
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
 
@@ -3275,32 +3276,32 @@ async fn unified_exec_python_prompt_under_seatbelt() -> Result<()> {
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::read_only(), turn_cwd.as_path());
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "start python under seatbelt".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
-                environments: Some(local_selections(turn_cwd)),
-                approval_policy: Some(AskForApproval::Never),
-                sandbox_policy: Some(sandbox_policy),
-                permission_profile,
-                collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
-                    mode: ody_protocol::config_types::ModeKind::Default,
-                    settings: ody_protocol::config_types::Settings {
-                        model: session_model,
-                        reasoning_effort: None,
-                        developer_instructions: None,
-                    },
-                }),
-                ..Default::default()
-            },
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "start python under seatbelt".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(turn_cwd)),
+            approval_policy: Some(AskForApproval::Never),
+            sandbox_policy: Some(sandbox_policy),
+            permission_profile,
+            collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
+                mode: ody_protocol::config_types::ModeKind::Default,
+                settings: ody_protocol::config_types::Settings {
+                    model: session_model,
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                    design_audit_level: None,
+                },
+            }),
+            ..Default::default()
+        },
+    })
+    .await?;
 
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
 

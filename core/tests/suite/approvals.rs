@@ -2,6 +2,27 @@
 
 use anyhow::Context;
 use anyhow::Result;
+use core_test_support::managed_network_requirements_loader;
+use core_test_support::responses::ev_apply_patch_custom_tool_call;
+use core_test_support::responses::ev_assistant_message;
+use core_test_support::responses::ev_completed;
+use core_test_support::responses::ev_function_call;
+use core_test_support::responses::ev_function_call_with_namespace;
+use core_test_support::responses::ev_response_created;
+use core_test_support::responses::mount_sse_once;
+use core_test_support::responses::mount_sse_once_match;
+use core_test_support::responses::sse;
+use core_test_support::responses::start_mock_server;
+use core_test_support::skip_if_no_network;
+use core_test_support::test_ody::TestOdy;
+use core_test_support::test_ody::local_selections;
+use core_test_support::test_ody::test_ody;
+use core_test_support::test_ody::turn_permission_fields;
+use core_test_support::wait_for_event;
+use core_test_support::wait_for_event_with_timeout;
+use core_test_support::zsh_fork::build_zsh_fork_test;
+use core_test_support::zsh_fork::restrictive_workspace_write_profile;
+use core_test_support::zsh_fork::zsh_fork_runtime;
 use ody_config::types::ApprovalsReviewer;
 use ody_core::OdyThread;
 use ody_core::config::Constrained;
@@ -26,27 +47,6 @@ use ody_protocol::protocol::Op;
 use ody_protocol::protocol::ReviewDecision;
 use ody_protocol::protocol::SandboxPolicy;
 use ody_protocol::user_input::UserInput;
-use core_test_support::managed_network_requirements_loader;
-use core_test_support::responses::ev_apply_patch_custom_tool_call;
-use core_test_support::responses::ev_assistant_message;
-use core_test_support::responses::ev_completed;
-use core_test_support::responses::ev_function_call;
-use core_test_support::responses::ev_function_call_with_namespace;
-use core_test_support::responses::ev_response_created;
-use core_test_support::responses::mount_sse_once;
-use core_test_support::responses::mount_sse_once_match;
-use core_test_support::responses::sse;
-use core_test_support::responses::start_mock_server;
-use core_test_support::skip_if_no_network;
-use core_test_support::test_ody::TestOdy;
-use core_test_support::test_ody::local_selections;
-use core_test_support::test_ody::test_ody;
-use core_test_support::test_ody::turn_permission_fields;
-use core_test_support::wait_for_event;
-use core_test_support::wait_for_event_with_timeout;
-use core_test_support::zsh_fork::build_zsh_fork_test;
-use core_test_support::zsh_fork::restrictive_workspace_write_profile;
-use core_test_support::zsh_fork::zsh_fork_runtime;
 use pretty_assertions::assert_eq;
 use regex_lite::Regex;
 use serde_json::Value;
@@ -673,6 +673,7 @@ async fn submit_turn(
                         model: session_model,
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()
@@ -723,10 +724,7 @@ fn parse_result(item: &Value) -> CommandResult {
     }
 }
 
-async fn expect_exec_approval(
-    test: &TestOdy,
-    expected_command: &str,
-) -> ExecApprovalRequestEvent {
+async fn expect_exec_approval(test: &TestOdy, expected_command: &str) -> ExecApprovalRequestEvent {
     let event = wait_for_event(&test.ody, |event| {
         matches!(
             event,
@@ -2064,15 +2062,13 @@ async fn approving_apply_patch_for_session_skips_future_prompts_for_same_file() 
     let sandbox_policy = SandboxPolicy::DangerFullAccess;
     let sandbox_policy_for_config = sandbox_policy.clone();
 
-    let mut builder = test_ody()
-        .with_model("gpt-5.4")
-        .with_config(move |config| {
-            config.permissions.approval_policy = Constrained::allow_any(approval_policy);
-            config
-                .set_legacy_sandbox_policy(sandbox_policy_for_config)
-                .expect("set sandbox policy");
-            config.approvals_reviewer = ApprovalsReviewer::User;
-        });
+    let mut builder = test_ody().with_model("gpt-5.4").with_config(move |config| {
+        config.permissions.approval_policy = Constrained::allow_any(approval_policy);
+        config
+            .set_legacy_sandbox_policy(sandbox_policy_for_config)
+            .expect("set sandbox policy");
+        config.approvals_reviewer = ApprovalsReviewer::User;
+    });
     let test = builder.build(&server).await?;
 
     let target = TargetPath::OutsideWorkspace("apply_patch_allow_session.txt");
@@ -2629,6 +2625,7 @@ async fn env_zsh_script_spawned_by_python_can_request_escalation_under_zsh_fork(
                         model: session_model,
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()
@@ -2773,6 +2770,7 @@ async fn matched_prefix_rule_runs_unsandboxed_under_zsh_fork() -> Result<()> {
                         model: session_model,
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()
@@ -3364,6 +3362,7 @@ allow_local_binding = true
                         model: session_model,
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()

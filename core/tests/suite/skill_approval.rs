@@ -2,13 +2,6 @@
 #![cfg(unix)]
 
 use anyhow::Result;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::ExecApprovalRequestEvent;
-use ody_protocol::protocol::GranularApprovalConfig;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
 use core_test_support::responses::mount_function_call_agent_response;
 use core_test_support::responses::start_mock_server;
 use core_test_support::skip_if_no_network;
@@ -20,6 +13,13 @@ use core_test_support::wait_for_event_match;
 use core_test_support::zsh_fork::build_zsh_fork_test;
 use core_test_support::zsh_fork::restrictive_workspace_write_profile;
 use core_test_support::zsh_fork::zsh_fork_runtime;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::ExecApprovalRequestEvent;
+use ody_protocol::protocol::GranularApprovalConfig;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -66,6 +66,7 @@ async fn submit_turn_with_policies(
                         model: test.session_configured.model.clone(),
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()

@@ -3,6 +3,7 @@ use app_test_support::TestAppServer;
 use app_test_support::create_final_assistant_message_sse_response;
 use app_test_support::create_mock_responses_server_sequence;
 use app_test_support::to_response;
+use core_test_support::responses;
 use ody_app_server_protocol::JSONRPCMessage;
 use ody_app_server_protocol::JSONRPCResponse;
 use ody_app_server_protocol::RequestId;
@@ -17,7 +18,6 @@ use ody_protocol::config_types::CollaborationMode;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::config_types::Settings;
 use ody_protocol::model_metadata::ReasoningEffort;
-use core_test_support::responses;
 use serde_json::json;
 use tokio::time::timeout;
 
@@ -94,6 +94,7 @@ async fn request_user_input_round_trip() -> Result<()> {
                     model: "mock-model".to_string(),
                     reasoning_effort: Some(ReasoningEffort::Medium),
                     developer_instructions: None,
+                    design_audit_level: None,
                 },
             }),
             ..Default::default()

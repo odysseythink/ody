@@ -13,6 +13,7 @@ use std::time::Duration;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
+use futures::future::BoxFuture;
 use ody_config::CloudConfigBundleLoader;
 use ody_core::OdyThread;
 use ody_core::StartThreadOptions;
@@ -33,12 +34,12 @@ use ody_extension_api::empty_extension_registry;
 use ody_features::Feature;
 use ody_home::OdyHomeUserInstructionsProvider;
 use ody_model_provider_info::ModelProviderInfo;
-use ody_model_provider_info::built_in_model_providers;
 use ody_model_provider_info::ProviderCapabilities;
+use ody_model_provider_info::built_in_model_providers;
 use ody_models_manager::bundled_models_response;
-use ody_protocol::models::PermissionProfile;
 use ody_protocol::model_metadata::ModelInfo;
 use ody_protocol::model_metadata::ModelsResponse;
+use ody_protocol::models::PermissionProfile;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::InitialHistory;
@@ -52,7 +53,6 @@ use ody_protocol::protocol::TurnEnvironmentSelections;
 use ody_protocol::user_input::UserInput;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path_uri::PathUri;
-use futures::future::BoxFuture;
 use serde_json::Value;
 use tempfile::TempDir;
 use wiremock::MockServer;
@@ -516,10 +516,8 @@ impl TestOdyBuilder {
             find_ody_linux_sandbox_exe().ok(),
         )?;
         #[cfg(not(target_os = "linux"))]
-        let local_runtime_paths = ody_exec_server::ExecServerRuntimePaths::new(
-            std::env::current_exe()?,
-            None,
-        )?;
+        let local_runtime_paths =
+            ody_exec_server::ExecServerRuntimePaths::new(std::env::current_exe()?, None)?;
         let environment_manager = Arc::new(if include_local_environment {
             ody_exec_server::EnvironmentManager::create_for_tests_with_local(
                 exec_server_url,
@@ -903,6 +901,7 @@ impl TestOdy {
                             model: session_model,
                             reasoning_effort: None,
                             developer_instructions: None,
+                            design_audit_level: None,
                         },
                     }),
                     ..Default::default()

@@ -1,15 +1,6 @@
 #![allow(clippy::unwrap_used)]
 
 use anyhow::Result;
-use ody_features::Feature;
-use ody_protocol::config_types::CollaborationMode;
-use ody_protocol::config_types::ModeKind;
-use ody_protocol::config_types::Settings;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
 use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
 use core_test_support::responses::ev_function_call;
@@ -21,6 +12,15 @@ use core_test_support::test_ody::local_selections;
 use core_test_support::test_ody::test_ody;
 use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event;
+use ody_features::Feature;
+use ody_protocol::config_types::CollaborationMode;
+use ody_protocol::config_types::ModeKind;
+use ody_protocol::config_types::Settings;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
 use serde_json::Value;
 use serde_json::json;
 use std::fs;
@@ -32,6 +32,7 @@ fn collaboration_mode_for_model(model: String) -> CollaborationMode {
             model,
             reasoning_effort: None,
             developer_instructions: Some("exercise approvals in collaboration mode".to_string()),
+            design_audit_level: None,
         },
     }
 }
@@ -67,6 +68,7 @@ async fn submit_user_turn(
                             model: session_model,
                             reasoning_effort: None,
                             developer_instructions: None,
+                            design_audit_level: None,
                         },
                     })
                 }),
@@ -226,6 +228,7 @@ async fn execpolicy_blocks_shell_invocation() -> Result<()> {
                         model: session_model,
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()

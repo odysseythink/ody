@@ -15,8 +15,8 @@ use ody_app_server_protocol::CollaborationModeListResponse;
 use ody_app_server_protocol::CollaborationModeMask;
 use ody_app_server_protocol::JSONRPCResponse;
 use ody_app_server_protocol::RequestId;
-use ody_protocol::config_types::ModeKind;
 use ody_core::test_support::builtin_collaboration_mode_presets;
+use ody_protocol::config_types::ModeKind;
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 use tokio::time::timeout;
@@ -53,6 +53,7 @@ async fn list_collaboration_modes_returns_presets() -> Result<()> {
             mode: preset.mode,
             model: preset.model,
             reasoning_effort: preset.reasoning_effort,
+            design_audit_level: None,
         })
         .collect();
     assert_eq!(expected, items);

@@ -3206,6 +3206,7 @@ mod tests {
                             model: "gpt-5.4".to_string(),
                             reasoning_effort: None,
                             developer_instructions: None,
+                            design_audit_level: None,
                         },
                     },
                     multi_agent_mode: Default::default(),

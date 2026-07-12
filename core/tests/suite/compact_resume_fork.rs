@@ -9,18 +9,6 @@ use super::compact::COMPACT_WARNING_MESSAGE;
 use super::compact::FIRST_REPLY;
 use super::compact::SUMMARY_TEXT;
 use anyhow::Result;
-use ody_core::OdyThread;
-use ody_core::ThreadManager;
-use ody_core::compact::SUMMARIZATION_PROMPT;
-use ody_core::config::Config;
-use ody_core::spawn::ODY_SANDBOX_NETWORK_DISABLED_ENV_VAR;
-use ody_protocol::config_types::CollaborationMode;
-use ody_protocol::config_types::ModeKind;
-use ody_protocol::config_types::Settings;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::WarningEvent;
-use ody_protocol::user_input::UserInput;
 use core_test_support::context_snapshot;
 use core_test_support::context_snapshot::ContextSnapshotOptions;
 use core_test_support::context_snapshot::ContextSnapshotRenderMode;
@@ -35,6 +23,18 @@ use core_test_support::responses::sse;
 use core_test_support::test_ody::local_selections;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
+use ody_core::OdyThread;
+use ody_core::ThreadManager;
+use ody_core::compact::SUMMARIZATION_PROMPT;
+use ody_core::config::Config;
+use ody_core::spawn::ODY_SANDBOX_NETWORK_DISABLED_ENV_VAR;
+use ody_protocol::config_types::CollaborationMode;
+use ody_protocol::config_types::ModeKind;
+use ody_protocol::config_types::Settings;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::WarningEvent;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
@@ -557,6 +557,7 @@ async fn snapshot_rollback_followup_turn_trims_context_updates() -> Result<()> {
                     model: MODEL.to_string(),
                     reasoning_effort: None,
                     developer_instructions: Some(ROLLED_BACK_DEV_INSTRUCTIONS.to_string()),
+                    design_audit_level: None,
                 },
             }),
             ..Default::default()

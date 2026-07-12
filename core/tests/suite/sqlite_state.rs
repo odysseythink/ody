@@ -1,4 +1,20 @@
 use anyhow::Result;
+use core_test_support::responses;
+use core_test_support::responses::ev_completed;
+use core_test_support::responses::ev_function_call;
+use core_test_support::responses::ev_response_created;
+use core_test_support::responses::ev_web_search_call_done;
+use core_test_support::responses::mount_sse_once;
+use core_test_support::responses::mount_sse_sequence;
+use core_test_support::responses::start_mock_server;
+use core_test_support::skip_if_no_network;
+use core_test_support::stdio_server_bin;
+use core_test_support::test_ody::local_selections;
+use core_test_support::test_ody::test_ody;
+use core_test_support::test_ody::turn_permission_fields;
+use core_test_support::wait_for_event;
+use core_test_support::wait_for_event_match;
+use core_test_support::wait_for_mcp_server;
 use ody_config::types::McpServerConfig;
 use ody_config::types::McpServerTransportConfig;
 use ody_core::config::Config;
@@ -22,22 +38,6 @@ use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::UserMessageEvent;
 use ody_protocol::user_input::UserInput;
 use ody_web_search_extension::install as install_web_search_extension;
-use core_test_support::responses;
-use core_test_support::responses::ev_completed;
-use core_test_support::responses::ev_function_call;
-use core_test_support::responses::ev_response_created;
-use core_test_support::responses::ev_web_search_call_done;
-use core_test_support::responses::mount_sse_once;
-use core_test_support::responses::mount_sse_sequence;
-use core_test_support::responses::start_mock_server;
-use core_test_support::skip_if_no_network;
-use core_test_support::stdio_server_bin;
-use core_test_support::test_ody::local_selections;
-use core_test_support::test_ody::test_ody;
-use core_test_support::test_ody::turn_permission_fields;
-use core_test_support::wait_for_event;
-use core_test_support::wait_for_event_match;
-use core_test_support::wait_for_mcp_server;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use std::collections::HashMap;
@@ -711,6 +711,7 @@ async fn mcp_call_marks_thread_memory_mode_polluted_when_configured() -> Result<
                         model: test.session_configured.model.clone(),
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()

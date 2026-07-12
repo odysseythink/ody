@@ -3,12 +3,6 @@
 
 use anyhow::Result;
 use anyhow::anyhow;
-use ody_features::Feature;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
 use core_test_support::responses::ResponseMock;
 use core_test_support::responses::ResponsesRequest;
 use core_test_support::responses::ev_assistant_message;
@@ -23,6 +17,12 @@ use core_test_support::test_ody::TestOdy;
 use core_test_support::test_ody::local_selections;
 use core_test_support::test_ody::test_ody;
 use core_test_support::test_ody::turn_permission_fields;
+use ody_features::Feature;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use std::time::Duration;
@@ -95,7 +95,8 @@ async fn responses_api_parent_and_subagent_requests_include_identity_headers() -
     submit_turn_with_timeout(&test, PARENT_PROMPT).await?;
 
     let parent = wait_for_matching_request(&parent_mock, "parent request", |request| {
-        request.body_contains_text(PARENT_PROMPT) && request.header("x-odysseythink-subagent").is_none()
+        request.body_contains_text(PARENT_PROMPT)
+            && request.header("x-odysseythink-subagent").is_none()
     })
     .await?;
     let child = wait_for_matching_request(&child_mock, "child request", |request| {
@@ -165,6 +166,7 @@ async fn submit_turn_with_timeout(test: &TestOdy, prompt: &str) -> Result<()> {
                         model: session_model,
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()
@@ -212,11 +214,7 @@ where
     .map_err(|_| anyhow!("timed out waiting for {label}"))
 }
 
-async fn wait_for_event_result<F>(
-    test: &TestOdy,
-    stage: &str,
-    mut predicate: F,
-) -> Result<EventMsg>
+async fn wait_for_event_result<F>(test: &TestOdy, stage: &str, mut predicate: F) -> Result<EventMsg>
 where
     F: FnMut(&EventMsg) -> bool,
 {

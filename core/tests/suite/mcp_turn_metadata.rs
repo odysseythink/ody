@@ -2,21 +2,6 @@
 #![allow(clippy::unwrap_used)]
 
 use anyhow::Result;
-use ody_config::types::AppToolApproval;
-use ody_core::config::Config;
-use ody_features::Feature;
-use ody_protocol::config_types::ApprovalsReviewer;
-use ody_protocol::config_types::CollaborationMode;
-use ody_protocol::config_types::ModeKind;
-use ody_protocol::config_types::Settings;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::ElicitationAction;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::request_user_input::RequestUserInputAnswer;
-use ody_protocol::request_user_input::RequestUserInputResponse;
-use ody_protocol::user_input::UserInput;
 use core_test_support::PathExt;
 use core_test_support::apps_test_server::AppsTestServer;
 use core_test_support::apps_test_server::SEARCH_CALENDAR_CREATE_TOOL;
@@ -37,6 +22,21 @@ use core_test_support::test_ody::local_selections;
 use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event;
 use core_test_support::wait_for_event_match;
+use ody_config::types::AppToolApproval;
+use ody_core::config::Config;
+use ody_features::Feature;
+use ody_protocol::config_types::ApprovalsReviewer;
+use ody_protocol::config_types::CollaborationMode;
+use ody_protocol::config_types::ModeKind;
+use ody_protocol::config_types::Settings;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::ElicitationAction;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::request_user_input::RequestUserInputAnswer;
+use ody_protocol::request_user_input::RequestUserInputResponse;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use std::collections::HashMap;
@@ -114,6 +114,7 @@ async fn submit_user_turn(
                             model: session_model,
                             reasoning_effort: None,
                             developer_instructions: None,
+                            design_audit_level: None,
                         },
                     })
                 }),
@@ -157,8 +158,8 @@ async fn approved_mcp_tool_call_metadata_records_prior_user_input_request() -> R
     )
     .await;
 
-    let mut builder = search_capable_apps_builder(apps_server.base_url.clone())
-        .with_config(|config| {
+    let mut builder =
+        search_capable_apps_builder(apps_server.base_url.clone()).with_config(|config| {
             // Use the opposite global reviewer so this route must come from apps._default.
             config.approvals_reviewer = ApprovalsReviewer::AutoReview;
             config
@@ -276,8 +277,8 @@ async fn apps_default_prompt_with_auto_review_routes_actual_mcp_approval_to_guar
     )
     .await;
 
-    let mut builder = search_capable_apps_builder(apps_server.base_url.clone())
-        .with_config(|config| {
+    let mut builder =
+        search_capable_apps_builder(apps_server.base_url.clone()).with_config(|config| {
             // Use the opposite global reviewer so this route must come from apps._default.
             config.approvals_reviewer = ApprovalsReviewer::User;
             config
@@ -391,8 +392,8 @@ async fn mcp_tool_call_metadata_records_prior_request_user_input_tool() -> Resul
     )
     .await;
 
-    let mut builder = search_capable_apps_builder(apps_server.base_url.clone())
-        .with_config(|config| {
+    let mut builder =
+        search_capable_apps_builder(apps_server.base_url.clone()).with_config(|config| {
             set_calendar_approval_mode(config, AppToolApproval::Approve);
         });
     let test = builder.build(&server).await?;
@@ -407,6 +408,7 @@ async fn mcp_tool_call_metadata_records_prior_request_user_input_tool() -> Resul
                 model: test.session_configured.model.clone(),
                 reasoning_effort: None,
                 developer_instructions: None,
+                design_audit_level: None,
             },
         }),
     )

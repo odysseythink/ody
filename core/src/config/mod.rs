@@ -6,6 +6,7 @@ use crate::unified_exec::MIN_EMPTY_YIELD_TIME_MS;
 use crate::windows_sandbox::WindowsSandboxLevelExt;
 use crate::windows_sandbox::resolve_windows_sandbox_mode;
 use crate::windows_sandbox::resolve_windows_sandbox_private_desktop;
+use ody_client::AuthRouteConfig;
 use ody_config::CloudConfigBundleLoader;
 use ody_config::ConfigLayerSource;
 use ody_config::ConfigLayerStack;
@@ -72,22 +73,22 @@ use ody_features::NetworkProxyConfigToml;
 use ody_features::TokenBudgetConfigToml;
 use ody_git_utils::resolve_root_git_project_for_trust;
 use ody_install_context::InstallContext;
-use ody_client::AuthRouteConfig;
 use ody_mcp::McpConfig;
 use ody_mcp::McpPluginAttribution;
 use ody_mcp::McpServerRegistration;
 use ody_mcp::ResolvedMcpCatalog;
 use ody_memories_read::memory_root;
 use ody_model_provider_info::ModelProviderInfo;
-use ody_model_provider_info::built_in_model_providers;
 #[cfg(test)]
 use ody_model_provider_info::ProviderCapabilities;
 #[cfg(test)]
 use ody_model_provider_info::WireApi;
+use ody_model_provider_info::built_in_model_providers;
 use ody_model_provider_info::merge_configured_model_providers;
 use ody_models_manager::ModelsManagerConfig;
 use ody_protocol::config_types::AltScreenMode;
 use ody_protocol::config_types::AutoCompactTokenLimitScope;
+use ody_protocol::config_types::DesignAuditLevel;
 use ody_protocol::config_types::ForcedLoginMethod;
 use ody_protocol::config_types::Personality;
 use ody_protocol::config_types::ReasoningSummary;
@@ -100,11 +101,11 @@ use ody_protocol::config_types::Verbosity;
 use ody_protocol::config_types::WebSearchConfig;
 use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::config_types::WindowsSandboxLevel;
+use ody_protocol::model_metadata::ModelsResponse;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::models::ActivePermissionProfile;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::models::SandboxEnforcement;
-use ody_protocol::model_metadata::ModelsResponse;
-use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::permissions::FileSystemSandboxPolicy;
 use ody_protocol::permissions::NetworkSandboxPolicy;
 use ody_protocol::protocol::AskForApproval;
@@ -156,6 +157,9 @@ mod resolved_permission_profile;
 #[cfg(test)]
 mod schema;
 pub use auth_keyring::resolve_bootstrap_auth_keyring_backend_kind;
+pub use managed_features::ManagedFeatures;
+pub use network_proxy_spec::NetworkProxySpec;
+pub use network_proxy_spec::StartedNetworkProxy;
 pub use ody_config::ConfigLoadOptions;
 pub use ody_config::Constrained;
 pub use ody_config::ConstraintError;
@@ -164,9 +168,6 @@ pub use ody_config::LoaderOverrides;
 pub use ody_network_proxy::NetworkProxyAuditMetadata;
 use ody_sandboxing::compatibility_sandbox_policy_for_permission_profile;
 pub use ody_sandboxing::system_bwrap_warning;
-pub use managed_features::ManagedFeatures;
-pub use network_proxy_spec::NetworkProxySpec;
-pub use network_proxy_spec::StartedNetworkProxy;
 pub use permission_profile_catalog::PermissionProfileCatalogEntry;
 pub use permission_profile_catalog::permission_profile_catalog;
 use permission_profile_catalog::permission_profile_catalog_from_permissions;
@@ -365,15 +366,16 @@ pub(crate) async fn test_config_for_ody_home(ody_home: &Path) -> Config {
     std::fs::create_dir_all(&ody_home).expect("create ody home directory");
     let mut toml = ConfigToml::default();
     toml.model_provider = Some(TEST_PROVIDER_ID.to_string());
-    toml.model_providers = std::collections::HashMap::from([(
-        TEST_PROVIDER_ID.to_string(),
-        test_provider(),
-    )]);
+    toml.model_providers =
+        std::collections::HashMap::from([(TEST_PROVIDER_ID.to_string(), test_provider())]);
     toml.model_catalog_json = Some(model_catalog);
     let mut config_contents = toml::to_string(&toml).expect("test config should serialize to TOML");
     config_contents.push_str("\n[features]\nfast_mode = true\n");
-    std::fs::write(ody_home.join(crate::config::CONFIG_TOML_FILE), config_contents)
-        .expect("write test config.toml");
+    std::fs::write(
+        ody_home.join(crate::config::CONFIG_TOML_FILE),
+        config_contents,
+    )
+    .expect("write test config.toml");
 
     ConfigBuilder::without_managed_config_for_tests()
         .ody_home(ody_home.to_path_buf())
@@ -1450,6 +1452,11 @@ impl ConfigBuilder {
 }
 
 impl Config {
+    /// Returns the configured default Design-mode audit level, if any.
+    pub fn design_audit_level(&self) -> Option<DesignAuditLevel> {
+        self.plan_mode.as_ref().and_then(|pm| pm.design_audit_level)
+    }
+
     pub(crate) fn multi_agent_version_from_features(&self) -> MultiAgentVersion {
         if self.features.enabled(Feature::MultiAgentV2) {
             MultiAgentVersion::V2
@@ -1717,11 +1724,8 @@ impl Config {
         cli_overrides: Vec<(String, TomlValue)>,
     ) -> std::io::Result<Self> {
         let ody_home = find_ody_home()?;
-        Self::load_default_with_cli_overrides_for_ody_home(
-            ody_home.to_path_buf(),
-            cli_overrides,
-        )
-        .await
+        Self::load_default_with_cli_overrides_for_ody_home(ody_home.to_path_buf(), cli_overrides)
+            .await
     }
 
     /// Load a default configuration for a specific Ody home without reading
@@ -2771,7 +2775,10 @@ mod language_tests {
 
     #[test]
     fn map_locale_to_language_maps_common_locales() {
-        assert_eq!(map_locale_to_language("zh-Hans_CN").as_deref(), Some("Chinese"));
+        assert_eq!(
+            map_locale_to_language("zh-Hans_CN").as_deref(),
+            Some("Chinese")
+        );
         assert_eq!(map_locale_to_language("en-US").as_deref(), Some("English"));
         assert_eq!(map_locale_to_language("ja_JP").as_deref(), Some("Japanese"));
         assert_eq!(map_locale_to_language("ko-KR").as_deref(), Some("Korean"));

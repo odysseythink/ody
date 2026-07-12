@@ -2,6 +2,21 @@
 #![allow(clippy::unwrap_used)]
 
 use anyhow::Result;
+use core_test_support::apps_test_server::AppsTestServer;
+use core_test_support::responses::ev_assistant_message;
+use core_test_support::responses::ev_completed;
+use core_test_support::responses::ev_function_call;
+use core_test_support::responses::ev_response_created;
+use core_test_support::responses::mount_sse_once;
+use core_test_support::responses::mount_sse_sequence;
+use core_test_support::responses::sse;
+use core_test_support::responses::start_mock_server;
+use core_test_support::skip_if_no_network;
+use core_test_support::test_ody::TestOdy;
+use core_test_support::test_ody::test_ody;
+use core_test_support::test_ody::turn_permission_fields;
+use core_test_support::wait_for_event;
+use core_test_support::wait_for_event_match;
 use ody_config::types::ToolSuggestDisabledTool;
 use ody_config::types::ToolSuggestDiscoverable;
 use ody_config::types::ToolSuggestDiscoverableType;
@@ -20,21 +35,6 @@ use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::Op;
 use ody_protocol::protocol::ThreadSettingsOverrides;
 use ody_protocol::user_input::UserInput;
-use core_test_support::apps_test_server::AppsTestServer;
-use core_test_support::responses::ev_assistant_message;
-use core_test_support::responses::ev_completed;
-use core_test_support::responses::ev_function_call;
-use core_test_support::responses::ev_response_created;
-use core_test_support::responses::mount_sse_once;
-use core_test_support::responses::mount_sse_sequence;
-use core_test_support::responses::sse;
-use core_test_support::responses::start_mock_server;
-use core_test_support::skip_if_no_network;
-use core_test_support::test_ody::TestOdy;
-use core_test_support::test_ody::test_ody;
-use core_test_support::test_ody::turn_permission_fields;
-use core_test_support::wait_for_event;
-use core_test_support::wait_for_event_match;
 use serde_json::Value;
 use serde_json::json;
 use wiremock::Mock;
@@ -129,11 +129,10 @@ async fn build_test(
     server: &wiremock::MockServer,
     apps_server: &AppsTestServer,
 ) -> Result<TestOdy> {
-    let mut builder = test_ody()
-        .with_config({
-            let apps_base_url = apps_server.base_url.clone();
-            move |config| configure_apps_without_search_tool(config, apps_base_url.as_str())
-        });
+    let mut builder = test_ody().with_config({
+        let apps_base_url = apps_server.base_url.clone();
+        move |config| configure_apps_without_search_tool(config, apps_base_url.as_str())
+    });
     builder.build(server).await
 }
 
@@ -159,6 +158,7 @@ async fn start_install_turn(test: &TestOdy, prompt: &str) -> Result<ElicitationR
                         model: test.session_configured.model.clone(),
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()
@@ -608,16 +608,15 @@ async fn endpoint_mode_with_no_eligible_candidates_exposes_no_suggestion_tools()
         ]),
     )
     .await;
-    let mut builder = test_ody()
-        .with_config({
-            let apps_base_url = apps_server.base_url.clone();
-            move |config| {
-                configure_apps_without_search_tool(config, apps_base_url.as_str());
-                config.tool_suggest.disabled_tools = vec![ToolSuggestDisabledTool::plugin(
-                    "google-calendar@odysseythink-curated-remote",
-                )];
-            }
-        });
+    let mut builder = test_ody().with_config({
+        let apps_base_url = apps_server.base_url.clone();
+        move |config| {
+            configure_apps_without_search_tool(config, apps_base_url.as_str());
+            config.tool_suggest.disabled_tools = vec![ToolSuggestDisabledTool::plugin(
+                "google-calendar@odysseythink-curated-remote",
+            )];
+        }
+    });
     let test = builder.build(&server).await?;
 
     test.submit_turn("list tools").await?;

@@ -34,6 +34,7 @@ use ody_model_provider_info::KIMI_PROVIDER_ID;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::ProviderCapabilities;
 use ody_protocol::config_types::AutoCompactTokenLimitScope;
+use ody_protocol::config_types::DesignAuditLevel;
 use ody_protocol::config_types::ForcedLoginMethod;
 use ody_protocol::config_types::Personality;
 use ody_protocol::config_types::ReasoningSummary;
@@ -43,8 +44,8 @@ use ody_protocol::config_types::Verbosity;
 use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::config_types::WebSearchToolConfig;
 use ody_protocol::config_types::WindowsSandboxLevel;
-use ody_protocol::models::PermissionProfile;
 use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::models::PermissionProfile;
 use ody_protocol::permissions::NetworkSandboxPolicy;
 use ody_protocol::protocol::AskForApproval;
 use ody_utils_absolute_path::AbsolutePathBuf;
@@ -56,11 +57,8 @@ use serde::Serialize;
 
 use serde_json::Value as JsonValue;
 
-const RESERVED_MODEL_PROVIDER_IDS: [&str; 3] = [
-    KIMI_PROVIDER_ID,
-    DEEPSEEK_PROVIDER_ID,
-    GLM_PROVIDER_ID,
-];
+const RESERVED_MODEL_PROVIDER_IDS: [&str; 3] =
+    [KIMI_PROVIDER_ID, DEEPSEEK_PROVIDER_ID, GLM_PROVIDER_ID];
 
 pub const DEFAULT_PROJECT_DOC_MAX_BYTES: usize = 32 * 1024;
 
@@ -128,7 +126,6 @@ pub enum PlanContextIsolation {
     /// Plan conversations are routed to a separate partition.
     On,
 }
-
 
 /// Plan-mode contract tier: concise conversational contract vs. full rigor contract.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq, JsonSchema)]
@@ -215,6 +212,9 @@ pub struct PlanModeConfigToml {
     /// Explicit plan-mode tier override.  means use the heuristic scorer (Auto).
     #[serde(default)]
     pub tier: Option<PlanModeTier>,
+    /// Default audit level for Design mode. None means the user must choose in the TUI on entry.
+    #[serde(default)]
+    pub design_audit_level: Option<DesignAuditLevel>,
 }
 
 impl Default for PlanModeConfigToml {
@@ -230,6 +230,7 @@ impl Default for PlanModeConfigToml {
             full_refresh_turns: default_full_refresh_turns(),
             dedup_min_turns: default_dedup_min_turns(),
             tier: None,
+            design_audit_level: None,
         }
     }
 }
@@ -691,9 +692,7 @@ impl ConfigToml {
     pub fn resolve_ody_code_default_model(&self) -> (Option<String>, Option<String>) {
         match &self.default_model {
             Some(default_model) => match default_model.split_once('/') {
-                Some((provider, model)) => {
-                    (Some(provider.to_string()), Some(model.to_string()))
-                }
+                Some((provider, model)) => (Some(provider.to_string()), Some(model.to_string())),
                 None => (self.default_provider.clone(), Some(default_model.clone())),
             },
             None => (self.default_provider.clone(), None),
@@ -723,9 +722,7 @@ impl ConfigToml {
     pub fn normalized_default_model(&self) -> (Option<String>, Option<String>) {
         if let Some(default_model) = &self.default_model {
             return match default_model.split_once('/') {
-                Some((provider, model)) => {
-                    (Some(provider.to_string()), Some(model.to_string()))
-                }
+                Some((provider, model)) => (Some(provider.to_string()), Some(model.to_string())),
                 None => (self.default_provider.clone(), Some(default_model.clone())),
             };
         }
@@ -1170,7 +1167,6 @@ pub fn validate_model_providers(
     Ok(())
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1259,14 +1255,8 @@ base_url = "https://api.openai.com/v1"
 
         let kimi = converted.get("kimi_gyy").expect("kimi_gyy provider");
         assert_eq!(kimi.name, "Kimi");
-        assert_eq!(
-            kimi.base_url,
-            Some("https://api.kimi.com/v1".to_string())
-        );
-        assert_eq!(
-            kimi.experimental_bearer_token,
-            Some("sk-kimi".to_string())
-        );
+        assert_eq!(kimi.base_url, Some("https://api.kimi.com/v1".to_string()));
+        assert_eq!(kimi.experimental_bearer_token, Some("sk-kimi".to_string()));
 
         let openai_custom = converted
             .get("openai_custom")
@@ -1313,7 +1303,10 @@ wire_api = "chat"
 
         let result = config.normalized_providers();
         let foo = result.get("foo").expect("foo provider");
-        assert_eq!(foo.base_url, Some("https://providers.example.com".to_string()));
+        assert_eq!(
+            foo.base_url,
+            Some("https://providers.example.com".to_string())
+        );
         assert_eq!(foo.name, "Kimi");
     }
 
@@ -1383,10 +1376,8 @@ model_provider = "openai"
 
     #[test]
     fn resolve_ody_code_default_model_splits_provider_and_model() {
-        let config: ConfigToml = toml::from_str(
-            r#"default_model = "kimi_gyy/kimi-for-coding""#,
-        )
-        .expect("default_model should deserialize");
+        let config: ConfigToml = toml::from_str(r#"default_model = "kimi_gyy/kimi-for-coding""#)
+            .expect("default_model should deserialize");
 
         let (provider, model) = config.resolve_ody_code_default_model();
         assert_eq!(provider, Some("kimi_gyy".to_string()));
@@ -1454,13 +1445,30 @@ type = "openai"
     #[test]
     fn plan_mode_defaults() {
         let config: ConfigToml = toml::from_str("").expect("empty config should deserialize");
-        let plan_mode = config.plan_mode.expect("default plan_mode table should be present");
+        let plan_mode = config
+            .plan_mode
+            .expect("default plan_mode table should be present");
         assert_eq!(plan_mode.enforcement, Some(PlanEnforcement::Strict));
         assert_eq!(plan_mode.persist_plan_file, Some(true));
         assert_eq!(plan_mode.context_isolation, Some(PlanContextIsolation::Off));
         assert_eq!(plan_mode.split_threshold, Some(8));
         assert!(plan_mode.model.is_none());
         assert!(plan_mode.reasoning_effort.is_none());
+        assert_eq!(plan_mode.design_audit_level, None);
+    }
+
+    #[test]
+    fn plan_mode_deserializes_design_audit_level() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[plan_mode]
+design_audit_level = "deep"
+"#,
+        )
+        .expect("plan_mode config should deserialize");
+
+        let plan_mode = config.plan_mode.expect("plan_mode should be present");
+        assert_eq!(plan_mode.design_audit_level, Some(DesignAuditLevel::Deep));
     }
 
     #[test]

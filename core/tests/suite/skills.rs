@@ -2,14 +2,6 @@
 #![allow(clippy::unwrap_used)]
 
 use anyhow::Result;
-use ody_exec_server::CreateDirectoryOptions;
-use ody_exec_server::ExecutorFileSystem;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
-use ody_utils_absolute_path::AbsolutePathBuf;
-use ody_utils_path_uri::PathUri;
 use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
 use core_test_support::responses::ev_response_created;
@@ -21,6 +13,14 @@ use core_test_support::skip_if_wine_exec;
 use core_test_support::test_ody::local_selections;
 use core_test_support::test_ody::test_ody;
 use core_test_support::test_ody::turn_permission_fields;
+use ody_exec_server::CreateDirectoryOptions;
+use ody_exec_server::ExecutorFileSystem;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
+use ody_utils_absolute_path::AbsolutePathBuf;
+use ody_utils_path_uri::PathUri;
 use std::sync::Arc;
 
 async fn write_repo_skill(
@@ -106,6 +106,7 @@ async fn user_turn_includes_skill_instructions() -> Result<()> {
                         model: session_model,
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()

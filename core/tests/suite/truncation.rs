@@ -3,13 +3,6 @@
 
 use anyhow::Context;
 use anyhow::Result;
-use ody_config::types::McpServerConfig;
-use ody_config::types::McpServerTransportConfig;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
 use core_test_support::TempDirExt;
 use core_test_support::assert_regex_match;
 use core_test_support::responses;
@@ -26,6 +19,13 @@ use core_test_support::test_ody::local_selections;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
 use core_test_support::wait_for_mcp_server;
+use ody_config::types::McpServerConfig;
+use ody_config::types::McpServerTransportConfig;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
 use serde_json::Value;
 use serde_json::json;
 use std::collections::HashMap;
@@ -539,6 +539,7 @@ async fn mcp_image_output_preserves_image_and_no_text_summary() -> Result<()> {
                         model: session_model,
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()

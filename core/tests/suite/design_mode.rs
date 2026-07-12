@@ -1,13 +1,5 @@
 //! End-to-end Design mode integration tests (Phase D9).
 use anyhow::Result;
-use ody_protocol::config_types::CollaborationMode;
-use ody_protocol::config_types::ModeKind;
-use ody_protocol::config_types::Settings;
-use ody_protocol::protocol::COLLABORATION_MODE_CLOSE_TAG;
-use ody_protocol::protocol::COLLABORATION_MODE_OPEN_TAG;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
 use core_test_support::responses::ev_completed;
 use core_test_support::responses::ev_response_created;
 use core_test_support::responses::mount_sse_once;
@@ -17,6 +9,15 @@ use core_test_support::skip_if_no_network;
 use core_test_support::test_ody::local_selections;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
+use ody_protocol::config_types::CollaborationMode;
+use ody_protocol::config_types::DesignAuditLevel;
+use ody_protocol::config_types::ModeKind;
+use ody_protocol::config_types::Settings;
+use ody_protocol::protocol::COLLABORATION_MODE_CLOSE_TAG;
+use ody_protocol::protocol::COLLABORATION_MODE_OPEN_TAG;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 
@@ -27,6 +28,7 @@ fn collab_mode(mode: ModeKind, instructions: Option<&str>) -> CollaborationMode 
             model: "gpt-5.4".to_string(),
             reasoning_effort: None,
             developer_instructions: instructions.map(str::to_string),
+            design_audit_level: None,
         },
     }
 }
@@ -103,9 +105,18 @@ async fn design_mode_includes_design_instructions() -> Result<()> {
     let collab_xml = collab_xml("");
     assert_eq!(count_messages_containing(&dev_texts, &collab_xml), 1);
     let combined = dev_texts.join("\n");
-    assert!(combined.contains("Design Mode"), "expected Design Mode instructions");
-    assert!(combined.contains(".ody-code/designs/"), "expected designs directory anchor");
-    assert!(combined.contains("<HARD-GATE>"), "expected HARD-GATE anchor");
+    assert!(
+        combined.contains("Design Mode"),
+        "expected Design Mode instructions"
+    );
+    assert!(
+        combined.contains(".ody-code/designs/"),
+        "expected designs directory anchor"
+    );
+    assert!(
+        combined.contains("<HARD-GATE>"),
+        "expected HARD-GATE anchor"
+    );
     assert!(combined.contains("Step 0"), "expected Step 0 audit gate");
 
     Ok(())
@@ -154,8 +165,10 @@ async fn design_mode_renders_split_threshold_from_plan_config() -> Result<()> {
                         model: "gpt-5.4".to_string(),
                         reasoning_effort: None,
                         developer_instructions: Some(
-                            "Split designs larger than {{ split_threshold }} subsystems.".to_string(),
+                            "Split designs larger than {{ split_threshold }} subsystems."
+                                .to_string(),
                         ),
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()
@@ -321,8 +334,78 @@ async fn design_to_plan_handoff_injects_reminder() -> Result<()> {
     let input = req2.single_request().input();
     let dev_texts = developer_texts(&input);
     let combined = dev_texts.join("\n");
-    assert!(combined.contains("handed off"), "expected handoff reminder; got {combined:?}");
+    assert!(
+        combined.contains("handed off"),
+        "expected handoff reminder; got {combined:?}"
+    );
     assert!(combined.contains("designs"), "expected design path mention");
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn design_mode_injects_selected_audit_level() -> Result<()> {
+    skip_if_no_network!(Ok(()));
+
+    let server = start_mock_server().await;
+    let req = mount_sse_once(
+        &server,
+        sse(vec![ev_response_created("resp-1"), ev_completed("resp-1")]),
+    )
+    .await;
+
+    let mut builder = test_ody().with_config(|config| {
+        config.plan_mode = Some(ody_config::config_toml::PlanModeConfigToml {
+            design_audit_level: Some(ody_protocol::config_types::DesignAuditLevel::Standard),
+            ..Default::default()
+        });
+    });
+    let test = builder.build(&server).await?;
+
+    test.ody
+        .submit(Op::UserInput {
+            items: vec![UserInput::Text {
+                text: "hello".into(),
+                text_elements: Vec::new(),
+            }],
+            final_output_json_schema: None,
+            responsesapi_client_metadata: None,
+            additional_context: Default::default(),
+            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+                environments: Some(local_selections(test.config.cwd.clone())),
+                approval_policy: Some(test.config.permissions.approval_policy.value()),
+                sandbox_policy: Some(test.config.legacy_sandbox_policy()),
+                summary: Some(
+                    test.config
+                        .model_reasoning_summary
+                        .unwrap_or(ody_protocol::config_types::ReasoningSummary::Auto),
+                ),
+                collaboration_mode: Some(CollaborationMode {
+                    mode: ModeKind::Design,
+                    settings: Settings {
+                        model: "gpt-5.4".to_string(),
+                        reasoning_effort: None,
+                        developer_instructions: None,
+                        design_audit_level: Some(DesignAuditLevel::Standard),
+                    },
+                }),
+                ..Default::default()
+            },
+        })
+        .await?;
+    wait_for_event(&test.ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
+
+    let input = req.single_request().input();
+    let dev_texts = developer_texts(&input);
+    let combined = dev_texts.join("\n");
+    assert!(
+        combined.contains("Audit level: Standard"),
+        "expected audit level injection; got {combined:?}"
+    );
+    assert!(
+        combined.contains("Do NOT ask the user to choose the audit level again"),
+        "expected host-managed instruction; got {combined:?}"
+    );
 
     Ok(())
 }

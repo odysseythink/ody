@@ -1,14 +1,4 @@
 use anyhow::Result;
-use ody_protocol::models::ContentItem;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::models::ResponseItem;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::OdyErrorInfo;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::ModelRerouteReason;
-use ody_protocol::protocol::ModelVerification;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
 use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_function_call;
 use core_test_support::responses::ev_model_verification_metadata;
@@ -25,6 +15,16 @@ use core_test_support::test_ody::local_selections;
 use core_test_support::test_ody::test_ody;
 use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event;
+use ody_protocol::models::ContentItem;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::models::ResponseItem;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::ModelRerouteReason;
+use ody_protocol::protocol::ModelVerification;
+use ody_protocol::protocol::OdyErrorInfo;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use wiremock::ResponseTemplate;
 
@@ -57,6 +57,7 @@ fn disabled_text_turn(test: &TestOdy, text: &str) -> Op {
                     model: REQUESTED_MODEL.to_string(),
                     reasoning_effort: test.config.model_reasoning_effort.clone(),
                     developer_instructions: None,
+                    design_audit_level: None,
                 },
             }),
             ..Default::default()

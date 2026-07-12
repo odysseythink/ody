@@ -1,25 +1,5 @@
 use anyhow::Context;
 use anyhow::Result;
-use ody_config::types::ApprovalsReviewer;
-use ody_core::config::Constrained;
-use ody_exec_server::CreateDirectoryOptions;
-use ody_exec_server::LOCAL_ENVIRONMENT_ID;
-use ody_exec_server::REMOTE_ENVIRONMENT_ID;
-use ody_exec_server::RemoveOptions;
-use ody_features::Feature;
-use ody_protocol::approvals::NetworkApprovalContext;
-use ody_protocol::approvals::NetworkApprovalProtocol;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::permissions::NetworkSandboxPolicy;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::ExecApprovalRequestEvent;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::ReviewDecision;
-use ody_protocol::protocol::TurnEnvironmentSelection;
-use ody_protocol::protocol::TurnEnvironmentSelections;
-use ody_protocol::user_input::UserInput;
-use ody_utils_path_uri::PathUri;
 use core_test_support::PathBufExt;
 use core_test_support::PathExt;
 use core_test_support::get_remote_test_env;
@@ -42,6 +22,26 @@ use core_test_support::test_ody::test_ody;
 use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event;
 use core_test_support::wait_for_event_with_timeout;
+use ody_config::types::ApprovalsReviewer;
+use ody_core::config::Constrained;
+use ody_exec_server::CreateDirectoryOptions;
+use ody_exec_server::LOCAL_ENVIRONMENT_ID;
+use ody_exec_server::REMOTE_ENVIRONMENT_ID;
+use ody_exec_server::RemoveOptions;
+use ody_features::Feature;
+use ody_protocol::approvals::NetworkApprovalContext;
+use ody_protocol::approvals::NetworkApprovalProtocol;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::permissions::NetworkSandboxPolicy;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::ExecApprovalRequestEvent;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::ReviewDecision;
+use ody_protocol::protocol::TurnEnvironmentSelection;
+use ody_protocol::protocol::TurnEnvironmentSelections;
+use ody_protocol::user_input::UserInput;
+use ody_utils_path_uri::PathUri;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
@@ -273,6 +273,7 @@ async fn submit_managed_network_turn(
                         model: test.session_configured.model.clone(),
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()

@@ -1,19 +1,6 @@
 use core_test_support::test_ody::local_selections;
 use std::sync::Arc;
 
-use ody_core::OdyThread;
-use ody_features::Feature;
-use ody_protocol::AgentPath;
-use ody_protocol::items::SleepItem;
-use ody_protocol::items::TurnItem;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::InterAgentCommunication;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::RolloutItem;
-use ody_protocol::protocol::RolloutLine;
-use ody_protocol::user_input::UserInput;
 use core_test_support::context_snapshot;
 use core_test_support::context_snapshot::ContextSnapshotOptions;
 use core_test_support::responses;
@@ -32,6 +19,19 @@ use core_test_support::test_ody::TestOdy;
 use core_test_support::test_ody::test_ody;
 use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event;
+use ody_core::OdyThread;
+use ody_features::Feature;
+use ody_protocol::AgentPath;
+use ody_protocol::items::SleepItem;
+use ody_protocol::items::TurnItem;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::InterAgentCommunication;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::RolloutItem;
+use ody_protocol::protocol::RolloutLine;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::from_slice;
@@ -127,19 +127,18 @@ async fn build_ody(server: &StreamingSseServer) -> Arc<OdyThread> {
 }
 
 async fn submit_user_input(ody: &OdyThread, text: &str) {
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: text.to_string(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .expect("submit user input");
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: text.to_string(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .expect("submit user input");
 }
 
 async fn submit_danger_full_access_user_turn(test: &TestOdy, text: &str) {
@@ -165,6 +164,7 @@ async fn submit_danger_full_access_user_turn(test: &TestOdy, text: &str) {
                         model: test.session_configured.model.clone(),
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()
@@ -175,36 +175,33 @@ async fn submit_danger_full_access_user_turn(test: &TestOdy, text: &str) {
 }
 
 async fn steer_user_input(ody: &OdyThread, text: &str) {
-    ody
-        .steer_input(
-            vec![UserInput::Text {
-                text: text.to_string(),
-                text_elements: Vec::new(),
-            }],
-            /*additional_context*/ Default::default(),
-            /*expected_turn_id*/ None,
-            /*client_user_message_id*/ None,
-            /*responsesapi_client_metadata*/ None,
-        )
-        .await
-        .expect("steer user input");
+    ody.steer_input(
+        vec![UserInput::Text {
+            text: text.to_string(),
+            text_elements: Vec::new(),
+        }],
+        /*additional_context*/ Default::default(),
+        /*expected_turn_id*/ None,
+        /*client_user_message_id*/ None,
+        /*responsesapi_client_metadata*/ None,
+    )
+    .await
+    .expect("steer user input");
 }
 
 async fn submit_queue_only_agent_mail(ody: &OdyThread, text: &str) {
-    ody
-        .submit(Op::InterAgentCommunication {
-            communication: InterAgentCommunication::new(
-                AgentPath::try_from("/root/worker").expect("worker path should parse"),
-                AgentPath::root(),
-                Vec::new(),
-                text.to_string(),
-                /*trigger_turn*/ false,
-            ),
-        })
-        .await
-        .expect("submit queue-only agent mail");
-    ody
-        .submit(Op::RealtimeConversationListVoices)
+    ody.submit(Op::InterAgentCommunication {
+        communication: InterAgentCommunication::new(
+            AgentPath::try_from("/root/worker").expect("worker path should parse"),
+            AgentPath::root(),
+            Vec::new(),
+            text.to_string(),
+            /*trigger_turn*/ false,
+        ),
+    })
+    .await
+    .expect("submit queue-only agent mail");
+    ody.submit(Op::RealtimeConversationListVoices)
         .await
         .expect("submit list-voices barrier");
     wait_for_event(ody, |event| {
@@ -532,38 +529,36 @@ async fn injected_user_input_triggers_follow_up_request_with_deltas() {
         .unwrap()
         .ody;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "first prompt".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "first prompt".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |event| {
         matches!(event, EventMsg::AgentMessageContentDelta(_))
     })
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "second prompt".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "second prompt".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     let _ = gate_completed_tx.send(());
 

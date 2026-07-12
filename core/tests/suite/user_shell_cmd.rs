@@ -1,15 +1,4 @@
 use anyhow::Context;
-use ody_features::Feature;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::permissions::NetworkSandboxPolicy;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::ExecCommandEndEvent;
-use ody_protocol::protocol::ExecCommandSource;
-use ody_protocol::protocol::ExecOutputStream;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::TurnAbortReason;
-use ody_protocol::user_input::UserInput;
 use core_test_support::PathBufExt;
 use core_test_support::assert_regex_match;
 use core_test_support::responses;
@@ -28,6 +17,17 @@ use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event;
 use core_test_support::wait_for_event_match;
 use core_test_support::wait_for_event_with_timeout;
+use ody_features::Feature;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::permissions::NetworkSandboxPolicy;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::ExecCommandEndEvent;
+use ody_protocol::protocol::ExecCommandSource;
+use ody_protocol::protocol::ExecOutputStream;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::TurnAbortReason;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use regex_lite::escape;
 use std::path::PathBuf;
@@ -60,8 +60,7 @@ async fn user_shell_cmd_ls_and_cat_in_temp_dir() {
 
     // 1) shell command should list the file
     let list_cmd = "ls".to_string();
-    ody
-        .submit(Op::RunUserShellCommand { command: list_cmd })
+    ody.submit(Op::RunUserShellCommand { command: list_cmd })
         .await
         .unwrap();
     let msg = wait_for_event(&ody, |ev| matches!(ev, EventMsg::ExecCommandEnd(_))).await;
@@ -79,8 +78,7 @@ async fn user_shell_cmd_ls_and_cat_in_temp_dir() {
 
     // 2) shell command should print the file contents verbatim
     let cat_cmd = format!("cat {file_name}");
-    ody
-        .submit(Op::RunUserShellCommand { command: cat_cmd })
+    ody.submit(Op::RunUserShellCommand { command: cat_cmd })
         .await
         .unwrap();
     let msg = wait_for_event(&ody, |ev| matches!(ev, EventMsg::ExecCommandEnd(_))).await;
@@ -147,8 +145,7 @@ async fn user_shell_cmd_can_be_interrupted() {
 
     // Start a long-running command and then interrupt it.
     let sleep_cmd = "sleep 5".to_string();
-    ody
-        .submit(Op::RunUserShellCommand { command: sleep_cmd })
+    ody.submit(Op::RunUserShellCommand { command: sleep_cmd })
         .await
         .unwrap();
 
@@ -229,6 +226,7 @@ async fn user_shell_command_does_not_replace_active_turn() -> anyhow::Result<()>
                         model: fixture.session_configured.model.clone(),
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()
@@ -398,12 +396,9 @@ async fn user_shell_command_does_not_set_network_sandbox_env_var() -> anyhow::Re
     #[cfg(windows)]
     let command = r#"$val = $env:ODY_SANDBOX_NETWORK_DISABLED; if ([string]::IsNullOrEmpty($val)) { $val = 'not-set' } ; [System.Console]::Write($val)"#.to_string();
     #[cfg(not(windows))]
-    let command =
-        r#"sh -c "printf '%s' \"${ODY_SANDBOX_NETWORK_DISABLED:-not-set}\"""#.to_string();
+    let command = r#"sh -c "printf '%s' \"${ODY_SANDBOX_NETWORK_DISABLED:-not-set}\"""#.to_string();
 
-    test.ody
-        .submit(Op::RunUserShellCommand { command })
-        .await?;
+    test.ody.submit(Op::RunUserShellCommand { command }).await?;
 
     let ExecCommandEndEvent {
         exit_code,

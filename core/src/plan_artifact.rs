@@ -1,11 +1,12 @@
 use ody_config::config_toml::PlanModeTier;
+use ody_protocol::config_types::DesignAuditLevel;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path::write_atomically;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Mutex as StdMutex;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::Mutex as StdMutex;
 use tokio::sync::Mutex;
 
 /// Session-level plan/design file artifact. Lives in Plan or Design mode.
@@ -26,6 +27,7 @@ pub struct PlanArtifact {
     /// Turn at which any reminder was last injected; `Some(0)` means "before turn 1".
     last_any_turn: StdMutex<Option<usize>>,
     current_tier: StdMutex<Option<PlanModeTier>>,
+    current_design_audit_level: StdMutex<Option<DesignAuditLevel>>,
     plans_base_dir: AbsolutePathBuf,
     /// Sub-directory under `plans_base_dir` that holds this artifact's files
     /// (e.g. `"plans"` for Plan mode, `"designs"` for Design mode).
@@ -63,10 +65,14 @@ pub enum PartStatus {
 
 #[derive(Debug)]
 pub enum PlanWriteOutcome {
-    Written { path: PathBuf },
+    Written {
+        path: PathBuf,
+    },
     InlineOnly,
     #[allow(dead_code)]
-    Failed { error: PlanArtifactError },
+    Failed {
+        error: PlanArtifactError,
+    },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -120,13 +126,13 @@ impl PlanArtifact {
             last_full_turn: StdMutex::new(Some(0)),
             last_any_turn: StdMutex::new(Some(0)),
             current_tier: StdMutex::new(None),
+            current_design_audit_level: StdMutex::new(None),
             plans_base_dir,
             subdir,
             thread_id,
             date: date.to_string(),
         }
     }
-
 
     /// Mark the plan as submitted. Plan-mode turn loop will end the turn on
     /// the next `take_submitted` check.
@@ -181,7 +187,11 @@ impl PlanArtifact {
         if matches!(state, PlanArtifactState::Temporary { .. }) {
             let sanitized = sanitize_plan_slug(slug);
             let final_name = format!("{}-{}.md", self.date, sanitized);
-            let final_path = self.plans_base_dir.as_path().join(self.subdir).join(final_name);
+            let final_path = self
+                .plans_base_dir
+                .as_path()
+                .join(self.subdir)
+                .join(final_name);
             *state = PlanArtifactState::Finalized { final_path };
         }
     }
@@ -273,6 +283,22 @@ impl PlanArtifact {
         *self.current_tier.lock().expect("current_tier poisoned") = Some(tier);
     }
 
+    /// Returns the Design-mode audit level selected for this artifact, if any.
+    pub fn design_audit_level(&self) -> Option<DesignAuditLevel> {
+        *self
+            .current_design_audit_level
+            .lock()
+            .expect("current_design_audit_level poisoned")
+    }
+
+    /// Records the selected Design-mode audit level.
+    pub fn set_design_audit_level(&self, level: DesignAuditLevel) {
+        *self
+            .current_design_audit_level
+            .lock()
+            .expect("current_design_audit_level poisoned") = Some(level);
+    }
+
     pub fn last_plan_text(&self) -> Option<String> {
         self.last_plan_text.try_lock().ok()?.clone()
     }
@@ -330,6 +356,7 @@ impl PlanArtifact {
                     last_full_turn: StdMutex::new(Some(0)),
                     last_any_turn: StdMutex::new(Some(0)),
                     current_tier: StdMutex::new(None),
+                    current_design_audit_level: StdMutex::new(None),
                     plans_base_dir,
                     subdir,
                     thread_id,
@@ -451,11 +478,11 @@ mod tests {
         let (artifact, tmp) = test_artifact("2026-07-04");
         let path = artifact.path().unwrap();
         assert!(path.starts_with(tmp.path().join("plans")));
-        assert!(path
-            .to_string_lossy()
-            .contains("tmp-00000000-0000-0000-0000-000000000001-2026-07-04.md"));
+        assert!(
+            path.to_string_lossy()
+                .contains("tmp-00000000-0000-0000-0000-000000000001-2026-07-04.md")
+        );
     }
-
 
     #[test]
     fn submitted_flag_defaults_false_and_toggles_once() {
@@ -479,9 +506,11 @@ mod tests {
         artifact.finalize_name("auth_flow").await.unwrap();
         let final_path = artifact.path().unwrap();
         assert!(final_path.starts_with(tmp.path().join("designs")));
-        assert!(final_path
-            .to_string_lossy()
-            .ends_with("2026-07-04-auth_flow.md"));
+        assert!(
+            final_path
+                .to_string_lossy()
+                .ends_with("2026-07-04-auth_flow.md")
+        );
 
         assert!(artifact.is_plan_file_path(&final_path));
         let stem_dir = final_path.with_extension("");
@@ -582,7 +611,9 @@ mod tests {
     #[tokio::test]
     async fn write_plan_falls_back_to_plan_slug_when_markdown_has_no_title() {
         let (artifact, _tmp) = test_artifact("2026-07-10");
-        let outcome = artifact.write_plan("no heading here, just prose", true).await;
+        let outcome = artifact
+            .write_plan("no heading here, just prose", true)
+            .await;
         let path = match outcome {
             PlanWriteOutcome::Written { path } => path,
             other => panic!("expected Written, got {other:?}"),
@@ -619,7 +650,10 @@ mod tests {
         let (artifact, _tmp) = test_artifact("2026-07-04");
         artifact.finalize_name("refactor_auth").await.unwrap();
         let path = artifact.path().unwrap();
-        assert!(path.to_string_lossy().ends_with("2026-07-04-refactor_auth.md"));
+        assert!(
+            path.to_string_lossy()
+                .ends_with("2026-07-04-refactor_auth.md")
+        );
     }
 
     #[tokio::test]
@@ -635,7 +669,9 @@ mod tests {
         let (artifact, _tmp) = test_artifact("2026-07-04");
         artifact.finalize_name("refactor_auth").await.unwrap();
         let outcome = artifact.write_plan("# Plan\n", true).await;
-        assert!(matches!(outcome, PlanWriteOutcome::Written { path } if path.to_string_lossy().ends_with("2026-07-04-refactor_auth.md")));
+        assert!(
+            matches!(outcome, PlanWriteOutcome::Written { path } if path.to_string_lossy().ends_with("2026-07-04-refactor_auth.md"))
+        );
     }
 
     #[tokio::test]
@@ -643,7 +679,10 @@ mod tests {
         let (artifact, _tmp) = test_artifact("2026-07-04");
         let outcome = artifact.write_plan("# Plan\n", false).await;
         assert!(matches!(outcome, PlanWriteOutcome::InlineOnly));
-        assert!(matches!(&*artifact.state.lock().await, PlanArtifactState::InlineOnly));
+        assert!(matches!(
+            &*artifact.state.lock().await,
+            PlanArtifactState::InlineOnly
+        ));
     }
 
     #[tokio::test]
@@ -670,8 +709,12 @@ mod tests {
         std::fs::write(&existing, "# Existing").unwrap();
         let thread_id =
             ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-000000000002").unwrap();
-        let artifact =
-            PlanArtifact::restore_or_create(plans_base_dir, thread_id, Some(existing.clone()), "2026-07-04");
+        let artifact = PlanArtifact::restore_or_create(
+            plans_base_dir,
+            thread_id,
+            Some(existing.clone()),
+            "2026-07-04",
+        );
         assert!(artifact.is_plan_file_path(&existing));
     }
 
@@ -808,20 +851,32 @@ mod tests {
         assert!(artifact.is_plan_file_path(&part_file));
     }
 
-#[test]
-fn default_plan_mode_tier_is_none() {
-    let (artifact, _tmp) = test_artifact("2026-07-04");
-    assert_eq!(artifact.plan_mode_tier(), None);
-}
+    #[test]
+    fn default_plan_mode_tier_is_none() {
+        let (artifact, _tmp) = test_artifact("2026-07-04");
+        assert_eq!(artifact.plan_mode_tier(), None);
+    }
 
-#[test]
-fn plan_mode_tier_round_trip() {
-    let (artifact, _tmp) = test_artifact("2026-07-04");
-    artifact.set_plan_mode_tier(PlanModeTier::Rigor);
-    assert_eq!(artifact.plan_mode_tier(), Some(PlanModeTier::Rigor));
+    #[test]
+    fn plan_mode_tier_round_trip() {
+        let (artifact, _tmp) = test_artifact("2026-07-04");
+        artifact.set_plan_mode_tier(PlanModeTier::Rigor);
+        assert_eq!(artifact.plan_mode_tier(), Some(PlanModeTier::Rigor));
 
-    artifact.set_plan_mode_tier(PlanModeTier::Concise);
-    assert_eq!(artifact.plan_mode_tier(), Some(PlanModeTier::Concise));
-}
+        artifact.set_plan_mode_tier(PlanModeTier::Concise);
+        assert_eq!(artifact.plan_mode_tier(), Some(PlanModeTier::Concise));
+    }
 
+    #[test]
+    fn default_design_audit_level_is_none() {
+        let (artifact, _tmp) = test_artifact("2026-07-04");
+        assert_eq!(artifact.design_audit_level(), None);
+    }
+
+    #[test]
+    fn design_audit_level_round_trip() {
+        let (artifact, _tmp) = test_artifact("2026-07-04");
+        artifact.set_design_audit_level(DesignAuditLevel::Deep);
+        assert_eq!(artifact.design_audit_level(), Some(DesignAuditLevel::Deep));
+    }
 }

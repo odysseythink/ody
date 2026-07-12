@@ -6,22 +6,6 @@ use anyhow::Result;
 use chrono::DateTime;
 use chrono::TimeZone;
 use chrono::Utc;
-use ody_models_manager::client_version_to_whole;
-use ody_models_manager::manager::RefreshStrategy;
-use ody_protocol::config_types::ReasoningSummary;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::model_metadata::ConfigShellToolType;
-use ody_protocol::model_metadata::ModelInfo;
-use ody_protocol::model_metadata::ModelVisibility;
-use ody_protocol::model_metadata::ModelsResponse;
-use ody_protocol::model_metadata::ReasoningEffort;
-use ody_protocol::model_metadata::ReasoningEffortPreset;
-use ody_protocol::model_metadata::TruncationPolicyConfig;
-use ody_protocol::model_metadata::default_input_modalities;
-use ody_protocol::model_metadata::ModelCapabilities;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
 use core_test_support::responses;
 use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
@@ -31,6 +15,22 @@ use core_test_support::responses::sse_response;
 use core_test_support::test_ody::test_ody;
 use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event;
+use ody_models_manager::client_version_to_whole;
+use ody_models_manager::manager::RefreshStrategy;
+use ody_protocol::config_types::ReasoningSummary;
+use ody_protocol::model_metadata::ConfigShellToolType;
+use ody_protocol::model_metadata::ModelCapabilities;
+use ody_protocol::model_metadata::ModelInfo;
+use ody_protocol::model_metadata::ModelVisibility;
+use ody_protocol::model_metadata::ModelsResponse;
+use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffortPreset;
+use ody_protocol::model_metadata::TruncationPolicyConfig;
+use ody_protocol::model_metadata::default_input_modalities;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use serde::Deserialize;
 use serde::Serialize;
@@ -92,32 +92,32 @@ async fn renews_cache_ttl_on_matching_models_etag() -> Result<()> {
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::Disabled, test.cwd_path());
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hi".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
-                environments: Some(local_selections(test.config.cwd.clone())),
-                approval_policy: Some(ody_protocol::protocol::AskForApproval::Never),
-                sandbox_policy: Some(sandbox_policy),
-                permission_profile,
-                collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
-                    mode: ody_protocol::config_types::ModeKind::Default,
-                    settings: ody_protocol::config_types::Settings {
-                        model: test.session_configured.model.clone(),
-                        reasoning_effort: None,
-                        developer_instructions: None,
-                    },
-                }),
-                ..Default::default()
-            },
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hi".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(test.config.cwd.clone())),
+            approval_policy: Some(ody_protocol::protocol::AskForApproval::Never),
+            sandbox_policy: Some(sandbox_policy),
+            permission_profile,
+            collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
+                mode: ody_protocol::config_types::ModeKind::Default,
+                settings: ody_protocol::config_types::Settings {
+                    model: test.session_configured.model.clone(),
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                    design_audit_level: None,
+                },
+            }),
+            ..Default::default()
+        },
+    })
+    .await?;
 
     let _ = wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
 

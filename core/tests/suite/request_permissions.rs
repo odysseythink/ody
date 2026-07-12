@@ -1,6 +1,21 @@
 #![allow(clippy::unwrap_used)]
 
 use anyhow::Result;
+use core_test_support::responses::ev_assistant_message;
+use core_test_support::responses::ev_completed;
+use core_test_support::responses::ev_function_call;
+use core_test_support::responses::ev_response_created;
+use core_test_support::responses::mount_sse_once;
+use core_test_support::responses::mount_sse_sequence;
+use core_test_support::responses::sse;
+use core_test_support::responses::start_mock_server;
+use core_test_support::skip_if_no_network;
+use core_test_support::skip_if_sandbox;
+use core_test_support::test_ody::TestOdy;
+use core_test_support::test_ody::local_selections;
+use core_test_support::test_ody::test_ody;
+use core_test_support::test_ody::turn_permission_fields;
+use core_test_support::wait_for_event;
 use ody_core::config::Constrained;
 use ody_core::sandboxing::SandboxPermissions;
 use ody_features::Feature;
@@ -20,21 +35,6 @@ use ody_protocol::request_permissions::RequestPermissionProfile;
 use ody_protocol::request_permissions::RequestPermissionsResponse;
 use ody_protocol::user_input::UserInput;
 use ody_utils_absolute_path::AbsolutePathBuf;
-use core_test_support::responses::ev_assistant_message;
-use core_test_support::responses::ev_completed;
-use core_test_support::responses::ev_function_call;
-use core_test_support::responses::ev_response_created;
-use core_test_support::responses::mount_sse_once;
-use core_test_support::responses::mount_sse_sequence;
-use core_test_support::responses::sse;
-use core_test_support::responses::start_mock_server;
-use core_test_support::skip_if_no_network;
-use core_test_support::skip_if_sandbox;
-use core_test_support::test_ody::TestOdy;
-use core_test_support::test_ody::local_selections;
-use core_test_support::test_ody::test_ody;
-use core_test_support::test_ody::turn_permission_fields;
-use core_test_support::wait_for_event;
 use pretty_assertions::assert_eq;
 use regex_lite::Regex;
 use serde_json::Value;
@@ -195,6 +195,7 @@ async fn submit_turn(
                         model: session_model,
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()
@@ -211,10 +212,7 @@ async fn wait_for_completion(test: &TestOdy) {
     .await;
 }
 
-async fn expect_exec_approval(
-    test: &TestOdy,
-    expected_command: &str,
-) -> ExecApprovalRequestEvent {
+async fn expect_exec_approval(test: &TestOdy, expected_command: &str) -> ExecApprovalRequestEvent {
     let event = wait_for_event(&test.ody, |event| {
         matches!(
             event,
@@ -238,9 +236,7 @@ async fn expect_exec_approval(
     }
 }
 
-async fn wait_for_exec_approval_or_completion(
-    test: &TestOdy,
-) -> Option<ExecApprovalRequestEvent> {
+async fn wait_for_exec_approval_or_completion(test: &TestOdy) -> Option<ExecApprovalRequestEvent> {
     let event = wait_for_event(&test.ody, |event| {
         matches!(
             event,

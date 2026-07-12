@@ -1,14 +1,4 @@
 use anyhow::Context;
-use ody_protocol::models::ContentItem;
-use ody_protocol::models::DEFAULT_IMAGE_DETAIL;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::models::ResponseItem;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::RolloutItem;
-use ody_protocol::protocol::RolloutLine;
-use ody_protocol::user_input::UserInput;
 use core_test_support::TempDirExt;
 use core_test_support::responses;
 use core_test_support::responses::ev_assistant_message;
@@ -24,6 +14,16 @@ use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event;
 use image::ImageBuffer;
 use image::Rgba;
+use ody_protocol::models::ContentItem;
+use ody_protocol::models::DEFAULT_IMAGE_DETAIL;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::models::ResponseItem;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::RolloutItem;
+use ody_protocol::protocol::RolloutLine;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use std::path::Path;
 use std::time::Duration;
@@ -114,38 +114,38 @@ async fn copy_paste_local_image_persists_rollout_request_shape() -> anyhow::Resu
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::Disabled, cwd.path());
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![
-                UserInput::LocalImage {
-                    path: abs_path.clone(),
-                    detail: None,
-                },
-                UserInput::Text {
-                    text: "pasted image".to_string(),
-                    text_elements: Vec::new(),
-                },
-            ],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
-                environments: Some(local_selections(cwd.abs())),
-                approval_policy: Some(AskForApproval::Never),
-                sandbox_policy: Some(sandbox_policy),
-                permission_profile,
-                collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
-                    mode: ody_protocol::config_types::ModeKind::Default,
-                    settings: ody_protocol::config_types::Settings {
-                        model: session_model,
-                        reasoning_effort: None,
-                        developer_instructions: None,
-                    },
-                }),
-                ..Default::default()
+    ody.submit(Op::UserInput {
+        items: vec![
+            UserInput::LocalImage {
+                path: abs_path.clone(),
+                detail: None,
             },
-        })
-        .await?;
+            UserInput::Text {
+                text: "pasted image".to_string(),
+                text_elements: Vec::new(),
+            },
+        ],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(cwd.abs())),
+            approval_policy: Some(AskForApproval::Never),
+            sandbox_policy: Some(sandbox_policy),
+            permission_profile,
+            collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
+                mode: ody_protocol::config_types::ModeKind::Default,
+                settings: ody_protocol::config_types::Settings {
+                    model: session_model,
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                    design_audit_level: None,
+                },
+            }),
+            ..Default::default()
+        },
+    })
+    .await?;
 
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
     ody.submit(Op::Shutdown).await?;
@@ -213,38 +213,38 @@ async fn drag_drop_image_persists_rollout_request_shape() -> anyhow::Result<()> 
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::Disabled, cwd.path());
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![
-                UserInput::Image {
-                    image_url: image_url.clone(),
-                    detail: None,
-                },
-                UserInput::Text {
-                    text: "dropped image".to_string(),
-                    text_elements: Vec::new(),
-                },
-            ],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
-                environments: Some(local_selections(cwd.abs())),
-                approval_policy: Some(AskForApproval::Never),
-                sandbox_policy: Some(sandbox_policy),
-                permission_profile,
-                collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
-                    mode: ody_protocol::config_types::ModeKind::Default,
-                    settings: ody_protocol::config_types::Settings {
-                        model: session_model,
-                        reasoning_effort: None,
-                        developer_instructions: None,
-                    },
-                }),
-                ..Default::default()
+    ody.submit(Op::UserInput {
+        items: vec![
+            UserInput::Image {
+                image_url: image_url.clone(),
+                detail: None,
             },
-        })
-        .await?;
+            UserInput::Text {
+                text: "dropped image".to_string(),
+                text_elements: Vec::new(),
+            },
+        ],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(cwd.abs())),
+            approval_policy: Some(AskForApproval::Never),
+            sandbox_policy: Some(sandbox_policy),
+            permission_profile,
+            collaboration_mode: Some(ody_protocol::config_types::CollaborationMode {
+                mode: ody_protocol::config_types::ModeKind::Default,
+                settings: ody_protocol::config_types::Settings {
+                    model: session_model,
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                    design_audit_level: None,
+                },
+            }),
+            ..Default::default()
+        },
+    })
+    .await?;
 
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
     ody.submit(Op::Shutdown).await?;

@@ -1,5 +1,22 @@
 use anyhow::Context;
 use anyhow::Result;
+use core_test_support::responses::ResponseMock;
+use core_test_support::responses::ev_assistant_message;
+use core_test_support::responses::ev_completed;
+use core_test_support::responses::ev_function_call;
+use core_test_support::responses::ev_response_created;
+use core_test_support::responses::mount_sse_once;
+use core_test_support::responses::sse;
+use core_test_support::responses::start_mock_server;
+use core_test_support::skip_if_no_network;
+use core_test_support::test_ody::TestOdy;
+use core_test_support::test_ody::local_selections;
+use core_test_support::test_ody::turn_permission_fields;
+use core_test_support::wait_for_event;
+use core_test_support::wait_for_event_with_timeout;
+use core_test_support::zsh_fork::build_unified_exec_zsh_fork_test;
+use core_test_support::zsh_fork::restrictive_workspace_write_profile;
+use core_test_support::zsh_fork::zsh_fork_runtime;
 use ody_config::permissions_toml::FilesystemPermissionToml;
 use ody_config::permissions_toml::PermissionProfileToml;
 use ody_config::types::ApprovalsReviewer;
@@ -21,23 +38,6 @@ use ody_protocol::protocol::Op;
 use ody_protocol::protocol::ReviewDecision;
 use ody_protocol::protocol::ThreadSettingsOverrides;
 use ody_protocol::user_input::UserInput;
-use core_test_support::responses::ResponseMock;
-use core_test_support::responses::ev_assistant_message;
-use core_test_support::responses::ev_completed;
-use core_test_support::responses::ev_function_call;
-use core_test_support::responses::ev_response_created;
-use core_test_support::responses::mount_sse_once;
-use core_test_support::responses::sse;
-use core_test_support::responses::start_mock_server;
-use core_test_support::skip_if_no_network;
-use core_test_support::test_ody::TestOdy;
-use core_test_support::test_ody::local_selections;
-use core_test_support::test_ody::turn_permission_fields;
-use core_test_support::wait_for_event;
-use core_test_support::wait_for_event_with_timeout;
-use core_test_support::zsh_fork::build_unified_exec_zsh_fork_test;
-use core_test_support::zsh_fork::restrictive_workspace_write_profile;
-use core_test_support::zsh_fork::zsh_fork_runtime;
 use pretty_assertions::assert_eq;
 use regex_lite::Regex;
 use serde_json::Value;
@@ -422,6 +422,7 @@ async fn submit_turn_with_session_permissions(
                         model: session_model,
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()
@@ -511,10 +512,7 @@ fn parsed_regex_result(pattern: &str, output_str: &str) -> Option<CommandResult>
     })
 }
 
-async fn expect_exec_approval(
-    test: &TestOdy,
-    expected_command: &str,
-) -> ExecApprovalRequestEvent {
+async fn expect_exec_approval(test: &TestOdy, expected_command: &str) -> ExecApprovalRequestEvent {
     let event = wait_for_event(&test.ody, |event| {
         matches!(
             event,

@@ -2,21 +2,6 @@
 #![cfg(target_os = "macos")]
 
 use anyhow::Result;
-use ody_core::config::Constrained;
-use ody_features::Feature;
-use ody_protocol::config_types::ApprovalsReviewer;
-use ody_protocol::models::FileSystemPermissions;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::permissions::NetworkSandboxPolicy;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::ReviewDecision;
-use ody_protocol::request_permissions::PermissionGrantScope;
-use ody_protocol::request_permissions::RequestPermissionProfile;
-use ody_protocol::request_permissions::RequestPermissionsResponse;
-use ody_protocol::user_input::UserInput;
-use ody_utils_absolute_path::AbsolutePathBuf;
 use core_test_support::responses::ev_apply_patch_custom_tool_call;
 use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
@@ -32,6 +17,21 @@ use core_test_support::test_ody::local_selections;
 use core_test_support::test_ody::test_ody;
 use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event;
+use ody_core::config::Constrained;
+use ody_features::Feature;
+use ody_protocol::config_types::ApprovalsReviewer;
+use ody_protocol::models::FileSystemPermissions;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::permissions::NetworkSandboxPolicy;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::ReviewDecision;
+use ody_protocol::request_permissions::PermissionGrantScope;
+use ody_protocol::request_permissions::RequestPermissionProfile;
+use ody_protocol::request_permissions::RequestPermissionsResponse;
+use ody_protocol::user_input::UserInput;
+use ody_utils_absolute_path::AbsolutePathBuf;
 use pretty_assertions::assert_eq;
 use regex_lite::Regex;
 use serde_json::Value;
@@ -163,6 +163,7 @@ async fn submit_turn(
                         model: session_model,
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()

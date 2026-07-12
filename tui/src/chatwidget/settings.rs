@@ -563,6 +563,7 @@ impl ChatWidget {
             model: Some(settings.model.clone()),
             reasoning_effort: Some(settings.reasoning_effort.clone()),
             developer_instructions: Some(settings.developer_instructions),
+            design_audit_level: None,
         });
         self.update_collaboration_mode_indicator();
         self.refresh_plan_mode_nudge();

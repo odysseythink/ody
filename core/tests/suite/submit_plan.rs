@@ -89,6 +89,7 @@ async fn submit_plan_round_trip() -> anyhow::Result<()> {
                     model: session_configured.model.clone(),
                     reasoning_effort: None,
                     developer_instructions: None,
+                    design_audit_level: None,
                 },
             }),
             ..Default::default()
@@ -182,6 +183,7 @@ async fn submit_plan_terminal_does_not_trigger_second_sampling() -> anyhow::Resu
                     model: session_configured.model.clone(),
                     reasoning_effort: None,
                     developer_instructions: None,
+                    design_audit_level: None,
                 },
             }),
             ..Default::default()
@@ -256,8 +258,7 @@ async fn submit_plan_split_pending_part_does_not_end_turn() -> anyhow::Result<()
         ev_completed("resp-2"),
     ]);
 
-    let response_mock =
-        mount_sse_sequence(&server, vec![first_response, second_response]).await;
+    let response_mock = mount_sse_sequence(&server, vec![first_response, second_response]).await;
 
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::Disabled, cwd.path());
@@ -281,6 +282,7 @@ async fn submit_plan_split_pending_part_does_not_end_turn() -> anyhow::Result<()
                     model: session_configured.model.clone(),
                     reasoning_effort: None,
                     developer_instructions: None,
+                    design_audit_level: None,
                 },
             }),
             ..Default::default()

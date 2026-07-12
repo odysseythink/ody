@@ -240,6 +240,7 @@ mod tests {
                     model: model.to_string(),
                     reasoning_effort: None,
                     developer_instructions: None,
+                    design_audit_level: None,
                 },
             },
             multi_agent_mode: MultiAgentMode::ExplicitRequestOnly,

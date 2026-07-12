@@ -125,11 +125,11 @@ mod thread_processor_behavior_tests {
     use ody_protocol::config_types::CollaborationMode;
     use ody_protocol::config_types::ModeKind;
     use ody_protocol::config_types::Settings;
+    use ody_protocol::model_metadata::ReasoningEffort;
     use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_DANGER_FULL_ACCESS;
     use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_READ_ONLY;
     use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_WORKSPACE;
     use ody_protocol::models::PermissionProfile;
-    use ody_protocol::model_metadata::ReasoningEffort;
     use ody_protocol::permissions::FileSystemAccessMode;
     use ody_protocol::permissions::FileSystemPath;
     use ody_protocol::permissions::FileSystemSandboxEntry;
@@ -514,22 +514,21 @@ mod thread_processor_behavior_tests {
         let full_access_profile = ody_protocol::models::PermissionProfile::Disabled;
         let workspace_write_profile = ody_protocol::models::PermissionProfile::workspace_write();
         let read_only_profile = ody_protocol::models::PermissionProfile::read_only();
-        let split_write_profile =
-            ody_protocol::models::PermissionProfile::from_runtime_permissions(
-                &FileSystemSandboxPolicy::restricted(vec![
-                    FileSystemSandboxEntry {
-                        path: FileSystemPath::Path { path: cwd.clone() },
-                        access: FileSystemAccessMode::Write,
+        let split_write_profile = ody_protocol::models::PermissionProfile::from_runtime_permissions(
+            &FileSystemSandboxPolicy::restricted(vec![
+                FileSystemSandboxEntry {
+                    path: FileSystemPath::Path { path: cwd.clone() },
+                    access: FileSystemAccessMode::Write,
+                },
+                FileSystemSandboxEntry {
+                    path: FileSystemPath::GlobPattern {
+                        pattern: "/tmp/project/**/*.env".to_string(),
                     },
-                    FileSystemSandboxEntry {
-                        path: FileSystemPath::GlobPattern {
-                            pattern: "/tmp/project/**/*.env".to_string(),
-                        },
-                        access: FileSystemAccessMode::Deny,
-                    },
-                ]),
-                NetworkSandboxPolicy::Restricted,
-            );
+                    access: FileSystemAccessMode::Deny,
+                },
+            ]),
+            NetworkSandboxPolicy::Restricted,
+        );
 
         assert!(requested_permissions_trust_project(
             &ConfigOverrides {
@@ -775,6 +774,7 @@ mod thread_processor_behavior_tests {
                     model: "gpt-5".to_string(),
                     reasoning_effort: None,
                     developer_instructions: None,
+                    design_audit_level: None,
                 },
             },
             session_source: SessionSource::Cli,

@@ -1,4 +1,5 @@
 use ody_protocol::config_types::CollaborationModeMask as CoreCollaborationModeMask;
+use ody_protocol::config_types::DesignAuditLevel;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::model_metadata::ReasoningEffort;
 use schemars::JsonSchema;
@@ -23,6 +24,9 @@ pub struct CollaborationModeMask {
     #[serde(rename = "reasoning_effort")]
     #[ts(rename = "reasoning_effort")]
     pub reasoning_effort: Option<Option<ReasoningEffort>>,
+    #[serde(rename = "design_audit_level")]
+    #[ts(rename = "design_audit_level")]
+    pub design_audit_level: Option<Option<DesignAuditLevel>>,
 }
 
 impl From<CoreCollaborationModeMask> for CollaborationModeMask {
@@ -32,6 +36,7 @@ impl From<CoreCollaborationModeMask> for CollaborationModeMask {
             mode: value.mode,
             model: value.model,
             reasoning_effort: value.reasoning_effort,
+            design_audit_level: value.design_audit_level,
         }
     }
 }

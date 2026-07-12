@@ -34,10 +34,8 @@ pub async fn build_prompt_input(
 ) -> OdyResult<Vec<ResponseItem>> {
     config.ephemeral = true;
 
-    let local_runtime_paths = ExecServerRuntimePaths::from_optional_paths(
-        config.ody_self_exe.clone(),
-        None,
-    )?;
+    let local_runtime_paths =
+        ExecServerRuntimePaths::from_optional_paths(config.ody_self_exe.clone(), None)?;
 
     let thread_store = thread_store_from_config(&config, state_db.clone());
     let installation_id = resolve_installation_id(&config.ody_home).await?;
@@ -45,12 +43,9 @@ pub async fn build_prompt_input(
         &config,
         SessionSource::Exec,
         Arc::new(
-            EnvironmentManager::from_ody_home(
-                config.ody_home.clone(),
-                Some(local_runtime_paths),
-            )
-            .await
-            .map_err(|err| OdyErr::Fatal(err.to_string()))?,
+            EnvironmentManager::from_ody_home(config.ody_home.clone(), Some(local_runtime_paths))
+                .await
+                .map_err(|err| OdyErr::Fatal(err.to_string()))?,
         ),
         empty_extension_registry(),
         user_instructions_provider,
@@ -68,6 +63,7 @@ pub async fn build_prompt_input(
             model: config.model.clone().unwrap_or_default(),
             reasoning_effort: config.model_reasoning_effort.clone(),
             developer_instructions: Some(ody_collaboration_mode_templates::PLAN.to_string()),
+            design_audit_level: None,
         };
         let plan_collaboration_mode = CollaborationMode {
             mode: ModeKind::Plan,

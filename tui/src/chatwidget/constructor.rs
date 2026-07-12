@@ -7,10 +7,7 @@ impl ChatWidget {
         Self::new_with_op_target(common, OdyOpTarget::AppEvent)
     }
 
-    pub(super) fn new_with_op_target(
-        common: ChatWidgetInit,
-        ody_op_target: OdyOpTarget,
-    ) -> Self {
+    pub(super) fn new_with_op_target(common: ChatWidgetInit, ody_op_target: OdyOpTarget) -> Self {
         let ChatWidgetInit {
             config,
             frame_requester,
@@ -53,6 +50,7 @@ impl ChatWidget {
             model: header_model.clone(),
             reasoning_effort: None,
             developer_instructions: None,
+            design_audit_level: None,
         };
         // Collaboration modes start in Default mode.
         let current_collaboration_mode = CollaborationMode {

@@ -11,10 +11,7 @@ use ody_core_skills::SkillLoadOutcome;
 use ody_core_skills::SkillMetadata;
 use ody_core_skills::SkillType;
 use ody_core_skills::injection::InjectedHostSkillPrompts;
-use ody_protocol::config_types::CollaborationMode;
-use ody_protocol::config_types::ModeKind;
-use ody_protocol::config_types::Settings;
-use ody_protocol::protocol::TokenUsage;
+use ody_exec_server::EnvironmentManager;
 use ody_extension_api::ConversationHistory;
 use ody_extension_api::ExtensionData;
 use ody_extension_api::ExtensionEventSink;
@@ -23,18 +20,21 @@ use ody_extension_api::NoopTurnItemEmitter;
 use ody_extension_api::ThreadStartInput;
 use ody_extension_api::ToolCall;
 use ody_extension_api::ToolPayload;
-use ody_extension_api::TurnStartInput;
 use ody_extension_api::TurnInputContext;
-use ody_exec_server::EnvironmentManager;
+use ody_extension_api::TurnStartInput;
 use ody_protocol::capabilities::CapabilityRootLocation;
 use ody_protocol::capabilities::SelectedCapabilityRoot;
+use ody_protocol::config_types::CollaborationMode;
+use ody_protocol::config_types::ModeKind;
+use ody_protocol::config_types::Settings;
 use ody_protocol::protocol::Event;
 use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::SkillActivationKind;
 use ody_protocol::protocol::SKILLS_INSTRUCTIONS_CLOSE_TAG;
 use ody_protocol::protocol::SKILLS_INSTRUCTIONS_OPEN_TAG;
 use ody_protocol::protocol::SessionSource;
+use ody_protocol::protocol::SkillActivationKind;
 use ody_protocol::protocol::SkillScope;
+use ody_protocol::protocol::TokenUsage;
 use ody_protocol::protocol::TruncationPolicy;
 use ody_protocol::user_input::UserInput;
 use ody_skills_extension::ExecutorSkillProvider;
@@ -800,7 +800,11 @@ async fn host_provider_maps_new_metadata_fields() {
         .await
         .unwrap();
 
-    let entry = catalog.entries.iter().find(|e| e.name == "host-review").unwrap();
+    let entry = catalog
+        .entries
+        .iter()
+        .find(|e| e.name == "host-review")
+        .unwrap();
     assert!(matches!(entry.skill_type, SkillType::Knowledge));
     assert_eq!(entry.triggers, vec!["review"]);
     assert!(entry.hidden_in_modes.contains(&ModeKind::Plan));
@@ -862,7 +866,6 @@ async fn executor_provider_maps_new_metadata_fields() {
     });
 }
 
-
 #[tokio::test]
 async fn hidden_in_modes_excludes_skill_from_turn_input_catalog() -> TestResult {
     let read_requests = Arc::new(Mutex::new(Vec::new()));
@@ -919,6 +922,7 @@ async fn hidden_in_modes_excludes_skill_from_turn_input_catalog() -> TestResult 
                     model: "test".to_string(),
                     reasoning_effort: None,
                     developer_instructions: None,
+                    design_audit_level: None,
                 },
             },
             token_usage_at_turn_start: &TokenUsage::default(),
@@ -993,14 +997,16 @@ async fn knowledge_skills_are_not_selected_by_explicit_mention() -> TestResult {
     let read_requests = Arc::new(Mutex::new(Vec::new()));
     let provider = Arc::new(StaticSkillProvider {
         catalog: SkillCatalog {
-            entries: vec![test_entry(
-                SkillSourceKind::Host,
-                "host",
-                "host/review",
-                "review/SKILL.md",
-            )
-            .with_skill_type(SkillType::Knowledge)
-            .with_triggers(vec!["audit".to_string()])],
+            entries: vec![
+                test_entry(
+                    SkillSourceKind::Host,
+                    "host",
+                    "host/review",
+                    "review/SKILL.md",
+                )
+                .with_skill_type(SkillType::Knowledge)
+                .with_triggers(vec!["audit".to_string()]),
+            ],
             warnings: Vec::new(),
         },
         read_requests: Arc::clone(&read_requests),
@@ -1044,10 +1050,12 @@ async fn knowledge_skills_are_not_selected_by_explicit_mention() -> TestResult {
         .await;
 
     assert!(fragments.is_empty());
-    assert!(read_requests
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .is_empty());
+    assert!(
+        read_requests
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_empty()
+    );
 
     Ok(())
 }
@@ -1134,14 +1142,16 @@ async fn knowledge_skill_is_auto_injected_on_trigger_match() -> TestResult {
     let read_requests = Arc::new(Mutex::new(Vec::new()));
     let provider = Arc::new(StaticSkillProvider {
         catalog: SkillCatalog {
-            entries: vec![test_entry(
-                SkillSourceKind::Host,
-                "host",
-                "host/review",
-                "review/SKILL.md",
-            )
-            .with_skill_type(SkillType::Knowledge)
-            .with_triggers(vec!["review".to_string()])],
+            entries: vec![
+                test_entry(
+                    SkillSourceKind::Host,
+                    "host",
+                    "host/review",
+                    "review/SKILL.md",
+                )
+                .with_skill_type(SkillType::Knowledge)
+                .with_triggers(vec!["review".to_string()]),
+            ],
             warnings: Vec::new(),
         },
         read_requests: Arc::clone(&read_requests),
@@ -1203,13 +1213,15 @@ async fn disable_model_invocation_blocks_tool_read() -> TestResult {
     let read_requests = Arc::new(Mutex::new(Vec::new()));
     let provider = Arc::new(StaticSkillProvider {
         catalog: SkillCatalog {
-            entries: vec![test_entry(
-                SkillSourceKind::Host,
-                "host",
-                "host/review",
-                "review/SKILL.md",
-            )
-            .with_disable_model_invocation(true)],
+            entries: vec![
+                test_entry(
+                    SkillSourceKind::Host,
+                    "host",
+                    "host/review",
+                    "review/SKILL.md",
+                )
+                .with_disable_model_invocation(true),
+            ],
             warnings: Vec::new(),
         },
         read_requests: Arc::clone(&read_requests),
@@ -1245,6 +1257,7 @@ async fn disable_model_invocation_blocks_tool_read() -> TestResult {
                     model: "test".to_string(),
                     reasoning_effort: None,
                     developer_instructions: None,
+                    design_audit_level: None,
                 },
             },
             token_usage_at_turn_start: &TokenUsage::default(),
@@ -1280,7 +1293,10 @@ async fn disable_model_invocation_blocks_tool_read() -> TestResult {
             payload: payload.clone(),
         })
         .await;
-    assert!(result.is_err(), "skills.read should fail for a skill with disable_model_invocation");
+    assert!(
+        result.is_err(),
+        "skills.read should fail for a skill with disable_model_invocation"
+    );
     assert!(
         read_requests
             .lock()
@@ -1390,6 +1406,7 @@ async fn skill_activated_event_is_emitted_for_explicit_selection() -> TestResult
                     model: "test".to_string(),
                     reasoning_effort: None,
                     developer_instructions: None,
+                    design_audit_level: None,
                 },
             },
             token_usage_at_turn_start: &TokenUsage::default(),

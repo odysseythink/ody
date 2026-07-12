@@ -51,10 +51,7 @@ fn env_overlay_for_exec_server_keeps_runtime_changes_only() {
         ("PATH".to_string(), "/sandbox-path".to_string()),
         ("SHELL_SET".to_string(), "policy".to_string()),
         ("ODY_THREAD_ID".to_string(), "thread-1".to_string()),
-        (
-            "ODY_SANDBOX_NETWORK_DISABLED".to_string(),
-            "1".to_string(),
-        ),
+        ("ODY_SANDBOX_NETWORK_DISABLED".to_string(), "1".to_string()),
     ]);
 
     assert_eq!(
@@ -62,10 +59,7 @@ fn env_overlay_for_exec_server_keeps_runtime_changes_only() {
         HashMap::from([
             ("PATH".to_string(), "/sandbox-path".to_string()),
             ("ODY_THREAD_ID".to_string(), "thread-1".to_string()),
-            (
-                "ODY_SANDBOX_NETWORK_DISABLED".to_string(),
-                "1".to_string()
-            ),
+            ("ODY_SANDBOX_NETWORK_DISABLED".to_string(), "1".to_string()),
         ])
     );
 }
@@ -340,6 +334,7 @@ fn plan_mode() -> CollaborationMode {
             model: "m".to_string(),
             reasoning_effort: None,
             developer_instructions: None,
+            design_audit_level: None,
         },
     }
 }
@@ -351,6 +346,7 @@ fn default_mode() -> CollaborationMode {
             model: "m".to_string(),
             reasoning_effort: None,
             developer_instructions: None,
+            design_audit_level: None,
         },
     }
 }
@@ -407,7 +403,10 @@ fn plan_mode_exec_gate_strict_write_forbids() {
     if let ExecApprovalRequirement::Forbidden { reason } = result {
         assert!(reason.contains("Plan mode is read-only by default"));
         assert!(reason.contains(PLAN_MODE_REJECTION_MARKER));
-        assert!(reason.contains("cp a b"), "reason should include command: {reason}");
+        assert!(
+            reason.contains("cp a b"),
+            "reason should include command: {reason}"
+        );
     }
 }
 
@@ -428,7 +427,10 @@ fn plan_mode_exec_gate_ask_write_needs_approval() {
     );
     if let ExecApprovalRequirement::NeedsApproval { reason, .. } = result {
         assert!(
-            reason.as_ref().unwrap().contains("may modify files while in Plan mode")
+            reason
+                .as_ref()
+                .unwrap()
+                .contains("may modify files while in Plan mode")
         );
     }
 }
@@ -445,7 +447,10 @@ fn plan_mode_exec_gate_advisory_allows_write() {
         PlanEnforcement::Advisory,
         &cmd(&["rm", "-rf", "/"]),
     );
-    assert_eq!(result, req, "advisory should behave like legacy prompt-only plan mode");
+    assert_eq!(
+        result, req,
+        "advisory should behave like legacy prompt-only plan mode"
+    );
 }
 
 #[test]
@@ -493,7 +498,10 @@ fn plan_mode_exec_gate_ask_does_not_downgrade_existing_forbidden() {
         PlanEnforcement::Ask,
         &cmd(&["cp", "a", "b"]),
     );
-    assert_eq!(result, req, "Plan-mode Ask must not downgrade execpolicy Forbidden");
+    assert_eq!(
+        result, req,
+        "Plan-mode Ask must not downgrade execpolicy Forbidden"
+    );
 }
 
 #[test]
@@ -507,5 +515,8 @@ fn plan_mode_exec_gate_read_only_does_not_downgrade_existing_forbidden() {
         PlanEnforcement::Strict,
         &cmd(&["ls"]),
     );
-    assert_eq!(result, req, "Read-only command must not downgrade execpolicy Forbidden");
+    assert_eq!(
+        result, req,
+        "Read-only command must not downgrade execpolicy Forbidden"
+    );
 }

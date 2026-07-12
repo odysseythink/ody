@@ -14,26 +14,6 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use ody_exec_server::CreateDirectoryOptions;
-use ody_exec_server::LOCAL_ENVIRONMENT_ID;
-use ody_exec_server::REMOTE_ENVIRONMENT_ID;
-use ody_exec_server::RemoveOptions;
-use ody_features::Feature;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::permissions::FileSystemAccessMode;
-use ody_protocol::permissions::FileSystemPath;
-use ody_protocol::permissions::FileSystemSandboxEntry;
-use ody_protocol::permissions::FileSystemSandboxPolicy;
-use ody_protocol::permissions::FileSystemSpecialPath;
-use ody_protocol::permissions::NetworkSandboxPolicy;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::SandboxPolicy;
-use ody_protocol::protocol::TurnEnvironmentSelection;
-use ody_protocol::user_input::UserInput;
-use ody_utils_absolute_path::AbsolutePathBuf;
-use ody_utils_path_uri::PathUri;
 use core_test_support::PathBufExt;
 use core_test_support::assert_regex_match;
 use core_test_support::get_remote_test_env;
@@ -55,6 +35,26 @@ use core_test_support::test_ody::test_ody;
 use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event;
 use core_test_support::wait_for_event_with_timeout;
+use ody_exec_server::CreateDirectoryOptions;
+use ody_exec_server::LOCAL_ENVIRONMENT_ID;
+use ody_exec_server::REMOTE_ENVIRONMENT_ID;
+use ody_exec_server::RemoveOptions;
+use ody_features::Feature;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::permissions::FileSystemAccessMode;
+use ody_protocol::permissions::FileSystemPath;
+use ody_protocol::permissions::FileSystemSandboxEntry;
+use ody_protocol::permissions::FileSystemSandboxPolicy;
+use ody_protocol::permissions::FileSystemSpecialPath;
+use ody_protocol::permissions::NetworkSandboxPolicy;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::SandboxPolicy;
+use ody_protocol::protocol::TurnEnvironmentSelection;
+use ody_protocol::user_input::UserInput;
+use ody_utils_absolute_path::AbsolutePathBuf;
+use ody_utils_path_uri::PathUri;
 use serde_json::json;
 use wiremock::Mock;
 use wiremock::Respond;
@@ -112,6 +112,7 @@ async fn submit_without_wait_with_turn_permissions(
                         model: session_model,
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()
@@ -250,7 +251,6 @@ fn apply_patch_responses(
 
 #[cfg(target_os = "linux")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn apply_patch_cli_multiple_operations_integration() -> Result<()> {
     skip_if_no_network!(Ok(()));
@@ -1633,6 +1633,7 @@ async fn apply_patch_turn_diff_tracks_local_and_remote_environment_paths() -> Re
                         model: test.session_configured.model.clone(),
                         reasoning_effort: None,
                         developer_instructions: None,
+                        design_audit_level: None,
                     },
                 }),
                 ..Default::default()

@@ -30,6 +30,7 @@ fn collaboration_mode(mode: ModeKind) -> CollaborationMode {
             model: "test".to_string(),
             reasoning_effort: None,
             developer_instructions: None,
+            design_audit_level: None,
         },
     }
 }
@@ -51,7 +52,9 @@ fn apply_plan_mode_patch_gate_denies_in_plan_mode_strict() {
     assert!(
         matches!(
             result,
-            Some(InternalApplyPatchInvocation::Output(Err(FunctionCallError::RespondToModel(_))))
+            Some(InternalApplyPatchInvocation::Output(Err(
+                FunctionCallError::RespondToModel(_)
+            )))
         ),
         "Plan mode strict should reject patch with model-readable error"
     );
@@ -74,11 +77,13 @@ fn apply_plan_mode_patch_gate_asks_in_plan_mode_ask() {
     assert!(
         matches!(
             result,
-            Some(InternalApplyPatchInvocation::DelegateToRuntime(ApplyPatchRuntimeInvocation {
-                auto_approved: false,
-                exec_approval_requirement: ExecApprovalRequirement::NeedsApproval { .. },
-                ..
-            }))
+            Some(InternalApplyPatchInvocation::DelegateToRuntime(
+                ApplyPatchRuntimeInvocation {
+                    auto_approved: false,
+                    exec_approval_requirement: ExecApprovalRequirement::NeedsApproval { .. },
+                    ..
+                }
+            ))
         ),
         "Plan mode ask should force user approval"
     );
@@ -98,10 +103,7 @@ fn apply_plan_mode_patch_gate_allows_in_default_mode() {
         None,
     );
 
-    assert!(
-        result.is_none(),
-        "Default mode should not be gated"
-    );
+    assert!(result.is_none(), "Default mode should not be gated");
 }
 
 #[test]
@@ -158,15 +160,14 @@ fn apply_design_mode_patch_gate_denies_in_design_mode_strict() {
     assert!(
         matches!(
             result,
-            Some(InternalApplyPatchInvocation::Output(Err(FunctionCallError::RespondToModel(
-                _
-            ))))
+            Some(InternalApplyPatchInvocation::Output(Err(
+                FunctionCallError::RespondToModel(_)
+            )))
         ),
         "Design mode strict should reject patch with model-readable error"
     );
-    if let Some(InternalApplyPatchInvocation::Output(Err(FunctionCallError::RespondToModel(
-        msg,
-    )))) = result
+    if let Some(InternalApplyPatchInvocation::Output(Err(FunctionCallError::RespondToModel(msg)))) =
+        result
     {
         assert!(msg.contains("[design-mode-blocked]"), "msg: {msg}");
     }
