@@ -14,6 +14,50 @@ use ody_utils_path_uri::PathUri;
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 
+/// Regression test for a real session failure: a part file's Markdown body
+/// legitimately quotes Rust source containing `A | B` match-arm alternation,
+/// `||`, and `&&` as literal text (e.g. documenting `mode_model_for`'s
+/// fallback chain). Naively scanning the *entire* tokenized heredoc for
+/// shell control-flow characters treated this inert body text as a command
+/// chain and denied the write, even though the write target was already
+/// unambiguous before the heredoc began.
+#[test]
+fn plan_gate_exec_strict_allows_heredoc_body_containing_pipe_and_ampersand_text() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = plan_artifact_at(tmp.path());
+    let plan_path = artifact.path().unwrap();
+    let stem_dir = plan_path.with_extension("");
+    let part_file = stem_dir.join("config.md");
+
+    let body = "```rust\n\
+        pub fn mode_model_for(&self, mode: ModeKind) -> Option<&str> {\n\
+        \x20   match mode {\n\
+        \x20       ModeKind::PairProgramming | ModeKind::Execute => None,\n\
+        \x20       _ => self.mode_models.plan.as_deref().or_else(|| self.plan_mode.as_ref().and_then(|pm| pm.model.as_deref())),\n\
+        \x20   }\n\
+        }\n\
+        ```\n\
+        Some prose noting that `a || b` and `a && b` both short-circuit.\n";
+    let script = format!(
+        "cat > {} <<'EOF'\n{body}\nEOF\n",
+        part_file.to_string_lossy()
+    );
+    let cmd = vec!["bash".to_string(), "-lc".to_string(), script];
+
+    let decision = plan_mode_gate_for_exec(
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &cmd,
+        tmp.path(),
+        Some(&artifact),
+    );
+    assert_eq!(
+        decision,
+        PlanGateDecision::Allow,
+        "shell-operator-looking characters inside the heredoc body must not block a write whose target is unambiguous"
+    );
+}
+
 #[test]
 fn test_writable_roots_constraint() {
     // Use a temporary directory as our workspace to avoid touching
@@ -750,7 +794,13 @@ fn plan_gate_exec_read_only_allowed_in_strict() {
     ];
     for cmd in cases {
         assert_eq!(
-            plan_mode_gate_for_exec(&plan_mode(), PlanEnforcement::Strict, &cmd),
+            plan_mode_gate_for_exec(
+                &plan_mode(),
+                PlanEnforcement::Strict,
+                &cmd,
+                std::path::Path::new("/repo"),
+                None
+            ),
             PlanGateDecision::Allow,
             "expected {cmd:?} to be read-only"
         );
@@ -773,7 +823,13 @@ fn plan_gate_exec_known_write_strict_denies() {
     for cmd in cases {
         assert!(
             matches!(
-                plan_mode_gate_for_exec(&plan_mode(), PlanEnforcement::Strict, &cmd),
+                plan_mode_gate_for_exec(
+                    &plan_mode(),
+                    PlanEnforcement::Strict,
+                    &cmd,
+                    std::path::Path::new("/repo"),
+                    None
+                ),
                 PlanGateDecision::Deny { .. }
             ),
             "expected {cmd:?} to be denied in strict"
@@ -791,7 +847,13 @@ fn plan_gate_exec_indeterminate_strict_asks() {
     for cmd in cases {
         assert!(
             matches!(
-                plan_mode_gate_for_exec(&plan_mode(), PlanEnforcement::Strict, &cmd),
+                plan_mode_gate_for_exec(
+                    &plan_mode(),
+                    PlanEnforcement::Strict,
+                    &cmd,
+                    std::path::Path::new("/repo"),
+                    None
+                ),
                 PlanGateDecision::Ask { .. }
             ),
             "expected {cmd:?} to require approval in strict"
@@ -804,7 +866,13 @@ fn plan_gate_exec_ask_enforcement_asks_for_non_readonly() {
     for cmd in [vec_str(&["cp", "a", "b"]), vec_str(&["cargo", "check"])] {
         assert!(
             matches!(
-                plan_mode_gate_for_exec(&plan_mode(), PlanEnforcement::Ask, &cmd),
+                plan_mode_gate_for_exec(
+                    &plan_mode(),
+                    PlanEnforcement::Ask,
+                    &cmd,
+                    std::path::Path::new("/repo"),
+                    None
+                ),
                 PlanGateDecision::Ask { .. }
             ),
             "expected {cmd:?} to require approval in ask enforcement"
@@ -816,7 +884,13 @@ fn plan_gate_exec_ask_enforcement_asks_for_non_readonly() {
 fn plan_gate_exec_advisory_allows_everything() {
     for cmd in [vec_str(&["rm", "-rf", "/"]), vec_str(&["cargo", "check"])] {
         assert_eq!(
-            plan_mode_gate_for_exec(&plan_mode(), PlanEnforcement::Advisory, &cmd),
+            plan_mode_gate_for_exec(
+                &plan_mode(),
+                PlanEnforcement::Advisory,
+                &cmd,
+                std::path::Path::new("/repo"),
+                None
+            ),
             PlanGateDecision::Allow,
             "advisory should behave like the legacy prompt-only plan mode"
         );
@@ -832,12 +906,161 @@ fn plan_gate_exec_default_mode_zero_regression() {
     ] {
         for cmd in [vec_str(&["rm", "-rf", "/"]), vec_str(&["ls"])] {
             assert_eq!(
-                plan_mode_gate_for_exec(&default_mode(), enforcement, &cmd),
+                plan_mode_gate_for_exec(
+                    &default_mode(),
+                    enforcement,
+                    &cmd,
+                    std::path::Path::new("/repo"),
+                    None
+                ),
                 PlanGateDecision::Allow,
                 "Default mode must never gate exec"
             );
         }
     }
+}
+
+#[test]
+fn plan_gate_exec_strict_allows_mkdir_of_plan_stem_dir() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = plan_artifact_at(tmp.path());
+    let plan_path = artifact.path().unwrap();
+    let stem_dir = plan_path.with_extension("");
+    let cmd = vec![
+        "mkdir".to_string(),
+        "-p".to_string(),
+        stem_dir.to_string_lossy().to_string(),
+    ];
+    let decision = plan_mode_gate_for_exec(
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &cmd,
+        tmp.path(),
+        Some(&artifact),
+    );
+    assert_eq!(decision, PlanGateDecision::Allow);
+}
+
+#[test]
+fn plan_gate_exec_strict_allows_redirect_write_under_plan_stem_dir() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = plan_artifact_at(tmp.path());
+    let plan_path = artifact.path().unwrap();
+    let stem_dir = plan_path.with_extension("");
+    let part_file = stem_dir.join("core.md");
+    let script = format!(
+        "cat > {} <<'EOF'\nhello\nEOF\n",
+        part_file.to_string_lossy()
+    );
+    let cmd = vec!["bash".to_string(), "-lc".to_string(), script];
+    let decision = plan_mode_gate_for_exec(
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &cmd,
+        tmp.path(),
+        Some(&artifact),
+    );
+    assert_eq!(decision, PlanGateDecision::Allow);
+}
+
+#[test]
+fn plan_gate_exec_strict_allows_redirect_write_to_plan_file_itself() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = plan_artifact_at(tmp.path());
+    let plan_path = artifact.path().unwrap();
+    let script = format!("echo '# Plan' > {}", plan_path.to_string_lossy());
+    let cmd = vec!["bash".to_string(), "-lc".to_string(), script];
+    let decision = plan_mode_gate_for_exec(
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &cmd,
+        tmp.path(),
+        Some(&artifact),
+    );
+    assert_eq!(decision, PlanGateDecision::Allow);
+}
+
+#[test]
+fn plan_gate_exec_strict_denies_mkdir_outside_plan_scope() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = plan_artifact_at(tmp.path());
+    let other_dir = tmp.path().join("other_dir");
+    let cmd = vec![
+        "mkdir".to_string(),
+        "-p".to_string(),
+        other_dir.to_string_lossy().to_string(),
+    ];
+    let decision = plan_mode_gate_for_exec(
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &cmd,
+        tmp.path(),
+        Some(&artifact),
+    );
+    assert!(matches!(decision, PlanGateDecision::Deny { .. }));
+}
+
+#[test]
+fn plan_gate_exec_strict_denies_compound_command_even_within_plan_scope() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = plan_artifact_at(tmp.path());
+    let plan_path = artifact.path().unwrap();
+    let stem_dir = plan_path.with_extension("");
+    let script = format!("mkdir -p {} && rm -rf /", stem_dir.to_string_lossy());
+    let cmd = vec!["bash".to_string(), "-lc".to_string(), script];
+    let decision = plan_mode_gate_for_exec(
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &cmd,
+        tmp.path(),
+        Some(&artifact),
+    );
+    assert!(
+        matches!(decision, PlanGateDecision::Deny { .. }),
+        "chained commands must not be whitelisted even if the first segment is in-scope"
+    );
+}
+
+#[test]
+fn plan_gate_exec_strict_still_denies_rm_within_plan_scope() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = plan_artifact_at(tmp.path());
+    let plan_path = artifact.path().unwrap();
+    let stem_dir = plan_path.with_extension("");
+    let part_file = stem_dir.join("core.md");
+    let cmd = vec!["rm".to_string(), part_file.to_string_lossy().to_string()];
+    let decision = plan_mode_gate_for_exec(
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &cmd,
+        tmp.path(),
+        Some(&artifact),
+    );
+    assert!(
+        matches!(decision, PlanGateDecision::Deny { .. }),
+        "rm is not in the carve-out's whitelisted verb set, even for in-scope paths"
+    );
+}
+
+#[test]
+fn design_gate_exec_strict_allows_mkdir_of_design_stem_dir() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = design_artifact_at(tmp.path());
+    let design_path = artifact.path().unwrap();
+    let stem_dir = design_path.with_extension("");
+    let cmd = vec![
+        "mkdir".to_string(),
+        "-p".to_string(),
+        stem_dir.to_string_lossy().to_string(),
+    ];
+    let decision = plan_mode_gate_for_exec(
+        &design_mode(),
+        PlanEnforcement::Strict,
+        &cmd,
+        tmp.path(),
+        Some(&artifact),
+    );
+    assert_eq!(decision, PlanGateDecision::Allow);
 }
 
 #[test]
@@ -854,7 +1077,13 @@ fn design_gate_exec_read_only_allowed_in_strict() {
     ];
     for cmd in cases {
         assert_eq!(
-            plan_mode_gate_for_exec(&design_mode(), PlanEnforcement::Strict, &cmd),
+            plan_mode_gate_for_exec(
+                &design_mode(),
+                PlanEnforcement::Strict,
+                &cmd,
+                std::path::Path::new("/repo"),
+                None
+            ),
             PlanGateDecision::Allow,
             "expected {cmd:?} to be read-only in Design mode"
         );
@@ -870,7 +1099,13 @@ fn design_gate_exec_known_write_strict_denies() {
         vec_str(&["git", "commit", "-m", "x"]),
     ];
     for cmd in cases {
-        let decision = plan_mode_gate_for_exec(&design_mode(), PlanEnforcement::Strict, &cmd);
+        let decision = plan_mode_gate_for_exec(
+            &design_mode(),
+            PlanEnforcement::Strict,
+            &cmd,
+            std::path::Path::new("/repo"),
+            None,
+        );
         assert!(
             matches!(decision, PlanGateDecision::Deny { .. }),
             "expected {cmd:?} to be denied in Design mode strict"
@@ -889,7 +1124,13 @@ fn design_gate_exec_indeterminate_strict_asks() {
         vec_str(&["bash", "-lc", "some-tool --analyze"]),
     ];
     for cmd in cases {
-        let decision = plan_mode_gate_for_exec(&design_mode(), PlanEnforcement::Strict, &cmd);
+        let decision = plan_mode_gate_for_exec(
+            &design_mode(),
+            PlanEnforcement::Strict,
+            &cmd,
+            std::path::Path::new("/repo"),
+            None,
+        );
         assert!(
             matches!(decision, PlanGateDecision::Ask { .. }),
             "expected {cmd:?} to require approval in Design mode strict"
@@ -907,7 +1148,13 @@ fn design_gate_exec_indeterminate_strict_asks() {
 fn design_gate_exec_advisory_allows_everything() {
     for cmd in [vec_str(&["rm", "-rf", "/"]), vec_str(&["cargo", "check"])] {
         assert_eq!(
-            plan_mode_gate_for_exec(&design_mode(), PlanEnforcement::Advisory, &cmd),
+            plan_mode_gate_for_exec(
+                &design_mode(),
+                PlanEnforcement::Advisory,
+                &cmd,
+                std::path::Path::new("/repo"),
+                None
+            ),
             PlanGateDecision::Allow,
             "advisory should behave like prompt-only Design mode"
         );
@@ -920,3 +1167,4 @@ fn design_mode_exec_denied_message_includes_marker_and_command() {
     assert!(msg.contains(DESIGN_MODE_REJECTION_MARKER));
     assert!(msg.contains("git commit"));
 }
+

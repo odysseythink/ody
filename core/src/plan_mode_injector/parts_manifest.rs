@@ -106,6 +106,16 @@ pub fn parse_parts_manifest(content: &str) -> ManifestParseResult {
     result
 }
 
+/// Returns true only if `row` is marked `done` in the table AND its
+/// normalized part file actually exists on disk. A `done` row whose file is
+/// missing (e.g. the model never wrote it, or wrote it to the wrong place)
+/// is treated as not actually finished, so callers keep directing the model
+/// back to it instead of silently accepting a false completion.
+pub fn row_is_verified_done(stem_dir: &Path, row: &ManifestRow) -> bool {
+    row.status == RowStatus::Done
+        && normalize_part_path(stem_dir, &row.file).is_some_and(|path| path.exists())
+}
+
 pub fn normalize_part_path(stem_dir: &Path, file_cell: &str) -> Option<PathBuf> {
     if file_cell.starts_with('/') || file_cell.contains("..") {
         return None;

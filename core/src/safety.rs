@@ -2,6 +2,7 @@ use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 
+use crate::plan_artifact::PlanArtifact;
 use ody_apply_patch::ApplyPatchAction;
 use ody_apply_patch::ApplyPatchFileChange;
 use ody_config::config_toml::PlanEnforcement;
@@ -10,12 +11,12 @@ use ody_protocol::config_types::ModeKind;
 use ody_protocol::config_types::WindowsSandboxLevel;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::parse_command::ParsedCommand;
-use crate::plan_artifact::PlanArtifact;
 use ody_protocol::permissions::FileSystemSandboxPolicy;
 use ody_protocol::protocol::AskForApproval;
 use ody_sandboxing::SandboxType;
 use ody_sandboxing::get_platform_sandbox;
 use ody_shell_command::bash::extract_bash_command;
+use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path_uri::PathUri;
 
 const PATCH_REJECTED_OUTSIDE_PROJECT_REASON: &str =
@@ -67,7 +68,10 @@ pub fn plan_mode_write_denied_message(path: &std::path::Path) -> String {
 /// Returns a human-readable Design-mode patch-denial message that includes the
 /// rejected file path and the stable rejection marker.
 pub fn design_mode_write_denied_message(path: &std::path::Path) -> String {
-    format!("{DESIGN_MODE_WRITE_DENIED_REASON} (file: {})", path.display())
+    format!(
+        "{DESIGN_MODE_WRITE_DENIED_REASON} (file: {})",
+        path.display()
+    )
 }
 
 /// Returns true for session modes that are read-only by default and must be
@@ -95,19 +99,15 @@ pub fn plan_mode_gate_for_patch(
         return PlanGateDecision::Allow;
     }
 
-    let all_paths_whitelisted = action
-        .changes()
-        .keys()
-        .all(|path_uri| {
-            path_uri
-                .to_abs_path()
-                .ok()
-                .map(|abs_path| {
-                    plan_artifact
-                        .is_some_and(|artifact| artifact.is_plan_file_path(abs_path.as_path()))
-                })
-                .unwrap_or(false)
-        });
+    let all_paths_whitelisted = action.changes().keys().all(|path_uri| {
+        path_uri
+            .to_abs_path()
+            .ok()
+            .map(|abs_path| {
+                plan_artifact.is_some_and(|artifact| artifact.is_plan_file_path(abs_path.as_path()))
+            })
+            .unwrap_or(false)
+    });
 
     if all_paths_whitelisted {
         return PlanGateDecision::Allow;
@@ -159,10 +159,18 @@ enum PlanModeExecClassification {
 /// Plan-mode front gate for exec commands. Runs before the normal exec approval
 /// path so that `AskForApproval::Never` and future auto-approve paths cannot
 /// bypass Plan mode.
+///
+/// `cwd` and `plan_artifact` mirror `plan_mode_gate_for_patch`'s whitelist: a
+/// known-write command whose target path(s) all resolve under the plan's own
+/// file or its `<stem>/*.md` part directory is allowed, so that split-plan
+/// part files can be created with `mkdir`/shell redirection when the model's
+/// tool set has no `apply_patch`-style file-write tool.
 pub fn plan_mode_gate_for_exec(
     mode: &CollaborationMode,
     enforcement: PlanEnforcement,
     command: &[String],
+    cwd: &Path,
+    plan_artifact: Option<&PlanArtifact>,
 ) -> PlanGateDecision {
     if !is_read_only_session_mode(mode.mode) {
         return PlanGateDecision::Allow;
@@ -182,19 +190,22 @@ pub fn plan_mode_gate_for_exec(
 
     match classify_command_for_plan_mode(command) {
         PlanModeExecClassification::ReadOnly => PlanGateDecision::Allow,
+        PlanModeExecClassification::KnownWrite
+            if known_write_targets_within_plan_scope(command, cwd, plan_artifact) =>
+        {
+            PlanGateDecision::Allow
+        }
         PlanModeExecClassification::KnownWrite => match enforcement {
             PlanEnforcement::Strict => PlanGateDecision::Deny {
                 reason: denied_message,
             },
-            PlanEnforcement::Ask => PlanGateDecision::Ask {
-                reason: ask_reason,
-            },
+            PlanEnforcement::Ask => PlanGateDecision::Ask { reason: ask_reason },
             PlanEnforcement::Advisory => PlanGateDecision::Allow,
         },
         PlanModeExecClassification::Indeterminate => match enforcement {
-            PlanEnforcement::Strict | PlanEnforcement::Ask => PlanGateDecision::Ask {
-                reason: ask_reason,
-            },
+            PlanEnforcement::Strict | PlanEnforcement::Ask => {
+                PlanGateDecision::Ask { reason: ask_reason }
+            }
             PlanEnforcement::Advisory => PlanGateDecision::Allow,
         },
     }
@@ -320,6 +331,116 @@ fn is_known_write_command(command: &[String]) -> bool {
         }
         _ => false,
     }
+}
+
+/// Shell control-flow tokens that chain multiple commands together. A
+/// command containing any of these is too complex to safely reason about
+/// path-by-path, so the plan-directory write carve-out never applies to it
+/// (it falls through to the normal Deny/Ask handling).
+const SHELL_CONTROL_FLOW_TOKENS: &[&str] = &[";", "&&", "||", "|", "&"];
+
+/// Best-effort tokenization of the command actually being run: for a
+/// bash/zsh/sh wrapper this is the wrapped script re-split with `shlex`;
+/// otherwise it is the argv the caller already split.
+fn effective_tokens_for_plan_scope_check(command: &[String]) -> Option<Vec<String>> {
+    if let Some((_, script)) = extract_bash_command(command) {
+        shlex::split(script)
+    } else {
+        Some(command.to_vec())
+    }
+}
+
+/// Truncates the token stream at the first heredoc redirection operator
+/// (`<<`, `<<-`), if present. Everything from that point on is heredoc body
+/// text — data fed to the command's stdin, not shell syntax — so scanning it
+/// for control-flow tokens or write targets is not just unnecessary, it's
+/// wrong: prose or quoted code (e.g. a Rust match arm's `A | B`, or `&&`/`||`
+/// mentioned as literal text) can freely contain characters that look like
+/// shell operators without being one. The write target and command name are
+/// always fully determined before the heredoc body begins.
+fn truncate_before_heredoc(tokens: &[String]) -> &[String] {
+    match tokens.iter().position(|t| t.starts_with("<<")) {
+        Some(idx) => &tokens[..idx],
+        None => tokens,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum WriteTargetKind {
+    File,
+    Directory,
+}
+
+/// Extracts the write target path(s) for the small set of commands the
+/// plan-scope carve-out understands (`mkdir`, `touch`, `tee`, and shell
+/// redirection `>`/`>>`). Returns an empty vec for anything else (e.g. `rm`,
+/// `cp`, `git`), which callers treat as "cannot confidently whitelist".
+fn write_targets_for_tokens(tokens: &[String]) -> Vec<(WriteTargetKind, String)> {
+    let Some(cmd0) = tokens.first() else {
+        return Vec::new();
+    };
+    let key = executable_base_name(cmd0);
+
+    match key.as_deref() {
+        Some("mkdir") => tokens
+            .iter()
+            .skip(1)
+            .filter(|arg| !arg.starts_with('-'))
+            .map(|arg| (WriteTargetKind::Directory, arg.clone()))
+            .collect(),
+        Some("touch" | "tee") => tokens
+            .iter()
+            .skip(1)
+            .filter(|arg| !arg.starts_with('-'))
+            .map(|arg| (WriteTargetKind::File, arg.clone()))
+            .collect(),
+        _ => tokens
+            .windows(2)
+            .filter(|pair| pair[0] == ">" || pair[0] == ">>")
+            .map(|pair| (WriteTargetKind::File, pair[1].clone()))
+            .collect(),
+    }
+}
+
+/// Returns true only when `command` is a single (non-chained) known-write
+/// command whose every write target can be confidently extracted and every
+/// extracted target resolves under the current plan artifact's own file or
+/// its `<stem>/` part directory.
+///
+/// Failing closed here is safe: it never widens what Plan mode blocks, only
+/// what it can allow. Anything ambiguous (chained commands, unrecognized
+/// verbs, unresolvable targets) falls through to the existing Deny/Ask path.
+fn known_write_targets_within_plan_scope(
+    command: &[String],
+    cwd: &Path,
+    plan_artifact: Option<&PlanArtifact>,
+) -> bool {
+    let Some(plan_artifact) = plan_artifact else {
+        return false;
+    };
+    let Some(tokens) = effective_tokens_for_plan_scope_check(command) else {
+        return false;
+    };
+    let tokens = truncate_before_heredoc(&tokens);
+    if tokens
+        .iter()
+        .any(|t| SHELL_CONTROL_FLOW_TOKENS.contains(&t.as_str()))
+    {
+        return false;
+    }
+
+    let targets = write_targets_for_tokens(tokens);
+    if targets.is_empty() {
+        return false;
+    }
+
+    targets.into_iter().all(|(kind, raw_target)| {
+        let resolved = AbsolutePathBuf::resolve_path_against_base(&raw_target, cwd).to_path_buf();
+        match kind {
+            WriteTargetKind::Directory => plan_artifact.is_plan_stem_dir_path(&resolved),
+            WriteTargetKind::File => plan_artifact.is_plan_file_path(&resolved),
+        }
+    })
 }
 
 fn merge_classification(

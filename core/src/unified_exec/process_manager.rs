@@ -364,8 +364,10 @@ fn apply_plan_mode_gate_to_exec_requirement(
     mode: &CollaborationMode,
     enforcement: PlanEnforcement,
     command: &[String],
+    cwd: &std::path::Path,
+    plan_artifact: Option<&crate::plan_artifact::PlanArtifact>,
 ) -> ExecApprovalRequirement {
-    match plan_mode_gate_for_exec(mode, enforcement, command) {
+    match plan_mode_gate_for_exec(mode, enforcement, command, cwd, plan_artifact) {
         PlanGateDecision::Allow => requirement,
         PlanGateDecision::Deny { reason } => ExecApprovalRequirement::Forbidden { reason },
         PlanGateDecision::Ask { reason } => match requirement {
@@ -1163,11 +1165,17 @@ impl UnifiedExecProcessManager {
             .as_ref()
             .and_then(|pm| pm.enforcement)
             .unwrap_or(PlanEnforcement::Strict);
+        let plan_scope_cwd = cwd
+            .to_abs_path()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|_| std::path::PathBuf::from("."));
         let exec_approval_requirement = apply_plan_mode_gate_to_exec_requirement(
             exec_approval_requirement,
             &context.turn.collaboration_mode,
             plan_mode_enforcement,
             &request.command,
+            &plan_scope_cwd,
+            context.turn.plan_artifact.as_deref(),
         );
         let req = UnifiedExecToolRequest {
             command: request.command.clone(),

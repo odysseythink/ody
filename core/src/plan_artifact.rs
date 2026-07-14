@@ -338,6 +338,16 @@ impl PlanArtifact {
         ody_utils_path::paths_match_after_normalization(&stem_dir, target_parent)
     }
 
+    /// Returns true if `target` is exactly this artifact's stem sub-directory
+    /// (the directory that holds split-plan part files). Used to allow
+    /// `mkdir`-ing that directory in Plan mode before writing part files into it.
+    pub fn is_plan_stem_dir_path(&self, target: &Path) -> bool {
+        let Some(stem_dir) = self.stem_dir() else {
+            return false;
+        };
+        ody_utils_path::paths_match_after_normalization(&stem_dir, target)
+    }
+
     pub fn restore_or_create(
         plans_base_dir: AbsolutePathBuf,
         thread_id: ody_protocol::ThreadId,

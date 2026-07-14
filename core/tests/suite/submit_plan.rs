@@ -332,3 +332,123 @@ async fn submit_plan_split_pending_part_does_not_end_turn() -> anyhow::Result<()
 
     Ok(())
 }
+
+/// Regression test: a split plan where nothing has been verified done yet
+/// (every row still `pending`) must be allowed to drop the `## Parts` table
+/// and finalize as a single-file plan. This is the escape hatch for a model
+/// that cannot write part files in Plan mode at all (no working file-write
+/// tool, or one that keeps guessing the wrong path) — without it, every
+/// single-file resubmission is rejected forever, even after the user
+/// explicitly agrees to abandon the split, because there is no other way to
+/// ever clear the "previously had a `## Parts` table" state.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn submit_plan_allows_dropping_parts_table_when_nothing_done_yet() -> anyhow::Result<()> {
+    skip_if_no_network!(Ok(()));
+
+    let server = start_mock_server().await;
+
+    let mut builder = test_ody();
+    let TestOdy {
+        ody,
+        cwd,
+        session_configured,
+        ..
+    } = builder.build(&server).await?;
+
+    let index_call_id = "submit-plan-index-drop";
+    let index_markdown = "# Split Plan\n\n## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 1 | part1.md | scope one | pending |\n";
+    let index_args = json!({"plan": index_markdown}).to_string();
+    let first_response = sse(vec![
+        ev_response_created("resp-1"),
+        ev_function_call(index_call_id, "submit_plan", &index_args),
+        ev_completed("resp-1"),
+    ]);
+
+    // Second call: abandons the split entirely in favor of a single-file plan.
+    // Since no part was ever verified done, this must be accepted as the
+    // terminal submission rather than rejected as a "dropped index" fragment.
+    let single_file_call_id = "submit-plan-single-file";
+    let single_file_markdown =
+        "# Single File Plan\n\n**Goal:** everything in one document.\n\n- [ ] Task 1\n";
+    let single_file_args = json!({"plan": single_file_markdown}).to_string();
+    let second_response = sse(vec![
+        ev_response_created("resp-2"),
+        ev_function_call(single_file_call_id, "submit_plan", &single_file_args),
+        ev_completed("resp-2"),
+    ]);
+
+    let response_mock = mount_sse_sequence(&server, vec![first_response, second_response]).await;
+
+    let (sandbox_policy, permission_profile) =
+        turn_permission_fields(PermissionProfile::Disabled, cwd.path());
+
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "please make a split plan".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(cwd.abs())),
+            approval_policy: Some(AskForApproval::Never),
+            sandbox_policy: Some(sandbox_policy),
+            permission_profile,
+            collaboration_mode: Some(CollaborationMode {
+                mode: ModeKind::Plan,
+                settings: Settings {
+                    model: session_configured.model.clone(),
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                    design_audit_level: None,
+                },
+            }),
+            ..Default::default()
+        },
+    })
+    .await?;
+
+    let index_completed = wait_for_event_match(&ody, |event| match event {
+        EventMsg::ItemCompleted(ody_protocol::protocol::ItemCompletedEvent {
+            item: TurnItem::Plan(item),
+            ..
+        }) => Some(item.clone()),
+        _ => None,
+    })
+    .await;
+    assert_eq!(index_completed.text, index_markdown);
+    let plan_path = index_completed
+        .plan_file_path
+        .expect("index submission should have a plan_file_path");
+
+    let final_completed = wait_for_event_match(&ody, |event| match event {
+        EventMsg::ItemCompleted(ody_protocol::protocol::ItemCompletedEvent {
+            item: TurnItem::Plan(item),
+            ..
+        }) => Some(item.clone()),
+        _ => None,
+    })
+    .await;
+    assert_eq!(final_completed.text, single_file_markdown);
+
+    let requests = response_mock.requests();
+    assert_eq!(requests.len(), 2, "no further sampling round should be needed");
+
+    let (single_file_output, single_file_success) =
+        call_output(&requests[1], single_file_call_id);
+    assert_eq!(
+        single_file_success,
+        Some(true),
+        "abandoning a split plan with nothing done yet must be accepted: {single_file_output}"
+    );
+    assert_eq!(single_file_output, "Plan submitted");
+
+    let persisted = tokio::fs::read_to_string(&plan_path).await?;
+    assert_eq!(
+        persisted, single_file_markdown,
+        "the single-file plan should have replaced the index on disk"
+    );
+
+    Ok(())
+}

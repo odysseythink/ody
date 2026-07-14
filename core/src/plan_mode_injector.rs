@@ -1,5 +1,7 @@
 use crate::plan_artifact::{ManifestSnapshot, PartRow, PartStatus, PlanArtifact};
-use crate::plan_mode_injector::parts_manifest::{normalize_part_path, parse_parts_manifest, RowStatus};
+use crate::plan_mode_injector::parts_manifest::{
+    RowStatus, normalize_part_path, parse_parts_manifest, row_is_verified_done,
+};
 use ody_config::config_toml::PlanModeConfigToml;
 use ody_protocol::config_types::ModeKind;
 use std::path::Path;
@@ -61,17 +63,27 @@ impl PlanModeInjector {
         let mut pending_rows: Vec<PartRow> = Vec::new();
         for row in &manifest.rows {
             if normalize_part_path(&stem_dir, &row.file).is_none() {
-                warn!("plan_mode_injector: ignored invalid manifest path {}", row.file);
+                warn!(
+                    "plan_mode_injector: ignored invalid manifest path {}",
+                    row.file
+                );
                 continue;
             }
-            match row.status {
-                RowStatus::Done => done_count += 1,
-                RowStatus::Pending => pending_rows.push(PartRow {
-                    file_name: row.file.clone(),
-                    scope: row.scope.clone(),
-                    status: PartStatus::Pending,
-                }),
+            if row_is_verified_done(&stem_dir, row) {
+                done_count += 1;
+                continue;
             }
+            if row.status == RowStatus::Done {
+                warn!(
+                    "plan_mode_injector: part {} marked done but its file is missing on disk; treating as pending",
+                    row.file
+                );
+            }
+            pending_rows.push(PartRow {
+                file_name: row.file.clone(),
+                scope: row.scope.clone(),
+                status: PartStatus::Pending,
+            });
         }
 
         let prev_snapshot = artifact.last_manifest_snapshot();
@@ -89,9 +101,10 @@ impl PlanModeInjector {
                     normalize_part_path(&stem_dir, &row.file).map(|_| PartRow {
                         file_name: row.file.clone(),
                         scope: row.scope.clone(),
-                        status: match row.status {
-                            RowStatus::Done => PartStatus::Done,
-                            RowStatus::Pending => PartStatus::Pending,
+                        status: if row_is_verified_done(&stem_dir, row) {
+                            PartStatus::Done
+                        } else {
+                            PartStatus::Pending
                         },
                     })
                 })
@@ -195,31 +208,51 @@ impl PlanModeInjector {
     }
 }
 
+/// Resolves the path a pending part should actually be written at: the
+/// index's own `<stem>/` directory joined with the part's basename.
+///
+/// `next_part.relative_path` comes verbatim from the `## Parts` table's
+/// `File` cell, which the model is supposed to fill with a bare filename
+/// (e.g. `core.md`) — but models sometimes write a directory-prefixed value
+/// there instead (e.g. copying a design doc's own filename). `normalize_part_path`
+/// already discards any such prefix and re-joins with the real stem directory
+/// for *validation*; this does the same for the *directive text shown to the
+/// model*, so the two never disagree about where a part belongs.
+fn resolved_part_path(index_path: &Path, relative_path: &str) -> String {
+    let basename = Path::new(relative_path)
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| relative_path.to_string());
+    match index_path.file_stem() {
+        Some(stem) => format!("{}/{}", index_path.with_file_name(stem).display(), basename),
+        None => basename,
+    }
+}
+
 pub fn render_directive(
     directive: &PlanModeDirective,
     index_path: &Path,
     mode: ModeKind,
 ) -> Option<String> {
-    let _ = index_path;
     match (mode, directive) {
         (ModeKind::Design, PlanModeDirective::StartSplit { next_part }) => Some(format!(
             "This design has been split into multiple parts. Write only the first pending part this turn: {} (scope: {}). Place it under the design's `<stem>/` directory. One part per turn — do not write other parts yet.",
-            next_part.relative_path, next_part.scope
+            resolved_part_path(index_path, &next_part.relative_path), next_part.scope
         )),
         (ModeKind::Design, PlanModeDirective::ContinueSplit { next_part }) => Some(format!(
             "Good progress. The next pending design part is: {} (scope: {}). Write only this part under the `<stem>/` directory in the current turn. One part per turn.",
-            next_part.relative_path, next_part.scope
+            resolved_part_path(index_path, &next_part.relative_path), next_part.scope
         )),
         (ModeKind::Design, PlanModeDirective::FinalReview) => Some(
             "All design parts are marked done. Before asking for final approval, run a cross-file consistency review across the index and every `<stem>/` part, then present the final design for approval.".to_string()
         ),
         (_, PlanModeDirective::StartSplit { next_part }) => Some(format!(
             "This plan has been split into multiple parts. Focus this turn on writing only the first pending part: {} (scope: {}). Do not write other parts yet.",
-            next_part.relative_path, next_part.scope
+            resolved_part_path(index_path, &next_part.relative_path), next_part.scope
         )),
         (_, PlanModeDirective::ContinueSplit { next_part }) => Some(format!(
             "Good progress. The next pending part is: {} (scope: {}). Write only this part in the current turn.",
-            next_part.relative_path, next_part.scope
+            resolved_part_path(index_path, &next_part.relative_path), next_part.scope
         )),
         (_, PlanModeDirective::FinalReview) => Some(
             "All parts are marked done. Before finalizing the plan, review the parts for consistency, then call the submit_plan tool with the final plan markdown as the only action to persist it and end the turn.".to_string()
@@ -286,24 +319,21 @@ pub fn select_reminder(
     last_any_turn: Option<usize>,
     config: Option<&PlanModeConfigToml>,
 ) -> Option<ReminderKind> {
-    let full_refresh = config
-        .and_then(|c| c.full_refresh_turns)
-        .unwrap_or(5);
-    let dedup_min = config
-        .and_then(|c| c.dedup_min_turns)
-        .unwrap_or(2);
+    let full_refresh = config.and_then(|c| c.full_refresh_turns).unwrap_or(5);
+    let dedup_min = config.and_then(|c| c.dedup_min_turns).unwrap_or(2);
 
     if full_refresh > 0 {
-        let full_due = last_full_turn
-            .map_or(true, |last| current_turn.saturating_sub(last) >= full_refresh);
+        let full_due = last_full_turn.map_or(true, |last| {
+            current_turn.saturating_sub(last) >= full_refresh
+        });
         if full_due {
             return Some(ReminderKind::Full);
         }
     }
 
     if dedup_min > 0 {
-        let sparse_due = last_any_turn
-            .map_or(true, |last| current_turn.saturating_sub(last) >= dedup_min);
+        let sparse_due =
+            last_any_turn.map_or(true, |last| current_turn.saturating_sub(last) >= dedup_min);
         if sparse_due {
             return Some(ReminderKind::Sparse);
         }
@@ -352,11 +382,22 @@ mod directive_tests {
             done_count: 0,
             pending_count: 2,
             rows: vec![
-                PartRow { file_name: "core.md".to_string(), scope: "models".to_string(), status: PartStatus::Pending },
-                PartRow { file_name: "api.md".to_string(), scope: "endpoints".to_string(), status: PartStatus::Pending },
+                PartRow {
+                    file_name: "core.md".to_string(),
+                    scope: "models".to_string(),
+                    status: PartStatus::Pending,
+                },
+                PartRow {
+                    file_name: "api.md".to_string(),
+                    scope: "endpoints".to_string(),
+                    status: PartStatus::Pending,
+                },
             ],
         };
         artifact.set_last_manifest_snapshot(prev);
+        let stem_dir = artifact.stem_dir().unwrap();
+        std::fs::create_dir_all(&stem_dir).unwrap();
+        std::fs::write(stem_dir.join("core.md"), "# Core\n").unwrap();
         let markdown = "## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 1 | core.md | models | done |\n| 2 | api.md | endpoints | pending |\n";
         let result = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
         assert_eq!(
@@ -379,15 +420,67 @@ mod directive_tests {
             done_count: 0,
             pending_count: 2,
             rows: vec![
-                PartRow { file_name: "core.md".to_string(), scope: "models".to_string(), status: PartStatus::Pending },
-                PartRow { file_name: "api.md".to_string(), scope: "endpoints".to_string(), status: PartStatus::Pending },
+                PartRow {
+                    file_name: "core.md".to_string(),
+                    scope: "models".to_string(),
+                    status: PartStatus::Pending,
+                },
+                PartRow {
+                    file_name: "api.md".to_string(),
+                    scope: "endpoints".to_string(),
+                    status: PartStatus::Pending,
+                },
             ],
         };
         artifact.set_last_manifest_snapshot(prev);
+        let stem_dir = artifact.stem_dir().unwrap();
+        std::fs::create_dir_all(&stem_dir).unwrap();
+        std::fs::write(stem_dir.join("core.md"), "# Core\n").unwrap();
+        std::fs::write(stem_dir.join("api.md"), "# Api\n").unwrap();
         let markdown = "## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 1 | core.md | models | done |\n| 2 | api.md | endpoints | done |\n";
         let result = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
         assert_eq!(result.directive, PlanModeDirective::FinalReview);
         assert!(result.boundary_crossed);
+    }
+
+    /// Regression test: a model can flip a `## Parts` row to `done` in the
+    /// index markdown without ever having written that part's file (e.g. it
+    /// had no working file-write tool in Plan mode). That must not be treated
+    /// as real completion — the row should stay pending so the model is
+    /// redirected back to it instead of ending Plan mode with a missing part.
+    #[tokio::test]
+    async fn done_row_with_missing_file_is_treated_as_pending() {
+        let (artifact, _tmp) = artifact("2026-07-04");
+        artifact.finalize_name("topic").await.unwrap();
+        let prev = ManifestSnapshot {
+            done_count: 0,
+            pending_count: 2,
+            rows: vec![
+                PartRow {
+                    file_name: "core.md".to_string(),
+                    scope: "models".to_string(),
+                    status: PartStatus::Pending,
+                },
+                PartRow {
+                    file_name: "api.md".to_string(),
+                    scope: "endpoints".to_string(),
+                    status: PartStatus::Pending,
+                },
+            ],
+        };
+        artifact.set_last_manifest_snapshot(prev);
+        // Note: neither core.md nor api.md is ever written to disk here.
+        let markdown = "## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 1 | core.md | models | done |\n| 2 | api.md | endpoints | done |\n";
+        let result = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
+        assert_eq!(
+            result.directive,
+            PlanModeDirective::None,
+            "a done row without a file on disk must not trigger FinalReview"
+        );
+        assert!(
+            !result.boundary_crossed,
+            "no row is actually verified done, so no boundary was crossed"
+        );
     }
 
     #[tokio::test]
@@ -398,8 +491,16 @@ mod directive_tests {
             done_count: 1,
             pending_count: 1,
             rows: vec![
-                PartRow { file_name: "core.md".to_string(), scope: "models".to_string(), status: PartStatus::Done },
-                PartRow { file_name: "api.md".to_string(), scope: "endpoints".to_string(), status: PartStatus::Pending },
+                PartRow {
+                    file_name: "core.md".to_string(),
+                    scope: "models".to_string(),
+                    status: PartStatus::Done,
+                },
+                PartRow {
+                    file_name: "api.md".to_string(),
+                    scope: "endpoints".to_string(),
+                    status: PartStatus::Pending,
+                },
             ],
         };
         artifact.set_last_manifest_snapshot(prev);
@@ -415,9 +516,21 @@ mod directive_tests {
             split_plan_compaction_ratio: Some(0.5),
             ..Default::default()
         };
-        assert!(PlanModeInjector::should_trigger_compaction(true, Some(&config), 0.6));
-        assert!(!PlanModeInjector::should_trigger_compaction(true, Some(&config), 0.4));
-        assert!(!PlanModeInjector::should_trigger_compaction(false, Some(&config), 0.9));
+        assert!(PlanModeInjector::should_trigger_compaction(
+            true,
+            Some(&config),
+            0.6
+        ));
+        assert!(!PlanModeInjector::should_trigger_compaction(
+            true,
+            Some(&config),
+            0.4
+        ));
+        assert!(!PlanModeInjector::should_trigger_compaction(
+            false,
+            Some(&config),
+            0.9
+        ));
     }
 
     #[test]
@@ -602,7 +715,11 @@ mod directive_tests {
         // cadence test above). Design must stay silent at every one of these turns.
         for _ in 1..=7 {
             assert_eq!(
-                PlanModeInjector::render_reminder_if_due(&artifact, Some(&config), ModeKind::Design),
+                PlanModeInjector::render_reminder_if_due(
+                    &artifact,
+                    Some(&config),
+                    ModeKind::Design
+                ),
                 None,
                 "Design mode must never receive a Plan rigor-tier reminder"
             );
@@ -617,10 +734,42 @@ mod directive_tests {
                 scope: "models".into(),
             },
         };
-        let text = render_directive(&dir, Path::new("plan.md"), ModeKind::Plan).expect("plan start");
+        let text =
+            render_directive(&dir, Path::new("plan.md"), ModeKind::Plan).expect("plan start");
         assert!(text.contains("split into multiple parts"), "{text}");
         assert!(text.contains("core.md"), "{text}");
         assert!(text.contains("models"), "{text}");
+    }
+
+    /// Regression test for a real session: the model wrote a directory-prefixed
+    /// value into the `## Parts` table's `File` cell (copying an unrelated design
+    /// doc's filename) instead of a bare basename. `normalize_part_path` already
+    /// discards that prefix for *validation*, re-joining with the real stem
+    /// directory — but `render_directive` used to echo the raw (wrong) cell value
+    /// verbatim in the directive text shown to the model, so the model dutifully
+    /// tried to `mkdir`/write into a directory that didn't match the plan's real
+    /// stem and got denied. The directive must always show the real path.
+    #[test]
+    fn render_directive_resolves_wrong_directory_prefix_in_relative_path() {
+        let dir = PlanModeDirective::StartSplit {
+            next_part: PartTarget {
+                relative_path: "2026-07-12-mode-models-per-mode-config/config-schema.md".into(),
+                scope: "config schema".into(),
+            },
+        };
+        let index_path =
+            Path::new("/repo/.ody-code/plans/2026-07-12-mode_models_implementation_plan.md");
+        let text = render_directive(&dir, index_path, ModeKind::Plan).expect("plan start");
+        assert!(
+            text.contains(
+                "/repo/.ody-code/plans/2026-07-12-mode_models_implementation_plan/config-schema.md"
+            ),
+            "directive must resolve the part against the real stem directory, not the model's guessed prefix: {text}"
+        );
+        assert!(
+            !text.contains("2026-07-12-mode-models-per-mode-config"),
+            "directive must not repeat the model's wrong directory prefix: {text}"
+        );
     }
 
     #[test]

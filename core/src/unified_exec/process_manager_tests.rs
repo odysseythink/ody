@@ -366,6 +366,8 @@ fn plan_mode_exec_gate_default_mode_leaves_skip_unchanged() {
         &default_mode(),
         PlanEnforcement::Strict,
         &cmd(&["rm", "-rf", "/"]),
+        std::path::Path::new("/repo"),
+        None,
     );
     assert_eq!(result, req, "Default mode must not gate exec");
 }
@@ -381,6 +383,8 @@ fn plan_mode_exec_gate_read_only_leaves_skip_unchanged() {
         &plan_mode(),
         PlanEnforcement::Strict,
         &cmd(&["ls", "-la"]),
+        std::path::Path::new("/repo"),
+        None,
     );
     assert_eq!(result, req);
 }
@@ -395,6 +399,8 @@ fn plan_mode_exec_gate_strict_write_forbids() {
         &plan_mode(),
         PlanEnforcement::Strict,
         &cmd(&["cp", "a", "b"]),
+        std::path::Path::new("/repo"),
+        None,
     );
     assert!(
         matches!(result, ExecApprovalRequirement::Forbidden { .. }),
@@ -420,6 +426,8 @@ fn plan_mode_exec_gate_ask_write_needs_approval() {
         &plan_mode(),
         PlanEnforcement::Ask,
         &cmd(&["cp", "a", "b"]),
+        std::path::Path::new("/repo"),
+        None,
     );
     assert!(
         matches!(result, ExecApprovalRequirement::NeedsApproval { .. }),
@@ -446,6 +454,8 @@ fn plan_mode_exec_gate_advisory_allows_write() {
         &plan_mode(),
         PlanEnforcement::Advisory,
         &cmd(&["rm", "-rf", "/"]),
+        std::path::Path::new("/repo"),
+        None,
     );
     assert_eq!(
         result, req,
@@ -463,6 +473,8 @@ fn plan_mode_exec_gate_strict_indeterminate_needs_approval() {
         &plan_mode(),
         PlanEnforcement::Strict,
         &cmd(&["cargo", "check"]),
+        std::path::Path::new("/repo"),
+        None,
     );
     assert!(
         matches!(result, ExecApprovalRequirement::NeedsApproval { .. }),
@@ -480,6 +492,8 @@ fn plan_mode_exec_gate_strict_deny_overrides_existing_needs_approval() {
         &plan_mode(),
         PlanEnforcement::Strict,
         &cmd(&["cp", "a", "b"]),
+        std::path::Path::new("/repo"),
+        None,
     );
     assert!(
         matches!(result, ExecApprovalRequirement::Forbidden { .. }),
@@ -497,6 +511,8 @@ fn plan_mode_exec_gate_ask_does_not_downgrade_existing_forbidden() {
         &plan_mode(),
         PlanEnforcement::Ask,
         &cmd(&["cp", "a", "b"]),
+        std::path::Path::new("/repo"),
+        None,
     );
     assert_eq!(
         result, req,
@@ -514,6 +530,8 @@ fn plan_mode_exec_gate_read_only_does_not_downgrade_existing_forbidden() {
         &plan_mode(),
         PlanEnforcement::Strict,
         &cmd(&["ls"]),
+        std::path::Path::new("/repo"),
+        None,
     );
     assert_eq!(
         result, req,
