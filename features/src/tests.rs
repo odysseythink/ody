@@ -41,6 +41,19 @@ fn default_enabled_features_are_stable() {
     }
 }
 
+/// The structured file tools (read_file/grep/glob) are the low-context
+/// exploration path that replaces raw `rg`/`cat` shell calls. They only pay off
+/// if they are in the model's tool list by default — a model that does not see
+/// them shells out instead, which is the behaviour this feature exists to fix.
+#[test]
+fn file_tools_are_enabled_by_default() {
+    assert_eq!(Feature::FileTools.stage(), Stage::Stable);
+    assert!(
+        Features::with_defaults().enabled(Feature::FileTools),
+        "structured file tools must be on by default"
+    );
+}
+
 #[test]
 fn use_legacy_landlock_is_deprecated_and_disabled_by_default() {
     assert_eq!(Feature::UseLegacyLandlock.stage(), Stage::Deprecated);
