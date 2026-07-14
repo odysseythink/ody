@@ -4,6 +4,7 @@ use std::sync::Arc;
 use ody_features::Feature;
 use ody_mcp::ToolInfo;
 use ody_model_provider::create_model_provider;
+use ody_protocol::config_types::ModeKind;
 use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::dynamic_tools::DynamicToolSpec;
 use ody_protocol::model_metadata::ApplyPatchToolType;
@@ -1427,4 +1428,18 @@ async fn hosted_tools_follow_provider_auth_model_and_config_gates() {
     )
     .await;
     standalone_web_search.assert_visible_lacks(&["web_search"]);
+}
+
+#[test]
+fn plan_and_design_mode_register_apply_patch_even_without_model_support() {
+    // Fallback write channel: read-only modes must always have a file-write
+    // tool, or split-plan part files can never be persisted.
+    assert!(super::should_register_apply_patch(true, false, ModeKind::Plan));
+    assert!(super::should_register_apply_patch(true, true, ModeKind::Plan));
+    assert!(super::should_register_apply_patch(true, false, ModeKind::Design));
+    // No environment → nowhere to patch.
+    assert!(!super::should_register_apply_patch(false, false, ModeKind::Plan));
+    // Writable modes keep the old gating: only when the model advertises it.
+    assert!(!super::should_register_apply_patch(true, false, ModeKind::Default));
+    assert!(super::should_register_apply_patch(true, true, ModeKind::Default));
 }

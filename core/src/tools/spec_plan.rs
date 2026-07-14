@@ -630,6 +630,22 @@ fn add_mcp_resource_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut
     }
 }
 
+/// Plan/Design mode must always expose at least one file-write tool so
+/// split-plan part files can be persisted. `apply_patch` is normally
+/// registered only for models that advertise the tool type; in read-only
+/// session modes register it anyway as the fallback write channel — the
+/// shell may be disabled, and `plan_mode_gate_for_patch` (safety.rs) already
+/// restricts patches to the plan file and its `<stem>/` directory, so this
+/// does not widen what those modes can write.
+fn should_register_apply_patch(
+    has_environment: bool,
+    apply_patch_supported: bool,
+    mode: ModeKind,
+) -> bool {
+    has_environment
+        && (apply_patch_supported || matches!(mode, ModeKind::Plan | ModeKind::Design))
+}
+
 #[instrument(level = "trace", skip_all)]
 fn add_core_utility_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut PlannedTools) {
     let turn_context = context.turn_context;
@@ -693,8 +709,11 @@ fn add_core_utility_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut
         ));
     }
 
-    if environment_mode.has_environment() && turn_context.model_info.apply_patch_tool_type.is_some()
-    {
+    if should_register_apply_patch(
+        environment_mode.has_environment(),
+        turn_context.model_info.apply_patch_tool_type.is_some(),
+        turn_context.collaboration_mode.mode,
+    ) {
         let include_environment_id = matches!(environment_mode, ToolEnvironmentMode::Multiple);
         planned_tools.add(ApplyPatchHandler::new(include_environment_id));
     }
