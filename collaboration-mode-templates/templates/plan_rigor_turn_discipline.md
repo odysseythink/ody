@@ -111,14 +111,15 @@ User: "This looks good but add a performance test."
 ## Parts
 | # | File | Scope | Status |
 |---|---|---|---|
-| 1 | design-mode/protocol.md | Protocol types | pending |
-| 2 | design-mode/config.md | Config + instructions | pending |
-| 3 | design-mode/schema.md | Schema + tests | pending |
+| 1 | <stem>/protocol.md | Protocol types | pending |
+| 2 | <stem>/config.md | Config + instructions | pending |
+| 3 | <stem>/schema.md | Schema + tests | pending |
 ```
 → 3 rows are `pending`, so this call saves the index only — Plan mode stays active, no AskUserQuestion. Injection will direct to Part 1.
 
 **Turn 2:**
-- Write `design-mode/protocol.md` with a normal file-write tool:
+- Write `<stem>/protocol.md` with a normal file-write tool:
+   - The `<stem>` directory is date-slug-prefixed and revealed in the `submit_plan` response — never guess it.
 ```
 ## Part 1 (from previous turn's injection)
 
@@ -129,12 +130,12 @@ User: "This looks good but add a performance test."
 → Still 2 rows `pending`, so Plan mode stays active. Injection directs to Part 2.
 
 **Turn 3:**
-- Write `design-mode/config.md`
+- Write `<stem>/config.md`
 - Call `submit_plan` with the index markdown, Parts 1-2 `done` (Part 3 still `pending`)
 → Still 1 row `pending`, Plan mode stays active. Injection directs to Part 3.
 
 **Turn 4:**
-- Write `design-mode/schema.md` (final part)
+- Write `<stem>/schema.md` (final part)
 - Cross-file consistency review: all dependencies valid ✓
 - Call `submit_plan` with the index markdown, all 3 rows `done`
 → No rows `pending`, so this call ends Plan mode (approval requested)

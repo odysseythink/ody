@@ -61,6 +61,7 @@ The index file must include a `## Parts` table listing all part files and their 
 
 2. **Each subsequent turn: write ONE part file with a normal file-write tool (not `submit_plan`)**
    - Create the part file at exactly `<index-stem>/<part-name>.md`
+   - The `<index-stem>` directory is date-slug-prefixed and revealed in the `submit_plan` response — never guess it.
    - Include: part header → its tasks → its local Self-Review (7 items)
    - `submit_plan` cannot create this file — it only ever overwrites the index — so use your normal file-write tool. Writing under the plan's own `<index-stem>/` directory is allowed in Plan mode.
    - After finishing the part, call `submit_plan` again with the index's full markdown, this time with that part's row flipped from `pending` to `done`. This re-submission is what advances the tracker — a direct edit to the index's `## Parts` table alone will not be seen.
@@ -85,7 +86,7 @@ Tasks in different parts may depend on each other. Use this format:
 **Depends on:** <id>/core.md: Task 2
 ```
 
-Example: `Depends on: design-mode/core.md: Task 3` means "this task uses a symbol/artifact that Task 3 in the core.md part created."
+Example: `Depends on: <stem>/core.md: Task 3` means "this task uses a symbol/artifact that Task 3 in the core.md part created."
 
 ### Local Self-Review in each part
 
@@ -150,14 +151,14 @@ Part 3: Schema + Verification (Fixtures + tests)
 ## Parts
 | # | File | Scope | Status |
 |---|---|---|---|
-| 1 | `design-mode/protocol-core.md` | Protocol types + presets | pending |
-| 2 | `design-mode/config.md` | Config + instructions | pending |
-| 3 | `design-mode/schema.md` | Schema fixtures + verification | pending |
+| 1 | `<stem>/protocol-core.md` | Protocol types + presets | pending |
+| 2 | `<stem>/config.md` | Config + instructions | pending |
+| 3 | `<stem>/schema.md` | Schema fixtures + verification | pending |
 
 ...rest of index...
 ```
 
-**Part file 1:** `design-mode/protocol-core.md`
+**Part file 1:** `<stem>/protocol-core.md`
 ```markdown
 # Design Mode — Protocol & Presets (Part 1)
 
