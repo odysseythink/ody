@@ -12,12 +12,15 @@ use crate::tools::handlers::DynamicToolHandler;
 use crate::tools::handlers::ExecCommandHandler;
 use crate::tools::handlers::ExecCommandHandlerOptions;
 use crate::tools::handlers::GetContextRemainingHandler;
+use crate::tools::handlers::GlobHandler;
+use crate::tools::handlers::GrepHandler;
 use crate::tools::handlers::ListAvailablePluginsToInstallHandler;
 use crate::tools::handlers::ListMcpResourceTemplatesHandler;
 use crate::tools::handlers::ListMcpResourcesHandler;
 use crate::tools::handlers::McpHandler;
 use crate::tools::handlers::NewContextWindowHandler;
 use crate::tools::handlers::PlanHandler;
+use crate::tools::handlers::ReadFileHandler;
 use crate::tools::handlers::ReadMcpResourceHandler;
 use crate::tools::handlers::RequestPermissionsHandler;
 use crate::tools::handlers::RequestPluginInstallHandler;
@@ -33,6 +36,7 @@ use crate::tools::handlers::WriteStdinHandler;
 use crate::tools::handlers::agent_jobs::ReportAgentJobResultHandler;
 use crate::tools::handlers::agent_jobs::SpawnAgentsOnCsvHandler;
 use crate::tools::handlers::extension_tools::ExtensionToolAdapter;
+use crate::tools::handlers::file_tools_spec::FileToolOptions;
 use crate::tools::handlers::multi_agents::CloseAgentHandler;
 use crate::tools::handlers::multi_agents::ResumeAgentHandler;
 use crate::tools::handlers::multi_agents::SendInputHandler;
@@ -548,6 +552,7 @@ fn code_mode_namespace_descriptions(
 #[instrument(level = "trace", skip_all)]
 fn add_tool_sources(context: &CoreToolPlanContext<'_>, planned_tools: &mut PlannedTools) {
     add_shell_tools(context, planned_tools);
+    add_file_tools(context, planned_tools);
     add_mcp_resource_tools(context, planned_tools);
     add_core_utility_tools(context, planned_tools);
     add_collaboration_tools(context, planned_tools);
@@ -619,6 +624,35 @@ fn unified_exec_should_include_shell_parameter(turn_context: &TurnContext) -> bo
         .turn_environments
         .iter()
         .any(|environment| environment.environment.is_remote())
+}
+
+/// Registers `read_file` / `grep` / `glob`.
+///
+/// Exposure is deliberately `Direct` (the `PlannedTools::add` default): a
+/// `Deferred` tool is absent from the model's initial tool list, so the model
+/// would fall back to raw `rg`/`cat` through `shell_command` — the very path
+/// these tools exist to replace. They only save context if the model sees them.
+#[instrument(level = "trace", skip_all)]
+fn add_file_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut PlannedTools) {
+    let turn_context = context.turn_context;
+    if !turn_context
+        .config
+        .features
+        .get()
+        .enabled(Feature::FileTools)
+    {
+        return;
+    }
+    let environment_mode = turn_context.tool_environment_mode();
+    if !environment_mode.has_environment() {
+        return;
+    }
+    let options = FileToolOptions {
+        include_environment_id: matches!(environment_mode, ToolEnvironmentMode::Multiple),
+    };
+    planned_tools.add(ReadFileHandler::new(options));
+    planned_tools.add(GrepHandler::new(options));
+    planned_tools.add(GlobHandler::new(options));
 }
 
 #[instrument(level = "trace", skip_all)]
@@ -780,7 +814,17 @@ fn add_collaboration_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mu
         } else {
             let agent_type_description =
                 agent_type_description(turn_context, context.default_agent_type_description);
-            let exposure = if search_tool_enabled(turn_context) {
+            let exposure = if crate::safety::is_read_only_session_mode(
+                turn_context.collaboration_mode.mode,
+            ) {
+                // In Plan/Design mode, exploration IS the job, and delegating it to a
+                // read-only `explorer` is what keeps the planning context free. A
+                // Deferred tool is absent from the model's initial tool list — it
+                // would have to discover spawn_agent through tool_search before it
+                // could ever choose to delegate, so in practice it never does, and
+                // every search lands in the planning context instead.
+                ToolExposure::Direct
+            } else if search_tool_enabled(turn_context) {
                 ToolExposure::Deferred
             } else {
                 ToolExposure::Direct

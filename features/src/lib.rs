@@ -141,6 +141,8 @@ pub enum Feature {
     NetworkProxy,
     /// Respect host system proxy settings for Ody-owned network clients.
     RespectSystemProxy,
+    /// Enable the structured file tools (read_file/grep/glob).
+    FileTools,
     /// Enable collab tools.
     Collab,
     /// Enable task-path-based multi-agent routing.
@@ -1015,6 +1017,12 @@ pub const FEATURES: &[FeatureSpec] = &[
         key: "respect_system_proxy",
         stage: Stage::UnderDevelopment,
         default_enabled: false,
+    },
+    FeatureSpec {
+        id: Feature::FileTools,
+        key: "file_tools",
+        stage: Stage::Stable,
+        default_enabled: true,
     },
     FeatureSpec {
         id: Feature::Collab,

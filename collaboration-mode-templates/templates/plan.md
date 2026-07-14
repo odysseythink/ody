@@ -63,7 +63,7 @@ Once the spec is decision-complete, produce the plan using this structured workf
 
 ### Workflow (five steps)
 
-1. **Understand** — explore the codebase with Read/Grep/Glob to discover existing functions, utilities, and patterns you can reuse. Eliminate unknowns by active discovery before planning.
+1. **Understand** — explore the codebase with `grep` / `glob` / `read_file` to discover existing functions, utilities, and patterns you can reuse. Start with `grep` (it returns file paths, not their contents), then `read_file` only the regions that matter — a broad dump of matching lines burns the context you will need for the plan itself. Eliminate unknowns by active discovery before planning.
 
 2. **File Structure** — list the files each task creates or modifies, with one clear responsibility per file. If a task touches multiple files, explain which file handles which concern.
 

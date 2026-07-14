@@ -1450,9 +1450,199 @@ async fn apply_patch_is_a_json_function_tool_for_models_without_any_capability()
     }
 }
 
+/// The file tools only reduce context if the model can actually see them. A
+/// `Deferred` registration would leave them out of the initial tool list, and
+/// the model would explore with raw `rg`/`cat` through `shell_command` — the
+/// exact path they exist to replace. Assert against the *model-visible* specs,
+/// not merely the registry.
+#[tokio::test]
+async fn file_tools_are_model_visible_in_every_mode() {
+    for mode in [ModeKind::Default, ModeKind::Plan, ModeKind::Design] {
+        let probe = probe(|turn| {
+            turn.collaboration_mode.mode = mode;
+        })
+        .await;
+
+        probe.assert_visible_contains(&["read_file", "grep", "glob"]);
+        for name in ["read_file", "grep", "glob"] {
+            assert!(
+                matches!(probe.visible_spec(name), ToolSpec::Function(_)),
+                "{name} must be a plain function tool in {mode:?}"
+            );
+        }
+    }
+}
+
+/// The root cause of the context burn: `spawn_agent` was Deferred whenever the
+/// search tool was on, so in Plan mode it was ABSENT from the model's initial
+/// tool list. The model could not choose to delegate exploration without first
+/// discovering the tool through tool_search — so it never did, and every search
+/// landed in the planning context.
+///
+/// Assert against `model_visible_specs`, not the registry: a registered-but-
+/// Deferred tool passes a registry check while being invisible to the model,
+/// which is exactly how this went unnoticed.
+#[tokio::test]
+async fn spawn_agent_is_directly_visible_in_read_only_modes() {
+    let spawn_agent = format!("{MULTI_AGENT_V1_NAMESPACE}spawn_agent");
+    for mode in [ModeKind::Plan, ModeKind::Design] {
+        let probe = probe(|turn| {
+            turn.collaboration_mode.mode = mode;
+        })
+        .await;
+
+        assert_eq!(
+            probe.exposure(&spawn_agent),
+            ToolExposure::Direct,
+            "spawn_agent must be Direct in {mode:?} — a Deferred tool is not in the \
+             model's tool list, so exploration can never be delegated"
+        );
+        assert!(
+            probe
+                .namespace_function_names(MULTI_AGENT_V1_NAMESPACE)
+                .iter()
+                .any(|name| name == "spawn_agent"),
+            "spawn_agent must appear in the model-visible {MULTI_AGENT_V1_NAMESPACE} namespace \
+             in {mode:?}"
+        );
+    }
+}
+
+/// Outside the read-only planning modes the previous behaviour stands: the
+/// search tool defers spawn_agent to keep the default tool list small.
+#[tokio::test]
+async fn spawn_agent_stays_deferred_outside_read_only_modes() {
+    let probe = probe(|turn| {
+        turn.collaboration_mode.mode = ModeKind::Default;
+    })
+    .await;
+    assert_eq!(
+        probe.exposure(&format!("{MULTI_AGENT_V1_NAMESPACE}spawn_agent")),
+        ToolExposure::Deferred
+    );
+}
+
+/// The blanket "do not spawn sub-agents unless the user explicitly asks" was the
+/// instruction that kept every search in the main context. It must survive only
+/// for WRITING work; read-only exploration is now the delegation that is
+/// actively encouraged.
+#[tokio::test]
+async fn spawn_agent_guidance_encourages_delegating_exploration() {
+    let probe = probe(|turn| {
+        turn.collaboration_mode.mode = ModeKind::Plan;
+    })
+    .await;
+    let ToolSpec::Namespace(namespace) = probe.visible_spec(MULTI_AGENT_V1_NAMESPACE) else {
+        panic!("{MULTI_AGENT_V1_NAMESPACE} should be a namespace spec");
+    };
+    let ResponsesApiNamespaceTool::Function(spec) = namespace
+        .tools
+        .iter()
+        .find(|tool| match tool {
+            ResponsesApiNamespaceTool::Function(tool) => tool.name == "spawn_agent",
+        })
+        .expect("spawn_agent should be in the namespace");
+    let description = &spec.description;
+
+    assert!(
+        !description.contains(
+            "Do not spawn sub-agents unless the user explicitly asks for sub-agents, delegation, \
+             or parallel agent work.\n"
+        ),
+        "the blanket prohibition must no longer stand alone — it now applies only to writes"
+    );
+    assert!(
+        description.contains("Delegate broad, read-only codebase exploration"),
+        "spawn_agent must actively steer exploration at a sub-agent: {description}"
+    );
+    assert!(
+        !description.contains("prefer delegating concrete code-change worker subtasks over \
+                               read-only explorer analysis"),
+        "the line disparaging read-only explorers contradicts the new guidance and must be gone"
+    );
+}
+
+/// Cross-layer guard against the bug this whole change started from: the base
+/// instructions used to tell the model to explore with tools ody-rs did not
+/// register, so it fell back to raw `rg`/`cat` shell calls. A prompt may only
+/// name a tool the tool plan actually exposes — assert the two agree instead of
+/// trusting that they do.
+#[tokio::test]
+async fn base_instructions_only_name_tools_the_tool_plan_registers() {
+    let probe = probe(|_| {}).await;
+    let base_instructions = ody_models_manager::model_info::BASE_INSTRUCTIONS;
+
+    for tool in ["read_file", "grep", "glob"] {
+        assert!(
+            base_instructions.contains(&format!("`{tool}`")),
+            "base instructions must steer exploration at `{tool}`"
+        );
+        probe.assert_visible_contains(&[tool]);
+    }
+    assert!(
+        !base_instructions.contains("prefer using `rg`"),
+        "base instructions must not still prefer raw `rg` over the structured tools"
+    );
+}
+
+/// In plain code mode the file tools stay in the model's own tool list — code
+/// mode adds the `exec` surface rather than replacing it. The exec description
+/// does not enumerate nested tools here (`build_exec_tool_description` returns
+/// early unless `code_mode_only`), so visibility is what there is to check; the
+/// code-mode-only case below is where reachability actually needs pinning.
+#[tokio::test]
+async fn file_tools_stay_model_visible_in_plain_code_mode() {
+    let plan = probe(|turn| {
+        set_features(turn, &[Feature::CodeMode]);
+    })
+    .await;
+
+    plan.assert_visible_contains(&["read_file", "grep", "glob"]);
+    plan.assert_registered_contains(&["read_file", "grep", "glob"]);
+}
+
+/// The failure mode worth pinning: in code-mode-ONLY sessions every Direct tool
+/// is hidden from the model's tool list (`is_hidden_by_code_mode_only`). If the
+/// file tools were hidden there *and* absent from the nested surface, they would
+/// be unreachable altogether — registered, advertised by the base instructions,
+/// and impossible to call.
+#[tokio::test]
+async fn file_tools_stay_reachable_in_code_mode_only() {
+    let plan = probe(|turn| {
+        set_features(turn, &[Feature::CodeMode, Feature::CodeModeOnly]);
+    })
+    .await;
+
+    plan.assert_visible_lacks(&["read_file", "grep", "glob"]);
+    plan.assert_registered_contains(&["read_file", "grep", "glob"]);
+
+    let ToolSpec::Function(exec) = plan.visible_spec(ody_code_mode::PUBLIC_TOOL_NAME) else {
+        panic!("expected code mode exec tool");
+    };
+    for tool in ["read_file", "grep", "glob"] {
+        assert!(
+            exec.description.contains(tool),
+            "{tool} is hidden from the model's tool list in code-mode-only, so it MUST be in \
+             the nested tool surface — otherwise it is unreachable: {}",
+            exec.description
+        );
+    }
+}
+
+#[tokio::test]
+async fn file_tools_can_be_disabled_by_feature() {
+    let probe = probe(|turn| {
+        set_feature(turn, Feature::FileTools, /*enabled*/ false);
+    })
+    .await;
+    probe.assert_visible_lacks(&["read_file", "grep", "glob"]);
+}
+
 #[test]
 fn apply_patch_registration_only_needs_an_environment() {
-    assert!(super::should_register_apply_patch(/*has_environment*/ true));
+    assert!(super::should_register_apply_patch(
+        /*has_environment*/ true
+    ));
     assert!(!super::should_register_apply_patch(
         /*has_environment*/ false
     ));

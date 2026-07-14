@@ -673,7 +673,11 @@ fn spawn_agent_tool_description(
         {tool_description}
 This spawn_agent tool provides you access to sub-agents that inherit your current model by default. Do not set the `model` field unless the user explicitly asks for a different model or there is a clear task-specific reason. You should follow the rules and guidelines below to use this tool.
 
-Do not spawn sub-agents unless the user explicitly asks for sub-agents, delegation, or parallel agent work.
+### When to delegate
+
+Delegate broad, read-only codebase exploration to an `explorer` sub-agent whenever a question will clearly take more than about 3 searches to answer, or when you need to investigate several files and patterns at once. Spawn multiple explorers concurrently for questions that are independent of each other. An explorer's searches and file reads stay in ITS context — you only receive its final summary — so delegating exploration is how you keep your own context free for the work that actually depends on the answer. A question you could answer with one targeted `grep` is not worth delegating; just run the `grep`.
+
+For work that WRITES (code changes, refactors, parallel implementation), do not spawn sub-agents unless the user explicitly asks for sub-agents, delegation, or parallel agent work.
 {agent_role_usage_hint}
 
 ### Designing delegated subtasks
@@ -682,7 +686,7 @@ Do not spawn sub-agents unless the user explicitly asks for sub-agents, delegati
 - Do not duplicate work between the main rollout and delegated subtasks.
 - Avoid issuing multiple delegate calls on the same unresolved thread unless the new delegated task is genuinely different and necessary.
 - Narrow the delegated ask to the concrete output you need next.
-- For coding tasks, prefer delegating concrete code-change worker subtasks over read-only explorer analysis when the subagent can make a bounded patch in a clear write scope.
+- Ask an explorer for a conclusion, not a transcript: tell it to report `file:line` references and findings, not pasted file contents.
 - When delegating coding work, instruct the submodel to edit files directly in its forked workspace and list the file paths it changed in the final answer.
 - For code-edit subtasks, decompose work so each delegated task has a disjoint write set.
 
