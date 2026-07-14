@@ -7,6 +7,7 @@ use crate::tools::registry::CoreToolRuntime;
 use crate::tools::registry::ToolExecutor;
 use ody_tools::ToolName;
 use ody_tools::ToolSpec;
+use serde::Deserialize;
 
 use super::ExecContext;
 use super::PUBLIC_TOOL_NAME;
@@ -119,20 +120,39 @@ impl CodeModeExecuteHandler {
             ..
         } = invocation;
 
-        match payload {
-            ToolPayload::Custom { input } if is_exec_tool_name(&tool_name) => self
-                .execute(session, turn, call_id, input)
-                .await
-                .map(boxed_tool_output),
-            _ => Err(FunctionCallError::RespondToModel(format!(
-                "{PUBLIC_TOOL_NAME} expects raw JavaScript source text"
-            ))),
+        let ToolPayload::Function { arguments } = payload else {
+            return Err(FunctionCallError::RespondToModel(format!(
+                "{PUBLIC_TOOL_NAME} expects JavaScript source in its `source` argument"
+            )));
+        };
+        if !is_exec_tool_name(&tool_name) {
+            return Err(FunctionCallError::RespondToModel(format!(
+                "{PUBLIC_TOOL_NAME} handler received non-{PUBLIC_TOOL_NAME} input"
+            )));
         }
+        let source = match serde_json::from_str::<CodeModeExecuteArgs>(&arguments) {
+            Ok(args) => args.source,
+            Err(err) => {
+                return Err(FunctionCallError::RespondToModel(format!(
+                    "failed to parse {PUBLIC_TOOL_NAME} arguments: {err}"
+                )));
+            }
+        };
+
+        self.execute(session, turn, call_id, source)
+            .await
+            .map(boxed_tool_output)
     }
+}
+
+/// The arguments of the code mode executor: the JavaScript source to run.
+#[derive(Debug, Deserialize)]
+struct CodeModeExecuteArgs {
+    source: String,
 }
 
 impl CoreToolRuntime for CodeModeExecuteHandler {
     fn matches_kind(&self, payload: &ToolPayload) -> bool {
-        matches!(payload, ToolPayload::Custom { .. })
+        matches!(payload, ToolPayload::Function { .. })
     }
 }

@@ -1,6 +1,6 @@
 use ody_code_mode::ToolDefinition as CodeModeToolDefinition;
-use ody_tools::FreeformTool;
-use ody_tools::FreeformToolFormat;
+use ody_tools::JsonSchema;
+use ody_tools::ResponsesApiTool;
 use ody_tools::ToolSpec;
 use std::collections::BTreeMap;
 
@@ -10,17 +10,15 @@ pub(crate) fn create_code_mode_tool(
     code_mode_only: bool,
     deferred_tools_available: bool,
 ) -> ToolSpec {
-    const CODE_MODE_FREEFORM_GRAMMAR: &str = r#"
-start: pragma_source | plain_source
-pragma_source: PRAGMA_LINE NEWLINE SOURCE
-plain_source: SOURCE
+    let properties = BTreeMap::from([(
+        "source".to_string(),
+        JsonSchema::string(Some(
+            "The JavaScript source to execute. May start with a `// @exec:` pragma line."
+                .to_string(),
+        )),
+    )]);
 
-PRAGMA_LINE: /[ \t]*\/\/ @exec:[^\r\n]*/
-NEWLINE: /\r?\n/
-SOURCE: /[\s\S]+/
-"#;
-
-    ToolSpec::Freeform(FreeformTool {
+    ToolSpec::Function(ResponsesApiTool {
         name: ody_code_mode::PUBLIC_TOOL_NAME.to_string(),
         description: ody_code_mode::build_exec_tool_description(
             enabled_tools,
@@ -28,11 +26,14 @@ SOURCE: /[\s\S]+/
             code_mode_only,
             deferred_tools_available,
         ),
-        format: FreeformToolFormat {
-            r#type: "grammar".to_string(),
-            syntax: "lark".to_string(),
-            definition: CODE_MODE_FREEFORM_GRAMMAR.to_string(),
-        },
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::object(
+            properties,
+            Some(vec!["source".to_string()]),
+            Some(false.into()),
+        ),
+        output_schema: None,
     })
 }
 
@@ -43,7 +44,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn create_code_mode_tool_matches_expected_spec() {
+    fn create_code_mode_tool_takes_the_source_in_a_required_string() {
         let enabled_tools = vec![ody_code_mode::ToolDefinition {
             name: "update_plan".to_string(),
             tool_name: ToolName::plain("update_plan"),
@@ -53,36 +54,34 @@ mod tests {
             output_schema: None,
         }];
 
+        let spec = create_code_mode_tool(
+            &enabled_tools,
+            &BTreeMap::new(),
+            /*code_mode_only*/ true,
+            /*deferred_tools_available*/ false,
+        );
+
+        let ToolSpec::Function(tool) = spec else {
+            panic!("the code mode executor must be a JSON function tool");
+        };
+        assert_eq!(tool.name, ody_code_mode::PUBLIC_TOOL_NAME);
         assert_eq!(
-            create_code_mode_tool(
+            tool.description,
+            ody_code_mode::build_exec_tool_description(
                 &enabled_tools,
                 &BTreeMap::new(),
                 /*code_mode_only*/ true,
-                /*deferred_tools_available*/ false,
-            ),
-            ToolSpec::Freeform(FreeformTool {
-                name: ody_code_mode::PUBLIC_TOOL_NAME.to_string(),
-                description: ody_code_mode::build_exec_tool_description(
-                    &enabled_tools,
-                    &BTreeMap::new(),
-                    /*code_mode_only*/ true,
-                    /*deferred_tools_available*/ false
-                ),
-                format: FreeformToolFormat {
-                    r#type: "grammar".to_string(),
-                    syntax: "lark".to_string(),
-                    definition: r#"
-start: pragma_source | plain_source
-pragma_source: PRAGMA_LINE NEWLINE SOURCE
-plain_source: SOURCE
-
-PRAGMA_LINE: /[ \t]*\/\/ @exec:[^\r\n]*/
-NEWLINE: /\r?\n/
-SOURCE: /[\s\S]+/
-"#
-                    .to_string(),
-                },
-            })
+                /*deferred_tools_available*/ false
+            )
+        );
+        assert_eq!(tool.parameters.required, Some(vec!["source".to_string()]));
+        assert_eq!(
+            tool.parameters
+                .properties
+                .expect("parameters.properties")
+                .keys()
+                .collect::<Vec<_>>(),
+            vec!["source"]
         );
     }
 }

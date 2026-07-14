@@ -444,7 +444,7 @@ async fn request_user_input_stays_direct_in_code_mode_only() {
         ToolExposure::DirectModelOnly
     );
 
-    let ToolSpec::Freeform(exec) = plan.visible_spec(ody_code_mode::PUBLIC_TOOL_NAME) else {
+    let ToolSpec::Function(exec) = plan.visible_spec(ody_code_mode::PUBLIC_TOOL_NAME) else {
         panic!("expected code mode exec tool");
     };
     assert!(!exec.description.contains("request_user_input"));
@@ -1016,7 +1016,7 @@ async fn code_mode_only_exposes_configured_dynamic_namespace_directly() {
     };
     let ResponsesApiNamespaceTool::Function(tool) = &namespace.tools[0];
     assert_eq!(tool.defer_loading, None);
-    let ToolSpec::Freeform(exec) = plan.visible_spec(ody_code_mode::PUBLIC_TOOL_NAME) else {
+    let ToolSpec::Function(exec) = plan.visible_spec(ody_code_mode::PUBLIC_TOOL_NAME) else {
         panic!("expected code mode exec tool");
     };
     assert!(!exec.description.contains("direct_only_lookup(args:"));
@@ -1044,7 +1044,7 @@ async fn excluded_deferred_namespaces_do_not_enable_nested_tool_guidance() {
     )
     .await;
 
-    let ToolSpec::Freeform(exec) = plan.visible_spec(ody_code_mode::PUBLIC_TOOL_NAME) else {
+    let ToolSpec::Function(exec) = plan.visible_spec(ody_code_mode::PUBLIC_TOOL_NAME) else {
         panic!("expected code mode exec tool");
     };
     assert!(
