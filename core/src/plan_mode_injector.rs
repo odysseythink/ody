@@ -132,10 +132,12 @@ impl PlanModeInjector {
 
         let directive = if prev_snapshot.is_none() {
             PlanModeDirective::StartSplit { next_part: target }
-        } else if boundary_crossed {
-            PlanModeDirective::ContinueSplit { next_part: target }
         } else {
-            PlanModeDirective::None
+            // Nudge on every turn that makes no verified progress, not just on
+            // boundary crossings — a model that wrote the index and then
+            // stalled must be pushed back to the next pending part until the
+            // file lands on disk. (pending_rows is known non-empty here.)
+            PlanModeDirective::ContinueSplit { next_part: target }
         };
 
         AfterPlanTurnResult {
@@ -244,7 +246,7 @@ pub fn render_directive(
             resolved_part_path(index_path, &next_part.relative_path), next_part.scope
         )),
         (ModeKind::Design, PlanModeDirective::ContinueSplit { next_part }) => Some(format!(
-            "Good progress. The next pending design part is: {} (scope: {}). Write only this part under the `<stem>/` directory in the current turn. One part per turn.",
+            "The next pending design part is: {} (scope: {}). Write only this part under the `<stem>/` directory in the current turn. One part per turn. A `done` row counts only when the part file exists on disk at exactly this path.",
             resolved_part_path(index_path, &next_part.relative_path), next_part.scope
         )),
         (ModeKind::Design, PlanModeDirective::FinalReview) => Some(
@@ -255,7 +257,7 @@ pub fn render_directive(
             resolved_part_path(index_path, &next_part.relative_path), next_part.scope
         )),
         (_, PlanModeDirective::ContinueSplit { next_part }) => Some(format!(
-            "Good progress. The next pending part is: {} (scope: {}). Write only this part in the current turn.",
+            "The next pending part is: {} (scope: {}). Write only this part in the current turn. A `done` row counts only when the part file exists on disk at exactly this path.",
             resolved_part_path(index_path, &next_part.relative_path), next_part.scope
         )),
         (_, PlanModeDirective::FinalReview) => Some(
@@ -472,6 +474,53 @@ mod directive_tests {
     }
 
     #[tokio::test]
+    async fn stalled_turns_keep_nudging_continue_split() {
+        let (artifact, _tmp) = artifact("2026-07-04");
+        artifact.finalize_name("topic").await.unwrap();
+        let markdown = "## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 1 | core.md | models | pending |\n| 2 | api.md | endpoints | pending |\n";
+        // Turn 1: first time the manifest is seen → StartSplit.
+        let first = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
+        assert!(matches!(first.directive, PlanModeDirective::StartSplit { .. }));
+        // Turn 2: no part verified done, nothing changed → nudge instead of None.
+        let second = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
+        assert!(matches!(
+            second.directive,
+            PlanModeDirective::ContinueSplit { .. }
+        ));
+        // Turn 3: still stalled → keep nudging.
+        let third = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
+        assert!(matches!(
+            third.directive,
+            PlanModeDirective::ContinueSplit { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn continue_split_directive_states_on_disk_verification_rule() {
+        let (artifact, _tmp) = artifact("2026-07-04");
+        artifact.finalize_name("topic").await.unwrap();
+        let target = PartTarget {
+            relative_path: "api.md".to_string(),
+            scope: "endpoints".to_string(),
+        };
+        let text = render_directive(
+            &PlanModeDirective::ContinueSplit { next_part: target },
+            artifact.path().as_deref().unwrap(),
+            ModeKind::Plan,
+        )
+        .expect("directive text");
+        let expected = format!("{}", artifact.stem_dir().unwrap().join("api.md").display());
+        assert!(
+            text.contains(&expected),
+            "directive should carry the resolved absolute part path:\n{text}"
+        );
+        assert!(
+            text.contains("exists on disk"),
+            "directive should state the on-disk verification rule:\n{text}"
+        );
+    }
+
+    #[tokio::test]
     async fn final_review_when_all_done() {
         let (artifact, _tmp) = artifact("2026-07-04");
         artifact.finalize_name("topic").await.unwrap();
@@ -533,8 +582,14 @@ mod directive_tests {
         let result = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
         assert_eq!(
             result.directive,
-            PlanModeDirective::None,
-            "a done row without a file on disk must not trigger FinalReview"
+            PlanModeDirective::ContinueSplit {
+                next_part: PartTarget {
+                    relative_path: "core.md".to_string(),
+                    scope: "models".to_string(),
+                }
+            },
+            "a done row without a file on disk must not trigger FinalReview; \
+             the model is nudged back to the first unverified part instead"
         );
         assert!(
             !result.boundary_crossed,
@@ -543,7 +598,7 @@ mod directive_tests {
     }
 
     #[tokio::test]
-    async fn no_directive_when_nothing_changed() {
+    async fn nudges_continue_split_when_nothing_changed() {
         let (artifact, _tmp) = artifact("2026-07-04");
         artifact.finalize_name("topic").await.unwrap();
         let prev = ManifestSnapshot {
@@ -563,9 +618,20 @@ mod directive_tests {
             ],
         };
         artifact.set_last_manifest_snapshot(prev);
+        // Note: core.md is never written to disk, so its `done` row is not
+        // verified and it stays pending — the stalled turn must nudge the
+        // model back to it rather than staying silent.
         let markdown = "## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 1 | core.md | models | done |\n| 2 | api.md | endpoints | pending |\n";
         let result = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
-        assert_eq!(result.directive, PlanModeDirective::None);
+        assert_eq!(
+            result.directive,
+            PlanModeDirective::ContinueSplit {
+                next_part: PartTarget {
+                    relative_path: "core.md".to_string(),
+                    scope: "models".to_string(),
+                }
+            }
+        );
         assert!(!result.boundary_crossed);
     }
 
