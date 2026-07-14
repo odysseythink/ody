@@ -16,15 +16,6 @@ pub fn augment_tool_spec_for_code_mode(spec: ToolSpec) -> ToolSpec {
             tool.description = description;
             ToolSpec::Function(tool)
         }
-        ToolSpec::Freeform(mut tool) => {
-            let Some(description) =
-                augmented_description_for_spec(&ToolSpec::Freeform(tool.clone()))
-            else {
-                return ToolSpec::Freeform(tool);
-            };
-            tool.description = description;
-            ToolSpec::Freeform(tool)
-        }
         ToolSpec::Namespace(mut namespace) => {
             for tool in &mut namespace.tools {
                 match tool {
@@ -118,17 +109,6 @@ fn code_mode_tool_definitions_for_spec(spec: &ToolSpec) -> Vec<CodeModeToolDefin
                 kind: CodeModeToolKind::Function,
                 input_schema: serde_json::to_value(&tool.parameters).ok(),
                 output_schema: tool.output_schema.clone(),
-            }]
-        }
-        ToolSpec::Freeform(tool) => {
-            let name = tool.name.clone();
-            vec![CodeModeToolDefinition {
-                tool_name: ToolName::plain(name.clone()),
-                name,
-                description: tool.description.clone(),
-                kind: CodeModeToolKind::Freeform,
-                input_schema: None,
-                output_schema: None,
             }]
         }
         ToolSpec::Namespace(namespace) => namespace

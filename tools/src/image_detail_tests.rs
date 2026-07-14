@@ -24,7 +24,6 @@ fn model_info() -> ModelInfo {
         "default_reasoning_summary": "auto",
         "support_verbosity": false,
         "default_verbosity": null,
-        "apply_patch_tool_type": null,
         "truncation_policy": {
             "mode": "bytes",
             "limit": 10000

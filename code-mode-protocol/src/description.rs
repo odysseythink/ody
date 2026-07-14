@@ -125,7 +125,6 @@ pub const CODE_MODE_PRAGMA_PREFIX: &str = "// @exec:";
 #[serde(rename_all = "snake_case")]
 pub enum CodeModeToolKind {
     Function,
-    Freeform,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -386,7 +385,6 @@ pub fn render_code_mode_sample(
 fn render_code_mode_sample_for_definition(definition: &ToolDefinition) -> String {
     let input_name = match definition.kind {
         CodeModeToolKind::Function => "args",
-        CodeModeToolKind::Freeform => "input",
     };
     let input_type = match definition.kind {
         CodeModeToolKind::Function => definition
@@ -394,7 +392,6 @@ fn render_code_mode_sample_for_definition(definition: &ToolDefinition) -> String
             .as_ref()
             .map(render_json_schema_to_typescript)
             .unwrap_or_else(|| "unknown".to_string()),
-        CodeModeToolKind::Freeform => "string".to_string(),
     };
     let output_type = if let Some(structured_content_schema) =
         mcp_structured_content_schema(definition.output_schema.as_ref())

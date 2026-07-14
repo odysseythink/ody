@@ -384,25 +384,6 @@ fn convert_tool(tool: &Value, vendor: ChatVendor) -> Option<Value> {
             }
             Some(json!({ "type": "function", "function": Value::Object(function) }))
         }
-        // Freeform/custom tools take raw string input; expose them as a
-        // function with a single string argument so chat providers can call
-        // them.
-        "custom" => {
-            let name = obj.get("name").cloned().unwrap_or(Value::Null);
-            let description = obj.get("description").cloned().unwrap_or(Value::Null);
-            Some(json!({
-                "type": "function",
-                "function": {
-                    "name": name,
-                    "description": description,
-                    "parameters": {
-                        "type": "object",
-                        "properties": { "input": { "type": "string" } },
-                        "required": ["input"],
-                    },
-                },
-            }))
-        }
         other => {
             debug!("dropping unsupported tool type for chat completions: {other}");
             None

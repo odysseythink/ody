@@ -100,7 +100,6 @@ pub(crate) struct ToolName {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ToolKind {
     Function,
-    Freeform,
 }
 
 /// A nested tool request emitted by a running cell.

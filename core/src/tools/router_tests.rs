@@ -431,7 +431,6 @@ fn namespace_function_names(specs: &[ToolSpec], namespace_name: &str) -> Vec<Str
                     .collect(),
             ),
             ToolSpec::Function(_)
-            | ToolSpec::Freeform(_)
             | ToolSpec::ToolSearch { .. }
             | ToolSpec::ImageGeneration { .. }
             | ToolSpec::WebSearch { .. }

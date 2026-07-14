@@ -3013,7 +3013,6 @@ async fn turn_start_streams_apply_patch_change_updates_v2() -> Result<()> {
         .expect("models_cache.json should contain at least one model");
     model["slug"] = serde_json::Value::from("mock-model");
     model["display_name"] = serde_json::Value::from("mock-model");
-    model["apply_patch_tool_type"] = serde_json::Value::from("freeform");
     std::fs::write(&cache_path, serde_json::to_string_pretty(&cache)?)?;
 
     let mut mcp = TestAppServer::new(&ody_home).await?;

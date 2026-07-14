@@ -50,8 +50,6 @@ pub use request_plugin_install::build_request_plugin_install_elicitation_request
 pub use request_plugin_install::verified_connector_install_completed;
 pub use response_history::retain_tail_from_last_n_user_messages;
 pub use response_history::truncate_assistant_output_text_to_token_budget;
-pub use responses_api::FreeformTool;
-pub use responses_api::FreeformToolFormat;
 pub use responses_api::LoadableToolSpec;
 pub use responses_api::ResponsesApiNamespace;
 pub use responses_api::ResponsesApiNamespaceTool;

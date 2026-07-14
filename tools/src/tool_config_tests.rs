@@ -32,7 +32,6 @@ fn model_with_shell_type(shell_type: ConfigShellToolType) -> ModelInfo {
         default_reasoning_summary: Default::default(),
         support_verbosity: false,
         default_verbosity: None,
-        apply_patch_tool_type: None,
         web_search_tool_type: Default::default(),
         truncation_policy: TruncationPolicyConfig::tokens(/*limit*/ 1024),
         supports_parallel_tool_calls: true,

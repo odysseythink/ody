@@ -1,4 +1,3 @@
-use crate::FreeformTool;
 use crate::JsonSchema;
 use crate::LoadableToolSpec;
 use crate::ResponsesApiNamespace;
@@ -48,8 +47,6 @@ pub enum ToolSpec {
         #[serde(skip_serializing_if = "Option::is_none")]
         search_content_types: Option<Vec<String>>,
     },
-    #[serde(rename = "custom")]
-    Freeform(FreeformTool),
 }
 
 impl ToolSpec {
@@ -60,7 +57,6 @@ impl ToolSpec {
             ToolSpec::ToolSearch { .. } => "tool_search",
             ToolSpec::ImageGeneration { .. } => "image_generation",
             ToolSpec::WebSearch { .. } => "web_search",
-            ToolSpec::Freeform(tool) => tool.name.as_str(),
         }
     }
 }

@@ -261,7 +261,6 @@ impl runtime::SessionRuntimeDelegate for ProtocolDelegate {
                     },
                     tool_kind: match invocation.tool_kind {
                         runtime::ToolKind::Function => CodeModeToolKind::Function,
-                        runtime::ToolKind::Freeform => CodeModeToolKind::Freeform,
                     },
                     input: invocation.input,
                 },
@@ -307,7 +306,6 @@ fn runtime_request(request: ExecuteRequest) -> runtime::CreateCellRequest {
                 description: definition.description,
                 kind: match definition.kind {
                     CodeModeToolKind::Function => runtime::ToolKind::Function,
-                    CodeModeToolKind::Freeform => runtime::ToolKind::Freeform,
                 },
             })
             .collect(),

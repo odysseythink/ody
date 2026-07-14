@@ -1,8 +1,6 @@
 use super::augment_tool_spec_for_code_mode;
 use super::tool_spec_to_code_mode_tool_definition;
 use crate::AdditionalProperties;
-use crate::FreeformTool;
-use crate::FreeformToolFormat;
 use crate::JsonSchema;
 use crate::ResponsesApiTool;
 use crate::ToolName;
@@ -67,57 +65,47 @@ declare const tools: { lookup_order(args: { order_id: string; }): Promise<{ ok: 
 
 #[test]
 fn augment_tool_spec_for_code_mode_preserves_exec_tool_description() {
-    assert_eq!(
-        augment_tool_spec_for_code_mode(ToolSpec::Freeform(FreeformTool {
-            name: ody_code_mode::PUBLIC_TOOL_NAME.to_string(),
-            description: "Run code".to_string(),
-            format: FreeformToolFormat {
-                r#type: "grammar".to_string(),
-                syntax: "lark".to_string(),
-                definition: "start: \"exec\"".to_string(),
-            },
-        })),
-        ToolSpec::Freeform(FreeformTool {
-            name: ody_code_mode::PUBLIC_TOOL_NAME.to_string(),
-            description: "Run code".to_string(),
-            format: FreeformToolFormat {
-                r#type: "grammar".to_string(),
-                syntax: "lark".to_string(),
-                definition: "start: \"exec\"".to_string(),
-            },
-        })
-    );
+    let exec = ToolSpec::Function(ResponsesApiTool {
+        name: ody_code_mode::PUBLIC_TOOL_NAME.to_string(),
+        description: "Run code".to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::object(
+            BTreeMap::from([("source".to_string(), JsonSchema::string(None))]),
+            Some(vec!["source".to_string()]),
+            Some(false.into()),
+        ),
+        output_schema: None,
+    });
+
+    // The executor is not one of its own nested tools, so it is left alone.
+    assert_eq!(augment_tool_spec_for_code_mode(exec.clone()), exec);
 }
 
 #[test]
 fn tool_spec_to_code_mode_tool_definition_returns_augmented_nested_tools() {
-    let spec = ToolSpec::Freeform(FreeformTool {
+    let parameters = JsonSchema::object(
+        BTreeMap::from([("input".to_string(), JsonSchema::string(None))]),
+        Some(vec!["input".to_string()]),
+        Some(false.into()),
+    );
+    let spec = ToolSpec::Function(ResponsesApiTool {
         name: "apply_patch".to_string(),
         description: "Apply a patch".to_string(),
-        format: FreeformToolFormat {
-            r#type: "grammar".to_string(),
-            syntax: "lark".to_string(),
-            definition: "start: \"patch\"".to_string(),
-        },
+        strict: false,
+        defer_loading: None,
+        parameters: parameters.clone(),
+        output_schema: None,
     });
 
-    assert_eq!(
-        tool_spec_to_code_mode_tool_definition(&spec),
-        Some(ody_code_mode::ToolDefinition {
-            name: "apply_patch".to_string(),
-            tool_name: ToolName::plain("apply_patch"),
-            description: r#"Apply a patch
-
-exec tool declaration:
-```ts
-declare const tools: { apply_patch(input: string): Promise<unknown>; };
-```"#
-                .to_string(),
-            kind: ody_code_mode::CodeModeToolKind::Freeform,
-            input_schema: None,
-            output_schema: None,
-        })
-    );
+    let definition =
+        tool_spec_to_code_mode_tool_definition(&spec).expect("apply_patch is a nested tool");
+    assert_eq!(definition.name, "apply_patch");
+    assert_eq!(definition.tool_name, ToolName::plain("apply_patch"));
+    assert_eq!(definition.kind, ody_code_mode::CodeModeToolKind::Function);
+    assert_eq!(definition.input_schema, serde_json::to_value(&parameters).ok());
+    assert!(definition.description.starts_with("Apply a patch"));
+    assert!(definition.description.contains("exec tool declaration:"));
 }
 
 #[test]

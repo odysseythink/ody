@@ -51,8 +51,7 @@ impl ToolSearchInfo {
             }
             ToolSpec::ToolSearch { .. }
             | ToolSpec::ImageGeneration { .. }
-            | ToolSpec::WebSearch { .. }
-            | ToolSpec::Freeform(_) => return None,
+            | ToolSpec::WebSearch { .. } => return None,
         };
 
         Some(Self {
@@ -86,11 +85,6 @@ fn default_tool_search_text(spec: &ToolSpec) -> String {
         }
         ToolSpec::WebSearch { .. } => {
             push_search_part(&mut parts, "web search".to_string());
-        }
-        ToolSpec::Freeform(tool) => {
-            push_search_part(&mut parts, tool.name.clone());
-            push_search_part(&mut parts, tool.description.clone());
-            push_search_part(&mut parts, tool.format.syntax.clone());
         }
     }
 

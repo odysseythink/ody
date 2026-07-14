@@ -182,7 +182,6 @@ pub fn model_info_from_slug_with_provider(
         default_reasoning_summary: ReasoningSummary::Auto,
         support_verbosity: false,
         default_verbosity: None,
-        apply_patch_tool_type: None,
         web_search_tool_type: caps.web_search_tool_type,
         truncation_policy: caps.truncation_policy,
         supports_parallel_tool_calls: caps.supports_parallel_tool_calls,

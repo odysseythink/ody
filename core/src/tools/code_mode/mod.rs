@@ -284,7 +284,6 @@ fn build_nested_tool_payload(
 ) -> Result<ToolPayload, String> {
     match tool_kind {
         CodeModeToolKind::Function => build_function_tool_payload(tool_name, input),
-        CodeModeToolKind::Freeform => build_freeform_tool_payload(tool_name, input),
     }
 }
 
@@ -307,16 +306,6 @@ fn serialize_function_tool_arguments(
         Some(_) => Err(format!(
             "tool `{tool_name}` expects a JSON object for arguments"
         )),
-    }
-}
-
-fn build_freeform_tool_payload(
-    tool_name: &ToolName,
-    input: Option<JsonValue>,
-) -> Result<ToolPayload, String> {
-    match input {
-        Some(JsonValue::String(input)) => Ok(ToolPayload::Custom { input }),
-        _ => Err(format!("tool `{tool_name}` expects a string input")),
     }
 }
 
@@ -344,23 +333,6 @@ mod tests {
                 assert_eq!(arguments, r#"{"value":1}"#.to_string());
             }
             other => panic!("expected function payload, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn build_nested_tool_payload_uses_freeform_kind() {
-        let payload = build_nested_tool_payload(
-            CodeModeToolKind::Freeform,
-            &ToolName::plain("example"),
-            Some(json!("hello")),
-        )
-        .expect("freeform payload should preserve string input");
-
-        match payload {
-            ToolPayload::Custom { input } => {
-                assert_eq!(input, "hello".to_string());
-            }
-            other => panic!("expected freeform payload, got {other:?}"),
         }
     }
 

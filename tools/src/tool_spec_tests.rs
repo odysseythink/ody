@@ -3,8 +3,6 @@ use super::ResponsesApiWebSearchFilters;
 use super::ResponsesApiWebSearchUserLocation;
 use super::ToolSpec;
 use crate::AdditionalProperties;
-use crate::FreeformTool;
-use crate::FreeformToolFormat;
 use crate::JsonSchema;
 use crate::ResponsesApiNamespaceTool;
 use crate::ResponsesApiTool;
@@ -75,19 +73,6 @@ fn tool_spec_name_covers_all_variants() {
         }
         .name(),
         "web_search"
-    );
-    assert_eq!(
-        ToolSpec::Freeform(FreeformTool {
-            name: "exec".to_string(),
-            description: "Run a command".to_string(),
-            format: FreeformToolFormat {
-                r#type: "grammar".to_string(),
-                syntax: "lark".to_string(),
-                definition: "start: \"exec\"".to_string(),
-            },
-        })
-        .name(),
-        "exec"
     );
 }
 

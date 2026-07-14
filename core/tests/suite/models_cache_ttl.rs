@@ -357,7 +357,6 @@ fn test_remote_model(slug: &str, priority: i32) -> ModelInfo {
         support_verbosity: false,
         default_verbosity: None,
         availability_nux: None,
-        apply_patch_tool_type: None,
         web_search_tool_type: Default::default(),
         truncation_policy: TruncationPolicyConfig::bytes(/*limit*/ 10_000),
         supports_parallel_tool_calls: false,

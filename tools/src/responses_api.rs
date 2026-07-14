@@ -4,23 +4,8 @@ use crate::ToolName;
 use crate::parse_dynamic_tool;
 use crate::parse_mcp_tool;
 use ody_protocol::dynamic_tools::DynamicToolFunctionSpec;
-use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct FreeformTool {
-    pub name: String,
-    pub description: String,
-    pub format: FreeformToolFormat,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct FreeformToolFormat {
-    pub r#type: String,
-    pub syntax: String,
-    pub definition: String,
-}
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct ResponsesApiTool {

@@ -4,7 +4,6 @@ use ody_models_manager::manager::RefreshStrategy;
 use ody_protocol::config_types::ApprovalsReviewer;
 use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::models::PermissionProfile;
-use ody_protocol::model_metadata::ApplyPatchToolType;
 use ody_protocol::model_metadata::ConfigShellToolType;
 use ody_protocol::model_metadata::ModelInfo;
 use ody_protocol::model_metadata::ModelVisibility;
@@ -245,7 +244,6 @@ fn remote_model_with_auto_review_override(slug: &str, review_model: &str) -> Mod
         support_verbosity: false,
         default_verbosity: None,
         availability_nux: None,
-        apply_patch_tool_type: Some(ApplyPatchToolType::Freeform),
         web_search_tool_type: Default::default(),
         truncation_policy: TruncationPolicyConfig::bytes(/*limit*/ 10_000),
         supports_parallel_tool_calls: false,

@@ -7,7 +7,6 @@ use ody_model_provider::create_model_provider;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::dynamic_tools::DynamicToolSpec;
-use ody_protocol::model_metadata::ApplyPatchToolType;
 use ody_protocol::model_metadata::ConfigShellToolType;
 use ody_protocol::model_metadata::InputModality;
 use ody_protocol::model_metadata::ToolMode;
@@ -76,8 +75,7 @@ impl ToolPlanProbe {
                 ToolSpec::Function(_)
                 | ToolSpec::ToolSearch { .. }
                 | ToolSpec::ImageGeneration { .. }
-                | ToolSpec::WebSearch { .. }
-                | ToolSpec::Freeform(_) => None,
+                | ToolSpec::WebSearch { .. } => None,
             })
             .collect::<BTreeMap<_, _>>();
         let registered_tool_names = router.registered_tool_names_for_test();
@@ -584,7 +582,6 @@ async fn environment_count_controls_environment_backed_tools() {
     let no_environment = probe(|turn| {
         turn.environments.turn_environments.clear();
         set_feature(turn, Feature::ShellTool, /*enabled*/ true);
-        turn.model_info.apply_patch_tool_type = Some(ApplyPatchToolType::Freeform);
     })
     .await;
     no_environment.assert_visible_lacks(&[
@@ -604,7 +601,6 @@ async fn environment_count_controls_environment_backed_tools() {
         duplicate_primary_environment(turn);
         set_feature(turn, Feature::ShellTool, /*enabled*/ true);
         set_feature(turn, Feature::UnifiedExec, /*enabled*/ true);
-        turn.model_info.apply_patch_tool_type = Some(ApplyPatchToolType::Freeform);
     })
     .await;
     multiple_environments.assert_visible_contains(&["exec_command", "apply_patch", "view_image"]);
@@ -1443,7 +1439,6 @@ async fn apply_patch_is_a_json_function_tool_for_models_without_any_capability()
     for mode in [ModeKind::Default, ModeKind::Plan, ModeKind::Design] {
         let probe = probe(|turn| {
             turn.collaboration_mode.mode = mode;
-            turn.model_info.apply_patch_tool_type = None;
         })
         .await;
 

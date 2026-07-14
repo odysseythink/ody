@@ -232,15 +232,6 @@ fn tools_from_spec(tool: &ToolSpec) -> Vec<ToolDefinition> {
                 namespace_description: None,
             }]
         }
-        ToolSpec::Freeform(tool) => {
-            vec![ToolDefinition {
-                name: tool.name.clone(),
-                description: tool.description.clone(),
-                schema: serde_json::json!({}),
-                namespace: None,
-                namespace_description: None,
-            }]
-        }
         // Responses-only built-in tools have no Chat Completions equivalent;
         // omit them rather than emitting malformed definitions.
         ToolSpec::ImageGeneration { .. } | ToolSpec::WebSearch { .. } => Vec::new(),

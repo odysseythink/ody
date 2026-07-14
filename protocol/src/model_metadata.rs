@@ -275,12 +275,6 @@ pub enum ConfigShellToolType {
     ShellCommand,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum ApplyPatchToolType {
-    Freeform,
-}
-
 #[derive(
     Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, TS, JsonSchema, Default,
 )]
@@ -498,7 +492,6 @@ pub struct ModelInfo {
     pub default_reasoning_summary: ReasoningSummary,
     pub support_verbosity: bool,
     pub default_verbosity: Option<Verbosity>,
-    pub apply_patch_tool_type: Option<ApplyPatchToolType>,
     #[serde(default)]
     pub web_search_tool_type: WebSearchToolType,
     pub truncation_policy: TruncationPolicyConfig,
@@ -860,7 +853,6 @@ mod tests {
             default_reasoning_summary: ReasoningSummary::Auto,
             support_verbosity: false,
             default_verbosity: None,
-            apply_patch_tool_type: None,
             web_search_tool_type: WebSearchToolType::Text,
             truncation_policy: TruncationPolicyConfig::bytes(/*limit*/ 10_000),
             supports_parallel_tool_calls: false,
@@ -1145,7 +1137,6 @@ mod tests {
             "default_reasoning_summary": "auto",
             "support_verbosity": false,
             "default_verbosity": null,
-            "apply_patch_tool_type": null,
             "truncation_policy": {
                 "mode": "bytes",
                 "limit": 10000

@@ -4,7 +4,6 @@
       "prefer_websockets": true,
       "support_verbosity": true,
       "default_verbosity": "low",
-      "apply_patch_tool_type": "freeform",
       "web_search_tool_type": "text_and_image",
       "input_modalities": [
         "text",
@@ -128,7 +127,6 @@
       "prefer_websockets": true,
       "support_verbosity": true,
       "default_verbosity": "low",
-      "apply_patch_tool_type": "freeform",
       "web_search_tool_type": "text_and_image",
       "input_modalities": [
         "text",
@@ -247,7 +245,6 @@
       "prefer_websockets": true,
       "support_verbosity": true,
       "default_verbosity": "medium",
-      "apply_patch_tool_type": "freeform",
       "web_search_tool_type": "text_and_image",
       "input_modalities": [
         "text",
@@ -361,7 +358,6 @@
       "prefer_websockets": true,
       "support_verbosity": true,
       "default_verbosity": "low",
-      "apply_patch_tool_type": "freeform",
       "web_search_tool_type": "text",
       "input_modalities": [
         "text",
@@ -475,7 +471,6 @@
       "prefer_websockets": true,
       "support_verbosity": true,
       "default_verbosity": "low",
-      "apply_patch_tool_type": "freeform",
       "web_search_tool_type": "text",
       "input_modalities": [
         "text",
@@ -585,7 +580,6 @@
       "prefer_websockets": true,
       "support_verbosity": true,
       "default_verbosity": "low",
-      "apply_patch_tool_type": "freeform",
       "web_search_tool_type": "text_and_image",
       "input_modalities": [
         "text",

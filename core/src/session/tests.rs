@@ -9798,7 +9798,7 @@ async fn abort_review_task_emits_exited_then_aborted_and_records_history() {
 }
 
 #[tokio::test]
-async fn fatal_tool_error_stops_turn_and_reports_error() {
+async fn incompatible_tool_payload_is_reported_back_to_the_model() {
     let (session, turn_context, _rx) = make_session_and_context_with_rx().await;
     let tools = {
         session
@@ -9844,16 +9844,16 @@ async fn fatal_tool_error_stops_turn_and_reports_error() {
         )
         .await
         .err()
-        .expect("expected fatal error");
+        .expect("expected an error");
 
     match err {
-        FunctionCallError::Fatal(message) => {
+        FunctionCallError::RespondToModel(message) => {
             assert_eq!(
                 message,
                 "tool shell_command invoked with incompatible payload"
             );
         }
-        other => panic!("expected FunctionCallError::Fatal, got {other:?}"),
+        other => panic!("expected FunctionCallError::RespondToModel, got {other:?}"),
     }
 }
 

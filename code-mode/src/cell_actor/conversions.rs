@@ -25,7 +25,6 @@ pub(super) fn runtime_request(request: CellRequest) -> ExecuteRequest {
                 description: definition.description,
                 kind: match definition.kind {
                     CellToolKind::Function => CodeModeToolKind::Function,
-                    CellToolKind::Freeform => CodeModeToolKind::Freeform,
                 },
                 input_schema: None,
                 output_schema: None,
@@ -40,7 +39,6 @@ pub(super) fn runtime_request(request: CellRequest) -> ExecuteRequest {
 pub(super) fn cell_tool_kind(kind: CodeModeToolKind) -> CellToolKind {
     match kind {
         CodeModeToolKind::Function => CellToolKind::Function,
-        CodeModeToolKind::Freeform => CellToolKind::Freeform,
     }
 }
 
