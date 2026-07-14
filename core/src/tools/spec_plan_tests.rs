@@ -1431,15 +1431,9 @@ async fn hosted_tools_follow_provider_auth_model_and_config_gates() {
 }
 
 #[test]
-fn plan_and_design_mode_register_apply_patch_even_without_model_support() {
-    // Fallback write channel: read-only modes must always have a file-write
-    // tool, or split-plan part files can never be persisted.
-    assert!(super::should_register_apply_patch(true, false, ModeKind::Plan));
-    assert!(super::should_register_apply_patch(true, true, ModeKind::Plan));
-    assert!(super::should_register_apply_patch(true, false, ModeKind::Design));
+fn apply_patch_registration_requires_model_support_in_every_mode() {
+    assert!(super::should_register_apply_patch(true, true));
+    assert!(!super::should_register_apply_patch(true, false));
     // No environment → nowhere to patch.
-    assert!(!super::should_register_apply_patch(false, false, ModeKind::Plan));
-    // Writable modes keep the old gating: only when the model advertises it.
-    assert!(!super::should_register_apply_patch(true, false, ModeKind::Default));
-    assert!(super::should_register_apply_patch(true, true, ModeKind::Default));
+    assert!(!super::should_register_apply_patch(false, true));
 }
