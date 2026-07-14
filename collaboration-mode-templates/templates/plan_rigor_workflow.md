@@ -4,7 +4,7 @@ In addition to the conversational planning phases above, rigor-tier plans MUST f
 
 ### Workflow (five steps)
 
-1. **Understand** — explore the codebase with Read/Grep/Glob to discover existing functions, utilities, and patterns you can reuse. Eliminate unknowns by active discovery before planning.
+1. **Understand** — explore the codebase with targeted, low-noise searches to discover existing functions, utilities, and patterns you can reuse. Prefer narrow queries that return file paths first, then read only the specific regions you need — a broad dump of matching lines burns the context you will need for the plan itself. Eliminate unknowns by active discovery before planning.
 
 2. **File Structure** — list the files each task creates or modifies, with one clear responsibility per file. If a task touches multiple files, explain which file handles which concern.
 
