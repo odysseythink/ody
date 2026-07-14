@@ -35,6 +35,7 @@ pub(crate) mod test_sync_spec;
 mod tool_search;
 pub(crate) mod tool_search_spec;
 pub(crate) mod unified_exec;
+pub(crate) mod file_tools_spec;
 mod view_image;
 pub(crate) mod view_image_spec;
 
