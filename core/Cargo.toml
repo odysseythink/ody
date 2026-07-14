@@ -87,9 +87,12 @@ http = { workspace = true }
 iana-time-zone = { workspace = true }
 image = { workspace = true, features = ["jpeg", "png", "webp"] }
 indexmap = { workspace = true }
+globset = { workspace = true }
+ignore = { workspace = true }
 libc = { workspace = true }
 once_cell = { workspace = true }
 rand = { workspace = true }
+regex = { workspace = true }
 regex-lite = { workspace = true }
 reqwest = { workspace = true, features = ["json", "stream"] }
 rmcp = { workspace = true, default-features = false, features = [

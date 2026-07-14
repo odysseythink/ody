@@ -1450,9 +1450,43 @@ async fn apply_patch_is_a_json_function_tool_for_models_without_any_capability()
     }
 }
 
+/// The file tools only reduce context if the model can actually see them. A
+/// `Deferred` registration would leave them out of the initial tool list, and
+/// the model would explore with raw `rg`/`cat` through `shell_command` — the
+/// exact path they exist to replace. Assert against the *model-visible* specs,
+/// not merely the registry.
+#[tokio::test]
+async fn file_tools_are_model_visible_in_every_mode() {
+    for mode in [ModeKind::Default, ModeKind::Plan, ModeKind::Design] {
+        let probe = probe(|turn| {
+            turn.collaboration_mode.mode = mode;
+        })
+        .await;
+
+        probe.assert_visible_contains(&["read_file", "grep", "glob"]);
+        for name in ["read_file", "grep", "glob"] {
+            assert!(
+                matches!(probe.visible_spec(name), ToolSpec::Function(_)),
+                "{name} must be a plain function tool in {mode:?}"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn file_tools_can_be_disabled_by_feature() {
+    let probe = probe(|turn| {
+        set_feature(turn, Feature::FileTools, /*enabled*/ false);
+    })
+    .await;
+    probe.assert_visible_lacks(&["read_file", "grep", "glob"]);
+}
+
 #[test]
 fn apply_patch_registration_only_needs_an_environment() {
-    assert!(super::should_register_apply_patch(/*has_environment*/ true));
+    assert!(super::should_register_apply_patch(
+        /*has_environment*/ true
+    ));
     assert!(!super::should_register_apply_patch(
         /*has_environment*/ false
     ));

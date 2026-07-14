@@ -36,7 +36,10 @@ pub struct FileToolOptions {
     pub include_environment_id: bool,
 }
 
-fn environment_id_property(properties: &mut BTreeMap<String, JsonSchema>, options: FileToolOptions) {
+fn environment_id_property(
+    properties: &mut BTreeMap<String, JsonSchema>,
+    options: FileToolOptions,
+) {
     if options.include_environment_id {
         properties.insert(
             "environment_id".to_string(),
@@ -235,9 +238,10 @@ pub fn create_glob_tool(options: FileToolOptions) -> ToolSpec {
 
     ToolSpec::Function(ResponsesApiTool {
         name: GLOB_TOOL_NAME.to_string(),
-        description: "Find files by glob pattern, newest first. Prefer this over shell `find`/`ls -R`. \
+        description:
+            "Find files by glob pattern, newest first. Prefer this over shell `find`/`ls -R`. \
              Respects .gitignore."
-            .to_string(),
+                .to_string(),
         strict: false,
         defer_loading: None,
         parameters: JsonSchema::object(
