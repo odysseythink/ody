@@ -485,7 +485,10 @@ impl ToolRegistry {
                 &tool_result_tags,
                 &extra_trace_fields,
             );
-            let err = FunctionCallError::Fatal(message);
+            // A model picking the wrong payload shape is model misbehavior, not a
+            // broken program invariant: report it back so the model can retry
+            // instead of failing the turn.
+            let err = FunctionCallError::RespondToModel(message);
             dispatch_trace.record_failed(&err);
             return Err(err);
         }
