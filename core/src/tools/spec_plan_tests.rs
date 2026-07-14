@@ -1585,6 +1585,50 @@ async fn base_instructions_only_name_tools_the_tool_plan_registers() {
     );
 }
 
+/// In plain code mode the file tools stay in the model's own tool list — code
+/// mode adds the `exec` surface rather than replacing it. The exec description
+/// does not enumerate nested tools here (`build_exec_tool_description` returns
+/// early unless `code_mode_only`), so visibility is what there is to check; the
+/// code-mode-only case below is where reachability actually needs pinning.
+#[tokio::test]
+async fn file_tools_stay_model_visible_in_plain_code_mode() {
+    let plan = probe(|turn| {
+        set_features(turn, &[Feature::CodeMode]);
+    })
+    .await;
+
+    plan.assert_visible_contains(&["read_file", "grep", "glob"]);
+    plan.assert_registered_contains(&["read_file", "grep", "glob"]);
+}
+
+/// The failure mode worth pinning: in code-mode-ONLY sessions every Direct tool
+/// is hidden from the model's tool list (`is_hidden_by_code_mode_only`). If the
+/// file tools were hidden there *and* absent from the nested surface, they would
+/// be unreachable altogether — registered, advertised by the base instructions,
+/// and impossible to call.
+#[tokio::test]
+async fn file_tools_stay_reachable_in_code_mode_only() {
+    let plan = probe(|turn| {
+        set_features(turn, &[Feature::CodeMode, Feature::CodeModeOnly]);
+    })
+    .await;
+
+    plan.assert_visible_lacks(&["read_file", "grep", "glob"]);
+    plan.assert_registered_contains(&["read_file", "grep", "glob"]);
+
+    let ToolSpec::Function(exec) = plan.visible_spec(ody_code_mode::PUBLIC_TOOL_NAME) else {
+        panic!("expected code mode exec tool");
+    };
+    for tool in ["read_file", "grep", "glob"] {
+        assert!(
+            exec.description.contains(tool),
+            "{tool} is hidden from the model's tool list in code-mode-only, so it MUST be in \
+             the nested tool surface — otherwise it is unreachable: {}",
+            exec.description
+        );
+    }
+}
+
 #[tokio::test]
 async fn file_tools_can_be_disabled_by_feature() {
     let probe = probe(|turn| {
