@@ -85,6 +85,11 @@ fn count_task_headings(plan: &str) -> usize {
 /// threshold, I should split" and then submit a single file anyway, so this
 /// is checked mechanically rather than trusted.
 fn split_threshold_gap(plan: &str, split_threshold: usize) -> Option<String> {
+    // 0 disables splitting (config_toml.rs schema doc); without this guard
+    // every plan with at least one task heading would be rejected.
+    if split_threshold == 0 {
+        return None;
+    }
     let task_count = count_task_headings(plan);
     if task_count > split_threshold {
         Some(format!(
@@ -367,8 +372,20 @@ mod tests {
     }
 
     #[test]
+    fn split_threshold_zero_disables_split_requirement() {
+        let plan = (1..=13)
+            .map(|n| format!("### Task {n}\n\nDo thing {n}.\n"))
+            .collect::<String>();
+        assert_eq!(count_task_headings(&plan), 13);
+        assert!(
+            split_threshold_gap(&plan, 0).is_none(),
+            "split_threshold = 0 must disable the split requirement"
+        );
+    }
+
+    #[test]
     fn count_task_headings_ignores_unrelated_headings_and_prose() {
-        let plan = "# Plan\n\n## Tasks\n\nSee Task 1 above.\n\n### Task 1: real\n\n#### Task 1a: not counted (wrong heading level)\n\n### Task 2: real\n";
+        let plan = "# Plan\n\n## Tasks\n\nSee Task 1 above.\n\n### Task 1: real\n\n##### Task 5: not counted (too deep)\n\n### Task 2: real\n";
         assert_eq!(count_task_headings(plan), 2);
     }
 

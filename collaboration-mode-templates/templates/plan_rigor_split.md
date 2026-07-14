@@ -1,11 +1,11 @@
 ## Rigor tier addendum: Large plan splitting & Parts manifest
 
-Plans >{{ split_threshold }} tasks, or spanning multiple subsystems, must split into an index file and multiple part files. This ensures large plans remain manageable and can survive context compaction mid-generation.
+When {{ split_threshold }} is greater than 0, plans with more than {{ split_threshold }} tasks (or spanning multiple subsystems) must split into an index file and multiple part files; a value of 0 disables splitting. This ensures large plans remain manageable and can survive context compaction mid-generation.
 
 ### When to split
 
 Split a plan when:
-1. The task count exceeds {{ split_threshold }} (default: 8 tasks).
+1. The task count exceeds {{ split_threshold }} (default: 8 tasks; 0 disables splitting).
 2. The work spans multiple subsystems and some tasks are independently shippable as phases.
 
 If neither condition holds, keep all tasks in one file.

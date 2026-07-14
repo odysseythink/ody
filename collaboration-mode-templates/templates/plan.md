@@ -155,7 +155,7 @@ Only call `submit_plan` once per turn, and only when you are presenting a comple
 
 ## Large plan splitting
 
-If the plan has more than `{{ split_threshold }}` distinct tasks, or spans multiple subsystems, split it into multiple files:
+When `{{ split_threshold }}` is greater than 0 and the plan has more than `{{ split_threshold }}` distinct tasks, or it spans multiple subsystems, split it into multiple files (a `{{ split_threshold }}` value of 0 disables splitting — keep everything in one file):
 
 1. **Write the index first.** Call `submit_plan` with an overview and a `## Parts` table (all rows `pending`) as the `plan` argument. `submit_plan` always writes to this one index file — while the table still has `pending` rows, this call only saves the index and keeps Plan mode active; it does not end the turn.
 2. **Write each part with a normal file-write tool, not `submit_plan`.** Create it at `<plan-stem>/<part>.md`. `submit_plan` cannot create separate part files; it only ever overwrites the index. Writing under the plan's own `<plan-stem>/` directory is allowed in Plan mode.
