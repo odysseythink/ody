@@ -1,36 +1,49 @@
 use super::*;
+use ody_tools::JsonSchemaPrimitiveType;
+use ody_tools::JsonSchemaType;
 use pretty_assertions::assert_eq;
 
-#[test]
-fn create_apply_patch_freeform_tool_matches_expected_spec() {
-    assert_eq!(
-        create_apply_patch_freeform_tool(/*include_environment_id*/ false),
-        ToolSpec::Freeform(FreeformTool {
-            name: "apply_patch".to_string(),
-            description:
-                "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON."
-                    .to_string(),
-            format: FreeformToolFormat {
-                r#type: "grammar".to_string(),
-                syntax: "lark".to_string(),
-                definition: APPLY_PATCH_LARK_GRAMMAR.to_string(),
-            },
-        })
-    );
+fn function_tool(include_environment_id: bool) -> ResponsesApiTool {
+    let ToolSpec::Function(tool) = create_apply_patch_tool(include_environment_id) else {
+        panic!("apply_patch must be a JSON function tool so every model can call it");
+    };
+    tool
 }
 
 #[test]
-fn create_apply_patch_freeform_tool_includes_environment_id_when_requested() {
-    let ToolSpec::Freeform(tool) =
-        create_apply_patch_freeform_tool(/*include_environment_id*/ true)
-    else {
-        panic!("expected freeform tool");
+fn create_apply_patch_tool_takes_the_patch_in_a_required_input_string() {
+    let tool = function_tool(/*include_environment_id*/ false);
+
+    assert_eq!(tool.name, APPLY_PATCH_TOOL_NAME);
+    assert_eq!(tool.parameters.required, Some(vec!["input".to_string()]));
+
+    let properties = tool.parameters.properties.expect("parameters.properties");
+    assert_eq!(properties.keys().collect::<Vec<_>>(), vec!["input"]);
+    let input = &properties["input"];
+    assert_eq!(
+        input.schema_type,
+        Some(JsonSchemaType::Single(JsonSchemaPrimitiveType::String))
+    );
+
+    let description = input.description.as_deref().expect("input.description");
+    assert!(description.contains("*** Begin Patch"));
+    assert!(description.contains("*** End Patch"));
+}
+
+#[test]
+fn create_apply_patch_tool_documents_environment_id_only_when_requested() {
+    let without = function_tool(/*include_environment_id*/ false);
+    let with = function_tool(/*include_environment_id*/ true);
+
+    let description_of = |tool: ResponsesApiTool| {
+        tool.parameters
+            .properties
+            .expect("parameters.properties")["input"]
+            .description
+            .clone()
+            .expect("input.description")
     };
 
-    assert!(tool.format.definition.contains("environment_id?"));
-    assert!(
-        tool.format
-            .definition
-            .contains("\"*** Environment ID: \" filename LF")
-    );
+    assert!(!description_of(without).contains("*** Environment ID:"));
+    assert!(description_of(with).contains("*** Environment ID:"));
 }

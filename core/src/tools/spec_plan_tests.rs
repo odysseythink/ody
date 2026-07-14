@@ -394,12 +394,16 @@ fn has_parameter(spec: &ToolSpec, parameter_name: &str) -> bool {
 }
 
 fn apply_patch_accepts_environment_id(spec: &ToolSpec) -> bool {
-    match spec {
-        ToolSpec::Freeform(tool) if tool.name == "apply_patch" => {
-            tool.format.definition.contains("Environment ID")
-        }
-        _ => false,
-    }
+    let ToolSpec::Function(tool) = spec else {
+        return false;
+    };
+    tool.name == "apply_patch"
+        && tool
+            .parameters
+            .properties
+            .as_ref()
+            .and_then(|properties| properties.get("input")?.description.as_ref())
+            .is_some_and(|description| description.contains("Environment ID"))
 }
 
 #[tokio::test]
@@ -1430,10 +1434,31 @@ async fn hosted_tools_follow_provider_auth_model_and_config_gates() {
     standalone_web_search.assert_visible_lacks(&["web_search"]);
 }
 
+/// The regression behind the freeform removal: a model with no `apply_patch`
+/// capability (every model we ship against) used to be handed a freeform tool it
+/// could not call, which failed the turn on dispatch. apply_patch must be a
+/// plain JSON function tool, in every mode, for every model.
+#[tokio::test]
+async fn apply_patch_is_a_json_function_tool_for_models_without_any_capability() {
+    for mode in [ModeKind::Default, ModeKind::Plan, ModeKind::Design] {
+        let probe = probe(|turn| {
+            turn.collaboration_mode.mode = mode;
+            turn.model_info.apply_patch_tool_type = None;
+        })
+        .await;
+
+        probe.assert_visible_contains(&["apply_patch"]);
+        assert!(
+            matches!(probe.visible_spec("apply_patch"), ToolSpec::Function(_)),
+            "apply_patch must be a function tool in {mode:?}"
+        );
+    }
+}
+
 #[test]
-fn apply_patch_registration_requires_model_support_in_every_mode() {
-    assert!(super::should_register_apply_patch(true, true));
-    assert!(!super::should_register_apply_patch(true, false));
-    // No environment → nowhere to patch.
-    assert!(!super::should_register_apply_patch(false, true));
+fn apply_patch_registration_only_needs_an_environment() {
+    assert!(super::should_register_apply_patch(/*has_environment*/ true));
+    assert!(!super::should_register_apply_patch(
+        /*has_environment*/ false
+    ));
 }

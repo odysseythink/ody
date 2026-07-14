@@ -2236,13 +2236,22 @@ async fn try_run_sampling_request(
                 }
             }
             ResponseEvent::OutputItemAdded(item) => {
-                if let ResponseItem::CustomToolCall { call_id, name, .. } = &item {
-                    let tool_name = ToolName::plain(name.as_str());
+                let streamed_tool_call = match &item {
+                    ResponseItem::CustomToolCall { call_id, name, .. } => {
+                        Some((call_id.clone(), ToolName::plain(name.as_str())))
+                    }
+                    ResponseItem::FunctionCall {
+                        call_id,
+                        name,
+                        namespace,
+                        ..
+                    } => Some((call_id.clone(), ToolName::new(namespace.clone(), name.clone()))),
+                    _ => None,
+                };
+                if let Some((call_id, tool_name)) = streamed_tool_call {
                     active_tool_argument_diff_consumer = tool_runtime
                         .create_diff_consumer(&tool_name)
-                        .map(|consumer| (call_id.clone(), consumer));
-                } else if matches!(&item, ResponseItem::FunctionCall { .. }) {
-                    active_tool_argument_diff_consumer = None;
+                        .map(|consumer| (call_id, consumer));
                 }
                 if let Some(turn_item) = handle_non_tool_response_item(
                     sess.as_ref(),

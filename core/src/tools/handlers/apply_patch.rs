@@ -23,7 +23,9 @@ use crate::tools::context::boxed_tool_output;
 use crate::tools::events::ToolEmitter;
 use crate::tools::events::ToolEventCtx;
 use crate::tools::handlers::apply_granted_turn_permissions;
-use crate::tools::handlers::apply_patch_spec::create_apply_patch_freeform_tool;
+use crate::tools::handlers::apply_patch_spec::create_apply_patch_tool;
+use serde::Deserialize;
+use tracing::debug;
 use crate::tools::handlers::resolve_tool_environment;
 use crate::tools::handlers::updated_hook_command;
 use crate::tools::hook_names::HookToolName;
@@ -57,8 +59,8 @@ use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path_uri::PathUri;
 
 const APPLY_PATCH_ARGUMENT_DIFF_BUFFER_INTERVAL: Duration = Duration::from_millis(500);
-/// Handles freeform `apply_patch` requests and routes verified patches to the
-/// selected environment filesystem.
+/// Handles `apply_patch` requests and routes verified patches to the selected
+/// environment filesystem.
 #[derive(Default)]
 pub struct ApplyPatchHandler {
     multi_environment: bool,
@@ -70,8 +72,15 @@ impl ApplyPatchHandler {
     }
 }
 
+/// The arguments of the `apply_patch` function tool: the patch text verbatim.
+#[derive(Debug, Deserialize)]
+struct ApplyPatchToolArgs {
+    input: String,
+}
+
 #[derive(Default)]
 struct ApplyPatchArgumentDiffConsumer {
+    decoder: PatchInputDecoder,
     parser: StreamingPatchParser,
     last_sent_at: Option<Instant>,
     pending: Option<PatchApplyUpdatedEvent>,
@@ -104,7 +113,11 @@ impl ToolArgumentDiffConsumer for ApplyPatchArgumentDiffConsumer {
 
 impl ApplyPatchArgumentDiffConsumer {
     fn push_delta(&mut self, call_id: String, delta: &str) -> Option<PatchApplyUpdatedEvent> {
-        let hunks = self.parser.push_delta(delta).ok()?;
+        let patch_text = self.decoder.push(delta);
+        if patch_text.is_empty() {
+            return None;
+        }
+        let hunks = self.parser.push_delta(&patch_text).ok()?;
         if hunks.is_empty() {
             return None;
         }
@@ -129,9 +142,13 @@ impl ApplyPatchArgumentDiffConsumer {
     fn finish_update_on_complete(
         &mut self,
     ) -> Result<Option<PatchApplyUpdatedEvent>, FunctionCallError> {
-        self.parser.finish().map_err(|err| {
-            FunctionCallError::RespondToModel(format!("failed to parse apply_patch: {err}"))
-        })?;
+        // Streaming is preview-only: `handle_call` re-parses the finished
+        // arguments and is the authority on whether the patch is valid. A
+        // half-streamed patch must never fail the tool call here.
+        if let Err(err) = self.parser.finish() {
+            debug!("apply_patch streaming preview did not parse: {err}");
+            return Ok(None);
+        }
 
         let event = self.pending.take();
         if event.is_some() {
@@ -139,6 +156,167 @@ impl ApplyPatchArgumentDiffConsumer {
         }
         Ok(event)
     }
+}
+
+/// Incrementally decodes the `input` string out of the streamed JSON arguments
+/// of the `apply_patch` function tool, so the patch can be previewed while the
+/// model is still generating it.
+///
+/// Only the decoded prefix is emitted on each call; once the string is closed
+/// (or the arguments turn out not to contain a decodable `input`), the decoder
+/// goes quiet. Errors are never surfaced — this feeds a preview, not the apply.
+#[derive(Default)]
+struct PatchInputDecoder {
+    buffer: String,
+    /// Byte offset of the next undecoded byte of the `input` string value.
+    cursor: Option<usize>,
+    done: bool,
+}
+
+impl PatchInputDecoder {
+    fn push(&mut self, delta: &str) -> String {
+        if self.done {
+            return String::new();
+        }
+        self.buffer.push_str(delta);
+
+        if self.cursor.is_none() {
+            self.cursor = find_json_string_value_start(&self.buffer, "input");
+        }
+        let Some(mut cursor) = self.cursor else {
+            return String::new();
+        };
+
+        let bytes = self.buffer.as_bytes();
+        let mut decoded = String::new();
+        while cursor < bytes.len() {
+            match bytes[cursor] {
+                // Closing quote: the whole `input` value has arrived.
+                b'"' => {
+                    self.done = true;
+                    cursor += 1;
+                    break;
+                }
+                b'\\' => match decode_json_escape(&self.buffer, cursor) {
+                    JsonEscape::Decoded { ch, len } => {
+                        decoded.push(ch);
+                        cursor += len;
+                    }
+                    // The escape is split across deltas; resume once more arrives.
+                    JsonEscape::Incomplete => break,
+                    JsonEscape::Invalid => {
+                        self.done = true;
+                        break;
+                    }
+                },
+                _ => {
+                    let ch = self.buffer[cursor..].chars().next().unwrap_or_default();
+                    decoded.push(ch);
+                    cursor += ch.len_utf8();
+                }
+            }
+        }
+        self.cursor = Some(cursor);
+        decoded
+    }
+}
+
+enum JsonEscape {
+    Decoded { ch: char, len: usize },
+    Incomplete,
+    Invalid,
+}
+
+/// Decodes the JSON escape sequence starting at `start` (which must be a `\`).
+fn decode_json_escape(buffer: &str, start: usize) -> JsonEscape {
+    let bytes = buffer.as_bytes();
+    let Some(kind) = bytes.get(start + 1) else {
+        return JsonEscape::Incomplete;
+    };
+    let simple = match kind {
+        b'"' => Some('"'),
+        b'\\' => Some('\\'),
+        b'/' => Some('/'),
+        b'b' => Some('\u{8}'),
+        b'f' => Some('\u{c}'),
+        b'n' => Some('\n'),
+        b'r' => Some('\r'),
+        b't' => Some('\t'),
+        _ => None,
+    };
+    if let Some(ch) = simple {
+        return JsonEscape::Decoded { ch, len: 2 };
+    }
+    if *kind != b'u' {
+        return JsonEscape::Invalid;
+    }
+
+    let Some(first) = decode_json_hex4(buffer, start) else {
+        return if buffer.len() < start + 6 {
+            JsonEscape::Incomplete
+        } else {
+            JsonEscape::Invalid
+        };
+    };
+    // Non-surrogate: a single \uXXXX is the whole character.
+    if !(0xD800..=0xDFFF).contains(&first) {
+        return match char::from_u32(first) {
+            Some(ch) => JsonEscape::Decoded { ch, len: 6 },
+            None => JsonEscape::Invalid,
+        };
+    }
+    // Astral characters arrive as a surrogate pair: 😀.
+    if !(0xD800..=0xDBFF).contains(&first) {
+        return JsonEscape::Invalid;
+    }
+    if buffer.len() < start + 12 {
+        return JsonEscape::Incomplete;
+    }
+    if bytes.get(start + 6) != Some(&b'\\') || bytes.get(start + 7) != Some(&b'u') {
+        return JsonEscape::Invalid;
+    }
+    let Some(low) = decode_json_hex4(buffer, start + 6) else {
+        return JsonEscape::Invalid;
+    };
+    if !(0xDC00..=0xDFFF).contains(&low) {
+        return JsonEscape::Invalid;
+    }
+    let code = 0x1_0000 + ((first - 0xD800) << 10) + (low - 0xDC00);
+    match char::from_u32(code) {
+        Some(ch) => JsonEscape::Decoded { ch, len: 12 },
+        None => JsonEscape::Invalid,
+    }
+}
+
+/// Reads the 4 hex digits of a `\uXXXX` escape whose backslash is at `start`.
+fn decode_json_hex4(buffer: &str, start: usize) -> Option<u32> {
+    let hex = buffer.get(start + 2..start + 6)?;
+    u32::from_str_radix(hex, 16).ok()
+}
+
+/// Finds the byte offset just past the opening quote of `"<key>": "` in a
+/// possibly-incomplete JSON object. Returns `None` until the opening quote of
+/// the value has arrived.
+fn find_json_string_value_start(buffer: &str, key: &str) -> Option<usize> {
+    let key_pattern = format!("\"{key}\"");
+    let key_at = buffer.find(&key_pattern)?;
+    let mut rest = buffer[key_at + key_pattern.len()..].char_indices();
+    let mut seen_colon = false;
+    for (offset, ch) in &mut rest {
+        if ch.is_whitespace() {
+            continue;
+        }
+        if ch == ':' && !seen_colon {
+            seen_colon = true;
+            continue;
+        }
+        if ch == '"' && seen_colon {
+            return Some(key_at + key_pattern.len() + offset + 1);
+        }
+        // Anything else means this is not a string-valued `input` key.
+        return None;
+    }
+    None
 }
 
 fn convert_apply_patch_hunks_to_protocol(hunks: &[Hunk]) -> HashMap<PathBuf, FileChange> {
@@ -255,7 +433,9 @@ fn write_permissions_for_paths(
 /// Extracts the raw patch text used as the command-shaped hook input for apply_patch.
 fn apply_patch_payload_command(payload: &ToolPayload) -> Option<String> {
     match payload {
-        ToolPayload::Custom { input } => Some(input.clone()),
+        ToolPayload::Function { arguments } => serde_json::from_str::<ApplyPatchToolArgs>(arguments)
+            .ok()
+            .map(|args| args.input),
         _ => None,
     }
 }
@@ -334,7 +514,7 @@ impl ToolExecutor<ToolInvocation> for ApplyPatchHandler {
     }
 
     fn spec(&self) -> ToolSpec {
-        create_apply_patch_freeform_tool(self.multi_environment)
+        create_apply_patch_tool(self.multi_environment)
     }
 
     fn handle(&self, invocation: ToolInvocation) -> ody_tools::ToolExecutorFuture<'_> {
@@ -357,10 +537,18 @@ impl ApplyPatchHandler {
             ..
         } = invocation;
 
-        let ToolPayload::Custom { input: patch_input } = payload else {
+        let ToolPayload::Function { arguments } = payload else {
             return Err(FunctionCallError::RespondToModel(
                 "apply_patch handler received unsupported payload".to_string(),
             ));
+        };
+        let patch_input = match serde_json::from_str::<ApplyPatchToolArgs>(&arguments) {
+            Ok(args) => args.input,
+            Err(err) => {
+                return Err(FunctionCallError::RespondToModel(format!(
+                    "failed to parse apply_patch arguments: {err}"
+                )));
+            }
         };
         let args = match ody_apply_patch::parse_patch(&patch_input) {
             Ok(args) => args,
@@ -507,7 +695,7 @@ impl ApplyPatchHandler {
 
 impl CoreToolRuntime for ApplyPatchHandler {
     fn matches_kind(&self, payload: &ToolPayload) -> bool {
-        matches!(payload, ToolPayload::Custom { .. })
+        matches!(payload, ToolPayload::Function { .. })
     }
 
     fn create_diff_consumer(&self) -> Option<Box<dyn ToolArgumentDiffConsumer>> {
@@ -528,8 +716,8 @@ impl CoreToolRuntime for ApplyPatchHandler {
     ) -> Result<ToolInvocation, FunctionCallError> {
         let patch = updated_hook_command(&updated_input)?;
         invocation.payload = match invocation.payload {
-            ToolPayload::Custom { .. } => ToolPayload::Custom {
-                input: patch.to_string(),
+            ToolPayload::Function { .. } => ToolPayload::Function {
+                arguments: serde_json::json!({ "input": patch }).to_string(),
             },
             payload => payload,
         };

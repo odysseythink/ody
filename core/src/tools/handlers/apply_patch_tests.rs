@@ -48,12 +48,17 @@ async fn invocation_for_payload(payload: ToolPayload) -> ToolInvocation {
     }
 }
 
+/// The `apply_patch` function-tool payload carrying `patch`.
+fn patch_payload(patch: &str) -> ToolPayload {
+    ToolPayload::Function {
+        arguments: json!({ "input": patch }).to_string(),
+    }
+}
+
 #[tokio::test]
-async fn pre_tool_use_payload_uses_freeform_patch_input() {
+async fn pre_tool_use_payload_uses_patch_input() {
     let patch = sample_patch();
-    let payload = ToolPayload::Custom {
-        input: patch.to_string(),
-    };
+    let payload = patch_payload(&patch);
     let invocation = invocation_for_payload(payload).await;
     let handler = ApplyPatchHandler::default();
 
@@ -69,9 +74,7 @@ async fn pre_tool_use_payload_uses_freeform_patch_input() {
 #[tokio::test]
 async fn post_tool_use_payload_uses_patch_input_and_tool_output() {
     let patch = sample_patch();
-    let payload = ToolPayload::Custom {
-        input: patch.to_string(),
-    };
+    let payload = patch_payload(&patch);
     let invocation = invocation_for_payload(payload).await;
     let output = ApplyPatchToolOutput::from_text("Success. Updated files.".to_string());
     let handler = ApplyPatchHandler::default();
@@ -87,17 +90,36 @@ async fn post_tool_use_payload_uses_patch_input_and_tool_output() {
     );
 }
 
+/// Encodes `chunk` of patch text as it arrives inside the streamed JSON
+/// arguments: the first chunk opens the object and the `input` string, the last
+/// one closes both.
+fn opening_delta(chunk: &str) -> String {
+    format!(r#"{{"input": "{}"#, escaped_delta(chunk))
+}
+
+fn escaped_delta(chunk: &str) -> String {
+    let encoded = serde_json::to_string(chunk).expect("encode chunk");
+    encoded[1..encoded.len() - 1].to_string()
+}
+
+fn closing_delta(chunk: &str) -> String {
+    format!(r#"{}"}}"#, escaped_delta(chunk))
+}
+
 #[test]
 fn diff_consumer_streams_apply_patch_changes() {
     let mut consumer = ApplyPatchArgumentDiffConsumer::default();
     assert!(
         consumer
-            .push_delta("call-1".to_string(), "*** Begin Patch\n")
+            .push_delta("call-1".to_string(), &opening_delta("*** Begin Patch\n"))
             .is_none()
     );
 
     let event = consumer
-        .push_delta("call-1".to_string(), "*** Add File: hello.txt\n+hello")
+        .push_delta(
+            "call-1".to_string(),
+            &escaped_delta("*** Add File: hello.txt\n+hello"),
+        )
         .expect("progress event");
     assert_eq!(
         (event.call_id, event.changes),
@@ -114,12 +136,12 @@ fn diff_consumer_streams_apply_patch_changes() {
 
     assert!(
         consumer
-            .push_delta("call-1".to_string(), "\n+world")
+            .push_delta("call-1".to_string(), &escaped_delta("\n+world"))
             .is_none()
     );
     assert!(
         consumer
-            .push_delta("call-1".to_string(), "\n*** End Patch")
+            .push_delta("call-1".to_string(), &closing_delta("\n*** End Patch"))
             .is_none()
     );
 
@@ -148,13 +170,16 @@ fn diff_consumer_streams_apply_patch_changes_with_environment_header() {
         consumer
             .push_delta(
                 "call-1".to_string(),
-                "*** Begin Patch\n*** Environment ID: remote\n",
+                &opening_delta("*** Begin Patch\n*** Environment ID: remote\n"),
             )
             .is_none()
     );
 
     let event = consumer
-        .push_delta("call-1".to_string(), "*** Add File: hello.txt\n+hello")
+        .push_delta(
+            "call-1".to_string(),
+            &escaped_delta("*** Add File: hello.txt\n+hello"),
+        )
         .expect("progress event");
     assert_eq!(
         event.changes,
@@ -170,9 +195,12 @@ fn diff_consumer_streams_apply_patch_changes_with_environment_header() {
 #[test]
 fn diff_consumer_sends_next_update_after_buffer_interval() {
     let mut consumer = ApplyPatchArgumentDiffConsumer::default();
-    consumer.push_delta("call-1".to_string(), "*** Begin Patch\n");
+    consumer.push_delta("call-1".to_string(), &opening_delta("*** Begin Patch\n"));
     let first = consumer
-        .push_delta("call-1".to_string(), "*** Add File: hello.txt\n+hello")
+        .push_delta(
+            "call-1".to_string(),
+            &escaped_delta("*** Add File: hello.txt\n+hello"),
+        )
         .expect("first progress event");
     assert_eq!(
         first.changes,
@@ -187,7 +215,7 @@ fn diff_consumer_sends_next_update_after_buffer_interval() {
     consumer.last_sent_at =
         Some(std::time::Instant::now() - APPLY_PATCH_ARGUMENT_DIFF_BUFFER_INTERVAL);
     let second = consumer
-        .push_delta("call-1".to_string(), "\n+world")
+        .push_delta("call-1".to_string(), &escaped_delta("\n+world"))
         .expect("second progress event");
     assert_eq!(
         second.changes,
@@ -331,9 +359,7 @@ async fn plan_mode_invocation_for_payload(
 
 #[tokio::test]
 async fn plan_mode_patch_denial_emits_warning() {
-    let payload = ToolPayload::Custom {
-        input: sample_patch().to_string(),
-    };
+    let payload = patch_payload(&sample_patch());
     let (invocation, rx) = plan_mode_invocation_for_payload(payload).await;
     let handler = ApplyPatchHandler::default();
 
@@ -356,4 +382,65 @@ async fn plan_mode_patch_denial_emits_warning() {
             _ => continue,
         }
     }
+}
+
+/// Feeds `deltas` to the decoder and returns everything it decoded.
+fn decode_stream(deltas: &[&str]) -> String {
+    let mut decoder = PatchInputDecoder::default();
+    deltas.iter().map(|delta| decoder.push(delta)).collect()
+}
+
+const PATCH: &str = "*** Begin Patch\n*** Add File: a.txt\n+hi\n*** End Patch\n";
+
+#[test]
+fn patch_input_decoder_reconstructs_the_patch_from_streamed_json() {
+    let arguments = json!({ "input": PATCH }).to_string();
+    // One byte at a time: the worst case a provider can hand us.
+    let deltas = arguments
+        .as_bytes()
+        .chunks(1)
+        .map(|chunk| std::str::from_utf8(chunk).expect("ascii"))
+        .collect::<Vec<_>>();
+
+    assert_eq!(decode_stream(&deltas), PATCH);
+}
+
+#[test]
+fn patch_input_decoder_handles_escapes_split_across_deltas() {
+    // The \n escape is torn in half, as is the \" escape.
+    assert_eq!(
+        decode_stream(&[r#"{"input": "a\"#, r#"nb\"#, r#""c""#, "}"]),
+        "a\nb\"c"
+    );
+}
+
+#[test]
+fn patch_input_decoder_decodes_unicode_and_surrogate_pairs() {
+    let text = "é😀";
+    let arguments = serde_json::to_string(&json!({ "input": text })).expect("serialize");
+    // serde_json emits astral chars raw, so force the \u form providers may send.
+    let escaped = r#"{"input": "é😀"}"#;
+
+    assert_eq!(decode_stream(&[&arguments]), text);
+    assert_eq!(decode_stream(&[escaped]), text);
+    // Torn surrogate pair: nothing is emitted until the low half arrives.
+    assert_eq!(decode_stream(&[r#"{"input": "\ud83d"#, r#"\ude00""#]), "😀");
+}
+
+#[test]
+fn patch_input_decoder_stops_at_the_closing_quote() {
+    let arguments = format!(
+        r#"{{"input": {}, "unexpected": "trailing"}}"#,
+        serde_json::to_string(PATCH).expect("serialize")
+    );
+
+    assert_eq!(decode_stream(&[&arguments]), PATCH);
+}
+
+#[test]
+fn patch_input_decoder_stays_quiet_when_there_is_no_input_string() {
+    assert_eq!(decode_stream(&[r#"{"command": "not-input"}"#]), "");
+    assert_eq!(decode_stream(&[r#"{"input": 42}"#]), "");
+    // Partial arguments that have not reached the value yet.
+    assert_eq!(decode_stream(&[r#"{"inp"#]), "");
 }
