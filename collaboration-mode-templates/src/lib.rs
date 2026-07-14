@@ -20,19 +20,28 @@ pub const PLAN_RIGOR_TURN_DISCIPLINE: &str =
 mod template_tests {
     use super::*;
 
-    /// ody-rs ships no Read/Grep/Glob tools — the model-facing surface is
-    /// `shell_command`/`exec_command` (see core/src/tools/handlers/*_spec.rs).
-    /// Naming them sends the model looking for tools that do not exist, and it
-    /// falls back to raw `rg`/`cat` shell calls, the most context-expensive
-    /// exploration path available. The wording was inherited verbatim from
-    /// ody-code, which does ship those tools.
+    /// The templates may only name tools ody-rs actually registers. The
+    /// inherited-from-ody-code wording named `Read/Grep/Glob`, which ody-rs did
+    /// not ship; the model looked for them, found nothing, and fell back to raw
+    /// `rg`/`cat` shell calls — the most context-expensive exploration path
+    /// available. The tools now exist under their real names, so pin those.
+    ///
+    /// If a template ever names a tool again, cross-check it against the handler
+    /// names in `core/src/tools/handlers/file_tools_spec.rs`.
     #[test]
-    fn plan_templates_do_not_name_nonexistent_tools() {
+    fn plan_templates_only_name_tools_that_exist() {
         for (name, body) in [("PLAN", PLAN), ("PLAN_RIGOR_WORKFLOW", PLAN_RIGOR_WORKFLOW)] {
             assert!(
                 !body.contains("Read/Grep/Glob"),
-                "{name} still names the nonexistent Read/Grep/Glob tools"
+                "{name} names Read/Grep/Glob; ody-rs registers `read_file`/`grep`/`glob`"
             );
+            for tool in ["`grep`", "`glob`", "`read_file`"] {
+                assert!(
+                    body.contains(tool),
+                    "{name} must steer exploration at {tool} — otherwise the model \
+                     defaults back to shelling out to rg/cat"
+                );
+            }
         }
     }
 

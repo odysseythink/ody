@@ -1473,6 +1473,29 @@ async fn file_tools_are_model_visible_in_every_mode() {
     }
 }
 
+/// Cross-layer guard against the bug this whole change started from: the base
+/// instructions used to tell the model to explore with tools ody-rs did not
+/// register, so it fell back to raw `rg`/`cat` shell calls. A prompt may only
+/// name a tool the tool plan actually exposes — assert the two agree instead of
+/// trusting that they do.
+#[tokio::test]
+async fn base_instructions_only_name_tools_the_tool_plan_registers() {
+    let probe = probe(|_| {}).await;
+    let base_instructions = ody_models_manager::model_info::BASE_INSTRUCTIONS;
+
+    for tool in ["read_file", "grep", "glob"] {
+        assert!(
+            base_instructions.contains(&format!("`{tool}`")),
+            "base instructions must steer exploration at `{tool}`"
+        );
+        probe.assert_visible_contains(&[tool]);
+    }
+    assert!(
+        !base_instructions.contains("prefer using `rg`"),
+        "base instructions must not still prefer raw `rg` over the structured tools"
+    );
+}
+
 #[tokio::test]
 async fn file_tools_can_be_disabled_by_feature() {
     let probe = probe(|turn| {
