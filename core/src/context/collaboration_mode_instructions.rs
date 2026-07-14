@@ -29,16 +29,8 @@ impl CollaborationModeInstructions {
             .as_ref()
             .filter(|instructions| !instructions.is_empty())?;
 
-        let rendered = if matches!(collaboration_mode.mode, ModeKind::Plan | ModeKind::Design)
-            && instructions.contains(SPLIT_THRESHOLD_TEMPLATE_KEY)
-        {
-            render_plan_instructions(instructions, split_threshold)
-        } else {
-            instructions.clone()
-        };
-
         let mut this = Self {
-            instructions: rendered,
+            instructions: instructions.clone(),
         };
 
         if collaboration_mode.mode == ModeKind::Plan {
@@ -62,6 +54,15 @@ impl CollaborationModeInstructions {
         if collaboration_mode.mode == ModeKind::Design {
             let level = plan_artifact.and_then(|a| a.design_audit_level());
             this = this.with_design_audit_level(level);
+        }
+
+        // Render AFTER all fragments are appended: PLAN_RIGOR_SPLIT carries its
+        // own {{ split_threshold }} placeholders, so rendering the base
+        // instructions first leaves literal placeholders in the final text.
+        if matches!(collaboration_mode.mode, ModeKind::Plan | ModeKind::Design)
+            && this.instructions.contains(SPLIT_THRESHOLD_TEMPLATE_KEY)
+        {
+            this.instructions = render_plan_instructions(&this.instructions, split_threshold);
         }
 
         Some(this)
@@ -265,6 +266,34 @@ mod tests {
         )
         .expect("should produce instructions");
         assert_eq!(instructions.body(), "Split plans larger than 8 tasks.");
+    }
+
+    #[test]
+    fn rigor_fragments_have_no_unrendered_split_threshold_placeholder() {
+        // user_prompt = Some(..) forces tier resolution through the selector,
+        // which always returns Rigor for Plan mode (see
+        // plan_mode_tier_selector.rs: select_tier), so all rigor fragments —
+        // including PLAN_RIGOR_SPLIT with its own {{ split_threshold }} — are
+        // appended.
+        let mode =
+            plan_mode_with_instructions("Split plans larger than {{ split_threshold }} tasks.");
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            Some("write the migration plan"),
+            None,
+            None,
+        )
+        .expect("should produce instructions");
+        let body = instructions.body();
+        assert!(
+            !body.contains("{{"),
+            "rigor-tier instructions still contain an unrendered placeholder:\n{}",
+            body.lines()
+                .filter(|line| line.contains("{{"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
     }
 
     #[test]
