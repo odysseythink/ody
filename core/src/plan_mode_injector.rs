@@ -203,6 +203,10 @@ impl PlanModeInjector {
             ReminderKind::Full => render_full_reminder(),
             ReminderKind::Sparse => render_sparse_reminder(),
         };
+        let split_threshold = plan_mode_config
+            .and_then(|c| c.split_threshold)
+            .unwrap_or(8);
+        let text = render_threshold_placeholders(&text, split_threshold);
         artifact.record_reminder_injected(kind == ReminderKind::Full, current_turn);
         Some((kind, text))
     }
@@ -261,19 +265,29 @@ pub fn render_directive(
     }
 }
 
+/// Substitutes the `{{ split_threshold }}` placeholder carried by
+/// PLAN_RIGOR_SPLIT. The reminder injection path (session/turn.rs) does not
+/// go through `render_plan_instructions`, so reminders must render the
+/// placeholder themselves.
+fn render_threshold_placeholders(text: &str, split_threshold: usize) -> String {
+    text.replace("{{ split_threshold }}", &split_threshold.to_string())
+}
+
 /// Renders the full rigor-tier plan-mode reminder.
 ///
 /// Re-injects all rigor fragments so the model keeps the complete contract
 /// in context during a long planning session.
 pub fn render_full_reminder() -> String {
     format!(
-        "## Plan-mode rigor reminder (full)\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}",
+        "## Plan-mode rigor reminder (full)\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}",
         ody_collaboration_mode_templates::PLAN_RIGOR_COVERAGE,
         ody_collaboration_mode_templates::PLAN_RIGOR_SELFREVIEW,
         ody_collaboration_mode_templates::PLAN_RIGOR_INVARIANTS,
         ody_collaboration_mode_templates::PLAN_RIGOR_GROUNDING,
         ody_collaboration_mode_templates::PLAN_RIGOR_SCOPE,
         ody_collaboration_mode_templates::PLAN_RIGOR_RENAME,
+        ody_collaboration_mode_templates::PLAN_RIGOR_SPLIT,
+        ody_collaboration_mode_templates::PLAN_RIGOR_TURN_DISCIPLINE,
     )
 }
 
@@ -294,6 +308,7 @@ You are writing a rigor-tier plan. Keep the following artifacts current:
 - Source-grounding mandate
 - Out-of-scope / false-positive discipline
 - Rename-vs-delete decision prompt
+- Large-plan splitting: keep the ## Parts manifest current; one part per turn
 
 Quality bar: the plan must stay concrete enough to execute with zero follow-up — complete code in every step (not pseudocode or "similar to Task N"), exact commands with expected output, and per-task tests that assert the actual risk being changed.
 "#
@@ -340,6 +355,50 @@ pub fn select_reminder(
     }
 
     None
+}
+
+#[cfg(test)]
+mod reminder_tests {
+    use super::*;
+
+    #[test]
+    fn full_reminder_includes_split_contract() {
+        let text = render_full_reminder();
+        assert!(
+            text.contains("Large plan splitting"),
+            "full reminder missing the split addendum (PLAN_RIGOR_SPLIT)"
+        );
+        assert!(
+            text.contains("Parts manifest"),
+            "full reminder missing the Parts manifest contract"
+        );
+        assert!(
+            text.contains("Turn discipline"),
+            "full reminder missing turn discipline (PLAN_RIGOR_TURN_DISCIPLINE)"
+        );
+    }
+
+    #[test]
+    fn sparse_reminder_mentions_parts_manifest() {
+        let text = render_sparse_reminder();
+        assert!(
+            text.contains("Parts manifest"),
+            "sparse reminder should keep the split contract alive between full reinjections"
+        );
+    }
+
+    #[test]
+    fn reminder_threshold_placeholders_are_rendered() {
+        // The reminder injection path (session/turn.rs) does not go through
+        // render_plan_instructions, so the reminder text must substitute the
+        // placeholder itself before reaching the model.
+        let text = render_threshold_placeholders("Plans >{{ split_threshold }} tasks", 8);
+        assert_eq!(text, "Plans >8 tasks");
+        assert!(
+            !render_threshold_placeholders(render_full_reminder().as_str(), 8).contains("{{"),
+            "full reminder must contain no unrendered placeholder after substitution"
+        );
+    }
 }
 
 #[cfg(test)]
