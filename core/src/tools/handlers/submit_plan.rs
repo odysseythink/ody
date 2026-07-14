@@ -22,7 +22,9 @@ use ody_protocol::protocol::WarningEvent;
 use ody_protocol::submit_plan_tool::SubmitPlanArgs;
 use ody_tools::ToolName;
 use ody_tools::ToolSpec;
+use regex_lite::Regex;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 const PLAN_SUBMITTED_MESSAGE: &str = "Plan submitted";
 const REQUIRED_SELF_REVIEW_ITEMS: usize = 7;
@@ -64,18 +66,18 @@ fn rigor_structure_gap(plan: &str) -> Option<String> {
     }
 }
 
-/// Counts `### Task N` headings — the convention every observed plan and
+/// Counts `Task N` headings (## to ####, case-insensitive, optional
+/// punctuation after the number) — the convention every observed plan and
 /// template example uses for the "Tasks" section. Used to mechanically detect
 /// a plan that should have been split per the base template's "Large plan
-/// splitting" rule but wasn't.
+/// splitting" rule but wasn't. Deliberately conservative: headings that only
+/// contain the word "Task" without a number (e.g. "### Task Breakdown",
+/// "### Tasks") are NOT counted.
 fn count_task_headings(plan: &str) -> usize {
+    static TASK_HEADING_RE: OnceLock<Regex> = OnceLock::new();
+    let re = TASK_HEADING_RE.get_or_init(|| Regex::new(r"(?i)^#{2,4}\s+task\s+\d").unwrap());
     plan.lines()
-        .filter(|line| {
-            line.trim_start()
-                .strip_prefix("### Task ")
-                .and_then(|rest| rest.trim_start().chars().next())
-                .is_some_and(|c| c.is_ascii_digit())
-        })
+        .filter(|line| re.is_match(line.trim_start()))
         .count()
 }
 
@@ -93,7 +95,7 @@ fn split_threshold_gap(plan: &str, split_threshold: usize) -> Option<String> {
     let task_count = count_task_headings(plan);
     if task_count > split_threshold {
         Some(format!(
-            "has {task_count} `### Task` headings but no `## Parts` table — the plan-mode instructions require splitting into multiple files once a plan exceeds {split_threshold} distinct tasks (see \"Large plan splitting\")"
+            "has {task_count} task headings but no `## Parts` table — the plan-mode instructions require splitting into multiple files once a plan exceeds {split_threshold} distinct tasks (see \"Large plan splitting\"). Task headings must look like `### Task N` (## to #### allowed, `Task` case-insensitive, N a number); rename non-task headings so they are not counted."
         ))
     } else {
         None
@@ -369,6 +371,32 @@ mod tests {
             tasks_with(13)
         );
         assert!(split_threshold_gap(&plan, 3).is_some());
+    }
+
+    #[test]
+    fn count_task_headings_accepts_common_variants() {
+        let plan =
+            "## Task 1\n\n### Task 2: wire the API\n\n#### task 3 — migrate\n\n### Task 12\n";
+        assert_eq!(count_task_headings(plan), 4);
+    }
+
+    #[test]
+    fn count_task_headings_ignores_non_task_headings() {
+        // MUST-SURVIVE: prose-ish headings that merely contain "Task" must not
+        // be counted, or ordinary single-file plans would trip the split check.
+        let plan =
+            "### Task Breakdown\n\n### Tasks\n\n### Task: overview\n\n### Random heading\n\n## Parts\n";
+        assert_eq!(count_task_headings(plan), 0);
+    }
+
+    #[test]
+    fn split_threshold_gap_message_names_expected_format() {
+        let plan = (1..=9).map(|n| format!("### Task {n}\n")).collect::<String>();
+        let gap = split_threshold_gap(&plan, 8).expect("9 tasks should exceed threshold 8");
+        assert!(
+            gap.contains("### Task N"),
+            "error should name the expected heading format so the model can self-correct: {gap}"
+        );
     }
 
     #[test]
