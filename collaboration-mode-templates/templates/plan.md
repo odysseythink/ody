@@ -149,6 +149,8 @@ Prefer grouped implementation bullets by subsystem or behavior over file-by-file
 
 Keep bullets short and avoid explanatory sub-bullets unless they are needed to prevent ambiguity. Prefer the minimum detail needed for implementation safety, not exhaustive coverage. Within each section, compress related changes into a few high-signal bullets and omit branch-by-branch logic, repeated invariants, and long lists of unaffected behavior unless they are necessary to prevent a likely implementation mistake. Avoid repeated repo facts and irrelevant edge-case or rollout detail. For straightforward refactors, keep the plan to a compact summary, key edits, tests, and assumptions. If the user asks for more detail, then expand.
 
+The conciseness rules above govern the writing style of a single-file plan and of each part file's internals. Once the task count exceeds the split threshold, splitting takes precedence over conciseness — a single-file plan over the threshold is non-compliant (see "Large plan splitting" below).
+
 Do not ask "should I proceed?" in the final output. The user can easily switch out of Plan mode and request implementation once you have called `submit_plan`. Alternatively, they can decide to stay in Plan mode and continue refining the plan.
 
 Only call `submit_plan` once per turn, and only when you are presenting a complete spec (or, for split plans, one complete index/part — see below).
