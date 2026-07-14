@@ -4,6 +4,7 @@ use crate::config::ConfigBuilder;
 use crate::skills_load_input_from_config;
 use ody_config::ConfigLayerStackOrdering;
 use ody_core_plugins::PluginsManager;
+use ody_protocol::models::PermissionProfile;
 use ody_protocol::config_types::ServiceTier;
 use ody_protocol::model_metadata::ReasoningEffort;
 use ody_utils_absolute_path::test_support::PathExt;
@@ -86,12 +87,61 @@ async fn apply_explorer_role_sets_model_and_adds_session_flags_layer() {
     assert_eq!(session_flags_layer_count(&config), before_layers + 1);
 }
 
+/// The explorer role exists to absorb codebase exploration in its own context so
+/// the parent's context stays free. That only works if it is genuinely read-only:
+/// an explorer that can edit files is just an unsupervised worker, and delegating
+/// exploration to it stops being safe.
+///
+/// `explorer.toml` shipped EMPTY, so the role had a description but no enforcement
+/// at all. Pin the sandbox here — a role's read-only-ness is applied through its
+/// config layer, not through a tool allowlist, so nothing else checks it.
 #[tokio::test]
-async fn apply_empty_explorer_role_preserves_current_model_and_reasoning_effort() {
-    let (_home, mut config) = test_config_with_cli_overrides(Vec::new()).await;
-    let before_layers = session_flags_layer_count(&config);
-    config.model = Some("gpt-5.4-mini".to_string());
-    config.model_reasoning_effort = Some(ReasoningEffort::High);
+async fn explorer_role_is_sandboxed_read_only() {
+    // Start from a workspace-write parent, i.e. the interesting case: the role
+    // layer has to *narrow* an already-permissive session, not merely inherit a
+    // restrictive default.
+    let (_home, mut config) = test_config_with_cli_overrides(vec![(
+        "sandbox_mode".to_string(),
+        TomlValue::String("workspace-write".to_string()),
+    )])
+    .await;
+    assert_ne!(
+        config.permissions.permission_profile(),
+        &PermissionProfile::read_only(),
+        "precondition: the parent session must start writable, or this test proves nothing"
+    );
+
+    apply_role_to_config(&mut config, Some("explorer"))
+        .await
+        .expect("explorer role should apply");
+
+    assert_eq!(
+        config.permissions.permission_profile(),
+        &PermissionProfile::read_only(),
+        "the explorer role must force a read-only permission profile even when the \
+         parent session is workspace-write"
+    );
+}
+
+/// `explorer.toml` constrains the sandbox and nothing else, so an explorer must
+/// still inherit the session's model. The model has to come through the config
+/// layer stack (as it does in production) rather than a direct struct poke:
+/// applying a non-empty role layer rebuilds the config from the stack, so a
+/// field mutated straight on the struct would be discarded — which is a property
+/// of the reload, not a regression in the role.
+#[tokio::test]
+async fn apply_explorer_role_preserves_current_model_and_reasoning_effort() {
+    let (_home, mut config) = test_config_with_cli_overrides(vec![
+        (
+            "model".to_string(),
+            TomlValue::String("gpt-5.4-mini".to_string()),
+        ),
+        (
+            "model_reasoning_effort".to_string(),
+            TomlValue::String("high".to_string()),
+        ),
+    ])
+    .await;
 
     apply_role_to_config(&mut config, Some("explorer"))
         .await
@@ -99,7 +149,73 @@ async fn apply_empty_explorer_role_preserves_current_model_and_reasoning_effort(
 
     assert_eq!(config.model.as_deref(), Some("gpt-5.4-mini"));
     assert_eq!(config.model_reasoning_effort, Some(ReasoningEffort::High));
-    assert_eq!(session_flags_layer_count(&config), before_layers);
+}
+
+/// A spawned agent inherits the parent's model by having it written onto the
+/// `Config` struct (`build_agent_shared_config`), NOT into the config layer
+/// stack. Applying a role with a non-empty layer rebuilds the config from that
+/// stack, so without an explicit override the inherited model is silently
+/// dropped — and the very next step, `apply_spawn_agent_service_tier`, fails
+/// with "could not resolve the child model".
+///
+/// `model_provider` and `service_tier` are already kept sticky this way; `model`
+/// was simply omitted. Every role with a non-empty config file has this bug
+/// (`awaiter.toml` included); `explorer.toml` only hid it by being empty.
+#[tokio::test]
+async fn role_with_a_non_empty_layer_preserves_a_runtime_selected_model() {
+    let (home, mut config) = test_config_with_cli_overrides(Vec::new()).await;
+    let role_path = write_role_config(
+        &home,
+        "sandbox-only.toml",
+        "sandbox_mode = \"read-only\"\n",
+    )
+    .await;
+    config.agent_roles.insert(
+        "custom".to_string(),
+        AgentRoleConfig {
+            description: None,
+            config_file: Some(role_path),
+            nickname_candidates: None,
+        },
+    );
+    // Mirror the spawn path: the parent's model lands on the struct, not the stack.
+    config.model = Some("runtime-selected-model".to_string());
+
+    apply_role_to_config(&mut config, Some("custom"))
+        .await
+        .expect("custom role should apply");
+
+    assert_eq!(
+        config.model.as_deref(),
+        Some("runtime-selected-model"),
+        "a role that does not set `model` must not drop the model the parent was running"
+    );
+}
+
+#[tokio::test]
+async fn role_that_sets_a_model_still_wins_over_the_runtime_model() {
+    let (home, mut config) = test_config_with_cli_overrides(Vec::new()).await;
+    let role_path =
+        write_role_config(&home, "model-role.toml", "model = \"role-model\"\n").await;
+    config.agent_roles.insert(
+        "custom".to_string(),
+        AgentRoleConfig {
+            description: None,
+            config_file: Some(role_path),
+            nickname_candidates: None,
+        },
+    );
+    config.model = Some("runtime-selected-model".to_string());
+
+    apply_role_to_config(&mut config, Some("custom"))
+        .await
+        .expect("custom role should apply");
+
+    assert_eq!(
+        config.model.as_deref(),
+        Some("role-model"),
+        "an explicit `model` in the role layer must still take precedence"
+    );
 }
 
 #[tokio::test]

@@ -1473,6 +1473,95 @@ async fn file_tools_are_model_visible_in_every_mode() {
     }
 }
 
+/// The root cause of the context burn: `spawn_agent` was Deferred whenever the
+/// search tool was on, so in Plan mode it was ABSENT from the model's initial
+/// tool list. The model could not choose to delegate exploration without first
+/// discovering the tool through tool_search — so it never did, and every search
+/// landed in the planning context.
+///
+/// Assert against `model_visible_specs`, not the registry: a registered-but-
+/// Deferred tool passes a registry check while being invisible to the model,
+/// which is exactly how this went unnoticed.
+#[tokio::test]
+async fn spawn_agent_is_directly_visible_in_read_only_modes() {
+    let spawn_agent = format!("{MULTI_AGENT_V1_NAMESPACE}spawn_agent");
+    for mode in [ModeKind::Plan, ModeKind::Design] {
+        let probe = probe(|turn| {
+            turn.collaboration_mode.mode = mode;
+        })
+        .await;
+
+        assert_eq!(
+            probe.exposure(&spawn_agent),
+            ToolExposure::Direct,
+            "spawn_agent must be Direct in {mode:?} — a Deferred tool is not in the \
+             model's tool list, so exploration can never be delegated"
+        );
+        assert!(
+            probe
+                .namespace_function_names(MULTI_AGENT_V1_NAMESPACE)
+                .iter()
+                .any(|name| name == "spawn_agent"),
+            "spawn_agent must appear in the model-visible {MULTI_AGENT_V1_NAMESPACE} namespace \
+             in {mode:?}"
+        );
+    }
+}
+
+/// Outside the read-only planning modes the previous behaviour stands: the
+/// search tool defers spawn_agent to keep the default tool list small.
+#[tokio::test]
+async fn spawn_agent_stays_deferred_outside_read_only_modes() {
+    let probe = probe(|turn| {
+        turn.collaboration_mode.mode = ModeKind::Default;
+    })
+    .await;
+    assert_eq!(
+        probe.exposure(&format!("{MULTI_AGENT_V1_NAMESPACE}spawn_agent")),
+        ToolExposure::Deferred
+    );
+}
+
+/// The blanket "do not spawn sub-agents unless the user explicitly asks" was the
+/// instruction that kept every search in the main context. It must survive only
+/// for WRITING work; read-only exploration is now the delegation that is
+/// actively encouraged.
+#[tokio::test]
+async fn spawn_agent_guidance_encourages_delegating_exploration() {
+    let probe = probe(|turn| {
+        turn.collaboration_mode.mode = ModeKind::Plan;
+    })
+    .await;
+    let ToolSpec::Namespace(namespace) = probe.visible_spec(MULTI_AGENT_V1_NAMESPACE) else {
+        panic!("{MULTI_AGENT_V1_NAMESPACE} should be a namespace spec");
+    };
+    let ResponsesApiNamespaceTool::Function(spec) = namespace
+        .tools
+        .iter()
+        .find(|tool| match tool {
+            ResponsesApiNamespaceTool::Function(tool) => tool.name == "spawn_agent",
+        })
+        .expect("spawn_agent should be in the namespace");
+    let description = &spec.description;
+
+    assert!(
+        !description.contains(
+            "Do not spawn sub-agents unless the user explicitly asks for sub-agents, delegation, \
+             or parallel agent work.\n"
+        ),
+        "the blanket prohibition must no longer stand alone — it now applies only to writes"
+    );
+    assert!(
+        description.contains("Delegate broad, read-only codebase exploration"),
+        "spawn_agent must actively steer exploration at a sub-agent: {description}"
+    );
+    assert!(
+        !description.contains("prefer delegating concrete code-change worker subtasks over \
+                               read-only explorer analysis"),
+        "the line disparaging read-only explorers contradicts the new guidance and must be gone"
+    );
+}
+
 /// Cross-layer guard against the bug this whole change started from: the base
 /// instructions used to tell the model to explore with tools ody-rs did not
 /// register, so it fell back to raw `rg`/`cat` shell calls. A prompt may only

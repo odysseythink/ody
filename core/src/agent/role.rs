@@ -29,12 +29,14 @@ use toml::Value as TomlValue;
 pub const DEFAULT_ROLE_NAME: &str = "default";
 const AGENT_TYPE_UNAVAILABLE_ERROR: &str = "agent type is currently not available";
 
-/// Applies a named role layer to `config` while preserving caller-owned provider settings.
+/// Applies a named role layer to `config` while preserving caller-owned model settings.
 ///
 /// The role layer is inserted at session-flag precedence so it can override persisted config, but
-/// the caller's current `model_provider` and `service_tier` remain sticky runtime choices unless
-/// the role explicitly sets the corresponding top-level config key. Rebuilding the config without
-/// those overrides would make a spawned agent silently fall back to default settings.
+/// the caller's current `model`, `model_provider` and `service_tier` remain sticky runtime choices
+/// unless the role explicitly sets the corresponding top-level config key. Rebuilding the config
+/// without those overrides would make a spawned agent silently fall back to default settings — for
+/// `model` that is worse than a fallback: it becomes `None`, and the spawn path then fails outright
+/// in `apply_spawn_agent_service_tier`.
 pub(crate) async fn apply_role_to_config(
     config: &mut Config,
     role_name: Option<&str>,
@@ -71,12 +73,19 @@ async fn apply_role_to_config_inner(
     }
     let preserve_current_provider = role_layer_toml.get("model_provider").is_none();
     let preserve_current_service_tier = role_layer_toml.get("service_tier").is_none();
+    // A spawned agent inherits its parent's model by having it written onto the
+    // `Config` struct, not into the config layer stack (see
+    // `build_agent_shared_config`). Rebuilding from the stack therefore drops it
+    // unless we carry it across — and the next step in the spawn path,
+    // `apply_spawn_agent_service_tier`, then fails to resolve the child model.
+    let preserve_current_model = role_layer_toml.get("model").is_none();
 
     *config = reload::build_next_config(
         config,
         role_layer_toml,
         preserve_current_provider,
         preserve_current_service_tier,
+        preserve_current_model,
     )
     .await?;
     Ok(())
@@ -134,6 +143,7 @@ mod reload {
         role_layer_toml: TomlValue,
         preserve_current_provider: bool,
         preserve_current_service_tier: bool,
+        preserve_current_model: bool,
     ) -> anyhow::Result<Config> {
         let config_layer_stack = build_config_layer_stack(config, &role_layer_toml)?;
         let merged_config = deserialize_effective_config(config, &config_layer_stack)?;
@@ -145,6 +155,7 @@ mod reload {
                 config,
                 preserve_current_provider,
                 preserve_current_service_tier,
+                preserve_current_model,
             ),
             config.ody_home.clone(),
             config_layer_stack,
@@ -202,9 +213,11 @@ mod reload {
         config: &Config,
         preserve_current_provider: bool,
         preserve_current_service_tier: bool,
+        preserve_current_model: bool,
     ) -> ConfigOverrides {
         ConfigOverrides {
             cwd: Some(config.cwd.to_path_buf()),
+            model: preserve_current_model.then(|| config.model.clone()).flatten(),
             model_provider: preserve_current_provider.then(|| config.model_provider_id.clone()),
             service_tier: preserve_current_service_tier.then(|| config.service_tier.clone()),
             main_execve_wrapper_exe: config.main_execve_wrapper_exe.clone(),
