@@ -162,6 +162,20 @@ fn open_desktop_thread_url(url: &str) -> Result<(), String> {
 }
 
 #[cfg(target_os = "windows")]
+fn open_desktop_thread_url(url: &str) -> Result<(), String> {
+    let status = std::process::Command::new("cmd")
+        .args(["/C", "start", "", url])
+        .status()
+        .map_err(|err| format!("failed to invoke `start`: {err}"))?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("`start {url}` exited with {status}"))
+    }
+}
+
+#[cfg(target_os = "windows")]
 fn powershell_single_quoted_string(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }

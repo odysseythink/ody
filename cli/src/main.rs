@@ -23,7 +23,6 @@ use ody_utils_cli::ProfileV2Name;
 use ody_utils_cli::SharedCliOptions;
 use owo_colors::OwoColorize;
 use serde::Serialize;
-use serde::Deserialize;
 use std::collections::HashSet;
 use std::io::IsTerminal;
 use std::io::Write;
@@ -1229,7 +1228,7 @@ async fn cli_main(
             #[cfg(target_os = "windows")]
             ody_cli::run_command_under_windows_sandbox(
                 sandbox_cli,
-                arg0_paths.clone(),
+                arg0_paths.ody_linux_sandbox_exe.clone(),
                 loader_overrides,
             )
             .await?;
@@ -1478,7 +1477,7 @@ async fn run_exec_server_command(
 }
 
 async fn load_exec_server_remote_auth_provider(
-    config: &ody_core::config::Config,
+    _config: &ody_core::config::Config,
     base_url: &str,
     use_agent_identity_auth: bool,
 ) -> anyhow::Result<ody_api::SharedAuthProvider> {
