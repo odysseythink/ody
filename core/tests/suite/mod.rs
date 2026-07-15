@@ -36,6 +36,8 @@ mod approvals;
 mod auto_review;
 mod client;
 mod client_websockets;
+// Executes real JS through the code-mode runtime; requires the `v8` feature.
+#[cfg(feature = "v8")]
 mod code_mode;
 mod collaboration_instructions;
 mod compact;

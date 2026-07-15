@@ -23,6 +23,10 @@ workspace = true
 # only useful for manually exercising the app-server protocol during
 # development.
 debug-app-server-client = ["dep:ody-app-server-test-client"]
+# Enables the V8-backed code-mode runtime. Off by default so local dev
+# builds skip compiling/linking V8; release/packaging builds must pass
+# `--features v8` for code mode to work at runtime.
+v8 = ["ody-core/v8"]
 
 [dependencies]
 anyhow = { workspace = true }
