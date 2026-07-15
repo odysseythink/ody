@@ -375,7 +375,6 @@ use ody_protocol::protocol::NetworkApprovalContext;
 use ody_protocol::protocol::NonSteerableTurnKind;
 use ody_protocol::protocol::OdyErrorInfo;
 use ody_protocol::protocol::Op;
-use ody_protocol::protocol::RateLimitSnapshot;
 use ody_protocol::protocol::RequestUserInputEvent;
 use ody_protocol::protocol::ReviewDecision;
 use ody_protocol::protocol::SandboxPolicy;
@@ -3606,22 +3605,6 @@ impl Session {
         self.send_token_count_event(turn_context).await;
     }
 
-    pub(crate) async fn update_rate_limits(
-        &self,
-        turn_context: &TurnContext,
-        new_rate_limits: RateLimitSnapshot,
-    ) {
-        self.record_rate_limits_info(new_rate_limits).await;
-        self.send_token_count_event(turn_context).await;
-    }
-
-    pub(crate) async fn record_rate_limits_info(&self, new_rate_limits: RateLimitSnapshot) {
-        {
-            let mut state = self.state.lock().await;
-            state.set_rate_limits(new_rate_limits);
-        }
-    }
-
     pub(crate) async fn mcp_dependency_prompted(&self) -> HashSet<String> {
         let state = self.state.lock().await;
         state.mcp_dependency_prompted()
@@ -3641,11 +3624,11 @@ impl Session {
     }
 
     pub(crate) async fn send_token_count_event(&self, turn_context: &TurnContext) {
-        let (info, rate_limits) = {
+        let (info) = {
             let state = self.state.lock().await;
-            state.token_info_and_rate_limits()
+            state.token_info()
         };
-        let event = EventMsg::TokenCount(TokenCountEvent { info, rate_limits });
+        let event = EventMsg::TokenCount(TokenCountEvent { info });
         self.send_event(turn_context, event).await;
     }
 

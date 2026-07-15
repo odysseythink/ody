@@ -1,12 +1,5 @@
 use super::new_status_output;
-use super::new_status_output_with_rate_limits;
-use super::new_status_output_with_rate_limits_handle;
-use super::rate_limit_snapshot_display;
-use super::rate_limits::RateLimitSnapshotDisplay;
-use super::rate_limits::RateLimitWindowDisplay;
-use super::rate_limits::SpendControlLimitSnapshotDisplay;
-use super::rate_limits::StatusRateLimitData;
-use super::rate_limits::compose_rate_limit_data_many;
+use super::new_status_output_with_handle;
 use crate::history_cell::HistoryCell;
 use crate::legacy_core::config::Config;
 use crate::legacy_core::config::ConfigBuilder;
@@ -22,10 +15,6 @@ use chrono::Local;
 use chrono::TimeZone;
 use chrono::Utc;
 use ody_app_server_protocol::AskForApproval;
-use ody_app_server_protocol::CreditsSnapshot;
-use ody_app_server_protocol::RateLimitSnapshot;
-use ody_app_server_protocol::RateLimitWindow;
-use ody_app_server_protocol::SpendControlLimitSnapshot;
 use ody_config::LoaderOverrides;
 use ody_models_manager::test_support::construct_model_info_offline_for_tests;
 use ody_models_manager::test_support::get_model_offline_for_tests;
@@ -48,34 +37,6 @@ use pretty_assertions::assert_eq;
 use ratatui::prelude::*;
 use tempfile::TempDir;
 use unicode_width::UnicodeWidthStr;
-
-#[test]
-fn stale_monthly_limit_marks_fresh_rolling_snapshot_stale() {
-    let now = Local::now();
-    let snapshot = RateLimitSnapshotDisplay {
-        limit_name: "ody".to_string(),
-        captured_at: now,
-        primary: Some(RateLimitWindowDisplay {
-            used_percent: 20.0,
-            resets_at: Some("soon".to_string()),
-            window_minutes: Some(300),
-        }),
-        secondary: None,
-        credits: None,
-        individual_limit: Some(SpendControlLimitSnapshotDisplay {
-            captured_at: now - ChronoDuration::minutes(20),
-            percent_remaining: 68.0,
-            used: "8,000".to_string(),
-            limit: "25,000".to_string(),
-            resets_at: Some("later".to_string()),
-        }),
-    };
-
-    assert!(matches!(
-        compose_rate_limit_data_many(&[snapshot], now),
-        StatusRateLimitData::Stale(_)
-    ));
-}
 
 fn app_server_workspace_write_profile(network_enabled: bool) -> PermissionProfile {
     PermissionProfile::Managed {
@@ -222,7 +183,6 @@ fn permissions_text_for(config: &Config) -> Option<String> {
         &None,
         /*thread_name*/ None,
         /*forked_from*/ None,
-        /*rate_limits*/ None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -267,24 +227,6 @@ async fn status_snapshot_includes_reasoning_details() {
         .with_ymd_and_hms(2024, 1, 2, 3, 4, 5)
         .single()
         .expect("timestamp");
-    let snapshot = RateLimitSnapshot {
-        limit_id: None,
-        limit_name: None,
-        primary: Some(RateLimitWindow {
-            used_percent: 72,
-            window_duration_mins: Some(300),
-            resets_at: Some(reset_at_from(&captured_at, /*seconds*/ 600)),
-        }),
-        secondary: Some(RateLimitWindow {
-            used_percent: 45,
-            window_duration_mins: Some(10080),
-            resets_at: Some(reset_at_from(&captured_at, /*seconds*/ 1_200)),
-        }),
-        credits: None,
-        individual_limit: None,
-        rate_limit_reached_type: None,
-    };
-    let rate_display = rate_limit_snapshot_display(&snapshot, captured_at);
 
     let model_slug = get_model_offline_for_tests(config.model.as_deref());
     let token_info = token_info_for(&model_slug, &config, &usage);
@@ -298,7 +240,6 @@ async fn status_snapshot_includes_reasoning_details() {
         &None,
         /*thread_name*/ None,
         /*forked_from*/ None,
-        Some(&rate_display),
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -612,7 +553,6 @@ async fn status_snapshot_shows_active_user_defined_profile() {
         &None,
         /*thread_name*/ None,
         /*forked_from*/ None,
-        /*rate_limits*/ None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -660,7 +600,6 @@ async fn status_snapshot_shows_auto_review_permissions() {
         &None,
         /*thread_name*/ None,
         /*forked_from*/ None,
-        /*rate_limits*/ None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -759,7 +698,6 @@ async fn status_snapshot_includes_forked_from() {
         &Some(session_id),
         /*thread_name*/ None,
         Some(forked_from),
-        /*rate_limits*/ None,
         captured_at,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -773,400 +711,6 @@ async fn status_snapshot_includes_forked_from() {
     }
     let sanitized = sanitize_directory(rendered_lines).join("\n");
     assert_snapshot!(sanitized);
-}
-
-#[tokio::test]
-async fn status_snapshot_includes_monthly_limit() {
-    let temp_home = TempDir::new().expect("temp home");
-    let mut config = test_config(&temp_home).await;
-    config.model = Some("kimi-for-coding".to_string());
-    config.model_provider_id = "kimi".to_string();
-    set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
-
-    let auth_display = test_status_auth_display();
-    let usage = TokenUsage {
-        input_tokens: 800,
-        cached_input_tokens: 0,
-        output_tokens: 400,
-        reasoning_output_tokens: 0,
-        total_tokens: 1_200,
-    };
-
-    let captured_at = chrono::Local
-        .with_ymd_and_hms(2024, 5, 6, 7, 8, 9)
-        .single()
-        .expect("timestamp");
-    let snapshot = RateLimitSnapshot {
-        limit_id: None,
-        limit_name: None,
-        primary: Some(RateLimitWindow {
-            used_percent: 12,
-            window_duration_mins: Some(43_200),
-            resets_at: Some(reset_at_from(&captured_at, /*seconds*/ 86_400)),
-        }),
-        secondary: None,
-        credits: None,
-        individual_limit: None,
-        rate_limit_reached_type: None,
-    };
-    let rate_display = rate_limit_snapshot_display(&snapshot, captured_at);
-
-    let model_slug = get_model_offline_for_tests(config.model.as_deref());
-    let token_info = token_info_for(&model_slug, &config, &usage);
-    let composite = new_status_output(
-        &config,
-        auth_display.as_ref(),
-        Some(&token_info),
-        &usage,
-        &None,
-        /*thread_name*/ None,
-        /*forked_from*/ None,
-        Some(&rate_display),
-        captured_at,
-        &model_slug,
-        /*collaboration_mode*/ None,
-        /*reasoning_effort_override*/ None,
-    );
-    let mut rendered_lines = render_lines(&composite.display_lines(/*width*/ 80));
-    if cfg!(windows) {
-        for line in &mut rendered_lines {
-            *line = line.replace('\\', "/");
-        }
-    }
-    let sanitized = sanitize_directory(rendered_lines).join("\n");
-    assert_snapshot!(sanitized);
-}
-
-#[tokio::test]
-async fn status_snapshot_includes_enterprise_monthly_credit_limit() {
-    let temp_home = TempDir::new().expect("temp home");
-    let mut config = test_config(&temp_home).await;
-    config.model = Some("kimi-for-coding".to_string());
-    config.model_provider_id = "kimi".to_string();
-    set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
-
-    let auth_display = test_status_auth_display();
-    let usage = TokenUsage {
-        input_tokens: 800,
-        cached_input_tokens: 0,
-        output_tokens: 400,
-        reasoning_output_tokens: 0,
-        total_tokens: 1_200,
-    };
-    let captured_at = chrono::Local
-        .with_ymd_and_hms(2024, 5, 6, 7, 8, 9)
-        .single()
-        .expect("timestamp");
-    let snapshot = RateLimitSnapshot {
-        limit_id: None,
-        limit_name: None,
-        primary: None,
-        secondary: None,
-        credits: None,
-        individual_limit: Some(SpendControlLimitSnapshot {
-            limit: "25000".to_string(),
-            used: "8000".to_string(),
-            remaining_percent: 68,
-            resets_at: reset_at_from(&captured_at, /*seconds*/ 86_400),
-        }),
-        rate_limit_reached_type: None,
-    };
-    let rate_display = rate_limit_snapshot_display(&snapshot, captured_at);
-
-    let model_slug = get_model_offline_for_tests(config.model.as_deref());
-    let token_info = token_info_for(&model_slug, &config, &usage);
-    let composite = new_status_output(
-        &config,
-        auth_display.as_ref(),
-        Some(&token_info),
-        &usage,
-        &None,
-        /*thread_name*/ None,
-        /*forked_from*/ None,
-        Some(&rate_display),
-        captured_at,
-        &model_slug,
-        /*collaboration_mode*/ None,
-        /*reasoning_effort_override*/ None,
-    );
-    let mut rendered_lines = render_lines(&composite.display_lines(/*width*/ 92));
-    if cfg!(windows) {
-        for line in &mut rendered_lines {
-            *line = line.replace('\\', "/");
-        }
-    }
-    let sanitized = sanitize_directory(rendered_lines).join("\n");
-    assert_snapshot!(sanitized);
-
-    let mut rendered_lines = render_lines(&composite.display_lines(/*width*/ 46));
-    if cfg!(windows) {
-        for line in &mut rendered_lines {
-            *line = line.replace('\\', "/");
-        }
-    }
-    let sanitized = sanitize_directory(rendered_lines).join("\n");
-    assert_snapshot!(
-        "status_snapshot_wraps_enterprise_monthly_credit_details_in_narrow_terminal",
-        sanitized
-    );
-}
-
-#[tokio::test]
-async fn status_snapshot_uses_generic_limit_labels_for_unsupported_windows() {
-    let temp_home = TempDir::new().expect("temp home");
-    let mut config = test_config(&temp_home).await;
-    config.model = Some("kimi-for-coding".to_string());
-    config.model_provider_id = "kimi".to_string();
-    set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
-
-    let auth_display = test_status_auth_display();
-    let usage = TokenUsage {
-        input_tokens: 800,
-        cached_input_tokens: 0,
-        output_tokens: 400,
-        reasoning_output_tokens: 0,
-        total_tokens: 1_200,
-    };
-
-    let captured_at = chrono::Local
-        .with_ymd_and_hms(2024, 5, 6, 7, 8, 9)
-        .single()
-        .expect("timestamp");
-    let snapshot = RateLimitSnapshot {
-        limit_id: None,
-        limit_name: None,
-        primary: Some(RateLimitWindow {
-            used_percent: 35,
-            window_duration_mins: Some(2 * 60),
-            resets_at: Some(reset_at_from(&captured_at, /*seconds*/ 86_400)),
-        }),
-        secondary: Some(RateLimitWindow {
-            used_percent: 50,
-            window_duration_mins: Some(3 * 60),
-            resets_at: Some(reset_at_from(&captured_at, /*seconds*/ 172_800)),
-        }),
-        credits: None,
-        individual_limit: None,
-        rate_limit_reached_type: None,
-    };
-    let rate_display = rate_limit_snapshot_display(&snapshot, captured_at);
-
-    let model_slug = get_model_offline_for_tests(config.model.as_deref());
-    let token_info = token_info_for(&model_slug, &config, &usage);
-    let composite = new_status_output(
-        &config,
-        auth_display.as_ref(),
-        Some(&token_info),
-        &usage,
-        &None,
-        /*thread_name*/ None,
-        /*forked_from*/ None,
-        Some(&rate_display),
-        captured_at,
-        &model_slug,
-        /*collaboration_mode*/ None,
-        /*reasoning_effort_override*/ None,
-    );
-    let mut rendered_lines = render_lines(&composite.display_lines(/*width*/ 80));
-    if cfg!(windows) {
-        for line in &mut rendered_lines {
-            *line = line.replace('\\', "/");
-        }
-    }
-    let sanitized = sanitize_directory(rendered_lines).join("\n");
-    assert_snapshot!(sanitized);
-}
-
-#[tokio::test]
-async fn status_snapshot_shows_unlimited_credits() {
-    let temp_home = TempDir::new().expect("temp home");
-    let config = test_config(&temp_home).await;
-    let auth_display = test_status_auth_display();
-    let usage = TokenUsage::default();
-    let captured_at = chrono::Local
-        .with_ymd_and_hms(2024, 2, 3, 4, 5, 6)
-        .single()
-        .expect("timestamp");
-    let snapshot = RateLimitSnapshot {
-        limit_id: None,
-        limit_name: None,
-        primary: None,
-        secondary: None,
-        credits: Some(CreditsSnapshot {
-            has_credits: true,
-            unlimited: true,
-            balance: None,
-        }),
-        individual_limit: None,
-        rate_limit_reached_type: None,
-    };
-    let rate_display = rate_limit_snapshot_display(&snapshot, captured_at);
-    let model_slug = get_model_offline_for_tests(config.model.as_deref());
-    let token_info = token_info_for(&model_slug, &config, &usage);
-    let composite = new_status_output(
-        &config,
-        auth_display.as_ref(),
-        Some(&token_info),
-        &usage,
-        &None,
-        /*thread_name*/ None,
-        /*forked_from*/ None,
-        Some(&rate_display),
-        captured_at,
-        &model_slug,
-        /*collaboration_mode*/ None,
-        /*reasoning_effort_override*/ None,
-    );
-    let rendered = render_lines(&composite.display_lines(/*width*/ 120));
-    assert!(
-        rendered
-            .iter()
-            .any(|line| line.contains("Credits:") && line.contains("Unlimited")),
-        "expected Credits: Unlimited line, got {rendered:?}"
-    );
-}
-
-#[tokio::test]
-async fn status_snapshot_shows_positive_credits() {
-    let temp_home = TempDir::new().expect("temp home");
-    let config = test_config(&temp_home).await;
-    let auth_display = test_status_auth_display();
-    let usage = TokenUsage::default();
-    let captured_at = chrono::Local
-        .with_ymd_and_hms(2024, 3, 4, 5, 6, 7)
-        .single()
-        .expect("timestamp");
-    let snapshot = RateLimitSnapshot {
-        limit_id: None,
-        limit_name: None,
-        primary: None,
-        secondary: None,
-        credits: Some(CreditsSnapshot {
-            has_credits: true,
-            unlimited: false,
-            balance: Some("12.5".to_string()),
-        }),
-        individual_limit: None,
-        rate_limit_reached_type: None,
-    };
-    let rate_display = rate_limit_snapshot_display(&snapshot, captured_at);
-    let model_slug = get_model_offline_for_tests(config.model.as_deref());
-    let token_info = token_info_for(&model_slug, &config, &usage);
-    let composite = new_status_output(
-        &config,
-        auth_display.as_ref(),
-        Some(&token_info),
-        &usage,
-        &None,
-        /*thread_name*/ None,
-        /*forked_from*/ None,
-        Some(&rate_display),
-        captured_at,
-        &model_slug,
-        /*collaboration_mode*/ None,
-        /*reasoning_effort_override*/ None,
-    );
-    let rendered = render_lines(&composite.display_lines(/*width*/ 120));
-    assert!(
-        rendered
-            .iter()
-            .any(|line| line.contains("Credits:") && line.contains("13 credits")),
-        "expected Credits line with rounded credits, got {rendered:?}"
-    );
-}
-
-#[tokio::test]
-async fn status_snapshot_hides_zero_credits() {
-    let temp_home = TempDir::new().expect("temp home");
-    let config = test_config(&temp_home).await;
-    let auth_display = test_status_auth_display();
-    let usage = TokenUsage::default();
-    let captured_at = chrono::Local
-        .with_ymd_and_hms(2024, 4, 5, 6, 7, 8)
-        .single()
-        .expect("timestamp");
-    let snapshot = RateLimitSnapshot {
-        limit_id: None,
-        limit_name: None,
-        primary: None,
-        secondary: None,
-        credits: Some(CreditsSnapshot {
-            has_credits: true,
-            unlimited: false,
-            balance: Some("0".to_string()),
-        }),
-        individual_limit: None,
-        rate_limit_reached_type: None,
-    };
-    let rate_display = rate_limit_snapshot_display(&snapshot, captured_at);
-    let model_slug = get_model_offline_for_tests(config.model.as_deref());
-    let token_info = token_info_for(&model_slug, &config, &usage);
-    let composite = new_status_output(
-        &config,
-        auth_display.as_ref(),
-        Some(&token_info),
-        &usage,
-        &None,
-        /*thread_name*/ None,
-        /*forked_from*/ None,
-        Some(&rate_display),
-        captured_at,
-        &model_slug,
-        /*collaboration_mode*/ None,
-        /*reasoning_effort_override*/ None,
-    );
-    let rendered = render_lines(&composite.display_lines(/*width*/ 120));
-    assert!(
-        rendered.iter().all(|line| !line.contains("Credits:")),
-        "expected no Credits line, got {rendered:?}"
-    );
-}
-
-#[tokio::test]
-async fn status_snapshot_hides_when_has_no_credits_flag() {
-    let temp_home = TempDir::new().expect("temp home");
-    let config = test_config(&temp_home).await;
-    let auth_display = test_status_auth_display();
-    let usage = TokenUsage::default();
-    let captured_at = chrono::Local
-        .with_ymd_and_hms(2024, 5, 6, 7, 8, 9)
-        .single()
-        .expect("timestamp");
-    let snapshot = RateLimitSnapshot {
-        limit_id: None,
-        limit_name: None,
-        primary: None,
-        secondary: None,
-        credits: Some(CreditsSnapshot {
-            has_credits: false,
-            unlimited: true,
-            balance: None,
-        }),
-        individual_limit: None,
-        rate_limit_reached_type: None,
-    };
-    let rate_display = rate_limit_snapshot_display(&snapshot, captured_at);
-    let model_slug = get_model_offline_for_tests(config.model.as_deref());
-    let token_info = token_info_for(&model_slug, &config, &usage);
-    let composite = new_status_output(
-        &config,
-        auth_display.as_ref(),
-        Some(&token_info),
-        &usage,
-        &None,
-        /*thread_name*/ None,
-        /*forked_from*/ None,
-        Some(&rate_display),
-        captured_at,
-        &model_slug,
-        /*collaboration_mode*/ None,
-        /*reasoning_effort_override*/ None,
-    );
-    let rendered = render_lines(&composite.display_lines(/*width*/ 120));
-    assert!(
-        rendered.iter().all(|line| !line.contains("Credits:")),
-        "expected no Credits line when has_credits is false, got {rendered:?}"
-    );
 }
 
 #[tokio::test]
@@ -1200,7 +744,6 @@ async fn status_card_token_usage_excludes_cached_tokens() {
         &None,
         /*thread_name*/ None,
         /*forked_from*/ None,
-        /*rate_limits*/ None,
         now,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -1212,71 +755,6 @@ async fn status_card_token_usage_excludes_cached_tokens() {
         rendered.iter().all(|line| !line.contains("cached")),
         "cached tokens should not be displayed, got: {rendered:?}"
     );
-}
-
-#[tokio::test]
-async fn status_snapshot_truncates_in_narrow_terminal() {
-    let temp_home = TempDir::new().expect("temp home");
-    let mut config = test_config(&temp_home).await;
-    config.model = Some("kimi-for-coding".to_string());
-    config.model_provider_id = "kimi".to_string();
-    config.model_reasoning_summary = Some(ReasoningSummary::Detailed);
-    set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
-
-    let auth_display = test_status_auth_display();
-    let usage = TokenUsage {
-        input_tokens: 1_200,
-        cached_input_tokens: 200,
-        output_tokens: 900,
-        reasoning_output_tokens: 150,
-        total_tokens: 2_250,
-    };
-
-    let captured_at = chrono::Local
-        .with_ymd_and_hms(2024, 1, 2, 3, 4, 5)
-        .single()
-        .expect("timestamp");
-    let snapshot = RateLimitSnapshot {
-        limit_id: None,
-        limit_name: None,
-        primary: Some(RateLimitWindow {
-            used_percent: 72,
-            window_duration_mins: Some(300),
-            resets_at: Some(reset_at_from(&captured_at, /*seconds*/ 600)),
-        }),
-        secondary: None,
-        credits: None,
-        individual_limit: None,
-        rate_limit_reached_type: None,
-    };
-    let rate_display = rate_limit_snapshot_display(&snapshot, captured_at);
-
-    let model_slug = get_model_offline_for_tests(config.model.as_deref());
-    let token_info = token_info_for(&model_slug, &config, &usage);
-    let reasoning_effort_override = Some(Some(ReasoningEffort::High));
-    let composite = new_status_output(
-        &config,
-        auth_display.as_ref(),
-        Some(&token_info),
-        &usage,
-        &None,
-        /*thread_name*/ None,
-        /*forked_from*/ None,
-        Some(&rate_display),
-        captured_at,
-        &model_slug,
-        /*collaboration_mode*/ None,
-        reasoning_effort_override,
-    );
-    let mut rendered_lines = render_lines(&composite.display_lines(/*width*/ 70));
-    if cfg!(windows) {
-        for line in &mut rendered_lines {
-            *line = line.replace('\\', "/");
-        }
-    }
-    let sanitized = sanitize_directory(rendered_lines).join("\n");
-
-    assert_snapshot!(sanitized);
 }
 
 #[tokio::test]
@@ -1310,7 +788,6 @@ async fn status_snapshot_shows_missing_limits_message() {
         &None,
         /*thread_name*/ None,
         /*forked_from*/ None,
-        /*rate_limits*/ None,
         now,
         &model_slug,
         /*collaboration_mode*/ None,
@@ -1353,7 +830,7 @@ async fn status_snapshot_uses_default_reasoning_when_config_empty() {
 
     let model_slug = get_model_offline_for_tests(config.model.as_deref());
     let token_info = token_info_for(&model_slug, &config, &usage);
-    let (composite, _) = new_status_output_with_rate_limits_handle(
+    let (composite, _) = new_status_output_with_handle(
         &config,
         /*runtime_model_provider_base_url*/ None,
         Some(&remote_connection),
@@ -1363,396 +840,11 @@ async fn status_snapshot_uses_default_reasoning_when_config_empty() {
         &None,
         /*thread_name*/ None,
         /*forked_from*/ None,
-        &[],
         now,
         &model_slug,
         /*collaboration_mode*/ None,
         /*reasoning_effort_override*/ Some(Some(ReasoningEffort::Medium)),
         "<none>".to_string(),
-        /*refreshing_rate_limits*/ false,
-    );
-    let mut rendered_lines = render_lines(&composite.display_lines(/*width*/ 80));
-    if cfg!(windows) {
-        for line in &mut rendered_lines {
-            *line = line.replace('\\', "/");
-        }
-    }
-    let sanitized = sanitize_directory(rendered_lines).join("\n");
-    assert_snapshot!(sanitized);
-}
-
-#[tokio::test]
-async fn status_snapshot_shows_refreshing_limits_notice() {
-    let temp_home = TempDir::new().expect("temp home");
-    let mut config = test_config(&temp_home).await;
-    config.model = Some("kimi-for-coding".to_string());
-    set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
-
-    let usage = TokenUsage {
-        input_tokens: 500,
-        cached_input_tokens: 0,
-        output_tokens: 250,
-        reasoning_output_tokens: 0,
-        total_tokens: 750,
-    };
-    let captured_at = chrono::Local
-        .with_ymd_and_hms(2024, 6, 7, 8, 9, 10)
-        .single()
-        .expect("timestamp");
-    let snapshot = RateLimitSnapshot {
-        limit_id: None,
-        limit_name: None,
-        primary: Some(RateLimitWindow {
-            used_percent: 45,
-            window_duration_mins: Some(300),
-            resets_at: Some(reset_at_from(&captured_at, /*seconds*/ 900)),
-        }),
-        secondary: Some(RateLimitWindow {
-            used_percent: 30,
-            window_duration_mins: Some(10_080),
-            resets_at: Some(reset_at_from(&captured_at, /*seconds*/ 2_700)),
-        }),
-        credits: None,
-        individual_limit: None,
-        rate_limit_reached_type: None,
-    };
-    let rate_display = rate_limit_snapshot_display(&snapshot, captured_at);
-
-    let model_slug = get_model_offline_for_tests(config.model.as_deref());
-    let token_info = token_info_for(&model_slug, &config, &usage);
-    let composite = new_status_output_with_rate_limits(
-        &config,
-        /*auth_display*/ None,
-        Some(&token_info),
-        &usage,
-        &None,
-        /*thread_name*/ None,
-        /*forked_from*/ None,
-        std::slice::from_ref(&rate_display),
-        captured_at,
-        &model_slug,
-        /*collaboration_mode*/ None,
-        /*reasoning_effort_override*/ None,
-        /*refreshing_rate_limits*/ true,
-    );
-    let mut rendered_lines = render_lines(&composite.display_lines(/*width*/ 80));
-    if cfg!(windows) {
-        for line in &mut rendered_lines {
-            *line = line.replace('\\', "/");
-        }
-    }
-    let sanitized = sanitize_directory(rendered_lines).join("\n");
-    assert_snapshot!(sanitized);
-}
-
-#[tokio::test]
-async fn status_snapshot_includes_credits_and_limits() {
-    let temp_home = TempDir::new().expect("temp home");
-    let mut config = test_config(&temp_home).await;
-    config.model = Some("gpt-5.1-ody".to_string());
-    set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
-
-    let auth_display = test_status_auth_display();
-    let usage = TokenUsage {
-        input_tokens: 1_500,
-        cached_input_tokens: 100,
-        output_tokens: 600,
-        reasoning_output_tokens: 0,
-        total_tokens: 2_200,
-    };
-
-    let captured_at = chrono::Local
-        .with_ymd_and_hms(2024, 7, 8, 9, 10, 11)
-        .single()
-        .expect("timestamp");
-    let snapshot = RateLimitSnapshot {
-        limit_id: None,
-        limit_name: None,
-        primary: Some(RateLimitWindow {
-            used_percent: 45,
-            window_duration_mins: Some(300),
-            resets_at: Some(reset_at_from(&captured_at, /*seconds*/ 900)),
-        }),
-        secondary: Some(RateLimitWindow {
-            used_percent: 30,
-            window_duration_mins: Some(10_080),
-            resets_at: Some(reset_at_from(&captured_at, /*seconds*/ 2_700)),
-        }),
-        credits: Some(CreditsSnapshot {
-            has_credits: true,
-            unlimited: false,
-            balance: Some("37.5".to_string()),
-        }),
-        individual_limit: None,
-        rate_limit_reached_type: None,
-    };
-    let rate_display = rate_limit_snapshot_display(&snapshot, captured_at);
-
-    let model_slug = get_model_offline_for_tests(config.model.as_deref());
-    let token_info = token_info_for(&model_slug, &config, &usage);
-    let composite = new_status_output(
-        &config,
-        auth_display.as_ref(),
-        Some(&token_info),
-        &usage,
-        &None,
-        /*thread_name*/ None,
-        /*forked_from*/ None,
-        Some(&rate_display),
-        captured_at,
-        &model_slug,
-        /*collaboration_mode*/ None,
-        /*reasoning_effort_override*/ None,
-    );
-    let mut rendered_lines = render_lines(&composite.display_lines(/*width*/ 80));
-    if cfg!(windows) {
-        for line in &mut rendered_lines {
-            *line = line.replace('\\', "/");
-        }
-    }
-    let sanitized = sanitize_directory(rendered_lines).join("\n");
-    assert_snapshot!(sanitized);
-}
-
-#[tokio::test]
-async fn status_snapshot_shows_unavailable_limits_message() {
-    let temp_home = TempDir::new().expect("temp home");
-    let mut config = test_config(&temp_home).await;
-    config.model = Some("kimi-for-coding".to_string());
-    set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
-
-    let auth_display = test_status_auth_display();
-    let usage = TokenUsage {
-        input_tokens: 500,
-        cached_input_tokens: 0,
-        output_tokens: 250,
-        reasoning_output_tokens: 0,
-        total_tokens: 750,
-    };
-
-    let snapshot = RateLimitSnapshot {
-        limit_id: None,
-        limit_name: None,
-        primary: None,
-        secondary: None,
-        credits: None,
-        individual_limit: None,
-        rate_limit_reached_type: None,
-    };
-    let captured_at = chrono::Local
-        .with_ymd_and_hms(2024, 6, 7, 8, 9, 10)
-        .single()
-        .expect("timestamp");
-    let rate_display = rate_limit_snapshot_display(&snapshot, captured_at);
-
-    let model_slug = get_model_offline_for_tests(config.model.as_deref());
-    let token_info = token_info_for(&model_slug, &config, &usage);
-    let composite = new_status_output(
-        &config,
-        auth_display.as_ref(),
-        Some(&token_info),
-        &usage,
-        &None,
-        /*thread_name*/ None,
-        /*forked_from*/ None,
-        Some(&rate_display),
-        captured_at,
-        &model_slug,
-        /*collaboration_mode*/ None,
-        /*reasoning_effort_override*/ None,
-    );
-    let mut rendered_lines = render_lines(&composite.display_lines(/*width*/ 80));
-    if cfg!(windows) {
-        for line in &mut rendered_lines {
-            *line = line.replace('\\', "/");
-        }
-    }
-    let sanitized = sanitize_directory(rendered_lines).join("\n");
-    assert_snapshot!(sanitized);
-}
-
-#[tokio::test]
-async fn status_snapshot_treats_refreshing_empty_limits_as_unavailable() {
-    let temp_home = TempDir::new().expect("temp home");
-    let mut config = test_config(&temp_home).await;
-    config.model = Some("kimi-for-coding".to_string());
-    set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
-
-    let usage = TokenUsage {
-        input_tokens: 500,
-        cached_input_tokens: 0,
-        output_tokens: 250,
-        reasoning_output_tokens: 0,
-        total_tokens: 750,
-    };
-
-    let snapshot = RateLimitSnapshot {
-        limit_id: None,
-        limit_name: None,
-        primary: None,
-        secondary: None,
-        credits: None,
-        individual_limit: None,
-        rate_limit_reached_type: None,
-    };
-    let captured_at = chrono::Local
-        .with_ymd_and_hms(2024, 6, 7, 8, 9, 10)
-        .single()
-        .expect("timestamp");
-    let rate_display = rate_limit_snapshot_display(&snapshot, captured_at);
-
-    let model_slug = get_model_offline_for_tests(config.model.as_deref());
-    let token_info = token_info_for(&model_slug, &config, &usage);
-    let composite = new_status_output_with_rate_limits(
-        &config,
-        /*auth_display*/ None,
-        Some(&token_info),
-        &usage,
-        &None,
-        /*thread_name*/ None,
-        /*forked_from*/ None,
-        std::slice::from_ref(&rate_display),
-        captured_at,
-        &model_slug,
-        /*collaboration_mode*/ None,
-        /*reasoning_effort_override*/ None,
-        /*refreshing_rate_limits*/ true,
-    );
-    let mut rendered_lines = render_lines(&composite.display_lines(/*width*/ 80));
-    if cfg!(windows) {
-        for line in &mut rendered_lines {
-            *line = line.replace('\\', "/");
-        }
-    }
-    let sanitized = sanitize_directory(rendered_lines).join("\n");
-    assert_snapshot!(sanitized);
-}
-
-#[tokio::test]
-async fn status_snapshot_shows_stale_limits_message() {
-    let temp_home = TempDir::new().expect("temp home");
-    let mut config = test_config(&temp_home).await;
-    config.model = Some("kimi-for-coding".to_string());
-    set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
-
-    let auth_display = test_status_auth_display();
-    let usage = TokenUsage {
-        input_tokens: 1_200,
-        cached_input_tokens: 200,
-        output_tokens: 900,
-        reasoning_output_tokens: 150,
-        total_tokens: 2_250,
-    };
-
-    let captured_at = chrono::Local
-        .with_ymd_and_hms(2024, 1, 2, 3, 4, 5)
-        .single()
-        .expect("timestamp");
-    let snapshot = RateLimitSnapshot {
-        limit_id: None,
-        limit_name: None,
-        primary: Some(RateLimitWindow {
-            used_percent: 72,
-            window_duration_mins: Some(300),
-            resets_at: Some(reset_at_from(&captured_at, /*seconds*/ 600)),
-        }),
-        secondary: Some(RateLimitWindow {
-            used_percent: 40,
-            window_duration_mins: Some(10_080),
-            resets_at: Some(reset_at_from(&captured_at, /*seconds*/ 1_800)),
-        }),
-        credits: None,
-        individual_limit: None,
-        rate_limit_reached_type: None,
-    };
-    let rate_display = rate_limit_snapshot_display(&snapshot, captured_at);
-    let now = captured_at + ChronoDuration::minutes(20);
-
-    let model_slug = get_model_offline_for_tests(config.model.as_deref());
-    let token_info = token_info_for(&model_slug, &config, &usage);
-    let composite = new_status_output(
-        &config,
-        auth_display.as_ref(),
-        Some(&token_info),
-        &usage,
-        &None,
-        /*thread_name*/ None,
-        /*forked_from*/ None,
-        Some(&rate_display),
-        now,
-        &model_slug,
-        /*collaboration_mode*/ None,
-        /*reasoning_effort_override*/ None,
-    );
-    let mut rendered_lines = render_lines(&composite.display_lines(/*width*/ 80));
-    if cfg!(windows) {
-        for line in &mut rendered_lines {
-            *line = line.replace('\\', "/");
-        }
-    }
-    let sanitized = sanitize_directory(rendered_lines).join("\n");
-    assert_snapshot!(sanitized);
-}
-
-#[tokio::test]
-async fn status_snapshot_cached_limits_hide_credits_without_flag() {
-    let temp_home = TempDir::new().expect("temp home");
-    let mut config = test_config(&temp_home).await;
-    config.model = Some("gpt-5.1-ody".to_string());
-    set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
-
-    let auth_display = test_status_auth_display();
-    let usage = TokenUsage {
-        input_tokens: 900,
-        cached_input_tokens: 200,
-        output_tokens: 350,
-        reasoning_output_tokens: 0,
-        total_tokens: 1_450,
-    };
-
-    let captured_at = chrono::Local
-        .with_ymd_and_hms(2024, 9, 10, 11, 12, 13)
-        .single()
-        .expect("timestamp");
-    let snapshot = RateLimitSnapshot {
-        limit_id: None,
-        limit_name: None,
-        primary: Some(RateLimitWindow {
-            used_percent: 60,
-            window_duration_mins: Some(300),
-            resets_at: Some(reset_at_from(&captured_at, /*seconds*/ 1_200)),
-        }),
-        secondary: Some(RateLimitWindow {
-            used_percent: 35,
-            window_duration_mins: Some(10_080),
-            resets_at: Some(reset_at_from(&captured_at, /*seconds*/ 2_400)),
-        }),
-        credits: Some(CreditsSnapshot {
-            has_credits: false,
-            unlimited: false,
-            balance: Some("80".to_string()),
-        }),
-        individual_limit: None,
-        rate_limit_reached_type: None,
-    };
-    let rate_display = rate_limit_snapshot_display(&snapshot, captured_at);
-    let now = captured_at + ChronoDuration::minutes(20);
-
-    let model_slug = get_model_offline_for_tests(config.model.as_deref());
-    let token_info = token_info_for(&model_slug, &config, &usage);
-    let composite = new_status_output(
-        &config,
-        auth_display.as_ref(),
-        Some(&token_info),
-        &usage,
-        &None,
-        /*thread_name*/ None,
-        /*forked_from*/ None,
-        Some(&rate_display),
-        now,
-        &model_slug,
-        /*collaboration_mode*/ None,
-        /*reasoning_effort_override*/ None,
     );
     let mut rendered_lines = render_lines(&composite.display_lines(/*width*/ 80));
     if cfg!(windows) {
@@ -1805,7 +897,6 @@ async fn status_context_window_uses_last_usage() {
         &None,
         /*thread_name*/ None,
         /*forked_from*/ None,
-        /*rate_limits*/ None,
         now,
         &model_slug,
         /*collaboration_mode*/ None,

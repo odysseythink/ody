@@ -8,14 +8,14 @@ This document describes Ody's experimental MCP server interface: a JSON-RPC API 
 
 ## Overview
 
-Ody exposes MCP-compatible methods to manage threads, turns, accounts, config, and approvals. The types live in `app-server-protocol/src/protocol/{common,v1,v2}.rs` and are consumed by the app server implementation in `app-server/`.
+Ody exposes MCP-compatible methods to manage threads, turns, auth, config, and approvals. The types live in `app-server-protocol/src/protocol/{common,v1,v2}.rs` and are consumed by the app server implementation in `app-server/`.
 
 At a glance:
 
 - Primary v2 RPCs
   - `thread/start`, `thread/resume`, `thread/fork`, `thread/read`, `thread/list`
   - `turn/start`, `turn/steer`, `turn/interrupt`
-  - `account/read`, `account/login/start`, `account/login/cancel`, `account/logout`, `account/rateLimits/read`
+  - `auth/read`, `auth/login/start`, `auth/logout`
   - `config/read`, `config/value/write`, `config/batchWrite`
   - `model/list`, `app/list`, `collaborationMode/list`
 - Remaining v1 compatibility RPCs
@@ -24,7 +24,7 @@ At a glance:
   - `gitDiffToRemote`
   - `fuzzyFileSearch`, `fuzzyFileSearch/sessionStart`, `fuzzyFileSearch/sessionUpdate`, `fuzzyFileSearch/sessionStop`
 - Notifications
-  - v2 typed notifications such as `thread/started`, `turn/completed`, `account/login/completed`
+  - v2 typed notifications such as `thread/started`, `turn/completed`, `auth/login/completed`
   - `ody/event/*` stream notifications for live agent events
   - `fuzzyFileSearch/sessionUpdated`, `fuzzyFileSearch/sessionCompleted`
 - Approvals (server -> client requests)

@@ -103,12 +103,6 @@ pub(crate) enum StatusLineItem {
     #[strum(to_string = "context-used", serialize = "context-usage")]
     ContextUsed,
 
-    /// Remaining usage on the primary rate limit.
-    FiveHourLimit,
-
-    /// Remaining usage on the secondary rate limit.
-    WeeklyLimit,
-
     /// Ody application version.
     OdyVersion,
 
@@ -169,12 +163,6 @@ impl StatusLineItem {
             StatusLineItem::ContextUsed => {
                 "Percentage of context window used (omitted when unknown)"
             }
-            StatusLineItem::FiveHourLimit => {
-                "Remaining usage on the primary usage limit (omitted when unavailable)"
-            }
-            StatusLineItem::WeeklyLimit => {
-                "Remaining usage on the secondary usage limit (omitted when unavailable)"
-            }
             StatusLineItem::OdyVersion => "Ody application version",
             StatusLineItem::ContextWindowSize => {
                 "Total context window size in tokens (omitted when unknown)"
@@ -212,8 +200,6 @@ impl StatusLineItem {
             StatusLineItem::ApprovalMode => StatusSurfacePreviewItem::ApprovalMode,
             StatusLineItem::ContextRemaining => StatusSurfacePreviewItem::ContextRemaining,
             StatusLineItem::ContextUsed => StatusSurfacePreviewItem::ContextUsed,
-            StatusLineItem::FiveHourLimit => StatusSurfacePreviewItem::FiveHourLimit,
-            StatusLineItem::WeeklyLimit => StatusSurfacePreviewItem::WeeklyLimit,
             StatusLineItem::OdyVersion => StatusSurfacePreviewItem::OdyVersion,
             StatusLineItem::ContextWindowSize => StatusSurfacePreviewItem::ContextWindowSize,
             StatusLineItem::UsedTokens => StatusSurfacePreviewItem::UsedTokens,
@@ -352,10 +338,6 @@ impl StatusLineSetupView {
         let default_name = item.to_string();
         let default_description = item.description();
         let (name, description) = match item {
-            StatusLineItem::FiveHourLimit | StatusLineItem::WeeklyLimit => (
-                preview_data.rate_limit_item_name(item.preview_item(), &default_name),
-                preview_data.rate_limit_item_description(item.preview_item(), default_description),
-            ),
             _ => (default_name, default_description.to_string()),
         };
 
@@ -656,10 +638,6 @@ mod tests {
                 (
                     StatusLineItem::GitBranch.preview_item(),
                     "jif/statusline-preview".to_string(),
-                ),
-                (
-                    StatusLineItem::WeeklyLimit.preview_item(),
-                    "weekly 82% left".to_string(),
                 ),
             ]),
             AppEventSender::new(tx_raw),

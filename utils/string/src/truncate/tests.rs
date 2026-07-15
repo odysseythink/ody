@@ -94,11 +94,13 @@ fn truncate_with_token_budget_returns_original_when_under_limit() {
 }
 
 #[test]
-fn truncate_with_token_budget_reports_truncation_at_zero_limit() {
+fn truncate_with_token_budget_passes_through_at_zero_limit() {
+    // A zero limit means "no truncation limit was configured": fail open and
+    // keep the content instead of collapsing to a bare truncation marker.
     let s = "abcdef";
     let (out, original) = truncate_middle_with_token_budget(s, /*max_tokens*/ 0);
-    assert_eq!(out, "…2 tokens truncated…");
-    assert_eq!(original, Some(2));
+    assert_eq!(out, s);
+    assert_eq!(original, None);
 }
 
 #[test]

@@ -3,7 +3,6 @@ use crate::common::ResponseStream;
 use crate::common::SafetyBuffering;
 use crate::common::SafetyBufferingTreatment;
 use crate::error::ApiError;
-use crate::rate_limits::parse_all_rate_limits;
 use crate::safety_buffering::treatment_from_headers;
 use crate::telemetry::SseTelemetry;
 use ody_client::ByteStream;
@@ -37,7 +36,6 @@ pub fn spawn_response_stream(
     telemetry: Option<Arc<dyn SseTelemetry>>,
     turn_state: Option<Arc<OnceLock<String>>>,
 ) -> ResponseStream {
-    let rate_limit_snapshots = parse_all_rate_limits(&stream_response.headers);
     let models_etag = stream_response
         .headers
         .get("X-Models-Etag")
@@ -72,9 +70,7 @@ pub fn spawn_response_stream(
         if let Some(model) = server_model {
             let _ = tx_event.send(Ok(ResponseEvent::ServerModel(model))).await;
         }
-        for snapshot in rate_limit_snapshots {
-            let _ = tx_event.send(Ok(ResponseEvent::RateLimits(snapshot))).await;
-        }
+
         if let Some(etag) = models_etag {
             let _ = tx_event.send(Ok(ResponseEvent::ModelsEtag(etag))).await;
         }

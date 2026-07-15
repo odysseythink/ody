@@ -1,4 +1,3 @@
-use crate::rate_limits::RateLimitError;
 use ody_client::TransportError;
 use http::StatusCode;
 use std::time::Duration;
@@ -23,18 +22,10 @@ pub enum ApiError {
         message: String,
         delay: Option<Duration>,
     },
-    #[error("rate limit: {0}")]
-    RateLimit(String),
     #[error("invalid request: {message}")]
     InvalidRequest { message: String },
     #[error("cyber policy: {message}")]
     CyberPolicy { message: String },
     #[error("server overloaded")]
     ServerOverloaded,
-}
-
-impl From<RateLimitError> for ApiError {
-    fn from(err: RateLimitError) -> Self {
-        Self::RateLimit(err.to_string())
-    }
 }

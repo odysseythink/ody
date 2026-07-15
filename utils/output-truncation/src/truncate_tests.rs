@@ -185,7 +185,9 @@ fn formatted_truncate_text_content_items_with_policy_returns_original_under_limi
 }
 
 #[test]
-fn formatted_truncate_text_content_items_with_policy_preserves_empty_leading_text_behavior() {
+fn formatted_truncate_text_content_items_with_policy_passes_through_at_zero_limit() {
+    // A zero budget means "no truncation limit was configured": fail open and
+    // keep the items instead of collapsing to a bare truncation marker.
     let items = vec![
         FunctionCallOutputContentItem::InputText {
             text: String::new(),
@@ -198,13 +200,19 @@ fn formatted_truncate_text_content_items_with_policy_preserves_empty_leading_tex
     let (output, original_token_count) =
         formatted_truncate_text_content_items_with_policy(&items, TruncationPolicy::Bytes(0));
 
-    assert_eq!(
-        output,
-        vec![FunctionCallOutputContentItem::InputText {
-            text: "Warning: truncated output (original token count: 1)\nTotal output lines: 1\n\n…3 chars truncated…".to_string(),
-        }]
-    );
-    assert_eq!(original_token_count, Some(1));
+    assert_eq!(output, items);
+    assert_eq!(original_token_count, None);
+}
+
+#[test]
+fn truncate_function_output_items_with_policy_passes_through_at_zero_limit() {
+    let items = vec![FunctionCallOutputContentItem::InputText {
+        text: "abcdef".to_string(),
+    }];
+
+    let output = truncate_function_output_items_with_policy(&items, TruncationPolicy::Bytes(0));
+
+    assert_eq!(output, items);
 }
 
 #[test]

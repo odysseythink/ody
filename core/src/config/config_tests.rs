@@ -11289,3 +11289,56 @@ api_key = "sk-test"
     Ok(())
 }
 
+
+#[test]
+fn configured_model_catalog_builds_from_models_tables() {
+    let cfg: ConfigToml = toml::from_str(
+        r#"
+[providers.kimi_gyy]
+type = "kimi"
+api_key = "sk-test"
+
+[models."kimi_gyy/kimi-for-coding"]
+provider = "kimi_gyy"
+model = "kimi-for-coding"
+max_context_size = 262144
+capabilities = ["tool_use", "image_in"]
+"#,
+    )
+    .expect("config should deserialize");
+
+    let providers = cfg.convert_ody_code_providers();
+    let provider = providers.get("kimi_gyy").expect("provider should exist");
+    let catalog = configured_model_catalog(&cfg.models, "kimi_gyy", provider)
+        .expect("models table should produce a catalog");
+
+    let model = catalog
+        .models
+        .iter()
+        .find(|model| model.slug == "kimi-for-coding")
+        .expect("configured model should be in the catalog");
+    assert!(!model.used_fallback_model_metadata);
+    assert_eq!(model.context_window, Some(262_144));
+    assert!(model.truncation_policy.limit > 0);
+    assert!(model.capabilities.supports_tools);
+    assert!(model.capabilities.supports_vision);
+}
+
+#[test]
+fn configured_model_catalog_skips_non_chat_providers() {
+    let cfg: ConfigToml = toml::from_str(
+        r#"
+[models."openai/gpt-5"]
+provider = "openai"
+model = "gpt-5"
+max_context_size = 272000
+"#,
+    )
+    .expect("config should deserialize");
+
+    let provider = ModelProviderInfo {
+        wire_api: WireApi::Responses,
+        ..Default::default()
+    };
+    assert!(configured_model_catalog(&cfg.models, "openai", &provider).is_none());
+}

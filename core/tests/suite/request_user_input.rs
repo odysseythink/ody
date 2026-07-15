@@ -128,7 +128,6 @@ async fn request_user_input_round_trip_for_mode(
     let first_response = sse(vec![
         ev_response_created("resp-1"),
         ev_function_call(call_id, "request_user_input", &request_args),
-        ev_rate_limits(),
         ev_completed("resp-1"),
     ]);
     responses::mount_sse_once(&server, first_response).await;
@@ -227,25 +226,6 @@ async fn request_user_input_round_trip_for_mode(
     Ok(())
 }
 
-fn ev_rate_limits() -> Value {
-    json!({
-        "type": "ody.rate_limits",
-        "plan_type": "plus",
-        "rate_limits": {
-            "allowed": true,
-            "limit_reached": false,
-            "primary": {
-                "used_percent": 42,
-                "window_minutes": 60,
-                "reset_at": 1700000000
-            },
-            "secondary": null
-        },
-        "code_review_rate_limits": null,
-        "credits": null,
-        "promo": null
-    })
-}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn request_user_input_interrupt_emits_deferred_token_count() -> anyhow::Result<()> {

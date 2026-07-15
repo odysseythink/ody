@@ -262,6 +262,41 @@ mod capability_tests {
         assert!(resolved.supports_vision);
         assert!(resolved.supports_turn_pause);
     }
+
+    #[test]
+    fn model_capabilities_zero_truncation_limit_is_clamped() {
+        use super::DEFAULT_TRUNCATION_POLICY;
+        use ody_protocol::model_metadata::TruncationPolicyConfig;
+
+        let zero = ModelCapabilities {
+            truncation_policy: TruncationPolicyConfig::bytes(0),
+            ..Default::default()
+        };
+        let resolved = resolve_model_capabilities(
+            &ProviderCapabilities::default(),
+            WireApi::Chat,
+            Some(&zero),
+            None,
+            "test-model",
+        );
+        assert_eq!(resolved.truncation_policy, DEFAULT_TRUNCATION_POLICY);
+
+        let explicit = ModelCapabilities {
+            truncation_policy: TruncationPolicyConfig::tokens(1_234),
+            ..Default::default()
+        };
+        let resolved = resolve_model_capabilities(
+            &ProviderCapabilities::default(),
+            WireApi::Chat,
+            Some(&explicit),
+            None,
+            "test-model",
+        );
+        assert_eq!(
+            resolved.truncation_policy,
+            TruncationPolicyConfig::tokens(1_234)
+        );
+    }
 }
 
 #[test]
@@ -306,8 +341,11 @@ fn unknown_model_slug_has_conservative_fallback_capabilities() {
     let model = model_info_from_slug("totally-unknown-model");
     assert!(model.used_fallback_model_metadata);
     assert!(model.capabilities.supports_tools);
-    assert_eq!(model.capabilities.input_modalities, vec![InputModality::Text]);
-    assert!(!model.capabilities.supports_vision);
+    assert_eq!(
+        model.capabilities.input_modalities,
+        vec![InputModality::Text, InputModality::Image]
+    );
+    assert!(model.capabilities.supports_vision);
     assert!(!model.capabilities.supports_search_tool);
 }
 
@@ -327,4 +365,113 @@ fn unknown_chat_provider_has_fallback_catalog_with_capabilities() {
     assert_eq!(model.capabilities.input_modalities, vec![InputModality::Text, InputModality::Image]);
     assert!(model.context_window.is_some());
     assert!(model.max_context_window.is_some());
+}
+
+#[test]
+fn unknown_model_slug_has_nonzero_truncation_budget() {
+    // Regression: a zero truncation budget used to truncate every tool output
+    // down to the bare "…N chars truncated…" marker, hiding all shell output
+    // from the model.
+    let model = model_info_from_slug("totally-unknown-model");
+    assert!(model.used_fallback_model_metadata);
+    assert_eq!(model.truncation_policy, DEFAULT_TRUNCATION_POLICY);
+    assert_eq!(model.capabilities.truncation_policy, DEFAULT_TRUNCATION_POLICY);
+}
+
+#[test]
+fn chat_catalog_models_have_nonzero_truncation_budget() {
+    let info = ModelProviderInfo {
+        wire_api: WireApi::Chat,
+        ..Default::default()
+    };
+    for provider in ["kimi", "deepseek", "glm", "custom"] {
+        let catalog = model_catalog_for_provider(provider, &info)
+            .unwrap_or_else(|| panic!("missing catalog for {provider}"));
+        assert!(
+            catalog
+                .models
+                .iter()
+                .all(|m| m.truncation_policy.limit > 0
+                    && m.capabilities.truncation_policy.limit > 0),
+            "provider {provider} catalog contains a zero truncation budget"
+        );
+    }
+}
+
+#[test]
+fn configured_model_catalog_returns_none_without_matching_provider() {
+    let entries = vec![ConfiguredModelSpec {
+        provider: "other".to_string(),
+        model: "m".to_string(),
+        ..Default::default()
+    }];
+    assert!(
+        configured_model_catalog_for_provider(
+            "kimi_ranweiwei",
+            WireApi::Chat,
+            &ProviderCapabilities::default(),
+            &entries,
+        )
+        .is_none()
+    );
+}
+
+#[test]
+fn configured_model_catalog_uses_declared_metadata() {
+    let entries = vec![ConfiguredModelSpec {
+        provider: "kimi_ranweiwei".to_string(),
+        model: "kimi-for-coding".to_string(),
+        max_context_size: Some(262_144),
+        max_output_size: Some(8_192),
+        capabilities: vec!["tool_use".to_string(), "image_in".to_string()],
+        display_name: Some("Kimi for Coding".to_string()),
+    }];
+    let catalog = configured_model_catalog_for_provider(
+        "kimi_ranweiwei",
+        WireApi::Chat,
+        &ProviderCapabilities::default(),
+        &entries,
+    )
+    .expect("matching provider should produce a catalog");
+
+    assert_eq!(catalog.models.len(), 1);
+    let model = &catalog.models[0];
+    assert_eq!(model.slug, "kimi-for-coding");
+    assert_eq!(model.display_name, "Kimi for Coding");
+    assert!(!model.used_fallback_model_metadata);
+    assert_eq!(model.visibility, ModelVisibility::List);
+    assert_eq!(model.context_window, Some(262_144));
+    assert_eq!(model.max_context_window, Some(262_144));
+    assert_eq!(model.capabilities.max_output_tokens, Some(8_192));
+    assert!(model.capabilities.supports_tools);
+    assert!(model.capabilities.supports_vision);
+    assert!(!model.capabilities.supports_thinking);
+    assert_eq!(
+        model.capabilities.input_modalities,
+        vec![InputModality::Text, InputModality::Image]
+    );
+    assert!(model.truncation_policy.limit > 0);
+}
+
+#[test]
+fn configured_model_catalog_defaults_capabilities_from_wire_api() {
+    let entries = vec![ConfiguredModelSpec {
+        provider: "kimi_ranweiwei".to_string(),
+        model: "kimi-for-coding".to_string(),
+        max_context_size: Some(262_144),
+        ..Default::default()
+    }];
+    let catalog = configured_model_catalog_for_provider(
+        "kimi_ranweiwei",
+        WireApi::Chat,
+        &ProviderCapabilities::default(),
+        &entries,
+    )
+    .expect("matching provider should produce a catalog");
+
+    let model = &catalog.models[0];
+    assert_eq!(model.display_name, "kimi-for-coding");
+    assert!(model.capabilities.supports_tools);
+    assert!(model.capabilities.supports_vision);
+    assert_eq!(model.context_window, Some(262_144));
 }

@@ -18,7 +18,7 @@ Completions）供应商。配置与差异说明见 [docs/multi_provider.md](docs
 cargo build
 
 # 只编译主 CLI 二进制（debug）
-cargo build -p ody-cli
+cargo build -p ody-cli --features v8
 
 # 发布编译主 CLI 二进制
 cargo build --release -p ody-cli

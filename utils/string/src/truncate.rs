@@ -40,13 +40,11 @@ fn truncate_with_byte_estimate(s: &str, max_bytes: usize, use_tokens: bool) -> S
         return String::new();
     }
 
-    let total_chars = s.chars().count();
-
     if max_bytes == 0 {
-        return format_truncation_marker(
-            use_tokens,
-            removed_units(use_tokens, s.len(), total_chars),
-        );
+        // A zero budget means "no truncation limit was configured". Fail open
+        // and keep the content: collapsing to a bare truncation marker would
+        // hide the output from the model entirely.
+        return s.to_string();
     }
 
     if s.len() <= max_bytes {

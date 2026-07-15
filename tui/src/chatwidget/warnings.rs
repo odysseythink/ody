@@ -1,8 +1,7 @@
 use std::collections::HashSet;
 
 const FALLBACK_MODEL_METADATA_WARNING_PREFIX: &str = "Model metadata for `";
-const FALLBACK_MODEL_METADATA_WARNING_SUFFIX: &str =
-    "` not found. Defaulting to fallback metadata; this can degrade performance and cause issues.";
+const FALLBACK_MODEL_METADATA_WARNING_TAIL: &str = " not found.";
 
 #[derive(Default)]
 pub(super) struct WarningDisplayState {
@@ -16,8 +15,12 @@ impl WarningDisplayState {
     }
 }
 
+/// Extract the slug from a fallback-metadata warning. The message suffix may
+/// grow extra guidance over time, so only the stable head is matched:
+/// `Model metadata for `<slug>` not found.…`.
 fn fallback_model_metadata_warning_slug(message: &str) -> Option<&str> {
-    message
-        .strip_prefix(FALLBACK_MODEL_METADATA_WARNING_PREFIX)?
-        .strip_suffix(FALLBACK_MODEL_METADATA_WARNING_SUFFIX)
+    let rest = message.strip_prefix(FALLBACK_MODEL_METADATA_WARNING_PREFIX)?;
+    let (slug, tail) = rest.split_once('`')?;
+    tail.starts_with(FALLBACK_MODEL_METADATA_WARNING_TAIL)
+        .then_some(slug)
 }

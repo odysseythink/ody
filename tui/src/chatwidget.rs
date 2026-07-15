@@ -64,12 +64,9 @@ use crate::multi_agents;
 use crate::multi_agents::AgentMetadata;
 use crate::session_state::SessionNetworkProxyRuntime;
 use crate::session_state::ThreadSessionState;
-use crate::status::RateLimitWindowDisplay;
-use crate::status::StatusAuthDisplay;
 use crate::status::StatusHistoryHandle;
 use crate::status::format_directory_display;
 use crate::status::format_tokens_compact;
-use crate::status::rate_limit_snapshot_display_for_limit;
 use crate::terminal_hyperlinks::HyperlinkLine;
 use crate::terminal_title::SetTerminalTitleResult;
 use crate::terminal_title::clear_terminal_title;
@@ -86,7 +83,6 @@ use ody_app_server_protocol::CollabAgentToolCallStatus;
 use ody_app_server_protocol::CommandExecutionRequestApprovalParams;
 use ody_app_server_protocol::CommandExecutionSource as ExecCommandSource;
 use ody_app_server_protocol::ConfigLayerSource;
-use ody_app_server_protocol::CreditsSnapshot;
 use ody_app_server_protocol::ErrorNotification;
 use ody_app_server_protocol::FileChangeRequestApprovalParams;
 use ody_app_server_protocol::GuardianApprovalReviewAction;
@@ -96,8 +92,6 @@ use ody_app_server_protocol::McpServerElicitationRequest;
 use ody_app_server_protocol::McpServerElicitationRequestParams;
 use ody_app_server_protocol::McpServerStatusDetail;
 use ody_app_server_protocol::ModelVerification as AppServerModelVerification;
-use ody_app_server_protocol::RateLimitReachedType;
-use ody_app_server_protocol::RateLimitSnapshot;
 use ody_app_server_protocol::RequestId as AppServerRequestId;
 use ody_app_server_protocol::ReviewTarget;
 use ody_app_server_protocol::ServerNotification;
@@ -315,7 +309,6 @@ use crate::render::renderable::Renderable;
 use crate::render::renderable::RenderableExt;
 use crate::render::renderable::RenderableItem;
 use crate::slash_command::SlashCommand;
-use crate::status::RateLimitSnapshotDisplay;
 use crate::status::remote_connection::RemoteConnectionStatus;
 use crate::status_indicator_widget::STATUS_DETAILS_DEFAULT_MAX_LINES;
 use crate::status_indicator_widget::StatusDetailsCapitalization;
@@ -378,14 +371,6 @@ mod permission_popups;
 mod permissions_menu;
 mod protocol;
 mod protocol_requests;
-mod rate_limits;
-use self::rate_limits::RateLimitErrorKind;
-use self::rate_limits::RateLimitSwitchPromptState;
-use self::rate_limits::RateLimitWarningState;
-use self::rate_limits::app_server_rate_limit_error_kind;
-pub(crate) use self::rate_limits::fallback_limit_label;
-use self::rate_limits::is_app_server_cyber_policy_error;
-pub(crate) use self::rate_limits::limit_label_for_window;
 mod reasoning_shortcuts;
 mod rendering;
 mod replay;
@@ -546,13 +531,9 @@ pub(crate) struct ChatWidget {
     runtime_model_provider_base_url: Option<String>,
     pub(crate) remote_connection: Option<RemoteConnectionStatus>,
     token_info: Option<TokenUsageInfo>,
-    rate_limit_snapshots_by_limit_id: BTreeMap<String, RateLimitSnapshotDisplay>,
     refreshing_status_outputs: Vec<(u64, StatusHistoryHandle)>,
     next_status_refresh_request_id: u64,
-    ody_rate_limit_reached_type: Option<RateLimitReachedType>,
-    rate_limit_warnings: RateLimitWarningState,
     warning_display_state: WarningDisplayState,
-    rate_limit_switch_prompt: RateLimitSwitchPromptState,
     adaptive_chunking: AdaptiveChunkingPolicy,
     // Stream lifecycle controller
     stream_controller: Option<StreamController>,

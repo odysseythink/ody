@@ -2119,6 +2119,43 @@
         }
       ]
     },
+    "OdyCodeModelConfig": {
+      "additionalProperties": false,
+      "description": "Ody-code compatible model configuration.\n\nKeyed in `ConfigToml::models` by `provider_id/model_name`. Declares the metadata the static catalog and the provider's `/models` endpoint cannot supply for custom/self-hosted models.",
+      "properties": {
+        "capabilities": {
+          "default": [],
+          "description": "Capability flags, e.g. \"tool_use\", \"thinking\", \"image_in\".",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "display_name": {
+          "description": "Human-readable name shown in model pickers.",
+          "type": "string"
+        },
+        "max_context_size": {
+          "description": "Total context window size in tokens.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "max_output_size": {
+          "description": "Maximum output tokens per response.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "model": {
+          "description": "Model name sent to the provider (defaults to the key suffix).",
+          "type": "string"
+        },
+        "provider": {
+          "description": "Provider id this model belongs to (must match the key prefix).",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "OdyCodeOAuthRef": {
       "additionalProperties": false,
       "description": "Ody-code compatible OAuth reference.",
@@ -5566,6 +5603,14 @@
       ],
       "description": "Optional verbosity control for GPT-5 models (Responses API `text.verbosity`)."
     },
+    "models": {
+      "additionalProperties": {
+        "$ref": "#/definitions/OdyCodeModelConfig"
+      },
+      "default": {},
+      "description": "Ody-code compatible model entries keyed by `provider_id/model_name`. These declare metadata (context window, capabilities) for models that are not present in the built-in catalog or the provider's `/models` listing, so fallback metadata (zero truncation budget, hidden tool outputs) is not used for them.",
+      "type": "object"
+    },
     "notice": {
       "allOf": [
         {
@@ -5732,6 +5777,10 @@
     },
     "service_tier": {
       "description": "Optional explicit service tier request id for new turns (for example `default`, `priority`, or `flex`; legacy `fast` also works).",
+      "type": "string"
+    },
+    "shell": {
+      "description": "Shell used to execute model-invoked shell commands.\n\nAccepts a shell name (`cmd`, `powershell`, `pwsh`, `bash`, `zsh`, or `sh`) or a path to a shell executable. When unset, defaults to `cmd.exe` on Windows and the user's login shell on other platforms.",
       "type": "string"
     },
     "shell_environment_policy": {

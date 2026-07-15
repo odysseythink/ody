@@ -17,6 +17,13 @@ use ody_utils_output_truncation::approx_bytes_for_tokens;
 use tracing::warn;
 
 pub const BASE_INSTRUCTIONS: &str = include_str!("../prompt.md");
+
+/// Truncation policy applied when neither the catalog nor user config provides
+/// one. A zero limit would truncate every tool output down to just the
+/// `…N chars truncated…` marker (see `truncate_with_byte_estimate` in
+/// `ody-utils-string`), leaving the model blind to all shell output. 10_000
+/// bytes matches the hosted `/models` catalog default.
+pub const DEFAULT_TRUNCATION_POLICY: TruncationPolicyConfig = TruncationPolicyConfig::bytes(10_000);
 const DEFAULT_PERSONALITY_HEADER: &str = "You are Ody, a coding agent based on GPT-5. You and the user share the same workspace and collaborate to achieve the user's goals.";
 const LOCAL_FRIENDLY_TEMPLATE: &str =
     "You optimize for team morale and being a supportive teammate as much as code quality.";
@@ -94,6 +101,13 @@ pub fn resolve_model_capabilities(
         if let Some(limit) = caps.auto_compact_token_limit {
             caps.auto_compact_token_limit = Some(limit.min(max_auto_compact));
         }
+    }
+
+    // A zero truncation budget hides every tool output from the model (the
+    // truncator keeps only the "…N chars truncated…" marker), so clamp to a
+    // usable default when no source provided a positive limit.
+    if caps.truncation_policy.limit <= 0 {
+        caps.truncation_policy = DEFAULT_TRUNCATION_POLICY;
     }
 
     caps
@@ -259,9 +273,119 @@ pub fn model_catalog_for_provider(
     }
 }
 
+/// A model declared in user config via `[models."provider/model"]` tables.
+///
+/// This mirrors the ody-code shaped `OdyCodeModelConfig` (converted by the
+/// caller) and lets user-declared models participate in the catalog with real
+/// metadata instead of fallback metadata.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ConfiguredModelSpec {
+    /// Provider id this model belongs to.
+    pub provider: String,
+    /// Model name sent to the provider.
+    pub model: String,
+    /// Total context window size in tokens.
+    pub max_context_size: Option<i64>,
+    /// Maximum output tokens per response.
+    pub max_output_size: Option<i64>,
+    /// Capability flags, e.g. "tool_use", "thinking", "image_in".
+    pub capabilities: Vec<String>,
+    /// Human-readable name shown in model pickers.
+    pub display_name: Option<String>,
+}
+
+/// Catalog built from user-declared `[models.*]` config entries.
+///
+/// Returns `None` when no entry targets `provider_id`, so callers can fall
+/// back to the static/remote catalog chain unchanged.
+pub fn configured_model_catalog_for_provider(
+    provider_id: &str,
+    wire_api: WireApi,
+    provider_caps: &ProviderCapabilities,
+    entries: &[ConfiguredModelSpec],
+) -> Option<ModelsResponse> {
+    let models: Vec<ModelInfo> = entries
+        .iter()
+        .filter(|entry| entry.provider == provider_id)
+        .enumerate()
+        .map(|(index, entry)| {
+            entry.to_model_info(index as i32, provider_id, wire_api, provider_caps)
+        })
+        .collect();
+    if models.is_empty() {
+        None
+    } else {
+        Some(ModelsResponse { models })
+    }
+}
+
+impl ConfiguredModelSpec {
+    fn to_model_info(
+        &self,
+        priority: i32,
+        provider_id: &str,
+        wire_api: WireApi,
+        provider_caps: &ProviderCapabilities,
+    ) -> ModelInfo {
+        let declared = |flag: &str| self.capabilities.iter().any(|cap| cap == flag);
+        let caps = if self.capabilities.is_empty() {
+            // No explicit capability list: infer from the wire API like the
+            // built-in catalogs do.
+            default_model_capabilities_for_wire_api(wire_api)
+        } else {
+            let vision = declared("image_in") || declared("video_in");
+            ModelCapabilities {
+                supports_tools: declared("tool_use"),
+                supports_parallel_tool_calls: declared("tool_use"),
+                supports_thinking: declared("thinking"),
+                supports_reasoning_summaries: declared("thinking"),
+                supports_vision: vision,
+                input_modalities: if vision {
+                    vec![InputModality::Text, InputModality::Image]
+                } else {
+                    vec![InputModality::Text]
+                },
+                ..Default::default()
+            }
+        };
+        let mut caps = ModelCapabilities {
+            context_window: self.max_context_size,
+            max_context_window: self.max_context_size,
+            max_output_tokens: self.max_output_size,
+            ..caps
+        };
+        // Apply provider-level upper bounds and consistency clamps (including
+        // the non-zero truncation budget guarantee).
+        caps = resolve_model_capabilities(provider_caps, wire_api, Some(&caps), None, &self.model);
+
+        let mut model = model_info_from_slug_with_provider(
+            &self.model,
+            provider_id,
+            wire_api,
+            provider_caps,
+        );
+        model.display_name = self.display_name.clone().unwrap_or_else(|| self.model.clone());
+        model.visibility = ModelVisibility::List;
+        model.priority = priority;
+        model.used_fallback_model_metadata = false;
+        model.context_window = caps.context_window;
+        model.max_context_window = caps.max_context_window;
+        model.supports_reasoning_summaries = caps.supports_reasoning_summaries;
+        model.supports_parallel_tool_calls = caps.supports_parallel_tool_calls;
+        model.capabilities = caps;
+        // Keep top-level fields in sync with capabilities.
+        model.input_modalities = model.capabilities.input_modalities.clone();
+        model.web_search_tool_type = model.capabilities.web_search_tool_type;
+        model.truncation_policy = model.capabilities.truncation_policy;
+        model.shell_type = model.capabilities.shell_type;
+        model.tool_mode = model.capabilities.tool_mode.clone();
+        model.effective_context_window_percent = model.capabilities.effective_context_window_percent;
+        model
+    }
+}
+
 /// Build a single-model fallback descriptor inferred from a wire API.
-fn fallback_catalog_model(provider_id: &str, wire_api: WireApi, context_window: i64) -> ModelInfo {
-    let mut caps = resolve_model_capabilities(
+fn fallback_catalog_model(provider_id: &str, wire_api: WireApi, context_window: i64) -> ModelInfo {    let mut caps = resolve_model_capabilities(
         &ProviderCapabilities::default(),
         wire_api,
         None,
@@ -352,6 +476,7 @@ impl ChatModelSpec {
             supports_vision: true,
             supports_image_detail_original: false,
             input_modalities: vec![InputModality::Text, InputModality::Image],
+            truncation_policy: DEFAULT_TRUNCATION_POLICY,
             ..Default::default()
         };
         // Keep top-level fields in sync with capabilities.

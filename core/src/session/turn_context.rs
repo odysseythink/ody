@@ -907,8 +907,8 @@ impl Session {
                 tc,
                 EventMsg::Warning(WarningEvent {
                     message: format!(
-                        "Model metadata for `{}` not found. Defaulting to fallback metadata; this can degrade performance and cause issues.",
-                        tc.model_info.slug
+                        "Model metadata for `{}` not found. Defaulting to fallback metadata; this can degrade performance and cause issues. In particular, shell/tool outputs may be truncated away entirely (zero truncation budget), so the model cannot see command results. To fix, declare the model via `[models.\"{}/{}\"]` in config.toml with `max_context_size` (and `capabilities`), or set `model_context_window` and `tool_output_token_limit`.",
+                        tc.model_info.slug, tc.config.model_provider_id, tc.model_info.slug
                     ),
                 }),
             )

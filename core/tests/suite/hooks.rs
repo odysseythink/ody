@@ -77,6 +77,7 @@ fn network_workspace_write_profile() -> PermissionProfile {
     )
 }
 
+#[cfg(feature = "v8")]
 fn code_mode_custom_tool_output_text(output_item: &Value) -> String {
     match output_item.get("output") {
         Some(Value::String(text)) => text.clone(),
@@ -2712,6 +2713,7 @@ async fn pre_tool_use_rewrites_exec_command_before_execution() -> Result<()> {
     assert_pre_tool_use_rewrites_bash_surface(BashRewriteSurface::ExecCommand).await
 }
 
+#[cfg(feature = "v8")]
 #[tokio::test]
 async fn pre_tool_use_rewrites_code_mode_nested_exec_command_before_execution() -> Result<()> {
     skip_if_no_network!(Ok(()));
@@ -2802,6 +2804,7 @@ text(output.output);
     Ok(())
 }
 
+#[cfg(feature = "v8")]
 #[tokio::test]
 async fn pre_tool_use_block_rejects_code_mode_tool_promise_before_execution() -> Result<()> {
     skip_if_no_network!(Ok(()));
@@ -2877,6 +2880,7 @@ try {{
     Ok(())
 }
 
+#[cfg(feature = "v8")]
 async fn assert_post_tool_use_blocks_code_mode_tool_result(
     hook_mode: &'static str,
     reason: &'static str,
@@ -2965,6 +2969,7 @@ try {{
     Ok(())
 }
 
+#[cfg(feature = "v8")]
 #[tokio::test]
 async fn post_tool_use_block_decision_rejects_code_mode_tool_promise() -> Result<()> {
     assert_post_tool_use_blocks_code_mode_tool_result(
@@ -2974,6 +2979,7 @@ async fn post_tool_use_block_decision_rejects_code_mode_tool_promise() -> Result
     .await
 }
 
+#[cfg(feature = "v8")]
 #[tokio::test]
 async fn post_tool_use_exit_two_rejects_code_mode_tool_promise() -> Result<()> {
     assert_post_tool_use_blocks_code_mode_tool_result("exit_2", "blocked nested result by exit two")

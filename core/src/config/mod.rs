@@ -25,6 +25,7 @@ use ody_config::Sourced;
 use ody_config::ThreadConfigLoader;
 use ody_config::config_toml::ConfigLockfileToml;
 use ody_config::config_toml::ConfigToml;
+use ody_config::config_toml::OdyCodeModelConfig;
 use ody_config::config_toml::DEFAULT_PROJECT_DOC_MAX_BYTES;
 use ody_config::config_toml::PlanModeConfigToml;
 use ody_config::config_toml::ProjectConfig;
@@ -86,6 +87,8 @@ use ody_model_provider_info::WireApi;
 use ody_model_provider_info::built_in_model_providers;
 use ody_model_provider_info::merge_configured_model_providers;
 use ody_models_manager::ModelsManagerConfig;
+use ody_models_manager::model_info::ConfiguredModelSpec;
+use ody_models_manager::model_info::configured_model_catalog_for_provider;
 use ody_protocol::config_types::AltScreenMode;
 use ody_protocol::config_types::AutoCompactTokenLimitScope;
 use ody_protocol::config_types::DesignAuditLevel;
@@ -746,6 +749,12 @@ pub struct Config {
 
     /// Preferred language for model responses in the TUI transcript.
     pub language: Option<String>,
+
+    /// Shell used to execute model-invoked shell commands (a shell name such
+    /// as `cmd`, `powershell`, or `bash`, or a path to a shell executable).
+    /// `None` uses the platform default (`cmd.exe` on Windows, the user's
+    /// login shell elsewhere).
+    pub shell: Option<String>,
 
     /// Developer instructions override injected as a separate message.
     pub developer_instructions: Option<String>,
@@ -1920,6 +1929,53 @@ fn load_model_catalog(
     model_catalog_json
         .map(|path| load_catalog_json(&path))
         .transpose()
+}
+
+/// Build a model catalog from user-declared `[models."provider/model"]`
+/// config tables.
+///
+/// Only applies to Chat Completions providers: Responses / Anthropic Messages
+/// providers fetch their catalogs remotely, so config entries would never be
+/// consulted for them. Returns `None` when no entry targets the active
+/// provider so the static/remote catalog chain is preserved.
+fn configured_model_catalog(
+    models: &HashMap<String, OdyCodeModelConfig>,
+    model_provider_id: &str,
+    model_provider: &ModelProviderInfo,
+) -> Option<ModelsResponse> {
+    if models.is_empty() || !model_provider.is_chat_completions() {
+        return None;
+    }
+    let entries: Vec<ConfiguredModelSpec> = models
+        .iter()
+        .map(|(key, model)| {
+            let (key_provider, key_model) = key
+                .split_once('/')
+                .map_or((None, None), |(p, m)| (Some(p), Some(m)));
+            ConfiguredModelSpec {
+                provider: model
+                    .provider
+                    .clone()
+                    .or_else(|| key_provider.map(str::to_string))
+                    .unwrap_or_default(),
+                model: model
+                    .model
+                    .clone()
+                    .or_else(|| key_model.map(str::to_string))
+                    .unwrap_or_else(|| key.clone()),
+                max_context_size: model.max_context_size,
+                max_output_size: model.max_output_size,
+                capabilities: model.capabilities.clone(),
+                display_name: model.display_name.clone(),
+            }
+        })
+        .collect();
+    configured_model_catalog_for_provider(
+        model_provider_id,
+        model_provider.wire_api,
+        &model_provider.capabilities,
+        &entries,
+    )
 }
 
 fn filter_mcp_servers_by_requirements(
@@ -3475,6 +3531,8 @@ impl Config {
 
         let configured_model_providers = cfg.normalized_providers();
         let (default_provider, default_model) = cfg.normalized_default_model();
+        // Cloned early: `cfg` is partially moved by later field extractions.
+        let configured_models = cfg.models.clone();
 
         validate_model_providers(&configured_model_providers)
             .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidData, message))?;
@@ -3495,6 +3553,10 @@ impl Config {
                 )
             })?
             .clone();
+
+        // Computed early: `cfg` is partially moved by later field extractions.
+        let configured_catalog =
+            configured_model_catalog(&configured_models, &model_provider_id, &model_provider);
 
         let shell_environment_policy = cfg.shell_environment_policy.into();
         let allow_login_shell = cfg.allow_login_shell.unwrap_or(true);
@@ -3740,7 +3802,8 @@ impl Config {
         let review_model = override_review_model.or(cfg.review_model);
 
         let check_for_update_on_startup = cfg.check_for_update_on_startup.unwrap_or(true);
-        let model_catalog = load_model_catalog(cfg.model_catalog_json.clone())?;
+        let model_catalog =
+            load_model_catalog(cfg.model_catalog_json.clone())?.or(configured_catalog);
 
         let log_dir = cfg
             .log_dir
@@ -3897,6 +3960,7 @@ impl Config {
             notify: cfg.notify,
             base_instructions,
             language: cfg.language.clone(),
+            shell: cfg.shell.clone(),
             personality,
             developer_instructions,
             compact_prompt,

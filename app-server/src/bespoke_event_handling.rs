@@ -11,7 +11,6 @@ use crate::thread_state::TurnSummary;
 use crate::thread_state::resolve_server_request_on_thread_listener;
 use crate::thread_status::ThreadWatchActiveGuard;
 use crate::thread_status::ThreadWatchManager;
-use ody_app_server_protocol::RateLimitsUpdatedNotification;
 use ody_app_server_protocol::AdditionalPermissionProfile as V2AdditionalPermissionProfile;
 use ody_app_server_protocol::OdyErrorInfo as V2OdyErrorInfo;
 use ody_app_server_protocol::CommandAction as V2ParsedCommand;
@@ -1631,7 +1630,7 @@ async fn handle_token_count_event(
     token_count_event: TokenCountEvent,
     outgoing: &ThreadScopedOutgoingMessageSender,
 ) {
-    let TokenCountEvent { info, rate_limits } = token_count_event;
+    let TokenCountEvent { info } = token_count_event;
     if let Some(token_usage) = info.map(ThreadTokenUsage::from) {
         let notification = ThreadTokenUsageUpdatedNotification {
             thread_id: conversation_id.to_string(),
@@ -1640,15 +1639,6 @@ async fn handle_token_count_event(
         };
         outgoing
             .send_server_notification(ServerNotification::ThreadTokenUsageUpdated(notification))
-            .await;
-    }
-    if let Some(rate_limits) = rate_limits {
-        outgoing
-            .send_server_notification(ServerNotification::RateLimitsUpdated(
-                RateLimitsUpdatedNotification {
-                    rate_limits: rate_limits.into(),
-                },
-            ))
             .await;
     }
 }
@@ -2202,12 +2192,9 @@ mod tests {
     use ody_protocol::plan_tool::StepStatus;
     use ody_protocol::protocol::AgentMessageEvent;
     use ody_protocol::protocol::AskForApproval;
-    use ody_protocol::protocol::CreditsSnapshot;
     use ody_protocol::protocol::EventMsg;
     use ody_protocol::protocol::GuardianAssessmentEvent;
     use ody_protocol::protocol::GuardianAssessmentStatus;
-    use ody_protocol::protocol::RateLimitSnapshot;
-    use ody_protocol::protocol::RateLimitWindow;
     use ody_protocol::protocol::RolloutItem;
     use ody_protocol::protocol::SessionSource;
     use ody_protocol::protocol::SubAgentActivityEvent;
@@ -3695,98 +3682,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_handle_token_count_event_emits_usage_and_rate_limits() -> Result<()> {
-        let conversation_id = ThreadId::new();
-        let turn_id = "turn-123".to_string();
-        let (tx, mut rx) = mpsc::channel(CHANNEL_CAPACITY);
-        let outgoing = Arc::new(OutgoingMessageSender::new(
-            tx,
-            ody_analytics::AnalyticsEventsClient::disabled(),
-        ));
-        let outgoing = ThreadScopedOutgoingMessageSender::new(
-            outgoing,
-            vec![ConnectionId(1)],
-            ThreadId::new(),
-        );
-
-        let info = TokenUsageInfo {
-            total_token_usage: TokenUsage {
-                input_tokens: 100,
-                cached_input_tokens: 25,
-                output_tokens: 50,
-                reasoning_output_tokens: 9,
-                total_tokens: 200,
-            },
-            last_token_usage: TokenUsage {
-                input_tokens: 10,
-                cached_input_tokens: 5,
-                output_tokens: 7,
-                reasoning_output_tokens: 1,
-                total_tokens: 23,
-            },
-            model_context_window: Some(4096),
-        };
-        let rate_limits = RateLimitSnapshot {
-            limit_id: Some("ody".to_string()),
-            limit_name: None,
-            primary: Some(RateLimitWindow {
-                used_percent: 42.5,
-                window_minutes: Some(15),
-                resets_at: Some(1700000000),
-            }),
-            secondary: None,
-            credits: Some(CreditsSnapshot {
-                has_credits: true,
-                unlimited: false,
-                balance: Some("5".to_string()),
-            }),
-            individual_limit: None,
-            rate_limit_reached_type: None,
-        };
-
-        handle_token_count_event(
-            conversation_id,
-            turn_id.clone(),
-            TokenCountEvent {
-                info: Some(info),
-                rate_limits: Some(rate_limits),
-            },
-            &outgoing,
-        )
-        .await;
-
-        let first = recv_broadcast_message(&mut rx).await?;
-        match first {
-            OutgoingMessage::AppServerNotification(
-                ServerNotification::ThreadTokenUsageUpdated(payload),
-            ) => {
-                assert_eq!(payload.thread_id, conversation_id.to_string());
-                assert_eq!(payload.turn_id, turn_id);
-                let usage = payload.token_usage;
-                assert_eq!(usage.total.total_tokens, 200);
-                assert_eq!(usage.total.cached_input_tokens, 25);
-                assert_eq!(usage.last.output_tokens, 7);
-                assert_eq!(usage.model_context_window, Some(4096));
-            }
-            other => bail!("unexpected notification: {other:?}"),
-        }
-
-        let second = recv_broadcast_message(&mut rx).await?;
-        match second {
-            OutgoingMessage::AppServerNotification(
-                ServerNotification::RateLimitsUpdated(payload),
-            ) => {
-                assert_eq!(payload.rate_limits.limit_id.as_deref(), Some("ody"));
-                assert_eq!(payload.rate_limits.limit_name, None);
-                assert!(payload.rate_limits.primary.is_some());
-                assert!(payload.rate_limits.credits.is_some());
-            }
-            other => bail!("unexpected notification: {other:?}"),
-        }
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn test_handle_token_count_event_without_usage_info() -> Result<()> {
         let conversation_id = ThreadId::new();
         let turn_id = "turn-456".to_string();
@@ -3806,7 +3701,6 @@ mod tests {
             turn_id.clone(),
             TokenCountEvent {
                 info: None,
-                rate_limits: None,
             },
             &outgoing,
         )

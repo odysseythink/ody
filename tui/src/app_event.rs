@@ -758,9 +758,6 @@ pub(crate) enum AppEvent {
     #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     UpdateWorldWritableWarningAcknowledged(bool),
 
-    /// Update whether the rate limit switch prompt has been acknowledged for the session.
-    UpdateRateLimitSwitchPromptHidden(bool),
-
     /// Update the Plan-mode-specific reasoning effort in memory.
     UpdatePlanModeReasoningEffort(Option<ReasoningEffort>),
 
@@ -770,9 +767,6 @@ pub(crate) enum AppEvent {
     /// Persist the acknowledgement flag for the world-writable directories warning.
     #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     PersistWorldWritableWarningAcknowledged,
-
-    /// Persist the acknowledgement flag for the rate limit switch prompt.
-    PersistRateLimitSwitchPromptHidden,
 
     /// Persist the Plan-mode-specific reasoning effort.
     PersistPlanModeReasoningEffort(Option<ReasoningEffort>),

@@ -507,9 +507,7 @@ impl ChatWidget {
                 self.add_hooks_output();
             }
             SlashCommand::Status => {
-                self.add_status_output(
-                    /*refreshing_rate_limits*/ false, /*request_id*/ None,
-                );
+                self.add_status_output(/*request_id*/ None);
             }
             SlashCommand::Ide => {
                 self.handle_ide_command();
