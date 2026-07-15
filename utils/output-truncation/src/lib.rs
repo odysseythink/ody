@@ -10,7 +10,10 @@ use ody_utils_string::truncate_middle_with_token_budget;
 pub use ody_protocol::protocol::TruncationPolicy;
 
 pub fn formatted_truncate_text(content: &str, policy: TruncationPolicy) -> String {
-    if content.len() <= policy.byte_budget() {
+    let budget = policy.byte_budget();
+    if budget == 0 || content.len() <= budget {
+        // A zero budget means "no truncation limit was configured": fail open
+        // and keep the content instead of hiding it behind a marker.
         return content.to_string();
     }
 
@@ -54,7 +57,9 @@ pub fn formatted_truncate_text_content_items_with_policy(
         combined.push_str(text);
     }
 
-    if combined.len() <= policy.byte_budget() {
+    let budget = policy.byte_budget();
+    if budget == 0 || combined.len() <= budget {
+        // Zero budget: no truncation limit configured, keep the items as-is.
         return (items.to_vec(), None);
     }
 
@@ -84,6 +89,11 @@ pub fn truncate_function_output_items_with_policy(
     items: &[FunctionCallOutputContentItem],
     policy: TruncationPolicy,
 ) -> Vec<FunctionCallOutputContentItem> {
+    if policy.byte_budget() == 0 {
+        // Zero budget: no truncation limit configured, keep everything.
+        return items.to_vec();
+    }
+
     let mut out: Vec<FunctionCallOutputContentItem> = Vec::with_capacity(items.len());
     let mut remaining_budget = match policy {
         TruncationPolicy::Bytes(_) => policy.byte_budget(),

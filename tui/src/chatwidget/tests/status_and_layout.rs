@@ -1141,6 +1141,20 @@ async fn repeated_model_metadata_warning_is_hidden_for_same_slug() {
 }
 
 #[tokio::test]
+async fn repeated_model_metadata_warning_with_extra_guidance_is_hidden() {
+    // The warning may append remediation guidance after the stable head; the
+    // dedupe matcher must still recognize it.
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    let warning = "Model metadata for `unknown-model` not found. Defaulting to fallback metadata; this can degrade performance and cause issues. In particular, shell/tool outputs may be truncated away entirely (zero truncation budget), so the model cannot see command results. To fix, declare the model via `[models.\"provider/unknown-model\"]` in config.toml with `max_context_size` (and `capabilities`), or set `model_context_window` and `tool_output_token_limit`.";
+
+    handle_warning(&mut chat, warning);
+    handle_warning(&mut chat, warning);
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected one warning history cell");
+}
+
+#[tokio::test]
 async fn repeated_generic_warning_is_not_hidden() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
 

@@ -388,6 +388,14 @@ pub struct ConfigToml {
     #[serde(default)]
     pub providers: HashMap<String, OdyCodeProviderConfig>,
 
+    /// Ody-code compatible model entries keyed by `provider_id/model_name`.
+    /// These declare metadata (context window, capabilities) for models that
+    /// are not present in the built-in catalog or the provider's `/models`
+    /// listing, so fallback metadata (zero truncation budget, hidden tool
+    /// outputs) is not used for them.
+    #[serde(default)]
+    pub models: HashMap<String, OdyCodeModelConfig>,
+
     /// Ody-code compatible default provider id.
     #[serde(default)]
     pub default_provider: Option<String>,
@@ -648,6 +656,29 @@ pub struct OdyCodeProviderConfig {
 pub struct OdyCodeOAuthRef {
     pub storage: String,
     pub key: String,
+}
+
+/// Ody-code compatible model configuration.
+///
+/// Keyed in `ConfigToml::models` by `provider_id/model_name`. Declares the
+/// metadata the static catalog and the provider's `/models` endpoint cannot
+/// supply for custom/self-hosted models.
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct OdyCodeModelConfig {
+    /// Provider id this model belongs to (must match the key prefix).
+    pub provider: Option<String>,
+    /// Model name sent to the provider (defaults to the key suffix).
+    pub model: Option<String>,
+    /// Total context window size in tokens.
+    pub max_context_size: Option<i64>,
+    /// Maximum output tokens per response.
+    pub max_output_size: Option<i64>,
+    /// Capability flags, e.g. "tool_use", "thinking", "image_in".
+    #[serde(default)]
+    pub capabilities: Vec<String>,
+    /// Human-readable name shown in model pickers.
+    pub display_name: Option<String>,
 }
 
 impl ConfigToml {
@@ -1243,6 +1274,14 @@ api_key = ""
         assert!(config.model.is_none());
         assert!(config.model_provider.is_none());
         assert!(config.model_providers.is_empty());
+
+        // `[models.*]` tables are now captured so they can seed the model
+        // catalog with context-window/capability metadata.
+        assert_eq!(config.models.len(), 1);
+        let entry = &config.models["kimi_gyy/kimi-for-coding"];
+        assert_eq!(entry.provider.as_deref(), Some("kimi_gyy"));
+        assert_eq!(entry.model.as_deref(), Some("kimi-for-coding"));
+        assert_eq!(entry.max_context_size, Some(262144));
     }
 
     #[test]
