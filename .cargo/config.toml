@@ -16,8 +16,10 @@ replace-with = 'tuna'
 [source.tuna]
 registry = "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/"
 
-[target.x86_64-pc-windows-msvc]
-linker = "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\link.exe"
+# NOTE: do NOT hardcode `linker` here — the MSVC path is machine-specific.
+# Set it per-machine via the user environment variable:
+#   CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER = <path to link.exe>
+# (env var overrides this config file; rustc also auto-detects MSVC when unset)
 
 [env]
 # macOS uses a 2 MiB default thread stack, which is too small for deep async
