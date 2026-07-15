@@ -1,15 +1,11 @@
 use crate::TransportError;
 use crate::error::ApiError;
-use crate::rate_limits::parse_promo_message;
-use crate::rate_limits::parse_rate_limit_for_limit;
-use crate::rate_limits::parse_rate_limit_reached_type;
 use base64::Engine;
 use chrono::DateTime;
 use chrono::Utc;
 use ody_protocol::error::OdyErr;
 use ody_protocol::error::RetryLimitReachedError;
 use ody_protocol::error::UnexpectedResponseError;
-use ody_protocol::error::UsageLimitReachedError;
 use http::HeaderMap;
 use serde::Deserialize;
 use serde_json::Value;
@@ -82,30 +78,6 @@ pub fn map_api_error(err: ApiError) -> OdyErr {
                 } else if status == http::StatusCode::INTERNAL_SERVER_ERROR {
                     OdyErr::InternalServerError
                 } else if status == http::StatusCode::TOO_MANY_REQUESTS {
-                    if let Ok(err) = serde_json::from_str::<UsageErrorResponse>(&body_text) {
-                        if err.error.error_type.as_deref() == Some("usage_limit_reached") {
-                            let limit_id = extract_header(headers.as_ref(), ACTIVE_LIMIT_HEADER);
-                            let rate_limits = headers.as_ref().and_then(|map| {
-                                parse_rate_limit_for_limit(map, limit_id.as_deref())
-                            });
-                            let promo_message = headers.as_ref().and_then(parse_promo_message);
-                            let rate_limit_reached_type =
-                                headers.as_ref().and_then(parse_rate_limit_reached_type);
-                            let resets_at = err
-                                .error
-                                .resets_at
-                                .and_then(|seconds| DateTime::<Utc>::from_timestamp(seconds, 0));
-                            return OdyErr::UsageLimitReached(UsageLimitReachedError {
-                                resets_at,
-                                rate_limits: rate_limits.map(Box::new),
-                                promo_message,
-                                rate_limit_reached_type,
-                            });
-                        } else if err.error.error_type.as_deref() == Some("usage_not_included") {
-                            return OdyErr::UsageNotIncluded;
-                        }
-                    }
-
                     OdyErr::RetryLimit(RetryLimitReachedError {
                         status,
                         request_id: extract_request_tracking_id(headers.as_ref()),
@@ -135,7 +107,6 @@ pub fn map_api_error(err: ApiError) -> OdyErr {
                 OdyErr::Stream(msg, None)
             }
         },
-        ApiError::RateLimit(msg) => OdyErr::Stream(msg, None),
     }
 }
 

@@ -880,6 +880,19 @@ impl Session {
                 session_configuration.user_shell_override.clone()
             {
                 user_shell_override
+            } else if let Some(configured_shell) = config.shell.as_deref() {
+                let requested = PathBuf::from(configured_shell);
+                match shell::detect_shell_type(&requested)
+                    .and_then(|shell_type| shell::get_shell(shell_type, Some(&requested)))
+                {
+                    Some(resolved) => resolved,
+                    None => {
+                        warn!(
+                            "config `shell = \"{configured_shell}\"` is not a recognized or installed shell; falling back to the platform default shell"
+                        );
+                        shell::default_user_shell()
+                    }
+                }
             } else if use_zsh_fork_shell {
                 let zsh_path = config.zsh_path.as_ref().ok_or_else(|| {
                     anyhow::anyhow!(

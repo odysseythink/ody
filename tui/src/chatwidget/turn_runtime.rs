@@ -204,7 +204,6 @@ impl ChatWidget {
             });
         }
 
-        self.maybe_show_pending_rate_limit_prompt();
     }
 
     pub(super) fn maybe_prompt_plan_implementation(&mut self) {
@@ -221,13 +220,6 @@ impl ChatWidget {
             return;
         }
         if !self.bottom_pane.no_modal_or_popup_active() {
-            return;
-        }
-
-        if matches!(
-            self.rate_limit_switch_prompt,
-            RateLimitSwitchPromptState::Pending
-        ) {
             return;
         }
 
@@ -331,7 +323,6 @@ impl ChatWidget {
         self.clear_cancel_edit();
         self.request_status_line_branch_refresh();
         self.request_status_line_git_summary_refresh();
-        self.maybe_show_pending_rate_limit_prompt();
     }
 
     pub(super) fn on_server_overloaded_error(&mut self, message: String) {
@@ -374,47 +365,6 @@ impl ChatWidget {
         self.maybe_send_next_queued_input();
     }
 
-    pub(super) fn on_rate_limit_error(&mut self, error_kind: RateLimitErrorKind, message: String) {
-        let usage_limit_error = matches!(error_kind, RateLimitErrorKind::UsageLimit);
-        let rate_limit_reached_type = self.ody_rate_limit_reached_type.map(|kind| {
-            if usage_limit_error {
-                match kind {
-                    RateLimitReachedType::WorkspaceOwnerCreditsDepleted => {
-                        RateLimitReachedType::WorkspaceOwnerUsageLimitReached
-                    }
-                    RateLimitReachedType::WorkspaceMemberCreditsDepleted => {
-                        RateLimitReachedType::WorkspaceMemberUsageLimitReached
-                    }
-                    other => other,
-                }
-            } else {
-                kind
-            }
-        });
-        self.ody_rate_limit_reached_type = rate_limit_reached_type;
-        match rate_limit_reached_type {
-            Some(RateLimitReachedType::WorkspaceOwnerCreditsDepleted) => {
-                self.on_error(
-                    "You're out of credits. Your workspace is out of credits. Add credits to continue using Ody."
-                        .to_string(),
-                );
-            }
-            Some(RateLimitReachedType::WorkspaceOwnerUsageLimitReached) => {
-                self.on_error(
-                    "Usage limit reached. You've reached your usage limit. Increase your limits to continue using ody."
-                        .to_string(),
-                );
-            }
-            Some(RateLimitReachedType::WorkspaceMemberCreditsDepleted)
-            | Some(RateLimitReachedType::WorkspaceMemberUsageLimitReached) => {
-                self.on_error(message);
-            }
-            Some(RateLimitReachedType::RateLimitReached) | None => {
-                self.on_error(message);
-            }
-        }
-    }
-
     pub(super) fn handle_non_retry_error(
         &mut self,
         message: String,
@@ -424,22 +374,7 @@ impl ChatWidget {
             .as_ref()
             .is_some_and(|info| self.handle_app_server_steer_rejected_error(info))
         {
-        } else if ody_error_info
-            .as_ref()
-            .is_some_and(is_app_server_cyber_policy_error)
-        {
-            self.on_cyber_policy_error();
-        } else if let Some(info) = ody_error_info
-            .as_ref()
-            .and_then(app_server_rate_limit_error_kind)
-        {
-            match info {
-                RateLimitErrorKind::ServerOverloaded => self.on_server_overloaded_error(message),
-                RateLimitErrorKind::UsageLimit | RateLimitErrorKind::Generic => {
-                    self.on_rate_limit_error(info, message)
-                }
-            }
-        } else {
+        }  else {
             self.on_error(message);
         }
     }

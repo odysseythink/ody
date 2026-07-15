@@ -694,7 +694,6 @@ mod tests {
     use std::time::Duration;
 
     use ody_app_server_protocol::LoginCompletedNotification;
-    use ody_app_server_protocol::RateLimitsUpdatedNotification;
     use ody_app_server_protocol::AuthUpdatedNotification;
     use ody_app_server_protocol::ApplyPatchApprovalParams;
     use ody_app_server_protocol::AuthMode;
@@ -708,8 +707,6 @@ mod tests {
     use ody_app_server_protocol::ModelReroutedNotification;
     use ody_app_server_protocol::ModelVerification;
     use ody_app_server_protocol::ModelVerificationNotification;
-    use ody_app_server_protocol::RateLimitSnapshot;
-    use ody_app_server_protocol::RateLimitWindow;
     use ody_app_server_protocol::ServerResponse;
     use ody_app_server_protocol::ToolRequestUserInputParams;
     use ody_app_server_protocol::TurnModerationMetadataNotification;
@@ -764,51 +761,6 @@ mod tests {
                     "loginId": Uuid::nil().to_string(),
                     "success": true,
                     "error": null,
-                },
-            }),
-            serde_json::to_value(jsonrpc_notification)
-                .expect("ensure the notification serializes correctly"),
-            "ensure the notification serializes correctly"
-        );
-    }
-
-    #[test]
-    fn verify_account_rate_limits_notification_serialization() {
-        let notification =
-            ServerNotification::RateLimitsUpdated(RateLimitsUpdatedNotification {
-                rate_limits: RateLimitSnapshot {
-                    limit_id: Some("ody".to_string()),
-                    limit_name: None,
-                    primary: Some(RateLimitWindow {
-                        used_percent: 25,
-                        window_duration_mins: Some(15),
-                        resets_at: Some(123),
-                    }),
-                    secondary: None,
-                    credits: None,
-                    individual_limit: None,
-                    rate_limit_reached_type: None,
-                },
-            });
-
-        let jsonrpc_notification = OutgoingMessage::AppServerNotification(notification);
-        assert_eq!(
-            json!({
-                "method": "rateLimits/updated",
-                "params": {
-                        "rateLimits": {
-                        "limitId": "ody",
-                        "limitName": null,
-                        "primary": {
-                            "usedPercent": 25,
-                            "windowDurationMins": 15,
-                            "resetsAt": 123
-                        },
-                        "secondary": null,
-                        "credits": null,
-                        "individualLimit": null,
-                        "rateLimitReachedType": null
-                    }
                 },
             }),
             serde_json::to_value(jsonrpc_notification)

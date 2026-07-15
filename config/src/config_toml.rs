@@ -272,6 +272,13 @@ pub struct ConfigToml {
     #[serde(default)]
     pub shell_environment_policy: ShellEnvironmentPolicyToml,
 
+    /// Shell used to execute model-invoked shell commands.
+    ///
+    /// Accepts a shell name (`cmd`, `powershell`, `pwsh`, `bash`, `zsh`, or
+    /// `sh`) or a path to a shell executable. When unset, defaults to
+    /// `cmd.exe` on Windows and the user's login shell on other platforms.
+    pub shell: Option<String>,
+
     /// Whether the model may request a login shell for shell-based tools.
     /// Default to `true`
     ///
@@ -1178,6 +1185,16 @@ mod tests {
         let config: ConfigToml = toml::from_str(r#"legacy_base_url = "https://example.com""#)
             .expect("should ignore unknown key");
         let _ = config;
+    }
+
+    #[test]
+    fn shell_setting_deserializes_from_toml() {
+        let config: ConfigToml =
+            toml::from_str(r#"shell = "cmd.exe""#).expect("shell setting should deserialize");
+        assert_eq!(config.shell.as_deref(), Some("cmd.exe"));
+
+        let config: ConfigToml = toml::from_str("").expect("empty config should deserialize");
+        assert!(config.shell.is_none());
     }
 
     #[test]

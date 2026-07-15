@@ -190,7 +190,6 @@ impl ChatWidget {
             }
             ServerNotification::ServerRequestResolved(_)
             | ServerNotification::AuthUpdated(_)
-            | ServerNotification::RateLimitsUpdated(_)
             | ServerNotification::LoginCompleted(_)
             | ServerNotification::ThreadStarted(_)
             | ServerNotification::ThreadStatusChanged(_)

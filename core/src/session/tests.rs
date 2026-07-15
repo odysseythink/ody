@@ -132,15 +132,12 @@ use ody_protocol::models::ResponseItem;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::CompactedItem;
 use ody_protocol::protocol::ConversationAudioParams;
-use ody_protocol::protocol::CreditsSnapshot;
 use ody_protocol::protocol::GranularApprovalConfig;
 use ody_protocol::protocol::InitialHistory;
 use ody_protocol::protocol::InterAgentCommunication;
 use ody_protocol::protocol::MultiAgentVersion;
 use ody_protocol::protocol::NetworkApprovalProtocol;
 use ody_protocol::protocol::OdyErrorInfo;
-use ody_protocol::protocol::RateLimitSnapshot;
-use ody_protocol::protocol::RateLimitWindow;
 use ody_protocol::protocol::RealtimeAudioFrame;
 use ody_protocol::protocol::RealtimeConversationListVoicesResponseEvent;
 use ody_protocol::protocol::RealtimeVoice;
@@ -2075,25 +2072,21 @@ async fn record_initial_history_seeds_token_info_from_rollout() {
     rollout_items.push(RolloutItem::EventMsg(EventMsg::TokenCount(
         TokenCountEvent {
             info: Some(info1),
-            rate_limits: None,
         },
     )));
     rollout_items.push(RolloutItem::EventMsg(EventMsg::TokenCount(
         TokenCountEvent {
             info: None,
-            rate_limits: None,
         },
     )));
     rollout_items.push(RolloutItem::EventMsg(EventMsg::TokenCount(
         TokenCountEvent {
             info: Some(info2.clone()),
-            rate_limits: None,
         },
     )));
     rollout_items.push(RolloutItem::EventMsg(EventMsg::TokenCount(
         TokenCountEvent {
             info: None,
-            rate_limits: None,
         },
     )));
 
@@ -3443,214 +3436,6 @@ async fn thread_rollback_fails_when_num_turns_is_zero() {
 
     let history = sess.clone_history().await;
     assert_eq!(initial_context, history.raw_items());
-}
-
-#[tokio::test]
-async fn set_rate_limits_retains_previous_credits() {
-    let ody_home = tempfile::tempdir().expect("create temp dir");
-    let config = build_test_config(ody_home.path()).await;
-    let config = Arc::new(config);
-    let model = get_model_offline_for_tests(config.model.as_deref());
-    let model_info =
-        construct_model_info_offline_for_tests(model.as_str(), &config.to_models_manager_config());
-    let reasoning_effort = config.model_reasoning_effort.clone();
-    let collaboration_mode = CollaborationMode {
-        mode: ModeKind::Default,
-        settings: Settings {
-            model,
-            reasoning_effort,
-            developer_instructions: None,
-            design_audit_level: None,
-        },
-    };
-    let session_configuration = SessionConfiguration {
-        provider: config.model_provider.clone(),
-        collaboration_mode,
-        model_reasoning_summary: config.model_reasoning_summary,
-        developer_instructions: config.developer_instructions.clone(),
-        loaded_agents_md: None,
-        service_tier: None,
-        personality: config.personality,
-        base_instructions: config
-            .base_instructions
-            .clone()
-            .unwrap_or_else(|| model_info.get_model_instructions(config.personality)),
-        compact_prompt: config.compact_prompt.clone(),
-        approval_policy: config.permissions.approval_policy.clone(),
-        approvals_reviewer: config.approvals_reviewer,
-        permission_profile_state: config.permissions.permission_profile_state().clone(),
-        windows_sandbox_level: WindowsSandboxLevel::from_config(&config),
-        environments: TurnEnvironmentSelections::new(config.cwd.clone(), Vec::new()),
-        workspace_roots: config.workspace_roots.clone(),
-        ody_home: config.ody_home.clone(),
-        thread_name: None,
-        original_config_do_not_use: Arc::clone(&config),
-        metrics_service_name: None,
-        app_server_client_name: None,
-        app_server_client_version: None,
-        session_source: SessionSource::Exec,
-        forked_from_thread_id: None,
-        parent_thread_id: None,
-        thread_source: None,
-        dynamic_tools: Vec::new(),
-        user_shell_override: None,
-    };
-
-    let mut state = SessionState::new(session_configuration);
-    let initial = RateLimitSnapshot {
-        limit_id: None,
-        limit_name: None,
-        primary: Some(RateLimitWindow {
-            used_percent: 10.0,
-            window_minutes: Some(15),
-            resets_at: Some(1_700),
-        }),
-        secondary: None,
-        credits: Some(CreditsSnapshot {
-            has_credits: true,
-            unlimited: false,
-            balance: Some("10.00".to_string()),
-        }),
-        individual_limit: None,
-        rate_limit_reached_type: None,
-    };
-    state.set_rate_limits(initial.clone());
-
-    let update = RateLimitSnapshot {
-        limit_id: Some("ody_other".to_string()),
-        limit_name: Some("ody_other".to_string()),
-        primary: Some(RateLimitWindow {
-            used_percent: 40.0,
-            window_minutes: Some(30),
-            resets_at: Some(1_800),
-        }),
-        secondary: Some(RateLimitWindow {
-            used_percent: 5.0,
-            window_minutes: Some(60),
-            resets_at: Some(1_900),
-        }),
-        credits: None,
-        individual_limit: None,
-        rate_limit_reached_type: None,
-    };
-    state.set_rate_limits(update.clone());
-
-    assert_eq!(
-        state.latest_rate_limits,
-        Some(RateLimitSnapshot {
-            limit_id: Some("ody_other".to_string()),
-            limit_name: Some("ody_other".to_string()),
-            primary: update.primary.clone(),
-            secondary: update.secondary,
-            credits: initial.credits,
-            individual_limit: initial.individual_limit,
-            rate_limit_reached_type: None,
-        })
-    );
-}
-
-#[tokio::test]
-async fn set_rate_limits_updates_plan_type_when_present() {
-    let ody_home = tempfile::tempdir().expect("create temp dir");
-    let config = build_test_config(ody_home.path()).await;
-    let config = Arc::new(config);
-    let model = get_model_offline_for_tests(config.model.as_deref());
-    let model_info =
-        construct_model_info_offline_for_tests(model.as_str(), &config.to_models_manager_config());
-    let reasoning_effort = config.model_reasoning_effort.clone();
-    let collaboration_mode = CollaborationMode {
-        mode: ModeKind::Default,
-        settings: Settings {
-            model,
-            reasoning_effort,
-            developer_instructions: None,
-            design_audit_level: None,
-        },
-    };
-    let session_configuration = SessionConfiguration {
-        provider: config.model_provider.clone(),
-        collaboration_mode,
-        model_reasoning_summary: config.model_reasoning_summary,
-        developer_instructions: config.developer_instructions.clone(),
-        loaded_agents_md: None,
-        service_tier: None,
-        personality: config.personality,
-        base_instructions: config
-            .base_instructions
-            .clone()
-            .unwrap_or_else(|| model_info.get_model_instructions(config.personality)),
-        compact_prompt: config.compact_prompt.clone(),
-        approval_policy: config.permissions.approval_policy.clone(),
-        approvals_reviewer: config.approvals_reviewer,
-        permission_profile_state: config.permissions.permission_profile_state().clone(),
-        windows_sandbox_level: WindowsSandboxLevel::from_config(&config),
-        environments: TurnEnvironmentSelections::new(config.cwd.clone(), Vec::new()),
-        workspace_roots: config.workspace_roots.clone(),
-        ody_home: config.ody_home.clone(),
-        thread_name: None,
-        original_config_do_not_use: Arc::clone(&config),
-        metrics_service_name: None,
-        app_server_client_name: None,
-        app_server_client_version: None,
-        session_source: SessionSource::Exec,
-        forked_from_thread_id: None,
-        parent_thread_id: None,
-        thread_source: None,
-        dynamic_tools: Vec::new(),
-        user_shell_override: None,
-    };
-
-    let mut state = SessionState::new(session_configuration);
-    let initial = RateLimitSnapshot {
-        limit_id: None,
-        limit_name: None,
-        primary: Some(RateLimitWindow {
-            used_percent: 15.0,
-            window_minutes: Some(20),
-            resets_at: Some(1_600),
-        }),
-        secondary: Some(RateLimitWindow {
-            used_percent: 5.0,
-            window_minutes: Some(45),
-            resets_at: Some(1_650),
-        }),
-        credits: Some(CreditsSnapshot {
-            has_credits: true,
-            unlimited: false,
-            balance: Some("15.00".to_string()),
-        }),
-        individual_limit: None,
-        rate_limit_reached_type: None,
-    };
-    state.set_rate_limits(initial.clone());
-
-    let update = RateLimitSnapshot {
-        limit_id: None,
-        limit_name: None,
-        primary: Some(RateLimitWindow {
-            used_percent: 35.0,
-            window_minutes: Some(25),
-            resets_at: Some(1_700),
-        }),
-        secondary: None,
-        credits: None,
-        individual_limit: None,
-        rate_limit_reached_type: None,
-    };
-    state.set_rate_limits(update.clone());
-
-    assert_eq!(
-        state.latest_rate_limits,
-        Some(RateLimitSnapshot {
-            limit_id: Some("ody".to_string()),
-            limit_name: None,
-            primary: update.primary,
-            secondary: update.secondary,
-            credits: initial.credits,
-            individual_limit: initial.individual_limit,
-            rate_limit_reached_type: None,
-        })
-    );
 }
 
 #[test]

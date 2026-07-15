@@ -4662,26 +4662,6 @@
           "properties": {
             "method": {
               "enum": [
-                "rateLimits/updated"
-              ],
-              "title": "RateLimits/updatedNotificationMethod",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/definitions/v2/RateLimitsUpdatedNotification"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "title": "RateLimits/updatedNotification",
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "enum": [
                 "app/list/updated"
               ],
               "title": "App/list/updatedNotificationMethod",
@@ -8093,27 +8073,6 @@
           "assistant"
         ],
         "type": "string"
-      },
-      "CreditsSnapshot": {
-        "properties": {
-          "balance": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "hasCredits": {
-            "type": "boolean"
-          },
-          "unlimited": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "hasCredits",
-          "unlimited"
-        ],
-        "type": "object"
       },
       "DeprecationNoticeNotification": {
         "$schema": "http://json-schema.org/draft-07/schema#",
@@ -13555,123 +13514,6 @@
         ],
         "type": "object"
       },
-      "RateLimitReachedType": {
-        "enum": [
-          "rate_limit_reached",
-          "workspace_owner_credits_depleted",
-          "workspace_member_credits_depleted",
-          "workspace_owner_usage_limit_reached",
-          "workspace_member_usage_limit_reached"
-        ],
-        "type": "string"
-      },
-      "RateLimitSnapshot": {
-        "properties": {
-          "credits": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/v2/CreditsSnapshot"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "individualLimit": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/v2/SpendControlLimitSnapshot"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "limitId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "limitName": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "primary": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/v2/RateLimitWindow"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "rateLimitReachedType": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/v2/RateLimitReachedType"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "secondary": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/v2/RateLimitWindow"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object"
-      },
-      "RateLimitWindow": {
-        "properties": {
-          "resetsAt": {
-            "format": "int64",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "usedPercent": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "windowDurationMins": {
-            "format": "int64",
-            "type": [
-              "integer",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "usedPercent"
-        ],
-        "type": "object"
-      },
-      "RateLimitsUpdatedNotification": {
-        "$schema": "http://json-schema.org/draft-07/schema#",
-        "description": "Sparse rolling rate-limit update.\n\nClients should merge available values into the most recent `rateLimits/read` response or refetch that snapshot. Nullable auth metadata may be unavailable in a rolling update and does not clear a previously observed value.",
-        "properties": {
-          "rateLimits": {
-            "$ref": "#/definitions/v2/RateLimitSnapshot"
-          }
-        },
-        "required": [
-          "rateLimits"
-        ],
-        "title": "RateLimitsUpdatedNotification",
-        "type": "object"
-      },
       "RawResponseItemCompletedNotification": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "properties": {
@@ -15693,31 +15535,6 @@
           "desc"
         ],
         "type": "string"
-      },
-      "SpendControlLimitSnapshot": {
-        "properties": {
-          "limit": {
-            "type": "string"
-          },
-          "remainingPercent": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "resetsAt": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "used": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "limit",
-          "remainingPercent",
-          "resetsAt",
-          "used"
-        ],
-        "type": "object"
       },
       "SubAgentActivityKind": {
         "enum": [

@@ -274,7 +274,7 @@ pub fn default_user_shell() -> DetectedShell {
 
 pub fn default_user_shell_from_path(user_shell_path: Option<PathBuf>) -> DetectedShell {
     if cfg!(windows) {
-        get_shell(ShellType::PowerShell, /*path*/ None).unwrap_or_else(ultimate_fallback_shell)
+        get_shell(ShellType::Cmd, /*path*/ None).unwrap_or_else(ultimate_fallback_shell)
     } else {
         let user_default_shell = user_shell_path
             .and_then(|shell| detect_shell_type(&shell))
@@ -298,6 +298,14 @@ pub fn default_user_shell_from_path(user_shell_path: Option<PathBuf>) -> Detecte
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+
+    #[cfg(windows)]
+    #[test]
+    fn default_user_shell_is_cmd_on_windows() {
+        let shell = default_user_shell();
+        assert_eq!(shell.shell_type, ShellType::Cmd);
+        assert!(shell.shell_path.to_string_lossy().ends_with("cmd.exe"));
+    }
 
     #[test]
     fn test_detect_shell_type() {

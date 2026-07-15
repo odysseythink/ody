@@ -5,6 +5,7 @@ use serde::Serialize;
 use std::path::PathBuf;
 
 pub use ody_shell_command::shell_detect::ShellType;
+pub use ody_shell_command::shell_detect::detect_shell_type;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Shell {

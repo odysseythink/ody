@@ -2,7 +2,6 @@
 
 use super::*;
 use crate::app_event::AppEvent;
-use crate::chatwidget::rate_limits::RATE_LIMIT_SWITCH_PROMPT_VIEW_ID;
 use ody_protocol::config_types::DesignAuditLevel;
 
 impl ChatWidget {
@@ -211,16 +210,8 @@ impl ChatWidget {
     ) {
         // Auth-update notifications are the identity boundary. The visible auth fields can
         // be identical across two auth states, so always invalidate auth-scoped requests and data.
-        self.ody_rate_limit_reached_type = None;
-        self.rate_limit_warnings = RateLimitWarningState::default();
-        self.rate_limit_switch_prompt = RateLimitSwitchPromptState::Idle;
-        self.bottom_pane
-            .dismiss_view_by_id(RATE_LIMIT_SWITCH_PROMPT_VIEW_ID);
         let had_refreshing_status_outputs = !self.refreshing_status_outputs.is_empty();
         let now = Local::now();
-        for (_, handle) in self.refreshing_status_outputs.drain(..) {
-            handle.finish_rate_limit_refresh(&[], now);
-        }
         if had_refreshing_status_outputs {
             self.request_redraw();
         }

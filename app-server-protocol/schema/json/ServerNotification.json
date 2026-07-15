@@ -813,27 +813,6 @@
       ],
       "type": "object"
     },
-    "CreditsSnapshot": {
-      "properties": {
-        "balance": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "hasCredits": {
-          "type": "boolean"
-        },
-        "unlimited": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "hasCredits",
-        "unlimited"
-      ],
-      "type": "object"
-    },
     "DeprecationNoticeNotification": {
       "properties": {
         "details": {
@@ -2826,121 +2805,6 @@
         }
       ]
     },
-    "RateLimitReachedType": {
-      "enum": [
-        "rate_limit_reached",
-        "workspace_owner_credits_depleted",
-        "workspace_member_credits_depleted",
-        "workspace_owner_usage_limit_reached",
-        "workspace_member_usage_limit_reached"
-      ],
-      "type": "string"
-    },
-    "RateLimitSnapshot": {
-      "properties": {
-        "credits": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/CreditsSnapshot"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "individualLimit": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/SpendControlLimitSnapshot"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "limitId": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "limitName": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "primary": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/RateLimitWindow"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "rateLimitReachedType": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/RateLimitReachedType"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "secondary": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/RateLimitWindow"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "type": "object"
-    },
-    "RateLimitWindow": {
-      "properties": {
-        "resetsAt": {
-          "format": "int64",
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "usedPercent": {
-          "format": "int32",
-          "type": "integer"
-        },
-        "windowDurationMins": {
-          "format": "int64",
-          "type": [
-            "integer",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "usedPercent"
-      ],
-      "type": "object"
-    },
-    "RateLimitsUpdatedNotification": {
-      "description": "Sparse rolling rate-limit update.\n\nClients should merge available values into the most recent `rateLimits/read` response or refetch that snapshot. Nullable auth metadata may be unavailable in a rolling update and does not clear a previously observed value.",
-      "properties": {
-        "rateLimits": {
-          "$ref": "#/definitions/RateLimitSnapshot"
-        }
-      },
-      "required": [
-        "rateLimits"
-      ],
-      "type": "object"
-    },
     "RealtimeConversationVersion": {
       "enum": [
         "v1",
@@ -3274,31 +3138,6 @@
     },
     "SkillsChangedNotification": {
       "description": "Notification emitted when watched local skill files change.\n\nTreat this as an invalidation signal and re-run `skills/list` with the client's current parameters when refreshed skill metadata is needed.",
-      "type": "object"
-    },
-    "SpendControlLimitSnapshot": {
-      "properties": {
-        "limit": {
-          "type": "string"
-        },
-        "remainingPercent": {
-          "format": "int32",
-          "type": "integer"
-        },
-        "resetsAt": {
-          "format": "int64",
-          "type": "integer"
-        },
-        "used": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "limit",
-        "remainingPercent",
-        "resetsAt",
-        "used"
-      ],
       "type": "object"
     },
     "SubAgentActivityKind": {
@@ -6296,26 +6135,6 @@
         "params"
       ],
       "title": "Auth/updatedNotification",
-      "type": "object"
-    },
-    {
-      "properties": {
-        "method": {
-          "enum": [
-            "rateLimits/updated"
-          ],
-          "title": "RateLimits/updatedNotificationMethod",
-          "type": "string"
-        },
-        "params": {
-          "$ref": "#/definitions/RateLimitsUpdatedNotification"
-        }
-      },
-      "required": [
-        "method",
-        "params"
-      ],
-      "title": "RateLimits/updatedNotification",
       "type": "object"
     },
     {

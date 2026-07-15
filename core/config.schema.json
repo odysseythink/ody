@@ -5734,6 +5734,10 @@
       "description": "Optional explicit service tier request id for new turns (for example `default`, `priority`, or `flex`; legacy `fast` also works).",
       "type": "string"
     },
+    "shell": {
+      "description": "Shell used to execute model-invoked shell commands.\n\nAccepts a shell name (`cmd`, `powershell`, `pwsh`, `bash`, `zsh`, or `sh`) or a path to a shell executable. When unset, defaults to `cmd.exe` on Windows and the user's login shell on other platforms.",
+      "type": "string"
+    },
     "shell_environment_policy": {
       "allOf": [
         {

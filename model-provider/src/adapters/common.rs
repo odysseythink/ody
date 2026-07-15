@@ -135,9 +135,6 @@ pub(crate) fn normalize_response_event_with_state(
             });
             Ok(events)
         }
-        ResponseEvent::RateLimits(_) => Ok(vec![ChatEvent::Raw(RawFrame::Json(
-            serde_json::json!({"event": "rate_limits"}),
-        ))]),
         ResponseEvent::ModelsEtag(etag) => Ok(vec![ChatEvent::Raw(RawFrame::Json(
             serde_json::json!({"etag": etag}),
         ))]),
@@ -232,10 +229,6 @@ pub(crate) fn chat_provider_error_from_api_error(err: ApiError) -> ChatProviderE
         },
         ApiError::CyberPolicy { message } => ChatProviderError::Provider {
             code: "cyber_policy".into(),
-            message,
-        },
-        ApiError::RateLimit(message) => ChatProviderError::Provider {
-            code: "rate_limit".into(),
             message,
         },
         ApiError::Retryable { message, .. } => ChatProviderError::Provider {

@@ -105,22 +105,6 @@ pub(super) fn invalid_value(
     }
 }
 
-pub(super) fn snapshot(percent: f64) -> RateLimitSnapshot {
-    RateLimitSnapshot {
-        limit_id: None,
-        limit_name: None,
-        primary: Some(RateLimitWindow {
-            used_percent: percent.round() as i32,
-            window_duration_mins: Some(60),
-            resets_at: None,
-        }),
-        secondary: None,
-        credits: None,
-        individual_limit: None,
-        rate_limit_reached_type: None,
-    }
-}
-
 pub(super) fn test_session_telemetry(config: &Config, model: &str) -> SessionTelemetry {
     let model_info =
         construct_model_info_offline_for_tests(model, &config.to_models_manager_config());

@@ -162,7 +162,6 @@ mod tests {
             })),
             RolloutItem::EventMsg(EventMsg::TokenCount(TokenCountEvent {
                 info: None,
-                rate_limits: None,
             })),
             RolloutItem::EventMsg(EventMsg::UserMessage(UserMessageEvent {
                 client_id: None,
