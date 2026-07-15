@@ -1729,9 +1729,6 @@ impl OdyClient {
                             completion.login_id
                         );
                     }
-                    ServerNotification::RateLimitsUpdated(snapshot) => {
-                        println!("< rateLimitsUpdated notification: {snapshot:?}");
-                    }
                     _ => {}
                 }
             }

@@ -60,10 +60,6 @@ pub(crate) enum TerminalTitleItem {
     /// Percentage of context window used.
     #[strum(to_string = "context-used", serialize = "context-usage")]
     ContextUsed,
-    /// Remaining usage on the primary rate limit.
-    FiveHourLimit,
-    /// Remaining usage on the secondary rate limit.
-    WeeklyLimit,
     /// Ody application version.
     OdyVersion,
     /// Total tokens used in the current session.
@@ -108,12 +104,6 @@ impl TerminalTitleItem {
             TerminalTitleItem::ContextUsed => {
                 "Percentage of context window used (omitted when unknown)"
             }
-            TerminalTitleItem::FiveHourLimit => {
-                "Remaining usage on the primary usage limit (omitted when unavailable)"
-            }
-            TerminalTitleItem::WeeklyLimit => {
-                "Remaining usage on the secondary usage limit (omitted when unavailable)"
-            }
             TerminalTitleItem::OdyVersion => "Ody application version",
             TerminalTitleItem::UsedTokens => "Total tokens used in session (omitted when zero)",
             TerminalTitleItem::TotalInputTokens => "Total input tokens used in session",
@@ -142,8 +132,6 @@ impl TerminalTitleItem {
             TerminalTitleItem::GitBranch => Some(StatusSurfacePreviewItem::GitBranch),
             TerminalTitleItem::ContextRemaining => Some(StatusSurfacePreviewItem::ContextRemaining),
             TerminalTitleItem::ContextUsed => Some(StatusSurfacePreviewItem::ContextUsed),
-            TerminalTitleItem::FiveHourLimit => Some(StatusSurfacePreviewItem::FiveHourLimit),
-            TerminalTitleItem::WeeklyLimit => Some(StatusSurfacePreviewItem::WeeklyLimit),
             TerminalTitleItem::OdyVersion => Some(StatusSurfacePreviewItem::OdyVersion),
             TerminalTitleItem::UsedTokens => Some(StatusSurfacePreviewItem::UsedTokens),
             TerminalTitleItem::TotalInputTokens => Some(StatusSurfacePreviewItem::TotalInputTokens),
@@ -323,13 +311,6 @@ impl TerminalTitleSetupView {
         let default_name = item.to_string();
         let default_description = item.description();
         let (name, description) = match item.preview_item() {
-            Some(
-                preview_item @ (StatusSurfacePreviewItem::FiveHourLimit
-                | StatusSurfacePreviewItem::WeeklyLimit),
-            ) => (
-                preview_data.rate_limit_item_name(preview_item, &default_name),
-                preview_data.rate_limit_item_description(preview_item, default_description),
-            ),
             _ => (default_name, default_description.to_string()),
         };
 
@@ -536,7 +517,6 @@ mod tests {
                 "app-name",
                 "context-remaining",
                 "context-used",
-                "five-hour-limit",
                 "git-branch",
                 "activity",
                 "current-dir",
@@ -544,7 +524,6 @@ mod tests {
                 "model",
                 "model-with-reasoning",
                 "reasoning",
-                "weekly-limit",
                 "ody-version",
                 "used-tokens",
                 "total-input-tokens",
@@ -560,7 +539,6 @@ mod tests {
                 TerminalTitleItem::AppName,
                 TerminalTitleItem::ContextRemaining,
                 TerminalTitleItem::ContextUsed,
-                TerminalTitleItem::FiveHourLimit,
                 TerminalTitleItem::GitBranch,
                 TerminalTitleItem::Spinner,
                 TerminalTitleItem::CurrentDir,
@@ -568,7 +546,6 @@ mod tests {
                 TerminalTitleItem::Model,
                 TerminalTitleItem::ModelWithReasoning,
                 TerminalTitleItem::Reasoning,
-                TerminalTitleItem::WeeklyLimit,
                 TerminalTitleItem::OdyVersion,
                 TerminalTitleItem::UsedTokens,
                 TerminalTitleItem::TotalInputTokens,

@@ -5,7 +5,6 @@ use crate::common::ResponsesWsRequest;
 use crate::common::SafetyBufferingTreatment;
 use crate::error::ApiError;
 use crate::provider::Provider;
-use crate::rate_limits::parse_rate_limit_event;
 use crate::safety_buffering::treatment_from_headers;
 use crate::sse::ResponsesStreamEvent;
 use crate::sse::process_responses_event;
@@ -701,12 +700,6 @@ async fn run_websocket_response_stream(
                 let safety_buffering = event
                     .safety_buffering()
                     .map(|buffering| buffering.with_treatment(&safety_buffering_treatment));
-                if event.kind() == "ody.rate_limits" {
-                    if let Some(snapshot) = parse_rate_limit_event(&text) {
-                        let _ = tx_event.send(Ok(ResponseEvent::RateLimits(snapshot))).await;
-                    }
-                    continue;
-                }
                 if let Some(model) = event.response_model()
                     && last_server_model.as_deref() != Some(model.as_str())
                 {

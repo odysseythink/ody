@@ -19,7 +19,6 @@ use crate::session::PreviousTurnSettings;
 use crate::session::session::SessionConfiguration;
 use crate::session::time_reminder::CurrentTimeReminderState;
 use crate::session_startup_prewarm::SessionStartupPrewarmHandle;
-use ody_protocol::protocol::RateLimitSnapshot;
 use ody_protocol::protocol::TokenUsage;
 use ody_protocol::protocol::TokenUsageInfo;
 use ody_protocol::protocol::TurnContextItem;
@@ -29,7 +28,6 @@ use ody_utils_output_truncation::TruncationPolicy;
 pub(crate) struct SessionState {
     pub(crate) session_configuration: SessionConfiguration,
     pub(crate) history: ContextManager,
-    pub(crate) latest_rate_limits: Option<RateLimitSnapshot>,
     pub(crate) server_reasoning_included: bool,
     pub(crate) mcp_dependency_prompted: HashSet<String>,
     pub(crate) additional_context: AdditionalContextStore,
@@ -57,7 +55,6 @@ impl SessionState {
         Self {
             session_configuration,
             history,
-            latest_rate_limits: None,
             server_reasoning_included: false,
             mcp_dependency_prompted: HashSet::new(),
             additional_context: AdditionalContextStore::default(),
@@ -199,19 +196,6 @@ impl SessionState {
         self.history.token_info()
     }
 
-    pub(crate) fn set_rate_limits(&mut self, snapshot: RateLimitSnapshot) {
-        self.latest_rate_limits = Some(merge_rate_limit_fields(
-            self.latest_rate_limits.as_ref(),
-            snapshot,
-        ));
-    }
-
-    pub(crate) fn token_info_and_rate_limits(
-        &self,
-    ) -> (Option<TokenUsageInfo>, Option<RateLimitSnapshot>) {
-        (self.token_info(), self.latest_rate_limits.clone())
-    }
-
     pub(crate) fn set_token_usage_full(&mut self, context_window: i64) {
         self.history.set_token_usage_full(context_window);
     }
@@ -332,24 +316,6 @@ impl SessionState {
     }
 }
 
-// Sometimes new snapshots don't include credits or plan information.
-// Preserve those from the previous snapshot when missing. For `limit_id`, treat
-// missing values as the default `"ody"` bucket.
-fn merge_rate_limit_fields(
-    previous: Option<&RateLimitSnapshot>,
-    mut snapshot: RateLimitSnapshot,
-) -> RateLimitSnapshot {
-    if snapshot.limit_id.is_none() {
-        snapshot.limit_id = Some("ody".to_string());
-    }
-    if snapshot.credits.is_none() {
-        snapshot.credits = previous.and_then(|prior| prior.credits.clone());
-    }
-    if snapshot.individual_limit.is_none() {
-        snapshot.individual_limit = previous.and_then(|prior| prior.individual_limit.clone());
-    }
-    snapshot
-}
 
 #[cfg(test)]
 #[path = "session_tests.rs"]

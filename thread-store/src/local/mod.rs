@@ -518,7 +518,6 @@ mod tests {
                 RolloutItem::EventMsg(EventMsg::TokenCount(
                     ody_protocol::protocol::TokenCountEvent {
                         info: None,
-                        rate_limits: None,
                     },
                 )),
                 RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
@@ -602,7 +601,6 @@ mod tests {
             .append_items(&[RolloutItem::EventMsg(EventMsg::TokenCount(
                 ody_protocol::protocol::TokenCountEvent {
                     info: None,
-                    rate_limits: None,
                 },
             ))])
             .await

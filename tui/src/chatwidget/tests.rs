@@ -46,7 +46,6 @@ pub(super) use ody_app_server_protocol::CommandExecutionSource as ExecCommandSou
 pub(super) use ody_app_server_protocol::CommandExecutionSource as AppServerCommandExecutionSource;
 pub(super) use ody_app_server_protocol::CommandExecutionStatus as AppServerCommandExecutionStatus;
 pub(super) use ody_app_server_protocol::ConfigWarningNotification;
-pub(super) use ody_app_server_protocol::CreditsSnapshot;
 pub(super) use ody_app_server_protocol::ErrorNotification;
 pub(super) use ody_app_server_protocol::ExecPolicyAmendment;
 pub(super) use ody_app_server_protocol::FileUpdateChange;
@@ -94,9 +93,6 @@ pub(super) use ody_app_server_protocol::PluginMarketplaceEntry;
 pub(super) use ody_app_server_protocol::PluginReadResponse;
 pub(super) use ody_app_server_protocol::PluginSource;
 pub(super) use ody_app_server_protocol::PluginSummary;
-pub(super) use ody_app_server_protocol::RateLimitReachedType;
-pub(super) use ody_app_server_protocol::RateLimitSnapshot;
-pub(super) use ody_app_server_protocol::RateLimitWindow;
 pub(super) use ody_app_server_protocol::ReasoningSummaryTextDeltaNotification;
 pub(super) use ody_app_server_protocol::ReviewTarget;
 pub(super) use ody_app_server_protocol::ServerNotification;

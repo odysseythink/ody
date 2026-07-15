@@ -1180,7 +1180,6 @@ impl SessionTelemetry {
             ResponseEvent::TurnModerationMetadata(_) => "turn_moderation_metadata".into(),
             ResponseEvent::SafetyBuffering(_) => "safety_buffering".into(),
             ResponseEvent::ServerReasoningIncluded(_) => "server_reasoning_included".into(),
-            ResponseEvent::RateLimits(_) => "rate_limits".into(),
             ResponseEvent::ModelsEtag(_) => "models_etag".into(),
         }
     }

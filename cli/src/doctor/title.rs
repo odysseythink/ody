@@ -133,8 +133,6 @@ fn terminal_title_item_id(item: &str) -> Option<&'static str> {
         "git-branch" => Some("git-branch"),
         "context-remaining" => Some("context-remaining"),
         "context-used" | "context-usage" => Some("context-used"),
-        "five-hour-limit" => Some("five-hour-limit"),
-        "weekly-limit" => Some("weekly-limit"),
         "ody-version" => Some("ody-version"),
         "used-tokens" => Some("used-tokens"),
         "total-input-tokens" => Some("total-input-tokens"),

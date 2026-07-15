@@ -747,6 +747,12 @@ pub struct Config {
     /// Preferred language for model responses in the TUI transcript.
     pub language: Option<String>,
 
+    /// Shell used to execute model-invoked shell commands (a shell name such
+    /// as `cmd`, `powershell`, or `bash`, or a path to a shell executable).
+    /// `None` uses the platform default (`cmd.exe` on Windows, the user's
+    /// login shell elsewhere).
+    pub shell: Option<String>,
+
     /// Developer instructions override injected as a separate message.
     pub developer_instructions: Option<String>,
 
@@ -3897,6 +3903,7 @@ impl Config {
             notify: cfg.notify,
             base_instructions,
             language: cfg.language.clone(),
+            shell: cfg.shell.clone(),
             personality,
             developer_instructions,
             compact_prompt,

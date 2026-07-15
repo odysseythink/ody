@@ -1456,10 +1456,6 @@ async fn run_sampling_request(
                 return Err(OdyErr::ContextWindowExceeded);
             }
             Err(OdyErr::UsageLimitReached(e)) => {
-                let rate_limits = e.rate_limits.clone();
-                if let Some(rate_limits) = rate_limits {
-                    sess.update_rate_limits(&turn_context, *rate_limits).await;
-                }
                 return Err(OdyErr::UsageLimitReached(e));
             }
             Err(err) => err,
@@ -2357,12 +2353,6 @@ async fn try_run_sampling_request(
             }
             ResponseEvent::ServerReasoningIncluded(included) => {
                 sess.set_server_reasoning_included(included).await;
-            }
-            ResponseEvent::RateLimits(snapshot) => {
-                // Update internal state with latest rate limits, but defer sending until
-                // token usage is available to avoid duplicate TokenCount events.
-                sess.record_rate_limits_info(snapshot).await;
-                should_emit_token_count = true;
             }
             ResponseEvent::ModelsEtag(etag) => {
                 // Update internal state with latest models etag

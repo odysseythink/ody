@@ -344,7 +344,6 @@ fn response_event_records_turn_ttft(event: &ResponseEvent) -> bool {
         | ResponseEvent::ToolCallInputDelta { .. }
         | ResponseEvent::Completed { .. }
         | ResponseEvent::ReasoningSummaryPartAdded { .. }
-        | ResponseEvent::RateLimits(_)
         | ResponseEvent::ModelsEtag(_) => false,
     }
 }

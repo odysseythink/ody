@@ -2137,72 +2137,8 @@ impl TokenUsageInfo {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct TokenCountEvent {
     pub info: Option<TokenUsageInfo>,
-    pub rate_limits: Option<RateLimitSnapshot>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, JsonSchema, TS)]
-pub struct RateLimitSnapshot {
-    pub limit_id: Option<String>,
-    pub limit_name: Option<String>,
-    pub primary: Option<RateLimitWindow>,
-    pub secondary: Option<RateLimitWindow>,
-    pub credits: Option<CreditsSnapshot>,
-    pub individual_limit: Option<SpendControlLimitSnapshot>,
-    pub rate_limit_reached_type: Option<RateLimitReachedType>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
-#[serde(rename_all = "snake_case")]
-#[ts(rename_all = "snake_case")]
-pub enum RateLimitReachedType {
-    RateLimitReached,
-    WorkspaceOwnerCreditsDepleted,
-    WorkspaceMemberCreditsDepleted,
-    WorkspaceOwnerUsageLimitReached,
-    WorkspaceMemberUsageLimitReached,
-}
-
-impl FromStr for RateLimitReachedType {
-    type Err = String;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "rate_limit_reached" => Ok(Self::RateLimitReached),
-            "workspace_owner_credits_depleted" => Ok(Self::WorkspaceOwnerCreditsDepleted),
-            "workspace_member_credits_depleted" => Ok(Self::WorkspaceMemberCreditsDepleted),
-            "workspace_owner_usage_limit_reached" => Ok(Self::WorkspaceOwnerUsageLimitReached),
-            "workspace_member_usage_limit_reached" => Ok(Self::WorkspaceMemberUsageLimitReached),
-            other => Err(format!("unknown rate limit reached type: {other}")),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, JsonSchema, TS)]
-pub struct RateLimitWindow {
-    /// Percentage (0-100) of the window that has been consumed.
-    pub used_percent: f64,
-    /// Rolling window duration, in minutes.
-    #[ts(type = "number | null")]
-    pub window_minutes: Option<i64>,
-    /// Unix timestamp (seconds since epoch) when the window resets.
-    #[ts(type = "number | null")]
-    pub resets_at: Option<i64>,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, JsonSchema, TS)]
-pub struct CreditsSnapshot {
-    pub has_credits: bool,
-    pub unlimited: bool,
-    pub balance: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, JsonSchema, TS)]
-pub struct SpendControlLimitSnapshot {
-    pub limit: String,
-    pub used: String,
-    pub remaining_percent: i32,
-    pub resets_at: i64,
-}
 
 // Includes prompts, tools and space to call compact.
 const BASELINE_TOKENS: i64 = 12000;

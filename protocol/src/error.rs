@@ -5,8 +5,6 @@ use crate::exec_output::ExecToolCallOutput;
 use crate::network_policy::NetworkPolicyDecisionPayload;
 use crate::protocol::ErrorEvent;
 use crate::protocol::OdyErrorInfo;
-use crate::protocol::RateLimitReachedType;
-use crate::protocol::RateLimitSnapshot;
 use crate::protocol::TruncationPolicy;
 use chrono::DateTime;
 use chrono::Datelike;
@@ -434,118 +432,23 @@ impl std::fmt::Display for RetryLimitReachedError {
 
 #[derive(Debug)]
 pub struct UsageLimitReachedError {
-    pub resets_at: Option<DateTime<Utc>>,
-    pub rate_limits: Option<Box<RateLimitSnapshot>>,
     pub promo_message: Option<String>,
-    pub rate_limit_reached_type: Option<RateLimitReachedType>,
 }
 
 impl std::fmt::Display for UsageLimitReachedError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(limit_name) = self
-            .rate_limits
-            .as_ref()
-            .and_then(|snapshot| snapshot.limit_name.as_deref())
-            .map(str::trim)
-            .filter(|name| !name.is_empty())
-            && !limit_name.eq_ignore_ascii_case("ody")
-        {
-            return write!(
-                f,
-                "You've hit your usage limit for {limit_name}. Switch to another model now,{}",
-                retry_suffix_after_or(self.resets_at.as_ref())
-            );
-        }
-
-        if let Some(rate_limit_reached_type) = self.rate_limit_reached_type {
-            match rate_limit_reached_type {
-                RateLimitReachedType::WorkspaceOwnerCreditsDepleted => {
-                    return write!(
-                        f,
-                        "Your workspace is out of credits. Add credits to continue."
-                    );
-                }
-                RateLimitReachedType::WorkspaceMemberCreditsDepleted => {
-                    return write!(
-                        f,
-                        "Your workspace is out of credits. Ask your workspace owner to refill in order to continue."
-                    );
-                }
-                RateLimitReachedType::WorkspaceOwnerUsageLimitReached => {
-                    return write!(
-                        f,
-                        "You hit your spend cap set in your workspace. Increase your spend cap to continue."
-                    );
-                }
-                RateLimitReachedType::WorkspaceMemberUsageLimitReached => {
-                    return write!(
-                        f,
-                        "You hit your spend cap set by the owner of your workspace. Ask an owner to increase your spend cap to continue."
-                    );
-                }
-                RateLimitReachedType::RateLimitReached => {
-                    // Generic limits intentionally use the existing promo or plan copy below.
-                }
-            }
-        }
-
         if let Some(promo_message) = &self.promo_message {
             return write!(
                 f,
-                "You've hit your usage limit. {promo_message},{}",
-                retry_suffix_after_or(self.resets_at.as_ref())
+                "You've hit your usage limit. {promo_message}"
             );
         }
 
         let message = format!(
-            "You've hit your usage limit.{}",
-            retry_suffix(self.resets_at.as_ref())
+            "You've hit your usage limit."
         );
 
         write!(f, "{message}")
-    }
-}
-
-fn retry_suffix(resets_at: Option<&DateTime<Utc>>) -> String {
-    if let Some(resets_at) = resets_at {
-        let formatted = format_retry_timestamp(resets_at);
-        format!(" Try again at {formatted}.")
-    } else {
-        " Try again later.".to_string()
-    }
-}
-
-fn retry_suffix_after_or(resets_at: Option<&DateTime<Utc>>) -> String {
-    if let Some(resets_at) = resets_at {
-        let formatted = format_retry_timestamp(resets_at);
-        format!(" or try again at {formatted}.")
-    } else {
-        " or try again later.".to_string()
-    }
-}
-
-fn format_retry_timestamp(resets_at: &DateTime<Utc>) -> String {
-    let local_reset = resets_at.with_timezone(&Local);
-    let local_now = now_for_retry().with_timezone(&Local);
-    if local_reset.date_naive() == local_now.date_naive() {
-        local_reset.format("%-I:%M %p").to_string()
-    } else {
-        let suffix = day_suffix(local_reset.day());
-        local_reset
-            .format(&format!("%b %-d{suffix}, %Y %-I:%M %p"))
-            .to_string()
-    }
-}
-
-fn day_suffix(day: u32) -> &'static str {
-    match day {
-        11..=13 => "th",
-        _ => match day % 10 {
-            1 => "st",
-            2 => "nd", // codespell:ignore
-            3 => "rd",
-            _ => "th",
-        },
     }
 }
 
@@ -553,16 +456,6 @@ fn day_suffix(day: u32) -> &'static str {
 thread_local! {
     static NOW_OVERRIDE: std::cell::RefCell<Option<DateTime<Utc>>> =
         const { std::cell::RefCell::new(None) };
-}
-
-fn now_for_retry() -> DateTime<Utc> {
-    #[cfg(test)]
-    {
-        if let Some(now) = NOW_OVERRIDE.with(|cell| *cell.borrow()) {
-            return now;
-        }
-    }
-    Utc::now()
 }
 
 #[derive(Debug)]

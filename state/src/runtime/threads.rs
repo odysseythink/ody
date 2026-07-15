@@ -2686,7 +2686,6 @@ mod tests {
                     last_token_usage: ody_protocol::protocol::TokenUsage::default(),
                     model_context_window: None,
                 }),
-                rate_limits: None,
             },
         ))];
         let override_updated_at =

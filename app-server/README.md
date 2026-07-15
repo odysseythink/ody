@@ -1893,66 +1893,50 @@ $demo-app Pull the latest updates from the team.
 
 ## Auth endpoints
 
-The JSON-RPC auth/account surface exposes request/response methods plus server-initiated notifications (no `id`). Use these to determine auth state, start or cancel logins, logout, and inspect ChatGPT rate limits.
+The JSON-RPC auth surface exposes request/response methods plus server-initiated notifications (no `id`). Auth state is a single API key persisted under `ODY_HOME/auth.json`; there is no account or OAuth flow, so login completes synchronously and there is no pending login to cancel.
 
 ### Authentication modes
 
-Ody supports these authentication modes. The current mode is surfaced in `account/updated` (`authMode`), and can be inferred from `account/read`.
+The current mode is surfaced via `auth/read` (`authState`) and pushed through `auth/updated` (`authMode`).
 
-- **API key (`apiKey`)**: Caller supplies an OpenAI API key via `account/login/start` with `type: "apiKey"`. The API key is saved and used for API requests.
-- **ChatGPT managed (`chatgpt`)** (recommended): Ody owns the ChatGPT OAuth flow and refresh tokens. Start via `account/login/start` with `type: "chatgpt"` for the browser flow or `type: "chatgptDeviceCode"` for device code; Ody persists tokens to disk and refreshes them automatically.
-- **Personal access token (`personalAccessToken`)**: Ody uses a ChatGPT-backed personal access token loaded outside the app-server login RPCs, such as with `ody login --with-access-token` or `ODY_ACCESS_TOKEN`.
+- **API key (`apiKey`)**: Caller supplies an API key via `auth/login/start` with `type: "apiKey"`. The key is persisted and used for API requests.
+- **Unauthenticated (`null`)**: No persisted API key.
 
 ### API Overview
 
-- `account/read` — fetch current account info; optionally refresh tokens.
-- `account/login/start` — begin login (`apiKey`, `chatgpt`, `chatgptDeviceCode`).
-- `account/login/completed` (notify) — emitted when a login attempt finishes (success or error).
-- `account/login/cancel` — cancel a pending managed ChatGPT login by `loginId`.
-- `account/logout` — sign out; triggers `account/updated`.
-- `account/updated` (notify) — emitted whenever auth mode changes (`authMode`: `apikey`, `chatgpt`, `personalAccessToken`, or `null`) .
-- `account/rateLimits/read` — fetch ChatGPT rate limits, an optional effective monthly credit limit, and the number of earned rate-limit resets currently available. Rate-limit updates arrive via `account/rateLimits/updated` (notify); the reset count is snapshot-only.
-- `account/rateLimitResetCredit/consume` — consume one earned reset using a caller-provided idempotency key.
-- `account/usage/read` — fetch ChatGPT account token-activity summary and daily buckets.
-- `account/workspaceMessages/read` — fetch active workspace messages, including workspace notification headlines when available.
-- `account/rateLimits/updated` (notify) — emitted whenever a user's ChatGPT rate limits change. This is a sparse rolling update; merge available values into the most recent `account/rateLimits/read` response or refetch that snapshot.
-- `account/sendAddCreditsNudgeEmail` — ask ChatGPT to email the workspace owner about depleted credits or a reached usage limit.
-- `mcpServer/oauthLogin/completed` (notify) — emitted after a `mcpServer/oauth/login` flow finishes for a server; payload includes `{ name, success, error? }`.
-- `mcpServer/startupStatus/updated` (notify) — emitted when a configured MCP server's startup status changes; payload includes `{ threadId, name, status, error }`, where `threadId` is the owning thread when startup is thread-scoped and `null` when it is app-scoped, and `status` is `starting`, `ready`, `failed`, or `cancelled`.
+- `auth/read` — fetch current auth state.
+- `auth/login/start` — log in with an API key (`type: "apiKey"`).
+- `auth/login/completed` (notify) — emitted when a login attempt finishes (success or error); `loginId` is always `null`.
+- `auth/logout` — sign out; deletes the persisted API key and triggers `auth/updated`.
+- `auth/updated` (notify) — emitted whenever auth mode changes (`authMode`: `"apiKey"` or `null`).
+- `getAuthStatus` — v1 compatibility RPC; DEPRECATED in favor of `auth/read`.
 
 ### 1) Check auth state
 
 Request:
 
 ```json
-{ "method": "account/read", "id": 1, "params": { "refreshToken": false } }
+{ "method": "auth/read", "id": 1, "params": { "refreshToken": false } }
 ```
 
 Response examples:
 
 ```json
-{ "id": 1, "result": { "account": null, "requiresOpenaiAuth": false } } // No OpenAI auth needed (e.g., OSS/local models)
-{ "id": 1, "result": { "account": null, "requiresOpenaiAuth": true } }  // OpenAI auth required (typical for OpenAI-hosted models)
-{ "id": 1, "result": { "account": { "type": "apiKey" }, "requiresOpenaiAuth": true } }
-{ "id": 1, "result": { "account": { "type": "chatgpt", "email": "user@example.com" }, "requiresOpenaiAuth": true } }
-{ "id": 1, "result": { "account": { "type": "chatgpt", "email": null }, "requiresOpenaiAuth": true } }
-{ "id": 1, "result": { "account": { "type": "amazonBedrock", "credentialSource": "odyManaged" }, "requiresOpenaiAuth": false } }
-{ "id": 1, "result": { "account": { "type": "amazonBedrock", "credentialSource": "awsManaged" }, "requiresOpenaiAuth": false } }
+{ "id": 1, "result": { "authState": null } }                 // not logged in
+{ "id": 1, "result": { "authState": { "type": "apiKey" } } } // API key configured
 ```
 
 Field notes:
 
-- `refreshToken` (bool): set `true` to force a token refresh.
-- `email` is `null` when the ChatGPT account does not have an email address.
-- `requiresOpenaiAuth` reflects the active provider; when `false`, Ody can run without OpenAI credentials.
-- Amazon Bedrock reports `credentialSource: "odyManaged"` when it uses a Bedrock API key managed by Ody. Otherwise it reports `credentialSource: "awsManaged"` for the external AWS credential path. This identifies the selected credential source; it does not validate that the AWS credential chain can resolve credentials.
+- `refreshToken` (bool): legacy flag, ignored — API key auth has no token-refresh flow.
+- The v1 `getAuthStatus` RPC remains for compatibility (`{ "includeToken": true }` also returns the raw key as `authToken`) but is deprecated in favor of `auth/read`.
 
 ### 2) Log in with an API key
 
 1. Send:
    ```json
    {
-     "method": "account/login/start",
+     "method": "auth/login/start",
      "id": 2,
      "params": { "type": "apiKey", "apiKey": "sk-…" }
    }
@@ -1961,107 +1945,21 @@ Field notes:
    ```json
    { "id": 2, "result": { "type": "apiKey" } }
    ```
-3. Notifications:
+3. Notifications on success:
    ```json
-   { "method": "account/login/completed", "params": { "loginId": null, "success": true, "error": null } }
-   { "method": "account/updated", "params": { "authMode": "apikey" } }
+   { "method": "auth/login/completed", "params": { "loginId": null, "success": true, "error": null } }
+   { "method": "auth/updated", "params": { "authMode": "apiKey" } }
    ```
 
-### 3) Log in with ChatGPT (browser flow)
-
-1. Start:
-   ```json
-   { "method": "account/login/start", "id": 3, "params": { "type": "chatgpt" } }
-   { "id": 3, "result": { "type": "chatgpt", "loginId": "<uuid>", "authUrl": "https://chatgpt.com/…&redirect_uri=http%3A%2F%2Flocalhost%3A<port>%2Fauth%2Fcallback" } }
-   ```
-2. Open `authUrl` in a browser; the app-server hosts the local callback.
-3. Wait for notifications:
-   ```json
-   { "method": "account/login/completed", "params": { "loginId": "<uuid>", "success": true, "error": null } }
-   { "method": "account/updated", "params": { "authMode": "chatgpt" } }
-   ```
-
-### 4) Log in with ChatGPT (device code flow)
-
-1. Start:
-   ```json
-   { "method": "account/login/start", "id": 4, "params": { "type": "chatgptDeviceCode" } }
-   { "id": 4, "result": { "type": "chatgptDeviceCode", "loginId": "<uuid>", "verificationUrl": "https://auth.odysseythink.com/ody/device", "userCode": "ABCD-1234" } }
-   ```
-2. Show `verificationUrl` and `userCode` to the user; the frontend owns the UX.
-3. Wait for notifications:
-   ```json
-   { "method": "account/login/completed", "params": { "loginId": "<uuid>", "success": true, "error": null } }
-   { "method": "account/updated", "params": { "authMode": "chatgpt" } }
-   ```
-
-### 5) Cancel a ChatGPT login
+### 3) Logout
 
 ```json
-{ "method": "account/login/cancel", "id": 5, "params": { "loginId": "<uuid>" } }
-{ "method": "account/login/completed", "params": { "loginId": "<uuid>", "success": false, "error": "…" } }
+{ "method": "auth/logout", "id": 3 }
+{ "id": 3, "result": {} }
+{ "method": "auth/updated", "params": { "authMode": null } }
 ```
 
-### 6) Logout
-
-```json
-{ "method": "account/logout", "id": 6 }
-{ "id": 6, "result": {} }
-{ "method": "account/updated", "params": { "authMode": null } }
-```
-
-### 7) Rate limits (ChatGPT)
-
-```json
-{ "method": "account/rateLimits/read", "id": 7 }
-{ "id": 7, "result": { "rateLimits": { "primary": { "usedPercent": 25, "windowDurationMins": 15, "resetsAt": 1730947200 }, "secondary": null, "rateLimitReachedType": null }, "rateLimitResetCredits": { "availableCount": 2 } } }
-{ "method": "account/rateLimits/updated", "params": { "rateLimits": { … } } }
-```
-
-Field notes:
-
-- `usedPercent` is current usage within the OpenAI quota window.
-- `windowDurationMins` is the quota window length.
-- `resetsAt` is a Unix timestamp (seconds) for the next reset.
-- `rateLimitReachedType` identifies the backend-classified limit state when one has been reached.
-- `individualLimit` describes the effective monthly credit limit when available. In an `account/rateLimits/read` response, `null` means no monthly limit is available. In a sparse `account/rateLimits/updated` notification, nullable account metadata may be unavailable and does not clear a previously observed value.
-- `rateLimitResetCredits` contains the available earned-reset count when the backend provides it; otherwise it is `null`. Refetch `account/rateLimits/read` after consuming a reset.
-
-### 8) Earned rate-limit resets (ChatGPT)
-
-```json
-{ "method": "account/rateLimitResetCredit/consume", "id": 8, "params": { "idempotencyKey": "8ae96ff3-3425-4f4c-8772-b6fd61502868" } }
-{ "id": 8, "result": { "outcome": "reset" } }
-```
-
-Field notes:
-
-- `idempotencyKey` must be non-empty. A UUID is recommended for each logical redemption attempt; reuse the same value when retrying that attempt.
-- `reset` means a credit was consumed.
-- `alreadyRedeemed` means the same redemption completed previously. Treat it as an idempotent success and refresh account limits.
-- `nothingToReset` means there is no eligible rate-limit window to reset.
-- `noCredit` means the account has no earned reset credits available.
-- Refetch `account/rateLimits/read` after consuming a reset instead of inferring updated windows from this response.
-
-### 9) Workspace messages (ChatGPT)
-
-```json
-{ "method": "account/workspaceMessages/read", "id": 9 }
-{ "id": 9, "result": { "featureEnabled": true, "messages": [
-    { "messageId": "msg_123", "messageType": "headline", "messageBody": "Workspace maintenance starts at 5pm.", "createdAt": 1781395200, "archivedAt": null }
-] } }
-```
-
-When the upstream workspace-message feature is disabled, `featureEnabled` is `false` and `messages` is empty.
-
-### 10) Notify a workspace owner about a limit
-
-```json
-{ "method": "account/sendAddCreditsNudgeEmail", "id": 9, "params": { "creditType": "credits" } }
-{ "id": 9, "result": { "status": "sent" } }
-```
-
-Use `creditType: "credits"` when workspace credits are depleted, or `creditType: "usage_limit"` when the workspace usage limit has been reached. If the owner was already notified recently, the response status is `cooldown_active`.
+Logout succeeds even when no API key is configured and still emits `auth/updated` with `authMode: null`.
 
 ## Experimental API Opt-in
 
