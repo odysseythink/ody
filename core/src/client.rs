@@ -1855,6 +1855,7 @@ fn map_chat_stream(
                             total_tokens: (input_tokens + output_tokens) as i64,
                         }),
                         end_turn: Some(true),
+                        finish_reason: None,
                     });
                 }
                 Ok(ChatEvent::Finish { reason, raw_reason: _ }) => {
@@ -1881,6 +1882,7 @@ fn map_chat_stream(
                         response_id: String::new(),
                         token_usage: None,
                         end_turn: Some(end_turn),
+                        finish_reason: None,
                     });
                 }
                 Ok(ChatEvent::Raw(_)) => {}
@@ -1889,6 +1891,7 @@ fn map_chat_stream(
                         response_id: String::new(),
                         token_usage: None,
                         end_turn: Some(false),
+                        finish_reason: None,
                     });
                 }
                 Err(err) => {
@@ -2012,6 +2015,7 @@ where
                     response_id,
                     token_usage,
                     end_turn,
+                    finish_reason,
                 }) => {
                     feedback_tags!(last_model_response_id = &response_id);
                     if let Some(usage) = &token_usage {
@@ -2040,6 +2044,7 @@ where
                             response_id,
                             token_usage,
                             end_turn,
+                            finish_reason,
                         }))
                         .await
                         .is_err()

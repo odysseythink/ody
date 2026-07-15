@@ -389,6 +389,7 @@ mod tests {
                 response_id: "resp_1".into(),
                 token_usage: None,
                 end_turn: Some(true),
+                finish_reason: None,
             },
             &mut state,
         )
@@ -415,6 +416,7 @@ mod tests {
                 response_id: "resp_1".into(),
                 token_usage: None,
                 end_turn: None,
+                finish_reason: None,
             },
             &mut state,
         )
@@ -441,6 +443,7 @@ mod tests {
                 response_id: "resp_1".into(),
                 token_usage: None,
                 end_turn: Some(true),
+                finish_reason: None,
             },
             &mut state,
         )
@@ -474,6 +477,7 @@ mod tests {
                 response_id: "resp_1".into(),
                 token_usage: None,
                 end_turn: Some(true),
+                finish_reason: None,
             },
             &mut state,
         )
@@ -495,6 +499,7 @@ mod tests {
                 response_id: "resp_1".into(),
                 token_usage: None,
                 end_turn: Some(false),
+                finish_reason: None,
             },
             &mut state,
         )

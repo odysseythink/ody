@@ -91,6 +91,10 @@ pub enum ResponseEvent {
         /// Did the model affirmatively end its turn? Some providers do not set this,
         /// so we rely on fallback logic when this is `None`.
         end_turn: Option<bool>,
+        /// Raw wire-format finish reason. Currently only populated on the Chat
+        /// Completions path; `"length"` / `"max_tokens"` mean the provider's max
+        /// output token limit truncated the response.
+        finish_reason: Option<String>,
     },
     OutputTextDelta(String),
     ToolCallInputDelta {

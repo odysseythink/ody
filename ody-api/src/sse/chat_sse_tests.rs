@@ -72,6 +72,7 @@ async fn parses_text_and_completion() {
             response_id,
             token_usage,
             end_turn,
+            finish_reason,
         }) => {
             assert_eq!(response_id, "resp_1");
             assert_eq!(*end_turn, Some(true));
@@ -79,6 +80,11 @@ async fn parses_text_and_completion() {
             assert_eq!(usage.input_tokens, 3);
             assert_eq!(usage.output_tokens, 2);
             assert_eq!(usage.total_tokens, 5);
+            assert_eq!(
+                finish_reason.as_deref(),
+                Some("stop"),
+                "stop reason must survive pass-through"
+            );
         }
         other => panic!("expected Completed, got {other:?}"),
     }
@@ -207,4 +213,57 @@ async fn surfaces_error_object() {
         }
     }
     assert!(saw_error, "expected a stream error");
+}
+
+#[tokio::test]
+async fn preserves_finish_reason_length_on_completion() {
+    let events = run_chat_sse(
+        &[
+            r#"{"id":"resp_1","choices":[{"delta":{"content":"hi"}}]}"#,
+            r#"{"id":"resp_1","choices":[{"delta":{},"finish_reason":"length"}]}"#,
+            "[DONE]",
+        ],
+        ChatVendor::Kimi,
+    )
+    .await;
+
+    match events.last() {
+        Some(ResponseEvent::Completed {
+            end_turn,
+            finish_reason,
+            ..
+        }) => {
+            assert_eq!(
+                *end_turn,
+                Some(true),
+                "length still ends the turn (no auto-follow-up)"
+            );
+            assert_eq!(
+                finish_reason.as_deref(),
+                Some("length"),
+                "raw finish_reason must be preserved on Completed"
+            );
+        }
+        other => panic!("expected Completed, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn preserves_finish_reason_max_tokens_variant_on_completion() {
+    let events = run_chat_sse(
+        &[
+            r#"{"choices":[{"delta":{"content":"hi"}}]}"#,
+            r#"{"choices":[{"delta":{},"finish_reason":"max_tokens"}]}"#,
+            "[DONE]",
+        ],
+        ChatVendor::Generic,
+    )
+    .await;
+
+    match events.last() {
+        Some(ResponseEvent::Completed { finish_reason, .. }) => {
+            assert_eq!(finish_reason.as_deref(), Some("max_tokens"));
+        }
+        other => panic!("expected Completed, got {other:?}"),
+    }
 }

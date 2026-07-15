@@ -448,6 +448,7 @@ async fn process_chat_sse(
             response_id: response_id.unwrap_or_default(),
             token_usage: usage.map(Into::into),
             end_turn,
+            finish_reason: finish_reason.clone(),
         }))
         .await;
 }

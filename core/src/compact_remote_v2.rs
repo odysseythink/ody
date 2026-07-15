@@ -837,6 +837,7 @@ mod tests {
                     total_tokens: 123_498,
                 }),
                 end_turn: Some(true),
+                finish_reason: None,
             }),
         ]);
 

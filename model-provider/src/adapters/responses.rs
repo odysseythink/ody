@@ -488,6 +488,7 @@ mod tests {
                     total_tokens: 30,
                 }),
                 end_turn: Some(true),
+                finish_reason: None,
             },
             &mut state,
         )

@@ -444,6 +444,7 @@ async fn response_stream_records_last_model_feedback_ids() {
             response_id: "resp-123".to_string(),
             token_usage: None,
             end_turn: Some(true),
+            finish_reason: None,
         }),
     ]);
     let (mut stream, _) = super::map_response_events(

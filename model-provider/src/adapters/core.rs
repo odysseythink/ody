@@ -79,6 +79,7 @@ pub fn to_response_event(event: ChatEvent) -> Vec<ResponseEvent> {
                     total_tokens: (input_tokens + output_tokens) as i64,
                 }),
                 end_turn: Some(true),
+                finish_reason: None,
             }]
         }
         ChatEvent::Finish {
@@ -90,6 +91,7 @@ pub fn to_response_event(event: ChatEvent) -> Vec<ResponseEvent> {
                 response_id: String::new(),
                 token_usage: None,
                 end_turn: Some(end_turn),
+                finish_reason: None,
             }]
         }
         ChatEvent::Raw(_) => vec![],
@@ -99,6 +101,7 @@ pub fn to_response_event(event: ChatEvent) -> Vec<ResponseEvent> {
                 response_id: String::new(),
                 token_usage: None,
                 end_turn: Some(false),
+                finish_reason: None,
             }]
         }
     }
