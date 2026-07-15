@@ -2361,6 +2361,7 @@ async fn try_run_sampling_request(
             ResponseEvent::Completed {
                 token_usage,
                 end_turn,
+                finish_reason,
                 ..
             } => {
                 flush_assistant_text_segments_all(
@@ -2377,6 +2378,18 @@ async fn try_run_sampling_request(
                 should_emit_turn_diff = true;
                 if let Err(err) = budget_result {
                     break Err(err);
+                }
+                if let Some(reason @ ("length" | "max_tokens")) = finish_reason.as_deref() {
+                    sess.send_event(
+                        &turn_context,
+                        EventMsg::Warning(WarningEvent {
+                            message: format!(
+                                "Model hit the provider's max output token limit \
+                                 (finish_reason={reason}); the response may be incomplete."
+                            ),
+                        }),
+                    )
+                    .await;
                 }
                 if let Some(false) = end_turn {
                     needs_follow_up = true;
