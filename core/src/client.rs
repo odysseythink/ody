@@ -1693,6 +1693,7 @@ fn map_chat_stream(
         let mut reasoning_text: Option<String> = None;
         let mut assistant_item_added = false;
         let mut reasoning_item_added = false;
+        let mut pending_usage: Option<TokenUsage> = None;
 
         loop {
             let event = tokio::select! {
@@ -1706,13 +1707,26 @@ fn map_chat_stream(
                 }
                 event = chat_stream.next() => event,
             };
-            let Some(event) = event else {
-                inference_trace_attempt.record_failed(
-                    "stream closed before response.completed",
-                    None,
-                    &[],
-                );
-                return;
+            let event = match event {
+                Some(event) => event,
+                // Defensive flush: `ChatEvent::Usage` is always immediately
+                // followed by `Finish` from the same normalize batch, so
+                // buffered usage at stream end should be unreachable.
+                // Synthesize the missing `Finish` so the buffered usage still
+                // closes the turn exactly as the previous Usage-terminal
+                // fallback did (a single `Completed` carrying the usage).
+                None if pending_usage.is_some() => Ok(ChatEvent::Finish {
+                    reason: FinishReason::Stop,
+                    raw_reason: None,
+                }),
+                None => {
+                    inference_trace_attempt.record_failed(
+                        "stream closed before response.completed",
+                        None,
+                        &[],
+                    );
+                    return;
+                }
             };
 
             let mut events: Vec<ResponseEvent> = Vec::new();
@@ -1845,20 +1859,20 @@ fn map_chat_stream(
                             internal_chat_message_metadata_passthrough: None,
                         }));
                     }
-                    events.push(ResponseEvent::Completed {
-                        response_id: String::new(),
-                        token_usage: Some(TokenUsage {
-                            input_tokens: input_tokens as i64,
-                            output_tokens: output_tokens as i64,
-                            cached_input_tokens: 0,
-                            reasoning_output_tokens: reasoning_tokens.unwrap_or(0) as i64,
-                            total_tokens: (input_tokens + output_tokens) as i64,
-                        }),
-                        end_turn: Some(true),
-                        finish_reason: None,
+                    // Usage is always immediately followed by `Finish` from
+                    // the same normalize batch; buffer it so the terminal
+                    // `Completed` emitted on `Finish` carries the token usage
+                    // alongside the finish reason instead of short-circuiting
+                    // the stream here.
+                    pending_usage = Some(TokenUsage {
+                        input_tokens: input_tokens as i64,
+                        output_tokens: output_tokens as i64,
+                        cached_input_tokens: 0,
+                        reasoning_output_tokens: reasoning_tokens.unwrap_or(0) as i64,
+                        total_tokens: (input_tokens + output_tokens) as i64,
                     });
                 }
-                Ok(ChatEvent::Finish { reason, raw_reason: _ }) => {
+                Ok(ChatEvent::Finish { reason, raw_reason }) => {
                     if let Some(text) = assistant_text.take() {
                         events.push(ResponseEvent::OutputItemDone(ResponseItem::Message {
                             id: None,
@@ -1877,12 +1891,12 @@ fn map_chat_stream(
                             internal_chat_message_metadata_passthrough: None,
                         }));
                     }
-                    let end_turn = matches!(reason, FinishReason::Stop);
+                    let end_turn = matches!(reason, FinishReason::Stop | FinishReason::MaxTokens);
                     events.push(ResponseEvent::Completed {
                         response_id: String::new(),
-                        token_usage: None,
+                        token_usage: pending_usage.take(),
                         end_turn: Some(end_turn),
-                        finish_reason: None,
+                        finish_reason: raw_reason,
                     });
                 }
                 Ok(ChatEvent::Raw(_)) => {}

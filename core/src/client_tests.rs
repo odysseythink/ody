@@ -683,6 +683,205 @@ async fn chat_stream_maps_events_to_response_stream() {
     assert!(saw_completed, "Expected Completed event");
 }
 
+#[tokio::test]
+async fn chat_stream_maps_max_tokens_finish_to_completed_end_turn_true() {
+    use futures::stream;
+    use ody_model_provider::{ChatEvent, ContentPart, FinishReason};
+
+    let chat_stream = stream::iter(vec![
+        Ok(ChatEvent::Start),
+        Ok(ChatEvent::ContentPart(ContentPart::Text("partial".into()))),
+        Ok(ChatEvent::Finish {
+            reason: FinishReason::MaxTokens,
+            raw_reason: Some("length".into()),
+        }),
+    ]);
+    let stream = crate::client::map_chat_stream(
+        Box::pin(chat_stream),
+        create_test_session_telemetry(),
+        InferenceTraceContext::disabled().start_attempt(),
+    );
+
+    futures::pin_mut!(stream);
+    let mut completed = None;
+    while let Some(event) = stream.next().await {
+        if matches!(event, Ok(ResponseEvent::Completed { .. })) {
+            completed = Some(event.expect("completed event is Ok"));
+        }
+    }
+    match completed {
+        Some(ResponseEvent::Completed {
+            end_turn,
+            finish_reason,
+            ..
+        }) => {
+            assert_eq!(
+                end_turn,
+                Some(true),
+                "MaxTokens must still end the turn (Some(false) would trigger auto-follow-up)"
+            );
+            assert_eq!(
+                finish_reason.as_deref(),
+                Some("length"),
+                "raw finish_reason must be passed through"
+            );
+        }
+        other => panic!("expected Completed, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn chat_stream_maps_non_turn_ending_finishes_to_completed_end_turn_false() {
+    use futures::stream;
+    use ody_model_provider::{ChatEvent, ContentPart, FinishReason};
+
+    // Every `FinishReason` variant outside {Stop, MaxTokens} must keep the
+    // paused-turn semantics (`end_turn == Some(false)`).
+    let cases: Vec<(FinishReason, Option<String>)> = vec![
+        (FinishReason::ToolCalls, Some("tool_calls".into())),
+        (FinishReason::ContentFilter, Some("content_filter".into())),
+        (FinishReason::PauseTurn, Some("pause_turn".into())),
+        (
+            FinishReason::Other("incomplete".into()),
+            Some("incomplete".into()),
+        ),
+    ];
+    for (reason, raw_reason) in cases {
+        let chat_stream = stream::iter(vec![
+            Ok(ChatEvent::Start),
+            Ok(ChatEvent::ContentPart(ContentPart::Text("paused".into()))),
+            Ok(ChatEvent::Finish {
+                reason: reason.clone(),
+                raw_reason,
+            }),
+        ]);
+        let stream = crate::client::map_chat_stream(
+            Box::pin(chat_stream),
+            create_test_session_telemetry(),
+            InferenceTraceContext::disabled().start_attempt(),
+        );
+
+        futures::pin_mut!(stream);
+        let mut completed = None;
+        while let Some(event) = stream.next().await {
+            if matches!(event, Ok(ResponseEvent::Completed { .. })) {
+                completed = Some(event.expect("completed event is Ok"));
+            }
+        }
+        match completed {
+            Some(ResponseEvent::Completed { end_turn, .. }) => {
+                assert_eq!(
+                    end_turn,
+                    Some(false),
+                    "{reason:?} must keep the paused-turn semantics"
+                );
+            }
+            other => panic!("expected Completed for {reason:?}, got {other:?}"),
+        }
+    }
+}
+
+#[tokio::test]
+async fn chat_stream_folds_usage_into_finish_completed() {
+    use futures::stream;
+    use ody_model_provider::{ChatEvent, ContentPart, FinishReason, Usage};
+
+    let chat_stream = stream::iter(vec![
+        Ok(ChatEvent::Start),
+        Ok(ChatEvent::ContentPart(ContentPart::Text("partial".into()))),
+        Ok(ChatEvent::Usage(Usage {
+            input_tokens: 10,
+            output_tokens: 5,
+            reasoning_tokens: None,
+        })),
+        Ok(ChatEvent::Finish {
+            reason: FinishReason::MaxTokens,
+            raw_reason: Some("length".into()),
+        }),
+    ]);
+    let stream = crate::client::map_chat_stream(
+        Box::pin(chat_stream),
+        create_test_session_telemetry(),
+        InferenceTraceContext::disabled().start_attempt(),
+    );
+
+    futures::pin_mut!(stream);
+    let mut completed_events = Vec::new();
+    while let Some(event) = stream.next().await {
+        if let Ok(ResponseEvent::Completed { .. }) = event {
+            completed_events.push(event.expect("completed event is Ok"));
+        }
+    }
+    assert_eq!(
+        completed_events.len(),
+        1,
+        "usage must be folded into the Finish completed, not short-circuit it"
+    );
+    match &completed_events[0] {
+        ResponseEvent::Completed {
+            token_usage,
+            end_turn,
+            finish_reason,
+            ..
+        } => {
+            let usage = token_usage.as_ref().expect("usage folded into completed");
+            assert_eq!(usage.input_tokens, 10);
+            assert_eq!(usage.output_tokens, 5);
+            assert_eq!(*end_turn, Some(true));
+            assert_eq!(finish_reason.as_deref(), Some("length"));
+        }
+        other => panic!("expected Completed, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn chat_stream_flushes_buffered_usage_when_stream_ends_without_finish() {
+    use futures::stream;
+    use ody_model_provider::{ChatEvent, Usage};
+
+    let chat_stream = stream::iter(vec![
+        Ok(ChatEvent::Start),
+        Ok(ChatEvent::Usage(Usage {
+            input_tokens: 10,
+            output_tokens: 5,
+            reasoning_tokens: None,
+        })),
+    ]);
+    let stream = crate::client::map_chat_stream(
+        Box::pin(chat_stream),
+        create_test_session_telemetry(),
+        InferenceTraceContext::disabled().start_attempt(),
+    );
+
+    futures::pin_mut!(stream);
+    let mut completed_events = Vec::new();
+    while let Some(event) = stream.next().await {
+        if let Ok(ResponseEvent::Completed { .. }) = event {
+            completed_events.push(event.expect("completed event is Ok"));
+        }
+    }
+    assert_eq!(
+        completed_events.len(),
+        1,
+        "buffered usage must still close the turn when the stream ends without Finish"
+    );
+    match &completed_events[0] {
+        ResponseEvent::Completed {
+            token_usage,
+            end_turn,
+            finish_reason,
+            ..
+        } => {
+            let usage = token_usage.as_ref().expect("usage folded into completed");
+            assert_eq!(usage.input_tokens, 10);
+            assert_eq!(usage.output_tokens, 5);
+            assert_eq!(*end_turn, Some(true));
+            assert_eq!(finish_reason.as_deref(), None);
+        }
+        other => panic!("expected Completed, got {other:?}"),
+    }
+}
+
 fn test_model_client_with_provider(provider: ModelProviderInfo) -> ModelClient {
     let thread_id = ThreadId::new();
     ModelClient::new(

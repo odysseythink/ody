@@ -84,14 +84,14 @@ pub fn to_response_event(event: ChatEvent) -> Vec<ResponseEvent> {
         }
         ChatEvent::Finish {
             reason,
-            raw_reason: _,
+            raw_reason,
         } => {
-            let end_turn = matches!(reason, FinishReason::Stop);
+            let end_turn = matches!(reason, FinishReason::Stop | FinishReason::MaxTokens);
             vec![ResponseEvent::Completed {
                 response_id: String::new(),
                 token_usage: None,
                 end_turn: Some(end_turn),
-                finish_reason: None,
+                finish_reason: raw_reason,
             }]
         }
         ChatEvent::Raw(_) => vec![],
