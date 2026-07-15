@@ -24,6 +24,3 @@ linker = "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC
 # call chains in agent control and guardian tests. Use 4 MiB to match the
 # effective headroom on Linux and stay below the Windows link-time 8 MiB.
 RUST_MIN_STACK = "4194304"
-# Windows: symlink creation in v8 build script fails without Developer Mode/admin.
-# Point directly to the pre-built binding file to bypass the symlink logic.
-RUSTY_V8_SRC_BINDING_PATH = "C:\\Users\\hkb819\\.cargo\\registry\\src\\mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda\\v8-149.2.0\\gen\\src_binding_release_x86_64-pc-windows-msvc.rs"
