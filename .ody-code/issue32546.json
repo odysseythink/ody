@@ -1,0 +1,117 @@
+{
+  "url": "https://api.github.com/repos/openai/codex/issues/32546",
+  "repository_url": "https://api.github.com/repos/openai/codex",
+  "labels_url": "https://api.github.com/repos/openai/codex/issues/32546/labels{/name}",
+  "comments_url": "https://api.github.com/repos/openai/codex/issues/32546/comments",
+  "events_url": "https://api.github.com/repos/openai/codex/issues/32546/events",
+  "html_url": "https://github.com/openai/codex/issues/32546",
+  "id": 4866075552,
+  "node_id": "I_kwDOOYsS4c8AAAABIgproA",
+  "number": 32546,
+  "title": "Codex CLI TUI repeatedly hides and shows the text cursor in WezTerm while a   turn is running",
+  "user": {
+    "login": "qnt-dev",
+    "id": 87720623,
+    "node_id": "MDQ6VXNlcjg3NzIwNjIz",
+    "avatar_url": "https://avatars.githubusercontent.com/u/87720623?v=4",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/qnt-dev",
+    "html_url": "https://github.com/qnt-dev",
+    "followers_url": "https://api.github.com/users/qnt-dev/followers",
+    "following_url": "https://api.github.com/users/qnt-dev/following{/other_user}",
+    "gists_url": "https://api.github.com/users/qnt-dev/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/qnt-dev/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/qnt-dev/subscriptions",
+    "organizations_url": "https://api.github.com/users/qnt-dev/orgs",
+    "repos_url": "https://api.github.com/users/qnt-dev/repos",
+    "events_url": "https://api.github.com/users/qnt-dev/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/qnt-dev/received_events",
+    "type": "User",
+    "user_view_type": "public",
+    "site_admin": false
+  },
+  "labels": [
+    {
+      "id": 8448146916,
+      "node_id": "LA_kwDOOYsS4c8AAAAB94x95A",
+      "url": "https://api.github.com/repos/openai/codex/labels/bug",
+      "name": "bug",
+      "color": "d73a4a",
+      "default": true,
+      "description": "Something isn't working"
+    },
+    {
+      "id": 9095738671,
+      "node_id": "LA_kwDOOYsS4c8AAAACHiX1Lw",
+      "url": "https://api.github.com/repos/openai/codex/labels/windows-os",
+      "name": "windows-os",
+      "color": "78dc9b",
+      "default": false,
+      "description": "Issues related to Codex on Windows systems"
+    },
+    {
+      "id": 9310494399,
+      "node_id": "LA_kwDOOYsS4c8AAAACKvLevw",
+      "url": "https://api.github.com/repos/openai/codex/labels/TUI",
+      "name": "TUI",
+      "color": "c5b821",
+      "default": false,
+      "description": "Issues related to the terminal user interface: text input, menus and dialogs, and terminal display"
+    },
+    {
+      "id": 9433262053,
+      "node_id": "LA_kwDOOYsS4c8AAAACMkQn5Q",
+      "url": "https://api.github.com/repos/openai/codex/labels/CLI",
+      "name": "CLI",
+      "color": "7e8a16",
+      "default": false,
+      "description": "Issues related to the Codex CLI"
+    }
+  ],
+  "state": "open",
+  "locked": false,
+  "assignees": [
+
+  ],
+  "milestone": null,
+  "comments": 0,
+  "created_at": "2026-07-12T08:47:59Z",
+  "updated_at": "2026-07-12T08:48:32Z",
+  "closed_at": null,
+  "assignee": null,
+  "author_association": "NONE",
+  "issue_field_values": [
+
+  ],
+  "type": null,
+  "active_lock_reason": null,
+  "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+  },
+  "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 0,
+    "blocking": 0,
+    "total_blocking": 0
+  },
+  "body": "### What version of Codex CLI is running?\n\ncodex-cli 0.144.1\n\n### What subscription do you have?\n\nChatGPT subscription via ChatGPT sign-in (pro)\n\n### Which model were you using?\n\ngpt-5.6-sol\n\n### What platform is your computer?\n\nMicrosoft Windows NT 10.0.26200.0 x64\n\n### What terminal emulator and version are you using (if applicable)?\n\nWezTerm 20240203-110809-5046fc22   Windows PowerShell, without tmux, screen, zellij, WSL, or another multiplexer   TERM=xterm-256color\n\n### Codex doctor report\n\n```json\ncodex doctor --json did not complete. It timed out after more than 30 seconds without producing output.\n```\n\n### What issue are you seeing?\n\nWhile a Codex CLI turn is actively running, the text cursor in the prompt\n  input area repeatedly disappears and reappears. Visually, it looks like a\n  blinking cursor.\n\n  This occurs specifically in WezTerm. Running the same Codex CLI workflow in\n  other terminal emulators does not produce the visible cursor blinking.\n\n  The behavior is not caused by WezTerm's configured cursor blink animation. I\n  tested the following WezTerm settings and fully restarted all WezTerm\n  processes before starting a new Codex session:\n\n  config.default_cursor_style = \"SteadyBlock\"\n  config.cursor_blink_rate = 0\n\n  The issue remained unchanged.\n\n  I also tested the following Codex configuration:\n\n  [tui]\n  animations = false\n\n  This did not resolve the issue either.\n\n  To distinguish terminal cursor animation from application-controlled cursor\n  visibility, I polled the active WezTerm pane while a Codex turn was running:\n\n  wezterm cli list --format json\n\n  The pane state repeatedly alternated between Visible and Hidden while the\n  cursor coordinates remained unchanged:\n\n  visibility=Visible shape=Default x=2 y=22\n  visibility=Visible shape=Default x=2 y=22\n  visibility=Hidden  shape=Default x=2 y=22\n  visibility=Visible shape=Default x=2 y=22\n  visibility=Hidden  shape=Default x=2 y=22\n  visibility=Visible shape=Default x=2 y=22\n  visibility=Hidden  shape=Default x=2 y=22\n\n  The transitions occur approximately every 300–500 ms while the turn is active.\n\n  This indicates that the terminal is receiving application-controlled cursor\n  visibility changes rather than merely animating a blinking cursor shape.\n\n  Typing also exposes the same relationship: when a character is entered, the\n  cursor disappears during the redraw and then reappears at the new position.\n\n  WezTerm's cursor_blink_rate setting cannot prevent this because it controls\n  only the terminal's own cursor animation, not application-issued cursor\n  visibility changes.\n\n  It appears that the Codex TUI/Ratatui rendering path temporarily hides the\n  cursor during redraws and leaves the Hidden state observable between frames in\n  WezTerm. Other tested terminals appear to coalesce or mask these intermediate\n  visibility changes.\n\n\n\n### What steps can reproduce the bug?\n\n1. Start WezTerm 20240203-110809-5046fc22 on Windows 11.\n  2. Open Windows PowerShell directly, without WSL or a terminal multiplexer.\n  3. Run Codex CLI with:\n\n     codex\n\n  4. Enter any prompt that causes the agent to work for several seconds.\n  5. While the status shows Working, observe the cursor in the prompt input\n  area.\n  6. The cursor repeatedly disappears and reappears approximately every 300–500\n  ms.\n  7. Enter one or more characters while the turn is still running.\n  8. Observe that the cursor disappears during the redraw and then reappears at\n  the new position.\n\n  The visibility changes can also be verified from another PowerShell process by\n  repeatedly running:\n\n  1..40 | ForEach-Object {\n      $pane = wezterm cli list --format json |\n          ConvertFrom-Json |\n          Where-Object is_active\n\n      \"visibility=$($pane.cursor_visibility) shape=$($pane.cursor_shape)\n      x=$($pane.cursor_x) y=$($pane.cursor_y)\"\n\n      Start-Sleep -Milliseconds 100\n  }\n\n  The output alternates between cursor_visibility=Visible and\n  cursor_visibility=Hidden while x and y remain unchanged.\n\n  The issue remains reproducible after:\n\n  - Closing every WezTerm window.\n  - Confirming that wezterm-gui.exe is no longer running.\n  - Starting a completely new WezTerm process.\n  - Starting a new Codex CLI session.\n  - Setting cursor_blink_rate = 0 and default_cursor_style = \"SteadyBlock\".\n  - Setting [tui] animations = false.\n\n### What is the expected behavior?\n\nThe prompt cursor should remain steadily visible while a Codex turn is\n  running.\n\n  If the TUI needs to hide the cursor temporarily while drawing a frame, the\n  Hide, redraw, and Show operations should be contained within one synchronized\n  terminal update so that the intermediate Hidden state is never visibly\n  rendered.\n\n  The behavior should be consistent across WezTerm and other supported terminal\n  emulators.\n\n### Additional information\n\n This does not appear to be a normal cursor-style preference or a WezTerm\n  blink-rate issue.\n\n  In the WezTerm source for this version, cursor animation is enabled only when\n  the effective cursor shape is a blinking shape and cursor_blink_rate is non-\n  zero. Despite setting cursor_blink_rate to zero, wezterm cli reports that the\n  pane's actual cursor_visibility state changes between Visible and Hidden.\n\n  I also tested increasing WezTerm's mux_output_parser_coalesce_delay_ms from\n  its default of 3 ms to 20 ms. This did not prevent the visibility transitions,\n  so they do not appear to be resolved by ordinary output coalescing.\n\n  There is no separate cursor-style or visibility option in the current Codex\n  TUI configuration that addresses this behavior.\n\n  A possible fix may be to ensure that the Codex/Ratatui draw path does not\n  leave the terminal cursor hidden between completed frames, or to ensure that\n  cursor restoration is included in the same synchronized output transaction as\n  the redraw.",
+  "closed_by": null,
+  "reactions": {
+    "url": "https://api.github.com/repos/openai/codex/issues/32546/reactions",
+    "total_count": 0,
+    "+1": 0,
+    "-1": 0,
+    "laugh": 0,
+    "hooray": 0,
+    "confused": 0,
+    "heart": 0,
+    "rocket": 0,
+    "eyes": 0
+  },
+  "timeline_url": "https://api.github.com/repos/openai/codex/issues/32546/timeline",
+  "performed_via_github_app": null,
+  "state_reason": null,
+  "pinned_comment": null
+}

@@ -1,0 +1,108 @@
+{
+  "url": "https://api.github.com/repos/openai/codex/issues/17823",
+  "repository_url": "https://api.github.com/repos/openai/codex",
+  "labels_url": "https://api.github.com/repos/openai/codex/issues/17823/labels{/name}",
+  "comments_url": "https://api.github.com/repos/openai/codex/issues/17823/comments",
+  "events_url": "https://api.github.com/repos/openai/codex/issues/17823/events",
+  "html_url": "https://github.com/openai/codex/issues/17823",
+  "id": 4264152960,
+  "node_id": "I_kwDOOYsS4c7-Kc-A",
+  "number": 17823,
+  "title": "Cursor jumps between UI regions in third-party terminals (Tabby, Wave)",
+  "user": {
+    "login": "refrain2333",
+    "id": 166939881,
+    "node_id": "U_kgDOCfNM6Q",
+    "avatar_url": "https://avatars.githubusercontent.com/u/166939881?v=4",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/refrain2333",
+    "html_url": "https://github.com/refrain2333",
+    "followers_url": "https://api.github.com/users/refrain2333/followers",
+    "following_url": "https://api.github.com/users/refrain2333/following{/other_user}",
+    "gists_url": "https://api.github.com/users/refrain2333/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/refrain2333/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/refrain2333/subscriptions",
+    "organizations_url": "https://api.github.com/users/refrain2333/orgs",
+    "repos_url": "https://api.github.com/users/refrain2333/repos",
+    "events_url": "https://api.github.com/users/refrain2333/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/refrain2333/received_events",
+    "type": "User",
+    "user_view_type": "public",
+    "site_admin": false
+  },
+  "labels": [
+    {
+      "id": 8448146916,
+      "node_id": "LA_kwDOOYsS4c8AAAAB94x95A",
+      "url": "https://api.github.com/repos/openai/codex/labels/bug",
+      "name": "bug",
+      "color": "d73a4a",
+      "default": true,
+      "description": "Something isn't working"
+    },
+    {
+      "id": 9095738671,
+      "node_id": "LA_kwDOOYsS4c8AAAACHiX1Lw",
+      "url": "https://api.github.com/repos/openai/codex/labels/windows-os",
+      "name": "windows-os",
+      "color": "78dc9b",
+      "default": false,
+      "description": "Issues related to Codex on Windows systems"
+    },
+    {
+      "id": 9310494399,
+      "node_id": "LA_kwDOOYsS4c8AAAACKvLevw",
+      "url": "https://api.github.com/repos/openai/codex/labels/TUI",
+      "name": "TUI",
+      "color": "c5b821",
+      "default": false,
+      "description": "Issues related to the terminal user interface: text input, menus and dialogs, and terminal display"
+    }
+  ],
+  "state": "open",
+  "locked": false,
+  "assignees": [
+
+  ],
+  "milestone": null,
+  "comments": 3,
+  "created_at": "2026-04-14T18:59:51Z",
+  "updated_at": "2026-06-09T10:37:59Z",
+  "closed_at": null,
+  "assignee": null,
+  "author_association": "NONE",
+  "issue_field_values": [
+
+  ],
+  "type": null,
+  "active_lock_reason": null,
+  "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+  },
+  "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 0,
+    "blocking": 0,
+    "total_blocking": 0
+  },
+  "body": "### What version of Codex CLI are you using?\n\ncodex-cli 0.120.0\n\n### What subscription do you have?\n\nfree\n\n### What platform is your computer?\n\nMicrosoft Windows NT 10.0.26200.0 x64 (Windows 11)\n\n### What terminal emulator and version are you using?\n\n- Tabby (latest)\n- Wave Terminal (latest)\n- Windows Terminal (for comparison)\n- Warp (for comparison)\n- System default cmd.exe and pwsh\n\n### What issue are you seeing?\n\nWhen running Codex CLI in certain third-party terminals (Tabby, Wave), the cursor rapidly jumps between multiple UI regions:\n\n1. The `Working (XXs · esc to interrupt)` status line\n2. The `> input` command line\n3. The model info line (e.g., `gpt-5.4 high · ~`)\n\nThis makes it difficult to see where the actual input cursor is and is visually distracting.\n\n### What steps can reproduce the bug?\n\n1. Open Tabby or Wave terminal\n2. Run `codex`\n3. Send a prompt and wait for the model to process\n4. Observe the cursor jumping between the status line, input line, and bottom info bar\n\n### Expected behavior\n\nThe cursor should remain at the input field, as it does in stock Windows terminals, Windows Terminal, and Warp.\n\n### Additional information\n\n| Terminal | Shell | Behavior |\n|----------|-------|----------|\n| System default terminal | cmd/pwsh | ✅ Normal |\n| Windows Terminal | cmd/pwsh | ✅ Normal |\n| Warp | cmd/pwsh | ✅ Normal |\n| **Tabby** | **cmd** | ❌ Cursor jumps |\n| **Tabby** | **pwsh** | ❌ Cursor jumps |\n| **Wave** | **cmd** | ❌ Cursor jumps |\n| **Wave** | **pwsh** | ❌ Cursor jumps |\n\nThe issue occurs in Tabby and Wave regardless of shell (cmd or pwsh). System default terminal, Windows Terminal, and Warp all work correctly. This suggests the problem is related to how Codex's TUI handles ANSI escape sequences for cursor positioning in specific terminal emulators.\n\nThis appears related to [#16687](https://github.com/openai/codex/issues/16687) but this report adds more terminal coverage, notably that **Warp works correctly** while **Tabby and Wave do not**.",
+  "closed_by": null,
+  "reactions": {
+    "url": "https://api.github.com/repos/openai/codex/issues/17823/reactions",
+    "total_count": 4,
+    "+1": 4,
+    "-1": 0,
+    "laugh": 0,
+    "hooray": 0,
+    "confused": 0,
+    "heart": 0,
+    "rocket": 0,
+    "eyes": 0
+  },
+  "timeline_url": "https://api.github.com/repos/openai/codex/issues/17823/timeline",
+  "performed_via_github_app": null,
+  "state_reason": null,
+  "pinned_comment": null
+}
