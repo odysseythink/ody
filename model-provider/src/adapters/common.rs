@@ -91,6 +91,7 @@ pub(crate) fn normalize_response_event_with_state(
         ResponseEvent::Completed {
             token_usage,
             end_turn,
+            finish_reason,
             ..
         } => {
             // Detect a degenerate empty completion: the turn finished (or the
@@ -118,19 +119,24 @@ pub(crate) fn normalize_response_event_with_state(
                 };
                 events.push(ChatEvent::Usage(usage));
             }
-            let reason = match end_turn {
-                Some(true) => FinishReason::Stop,
-                Some(false) => FinishReason::Other("incomplete".into()),
-                None => FinishReason::Stop,
+            let reason = match finish_reason.as_deref() {
+                Some("length") | Some("max_tokens") => FinishReason::MaxTokens,
+                _ => match end_turn {
+                    Some(true) => FinishReason::Stop,
+                    Some(false) => FinishReason::Other("incomplete".into()),
+                    None => FinishReason::Stop,
+                },
             };
             events.push(ChatEvent::Finish {
                 reason,
-                raw_reason: end_turn.map(|e| {
-                    if e {
-                        "stop".into()
-                    } else {
-                        "incomplete".into()
-                    }
+                raw_reason: finish_reason.or_else(|| {
+                    end_turn.map(|e| {
+                        if e {
+                            "stop".into()
+                        } else {
+                            "incomplete".into()
+                        }
+                    })
                 }),
             });
             Ok(events)
@@ -511,5 +517,113 @@ mod tests {
                 ..
             }]
         ));
+    }
+
+    #[test]
+    fn length_finish_reason_maps_to_max_tokens() {
+        let mut state = NormalizeState::default();
+        normalize_response_event_with_state(
+            ResponseEvent::OutputTextDelta("hi".into()),
+            &mut state,
+        )
+        .expect("text delta normalizes");
+        let completed = normalize_response_event_with_state(
+            ResponseEvent::Completed {
+                response_id: "resp_1".into(),
+                token_usage: None,
+                end_turn: Some(true),
+                finish_reason: Some("length".into()),
+            },
+            &mut state,
+        )
+        .expect("completion with text delta is normal");
+        assert_eq!(
+            completed.as_slice(),
+            &[ChatEvent::Finish {
+                reason: FinishReason::MaxTokens,
+                raw_reason: Some("length".into()),
+            }]
+        );
+    }
+
+    #[test]
+    fn max_tokens_finish_reason_variant_maps_to_max_tokens() {
+        let mut state = NormalizeState::default();
+        normalize_response_event_with_state(
+            ResponseEvent::OutputTextDelta("hi".into()),
+            &mut state,
+        )
+        .expect("text delta normalizes");
+        let completed = normalize_response_event_with_state(
+            ResponseEvent::Completed {
+                response_id: "resp_1".into(),
+                token_usage: None,
+                end_turn: Some(true),
+                finish_reason: Some("max_tokens".into()),
+            },
+            &mut state,
+        )
+        .expect("completion with text delta is normal");
+        assert_eq!(
+            completed.as_slice(),
+            &[ChatEvent::Finish {
+                reason: FinishReason::MaxTokens,
+                raw_reason: Some("max_tokens".into()),
+            }]
+        );
+    }
+
+    #[test]
+    fn tool_calls_finish_reason_does_not_map_to_max_tokens() {
+        let mut state = NormalizeState::default();
+        normalize_response_event_with_state(
+            ResponseEvent::OutputTextDelta("hi".into()),
+            &mut state,
+        )
+        .expect("text delta normalizes");
+        let completed = normalize_response_event_with_state(
+            ResponseEvent::Completed {
+                response_id: "resp_1".into(),
+                token_usage: None,
+                end_turn: Some(false),
+                finish_reason: Some("tool_calls".into()),
+            },
+            &mut state,
+        )
+        .expect("completion with text delta is normal");
+        assert_eq!(
+            completed.as_slice(),
+            &[ChatEvent::Finish {
+                reason: FinishReason::Other("incomplete".into()),
+                raw_reason: Some("tool_calls".into()),
+            }]
+        );
+    }
+
+    #[test]
+    fn stop_finish_reason_still_maps_to_stop() {
+        let mut state = NormalizeState::default();
+        normalize_response_event_with_state(
+            ResponseEvent::OutputTextDelta("hi".into()),
+            &mut state,
+        )
+        .expect("text delta normalizes");
+        let completed = normalize_response_event_with_state(
+            ResponseEvent::Completed {
+                response_id: "resp_1".into(),
+                token_usage: None,
+                end_turn: Some(true),
+                finish_reason: Some("stop".into()),
+            },
+            &mut state,
+        )
+        .expect("completion with text delta is normal");
+        assert_eq!(
+            completed.as_slice(),
+            &[ChatEvent::Finish {
+                reason: FinishReason::Stop,
+                raw_reason: Some("stop".into()),
+            }]
+        );
     }
 }
