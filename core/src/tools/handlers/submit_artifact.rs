@@ -8,7 +8,7 @@ use crate::function_tool::FunctionCallError;
 use crate::plan_artifact::PlanWriteOutcome;
 use crate::plan_mode_injector::parts_manifest::RowStatus;
 use crate::plan_mode_injector::parts_manifest::parse_parts_manifest;
-use crate::plan_mode_injector::parts_manifest::part_file_cell_has_placeholder;
+use crate::plan_mode_injector::parts_manifest::part_file_cell_problem;
 use crate::plan_mode_injector::parts_manifest::row_is_verified_done;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
@@ -22,6 +22,7 @@ use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::PlanDeltaEvent;
 use ody_protocol::protocol::WarningEvent;
 use regex_lite::Regex;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
@@ -64,6 +65,22 @@ const REQUIRED_SELF_REVIEW_ITEMS: usize = 7;
 /// section reproducing all seven checklist items. Models reliably reference these
 /// requirements ("all seven items") without actually including the sections, so this
 /// is checked mechanically rather than trusted.
+/// Every `## Parts` File cell in `markdown` that cannot be followed as written, explained.
+///
+/// Empty when the plan has no manifest (a single-file plan) or every cell is usable.
+fn parts_manifest_cell_problems(stem_dir: &Path, markdown: &str) -> Vec<String> {
+    parse_parts_manifest(markdown)
+        .manifest
+        .map(|manifest| {
+            manifest
+                .rows
+                .iter()
+                .filter_map(|row| part_file_cell_problem(stem_dir, &row.file))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn rigor_structure_gap(plan: &str) -> Option<String> {
     let lower = plan.to_lowercase();
     let has_spec_coverage = lower.contains("## spec coverage") || lower.contains("## spec-coverage");
@@ -270,20 +287,14 @@ pub(crate) async fn handle_submit_artifact(
             .await;
     }
 
-    // Rows whose `File` cell still carries `<...>` placeholder notation. Collected here because
-    // `markdown` is moved into the completed event below, and reported in the response so the model
-    // learns why those rows will never verify instead of being told to keep writing parts forever.
-    let placeholder_part_rows: Vec<String> = parse_parts_manifest(&markdown)
-        .manifest
-        .map(|manifest| {
-            manifest
-                .rows
-                .iter()
-                .filter(|row| part_file_cell_has_placeholder(&row.file))
-                .map(|row| format!("`{}`", row.file))
-                .collect()
-        })
-        .unwrap_or_default();
+    // Rows whose `File` cell cannot be followed as written. Collected here because `markdown` is
+    // moved into the completed event below, and reported in the response: such a row can never
+    // verify, so without naming it the model would be told to keep writing parts every turn with no
+    // clue why the ones it already wrote do not count.
+    let bad_part_cells: Vec<String> = match artifact.stem_dir() {
+        Some(stem_dir) => parts_manifest_cell_problems(&stem_dir, &markdown),
+        None => Vec::new(),
+    };
 
     // 6. Pending parts detection
     let has_pending_parts = match artifact.stem_dir() {
@@ -353,14 +364,27 @@ pub(crate) async fn handle_submit_artifact(
     // A row whose `File` cell is still a placeholder can never verify, so without naming those rows
     // the model would be told "keep writing parts" every turn with no clue why the parts it already
     // wrote do not count. Computed before `markdown` is moved into the completed event above.
-    let message = if has_pending_parts {
+    // A bad `File` cell must block finalization, not just colour the mid-flight message. A bare
+    // `core.md` still resolves — only the basename is used — so the rows verify, `has_pending_parts`
+    // goes false, and a plan whose manifest points nowhere would otherwise sail straight through to
+    // `submitted`. Placed before the `gap` arm so it applies to every tier, not just Rigor.
+    let bad_cells_message = (!bad_part_cells.is_empty()).then(|| {
+        format!(
+            "{} saved, but these ## Parts File cells cannot be followed as written: {}. Each cell must be the part's path relative to the index with the real directory filled in — for this plan, `{}/<part-name>.md`. This call was persisted but is NOT final: whoever reads the index next may have only its text, so the cell has to be openable as written. Fix the cells and call {} again with the corrected index.",
+            wording.noun,
+            bad_part_cells.join("; "),
+            artifact
+                .stem_dir()
+                .and_then(|dir| dir.file_name().map(|n| n.to_string_lossy().into_owned()))
+                .unwrap_or_default(),
+            wording.tool_name
+        )
+    });
+
+    let message = if let Some(bad_cells) = bad_cells_message {
+        bad_cells
+    } else if has_pending_parts {
         match artifact.stem_dir() {
-            Some(_) if !placeholder_part_rows.is_empty() => format!(
-                "{} part saved, but these ## Parts rows still have placeholder File cells: {}. A File cell must be the part file's real name only (e.g. `core.md`) — no directory prefix, and nothing left to substitute. Rows like these can never be verified as done, and anyone reading the index cannot find the file. Fix those cells and call {} again with the corrected index.",
-                wording.noun,
-                placeholder_part_rows.join(", "),
-                wording.tool_name
-            ),
             Some(stem_dir) => format!(
                 "{} part saved. This {} is split into multiple parts and pending parts remain — stay in {} mode and keep writing them one per turn; do not treat this call as final. Write each part file at exactly {}/<part-name>.md (use the file names from the ## Parts table).",
                 wording.noun, wording.noun, wording.mode_name, stem_dir.display()
@@ -402,6 +426,53 @@ pub(crate) async fn handle_submit_artifact(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn manifest_with(file_cells: [&str; 2]) -> String {
+        format!(
+            "# Plan\n\n## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n\
+             | 1 | `{}` | core | done |\n| 2 | `{}` | tests | done |\n",
+            file_cells[0], file_cells[1]
+        )
+    }
+
+    /// Both manifests below actually shipped, and both left the executing agent unable to open the
+    /// parts. Neither failed at submit time, because only the basename is used to resolve a cell.
+    #[test]
+    fn parts_manifest_cell_problems_flags_both_shipped_failures() {
+        let stem = Path::new("/plans/2026-07-16-pinnedtodowidget_implementation_plan");
+
+        // Shipped once: the template's own examples used this notation, so the model copied it.
+        let placeholders =
+            manifest_with(["<stem>/core-widget.md", "<stem>/tests.md"]);
+        let problems = parts_manifest_cell_problems(stem, &placeholders);
+        assert_eq!(problems.len(), 2, "{problems:?}");
+        assert!(problems[0].contains("placeholder"), "{problems:?}");
+
+        // Shipped next: bare names. Resolvable only by someone who already knows the directory —
+        // which the reader of a handed-over index does not.
+        let bare = manifest_with(["widget-core.md", "tests.md"]);
+        let problems = parts_manifest_cell_problems(stem, &bare);
+        assert_eq!(problems.len(), 2, "{problems:?}");
+        assert!(
+            problems[0].contains("2026-07-16-pinnedtodowidget_implementation_plan/widget-core.md"),
+            "the report must spell out the path to use: {problems:?}"
+        );
+
+        // The form that works: real directory, real file name, nothing to expand.
+        let good = manifest_with([
+            "2026-07-16-pinnedtodowidget_implementation_plan/widget-core.md",
+            "2026-07-16-pinnedtodowidget_implementation_plan/tests.md",
+        ]);
+        assert!(parts_manifest_cell_problems(stem, &good).is_empty());
+    }
+
+    /// A single-file plan has no manifest and must not be dragged into this check.
+    #[test]
+    fn parts_manifest_cell_problems_ignores_plans_without_a_manifest() {
+        let stem = Path::new("/plans/2026-07-16-topic");
+        let plan = "# Plan\n\n## Summary\n\nNo parts here.\n";
+        assert!(parts_manifest_cell_problems(stem, plan).is_empty());
+    }
 
     // Re-exported from submit_plan.rs's test module — same helpers, same tests.
     // They remain here because the functions they test moved here.

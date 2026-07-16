@@ -35,16 +35,19 @@ A split plan consists of:
 
 The index file must include a `## Parts` table listing all part files and their status:
 
+For an index at `2026-07-10-design-mode.md`, the table reads:
+
 ```
 ## Parts
 | # | File | Scope | Status |
 |---|---|---|---|
-| 1 | `core.md` | models + persistence | pending |
-| 2 | `api.md` | endpoints + wiring | pending |
-| 3 | `ui.md` | rendering | pending |
+| 1 | `2026-07-10-design-mode/core.md` | models + persistence | pending |
+| 2 | `2026-07-10-design-mode/api.md` | endpoints + wiring | pending |
+| 3 | `2026-07-10-design-mode/ui.md` | rendering | pending |
 ```
 
-- **File column:** the part file's **name only** — `core.md`, never `2026-07-10-design-mode/core.md` and never a placeholder like `<id>/core.md`. The directory is not part of this cell: it is fixed, identical for every row, and printed in full in the `submit_plan` response. Write these cells exactly as they will appear on disk; a reader of the index has no way to expand something you left unsubstituted.
+- **File column:** the part file's path relative to the index, **with your plan's real directory name filled in** — the `submit_plan` response prints that directory, so substitute it and never invent one. `2026-07-10-design-mode/` above is this example's directory, not yours.
+  - This cell is how a reader finds the file. Someone handed only this index — a human, or the agent that will execute the plan — must be able to open exactly what it says, with nothing left to expand and nothing to guess. `<stem>/core.md` and a bare `core.md` both fail that test: the first cannot be resolved at all, the second does not say where the file lives.
 - **Scope column:** Brief description of what this part handles
 - **Status column:** `pending` (not yet written) or `done` (written + finalized)
 
@@ -153,9 +156,9 @@ Part 3: Schema + Verification (Fixtures + tests)
 ## Parts
 | # | File | Scope | Status |
 |---|---|---|---|
-| 1 | `protocol-core.md` | Protocol types + presets | pending |
-| 2 | `config.md` | Config + instructions | pending |
-| 3 | `schema.md` | Schema fixtures + verification | pending |
+| 1 | `2026-07-10-design-mode/protocol-core.md` | Protocol types + presets | pending |
+| 2 | `2026-07-10-design-mode/config.md` | Config + instructions | pending |
+| 3 | `2026-07-10-design-mode/schema.md` | Schema fixtures + verification | pending |
 
 ...rest of index...
 ```

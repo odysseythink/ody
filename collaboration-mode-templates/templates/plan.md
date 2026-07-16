@@ -123,11 +123,11 @@ Example `## Parts` table:
 ## Parts
 | # | File | Scope | Status |
 |---|---|---|---|
-| 1 | `core.md` | data models + persistence | pending |
-| 2 | `api.md` | endpoints + wiring | pending |
-| 3 | `ui.md` | rendering | pending |
+| 1 | `2026-07-10-search-redesign/core.md` | data models + persistence | pending |
+| 2 | `2026-07-10-search-redesign/api.md` | endpoints + wiring | pending |
+| 3 | `2026-07-10-search-redesign/ui.md` | rendering | pending |
 
-The `File` cell is the part file's name only — never a directory prefix, and never a placeholder you have not substituted. The directory is the same for every row and `submit_plan` prints it for you.
+Each `File` cell is the part's path relative to the index, with your plan's real directory filled in (`2026-07-10-search-redesign/` is this example's). `submit_plan` prints that directory — substitute it, never leave a `<placeholder>` and never drop the directory. Whoever reads this index next may have nothing but its text; the cell has to be openable as written.
 
 If the user stays in Plan mode and asks for revisions after a prior `submit_plan` call, any new `submit_plan` call must include a complete replacement plan, not a delta. If the user indicates that the prior plan is not acceptable but does not provide enough information to produce a complete replacement, address the concern and continue planning without calling `submit_plan`. If the follow-up neither requires changes nor calls the plan into question (e.g. clarifying question), answer it, then call `submit_plan` again with the prior plan unchanged.
 

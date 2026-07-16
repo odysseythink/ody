@@ -66,22 +66,24 @@ mod template_tests {
         );
     }
 
-    /// Every `## Parts` table example the model can see must be copy-ready.
+    /// Every `## Parts` File cell the model can see must be openable exactly as written.
     ///
-    /// Regression: PLAN_RIGOR_SPLIT's examples used `<id>/core.md` and `<stem>/protocol-core.md`,
-    /// and its File-column rule read "always `<id>/`" — an instruction, not a placeholder. Its
-    /// worked example was internally inconsistent too: a concrete index (`2026-07-10-design-mode.md`)
-    /// beside a Parts table full of `<stem>/`. Meanwhile PLAN's example used bare `core.md`. A rigor
-    /// prompt therefore showed three different formats for one column, and a real plan shipped with
-    /// `<stem>/core-widget.md` rows.
+    /// The cell is the manifest's locator: an index is routinely handed to a downstream reader — a
+    /// human, or the agent that executes the plan — as text and nothing else. So it needs a real
+    /// directory *and* a real file name.
     ///
-    /// The core tolerates it — `normalize_part_path` keeps only the basename — so nothing failed at
-    /// submit time. The damage lands on whoever reads the index next: the executing agent looked for
-    /// a `<stem>` directory and found nothing.
+    /// Two ways to fail it, both shipped:
+    ///   - `<stem>/core-widget.md` — placeholder never substituted; the executing agent went looking
+    ///     for a literal `<stem>` directory. The examples taught this: `<id>/core.md`, a File-column
+    ///     rule reading "always `<id>/`", and a worked example pairing a concrete index with
+    ///     `<stem>/` rows.
+    ///   - `widget-core.md` — bare name; resolvable by nobody who does not already know the
+    ///     directory. This was the over-correction for the first, and it is just as unusable.
     ///
-    /// The `File` cell is a bare file name. `submit_plan` supplies the directory at runtime.
+    /// `normalize_part_path` keeps only the basename, so the core accepts all three forms and the
+    /// damage is invisible at submit time. That makes this test the guard, not the runtime.
     #[test]
-    fn parts_table_examples_use_bare_copy_ready_file_names() {
+    fn parts_table_examples_are_openable_as_written() {
         for (name, body) in [("PLAN", PLAN), ("PLAN_RIGOR_SPLIT", PLAN_RIGOR_SPLIT)] {
             let rows = parts_table_file_cells(body);
             assert!(
@@ -92,13 +94,16 @@ mod template_tests {
                 assert!(
                     !cell.contains('<') && !cell.contains('>'),
                     "{name}: Parts example File cell {cell:?} carries an unsubstituted placeholder. \
-                     Models copy example tables verbatim; write the cell as it should appear on disk."
+                     Models copy example tables verbatim, so an example must be a finished artifact."
                 );
                 assert!(
-                    !cell.contains('/'),
-                    "{name}: Parts example File cell {cell:?} has a directory prefix. The File cell \
-                     is a bare file name — `normalize_part_path` keeps only the basename, and \
-                     submit_plan supplies the directory."
+                    cell.contains('/'),
+                    "{name}: Parts example File cell {cell:?} has no directory. The cell is how a \
+                     reader locates the part; a bare file name does not say where it lives."
+                );
+                assert!(
+                    cell.ends_with(".md"),
+                    "{name}: Parts example File cell {cell:?} is not a markdown file"
                 );
             }
         }
