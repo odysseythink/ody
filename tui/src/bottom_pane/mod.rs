@@ -416,11 +416,14 @@ impl BottomPane {
 
     pub fn set_pinned_todo(&mut self, update: Option<UpdatePlanArgs>) {
         match update {
-            Some(args) => {
-                let mut widget = PinnedTodoWidget::new();
-                widget.update(args);
-                self.pinned_todo = Some(widget);
-            }
+            Some(args) => match &mut self.pinned_todo {
+                Some(widget) => widget.update(args),
+                None => {
+                    let mut widget = PinnedTodoWidget::new();
+                    widget.update(args);
+                    self.pinned_todo = Some(widget);
+                }
+            },
             None => {
                 self.pinned_todo = None;
             }
@@ -3102,6 +3105,54 @@ mod tests {
         let area = Rect::new(0, 0, 40, pane.desired_height(/*width*/ 40).max(2));
         assert!(pane.cursor_pos(area).is_some());
         assert_eq!(lower_view_handle_calls.get(), 0);
+    }
+
+    #[test]
+    fn set_pinned_todo_reuses_instance_and_preserves_watermark() {
+        use ody_protocol::plan_tool::{PlanItemArg, StepStatus, UpdatePlanArgs};
+
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut pane = BottomPane::new(BottomPaneParams {
+            app_event_tx: tx,
+            frame_requester: FrameRequester::test_dummy(),
+            has_input_focus: true,
+            enhanced_keys_supported: false,
+            placeholder_text: "Ask Ody to do anything".to_string(),
+            disable_paste_burst: false,
+            animations_enabled: true,
+            skills: Some(Vec::new()),
+        });
+
+        let make_update = |completed: usize| UpdatePlanArgs {
+            explanation: None,
+            plan: (0..20)
+                .map(|i| PlanItemArg {
+                    step: format!("Step {i}"),
+                    status: if i < completed {
+                        StepStatus::Completed
+                    } else if i == completed {
+                        StepStatus::InProgress
+                    } else {
+                        StepStatus::Pending
+                    },
+                })
+                .collect(),
+        };
+
+        pane.set_pinned_todo(Some(make_update(0)));
+        let initial = pane.pinned_todo.as_ref().unwrap().desired_height(80);
+        assert_eq!(initial, 8, "folded long plan must start at max_lines");
+
+        // Second update on the SAME BottomPane must reuse the widget and
+        // keep the watermark (height must not shrink now that most steps
+        // are completed and the folded view would otherwise collapse).
+        pane.set_pinned_todo(Some(make_update(20)));
+        let after = pane.pinned_todo.as_ref().unwrap().desired_height(80);
+        assert_eq!(
+            after, initial,
+            "set_pinned_todo(Some) must reuse the widget instance so the watermark survives"
+        );
     }
 
     #[test]
