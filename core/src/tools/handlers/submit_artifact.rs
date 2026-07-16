@@ -8,6 +8,7 @@ use crate::function_tool::FunctionCallError;
 use crate::plan_artifact::PlanWriteOutcome;
 use crate::plan_mode_injector::parts_manifest::RowStatus;
 use crate::plan_mode_injector::parts_manifest::parse_parts_manifest;
+use crate::plan_mode_injector::parts_manifest::part_file_cell_has_placeholder;
 use crate::plan_mode_injector::parts_manifest::row_is_verified_done;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
@@ -269,6 +270,21 @@ pub(crate) async fn handle_submit_artifact(
             .await;
     }
 
+    // Rows whose `File` cell still carries `<...>` placeholder notation. Collected here because
+    // `markdown` is moved into the completed event below, and reported in the response so the model
+    // learns why those rows will never verify instead of being told to keep writing parts forever.
+    let placeholder_part_rows: Vec<String> = parse_parts_manifest(&markdown)
+        .manifest
+        .map(|manifest| {
+            manifest
+                .rows
+                .iter()
+                .filter(|row| part_file_cell_has_placeholder(&row.file))
+                .map(|row| format!("`{}`", row.file))
+                .collect()
+        })
+        .unwrap_or_default();
+
     // 6. Pending parts detection
     let has_pending_parts = match artifact.stem_dir() {
         Some(stem_dir) => parse_parts_manifest(&markdown)
@@ -333,8 +349,18 @@ pub(crate) async fn handle_submit_artifact(
         .await;
 
     // 9. Build response message
+    //
+    // A row whose `File` cell is still a placeholder can never verify, so without naming those rows
+    // the model would be told "keep writing parts" every turn with no clue why the parts it already
+    // wrote do not count. Computed before `markdown` is moved into the completed event above.
     let message = if has_pending_parts {
         match artifact.stem_dir() {
+            Some(_) if !placeholder_part_rows.is_empty() => format!(
+                "{} part saved, but these ## Parts rows still have placeholder File cells: {}. A File cell must be the part file's real name only (e.g. `core.md`) — no directory prefix, and nothing left to substitute. Rows like these can never be verified as done, and anyone reading the index cannot find the file. Fix those cells and call {} again with the corrected index.",
+                wording.noun,
+                placeholder_part_rows.join(", "),
+                wording.tool_name
+            ),
             Some(stem_dir) => format!(
                 "{} part saved. This {} is split into multiple parts and pending parts remain — stay in {} mode and keep writing them one per turn; do not treat this call as final. Write each part file at exactly {}/<part-name>.md (use the file names from the ## Parts table).",
                 wording.noun, wording.noun, wording.mode_name, stem_dir.display()

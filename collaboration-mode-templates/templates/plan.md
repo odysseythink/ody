@@ -112,7 +112,7 @@ Only call `submit_plan` once per turn, and only when you are presenting a comple
 When `{{ split_threshold }}` is greater than 0 and the plan has more than `{{ split_threshold }}` distinct tasks, or it spans multiple subsystems, split it into multiple files (a `{{ split_threshold }}` value of 0 disables splitting — keep everything in one file):
 
 1. **Write the index first.** Call `submit_plan` with an overview and a `## Parts` table (all rows `pending`) as the `plan` argument. `submit_plan` always writes to this one index file — while the table still has `pending` rows, this call only saves the index and keeps Plan mode active; it does not end the turn.
-2. **Write each part with a normal file-write tool, not `submit_plan`.** Create it at `<plan-stem>/<part>.md`. `submit_plan` cannot create separate part files; it only ever overwrites the index. Writing under the plan's own `<plan-stem>/` directory is allowed in Plan mode.
+2. **Write each part with a normal file-write tool, not `submit_plan`.** The `submit_plan` response prints the exact directory to write into — use it verbatim, never guess it — and name the file exactly as its `File` cell in the `## Parts` table. `submit_plan` cannot create separate part files; it only ever overwrites the index. Writing under the plan's own part directory is allowed in Plan mode.
 3. **After finishing a part, call `submit_plan` again** with the index's full markdown, this time with that part's row flipped to `done`. This is what advances the tracker to the next pending part — a direct edit to the index file's `## Parts` table alone will not be seen. As long as any row is still `pending`, this call keeps Plan mode active.
 4. Only write one part per turn.
 
@@ -126,6 +126,8 @@ Example `## Parts` table:
 | 1 | `core.md` | data models + persistence | pending |
 | 2 | `api.md` | endpoints + wiring | pending |
 | 3 | `ui.md` | rendering | pending |
+
+The `File` cell is the part file's name only — never a directory prefix, and never a placeholder you have not substituted. The directory is the same for every row and `submit_plan` prints it for you.
 
 If the user stays in Plan mode and asks for revisions after a prior `submit_plan` call, any new `submit_plan` call must include a complete replacement plan, not a delta. If the user indicates that the prior plan is not acceptable but does not provide enough information to produce a complete replacement, address the concern and continue planning without calling `submit_plan`. If the follow-up neither requires changes nor calls the plan into question (e.g. clarifying question), answer it, then call `submit_plan` again with the prior plan unchanged.
 

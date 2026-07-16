@@ -116,8 +116,23 @@ pub fn row_is_verified_done(stem_dir: &Path, row: &ManifestRow) -> bool {
         && normalize_part_path(stem_dir, &row.file).is_some_and(|path| path.exists())
 }
 
+/// True if a `File` cell still carries template placeholder notation (`<stem>/core.md`,
+/// `<id>/api.md`) instead of a real file name.
+///
+/// Such a cell used to normalize cleanly: only the basename is kept, so `<stem>/core.md` resolved
+/// to `<real-stem-dir>/core.md`, existed, and verified `done`. The plan finalized and shipped with
+/// rows no reader could follow — the executing agent went looking for a literal `<stem>` directory.
+/// The manifest is written for humans and downstream agents as much as for this code, so a cell
+/// that is not a real name is a defect even when the path resolves.
+pub fn part_file_cell_has_placeholder(file_cell: &str) -> bool {
+    file_cell.contains('<') || file_cell.contains('>')
+}
+
 pub fn normalize_part_path(stem_dir: &Path, file_cell: &str) -> Option<PathBuf> {
     if file_cell.starts_with('/') || file_cell.contains("..") {
+        return None;
+    }
+    if part_file_cell_has_placeholder(file_cell) {
         return None;
     }
     let path = Path::new(file_cell);
@@ -228,5 +243,56 @@ mod tests {
     fn normalize_part_path_rejects_non_md() {
         let stem = Path::new("/plans/2026-07-05-topic");
         assert!(normalize_part_path(stem, "core.txt").is_none());
+    }
+
+    /// Regression: a real shipped plan carried `<stem>/core-widget.md` rows. Only the basename is
+    /// kept, so the cell resolved to the real file, existed, and verified `done` — the plan
+    /// finalized with rows no reader could follow, and the executing agent went hunting for a
+    /// literal `<stem>` directory. The cell is part of the artifact, not just a lookup key.
+    #[test]
+    fn normalize_part_path_rejects_unsubstituted_placeholders() {
+        let stem = Path::new("/plans/2026-07-05-topic");
+        for cell in [
+            "<stem>/core.md",
+            "<id>/core.md",
+            "<plan-stem>/core.md",
+            "<part-name>.md",
+        ] {
+            assert!(
+                normalize_part_path(stem, cell).is_none(),
+                "{cell:?} is a placeholder, not a file name, and must not resolve"
+            );
+        }
+    }
+
+    #[test]
+    fn part_file_cell_has_placeholder_only_flags_placeholder_notation() {
+        assert!(part_file_cell_has_placeholder("<stem>/core.md"));
+        assert!(part_file_cell_has_placeholder("<id>/api.md"));
+        assert!(!part_file_cell_has_placeholder("core.md"));
+        assert!(!part_file_cell_has_placeholder("2026-07-05-topic/core.md"));
+    }
+
+    /// A `done` row whose cell is a placeholder must not count as finished, even though the
+    /// basename would resolve to a file that really exists.
+    #[test]
+    fn row_with_placeholder_cell_is_not_verified_done() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stem = tmp.path();
+        std::fs::write(stem.join("core.md"), "# Part 1\n").unwrap();
+
+        let placeholder = ManifestRow {
+            number: 1,
+            file: "<stem>/core.md".to_string(),
+            scope: "core".to_string(),
+            status: RowStatus::Done,
+        };
+        assert!(!row_is_verified_done(stem, &placeholder));
+
+        let real = ManifestRow {
+            file: "core.md".to_string(),
+            ..placeholder
+        };
+        assert!(row_is_verified_done(stem, &real));
     }
 }

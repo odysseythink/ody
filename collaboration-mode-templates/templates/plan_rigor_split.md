@@ -14,7 +14,7 @@ If neither condition holds, keep all tasks in one file.
 
 A split plan consists of:
 
-1. **Index file** (`<id>.md`) — the entry point
+1. **Index file** — the entry point
    - Title, Goal, Architecture, Tech Stack
    - Execution note
    - File Structure table (listing all files touched across all parts)
@@ -24,10 +24,10 @@ A split plan consists of:
    - **Parts manifest** (all rows start as `pending`)
    - **NO task sections** (no `### Task` headers, no step lists)
 
-2. **Part files** (inside `<id>/` subdirectory)
-   - Each part lives in a subdirectory named exactly after the index file's stem
-   - If index is `2026-07-10-design-mode.md`, parts live in `2026-07-10-design-mode/`
+2. **Part files** — in a subdirectory named after the index file's stem
+   - If the index is `2026-07-10-design-mode.md`, parts live in `2026-07-10-design-mode/`
    - Example: `2026-07-10-design-mode/core.md`, `2026-07-10-design-mode/api.md`
+   - You never have to work that directory out: the `submit_plan` response prints it in full. Use it verbatim.
    - Each part file contains: part header → tasks for that phase → local Self-Review
    - **A file written next to the index (e.g., `2026-07-10-design-mode-core.md`) will be rejected by the write guard**
 
@@ -39,12 +39,12 @@ The index file must include a `## Parts` table listing all part files and their 
 ## Parts
 | # | File | Scope | Status |
 |---|---|---|---|
-| 1 | `<id>/core.md` | models + persistence | pending |
-| 2 | `<id>/api.md` | endpoints + wiring | pending |
-| 3 | `<id>/ui.md` | rendering | pending |
+| 1 | `core.md` | models + persistence | pending |
+| 2 | `api.md` | endpoints + wiring | pending |
+| 3 | `ui.md` | rendering | pending |
 ```
 
-- **File column:** Relative path from index, using exact directory name (always `<id>/`)
+- **File column:** the part file's **name only** — `core.md`, never `2026-07-10-design-mode/core.md` and never a placeholder like `<id>/core.md`. The directory is not part of this cell: it is fixed, identical for every row, and printed in full in the `submit_plan` response. Write these cells exactly as they will appear on disk; a reader of the index has no way to expand something you left unsubstituted.
 - **Scope column:** Brief description of what this part handles
 - **Status column:** `pending` (not yet written) or `done` (written + finalized)
 
@@ -82,11 +82,13 @@ The index file must include a `## Parts` table listing all part files and their 
 
 Tasks in different parts may depend on each other. Use this format:
 
+Reference the other part by its `File` cell — the bare file name, exactly as it appears in the Parts table, with no directory prefix:
+
 ```
-**Depends on:** <id>/core.md: Task 2
+**Depends on:** core.md: Task 2
 ```
 
-Example: `Depends on: <stem>/core.md: Task 3` means "this task uses a symbol/artifact that Task 3 in the core.md part created."
+`Depends on: core.md: Task 3` means "this task uses a symbol/artifact that Task 3 in the `core.md` part created."
 
 ### Local Self-Review in each part
 
@@ -151,14 +153,14 @@ Part 3: Schema + Verification (Fixtures + tests)
 ## Parts
 | # | File | Scope | Status |
 |---|---|---|---|
-| 1 | `<stem>/protocol-core.md` | Protocol types + presets | pending |
-| 2 | `<stem>/config.md` | Config + instructions | pending |
-| 3 | `<stem>/schema.md` | Schema fixtures + verification | pending |
+| 1 | `protocol-core.md` | Protocol types + presets | pending |
+| 2 | `config.md` | Config + instructions | pending |
+| 3 | `schema.md` | Schema fixtures + verification | pending |
 
 ...rest of index...
 ```
 
-**Part file 1:** `<stem>/protocol-core.md`
+**Part file 1:** `2026-07-10-design-mode/protocol-core.md`
 ```markdown
 # Design Mode — Protocol & Presets (Part 1)
 

@@ -66,6 +66,70 @@ mod template_tests {
         );
     }
 
+    /// Every `## Parts` table example the model can see must be copy-ready.
+    ///
+    /// Regression: PLAN_RIGOR_SPLIT's examples used `<id>/core.md` and `<stem>/protocol-core.md`,
+    /// and its File-column rule read "always `<id>/`" — an instruction, not a placeholder. Its
+    /// worked example was internally inconsistent too: a concrete index (`2026-07-10-design-mode.md`)
+    /// beside a Parts table full of `<stem>/`. Meanwhile PLAN's example used bare `core.md`. A rigor
+    /// prompt therefore showed three different formats for one column, and a real plan shipped with
+    /// `<stem>/core-widget.md` rows.
+    ///
+    /// The core tolerates it — `normalize_part_path` keeps only the basename — so nothing failed at
+    /// submit time. The damage lands on whoever reads the index next: the executing agent looked for
+    /// a `<stem>` directory and found nothing.
+    ///
+    /// The `File` cell is a bare file name. `submit_plan` supplies the directory at runtime.
+    #[test]
+    fn parts_table_examples_use_bare_copy_ready_file_names() {
+        for (name, body) in [("PLAN", PLAN), ("PLAN_RIGOR_SPLIT", PLAN_RIGOR_SPLIT)] {
+            let rows = parts_table_file_cells(body);
+            assert!(
+                !rows.is_empty(),
+                "{name} exposes no `## Parts` example rows to check — did the table format change?"
+            );
+            for cell in rows {
+                assert!(
+                    !cell.contains('<') && !cell.contains('>'),
+                    "{name}: Parts example File cell {cell:?} carries an unsubstituted placeholder. \
+                     Models copy example tables verbatim; write the cell as it should appear on disk."
+                );
+                assert!(
+                    !cell.contains('/'),
+                    "{name}: Parts example File cell {cell:?} has a directory prefix. The File cell \
+                     is a bare file name — `normalize_part_path` keeps only the basename, and \
+                     submit_plan supplies the directory."
+                );
+            }
+        }
+    }
+
+    /// Extracts the `File` column of every markdown row under a `## Parts` heading.
+    fn parts_table_file_cells(body: &str) -> Vec<String> {
+        let mut cells = Vec::new();
+        let mut in_parts = false;
+        for line in body.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("## ") {
+                in_parts = trimmed == "## Parts";
+                continue;
+            }
+            if !in_parts || !trimmed.starts_with('|') {
+                continue;
+            }
+            let columns: Vec<&str> = trimmed.trim_matches('|').split('|').collect();
+            let Some(file) = columns.get(1).map(|c| c.trim()) else {
+                continue;
+            };
+            // Skip the header (`File`) and the `|---|` separator.
+            if file.is_empty() || file == "File" || file.starts_with("---") {
+                continue;
+            }
+            cells.push(file.trim_matches('`').to_string());
+        }
+        cells
+    }
+
     fn understand_step_of(body: &str) -> String {
         body.lines()
             .find(|line| line.starts_with("1. **Understand**"))
