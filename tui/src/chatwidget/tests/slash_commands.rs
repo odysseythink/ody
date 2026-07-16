@@ -2570,7 +2570,7 @@ async fn slash_writing_plan_missing_file_shows_error() {
 }
 
 #[tokio::test]
-async fn slash_writing_plan_existing_file_submits_prompt_with_source_and_output_path() {
+async fn slash_writing_plan_submits_source_without_guessing_an_output_path() {
     let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
     chat.thread_id = Some(ThreadId::new());
     let plan_mask = collaboration_modes::plan_mask(chat.model_catalog.as_ref())
@@ -2596,8 +2596,15 @@ async fn slash_writing_plan_existing_file_submits_prompt_with_source_and_output_
         .collect::<Vec<_>>()
         .join("\n");
     assert!(
-        rendered.contains("writing-plan: 执行计划将写入:"),
-        "expected output path notice, got {rendered:?}"
+        rendered.contains("writing-plan: 执行计划将写入 .ody-code/plans/"),
+        "expected the plans-directory notice, got {rendered:?}"
+    );
+    // The plan file is named by the core from the plan's own title, which does not exist yet.
+    // Naming a concrete file here would be a guess — and the guess it used to make was the source
+    // file's stem, so a plan derived from `README.md` was announced as `plans/README.md`.
+    assert!(
+        !rendered.contains("plans/README.md"),
+        "the notice must not name a concrete plan file, got {rendered:?}"
     );
 
     match next_submit_op(&mut op_rx) {
@@ -2615,8 +2622,9 @@ async fn slash_writing_plan_existing_file_submits_prompt_with_source_and_output_
                 "expected prompt to mention source file, got {text:?}"
             );
             assert!(
-                text.contains(".ody-code/plans/README.md"),
-                "expected prompt to mention plan output path, got {text:?}"
+                !text.contains(".ody-code/plans/"),
+                "the prompt must not instruct the model to write to a path submit_plan will \
+                 ignore — it names the file from the plan's title, got {text:?}"
             );
         }
         other => panic!("expected Op::UserTurn, got {other:?}"),

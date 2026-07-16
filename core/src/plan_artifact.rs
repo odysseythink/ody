@@ -183,15 +183,15 @@ impl PlanArtifact {
 
     /// Rewrites `state` in place to `Finalized` using `slug`. No-op unless
     /// `state` is still `Temporary`. Caller must already hold the lock.
+    ///
+    /// Only the first persisted write reaches here, so the chosen name is stable for the rest of
+    /// the artifact's life: later writes (a revised plan, a split plan's part turns) see
+    /// `Finalized` and reuse the same path rather than re-allocating a fresh one.
     fn apply_finalized_name(&self, state: &mut PlanArtifactState, slug: &str) {
         if matches!(state, PlanArtifactState::Temporary { .. }) {
             let sanitized = sanitize_plan_slug(slug);
-            let final_name = format!("{}-{}.md", self.date, sanitized);
-            let final_path = self
-                .plans_base_dir
-                .as_path()
-                .join(self.subdir)
-                .join(final_name);
+            let dir = self.plans_base_dir.as_path().join(self.subdir);
+            let final_path = allocate_unclaimed_artifact_path(&dir, &self.date, &sanitized);
             *state = PlanArtifactState::Finalized { final_path };
         }
     }
@@ -399,6 +399,42 @@ fn infer_subdir(plans_base_dir: &AbsolutePathBuf, path: &Path) -> &'static str {
 }
 
 /// Sanitize a user prompt into a plan file slug.
+/// Picks `<date>-<slug>.md`, falling back to `<date>-<slug>_2.md`, `_3.md`, … when earlier
+/// artifacts already claimed the name.
+///
+/// Names come from the model's own title, so two unrelated plans written on the same day can land
+/// on the same slug. Without this, the second one silently destroyed the first: `write_atomically`
+/// truncates, and nothing else in the write path checks for an existing file. The TUI's
+/// `/writing-plan` path used to do its own `_2` allocation before handing a path over; that
+/// allocation is gone, so the guarantee has to live here — at the one place that actually decides
+/// the filename.
+fn allocate_unclaimed_artifact_path(dir: &Path, date: &str, slug: &str) -> PathBuf {
+    let base = dir.join(format!("{date}-{slug}.md"));
+    if !artifact_name_is_claimed(&base) {
+        return base;
+    }
+    for suffix in 2..=MAX_ARTIFACT_NAME_SUFFIX {
+        let candidate = dir.join(format!("{date}-{slug}_{suffix}.md"));
+        if !artifact_name_is_claimed(&candidate) {
+            return candidate;
+        }
+    }
+    // Exhausting 999 same-day, same-title artifacts is not a real scenario; overwriting the base
+    // is still wrong, so say so rather than corrupting a file silently.
+    tracing::warn!(
+        "plan artifact naming: {date}-{slug} and {MAX_ARTIFACT_NAME_SUFFIX} suffixed variants are \
+         all taken; falling back to {base:?}, which will be overwritten"
+    );
+    base
+}
+
+/// A name is claimed if either the artifact file or its split-parts stem directory exists. A split
+/// plan owns both `<stem>.md` and `<stem>/`, so reusing a stem whose directory survives would
+/// interleave two different plans' part files.
+fn artifact_name_is_claimed(artifact_path: &Path) -> bool {
+    artifact_path.exists() || artifact_path.with_extension("").exists()
+}
+
 pub(crate) fn sanitize_plan_slug(prompt: &str) -> String {
     let slug = sanitize_name(prompt);
     if slug.is_empty() || slug == "app" {
@@ -412,6 +448,9 @@ pub(crate) fn sanitize_plan_slug(prompt: &str) -> String {
 /// unbounded input (e.g. a whole user prompt embedding full file paths)
 /// produces filenames hundreds of characters long.
 const MAX_SLUG_LEN: usize = 60;
+
+/// Highest `_N` suffix `allocate_unclaimed_artifact_path` will try before giving up.
+const MAX_ARTIFACT_NAME_SUFFIX: u32 = 999;
 
 // Reuse the existing slug sanitizer used by plugins.
 fn sanitize_name(name: &str) -> String {
@@ -664,6 +703,95 @@ mod tests {
             path.to_string_lossy()
                 .ends_with("2026-07-04-refactor_auth.md")
         );
+    }
+
+    /// Regression: plan files are named from the model's own title, so two unrelated plans written
+    /// on the same day can produce the same slug. `write_atomically` truncates, so the second
+    /// submission used to silently destroy the first.
+    #[tokio::test]
+    async fn write_plan_does_not_overwrite_an_existing_same_named_plan() {
+        let tmp = tempfile::tempdir().unwrap();
+        let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let plans_dir = tmp.path().join("plans");
+        std::fs::create_dir_all(&plans_dir).unwrap();
+
+        let first = PlanArtifact::new_temp(
+            plans_base_dir.clone(),
+            ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-00000000000a").unwrap(),
+            "2026-07-16",
+        );
+        first.write_plan("# Refactor Auth\n\nfirst plan\n", true).await;
+
+        let second = PlanArtifact::new_temp(
+            plans_base_dir,
+            ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-00000000000b").unwrap(),
+            "2026-07-16",
+        );
+        let outcome = second.write_plan("# Refactor Auth\n\nsecond plan\n", true).await;
+
+        let second_path = match outcome {
+            PlanWriteOutcome::Written { path } => path,
+            other => panic!("expected Written, got {other:?}"),
+        };
+        assert!(
+            second_path.to_string_lossy().ends_with("2026-07-16-refactor_auth_2.md"),
+            "second same-titled plan should claim a suffixed name, got {second_path:?}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(plans_dir.join("2026-07-16-refactor_auth.md")).unwrap(),
+            "# Refactor Auth\n\nfirst plan\n",
+            "the first plan must survive intact"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&second_path).unwrap(),
+            "# Refactor Auth\n\nsecond plan\n"
+        );
+    }
+
+    /// A split plan owns both `<stem>.md` and the `<stem>/` directory its part files live in.
+    /// Reusing a stem whose directory survives would interleave two plans' parts.
+    #[tokio::test]
+    async fn write_plan_treats_a_surviving_stem_directory_as_claimed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let plans_dir = tmp.path().join("plans");
+        std::fs::create_dir_all(plans_dir.join("2026-07-16-split_topic")).unwrap();
+
+        let artifact = PlanArtifact::new_temp(
+            plans_base_dir,
+            ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-00000000000c").unwrap(),
+            "2026-07-16",
+        );
+        let outcome = artifact.write_plan("# Split Topic\n", true).await;
+
+        match outcome {
+            PlanWriteOutcome::Written { path } => assert!(
+                path.to_string_lossy().ends_with("2026-07-16-split_topic_2.md"),
+                "a surviving stem dir must be treated as claimed, got {path:?}"
+            ),
+            other => panic!("expected Written, got {other:?}"),
+        }
+    }
+
+    /// Revising a plan within one session must keep overwriting the same file: the name is decided
+    /// on the first write and `apply_finalized_name` no-ops afterwards. Without this, every
+    /// resubmission would spawn `_2`, `_3`, … copies.
+    #[tokio::test]
+    async fn resubmitting_within_a_session_reuses_the_same_path() {
+        let (artifact, _tmp) = test_artifact("2026-07-16");
+
+        let first = artifact.write_plan("# Refactor Auth\n\nv1\n", true).await;
+        let second = artifact.write_plan("# Refactor Auth\n\nv2\n", true).await;
+
+        let (first_path, second_path) = match (first, second) {
+            (
+                PlanWriteOutcome::Written { path: a },
+                PlanWriteOutcome::Written { path: b },
+            ) => (a, b),
+            other => panic!("expected both writes to persist, got {other:?}"),
+        };
+        assert_eq!(first_path, second_path, "a revision must not spawn a new file");
+        assert_eq!(std::fs::read_to_string(&second_path).unwrap(), "# Refactor Auth\n\nv2\n");
     }
 
     #[tokio::test]

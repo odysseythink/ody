@@ -133,6 +133,11 @@ impl ChatWidget {
     /// Return the directory used for plan files in Plan mode.
     ///
     /// Mirrors `PlanArtifact` layout: `{cwd}/.ody-code/plans`.
+    ///
+    /// No call site since `/writing-plan` stopped pre-allocating an output path — the core names
+    /// the plan file from its title, and the TUI has no business guessing it. Kept, like
+    /// `design_directory`, as the symmetric locator for this layout.
+    #[allow(dead_code)]
     fn plan_directory(&self) -> Option<PathBuf> {
         let cwd = self
             .current_cwd
@@ -151,29 +156,6 @@ impl ChatWidget {
             .clone()
             .unwrap_or_else(|| self.config.cwd.to_path_buf());
         Some(cwd.join(".ody-code").join("designs"))
-    }
-
-    fn allocate_writing_plan_path(&self, source_path: &Path) -> Option<PathBuf> {
-        let plans_dir = self.plan_directory()?;
-        let stem = source_path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("plan");
-        let base = plans_dir.join(format!("{stem}.md"));
-        if !base.exists() {
-            return Some(base);
-        }
-        let mut suffix = 2;
-        loop {
-            let candidate = plans_dir.join(format!("{stem}_{suffix}.md"));
-            if !candidate.exists() {
-                return Some(candidate);
-            }
-            suffix += 1;
-            if suffix > 999 {
-                return None;
-            }
-        }
     }
 
     fn request_side_conversation(
@@ -834,20 +816,20 @@ impl ChatWidget {
                     ));
                     return;
                 }
-                let Some(output_path) = self.allocate_writing_plan_path(&source_path) else {
-                    self.add_error_message(
-                        "writing-plan: could not allocate a plan output path.".to_string(),
-                    );
-                    return;
-                };
+                // No output path is announced or embedded here, deliberately. The plan file is
+                // named by the core from the plan's own title (`plan_artifact::write_plan`), which
+                // does not exist yet at this point — so any path named now is a guess, and the one
+                // this used to print was simply wrong whenever the model's title did not happen to
+                // slugify back to the source file's stem. The real path is reported once the plan
+                // is persisted, via `PlanItem::plan_file_path`.
                 self.add_info_message(
-                    format!("writing-plan: 执行计划将写入: {}", output_path.display()),
+                    "writing-plan: 执行计划将写入 .ody-code/plans/（文件名由计划标题决定）"
+                        .to_string(),
                     None,
                 );
                 let prompt = format!(
-                    "请阅读文件 {} 的内容，并将其转换为一份完整、可执行的执行计划，写入计划文件 {}。",
+                    "请阅读文件 {} 的内容，并将其转换为一份完整、可执行的执行计划。",
                     source_path.display(),
-                    output_path.display()
                 );
                 let user_message = self.prepared_inline_user_message(
                     prompt,

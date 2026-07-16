@@ -211,8 +211,12 @@ pub(crate) async fn handle_submit_artifact(
     }
 
     // 4. Emit start event
+    //
+    // No path yet, deliberately. The artifact is still `Temporary` here — its real name is derived
+    // from the markdown's title inside `write_plan` below — so the only path available at this
+    // point is the `tmp-<thread>-<date>.md` placeholder, which is never written and never exists.
+    // Reporting it made the TUI show a dead path; `None` correctly says "not persisted yet".
     let item_id = format!("{}-{}", turn.sub_id, wording.noun);
-    let artifact_path = artifact.path().map(PathBuf::from);
 
     session
         .emit_turn_item_started(
@@ -220,7 +224,7 @@ pub(crate) async fn handle_submit_artifact(
             &TurnItem::Plan(PlanItem {
                 id: item_id.clone(),
                 text: String::new(),
-                plan_file_path: artifact_path.clone(),
+                plan_file_path: None,
             }),
         )
         .await;
@@ -245,6 +249,14 @@ pub(crate) async fn handle_submit_artifact(
         .and_then(|pm| pm.persist_plan_file)
         .unwrap_or(true);
     let outcome = artifact.write_plan(&markdown, persist).await;
+
+    // The name is only decided inside `write_plan`, so this is the earliest point the real path
+    // exists. Take it from the outcome rather than re-reading the artifact: `Written` carries the
+    // exact path that was written, and the other outcomes genuinely have no file to point at.
+    let persisted_path = match &outcome {
+        PlanWriteOutcome::Written { path } => Some(PathBuf::from(path)),
+        PlanWriteOutcome::InlineOnly | PlanWriteOutcome::Failed { .. } => None,
+    };
 
     if let PlanWriteOutcome::Failed { error } = &outcome {
         session
@@ -315,7 +327,7 @@ pub(crate) async fn handle_submit_artifact(
             TurnItem::Plan(PlanItem {
                 id: item_id,
                 text: markdown,
-                plan_file_path: artifact_path,
+                plan_file_path: persisted_path,
             }),
         )
         .await;
