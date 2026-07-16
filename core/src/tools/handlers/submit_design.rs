@@ -18,6 +18,12 @@ use serde::Deserialize;
 struct SubmitDesignArgs {
     /// The design index markdown to persist and submit.
     pub design: String,
+    /// Whether this submission finalizes the design and exits Design mode.
+    /// Defaults to `false`, which checkpoints a partial/skeleton design without
+    /// ending the turn. Only `true` runs the C1–C8 completeness gate and can be
+    /// terminal.
+    #[serde(default, rename = "final")]
+    pub is_final: bool,
 }
 
 #[derive(Debug)]
@@ -54,7 +60,14 @@ impl SubmitDesignHandler {
         };
 
         let args: SubmitDesignArgs = parse_arguments(&arguments)?;
-        handle_submit_artifact(invocation, ModeKind::Design, &DESIGN_WORDING, args.design).await
+        handle_submit_artifact(
+            invocation,
+            ModeKind::Design,
+            &DESIGN_WORDING,
+            args.design,
+            args.is_final,
+        )
+        .await
     }
 }
 
@@ -116,5 +129,37 @@ mod tests {
             err.to_string().contains("design"),
             "missing 'design' field must produce an error mentioning it: {err}"
         );
+    }
+
+    #[test]
+    fn submit_design_args_final_defaults_false() {
+        // Omitting `final` must checkpoint (non-terminal), not finalize.
+        let args: SubmitDesignArgs =
+            serde_json::from_str(r#"{"design": "x"}"#).expect("valid JSON");
+        assert!(!args.is_final, "final must default to false (checkpoint)");
+    }
+
+    #[test]
+    fn submit_design_args_parses_final_true() {
+        let args: SubmitDesignArgs =
+            serde_json::from_str(r#"{"design": "x", "final": true}"#).expect("valid JSON");
+        assert!(args.is_final, "final=true must deserialize to is_final=true");
+    }
+
+    #[test]
+    fn submit_design_spec_exposes_optional_final_flag() {
+        let spec = SubmitDesignHandler.spec();
+        match spec {
+            ToolSpec::Function(tool) => {
+                let props = tool.parameters.properties.as_ref().expect("must have properties");
+                assert!(props.contains_key("final"), "spec must expose the 'final' flag");
+                let required = tool.parameters.required.clone().unwrap_or_default();
+                assert!(
+                    !required.iter().any(|r| r == "final"),
+                    "'final' must be optional (defaults to false)"
+                );
+            }
+            _ => panic!("expected Function variant"),
+        }
     }
 }

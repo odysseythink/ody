@@ -6,17 +6,25 @@ pub fn create_submit_design_tool() -> ToolSpec {
     use ody_tools::{JsonSchema, ResponsesApiTool};
     use std::collections::BTreeMap;
 
-    let properties = BTreeMap::from([(
-        "design".to_string(),
-        JsonSchema::string(Some(
-            "The design index markdown to persist. For single-file designs this is the complete design document. For split designs (## Parts table present), pass the index markdown on every call — the turn only ends once no part row is `pending`; intermediate calls return the stem directory path for part-file writes.".to_string(),
-        )),
-    )]);
+    let properties = BTreeMap::from([
+        (
+            "design".to_string(),
+            JsonSchema::string(Some(
+                "The design index markdown to persist. For single-file designs this is the complete design document. For split designs (## Parts table present), pass the index markdown on every call — the turn only ends once no part row is `pending`; intermediate calls return the stem directory path for part-file writes.".to_string(),
+            )),
+        ),
+        (
+            "final".to_string(),
+            JsonSchema::boolean(Some(
+                "Whether this submission is the final design ready to exit Design mode. Defaults to false. Pass `false` (or omit) to checkpoint an in-progress/skeleton design: it is persisted and shown, but the turn stays in Design mode so you can keep building. Pass `true` ONLY when the design is complete and you want to exit — this runs the C1–C8 completeness gate and, if it passes, ends the turn.".to_string(),
+            )),
+        ),
+    ]);
 
     ToolSpec::Function(ResponsesApiTool {
         name: SUBMIT_DESIGN_TOOL_NAME.to_string(),
         description: format!(
-            "Persist the current design in Design mode. The host derives the filename from the design's # Title and atomically writes it to {} — do not use a shell command or Write tool for the index file; use only this tool. Supports single-file designs and split designs (## Parts manifest). For split designs, call this tool with the index markdown after writing each part; the tool will report pending parts and keep the session in Design mode until all parts are done, then perform a completeness check (C1–C8) before finalizing.",
+            "Persist the current design in Design mode. The host derives the filename from the design's # Title and atomically writes it to {} — do not use a shell command or Write tool for the index file; use only this tool. Use `final: false` (the default) to checkpoint a partial/skeleton design each turn without exiting; use `final: true` only when the design is complete and you intend to exit. Supports single-file designs and split designs (## Parts manifest). For split designs, call this tool with the index markdown after writing each part; the tool will report pending parts and keep the session in Design mode until all parts are done. A `final: true` call then performs a completeness check (C1–C8) before finalizing.",
             ".ody-code/designs/"
         ),
         strict: false,

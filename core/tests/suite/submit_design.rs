@@ -165,7 +165,7 @@ async fn submit_design_persists_and_ends_turn() -> anyhow::Result<()> {
 
     let call_id = "submit-design-call";
     let design_markdown = complete_design_markdown();
-    let args = json!({"design": design_markdown}).to_string();
+    let args = json!({"design": design_markdown, "final": true}).to_string();
 
     let response = sse(vec![
         ev_response_created("resp-1"),
@@ -285,7 +285,7 @@ async fn submit_design_rejects_incomplete_c1_c8() -> anyhow::Result<()> {
     // to test structural gate too.
     let incomplete = "# D\n\n## Scope\nIn.\n\n## Architecture\nDesign.\n";
     let call_id = "submit-design-incomplete";
-    let args = json!({"design": incomplete}).to_string();
+    let args = json!({"design": incomplete, "final": true}).to_string();
 
     let first_response = sse(vec![
         ev_response_created("resp-1"),
@@ -296,7 +296,7 @@ async fn submit_design_rejects_incomplete_c1_c8() -> anyhow::Result<()> {
     // Second response: model retries with complete design.
     let complete = complete_design_markdown();
     let retry_call_id = "submit-design-retry";
-    let retry_args = json!({"design": complete}).to_string();
+    let retry_args = json!({"design": complete, "final": true}).to_string();
     let second_response = sse(vec![
         ev_response_created("resp-2"),
         ev_function_call(retry_call_id, "submit_design", &retry_args),
@@ -415,7 +415,7 @@ async fn submit_design_split_pending_part_returns_stem_dir() -> anyhow::Result<(
     // needs enough content/headings to pass C1–C8.
     let final_markdown = complete_design_markdown();
     let final_call_id = "submit-design-final";
-    let final_args = json!({"design": final_markdown}).to_string();
+    let final_args = json!({"design": final_markdown, "final": true}).to_string();
     let second_response = sse(vec![
         ev_response_created("resp-2"),
         ev_function_call(final_call_id, "submit_design", &final_args),

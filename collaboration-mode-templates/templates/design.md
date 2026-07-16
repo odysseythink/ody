@@ -97,13 +97,13 @@ Authoring rules:
 
 ## Incremental writing & large design splitting
 
-Never write the whole design in a single turn. Scaffold the file (title, scope, skeleton headings) in early turns, calling submit_design at the end of each turn to checkpoint. Then **append** component by component across turns, re-submitting after each addition.
+Never write the whole design in a single turn. Scaffold the file (title, scope, skeleton headings) in early turns, calling `submit_design` **with `final: false`** at the end of each turn to checkpoint. A `final: false` call persists and displays the current draft but keeps you in Design mode — it never ends the turn and never runs the completeness gate, so a skeleton is fine. Then **append** component by component across turns, re-submitting (still `final: false`) after each addition. Only your very last call, once the design is complete, uses `final: true` (see Step 5).
 
 When the design spans more than `{{ split_threshold }}` independent subsystems, split it:
 
 1. Keep the main design file as an **index**: global Scope In/Out, architecture overview, `## Prior Art` (if any), cross-cutting `## Assumptions & Risk`, and a `## Parts` manifest. **The index must self-contain a C1–C8 summary** — the submit gate verifies all eight sections against the index markdown, and a bare index without them will be rejected as incomplete.
 2. Write each subsystem as a part file with an ordinary Write tool under the stem directory returned by submit_design: `<stem>/<subsystem>.md`. Parts written elsewhere are rejected by the gate.
-3. Call submit_design with the updated index (## Parts table) after each part is written — the tool reports remaining pending parts and returns the stem directory path.
+3. Call submit_design (with `final: false`) with the updated index (## Parts table) after each part is written — the tool reports remaining pending parts and returns the stem directory path.
 
 Write **only one part per turn**. After all parts are done, run a cross-file consistency review before asking for final approval. The `## Parts` manifest is durable state that must survive compaction.
 
@@ -133,9 +133,9 @@ Then run the **post-write audit gate**: list every `[C:INFERRED]` item and have 
 
 ## Step 5 — Submit and exit (C1–C8 completeness gate)
 
-When the design is complete and all ## Parts rows are `done` (if split), call `submit_design` with the full index markdown as your only action for the turn. The host:
+When the design is complete and all ## Parts rows are `done` (if split), call `submit_design` **with `final: true`** and the full index markdown as your only action for the turn. `final: true` is what asks to exit — a checkpoint (`final: false`) never exits, no matter how complete it looks. The host:
 
-1. Checks C1–C8 completeness. If any section is missing, the design is persisted to disk but NOT finalized — a message lists the missing sections, and you stay in Design mode to fix them.
+1. Checks C1–C8 completeness. If any section is missing, the design is persisted to disk but NOT finalized — a message lists the missing sections, and you stay in Design mode to fix them (then call `submit_design` with `final: true` again).
 2. If all C1–C8 sections are present, the host marks the design submitted and ends the turn cleanly.
 
 The eight required sections: **C1** Scope In/Out, **C2** Architecture / Design, **C3** Data Models, **C4** Algorithms (pseudocode), **C5** Error Handling / Degradation, **C6** Self-Review, **C7** User final approval recorded, **C8** Reuse Analysis.
@@ -144,7 +144,7 @@ After the turn ends with "Design submitted", your next and only recommendation i
 
 ## Turn discipline
 
-End every turn with exactly one of: (a) a single clarifying question, or (b) a submit_design call (after checkpointing a partial or complete design). After the audit gate (Step 0) has been asked, there must be no pure-investigation turns that neither ask a question nor call submit_design with a design segment.
+End every turn with exactly one of: (a) a single clarifying question, or (b) a submit_design call — `final: false` to checkpoint a partial or complete design segment, or `final: true` only on the final exit turn. After the audit gate (Step 0) has been asked, there must be no pure-investigation turns that neither ask a question nor call submit_design with a design segment.
 
 ## Design file location
 

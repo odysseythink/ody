@@ -542,6 +542,20 @@ pub(crate) async fn run_turn(
                     max = MAX_TURN_CONTINUATION_RETRIES,
                     "model returned an empty completion mid-task; continuing with nudge"
                 );
+                // Surface the empty-completion continuation to the UI. Chat-wire
+                // providers (notably Kimi) can return several empty completions in
+                // a row after a tool result, which previously logged only at warn!
+                // level — leaving the user staring at a frozen screen for minutes.
+                // Mirror the stream-reconnect notice so the retry reads as visible
+                // progress instead of a hang.
+                sess.notify_stream_error(
+                    &turn_context,
+                    format!(
+                        "Model returned an empty response; retrying ({empty_completion_retries}/{MAX_TURN_CONTINUATION_RETRIES})…"
+                    ),
+                    e,
+                )
+                .await;
                 let nudge = ResponseItem::Message {
                     id: Some(uuid::Uuid::new_v4().to_string()),
                     role: "user".to_string(),
