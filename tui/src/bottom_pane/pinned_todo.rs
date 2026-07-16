@@ -7,18 +7,10 @@
 use ody_protocol::plan_tool::PlanItemArg;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::Styled;
-use ratatui::style::Stylize;
-use ratatui::text::Line;
-use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::WidgetRef;
 
-use crate::history_cell::render_plan_steps;
-use crate::style::accent_style;
-use crate::render::line_utils::{prefix_lines, push_owned_lines};
 use crate::render::renderable::Renderable;
-use crate::wrapping::{adaptive_wrap_line, RtOptions};
 
 /// Live pinned todo widget shown between the Working status line and the composer.
 ///
@@ -36,6 +28,13 @@ pub(crate) struct PinnedTodoWidget {
     max_lines: usize,
     /// Whether all steps are visible (toggled via ctrl+e).
     expanded: bool,
+    /// Folded-mode monotone watermark: the largest folded height (in lines)
+    /// this widget instance has ever rendered, capped at `max_lines`.
+    /// `None` until the first folded render. Drops with the widget instance
+    /// (set_pinned_todo(None) / new thread); never shrinks while alive.
+    /// Interior mutability: `Renderable` methods are `&self`, so the folded
+    /// render path records the watermark through a `Cell`.
+    watermark: std::cell::Cell<Option<usize>>,
 }
 
 impl Default for PinnedTodoWidget {
@@ -45,6 +44,7 @@ impl Default for PinnedTodoWidget {
             plan: Vec::new(),
             max_lines: 8,
             expanded: false,
+            watermark: std::cell::Cell::new(None),
         }
     }
 }
@@ -89,48 +89,102 @@ impl PinnedTodoWidget {
 
     /// Render the plan content into a vector of lines at the given width.
     ///
-    /// The returned height is kept stable as task statuses change: when the widget is first shown
-    /// we lock to `min(max_lines, full_content_height)` and pad with blank lines if the live
-    /// folded view becomes shorter. An empty plan (no tasks) hides the widget entirely.
+    /// Folded mode uses a monotone watermark: the visible height never
+    /// shrinks while this widget instance is alive, capped at `max_lines`.
+    /// An empty plan (no tasks) hides the widget entirely.
     fn display_lines(&self, width: u16) -> Vec<ratatui::text::Line<'static>> {
         // No tasks: don't take up any space.
         if self.plan.is_empty() {
             return vec![];
         }
 
-        let full = render_plan_steps(width, self.explanation.as_deref(), &self.plan);
-
         if self.expanded {
-            return full;
+            return plan_layout::full(width, self.explanation.as_deref(), &self.plan);
         }
 
-        let target = full.len().min(self.max_lines);
-        let mut lines = if full.len() <= self.max_lines {
-            full
+        plan_layout::folded(
+            width,
+            self.explanation.as_deref(),
+            &self.plan,
+            self.max_lines,
+            &self.watermark,
+        )
+    }
+}
+
+/// Private rendering routines for the pinned todo widget.
+///
+/// These are pure functions over the plan data; the only state they touch is
+/// the folded-mode watermark passed in by the widget.
+mod plan_layout {
+    use ody_protocol::plan_tool::PlanItemArg;
+    use ody_protocol::plan_tool::StepStatus;
+    use ratatui::style::Style;
+    use ratatui::style::Styled;
+    use ratatui::style::Stylize;
+    use ratatui::text::Line;
+    use ratatui::text::Span;
+    use std::cell::Cell;
+
+    use crate::history_cell::render_plan_steps;
+    use crate::render::line_utils::{prefix_lines, push_owned_lines};
+    use crate::style::accent_style;
+    use crate::wrapping::{adaptive_wrap_line, RtOptions};
+
+    /// Full rendering: delegate to the shared history-cell renderer so the
+    /// pinned widget and history entries stay identical.
+    pub(super) fn full(
+        width: u16,
+        explanation: Option<&str>,
+        plan: &[PlanItemArg],
+    ) -> Vec<Line<'static>> {
+        render_plan_steps(width, explanation, plan)
+    }
+
+    /// Folded rendering with a monotone watermark. The only place that
+    /// knows about the watermark: bump it to the largest candidate seen,
+    /// then pad the body up to it.
+    pub(super) fn folded(
+        width: u16,
+        explanation: Option<&str>,
+        plan: &[PlanItemArg],
+        max_lines: usize,
+        watermark: &Cell<Option<usize>>,
+    ) -> Vec<Line<'static>> {
+        let full_lines = full(width, explanation, plan);
+        if full_lines.is_empty() {
+            return vec![];
+        }
+
+        let candidate = full_lines.len().min(max_lines);
+        let new_watermark = watermark.get().unwrap_or(0).max(candidate);
+        watermark.set(Some(new_watermark));
+
+        let mut body = if full_lines.len() <= max_lines {
+            full_lines
         } else {
-            self.folded_lines(width, full.len())
+            compact_fold(width, explanation, plan, max_lines)
         };
 
-        // Keep the height fixed while tasks are being completed.
-        while lines.len() < target {
-            lines.push(Line::from(""));
+        while body.len() < new_watermark {
+            body.push(Line::from(""));
         }
-
-        lines
+        body
     }
 
     /// Build a compact folded view when the plan has too many lines.
-    fn folded_lines(&self, width: u16, _total_lines: usize) -> Vec<Line<'static>> {
-        use ody_protocol::plan_tool::StepStatus;
-        use ratatui::style::Style;
-
+    pub(super) fn compact_fold(
+        width: u16,
+        explanation: Option<&str>,
+        plan: &[PlanItemArg],
+        max_lines: usize,
+    ) -> Vec<Line<'static>> {
         let mut lines: Vec<Line<'static>> = vec![];
-        let completed = self
-            .plan
+        let completed = plan
             .iter()
             .filter(|p| matches!(p.status, StepStatus::Completed))
             .count();
-        let total = self.plan.len();
+        let total = plan.len();
 
         // Header with progress
         lines.push(
@@ -146,9 +200,7 @@ impl PinnedTodoWidget {
         let mut indented: Vec<Line<'static>> = vec![];
 
         // Show explanation if present and remember how many lines it consumes.
-        let expl_lines = if let Some(expl) = self
-            .explanation
-            .as_ref()
+        let expl_lines = if let Some(expl) = explanation
             .map(|s| s.trim())
             .filter(|t| !t.is_empty())
         {
@@ -161,18 +213,17 @@ impl PinnedTodoWidget {
             0
         };
 
-        // Reserve one line for the footer (ellipsis or completed summary) whenever
-        // the plan is non-empty, so the folded view never exceeds max_lines.
+        // Reserve one line for the footer (ellipsis or completed summary)
+        // whenever the plan is non-empty, so the folded view never exceeds
+        // max_lines.
         let reserve_footer = total > 0;
-        let mut remaining = self
-            .max_lines
+        let mut remaining = max_lines
             .saturating_sub(1) // header
             .saturating_sub(indented.len()) // explanation
             .saturating_sub(if reserve_footer { 1 } else { 0 });
 
         // Show in-progress items first
-        for item in self
-            .plan
+        for item in plan
             .iter()
             .filter(|p| matches!(p.status, StepStatus::InProgress))
         {
@@ -197,8 +248,7 @@ impl PinnedTodoWidget {
         }
 
         // Show pending items next
-        for item in self
-            .plan
+        for item in plan
             .iter()
             .filter(|p| matches!(p.status, StepStatus::Pending))
         {
@@ -223,7 +273,9 @@ impl PinnedTodoWidget {
         }
 
         let shown_visible = indented.len().saturating_sub(expl_lines);
-        let hidden = total.saturating_sub(completed).saturating_sub(shown_visible);
+        let hidden = total
+            .saturating_sub(completed)
+            .saturating_sub(shown_visible);
 
         if hidden > 0 {
             indented.push(Line::from(
@@ -264,6 +316,83 @@ mod tests {
     use crate::history_cell::new_plan_update;
     use crate::history_cell::HistoryCell;
     use crate::render::renderable::Renderable;
+    fn make_plan(total: usize, completed: usize) -> Vec<ody_protocol::plan_tool::PlanItemArg> {
+        (0..total)
+            .map(|i| ody_protocol::plan_tool::PlanItemArg {
+                step: format!("Step {i}"),
+                status: if i < completed {
+                    ody_protocol::plan_tool::StepStatus::Completed
+                } else if i == completed {
+                    ody_protocol::plan_tool::StepStatus::InProgress
+                } else {
+                    ody_protocol::plan_tool::StepStatus::Pending
+                },
+            })
+            .collect()
+    }
+
+    fn args_with(plan: Vec<ody_protocol::plan_tool::PlanItemArg>) -> UpdatePlanArgs {
+        UpdatePlanArgs {
+            explanation: None,
+            plan,
+        }
+    }
+
+    #[test]
+    fn watermark_monotone_across_updates_same_instance() {
+        let mut widget = PinnedTodoWidget::new();
+        let total = 20;
+        let mut heights = Vec::new();
+        for completed in 0..=total {
+            widget.update(args_with(make_plan(total, completed)));
+            let h = widget.desired_height(80);
+            let lines_len = widget.display_lines(80).len() as u16;
+            assert_eq!(h, lines_len, "desired_height must equal display_lines len");
+            heights.push(h);
+        }
+        assert_eq!(heights[0], 8, "initial folded height must be max_lines");
+        for w in heights.windows(2) {
+            assert!(w[1] >= w[0], "height must not shrink: {:?}",
+                heights);
+        }
+        assert_eq!(*heights.last().unwrap(), 8);
+    }
+
+    #[test]
+    fn watermark_caps_at_max_lines_after_all_complete() {
+        let mut widget = PinnedTodoWidget::new();
+        widget.update(args_with(make_plan(20, 0)));
+        assert_eq!(widget.desired_height(80), 8);
+        widget.update(args_with(make_plan(20, 20)));
+        assert_eq!(
+            widget.desired_height(80),
+            8,
+            "height must stay capped at max_lines after all tasks complete"
+        );
+    }
+
+    #[test]
+    fn expanded_does_not_update_watermark() {
+        let mut widget = PinnedTodoWidget::new();
+        widget.update(args_with(make_plan(20, 10)));
+        let folded_before = widget.desired_height(80);
+        assert_eq!(folded_before, 8);
+
+        widget.toggle_expanded();
+        let expanded_height = widget.desired_height(80);
+        assert!(
+            expanded_height > 8,
+            "expanded must show all lines: got {expanded_height}"
+        );
+
+        widget.toggle_expanded();
+        assert_eq!(
+            widget.desired_height(80),
+            folded_before,
+            "collapsing must return to the pre-expansion folded watermark"
+        );
+    }
+
 
     #[test]
     fn renders_pinned_todo_with_explanation_and_steps() {
@@ -285,6 +414,7 @@ mod tests {
             ],
             max_lines: 8,
             expanded: false,
+            watermark: std::cell::Cell::new(None),
         };
 
         let mut terminal = Terminal::new(TestBackend::new(60, 10)).expect("terminal");
@@ -321,6 +451,7 @@ mod tests {
             ],
             max_lines: 8,
             expanded: false,
+            watermark: std::cell::Cell::new(None),
         };
 
         // 1 header + 1 note + 2 steps = 4 lines (no wrapping at 80).
@@ -362,6 +493,7 @@ mod tests {
                 .collect(),
             max_lines: 8,
             expanded: false,
+            watermark: std::cell::Cell::new(None),
         };
 
         assert!(
@@ -373,44 +505,22 @@ mod tests {
 
     #[test]
     fn fixed_height_for_short_plan_when_all_completed() {
-        let steps = vec![
-            PlanItemArg {
-                step: "Step one".to_string(),
-                status: StepStatus::Completed,
-            },
-            PlanItemArg {
-                step: "Step two".to_string(),
-                status: StepStatus::InProgress,
-            },
-            PlanItemArg {
-                step: "Step three".to_string(),
-                status: StepStatus::Pending,
-            },
-        ];
-
-        let initial = PinnedTodoWidget {
-            explanation: None,
-            plan: steps.clone(),
-            max_lines: 8,
-            expanded: false,
-        };
-        let initial_height = initial.desired_height(80);
+        let mut widget = PinnedTodoWidget::new();
+        widget.update(args_with(vec![
+            PlanItemArg { step: "Step one".to_string(), status: StepStatus::Completed },
+            PlanItemArg { step: "Step two".to_string(), status: StepStatus::InProgress },
+            PlanItemArg { step: "Step three".to_string(), status: StepStatus::Pending },
+        ]));
+        let initial_height = widget.desired_height(80);
         assert_eq!(initial_height, 4); // 1 header + 3 steps
 
-        let all_done = PinnedTodoWidget {
-            explanation: None,
-            plan: steps
-                .into_iter()
-                .map(|s| PlanItemArg {
-                    status: StepStatus::Completed,
-                    ..s
-                })
-                .collect(),
-            max_lines: 8,
-            expanded: false,
-        };
+        widget.update(args_with(vec![
+            PlanItemArg { step: "Step one".to_string(), status: StepStatus::Completed },
+            PlanItemArg { step: "Step two".to_string(), status: StepStatus::Completed },
+            PlanItemArg { step: "Step three".to_string(), status: StepStatus::Completed },
+        ]));
         assert_eq!(
-            all_done.desired_height(80),
+            widget.desired_height(80),
             initial_height,
             "short plan height must stay fixed after all tasks complete"
         );
@@ -418,42 +528,14 @@ mod tests {
 
     #[test]
     fn fixed_height_for_long_plan_when_all_completed() {
-        let steps: Vec<PlanItemArg> = (0..20)
-            .map(|i| PlanItemArg {
-                step: format!("Step {i}"),
-                status: if i < 10 {
-                    StepStatus::Completed
-                } else if i == 10 {
-                    StepStatus::InProgress
-                } else {
-                    StepStatus::Pending
-                },
-            })
-            .collect();
-
-        let initial = PinnedTodoWidget {
-            explanation: None,
-            plan: steps.clone(),
-            max_lines: 8,
-            expanded: false,
-        };
-        let initial_height = initial.desired_height(80);
+        let mut widget = PinnedTodoWidget::new();
+        widget.update(args_with(make_plan(20, 10)));
+        let initial_height = widget.desired_height(80);
         assert_eq!(initial_height, 8);
 
-        let all_done = PinnedTodoWidget {
-            explanation: None,
-            plan: steps
-                .into_iter()
-                .map(|s| PlanItemArg {
-                    status: StepStatus::Completed,
-                    ..s
-                })
-                .collect(),
-            max_lines: 8,
-            expanded: false,
-        };
+        widget.update(args_with(make_plan(20, 20)));
         assert_eq!(
-            all_done.desired_height(80),
+            widget.desired_height(80),
             initial_height,
             "long plan height must stay at max_lines after all tasks complete"
         );
@@ -484,6 +566,7 @@ mod tests {
             plan: update.plan.clone(),
             max_lines: 8,
             expanded: true,
+            watermark: std::cell::Cell::new(None),
         };
         let cell = new_plan_update(update);
 
