@@ -30,6 +30,7 @@ pub(crate) mod request_user_input_spec;
 mod shell;
 pub(crate) mod shell_spec;
 mod sleep;
+pub(crate) mod submit_artifact;
 mod submit_plan;
 pub(crate) mod submit_plan_spec;
 mod test_sync;
