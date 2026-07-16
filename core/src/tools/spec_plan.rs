@@ -28,6 +28,7 @@ use crate::tools::handlers::RequestUserInputHandler;
 use crate::tools::handlers::ShellCommandHandler;
 use crate::tools::handlers::ShellCommandHandlerOptions;
 use crate::tools::handlers::SleepHandler;
+use crate::tools::handlers::SubmitDesignHandler;
 use crate::tools::handlers::SubmitPlanHandler;
 use crate::tools::handlers::TestSyncHandler;
 use crate::tools::handlers::ToolSearchHandlerCache;
@@ -683,10 +684,17 @@ fn add_core_utility_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut
         planned_tools.add(PlanHandler);
     }
 
-    // submit_plan is the explicit terminal action for Plan mode; exposing it
-    // outside Plan mode would let non-plan turns end themselves via a tool.
-    if turn_context.collaboration_mode.mode == ModeKind::Plan {
-        planned_tools.add_with_exposure(SubmitPlanHandler, ToolExposure::DirectModelOnly);
+    // submit_plan and submit_design are the explicit terminal actions for Plan
+    // and Design mode respectively; exposing either outside its mode would let
+    // non-relevant turns end themselves via a tool.
+    match turn_context.collaboration_mode.mode {
+        ModeKind::Plan => {
+            planned_tools.add_with_exposure(SubmitPlanHandler, ToolExposure::DirectModelOnly);
+        }
+        ModeKind::Design => {
+            planned_tools.add_with_exposure(SubmitDesignHandler, ToolExposure::DirectModelOnly);
+        }
+        _ => {}
     }
 
     if turn_context.config.experimental_request_user_input_enabled {
