@@ -18,8 +18,15 @@ impl<'a> PlanModeTierSelector<'a> {
     }
 
     pub fn select_tier(&self, _user_prompt: &str) -> PlanModeTierSelection {
-        // Config override takes precedence.
-        if let Some(tier) = self.config.and_then(|c| c.tier) {
+        // Config override takes precedence. `Auto` is not a resolvable tier — it means "let the
+        // selector decide" — so it falls through to the default below rather than being returned
+        // verbatim. Returning it would read as "not Rigor" at every `tier == Rigor` check and
+        // silently drop the rigor fragments.
+        if let Some(tier) = self
+            .config
+            .and_then(|c| c.tier)
+            .filter(|tier| *tier != PlanModeTier::Auto)
+        {
             return PlanModeTierSelection {
                 tier,
                 rationale: format!("config override: {}", tier_name(tier)),
@@ -92,6 +99,18 @@ mod tests {
         let selection = selector.select_tier("fix typo");
         assert_eq!(selection.tier, PlanModeTier::Rigor);
         assert!(selection.rationale.contains("config override"));
+    }
+
+    #[test]
+    fn config_auto_falls_through_to_rigor() {
+        let config = PlanModeConfigToml {
+            tier: Some(PlanModeTier::Auto),
+            ..Default::default()
+        };
+        let selector = PlanModeTierSelector::new(Some(&config));
+        let selection = selector.select_tier("any prompt");
+        assert_eq!(selection.tier, PlanModeTier::Rigor);
+        assert!(selection.rationale.contains("always generate detailed plan"));
     }
 
     #[test]

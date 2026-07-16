@@ -2,6 +2,8 @@
 
 In addition to the conversational planning phases above, rigor-tier plans MUST follow this explicit workflow to ensure completeness and traceability.
 
+A rigor-tier plan is never compressed into a compact summary. If a task's detail is long, that is correct — length is not a defect here.
+
 ### Workflow (five steps)
 
 1. **Understand** — explore the codebase with `grep` / `glob` / `read_file` to discover existing functions, utilities, and patterns you can reuse. Start with `grep` (it returns file paths, not their contents), then `read_file` only the regions that matter — a broad dump of matching lines burns the context you will need for the plan itself. Eliminate unknowns by active discovery before planning.
@@ -40,3 +42,4 @@ Example:
 
 > For executing workers: implement this plan task-by-task (prefer a fresh subagent/Task per task — a clean context per task avoids single-session degradation). Steps use - [ ] checkboxes for tracking.
 ```
+

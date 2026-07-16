@@ -39,8 +39,12 @@ assumes you know which fragment you're editing and why.
 
 - [ ] Adding a fragment: create the `.md` file, add the `pub const PLAN_RIGOR_<NAME>` in
       `collaboration-mode-templates/src/lib.rs`, add a `with_rigor_<name>()` method (copy the
-      three-line shape of any existing one), and insert the call into the chain in
-      `from_collaboration_mode` at the position its dependencies require.
+      three-line shape of any existing one), and insert the call into `with_rigor_contract()` at
+      the position its dependencies require.
+- [ ] Decide the fragment's **tier** first. The rigor chain lives in `with_rigor_contract()`; the
+      concise tier is the single `PLAN_CONCISE` fragment in `with_concise_contract()`. A rule that
+      both tiers obey is not a fragment at all — it belongs in base `plan.md`. Only rigor fragments
+      go in `RIGOR_FRAGMENT_GRAPH`.
 - [ ] Reordering the chain: re-derive which HARD edges (see FRAGMENT_CATALOG.md) the new order
       violates, if any. Update `RIGOR_COMPOSITION_ORDER` and the `actual_chain` array in
       `core/src/context/rigor_fragment_graph.rs`'s test module to match.
@@ -84,6 +88,21 @@ assumes you know which fragment you're editing and why.
 - **Copy-pasting TASK_SKELETON's no-placeholders section instead of referencing INVARIANTS.**
   They already overlap; a third near-duplicate makes future edits need three synced updates
   instead of two.
+
+- **Putting tier-specific text in the base `plan.md`.** `plan.md` renders for *every* tier;
+  fragments render for one. This has bitten in both directions. Rigor→base: WORKFLOW was inlined
+  as "PHASE 3A", so concise plans carried a "verify all seven items" instruction with no seven
+  items anywhere in the prompt, and models invented their own list. Base→rigor: the concise
+  autonomy rules and compact writing style lived in base, so rigor prompts were told to compress
+  to 3-5 sections while their own addenda demanded per-task detail. If a rule belongs to one tier,
+  it goes in that tier's fragment — full stop. Guarded by `base_template_is_tier_neutral`.
+
+- **Asking the model to infer its own tier.** The host resolves the tier and states it at the top
+  of the prompt (`with_plan_tier_declaration`). Fragments must not add competing cues like "when
+  the request is brief, you are in the concise tier" — that exact sentence let a one-line
+  `/writing-plan` request talk a rigor-tier session into a concise plan. If a fragment needs to
+  name its tier, assert it ("You are in the concise tier — the host said so above"), never derive
+  it.
 
 ## Plan mode `submit_plan` migration
 

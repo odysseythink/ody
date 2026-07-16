@@ -9,7 +9,32 @@ This document is the map: what each fragment does, what it assumes is already in
 the safe order to add or edit them in. It exists so that changing one fragment doesn't silently
 break the sentence that follows it (several fragments literally start with "In addition to ... above").
 
+## The tier contract (read this before adding tier-specific text anywhere)
+
+Base `plan.md` renders for **every** tier. Fragments render for **one** tier. So any rule that only
+one tier obeys MUST live in that tier's fragment — never in the base. Putting it in the base ships
+it to the other tier too, where it either contradicts that tier's own addenda or dangles with no
+definition. Both failure modes have already happened; see WORKFLOW and CONCISE below.
+
+Each Plan-mode prompt is therefore exactly: `tier declaration` + `base plan.md` + `that tier's
+fragments`, and nothing else:
+
+```rust
+this = match tier {
+    PlanModeTier::Concise => this.with_concise_contract(),
+    PlanModeTier::Rigor | PlanModeTier::Auto => this.with_rigor_contract(),
+};
+this = this.with_plan_tier_declaration(tier);
+```
+
+`with_plan_tier_declaration` prepends the host-resolved tier at the top of the prompt. It is the
+single authority on which tier is in force — fragments must never ask the model to infer its own
+tier (from request length, task size, or which sections rendered). `Auto` is not a renderable tier;
+`resolve_plan_mode_tier` normalizes it away before this match.
+
 ## Composition order (source of truth: the code)
+
+The Rigor chain, inside `with_rigor_contract()`:
 
 ```rust
 this.with_rigor_workflow()
@@ -28,9 +53,34 @@ this.with_rigor_workflow()
 If you change this order, re-check every "in addition to ... above" reference below — those
 sentences are only true if the referenced fragment actually rendered earlier in the string.
 
+The Concise tier is a single fragment (CONCISE), so it has no order to maintain and is **not** part
+of `RIGOR_FRAGMENT_GRAPH` — that graph and its drift test cover the rigor chain only.
+
 ## Fragment reference
 
-### 1. WORKFLOW — `plan_rigor_workflow.md` (42 lines)
+### 0. CONCISE — `plan_concise.md` (the only non-rigor fragment)
+
+- **Tier:** Concise. Everything else in this catalog is Rigor.
+- **Says:** the autonomy rules (resolve unknowns by exploration, choose labelled defaults, never
+  block finalization) and the compact writing style (3-5 short sections; grouped bullets over
+  file-by-file inventories), plus an explicit list of what the concise tier does *not* ask for
+  (`### Task N` sections, step checkboxes, Dependency Overview, Spec-coverage, Self-review).
+- **Depends on:** nothing. It is the whole concise contract in one file.
+- **Why it exists:** both halves used to live in base `plan.md` — the autonomy rules as
+  "## Concise-tier autonomy" and the writing style inside "Finalization rule". Because base renders
+  for every tier, rigor prompts received both. The writing style told them to compress to 3-5
+  sections while their own addenda demanded per-task detail with real code. Worse, the autonomy
+  section opened with "When the user's request is brief ... (the **concise** plan tier)", telling
+  the model to self-classify by request length — a heuristic the host had already abandoned
+  (`select_tier` ignores the prompt entirely). A terse request could therefore talk a rigor-tier
+  session into writing a concise plan. It also referenced a "standard" tier that never existed in
+  `PlanModeTier`.
+- **Change frequency:** low.
+- **Guarded by:** `rigor_tier_does_not_receive_concise_rules`, `base_template_is_tier_neutral`, and
+  `concise_tier_has_no_dangling_rigor_references` in
+  `core/src/context/collaboration_mode_instructions.rs`.
+
+### 1. WORKFLOW — `plan_rigor_workflow.md` (44 lines)
 
 - **Says:** the 5-step method (Understand → File Structure → Dependency Overview → Write the
   plan incrementally → Self-review), plus the mandatory plan document header (Title/Goal/
@@ -42,6 +92,20 @@ sentences are only true if the referenced fragment actually rendered earlier in 
 - **Referenced by:** nothing explicitly, but COVERAGE and TASK_SKELETON assume the reader has
   already seen "the workflow" as framing.
 - **Change frequency:** very low. This is the spine; changing the 5 steps ripples everywhere.
+- **Shares step 1 with base `plan.md`, deliberately.** Step 1 (**Understand**) is exploration
+  technique, which is tier-neutral — every plan-mode session needs it, so base carries an identical
+  copy under "Exploration technique (every tier)". Two tests in
+  `collaboration-mode-templates/src/lib.rs` pin this: `plan_templates_only_name_tools_that_exist`
+  (both copies must steer at `grep`/`glob`/`read_file`, or the model shells out to `rg`/`cat` and
+  burns context) and `plan_and_rigor_workflow_share_the_same_understand_step` (the two copies must
+  not drift, because `plan_mode_injector::render_full_reminder()` re-injects this fragment
+  mid-session). Steps 2-5 and the document header are rigor-only and live here alone.
+- **Do not inline the rest into `plan.md`.** It was, once, as "PHASE 3A" — a verbatim copy minus
+  the `(see Self-review addendum)` cross-reference. Rigor prompts rendered the workflow twice;
+  concise prompts rendered it *without* the addenda that define its steps, leaving "verify all
+  seven items" pointing at nothing, and models invented a seven-item checklist to fill the gap.
+  Guarded by `rigor_workflow_is_not_duplicated_in_base_template` in
+  `core/src/context/collaboration_mode_instructions.rs`.
 
 ### 2. COVERAGE — `plan_rigor_coverage.md` (23 lines)
 
