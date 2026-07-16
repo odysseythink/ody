@@ -365,16 +365,19 @@ pub(crate) async fn run_turn(
                 let needs_follow_up = model_needs_follow_up || has_pending_input;
                 let token_limit_reached = token_status.token_limit_reached;
 
-                // Plan-mode terminal tool: if submit_plan finalized the plan during this
-                // sampling response, end the turn cleanly. The after-turn hook already ran
-                // inside run_sampling_request (turn.rs:2682). Skip stop hooks — submit_plan
-                // is the intentional terminal action, so we must not let a stop hook
-                // re-inject continuation and undo terminality.
-                if turn_context.collaboration_mode.mode == ModeKind::Plan
-                    && turn_context
-                        .plan_artifact
-                        .as_ref()
-                        .is_some_and(|artifact| artifact.take_submitted())
+                // Plan/Design-mode terminal tools: if submit_plan / submit_design finalized
+                // the artifact during this sampling response, end the turn cleanly. The
+                // after-turn hook already ran inside run_sampling_request (turn.rs:2682).
+                // Skip stop hooks — submit_plan / submit_design are intentional terminal
+                // actions, so we must not let a stop hook re-inject continuation and undo
+                // terminality.
+                if matches!(
+                    turn_context.collaboration_mode.mode,
+                    ModeKind::Plan | ModeKind::Design
+                ) && turn_context
+                    .plan_artifact
+                    .as_ref()
+                    .is_some_and(|artifact| artifact.take_submitted())
                 {
                     last_agent_message = sampling_request_last_agent_message;
                     break;
