@@ -95,7 +95,7 @@ Reference the other part by its `File` cell — the bare file name, exactly as i
 
 ### Local Self-Review in each part
 
-Each part file must end with its own Self-Review section:
+Each part file must end with its own Self-Review section, scoped to that part. The blank form is below; the rule for filling it in is the one from the Self-review addendum — check an item off (`- [x]`) once you have verified it and say what settled it, leave it `- [ ]` if you cannot, and do not mark the part `done` while anything is unchecked.
 
 ```
 ## Self-review (Part 1)

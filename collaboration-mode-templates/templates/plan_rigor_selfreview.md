@@ -1,6 +1,8 @@
 ## Rigor tier addendum: Self-review checklist
 
-In addition to the Dependency Overview and Spec-coverage table above, every rigor-tier plan MUST end with a `## Self-review` section. Reproduce all seven items exactly as `- [ ]` checkboxes and verify each one before finalizing the plan.
+In addition to the Dependency Overview and Spec-coverage table above, every rigor-tier plan MUST end with a `## Self-review` section reproducing all seven items below, as checkboxes, in this order.
+
+These are yours to run, not the implementer's. Check an item off (`- [x]`) once you have actually verified it, and say what you verified against — name the file, symbol, or command that settled it, not "done". An item you cannot substantiate stays `- [ ]`, and a plan with an unchecked item is not ready to finalize: fix what the item exposed, then check it. A checked item with nothing behind it is worse than an unchecked one — it spends the reader's trust and buys nothing.
 
 - [ ] 1. Spec-coverage table: map every spec section/requirement → Task(s), marked covered / GAP / no-op (GAP means add the task).
 - [ ] 2. Placeholder scan: no TODO/TBD, no deferred-by-dependency excuses, no dead-code placeholders.
