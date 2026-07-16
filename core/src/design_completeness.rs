@@ -19,65 +19,90 @@ fn heading_regex() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"(?m)^## ").expect("valid heading regex"))
 }
 
+// Every section check anchors its keyword to the start of a heading line
+// (`^#{1,3}\s+`), so a keyword merely appearing in prose (or in a skeleton
+// section's placeholder body) no longer satisfies the section. An optional
+// enumerator prefix (`C1.`, `C2)`, `C3：` …) is tolerated so the template's own
+// `## C2. Architecture / Design` heading style passes without forcing the model
+// to rename to a bare `## Architecture` — the un-tolerated prefix previously
+// caused spurious "missing section" rejections. `(?im)` keeps `^` per-line and
+// matching case-insensitive.
+const HEADING_PREFIX: &str = r"(?im)^#{1,3}\s+(?:c\d+[.):：]?\s+)?";
+
 fn c1_scope() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"(?im)^#{1,3}\s+(scope|in/out|范围|scope\s+in)").expect("valid C1 regex")
+        Regex::new(&format!(r"{HEADING_PREFIX}(scope|in/out|范围)")).expect("valid C1 regex")
     })
 }
 
 fn c2_architecture() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"(?i)(architecture|design|approach|overview|架构|设计方案)")
-            .expect("valid C2 regex")
+        Regex::new(&format!(
+            r"{HEADING_PREFIX}(architecture|design|approach|overview|架构|设计方案)"
+        ))
+        .expect("valid C2 regex")
     })
 }
 
 fn c3_data_models() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"(?i)(data\s*models?|数据模型|models?|data\s+&?\s*state)")
-            .expect("valid C3 regex")
+        Regex::new(&format!(
+            r"{HEADING_PREFIX}(data\s*models?|数据模型|models?|data\s+&?\s*state)"
+        ))
+        .expect("valid C3 regex")
     })
 }
 
 fn c4_algorithms() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"(?i)(algorithms?|算法|pseudocode|implementation\s+notes?)")
-            .expect("valid C4 regex")
+        Regex::new(&format!(
+            r"{HEADING_PREFIX}(algorithms?|算法|pseudocode|implementation\s+notes?)"
+        ))
+        .expect("valid C4 regex")
     })
 }
 
 fn c5_error_handling() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"(?i)(error\s*handling|错误处理|errors?|degradation|failure\s+scenarios?)")
-            .expect("valid C5 regex")
+        Regex::new(&format!(
+            r"{HEADING_PREFIX}(error\s*handling|错误处理|errors?|degradation|failure\s+scenarios?)"
+        ))
+        .expect("valid C5 regex")
     })
 }
 
 fn c6_self_review() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
+    // Deliberately narrow: a bare `review` / `audit` heading is NOT accepted,
+    // because a section merely named "Design Review" is not the adversarial
+    // self-review this gate exists to force (mirrors ody-code's C6).
     RE.get_or_init(|| {
-        Regex::new(r"(?i)(self[- ]?review|自检|review|audit)").expect("valid C6 regex")
+        Regex::new(&format!(r"{HEADING_PREFIX}(self[-\s]?review|自检)")).expect("valid C6 regex")
     })
 }
 
 fn c7_user_approval() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"(?i)(user\s+(final\s+)?approval|用户批准|批准状态|approved?)")
-            .expect("valid C7 regex")
+        Regex::new(&format!(
+            r"{HEADING_PREFIX}(user\s+(?:final\s+)?approval|用户批准|批准状态|approved?)"
+        ))
+        .expect("valid C7 regex")
     })
 }
 
 fn c8_reuse_analysis() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"(?i)(?:reuse\s+analysis|复用分析|component\s+reuse|existing\s+components?)")
-            .expect("valid C8 regex")
+        Regex::new(&format!(
+            r"{HEADING_PREFIX}(reuse\s+analysis|复用分析|component\s+reuse|existing\s+components?)"
+        ))
+        .expect("valid C8 regex")
     })
 }
 
@@ -277,5 +302,85 @@ mod tests {
         assert!(report.contains("- sufficient content (design appears incomplete or empty)"));
         assert!(report.contains("- Scope or Scope In/Out section"));
         assert!(report.ends_with("Please add the missing sections before exiting Design mode."));
+    }
+
+    #[test]
+    fn enumerator_prefixed_headings_pass() {
+        // The template's own `## C1. Scope`, `## C2. Architecture / Design` …
+        // heading style must satisfy the gate without renaming to bare headings.
+        let design = concat!(
+            "# Widget Fix Design\n\n",
+            "## C1. Scope In / Out\n",
+            "In: the widget. Out: the polish. Padding padding padding padding ",
+            "padding padding padding padding padding padding padding padding.\n\n",
+            "## C2. Architecture / Design\n",
+            "approach overview.\n\n",
+            "## C3. Data Models\n",
+            "the new fields.\n\n",
+            "## C4. Algorithms\n",
+            "pseudocode.\n\n",
+            "## C5. Error Handling\n",
+            "degradation.\n\n",
+            "## C6. Self-Review\n",
+            "four-lens sweep.\n\n",
+            "## C7. User Approval\n",
+            "approved.\n\n",
+            "## C8. Reuse Analysis\n",
+            "existing components.\n",
+        );
+        assert!(
+            find_missing_design_sections(design).is_empty(),
+            "C-enumerated headings must pass; got {:?}",
+            find_missing_design_sections(design)
+        );
+    }
+
+    #[test]
+    fn keyword_in_prose_does_not_satisfy_section() {
+        // "architecture" only in prose (never a heading) must NOT satisfy C2 —
+        // this is the un-anchored-regex bug that let skeleton drafts pass.
+        let design = concat!(
+            "# A Design\n\n",
+            "## Scope\n",
+            "We will change the architecture and the data models and the ",
+            "algorithms. Padding padding padding padding padding padding padding ",
+            "padding padding padding padding padding padding padding padding.\n\n",
+            "## Notes\n",
+            "Some error handling review approval reuse prose, all inline.\n",
+        );
+        let missing = find_missing_design_sections(design);
+        for expected in [
+            "Architecture or Design section",
+            "Data Models section",
+            "Algorithms or Implementation Notes section",
+            "Error Handling section",
+            "Self-Review section",
+            "User Approval section",
+            "Reuse Analysis section",
+        ] {
+            assert!(
+                missing.iter().any(|m| m == expected),
+                "prose keyword must not satisfy {expected:?}; missing = {missing:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn bare_review_heading_does_not_satisfy_self_review() {
+        // A heading merely named "Design Review" is not the adversarial
+        // self-review C6 exists to force.
+        let design = concat!(
+            "# A Design\n\n",
+            "## Scope\n",
+            "padding padding padding padding padding padding padding padding ",
+            "padding padding padding padding padding padding padding padding.\n\n",
+            "## Design Review\n",
+            "a review and an audit were done.\n",
+        );
+        let missing = find_missing_design_sections(design);
+        assert!(
+            missing.iter().any(|m| m == "Self-Review section"),
+            "bare 'Design Review'/'audit' must not satisfy C6; missing = {missing:?}"
+        );
     }
 }

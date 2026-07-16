@@ -147,17 +147,22 @@ fn split_threshold_gap(plan: &str, split_threshold: usize) -> Option<String> {
 /// 3. Events — emits `TurnItem::Plan(started)`, `PlanDelta`, `Warning` (on
 ///    persist failure), and `TurnItem::Plan(completed)`.
 /// 4. Persist — calls `artifact.write_plan(&markdown, persist)`.
-/// 5. Pending-parts detection — returns non-terminal message with `stem_dir`
+/// 5. Checkpoint — when `finalize` is `false`, the artifact is persisted and
+///    shown but the turn stays in the current mode (never terminal). This lets
+///    Design mode checkpoint a partial/skeleton design each turn without the
+///    completeness gate accidentally finalizing it.
+/// 6. Pending-parts detection — returns non-terminal message with `stem_dir`
 ///    path when manifest has pending rows.
-/// 6. Terminal candidate — for Plan: `split_threshold_gap` then
+/// 7. Terminal candidate — for Plan: `split_threshold_gap` then
 ///    `rigor_structure_gap`; for Design: `design_completeness_report`.
-/// 7. Terminal — calls `artifact.mark_submitted()` and returns the submitted
+/// 8. Terminal — calls `artifact.mark_submitted()` and returns the submitted
 ///    message.
 pub(crate) async fn handle_submit_artifact(
     invocation: ToolInvocation,
     expected_mode: ModeKind,
     wording: &SubmitWording,
     markdown: String,
+    finalize: bool,
 ) -> Result<Box<dyn crate::tools::context::ToolOutput>, FunctionCallError> {
     let ToolInvocation {
         session,
@@ -272,8 +277,10 @@ pub(crate) async fn handle_submit_artifact(
             }),
     };
 
-    // 7. Gap detection — mode-dependent
-    let gap: Option<String> = if has_pending_parts {
+    // 7. Gap detection — mode-dependent. Skipped for non-final checkpoints:
+    // a checkpoint is never terminal, so the completeness/rigor gate (whose
+    // sole effect is to gate finalization) does not apply.
+    let gap: Option<String> = if !finalize || has_pending_parts {
         None
     } else if expected_mode == ModeKind::Design {
         // Design: C1–C8 completeness (replaces plan-specific split/rigor checks)
@@ -325,6 +332,13 @@ pub(crate) async fn handle_submit_artifact(
                 wording.noun, wording.noun, wording.mode_name
             ),
         }
+    } else if !finalize {
+        // Checkpoint: persisted and shown, but explicitly non-terminal. The
+        // completeness gate was skipped; do not mark the artifact submitted.
+        format!(
+            "{} checkpoint saved — still in {} mode (not final). Keep building the {}; call {} with `final: true` only once it is complete and you intend to exit.",
+            wording.noun, wording.mode_name, wording.noun, wording.tool_name
+        )
     } else if let Some(g) = gap {
         if expected_mode == ModeKind::Design {
             format!(

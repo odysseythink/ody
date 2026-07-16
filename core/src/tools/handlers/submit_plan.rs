@@ -47,7 +47,10 @@ impl SubmitPlanHandler {
         };
 
         let args: SubmitPlanArgs = parse_arguments(&arguments)?;
-        handle_submit_artifact(invocation, ModeKind::Plan, &PLAN_WORDING, args.plan).await
+        // Plan mode has no checkpoint/final split: every submit_plan is a
+        // finalize-intent call (its own split-parts / rigor gates decide
+        // terminality), so always request finalization here.
+        handle_submit_artifact(invocation, ModeKind::Plan, &PLAN_WORDING, args.plan, true).await
     }
 }
 
