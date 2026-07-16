@@ -57,7 +57,7 @@ pub const DESIGN_MODE_REJECTION_MARKER: &str = "[design-mode-blocked]";
 
 const PLAN_MODE_WRITE_DENIED_REASON: &str = "Plan mode is read-only by default. Finish planning and switch to Default mode to apply patches. [plan-mode-blocked]";
 
-const DESIGN_MODE_WRITE_DENIED_REASON: &str = "Design mode is read-only. Finish designing and switch to Plan or Default mode to make changes. [design-mode-blocked]";
+const DESIGN_MODE_WRITE_DENIED_REASON: &str = "Design mode is read-only. Persist the design index with the submit_design tool; write split parts only as .md files under the design's <stem>/ directory. Switch to Plan or Default mode to make other changes. [design-mode-blocked]";
 
 /// Returns a human-readable Plan-mode patch-denial message that includes the
 /// rejected file path and the stable rejection marker.

@@ -767,6 +767,23 @@ fn design_mode_write_denied_message_includes_marker_and_path() {
 }
 
 #[test]
+fn design_mode_write_denied_message_mentions_submit_design() {
+    let msg = design_mode_write_denied_message(std::path::Path::new("/tmp/x.txt"));
+    assert!(
+        msg.contains("submit_design"),
+        "denied message must mention submit_design tool: {msg}"
+    );
+    assert!(
+        msg.contains("[design-mode-blocked]"),
+        "marker must be preserved: {msg}"
+    );
+    assert!(
+        msg.contains("(file: /tmp/x.txt)"),
+        "file path must be included: {msg}"
+    );
+}
+
+#[test]
 fn plan_mode_exec_denied_message_includes_marker_and_command() {
     let msg = plan_mode_exec_denied_message("git commit");
     assert!(msg.contains(PLAN_MODE_REJECTION_MARKER));
