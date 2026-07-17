@@ -1011,3 +1011,48 @@ fn test_model_info_for_chat_provider() -> ModelInfo {
         capabilities: ModelCapabilities::default(),
     }
 }
+
+/// The reasoning analog of the cache regression: `Usage.cached_input_tokens` was
+/// silently dropped by this mapping and rebuilt as a hardcoded 0. Reasoning
+/// tokens ride the same path, so pin them here too — the plumbing is only
+/// exercised by providers that report a breakdown (kimi does not; it folds
+/// reasoning into `completion_tokens`, which is why kimi rollouts legitimately
+/// show `reasoning_output_tokens: 0`).
+#[tokio::test]
+async fn chat_stream_reports_reasoning_tokens_from_provider_usage() {
+    use futures::stream;
+    use ody_model_provider::{ChatEvent, ContentPart, FinishReason, Usage};
+
+    let chat_stream = stream::iter(vec![
+        Ok(ChatEvent::Start),
+        Ok(ChatEvent::ContentPart(ContentPart::Text("hi".into()))),
+        Ok(ChatEvent::Usage(Usage {
+            input_tokens: 10,
+            output_tokens: 40,
+            reasoning_tokens: Some(30),
+            cached_input_tokens: None,
+        })),
+        Ok(ChatEvent::Finish {
+            reason: FinishReason::Stop,
+            raw_reason: Some("stop".into()),
+        }),
+    ]);
+    let stream = crate::client::map_chat_stream(
+        Box::pin(chat_stream),
+        create_test_session_telemetry(),
+        InferenceTraceContext::disabled().start_attempt(),
+    );
+
+    futures::pin_mut!(stream);
+    let mut usage = None;
+    while let Some(event) = stream.next().await {
+        if let Ok(ResponseEvent::Completed { token_usage, .. }) = event {
+            usage = token_usage;
+        }
+    }
+    let usage = usage.expect("usage folded into completed");
+    assert_eq!(
+        usage.reasoning_output_tokens, 30,
+        "provider-reported reasoning tokens must survive the chat stream mapping"
+    );
+}

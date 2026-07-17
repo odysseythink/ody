@@ -325,3 +325,50 @@ async fn preserves_finish_reason_max_tokens_variant_on_completion() {
         other => panic!("expected Completed, got {other:?}"),
     }
 }
+
+async fn reasoning_output_tokens_for(usage_chunk: &str) -> i64 {
+    let events = run_chat_sse(
+        &[
+            r#"{"id":"resp_1","choices":[{"delta":{"content":"ok"}}]}"#,
+            r#"{"id":"resp_1","choices":[{"delta":{},"finish_reason":"stop"}]}"#,
+            usage_chunk,
+            "[DONE]",
+        ],
+        ChatVendor::Generic,
+    )
+    .await;
+
+    match events.last() {
+        Some(ResponseEvent::Completed { token_usage, .. }) => {
+            token_usage
+                .as_ref()
+                .expect("usage present")
+                .reasoning_output_tokens
+        }
+        other => panic!("expected Completed, got {other:?}"),
+    }
+}
+
+/// Providers that break reasoning out of `completion_tokens` report it here.
+#[tokio::test]
+async fn reads_reasoning_tokens_from_completion_tokens_details() {
+    let cached = reasoning_output_tokens_for(
+        r#"{"id":"resp_1","choices":[],"usage":{"prompt_tokens":10,"completion_tokens":40,"total_tokens":50,"completion_tokens_details":{"reasoning_tokens":30}}}"#,
+    )
+    .await;
+    assert_eq!(cached, 30);
+}
+
+/// `api.kimi.com/coding/v1` reports no reasoning breakdown at all: its streamed
+/// usage carries only prompt/completion/total plus `cached_tokens`, and folds
+/// reasoning into `completion_tokens`. A `reasoning_output_tokens: 0` on a kimi
+/// rollout is therefore absent upstream data, NOT a dropped value — unlike
+/// `cached_input_tokens`, which the wire does carry.
+#[tokio::test]
+async fn kimi_usage_without_reasoning_details_reports_zero() {
+    let cached = reasoning_output_tokens_for(
+        r#"{"id":"resp_1","choices":[],"usage":{"prompt_tokens":23,"completion_tokens":192,"total_tokens":215,"cached_tokens":23,"prompt_tokens_details":{"cached_tokens":23}}}"#,
+    )
+    .await;
+    assert_eq!(cached, 0);
+}
