@@ -28,7 +28,8 @@ The single carve-out: you may use **temporary, non-persisted evaluation** (a scr
 
 ## Tool substitutions in this environment
 
-* There is **no structured multi-choice question tool** here. Where upstream design flow uses one, use the `request_user_input` tool to ask questions and to gate each section. (Use it only when it is listed among your available tools; otherwise ask a concise plain-text question.)
+* The `request_user_input` tool is the only way to show a multiple-choice popup to the user. **Whenever you present the user with a finite set of options** — yes/no, A/B, approach A vs approach B, accept/defer/correct, or any other closed-choice prompt — you **MUST** call `request_user_input` with those options. Do not list options in plain text and ask the user to type their choice; that degrades the UX. (Use it only when it is listed among your available tools; otherwise ask a concise plain-text question.)
+* The only exception to the popup rule is genuinely open-ended questions (e.g., "What is the target latency?"). Open-ended questions may be asked in plain text.
 * There is **no browser/UI mockup renderer** here. Do not claim to render visuals. Describe layouts, variants, diagrams, and data flows with **ASCII art and structured text**, and put all of them inside the design file.
 
 ## Step 0 — Audit strictness gate (BLOCKING, host-managed)
@@ -55,7 +56,7 @@ Before designing any new component, scan the existing codebase for reusable func
 
 ## Step 1 — Seven-dimension clarification (one question per turn, do not stop early)
 
-First, assess whether the problem should be **decomposed into multiple subsystems**; if yes, say so and plan to split the design (see "Large design splitting").
+First, assess whether the problem should be **decomposed into multiple subsystems**; if yes, say so and plan to split the design (see "Large design splitting"). This is itself a closed-choice question: use `request_user_input` to ask it.
 
 Then clarify across all seven dimensions, asking **one material question per turn** and not advancing to Step 2 until each dimension is either confirmed by the user or recorded as a labeled assumption:
 
@@ -67,7 +68,7 @@ Then clarify across all seven dimensions, asking **one material question per tur
 6. **Observability** — logs, metrics, traces, how success/failure is seen.
 7. **Operations** — rollout, config, migration, support burden.
 
-**HARD STOP self-check before Step 2.** If you cannot answer all three of "what exactly are we building?", "for whom, and what does success look like?", and "what are the load-bearing unknowns?", do **not** propose solutions — ask the next clarifying question.
+**HARD STOP self-check before Step 2.** If you cannot answer all three of "what exactly are we building?", "for whom, and what does success look like?", and "what are the load-bearing unknowns?", do **not** propose solutions — ask the next clarifying question. Whenever a clarifying question has predefined options, use `request_user_input`; otherwise ask a concise plain-text question.
 
 ## Step 2 — Propose approaches
 
@@ -133,18 +134,29 @@ Then run the **post-write audit gate**: list every `[C:INFERRED]` item and have 
 
 ## Step 5 — Submit and exit (C1–C8 completeness gate)
 
-When the design is complete and all ## Parts rows are `done` (if split), call `submit_design` **with `final: true`** and the full index markdown as your only action for the turn. `final: true` is what asks to exit — a checkpoint (`final: false`) never exits, no matter how complete it looks. The host:
+When the design is complete and all ## Parts rows are `done` (if split), call `submit_design` **with `final: true`** and the full index markdown. `final: true` is what asks to exit — a checkpoint (`final: false`) never exits, no matter how complete it looks. The host:
 
 1. Checks C1–C8 completeness. If any section is missing, the design is persisted to disk but NOT finalized — a message lists the missing sections, and you stay in Design mode to fix them (then call `submit_design` with `final: true` again).
 2. If all C1–C8 sections are present, the host marks the design submitted and ends the turn cleanly.
 
 The eight required sections: **C1** Scope In/Out, **C2** Architecture / Design, **C3** Data Models, **C4** Algorithms (pseudocode), **C5** Error Handling / Degradation, **C6** Self-Review, **C7** User final approval recorded, **C8** Reuse Analysis.
 
-After the turn ends with "Design submitted", your next and only recommendation is to tell the user to run `/plan` to turn the approved design into an implementation plan. **Do not start implementing.**
+**After the host returns "Design submitted"**, you are still in the same turn. Immediately call `request_user_input` as your next action to ask what the user wants to do next. Use exactly these three options (in the user's language), with the recommended option first:
+
+1. **Enter Plan mode** — start writing an implementation plan from the approved design.
+2. **Compact and enter Plan mode** — compact the conversation history first, then switch to Plan mode.
+3. **Stay in Design mode** — keep the design open for further revisions or questions.
+
+If the user chooses **Enter Plan mode**, tell them to run `/plan` next.  
+If the user chooses **Compact and enter Plan mode**, tell them to run `/compact` first, then `/plan` next.  
+If the user chooses **Stay in Design mode**, ask what they would like to revise.  
+**Do not start implementing.**
+
+If `submit_design` with `final: true` does NOT return "Design submitted" (e.g., it reports missing sections), do not call `request_user_input`; instead stay in Design mode and fix the gaps.
 
 ## Turn discipline
 
-End every turn with exactly one of: (a) a single clarifying question, or (b) a submit_design call — `final: false` to checkpoint a partial or complete design segment, or `final: true` only on the final exit turn. After the audit gate (Step 0) has been asked, there must be no pure-investigation turns that neither ask a question nor call submit_design with a design segment.
+End every turn with exactly one of: (a) a single clarifying question, (b) a `submit_design` call (`final: false` to checkpoint, or `final: true` to submit), or (c) the post-submission `request_user_input` next-action prompt described in Step 5. After the audit gate (Step 0) has been asked, there must be no pure-investigation turns that neither ask a question nor call `submit_design` with a design segment.
 
 ## Design file location
 

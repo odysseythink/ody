@@ -135,6 +135,28 @@ mod template_tests {
         cells
     }
 
+    /// Design mode must explicitly require the popup tool for closed-choice questions and
+    /// must end with a next-action prompt. Otherwise models fall back to plain-text A/B lists.
+    #[test]
+    fn design_template_mandates_request_user_input_for_options_and_exit_prompt() {
+        assert!(
+            DESIGN.contains("**MUST** call `request_user_input`"),
+            "DESIGN must mandate request_user_input for option-based questions"
+        );
+        assert!(
+            DESIGN.contains("Enter Plan mode"),
+            "DESIGN must include the Enter Plan mode next-action option"
+        );
+        assert!(
+            DESIGN.contains("Compact and enter Plan mode"),
+            "DESIGN must include the Compact and enter Plan mode next-action option"
+        );
+        assert!(
+            DESIGN.contains("Stay in Design mode"),
+            "DESIGN must include the Stay in Design mode next-action option"
+        );
+    }
+
     fn understand_step_of(body: &str) -> String {
         body.lines()
             .find(|line| line.starts_with("1. **Understand**"))

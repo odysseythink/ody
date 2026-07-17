@@ -47,7 +47,7 @@ fn design_mode_instructions_anchor_design_file_to_designs_directory() {
         .expect("design instructions should be set");
 
     assert!(design_instructions.contains(".ody-code/designs/"));
-    assert!(design_instructions.contains("YYYY-MM-DD-<topic>.md"));
+    assert!(design_instructions.contains("YYYY-MM-DD-<slug>.md"));
     assert!(
         !design_instructions.contains(".ody-code/roadmaps/"),
         "design instructions must not point at the roadmaps directory"
@@ -57,6 +57,31 @@ fn design_mode_instructions_anchor_design_file_to_designs_directory() {
     assert!(design_instructions.contains("## Reuse Analysis"));
     assert!(design_instructions.contains("## Self-Review"));
     assert!(design_instructions.contains("[C:UPSTREAM]"));
+}
+
+#[test]
+fn design_mode_instructions_mandate_popup_for_closed_choice_questions() {
+    let design_instructions = design_preset()
+        .developer_instructions
+        .expect("design preset should include instructions")
+        .expect("design instructions should be set");
+
+    assert!(
+        design_instructions.contains("**MUST** call `request_user_input`"),
+        "design instructions must require request_user_input for closed-choice questions"
+    );
+    assert!(
+        design_instructions.contains("Enter Plan mode"),
+        "design instructions must offer Enter Plan mode after submission"
+    );
+    assert!(
+        design_instructions.contains("Compact and enter Plan mode"),
+        "design instructions must offer Compact and enter Plan mode after submission"
+    );
+    assert!(
+        design_instructions.contains("Stay in Design mode"),
+        "design instructions must offer Stay in Design mode after submission"
+    );
 }
 
 #[test]
