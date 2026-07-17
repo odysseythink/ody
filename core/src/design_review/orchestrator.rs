@@ -25,7 +25,7 @@ use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
 use crate::tasks::SessionTaskContext;
 
-const DESIGN_REVIEW_TIMEOUT: Duration = Duration::from_secs(60);
+const DESIGN_REVIEW_TIMEOUT: Duration = Duration::from_secs(600);
 
 pub(crate) struct DesignReviewOrchestrator;
 

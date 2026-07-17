@@ -3719,15 +3719,21 @@ impl Config {
         let base_instructions = base_instructions
             .or(file_base_instructions)
             .or(cfg.instructions.clone());
-        let effective_language = cfg.language.as_ref().and_then(|language| {
-            let language = language.trim();
-            if language.eq_ignore_ascii_case("auto") {
-                detect_system_language()
-            } else {
-                Some(language.to_string())
+        let effective_language = {
+            let explicit_language = cfg
+                .language
+                .as_ref()
+                .map(|language| language.trim())
+                .filter(|language| !language.is_empty());
+            match explicit_language {
+                None => detect_system_language(),
+                Some(language) if language.eq_ignore_ascii_case("auto") => {
+                    detect_system_language()
+                }
+                Some(language) => Some(language.to_string()),
             }
-        });
-       let base_instructions = if let Some(language) = effective_language {
+        };
+        let base_instructions = if let Some(language) = effective_language {
             let language_instruction = format!("\n\nThink and respond in {language}.");
             Some(base_instructions.unwrap_or_default() + &language_instruction)
         } else {

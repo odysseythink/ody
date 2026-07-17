@@ -330,9 +330,11 @@ pub struct ConfigToml {
     /// System instructions.
     pub instructions: Option<String>,
 
-    /// Preferred language for model responses in the TUI transcript.
-    /// When set, a short instruction is appended to the base instructions
-    /// asking the model to respond in this language.
+    /// Preferred language for model responses and reasoning.
+    /// When set (or left empty), a short instruction is appended to the base
+    /// instructions asking the model to think and respond in this language.
+    /// Use the special value "auto" to detect the language from the system locale.
+    /// When unset or empty, defaults to "auto".
     pub language: Option<String>,
 
     /// Developer instructions inserted as a `developer` role message.

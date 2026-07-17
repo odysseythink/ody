@@ -11112,7 +11112,7 @@ base_url = "https://api.test.com/v1"
 }
 
 #[tokio::test]
-async fn language_config_defaults_to_none() {
+async fn language_config_defaults_to_auto() {
     let config_toml: ConfigToml = toml::from_str(
         r#"
 model_provider = "test"
@@ -11133,7 +11133,10 @@ base_url = "https://api.test.com/v1"
     .await
     .expect("load config");
     assert_eq!(config.language, None);
-    assert_eq!(config.base_instructions, None);
+    let expected = sys_locale::get_locale()
+        .and_then(|locale| map_locale_to_language(&locale))
+        .map(|lang| format!("\n\nThink and respond in {lang}."));
+    assert_eq!(config.base_instructions, expected);
 }
 
 #[tokio::test]
