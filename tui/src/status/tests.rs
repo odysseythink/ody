@@ -14,6 +14,7 @@ use chrono::Duration as ChronoDuration;
 use chrono::Local;
 use chrono::TimeZone;
 use chrono::Utc;
+use insta::assert_snapshot;
 use ody_app_server_protocol::AskForApproval;
 use ody_config::LoaderOverrides;
 use ody_models_manager::test_support::construct_model_info_offline_for_tests;
@@ -21,18 +22,17 @@ use ody_models_manager::test_support::get_model_offline_for_tests;
 use ody_protocol::ThreadId;
 use ody_protocol::config_types::ApprovalsReviewer;
 use ody_protocol::config_types::ReasoningSummary;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::models::ActivePermissionProfile;
 use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_WORKSPACE;
 use ody_protocol::models::ManagedFileSystemPermissions;
 use ody_protocol::models::PermissionProfile;
-use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::permissions::FileSystemAccessMode;
 use ody_protocol::permissions::FileSystemPath;
 use ody_protocol::permissions::FileSystemSandboxEntry;
 use ody_protocol::permissions::FileSystemSpecialPath;
 use ody_protocol::permissions::NetworkSandboxPolicy;
 use ody_utils_absolute_path::AbsolutePathBuf;
-use insta::assert_snapshot;
 use pretty_assertions::assert_eq;
 use ratatui::prelude::*;
 use tempfile::TempDir;
@@ -568,7 +568,6 @@ async fn status_snapshot_shows_active_user_defined_profile() {
     let sanitized = sanitize_directory(rendered_lines).join("\n");
     assert_snapshot!(sanitized);
 }
-
 
 #[tokio::test]
 async fn status_snapshot_shows_auto_review_permissions() {

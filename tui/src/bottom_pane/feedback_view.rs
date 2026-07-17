@@ -1,10 +1,10 @@
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
 use ody_feedback::DOCTOR_REPORT_ATTACHMENT_FILENAME;
 use ody_feedback::FEEDBACK_DIAGNOSTICS_ATTACHMENT_FILENAME;
 use ody_feedback::FeedbackDiagnostics;
 use ody_feedback::WINDOWS_SANDBOX_LOG_ATTACHMENT_FILENAME;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;

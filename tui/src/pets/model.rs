@@ -661,8 +661,7 @@ mod tests {
         let ody_home = tempfile::tempdir().unwrap();
         super::super::asset_pack::write_test_pack(ody_home.path());
 
-        let pet =
-            Pet::load_with_ody_home("dewey", /*ody_home*/ Some(ody_home.path())).unwrap();
+        let pet = Pet::load_with_ody_home("dewey", /*ody_home*/ Some(ody_home.path())).unwrap();
 
         assert_eq!(pet.id, "dewey");
         assert_eq!(pet.display_name, "Dewey");

@@ -14,6 +14,9 @@ use crate::legacy_core::config::ConfigOverrides;
 use crate::legacy_core::config::load_config_toml_with_layer_stack;
 
 use crate::legacy_core::config::resolve_profile_v2_config_path;
+use color_eyre::eyre::Result;
+use color_eyre::eyre::WrapErr;
+use color_eyre::eyre::eyre;
 use ody_app_server_protocol::Thread as AppServerThread;
 use ody_app_server_protocol::ThreadListParams;
 use ody_app_server_protocol::ThreadSortKey;
@@ -26,9 +29,6 @@ use ody_exec_server::ExecServerRuntimePaths;
 use ody_protocol::ThreadId;
 use ody_utils_cli::CliConfigOverrides;
 use ody_utils_home_dir::find_ody_home;
-use color_eyre::eyre::Result;
-use color_eyre::eyre::WrapErr;
-use color_eyre::eyre::eyre;
 
 use super::RemoteAppServerEndpoint;
 

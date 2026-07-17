@@ -38,6 +38,10 @@ use crate::keymap::primary_binding;
 use crate::render::highlight::highlight_bash_to_lines;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::Renderable;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
+use crossterm::event::KeyModifiers;
 use ody_app_server_protocol::AdditionalPermissionProfile;
 use ody_app_server_protocol::CommandExecutionApprovalDecision;
 use ody_app_server_protocol::FileChangeApprovalDecision;
@@ -55,10 +59,6 @@ use ody_protocol::ThreadId;
 use ody_protocol::request_permissions::PermissionGrantScope;
 use ody_protocol::request_permissions::RequestPermissionProfile;
 use ody_utils_absolute_path::AbsolutePathBuf;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyEventKind;
-use crossterm::event::KeyModifiers;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
@@ -1134,6 +1134,8 @@ fn elicitation_options(keymap: &ApprovalKeymap) -> Vec<ApprovalOption> {
 mod tests {
     use super::*;
     use crate::app_event::AppEvent;
+    use crossterm::event::KeyModifiers;
+    use insta::assert_snapshot;
     use ody_app_server_protocol::AdditionalFileSystemPermissions;
     use ody_app_server_protocol::AdditionalNetworkPermissions;
     use ody_app_server_protocol::ExecPolicyAmendment;
@@ -1142,8 +1144,6 @@ mod tests {
     use ody_protocol::models::FileSystemPermissions;
     use ody_protocol::models::NetworkPermissions;
     use ody_utils_absolute_path::AbsolutePathBuf;
-    use crossterm::event::KeyModifiers;
-    use insta::assert_snapshot;
     use pretty_assertions::assert_eq;
     use tokio::sync::mpsc::unbounded_channel;
 

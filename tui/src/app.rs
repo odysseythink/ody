@@ -78,12 +78,17 @@ use crate::update_action::UpdateAction;
 use crate::version::ODY_CLI_VERSION;
 use crate::workspace_command::AppServerWorkspaceCommandRunner;
 use crate::workspace_command::WorkspaceCommandRunner;
+use color_eyre::eyre::Result;
+use color_eyre::eyre::WrapErr;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
+use crossterm::event::KeyModifiers;
 use ody_ansi_escape::ansi_escape_line;
 use ody_app_server_client::AppServerRequestHandle;
 use ody_app_server_client::TypedRequestError;
 use ody_app_server_protocol::AskForApproval;
 use ody_app_server_protocol::ClientRequest;
-use ody_app_server_protocol::OdyErrorInfo as AppServerOdyErrorInfo;
 use ody_app_server_protocol::ConfigBatchWriteParams;
 use ody_app_server_protocol::ConfigLayerSource;
 use ody_app_server_protocol::ConfigReadResponse;
@@ -99,6 +104,7 @@ use ody_app_server_protocol::McpAuthStatus;
 use ody_app_server_protocol::McpServerStatus;
 use ody_app_server_protocol::McpServerStatusDetail;
 use ody_app_server_protocol::MergeStrategy;
+use ody_app_server_protocol::OdyErrorInfo as AppServerOdyErrorInfo;
 use ody_app_server_protocol::PluginInstallParams;
 use ody_app_server_protocol::PluginInstallResponse;
 use ody_app_server_protocol::PluginListMarketplaceKind;
@@ -145,25 +151,19 @@ use ody_protocol::ThreadId;
 use ody_protocol::config_types::Personality;
 #[cfg(target_os = "windows")]
 use ody_protocol::config_types::WindowsSandboxLevel;
-use ody_protocol::models::ActivePermissionProfile;
-use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_WORKSPACE;
-use ody_protocol::models::PermissionProfile;
 use ody_protocol::model_metadata::ModelAvailabilityNux;
 use ody_protocol::model_metadata::ModelPreset;
 use ody_protocol::model_metadata::ModelUpgrade;
 use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
+use ody_protocol::models::ActivePermissionProfile;
+use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_WORKSPACE;
+use ody_protocol::models::PermissionProfile;
 #[cfg(target_os = "windows")]
 use ody_protocol::permissions::FileSystemSandboxKind;
 use ody_rollout::StateDbHandle;
 use ody_terminal_detection::user_agent;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_approval_presets::builtin_permission_profile_for_active_permission_profile;
-use color_eyre::eyre::Result;
-use color_eyre::eyre::WrapErr;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyEventKind;
-use crossterm::event::KeyModifiers;
 use ratatui::backend::Backend;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
@@ -300,9 +300,7 @@ fn collab_receiver_is_not_found(
 fn default_exec_approval_decisions(
     network_approval_context: Option<&ody_app_server_protocol::NetworkApprovalContext>,
     proposed_execpolicy_amendment: Option<&ody_app_server_protocol::ExecPolicyAmendment>,
-    proposed_network_policy_amendments: Option<
-        &[ody_app_server_protocol::NetworkPolicyAmendment],
-    >,
+    proposed_network_policy_amendments: Option<&[ody_app_server_protocol::NetworkPolicyAmendment]>,
     additional_permissions: Option<&ody_app_server_protocol::AdditionalPermissionProfile>,
 ) -> Vec<ody_app_server_protocol::CommandExecutionApprovalDecision> {
     use ody_app_server_protocol::CommandExecutionApprovalDecision;
@@ -820,7 +818,7 @@ impl App {
         let auth_mode = bootstrap.auth_mode;
         let api_key_configured = matches!(auth_mode, Some(TelemetryAuthMode::ApiKey));
         let has_ody_backend_auth = api_key_configured;
-        
+
         let session_telemetry = SessionTelemetry::new(
             ThreadId::new(),
             model.as_str(),

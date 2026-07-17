@@ -21,6 +21,5 @@ pub(crate) use helpers::compose_agents_summary;
 pub(crate) use helpers::format_directory_display;
 pub(crate) use helpers::format_tokens_compact;
 
-
 #[cfg(test)]
 mod tests;

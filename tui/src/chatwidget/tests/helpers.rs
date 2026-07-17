@@ -137,8 +137,8 @@ pub(super) fn test_session_telemetry_with_metrics(
     model: &str,
 ) -> (SessionTelemetry, InMemoryMetricExporter) {
     let (metrics, exporter) = build_test_metrics();
-    let telemetry = test_session_telemetry(config, model)
-        .with_metrics_without_metadata_tags(metrics);
+    let telemetry =
+        test_session_telemetry(config, model).with_metrics_without_metadata_tags(metrics);
     (telemetry, exporter)
 }
 
@@ -151,7 +151,10 @@ pub(super) fn latest_metrics(exporter: &InMemoryMetricExporter) -> ResourceMetri
         .expect("metrics export should exist")
 }
 
-pub(super) fn find_metric<'a>(resource_metrics: &'a ResourceMetrics, name: &str) -> Option<&'a Metric> {
+pub(super) fn find_metric<'a>(
+    resource_metrics: &'a ResourceMetrics,
+    name: &str,
+) -> Option<&'a Metric> {
     for scope_metrics in resource_metrics.scope_metrics() {
         for metric in scope_metrics.metrics() {
             if metric.name() == name {

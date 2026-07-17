@@ -2282,3 +2282,84 @@ async fn plan_implementation_telemetry_records_continue_planning_outcome() {
     chat.session_telemetry.shutdown_metrics().unwrap();
     assert_plan_resolved_outcome(&exporter, "continue_planning");
 }
+
+#[tokio::test]
+async fn plan_mode_log_delta_renders_in_bottom_pane() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    let plan_mask = collaboration_modes::plan_mask(chat.model_catalog.as_ref())
+        .expect("expected plan collaboration mode");
+    chat.set_collaboration_mask(plan_mask);
+
+    let thread_id = chat.thread_id.unwrap_or_else(ThreadId::new);
+    chat.handle_server_notification(
+        ServerNotification::PlanModeLogDelta(PlanModeLogDeltaNotification {
+            thread_id: thread_id.to_string(),
+            turn_id: "turn-1".to_string(),
+            event_id: "event-1".to_string(),
+            occurred_at_ms: 0,
+            kind: PlanModeLogKind::RigorReminder,
+            message: "Remember to define clear acceptance criteria.".to_string(),
+            detail: None,
+        }),
+        /*replay_kind*/ None,
+    );
+
+    let planning_log = chat
+        .bottom_pane
+        .planning_log()
+        .expect("expected planning log widget");
+    assert_eq!(planning_log.len(), 1);
+}
+
+#[tokio::test]
+async fn plan_mode_log_delta_is_ignored_in_default_mode() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    // Default mode without any Plan/Design mask.
+    assert_eq!(chat.active_collaboration_mode_kind(), ModeKind::Default);
+
+    let thread_id = chat.thread_id.unwrap_or_else(ThreadId::new);
+    chat.handle_server_notification(
+        ServerNotification::PlanModeLogDelta(PlanModeLogDeltaNotification {
+            thread_id: thread_id.to_string(),
+            turn_id: "turn-1".to_string(),
+            event_id: "event-1".to_string(),
+            occurred_at_ms: 0,
+            kind: PlanModeLogKind::RigorReminder,
+            message: "Remember to define clear acceptance criteria.".to_string(),
+            detail: None,
+        }),
+        /*replay_kind*/ None,
+    );
+
+    assert!(chat.bottom_pane.planning_log().is_none());
+}
+
+#[tokio::test]
+async fn planning_log_ctrl_g_toggles_expanded() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    let plan_mask = collaboration_modes::plan_mask(chat.model_catalog.as_ref())
+        .expect("expected plan collaboration mode");
+    chat.set_collaboration_mask(plan_mask);
+
+    let thread_id = chat.thread_id.unwrap_or_else(ThreadId::new);
+    chat.handle_server_notification(
+        ServerNotification::PlanModeLogDelta(PlanModeLogDeltaNotification {
+            thread_id: thread_id.to_string(),
+            turn_id: "turn-1".to_string(),
+            event_id: "event-1".to_string(),
+            occurred_at_ms: 0,
+            kind: PlanModeLogKind::RigorReminder,
+            message: "Remember to define clear acceptance criteria.".to_string(),
+            detail: None,
+        }),
+        /*replay_kind*/ None,
+    );
+
+    let planning_log = chat.bottom_pane.planning_log().unwrap();
+    assert!(!planning_log.is_expanded());
+
+    chat.handle_key_event(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL));
+
+    let planning_log = chat.bottom_pane.planning_log().unwrap();
+    assert!(planning_log.is_expanded());
+}

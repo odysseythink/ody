@@ -1389,6 +1389,9 @@ pub enum EventMsg {
 
     /// Notification that the agent is shutting down.
     ShutdownComplete,
+    /// Structured planning log emitted during Plan/Design mode to surface
+    /// rigor reminders, split checks, completeness gates, and mode transitions.
+    PlanModeLog(PlanModeLogEvent),
 
     /// Entered review mode.
     EnteredReviewMode(ReviewRequest),
@@ -1657,6 +1660,12 @@ impl From<CollabResumeEndEvent> for EventMsg {
 impl From<SubAgentActivityEvent> for EventMsg {
     fn from(event: SubAgentActivityEvent) -> Self {
         EventMsg::SubAgentActivity(event)
+    }
+}
+
+impl From<PlanModeLogEvent> for EventMsg {
+    fn from(event: PlanModeLogEvent) -> Self {
+        EventMsg::PlanModeLog(event)
     }
 }
 
@@ -4100,6 +4109,34 @@ pub struct SubAgentActivityEvent {
     pub agent_path: AgentPath,
     pub kind: SubAgentActivityKind,
 }
+
+/// A structured planning log event emitted during Plan/Design mode.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+pub struct PlanModeLogEvent {
+    pub event_id: String,
+    #[serde(default)]
+    pub occurred_at_ms: i64,
+    pub kind: PlanModeLogKind,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS, EnumIter)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum PlanModeLogKind {
+    RigorReminder,
+    SplitStarted,
+    SplitContinued,
+    SplitCompleted,
+    FinalReview,
+    DesignCompletenessCheck,
+    ModeTransition,
+    SubAgentDelegation,
+}
+
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema, TS)]
 pub struct CollabWaitingBeginEvent {

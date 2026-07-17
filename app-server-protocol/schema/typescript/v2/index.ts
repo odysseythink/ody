@@ -266,6 +266,8 @@ export type { PermissionProfileSummary } from "./PermissionProfileSummary";
 export type { PermissionsRequestApprovalParams } from "./PermissionsRequestApprovalParams";
 export type { PermissionsRequestApprovalResponse } from "./PermissionsRequestApprovalResponse";
 export type { PlanDeltaNotification } from "./PlanDeltaNotification";
+export type { PlanModeLogDeltaNotification } from "./PlanModeLogDeltaNotification";
+export type { PlanModeLogKind } from "./PlanModeLogKind";
 export type { PluginAuthPolicy } from "./PluginAuthPolicy";
 export type { PluginAvailability } from "./PluginAvailability";
 export type { PluginDetail } from "./PluginDetail";

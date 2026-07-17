@@ -58,6 +58,7 @@ mod approval_overlay;
 mod mcp_server_elicitation;
 mod multi_select_picker;
 mod pinned_todo;
+mod planning_log_widget;
 mod request_user_input;
 mod status_line_setup;
 mod status_line_style;
@@ -75,6 +76,7 @@ pub(crate) use approval_overlay::format_requested_permissions_rule;
 pub(crate) use mcp_server_elicitation::McpServerElicitationFormRequest;
 pub(crate) use mcp_server_elicitation::McpServerElicitationOverlay;
 pub(crate) use pinned_todo::PinnedTodoWidget;
+pub(crate) use planning_log_widget::PlanningLogWidget;
 pub(crate) use request_user_input::RequestUserInputOverlay;
 pub(crate) use status_line_style::status_line_from_segments;
 mod bottom_pane_view;
@@ -232,6 +234,8 @@ pub(crate) struct BottomPane {
     status: Option<StatusIndicatorWidget>,
     /// Pinned live plan checklist shown between the status line and the composer.
     pinned_todo: Option<PinnedTodoWidget>,
+    /// Structured planning log shown above the composer while in Plan/Design mode.
+    planning_log: Option<PlanningLogWidget>,
     /// Unified exec session summary source.
     ///
     /// When a status row exists, this summary is mirrored inline in that row;
@@ -294,6 +298,7 @@ impl BottomPane {
             is_task_running: false,
             status: None,
             pinned_todo: None,
+            planning_log: None,
             unified_exec_footer: UnifiedExecFooter::new(),
             pending_input_preview: PendingInputPreview::new(),
             pending_thread_approvals: PendingThreadApprovals::new(),
@@ -429,6 +434,42 @@ impl BottomPane {
             }
         }
         self.request_redraw();
+    }
+
+    /// Push a structured planning log delta into the bottom pane.
+    pub(crate) fn push_planning_log(
+        &mut self,
+        notification: ody_app_server_protocol::PlanModeLogDeltaNotification,
+    ) {
+        match &mut self.planning_log {
+            Some(widget) => widget.push(notification),
+            None => {
+                let mut widget = PlanningLogWidget::new();
+                widget.push(notification);
+                self.planning_log = Some(widget);
+            }
+        }
+        self.request_redraw();
+    }
+
+    /// Clear the structured planning log.
+    pub(crate) fn clear_planning_log(&mut self) {
+        if self.planning_log.take().is_some() {
+            self.request_redraw();
+        }
+    }
+
+    /// Toggle expanded / folded state of the planning log.
+    pub(crate) fn toggle_planning_log(&mut self) {
+        if let Some(widget) = &mut self.planning_log {
+            widget.toggle_expanded();
+            self.request_redraw();
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn planning_log(&self) -> Option<&PlanningLogWidget> {
+        self.planning_log.as_ref()
     }
 
     pub fn pinned_todo_update_args(&self) -> Option<UpdatePlanArgs> {
@@ -665,6 +706,15 @@ impl BottomPane {
                     pinned.toggle_expanded();
                 }
                 self.request_redraw();
+                return InputResult::None;
+            }
+            // Toggle planning log expanded state with ctrl+g.
+            if key_event.kind == KeyEventKind::Press
+                && key_event.code == KeyCode::Char('g')
+                && key_event.modifiers.contains(KeyModifiers::CONTROL)
+                && self.planning_log.is_some()
+            {
+                self.toggle_planning_log();
                 return InputResult::None;
             }
             let records_composer_activity =
@@ -1759,6 +1809,9 @@ impl BottomPane {
             flex2.push(/*flex*/ 1, RenderableItem::Owned(flex.into()));
             if let Some(pinned) = &self.pinned_todo {
                 flex2.push(/*flex*/ 0, RenderableItem::Borrowed(pinned));
+            }
+            if let Some(planning_log) = &self.planning_log {
+                flex2.push(/*flex*/ 0, RenderableItem::Borrowed(planning_log));
             }
             let composer: RenderableItem<'_> = if composer_right_reserve == 0 {
                 RenderableItem::Borrowed(&self.composer)
@@ -3197,5 +3250,48 @@ mod tests {
             "pinned_todo_renders_above_composer_snapshot",
             render_snapshot(&pane, area)
         );
+    }
+
+    #[test]
+    fn planning_log_widget_renders_and_toggles() {
+        use ody_app_server_protocol::PlanModeLogDeltaNotification;
+        use ody_app_server_protocol::PlanModeLogKind;
+
+        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let mut pane = BottomPane::new(BottomPaneParams {
+            app_event_tx: tx,
+            frame_requester: FrameRequester::test_dummy(),
+            has_input_focus: true,
+            enhanced_keys_supported: false,
+            placeholder_text: "Ask Ody to do anything".to_string(),
+            disable_paste_burst: false,
+            animations_enabled: true,
+            skills: Some(Vec::new()),
+        });
+
+        pane.push_planning_log(PlanModeLogDeltaNotification {
+            thread_id: "thread-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            event_id: "event-1".to_string(),
+            occurred_at_ms: 0,
+            kind: PlanModeLogKind::RigorReminder,
+            message: "Remember to define acceptance criteria.".to_string(),
+            detail: Some("Missing criteria: performance, security.".to_string()),
+        });
+
+        let width = 50;
+        let collapsed_height = pane.desired_height(width);
+        assert!(collapsed_height > 0);
+
+        let log = pane.planning_log().unwrap();
+        assert!(!log.is_expanded());
+
+        pane.toggle_planning_log();
+        let log = pane.planning_log().unwrap();
+        assert!(log.is_expanded());
+
+        let expanded_height = pane.desired_height(width);
+        assert!(expanded_height >= collapsed_height);
     }
 }

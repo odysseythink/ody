@@ -2542,7 +2542,6 @@ async fn compact_queues_user_messages_snapshot() {
     );
 }
 
-
 #[tokio::test]
 async fn slash_writing_plan_missing_file_shows_error() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;

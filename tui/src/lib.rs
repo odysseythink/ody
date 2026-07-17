@@ -35,6 +35,8 @@ use ody_app_server_protocol::ThreadListParams;
 use ody_app_server_protocol::ThreadSortKey as AppServerThreadSortKey;
 use ody_app_server_protocol::ThreadSourceKind;
 
+use color_eyre::eyre::WrapErr;
+use cwd_prompt::CwdPromptAction;
 use ody_client::originator;
 use ody_client::set_default_client_residency_requirement;
 use ody_config::CloudConfigBundleLoader;
@@ -54,8 +56,6 @@ use ody_state::log_db;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_absolute_path::canonicalize_existing_preserving_symlinks;
 use ody_utils_home_dir::find_ody_home;
-use color_eyre::eyre::WrapErr;
-use cwd_prompt::CwdPromptAction;
 pub use session_archive_commands::DeleteConfirmation;
 pub use session_archive_commands::SessionArchiveAction;
 pub use session_archive_commands::SessionArchiveCommandOptions;
@@ -205,8 +205,8 @@ use crate::startup_hooks_review::load_startup_hooks_review_entry;
 use crate::startup_hooks_review::maybe_run_startup_hooks_review;
 use crate::tui::Tui;
 pub use cli::Cli;
-use ody_arg0::Arg0DispatchPaths;
 pub use markdown_render::render_markdown_text;
+use ody_arg0::Arg0DispatchPaths;
 pub use public_widgets::composer_input::ComposerAction;
 pub use public_widgets::composer_input::ComposerInput;
 // (tests access modules directly within the crate)
@@ -1091,9 +1091,8 @@ pub async fn run_main(
 
         let log_file = log_file_opts.open(log_dir.join(TUI_LOG_FILE_NAME))?;
         let (non_blocking, guard) = non_blocking(log_file);
-        let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-            EnvFilter::new("ody_core=info,ody_tui=info,ody_rmcp_client=info")
-        });
+        let env_filter = EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new("ody_core=info,ody_tui=info,ody_rmcp_client=info"));
         let file_layer = tracing_subscriber::fmt::layer()
             .with_writer(non_blocking)
             .with_target(true)
@@ -1281,7 +1280,7 @@ async fn run_ratatui_app(
 
         // If the user made an explicit trust decision, or we showed the login flow, reload config
         // so current process state reflects persisted trust/auth changes.
-        if onboarding_result.directory_trust_persisted  {
+        if onboarding_result.directory_trust_persisted {
             load_config_or_exit(
                 cli_kv_overrides.clone(),
                 overrides.clone(),
@@ -1788,10 +1787,7 @@ fn should_show_trust_screen(config: &Config) -> bool {
     config.active_project.trust_level.is_none()
 }
 
-fn should_show_onboarding(
-    config: &Config,
-    show_trust_screen: bool,
-) -> bool {
+fn should_show_onboarding(config: &Config, show_trust_screen: bool) -> bool {
     if show_trust_screen {
         return true;
     }
@@ -2054,8 +2050,7 @@ mod tests {
     #[tokio::test]
     async fn default_daemon_auto_connect_probes_socket_only() -> color_eyre::Result<()> {
         let ody_home = TempDir::new()?;
-        let socket_path =
-            ody_app_server_client::app_server_control_socket_path(ody_home.path())?;
+        let socket_path = ody_app_server_client::app_server_control_socket_path(ody_home.path())?;
         std::fs::create_dir_all(socket_path.as_path().parent().expect("socket parent"))?;
         let _listener = tokio::net::UnixListener::bind(socket_path.as_path())?;
 

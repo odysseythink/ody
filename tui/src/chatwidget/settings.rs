@@ -830,6 +830,9 @@ impl ChatWidget {
         self.refresh_plan_mode_nudge();
         self.refresh_model_dependent_surfaces();
         let next_mode = self.active_mode_kind();
+        if previous_mode != next_mode {
+            self.bottom_pane.clear_planning_log();
+        }
         let next_model = self.current_model();
         let next_effort = self.effective_reasoning_effort();
         if previous_mode != next_mode

@@ -1360,23 +1360,24 @@ async fn thread_resume_token_usage_replay_can_belong_to_interrupted_turn() -> Re
             "timestamp": meta_rfc3339,
             "type": "event_msg",
             "payload": serde_json::to_value(EventMsg::TokenCount(TokenCountEvent {
-                info: Some(TokenUsageInfo {
-                    total_token_usage: TokenUsage {
-                        input_tokens: 180,
-                        cached_input_tokens: 40,
-                        output_tokens: 50,
-                        reasoning_output_tokens: 15,
-                        total_tokens: 230,
-                    },
-                    last_token_usage: TokenUsage {
-                        input_tokens: 90,
-                        cached_input_tokens: 30,
-                        output_tokens: 40,
-                        reasoning_output_tokens: 12,
-                        total_tokens: 130,
-                    },
-                    model_context_window: Some(200_000),
-                }),
+               info: Some(TokenUsageInfo {
+                   total_token_usage: TokenUsage {
+                       input_tokens: 180,
+                       cached_input_tokens: 40,
+                       output_tokens: 50,
+                       reasoning_output_tokens: 15,
+                       total_tokens: 230,
+                   },
+                   last_token_usage: TokenUsage {
+                       input_tokens: 90,
+                       cached_input_tokens: 30,
+                       output_tokens: 40,
+                       reasoning_output_tokens: 12,
+                       total_tokens: 130,
+                   },
+                   model_context_window: Some(200_000),
+                   auto_compact_token_limit: None,
+               }),
             }))?,
         })
         .to_string(),

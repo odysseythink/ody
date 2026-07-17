@@ -1,5 +1,5 @@
-use ody_features::FEATURES;
 use lazy_static::lazy_static;
+use ody_features::FEATURES;
 use rand::Rng;
 
 const ANNOUNCEMENT_TIP_URL: &str =
@@ -44,8 +44,7 @@ pub(crate) fn get_tooltip(fast_mode_enabled: bool) -> Option<String> {
     let mut rng = rand::rng();
 
     // Leave small chance for a random tooltip to be shown.
-    if rng.random_ratio(8, 10) {
-    }
+    if rng.random_ratio(8, 10) {}
 
     pick_tooltip(&mut rng).map(str::to_string)
 }
@@ -78,7 +77,6 @@ pub(crate) mod announcement {
     pub(crate) fn prewarm() {
         let _ = thread::spawn(|| ANNOUNCEMENT_TIP.get_or_init(init_announcement_tip_in_thread));
     }
-
 
     #[derive(Debug, Deserialize)]
     struct AnnouncementTipRaw {
@@ -149,9 +147,7 @@ pub(crate) mod announcement {
         response.error_for_status().ok()?.text().ok()
     }
 
-    pub(crate) fn parse_announcement_tip_toml(
-        text: &str,
-    ) -> Option<String> {
+    pub(crate) fn parse_announcement_tip_toml(text: &str) -> Option<String> {
         let announcements = toml::from_str::<AnnouncementTipDocument>(text)
             .map(|doc| doc.announcements)
             .or_else(|_| toml::from_str::<Vec<AnnouncementTipRaw>>(text))

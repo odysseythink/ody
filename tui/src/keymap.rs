@@ -20,11 +20,11 @@
 
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyModifiers;
 use ody_config::types::KeybindingsSpec;
 use ody_config::types::MAX_FUNCTION_KEY;
 use ody_config::types::TuiKeymap;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyModifiers;
 use serde::Serialize;
 use std::collections::HashMap;
 

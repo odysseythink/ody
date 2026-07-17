@@ -8,6 +8,7 @@ use crate::legacy_core::config::Config;
 use crate::legacy_core::config::ConfigBuilder;
 use crate::session_state::ThreadSessionState;
 use crate::wrapping::word_wrap_lines;
+use dirs::home_dir;
 use ody_app_server_protocol::AskForApproval;
 use ody_app_server_protocol::McpAuthStatus;
 use ody_config::types::McpServerConfig;
@@ -15,7 +16,6 @@ use ody_otel::RuntimeMetricTotals;
 use ody_otel::RuntimeMetricsSummary;
 use ody_protocol::ThreadId;
 use ody_protocol::parse_command::ParsedCommand;
-use dirs::home_dir;
 use pretty_assertions::assert_eq;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -386,7 +386,9 @@ fn proposed_plan_cell_displays_plan_file_path() {
 
     let rendered = render_lines(&plan.display_lines(/*width*/ 80));
     assert!(
-        rendered.iter().any(|line| line.contains("Plan file: /tmp/plan.md")),
+        rendered
+            .iter()
+            .any(|line| line.contains("Plan file: /tmp/plan.md")),
         "expected plan file indicator in rendered lines: {rendered:?}"
     );
 
@@ -2298,7 +2300,10 @@ fn reasoning_summary_block_without_header_is_visible_in_display() {
         render_lines(&cell.display_lines(/*width*/ 80)),
         vec!["• Detailed reasoning goes here."]
     );
-    assert_eq!(render_transcript(cell.as_ref()), vec!["• Detailed reasoning goes here."]);
+    assert_eq!(
+        render_transcript(cell.as_ref()),
+        vec!["• Detailed reasoning goes here."]
+    );
 }
 
 #[test]
@@ -2631,7 +2636,6 @@ fn consolidation_walker_replaces_agent_message_cells() {
     );
 }
 
-
 fn render_cell_to_buffer(cell: &dyn HistoryCell, width: u16, height: u16) -> Buffer {
     let area = Rect::new(0, 0, width, height);
     let mut buf = Buffer::empty(area);
@@ -2667,8 +2671,15 @@ fn session_header_renders_full_logo_at_80_cols() {
     let title_rows = buffer_rows_containing(&buf, "Welcome");
     let block_rows = buffer_rows_containing(&buf, "█");
 
-    assert_eq!(title_rows.len(), 1, "title should render on one row at 80 cols");
-    assert!(!block_rows.is_empty(), "expected full logo block characters");
+    assert_eq!(
+        title_rows.len(),
+        1,
+        "title should render on one row at 80 cols"
+    );
+    assert!(
+        !block_rows.is_empty(),
+        "expected full logo block characters"
+    );
     assert!(
         block_rows[0] < title_rows[0],
         "logo should appear above the title"
@@ -2684,12 +2695,18 @@ fn session_header_renders_compact_logo_at_40_cols() {
     let compact_rows = buffer_rows_containing(&buf, "      ██       ██");
 
     assert_eq!(title_rows.len(), 1);
-    assert!(!block_rows.is_empty(), "expected compact logo block characters");
+    assert!(
+        !block_rows.is_empty(),
+        "expected compact logo block characters"
+    );
     assert!(
         !compact_rows.is_empty(),
         "expected compact logo shape at 40 cols"
     );
-    assert!(block_rows[0] < title_rows[0], "logo should appear above the title");
+    assert!(
+        block_rows[0] < title_rows[0],
+        "logo should appear above the title"
+    );
 }
 
 #[test]
@@ -2700,5 +2717,8 @@ fn session_header_hides_logo_below_compact_width() {
     let title_rows = buffer_rows_containing(&buf, "Welcome");
 
     assert!(block_rows.is_empty(), "expected no logo blocks at 16 cols");
-    assert!(!title_rows.is_empty(), "title should still render without logo");
+    assert!(
+        !title_rows.is_empty(),
+        "title should still render without logo"
+    );
 }

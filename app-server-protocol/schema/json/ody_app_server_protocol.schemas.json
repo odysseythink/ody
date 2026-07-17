@@ -4415,6 +4415,27 @@
           "type": "object"
         },
         {
+          "description": "Structured planning log delta for Plan/Design mode.",
+          "properties": {
+            "method": {
+              "enum": [
+                "item/planModeLog/delta"
+              ],
+              "title": "Item/planModeLog/deltaNotificationMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/PlanModeLogDeltaNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "title": "Item/planModeLog/deltaNotification",
+          "type": "object"
+        },
+        {
           "description": "Stream base64-encoded stdout/stderr chunks for a running `command/exec` session.",
           "properties": {
             "method": {
@@ -6633,6 +6654,23 @@
       "CollaborationModeMask": {
         "description": "EXPERIMENTAL - collaboration mode preset metadata for clients.",
         "properties": {
+          "design_audit_level": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/v2/DesignAuditLevel"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "mode": {
             "anyOf": [
               {
@@ -8094,6 +8132,32 @@
         ],
         "title": "DeprecationNoticeNotification",
         "type": "object"
+      },
+      "DesignAuditLevel": {
+        "description": "Audit level for Design mode. Determines how rigorously assumptions are verified.",
+        "oneOf": [
+          {
+            "description": "Trust clearly-stated user facts; verify only load-bearing assumptions.",
+            "enum": [
+              "basic"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "Verify every assumption that would be expensive if wrong.",
+            "enum": [
+              "standard"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "Verify nearly everything against sources.",
+            "enum": [
+              "deep"
+            ],
+            "type": "string"
+          }
+        ]
       },
       "DynamicToolCallOutputContentItem": {
         "oneOf": [
@@ -12301,6 +12365,60 @@
         "title": "PlanDeltaNotification",
         "type": "object"
       },
+      "PlanModeLogDeltaNotification": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "description": "Structured planning log delta for Plan/Design mode. Emitted to surface rigor reminders, split checks, completeness gates, and mode transitions.",
+        "properties": {
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/definitions/v2/PlanModeLogKind"
+          },
+          "message": {
+            "type": "string"
+          },
+          "occurredAtMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "threadId": {
+            "type": "string"
+          },
+          "turnId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "eventId",
+          "kind",
+          "message",
+          "occurredAtMs",
+          "threadId",
+          "turnId"
+        ],
+        "title": "PlanModeLogDeltaNotification",
+        "type": "object"
+      },
+      "PlanModeLogKind": {
+        "enum": [
+          "rigorReminder",
+          "splitStarted",
+          "splitContinued",
+          "splitCompleted",
+          "finalReview",
+          "designCompletenessCheck",
+          "modeTransition",
+          "subAgentDelegation"
+        ],
+        "type": "string"
+      },
       "PluginAuthPolicy": {
         "enum": [
           "ON_INSTALL",
@@ -15149,6 +15267,16 @@
       "Settings": {
         "description": "Settings for a collaboration mode.",
         "properties": {
+          "design_audit_level": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/DesignAuditLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "developer_instructions": {
             "type": [
               "string",
@@ -18422,6 +18550,15 @@
       },
       "ThreadTokenUsage": {
         "properties": {
+          "autoCompactTokenLimit": {
+            "default": null,
+            "description": "Context size at which auto-compaction triggers, when one applies. This is what a \"context left\" indicator counts down to; see `ody_protocol::protocol::TokenUsageInfo::auto_compact_token_limit`.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "last": {
             "$ref": "#/definitions/v2/TokenUsageBreakdown"
           },

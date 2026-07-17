@@ -77,6 +77,9 @@ impl ChatWidget {
                 self.on_agent_message_delta(notification.delta);
             }
             ServerNotification::PlanDelta(notification) => self.on_plan_delta(notification.delta),
+            ServerNotification::PlanModeLogDelta(notification) => {
+                self.on_plan_mode_log(notification);
+            }
             ServerNotification::ReasoningSummaryTextDelta(notification) => {
                 self.on_agent_reasoning_delta(notification.delta);
             }

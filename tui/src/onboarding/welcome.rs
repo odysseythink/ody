@@ -244,7 +244,10 @@ mod tests {
                 row.contains(ch)
             })
         });
-        assert!(has_logo_blocks, "expected logo block characters in welcome animation");
+        assert!(
+            has_logo_blocks,
+            "expected logo block characters in welcome animation"
+        );
     }
 
     #[test]

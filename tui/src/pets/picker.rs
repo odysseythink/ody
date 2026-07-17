@@ -173,9 +173,7 @@ fn custom_pet_entries(ody_home: &Path) -> Vec<PetPickerEntry> {
                 continue;
             }
             let selector = custom_pet_selector(id);
-            let Ok(pet) =
-                Pet::load_with_ody_home(&selector, /*ody_home*/ Some(ody_home))
-            else {
+            let Ok(pet) = Pet::load_with_ody_home(&selector, /*ody_home*/ Some(ody_home)) else {
                 continue;
             };
             entries_by_selector.insert(

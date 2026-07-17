@@ -158,21 +158,16 @@ impl App {
             mode
         };
 
-        let (objective, output_dir) = match goal_files::materialize_goal_draft(
-            app_server,
-            ody_home.as_ref(),
-            draft,
-        )
-        .await
-        {
-            Ok(materialized) => materialized,
-            Err(err) => {
-                if self.current_displayed_thread_id() == Some(thread_id) {
-                    self.chat_widget.add_error_message(err.to_string());
+        let (objective, output_dir) =
+            match goal_files::materialize_goal_draft(app_server, ody_home.as_ref(), draft).await {
+                Ok(materialized) => materialized,
+                Err(err) => {
+                    if self.current_displayed_thread_id() == Some(thread_id) {
+                        self.chat_widget.add_error_message(err.to_string());
+                    }
+                    return;
                 }
-                return;
-            }
-        };
+            };
 
         let replacing_goal = matches!(mode, ThreadGoalSetMode::ReplaceExisting);
         if replacing_goal {

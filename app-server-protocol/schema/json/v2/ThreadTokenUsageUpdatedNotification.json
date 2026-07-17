@@ -3,6 +3,15 @@
   "definitions": {
     "ThreadTokenUsage": {
       "properties": {
+        "autoCompactTokenLimit": {
+          "default": null,
+          "description": "Context size at which auto-compaction triggers, when one applies. This is what a \"context left\" indicator counts down to; see `ody_protocol::protocol::TokenUsageInfo::auto_compact_token_limit`.",
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "last": {
           "$ref": "#/definitions/TokenUsageBreakdown"
         },

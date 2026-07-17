@@ -522,11 +522,17 @@ pub(crate) fn new_streaming_reasoning_tail_cell(
     if reasoning_buffer.is_empty() {
         return Box::new(StreamingReasoningTailCell::new(Vec::new()));
     }
-    let Some(wrap_width) = crate::width::usable_content_width_u16(width, /*reserved_cols*/ 2) else {
+    let Some(wrap_width) = crate::width::usable_content_width_u16(width, /*reserved_cols*/ 2)
+    else {
         return Box::new(StreamingReasoningTailCell::new(Vec::new()));
     };
     let mut lines: Vec<Line<'static>> = Vec::new();
-    append_markdown(reasoning_buffer, Some(wrap_width), Some(cwd.as_path()), &mut lines);
+    append_markdown(
+        reasoning_buffer,
+        Some(wrap_width),
+        Some(cwd.as_path()),
+        &mut lines,
+    );
     let summary_style = Style::default().dim().italic();
     let styled_lines = lines
         .into_iter()
@@ -545,7 +551,9 @@ pub(crate) fn new_streaming_reasoning_tail_cell(
             .initial_indent("• ".dim().into())
             .subsequent_indent("  ".into()),
     );
-    Box::new(StreamingReasoningTailCell::new(plain_hyperlink_lines(wrapped)))
+    Box::new(StreamingReasoningTailCell::new(plain_hyperlink_lines(
+        wrapped,
+    )))
 }
 pub(crate) fn new_user_prompt(
     message: String,

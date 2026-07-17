@@ -30,6 +30,7 @@ use ody_protocol::protocol::GuardianUserAuthorization as CoreGuardianUserAuthori
 use ody_protocol::protocol::PatchApplyStatus as CorePatchApplyStatus;
 use ody_protocol::protocol::ReviewDecision as CoreReviewDecision;
 use ody_protocol::protocol::SubAgentActivityKind as CoreSubAgentActivityKind;
+use ody_protocol::protocol::PlanModeLogKind as CorePlanModeLogKind;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path_uri::LegacyAppPathString;
 use schemars::JsonSchema;
@@ -1244,6 +1245,50 @@ pub struct PlanDeltaNotification {
     pub turn_id: String,
     pub item_id: String,
     pub delta: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum PlanModeLogKind {
+    RigorReminder,
+    SplitStarted,
+    SplitContinued,
+    SplitCompleted,
+    FinalReview,
+    DesignCompletenessCheck,
+    ModeTransition,
+    SubAgentDelegation,
+}
+
+impl From<CorePlanModeLogKind> for PlanModeLogKind {
+    fn from(value: CorePlanModeLogKind) -> Self {
+        match value {
+            CorePlanModeLogKind::RigorReminder => Self::RigorReminder,
+            CorePlanModeLogKind::SplitStarted => Self::SplitStarted,
+            CorePlanModeLogKind::SplitContinued => Self::SplitContinued,
+            CorePlanModeLogKind::SplitCompleted => Self::SplitCompleted,
+            CorePlanModeLogKind::FinalReview => Self::FinalReview,
+            CorePlanModeLogKind::DesignCompletenessCheck => Self::DesignCompletenessCheck,
+            CorePlanModeLogKind::ModeTransition => Self::ModeTransition,
+            CorePlanModeLogKind::SubAgentDelegation => Self::SubAgentDelegation,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+/// Structured planning log delta for Plan/Design mode. Emitted to surface
+/// rigor reminders, split checks, completeness gates, and mode transitions.
+pub struct PlanModeLogDeltaNotification {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub event_id: String,
+    pub occurred_at_ms: i64,
+    pub kind: PlanModeLogKind,
+    pub message: String,
+    pub detail: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]

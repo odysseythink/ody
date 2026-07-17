@@ -125,8 +125,7 @@ impl MemoriesSettingsView {
         let mut header = ColumnRenderable::new();
         header.push(Line::from("Reset all memories?".bold()));
         header.push(Line::from(
-            "This clears local memory files and rollout summaries for the current Ody home."
-                .dim(),
+            "This clears local memory files and rollout summaries for the current Ody home.".dim(),
         ));
         header
     }

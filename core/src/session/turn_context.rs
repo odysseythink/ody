@@ -21,6 +21,7 @@ use ody_protocol::config_types::ModeKind;
 use ody_protocol::model_metadata::ModelInfo;
 use ody_protocol::models::AdditionalPermissionProfile;
 use ody_protocol::protocol::MultiAgentVersion;
+use ody_protocol::protocol::PlanModeLogEvent;
 use ody_protocol::protocol::TurnEnvironmentSelection;
 use ody_sandboxing::compatibility_sandbox_policy_for_permission_profile;
 use ody_sandboxing::policy_transforms::effective_file_system_sandbox_policy;
@@ -583,6 +584,14 @@ impl Session {
         }
     }
 
+    fn new_turn_with_sub_id_logs(decision: &HandoffDecision) -> Vec<PlanModeLogEvent> {
+        match decision {
+            HandoffDecision::Allow { logs, .. } | HandoffDecision::Veto { logs, .. } => {
+                logs.clone()
+            }
+        }
+    }
+
     pub(crate) async fn new_turn_with_sub_id(
         &self,
         sub_id: String,
@@ -602,6 +611,7 @@ impl Session {
                 previous_config: Option<crate::config::Config>,
                 new_config: Option<crate::config::Config>,
                 reminder: Option<String>,
+                logs: Vec<PlanModeLogEvent>,
             },
         }
 
@@ -636,12 +646,12 @@ impl Session {
             let decision = if edge {
                 evaluate_design_exit(artifact, next.collaboration_mode.mode, enforcement).await
             } else {
-                HandoffDecision::Allow { reminder: None }
+                HandoffDecision::Allow { reminder: None, logs: Vec::new() }
             };
 
             // ---- phase 3: re-lock, commit or veto ----
             match decision {
-                HandoffDecision::Veto { missing_report } => {
+                HandoffDecision::Veto { missing_report, logs } => {
                     // No new mode committed: surface the missing-sections list as
                     // hidden model context on the current (still-Design) turn.
                     let source = InternalContextSource::from_static("design_handoff");
@@ -649,9 +659,15 @@ impl Session {
                         InternalModelContextFragment::new(source, missing_report.clone());
                     let item: ResponseItem = ContextualUserFragment::into(fragment);
                     self.inject_no_new_turn(vec![item], None).await;
+                    for log in logs {
+                        self.send_event_raw(Event {
+                            id: sub_id.clone(),
+                            msg: EventMsg::PlanModeLog(log),
+                        }).await;
+                    }
                     Err(OdyErr::InvalidRequest(missing_report))
                 }
-                HandoffDecision::Allow { reminder } => {
+                HandoffDecision::Allow { reminder, logs } => {
                     let mut state = self.state.lock().await;
                     let previous_permission_profile =
                         state.session_configuration.permission_profile();
@@ -676,6 +692,7 @@ impl Session {
                         previous_config,
                         new_config,
                         reminder,
+                        logs,
                     })
                 }
             }
@@ -687,6 +704,7 @@ impl Session {
             previous_config,
             new_config,
             reminder,
+            logs: design_handoff_logs,
         } = match update_result {
             Ok(outcome) => outcome,
             Err(err) => {
@@ -726,6 +744,10 @@ impl Session {
             let item: ResponseItem = ContextualUserFragment::into(fragment);
             self.record_conversation_items(turn_context.as_ref(), std::slice::from_ref(&item))
                 .await;
+        }
+
+        for log in design_handoff_logs {
+            self.send_event(turn_context.as_ref(), EventMsg::PlanModeLog(log)).await;
         }
 
         Ok(turn_context)

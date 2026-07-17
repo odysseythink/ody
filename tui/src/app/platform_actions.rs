@@ -33,14 +33,13 @@ impl App {
 
         tokio::task::spawn_blocking(move || {
             let logs_base_dir_path = logs_base_dir.as_path();
-            let result =
-                ody_windows_sandbox::apply_world_writable_scan_and_denies_for_permissions(
-                    logs_base_dir_path,
-                    cwd.as_path(),
-                    &env_map,
-                    &permissions,
-                    Some(logs_base_dir_path),
-                );
+            let result = ody_windows_sandbox::apply_world_writable_scan_and_denies_for_permissions(
+                logs_base_dir_path,
+                cwd.as_path(),
+                &env_map,
+                &permissions,
+                Some(logs_base_dir_path),
+            );
             if result.is_err() {
                 // Scan failed: warn without examples.
                 send_world_writable_scan_failed(&tx);

@@ -62,7 +62,9 @@ async fn app_server_model_verification_renders_warning() {
     assert!(rendered.contains("multiple flags for possible cybersecurity risk"));
     assert!(rendered.contains("extra safety checks are on"));
     assert!(rendered.contains("Trusted Access for Cyber"));
-    assert!(rendered.contains("https://help.odysseythink.com/en/articles/trusted-access-for-cyber"));
+    assert!(
+        rendered.contains("https://help.odysseythink.com/en/articles/trusted-access-for-cyber")
+    );
 }
 
 #[tokio::test]
@@ -444,7 +446,6 @@ async fn configured_pet_load_is_deferred_until_after_construction() {
         }
     );
 }
-
 
 #[tokio::test]
 async fn streaming_final_answer_keeps_task_running_state() {
@@ -1245,7 +1246,6 @@ async fn status_line_legacy_context_usage_renders_context_used_percent() {
     );
 }
 
-
 #[tokio::test]
 async fn status_line_branch_state_resets_when_git_branch_disabled() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
@@ -1436,9 +1436,7 @@ async fn status_line_model_with_reasoning_includes_fast_for_fast_capable_models(
 
     assert_eq!(
         status_line_text(&chat),
-        Some(format!(
-            "gpt-5.3-ody xhigh · Context 0% used · {test_cwd}"
-        ))
+        Some(format!("gpt-5.3-ody xhigh · Context 0% used · {test_cwd}"))
     );
 }
 

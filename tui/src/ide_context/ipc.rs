@@ -22,8 +22,7 @@ const MAX_IPC_FRAME_BYTES: usize = 256 * 1024 * 1024;
 #[cfg(any(unix, windows))]
 const TUI_SOURCE_CLIENT_ID: &str = "ody-tui";
 #[cfg(any(unix, windows))]
-const OPEN_IDE_HINT: &str =
-    "Open this project in VS Code or Cursor with the Ody extension active.";
+const OPEN_IDE_HINT: &str = "Open this project in VS Code or Cursor with the Ody extension active.";
 #[cfg(any(unix, windows))]
 const IDE_DID_NOT_PROVIDE_CONTEXT_HINT: &str = "The IDE extension did not provide context.";
 #[cfg(any(unix, windows))]

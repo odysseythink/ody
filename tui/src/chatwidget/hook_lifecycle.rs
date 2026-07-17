@@ -33,10 +33,7 @@ impl ChatWidget {
         self.request_redraw();
     }
 
-    pub(super) fn on_hook_completed(
-        &mut self,
-        completed: ody_app_server_protocol::HookRunSummary,
-    ) {
+    pub(super) fn on_hook_completed(&mut self, completed: ody_app_server_protocol::HookRunSummary) {
         let completed_existing_run = self
             .active_hook_cell
             .as_mut()

@@ -61,9 +61,8 @@ pub fn parse_plan_options(markdown: &str) -> Vec<PlanOption> {
 
 fn parse_option_heading(line: &str) -> Option<(char, &str)> {
     static RE: OnceLock<regex_lite::Regex> = OnceLock::new();
-    let re = RE.get_or_init(|| {
-        regex_lite::Regex::new(r"(?i)^##\s+option\s+([a-z])\b(.*)$").unwrap()
-    });
+    let re =
+        RE.get_or_init(|| regex_lite::Regex::new(r"(?i)^##\s+option\s+([a-z])\b(.*)$").unwrap());
     let caps = re.captures(line.trim_end())?;
     let letter = caps.get(1)?.as_str().chars().next()?;
     let rest = caps.get(2)?.as_str();
@@ -93,10 +92,13 @@ mod tests {
     #[test]
     fn parse_single_option_extracts_label_and_summary() {
         let opts = parse_plan_options("## Option A: Refactor incrementally\n- step 1");
-        assert_eq!(opts, vec![PlanOption {
-            label: 'A',
-            summary: "Refactor incrementally".to_string(),
-        }]);
+        assert_eq!(
+            opts,
+            vec![PlanOption {
+                label: 'A',
+                summary: "Refactor incrementally".to_string(),
+            }]
+        );
     }
 
     #[test]
@@ -148,7 +150,12 @@ mod tests {
     #[test]
     fn parse_caps_at_26_labels() {
         let markdown: String = (0..30)
-            .map(|i| format!("## Option {}: item {i}\n", char::from_u32('A' as u32 + (i % 26)).unwrap()))
+            .map(|i| {
+                format!(
+                    "## Option {}: item {i}\n",
+                    char::from_u32('A' as u32 + (i % 26)).unwrap()
+                )
+            })
             .collect::<Vec<_>>()
             .join("");
         assert_eq!(parse_plan_options(&markdown).len(), 26);
@@ -183,7 +190,9 @@ mod tests {
     #[test]
     fn handoff_suffix_for_implement_returns_none() {
         assert_eq!(
-            plan_choice_handoff_suffix(&PlanApprovalChoice::Implement { clear_context: false }),
+            plan_choice_handoff_suffix(&PlanApprovalChoice::Implement {
+                clear_context: false
+            }),
             None
         );
     }

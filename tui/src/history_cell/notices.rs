@@ -85,7 +85,8 @@ pub(crate) fn new_warning_event(message: String) -> PrefixedWrappedHistoryCell {
     PrefixedWrappedHistoryCell::new(message.yellow(), "⚠ ".yellow(), "  ")
 }
 
-const TRUSTED_ACCESS_FOR_CYBER_URL: &str = "https://help.odysseythink.com/en/articles/trusted-access-for-cyber";
+const TRUSTED_ACCESS_FOR_CYBER_URL: &str =
+    "https://help.odysseythink.com/en/articles/trusted-access-for-cyber";
 
 #[derive(Debug)]
 pub(crate) struct CyberPolicyNoticeCell;

@@ -4,6 +4,8 @@
 //! when a config mutation must be owned by the app server rather than written
 //! to the local `config.toml` directly.
 
+use color_eyre::eyre::Result;
+use color_eyre::eyre::WrapErr;
 use ody_app_server_client::AppServerRequestHandle;
 use ody_app_server_protocol::ClientRequest;
 use ody_app_server_protocol::ConfigBatchWriteParams;
@@ -20,8 +22,6 @@ use ody_features::FEATURES;
 use ody_protocol::config_types::SERVICE_TIER_DEFAULT_REQUEST_VALUE;
 use ody_protocol::config_types::TrustLevel;
 use ody_utils_absolute_path::AbsolutePathBuf;
-use color_eyre::eyre::Result;
-use color_eyre::eyre::WrapErr;
 use serde_json::Value as JsonValue;
 use std::fmt::Display;
 use std::path::Path;
@@ -139,7 +139,6 @@ pub(crate) fn build_memory_settings_edits(
         ),
     ]
 }
-
 
 pub(crate) async fn write_config_batch(
     request_handle: AppServerRequestHandle,

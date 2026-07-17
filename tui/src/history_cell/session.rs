@@ -73,7 +73,11 @@ pub(crate) fn render_logo_for_width(inner_width: usize) -> Vec<Line<'static>> {
 
 /// Render `lines` inside a border sized to the widest span in the content.
 pub(crate) fn with_border(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
-    with_border_internal(lines, /*forced_inner_width*/ None, Style::default().dim())
+    with_border_internal(
+        lines,
+        /*forced_inner_width*/ None,
+        Style::default().dim(),
+    )
 }
 
 /// Render `lines` inside a border sized to the widest span in the content with a custom border style.
@@ -134,7 +138,10 @@ fn with_border_internal(
         spans.push(Span::styled("│ ", border_style));
         spans.extend(line);
         if used_width < content_width {
-            spans.push(Span::styled(" ".repeat(content_width - used_width), border_style));
+            spans.push(Span::styled(
+                " ".repeat(content_width - used_width),
+                border_style,
+            ));
         }
         spans.push(Span::styled(" │", border_style));
         out.push(Line::from(spans));
@@ -412,9 +419,8 @@ impl HistoryCell for SessionHeaderHistoryCell {
         let make_row = |spans: Vec<Span<'static>>| Line::from(spans);
 
         // Title line rendered inside the box in ody-code's "Welcome to ODY Code!" style.
-        let title_spans: Vec<Span<'static>> = vec![
-            Span::styled("Welcome to ODY Code!", accent_style()),
-        ];
+        let title_spans: Vec<Span<'static>> =
+            vec![Span::styled("Welcome to ODY Code!", accent_style())];
 
         const CHANGE_MODEL_HINT_COMMAND: &str = "/model";
         const CHANGE_MODEL_HINT_EXPLANATION: &str = " to change";
@@ -446,7 +452,9 @@ impl HistoryCell for SessionHeaderHistoryCell {
         let hint = format!("{CHANGE_MODEL_HINT_COMMAND}{CHANGE_MODEL_HINT_EXPLANATION}");
         let hint_width = UnicodeWidthStr::width(hint.as_str());
         let used_width = prefix_width + model_value_width + reasoning_width + fast_width;
-        let pad_width = inner_width.saturating_sub(used_width).saturating_sub(hint_width);
+        let pad_width = inner_width
+            .saturating_sub(used_width)
+            .saturating_sub(hint_width);
         let pad = if pad_width > 0 {
             " ".repeat(pad_width)
         } else {
@@ -527,7 +535,6 @@ impl HistoryCell for SessionHeaderHistoryCell {
         lines
     }
 }
-
 
 #[cfg(test)]
 mod tests {

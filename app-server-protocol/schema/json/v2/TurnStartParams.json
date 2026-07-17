@@ -121,6 +121,32 @@
       ],
       "type": "object"
     },
+    "DesignAuditLevel": {
+      "description": "Audit level for Design mode. Determines how rigorously assumptions are verified.",
+      "oneOf": [
+        {
+          "description": "Trust clearly-stated user facts; verify only load-bearing assumptions.",
+          "enum": [
+            "basic"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Verify every assumption that would be expensive if wrong.",
+          "enum": [
+            "standard"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Verify nearly everything against sources.",
+          "enum": [
+            "deep"
+          ],
+          "type": "string"
+        }
+      ]
+    },
     "ImageDetail": {
       "enum": [
         "auto",
@@ -293,6 +319,16 @@
     "Settings": {
       "description": "Settings for a collaboration mode.",
       "properties": {
+        "design_audit_level": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DesignAuditLevel"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "developer_instructions": {
           "type": [
             "string",

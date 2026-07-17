@@ -84,6 +84,8 @@ pub(super) use ody_app_server_protocol::OdyErrorInfo;
 pub(super) use ody_app_server_protocol::PatchApplyStatus as AppServerPatchApplyStatus;
 pub(super) use ody_app_server_protocol::PatchChangeKind;
 pub(super) use ody_app_server_protocol::PermissionsRequestApprovalParams as AppServerPermissionsRequestApprovalParams;
+pub(super) use ody_app_server_protocol::PlanModeLogDeltaNotification;
+pub(super) use ody_app_server_protocol::PlanModeLogKind;
 pub(super) use ody_app_server_protocol::PluginAuthPolicy;
 pub(super) use ody_app_server_protocol::PluginDetail;
 pub(super) use ody_app_server_protocol::PluginInstallPolicy;

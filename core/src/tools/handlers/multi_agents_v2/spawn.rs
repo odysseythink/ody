@@ -8,7 +8,10 @@ use crate::tools::handlers::multi_agents_spec::SpawnAgentToolOptions;
 use crate::tools::handlers::multi_agents_spec::create_spawn_agent_tool_v2;
 use crate::turn_timing::now_unix_timestamp_ms;
 use ody_protocol::AgentPath;
+use ody_protocol::config_types::ModeKind;
 use ody_protocol::protocol::Op;
+use ody_protocol::protocol::PlanModeLogEvent;
+use ody_protocol::protocol::PlanModeLogKind;
 use ody_tools::ToolSpec;
 
 #[derive(Default)]
@@ -148,7 +151,7 @@ async fn handle_spawn_agent(
         .send_event(
             &turn,
             SubAgentActivityEvent {
-                event_id: call_id,
+                event_id: call_id.clone(),
                 occurred_at_ms: now_unix_timestamp_ms(),
                 agent_thread_id: new_thread_id,
                 agent_path: new_agent_path.clone(),
@@ -157,6 +160,22 @@ async fn handle_spawn_agent(
             .into(),
         )
         .await;
+
+    if matches!(turn.collaboration_mode.mode, ModeKind::Plan | ModeKind::Design) {
+        session
+            .send_event(
+                &turn,
+                PlanModeLogEvent {
+                    event_id: call_id,
+                    occurred_at_ms: now_unix_timestamp_ms(),
+                    kind: PlanModeLogKind::SubAgentDelegation,
+                    message: "Delegating to a sub-agent.".to_string(),
+                    detail: Some(format!("task_name={new_agent_path}")),
+                }
+                .into(),
+            )
+            .await;
+    }
     let role_tag = role_name.unwrap_or(DEFAULT_ROLE_NAME);
     turn.session_telemetry.counter(
         "ody.multi_agent.spawn",

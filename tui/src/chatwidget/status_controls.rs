@@ -188,10 +188,7 @@ impl ChatWidget {
         self.refresh_status_surfaces();
     }
 
-    pub(crate) fn add_status_output(
-        &mut self,
-        request_id: Option<u64>,
-    ) {
+    pub(crate) fn add_status_output(&mut self, request_id: Option<u64>) {
         let default_usage = TokenUsage::default();
         let token_info = self.token_info.as_ref();
         let total_usage = token_info

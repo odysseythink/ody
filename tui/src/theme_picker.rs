@@ -621,8 +621,7 @@ mod tests {
 
     #[test]
     fn subtitle_falls_back_to_preview_instructions_without_tilde_path() {
-        let subtitle =
-            theme_picker_subtitle(/*ody_home*/ None, /*terminal_width*/ None);
+        let subtitle = theme_picker_subtitle(/*ody_home*/ None, /*terminal_width*/ None);
         assert_eq!(subtitle, PREVIEW_FALLBACK_SUBTITLE);
     }
 
@@ -639,11 +638,8 @@ mod tests {
     #[test]
     fn unavailable_configured_theme_falls_back_to_configured_or_default_selection() {
         let configured_or_default_theme = highlight::configured_theme_name();
-        let params = build_theme_picker_params(
-            Some("not-a-real-theme"),
-            /*ody_home*/ None,
-            Some(120),
-        );
+        let params =
+            build_theme_picker_params(Some("not-a-real-theme"), /*ody_home*/ None, Some(120));
         let selected_idx = params
             .initial_selected_idx
             .expect("expected selected index for active fallback theme");

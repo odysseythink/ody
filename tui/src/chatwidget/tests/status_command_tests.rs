@@ -70,4 +70,3 @@ async fn status_command_renders_native_and_foreign_instruction_sources() {
         "expected /status to avoid stale <none> when app-server provided instruction sources, got: {rendered}"
     );
 }
-

@@ -7,6 +7,12 @@
 use crate::history_cell::PlainHistoryCell;
 use crate::render::line_utils::prefix_lines;
 use crate::text_formatting::truncate_text;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+#[cfg(target_os = "macos")]
+use crossterm::event::KeyEventKind;
+#[cfg(target_os = "macos")]
+use crossterm::event::KeyModifiers;
 use ody_app_server_protocol::CollabAgentState;
 use ody_app_server_protocol::CollabAgentStatus;
 use ody_app_server_protocol::CollabAgentTool;
@@ -15,12 +21,6 @@ use ody_app_server_protocol::SubAgentActivityKind;
 use ody_app_server_protocol::ThreadItem;
 use ody_protocol::ThreadId;
 use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-#[cfg(target_os = "macos")]
-use crossterm::event::KeyEventKind;
-#[cfg(target_os = "macos")]
-use crossterm::event::KeyModifiers;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;

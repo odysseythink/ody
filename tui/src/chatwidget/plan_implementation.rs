@@ -5,7 +5,6 @@ use ody_otel::SessionTelemetry;
 use ody_protocol::config_types::CollaborationModeMask;
 
 use crate::app_event::AppEvent;
-use crate::key_hint;
 use crate::bottom_pane::SelectionAction;
 use crate::bottom_pane::SelectionItem;
 use crate::bottom_pane::SelectionViewParams;
@@ -15,6 +14,7 @@ use crate::chatwidget::ChatWidget;
 use crate::chatwidget::plan_options::PlanApprovalChoice;
 use crate::chatwidget::plan_options::parse_plan_options;
 use crate::chatwidget::plan_options::plan_choice_handoff_suffix;
+use crate::key_hint;
 
 pub(super) const PLAN_IMPLEMENTATION_TITLE: &str = "Implement this plan?";
 pub(super) const PLAN_IMPLEMENTATION_YES: &str = "Yes, implement this plan";
@@ -29,8 +29,7 @@ pub(super) const PLAN_IMPLEMENTATION_CLEAR_CONTEXT_PREFIX: &str = concat!(
 );
 pub(super) const PLAN_IMPLEMENTATION_DEFAULT_UNAVAILABLE: &str = "Default mode unavailable";
 pub(super) const PLAN_IMPLEMENTATION_NO_APPROVED_PLAN: &str = "No approved plan available";
-pub(super) const PLAN_IMPLEMENTATION_PLAN_FILE_READ_FAILED: &str =
-    "Could not read plan file";
+pub(super) const PLAN_IMPLEMENTATION_PLAN_FILE_READ_FAILED: &str = "Could not read plan file";
 
 /// Builds the confirmation prompt shown after a plan is approved in Plan mode.
 ///
@@ -111,10 +110,7 @@ pub(super) fn selection_view_params(
                 })];
                 (actions, None)
             }
-            (Some(_), _) => (
-                Vec::new(),
-                Some(no_plan_reason.to_string()),
-            ),
+            (Some(_), _) => (Vec::new(), Some(no_plan_reason.to_string())),
         };
 
     let mut items: Vec<SelectionItem> = Vec::new();
@@ -194,7 +190,10 @@ pub(super) fn selection_view_params(
                             None,
                         )
                     }
-                    (None, _) => (Vec::new(), Some(PLAN_IMPLEMENTATION_DEFAULT_UNAVAILABLE.to_string())),
+                    (None, _) => (
+                        Vec::new(),
+                        Some(PLAN_IMPLEMENTATION_DEFAULT_UNAVAILABLE.to_string()),
+                    ),
                     _ => (Vec::new(), Some(no_plan_reason.to_string())),
                 };
             items.push(SelectionItem {

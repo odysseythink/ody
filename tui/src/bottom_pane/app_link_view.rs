@@ -1,11 +1,11 @@
 #[cfg(test)]
 use crate::app_command::AppCommand as Op;
-use ody_app_server_protocol::McpServerElicitationAction;
-use ody_app_server_protocol::RequestId as AppServerRequestId;
-use ody_protocol::ThreadId;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use ody_app_server_protocol::McpServerElicitationAction;
+use ody_app_server_protocol::RequestId as AppServerRequestId;
+use ody_protocol::ThreadId;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
@@ -1610,8 +1610,7 @@ mod tests {
                 title: "Google Calendar".to_string(),
                 description: None,
                 instructions: "Sign in to this app in your browser, then return here.".to_string(),
-                url: "https://ody.test/apps/google-calendar/connector_google_calendar"
-                    .to_string(),
+                url: "https://ody.test/apps/google-calendar/connector_google_calendar".to_string(),
                 is_installed: true,
                 is_enabled: true,
                 suggest_reason: Some("Reconnect Google Calendar.".to_string()),

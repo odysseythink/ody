@@ -1,7 +1,7 @@
-use ody_config::types::TuiKeymap;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
+use ody_config::types::TuiKeymap;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;

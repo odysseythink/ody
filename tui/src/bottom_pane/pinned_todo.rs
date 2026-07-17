@@ -129,7 +129,7 @@ mod plan_layout {
     use crate::history_cell::render_plan_steps;
     use crate::render::line_utils::{prefix_lines, push_owned_lines};
     use crate::style::accent_style;
-    use crate::wrapping::{adaptive_wrap_line, RtOptions};
+    use crate::wrapping::{RtOptions, adaptive_wrap_line};
 
     /// Full rendering: delegate to the shared history-cell renderer so the
     /// pinned widget and history entries stay identical.
@@ -200,9 +200,7 @@ mod plan_layout {
         let mut indented: Vec<Line<'static>> = vec![];
 
         // Show explanation if present and remember how many lines it consumes.
-        let expl_lines = if let Some(expl) = explanation
-            .map(|s| s.trim())
-            .filter(|t| !t.is_empty())
+        let expl_lines = if let Some(expl) = explanation.map(|s| s.trim()).filter(|t| !t.is_empty())
         {
             let note = Line::from(expl.to_string().dim().italic());
             let wrapped = adaptive_wrap_line(&note, RtOptions::new(wrap_width));
@@ -308,13 +306,13 @@ mod tests {
     use ody_protocol::plan_tool::PlanItemArg;
     use ody_protocol::plan_tool::StepStatus;
     use ody_protocol::plan_tool::UpdatePlanArgs;
+    use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
-    use ratatui::Terminal;
 
     use super::PinnedTodoWidget;
-    use crate::history_cell::new_plan_update;
     use crate::history_cell::HistoryCell;
+    use crate::history_cell::new_plan_update;
     use crate::render::renderable::Renderable;
     fn make_plan(total: usize, completed: usize) -> Vec<ody_protocol::plan_tool::PlanItemArg> {
         (0..total)
@@ -352,8 +350,7 @@ mod tests {
         }
         assert_eq!(heights[0], 8, "initial folded height must be max_lines");
         for w in heights.windows(2) {
-            assert!(w[1] >= w[0], "height must not shrink: {:?}",
-                heights);
+            assert!(w[1] >= w[0], "height must not shrink: {:?}", heights);
         }
         assert_eq!(*heights.last().unwrap(), 8);
     }
@@ -392,7 +389,6 @@ mod tests {
             "collapsing must return to the pre-expansion folded watermark"
         );
     }
-
 
     #[test]
     fn renders_pinned_todo_with_explanation_and_steps() {
@@ -507,17 +503,35 @@ mod tests {
     fn fixed_height_for_short_plan_when_all_completed() {
         let mut widget = PinnedTodoWidget::new();
         widget.update(args_with(vec![
-            PlanItemArg { step: "Step one".to_string(), status: StepStatus::Completed },
-            PlanItemArg { step: "Step two".to_string(), status: StepStatus::InProgress },
-            PlanItemArg { step: "Step three".to_string(), status: StepStatus::Pending },
+            PlanItemArg {
+                step: "Step one".to_string(),
+                status: StepStatus::Completed,
+            },
+            PlanItemArg {
+                step: "Step two".to_string(),
+                status: StepStatus::InProgress,
+            },
+            PlanItemArg {
+                step: "Step three".to_string(),
+                status: StepStatus::Pending,
+            },
         ]));
         let initial_height = widget.desired_height(80);
         assert_eq!(initial_height, 4); // 1 header + 3 steps
 
         widget.update(args_with(vec![
-            PlanItemArg { step: "Step one".to_string(), status: StepStatus::Completed },
-            PlanItemArg { step: "Step two".to_string(), status: StepStatus::Completed },
-            PlanItemArg { step: "Step three".to_string(), status: StepStatus::Completed },
+            PlanItemArg {
+                step: "Step one".to_string(),
+                status: StepStatus::Completed,
+            },
+            PlanItemArg {
+                step: "Step two".to_string(),
+                status: StepStatus::Completed,
+            },
+            PlanItemArg {
+                step: "Step three".to_string(),
+                status: StepStatus::Completed,
+            },
         ]));
         assert_eq!(
             widget.desired_height(80),

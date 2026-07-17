@@ -12,10 +12,10 @@
 //! advertised effort when the default is absent, before stepping through the
 //! advertised order.
 
+use crossterm::event::KeyEvent;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::model_metadata::ModelPreset;
 use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
-use crossterm::event::KeyEvent;
 
 use super::ChatWidget;
 use crate::app_event::AppEvent;

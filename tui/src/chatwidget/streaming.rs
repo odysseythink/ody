@@ -477,12 +477,10 @@ impl ChatWidget {
     }
 
     pub(super) fn clear_active_reasoning_tail(&mut self) {
-        if self
-            .transcript
-            .active_cell
-            .as_ref()
-            .is_some_and(|cell| cell.as_any().is::<history_cell::StreamingReasoningTailCell>())
-        {
+        if self.transcript.active_cell.as_ref().is_some_and(|cell| {
+            cell.as_any()
+                .is::<history_cell::StreamingReasoningTailCell>()
+        }) {
             self.transcript.active_cell = None;
             self.bump_active_cell_revision();
         }

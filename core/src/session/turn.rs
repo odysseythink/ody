@@ -1349,6 +1349,7 @@ async fn run_session_mode_after_turn(
 
     let plan_mode_config = turn_context.config.plan_mode.as_ref();
     let result = PlanModeInjector::after_plan_turn(artifact, plan_markdown, plan_mode_config);
+    let mut plan_mode_logs = result.logs.clone();
 
     if let Some(snapshot) = artifact.last_manifest_snapshot() {
         sess.set_plan_mode_last_manifest_snapshot(snapshot).await;
@@ -1399,7 +1400,7 @@ async fn run_session_mode_after_turn(
 
     // Periodic rigor-tier reminder reinjection (P2.3). Plan-only:
     // render_reminder_if_due self-guards `mode != Plan → None`.
-    if let Some((reminder_kind, reminder_text)) =
+    if let Some((reminder_kind, reminder_text, reminder_logs)) =
         PlanModeInjector::render_reminder_if_due(artifact, plan_mode_config, mode)
     {
         let source = InternalContextSource::from_static(match reminder_kind {
@@ -1410,6 +1411,11 @@ async fn run_session_mode_after_turn(
         let item: ResponseItem = ContextualUserFragment::into(fragment);
         sess.record_conversation_items(turn_context, std::slice::from_ref(&item))
             .await;
+        plan_mode_logs.extend(reminder_logs);
+    }
+
+    for log in plan_mode_logs {
+        sess.send_event(turn_context, EventMsg::PlanModeLog(log)).await;
     }
 
     Ok(())
@@ -1927,6 +1933,7 @@ pub(super) fn realtime_text_for_event(msg: &EventMsg) -> Option<(String, Option<
         | EventMsg::HookCompleted(_)
         | EventMsg::AgentMessageContentDelta(_)
         | EventMsg::PlanDelta(_)
+        | EventMsg::PlanModeLog(_)
         | EventMsg::ReasoningContentDelta(_)
         | EventMsg::ReasoningRawContentDelta(_)
         | EventMsg::CollabAgentSpawnBegin(_)

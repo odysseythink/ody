@@ -8,10 +8,14 @@
 
 use crate::design_completeness::design_completeness_report;
 use crate::plan_artifact::PlanArtifact;
+use crate::turn_timing::now_unix_timestamp_ms;
 use ody_config::config_toml::PlanEnforcement;
 use ody_protocol::config_types::ModeKind;
+use ody_protocol::protocol::PlanModeLogEvent;
+use ody_protocol::protocol::PlanModeLogKind;
 use std::path::PathBuf;
 use std::sync::Arc;
+use uuid::Uuid;
 
 /// Render inputs for a Design→Plan reminder. `selected_label` is reserved for a
 /// later interactive-selection step (D6-3) and is always `None` in v1.
@@ -22,12 +26,13 @@ pub(crate) struct PendingDesignHandoff {
     pub incomplete_note: Option<String>,
 }
 
+#[derive(Debug)]
 pub(crate) enum HandoffDecision {
     /// The switch may commit. `reminder` is `Some` only when `new == Plan`.
-    Allow { reminder: Option<String> },
+    Allow { reminder: Option<String>, logs: Vec<PlanModeLogEvent> },
     /// The switch is rejected (Strict + incomplete). `missing_report` is the
     /// user-facing missing-sections list.
-    Veto { missing_report: String },
+    Veto { missing_report: String, logs: Vec<PlanModeLogEvent> },
 }
 
 pub(crate) async fn evaluate_design_exit(
@@ -39,15 +44,27 @@ pub(crate) async fn evaluate_design_exit(
     let report = design_completeness_report(&content);
     let complete = report.is_none();
 
+    let mut logs = Vec::new();
+    logs.push(make_design_completeness_log(complete, report.as_deref()));
+
     if !complete && enforcement == PlanEnforcement::Strict {
+        logs.push(make_mode_transition_log(
+            new_mode,
+            "Design handoff vetoed: design is incomplete.".to_string(),
+        ));
         return HandoffDecision::Veto {
             missing_report: render_veto_message(&report.unwrap_or_default()),
+            logs,
         };
     }
     if new_mode != ModeKind::Plan {
         // D6-2: the gate fires on every Design exit, but the reminder is only
         // injected when the destination is Plan mode.
-        return HandoffDecision::Allow { reminder: None };
+        logs.push(make_mode_transition_log(
+            new_mode,
+            format!("Switching from Design mode to {new_mode:?}."),
+        ));
+        return HandoffDecision::Allow { reminder: None, logs };
     }
     let path = artifact
         .as_ref()
@@ -71,8 +88,42 @@ pub(crate) async fn evaluate_design_exit(
         selected_label: None,
         incomplete_note,
     };
+    let reminder = render_handoff_reminder(&handoff);
+    logs.push(make_mode_transition_log(
+        ModeKind::Plan,
+        "Design handoff approved.".to_string(),
+    ));
     HandoffDecision::Allow {
-        reminder: Some(render_handoff_reminder(&handoff)),
+        reminder: Some(reminder),
+        logs,
+    }
+}
+
+fn make_design_completeness_log(
+    complete: bool,
+    report: Option<&str>,
+) -> PlanModeLogEvent {
+    let message = if complete {
+        "Design completeness check passed.".to_string()
+    } else {
+        "Design completeness check: missing sections detected.".to_string()
+    };
+    PlanModeLogEvent {
+        event_id: Uuid::new_v4().to_string(),
+        occurred_at_ms: now_unix_timestamp_ms(),
+        kind: PlanModeLogKind::DesignCompletenessCheck,
+        message,
+        detail: report.map(|r| r.to_string()),
+    }
+}
+
+fn make_mode_transition_log(new_mode: ModeKind, message: String) -> PlanModeLogEvent {
+    PlanModeLogEvent {
+        event_id: Uuid::new_v4().to_string(),
+        occurred_at_ms: now_unix_timestamp_ms(),
+        kind: PlanModeLogKind::ModeTransition,
+        message,
+        detail: Some(format!("new_mode={:?}", new_mode)),
     }
 }
 
@@ -185,7 +236,8 @@ mod tests {
         assert!(matches!(
             decision,
             HandoffDecision::Allow {
-                reminder: Some(_)
+                reminder: Some(_),
+                ..
             }
         ));
     }
@@ -196,7 +248,21 @@ mod tests {
             evaluate_design_exit(None, ModeKind::Default, PlanEnforcement::Advisory).await;
         assert!(matches!(
             decision,
-            HandoffDecision::Allow { reminder: None }
+            HandoffDecision::Allow { reminder: None, .. }
         ));
+    }
+
+    #[tokio::test]
+    async fn evaluate_advisory_emits_design_completeness_log() {
+        let decision =
+            evaluate_design_exit(None, ModeKind::Plan, PlanEnforcement::Advisory).await;
+        let logs = match decision {
+            HandoffDecision::Allow { logs, .. } => logs,
+            other => panic!("expected Allow, got {other:?}"),
+        };
+        assert!(
+            logs.iter().any(|log| log.kind == PlanModeLogKind::DesignCompletenessCheck),
+            "expected a design completeness log, got {logs:?}"
+        );
     }
 }

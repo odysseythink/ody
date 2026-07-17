@@ -26,6 +26,7 @@ use crate::onboarding::mark_url_hyperlink;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::Renderable;
 use crate::tui::FrameRequester;
+use crossterm::event::KeyCode;
 use ody_app_server_protocol::PluginAuthPolicy;
 use ody_app_server_protocol::PluginAvailability;
 use ody_app_server_protocol::PluginDetail;
@@ -39,7 +40,6 @@ use ody_app_server_protocol::PluginSource;
 use ody_app_server_protocol::PluginSummary;
 use ody_core_plugins::is_odysseythink_curated_marketplace_name;
 use ody_utils_absolute_path::AbsolutePathBuf;
-use crossterm::event::KeyCode;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::prelude::Widget;
@@ -848,7 +848,9 @@ impl ChatWidget {
 
         let mut additional_marketplaces: Vec<&PluginMarketplaceEntry> = marketplaces
             .iter()
-            .filter(|marketplace| !MarketplaceProduct::from_marketplace(marketplace).is_by_odysseythink())
+            .filter(|marketplace| {
+                !MarketplaceProduct::from_marketplace(marketplace).is_by_odysseythink()
+            })
             .collect();
         additional_marketplaces.sort_by_cached_key(|marketplace| {
             let display_name = marketplace_display_name(marketplace);

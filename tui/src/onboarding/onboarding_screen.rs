@@ -10,6 +10,9 @@
 //! editing a non-empty API-key field, while control/alt chords remain available
 //! as explicit exit shortcuts.
 
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
 use ody_app_server_client::AppServerEvent;
 use ody_app_server_client::AppServerRequestHandle;
 use ody_app_server_protocol::ServerNotification;
@@ -17,9 +20,6 @@ use ody_exec_server::LOCAL_FS;
 use ody_git_utils::resolve_root_git_project_for_trust;
 #[cfg(target_os = "windows")]
 use ody_protocol::config_types::WindowsSandboxLevel;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyEventKind;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::prelude::Widget;
@@ -171,7 +171,6 @@ impl OnboardingScreen {
 
     fn handle_app_server_notification(&mut self, notification: ServerNotification) {
         match notification {
-
             _ => {}
         }
     }
@@ -189,8 +188,7 @@ impl KeyboardHandler for OnboardingScreen {
         if !matches!(key_event.kind, KeyEventKind::Press | KeyEventKind::Repeat) {
             return;
         }
-        let should_quit = key_event.kind == KeyEventKind::Press
-            && keys::QUIT.is_pressed(key_event);
+        let should_quit = key_event.kind == KeyEventKind::Press && keys::QUIT.is_pressed(key_event);
         if should_quit {
             self.is_done = true;
         } else {

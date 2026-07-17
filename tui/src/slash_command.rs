@@ -120,7 +120,9 @@ impl SlashCommand {
             SlashCommand::Personality => "choose a communication style for Ody",
             SlashCommand::Plan => "switch to Plan mode",
             SlashCommand::Design => "switch to Design mode",
-            SlashCommand::WritingPlan => "convert a source file into an execution plan (plan mode only)",
+            SlashCommand::WritingPlan => {
+                "convert a source file into an execution plan (plan mode only)"
+            }
             SlashCommand::Goal => "set or view the goal for a long-running task",
             SlashCommand::Agent | SlashCommand::MultiAgents => "switch the active agent thread",
             SlashCommand::Side | SlashCommand::Btw => {

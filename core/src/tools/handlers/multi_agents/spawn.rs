@@ -9,6 +9,9 @@ use crate::agent::role::apply_role_to_config;
 use crate::tools::handlers::multi_agents_spec::SpawnAgentToolOptions;
 use crate::tools::handlers::multi_agents_spec::create_spawn_agent_tool_v1;
 use crate::turn_timing::now_unix_timestamp_ms;
+use ody_protocol::config_types::ModeKind;
+use ody_protocol::protocol::PlanModeLogEvent;
+use ody_protocol::protocol::PlanModeLogKind;
 use ody_tools::ToolSpec;
 
 #[derive(Default)]
@@ -84,6 +87,22 @@ async fn handle_spawn_agent(
             .into(),
         )
         .await;
+
+    if matches!(turn.collaboration_mode.mode, ModeKind::Plan | ModeKind::Design) {
+        session
+            .send_event(
+                &turn,
+                PlanModeLogEvent {
+                    event_id: call_id.clone(),
+                    occurred_at_ms: now_unix_timestamp_ms(),
+                    kind: PlanModeLogKind::SubAgentDelegation,
+                    message: "Delegating to a sub-agent.".to_string(),
+                    detail: Some(format!("task_name={}", role_name.unwrap_or("default"))),
+                }
+                .into(),
+            )
+            .await;
+    }
     let mut config =
         build_agent_spawn_config(&session.get_base_instructions().await, turn.as_ref())?;
     if let Some(service_tier) = args.service_tier.as_ref() {

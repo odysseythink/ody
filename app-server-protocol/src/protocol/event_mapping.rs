@@ -13,6 +13,7 @@ use crate::protocol::v2::FileChangePatchUpdatedNotification;
 use crate::protocol::v2::ItemCompletedNotification;
 use crate::protocol::v2::ItemStartedNotification;
 use crate::protocol::v2::PlanDeltaNotification;
+use crate::protocol::v2::PlanModeLogDeltaNotification;
 use crate::protocol::v2::ReasoningSummaryPartAddedNotification;
 use crate::protocol::v2::ReasoningSummaryTextDeltaNotification;
 use crate::protocol::v2::ReasoningTextDeltaNotification;
@@ -190,6 +191,17 @@ pub fn item_event_to_server_notification(
                 turn_id,
                 item,
                 completed_at_ms: activity.occurred_at_ms,
+            })
+        }
+        EventMsg::PlanModeLog(event) => {
+            ServerNotification::PlanModeLogDelta(PlanModeLogDeltaNotification {
+                thread_id,
+                turn_id,
+                event_id: event.event_id,
+                occurred_at_ms: event.occurred_at_ms,
+                kind: event.kind.into(),
+                message: event.message,
+                detail: event.detail,
             })
         }
         EventMsg::CollabWaitingBegin(begin_event) => {
@@ -471,6 +483,9 @@ mod tests {
     use ody_protocol::protocol::CollabResumeEndEvent;
     use ody_protocol::protocol::ExecCommandOutputDeltaEvent;
     use ody_protocol::protocol::ExecOutputStream;
+    use ody_protocol::protocol::PlanModeLogEvent;
+    use ody_protocol::protocol::PlanModeLogKind;
+    use crate::protocol::v2::PlanModeLogKind as AppPlanModeLogKind;
     use pretty_assertions::assert_eq;
 
     fn assert_item_started_server_notification(
@@ -607,5 +622,35 @@ mod tests {
                 delta: "hello".to_string(),
             },
         );
+    }
+
+    #[test]
+    fn plan_mode_log_maps_to_plan_mode_log_delta() {
+        let event = PlanModeLogEvent {
+            event_id: "event-1".to_string(),
+            occurred_at_ms: 1234,
+            kind: PlanModeLogKind::RigorReminder,
+            message: "Remember acceptance criteria.".to_string(),
+            detail: Some("Add tests for the new feature.".to_string()),
+        };
+
+        let notification = item_event_to_server_notification(
+            EventMsg::PlanModeLog(event.clone()),
+            "thread-1",
+            "turn-1",
+        );
+
+        match notification {
+            ServerNotification::PlanModeLogDelta(payload) => {
+                assert_eq!(payload.thread_id, "thread-1");
+                assert_eq!(payload.turn_id, "turn-1");
+                assert_eq!(payload.event_id, event.event_id);
+                assert_eq!(payload.occurred_at_ms, event.occurred_at_ms);
+                assert_eq!(payload.kind, AppPlanModeLogKind::RigorReminder);
+                assert_eq!(payload.message, event.message);
+                assert_eq!(payload.detail, event.detail);
+            }
+            other => panic!("expected PlanModeLogDelta notification, got {other:?}"),
+        }
     }
 }

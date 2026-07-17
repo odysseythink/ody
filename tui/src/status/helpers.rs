@@ -168,8 +168,6 @@ pub(crate) fn format_reset_timestamp(dt: DateTime<Local>, captured_at: DateTime<
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -13,12 +13,12 @@ use ody_app_server_protocol::AskForApproval;
 use ody_model_provider_info::WireApi;
 use ody_protocol::ThreadId;
 use ody_protocol::config_types::ApprovalsReviewer;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::models::ActivePermissionProfile;
 use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_DANGER_FULL_ACCESS;
 use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_READ_ONLY;
 use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_WORKSPACE;
 use ody_protocol::models::PermissionProfile;
-use ody_protocol::model_metadata::ReasoningEffort;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_sandbox_summary::summarize_permission_profile;
 use ratatui::prelude::*;
@@ -58,13 +58,9 @@ pub(crate) struct StatusTokenUsageData {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct StatusHistoryHandle {
+pub(crate) struct StatusHistoryHandle {}
 
-}
-
-impl StatusHistoryHandle {
-
-}
+impl StatusHistoryHandle {}
 
 #[derive(Debug)]
 struct StatusHistoryCell {
@@ -277,7 +273,7 @@ impl StatusHistoryCell {
                 token_usage,
                 agents_summary,
             },
-            StatusHistoryHandle {  },
+            StatusHistoryHandle {},
         )
     }
 
@@ -314,7 +310,6 @@ impl StatusHistoryCell {
             Span::from(")").dim(),
         ])
     }
-
 }
 
 fn status_permission_summary(
@@ -461,7 +456,10 @@ impl HistoryCell for StatusHistoryCell {
             return Vec::new();
         }
 
-        let auth_value = self.auth_display.as_ref().map(|_| "API key configured".to_string());
+        let auth_value = self
+            .auth_display
+            .as_ref()
+            .map(|_| "API key configured".to_string());
 
         let mut labels: Vec<String> = vec!["Model", "Directory", "Permissions", "Agents.md"]
             .into_iter()

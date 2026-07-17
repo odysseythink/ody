@@ -392,7 +392,8 @@ async fn run_ody_tool_session_inner(
                     | EventMsg::DeprecationNotice(_)
                     | EventMsg::SkillLoaded(_)
                     | EventMsg::SkillActivated(_)
-                    | EventMsg::SkillLoadError(_) => {
+                    | EventMsg::SkillLoadError(_)
+                    | EventMsg::PlanModeLog(_) => {
                         // For now, we do not do anything extra for these
                         // events. Note that
                         // send(ody_event_to_notification(&event)) above has

@@ -216,8 +216,6 @@ mod tests {
         );
     }
 
-
-
     #[test]
     fn writing_plan_is_hidden_unless_plan_mode_active() {
         let mut flags = all_enabled_flags();

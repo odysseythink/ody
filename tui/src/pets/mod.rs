@@ -57,10 +57,7 @@ pub(crate) const DISABLED_PET_ID: &str = "disabled";
 /// preview or selection; skipping it would make first-use preview and
 /// persistence failures depend on deeper image-loading errors instead of the
 /// asset-fetch boundary.
-pub(crate) fn ensure_builtin_pack_for_pet(
-    pet_id: &str,
-    ody_home: &std::path::Path,
-) -> Result<()> {
+pub(crate) fn ensure_builtin_pack_for_pet(pet_id: &str, ody_home: &std::path::Path) -> Result<()> {
     if let Some(pet) = catalog::builtin_pet(pet_id) {
         asset_pack::ensure_builtin_pet(ody_home, pet)?;
     }

@@ -4,6 +4,10 @@ use std::path::PathBuf;
 
 #[cfg(test)]
 use crate::app_command::AppCommand as Op;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
+use crossterm::event::KeyModifiers;
 use ody_app_server_protocol::McpElicitationEnumSchema;
 use ody_app_server_protocol::McpElicitationPrimitiveSchema;
 use ody_app_server_protocol::McpElicitationSingleSelectEnumSchema;
@@ -22,10 +26,6 @@ use ody_protocol::mcp_approval_meta::TOOL_NAME_KEY;
 use ody_protocol::mcp_approval_meta::TOOL_PARAMS_DISPLAY_KEY as APPROVAL_TOOL_PARAMS_DISPLAY_KEY;
 use ody_protocol::mcp_approval_meta::TOOL_PARAMS_KEY as APPROVAL_TOOL_PARAMS_KEY;
 use ody_protocol::user_input::TextElement;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyEventKind;
-use crossterm::event::KeyModifiers;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;

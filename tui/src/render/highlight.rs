@@ -227,9 +227,7 @@ fn resolve_theme_with_override(name: Option<&str>, ody_home: Option<&Path>) -> T
 /// Extracted from the old `theme()` init closure so it can be reused.
 fn build_default_theme() -> Theme {
     let name = THEME_OVERRIDE.get().and_then(|name| name.as_deref());
-    let ody_home = ODY_HOME
-        .get()
-        .and_then(|ody_home| ody_home.as_deref());
+    let ody_home = ODY_HOME.get().and_then(|ody_home| ody_home.as_deref());
     resolve_theme_with_override(name, ody_home)
 }
 

@@ -63,7 +63,6 @@ impl StatusSurfaceSelections {
                 .status_line_items
                 .contains(&StatusLineItem::BranchChanges)
     }
-
 }
 
 /// Cached project-root display name keyed by the cwd used for the last lookup.
@@ -156,7 +155,6 @@ impl ChatWidget {
                 self.request_status_line_git_summary(cwd);
             }
         }
-
     }
 
     fn refresh_status_line_from_selections(&mut self, selections: &StatusSurfaceSelections) {

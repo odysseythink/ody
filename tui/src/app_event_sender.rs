@@ -65,16 +65,11 @@ impl AppEventSender {
     }
 
     pub(crate) fn list_skills(&self, cwds: Vec<PathBuf>, force_reload: bool) {
-        self.send(AppEvent::OdyOp(AppCommand::list_skills(
-            cwds,
-            force_reload,
-        )));
+        self.send(AppEvent::OdyOp(AppCommand::list_skills(cwds, force_reload)));
     }
 
     pub(crate) fn user_input_answer(&self, id: String, response: ToolRequestUserInputResponse) {
-        self.send(AppEvent::OdyOp(AppCommand::user_input_answer(
-            id, response,
-        )));
+        self.send(AppEvent::OdyOp(AppCommand::user_input_answer(id, response)));
     }
 
     pub(crate) fn exec_approval(

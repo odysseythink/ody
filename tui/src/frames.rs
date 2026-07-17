@@ -81,7 +81,6 @@ pub(crate) const ALL_VARIANTS: &[&[&str]] = &[
 
 pub(crate) const FRAME_TICK_DEFAULT: Duration = Duration::from_millis(80);
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

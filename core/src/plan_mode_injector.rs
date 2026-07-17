@@ -4,8 +4,12 @@ use crate::plan_mode_injector::parts_manifest::{
 };
 use ody_config::config_toml::PlanModeConfigToml;
 use ody_protocol::config_types::ModeKind;
+use ody_protocol::protocol::PlanModeLogEvent;
+use ody_protocol::protocol::PlanModeLogKind;
+use crate::turn_timing::now_unix_timestamp_ms;
 use std::path::Path;
 use tracing::warn;
+use uuid::Uuid;
 
 pub(crate) mod parts_manifest;
 
@@ -27,6 +31,7 @@ pub struct PartTarget {
 pub struct AfterPlanTurnResult {
     pub directive: PlanModeDirective,
     pub boundary_crossed: bool,
+    pub logs: Vec<PlanModeLogEvent>,
 }
 
 pub struct PlanModeInjector;
@@ -48,6 +53,7 @@ impl PlanModeInjector {
             return AfterPlanTurnResult {
                 directive: PlanModeDirective::None,
                 boundary_crossed: false,
+                logs: Vec::new(),
             };
         };
 
@@ -56,6 +62,7 @@ impl PlanModeInjector {
             return AfterPlanTurnResult {
                 directive: PlanModeDirective::None,
                 boundary_crossed: false,
+                logs: Vec::new(),
             };
         };
 
@@ -111,16 +118,32 @@ impl PlanModeInjector {
                 .collect(),
         });
 
+        let mut logs = Vec::new();
+        if boundary_crossed {
+            logs.push(make_log(
+                PlanModeLogKind::SplitCompleted,
+                "Plan part completed; advancing to the next pending part.".to_string(),
+                None,
+            ));
+        }
+
         if pending_rows.is_empty() {
             if done_count > 0 {
+                logs.push(make_log(
+                    PlanModeLogKind::FinalReview,
+                    "All plan parts are complete. Ready for final review.".to_string(),
+                    None,
+                ));
                 return AfterPlanTurnResult {
                     directive: PlanModeDirective::FinalReview,
                     boundary_crossed,
+                    logs,
                 };
             }
             return AfterPlanTurnResult {
                 directive: PlanModeDirective::None,
                 boundary_crossed,
+                logs,
             };
         }
 
@@ -130,19 +153,35 @@ impl PlanModeInjector {
             scope: next_part.scope.clone(),
         };
 
-        let directive = if prev_snapshot.is_none() {
-            PlanModeDirective::StartSplit { next_part: target }
+        let (directive, kind, message) = if prev_snapshot.is_none() {
+            (
+                PlanModeDirective::StartSplit { next_part: target },
+                PlanModeLogKind::SplitStarted,
+                format!(
+                    "Plan split started. First pending part: {} (scope: {})",
+                    next_part.file_name, next_part.scope
+                ),
+            )
         } else {
             // Nudge on every turn that makes no verified progress, not just on
             // boundary crossings — a model that wrote the index and then
             // stalled must be pushed back to the next pending part until the
             // file lands on disk. (pending_rows is known non-empty here.)
-            PlanModeDirective::ContinueSplit { next_part: target }
+            (
+                PlanModeDirective::ContinueSplit { next_part: target },
+                PlanModeLogKind::SplitContinued,
+                format!(
+                    "Continuing split plan. Next pending part: {} (scope: {})",
+                    next_part.file_name, next_part.scope
+                ),
+            )
         };
+        logs.push(make_log(kind, message, None));
 
         AfterPlanTurnResult {
             directive,
             boundary_crossed,
+            logs,
         }
     }
 
@@ -174,7 +213,7 @@ impl PlanModeInjector {
         artifact: &PlanArtifact,
         plan_mode_config: Option<&PlanModeConfigToml>,
         mode: ModeKind,
-    ) -> Option<(ReminderKind, String)> {
+    ) -> Option<(ReminderKind, String, Vec<PlanModeLogEvent>)> {
         if mode != ModeKind::Plan {
             return None;
         }
@@ -210,7 +249,25 @@ impl PlanModeInjector {
             .unwrap_or(8);
         let text = render_threshold_placeholders(&text, split_threshold);
         artifact.record_reminder_injected(kind == ReminderKind::Full, current_turn);
-        Some((kind, text))
+        let log = make_log(
+            PlanModeLogKind::RigorReminder,
+            match kind {
+                ReminderKind::Full => "Injecting full rigor reminder.".to_string(),
+                ReminderKind::Sparse => "Injecting sparse rigor reminder.".to_string(),
+            },
+            Some(format!("turn={}", current_turn)),
+        );
+        Some((kind, text, vec![log]))
+    }
+}
+
+fn make_log(kind: PlanModeLogKind, message: String, detail: Option<String>) -> PlanModeLogEvent {
+    PlanModeLogEvent {
+        event_id: Uuid::new_v4().to_string(),
+        occurred_at_ms: now_unix_timestamp_ms(),
+        kind,
+        message,
+        detail,
     }
 }
 
@@ -433,6 +490,25 @@ mod directive_tests {
             }
         );
         assert!(!result.boundary_crossed);
+    }
+
+    #[tokio::test]
+    async fn start_split_emits_split_started_log() {
+        let (artifact, _tmp) = artifact("2026-07-04");
+        artifact.finalize_name("topic").await.unwrap();
+        let markdown = "## Parts
+| # | File | Scope | Status |
+|---|---|---|---|
+| 1 | core.md | models | pending |
+";
+        let result = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
+        assert_eq!(result.logs.len(), 1, "expected one log entry, got {result:?}");
+        assert_eq!(result.logs[0].kind, PlanModeLogKind::SplitStarted);
+        assert!(
+            result.logs[0].message.contains("core.md"),
+            "expected log to mention next part file, got {:?}",
+            result.logs[0].message
+        );
     }
 
     #[tokio::test]
@@ -795,7 +871,7 @@ mod directive_tests {
         }
 
         // Turn 5: full reminder.
-        let (kind, text) =
+        let (kind, text, _logs) =
             PlanModeInjector::render_reminder_if_due(&artifact, Some(&config), ModeKind::Plan)
                 .expect("turn 5 should emit a full reminder");
         assert_eq!(kind, ReminderKind::Full);
@@ -812,7 +888,7 @@ mod directive_tests {
         );
 
         // Turn 7: sparse reminder.
-        let (kind, text) =
+        let (kind, text, _logs) =
             PlanModeInjector::render_reminder_if_due(&artifact, Some(&config), ModeKind::Plan)
                 .expect("turn 7 should emit a sparse reminder");
         assert_eq!(kind, ReminderKind::Sparse);

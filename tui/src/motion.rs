@@ -122,8 +122,8 @@ mod tests {
         let direct_spinner = regex_lite::Regex::new(r"(^|[^A-Za-z0-9_])spinner\s*\(").unwrap();
         let direct_shimmer =
             regex_lite::Regex::new(r"(^|[^A-Za-z0-9_])shimmer_spans\s*\(").unwrap();
-        let lib_rs = ody_utils_cargo_bin::find_resource!("src/lib.rs")
-            .expect("failed to locate TUI source");
+        let lib_rs =
+            ody_utils_cargo_bin::find_resource!("src/lib.rs").expect("failed to locate TUI source");
         let src_dir = lib_rs.parent().expect("lib.rs should have a parent");
 
         let mut source_files = Vec::new();

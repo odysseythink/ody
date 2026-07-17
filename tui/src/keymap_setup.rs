@@ -31,14 +31,14 @@ pub(crate) use picker::build_keymap_picker_params_for_selected_action;
 pub(crate) use picker::build_keymap_picker_params_for_selected_action_with_filter;
 pub(crate) use picker::build_keymap_picker_params_with_filter;
 
-use ody_config::types::KeybindingSpec;
-use ody_config::types::KeybindingsSpec;
-use ody_config::types::MAX_FUNCTION_KEY;
-use ody_config::types::TuiKeymap;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
+use ody_config::types::KeybindingSpec;
+use ody_config::types::KeybindingsSpec;
+use ody_config::types::MAX_FUNCTION_KEY;
+use ody_config::types::TuiKeymap;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;

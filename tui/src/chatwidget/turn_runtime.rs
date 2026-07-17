@@ -54,6 +54,7 @@ impl ChatWidget {
         self.turn_runtime_metrics = RuntimeMetricsSummary::default();
         self.session_telemetry.reset_runtime_metrics();
         self.bottom_pane.clear_quit_shortcut_hint();
+        self.bottom_pane.clear_planning_log();
         self.quit_shortcut_expires_at = None;
         self.quit_shortcut_key = None;
         self.update_task_running_state();
@@ -203,7 +204,6 @@ impl ChatWidget {
                 response: notification_response,
             });
         }
-
     }
 
     pub(super) fn maybe_prompt_plan_implementation(&mut self) {
@@ -374,7 +374,7 @@ impl ChatWidget {
             .as_ref()
             .is_some_and(|info| self.handle_app_server_steer_rejected_error(info))
         {
-        }  else {
+        } else {
             self.on_error(message);
         }
     }
@@ -404,6 +404,18 @@ impl ChatWidget {
         if verifications.contains(&AppServerModelVerification::TrustedAccessForCyber) {
             self.on_warning(TRUSTED_ACCESS_FOR_CYBER_VERIFICATION_WARNING);
         }
+    }
+
+    /// Handle a structured planning log delta for Plan/Design mode.
+    ///
+    /// The log is only surfaced while the active collaboration mode is Plan or Design;
+    /// notifications received in Default mode are ignored to avoid noise.
+    pub(super) fn on_plan_mode_log(&mut self, notification: PlanModeLogDeltaNotification) {
+        let mode = self.active_mode_kind();
+        if mode != ModeKind::Plan && mode != ModeKind::Design {
+            return;
+        }
+        self.bottom_pane.push_planning_log(notification);
     }
 
     pub(super) fn on_plan_update(&mut self, update: UpdatePlanArgs) {
