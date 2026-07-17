@@ -6,7 +6,7 @@ Plan mode sessions must follow strict turn discipline to avoid loops and ensure 
 
 Every turn in a non-split plan must end with exactly ONE of:
 
-1. **AskUserQuestion** — if you need clarification
+1. **`request_user_input`** — if you need clarification
    - Use when a material ambiguity remains that prevents you from writing the plan.
    - One question per turn; wait for the answer before proceeding.
    - Do NOT mention "the plan" (user cannot see it yet).
@@ -16,7 +16,7 @@ Every turn in a non-split plan must end with exactly ONE of:
    - Call the `submit_plan` tool with the full plan markdown as the `plan` argument.
    - Never ask about approval via text — that is `submit_plan`'s job.
 
-**Never mix them in one turn:** Do not call AskUserQuestion and `submit_plan` in the same turn.
+**Never mix them in one turn:** Do not call `request_user_input` and `submit_plan` in the same turn.
 
 ### Turn ending rules (split plans)
 
@@ -26,7 +26,7 @@ Split plans have different discipline because parts are written sequentially. `s
 - Write ONE part file per turn, with a normal file-write tool (not `submit_plan`), at `<index-stem>/<part-name>.md`
 - Then call `submit_plan` with the index's full markdown, that part's manifest row flipped to `done`
 - As long as any row in the markdown you pass to `submit_plan` is still `pending`, that call saves the index and keeps Plan mode active — it does not end the turn
-- Do NOT call AskUserQuestion this turn
+- Do NOT call `request_user_input` this turn
 - Stop after the `submit_plan` call that flips the row; injection will direct you to the next pending part
 
 **After all parts are done:**
@@ -37,19 +37,19 @@ Split plans have different discipline because parts are written sequentially. `s
 
 #### Rule 1: Do NOT ask about approval via text
 - ❌ "Is this plan OK?" (in plain text)
-- ❌ "Shall I proceed with this plan?" (in AskUserQuestion)
-- ✅ "Do you prefer Approach A or B?" (in AskUserQuestion, to clarify spec)
+- ❌ "Shall I proceed with this plan?" (in `request_user_input`)
+- ✅ "Do you prefer Approach A or B?" (in `request_user_input`, to clarify spec)
 - ✅ Call `submit_plan` with the final plan markdown (submit_plan's job)
 
-#### Rule 2: Do NOT reference "the plan" in AskUserQuestion
+#### Rule 2: Do NOT reference "the plan" in `request_user_input`
 - ❌ "Does the plan cover enough detail?"
 - ❌ "Should the plan include X?"
 - ✅ "Should we include caching in the implementation?"
 
 Why? The user cannot see the plan until you call `submit_plan` with no pending parts left. Asking about the plan confuses them.
 
-#### Rule 3: AskUserQuestion expects multiple choice
-When using AskUserQuestion, provide 2-4 meaningful options:
+#### Rule 3: `request_user_input` expects multiple choice
+When using `request_user_input`, provide 2-4 meaningful options:
 - ✅ Options are mutually exclusive (user picks one)
 - ✅ Each option materially changes the spec/plan
 - ❌ Options include filler ("Other: specify"); avoid generic catch-alls
@@ -75,7 +75,7 @@ Should we use Elasticsearch or a database query builder for the search index?
 - Option A: Elasticsearch (more powerful, external dependency)
 - Option B: Database query builder (simpler, built-in)
 ```
-→ Ends with AskUserQuestion
+→ Ends with `request_user_input`
 
 **Turn 2:**
 ```
@@ -115,7 +115,7 @@ User: "This looks good but add a performance test."
 | 2 | <stem>/config.md | Config + instructions | pending |
 | 3 | <stem>/schema.md | Schema + tests | pending |
 ```
-→ 3 rows are `pending`, so this call saves the index only — Plan mode stays active, no AskUserQuestion. Injection will direct to Part 1.
+→ 3 rows are `pending`, so this call saves the index only — Plan mode stays active, no `request_user_input`. Injection will direct to Part 1.
 
 **Turn 2:**
 - Write `<stem>/protocol.md` with a normal file-write tool:
