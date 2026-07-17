@@ -2307,6 +2307,28 @@ fn reasoning_summary_block_without_header_is_visible_in_display() {
 }
 
 #[test]
+fn reasoning_summary_block_collapses_long_content_and_can_expand() {
+    let cell = ReasoningSummaryCell::new(
+        "Reasoning".to_string(),
+        "Line 1
+Line 2
+Line 3
+Line 4".to_string(),
+        &test_cwd(),
+        /*transcript_only*/ false,
+    );
+
+    // Collapsed by default: only the first two preview lines plus a hint are shown.
+    let collapsed = render_lines(&cell.display_lines(/*width*/ 80));
+    assert_eq!(collapsed, vec!["• Line 1", "  Line 2", "  ... (2 more lines, alt+o to expand)"]);
+
+    // After expanding, the full content is rendered.
+    cell.set_expanded(true);
+    let expanded = render_lines(&cell.display_lines(/*width*/ 80));
+    assert_eq!(expanded, vec!["• Line 1", "  Line 2", "  Line 3", "  Line 4"]);
+}
+
+#[test]
 fn streaming_reasoning_tail_renders_with_bullet_prefix() {
     let cell = new_streaming_reasoning_tail_cell("Reasoning delta", 80, &test_cwd());
 
@@ -2315,6 +2337,23 @@ fn streaming_reasoning_tail_renders_with_bullet_prefix() {
         vec!["• Reasoning delta"]
     );
     assert_eq!(render_transcript(cell.as_ref()), vec!["• Reasoning delta"]);
+}
+
+#[test]
+fn streaming_reasoning_tail_truncates_to_last_preview_lines() {
+    let cell = new_streaming_reasoning_tail_cell(
+        "Line 1
+Line 2
+Line 3
+Line 4",
+        80,
+        &test_cwd(),
+    );
+
+    assert_eq!(
+        render_lines(&cell.display_lines(/*width*/ 80)),
+        vec!["• Line 3", "  Line 4"]
+    );
 }
 
 #[tokio::test]

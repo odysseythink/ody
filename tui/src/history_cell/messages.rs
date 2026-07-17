@@ -193,6 +193,9 @@ impl HistoryCell for UserHistoryCell {
     }
 }
 
+/// Number of wrapped lines to show before collapsing a reasoning summary.
+const REASONING_PREVIEW_LINES: usize = 2;
+
 #[derive(Debug)]
 pub(crate) struct ReasoningSummaryCell {
     _header: String,
@@ -200,6 +203,8 @@ pub(crate) struct ReasoningSummaryCell {
     /// Session cwd used to render local file links inside the reasoning body.
     cwd: PathBuf,
     transcript_only: bool,
+    /// Whether the full reasoning text is expanded in the transcript.
+    expanded: std::sync::atomic::AtomicBool,
 }
 
 impl ReasoningSummaryCell {
@@ -211,7 +216,23 @@ impl ReasoningSummaryCell {
             content,
             cwd: cwd.to_path_buf(),
             transcript_only,
+            expanded: std::sync::atomic::AtomicBool::new(false),
         }
+    }
+
+    /// Toggle the expanded/collapsed state of this reasoning block.
+    ///
+    /// Returns the new state after toggling.
+    pub(crate) fn toggle_expanded(&self) -> bool {
+        let current = self.expanded.load(std::sync::atomic::Ordering::Relaxed);
+        let new = !current;
+        self.expanded.store(new, std::sync::atomic::Ordering::Relaxed);
+        new
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_expanded(&self, expanded: bool) {
+        self.expanded.store(expanded, std::sync::atomic::Ordering::Relaxed);
     }
 
     fn lines(&self, width: u16) -> Vec<Line<'static>> {
@@ -235,12 +256,43 @@ impl ReasoningSummaryCell {
             })
             .collect::<Vec<_>>();
 
-        adaptive_wrap_lines(
+        let wrapped = adaptive_wrap_lines(
             &summary_lines,
             RtOptions::new(width as usize)
                 .initial_indent("• ".dim().into())
                 .subsequent_indent("  ".into()),
-        )
+        );
+        self.apply_collapse_hint(wrapped, width)
+    }
+
+    /// Truncate a long wrapped reasoning block and append a hint line.
+    fn apply_collapse_hint(
+        &self,
+        wrapped: Vec<Line<'static>>,
+        width: u16,
+    ) -> Vec<Line<'static>> {
+        if self.expanded.load(std::sync::atomic::Ordering::Relaxed)
+            || wrapped.len() <= REASONING_PREVIEW_LINES
+        {
+            return wrapped;
+        }
+
+        let remaining = wrapped.len() - REASONING_PREVIEW_LINES;
+        let mut truncated: Vec<Line<'static>> =
+            wrapped.into_iter().take(REASONING_PREVIEW_LINES).collect();
+        let more_lines = if remaining == 1 { "line" } else { "lines" };
+        let hint = Line::from(format!(
+            "... ({remaining} more {more_lines}, alt+o to expand)"
+        ))
+        .dim();
+        let wrapped_hint = adaptive_wrap_lines(
+            std::slice::from_ref(&hint),
+            RtOptions::new(width as usize)
+                .initial_indent("  ".into())
+                .subsequent_indent("  ".into()),
+        );
+        truncated.extend(wrapped_hint);
+        truncated
     }
 }
 
@@ -512,6 +564,11 @@ impl HistoryCell for StreamingReasoningTailCell {
 ///
 /// The tail mirrors the final `ReasoningSummaryCell` styling (dim italic, bullet prefix) so the
 /// streaming affordance visually matches the history entry that replaces it.
+///
+/// During active streaming the tail is capped to the last `REASONING_PREVIEW_LINES` wrapped lines
+/// so that a long reasoning block does not push the surrounding conversation out of view. The
+/// full buffer is retained in the controller and will be rendered by the finalized
+/// `ReasoningSummaryCell`.
 pub(crate) fn new_streaming_reasoning_tail_cell(
     reasoning_buffer: &str,
     width: u16,
@@ -545,14 +602,19 @@ pub(crate) fn new_streaming_reasoning_tail_cell(
             line
         })
         .collect::<Vec<_>>();
-    let wrapped = adaptive_wrap_lines(
-        &styled_lines,
-        RtOptions::new(width as usize)
-            .initial_indent("• ".dim().into())
-            .subsequent_indent("  ".into()),
-    );
+    // Wrap without the prefix so we can truncate to the most recent preview lines and then
+    // re-apply the bullet prefix on the first surviving line. This mirrors the ody-code
+    // thinking component, which keeps only the tail of a live reasoning block visible.
+    let wrapped = adaptive_wrap_lines(&styled_lines, RtOptions::new(wrap_width as usize));
+    let truncated = if wrapped.len() > REASONING_PREVIEW_LINES {
+        let start = wrapped.len() - REASONING_PREVIEW_LINES;
+        wrapped.into_iter().skip(start).collect()
+    } else {
+        wrapped
+    };
+    let prefixed = prefix_lines(truncated, "• ".dim().into(), "  ".into());
     Box::new(StreamingReasoningTailCell::new(plain_hyperlink_lines(
-        wrapped,
+        prefixed,
     )))
 }
 pub(crate) fn new_user_prompt(

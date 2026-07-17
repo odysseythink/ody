@@ -86,6 +86,8 @@ pub(crate) struct ChatKeymap {
     pub(crate) decrease_reasoning_effort: Vec<KeyBinding>,
     /// Increase the active reasoning effort.
     pub(crate) increase_reasoning_effort: Vec<KeyBinding>,
+    /// Expand or collapse the most recent reasoning block in the transcript.
+    pub(crate) toggle_reasoning_expansion: Vec<KeyBinding>,
     /// Edit the most recently queued message.
     pub(crate) edit_queued_message: Vec<KeyBinding>,
 }
@@ -439,6 +441,11 @@ impl RuntimeKeymap {
                 keymap.chat.increase_reasoning_effort.as_ref(),
                 &defaults.chat.increase_reasoning_effort,
                 "tui.keymap.chat.increase_reasoning_effort",
+            )?,
+            toggle_reasoning_expansion: resolve_bindings(
+                keymap.chat.toggle_reasoning_expansion.as_ref(),
+                &defaults.chat.toggle_reasoning_expansion,
+                "tui.keymap.chat.toggle_reasoning_expansion",
             )?,
             edit_queued_message: resolve_bindings(
                 keymap.chat.edit_queued_message.as_ref(),
@@ -927,6 +934,7 @@ impl RuntimeKeymap {
                     alt(KeyCode::Char('.')),
                     shift(KeyCode::Up)
                 ],
+                toggle_reasoning_expansion: default_bindings![alt(KeyCode::Char('o'))],
                 edit_queued_message: default_bindings![alt(KeyCode::Up), shift(KeyCode::Left)],
             },
             composer: ComposerKeymap {
@@ -1185,6 +1193,10 @@ impl RuntimeKeymap {
                     self.chat.increase_reasoning_effort.as_slice(),
                 ),
                 (
+                    "chat.toggle_reasoning_expansion",
+                    self.chat.toggle_reasoning_expansion.as_slice(),
+                ),
+                (
                     "chat.edit_queued_message",
                     self.chat.edit_queued_message.as_slice(),
                 ),
@@ -1226,6 +1238,10 @@ impl RuntimeKeymap {
                 (
                     "chat.increase_reasoning_effort",
                     self.chat.increase_reasoning_effort.as_slice(),
+                ),
+                (
+                    "chat.toggle_reasoning_expansion",
+                    self.chat.toggle_reasoning_expansion.as_slice(),
                 ),
                 (
                     "chat.edit_queued_message",
@@ -1336,6 +1352,10 @@ impl RuntimeKeymap {
                 (
                     "chat.increase_reasoning_effort",
                     self.chat.increase_reasoning_effort.as_slice(),
+                ),
+                (
+                    "chat.toggle_reasoning_expansion",
+                    self.chat.toggle_reasoning_expansion.as_slice(),
                 ),
                 ("composer.submit", self.composer.submit.as_slice()),
                 ("toggle_vim_mode", self.app.toggle_vim_mode.as_slice()),
@@ -2226,6 +2246,10 @@ mod tests {
         assert_eq!(
             runtime.chat.edit_queued_message,
             vec![key_hint::alt(KeyCode::Up), key_hint::shift(KeyCode::Left)]
+        );
+        assert_eq!(
+            runtime.chat.toggle_reasoning_expansion,
+            vec![key_hint::alt(KeyCode::Char('o'))]
         );
         assert_eq!(
             runtime.composer.history_search_previous,

@@ -562,6 +562,9 @@ pub(crate) enum AppEvent {
 
     InsertHistoryCell(Box<dyn HistoryCell>),
 
+    /// Expand or collapse the most recent committed reasoning block in the transcript.
+    ToggleReasoningExpansion,
+
     /// Finish buffering initial resume replay after all replay events have been queued.
     EndInitialHistoryReplayBuffer,
 

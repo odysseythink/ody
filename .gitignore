@@ -15,3 +15,5 @@
 .worktrees/
 .worktrees/
 scripts/
+*.snap
+*.snap.new
