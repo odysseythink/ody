@@ -1,118 +1,125 @@
 # Ody CLI
 
-[**Ody CLI Documentation**](https://developers.odysseythink.com/ody/cli)
+[Ody CLI Documentation](https://developers.odysseythink.com/ody/cli)
 
-## 多供应商支持
+Ody CLI is an open-source, terminal-based coding assistant. It provides an agentic chat interface, multi-provider model support, optional V8 code-mode execution, and a pluggable skill system—designed to help you write, understand, and refactor code from the command line.
 
-除默认供应商外，现已内置支持 Kimi、DeepSeek、GLM 三家 OpenAI 兼容（Chat
-Completions）供应商。配置与差异说明见 [docs/multi_provider.md](docs/multi_provider.md)。
+## Highlights
 
-## 构建
+- **Agentic TUI**: Rich terminal chat interface with streaming responses, history, and real-time reasoning visibility in Design and Plan modes.
+- **Multi-provider support**: Built-in support for OpenAI-compatible providers, including Kimi, DeepSeek, and GLM.
+- **Design / Plan modes**: Structured collaboration modes for design exploration and step-by-step implementation planning.
+- **Optional V8 code mode**: Run JavaScript snippets in a sandboxed V8 runtime by enabling the `v8` feature.
+- **Pluggable skill system**: Extend capabilities through local or remote skills with a unified integration surface.
+- **Sandboxed execution**: Hardened process and filesystem isolation for safe tool and command execution.
+- **Modular Rust workspace**: Fast, reliable, and organized as a Cargo workspace.
 
-本仓库使用 Cargo 作为构建工具。
+## Multi-provider support
 
-### 常用编译命令
+In addition to the default provider, Ody ships with built-in support for Kimi, DeepSeek, and GLM (all OpenAI-compatible Chat Completions endpoints). See [docs/multi_provider.md](docs/multi_provider.md) for configuration details and provider-specific notes.
+
+## Building
+
+This repository is a Cargo workspace.
+
+### Common build commands
 
 ```bash
-# 编译整个 workspace（debug）
+# Build the entire workspace (debug)
 cargo build
 
-# 只编译主 CLI 二进制（debug）
+# Build only the main CLI binary (debug)
 cargo build -p ody-cli --features v8
 
-# 发布编译主 CLI 二进制
+# Release build of the main CLI binary
 cargo build --release -p ody-cli
 ```
 
-### 产物位置
+### Output locations
 
-主二进制名为 `ody`，由 `cli/Cargo.toml` 中的 `[[bin]] name = "ody"` 定义：
+The main binary is named `ody` and is defined in `cli/Cargo.toml` by `[[bin]] name = "ody"`:
 
 ```bash
-# debug 产物
+# Debug binary
 ./target/debug/ody
 
-# release 产物
+# Release binary
 ./target/release/ody
 ```
 
-### 测试
+### Testing
 
 ```bash
-# 整个 workspace
+# Entire workspace
 cargo test
 
-# 单个 crate，例如 ody-core
+# Single crate, e.g. ody-core
 cargo test -p ody-core
 ```
 
-### 本地安装
+### Local installation
 
 ```bash
 cargo install --path cli
 ```
 
-这会编译并把 `ody` 安装到 `~/.cargo/bin/`。
+This compiles `ody` and installs it to `~/.cargo/bin/`.
 
-### 发布打包
+### Release packaging
 
-目前仓库中没有 `cargo dist` 之类的分发配置。最实际的做法是：
+There is no `cargo dist` distribution setup in this repository. The practical approach is:
 
 ```bash
 cargo build --release -p ody-cli
 ```
 
-然后使用产物 `target/release/ody` 进行打包。
+Then package the resulting `target/release/ody` binary.
 
+## Design Mode
 
-## 默认状态栏开启说明
-默认状态:statusline 是关的
+Ody provides a `/design` collaboration mode for structured design exploration. While in Design mode, the session is read-only except for the current design file under `.ody-code/designs/` and its optional split parts.
 
-status_surfaces.rs:177 → enabled = !status_line_items.is_empty(),而 tui.status_line 配置默认为空(core/src/config/mod.rs:763 Option<Vec<String>>)。所以开箱默认不显示 statusline 行,你现在看到的是 footer 右侧那条环境 "% context left"。
+Design mode shares `PlanModeConfigToml` settings (`enforcement`, `split_threshold`, `split_plan_compaction_ratio`) with Plan mode and must pass the C1–C8 completeness gate. With `enforcement = "Strict"`, an incomplete design blocks switching to Plan mode.
 
-怎么开(二选一,都是配置)
+## Status bar
 
-- 命令:/statusline(slash_command.rs:109 "configure which items appear in the status line")——交互式勾选。
-- 配置文件 ~/.ody/config.toml:
+By default, the status line is disabled. The footer line you normally see on the right is the environment context indicator (`% context left`).
+
+To enable the status line, use one of these configuration options:
+
+- Run the `/statusline` slash command and select items interactively.
+- Add the following to `~/.ody/config.toml`:
+
+```toml
 [tui]
 status_line = ["model", "context-remaining", "used-tokens"]
+```
 
-context 相关的可选 item(strum 配置名,已核实):
+Available context-related items:
 
-┌──────────────────────────────────┬─────────────────┐
-│              配置名              │      显示       │
-├──────────────────────────────────┼─────────────────┤
-│ context-remaining                │ Context X% left │
-├──────────────────────────────────┼─────────────────┤
-│ context-used(旧名 context-usage) │ Context X% used │
-├──────────────────────────────────┼─────────────────┤
-│ context-window-size              │ N window        │
-├──────────────────────────────────┼─────────────────┤
-│ used-tokens                      │ N used          │
-└──────────────────────────────────┴─────────────────┘
+| Item | Display |
+|------|---------|
+| `context-remaining` | Context X% left |
+| `context-used` | Context X% used |
+| `context-window-size` | N window |
+| `used-tokens` | N used |
 
-组合 ["model", "context-remaining", "used-tokens"] 就能得到接近甚至超过 ody-code context: X% (used/max) 的效果。
+Using `["model", "context-remaining", "used-tokens"]` gives a status line similar to the `ody-code` context display.
 
-关键:开启后是"替换单行",不是"加一行"
+Enabling the status line replaces the existing single footer line rather than adding a new one. When `status_line_active` is true, the left side shows the configured items and the right side shows the collaboration mode indicator. The default context footer (`% context left`) is no longer rendered because it only appears when the status line is inactive.
 
-这是渲染逻辑 chat_composer.rs:4208-4265 的实际行为——status_line_active 为真时:
+Default (status line off):
 
-- 左侧 = 你配置的 statusline items(model / branch / Context X% left / N used …);
-- 右侧 = collaboration mode 指示器;
-- 默认的环境 right_footer_line_with_context()(那条 "% context left")不再渲染——因为它只在 !status_line_active 分支里跑。
+```
+⇧Tab to cycle ...                                  75% context left
+```
 
-默认(statusline 关):
-  ⇧Tab to cycle  …轮播快捷键提示…                    75% context left
-开启后(statusline 开):
-  model · Context 75% left · 12.3k used            [Plan]
+Enabled (status line on):
 
-所以不会重复、不会多占一行。代价是:那行原本轮播的快捷键提示会被 statusline 内容取代,mode 指示挪到右侧。这就是主要 tradeoff——用"常驻的自选状态项"换掉"轮播的操作提示"。
+```
+model · Context 75% left · 12.3k used              [Plan]
+```
 
-同一个 caveat 依然在
+**Note:** `context-remaining`, `context-used`, and `context-window-size` require the provider configuration to include `max_context_tokens`. If Kimi, DeepSeek, or GLM providers are missing this value, these items return `None` and are omitted from the status line. To see the percentage, first set the context window size for those providers.
 
-context-remaining / context-used / context-window-size 都依赖 model_context_window 已知(chatwidget.rs:1143 context_remaining_percent)。kimi/deepseek/glm 若 provider 配置没带 max_context_tokens,这几个 item 会返回 None → 直接不显示(不报错,就是空白)。这跟上一轮说的第 2 点缺口是同一个根因——所以如果你开了 statusline 却发现 context% 不出来,先去补这三家的上下文窗口配置。
-
----
-一句话:开启只需 /statusline 或配 tui.status_line,零代码;它替换而非新增 footer 行,所以不会跟现有 "% context left" 重复;但要真显示出百分比,前提是对应 provider 配了上下文窗口大小。
-
-要我帮你确认 kimi/deepseek/glm 三家现在的 provider 配置到底有没有带 max_context_tokens 吗?这是决定"开了能不能看到 %"的实际前提。
+In short: enable the status line with `/statusline` or `tui.status_line`; it replaces the existing footer line instead of duplicating it, but context percentages require the corresponding provider to expose a context window size.
