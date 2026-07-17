@@ -85,6 +85,7 @@ pub fn create_fake_rollout_with_token_usage(
                 reasoning_output_tokens: 10,
                 total_tokens: 150,
             },
+            auto_compact_token_limit: None,
             last_token_usage: TokenUsage {
                 input_tokens: 70,
                 cached_input_tokens: 10,

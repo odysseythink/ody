@@ -1359,6 +1359,12 @@ pub struct ThreadTokenUsage {
     // TODO(aibrahim): make this not optional
     #[ts(type = "number | null")]
     pub model_context_window: Option<i64>,
+    /// Context size at which auto-compaction triggers, when one applies. This
+    /// is what a "context left" indicator counts down to; see
+    /// `ody_protocol::protocol::TokenUsageInfo::auto_compact_token_limit`.
+    #[serde(default)]
+    #[ts(type = "number | null")]
+    pub auto_compact_token_limit: Option<i64>,
 }
 
 impl From<CoreTokenUsageInfo> for ThreadTokenUsage {
@@ -1367,6 +1373,7 @@ impl From<CoreTokenUsageInfo> for ThreadTokenUsage {
             total: value.total_token_usage.into(),
             last: value.last_token_usage.into(),
             model_context_window: value.model_context_window,
+            auto_compact_token_limit: value.auto_compact_token_limit,
         }
     }
 }

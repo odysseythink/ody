@@ -880,6 +880,7 @@ fn token_usage_info_from_app_server(token_usage: ThreadTokenUsage) -> TokenUsage
             reasoning_output_tokens: token_usage.last.reasoning_output_tokens,
         },
         model_context_window: token_usage.model_context_window,
+        auto_compact_token_limit: token_usage.auto_compact_token_limit,
     }
 }
 
@@ -1104,9 +1105,9 @@ impl ChatWidget {
     }
 
     fn context_remaining_percent(&self, info: &TokenUsageInfo) -> Option<i64> {
-        info.model_context_window.map(|window| {
+        info.context_budget().map(|budget| {
             info.last_token_usage
-                .percent_of_context_window_remaining(window)
+                .percent_of_context_window_remaining(budget)
         })
     }
 

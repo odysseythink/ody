@@ -239,14 +239,17 @@ impl StatusHistoryCell {
         let session_id = session_id.as_ref().map(std::string::ToString::to_string);
         let forked_from = forked_from.map(|id| id.to_string());
         let default_usage = TokenUsage::default();
-        let (context_usage, context_window) = match token_info {
-            Some(info) => (&info.last_token_usage, info.model_context_window),
+        // Both the percentage and the denominator shown next to it are the
+        // compaction budget, not the raw window: they must agree, or the card
+        // reads "0% left (235K used / 249K)".
+        let (context_usage, context_budget) = match token_info {
+            Some(info) => (&info.last_token_usage, info.context_budget()),
             None => (&default_usage, config.model_context_window),
         };
-        let context_window = context_window.map(|window| StatusContextWindowData {
-            percent_remaining: context_usage.percent_of_context_window_remaining(window),
+        let context_window = context_budget.map(|budget| StatusContextWindowData {
+            percent_remaining: context_usage.percent_of_context_window_remaining(budget),
             tokens_in_context: context_usage.tokens_in_context_window(),
-            window,
+            window: budget,
         });
 
         let token_usage = StatusTokenUsageData {

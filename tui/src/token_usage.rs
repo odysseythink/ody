@@ -84,6 +84,19 @@ pub(crate) struct TokenUsageInfo {
     pub(crate) total_token_usage: TokenUsage,
     pub(crate) last_token_usage: TokenUsage,
     pub(crate) model_context_window: Option<i64>,
+    pub(crate) auto_compact_token_limit: Option<i64>,
+}
+
+impl TokenUsageInfo {
+    /// The budget the context indicator counts down to.
+    ///
+    /// Compaction, not the window, is what a session actually runs into, and
+    /// the two are independent numbers: on a small-context model the trigger
+    /// can sit well below the window, so counting down to the window would
+    /// show a comfortable "27% left" at the moment compaction fires.
+    pub(crate) fn context_budget(&self) -> Option<i64> {
+        self.auto_compact_token_limit.or(self.model_context_window)
+    }
 }
 
 impl fmt::Display for TokenUsage {

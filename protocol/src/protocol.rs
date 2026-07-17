@@ -2074,6 +2074,15 @@ pub struct TokenUsageInfo {
     // TODO(aibrahim): make this not optional
     #[ts(type = "number | null")]
     pub model_context_window: Option<i64>,
+    /// Context size at which auto-compaction triggers, when one applies.
+    ///
+    /// This is the budget a "context left" indicator should count down to:
+    /// compaction, not the window, is what the session actually runs into, and
+    /// the two are independent numbers. `model_context_window` stays the usable
+    /// window so callers that need the window itself are unaffected.
+    #[serde(default)]
+    #[ts(type = "number | null")]
+    pub auto_compact_token_limit: Option<i64>,
 }
 
 impl TokenUsageInfo {
@@ -2081,6 +2090,7 @@ impl TokenUsageInfo {
         info: &Option<TokenUsageInfo>,
         last: &Option<TokenUsage>,
         model_context_window: Option<i64>,
+        auto_compact_token_limit: Option<i64>,
     ) -> Option<Self> {
         if info.is_none() && last.is_none() {
             return None;
@@ -2092,6 +2102,7 @@ impl TokenUsageInfo {
                 total_token_usage: TokenUsage::default(),
                 last_token_usage: TokenUsage::default(),
                 model_context_window,
+                auto_compact_token_limit,
             },
         };
         if let Some(last) = last {
@@ -2100,7 +2111,16 @@ impl TokenUsageInfo {
         if let Some(model_context_window) = model_context_window {
             info.model_context_window = Some(model_context_window);
         }
+        if let Some(auto_compact_token_limit) = auto_compact_token_limit {
+            info.auto_compact_token_limit = Some(auto_compact_token_limit);
+        }
         Some(info)
+    }
+
+    /// The budget a "context left" indicator counts down to: the compaction
+    /// trigger when one applies, otherwise the usable window.
+    pub fn context_budget(&self) -> Option<i64> {
+        self.auto_compact_token_limit.or(self.model_context_window)
     }
 
     pub fn append_last_usage(&mut self, last: &TokenUsage) {
@@ -2128,6 +2148,7 @@ impl TokenUsageInfo {
             total_token_usage: TokenUsage::default(),
             last_token_usage: TokenUsage::default(),
             model_context_window: Some(context_window),
+            auto_compact_token_limit: None,
         };
         info.fill_to_context_window(context_window);
         info
@@ -5645,6 +5666,7 @@ mod tests {
             total_token_usage: TokenUsage::default(),
             last_token_usage: TokenUsage::default(),
             model_context_window: Some(258_400),
+            auto_compact_token_limit: Some(232_560),
         });
         let last = Some(TokenUsage {
             input_tokens: 10,
@@ -5654,10 +5676,39 @@ mod tests {
             total_tokens: 10,
         });
 
-        let info = TokenUsageInfo::new_or_append(&initial, &last, Some(128_000))
+        let info = TokenUsageInfo::new_or_append(&initial, &last, Some(128_000), Some(115_200))
             .expect("new_or_append should return info");
 
         assert_eq!(info.model_context_window, Some(128_000));
+        assert_eq!(info.auto_compact_token_limit, Some(115_200));
+    }
+
+    /// The indicator counts down to the compaction trigger, which on a small
+    /// window sits well below the window itself.
+    #[test]
+    fn token_usage_info_context_budget_prefers_the_compaction_trigger() {
+        let info = TokenUsageInfo {
+            total_token_usage: TokenUsage::default(),
+            last_token_usage: TokenUsage::default(),
+            model_context_window: Some(62_259),
+            auto_compact_token_limit: Some(45_536),
+        };
+
+        assert_eq!(info.context_budget(), Some(45_536));
+    }
+
+    /// No trigger (compaction disabled, or a model with no known window) falls
+    /// back to the window so the indicator keeps working.
+    #[test]
+    fn token_usage_info_context_budget_falls_back_to_the_window() {
+        let info = TokenUsageInfo {
+            total_token_usage: TokenUsage::default(),
+            last_token_usage: TokenUsage::default(),
+            model_context_window: Some(62_259),
+            auto_compact_token_limit: None,
+        };
+
+        assert_eq!(info.context_budget(), Some(62_259));
     }
 
     #[test]
@@ -5666,6 +5717,7 @@ mod tests {
             total_token_usage: TokenUsage::default(),
             last_token_usage: TokenUsage::default(),
             model_context_window: Some(258_400),
+            auto_compact_token_limit: Some(232_560),
         });
         let last = Some(TokenUsage {
             input_tokens: 10,
@@ -5675,10 +5727,15 @@ mod tests {
             total_tokens: 10,
         });
 
-        let info =
-            TokenUsageInfo::new_or_append(&initial, &last, /*model_context_window*/ None)
-                .expect("new_or_append should return info");
+        let info = TokenUsageInfo::new_or_append(
+            &initial,
+            &last,
+            /*model_context_window*/ None,
+            /*auto_compact_token_limit*/ None,
+        )
+        .expect("new_or_append should return info");
 
         assert_eq!(info.model_context_window, Some(258_400));
+        assert_eq!(info.auto_compact_token_limit, Some(232_560));
     }
 }

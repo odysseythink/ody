@@ -288,10 +288,12 @@ impl ChatWidget {
         preview_data
     }
 
+    /// The budget the context indicator counts down to: the compaction trigger
+    /// when core reported one, else the usable window.
     pub(super) fn status_line_context_window_size(&self) -> Option<i64> {
         self.token_info
             .as_ref()
-            .and_then(|info| info.model_context_window)
+            .and_then(TokenUsageInfo::context_budget)
             .or(self.config.model_context_window)
     }
 

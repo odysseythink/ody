@@ -62,6 +62,7 @@ impl ContextManager {
             history_version: 0,
             token_info: TokenUsageInfo::new_or_append(
                 &None, &None, /*model_context_window*/ None,
+                /*auto_compact_token_limit*/ None,
             ),
             reference_context_item: None,
             world_state_baseline: None,
@@ -281,11 +282,13 @@ impl ContextManager {
         &mut self,
         usage: &TokenUsage,
         model_context_window: Option<i64>,
+        auto_compact_token_limit: Option<i64>,
     ) {
         self.token_info = TokenUsageInfo::new_or_append(
             &self.token_info,
             &Some(usage.clone()),
             model_context_window,
+            auto_compact_token_limit,
         );
     }
 
