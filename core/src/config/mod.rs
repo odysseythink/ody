@@ -706,6 +706,10 @@ pub struct Config {
     /// active context or only tokens after the carried compaction-window prefix.
     pub model_auto_compact_token_limit_scope: AutoCompactTokenLimitScope,
 
+    /// Fraction of the context window at which finishing an `update_plan` task
+    /// triggers compaction in normal mode. `None` or `<= 0` disables it.
+    pub normal_task_compaction_ratio: Option<f64>,
+
     /// Key into the model_providers map that specifies which provider to use.
     pub model_provider_id: String,
 
@@ -3937,6 +3941,7 @@ impl Config {
             model_auto_compact_token_limit_scope: cfg
                 .model_auto_compact_token_limit_scope
                 .unwrap_or_default(),
+            normal_task_compaction_ratio: cfg.normal_task_compaction_ratio,
             model_provider_id,
             model_provider,
             cwd: resolved_cwd,

@@ -1207,6 +1207,11 @@ impl Session {
         state.active_plan().map(<[PlanItemArg]>::to_vec)
     }
 
+    pub(crate) async fn observe_plan_done_count(&self, done: usize) -> bool {
+        let mut state = self.state.lock().await;
+        state.observe_plan_done_count(done)
+    }
+
     pub(crate) async fn set_plan_mode_last_manifest_snapshot(&self, snapshot: ManifestSnapshot) {
         let mut state = self.state.lock().await;
         state.set_plan_mode_last_manifest_snapshot(snapshot);

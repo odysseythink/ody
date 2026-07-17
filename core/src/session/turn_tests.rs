@@ -172,3 +172,51 @@ async fn design_after_turn_injects_design_split_directive() {
         "design after-turn hook should record a design split directive mentioning one part per turn and core.md"
     );
 }
+
+fn checkpoint_plan(statuses: &[StepStatus]) -> Vec<PlanItemArg> {
+    statuses
+        .iter()
+        .enumerate()
+        .map(|(i, status)| PlanItemArg {
+            step: format!("step {i}"),
+            status: status.clone(),
+        })
+        .collect()
+}
+
+/// The whole point: a finished task in a large context is the cheap place to
+/// compact, so the global limit does not get to pick a mid-task moment instead.
+#[test]
+fn task_checkpoint_fires_on_a_finished_task_in_a_large_context() {
+    let plan = checkpoint_plan(&[StepStatus::Completed, StepStatus::InProgress]);
+    assert!(task_checkpoint_due(
+        0.5,
+        &plan,
+        /*crossed_boundary*/ true,
+        /*context_window*/ 249_036,
+        /*total_tokens*/ 154_587,
+    ));
+}
+
+/// Compaction costs a round trip; a small context has nothing to gain.
+#[test]
+fn task_checkpoint_holds_below_the_ratio() {
+    let plan = checkpoint_plan(&[StepStatus::Completed, StepStatus::InProgress]);
+    assert!(!task_checkpoint_due(0.5, &plan, true, 249_036, 80_342));
+}
+
+/// Every other turn crosses no boundary; the checkpoint must stay quiet or it
+/// would compact continuously.
+#[test]
+fn task_checkpoint_holds_without_a_finished_task() {
+    let plan = checkpoint_plan(&[StepStatus::Completed, StepStatus::InProgress]);
+    assert!(!task_checkpoint_due(0.5, &plan, false, 249_036, 200_000));
+}
+
+/// The final task leaves nothing to resume, so compacting there pays the cost
+/// for a context about to go idle.
+#[test]
+fn task_checkpoint_holds_when_no_work_remains() {
+    let plan = checkpoint_plan(&[StepStatus::Completed, StepStatus::Completed]);
+    assert!(!task_checkpoint_due(0.5, &plan, true, 249_036, 200_000));
+}

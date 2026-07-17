@@ -5611,6 +5611,12 @@
       "description": "Ody-code compatible model entries keyed by `provider_id/model_name`. These declare metadata (context window, capabilities) for models that are not present in the built-in catalog or the provider's `/models` listing, so fallback metadata (zero truncation budget, hidden tool outputs) is not used for them.",
       "type": "object"
     },
+    "normal_task_compaction_ratio": {
+      "default": 0.5,
+      "description": "Fraction of the context window at which finishing an `update_plan` task triggers compaction, in normal (non-Plan/Design) mode.\n\nA completed task is a cheap place to compact: the checklist is carried across compaction verbatim, so the summary loses less than it would mid-task. Set to `0` to disable. Plan/Design mode has its own `plan_mode.split_plan_compaction_ratio`.",
+      "format": "double",
+      "type": "number"
+    },
     "notice": {
       "allOf": [
         {

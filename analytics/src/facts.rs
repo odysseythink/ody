@@ -407,6 +407,7 @@ pub enum CompactionReason {
     ModelDownshift,
     CompHashChanged,
     PlanSplitCheckpoint,
+    TaskCheckpoint,
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]

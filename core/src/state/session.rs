@@ -54,6 +54,12 @@ pub(crate) struct SessionState {
     /// happened to mention it. Holding it here lets compaction re-attach the
     /// real state instead of trusting the summarizer to restate it.
     active_plan: Option<Vec<PlanItemArg>>,
+    /// Completed-task count observed by the last task-checkpoint check.
+    ///
+    /// `None` means "not tracking yet": the first observation only establishes
+    /// the baseline, so a plan that arrives already part-done cannot be mistaken
+    /// for a task having just finished.
+    last_plan_done_count: Option<usize>,
 }
 
 impl SessionState {
@@ -77,6 +83,7 @@ impl SessionState {
             plan_mode_last_manifest_snapshot: None,
             last_design_artifact: None,
             active_plan: None,
+            last_plan_done_count: None,
         }
     }
 
@@ -87,6 +94,17 @@ impl SessionState {
 
     pub(crate) fn active_plan(&self) -> Option<&[PlanItemArg]> {
         self.active_plan.as_deref()
+    }
+
+    /// Re-sync the task-checkpoint baseline, reporting whether a task just
+    /// finished (i.e. the completed count grew since the previous observation).
+    ///
+    /// Always re-syncs, so a plan that shrinks or is rewritten lowers the
+    /// baseline instead of latching a boundary that can never be crossed again.
+    pub(crate) fn observe_plan_done_count(&mut self, done: usize) -> bool {
+        let crossed = self.last_plan_done_count.is_some_and(|last| done > last);
+        self.last_plan_done_count = Some(done);
+        crossed
     }
 
     // History helpers

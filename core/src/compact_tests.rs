@@ -877,3 +877,40 @@ async fn session_active_plan_round_trips_and_clears() {
     session.set_active_plan(Vec::new()).await;
     assert!(session.active_plan().await.is_none());
 }
+
+/// The baseline must only arm after a first observation: a plan that arrives
+/// already part-done is not a task that just finished.
+#[tokio::test]
+async fn plan_done_count_first_observation_only_arms_the_baseline() {
+    let (session, _turn_context) = crate::session::tests::make_session_and_context().await;
+
+    assert!(
+        !session.observe_plan_done_count(2).await,
+        "the first observation establishes the baseline; it is not a crossing"
+    );
+    assert!(
+        !session.observe_plan_done_count(2).await,
+        "an unchanged count is not a crossing"
+    );
+    assert!(
+        session.observe_plan_done_count(3).await,
+        "a task moving to completed is a crossing"
+    );
+}
+
+/// A rewritten or shrunken checklist must lower the baseline, or the count could
+/// latch above every future value and never report a crossing again.
+#[tokio::test]
+async fn plan_done_count_resyncs_when_the_plan_shrinks() {
+    let (session, _turn_context) = crate::session::tests::make_session_and_context().await;
+
+    session.observe_plan_done_count(5).await;
+    assert!(
+        !session.observe_plan_done_count(1).await,
+        "shrinking is not a crossing"
+    );
+    assert!(
+        session.observe_plan_done_count(2).await,
+        "the baseline followed the plan down, so 1 -> 2 crosses"
+    );
+}

@@ -116,6 +116,8 @@ use ody_protocol::protocol::SafetyBufferingEvent;
 use ody_protocol::protocol::TurnDiffEvent;
 use ody_protocol::protocol::WarningEvent;
 use ody_protocol::user_input::UserInput;
+use ody_protocol::plan_tool::PlanItemArg;
+use ody_protocol::plan_tool::StepStatus;
 use ody_tools::ToolName;
 use ody_tools::filter_request_plugin_install_discoverable_tools_for_client;
 use ody_utils_stream_parser::AssistantTextChunk;
@@ -1037,6 +1039,91 @@ async fn run_pre_sampling_compact(
         .await?;
     }
     Ok(())
+}
+
+/// Whether a just-finished task warrants compacting before the next one starts.
+///
+/// A boundary alone is not enough: compacting a small context buys nothing and
+/// costs a model round trip, and compacting when no task remains pays that cost
+/// with nothing left to resume.
+fn task_checkpoint_due(
+    ratio: f64,
+    plan: &[PlanItemArg],
+    crossed_boundary: bool,
+    context_window: i64,
+    total_tokens: i64,
+) -> bool {
+    if !crossed_boundary {
+        return false;
+    }
+    let has_work = plan
+        .iter()
+        .any(|item| matches!(item.status, StepStatus::Pending | StepStatus::InProgress));
+    if !has_work {
+        return false;
+    }
+    (total_tokens as f64) >= (context_window as f64) * ratio
+}
+
+/// Opportunistic compaction when an `update_plan` task finishes in normal mode.
+///
+/// Executing a multi-task plan is one continuous stretch of turns, so context
+/// only grows until the global limit stops it — and that limit lands wherever it
+/// lands, typically mid-task. A task that just moved to `completed` is a cheaper
+/// place to compact: the checklist is carried across compaction verbatim (see
+/// `compact::summary_body_with_plan`), so the model resumes against recorded
+/// state rather than the summarizer's paraphrase of half-finished work.
+///
+/// Plan/Design mode is excluded; it has `run_session_mode_after_turn`, which
+/// checkpoints on split-plan part boundaries instead.
+#[instrument(level = "trace", skip_all)]
+async fn run_task_checkpoint(
+    sess: &Arc<Session>,
+    turn_context: &Arc<TurnContext>,
+    client_session: &mut ModelClientSession,
+) -> OdyResult<()> {
+    if !turn_context
+        .config
+        .features
+        .enabled(Feature::AutoCompaction)
+    {
+        return Ok(());
+    }
+    let Some(ratio) = turn_context.config.normal_task_compaction_ratio else {
+        return Ok(());
+    };
+    if ratio <= 0.0 {
+        return Ok(());
+    }
+    let Some(plan) = sess.active_plan().await else {
+        return Ok(());
+    };
+
+    let done = plan
+        .iter()
+        .filter(|item| matches!(item.status, StepStatus::Completed))
+        .count();
+    // Re-sync the baseline before any other guard can return, or a rejected
+    // check would leave the count stale and mis-report the next boundary.
+    let crossed_boundary = sess.observe_plan_done_count(done).await;
+
+    let Some(context_window) = turn_context.model_context_window() else {
+        return Ok(());
+    };
+    let total_tokens = sess.get_total_token_usage().await;
+    if !task_checkpoint_due(ratio, &plan, crossed_boundary, context_window, total_tokens) {
+        return Ok(());
+    }
+
+    run_auto_compact(
+        sess,
+        turn_context,
+        client_session,
+        InitialContextInjection::BeforeLastUserMessage,
+        CompactionReason::TaskCheckpoint,
+        CompactionPhase::MidTurn,
+    )
+    .await
 }
 
 /// Returns true only when both turns declare compaction compatibility hashes and they differ.
@@ -2583,6 +2670,14 @@ async fn try_run_sampling_request(
                 }
             }
         }
+    } else if let Err(err) = run_task_checkpoint(&sess, &turn_context, client_session).await {
+        if matches!(err, OdyErr::TurnAborted) {
+            return Err(err);
+        }
+        let error = err.to_ody_protocol_error();
+        sess.emit_turn_error_lifecycle(turn_context.as_ref(), error.clone())
+            .await;
+        error!(error = ?error, "Failed to run task checkpoint");
     }
 
     outcome

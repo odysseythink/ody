@@ -161,6 +161,10 @@ const fn default_split_threshold() -> Option<usize> {
     Some(8)
 }
 
+const fn default_normal_task_compaction_ratio() -> Option<f64> {
+    Some(0.5)
+}
+
 const fn default_split_plan_compaction_ratio() -> Option<f64> {
     Some(0.5)
 }
@@ -260,6 +264,16 @@ pub struct ConfigToml {
     /// Controls whether the auto-compaction limit applies to the full context or
     /// only to tokens after the carried prefix in the current compaction window.
     pub model_auto_compact_token_limit_scope: Option<AutoCompactTokenLimitScope>,
+
+    /// Fraction of the context window at which finishing an `update_plan` task
+    /// triggers compaction, in normal (non-Plan/Design) mode.
+    ///
+    /// A completed task is a cheap place to compact: the checklist is carried
+    /// across compaction verbatim, so the summary loses less than it would
+    /// mid-task. Set to `0` to disable. Plan/Design mode has its own
+    /// `plan_mode.split_plan_compaction_ratio`.
+    #[serde(default = "default_normal_task_compaction_ratio")]
+    pub normal_task_compaction_ratio: Option<f64>,
 
     /// Default approval policy for executing commands.
     pub approval_policy: Option<AskForApproval>,
