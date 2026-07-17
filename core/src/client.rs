@@ -1775,21 +1775,26 @@ fn map_chat_stream(
                 Ok(ChatEvent::ContentPart(part)) => {
                     // Image or tool-result parts are not streamed as deltas;
                     // emit a single completed message item.
-                    if let Some(text) = assistant_text.take() {
-                        events.push(ResponseEvent::OutputItemDone(ResponseItem::Message {
-                            id: None,
-                            role: "assistant".to_string(),
-                            content: vec![ContentItem::OutputText { text }],
-                            phase: None,
-                            internal_chat_message_metadata_passthrough: None,
-                        }));
-                    }
+                    // Reasoning closes before the message: the model produces it
+                    // first, and both the rendered transcript and the history we
+                    // replay read in item order. Flushing the message first put a
+                    // turn's reasoning *after* the answer it led to, which buried
+                    // any question the answer was asking.
                     if let Some(text) = reasoning_text.take() {
                         events.push(ResponseEvent::OutputItemDone(ResponseItem::Reasoning {
                             id: None,
                             summary: Vec::new(),
                             content: Some(vec![ReasoningItemContent::ReasoningText { text }]),
                             encrypted_content: None,
+                            internal_chat_message_metadata_passthrough: None,
+                        }));
+                    }
+                    if let Some(text) = assistant_text.take() {
+                        events.push(ResponseEvent::OutputItemDone(ResponseItem::Message {
+                            id: None,
+                            role: "assistant".to_string(),
+                            content: vec![ContentItem::OutputText { text }],
+                            phase: None,
                             internal_chat_message_metadata_passthrough: None,
                         }));
                     }
@@ -1809,21 +1814,26 @@ fn map_chat_stream(
                     namespace,
                     arguments,
                 })) => {
-                    if let Some(text) = assistant_text.take() {
-                        events.push(ResponseEvent::OutputItemDone(ResponseItem::Message {
-                            id: None,
-                            role: "assistant".to_string(),
-                            content: vec![ContentItem::OutputText { text }],
-                            phase: None,
-                            internal_chat_message_metadata_passthrough: None,
-                        }));
-                    }
+                    // Reasoning closes before the message: the model produces it
+                    // first, and both the rendered transcript and the history we
+                    // replay read in item order. Flushing the message first put a
+                    // turn's reasoning *after* the answer it led to, which buried
+                    // any question the answer was asking.
                     if let Some(text) = reasoning_text.take() {
                         events.push(ResponseEvent::OutputItemDone(ResponseItem::Reasoning {
                             id: None,
                             summary: Vec::new(),
                             content: Some(vec![ReasoningItemContent::ReasoningText { text }]),
                             encrypted_content: None,
+                            internal_chat_message_metadata_passthrough: None,
+                        }));
+                    }
+                    if let Some(text) = assistant_text.take() {
+                        events.push(ResponseEvent::OutputItemDone(ResponseItem::Message {
+                            id: None,
+                            role: "assistant".to_string(),
+                            content: vec![ContentItem::OutputText { text }],
+                            phase: None,
                             internal_chat_message_metadata_passthrough: None,
                         }));
                     }
@@ -1842,21 +1852,26 @@ fn map_chat_stream(
                     reasoning_tokens,
                     cached_input_tokens,
                 })) => {
-                    if let Some(text) = assistant_text.take() {
-                        events.push(ResponseEvent::OutputItemDone(ResponseItem::Message {
-                            id: None,
-                            role: "assistant".to_string(),
-                            content: vec![ContentItem::OutputText { text }],
-                            phase: None,
-                            internal_chat_message_metadata_passthrough: None,
-                        }));
-                    }
+                    // Reasoning closes before the message: the model produces it
+                    // first, and both the rendered transcript and the history we
+                    // replay read in item order. Flushing the message first put a
+                    // turn's reasoning *after* the answer it led to, which buried
+                    // any question the answer was asking.
                     if let Some(text) = reasoning_text.take() {
                         events.push(ResponseEvent::OutputItemDone(ResponseItem::Reasoning {
                             id: None,
                             summary: Vec::new(),
                             content: Some(vec![ReasoningItemContent::ReasoningText { text }]),
                             encrypted_content: None,
+                            internal_chat_message_metadata_passthrough: None,
+                        }));
+                    }
+                    if let Some(text) = assistant_text.take() {
+                        events.push(ResponseEvent::OutputItemDone(ResponseItem::Message {
+                            id: None,
+                            role: "assistant".to_string(),
+                            content: vec![ContentItem::OutputText { text }],
+                            phase: None,
                             internal_chat_message_metadata_passthrough: None,
                         }));
                     }
@@ -1874,21 +1889,26 @@ fn map_chat_stream(
                     });
                 }
                 Ok(ChatEvent::Finish { reason, raw_reason }) => {
-                    if let Some(text) = assistant_text.take() {
-                        events.push(ResponseEvent::OutputItemDone(ResponseItem::Message {
-                            id: None,
-                            role: "assistant".to_string(),
-                            content: vec![ContentItem::OutputText { text }],
-                            phase: None,
-                            internal_chat_message_metadata_passthrough: None,
-                        }));
-                    }
+                    // Reasoning closes before the message: the model produces it
+                    // first, and both the rendered transcript and the history we
+                    // replay read in item order. Flushing the message first put a
+                    // turn's reasoning *after* the answer it led to, which buried
+                    // any question the answer was asking.
                     if let Some(text) = reasoning_text.take() {
                         events.push(ResponseEvent::OutputItemDone(ResponseItem::Reasoning {
                             id: None,
                             summary: Vec::new(),
                             content: Some(vec![ReasoningItemContent::ReasoningText { text }]),
                             encrypted_content: None,
+                            internal_chat_message_metadata_passthrough: None,
+                        }));
+                    }
+                    if let Some(text) = assistant_text.take() {
+                        events.push(ResponseEvent::OutputItemDone(ResponseItem::Message {
+                            id: None,
+                            role: "assistant".to_string(),
+                            content: vec![ContentItem::OutputText { text }],
+                            phase: None,
                             internal_chat_message_metadata_passthrough: None,
                         }));
                     }

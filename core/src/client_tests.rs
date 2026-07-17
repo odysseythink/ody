@@ -1056,3 +1056,81 @@ async fn chat_stream_reports_reasoning_tokens_from_provider_usage() {
         "provider-reported reasoning tokens must survive the chat stream mapping"
     );
 }
+
+/// Collect the `OutputItemDone` items a chat stream closes with, in order.
+async fn done_item_labels(
+    events: Vec<Result<ody_model_provider::ChatEvent, ody_model_provider::ChatProviderError>>,
+) -> Vec<&'static str> {
+    use futures::stream;
+
+    let stream = crate::client::map_chat_stream(
+        Box::pin(stream::iter(events)),
+        create_test_session_telemetry(),
+        InferenceTraceContext::disabled().start_attempt(),
+    );
+
+    futures::pin_mut!(stream);
+    let mut labels = Vec::new();
+    while let Some(event) = stream.next().await {
+        if let Ok(ResponseEvent::OutputItemDone(item)) = event {
+            labels.push(match item {
+                ResponseItem::Reasoning { .. } => "reasoning",
+                ResponseItem::Message { .. } => "message",
+                ResponseItem::FunctionCall { .. } => "function_call",
+                _ => "other",
+            });
+        }
+    }
+    labels
+}
+
+#[tokio::test]
+async fn chat_stream_closes_reasoning_before_the_message_it_led_to() {
+    use ody_model_provider::{ChatEvent, ContentPart, FinishReason};
+
+    let labels = done_item_labels(vec![
+        Ok(ChatEvent::Start),
+        Ok(ChatEvent::ReasoningPart("weighing the options".into())),
+        Ok(ChatEvent::ContentPart(ContentPart::Text("A or B?".into()))),
+        Ok(ChatEvent::Finish {
+            reason: FinishReason::Stop,
+            raw_reason: None,
+        }),
+    ])
+    .await;
+
+    assert_eq!(
+        labels,
+        vec!["reasoning", "message"],
+        "the model reasons before it answers, so the reasoning item must close \
+         first; flushing the message first renders a turn's thinking after the \
+         answer and buries it"
+    );
+}
+
+#[tokio::test]
+async fn chat_stream_closes_reasoning_before_a_message_carrying_a_tool_call() {
+    use ody_model_provider::{ChatEvent, ContentPart, ToolCall};
+
+    let labels = done_item_labels(vec![
+        Ok(ChatEvent::Start),
+        Ok(ChatEvent::ReasoningPart("need to read the file".into())),
+        Ok(ChatEvent::ContentPart(ContentPart::Text(
+            "Reading it.".into(),
+        ))),
+        Ok(ChatEvent::ToolCall(ToolCall {
+            id: "call_1".into(),
+            name: "read_file".into(),
+            namespace: None,
+            arguments: serde_json::json!({"path": "a.rs"}),
+        })),
+    ])
+    .await;
+
+    assert_eq!(
+        labels,
+        vec!["reasoning", "message", "function_call"],
+        "history is replayed in item order, so a turn's reasoning must precede \
+         the message and call it produced"
+    );
+}
