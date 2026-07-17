@@ -93,11 +93,50 @@ impl SessionTask for ReviewTask {
     }
 }
 
+pub(crate) async fn run_one_shot_review(
+    session: Arc<SessionTaskContext>,
+    ctx: Arc<TurnContext>,
+    input: Vec<UserInput>,
+    cancellation_token: CancellationToken,
+    base_instructions: String,
+    model: String,
+) -> Option<ReviewOutputEvent> {
+    let receiver = start_review_conversation_with_overrides(
+        session,
+        ctx,
+        input,
+        cancellation_token.clone(),
+        Some(base_instructions),
+        Some(model),
+    )
+    .await?;
+    process_one_shot_review_events(receiver, cancellation_token).await
+}
+
 async fn start_review_conversation(
     session: Arc<SessionTaskContext>,
     ctx: Arc<TurnContext>,
     input: Vec<UserInput>,
     cancellation_token: CancellationToken,
+) -> Option<async_channel::Receiver<Event>> {
+    start_review_conversation_with_overrides(
+        session,
+        ctx,
+        input,
+        cancellation_token,
+        None,
+        None,
+    )
+    .await
+}
+
+async fn start_review_conversation_with_overrides(
+    session: Arc<SessionTaskContext>,
+    ctx: Arc<TurnContext>,
+    input: Vec<UserInput>,
+    cancellation_token: CancellationToken,
+    base_instructions_override: Option<String>,
+    model_override: Option<String>,
 ) -> Option<async_channel::Receiver<Event>> {
     let config = ctx.config.clone();
     let mut sub_agent_config = config.as_ref().clone();
@@ -114,13 +153,15 @@ async fn start_review_conversation(
     let _ = sub_agent_config.features.disable(Feature::MultiAgentV2);
 
     // Set explicit review rubric for the sub-agent
-    sub_agent_config.base_instructions = Some(crate::REVIEW_PROMPT.to_string());
+    sub_agent_config.base_instructions = base_instructions_override.or(Some(crate::REVIEW_PROMPT.to_string()));
     sub_agent_config.permissions.approval_policy = Constrained::allow_only(AskForApproval::Never);
 
-    let model = config
-        .review_model
-        .clone()
-        .unwrap_or_else(|| ctx.model_info.slug.clone());
+    let model = model_override.unwrap_or_else(|| {
+        config
+            .review_model
+            .clone()
+            .unwrap_or_else(|| ctx.model_info.slug.clone())
+    });
     sub_agent_config.model = Some(model);
     (run_ody_thread_one_shot(
         sub_agent_config,
@@ -187,12 +228,36 @@ async fn process_review_events(
     None
 }
 
+async fn process_one_shot_review_events(
+    receiver: async_channel::Receiver<Event>,
+    cancellation_token: CancellationToken,
+) -> Option<ReviewOutputEvent> {
+    loop {
+        tokio::select! {
+            Ok(event) = receiver.recv() => {
+                match event.msg {
+                    EventMsg::TurnComplete(task_complete) => {
+                        return task_complete
+                            .last_agent_message
+                            .as_deref()
+                            .map(parse_review_output_event);
+                    }
+                    EventMsg::TurnAborted(_) => return None,
+                    // Ignore other events: no parent forwarding for design review.
+                    _ => {}
+                }
+            }
+            _ = cancellation_token.cancelled() => return None,
+        }
+    }
+}
+
 /// Parse a ReviewOutputEvent from a text blob returned by the reviewer model.
 /// If the text is valid JSON matching ReviewOutputEvent, deserialize it.
 /// Otherwise, attempt to extract the first JSON object substring and parse it.
 /// If parsing still fails, return a structured fallback carrying the plain text
 /// in `overall_explanation`.
-fn parse_review_output_event(text: &str) -> ReviewOutputEvent {
+pub(crate) fn parse_review_output_event(text: &str) -> ReviewOutputEvent {
     if let Ok(ev) = serde_json::from_str::<ReviewOutputEvent>(text) {
         return ev;
     }

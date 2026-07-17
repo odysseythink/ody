@@ -24,6 +24,7 @@ mod compact_remote;
 mod compact_remote_v2;
 mod config_lock;
 mod design_completeness;
+mod design_review;
 mod design_audit_level_selector;
 pub use ody_thread::BackgroundTerminalInfo;
 pub use ody_thread::OdyThread;

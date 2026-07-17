@@ -2,6 +2,7 @@ mod compact;
 mod lifecycle;
 mod regular;
 mod review;
+pub(crate) use review::run_one_shot_review;
 mod user_shell;
 
 use std::sync::Arc;

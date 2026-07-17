@@ -4,6 +4,9 @@
 //! `SubmitDesignHandler` are thin shells that call `handle_submit_artifact`.
 
 use crate::design_completeness::design_completeness_report;
+use crate::design_review::orchestrator::DesignReviewOrchestrator;
+use crate::design_review::orchestrator::format_review_appendix_for_submit;
+use crate::design_review::types::DesignReviewRequest;
 use crate::function_tool::FunctionCallError;
 use crate::plan_artifact::PlanWriteOutcome;
 use crate::plan_mode_injector::parts_manifest::RowStatus;
@@ -175,6 +178,20 @@ fn split_threshold_gap(plan: &str, split_threshold: usize) -> Option<String> {
 ///    `rigor_structure_gap`; for Design: `design_completeness_report`.
 /// 8. Terminal — calls `artifact.mark_submitted()` and returns the submitted
 ///    message.
+pub(crate) fn should_trigger_design_review(
+    expected_mode: ModeKind,
+    finalize: bool,
+    gap: Option<&str>,
+    has_pending_parts: bool,
+    review_model: Option<&str>,
+) -> bool {
+    expected_mode == ModeKind::Design
+        && finalize
+        && gap.is_none()
+        && !has_pending_parts
+        && review_model.is_some()
+}
+
 pub(crate) async fn handle_submit_artifact(
     invocation: ToolInvocation,
     expected_mode: ModeKind,
@@ -347,6 +364,32 @@ pub(crate) async fn handle_submit_artifact(
         }
     };
 
+    // 7.5 — automatic adversarial review after structural gate
+    let review_appendix: Option<String> = if should_trigger_design_review(
+        expected_mode,
+        finalize,
+        gap.as_deref(),
+        has_pending_parts,
+        turn.config.review_model.as_deref(),
+    ) {
+        let request = DesignReviewRequest {
+            design_markdown: markdown.clone(),
+            review_model: turn.config.review_model.clone().expect("checked above"),
+        };
+        match DesignReviewOrchestrator::review(&session, &turn, request).await {
+            Ok(output) => Some(format_review_appendix_for_submit(&output)),
+            Err(err) => {
+                let message = format!("Design review failed: {err}");
+                session
+                    .send_event(turn.as_ref(), EventMsg::Warning(WarningEvent { message }))
+                    .await;
+                Some(format!("\n\n[Design review could not be completed: {err}]"))
+            }
+        }
+    } else {
+        None
+    };
+
     // 8. Emit completed event
     session
         .emit_turn_item_completed(
@@ -415,6 +458,12 @@ pub(crate) async fn handle_submit_artifact(
     } else {
         artifact.mark_submitted();
         format!("{} submitted", wording.noun)
+    };
+
+    let message = if let Some(appendix) = review_appendix {
+        format!("{message}\n\n{appendix}")
+    } else {
+        message
     };
 
     Ok(boxed_tool_output(FunctionToolOutput::from_text(
@@ -624,4 +673,65 @@ mod tests {
         assert!(gap.contains("Spec coverage"));
         assert!(gap.contains("Self-review"));
     }
+
+    #[test]
+    fn should_trigger_design_review_true_when_all_conditions_met() {
+        use ody_protocol::config_types::ModeKind;
+        assert!(should_trigger_design_review(
+            ModeKind::Design,
+            /*finalize*/ true,
+            /*gap*/ None,
+            /*has_pending_parts*/ false,
+            Some("gpt-review"),
+        ));
+    }
+
+    #[test]
+    fn should_trigger_design_review_false_when_not_final() {
+        use ody_protocol::config_types::ModeKind;
+        assert!(!should_trigger_design_review(
+            ModeKind::Design,
+            /*finalize*/ false,
+            /*gap*/ None,
+            /*has_pending_parts*/ false,
+            Some("gpt-review"),
+        ));
+    }
+
+    #[test]
+    fn should_trigger_design_review_false_when_gap_present() {
+        use ody_protocol::config_types::ModeKind;
+        assert!(!should_trigger_design_review(
+            ModeKind::Design,
+            /*finalize*/ true,
+            /*gap*/ Some("missing section"),
+            /*has_pending_parts*/ false,
+            Some("gpt-review"),
+        ));
+    }
+
+    #[test]
+    fn should_trigger_design_review_false_when_review_model_missing() {
+        use ody_protocol::config_types::ModeKind;
+        assert!(!should_trigger_design_review(
+            ModeKind::Design,
+            /*finalize*/ true,
+            /*gap*/ None,
+            /*has_pending_parts*/ false,
+            None,
+        ));
+    }
+
+    #[test]
+    fn should_trigger_design_review_false_when_not_design_mode() {
+        use ody_protocol::config_types::ModeKind;
+        assert!(!should_trigger_design_review(
+            ModeKind::Plan,
+            /*finalize*/ true,
+            /*gap*/ None,
+            /*has_pending_parts*/ false,
+            Some("gpt-review"),
+        ));
+    }
+
 }

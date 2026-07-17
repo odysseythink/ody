@@ -62,6 +62,47 @@ pub enum TurnSubmissionType {
     Queued,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DesignReviewFailureReason {
+    Timeout,
+    Session,
+    Parse,
+    Cancelled,
+}
+
+#[derive(Clone)]
+pub struct DesignReviewStartedInput {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub review_model: String,
+    pub started_at_ms: u64,
+}
+
+#[derive(Clone)]
+pub struct DesignReviewCompletedInput {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub review_model: String,
+    pub finding_count: usize,
+    pub critical_count: usize,
+    pub high_count: usize,
+    pub medium_count: usize,
+    pub low_count: usize,
+    pub started_at_ms: u64,
+    pub completed_at_ms: u64,
+}
+
+#[derive(Clone)]
+pub struct DesignReviewFailedInput {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub review_model: String,
+    pub reason: DesignReviewFailureReason,
+    pub started_at_ms: u64,
+    pub completed_at_ms: u64,
+}
+
 #[derive(Clone)]
 pub struct TurnResolvedConfigFact {
     pub turn_id: String,
@@ -508,6 +549,9 @@ pub(crate) enum CustomAnalyticsFact {
     PluginInstallFailed(PluginInstallFailedInput),
     ExternalAgentConfigImportCompleted(ExternalAgentConfigImportCompletedInput),
     ExternalAgentConfigImportFailure(ExternalAgentConfigImportFailureInput),
+    DesignReviewStarted(DesignReviewStartedInput),
+    DesignReviewCompleted(DesignReviewCompletedInput),
+    DesignReviewFailed(DesignReviewFailedInput),
 }
 
 pub(crate) struct SkillInvokedInput {

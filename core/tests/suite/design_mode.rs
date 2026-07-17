@@ -1,14 +1,21 @@
 //! End-to-end Design mode integration tests (Phase D9).
 use anyhow::Result;
+use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
+use core_test_support::responses::ev_function_call;
 use core_test_support::responses::ev_response_created;
 use core_test_support::responses::mount_sse_once;
+use core_test_support::responses::mount_sse_sequence;
 use core_test_support::responses::sse;
 use core_test_support::responses::start_mock_server;
 use core_test_support::skip_if_no_network;
 use core_test_support::test_ody::local_selections;
 use core_test_support::test_ody::test_ody;
+use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event;
+use core_test_support::wait_for_event_match;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
 use ody_protocol::config_types::CollaborationMode;
 use ody_protocol::config_types::DesignAuditLevel;
 use ody_protocol::config_types::ModeKind;
@@ -405,6 +412,327 @@ async fn design_mode_injects_selected_audit_level() -> Result<()> {
     assert!(
         combined.contains("Do NOT ask the user to choose the audit level again"),
         "expected host-managed instruction; got {combined:?}"
+    );
+
+    Ok(())
+
+}
+
+fn call_output(req: &core_test_support::responses::ResponsesRequest, call_id: &str) -> (String, Option<bool>) {
+    let raw = req.function_call_output(call_id);
+    assert_eq!(
+        raw.get("call_id").and_then(serde_json::Value::as_str),
+        Some(call_id),
+        "mismatched call_id in function_call_output"
+    );
+    let (content_opt, success) = req
+        .function_call_output_content_and_success(call_id)
+        .expect("function_call_output present");
+    let content = content_opt.expect("function_call_output content present");
+    (content, success)
+}
+
+fn complete_design_markdown() -> String {
+    concat!(
+        "# Feature Design\n\n",
+        "## Scope\n",
+        "In scope: the core behaviour. Out of scope: the UI polish. ",
+        "This line pads the document beyond the minimum content length so ",
+        "the structural gate does not trip on an otherwise complete design.\n\n",
+        "## Architecture\n",
+        "The approach is to reuse the existing pipeline and add a stage.\n\n",
+        "## Data Models\n",
+        "struct DesignState { sections: Vec<String> }\n\n",
+        "## Algorithms\n",
+        "implementation notes: walk the sections and tally coverage.\n\n",
+        "## Error Handling\n",
+        "failure scenarios and graceful degradation are handled inline.\n\n",
+        "## Self-Review\n",
+        "audit checklist reviewed against the rubric.\n\n",
+        "## User Approval\n",
+        "user final approval captured before handoff.\n\n",
+        "## Reuse Analysis\n",
+        "component reuse survey of existing components follows.",
+    )
+    .to_string()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn submit_design_final_triggers_adversarial_review_and_appends_findings()
+-> anyhow::Result<()> {
+    skip_if_no_network!(Ok(()));
+
+    let server = start_mock_server().await;
+
+    // First response: assistant calls submit_design(final: true).
+    let call_id = "submit-design-final";
+    let design_markdown = complete_design_markdown();
+    let args = serde_json::json!({"design": design_markdown, "final": true}).to_string();
+    let first_response = sse(vec![
+        ev_response_created("resp-1"),
+        ev_function_call(call_id, "submit_design", &args),
+        ev_completed("resp-1"),
+    ]);
+
+    // Second response: review model returns structured JSON findings.
+    let review_json = serde_json::json!({
+        "overall_assessment": "One high-confidence gap.",
+        "findings": [
+            {
+                "severity": "high",
+                "confidence": "high",
+                "title": "Missing operational runbook",
+                "detail": "The design does not describe on-call procedures.",
+                "location": "## Error Handling",
+                "suggested_fix": "Add a runbook section."
+            }
+        ]
+    })
+    .to_string();
+    let second_response = sse(vec![
+        ev_response_created("resp-2"),
+        ev_assistant_message("msg-review", &review_json),
+        ev_completed("resp-2"),
+    ]);
+
+    let response_mock =
+        mount_sse_sequence(&server, vec![first_response, second_response]).await;
+
+    let mut builder = test_ody().with_config(|config| {
+        config.review_model = Some("review-model".to_string());
+    });
+    let test = builder.build(&server).await?;
+
+    let (sandbox_policy, permission_profile) =
+        turn_permission_fields(PermissionProfile::Disabled, test.cwd.path());
+
+    test.ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "please finalize the design".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(test.config.cwd.clone())),
+            approval_policy: Some(AskForApproval::Never),
+            sandbox_policy: Some(sandbox_policy),
+            permission_profile,
+            collaboration_mode: Some(CollaborationMode {
+                mode: ModeKind::Design,
+                settings: Settings {
+                    model: test.session_configured.model.clone(),
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                    design_audit_level: None,
+                },
+            }),
+            ..Default::default()
+        },
+    })
+    .await?;
+
+    let _completed = wait_for_event_match(&test.ody, |event| match event {
+        EventMsg::ItemCompleted(_) => Some(()),
+        _ => None,
+    })
+    .await;
+
+    let requests = response_mock.requests();
+    assert_eq!(
+        requests.len(),
+        2,
+        "final design submission with review_model configured must trigger a review sub-session request"
+    );
+
+    // First request is the main turn; second request is the review sub-session.
+    let review_request = &requests[1];
+    let review_body = review_request.body_json();
+    let review_input = review_body["input"].as_array().expect("review input array");
+    let review_texts: Vec<String> = review_input
+        .iter()
+        .filter_map(|item| item.get("content").and_then(|c| c.as_array()).cloned())
+        .flatten()
+        .filter_map(|entry| entry.get("text").and_then(Value::as_str).map(str::to_owned))
+        .collect();
+    let combined_review_text = review_texts.join("\n");
+    assert!(
+        combined_review_text.contains("BREAK the design"),
+        "review prompt must ask the model to break the design"
+    );
+    assert!(
+        combined_review_text.contains(&design_markdown),
+        "review prompt must include the design markdown"
+    );
+    assert!(
+        combined_review_text.contains("Output strictly as JSON"),
+        "review prompt must demand JSON output"
+    );
+
+    // Tool output contains the findings appendix.
+    let first_req = &requests[0];
+    let (output_text, success) = call_output(first_req, call_id);
+    assert_eq!(success, Some(true));
+    assert!(
+        output_text.contains("## Adversarial design review findings"),
+        "tool output must include the review findings appendix: {output_text}"
+    );
+    assert!(
+        output_text.contains("[High] Missing operational runbook"),
+        "tool output must include the finding title: {output_text}"
+    );
+    assert!(
+        output_text.contains("advisory and do not block"),
+        "tool output must include the advisory disclaimer: {output_text}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn submit_design_final_skips_review_when_review_model_unset()
+-> anyhow::Result<()> {
+    skip_if_no_network!(Ok(()));
+
+    let server = start_mock_server().await;
+    let call_id = "submit-design-no-review";
+    let design_markdown = complete_design_markdown();
+    let args = serde_json::json!({"design": design_markdown, "final": true}).to_string();
+    let response = sse(vec![
+        ev_response_created("resp-1"),
+        ev_function_call(call_id, "submit_design", &args),
+        ev_completed("resp-1"),
+    ]);
+    let mock = mount_sse_once(&server, response).await;
+
+    let test = test_ody().build(&server).await?;
+
+    let (sandbox_policy, permission_profile) =
+        turn_permission_fields(PermissionProfile::Disabled, test.cwd.path());
+
+    test.ody
+        .submit(Op::UserInput {
+            items: vec![UserInput::Text {
+                text: "please finalize the design".into(),
+                text_elements: Vec::new(),
+            }],
+            final_output_json_schema: None,
+            responsesapi_client_metadata: None,
+            additional_context: Default::default(),
+            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+                environments: Some(local_selections(test.config.cwd.clone())),
+                approval_policy: Some(AskForApproval::Never),
+                sandbox_policy: Some(sandbox_policy),
+                permission_profile,
+                collaboration_mode: Some(design_preset()),
+                ..Default::default()
+            },
+        })
+        .await?;
+
+    let _completed = wait_for_event_match(&test.ody, |event| match event {
+        EventMsg::ItemCompleted(_) => Some(()),
+        _ => None,
+    })
+    .await;
+
+    let req = mock.single_request();
+    let (output_text, success) = call_output(&req, call_id);
+    assert_eq!(success, Some(true));
+    assert_eq!(output_text, "Design submitted");
+    assert!(
+        !output_text.contains("Adversarial design review findings"),
+        "no review should be triggered when review_model is unset"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn submit_design_final_review_fail_open_on_unparseable_output()
+-> anyhow::Result<()> {
+    skip_if_no_network!(Ok(()));
+
+    let server = start_mock_server().await;
+
+    let call_id = "submit-design-review-fallback";
+    let design_markdown = complete_design_markdown();
+    let args = serde_json::json!({"design": design_markdown, "final": true}).to_string();
+    let first_response = sse(vec![
+        ev_response_created("resp-1"),
+        ev_function_call(call_id, "submit_design", &args),
+        ev_completed("resp-1"),
+    ]);
+
+    // Review model returns prose instead of JSON.
+    let second_response = sse(vec![
+        ev_response_created("resp-2"),
+        ev_assistant_message("msg-review", "This looks fine to me."),
+        ev_completed("resp-2"),
+    ]);
+
+    let response_mock =
+        mount_sse_sequence(&server, vec![first_response, second_response]).await;
+
+    let mut builder = test_ody().with_config(|config| {
+        config.review_model = Some("review-model".to_string());
+    });
+    let test = builder.build(&server).await?;
+
+    let (sandbox_policy, permission_profile) =
+        turn_permission_fields(PermissionProfile::Disabled, test.cwd.path());
+
+    test.ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "please finalize the design".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(test.config.cwd.clone())),
+            approval_policy: Some(AskForApproval::Never),
+            sandbox_policy: Some(sandbox_policy),
+            permission_profile,
+            collaboration_mode: Some(CollaborationMode {
+                mode: ModeKind::Design,
+                settings: Settings {
+                    model: test.session_configured.model.clone(),
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                    design_audit_level: None,
+                },
+            }),
+            ..Default::default()
+        },
+    })
+    .await?;
+
+    let _completed = wait_for_event_match(&test.ody, |event| match event {
+        EventMsg::ItemCompleted(_) => Some(()),
+        _ => None,
+    })
+    .await;
+
+    let requests = response_mock.requests();
+    assert_eq!(requests.len(), 2);
+
+    let first_req = &requests[0];
+    let (output_text, success) = call_output(first_req, call_id);
+    assert_eq!(success, Some(true));
+    assert!(
+        output_text.contains("Design submitted"),
+        "submit_design must still succeed when review output is unparseable: {output_text}"
+    );
+    assert!(
+        output_text.contains("Review output could not be structured"),
+        "tool output must include the fallback finding: {output_text}"
+    );
+    assert!(
+        output_text.contains("This looks fine to me."),
+        "fallback finding must quote the raw review output: {output_text}"
     );
 
     Ok(())

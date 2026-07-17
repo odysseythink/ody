@@ -78,6 +78,9 @@ pub(crate) enum TrackEventRequest {
     AcceptedLineFingerprints(Box<OdyAcceptedLineFingerprintsEventRequest>),
     #[allow(dead_code)]
     ReviewEvent(OdyReviewEventRequest),
+    DesignReviewStarted(OdyDesignReviewStartedEventRequest),
+    DesignReviewCompleted(OdyDesignReviewCompletedEventRequest),
+    DesignReviewFailed(OdyDesignReviewFailedEventRequest),
     PluginUsed(OdyPluginUsedEventRequest),
     PluginInstalled(OdyPluginEventRequest),
     PluginUninstalled(OdyPluginEventRequest),
@@ -616,6 +619,56 @@ pub(crate) struct OdyReviewEventParams {
 pub(crate) struct OdyReviewEventRequest {
     pub(crate) event_type: &'static str,
     pub(crate) event_params: OdyReviewEventParams,
+}
+
+#[derive(Serialize)]
+pub(crate) struct OdyDesignReviewStartedEventRequest {
+    pub(crate) event_type: &'static str,
+    pub(crate) event_params: OdyDesignReviewStartedEventParams,
+}
+
+#[derive(Serialize)]
+pub(crate) struct OdyDesignReviewStartedEventParams {
+    pub(crate) thread_id: String,
+    pub(crate) turn_id: String,
+    pub(crate) review_model: String,
+    pub(crate) started_at_ms: u64,
+}
+
+#[derive(Serialize)]
+pub(crate) struct OdyDesignReviewCompletedEventRequest {
+    pub(crate) event_type: &'static str,
+    pub(crate) event_params: OdyDesignReviewCompletedEventParams,
+}
+
+#[derive(Serialize)]
+pub(crate) struct OdyDesignReviewCompletedEventParams {
+    pub(crate) thread_id: String,
+    pub(crate) turn_id: String,
+    pub(crate) review_model: String,
+    pub(crate) finding_count: u64,
+    pub(crate) critical_count: u64,
+    pub(crate) high_count: u64,
+    pub(crate) medium_count: u64,
+    pub(crate) low_count: u64,
+    pub(crate) started_at_ms: u64,
+    pub(crate) completed_at_ms: u64,
+}
+
+#[derive(Serialize)]
+pub(crate) struct OdyDesignReviewFailedEventRequest {
+    pub(crate) event_type: &'static str,
+    pub(crate) event_params: OdyDesignReviewFailedEventParams,
+}
+
+#[derive(Serialize)]
+pub(crate) struct OdyDesignReviewFailedEventParams {
+    pub(crate) thread_id: String,
+    pub(crate) turn_id: String,
+    pub(crate) review_model: String,
+    pub(crate) reason: crate::facts::DesignReviewFailureReason,
+    pub(crate) started_at_ms: u64,
+    pub(crate) completed_at_ms: u64,
 }
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, Serialize)]

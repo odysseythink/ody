@@ -13,6 +13,11 @@ use crate::events::SkillInvocationEventRequest;
 use crate::events::TrackEventRequest;
 use crate::facts::AnalyticsFact;
 use crate::facts::InvocationType;
+use crate::facts::CustomAnalyticsFact;
+use crate::facts::DesignReviewCompletedInput;
+use crate::facts::DesignReviewFailedInput;
+use crate::facts::DesignReviewFailureReason;
+use crate::facts::DesignReviewStartedInput;
 use ody_app_server_protocol::ApprovalsReviewer as AppServerApprovalsReviewer;
 use ody_app_server_protocol::AskForApproval as AppServerAskForApproval;
 use ody_app_server_protocol::ClientRequest;
@@ -441,4 +446,77 @@ fn track_event_request_batches_only_isolates_accepted_line_fingerprint_events() 
     assert_eq!(batches[3].len(), 2);
     assert!(batches[1][0].should_send_in_isolated_request());
     assert!(batches[2][0].should_send_in_isolated_request());
+}
+
+#[tokio::test]
+async fn track_design_review_started_emits_custom_fact() {
+    let (client, mut receiver) = client_with_receiver();
+    let input = DesignReviewStartedInput {
+        thread_id: "thread-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        review_model: "gpt-review".to_string(),
+        started_at_ms: 1_000,
+    };
+    client.track_design_review_started(input.clone());
+
+    let fact = receiver.try_recv().expect("fact should be queued");
+    match fact {
+        AnalyticsFact::Custom(CustomAnalyticsFact::DesignReviewStarted(received)) => {
+            assert_eq!(received.thread_id, "thread-1");
+            assert_eq!(received.turn_id, "turn-1");
+            assert_eq!(received.review_model, "gpt-review");
+            assert_eq!(received.started_at_ms, 1_000);
+        }
+        _other => panic!("expected DesignReviewStarted fact, got other variant"),
+    }
+}
+
+#[tokio::test]
+async fn track_design_review_completed_emits_custom_fact() {
+    let (client, mut receiver) = client_with_receiver();
+    let input = DesignReviewCompletedInput {
+        thread_id: "thread-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        review_model: "gpt-review".to_string(),
+        finding_count: 3,
+        critical_count: 1,
+        high_count: 1,
+        medium_count: 1,
+        low_count: 0,
+        started_at_ms: 1_000,
+        completed_at_ms: 2_000,
+    };
+    client.track_design_review_completed(input.clone());
+
+    let fact = receiver.try_recv().expect("fact should be queued");
+    match fact {
+        AnalyticsFact::Custom(CustomAnalyticsFact::DesignReviewCompleted(received)) => {
+            assert_eq!(received.finding_count, 3);
+            assert_eq!(received.critical_count, 1);
+            assert_eq!(received.low_count, 0);
+        }
+        _other => panic!("expected DesignReviewCompleted fact, got other variant"),
+    }
+}
+
+#[tokio::test]
+async fn track_design_review_failed_emits_custom_fact() {
+    let (client, mut receiver) = client_with_receiver();
+    let input = DesignReviewFailedInput {
+        thread_id: "thread-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        review_model: "gpt-review".to_string(),
+        reason: DesignReviewFailureReason::Timeout,
+        started_at_ms: 1_000,
+        completed_at_ms: 2_000,
+    };
+    client.track_design_review_failed(input.clone());
+
+    let fact = receiver.try_recv().expect("fact should be queued");
+    match fact {
+        AnalyticsFact::Custom(CustomAnalyticsFact::DesignReviewFailed(received)) => {
+            assert_eq!(received.reason, DesignReviewFailureReason::Timeout);
+        }
+        _other => panic!("expected DesignReviewFailed fact, got other variant"),
+    }
 }

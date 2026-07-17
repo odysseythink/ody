@@ -12,6 +12,12 @@ use crate::events::OdyCommandExecutionEventParams;
 use crate::events::OdyCommandExecutionEventRequest;
 use crate::events::OdyCompactionEventRequest;
 use crate::events::OdyDynamicToolCallEventParams;
+use crate::events::OdyDesignReviewCompletedEventParams;
+use crate::events::OdyDesignReviewCompletedEventRequest;
+use crate::events::OdyDesignReviewFailedEventParams;
+use crate::events::OdyDesignReviewFailedEventRequest;
+use crate::events::OdyDesignReviewStartedEventParams;
+use crate::events::OdyDesignReviewStartedEventRequest;
 use crate::events::OdyDynamicToolCallEventRequest;
 use crate::events::OdyFileChangeEventParams;
 use crate::events::OdyFileChangeEventRequest;
@@ -72,6 +78,9 @@ use crate::facts::AppUsedInput;
 use crate::facts::OdyCompactionEvent;
 use crate::facts::OdyGoalEvent;
 use crate::facts::CustomAnalyticsFact;
+use crate::facts::DesignReviewCompletedInput;
+use crate::facts::DesignReviewFailedInput;
+use crate::facts::DesignReviewStartedInput;
 use crate::facts::ExternalAgentConfigImportCompletedInput;
 use crate::facts::ExternalAgentConfigImportFailureInput;
 use crate::facts::HookRunInput;
@@ -529,6 +538,15 @@ impl AnalyticsReducer {
                 CustomAnalyticsFact::ExternalAgentConfigImportFailure(input) => {
                     self.ingest_external_agent_config_import_failure(input, out);
                 }
+                CustomAnalyticsFact::DesignReviewStarted(input) => {
+                    self.ingest_design_review_started(input, out);
+                }
+                CustomAnalyticsFact::DesignReviewCompleted(input) => {
+                    self.ingest_design_review_completed(input, out);
+                }
+                CustomAnalyticsFact::DesignReviewFailed(input) => {
+                    self.ingest_design_review_failed(input, out);
+                }
             },
         }
     }
@@ -845,6 +863,68 @@ impl AnalyticsReducer {
                     failure_stage: input.failure_stage,
                     error_type: input.error_type,
                     product_client_id: Some(originator().value),
+                },
+            },
+        ));
+    }
+
+    fn ingest_design_review_started(
+        &mut self,
+        input: DesignReviewStartedInput,
+        out: &mut Vec<TrackEventRequest>,
+    ) {
+        out.push(TrackEventRequest::DesignReviewStarted(
+            OdyDesignReviewStartedEventRequest {
+                event_type: "ody_design_review_started",
+                event_params: OdyDesignReviewStartedEventParams {
+                    thread_id: input.thread_id,
+                    turn_id: input.turn_id,
+                    review_model: input.review_model,
+                    started_at_ms: input.started_at_ms,
+                },
+            },
+        ));
+    }
+
+    fn ingest_design_review_completed(
+        &mut self,
+        input: DesignReviewCompletedInput,
+        out: &mut Vec<TrackEventRequest>,
+    ) {
+        out.push(TrackEventRequest::DesignReviewCompleted(
+            OdyDesignReviewCompletedEventRequest {
+                event_type: "ody_design_review_completed",
+                event_params: OdyDesignReviewCompletedEventParams {
+                    thread_id: input.thread_id,
+                    turn_id: input.turn_id,
+                    review_model: input.review_model,
+                    finding_count: crate::usize_to_u64(input.finding_count),
+                    critical_count: crate::usize_to_u64(input.critical_count),
+                    high_count: crate::usize_to_u64(input.high_count),
+                    medium_count: crate::usize_to_u64(input.medium_count),
+                    low_count: crate::usize_to_u64(input.low_count),
+                    started_at_ms: input.started_at_ms,
+                    completed_at_ms: input.completed_at_ms,
+                },
+            },
+        ));
+    }
+
+    fn ingest_design_review_failed(
+        &mut self,
+        input: DesignReviewFailedInput,
+        out: &mut Vec<TrackEventRequest>,
+    ) {
+        out.push(TrackEventRequest::DesignReviewFailed(
+            OdyDesignReviewFailedEventRequest {
+                event_type: "ody_design_review_failed",
+                event_params: OdyDesignReviewFailedEventParams {
+                    thread_id: input.thread_id,
+                    turn_id: input.turn_id,
+                    review_model: input.review_model,
+                    reason: input.reason,
+                    started_at_ms: input.started_at_ms,
+                    completed_at_ms: input.completed_at_ms,
                 },
             },
         ));

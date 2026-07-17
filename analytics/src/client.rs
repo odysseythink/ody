@@ -11,6 +11,9 @@ use crate::facts::AppMentionedInput;
 use crate::facts::AppUsedInput;
 use crate::facts::OdyGoalEvent;
 use crate::facts::CustomAnalyticsFact;
+use crate::facts::DesignReviewCompletedInput;
+use crate::facts::DesignReviewFailedInput;
+use crate::facts::DesignReviewStartedInput;
 use crate::facts::ExternalAgentConfigImportCompletedInput;
 use crate::facts::ExternalAgentConfigImportFailureInput;
 use crate::facts::HookRunFact;
@@ -367,6 +370,24 @@ impl AnalyticsEventsClient {
     ) {
         self.record_fact(AnalyticsFact::Custom(
             CustomAnalyticsFact::ExternalAgentConfigImportFailure(input),
+        ));
+    }
+
+    pub fn track_design_review_started(&self, input: DesignReviewStartedInput) {
+        self.record_fact(AnalyticsFact::Custom(
+            CustomAnalyticsFact::DesignReviewStarted(input),
+        ));
+    }
+
+    pub fn track_design_review_completed(&self, input: DesignReviewCompletedInput) {
+        self.record_fact(AnalyticsFact::Custom(
+            CustomAnalyticsFact::DesignReviewCompleted(input),
+        ));
+    }
+
+    pub fn track_design_review_failed(&self, input: DesignReviewFailedInput) {
+        self.record_fact(AnalyticsFact::Custom(
+            CustomAnalyticsFact::DesignReviewFailed(input),
         ));
     }
 
