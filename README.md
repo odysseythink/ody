@@ -77,6 +77,74 @@ Then package the resulting `target/release/ody` binary.
 
 ## Design Mode
 
-Ody provides a `/design` collaboration mode for structured design exploration. While in Design mode, the session is read-only except for the current design file under `.ody-code/designs/` and its optional split parts.
+Most coding assistants treat design as a prefix to implementation—an offhand "let's think step by step." Ody treats design as a first-class collaboration phase with its own workspace, rules, and handoff contract.
 
-Design mode shares `PlanModeConfigToml` settings (`enforcement`, `split_threshold`, `split_plan_compaction_ratio`) with Plan mode and must pass the C1–C8 completeness gate. With `enforcement = "Strict"`, an incomplete design blocks switching to Plan mode.
+Enter `/design` to switch the session into a structured design studio. While you are in Design mode, the rest of the workspace is read-only: the model can edit only the current design document under `.ody-code/designs/` and its optional split parts. This prevents "implementation drift"—the common failure mode where an agent starts writing code before the design is actually finished.
+
+Every design is written against an adversarial completeness gate (C1–C8) that enforces eight required sections:
+
+1. **Scope / In-Out** — what is in scope and, just as importantly, what is out.
+2. **Architecture & Design** — the conceptual approach, not a TODO list.
+3. **Data Models** — the state, shapes, and lifecycles the design depends on.
+4. **Algorithms & Implementation Notes** — the core logic, not framework plumbing.
+5. **Error Handling** — failure modes, degradation, and recovery.
+6. **Self-Review** — an adversarial audit against the rubric, not a polite summary.
+7. **User Approval** — explicit sign-off before the design can be handed off.
+8. **Reuse Analysis** — what existing components can be reused instead of rebuilt.
+
+When you leave Design mode, the C1–C8 gate runs against the saved design artifact. If the document is missing sections or too short, the handoff is vetoed or flagged depending on `enforcement`:
+
+- `Strict` — an incomplete design blocks the switch to Plan mode.
+- `Ask` — the handoff proceeds with a warning that the user must acknowledge.
+- `Advisory` — a note is appended but the switch is allowed.
+
+Design mode also shares `PlanModeConfigToml` settings with Plan mode (`split_threshold`, `split_plan_compaction_ratio`). Large designs can be split into parts under the design's `<stem>/` directory, so a multi-subsystem design stays navigable rather than becoming a single wall of text.
+
+Before the design starts, you choose an audit level—Basic, Standard, or Deep—that tells the model how aggressively to verify assumptions against the repo and upstream sources. This is a host decision, not a fuzzy prompt: the model receives the level in its instructions and is told not to ask you again.
+
+The end result is a design artifact that can be handed off to Plan mode as an approved blueprint. The Plan mode prompt is seeded with the design file path and a reminder to derive concrete implementation steps from the approved design, not from an improvised reinterpretation.
+
+This makes Ody's Design mode closer to a design-review tool than a chat wrapper: the model is held to a written, auditable, user-approved contract before it is allowed to plan or write code.
+
+## Status bar
+
+By default, the status line is disabled. The footer line you normally see on the right is the environment context indicator (`% context left`).
+
+To enable the status line, use one of these configuration options:
+
+- Run the `/statusline` slash command and select items interactively.
+- Add the following to `~/.ody/config.toml`:
+
+```toml
+[tui]
+status_line = ["model", "context-remaining", "used-tokens"]
+```
+
+Available context-related items:
+
+| Item | Display |
+|------|---------|
+| `context-remaining` | Context X% left |
+| `context-used` | Context X% used |
+| `context-window-size` | N window |
+| `used-tokens` | N used |
+
+Using `["model", "context-remaining", "used-tokens"]` gives a status line similar to the `ody-code` context display.
+
+Enabling the status line replaces the existing single footer line rather than adding a new one. When `status_line_active` is true, the left side shows the configured items and the right side shows the collaboration mode indicator. The default context footer (`% context left`) is no longer rendered because it only appears when the status line is inactive.
+
+Default (status line off):
+
+```
+⇧Tab to cycle ...                                  75% context left
+```
+
+Enabled (status line on):
+
+```
+model · Context 75% left · 12.3k used              [Plan]
+```
+
+**Note:** `context-remaining`, `context-used`, and `context-window-size` require the provider configuration to include `max_context_tokens`. If Kimi, DeepSeek, or GLM providers are missing this value, these items return `None` and are omitted from the status line. To see the percentage, first set the context window size for those providers.
+
+In short: enable the status line with `/statusline` or `tui.status_line`; it replaces the existing footer line instead of duplicating it, but context percentages require the corresponding provider to expose a context window size.
