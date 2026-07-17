@@ -4,6 +4,7 @@ use crate::plan_artifact::ManifestSnapshot;
 use crate::plan_artifact::PlanArtifact;
 use ody_protocol::models::AdditionalPermissionProfile;
 use ody_protocol::models::ResponseItem;
+use ody_protocol::plan_tool::PlanItemArg;
 use ody_sandboxing::policy_transforms::merge_permission_profiles;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -46,6 +47,13 @@ pub(crate) struct SessionState {
     next_turn_is_first: bool,
     plan_mode_last_manifest_snapshot: Option<ManifestSnapshot>,
     last_design_artifact: Option<Arc<PlanArtifact>>,
+    /// Latest `update_plan` checklist, kept outside the conversation.
+    ///
+    /// The tool call that carries it lives in history, which compaction
+    /// replaces wholesale, so the checklist would only survive if the summary
+    /// happened to mention it. Holding it here lets compaction re-attach the
+    /// real state instead of trusting the summarizer to restate it.
+    active_plan: Option<Vec<PlanItemArg>>,
 }
 
 impl SessionState {
@@ -68,7 +76,17 @@ impl SessionState {
             next_turn_is_first: true,
             plan_mode_last_manifest_snapshot: None,
             last_design_artifact: None,
+            active_plan: None,
         }
+    }
+
+    /// Record the checklist from the latest `update_plan` call.
+    pub(crate) fn set_active_plan(&mut self, plan: Vec<PlanItemArg>) {
+        self.active_plan = if plan.is_empty() { None } else { Some(plan) };
+    }
+
+    pub(crate) fn active_plan(&self) -> Option<&[PlanItemArg]> {
+        self.active_plan.as_deref()
     }
 
     // History helpers

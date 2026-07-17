@@ -389,6 +389,7 @@ use ody_protocol::protocol::TokenUsageInfo;
 use ody_protocol::protocol::TurnModerationMetadataEvent;
 use ody_protocol::protocol::WarningEvent;
 use ody_protocol::user_input::UserInput;
+use ody_protocol::plan_tool::PlanItemArg;
 use ody_tools::ToolEnvironmentMode;
 use ody_tools::UnifiedExecShellMode;
 use ody_utils_absolute_path::AbsolutePathBuf;
@@ -1194,6 +1195,16 @@ impl Session {
     pub(crate) async fn plan_mode_last_manifest_snapshot(&self) -> Option<ManifestSnapshot> {
         let state = self.state.lock().await;
         state.plan_mode_last_manifest_snapshot()
+    }
+
+    pub(crate) async fn set_active_plan(&self, plan: Vec<PlanItemArg>) {
+        let mut state = self.state.lock().await;
+        state.set_active_plan(plan);
+    }
+
+    pub(crate) async fn active_plan(&self) -> Option<Vec<PlanItemArg>> {
+        let state = self.state.lock().await;
+        state.active_plan().map(<[PlanItemArg]>::to_vec)
     }
 
     pub(crate) async fn set_plan_mode_last_manifest_snapshot(&self, snapshot: ManifestSnapshot) {

@@ -38,6 +38,8 @@ use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::TurnStartedEvent;
 use ody_protocol::protocol::WarningEvent;
 use ody_protocol::user_input::UserInput;
+use ody_protocol::plan_tool::PlanItemArg;
+use ody_protocol::plan_tool::StepStatus;
 use ody_rollout_trace::InferenceTraceContext;
 use ody_utils_output_truncation::TruncationPolicy;
 use ody_utils_output_truncation::approx_token_count;
@@ -304,6 +306,12 @@ async fn run_compact_task_inner_impl(
     // trailing guidance — placed last for recency — tells the resuming model that
     // the user's most recent message, not this summary's leftover agenda, is the
     // authoritative current request. This is the fix for post-compaction topic drift.
+    // Re-attach the live checklist rather than trusting the summarizer to have
+    // restated it: `update_plan`'s tool call is dropped with the rest of the
+    // replaced history, so a summary that omits it loses the plan outright. It
+    // goes inside the wrapper, as prior state -- SUMMARY_FOOTER still lands last
+    // so the topic-drift guidance keeps recency.
+    let summary_suffix = summary_body_with_plan(&summary_suffix, sess.active_plan().await.as_deref());
     let summary_text = format!("{SUMMARY_PREFIX}\n{summary_suffix}\n{SUMMARY_FOOTER}");
     let user_messages = collect_user_messages(history_items);
 
@@ -589,6 +597,38 @@ pub(crate) fn build_compacted_history(
         summary_text,
         COMPACT_USER_MESSAGE_MAX_TOKENS,
     )
+}
+
+/// The summary body a compaction writes into `<prior_conversation_summary>`.
+///
+/// The summarizer is asked for open work but has no obligation to reproduce the
+/// checklist verbatim, and `update_plan`'s tool call goes away with the replaced
+/// history -- so a summary that paraphrases or omits it loses the plan. Append
+/// the recorded state instead of relying on the summary to carry it.
+fn summary_body_with_plan(summary: &str, plan: Option<&[PlanItemArg]>) -> String {
+    match plan {
+        Some(plan) if !plan.is_empty() => {
+            format!("{}\n\n{}", summary.trim_end(), render_plan_markdown(plan))
+        }
+        _ => summary.to_string(),
+    }
+}
+
+/// Render the `update_plan` checklist for re-attachment to a compaction summary.
+///
+/// Statuses are spelled out rather than drawn as checkboxes so the resuming
+/// model reads them as recorded state, not as a rendering of its own output.
+fn render_plan_markdown(plan: &[PlanItemArg]) -> String {
+    let mut out = String::from("## Plan (recorded state, carried across compaction)");
+    for item in plan {
+        let status = match item.status {
+            StepStatus::Pending => "pending",
+            StepStatus::InProgress => "in_progress",
+            StepStatus::Completed => "completed",
+        };
+        out.push_str(&format!("\n- [{status}] {}", item.step));
+    }
+    out
 }
 
 fn build_compacted_history_with_limit(

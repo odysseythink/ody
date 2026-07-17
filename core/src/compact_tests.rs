@@ -797,3 +797,83 @@ fn insert_initial_context_before_last_real_user_or_summary_keeps_compaction_last
     ];
     assert_eq!(refreshed, expected);
 }
+
+fn plan_item(step: &str, status: StepStatus) -> PlanItemArg {
+    PlanItemArg {
+        step: step.to_string(),
+        status,
+    }
+}
+
+/// The checklist is the one thing compaction cannot re-derive: `update_plan`'s
+/// call is dropped with the replaced history, so a summary that never mentions
+/// it would otherwise lose the plan outright.
+#[test]
+fn summary_body_carries_the_plan_when_the_summary_omits_it() {
+    let plan = vec![
+        plan_item("port the reserve", StepStatus::Completed),
+        plan_item("calibrate the estimator", StepStatus::InProgress),
+        plan_item("write the tests", StepStatus::Pending),
+    ];
+
+    let body = summary_body_with_plan("We looked at compaction.", Some(&plan));
+
+    assert_eq!(
+        body,
+        "We looked at compaction.\n\n\
+         ## Plan (recorded state, carried across compaction)\n\
+         - [completed] port the reserve\n\
+         - [in_progress] calibrate the estimator\n\
+         - [pending] write the tests"
+    );
+}
+
+/// Sessions that never call `update_plan` must not grow a stray empty heading.
+#[test]
+fn summary_body_is_untouched_without_a_plan() {
+    assert_eq!(
+        summary_body_with_plan("We looked at compaction.", None),
+        "We looked at compaction."
+    );
+    assert_eq!(
+        summary_body_with_plan("We looked at compaction.", Some(&[])),
+        "We looked at compaction."
+    );
+}
+
+/// The plan rides inside `<prior_conversation_summary>`, so SUMMARY_FOOTER --
+/// the post-compaction topic-drift guidance -- still lands last for recency.
+#[test]
+fn plan_stays_inside_the_summary_wrapper() {
+    let plan = vec![plan_item("finish the port", StepStatus::InProgress)];
+    let body = summary_body_with_plan("Summary.", Some(&plan));
+    let summary_text = format!("{SUMMARY_PREFIX}\n{body}\n{SUMMARY_FOOTER}");
+
+    let plan_at = summary_text.find("## Plan").expect("plan is present");
+    let footer_at = summary_text
+        .find(SUMMARY_FOOTER.trim())
+        .expect("footer is present");
+    assert!(
+        plan_at < footer_at,
+        "the plan must precede the footer, or the drift guidance loses recency"
+    );
+    assert!(is_summary_message(&summary_text));
+}
+
+/// The store is what survives compaction; an empty checklist clears it rather
+/// than pinning a stale plan forever.
+#[tokio::test]
+async fn session_active_plan_round_trips_and_clears() {
+    let (session, _turn_context) = crate::session::tests::make_session_and_context().await;
+    assert!(session.active_plan().await.is_none());
+
+    session
+        .set_active_plan(vec![plan_item("step one", StepStatus::InProgress)])
+        .await;
+    let stored = session.active_plan().await.expect("plan should be stored");
+    assert_eq!(stored.len(), 1);
+    assert_eq!(stored[0].step, "step one");
+
+    session.set_active_plan(Vec::new()).await;
+    assert!(session.active_plan().await.is_none());
+}

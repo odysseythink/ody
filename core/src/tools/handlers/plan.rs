@@ -91,6 +91,9 @@ impl PlanHandler {
         }
 
         let args = parse_update_plan_arguments(&arguments)?;
+        // Keep the checklist outside the conversation too: compaction replaces
+        // history wholesale, and this call is the only place it exists.
+        session.set_active_plan(args.plan.clone()).await;
         session
             .send_event(turn.as_ref(), EventMsg::PlanUpdate(args))
             .await;
