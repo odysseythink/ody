@@ -3727,8 +3727,8 @@ impl Config {
                 Some(language.to_string())
             }
         });
-        let base_instructions = if let Some(language) = effective_language {
-            let language_instruction = format!("\n\nRespond to the user in {language}.");
+       let base_instructions = if let Some(language) = effective_language {
+            let language_instruction = format!("\n\nThink and respond in {language}.");
             Some(base_instructions.unwrap_or_default() + &language_instruction)
         } else {
             base_instructions

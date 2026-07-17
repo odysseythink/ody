@@ -11147,11 +11147,11 @@ async fn language_config_is_loaded_and_injected_into_base_instructions() {
     )
     .await
     .expect("load config");
-    assert_eq!(config.language.as_deref(), Some("zh"));
-    assert_eq!(
-        config.base_instructions.as_deref(),
-        Some("\n\nRespond to the user in zh.")
-    );
+   assert_eq!(config.language.as_deref(), Some("zh"));
+   assert_eq!(
+       config.base_instructions.as_deref(),
+        Some("\n\nThink and respond in zh.")
+   );
 }
 
 #[tokio::test]
@@ -11177,10 +11177,10 @@ base_url = "https://api.test.com/v1"
     )
     .await
     .expect("load config");
-    assert_eq!(
-        config.base_instructions.as_deref(),
-        Some("Be concise\n\nRespond to the user in es.")
-    );
+   assert_eq!(
+       config.base_instructions.as_deref(),
+        Some("Be concise\n\nThink and respond in es.")
+   );
 }
 
 #[tokio::test]
@@ -11205,11 +11205,11 @@ base_url = "https://api.test.com/v1"
     )
     .await
     .expect("load config");
-    assert_eq!(config.language.as_deref(), Some("  fr  "));
-    assert_eq!(
-        config.base_instructions.as_deref(),
-        Some("\n\nRespond to the user in fr.")
-    );
+   assert_eq!(config.language.as_deref(), Some("  fr  "));
+   assert_eq!(
+       config.base_instructions.as_deref(),
+        Some("\n\nThink and respond in fr.")
+   );
 }
 
 #[tokio::test]
@@ -11224,9 +11224,9 @@ async fn language_auto_uses_detected_system_language() {
     .await
     .expect("load config");
     assert_eq!(config.language.as_deref(), Some("auto"));
-    let expected = sys_locale::get_locale()
-        .and_then(|locale| map_locale_to_language(&locale))
-        .map(|lang| format!("\n\nRespond to the user in {lang}."));
+   let expected = sys_locale::get_locale()
+       .and_then(|locale| map_locale_to_language(&locale))
+        .map(|lang| format!("\n\nThink and respond in {lang}."));
     assert_eq!(config.base_instructions, expected);
 }
 
