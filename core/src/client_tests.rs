@@ -793,6 +793,7 @@ async fn chat_stream_folds_usage_into_finish_completed() {
             input_tokens: 10,
             output_tokens: 5,
             reasoning_tokens: None,
+            cached_input_tokens: None,
         })),
         Ok(ChatEvent::Finish {
             reason: FinishReason::MaxTokens,
@@ -845,6 +846,7 @@ async fn chat_stream_flushes_buffered_usage_when_stream_ends_without_finish() {
             input_tokens: 10,
             output_tokens: 5,
             reasoning_tokens: None,
+            cached_input_tokens: None,
         })),
     ]);
     let stream = crate::client::map_chat_stream(
@@ -880,6 +882,46 @@ async fn chat_stream_flushes_buffered_usage_when_stream_ends_without_finish() {
         }
         other => panic!("expected Completed, got {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn chat_stream_reports_cached_input_tokens_from_provider_usage() {
+    use futures::stream;
+    use ody_model_provider::{ChatEvent, ContentPart, FinishReason, Usage};
+
+    let chat_stream = stream::iter(vec![
+        Ok(ChatEvent::Start),
+        Ok(ChatEvent::ContentPart(ContentPart::Text("hi".into()))),
+        Ok(ChatEvent::Usage(Usage {
+            input_tokens: 100,
+            output_tokens: 5,
+            reasoning_tokens: None,
+            cached_input_tokens: Some(60),
+        })),
+        Ok(ChatEvent::Finish {
+            reason: FinishReason::Stop,
+            raw_reason: Some("stop".into()),
+        }),
+    ]);
+    let stream = crate::client::map_chat_stream(
+        Box::pin(chat_stream),
+        create_test_session_telemetry(),
+        InferenceTraceContext::disabled().start_attempt(),
+    );
+
+    futures::pin_mut!(stream);
+    let mut usage = None;
+    while let Some(event) = stream.next().await {
+        if let Ok(ResponseEvent::Completed { token_usage, .. }) = event {
+            usage = token_usage;
+        }
+    }
+    let usage = usage.expect("usage folded into completed");
+    assert_eq!(
+        usage.cached_input_tokens, 60,
+        "provider-reported cache reads must survive the chat stream mapping"
+    );
+    assert_eq!(usage.input_tokens, 100);
 }
 
 fn test_model_client_with_provider(provider: ModelProviderInfo) -> ModelClient {

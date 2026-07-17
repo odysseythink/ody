@@ -90,6 +90,64 @@ async fn parses_text_and_completion() {
     }
 }
 
+/// Collect the `cached_input_tokens` reported by a stream whose final chunk
+/// carries `usage`.
+async fn cached_input_tokens_for(usage_chunk: &str) -> i64 {
+    let events = run_chat_sse(
+        &[
+            r#"{"id":"resp_1","choices":[{"delta":{"content":"ok"}}]}"#,
+            r#"{"id":"resp_1","choices":[{"delta":{},"finish_reason":"stop"}]}"#,
+            usage_chunk,
+            "[DONE]",
+        ],
+        ChatVendor::Generic,
+    )
+    .await;
+
+    match events.last() {
+        Some(ResponseEvent::Completed { token_usage, .. }) => {
+            token_usage.as_ref().expect("usage present").cached_input_tokens
+        }
+        other => panic!("expected Completed, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn reads_cached_tokens_from_moonshot_top_level() {
+    let cached = cached_input_tokens_for(
+        r#"{"usage":{"prompt_tokens":100,"completion_tokens":20,"total_tokens":120,"cached_tokens":60}}"#,
+    )
+    .await;
+    assert_eq!(cached, 60);
+}
+
+#[tokio::test]
+async fn reads_cached_tokens_from_openai_prompt_tokens_details() {
+    let cached = cached_input_tokens_for(
+        r#"{"usage":{"prompt_tokens":100,"completion_tokens":20,"total_tokens":120,"prompt_tokens_details":{"cached_tokens":50}}}"#,
+    )
+    .await;
+    assert_eq!(cached, 50);
+}
+
+#[tokio::test]
+async fn moonshot_top_level_cached_tokens_wins_over_details() {
+    let cached = cached_input_tokens_for(
+        r#"{"usage":{"prompt_tokens":100,"completion_tokens":20,"total_tokens":120,"cached_tokens":60,"prompt_tokens_details":{"cached_tokens":50}}}"#,
+    )
+    .await;
+    assert_eq!(cached, 60);
+}
+
+#[tokio::test]
+async fn cached_tokens_absent_reports_zero() {
+    let cached = cached_input_tokens_for(
+        r#"{"usage":{"prompt_tokens":100,"completion_tokens":20,"total_tokens":120}}"#,
+    )
+    .await;
+    assert_eq!(cached, 0);
+}
+
 #[tokio::test]
 async fn parses_reasoning_content() {
     let events = run_chat_sse(

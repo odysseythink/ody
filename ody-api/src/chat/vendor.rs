@@ -52,6 +52,18 @@ impl ChatVendor {
         )
     }
 
+    /// Whether this provider accepts a `reasoning_content` field on *inbound*
+    /// assistant messages, i.e. whether the model's own thinking can be
+    /// replayed to it on the next turn ("interleaved thinking").
+    ///
+    /// Deliberately narrower than [`Self::supports_reasoning_content`], which
+    /// describes what a provider *emits*: a provider that streams thinking out
+    /// does not necessarily accept it back. `Generic` is excluded because an
+    /// unknown OpenAI-compatible gateway may reject the unknown field.
+    pub fn accepts_reasoning_content(self) -> bool {
+        matches!(self, ChatVendor::Kimi | ChatVendor::DeepSeek | ChatVendor::Glm)
+    }
+
     /// Whether to send the top-level `reasoning_effort` request field. GLM does
     /// not accept it (thinking is controlled by the model / response side).
     pub fn emits_reasoning_effort(self) -> bool {

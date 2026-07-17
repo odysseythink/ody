@@ -483,7 +483,7 @@ mod tests {
                 token_usage: Some(TokenUsage {
                     input_tokens: 10,
                     output_tokens: 20,
-                    cached_input_tokens: 0,
+                    cached_input_tokens: 6,
                     reasoning_output_tokens: 0,
                     total_tokens: 30,
                 }),
@@ -500,6 +500,7 @@ mod tests {
                 input_tokens: 10,
                 output_tokens: 20,
                 reasoning_tokens: None,
+                cached_input_tokens: Some(6),
             })
         );
         assert_eq!(

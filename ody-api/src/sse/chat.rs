@@ -110,6 +110,9 @@ struct ChatUsage {
     completion_tokens: i64,
     #[serde(default)]
     total_tokens: i64,
+    // Moonshot reports cache reads here rather than under prompt_tokens_details.
+    #[serde(default)]
+    cached_tokens: Option<i64>,
     #[serde(default)]
     prompt_tokens_details: Option<ChatPromptTokensDetails>,
     #[serde(default)]
@@ -132,10 +135,13 @@ impl From<ChatUsage> for TokenUsage {
     fn from(usage: ChatUsage) -> Self {
         TokenUsage {
             input_tokens: usage.prompt_tokens,
-            cached_input_tokens: usage
-                .prompt_tokens_details
-                .map(|d| d.cached_tokens)
-                .unwrap_or(0),
+            cached_input_tokens: match usage.cached_tokens {
+                Some(cached) => cached,
+                None => usage
+                    .prompt_tokens_details
+                    .map(|d| d.cached_tokens)
+                    .unwrap_or(0),
+            },
             output_tokens: usage.completion_tokens,
             reasoning_output_tokens: usage
                 .completion_tokens_details

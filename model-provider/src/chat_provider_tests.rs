@@ -41,6 +41,7 @@ fn usage_with_reasoning_roundtrips() {
         input_tokens: 10,
         output_tokens: 20,
         reasoning_tokens: Some(5),
+        cached_input_tokens: None,
     };
     let json = serde_json::to_string(&usage).expect("serializes");
     let back: Usage = serde_json::from_str(&json).expect("deserializes");
@@ -74,6 +75,7 @@ fn chat_completion_roundtrip() {
             input_tokens: 4,
             output_tokens: 8,
             reasoning_tokens: None,
+            cached_input_tokens: None,
         }),
         finish_reason: FinishReason::ToolCalls,
         raw_finish_reason: Some("tool_calls".into()),

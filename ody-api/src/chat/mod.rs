@@ -10,6 +10,7 @@ pub mod kimi_schema;
 pub mod vendor;
 
 use ody_protocol::models::ContentItem;
+use ody_protocol::models::ReasoningItemContent;
 use ody_protocol::models::ResponseItem;
 use serde_json::Map;
 use serde_json::Value;
@@ -59,9 +60,33 @@ impl ChatCompletionsRequest {
                 "content": self.instructions,
             }));
         }
+        // Thinking models condition on their own prior reasoning. Reasoning is
+        // a standalone item internally but has no standalone chat message, so
+        // hold it until the assistant message it belongs to is emitted.
+        let mut pending_reasoning: Option<String> = None;
         for (idx, item) in self.input.iter().enumerate() {
+            if let ResponseItem::Reasoning { content, .. } = item {
+                if self.vendor.accepts_reasoning_content()
+                    && let Some(text) = reasoning_text(content.as_deref())
+                {
+                    pending_reasoning.get_or_insert_default().push_str(&text);
+                }
+                continue;
+            }
             let before_len = messages.len();
             append_item_messages(item, &mut messages, self.vendor);
+            if let Some(reasoning) = pending_reasoning.take() {
+                // Only an assistant message can carry it. Anything else (a user
+                // turn, a tool result) means the reasoning has no carrier and is
+                // dropped, exactly as before this field existed.
+                if let Some(message) = messages[before_len..]
+                    .iter_mut()
+                    .find(|message| is_assistant(message))
+                    && let Some(object) = message.as_object_mut()
+                {
+                    object.insert("reasoning_content".into(), Value::String(reasoning));
+                }
+            }
             tracing::info!(
                 idx,
                 item_kind = %response_item_kind(item),
@@ -226,6 +251,27 @@ fn is_valid_function_name(name: &str) -> bool {
 
 /// Convert a single internal [`ResponseItem`] into zero or more chat messages,
 /// appending them to `messages`.
+fn is_assistant(message: &Value) -> bool {
+    message
+        .get("role")
+        .and_then(Value::as_str)
+        .is_some_and(|role| role == "assistant")
+}
+
+/// Flattens a reasoning item's content into the text to replay as
+/// `reasoning_content`. `None` when there is nothing to replay.
+fn reasoning_text(content: Option<&[ReasoningItemContent]>) -> Option<String> {
+    let text = content?
+        .iter()
+        .map(|part| match part {
+            ReasoningItemContent::ReasoningText { text } | ReasoningItemContent::Text { text } => {
+                text.as_str()
+            }
+        })
+        .collect::<String>();
+    (!text.is_empty()).then_some(text)
+}
+
 fn append_item_messages(item: &ResponseItem, messages: &mut Vec<Value>, vendor: ChatVendor) {
     match item {
         ResponseItem::Message { role, content, .. } => {
@@ -289,9 +335,10 @@ fn append_item_messages(item: &ResponseItem, messages: &mut Vec<Value>, vendor: 
                 "content": output.to_string(),
             }));
         }
-        // Reasoning items are not accepted as Chat Completions input; drop them.
+        // Reasoning is handled by the caller (replayed as `reasoning_content`
+        // on the assistant message it precedes) and never reaches here.
         // Responses-only items (shell calls, web search, image generation,
-        // compaction, ...) likewise have no chat representation.
+        // compaction, ...) have no chat representation.
         other => {
             debug!(
                 "dropping unsupported response item for chat completions: {}",
@@ -416,6 +463,29 @@ fn response_item_kind(item: &ResponseItem) -> &'static str {
 /// (which may contain both content and one or more tool_calls) is emitted as
 /// one Chat Completions message, followed immediately by tool response
 /// messages.
+fn reasoning_of(message: &Value) -> Option<&str> {
+    message.get("reasoning_content").and_then(Value::as_str)
+}
+
+/// Concatenation of both messages' replayed reasoning, in order.
+fn joined_reasoning(first: &Value, second: &Value) -> Option<String> {
+    match (reasoning_of(first), reasoning_of(second)) {
+        (Some(a), Some(b)) => Some(format!("{a}{b}")),
+        (Some(only), None) | (None, Some(only)) => Some(only.to_string()),
+        (None, None) => None,
+    }
+}
+
+/// Moves `from`'s reasoning onto `into` when merging collapses `from` away, so
+/// that replayed thinking survives the collapse.
+fn carry_reasoning(from: &Value, into: &mut Value) {
+    if let Some(reasoning) = joined_reasoning(from, into)
+        && let Some(object) = into.as_object_mut()
+    {
+        object.insert("reasoning_content".into(), Value::String(reasoning));
+    }
+}
+
 fn merge_consecutive_assistant_messages(messages: Vec<Value>) -> Vec<Value> {
     let mut merged: Vec<Value> = Vec::with_capacity(messages.len());
 
@@ -452,12 +522,14 @@ fn merge_consecutive_assistant_messages(messages: Vec<Value>) -> Vec<Value> {
                                     }
                                 }
                             }
+                            carry_reasoning(last, &mut message);
                             *last = message;
                             continue;
                         }
 
                         // Both messages are assistant tool_calls: combine
                         // into one assistant message.
+                        let merged_reasoning = joined_reasoning(last, &message);
                         if let (Some(last_tc), Some(msg_tc)) =
                             (last.get_mut("tool_calls"), message.get("tool_calls"))
                         {
@@ -465,6 +537,11 @@ fn merge_consecutive_assistant_messages(messages: Vec<Value>) -> Vec<Value> {
                                 (last_tc.as_array_mut(), msg_tc.as_array())
                             {
                                 last_arr.extend(msg_arr.iter().cloned());
+                                if let Some(reasoning) = merged_reasoning
+                                    && let Some(obj) = last.as_object_mut()
+                                {
+                                    obj.insert("reasoning_content".into(), Value::String(reasoning));
+                                }
                                 continue;
                             }
                         }

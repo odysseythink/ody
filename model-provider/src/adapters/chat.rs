@@ -231,6 +231,7 @@ fn message_to_response_items(message: crate::chat_provider::Message) -> Vec<Resp
     // Build content items from text/image/reasoning parts.
     // ToolResult parts within assistant/user messages are rendered as text.
     let mut content = Vec::new();
+    let mut reasoning = String::new();
     for part in message.content {
         match part {
             ContentPart::Text(text) => {
@@ -243,9 +244,11 @@ fn message_to_response_items(message: crate::chat_provider::Message) -> Vec<Resp
                     detail: None,
                 });
             }
-            ContentPart::Reasoning(text) => {
-                content.push(ody_protocol::models::ContentItem::InputText { text })
-            }
+            // Reasoning is not message content: flattening it into text would
+            // replay the model's private thinking as if it were spoken. Keep it
+            // as a Reasoning item so the wire layer can place it correctly (or
+            // drop it, for vendors that do not accept it).
+            ContentPart::Reasoning(text) => reasoning.push_str(&text),
             ContentPart::ToolResult {
                 tool_call_id,
                 content: parts,
@@ -280,6 +283,20 @@ fn message_to_response_items(message: crate::chat_provider::Message) -> Vec<Resp
     };
 
     let mut items = Vec::new();
+
+    // Reasoning precedes the assistant output it produced; the wire layer
+    // attaches it to the assistant message that follows it.
+    if !reasoning.is_empty() {
+        items.push(ResponseItem::Reasoning {
+            id: None,
+            summary: Vec::new(),
+            content: Some(vec![
+                ody_protocol::models::ReasoningItemContent::ReasoningText { text: reasoning },
+            ]),
+            encrypted_content: None,
+            internal_chat_message_metadata_passthrough: None,
+        });
+    }
 
     // Emit a Message item for text content (only for assistant, where
     // content might coexist with tool_calls; for user/developer/system,
@@ -446,6 +463,20 @@ impl<T: HttpTransport + 'static> ChatProvider for ChatAdapter<T> {
 mod tests {
     use super::*;
     use crate::chat_provider::{ChatEvent, ContentPart, Message, Role, ToolCall};
+    use ody_protocol::models::ReasoningItemContent;
+
+    struct BridgePrompt {
+        input: Vec<ResponseItem>,
+    }
+
+    impl crate::adapters::core::Prompt for BridgePrompt {
+        fn get_formatted_input_for_request(&self, _use_responses_lite: bool) -> Vec<ResponseItem> {
+            self.input.clone()
+        }
+        fn tools(&self) -> &[ody_tools::ToolSpec] {
+            &[]
+        }
+    }
 
     #[test]
     fn capabilities_for_kimi() {
@@ -596,5 +627,81 @@ mod tests {
                 arguments: serde_json::json!({"path": "/tmp"}),
             })]
         );
+    }
+
+    /// Regression across the whole `Prompt` -> `ChatRequest` -> wire bridge.
+    /// Kimi is a thinking model and conditions on its own prior reasoning: a
+    /// probe against `api.kimi.com` recovered a secret planted only in an
+    /// inbound `reasoning_content`. Dropping it makes the model re-derive its
+    /// plan from tool output every turn.
+    ///
+    /// This spans two layers on purpose. `adapters/core` silently dropped
+    /// reasoning while the wire layer's own tests passed, so the replay was
+    /// dead code; a test of either layer alone reproduces that blind spot.
+    #[test]
+    fn reasoning_survives_the_prompt_to_wire_bridge_for_kimi() {
+        let prompt = BridgePrompt {
+            input: vec![
+                ResponseItem::Reasoning {
+                    id: None,
+                    summary: Vec::new(),
+                    content: Some(vec![ReasoningItemContent::ReasoningText {
+                        text: "I should call the tool.".into(),
+                    }]),
+                    encrypted_content: None,
+                    internal_chat_message_metadata_passthrough: None,
+                },
+                ResponseItem::FunctionCall {
+                    id: None,
+                    name: "do_it".into(),
+                    namespace: None,
+                    arguments: "{}".into(),
+                    call_id: "call_1".into(),
+                    internal_chat_message_metadata_passthrough: None,
+                },
+            ],
+        };
+        let request = crate::adapters::core::prompt_to_chat_request("kimi-for-coding", &prompt, None);
+        let wire = build_api_request(request, ChatVendor::Kimi)
+            .expect("builds")
+            .to_wire();
+
+        let messages = wire["messages"].as_array().expect("messages");
+        let assistant = messages
+            .iter()
+            .find(|m| m["role"] == "assistant")
+            .expect("assistant message");
+        assert_eq!(assistant["reasoning_content"], "I should call the tool.");
+        assert!(
+            assistant.get("tool_calls").is_some(),
+            "reasoning must ride on the assistant message, not a bare one: {assistant}"
+        );
+    }
+
+    /// The model's private thinking must never be replayed as if it were spoken.
+    #[test]
+    fn reasoning_is_not_replayed_as_message_content() {
+        let prompt = BridgePrompt {
+            input: vec![ResponseItem::Reasoning {
+                id: None,
+                summary: Vec::new(),
+                content: Some(vec![ReasoningItemContent::ReasoningText {
+                    text: "secret thought".into(),
+                }]),
+                encrypted_content: None,
+                internal_chat_message_metadata_passthrough: None,
+            }],
+        };
+        let request = crate::adapters::core::prompt_to_chat_request("kimi-for-coding", &prompt, None);
+        let wire = build_api_request(request, ChatVendor::Kimi)
+            .expect("builds")
+            .to_wire();
+
+        for message in wire["messages"].as_array().expect("messages") {
+            assert!(
+                !message["content"].to_string().contains("secret thought"),
+                "thinking leaked into content: {message}"
+            );
+        }
     }
 }

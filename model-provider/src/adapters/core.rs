@@ -12,7 +12,9 @@ use crate::chat_provider::{
     Usage,
 };
 use ody_api::ResponseEvent;
-use ody_protocol::models::{ContentItem, FunctionCallOutputContentItem, ResponseItem};
+use ody_protocol::models::{
+    ContentItem, FunctionCallOutputContentItem, ReasoningItemContent, ResponseItem,
+};
 use ody_protocol::protocol::TokenUsage;
 use ody_tools::{ResponsesApiNamespaceTool, ToolSpec};
 
@@ -68,13 +70,14 @@ pub fn to_response_event(event: ChatEvent) -> Vec<ResponseEvent> {
             input_tokens,
             output_tokens,
             reasoning_tokens,
+            cached_input_tokens,
         }) => {
             vec![ResponseEvent::Completed {
                 response_id: String::new(),
                 token_usage: Some(TokenUsage {
                     input_tokens: input_tokens as i64,
                     output_tokens: output_tokens as i64,
-                    cached_input_tokens: 0,
+                    cached_input_tokens: cached_input_tokens.unwrap_or(0) as i64,
                     reasoning_output_tokens: reasoning_tokens.unwrap_or(0) as i64,
                     total_tokens: (input_tokens + output_tokens) as i64,
                 }),
@@ -324,7 +327,29 @@ fn response_item_to_messages(item: ResponseItem) -> Vec<Message> {
                 tool_call_id: Some(call_id),
             }]
         }
-        ResponseItem::Reasoning { .. } => Vec::new(),
+        // Thinking models condition on their own prior reasoning, so carry it
+        // through as a provider-neutral part rather than discarding it. Only
+        // vendors known to accept it get it on the wire; `ody-api` decides.
+        ResponseItem::Reasoning { content, .. } => {
+            let text = content
+                .unwrap_or_default()
+                .into_iter()
+                .map(|part| match part {
+                    ReasoningItemContent::ReasoningText { text }
+                    | ReasoningItemContent::Text { text } => text,
+                })
+                .collect::<String>();
+            if text.is_empty() {
+                Vec::new()
+            } else {
+                vec![Message {
+                    role: Role::Assistant,
+                    content: vec![ContentPart::Reasoning(text)],
+                    tool_calls: Vec::new(),
+                    tool_call_id: None,
+                }]
+            }
+        }
         _ => Vec::new(),
     }
 }
@@ -429,9 +454,28 @@ mod tests {
             input_tokens: 10,
             output_tokens: 20,
             reasoning_tokens: None,
+            cached_input_tokens: None,
         }));
         assert_eq!(events.len(), 1);
         assert!(matches!(events[0], ResponseEvent::Completed { .. }));
+    }
+
+    #[test]
+    fn usage_event_carries_cached_input_tokens_to_completed() {
+        let events = to_response_event(ChatEvent::Usage(Usage {
+            input_tokens: 100,
+            output_tokens: 20,
+            reasoning_tokens: None,
+            cached_input_tokens: Some(60),
+        }));
+        match &events[0] {
+            ResponseEvent::Completed { token_usage, .. } => {
+                let usage = token_usage.as_ref().expect("usage present");
+                assert_eq!(usage.cached_input_tokens, 60);
+                assert_eq!(usage.input_tokens, 100);
+            }
+            other => panic!("expected Completed, got {other:?}"),
+        }
     }
 
     #[test]
@@ -566,4 +610,5 @@ mod tests {
         let request = prompt_to_chat_request("m", &prompt, None);
         assert!(request.tools.is_empty());
     }
+
 }

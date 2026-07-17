@@ -144,6 +144,10 @@ pub struct Usage {
     pub output_tokens: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_tokens: Option<u32>,
+    /// Portion of `input_tokens` served from the provider's prompt cache.
+    /// `None` when the provider did not report a cache read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cached_input_tokens: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

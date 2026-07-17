@@ -1840,6 +1840,7 @@ fn map_chat_stream(
                     input_tokens,
                     output_tokens,
                     reasoning_tokens,
+                    cached_input_tokens,
                 })) => {
                     if let Some(text) = assistant_text.take() {
                         events.push(ResponseEvent::OutputItemDone(ResponseItem::Message {
@@ -1867,7 +1868,7 @@ fn map_chat_stream(
                     pending_usage = Some(TokenUsage {
                         input_tokens: input_tokens as i64,
                         output_tokens: output_tokens as i64,
-                        cached_input_tokens: 0,
+                        cached_input_tokens: cached_input_tokens.unwrap_or(0) as i64,
                         reasoning_output_tokens: reasoning_tokens.unwrap_or(0) as i64,
                         total_tokens: (input_tokens + output_tokens) as i64,
                     });

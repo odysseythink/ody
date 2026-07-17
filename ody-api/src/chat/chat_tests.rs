@@ -1,6 +1,7 @@
 use super::*;
 use ody_protocol::models::ContentItem;
 use ody_protocol::models::FunctionCallOutputPayload;
+use ody_protocol::models::ReasoningItemContent;
 use ody_protocol::models::ResponseItem;
 use pretty_assertions::assert_eq;
 use serde_json::json;
@@ -284,4 +285,122 @@ fn vendor_resolution_from_base_url() {
         ChatVendor::Glm
     );
     assert_eq!(ChatVendor::from_provider("whatever", None), ChatVendor::Generic);
+}
+
+fn reasoning(text: &str) -> ResponseItem {
+    ResponseItem::Reasoning {
+        id: None,
+        summary: Vec::new(),
+        content: Some(vec![ReasoningItemContent::ReasoningText {
+            text: text.to_string(),
+        }]),
+        encrypted_content: None,
+        internal_chat_message_metadata_passthrough: None,
+    }
+}
+
+fn function_call(name: &str, call_id: &str) -> ResponseItem {
+    ResponseItem::FunctionCall {
+        id: None,
+        name: name.to_string(),
+        namespace: None,
+        arguments: "{}".to_string(),
+        call_id: call_id.to_string(),
+        internal_chat_message_metadata_passthrough: None,
+    }
+}
+
+fn assistant_message(text: &str) -> ResponseItem {
+    ResponseItem::Message {
+        id: None,
+        role: "assistant".to_string(),
+        content: vec![ContentItem::OutputText {
+            text: text.to_string(),
+        }],
+        phase: None,
+        internal_chat_message_metadata_passthrough: None,
+    }
+}
+
+fn messages_of(request: &ChatCompletionsRequest) -> Vec<Value> {
+    request.to_wire()["messages"].as_array().unwrap().clone()
+}
+
+/// Kimi is a thinking model and conditions on its own prior reasoning: a probe
+/// against `api.kimi.com` recovered a secret planted *only* in an inbound
+/// `reasoning_content`. Dropping it makes the model re-derive its plan from the
+/// tool output every turn.
+#[test]
+fn reasoning_is_replayed_on_the_assistant_message_it_precedes() {
+    let mut request = base_request(ChatVendor::Kimi);
+    request.input = vec![
+        user_message("hi"),
+        reasoning("I should call the tool."),
+        function_call("do_it", "call_1"),
+    ];
+
+    let messages = messages_of(&request);
+    let assistant = messages.iter().find(|m| is_assistant(m)).unwrap();
+    assert_eq!(
+        assistant["reasoning_content"],
+        json!("I should call the tool.")
+    );
+    assert!(
+        assistant.get("tool_calls").is_some(),
+        "reasoning must ride on the tool_calls message, not a separate one: {assistant}"
+    );
+}
+
+/// The unknown field is only safe where we know it is accepted.
+#[test]
+fn reasoning_is_not_replayed_to_generic_providers() {
+    let mut request = base_request(ChatVendor::Generic);
+    request.input = vec![reasoning("thinking"), function_call("do_it", "call_1")];
+
+    let messages = messages_of(&request);
+    assert!(
+        !request.to_wire().to_string().contains("reasoning_content"),
+        "generic gateways may reject the field: {messages:?}"
+    );
+}
+
+/// Reasoning with no assistant message after it has nothing to ride on; it must
+/// not synthesize a bare assistant message.
+#[test]
+fn trailing_reasoning_without_an_assistant_message_is_dropped() {
+    let mut request = base_request(ChatVendor::Kimi);
+    request.input = vec![user_message("hi"), reasoning("thinking")];
+
+    let messages = messages_of(&request);
+    assert_eq!(
+        messages.iter().filter(|m| is_assistant(m)).count(),
+        0,
+        "expected no assistant message: {messages:?}"
+    );
+    assert!(!request.to_wire().to_string().contains("reasoning_content"));
+}
+
+/// `merge_consecutive_assistant_messages` collapses a content-only assistant
+/// message into the tool_calls message that follows. The reasoning attached to
+/// the collapsed message must survive.
+#[test]
+fn reasoning_survives_assistant_message_merging() {
+    let mut request = base_request(ChatVendor::Kimi);
+    request.input = vec![
+        user_message("hi"),
+        reasoning("first thought."),
+        assistant_message("Working on it."),
+        reasoning("second thought."),
+        function_call("do_it", "call_1"),
+    ];
+
+    let messages = messages_of(&request);
+    let assistants: Vec<_> = messages.iter().filter(|m| is_assistant(m)).collect();
+    assert_eq!(assistants.len(), 1, "expected one merged assistant message");
+    assert_eq!(
+        assistants[0]["reasoning_content"],
+        json!("first thought.second thought."),
+        "both thoughts must survive the merge: {:?}",
+        assistants[0]
+    );
 }

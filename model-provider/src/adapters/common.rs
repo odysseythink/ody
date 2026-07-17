@@ -116,6 +116,7 @@ pub(crate) fn normalize_response_event_with_state(
                     input_tokens: u.input_tokens as u32,
                     output_tokens: u.output_tokens as u32,
                     reasoning_tokens: Some(u.reasoning_output_tokens as u32).filter(|v| *v > 0),
+                    cached_input_tokens: Some(u.cached_input_tokens as u32).filter(|v| *v > 0),
                 };
                 events.push(ChatEvent::Usage(usage));
             }
