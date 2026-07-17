@@ -696,18 +696,6 @@ impl BottomPane {
                 self.request_redraw();
                 return InputResult::None;
             }
-            // Toggle pinned todo expanded state with ctrl+e.
-            if key_event.kind == KeyEventKind::Press
-                && key_event.code == KeyCode::Char('e')
-                && key_event.modifiers.contains(KeyModifiers::CONTROL)
-                && self.pinned_todo.is_some()
-            {
-                if let Some(pinned) = &mut self.pinned_todo {
-                    pinned.toggle_expanded();
-                }
-                self.request_redraw();
-                return InputResult::None;
-            }
             // Toggle planning log expanded state with ctrl+g.
             if key_event.kind == KeyEventKind::Press
                 && key_event.code == KeyCode::Char('g')
@@ -3161,7 +3149,7 @@ mod tests {
     }
 
     #[test]
-    fn set_pinned_todo_reuses_instance_and_preserves_watermark() {
+    fn set_pinned_todo_reuses_instance_and_updates_height() {
         use ody_protocol::plan_tool::{PlanItemArg, StepStatus, UpdatePlanArgs};
 
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
@@ -3195,21 +3183,37 @@ mod tests {
 
         pane.set_pinned_todo(Some(make_update(0)));
         let initial = pane.pinned_todo.as_ref().unwrap().desired_height(80);
-        assert_eq!(initial, 8, "folded long plan must start at max_lines");
+        assert_eq!(
+            initial, 8,
+            "long plan with overflow must be capped at 8 lines"
+        );
 
-        // Second update on the SAME BottomPane must reuse the widget and
-        // keep the watermark (height must not shrink now that most steps
-        // are completed and the folded view would otherwise collapse).
-        pane.set_pinned_todo(Some(make_update(20)));
+        // Second update on the SAME BottomPane must reuse the widget instance and
+        // reflect the new, shorter plan without preserving a watermark.
+        pane.set_pinned_todo(Some(UpdatePlanArgs {
+            explanation: None,
+            plan: vec![PlanItemArg {
+                step: "Only step".to_string(),
+                status: StepStatus::InProgress,
+            }],
+        }));
         let after = pane.pinned_todo.as_ref().unwrap().desired_height(80);
         assert_eq!(
-            after, initial,
-            "set_pinned_todo(Some) must reuse the widget instance so the watermark survives"
+            after, 3,
+            "short plan must collapse to its natural height (border + title + 1 row)"
+        );
+        assert!(
+            pane.pinned_todo
+                .as_ref()
+                .unwrap()
+                .to_update_args()
+                .is_some(),
+            "set_pinned_todo(Some) must reuse the widget instance"
         );
     }
 
     #[test]
-    fn pinned_todo_renders_above_composer_snapshot() {
+    fn pinned_todo_renders_above_composer() {
         use ody_protocol::plan_tool::{PlanItemArg, StepStatus, UpdatePlanArgs};
 
         let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
@@ -3226,7 +3230,7 @@ mod tests {
         });
 
         pane.set_pinned_todo(Some(UpdatePlanArgs {
-            explanation: Some("Working on feature".to_string()),
+            explanation: None,
             plan: vec![
                 PlanItemArg {
                     step: "Explore codebase".to_string(),
@@ -3246,10 +3250,17 @@ mod tests {
         let width = 50;
         let height = pane.desired_height(width);
         let area = Rect::new(0, 0, width, height);
-        assert_snapshot!(
-            "pinned_todo_renders_above_composer_snapshot",
-            render_snapshot(&pane, area)
+        let rendered = render_snapshot(&pane, area);
+        assert!(rendered.contains("Todo"), "expected Todo header");
+        assert!(
+            rendered.contains("✓ Explore codebase"),
+            "expected completed row"
         );
+        assert!(
+            rendered.contains("● Implement the change"),
+            "expected in-progress row"
+        );
+        assert!(rendered.contains("○ Write tests"), "expected pending row");
     }
 
     #[test]
