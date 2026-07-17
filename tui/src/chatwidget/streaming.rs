@@ -200,9 +200,6 @@ impl ChatWidget {
     }
 
     pub(super) fn on_agent_reasoning_delta(&mut self, delta: String) {
-        // For reasoning deltas, do not stream to history. Accumulate the
-        // current reasoning block and extract the first bold element
-        // (between **/**) as the chunk header. Show this header as status.
         self.reasoning_buffer.push_str(&delta);
 
         if self.unified_exec_wait_streak.is_some() {
@@ -218,12 +215,16 @@ impl ChatWidget {
         } else {
             // Fallback while we don't yet have a bold header: leave existing header as-is.
         }
+        self.reasoning_stream_active = true;
+        self.sync_streaming_reasoning_tail();
         self.request_redraw();
     }
 
     pub(super) fn on_agent_reasoning_final(&mut self) {
         // At the end of a reasoning block, record transcript-only content.
         self.full_reasoning_buffer.push_str(&self.reasoning_buffer);
+        self.reasoning_stream_active = false;
+        self.clear_active_reasoning_tail();
         if !self.full_reasoning_buffer.is_empty() {
             let cell = history_cell::new_reasoning_summary_block(
                 self.full_reasoning_buffer.clone(),
@@ -240,6 +241,8 @@ impl ChatWidget {
         // Start a new reasoning block for header extraction and accumulate transcript.
         self.full_reasoning_buffer.push_str(&self.reasoning_buffer);
         self.full_reasoning_buffer.push_str("\n\n");
+        self.reasoning_stream_active = false;
+        self.clear_active_reasoning_tail();
         self.reasoning_buffer.clear();
     }
 
@@ -471,5 +474,45 @@ impl ChatWidget {
             self.transcript.active_cell = None;
             self.bump_active_cell_revision();
         }
+    }
+
+    pub(super) fn clear_active_reasoning_tail(&mut self) {
+        if self
+            .transcript
+            .active_cell
+            .as_ref()
+            .is_some_and(|cell| cell.as_any().is::<history_cell::StreamingReasoningTailCell>())
+        {
+            self.transcript.active_cell = None;
+            self.bump_active_cell_revision();
+        }
+    }
+
+    /// Update the transient reasoning tail active cell from the current reasoning buffer.
+    ///
+    /// The reasoning tail is only rendered when neither an agent message stream nor a plan stream
+    /// is active, to avoid overwriting their live tail cells.
+    pub(super) fn sync_streaming_reasoning_tail(&mut self) {
+        if !self.reasoning_stream_active {
+            return;
+        }
+        if self.stream_controller.is_some() || self.plan_stream_controller.is_some() {
+            return;
+        }
+        if self.reasoning_buffer.is_empty() {
+            self.clear_active_reasoning_tail();
+            return;
+        }
+        let Some(width) = self.last_rendered_width.get() else {
+            return;
+        };
+        let width = u16::try_from(width).unwrap_or(u16::MAX);
+        let cell = history_cell::new_streaming_reasoning_tail_cell(
+            &self.reasoning_buffer,
+            width,
+            &self.config.cwd,
+        );
+        self.transcript.active_cell = Some(cell);
+        self.bump_active_cell_revision();
     }
 }

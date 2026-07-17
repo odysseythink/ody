@@ -587,6 +587,8 @@ pub(crate) struct ChatWidget {
     reasoning_buffer: String,
     // Accumulates full reasoning content for transcript-only recording
     full_reasoning_buffer: String,
+    // Tracks whether a reasoning stream is currently producing transient tail output.
+    reasoning_stream_active: bool,
     status_state: StatusState,
     review: ReviewState,
     // Active hook runs render in a dedicated live cell so they can run alongside tools.
@@ -1160,6 +1162,14 @@ impl ChatWidget {
 
     fn flush_active_cell(&mut self) {
         if let Some(active) = self.transcript.active_cell.take() {
+            if active
+                .as_any()
+                .is::<history_cell::StreamingReasoningTailCell>()
+            {
+                // The transient reasoning tail is not a committed history entry; the final
+                // `ReasoningSummaryCell` is the canonical history entry. Drop it.
+                return;
+            }
             self.transcript.needs_final_message_separator = true;
             self.app_event_tx.send(AppEvent::InsertHistoryCell(active));
         }
@@ -1651,6 +1661,7 @@ impl ChatWidget {
             controller.set_width(plan_stream_width);
         }
         self.sync_active_stream_tail();
+        self.sync_streaming_reasoning_tail();
         if !had_rendered_width {
             self.request_redraw();
         }

@@ -156,6 +156,7 @@ impl ChatWidget {
             interrupts: InterruptManager::new(),
             reasoning_buffer: String::new(),
             full_reasoning_buffer: String::new(),
+            reasoning_stream_active: false,
             status_state: StatusState::default(),
             review: ReviewState::default(),
             active_hook_cell: None,

@@ -2289,6 +2289,29 @@ fn reasoning_summary_block_returns_reasoning_cell_when_feature_disabled() {
     assert_eq!(rendered, vec!["• Detailed reasoning goes here."]);
 }
 
+#[test]
+fn reasoning_summary_block_without_header_is_visible_in_display() {
+    let cell =
+        new_reasoning_summary_block("Detailed reasoning goes here.".to_string(), &test_cwd());
+
+    assert_eq!(
+        render_lines(&cell.display_lines(/*width*/ 80)),
+        vec!["• Detailed reasoning goes here."]
+    );
+    assert_eq!(render_transcript(cell.as_ref()), vec!["• Detailed reasoning goes here."]);
+}
+
+#[test]
+fn streaming_reasoning_tail_renders_with_bullet_prefix() {
+    let cell = new_streaming_reasoning_tail_cell("Reasoning delta", 80, &test_cwd());
+
+    assert_eq!(
+        render_lines(&cell.display_lines(/*width*/ 80)),
+        vec!["• Reasoning delta"]
+    );
+    assert_eq!(render_transcript(cell.as_ref()), vec!["• Reasoning delta"]);
+}
+
 #[tokio::test]
 async fn reasoning_summary_block_respects_config_overrides() {
     let mut config = test_config().await;

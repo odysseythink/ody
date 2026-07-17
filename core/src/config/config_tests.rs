@@ -208,6 +208,36 @@ async fn load_config_normalizes_relative_cwd_override() -> std::io::Result<()> {
 }
 
 #[tokio::test]
+async fn load_config_defaults_show_raw_agent_reasoning_to_true() -> std::io::Result<()> {
+    let ody_home = tempdir()?;
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml::default(),
+        ConfigOverrides::default(),
+        ody_home.abs(),
+    )
+    .await?;
+
+    assert!(config.show_raw_agent_reasoning);
+    Ok(())
+}
+
+#[tokio::test]
+async fn load_config_honors_show_raw_agent_reasoning_override_false() -> std::io::Result<()> {
+    let ody_home = tempdir()?;
+    let mut base = ConfigToml::default();
+    base.show_raw_agent_reasoning = Some(false);
+    let config = Config::load_from_base_config_with_overrides(
+        base,
+        ConfigOverrides::default(),
+        ody_home.abs(),
+    )
+    .await?;
+
+    assert!(!config.show_raw_agent_reasoning);
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_toml_parsing() {
     let history_with_persistence = r#"
 [history]

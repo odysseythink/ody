@@ -2289,11 +2289,7 @@ async fn try_run_sampling_request(
                         if let TurnItem::AgentMessage(agent_message) = &mut turn_item {
                             agent_message.content =
                                 vec![ody_protocol::items::AgentMessageContent::Text {
-                                    text: if plan_mode {
-                                        String::new()
-                                    } else {
-                                        std::mem::take(&mut seeded.visible_text)
-                                    },
+                                    text: std::mem::take(&mut seeded.visible_text),
                                 }];
                         }
                         seeded_parsed = plan_mode.then_some(seeded);

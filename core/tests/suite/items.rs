@@ -713,6 +713,78 @@ async fn plan_mode_strips_plan_from_agent_messages() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn plan_mode_preserves_non_plan_commentary_text() -> anyhow::Result<()> {
+    skip_if_no_network!(Ok(()));
+
+    let server = start_mock_server().await;
+
+    let TestOdy {
+        ody,
+        session_configured,
+        ..
+    } = test_ody().build(&server).await?;
+
+    let full_message = "Intro\nOutro";
+    let stream = sse(vec![
+        ev_response_created("resp-1"),
+        ev_message_item_added("msg-1", ""),
+        ev_output_text_delta(full_message),
+        ev_assistant_message("msg-1", full_message),
+        ev_completed("resp-1"),
+    ]);
+    mount_sse_once(&server, stream).await;
+
+    let collaboration_mode = CollaborationMode {
+        mode: ModeKind::Plan,
+        settings: Settings {
+            model: session_configured.model.clone(),
+            reasoning_effort: None,
+            developer_instructions: None,
+            design_audit_level: None,
+        },
+    };
+
+    ody.submit(disabled_plan_turn(
+        "please plan",
+        session_configured.model.clone(),
+        collaboration_mode,
+    )?)
+    .await?;
+
+    let mut agent_deltas = Vec::new();
+    let mut agent_item = None;
+    loop {
+        let ev = wait_for_event(&ody, |_| true).await;
+        match ev {
+            EventMsg::AgentMessageContentDelta(event) => {
+                agent_deltas.push(event.delta);
+            }
+            EventMsg::ItemCompleted(ItemCompletedEvent {
+                item: TurnItem::AgentMessage(item),
+                ..
+            }) => {
+                agent_item = Some(item);
+            }
+            EventMsg::TurnComplete(_) => break,
+            _ => {}
+        }
+    }
+
+    assert_eq!(agent_deltas.concat(), "Intro\nOutro");
+    let agent_text_from_item: String = agent_item
+        .expect("AgentMessage item should complete")
+        .content
+        .iter()
+        .map(|entry| match entry {
+            AgentMessageContent::Text { text } => text.as_str(),
+        })
+        .collect();
+    assert_eq!(agent_text_from_item, "Intro\nOutro");
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn reasoning_content_delta_has_item_metadata() -> anyhow::Result<()> {
     skip_if_no_network!(Ok(()));
 

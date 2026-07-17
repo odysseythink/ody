@@ -4050,7 +4050,7 @@ impl Config {
             show_raw_agent_reasoning: cfg
                 .show_raw_agent_reasoning
                 .or(show_raw_agent_reasoning)
-                .unwrap_or(false),
+                .unwrap_or(true),
             guardian_policy_config,
             model_reasoning_effort: cfg.model_reasoning_effort,
             plan_mode_reasoning_effort: cfg.plan_mode_reasoning_effort,

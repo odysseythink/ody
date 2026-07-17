@@ -458,6 +458,95 @@ impl HistoryCell for StreamingAgentTailCell {
         !self.is_first_line
     }
 }
+
+/// Transient active-cell representation of the mutable tail of a reasoning stream.
+///
+/// During a reasoning block, deltas that are not part of an active agent or plan stream are
+/// displayed via this cell in the `active_cell` slot. It is replaced on every delta and dropped
+/// when the reasoning block finalizes, because the final `ReasoningSummaryCell` is the canonical
+/// history entry.
+#[derive(Debug)]
+pub(crate) struct StreamingReasoningTailCell {
+    lines: Vec<HyperlinkLine>,
+}
+
+impl StreamingReasoningTailCell {
+    pub(crate) fn new(lines: Vec<HyperlinkLine>) -> Self {
+        Self { lines }
+    }
+}
+
+impl HistoryCell for StreamingReasoningTailCell {
+    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        visible_lines(self.display_hyperlink_lines(width))
+    }
+
+    fn display_hyperlink_lines(&self, _width: u16) -> Vec<HyperlinkLine> {
+        // Tail lines are already rendered at the current stream width, including the bullet prefix.
+        // Re-wrapping them here could produce malformed in-flight rows.
+        let mut lines = self.lines.clone();
+        for line in &mut lines {
+            if line
+                .line
+                .spans
+                .iter()
+                .all(|span| span.content.chars().all(char::is_whitespace))
+            {
+                line.line = Line::default().style(line.line.style);
+                line.hyperlinks.clear();
+            }
+        }
+        lines
+    }
+
+    fn transcript_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        self.display_hyperlink_lines(width)
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        plain_lines(visible_lines(self.lines.clone()))
+    }
+}
+
+/// Render a transient reasoning tail from raw reasoning text.
+///
+/// The tail mirrors the final `ReasoningSummaryCell` styling (dim italic, bullet prefix) so the
+/// streaming affordance visually matches the history entry that replaces it.
+pub(crate) fn new_streaming_reasoning_tail_cell(
+    reasoning_buffer: &str,
+    width: u16,
+    cwd: &Path,
+) -> Box<dyn HistoryCell> {
+    let cwd = cwd.to_path_buf();
+    let reasoning_buffer = reasoning_buffer.trim();
+    if reasoning_buffer.is_empty() {
+        return Box::new(StreamingReasoningTailCell::new(Vec::new()));
+    }
+    let Some(wrap_width) = crate::width::usable_content_width_u16(width, /*reserved_cols*/ 2) else {
+        return Box::new(StreamingReasoningTailCell::new(Vec::new()));
+    };
+    let mut lines: Vec<Line<'static>> = Vec::new();
+    append_markdown(reasoning_buffer, Some(wrap_width), Some(cwd.as_path()), &mut lines);
+    let summary_style = Style::default().dim().italic();
+    let styled_lines = lines
+        .into_iter()
+        .map(|mut line| {
+            line.spans = line
+                .spans
+                .into_iter()
+                .map(|span| span.patch_style(summary_style))
+                .collect();
+            line
+        })
+        .collect::<Vec<_>>();
+    let wrapped = adaptive_wrap_lines(
+        &styled_lines,
+        RtOptions::new(width as usize)
+            .initial_indent("• ".dim().into())
+            .subsequent_indent("  ".into()),
+    );
+    Box::new(StreamingReasoningTailCell::new(plain_hyperlink_lines(wrapped)))
+}
 pub(crate) fn new_user_prompt(
     message: String,
     text_elements: Vec<TextElement>,
@@ -505,6 +594,6 @@ pub(crate) fn new_reasoning_summary_block(
         "".to_string(),
         full_reasoning_buffer.to_string(),
         &cwd,
-        /*transcript_only*/ true,
+        /*transcript_only*/ false,
     ))
 }

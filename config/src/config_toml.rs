@@ -82,6 +82,10 @@ const fn default_hide_agent_reasoning() -> Option<bool> {
     Some(false)
 }
 
+const fn default_show_raw_agent_reasoning() -> Option<bool> {
+    Some(true)
+}
+
 const fn default_true() -> bool {
     true
 }
@@ -468,6 +472,7 @@ pub struct ConfigToml {
 
     /// When set to `true`, `AgentReasoningRawContentEvent` events will be shown in the UI/output.
     /// Defaults to `false`.
+    #[serde(default = "default_show_raw_agent_reasoning")]
     pub show_raw_agent_reasoning: Option<bool>,
 
     pub model_reasoning_effort: Option<ReasoningEffort>,
@@ -1605,5 +1610,17 @@ split_threshold = 16
     fn deserialize_language_field() {
         let cfg: ConfigToml = toml::from_str(r#"language = "zh""#).unwrap();
         assert_eq!(cfg.language.as_deref(), Some("zh"));
+    }
+
+    #[test]
+    fn default_show_raw_agent_reasoning_is_true() {
+        let cfg: ConfigToml = toml::from_str("").unwrap();
+        assert_eq!(cfg.show_raw_agent_reasoning, Some(true));
+    }
+
+    #[test]
+    fn show_raw_agent_reasoning_explicit_false_is_preserved() {
+        let cfg: ConfigToml = toml::from_str(r#"show_raw_agent_reasoning = false"#).unwrap();
+        assert_eq!(cfg.show_raw_agent_reasoning, Some(false));
     }
 }
