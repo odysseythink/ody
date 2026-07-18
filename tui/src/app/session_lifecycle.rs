@@ -513,8 +513,12 @@ impl App {
             .set_queue_submissions_until_session_configured(/*queue*/ false);
         match result {
             Ok(started) => {
-                self.enqueue_primary_thread_session(started.session, started.turns)
-                    .await?;
+                self.enqueue_primary_thread_session(
+                    started.session,
+                    started.turns,
+                    /*initial_collaboration_mask*/ None,
+                )
+                .await?;
                 self.chat_widget.maybe_send_next_queued_input();
             }
             Err(err) => {
@@ -636,14 +640,12 @@ impl App {
             initial_user_message,
         );
         self.replace_chat_widget(ChatWidget::new_with_app_event(init));
-        // Apply the requested starting mode before the suppressed initial message
-        // is released, so the handoff turn runs in that mode (e.g. Plan for the
-        // design→plan "clear context and enter Plan mode" option).
-        if let Some(mask) = initial_collaboration_mask {
-            self.chat_widget.set_collaboration_mask(mask);
-        }
-        self.enqueue_primary_thread_session(started.session, started.turns)
-            .await?;
+        self.enqueue_primary_thread_session(
+            started.session,
+            started.turns,
+            initial_collaboration_mask,
+        )
+        .await?;
         self.backfill_loaded_subagent_threads(app_server).await;
         Ok(())
     }

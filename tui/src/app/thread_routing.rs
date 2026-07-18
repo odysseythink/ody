@@ -1098,6 +1098,7 @@ impl App {
         &mut self,
         session: ThreadSessionState,
         turns: Vec<Turn>,
+        initial_collaboration_mask: Option<ody_protocol::config_types::CollaborationModeMask>,
     ) -> Result<()> {
         let thread_id = session.thread_id;
         self.primary_thread_id = Some(thread_id);
@@ -1115,6 +1116,14 @@ impl App {
         self.chat_widget
             .set_initial_user_message_submit_suppressed(/*suppressed*/ true);
         self.chat_widget.handle_thread_session(session);
+        // Apply the requested starting mode after the session is configured but
+        // before the suppressed initial message is released, so the handoff turn
+        // runs in that mode (e.g. Plan for the design->plan "clear context and
+        // enter Plan mode" option). This must happen after handle_thread_session
+        // because that method resets active_collaboration_mask from the session.
+        if let Some(mask) = initial_collaboration_mask {
+            self.chat_widget.set_collaboration_mask(mask);
+        }
         let should_buffer_initial_replay = !turns.is_empty();
         if should_buffer_initial_replay {
             self.app_event_tx
