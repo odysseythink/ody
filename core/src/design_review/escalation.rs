@@ -7,7 +7,6 @@
 //! This is what makes Design mode actively resolve disagreements instead of
 //! dumping the findings as advisory text and stopping.
 
-use crate::design_review::next_step::transcript_is_chinese;
 use crate::design_review::types::DesignReviewConfidence;
 use crate::design_review::types::DesignReviewFinding;
 use crate::design_review::types::DesignReviewOutput;
@@ -59,6 +58,20 @@ fn escalated_findings(
     out
 }
 
+/// Whether the transcript language is Chinese, mirroring how core derives the
+/// effective language for model instructions (explicit config value, else the
+/// system locale).
+fn transcript_is_chinese(language: Option<&str>) -> bool {
+    let resolved = match language.map(str::trim).filter(|l| !l.is_empty()) {
+        Some(l) if l.eq_ignore_ascii_case("auto") => {
+            ody_config::locale::detect_system_locale_code()
+        }
+        Some(l) => ody_config::locale::parse_locale_code(l),
+        None => ody_config::locale::detect_system_locale_code(),
+    };
+    resolved.as_deref() == Some("zh")
+}
+
 fn severity_rank(severity: DesignReviewSeverity) -> u8 {
     match severity {
         DesignReviewSeverity::Critical => 0,
@@ -66,6 +79,121 @@ fn severity_rank(severity: DesignReviewSeverity) -> u8 {
         DesignReviewSeverity::Medium => 2,
         DesignReviewSeverity::Low => 3,
     }
+}
+
+/// The model's self-declared confidence in an assumption it recorded in the
+/// mandatory `## Assumptions & Unverified Items` table. This is the enumerable
+/// signal the host filters on: a *low*-confidence assumption is the riskiest
+/// (most likely wrong), so it escalates first — the inverse of finding severity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AssumptionConfidence {
+    High,
+    Medium,
+    Low,
+}
+
+impl AssumptionConfidence {
+    /// Parse the `Confidence` cell. Anything not clearly `high`/`medium` is
+    /// treated as `Low` — an unparseable confidence must surface, never be
+    /// silently finalized past.
+    fn parse(cell: &str) -> Self {
+        match cell.trim().to_ascii_lowercase().as_str() {
+            "high" => AssumptionConfidence::High,
+            "medium" | "med" | "moderate" => AssumptionConfidence::Medium,
+            _ => AssumptionConfidence::Low,
+        }
+    }
+}
+
+/// One row of the design's `## Assumptions & Unverified Items` table — an
+/// unconfirmed inference the model made. These are the `[C:INFERRED]` decisions,
+/// now surfaced through the same host-driven sign-off gate as review findings
+/// instead of a separate model-driven prompt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Assumption {
+    text: String,
+    confidence: AssumptionConfidence,
+    impact: String,
+}
+
+/// Whether an assumption escalates to the user at a given audit level. Monotonic
+/// and parallel to `escalated_severities`, but keyed on confidence (low = riskiest):
+/// Basic surfaces only low-confidence, Standard adds medium, Deep surfaces all.
+fn assumption_escalates(confidence: AssumptionConfidence, level: DesignAuditLevel) -> bool {
+    use AssumptionConfidence::*;
+    match level {
+        DesignAuditLevel::Basic => confidence == Low,
+        DesignAuditLevel::Standard => confidence != High,
+        DesignAuditLevel::Deep => true,
+    }
+}
+
+/// Extract the `## Assumptions & Unverified Items` table from the design index
+/// markdown. Mirrors `parse_parts_manifest`'s approach (the host already parses
+/// the mandated `## Parts` table the same way), but preserves cell positions so
+/// an empty middle cell does not shift the columns.
+/// Columns: `# | Assumption | Confidence | Impact if wrong | How to verify`.
+fn parse_assumptions(markdown: &str) -> Vec<Assumption> {
+    let Some(heading_pos) = markdown.find("## Assumptions") else {
+        return Vec::new();
+    };
+    let remainder = &markdown[heading_pos..];
+    let section_end = remainder
+        .find("\n## ")
+        .map(|i| i + 1)
+        .unwrap_or(remainder.len());
+    let section = &remainder[..section_end];
+
+    let lines: Vec<&str> = section.lines().collect();
+    let mut table_start = None;
+    for (i, line) in lines.iter().enumerate() {
+        if line.trim().starts_with('|') && i + 1 < lines.len() && lines[i + 1].contains("---") {
+            table_start = Some(i);
+            break;
+        }
+    }
+    let Some(table_start) = table_start else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::new();
+    for line in lines.iter().skip(table_start + 2) {
+        let trimmed = line.trim();
+        if !trimmed.starts_with('|') {
+            break;
+        }
+        // Position-preserving split: strip the outer pipes, then split, so an
+        // empty `How to verify` cell does not misalign `Confidence`/`Impact`.
+        let cells: Vec<&str> = trimmed
+            .trim_matches('|')
+            .split('|')
+            .map(str::trim)
+            .collect();
+        if cells.len() < 4 {
+            continue;
+        }
+        if cells[0].parse::<usize>().is_err() {
+            continue;
+        }
+        let text = cells[1].to_string();
+        if text.is_empty() {
+            continue;
+        }
+        out.push(Assumption {
+            text,
+            confidence: AssumptionConfidence::parse(cells[2]),
+            impact: cells[3].to_string(),
+        });
+    }
+    out
+}
+
+/// The assumptions that must be confirmed with the user at this level.
+fn escalated_assumptions(assumptions: &[Assumption], level: DesignAuditLevel) -> Vec<&Assumption> {
+    assumptions
+        .iter()
+        .filter(|a| assumption_escalates(a.confidence, level))
+        .collect()
 }
 
 /// What the escalation gate decided about finalizing the design.
@@ -136,23 +264,71 @@ fn finding_lines(findings: &[&DesignReviewFinding]) -> String {
         .join("\n")
 }
 
-/// One batched prompt listing every escalated finding, with a single accept-all
-/// vs revise choice.
-fn build_escalation_menu(
+fn assumption_lines(chinese: bool, assumptions: &[&Assumption]) -> String {
+    assumptions
+        .iter()
+        .enumerate()
+        .map(|(i, a)| {
+            let impact = if a.impact.trim().is_empty() {
+                String::new()
+            } else if chinese {
+                format!(" — 影响若错：{}", truncate(&a.impact, 120))
+            } else {
+                format!(" — impact if wrong: {}", truncate(&a.impact, 120))
+            };
+            format!("{}. {}{}", i + 1, truncate(&a.text, 160), impact)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// The two-section body listing every escalated assumption and finding, with a
+/// localized heading before each present section. Shared by the prompt and the
+/// revise message so both show the same detail.
+fn sections_text(
     chinese: bool,
+    assumptions: &[&Assumption],
+    findings: &[&DesignReviewFinding],
+) -> String {
+    let mut sections = Vec::new();
+    if !assumptions.is_empty() {
+        let head = if chinese {
+            "设计中的推断假设（需你确认）："
+        } else {
+            "Inferred assumptions in the design:"
+        };
+        sections.push(format!("{head}\n{}", assumption_lines(chinese, assumptions)));
+    }
+    if !findings.is_empty() {
+        let head = if chinese {
+            "对抗审查发现："
+        } else {
+            "Adversarial-review findings:"
+        };
+        sections.push(format!("{head}\n{}", finding_lines(findings)));
+    }
+    sections.join("\n\n")
+}
+
+/// One batched prompt listing every escalated assumption AND finding in two
+/// labeled sections, with a single accept-all vs revise choice. This is the
+/// merged sign-off gate: what used to be a separate model-driven inferred-
+/// decision prompt (Step 4.5) is now folded in here, host-driven and detailed.
+fn build_signoff_prompt(
+    chinese: bool,
+    assumptions: &[&Assumption],
     findings: &[&DesignReviewFinding],
     level: DesignAuditLevel,
 ) -> RequestUserInputArgs {
-    let list = finding_lines(findings);
+    let body = sections_text(chinese, assumptions, findings);
+    let total = assumptions.len() + findings.len();
     let question = if chinese {
         format!(
-            "对抗性自审在 {level} 等级下发现 {n} 条需要你确认的问题：\n\n{list}\n\n怎么处理？",
-            n = findings.len()
+            "在 {level} 等级下，最终确定设计前需要你签核以下 {total} 项：\n\n{body}\n\n怎么处理？"
         )
     } else {
         format!(
-            "The adversarial review surfaced {n} finding(s) needing your sign-off at the {level} level:\n\n{list}\n\nHow do you want to proceed?",
-            n = findings.len()
+            "Before finalizing at the {level} level, sign off on the following {total} item(s):\n\n{body}\n\nHow do you want to proceed?"
         )
     };
     let options = batch_options(chinese)
@@ -165,7 +341,7 @@ fn build_escalation_menu(
     RequestUserInputArgs {
         questions: vec![RequestUserInputQuestion {
             id: QUESTION_ID.to_string(),
-            header: if chinese { "审查确认" } else { "Review sign-off" }.to_string(),
+            header: if chinese { "签核确认" } else { "Sign-off" }.to_string(),
             question,
             is_other: false,
             is_secret: false,
@@ -185,9 +361,15 @@ fn truncate(s: &str, max: usize) -> String {
 }
 
 /// Message returned to the model when the user wants to revise. Lists every
-/// escalated finding and appends any notes the user typed about which to fix.
-fn build_revise(chinese: bool, findings: &[&DesignReviewFinding], notes: &[String]) -> String {
-    let list = finding_lines(findings);
+/// escalated assumption and finding and appends any notes the user typed about
+/// which to fix.
+fn build_revise(
+    chinese: bool,
+    assumptions: &[&Assumption],
+    findings: &[&DesignReviewFinding],
+    notes: &[String],
+) -> String {
+    let list = sections_text(chinese, assumptions, findings);
     let notes_line = {
         let joined = notes
             .iter()
@@ -205,7 +387,7 @@ fn build_revise(chinese: bool, findings: &[&DesignReviewFinding], notes: &[Strin
     };
     if chinese {
         format!(
-            "设计未最终确定：你选择留在 Design 模式修正。需要处理的审查发现：\n\n{list}{notes_line}\n\n修改设计后再用 `submit_design`（`final: true`）重新提交，不要开始实现。"
+            "设计未最终确定：你选择留在 Design 模式修正。需要处理：\n\n{list}{notes_line}\n\n修改设计后再用 `submit_design`（`final: true`）重新提交，不要开始实现。"
         )
     } else {
         format!(
@@ -214,35 +396,42 @@ fn build_revise(chinese: bool, findings: &[&DesignReviewFinding], notes: &[Strin
     }
 }
 
-/// Run the level-driven escalation gate. Presents ALL escalated findings in one
-/// prompt and returns whether the design may finalize. If nothing escalates (or
-/// the review produced no findings), finalizes silently.
+/// Run the level-driven sign-off gate. Presents ALL escalated assumptions AND
+/// review findings in ONE prompt and returns whether the design may finalize.
+/// This is the merged gate: the inferred-decision sign-off that used to be a
+/// separate model-driven Step 4.5 prompt is now sourced from the design's
+/// `## Assumptions & Unverified Items` table and shown here alongside the
+/// adversarial findings. If nothing escalates, finalizes silently.
 pub(crate) async fn run_escalation_gate(
     session: &Session,
     turn: &TurnContext,
     call_id: String,
     level: Option<DesignAuditLevel>,
     review: Option<&DesignReviewOutput>,
+    design_markdown: &str,
 ) -> EscalationDecision {
     // Template default when the host selected no level: Basic.
     let level = level.unwrap_or(DesignAuditLevel::Basic);
-    let Some(review) = review else {
-        return EscalationDecision::Finalize { note: None };
+
+    let all_assumptions = parse_assumptions(design_markdown);
+    let assumptions = escalated_assumptions(&all_assumptions, level);
+    let findings = match review {
+        Some(review) => escalated_findings(&review.findings, level),
+        None => Vec::new(),
     };
-    let escalated = escalated_findings(&review.findings, level);
-    if escalated.is_empty() {
+    if assumptions.is_empty() && findings.is_empty() {
         return EscalationDecision::Finalize { note: None };
     }
 
     let chinese = transcript_is_chinese(turn.config.language.as_deref());
-    let args = build_escalation_menu(chinese, &escalated, level);
+    let args = build_signoff_prompt(chinese, &assumptions, &findings, level);
     let Some(response) = session.request_user_input(turn, call_id, args).await else {
         // Cancelled / no active turn — do not silently finalize past unresolved
         // critical findings; keep the design open for revision.
         let message = if chinese {
-            "设计未最终确定：审查发现需要你确认但未收到回应。留在 Design 模式。".to_string()
+            "设计未最终确定：有事项需要你签核但未收到回应。留在 Design 模式。".to_string()
         } else {
-            "Design NOT finalized: escalated review findings need your sign-off but no response was received. Staying in Design mode.".to_string()
+            "Design NOT finalized: items need your sign-off but no response was received. Staying in Design mode.".to_string()
         };
         return EscalationDecision::Revise { message };
     };
@@ -262,7 +451,7 @@ pub(crate) async fn run_escalation_gate(
             .map(|a| a.answers.iter().skip(1).cloned().collect())
             .unwrap_or_default();
         EscalationDecision::Revise {
-            message: build_revise(chinese, &escalated, &notes),
+            message: build_revise(chinese, &assumptions, &findings, &notes),
         }
     }
 }
@@ -334,22 +523,97 @@ mod tests {
         assert_eq!(titles, vec!["c", "h", "m"]);
     }
 
+    fn assumption(text: &str, confidence: AssumptionConfidence, impact: &str) -> Assumption {
+        Assumption {
+            text: text.to_string(),
+            confidence,
+            impact: impact.to_string(),
+        }
+    }
+
     #[test]
-    fn menu_is_one_batched_question_listing_all_findings() {
+    fn prompt_is_one_batched_question_listing_findings_and_assumptions() {
         use DesignReviewConfidence::High as C;
         use DesignReviewSeverity::*;
         let f1 = finding(Critical, C, "plaintext key");
         let f2 = finding(High, C, "weak validation");
-        let refs = vec![&f1, &f2];
-        let menu = build_escalation_menu(false, &refs, DesignAuditLevel::Standard);
-        // One prompt, not one-per-finding — the whole point of the batching fix.
+        let a1 = assumption("overlay reuse", AssumptionConfidence::Low, "rewrite UI");
+        let f_refs = vec![&f1, &f2];
+        let a_refs = vec![&a1];
+        let menu = build_signoff_prompt(false, &a_refs, &f_refs, DesignAuditLevel::Standard);
+        // One prompt, not one-per-item — the whole point of the batching/merge.
         assert_eq!(menu.questions.len(), 1);
         // Two batch choices (accept-all vs revise); the client auto-adds Other.
         assert_eq!(menu.questions[0].options.as_ref().unwrap().len(), 2);
-        // Every finding is listed in the single question's text.
-        assert!(menu.questions[0].question.contains("plaintext key"));
-        assert!(menu.questions[0].question.contains("weak validation"));
-        assert!(menu.questions[0].question.contains("Standard"));
+        let q = &menu.questions[0].question;
+        // Both sections appear in the single question's text.
+        assert!(q.contains("plaintext key"));
+        assert!(q.contains("weak validation"));
+        assert!(q.contains("overlay reuse"));
+        assert!(q.contains("rewrite UI")); // assumption impact is inlined
+        assert!(q.contains("Standard"));
+        assert!(q.contains("3 item")); // 2 findings + 1 assumption
+    }
+
+    #[test]
+    fn assumption_escalation_is_monotonic_with_level() {
+        use AssumptionConfidence::*;
+        use DesignAuditLevel::*;
+        // Basic: only low-confidence (riskiest) assumptions surface.
+        assert!(assumption_escalates(Low, Basic));
+        assert!(!assumption_escalates(Medium, Basic));
+        assert!(!assumption_escalates(High, Basic));
+        // Standard adds medium.
+        assert!(assumption_escalates(Medium, Standard));
+        assert!(!assumption_escalates(High, Standard));
+        // Deep surfaces all, including high-confidence.
+        assert!(assumption_escalates(High, Deep));
+    }
+
+    #[test]
+    fn parse_assumptions_reads_the_mandated_table() {
+        let md = "# Title\n\n## Assumptions & Unverified Items\n\
+            | # | Assumption | Confidence | Impact if wrong | How to verify |\n\
+            |---|---|---|---|---|\n\
+            | 1 | plaintext API key storage | low | security boundary changes | read config |\n\
+            | 2 | overlay reuse | high | UI rewrite | grep |\n\
+            \n## Parts\n| # | File | Scope | Status |\n";
+        let parsed = parse_assumptions(md);
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].text, "plaintext API key storage");
+        assert_eq!(parsed[0].confidence, AssumptionConfidence::Low);
+        assert_eq!(parsed[0].impact, "security boundary changes");
+        assert_eq!(parsed[1].confidence, AssumptionConfidence::High);
+        // At Basic only the low-confidence row escalates; the ## Parts table
+        // after it is not swept in.
+        let escalated = escalated_assumptions(&parsed, DesignAuditLevel::Basic);
+        assert_eq!(escalated.len(), 1);
+        assert_eq!(escalated[0].text, "plaintext API key storage");
+    }
+
+    #[test]
+    fn parse_assumptions_absent_table_is_empty() {
+        assert!(parse_assumptions("# Title\n\nno table here\n").is_empty());
+    }
+
+    #[test]
+    fn parse_assumptions_tolerates_empty_verify_cell() {
+        // Empty trailing `How to verify` cell must not shift Confidence/Impact.
+        let md = "## Assumptions\n\
+            | # | Assumption | Confidence | Impact if wrong | How to verify |\n\
+            |---|---|---|---|---|\n\
+            | 1 | retry-on-failure | medium | worse UX |  |\n";
+        let parsed = parse_assumptions(md);
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].confidence, AssumptionConfidence::Medium);
+        assert_eq!(parsed[0].impact, "worse UX");
+    }
+
+    #[test]
+    fn transcript_language_detection() {
+        assert!(transcript_is_chinese(Some("zh-CN")));
+        assert!(transcript_is_chinese(Some("Chinese")));
+        assert!(!transcript_is_chinese(Some("en-US")));
     }
 
     #[test]
@@ -361,14 +625,17 @@ mod tests {
     }
 
     #[test]
-    fn revise_message_lists_findings_and_notes() {
+    fn revise_message_lists_findings_assumptions_and_notes() {
         use DesignReviewConfidence::High as C;
         use DesignReviewSeverity::*;
         let f1 = finding(Critical, C, "plaintext key");
-        let refs = vec![&f1];
-        let msg = build_revise(false, &refs, &["fix items 1 and 2".to_string()]);
+        let a1 = assumption("overlay reuse", AssumptionConfidence::Low, "rewrite UI");
+        let f_refs = vec![&f1];
+        let a_refs = vec![&a1];
+        let msg = build_revise(false, &a_refs, &f_refs, &["fix items 1 and 2".to_string()]);
         assert!(msg.contains("NOT finalized"));
         assert!(msg.contains("plaintext key"));
+        assert!(msg.contains("overlay reuse"));
         assert!(msg.contains("fix items 1 and 2"));
         assert!(msg.contains("Do not start implementing"));
     }
@@ -379,7 +646,7 @@ mod tests {
         use DesignReviewSeverity::*;
         let f1 = finding(High, C, "weak validation");
         let refs = vec![&f1];
-        let msg = build_revise(false, &refs, &[String::new()]);
+        let msg = build_revise(false, &[], &refs, &[String::new()]);
         assert!(!msg.contains("User notes"));
     }
 }

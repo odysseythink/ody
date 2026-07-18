@@ -214,7 +214,7 @@ impl CollaborationModeInstructions {
                  - **Basic** — verify only load-bearing assumptions (architecture, security, data, ops).\n\
                  - **Standard** — verify every assumption that would be expensive if wrong; record the rest in `## Assumptions & Unverified Items`.\n\
                  - **Deep** — verify nearly everything against sources; treat the repo and upstream as the only ground truth.\n\n\
-                 (2) How many adversarial-review findings the host escalates to the user for sign-off when you finalize: **Basic** surfaces Critical/High, **Standard** adds Medium, **Deep** adds Low. You do NOT run this escalation yourself — after `submit_design` with `final: true`, the host presents all level-appropriate findings to the user in a single prompt (accept/defer all, or revise) and only finalizes once they are resolved. A revise request keeps you in Design mode to fix them.\n\n\
+                 (2) What the host escalates to the user for sign-off when you finalize — ONE merged prompt covering both (a) inferred assumptions from your `## Assumptions & Unverified Items` table (**Basic** surfaces low-confidence rows, **Standard** adds medium, **Deep** all) and (b) adversarial-review findings (**Basic** Critical/High, **Standard** += Medium, **Deep** += Low). You do NOT run this yourself and do NOT separately ask the user to confirm inferred decisions — after `submit_design` with `final: true`, the host presents all level-appropriate items in a single prompt (accept/defer all, or revise) and only finalizes once they are resolved. A revise request keeps you in Design mode to fix them.\n\n\
                  Do NOT ask the user to choose the audit level again."
             ),
             None => format!(

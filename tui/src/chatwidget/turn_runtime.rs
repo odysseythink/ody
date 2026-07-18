@@ -181,6 +181,7 @@ impl ChatWidget {
 
         if !from_replay && !self.has_queued_follow_up_messages() && !had_pending_steers {
             self.maybe_prompt_plan_implementation();
+            self.maybe_prompt_design_next_step();
         }
         // Keep this flag for replayed completion events so a subsequent live TurnComplete can
         // still show the prompt once after thread switch replay.
@@ -224,6 +225,40 @@ impl ChatWidget {
         }
 
         self.open_plan_implementation_prompt();
+    }
+
+    /// After a design finalizes in Design mode, offer the next step. Mirrors
+    /// [`Self::maybe_prompt_plan_implementation`]; gated the same way. A design
+    /// session is a single turn that only reaches `TurnComplete` after the final
+    /// `submit_design` (checkpoints stay inside the turn), so `saw_plan_item_this_turn`
+    /// here means the design was finalized.
+    pub(super) fn maybe_prompt_design_next_step(&mut self) {
+        if !self.collaboration_modes_enabled() {
+            return;
+        }
+        if self.has_queued_follow_up_messages() {
+            return;
+        }
+        if self.active_mode_kind() != ModeKind::Design {
+            return;
+        }
+        if !self.transcript.saw_plan_item_this_turn {
+            return;
+        }
+        if !self.bottom_pane.no_modal_or_popup_active() {
+            return;
+        }
+        self.open_design_next_step_prompt();
+    }
+
+    pub(super) fn open_design_next_step_prompt(&mut self) {
+        let plan_mask = crate::collaboration_modes::plan_mask(self.model_catalog.as_ref());
+        let design_file_path = self.transcript.latest_proposed_plan_file_path.clone();
+        self.bottom_pane
+            .show_selection_view(design_next_step::selection_view_params(
+                plan_mask,
+                design_file_path.as_deref(),
+            ));
     }
 
     pub(super) fn open_plan_implementation_prompt(&mut self) {

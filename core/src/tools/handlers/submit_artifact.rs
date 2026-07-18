@@ -6,10 +6,8 @@
 use crate::design_completeness::design_completeness_report;
 use crate::design_review::escalation::EscalationDecision;
 use crate::design_review::escalation::run_escalation_gate;
-use crate::design_review::next_step::drive_post_design_next_step;
 use crate::design_review::orchestrator::DesignReviewOrchestrator;
 use crate::design_review::orchestrator::format_review_appendix_for_submit;
-use crate::design_review::orchestrator::severity_counts;
 use crate::design_review::types::DesignReviewOutput;
 use crate::design_review::types::DesignReviewRequest;
 use crate::function_tool::FunctionCallError;
@@ -408,6 +406,11 @@ pub(crate) async fn handle_submit_artifact(
         None
     };
 
+    // Keep a copy of the index markdown for the escalation gate below: the
+    // completed event moves `markdown`, but the gate needs to parse the design's
+    // `## Assumptions & Unverified Items` table out of it.
+    let design_markdown = markdown.clone();
+
     // 8. Emit completed event
     session
         .emit_turn_item_completed(
@@ -498,6 +501,7 @@ pub(crate) async fn handle_submit_artifact(
             call_id.clone(),
             artifact.design_audit_level(),
             review_output.as_ref(),
+            &design_markdown,
         )
         .await
         {
@@ -523,28 +527,11 @@ pub(crate) async fn handle_submit_artifact(
         message
     };
 
-    // Runtime backstop for the design dead-end: after the design finalizes, the
-    // host drives the next-step menu itself instead of trusting the model to call
-    // request_user_input (design.md Step 5 — the only step in the flow with no
-    // other enforcement, which silently dropped under long-session drift). Only
-    // fires when `did_submit` (the escalation gate did not send us back to
-    // revise) and an interactive frontend is available.
-    let review_counts = review_output.as_ref().map(|o| severity_counts(&o.findings));
-    let message = if did_submit && can_prompt {
-        match drive_post_design_next_step(
-            session.as_ref(),
-            turn.as_ref(),
-            call_id,
-            review_counts,
-        )
-        .await
-        {
-            Some(next) => format!("{message}\n\n{next}"),
-            None => message,
-        }
-    } else {
-        message
-    };
+    // The post-design next-step menu (Enter Plan / Stay) lives in the TUI, not
+    // here: collaboration mode is owned by the client, so only the TUI can act
+    // on "Enter Plan mode". The TUI shows it on TurnComplete after a design
+    // finalizes (see `maybe_prompt_design_next_step`). The host's job ends at
+    // finalizing the design and running the escalation gate above.
 
     Ok(boxed_tool_output(FunctionToolOutput::from_text(
         message,

@@ -87,7 +87,7 @@ Only `submit_design` persists the design file. **Persistence is automatic** — 
 Authoring rules:
 
 * Tag **every** decision, section, field, and interface with a source label: `[C:USER]` (confirmed by the user), `[C:INFERRED]` (your assumption — must also appear in Assumptions), `[C:DEFERRED]` (explicitly postponed), or `[C:UPSTREAM]` (taken verbatim from the source system).
-* Include a mandatory `## Assumptions & Unverified Items` table with columns: `# | Assumption | Confidence | Impact if wrong | How to verify`. Scale the number of rows to the audit tier from Step 0.
+* Include a mandatory `## Assumptions & Unverified Items` table with columns: `# | Assumption | Confidence | Impact if wrong | How to verify`. The `Confidence` cell **must** be exactly one of `high` / `medium` / `low` (the host parses it to decide which rows to escalate for sign-off — a low-confidence assumption is treated as the riskiest and surfaces first). Every `[C:INFERRED]` decision must have a row here. Scale the number of rows to the audit tier from Step 0.
 * Fidelity rubric — the design must be concrete enough to plan from:
   * explicit **Scope In / Scope Out**;
   * data-flow arrows between components;
@@ -132,7 +132,7 @@ Before requesting approval:
 3. Re-verify any pure predicate / regular expression / small algorithm by temporary non-persisted evaluation (the `<HARD-GATE>` carve-out); record the verdict.
 4. Write a `## Self-Review` section capturing findings and fixes.
 
-Then run the **post-write audit gate**: list every `[C:INFERRED]` item and have the user sign off each one as **accept / defer / correct** (scale how many you surface to the Step 0 audit tier). You must not enter Step 5 until every surfaced inference is resolved.
+Make sure every `[C:INFERRED]` decision is also recorded as a row in the `## Assumptions & Unverified Items` table (with an honest `Confidence` and a concrete `Impact if wrong`). **Do not run a separate inferred-decision sign-off prompt yourself** — the host now folds that sign-off into the single finalization gate in Step 5, sourced from this table, so a second model-driven prompt would just double-ask. Your job here is to make the table complete and truthful; the host surfaces the level-appropriate rows to the user at finalize time.
 
 ## Step 5 — Submit and exit (C1–C8 completeness gate)
 
@@ -143,21 +143,20 @@ When the design is complete and all ## Parts rows are `done` (if split), call `s
 
 The eight required sections: **C1** Scope In/Out, **C2** Architecture / Design, **C3** Data Models, **C4** Algorithms (pseudocode), **C5** Error Handling / Degradation, **C6** Self-Review, **C7** User final approval recorded, **C8** Reuse Analysis.
 
-**Audit-level escalation gate (host-run).** After the completeness check passes, the host runs the adversarial review and escalates the findings whose severity the Step 0 audit level covers (**Basic** = Critical/High, **Standard** += Medium, **Deep** += Low; `speculative` findings never escalate). It presents **all** escalated findings in a **single** prompt — the user picks *accept/defer all* or *some need fixing* (and may note which by number) — you do not run this yourself. If the user chooses to revise, the tool result says the design was NOT finalized and lists what to revise: stay in Design mode, fix those points, and call `submit_design` (`final: true`) again. If the user accepts/defers everything, the design finalizes and the next-step menu (below) follows.
+**Audit-level sign-off gate (host-run).** After the completeness check passes, the host runs the adversarial review and presents **one** merged sign-off prompt covering two things, both filtered by the Step 0 audit level:
 
-**After `submit_design` returns "Design submitted", the host automatically presents the next-step menu to the user** — Revise the design / Enter Plan mode / Compact then Plan / Stay in Design (the host makes **Revise** the recommended option when the adversarial review found Critical or High issues). Do **not** call `request_user_input` yourself here: the host already did, and the same `submit_design` tool result already carries the user's choice together with the exact instruction to relay. Your only job that turn is to relay that instruction:
+1. **Inferred assumptions** from your `## Assumptions & Unverified Items` table — **Basic** surfaces only `low`-confidence rows, **Standard** adds `medium`, **Deep** surfaces all.
+2. **Adversarial-review findings** whose severity the level covers — **Basic** = Critical/High, **Standard** += Medium, **Deep** += Low (`speculative` findings never escalate).
 
-- **Enter Plan mode** → tell them to run `/plan`.
-- **Compact then Plan** → tell them to run `/compact`, then `/plan`.
-- **Revise / Stay in Design mode** → stay in Design mode and address the point they raise.
+Both are shown in a **single** prompt — the user picks *accept/defer all* or *some need fixing* (and may note which by number) — you do not run this yourself, and you do not ask the user to confirm inferred decisions in a separate turn. If the user chooses to revise, the tool result says the design was NOT finalized and lists what to revise: stay in Design mode, fix those points, and call `submit_design` (`final: true`) again. If the user accepts/defers everything, the design finalizes and the next-step menu (below) follows.
 
-**Do not start implementing.**
+**After `submit_design` returns "Design submitted", the design is finalized and the turn is essentially done.** When the turn completes, the TUI itself shows the user a next-step menu (Enter Plan mode / Stay in Design) and, if they pick Enter Plan mode, switches modes for them — you do not drive this and you will not be told their choice. Give a brief closing message (one or two sentences confirming the design is ready) and end your turn. Do **not** call `request_user_input`, do **not** tell the user to run `/plan` yourself, and **do not start implementing**.
 
-If `submit_design` with `final: true` does NOT return "Design submitted" (e.g., it reports missing sections), no menu is shown; stay in Design mode and fix the gaps.
+If `submit_design` with `final: true` does NOT return "Design submitted" (e.g., it reports missing sections, or the escalation gate sent it back to revise), no menu is shown; stay in Design mode and fix the gaps.
 
 ## Turn discipline
 
-End every turn with exactly one of: (a) a single clarifying question, (b) a `submit_design` call (`final: false` to checkpoint, or `final: true` to submit), or (c) after a terminal `submit_design`, relaying the host's next-step choice carried in the tool result (Step 5). After the audit gate (Step 0) has been asked, there must be no pure-investigation turns that neither ask a question nor call `submit_design` with a design segment.
+End every turn with exactly one of: (a) a single clarifying question, (b) a `submit_design` call (`final: false` to checkpoint, or `final: true` to submit), or (c) after a terminal `submit_design` returns "Design submitted", a brief closing message (the TUI shows the next-step menu itself — see Step 5). After the audit gate (Step 0) has been asked, there must be no pure-investigation turns that neither ask a question nor call `submit_design` with a design segment.
 
 ## Design file location
 

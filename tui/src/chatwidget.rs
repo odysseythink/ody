@@ -363,6 +363,7 @@ mod plugins;
 use self::plugins::PluginInstallAuthFlowState;
 use self::plugins::PluginListFetchState;
 use self::plugins::PluginsCacheState;
+mod design_next_step;
 mod plan_implementation;
 use self::plan_implementation::PLAN_IMPLEMENTATION_TITLE;
 mod model_popups;
