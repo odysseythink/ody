@@ -789,6 +789,19 @@ impl ConfigEditsBuilder {
         self
     }
 
+    /// Set or clear the root `language` field.
+    pub fn set_language(mut self, language: Option<&str>) -> Self {
+        let segments = vec!["language".to_string()];
+        match language {
+            Some(language) => self.edits.push(ConfigEdit::SetPath {
+                segments,
+                value: value(language),
+            }),
+            None => self.edits.push(ConfigEdit::ClearPath { segments }),
+        }
+        self
+    }
+
     pub fn set_hide_full_access_warning(mut self, acknowledged: bool) -> Self {
         self.edits
             .push(ConfigEdit::SetNoticeHideFullAccessWarning(acknowledged));

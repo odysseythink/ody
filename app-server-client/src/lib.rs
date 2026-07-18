@@ -53,6 +53,8 @@ use ody_config::ThreadConfigLoader;
 use ody_config::config_toml::ConfigToml;
 use ody_core::config::Config;
 pub use ody_core::otel_init::build_provider as build_otel_provider;
+use ody_core::language_backfill::LanguageBackfillStatus;
+use ody_core::language_backfill::backfill_language_if_needed as core_backfill_language_if_needed;
 use ody_core::personality_migration::PersonalityMigrationStatus;
 use ody_core::personality_migration::maybe_migrate_personality;
 pub use ody_exec_server::EnvironmentManager;
@@ -106,6 +108,25 @@ pub async fn migrate_personality_if_needed(
         PersonalityMigrationStatus::SkippedMarker
         | PersonalityMigrationStatus::SkippedExplicitPersonality
         | PersonalityMigrationStatus::SkippedNoSessions => Ok(false),
+    }
+}
+
+/// Backfills the `language` field from the system locale when it is unset.
+///
+/// Returns `true` when the backfill changed config and the caller should reload
+/// it. Errors are surfaced so the caller can log and continue.
+pub async fn backfill_language_if_needed(
+    ody_home: &Path,
+    config_toml: &ConfigToml,
+) -> IoResult<bool> {
+    let status = core_backfill_language_if_needed(ody_home, config_toml)
+        .await
+        .map_err(std::io::Error::other)?;
+    match status {
+        LanguageBackfillStatus::Applied(_) => Ok(true),
+        LanguageBackfillStatus::SkippedExplicit | LanguageBackfillStatus::SkippedUndetected => {
+            Ok(false)
+        }
     }
 }
 

@@ -3324,6 +3324,15 @@ impl Session {
             }
         }
 
+        // Reinforce the language directive as the last developer section. Base
+        // instructions carry the same directive, but they sit far above the large
+        // volume of English context (collaboration-mode templates, tool output,
+        // source code) the model reads each turn; an identical, late reminder
+        // counteracts the resulting drift back to English.
+        if let Some(language) = turn_context.config.model_language.as_deref() {
+            developer_sections.push(ody_config::locale::language_directive(language));
+        }
+
         let multi_agent_v2_usage_hint_text =
             multi_agents::usage_hint_text(turn_context, &session_source);
 

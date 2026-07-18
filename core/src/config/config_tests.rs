@@ -11129,7 +11129,7 @@ base_url = "https://api.test.com/v1"
     assert_eq!(config.language, None);
     let expected = ody_config::locale::detect_system_locale_code()
         .and_then(|code| ody_config::locale::map_locale_code_to_model_language(&code))
-        .map(|lang| format!("\n\nThink and respond in {lang}."));
+        .map(|lang| format!("\n\n{}", ody_config::locale::language_directive(&lang)));
     assert_eq!(config.base_instructions, expected);
 }
 
@@ -11145,10 +11145,9 @@ async fn language_config_is_loaded_and_injected_into_base_instructions() {
     .await
     .expect("load config");
     assert_eq!(config.language.as_deref(), Some("zh"));
-    assert_eq!(
-        config.base_instructions.as_deref(),
-        Some("\n\nThink and respond in Chinese.")
-    );
+    assert_eq!(config.model_language.as_deref(), Some("Chinese"));
+    let expected = format!("\n\n{}", ody_config::locale::language_directive("Chinese"));
+    assert_eq!(config.base_instructions.as_deref(), Some(expected.as_str()));
 }
 
 #[tokio::test]
@@ -11174,10 +11173,11 @@ base_url = "https://api.test.com/v1"
     )
     .await
     .expect("load config");
-    assert_eq!(
-        config.base_instructions.as_deref(),
-        Some("Be concise\n\nThink and respond in Spanish.")
+    let expected = format!(
+        "Be concise\n\n{}",
+        ody_config::locale::language_directive("Spanish")
     );
+    assert_eq!(config.base_instructions.as_deref(), Some(expected.as_str()));
 }
 
 #[tokio::test]
@@ -11203,10 +11203,9 @@ base_url = "https://api.test.com/v1"
     .await
     .expect("load config");
     assert_eq!(config.language.as_deref(), Some("  fr  "));
-    assert_eq!(
-        config.base_instructions.as_deref(),
-        Some("\n\nThink and respond in French.")
-    );
+    assert_eq!(config.model_language.as_deref(), Some("French"));
+    let expected = format!("\n\n{}", ody_config::locale::language_directive("French"));
+    assert_eq!(config.base_instructions.as_deref(), Some(expected.as_str()));
 }
 
 #[tokio::test]
@@ -11223,7 +11222,7 @@ async fn language_auto_uses_detected_system_language() {
     assert_eq!(config.language.as_deref(), Some("auto"));
     let expected = ody_config::locale::detect_system_locale_code()
         .and_then(|code| ody_config::locale::map_locale_code_to_model_language(&code))
-        .map(|lang| format!("\n\nThink and respond in {lang}."));
+        .map(|lang| format!("\n\n{}", ody_config::locale::language_directive(&lang)));
     assert_eq!(config.base_instructions, expected);
 }
 

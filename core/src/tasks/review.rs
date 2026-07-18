@@ -166,6 +166,18 @@ async fn start_review_conversation_with_overrides(
     // Set explicit review rubric for the sub-agent
     sub_agent_config.base_instructions =
         base_instructions_override.or(Some(crate::REVIEW_PROMPT.to_string()));
+    // The rubric above *replaces* base_instructions, dropping the language
+    // directive that config load bakes in — which is why review/adversarial
+    // subagent output defaults to English. Re-append it so review findings
+    // (guardian and the design adversarial review) honor the configured
+    // language. `model_language` is carried on the cloned config.
+    if let Some(language) = sub_agent_config.model_language.as_deref()
+        && let Some(instructions) = sub_agent_config.base_instructions.as_mut()
+    {
+        instructions.push('\n');
+        instructions.push('\n');
+        instructions.push_str(&ody_config::locale::language_directive(language));
+    }
     sub_agent_config.permissions.approval_policy = Constrained::allow_only(AskForApproval::Never);
 
     let model = model_override.unwrap_or_else(|| {

@@ -1039,6 +1039,31 @@ pub async fn run_main(
                     tracing::warn!(error = %err, "failed to run personality migration");
                 }
             }
+
+            // Persist the detected system language into config.toml when unset, so
+            // the model's language directive no longer depends on run-time locale
+            // detection (which silently drops to English when it fails to resolve).
+            match ody_app_server_client::backfill_language_if_needed(
+                &config.ody_home,
+                &config_toml,
+            )
+            .await
+            {
+                Ok(true) => {
+                    config = load_config_or_exit(
+                        cli_kv_overrides.clone(),
+                        overrides.clone(),
+                        loader_overrides.clone(),
+                        cloud_config_bundle.clone(),
+                        strict_config,
+                    )
+                    .await;
+                }
+                Ok(false) => {}
+                Err(err) => {
+                    tracing::warn!(error = %err, "failed to backfill system language");
+                }
+            }
         }
         Err(err) => {
             tracing::warn!(error = %err, "failed to deserialize config for personality migration");

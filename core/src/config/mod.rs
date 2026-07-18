@@ -765,6 +765,12 @@ pub struct Config {
     /// Preferred language for model responses in the TUI transcript.
     pub language: Option<String>,
 
+    /// Resolved human-readable language name (e.g. `Chinese`) the model is
+    /// instructed to think and respond in, or `None` when no known language
+    /// could be resolved from `language`/the system locale. Baked into
+    /// `base_instructions` and reinforced in the per-turn developer bundle.
+    pub model_language: Option<String>,
+
     /// Shell used to execute model-invoked shell commands (a shell name such
     /// as `cmd`, `powershell`, or `bash`, or a path to a shell executable).
     /// `None` uses the platform default (`cmd.exe` on Windows, the user's
@@ -3688,8 +3694,9 @@ impl Config {
                 ody_config::locale::map_locale_code_to_model_language(&code)
             })
         };
-        let base_instructions = if let Some(language) = effective_language {
-            let language_instruction = format!("\n\nThink and respond in {language}.");
+        let base_instructions = if let Some(language) = effective_language.as_deref() {
+            let language_instruction =
+                format!("\n\n{}", ody_config::locale::language_directive(language));
             Some(base_instructions.unwrap_or_default() + &language_instruction)
         } else {
             base_instructions
@@ -3932,6 +3939,7 @@ impl Config {
             notify: cfg.notify,
             base_instructions,
             language: cfg.language.clone(),
+            model_language: effective_language,
             shell: cfg.shell.clone(),
             personality,
             developer_instructions,

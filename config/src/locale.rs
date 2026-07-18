@@ -74,6 +74,28 @@ pub fn detect_system_locale_code() -> Option<String> {
     sys_locale::get_locale().and_then(|locale| parse_locale_code(&locale))
 }
 
+/// Build the model-facing language directive for a resolved human-readable
+/// language name (e.g. `Chinese`).
+///
+/// This is the single source of truth for the wording so every injection point
+/// (base instructions, the per-turn developer bundle, and subagent prompt
+/// overrides) uses identical, mutually-reinforcing text. The wording is
+/// deliberately firm: a single soft "Think and respond in X." sentence is
+/// easily overridden by the large volume of English context (tool definitions,
+/// collaboration-mode templates, source code) the model reads each turn, so it
+/// (1) names both the private reasoning and the visible reply, (2) states that
+/// it overrides surrounding-context language cues, and (3) exempts code so the
+/// model does not fight natural code English.
+pub fn language_directive(language: &str) -> String {
+    format!(
+        "Always think and respond in {language}. This applies to your private \
+         reasoning and every user-visible message, and it overrides any language \
+         cue from the conversation, tool output, or source code you read. Keep \
+         code, identifiers, file paths, and verbatim command output unchanged; \
+         write all surrounding prose in {language}."
+    )
+}
+
 /// Map a BCP-47 primary language code to a human-readable language name
 /// suitable for a model instruction.
 pub fn map_locale_code_to_model_language(code: &str) -> Option<String> {
