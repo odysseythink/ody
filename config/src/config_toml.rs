@@ -251,6 +251,10 @@ pub struct ConfigToml {
     pub model: Option<String>,
     /// Review model override used by the `/review` feature.
     pub review_model: Option<String>,
+    /// Optional model override for the adversarial self-review triggered when
+    /// finalizing a design in Design Mode. When unset, Design Mode falls back
+    /// to `review_model` for backwards compatibility.
+    pub design_review_model: Option<String>,
 
     /// Provider to use from the model_providers map.
     pub model_provider: Option<String>,

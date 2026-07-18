@@ -3337,7 +3337,8 @@
               "decrease_reasoning_effort": null,
               "edit_queued_message": null,
               "increase_reasoning_effort": null,
-              "interrupt_turn": null
+              "interrupt_turn": null,
+              "toggle_reasoning_expansion": null
             },
             "composer": {
               "history_search_next": null,
@@ -3674,6 +3675,14 @@
             }
           ],
           "description": "Interrupt the active turn."
+        },
+        "toggle_reasoning_expansion": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/KeybindingsSpec"
+            }
+          ],
+          "description": "Expand or collapse the most recent reasoning block in the transcript."
         }
       },
       "type": "object"
@@ -3986,7 +3995,8 @@
             "decrease_reasoning_effort": null,
             "edit_queued_message": null,
             "increase_reasoning_effort": null,
-            "interrupt_turn": null
+            "interrupt_turn": null,
+            "toggle_reasoning_expansion": null
           }
         },
         "composer": {
@@ -5020,6 +5030,10 @@
       "description": "Ody-code compatible default thinking flag.",
       "type": "boolean"
     },
+    "design_review_model": {
+      "description": "Optional model override for the adversarial self-review triggered when finalizing a design in Design Mode. When unset, Design Mode falls back to `review_model` for backwards compatibility.",
+      "type": "string"
+    },
     "desktop": {
       "additionalProperties": true,
       "default": null,
@@ -5481,7 +5495,7 @@
       "type": "string"
     },
     "language": {
-      "description": "Preferred language for model responses in the TUI transcript. When set, a short instruction is appended to the base instructions asking the model to respond in this language.",
+      "description": "Preferred language for model responses and reasoning, expressed as a BCP-47 primary language code (e.g. `en`, `zh`, `es`, `fr`) or the special value `auto` to detect the language from the system locale.\n\nWhen set (or left empty), a short instruction is appended to the base instructions asking the model to think and respond in the mapped human-readable language name. Human-readable names such as `Chinese` are accepted for backwards compatibility. When unset or empty, defaults to `auto`.",
       "type": "string"
     },
     "log_dir": {

@@ -593,6 +593,95 @@ async fn submit_design_final_triggers_adversarial_review_and_appends_findings() 
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn submit_design_final_uses_design_review_model_over_review_model() -> anyhow::Result<()> {
+    skip_if_no_network!(Ok(()));
+
+    let server = start_mock_server().await;
+
+    let call_id = "submit-design-final";
+    let design_markdown = complete_design_markdown();
+    let args = serde_json::json!({"design": design_markdown, "final": true}).to_string();
+    let first_response = sse(vec![
+        ev_response_created("resp-1"),
+        ev_function_call(call_id, "submit_design", &args),
+        ev_completed("resp-1"),
+    ]);
+
+    let review_json = serde_json::json!({
+        "overall_assessment": "No issues.",
+        "findings": []
+    })
+    .to_string();
+    let second_response = sse(vec![
+        ev_response_created("resp-2"),
+        ev_assistant_message("msg-review", &review_json),
+        ev_completed("resp-2"),
+    ]);
+
+    let response_mock = mount_sse_sequence(&server, vec![first_response, second_response]).await;
+
+    let mut builder = test_ody().with_config(|config| {
+        config.review_model = Some("review-model".to_string());
+        config.design_review_model = Some("design-review-model".to_string());
+    });
+    let test = builder.build(&server).await?;
+
+    let (sandbox_policy, permission_profile) =
+        turn_permission_fields(PermissionProfile::Disabled, test.cwd.path());
+
+    test.ody
+        .submit(Op::UserInput {
+            items: vec![UserInput::Text {
+                text: "please finalize the design".into(),
+                text_elements: Vec::new(),
+            }],
+            final_output_json_schema: None,
+            responsesapi_client_metadata: None,
+            additional_context: Default::default(),
+            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+                environments: Some(local_selections(test.config.cwd.clone())),
+                approval_policy: Some(AskForApproval::Never),
+                sandbox_policy: Some(sandbox_policy),
+                permission_profile,
+                collaboration_mode: Some(CollaborationMode {
+                    mode: ModeKind::Design,
+                    settings: Settings {
+                        model: test.session_configured.model.clone(),
+                        reasoning_effort: None,
+                        developer_instructions: None,
+                        design_audit_level: None,
+                    },
+                }),
+                ..Default::default()
+            },
+        })
+        .await?;
+
+    let _completed = wait_for_event_match(&test.ody, |event| match event {
+        EventMsg::ItemCompleted(_) => Some(()),
+        _ => None,
+    })
+    .await;
+
+    let requests = response_mock.requests();
+    assert_eq!(
+        requests.len(),
+        2,
+        "final design submission with design_review_model configured must trigger a review sub-session request"
+    );
+
+    let review_request = &requests[1];
+    let review_body = review_request.body_json();
+    assert_eq!(
+        review_body["model"].as_str().unwrap(),
+        "design-review-model",
+        "design review must use design_review_model, not review_model"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn submit_design_final_skips_review_when_review_model_unset() -> anyhow::Result<()> {
     skip_if_no_network!(Ok(()));
 

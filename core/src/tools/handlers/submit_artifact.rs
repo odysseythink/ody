@@ -184,13 +184,13 @@ pub(crate) fn should_trigger_design_review(
     finalize: bool,
     gap: Option<&str>,
     has_pending_parts: bool,
-    review_model: Option<&str>,
+    design_review_model: Option<&str>,
 ) -> bool {
     expected_mode == ModeKind::Design
         && finalize
         && gap.is_none()
         && !has_pending_parts
-        && review_model.is_some()
+        && design_review_model.is_some()
 }
 
 pub(crate) async fn handle_submit_artifact(
@@ -366,16 +366,23 @@ pub(crate) async fn handle_submit_artifact(
     };
 
     // 7.5 — automatic adversarial review after structural gate
+    let effective_design_review_model = turn
+        .config
+        .design_review_model
+        .clone()
+        .or_else(|| turn.config.review_model.clone());
     let review_appendix: Option<String> = if should_trigger_design_review(
         expected_mode,
         finalize,
         gap.as_deref(),
         has_pending_parts,
-        turn.config.review_model.as_deref(),
+        effective_design_review_model.as_deref(),
     ) {
         let request = DesignReviewRequest {
             design_markdown: markdown.clone(),
-            review_model: turn.config.review_model.clone().expect("checked above"),
+            review_model: effective_design_review_model
+                .clone()
+                .expect("checked above"),
         };
         match DesignReviewOrchestrator::review(&session, &turn, request).await {
             Ok(output) => Some(format_review_appendix_for_submit(&output)),
