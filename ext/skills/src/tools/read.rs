@@ -59,11 +59,18 @@ impl ToolExecutor<ToolCall> for ReadTool {
     fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
         Box::pin(async move {
             let args: ReadArgs = parse_args(&call)?;
-            let catalog = self.context.catalog(&call.turn_id, args.authority.clone()).await;
+            let catalog = self
+                .context
+                .catalog(&call.turn_id, args.authority.clone())
+                .await;
             let authority = args.authority.into_authority();
             validate_handle("package", &args.package, MAX_HANDLE_BYTES)?;
             validate_handle("resource", &args.resource, MAX_HANDLE_BYTES)?;
-            let mode = self.context.thread_state.mode().unwrap_or(ModeKind::Default);
+            let mode = self
+                .context
+                .thread_state
+                .mode()
+                .unwrap_or(ModeKind::Default);
             let package_is_available = catalog.entries.iter().any(|entry| {
                 entry.enabled
                     && entry.authority == authority

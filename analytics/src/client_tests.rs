@@ -12,12 +12,12 @@ use crate::events::SkillInvocationEventParams;
 use crate::events::SkillInvocationEventRequest;
 use crate::events::TrackEventRequest;
 use crate::facts::AnalyticsFact;
-use crate::facts::InvocationType;
 use crate::facts::CustomAnalyticsFact;
 use crate::facts::DesignReviewCompletedInput;
 use crate::facts::DesignReviewFailedInput;
 use crate::facts::DesignReviewFailureReason;
 use crate::facts::DesignReviewStartedInput;
+use crate::facts::InvocationType;
 use ody_app_server_protocol::ApprovalsReviewer as AppServerApprovalsReviewer;
 use ody_app_server_protocol::AskForApproval as AppServerAskForApproval;
 use ody_app_server_protocol::ClientRequest;
@@ -53,23 +53,21 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TryRecvError;
 
 fn sample_accepted_line_fingerprint_event(thread_id: &str) -> TrackEventRequest {
-    TrackEventRequest::AcceptedLineFingerprints(Box::new(
-        OdyAcceptedLineFingerprintsEventRequest {
-            event_type: "ody_accepted_line_fingerprints",
-            event_params: OdyAcceptedLineFingerprintsEventParams {
-                event_type: "ody.accepted_line_fingerprints",
-                turn_id: "turn-1".to_string(),
-                thread_id: thread_id.to_string(),
-                product_surface: Some("ody".to_string()),
-                model_slug: Some("gpt-5.1-ody".to_string()),
-                completed_at: 1,
-                repo_hash: None,
-                accepted_added_lines: 1,
-                accepted_deleted_lines: 0,
-                line_fingerprints: Vec::new(),
-            },
+    TrackEventRequest::AcceptedLineFingerprints(Box::new(OdyAcceptedLineFingerprintsEventRequest {
+        event_type: "ody_accepted_line_fingerprints",
+        event_params: OdyAcceptedLineFingerprintsEventParams {
+            event_type: "ody.accepted_line_fingerprints",
+            turn_id: "turn-1".to_string(),
+            thread_id: thread_id.to_string(),
+            product_surface: Some("ody".to_string()),
+            model_slug: Some("gpt-5.1-ody".to_string()),
+            completed_at: 1,
+            repo_hash: None,
+            accepted_added_lines: 1,
+            accepted_deleted_lines: 0,
+            line_fingerprints: Vec::new(),
         },
-    ))
+    }))
 }
 
 fn sample_regular_track_event(thread_id: &str) -> TrackEventRequest {

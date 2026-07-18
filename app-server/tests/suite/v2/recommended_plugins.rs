@@ -2,6 +2,7 @@ use anyhow::Result;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
 use app_test_support::write_mock_responses_config_toml_simple;
+use core_test_support::responses;
 use ody_app_server_protocol::JSONRPCResponse;
 use ody_app_server_protocol::LoginResponse;
 use ody_app_server_protocol::RequestId;
@@ -9,7 +10,6 @@ use ody_app_server_protocol::ThreadStartParams;
 use ody_app_server_protocol::ThreadStartResponse;
 use ody_app_server_protocol::TurnStartParams;
 use ody_app_server_protocol::UserInput;
-use core_test_support::responses;
 use serde_json::Value;
 use std::time::Duration;
 use tempfile::TempDir;
@@ -46,9 +46,7 @@ async fn first_turn_after_external_login_does_not_inject_recommended_plugins() -
     .await?;
     timeout(DEFAULT_READ_TIMEOUT, app_server.initialize()).await??;
 
-    let login_id = app_server
-        .send_login_api_key_request("sk-test-key")
-        .await?;
+    let login_id = app_server.send_login_api_key_request("sk-test-key").await?;
     let login_response: JSONRPCResponse = timeout(
         DEFAULT_READ_TIMEOUT,
         app_server.read_stream_until_response_message(RequestId::Integer(login_id)),

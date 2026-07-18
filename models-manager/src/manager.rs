@@ -201,10 +201,7 @@ pub struct StaticModelsManager {
 
 impl OpenAiModelsManager {
     /// Construct an OpenAI-compatible remote model manager.
-    pub fn new(
-        ody_home: PathBuf,
-        endpoint_client: Arc<dyn ModelsEndpointClient>,
-    ) -> Self {
+    pub fn new(ody_home: PathBuf, endpoint_client: Arc<dyn ModelsEndpointClient>) -> Self {
         let cache_path = ody_home.join(MODEL_CACHE_FILE);
         let cache_manager = ModelsCacheManager::new(cache_path, DEFAULT_MODEL_CACHE_TTL);
         let remote_models = load_remote_models_from_file().unwrap_or_default();

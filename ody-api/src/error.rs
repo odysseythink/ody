@@ -1,5 +1,5 @@
-use ody_client::TransportError;
 use http::StatusCode;
+use ody_client::TransportError;
 use std::time::Duration;
 use thiserror::Error;
 

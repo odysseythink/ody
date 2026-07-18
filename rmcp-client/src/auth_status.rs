@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use anyhow::Result;
-use ody_protocol::protocol::McpAuthStatus;
 use futures::FutureExt;
+use ody_protocol::protocol::McpAuthStatus;
 use reqwest::Client;
 use reqwest::header::AUTHORIZATION;
 use reqwest::header::HeaderMap;

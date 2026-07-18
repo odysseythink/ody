@@ -21,6 +21,8 @@ use axum::http::StatusCode;
 use axum::http::Uri;
 use axum::http::header::AUTHORIZATION;
 use axum::routing::get;
+use flate2::Compression;
+use flate2::write::GzEncoder;
 use ody_app_server_protocol::AppInfo;
 use ody_app_server_protocol::AppSummary;
 use ody_app_server_protocol::AppsListParams;
@@ -33,8 +35,6 @@ use ody_app_server_protocol::PluginInstallResponse;
 use ody_app_server_protocol::RequestId;
 use ody_config::types::AuthCredentialsStoreMode;
 use ody_utils_absolute_path::AbsolutePathBuf;
-use flate2::Compression;
-use flate2::write::GzEncoder;
 use pretty_assertions::assert_eq;
 use rmcp::handler::server::ServerHandler;
 use rmcp::model::JsonObject;
@@ -317,8 +317,7 @@ async fn plugin_install_starts_mcp_oauth_with_formerly_disallowed_plugin_app() -
     write_connectors_config(ody_home.path(), &apps_server_url)?;
     write_api_key_auth(
         ody_home.path(),
-        ApiKeyAuthFixture::new("api-key")
-            .account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -500,11 +499,9 @@ connectors = true
     let marketplace_path =
         AbsolutePathBuf::try_from(repo_root.path().join(".agents/plugins/marketplace.json"))?;
 
-    let mut mcp = TestAppServer::new_with_env(
-        ody_home.path(),
-        &[("OPENAI_API_KEY", Some("test-api-key"))],
-    )
-    .await?;
+    let mut mcp =
+        TestAppServer::new_with_env(ody_home.path(), &[("OPENAI_API_KEY", Some("test-api-key"))])
+            .await?;
     timeout(DEFAULT_TIMEOUT, mcp.initialize()).await??;
 
     let request_id = mcp
@@ -830,10 +827,7 @@ async fn wait_for_plugin_analytics_payload(server: &MockServer) -> Result<serde_
             };
             if let Some(request) = requests.iter().find(|request| {
                 request.method == "POST"
-                    && request
-                        .url
-                        .path()
-                        .ends_with("/ody/analytics-events/events")
+                    && request.url.path().ends_with("/ody/analytics-events/events")
             }) {
                 return serde_json::from_slice(&request.body)
                     .map_err(|err| anyhow::anyhow!("invalid analytics payload: {err}"));
@@ -876,8 +870,7 @@ fn configure_remote_plugin_test(ody_home: &std::path::Path, server: &MockServer)
     write_remote_plugin_catalog_config(ody_home, &format!("{}/backend-api/", server.uri()))?;
     write_api_key_auth(
         ody_home,
-        ApiKeyAuthFixture::new("api-key")
-            .account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )
 }
@@ -902,8 +895,7 @@ connectors = true
     )?;
     write_api_key_auth(
         ody_home,
-        ApiKeyAuthFixture::new("api-key")
-            .account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )
 }

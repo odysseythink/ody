@@ -12,8 +12,7 @@ const MAX_DEFAULT_PROMPT_LEN: usize = 128;
 pub type PluginManifest = ody_plugin::manifest::PluginManifest<AbsolutePathBuf>;
 pub type PluginManifestHooks = ody_plugin::manifest::PluginManifestHooks<AbsolutePathBuf>;
 pub type PluginManifestInterface = ody_plugin::manifest::PluginManifestInterface<AbsolutePathBuf>;
-pub type PluginManifestMcpServers =
-    ody_plugin::manifest::PluginManifestMcpServers<AbsolutePathBuf>;
+pub type PluginManifestMcpServers = ody_plugin::manifest::PluginManifestMcpServers<AbsolutePathBuf>;
 pub type PluginManifestPaths = ody_plugin::manifest::PluginManifestPaths<AbsolutePathBuf>;
 
 #[derive(Debug, Default, Deserialize)]

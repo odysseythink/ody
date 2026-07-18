@@ -31,12 +31,8 @@ pub(crate) struct OpenAiModelsEndpoint {
 }
 
 impl OpenAiModelsEndpoint {
-    pub(crate) fn new(
-        provider_info: ModelProviderInfo,
-    ) -> Self {
-        Self {
-            provider_info,
-        }
+    pub(crate) fn new(provider_info: ModelProviderInfo) -> Self {
+        Self { provider_info }
     }
 
     async fn uses_ody_backend(&self) -> bool {
@@ -147,4 +143,3 @@ impl RequestTelemetry for ModelsRequestTelemetry {
         );
     }
 }
-

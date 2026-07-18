@@ -1,6 +1,6 @@
-use ody_protocol::protocol::SessionSource;
 use http::HeaderMap;
 use http::HeaderValue;
+use ody_protocol::protocol::SessionSource;
 
 pub fn build_session_headers(session_id: Option<String>, thread_id: Option<String>) -> HeaderMap {
     let mut headers = HeaderMap::new();

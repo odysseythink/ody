@@ -5,6 +5,7 @@ use app_test_support::TestAppServer;
 use app_test_support::create_final_assistant_message_sse_response;
 use app_test_support::create_mock_responses_server_sequence_unchecked;
 use app_test_support::to_response;
+use core_test_support::skip_if_windows;
 use ody_app_server_protocol::ConfigBatchWriteParams;
 use ody_app_server_protocol::ConfigEdit;
 use ody_app_server_protocol::HookEventName;
@@ -25,7 +26,6 @@ use ody_app_server_protocol::UserInput as V2UserInput;
 use ody_core::config::set_project_trust_level;
 use ody_protocol::config_types::TrustLevel;
 use ody_utils_absolute_path::AbsolutePathBuf;
-use core_test_support::skip_if_windows;
 use pretty_assertions::assert_eq;
 use serde::Serialize;
 use tempfile::TempDir;
@@ -421,8 +421,7 @@ timeout = 5
     )
     .await??;
     let HooksListResponse { data } = to_response(response)?;
-    let project_config_path =
-        AbsolutePathBuf::try_from(workspace.path().join(".ody/config.toml"))?;
+    let project_config_path = AbsolutePathBuf::try_from(workspace.path().join(".ody/config.toml"))?;
     assert_eq!(
         data,
         vec![
@@ -502,8 +501,7 @@ async fn hooks_list_uses_root_repo_hooks_for_linked_worktrees() -> Result<()> {
     let HooksListResponse { data } = to_response(response)?;
     let repo_hook = data[0].hooks[0].clone();
     let worktree_hook = data[1].hooks[0].clone();
-    let repo_config_path =
-        AbsolutePathBuf::from_absolute_path(repo_root.join(".ody/config.toml"))?;
+    let repo_config_path = AbsolutePathBuf::from_absolute_path(repo_root.join(".ody/config.toml"))?;
 
     assert_eq!(repo_hook.command.as_deref(), Some("echo root hook"));
     assert_eq!(worktree_hook.command.as_deref(), Some("echo root hook"));

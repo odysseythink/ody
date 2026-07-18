@@ -10,12 +10,12 @@ pub mod manifest;
 mod plugin_id;
 mod provider;
 
-use ody_config::HookEventsToml;
-use ody_utils_absolute_path::AbsolutePathBuf;
 pub use load_outcome::EffectiveSkillRoots;
 pub use load_outcome::LoadedPlugin;
 pub use load_outcome::PluginLoadOutcome;
 pub use load_outcome::prompt_safe_plugin_description;
+use ody_config::HookEventsToml;
+use ody_utils_absolute_path::AbsolutePathBuf;
 pub use plugin_id::PluginId;
 pub use plugin_id::PluginIdError;
 pub use plugin_id::validate_plugin_segment;

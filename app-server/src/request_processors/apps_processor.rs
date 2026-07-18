@@ -61,20 +61,14 @@ impl AppsRequestProcessor {
                 .set_enabled(Feature::Apps, thread.enabled(Feature::Apps));
         }
 
-        if !config
-            .features
-            .apps_enabled_for_auth(false)
-        {
+        if !config.features.apps_enabled_for_auth(false) {
             return Ok(Some(AppsListResponse {
                 data: Vec::new(),
                 next_cursor: None,
             }));
         }
 
-        if !self
-            .workspace_ody_plugins_enabled(&config)
-            .await
-        {
+        if !self.workspace_ody_plugins_enabled(&config).await {
             return Ok(Some(AppsListResponse {
                 data: Vec::new(),
                 next_cursor: None,
@@ -330,10 +324,7 @@ impl AppsRequestProcessor {
             .map_err(|err| internal_error(format!("failed to reload config: {err}")))
     }
 
-    async fn workspace_ody_plugins_enabled(
-        &self,
-        config: &Config,
-    ) -> bool {
+    async fn workspace_ody_plugins_enabled(&self, config: &Config) -> bool {
         match workspace_settings::ody_plugins_enabled_for_workspace(
             config,
             Some(&self.workspace_settings_cache),

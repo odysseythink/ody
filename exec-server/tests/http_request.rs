@@ -6,6 +6,8 @@ use std::collections::BTreeMap;
 use std::io::ErrorKind;
 use std::time::Duration;
 
+use common::exec_server::ExecServerHarness;
+use common::exec_server::exec_server;
 use ody_app_server_protocol::JSONRPCError;
 use ody_app_server_protocol::JSONRPCMessage;
 use ody_app_server_protocol::JSONRPCNotification;
@@ -16,8 +18,6 @@ use ody_exec_server::HttpRequestBodyDeltaNotification;
 use ody_exec_server::HttpRequestParams;
 use ody_exec_server::HttpRequestResponse;
 use ody_exec_server::InitializeParams;
-use common::exec_server::ExecServerHarness;
-use common::exec_server::exec_server;
 use pretty_assertions::assert_eq;
 use serde::de::DeserializeOwned;
 use serde_json::Value;

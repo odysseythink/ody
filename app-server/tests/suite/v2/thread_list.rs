@@ -10,6 +10,7 @@ use app_test_support::test_absolute_path;
 use app_test_support::to_response;
 use chrono::DateTime;
 use chrono::Utc;
+use core_test_support::responses;
 use ody_app_server_protocol::GitInfo as ApiGitInfo;
 use ody_app_server_protocol::JSONRPCError;
 use ody_app_server_protocol::JSONRPCResponse;
@@ -36,7 +37,6 @@ use ody_protocol::protocol::RolloutLine;
 use ody_protocol::protocol::SessionSource as CoreSessionSource;
 use ody_protocol::protocol::SubAgentSource;
 use ody_state::DirectionalThreadSpawnEdgeStatus;
-use core_test_support::responses;
 use pretty_assertions::assert_eq;
 use std::cmp::Reverse;
 use std::fs;
@@ -545,12 +545,7 @@ async fn thread_list_respects_cwd_filters() -> Result<()> {
         &first_target_cwd,
     )?;
     set_rollout_cwd(
-        rollout_path(
-            ody_home.path(),
-            "2025-01-02T12-00-00",
-            &second_filtered_id,
-        )
-        .as_path(),
+        rollout_path(ody_home.path(), "2025-01-02T12-00-00", &second_filtered_id).as_path(),
         &second_target_cwd,
     )?;
 
@@ -988,11 +983,9 @@ async fn thread_list_parent_filter_reads_direct_children_from_state_db() -> Resu
     let older_child_id = ThreadId::new();
     let newer_child_id = ThreadId::new();
     let grandchild_id = ThreadId::new();
-    let state_db = ody_state::StateRuntime::init(
-        ody_home.path().to_path_buf(),
-        "mock_provider".to_string(),
-    )
-    .await?;
+    let state_db =
+        ody_state::StateRuntime::init(ody_home.path().to_path_buf(), "mock_provider".to_string())
+            .await?;
     for (thread_id, created_at, source, model_provider) in [
         (
             older_child_id,

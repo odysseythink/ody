@@ -6,6 +6,8 @@ mod chat_provider_tests;
 mod models_endpoint;
 mod provider;
 
+pub mod login;
+
 pub mod adapters;
 
 pub use chat_provider::ChatCompletion;

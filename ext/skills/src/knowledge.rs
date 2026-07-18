@@ -229,10 +229,7 @@ mod tests {
     fn budget_caps_contents_bytes() {
         let mut large = knowledge_entry("large", &["large"]);
         large.description = "x".repeat(1_000);
-        let entries = vec![
-            large.clone(),
-            knowledge_entry("small", &["small"]),
-        ];
+        let entries = vec![large.clone(), knowledge_entry("small", &["small"])];
         // The large entry consumes more than half the budget, so only it fits.
         let selected = KnowledgeMicroagentInjector::select(
             "large small",

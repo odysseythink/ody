@@ -33,10 +33,7 @@ fn design_preset_uses_design_mode_and_name() {
     assert_eq!(preset.name, "Design");
     assert_eq!(preset.mode, Some(ModeKind::Design));
     assert_eq!(preset.model, None);
-    assert_eq!(
-        preset.reasoning_effort,
-        Some(Some(ReasoningEffort::Medium))
-    );
+    assert_eq!(preset.reasoning_effort, Some(Some(ReasoningEffort::Medium)));
 }
 
 #[test]

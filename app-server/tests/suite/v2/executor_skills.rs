@@ -3,6 +3,7 @@ use std::time::Duration;
 use anyhow::Result;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
+use core_test_support::responses;
 use ody_app_server_protocol::CapabilityRootLocation;
 use ody_app_server_protocol::JSONRPCResponse;
 use ody_app_server_protocol::RequestId;
@@ -11,7 +12,6 @@ use ody_app_server_protocol::ThreadStartParams;
 use ody_app_server_protocol::ThreadStartResponse;
 use ody_app_server_protocol::TurnStartParams;
 use ody_app_server_protocol::UserInput;
-use core_test_support::responses;
 use tempfile::TempDir;
 use tokio::time::timeout;
 

@@ -1,12 +1,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use ody_api::AuthProvider;
-use ody_api::SharedAuthProvider;
 use futures::FutureExt;
 use http::HeaderMap;
 use http::HeaderName;
 use http::HeaderValue;
+use ody_api::AuthProvider;
+use ody_api::SharedAuthProvider;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use tokio::time::sleep;
@@ -573,9 +573,9 @@ fn preview_error_body(body: &str) -> Option<String> {
 mod tests {
     use std::sync::Arc;
 
-    use ody_api::AuthProvider;
     use http::HeaderMap;
     use http::HeaderValue;
+    use ody_api::AuthProvider;
     use pretty_assertions::assert_eq;
     use wiremock::Mock;
     use wiremock::MockServer;

@@ -4,10 +4,10 @@ use std::ffi::OsStr;
 use std::path::Path;
 use std::path::PathBuf;
 
+use futures::future::join_all;
 use ody_file_system::ExecutorFileSystem;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path_uri::PathUri;
-use futures::future::join_all;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -950,7 +950,12 @@ mod tests {
 
     #[test]
     fn canonicalize_git_remote_url_rejects_non_repository_values() {
-        for remote in ["", "file:///tmp/repo", "github.com/odysseythink", "/tmp/repo"] {
+        for remote in [
+            "",
+            "file:///tmp/repo",
+            "github.com/odysseythink",
+            "/tmp/repo",
+        ] {
             assert_eq!(canonicalize_git_remote_url(remote), None);
         }
     }

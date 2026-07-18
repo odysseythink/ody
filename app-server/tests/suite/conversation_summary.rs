@@ -85,11 +85,7 @@ async fn get_conversation_summary_by_thread_id_reads_rollout() -> Result<()> {
     let thread_id = ThreadId::from_string(&conversation_id)?;
     let expected = expected_summary(
         thread_id,
-        normalized_canonical_path(rollout_path(
-            ody_home.path(),
-            FILENAME_TS,
-            &conversation_id,
-        ))?,
+        normalized_canonical_path(rollout_path(ody_home.path(), FILENAME_TS, &conversation_id))?,
     );
 
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
@@ -197,8 +193,7 @@ async fn get_conversation_summary_by_thread_id_reads_pathless_store_thread() -> 
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn get_conversation_summary_by_relative_rollout_path_resolves_from_ody_home() -> Result<()>
-{
+async fn get_conversation_summary_by_relative_rollout_path_resolves_from_ody_home() -> Result<()> {
     let ody_home = TempDir::new()?;
     let conversation_id = create_fake_rollout(
         ody_home.path(),

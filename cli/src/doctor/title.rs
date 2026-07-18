@@ -175,13 +175,15 @@ fn terminal_title_project_root(config: &Config, cwd: &Path) -> Option<ProjectTit
         )
         .iter()
         .find_map(|layer| match &layer.name {
-            ConfigLayerSource::Project { dot_ody_folder } => dot_ody_folder
-                .as_path()
-                .parent()
-                .map(|root| ProjectTitleRoot {
-                    source: "project config",
-                    path: root.to_path_buf(),
-                }),
+            ConfigLayerSource::Project { dot_ody_folder } => {
+                dot_ody_folder
+                    .as_path()
+                    .parent()
+                    .map(|root| ProjectTitleRoot {
+                        source: "project config",
+                        path: root.to_path_buf(),
+                    })
+            }
             _ => None,
         })
 }

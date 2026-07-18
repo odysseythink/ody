@@ -11,7 +11,6 @@ use reqwest::ResponseBuilderExt;
 use reqwest::StatusCode;
 use reqwest::Url;
 
-
 fn with_now_override<T>(now: DateTime<Utc>, f: impl FnOnce() -> T) -> T {
     NOW_OVERRIDE.with(|cell| {
         *cell.borrow_mut() = Some(now);
@@ -20,7 +19,6 @@ fn with_now_override<T>(now: DateTime<Utc>, f: impl FnOnce() -> T) -> T {
         result
     })
 }
-
 
 #[test]
 fn server_overloaded_maps_to_protocol() {

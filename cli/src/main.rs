@@ -855,9 +855,7 @@ fn main() -> anyhow::Result<()> {
     })
 }
 
-async fn cli_main(
-    arg0_paths: Arg0DispatchPaths,
-) -> anyhow::Result<()> {
+async fn cli_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
     let MultitoolCli {
         config_overrides: mut root_config_overrides,
         feature_toggles,
@@ -1446,11 +1444,8 @@ async fn run_exec_server_command(
         let auth_provider =
             load_exec_server_remote_auth_provider(&config, &base_url, cmd.use_agent_identity_auth)
                 .await?;
-        let mut remote_config = ody_exec_server::RemoteEnvironmentConfig::new(
-            base_url,
-            environment_id,
-            auth_provider,
-        )?;
+        let mut remote_config =
+            ody_exec_server::RemoteEnvironmentConfig::new(base_url, environment_id, auth_provider)?;
         if let Some(name) = cmd.name {
             remote_config.name = name;
         }
@@ -1495,9 +1490,9 @@ async fn load_exec_server_remote_auth_provider(
 
     validate_api_key_remote_host(base_url)?;
 
-    Ok(Arc::new(
-        ody_model_provider::BearerAuthProvider::new(api_key),
-    ))
+    Ok(Arc::new(ody_model_provider::BearerAuthProvider::new(
+        api_key,
+    )))
 }
 
 fn validate_api_key_remote_host(base_url: &str) -> anyhow::Result<()> {
@@ -1513,10 +1508,14 @@ fn validate_api_key_remote_host(base_url: &str) -> anyhow::Result<()> {
         url::Host::Ipv6(ip) => ip.is_loopback(),
     };
     let is_odysseythink_host = match &host {
-        url::Host::Domain(host) => ["odysseythink.com", "odysseythink.org"].into_iter().any(|domain| {
-            host.eq_ignore_ascii_case(domain)
-                || host.to_ascii_lowercase().ends_with(&format!(".{domain}"))
-        }),
+        url::Host::Domain(host) => {
+            ["odysseythink.com", "odysseythink.org"]
+                .into_iter()
+                .any(|domain| {
+                    host.eq_ignore_ascii_case(domain)
+                        || host.to_ascii_lowercase().ends_with(&format!(".{domain}"))
+                })
+        }
         _ => false,
     };
     let is_allowed = match url.scheme() {
@@ -1649,7 +1648,8 @@ async fn run_debug_prompt_input_command(
         sandbox_mode,
         cwd: shared.cwd,
         ody_self_exe: arg0_paths.ody_self_exe,
-        main_execve_wrapper_exe: arg0_paths.main_execve_wrapper_exe,        show_raw_agent_reasoning: None,
+        main_execve_wrapper_exe: arg0_paths.main_execve_wrapper_exe,
+        show_raw_agent_reasoning: None,
         ephemeral: Some(true),
         bypass_hook_trust: shared.bypass_hook_trust.then_some(true),
         additional_writable_roots: shared.add_dir,
@@ -2296,8 +2296,9 @@ mod tests {
 
     #[test]
     fn exec_server_remote_api_key_auth_rejects_suffix_spoof() {
-        let error = validate_api_key_remote_host("https://service.odysseythink.org.evil.example/api")
-            .expect_err("reject suffix spoof");
+        let error =
+            validate_api_key_remote_host("https://service.odysseythink.org.evil.example/api")
+                .expect_err("reject suffix spoof");
 
         assert_eq!(
             error.to_string(),
@@ -2640,9 +2641,8 @@ mod tests {
 
     #[test]
     fn plugin_list_parses_under_plugin() {
-        let cli =
-            MultitoolCli::try_parse_from(["ody", "plugin", "list", "--marketplace", "debug"])
-                .expect("parse");
+        let cli = MultitoolCli::try_parse_from(["ody", "plugin", "list", "--marketplace", "debug"])
+            .expect("parse");
 
         assert!(matches!(cli.subcommand, Some(Subcommand::Plugin(_))));
     }
@@ -2776,25 +2776,22 @@ mod tests {
 
     #[test]
     fn plugin_marketplace_remove_parses_under_plugin() {
-        let cli =
-            MultitoolCli::try_parse_from(["ody", "plugin", "marketplace", "remove", "debug"])
-                .expect("parse");
+        let cli = MultitoolCli::try_parse_from(["ody", "plugin", "marketplace", "remove", "debug"])
+            .expect("parse");
 
         assert!(matches!(cli.subcommand, Some(Subcommand::Plugin(_))));
     }
 
     #[test]
     fn marketplace_no_longer_parses_at_top_level() {
-        let add_result =
-            MultitoolCli::try_parse_from(["ody", "marketplace", "add", "owner/repo"]);
+        let add_result = MultitoolCli::try_parse_from(["ody", "marketplace", "add", "owner/repo"]);
         assert!(add_result.is_err());
 
         let upgrade_result =
             MultitoolCli::try_parse_from(["ody", "marketplace", "upgrade", "debug"]);
         assert!(upgrade_result.is_err());
 
-        let remove_result =
-            MultitoolCli::try_parse_from(["ody", "marketplace", "remove", "debug"]);
+        let remove_result = MultitoolCli::try_parse_from(["ody", "marketplace", "remove", "debug"]);
         assert!(remove_result.is_err());
     }
 
@@ -3141,9 +3138,8 @@ mod tests {
 
     #[test]
     fn fork_last_rejects_explicit_session_and_prompt() {
-        let err =
-            MultitoolCli::try_parse_from(["ody", "fork", "--last", "1234", "continue here"])
-                .expect_err("--last with an explicit session and prompt should be rejected");
+        let err = MultitoolCli::try_parse_from(["ody", "fork", "--last", "1234", "continue here"])
+            .expect_err("--last with an explicit session and prompt should be rejected");
 
         assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
     }
@@ -3179,10 +3175,7 @@ mod tests {
     fn app_server_analytics_default_disabled_without_flag() {
         let app_server = app_server_from_args(["ody", "app-server"].as_ref());
         assert!(!app_server.analytics_default_enabled);
-        assert_eq!(
-            app_server.listen,
-            ody_app_server::AppServerTransport::Stdio
-        );
+        assert_eq!(app_server.listen, ody_app_server::AppServerTransport::Stdio);
     }
 
     #[test]
@@ -3197,8 +3190,8 @@ mod tests {
         let cli = MultitoolCli::try_parse_from(["ody", "--strict-config"]).expect("parse");
         assert!(cli.interactive.strict_config);
 
-        let cli = MultitoolCli::try_parse_from(["ody", "mcp-server", "--strict-config"])
-            .expect("parse");
+        let cli =
+            MultitoolCli::try_parse_from(["ody", "mcp-server", "--strict-config"]).expect("parse");
         assert_matches!(
             cli.subcommand,
             Some(Subcommand::McpServer(McpServerCommand {
@@ -3217,8 +3210,8 @@ mod tests {
             }))
         );
 
-        let cli = MultitoolCli::try_parse_from(["ody", "exec-server", "--strict-config"])
-            .expect("parse");
+        let cli =
+            MultitoolCli::try_parse_from(["ody", "exec-server", "--strict-config"]).expect("parse");
         assert_matches!(
             cli.subcommand,
             Some(Subcommand::ExecServer(ExecServerCommand {
@@ -3230,8 +3223,8 @@ mod tests {
 
     #[test]
     fn root_strict_config_is_supported_for_exec_server() {
-        let cli = MultitoolCli::try_parse_from(["ody", "--strict-config", "exec-server"])
-            .expect("parse");
+        let cli =
+            MultitoolCli::try_parse_from(["ody", "--strict-config", "exec-server"]).expect("parse");
 
         reject_root_strict_config_for_subcommand(cli.interactive.strict_config, &cli.subcommand)
             .expect("exec-server should support root --strict-config");
@@ -3239,8 +3232,8 @@ mod tests {
 
     #[test]
     fn root_strict_config_is_rejected_for_unsupported_subcommands() {
-        let cli = MultitoolCli::try_parse_from(["ody", "--strict-config", "mcp", "list"])
-            .expect("parse");
+        let cli =
+            MultitoolCli::try_parse_from(["ody", "--strict-config", "mcp", "list"]).expect("parse");
         let err = reject_root_strict_config_for_subcommand(
             cli.interactive.strict_config,
             &cli.subcommand,
@@ -3271,8 +3264,8 @@ mod tests {
 
     #[test]
     fn remote_flag_parses_for_interactive_root() {
-        let cli = MultitoolCli::try_parse_from(["ody", "--remote", "unix://ody.sock"])
-            .expect("parse");
+        let cli =
+            MultitoolCli::try_parse_from(["ody", "--remote", "unix://ody.sock"]).expect("parse");
         assert_eq!(cli.remote.remote.as_deref(), Some("unix://ody.sock"));
     }
 
@@ -3294,9 +3287,8 @@ mod tests {
 
     #[test]
     fn remote_flag_parses_for_resume_subcommand() {
-        let cli =
-            MultitoolCli::try_parse_from(["ody", "resume", "--remote", "unix://ody.sock"])
-                .expect("parse");
+        let cli = MultitoolCli::try_parse_from(["ody", "resume", "--remote", "unix://ody.sock"])
+            .expect("parse");
         let Subcommand::Resume(ResumeCommand { remote, .. }) =
             cli.subcommand.expect("resume present")
         else {
@@ -3359,11 +3351,10 @@ mod tests {
 
     #[test]
     fn read_remote_auth_token_from_env_var_trims_values() {
-        let auth_token =
-            read_remote_auth_token_from_env_var_with("ODY_REMOTE_AUTH_TOKEN", |_| {
-                Ok("  bearer-token  ".to_string())
-            })
-            .expect("env var should parse");
+        let auth_token = read_remote_auth_token_from_env_var_with("ODY_REMOTE_AUTH_TOKEN", |_| {
+            Ok("  bearer-token  ".to_string())
+        })
+        .expect("env var should parse");
         assert_eq!(auth_token, "bearer-token");
     }
 
@@ -3378,9 +3369,8 @@ mod tests {
 
     #[test]
     fn app_server_listen_websocket_url_parses() {
-        let app_server = app_server_from_args(
-            ["ody", "app-server", "--listen", "ws://127.0.0.1:4500"].as_ref(),
-        );
+        let app_server =
+            app_server_from_args(["ody", "app-server", "--listen", "ws://127.0.0.1:4500"].as_ref());
         assert_eq!(
             app_server.listen,
             ody_app_server::AppServerTransport::WebSocket {
@@ -3393,10 +3383,7 @@ mod tests {
     fn app_server_listen_stdio_url_parses() {
         let app_server =
             app_server_from_args(["ody", "app-server", "--listen", "stdio://"].as_ref());
-        assert_eq!(
-            app_server.listen,
-            ody_app_server::AppServerTransport::Stdio
-        );
+        assert_eq!(app_server.listen, ody_app_server::AppServerTransport::Stdio);
     }
 
     #[test]
@@ -3407,14 +3394,9 @@ mod tests {
 
     #[test]
     fn app_server_stdio_flag_conflicts_with_listen() {
-        let err = MultitoolCli::try_parse_from([
-            "ody",
-            "app-server",
-            "--stdio",
-            "--listen",
-            "stdio://",
-        ])
-        .expect_err("--stdio and --listen should be rejected together");
+        let err =
+            MultitoolCli::try_parse_from(["ody", "app-server", "--stdio", "--listen", "stdio://"])
+                .expect_err("--stdio and --listen should be rejected together");
         assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
     }
 

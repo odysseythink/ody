@@ -2,10 +2,10 @@ use ody_features::Feature;
 use ody_features::Features;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::model_metadata::ConfigShellToolType;
+use ody_protocol::model_metadata::ModelCapabilities;
 use ody_protocol::model_metadata::ModelInfo;
 use ody_protocol::model_metadata::ModelVisibility;
 use ody_protocol::model_metadata::TruncationPolicyConfig;
-use ody_protocol::model_metadata::ModelCapabilities;
 use pretty_assertions::assert_eq;
 
 use super::*;

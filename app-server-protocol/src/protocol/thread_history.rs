@@ -1085,10 +1085,7 @@ impl ThreadHistoryBuilder {
         self.upsert_item_in_current_turn(item);
     }
 
-    fn handle_collab_resume_end(
-        &mut self,
-        payload: &ody_protocol::protocol::CollabResumeEndEvent,
-    ) {
+    fn handle_collab_resume_end(&mut self, payload: &ody_protocol::protocol::CollabResumeEndEvent) {
         let status = match &payload.status {
             AgentStatus::Errored(_) | AgentStatus::NotFound => CollabAgentToolCallStatus::Failed,
             _ => CollabAgentToolCallStatus::Completed,
@@ -1579,7 +1576,6 @@ mod tests {
     use ody_protocol::protocol::AgentReasoningEvent;
     use ody_protocol::protocol::AgentReasoningRawContentEvent;
     use ody_protocol::protocol::ApplyPatchApprovalRequestEvent;
-    use ody_protocol::protocol::OdyErrorInfo;
     use ody_protocol::protocol::CompactedItem;
     use ody_protocol::protocol::DynamicToolCallResponseEvent;
     use ody_protocol::protocol::ExecCommandEndEvent;
@@ -1587,6 +1583,7 @@ mod tests {
     use ody_protocol::protocol::ItemStartedEvent;
     use ody_protocol::protocol::McpInvocation;
     use ody_protocol::protocol::McpToolCallEndEvent;
+    use ody_protocol::protocol::OdyErrorInfo;
     use ody_protocol::protocol::PatchApplyBeginEvent;
     use ody_protocol::protocol::ThreadRolledBackEvent;
     use ody_protocol::protocol::TurnAbortReason;
@@ -2568,16 +2565,14 @@ mod tests {
                 local_images: Vec::new(),
                 ..Default::default()
             }),
-            EventMsg::DynamicToolCallRequest(
-                ody_protocol::dynamic_tools::DynamicToolCallRequest {
-                    call_id: "dyn-1".into(),
-                    turn_id: "turn-1".into(),
-                    started_at_ms: 0,
-                    namespace: Some("ody_app".into()),
-                    tool: "lookup_ticket".into(),
-                    arguments: serde_json::json!({"id":"ABC-123"}),
-                },
-            ),
+            EventMsg::DynamicToolCallRequest(ody_protocol::dynamic_tools::DynamicToolCallRequest {
+                call_id: "dyn-1".into(),
+                turn_id: "turn-1".into(),
+                started_at_ms: 0,
+                namespace: Some("ody_app".into()),
+                tool: "lookup_ticket".into(),
+                arguments: serde_json::json!({"id":"ABC-123"}),
+            }),
             EventMsg::DynamicToolCallResponse(DynamicToolCallResponseEvent {
                 call_id: "dyn-1".into(),
                 turn_id: "turn-1".into(),

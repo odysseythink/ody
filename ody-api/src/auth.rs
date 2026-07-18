@@ -1,6 +1,6 @@
+use http::HeaderMap;
 use ody_client::Request;
 use ody_client::TransportError;
-use http::HeaderMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;

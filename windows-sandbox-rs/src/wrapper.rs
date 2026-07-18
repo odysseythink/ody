@@ -262,10 +262,7 @@ fn parse_windows_sandbox_wrapper_args(args: Vec<String>) -> Result<WindowsSandbo
 
     let ody_home = ody_home.ok_or_else(|| anyhow!("missing required {ODY_HOME_FLAG}"))?;
     if !ody_home.is_absolute() {
-        bail!(
-            "{ODY_HOME_FLAG} must be absolute: {}",
-            ody_home.display()
-        );
+        bail!("{ODY_HOME_FLAG} must be absolute: {}", ody_home.display());
     }
     let command_cwd = command_cwd.ok_or_else(|| anyhow!("missing required {COMMAND_CWD_FLAG}"))?;
     if workspace_roots.is_empty() {

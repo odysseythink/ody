@@ -5,14 +5,14 @@ use crate::common::SafetyBufferingTreatment;
 use crate::error::ApiError;
 use crate::safety_buffering::treatment_from_headers;
 use crate::telemetry::SseTelemetry;
+use eventsource_stream::Eventsource;
+use futures::StreamExt;
 use ody_client::ByteStream;
 use ody_client::StreamResponse;
 use ody_protocol::models::ResponseItem;
 use ody_protocol::protocol::ModelVerification;
 use ody_protocol::protocol::TokenUsage;
 use ody_protocol::protocol::TurnModerationMetadataEvent;
-use eventsource_stream::Eventsource;
-use futures::StreamExt;
 use serde::Deserialize;
 use serde_json::Value;
 use std::sync::Arc;
@@ -235,7 +235,8 @@ impl ResponsesStreamEvent {
 fn header_odysseythink_model_value_from_json(value: &Value) -> Option<String> {
     let headers = value.as_object()?;
     headers.iter().find_map(|(name, value)| {
-        if name.eq_ignore_ascii_case("odysseythink-model") || name.eq_ignore_ascii_case("x-odysseythink-model")
+        if name.eq_ignore_ascii_case("odysseythink-model")
+            || name.eq_ignore_ascii_case("x-odysseythink-model")
         {
             json_value_as_string(value)
         } else {
@@ -645,15 +646,15 @@ mod tests {
     use super::*;
     use assert_matches::assert_matches;
     use bytes::Bytes;
-    use ody_client::StreamResponse;
-    use ody_client::TransportError;
-    use ody_protocol::models::MessagePhase;
-    use ody_protocol::models::ResponseItem;
     use futures::TryStreamExt;
     use futures::stream;
     use http::HeaderMap;
     use http::HeaderValue;
     use http::StatusCode;
+    use ody_client::StreamResponse;
+    use ody_client::TransportError;
+    use ody_protocol::models::MessagePhase;
+    use ody_protocol::models::ResponseItem;
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use tokio::sync::mpsc;

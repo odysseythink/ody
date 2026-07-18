@@ -103,7 +103,10 @@ fn tool_spec_to_code_mode_tool_definition_returns_augmented_nested_tools() {
     assert_eq!(definition.name, "apply_patch");
     assert_eq!(definition.tool_name, ToolName::plain("apply_patch"));
     assert_eq!(definition.kind, ody_code_mode::CodeModeToolKind::Function);
-    assert_eq!(definition.input_schema, serde_json::to_value(&parameters).ok());
+    assert_eq!(
+        definition.input_schema,
+        serde_json::to_value(&parameters).ok()
+    );
     assert!(definition.description.starts_with("Apply a patch"));
     assert!(definition.description.contains("exec tool declaration:"));
 }

@@ -10,14 +10,14 @@ use std::time::Instant;
 
 use anyhow::Result;
 use anyhow::anyhow;
+use futures::FutureExt;
+use futures::future::BoxFuture;
+use oauth2::TokenResponse;
 use ody_api::SharedAuthProvider;
 use ody_client::maybe_build_rustls_client_config_with_custom_ca;
 use ody_config::types::AuthKeyringBackendKind;
 use ody_config::types::McpServerEnvVar;
 use ody_exec_server::HttpClient;
-use futures::FutureExt;
-use futures::future::BoxFuture;
-use oauth2::TokenResponse;
 use reqwest::header::AUTHORIZATION;
 use reqwest::header::HeaderMap;
 use rmcp::model::CallToolRequestParams;

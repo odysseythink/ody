@@ -13,8 +13,8 @@ use tracing::warn;
 
 use crate::model::AgentThreadId;
 use crate::model::CodeCellRuntimeStatus;
-use crate::model::OdyTurnId;
 use crate::model::ModelVisibleCallId;
+use crate::model::OdyTurnId;
 use crate::payload::RawPayloadKind;
 use crate::payload::RawPayloadRef;
 use crate::raw_event::RawTraceEventContext;

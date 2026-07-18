@@ -7,11 +7,11 @@ use std::io::Result as IoResult;
 use std::sync::Arc;
 
 use ody_arg0::Arg0DispatchPaths;
+use ody_client::default_client::set_default_client_residency_requirement;
 use ody_core::config::ConfigBuilder;
 use ody_core::resolve_installation_id;
 use ody_exec_server::EnvironmentManager;
 use ody_exec_server::ExecServerRuntimePaths;
-use ody_client::default_client::set_default_client_residency_requirement;
 use ody_utils_cli::CliConfigOverrides;
 
 use rmcp::model::ClientNotification;
@@ -29,10 +29,10 @@ use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
-mod ody_tool_config;
-mod ody_tool_runner;
 mod exec_approval;
 pub(crate) mod message_processor;
+mod ody_tool_config;
+mod ody_tool_runner;
 mod outgoing_message;
 mod patch_approval;
 
@@ -41,10 +41,10 @@ use crate::outgoing_message::OutgoingJsonRpcMessage;
 use crate::outgoing_message::OutgoingMessage;
 use crate::outgoing_message::OutgoingMessageSender;
 
-pub use crate::ody_tool_config::OdyToolCallParam;
-pub use crate::ody_tool_config::OdyToolCallReplyParam;
 pub use crate::exec_approval::ExecApprovalElicitRequestParams;
 pub use crate::exec_approval::ExecApprovalResponse;
+pub use crate::ody_tool_config::OdyToolCallParam;
+pub use crate::ody_tool_config::OdyToolCallReplyParam;
 pub use crate::patch_approval::PatchApprovalElicitRequestParams;
 pub use crate::patch_approval::PatchApprovalResponse;
 

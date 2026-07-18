@@ -15,15 +15,15 @@ use crate::endpoint::realtime_websocket::protocol::RealtimeVoice;
 use crate::endpoint::realtime_websocket::protocol::parse_realtime_event;
 use crate::error::ApiError;
 use crate::provider::Provider;
+use futures::SinkExt;
+use futures::StreamExt;
+use http::HeaderMap;
+use http::HeaderValue;
 use ody_client::backoff;
 use ody_client::maybe_build_rustls_client_config_with_custom_ca;
 use ody_protocol::protocol::ConversationTextRole;
 use ody_protocol::protocol::RealtimeTranscriptDelta;
 use ody_utils_rustls_provider::ensure_rustls_crypto_provider;
-use futures::SinkExt;
-use futures::StreamExt;
-use http::HeaderMap;
-use http::HeaderValue;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -853,6 +853,7 @@ fn normalize_realtime_path(url: &mut Url) {
 mod tests {
     use super::*;
     use crate::endpoint::realtime_websocket::protocol::RealtimeTranscriptEntry;
+    use http::HeaderValue;
     use ody_protocol::protocol::RealtimeHandoffRequested;
     use ody_protocol::protocol::RealtimeInputAudioSpeechStarted;
     use ody_protocol::protocol::RealtimeNoopRequested;
@@ -862,7 +863,6 @@ mod tests {
     use ody_protocol::protocol::RealtimeTranscriptDelta;
     use ody_protocol::protocol::RealtimeTranscriptDone;
     use ody_protocol::protocol::RealtimeVoice;
-    use http::HeaderValue;
     use pretty_assertions::assert_eq;
     use serde_json::Value;
     use serde_json::json;

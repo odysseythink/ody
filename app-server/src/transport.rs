@@ -29,7 +29,6 @@ pub(crate) use ody_app_server_transport::start_control_socket_acceptor;
 pub(crate) use ody_app_server_transport::start_stdio_connection;
 pub(crate) use ody_app_server_transport::start_websocket_acceptor;
 
-
 pub(crate) struct ConnectionState {
     pub(crate) outbound_initialized: Arc<AtomicBool>,
     pub(crate) outbound_experimental_api_enabled: Arc<AtomicBool>,

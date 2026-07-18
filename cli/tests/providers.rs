@@ -12,11 +12,13 @@ fn ody_command(ody_home: &Path) -> Result<assert_cmd::Command> {
 #[test]
 fn providers_lists_builtin_providers_and_capabilities() -> Result<()> {
     let ody_home = TempDir::new()?;
-    let output = ody_command(ody_home.path())?
-        .args(["providers"])
-        .output()?;
+    let output = ody_command(ody_home.path())?.args(["providers"]).output()?;
 
-    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8(output.stdout)?;
     for id in ["kimi", "deepseek", "glm"] {
         assert!(
@@ -37,12 +39,17 @@ fn providers_json_lists_providers() -> Result<()> {
         .args(["providers", "--json"])
         .output()?;
 
-    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8(output.stdout)?;
     let value: serde_json::Value = serde_json::from_str(&stdout)?;
     let arr = value.as_array().expect("providers should be a JSON array");
     assert!(!arr.is_empty());
-    let ids: Vec<&str> = arr.iter()
+    let ids: Vec<&str> = arr
+        .iter()
         .filter_map(|e| e["provider_id"].as_str())
         .collect();
     assert!(ids.contains(&"kimi"));
@@ -85,4 +92,3 @@ api_key = "sk-test"
 
     Ok(())
 }
-

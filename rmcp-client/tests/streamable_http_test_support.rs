@@ -17,6 +17,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use anyhow::Context as _;
+use futures::FutureExt as _;
 use ody_config::types::AuthKeyringBackendKind;
 use ody_config::types::OAuthCredentialsStoreMode;
 use ody_exec_server::Environment;
@@ -27,7 +28,6 @@ use ody_rmcp_client::ElicitationAction;
 use ody_rmcp_client::ElicitationResponse;
 use ody_rmcp_client::RmcpClient;
 use ody_utils_cargo_bin::CargoBinError;
-use futures::FutureExt as _;
 use pretty_assertions::assert_eq;
 use rmcp::model::CallToolResult;
 use rmcp::model::ClientCapabilities;

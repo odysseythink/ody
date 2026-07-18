@@ -1,5 +1,5 @@
-use ody_utils_absolute_path::AbsolutePathBuf;
 use dirs::home_dir;
+use ody_utils_absolute_path::AbsolutePathBuf;
 use std::path::PathBuf;
 
 /// Returns the path to the Ody configuration directory, which can be
@@ -11,9 +11,7 @@ use std::path::PathBuf;
 /// - If `ODY_HOME` is not set, this function does not verify that the
 ///   directory exists.
 pub fn find_ody_home() -> std::io::Result<AbsolutePathBuf> {
-    let ody_home_env = std::env::var("ODY_HOME")
-        .ok()
-        .filter(|val| !val.is_empty());
+    let ody_home_env = std::env::var("ODY_HOME").ok().filter(|val| !val.is_empty());
     find_ody_home_from_env(ody_home_env.as_deref())
 }
 
@@ -65,8 +63,8 @@ fn find_ody_home_from_env(ody_home_env: Option<&str>) -> std::io::Result<Absolut
 #[cfg(test)]
 mod tests {
     use super::find_ody_home_from_env;
-    use ody_utils_absolute_path::AbsolutePathBuf;
     use dirs::home_dir;
+    use ody_utils_absolute_path::AbsolutePathBuf;
     use pretty_assertions::assert_eq;
     use std::fs;
     use std::io::ErrorKind;
@@ -124,8 +122,7 @@ mod tests {
 
     #[test]
     fn find_ody_home_without_env_uses_default_home_dir() {
-        let resolved =
-            find_ody_home_from_env(/*ody_home_env*/ None).expect("default ODY_HOME");
+        let resolved = find_ody_home_from_env(/*ody_home_env*/ None).expect("default ODY_HOME");
         let mut expected = home_dir().expect("home dir");
         expected.push(".ody-code");
         let expected = AbsolutePathBuf::from_absolute_path(expected).expect("absolute home");

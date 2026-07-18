@@ -37,7 +37,12 @@ pub(crate) fn collect_explicit_skill_mentions(
         match input {
             UserInput::Skill { name, path } => {
                 blocked_plain_names.insert(name.clone());
-                select_by_path(&selectable_entries, &path.to_string_lossy(), &mut seen, &mut selected);
+                select_by_path(
+                    &selectable_entries,
+                    &path.to_string_lossy(),
+                    &mut seen,
+                    &mut selected,
+                );
             }
             UserInput::Mention { name, path } if path_is_skill(path) => {
                 blocked_plain_names.insert(name.clone());

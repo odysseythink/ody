@@ -144,9 +144,7 @@ fn git_check_from_inputs(inputs: GitCheckInputs) -> DoctorCheck {
             DoctorIssue::new(CheckStatus::Warning, cause)
                 .measured(inputs.git_version.unwrap_or_else(|| "unknown".to_string()))
                 .expected("current Git for Windows")
-                .remedy(
-                    "Update Git for Windows or the bundled Git executable Ody resolves first.",
-                )
+                .remedy("Update Git for Windows or the bundled Git executable Ody resolves first.")
                 .field("git version")
                 .field("selected git"),
         );

@@ -1,8 +1,8 @@
 mod shared;
 
-mod auth;
 mod apps;
 mod attestation;
+mod auth;
 mod collaboration_mode;
 mod command_exec;
 mod config;
@@ -26,9 +26,9 @@ mod thread_data;
 mod turn;
 mod windows_sandbox;
 
-pub use auth::*;
 pub use apps::*;
 pub use attestation::*;
+pub use auth::*;
 pub use collaboration_mode::*;
 pub use command_exec::*;
 pub use config::*;

@@ -4,6 +4,9 @@ use std::time::Duration;
 
 use anyhow::Result;
 use bytes::Bytes;
+use futures::StreamExt;
+use http::HeaderMap;
+use http::StatusCode;
 use ody_api::AuthProvider;
 use ody_api::Compression;
 use ody_api::Provider;
@@ -15,9 +18,6 @@ use ody_client::Response;
 use ody_client::StreamResponse;
 use ody_client::TransportError;
 use ody_protocol::models::ResponseItem;
-use futures::StreamExt;
-use http::HeaderMap;
-use http::StatusCode;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 
@@ -132,9 +132,7 @@ async fn responses_stream_parses_items_and_completed_end_to_end() -> Result<()> 
         events.push(ev?);
     }
 
-    let events: Vec<ResponseEvent> = events
-        .into_iter()
-        .collect();
+    let events: Vec<ResponseEvent> = events.into_iter().collect();
 
     assert_eq!(events.len(), 3);
 

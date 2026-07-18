@@ -8,8 +8,7 @@ use super::*;
 
 #[tokio::test]
 async fn sqlite_sink_drops_low_level_opentelemetry_sdk_logs() {
-    let ody_home =
-        std::env::temp_dir().join(format!("ody-state-log-db-filter-{}", Uuid::new_v4()));
+    let ody_home = std::env::temp_dir().join(format!("ody-state-log-db-filter-{}", Uuid::new_v4()));
     let runtime = StateRuntime::init(ody_home.clone(), "test-provider".to_string())
         .await
         .expect("initialize runtime");

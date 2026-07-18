@@ -174,8 +174,7 @@ impl NetworkProxyBuilder {
             .set_blocked_request_observer(self.blocked_request_observer.clone())
             .await;
         let current_cfg = state.current_cfg().await?;
-        let (requested_http_addr, requested_socks_addr, reserved_listeners) = if self
-            .managed_by_ody
+        let (requested_http_addr, requested_socks_addr, reserved_listeners) = if self.managed_by_ody
         {
             let runtime = config::resolve_runtime(&current_cfg)?;
             #[cfg(target_os = "windows")]

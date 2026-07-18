@@ -516,9 +516,7 @@ mod tests {
                     internal_chat_message_metadata_passthrough: None,
                 }),
                 RolloutItem::EventMsg(EventMsg::TokenCount(
-                    ody_protocol::protocol::TokenCountEvent {
-                        info: None,
-                    },
+                    ody_protocol::protocol::TokenCountEvent { info: None },
                 )),
                 RolloutItem::EventMsg(EventMsg::TurnComplete(TurnCompleteEvent {
                     turn_id: "turn-1".to_string(),
@@ -599,9 +597,7 @@ mod tests {
 
         live_thread
             .append_items(&[RolloutItem::EventMsg(EventMsg::TokenCount(
-                ody_protocol::protocol::TokenCountEvent {
-                    info: None,
-                },
+                ody_protocol::protocol::TokenCountEvent { info: None },
             ))])
             .await
             .expect("append metadata-only item");

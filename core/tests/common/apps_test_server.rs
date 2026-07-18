@@ -195,8 +195,7 @@ pub fn configure_search_capable_apps(config: &mut Config, apps_base_url: &str) {
 
 pub fn apps_enabled_builder(apps_base_url: impl Into<String>) -> TestOdyBuilder {
     let apps_base_url = apps_base_url.into();
-    test_ody()
-        .with_config(move |config| configure_apps(config, apps_base_url.as_str()))
+    test_ody().with_config(move |config| configure_apps(config, apps_base_url.as_str()))
 }
 
 pub fn search_capable_apps_builder(apps_base_url: impl Into<String>) -> TestOdyBuilder {

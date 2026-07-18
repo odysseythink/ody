@@ -1,6 +1,6 @@
 use crate::events::AppServerRpcTransport;
-use crate::events::OdyRuntimeMetadata;
 use crate::events::GuardianReviewEventParams;
+use crate::events::OdyRuntimeMetadata;
 use ody_app_server_protocol::ClientRequest;
 use ody_app_server_protocol::ClientResponsePayload;
 use ody_app_server_protocol::InitializeParams;
@@ -16,8 +16,8 @@ use ody_protocol::config_types::Personality;
 use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::config_types::ServiceTier;
 use ody_protocol::error::OdyErr;
-use ody_protocol::models::PermissionProfile;
 use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::models::PermissionProfile;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::HookEventName;
 use ody_protocol::protocol::HookRunStatus;
@@ -240,9 +240,7 @@ impl From<&OdyErr> for OdyErrKind {
             OdyErr::ContextWindowExceeded => OdyErrKind::ContextWindowExceeded,
             OdyErr::ThreadNotFound(_) => OdyErrKind::ThreadNotFound,
             OdyErr::AgentLimitReached { .. } => OdyErrKind::AgentLimitReached,
-            OdyErr::SessionConfiguredNotFirstEvent => {
-                OdyErrKind::SessionConfiguredNotFirstEvent
-            }
+            OdyErr::SessionConfiguredNotFirstEvent => OdyErrKind::SessionConfiguredNotFirstEvent,
             OdyErr::Timeout => OdyErrKind::Timeout,
             OdyErr::RequestTimeout => OdyErrKind::RequestTimeout,
             OdyErr::Spawn => OdyErrKind::Spawn,

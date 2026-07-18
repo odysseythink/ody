@@ -18,8 +18,7 @@ use crate::bottom_pane::popup_consts::standard_popup_hint_line;
 
 pub(super) const DESIGN_NEXT_STEP_TITLE: &str = "Design ready — what next?";
 pub(super) const DESIGN_NEXT_STEP_ENTER_PLAN: &str = "Enter Plan mode and write the plan";
-pub(super) const DESIGN_NEXT_STEP_COMPACT_PLAN: &str =
-    "Clear context and enter Plan mode";
+pub(super) const DESIGN_NEXT_STEP_COMPACT_PLAN: &str = "Clear context and enter Plan mode";
 pub(super) const DESIGN_NEXT_STEP_STAY: &str = "Stay in Design mode";
 const PLAN_MODE_UNAVAILABLE: &str = "Plan mode unavailable";
 const PLAN_HANDOFF_PROMPT: &str =
@@ -134,7 +133,11 @@ mod tests {
         let enter = &params.items[0];
         assert_eq!(enter.name, DESIGN_NEXT_STEP_ENTER_PLAN);
         assert!(enter.disabled_reason.is_none());
-        assert_eq!(enter.actions.len(), 1, "Enter Plan must carry a switch action");
+        assert_eq!(
+            enter.actions.len(),
+            1,
+            "Enter Plan must carry a switch action"
+        );
         assert!(enter.is_default);
     }
 
@@ -142,7 +145,10 @@ mod tests {
     fn enter_plan_disabled_when_no_plan_mode() {
         let params = selection_view_params(None, None);
         let enter = &params.items[0];
-        assert_eq!(enter.disabled_reason.as_deref(), Some(PLAN_MODE_UNAVAILABLE));
+        assert_eq!(
+            enter.disabled_reason.as_deref(),
+            Some(PLAN_MODE_UNAVAILABLE)
+        );
         assert!(enter.actions.is_empty());
     }
 
@@ -189,6 +195,9 @@ mod tests {
     #[test]
     fn subtitle_names_the_design_file() {
         let params = selection_view_params(Some(plan_mask()), Some(Path::new("/d/design.md")));
-        assert_eq!(params.subtitle.as_deref(), Some("Design file: /d/design.md"));
+        assert_eq!(
+            params.subtitle.as_deref(),
+            Some("Design file: /d/design.md")
+        );
     }
 }

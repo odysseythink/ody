@@ -23,5 +23,3 @@ pub enum RefreshTokenFailedReason {
     Revoked,
     Other,
 }
-
-

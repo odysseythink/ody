@@ -82,7 +82,6 @@ mod tests {
     use super::SessionMetricTagValues;
     use pretty_assertions::assert_eq;
 
-
     #[test]
     fn session_metric_tags_skip_missing_optional_tags() {
         let tags = SessionMetricTagValues {

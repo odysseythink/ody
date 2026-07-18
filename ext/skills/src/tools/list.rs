@@ -68,9 +68,16 @@ impl ToolExecutor<ToolCall> for ListTool {
     fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
         Box::pin(async move {
             let args: ListArgs = parse_args(&call)?;
-            let catalog = self.context.catalog(&call.turn_id, args.authority.clone()).await;
+            let catalog = self
+                .context
+                .catalog(&call.turn_id, args.authority.clone())
+                .await;
             let authority = args.authority.into_authority();
-            let mode = self.context.thread_state.mode().unwrap_or(ModeKind::Default);
+            let mode = self
+                .context
+                .thread_state
+                .mode()
+                .unwrap_or(ModeKind::Default);
             let response = ListResponse {
                 skills: catalog
                     .entries

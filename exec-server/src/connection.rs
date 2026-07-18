@@ -7,11 +7,11 @@ use std::time::Duration;
 
 use axum::extract::ws::Message as AxumWebSocketMessage;
 use axum::extract::ws::WebSocket as AxumWebSocket;
-use ody_app_server_protocol::JSONRPCMessage;
 use futures::Sink;
 use futures::SinkExt;
 use futures::Stream;
 use futures::StreamExt;
+use ody_app_server_protocol::JSONRPCMessage;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncWrite;
 use tokio::process::Child;
@@ -597,10 +597,10 @@ mod tests {
     use std::task::Context;
     use std::task::Poll;
 
-    use ody_app_server_protocol::JSONRPCRequest;
-    use ody_app_server_protocol::RequestId;
     use futures::channel::mpsc as futures_mpsc;
     use futures::task::AtomicWaker;
+    use ody_app_server_protocol::JSONRPCRequest;
+    use ody_app_server_protocol::RequestId;
     use tokio::net::TcpListener;
     use tokio::time::timeout;
     use tokio_tungstenite::accept_async;

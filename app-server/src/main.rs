@@ -52,7 +52,6 @@ struct AppServerArgs {
     #[cfg(debug_assertions)]
     #[arg(long = "disable-plugin-startup-tasks-for-tests", hide = true)]
     disable_plugin_startup_tasks_for_tests: bool,
-
 }
 
 fn main() -> anyhow::Result<()> {

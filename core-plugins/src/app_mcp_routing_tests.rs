@@ -65,6 +65,10 @@ fn app_mcp_routing_clears_apps_regardless_of_plugin_state() {
     assert!(apps.is_empty());
     assert_eq!(
         sorted_mcp_server_names(&mcp_servers),
-        vec!["docs".to_string(), "linear".to_string(), "notion".to_string()]
+        vec![
+            "docs".to_string(),
+            "linear".to_string(),
+            "notion".to_string()
+        ]
     );
 }

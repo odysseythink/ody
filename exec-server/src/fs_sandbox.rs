@@ -22,10 +22,10 @@ use tokio::process::Command;
 
 use crate::ExecServerRuntimePaths;
 use crate::FileSystemSandboxContext;
-use crate::fs_helper::ODY_FS_HELPER_ARG1;
 use crate::fs_helper::FsHelperPayload;
 use crate::fs_helper::FsHelperRequest;
 use crate::fs_helper::FsHelperResponse;
+use crate::fs_helper::ODY_FS_HELPER_ARG1;
 use crate::local_file_system::current_sandbox_cwd;
 use crate::rpc::internal_error;
 use crate::rpc::invalid_request;
@@ -537,9 +537,8 @@ mod tests {
         let path_key = path_key.to_string_lossy().into_owned();
         let path = path.to_string_lossy().into_owned();
         let ody_self_exe = std::env::current_exe().expect("current exe");
-        let runtime_paths =
-            ExecServerRuntimePaths::new(ody_self_exe.clone(), Some(ody_self_exe))
-                .expect("runtime paths");
+        let runtime_paths = ExecServerRuntimePaths::new(ody_self_exe.clone(), Some(ody_self_exe))
+            .expect("runtime paths");
         let runner = FileSystemSandboxRunner::new(runtime_paths);
         let native_cwd = AbsolutePathBuf::current_dir().expect("cwd");
         let cwd = PathUri::from_abs_path(&native_cwd);
@@ -654,9 +653,8 @@ mod tests {
         let root = tempfile::tempdir().expect("temp dir");
         let ody_self_exe = root.path().join("bin").join("ody");
         let ody_linux_sandbox_exe = root.path().join("aliases").join("ody-linux-sandbox");
-        let runtime_paths =
-            ExecServerRuntimePaths::new(ody_self_exe, Some(ody_linux_sandbox_exe))
-                .expect("runtime paths");
+        let runtime_paths = ExecServerRuntimePaths::new(ody_self_exe, Some(ody_linux_sandbox_exe))
+            .expect("runtime paths");
         let cwd = AbsolutePathBuf::from_absolute_path(std::env::temp_dir().as_path())
             .expect("absolute cwd");
         let mut policy = restricted_policy(Vec::new());

@@ -2,9 +2,9 @@
 
 use anyhow::Context as _;
 use anyhow::ensure;
+use ctor::ctor;
 use ody_arg0::Arg0PathEntryGuard;
 use ody_utils_cargo_bin::CargoBinError;
-use ctor::ctor;
 use std::sync::OnceLock;
 use tempfile::TempDir;
 
@@ -30,9 +30,9 @@ pub mod hooks;
 pub mod process;
 pub mod responses;
 pub mod streaming_sse;
+mod test_environment;
 pub mod test_ody;
 pub mod test_ody_exec;
-mod test_environment;
 pub mod tracing;
 pub mod zsh_fork;
 
@@ -253,10 +253,7 @@ pub fn find_ody_linux_sandbox_exe() -> Result<PathBuf, CargoBinError> {
     ody_utils_cargo_bin::cargo_bin("ody-linux-sandbox")
 }
 
-pub async fn wait_for_event<F>(
-    ody: &OdyThread,
-    predicate: F,
-) -> ody_protocol::protocol::EventMsg
+pub async fn wait_for_event<F>(ody: &OdyThread, predicate: F) -> ody_protocol::protocol::EventMsg
 where
     F: FnMut(&ody_protocol::protocol::EventMsg) -> bool,
 {
@@ -370,8 +367,7 @@ pub fn format_with_current_shell_display(command: &str) -> String {
 }
 
 pub fn format_with_current_shell_non_login(command: &str) -> Vec<String> {
-    ody_core::shell::default_user_shell()
-        .derive_exec_args(command, /*use_login_shell*/ false)
+    ody_core::shell::default_user_shell().derive_exec_args(command, /*use_login_shell*/ false)
 }
 
 pub fn format_with_current_shell_display_non_login(command: &str) -> String {
@@ -626,7 +622,6 @@ macro_rules! skip_if_wine_exec {
 }
 
 #[macro_export]
-
 #[macro_export]
 macro_rules! skip_if_windows {
     ($return_value:expr $(,)?) => {{

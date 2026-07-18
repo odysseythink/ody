@@ -1,3 +1,5 @@
+use http::HeaderMap;
+use http::Method;
 use ody_api::AuthProvider;
 use ody_api::ModelsClient;
 use ody_api::Provider;
@@ -13,8 +15,6 @@ use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::model_metadata::ReasoningEffortPreset;
 use ody_protocol::model_metadata::TruncationPolicyConfig;
 use ody_protocol::model_metadata::default_input_modalities;
-use http::HeaderMap;
-use http::Method;
 use std::sync::Arc;
 use wiremock::Mock;
 use wiremock::MockServer;
@@ -103,8 +103,8 @@ async fn models_client_hits_models_endpoint() {
             auto_review_model_override: None,
             tool_mode: None,
             multi_agent_version: None,
-                    capabilities: ModelCapabilities::default(),
-}],
+            capabilities: ModelCapabilities::default(),
+        }],
     };
 
     Mock::given(method("GET"))

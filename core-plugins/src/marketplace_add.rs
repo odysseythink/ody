@@ -185,8 +185,7 @@ where
             destination.display()
         ))
     })?;
-    if let Err(err) =
-        record_added_marketplace_entry(ody_home, &marketplace_name, &install_metadata)
+    if let Err(err) = record_added_marketplace_entry(ody_home, &marketplace_name, &install_metadata)
     {
         if let Err(rollback_err) = fs::rename(&destination, &staged_root) {
             return Err(MarketplaceAddError::Internal(format!(
@@ -320,12 +319,7 @@ mod tests {
             err.to_string(),
             "--sparse is only supported for git marketplace sources"
         );
-        assert!(
-            !ody_home
-                .path()
-                .join(ody_config::CONFIG_TOML_FILE)
-                .exists()
-        );
+        assert!(!ody_home.path().join(ody_config::CONFIG_TOML_FILE).exists());
         Ok(())
     }
 

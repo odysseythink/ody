@@ -61,7 +61,10 @@ impl ChatVendor {
     /// does not necessarily accept it back. `Generic` is excluded because an
     /// unknown OpenAI-compatible gateway may reject the unknown field.
     pub fn accepts_reasoning_content(self) -> bool {
-        matches!(self, ChatVendor::Kimi | ChatVendor::DeepSeek | ChatVendor::Glm)
+        matches!(
+            self,
+            ChatVendor::Kimi | ChatVendor::DeepSeek | ChatVendor::Glm
+        )
     }
 
     /// Whether to send the top-level `reasoning_effort` request field. GLM does
@@ -131,10 +134,7 @@ impl ChatVendor {
         if self == ChatVendor::Glm
             && let Some(object) = body.as_object_mut()
         {
-            object.insert(
-                "thinking".into(),
-                serde_json::json!({ "type": "disabled" }),
-            );
+            object.insert("thinking".into(), serde_json::json!({ "type": "disabled" }));
         }
     }
 }

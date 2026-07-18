@@ -10,8 +10,9 @@ use serde_json::Map;
 use serde_json::Value;
 use std::collections::HashSet;
 
-const TYPE_COMPLETION_SKIP_KEYS: &[&str] =
-    &["$ref", "allOf", "anyOf", "else", "if", "not", "oneOf", "then"];
+const TYPE_COMPLETION_SKIP_KEYS: &[&str] = &[
+    "$ref", "allOf", "anyOf", "else", "if", "not", "oneOf", "then",
+];
 
 #[derive(Debug, Clone, Copy)]
 enum SchemaSlotKind {
@@ -36,8 +37,16 @@ struct ChildSchemaSlot {
 }
 
 const CHILD_SCHEMA_SLOTS: &[ChildSchemaSlot] = &[
-    ChildSchemaSlot { key: "$defs", kind: SchemaSlotKind::Map, parent_type: None },
-    ChildSchemaSlot { key: "definitions", kind: SchemaSlotKind::Map, parent_type: None },
+    ChildSchemaSlot {
+        key: "$defs",
+        kind: SchemaSlotKind::Map,
+        parent_type: None,
+    },
+    ChildSchemaSlot {
+        key: "definitions",
+        kind: SchemaSlotKind::Map,
+        parent_type: None,
+    },
     ChildSchemaSlot {
         key: "dependencies",
         kind: SchemaSlotKind::Map,
@@ -78,15 +87,31 @@ const CHILD_SCHEMA_SLOTS: &[ChildSchemaSlot] = &[
         kind: SchemaSlotKind::Single,
         parent_type: Some(StructuralType::String),
     },
-    ChildSchemaSlot { key: "else", kind: SchemaSlotKind::Single, parent_type: None },
-    ChildSchemaSlot { key: "if", kind: SchemaSlotKind::Single, parent_type: None },
-    ChildSchemaSlot { key: "not", kind: SchemaSlotKind::Single, parent_type: None },
+    ChildSchemaSlot {
+        key: "else",
+        kind: SchemaSlotKind::Single,
+        parent_type: None,
+    },
+    ChildSchemaSlot {
+        key: "if",
+        kind: SchemaSlotKind::Single,
+        parent_type: None,
+    },
+    ChildSchemaSlot {
+        key: "not",
+        kind: SchemaSlotKind::Single,
+        parent_type: None,
+    },
     ChildSchemaSlot {
         key: "propertyNames",
         kind: SchemaSlotKind::Single,
         parent_type: Some(StructuralType::Object),
     },
-    ChildSchemaSlot { key: "then", kind: SchemaSlotKind::Single, parent_type: None },
+    ChildSchemaSlot {
+        key: "then",
+        kind: SchemaSlotKind::Single,
+        parent_type: None,
+    },
     ChildSchemaSlot {
         key: "unevaluatedItems",
         kind: SchemaSlotKind::Single,
@@ -97,9 +122,21 @@ const CHILD_SCHEMA_SLOTS: &[ChildSchemaSlot] = &[
         kind: SchemaSlotKind::Single,
         parent_type: Some(StructuralType::Object),
     },
-    ChildSchemaSlot { key: "allOf", kind: SchemaSlotKind::Array, parent_type: None },
-    ChildSchemaSlot { key: "anyOf", kind: SchemaSlotKind::Array, parent_type: None },
-    ChildSchemaSlot { key: "oneOf", kind: SchemaSlotKind::Array, parent_type: None },
+    ChildSchemaSlot {
+        key: "allOf",
+        kind: SchemaSlotKind::Array,
+        parent_type: None,
+    },
+    ChildSchemaSlot {
+        key: "anyOf",
+        kind: SchemaSlotKind::Array,
+        parent_type: None,
+    },
+    ChildSchemaSlot {
+        key: "oneOf",
+        kind: SchemaSlotKind::Array,
+        parent_type: None,
+    },
     ChildSchemaSlot {
         key: "prefixItems",
         kind: SchemaSlotKind::Array,
@@ -123,7 +160,12 @@ fn object_structure_keys() -> HashSet<&'static str> {
     let mut set: HashSet<&'static str> = child_schema_keys_for_parent_type(StructuralType::Object)
         .into_iter()
         .collect();
-    set.extend(["dependentRequired", "maxProperties", "minProperties", "required"]);
+    set.extend([
+        "dependentRequired",
+        "maxProperties",
+        "minProperties",
+        "required",
+    ]);
     set
 }
 
@@ -131,7 +173,13 @@ fn array_structure_keys() -> HashSet<&'static str> {
     let mut set: HashSet<&'static str> = child_schema_keys_for_parent_type(StructuralType::Array)
         .into_iter()
         .collect();
-    set.extend(["maxContains", "maxItems", "minContains", "minItems", "uniqueItems"]);
+    set.extend([
+        "maxContains",
+        "maxItems",
+        "minContains",
+        "minItems",
+        "uniqueItems",
+    ]);
     set
 }
 
@@ -139,14 +187,27 @@ fn string_structure_keys() -> HashSet<&'static str> {
     let mut set: HashSet<&'static str> = child_schema_keys_for_parent_type(StructuralType::String)
         .into_iter()
         .collect();
-    set.extend(["contentEncoding", "contentMediaType", "format", "maxLength", "minLength", "pattern"]);
+    set.extend([
+        "contentEncoding",
+        "contentMediaType",
+        "format",
+        "maxLength",
+        "minLength",
+        "pattern",
+    ]);
     set
 }
 
 fn numeric_structure_keys() -> HashSet<&'static str> {
-    ["exclusiveMaximum", "exclusiveMinimum", "maximum", "minimum", "multipleOf"]
-        .into_iter()
-        .collect()
+    [
+        "exclusiveMaximum",
+        "exclusiveMinimum",
+        "maximum",
+        "minimum",
+        "multipleOf",
+    ]
+    .into_iter()
+    .collect()
 }
 
 /// Normalize a JSON Schema object for Kimi tool validation.
@@ -172,7 +233,9 @@ fn deref_json_schema(schema: Map<String, Value>) -> Map<String, Value> {
 
 fn has_unresolved_definition_ref(node: &Value, bucket_key: &str) -> bool {
     match node {
-        Value::Array(arr) => arr.iter().any(|c| has_unresolved_definition_ref(c, bucket_key)),
+        Value::Array(arr) => arr
+            .iter()
+            .any(|c| has_unresolved_definition_ref(c, bucket_key)),
         Value::Object(obj) => has_unresolved_definition_ref_in_obj(obj, bucket_key),
         _ => false,
     }
@@ -194,9 +257,11 @@ fn has_unresolved_definition_ref_in_obj(obj: &Map<String, Value>, bucket_key: &s
 
 fn resolve_node(node: Value, root: &Map<String, Value>, visited: &mut HashSet<String>) -> Value {
     match node {
-        Value::Array(arr) => {
-            Value::Array(arr.into_iter().map(|item| resolve_node(item, root, visited)).collect())
-        }
+        Value::Array(arr) => Value::Array(
+            arr.into_iter()
+                .map(|item| resolve_node(item, root, visited))
+                .collect(),
+        ),
         Value::Object(obj) => {
             if let Some(Value::String(ref_key)) = obj.get("$ref").cloned() {
                 if is_local_json_pointer_ref(&ref_key) {
@@ -228,8 +293,10 @@ fn resolve_node(node: Value, root: &Map<String, Value>, visited: &mut HashSet<St
                 }
                 return Value::Object(obj);
             }
-            let resolved: Map<String, Value> =
-                obj.into_iter().map(|(k, v)| (k, resolve_node(v, root, visited))).collect();
+            let resolved: Map<String, Value> = obj
+                .into_iter()
+                .map(|(k, v)| (k, resolve_node(v, root, visited)))
+                .collect();
             Value::Object(resolved)
         }
         other => other,
@@ -342,16 +409,25 @@ fn has_any_key(obj: &Map<String, Value>, keys: &[&str]) -> bool {
 }
 
 fn infer_type_from_structure(obj: &Map<String, Value>) -> String {
-    if has_any_key(obj, &object_structure_keys().into_iter().collect::<Vec<_>>()) {
+    if has_any_key(
+        obj,
+        &object_structure_keys().into_iter().collect::<Vec<_>>(),
+    ) {
         return "object".into();
     }
     if has_any_key(obj, &array_structure_keys().into_iter().collect::<Vec<_>>()) {
         return "array".into();
     }
-    if has_any_key(obj, &string_structure_keys().into_iter().collect::<Vec<_>>()) {
+    if has_any_key(
+        obj,
+        &string_structure_keys().into_iter().collect::<Vec<_>>(),
+    ) {
         return "string".into();
     }
-    if has_any_key(obj, &numeric_structure_keys().into_iter().collect::<Vec<_>>()) {
+    if has_any_key(
+        obj,
+        &numeric_structure_keys().into_iter().collect::<Vec<_>>(),
+    ) {
         return "number".into();
     }
     "string".into()
@@ -369,7 +445,10 @@ fn infer_type_from_values(values: &[Value]) -> String {
     }
     let normalized = normalize_inferred_types(inferred);
     // Mixed/empty enum types fall back to string rather than aborting.
-    normalized.into_iter().next().unwrap_or_else(|| "string".into())
+    normalized
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| "string".into())
 }
 
 fn infer_value_type(value: &Value) -> Option<String> {
@@ -392,7 +471,9 @@ fn normalize_inferred_types(types: HashSet<String>) -> Vec<String> {
     if normalized.contains("number") {
         normalized.remove("integer");
     }
-    let order = ["string", "number", "integer", "boolean", "object", "array", "null"];
+    let order = [
+        "string", "number", "integer", "boolean", "object", "array", "null",
+    ];
     order
         .into_iter()
         .filter(|t| normalized.contains(*t))

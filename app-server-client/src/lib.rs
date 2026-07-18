@@ -482,8 +482,7 @@ impl InProcessAppServerClient {
     /// with overload error instead of being silently dropped.
     pub async fn start(args: InProcessClientStartArgs) -> IoResult<Self> {
         let channel_capacity = args.channel_capacity.max(1);
-        let mut handle =
-            ody_app_server::in_process::start(args.into_runtime_start_args()).await?;
+        let mut handle = ody_app_server::in_process::start(args.into_runtime_start_args()).await?;
         let request_sender = handle.sender();
         let (command_tx, mut command_rx) = mpsc::channel::<ClientCommand>(channel_capacity);
         let (event_tx, event_rx) = mpsc::channel::<InProcessServerEvent>(channel_capacity);
@@ -926,6 +925,8 @@ pub(crate) fn request_method_name(request: &ClientRequest) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures::SinkExt;
+    use futures::StreamExt;
     use ody_app_server_protocol::ConfigRequirementsReadResponse;
     use ody_app_server_protocol::JSONRPCMessage;
     use ody_app_server_protocol::JSONRPCRequest;
@@ -940,8 +941,6 @@ mod tests {
     use ody_core::init_state_db;
     use ody_uds::UnixListener;
     use ody_utils_absolute_path::AbsolutePathBuf;
-    use futures::SinkExt;
-    use futures::StreamExt;
     use pretty_assertions::assert_eq;
     use std::ops::Deref;
     use std::path::Path;

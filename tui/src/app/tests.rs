@@ -210,6 +210,7 @@ async fn enqueue_primary_thread_session_replays_buffered_approval_after_attach()
     app.enqueue_primary_thread_session(
         test_thread_session(thread_id, test_path_buf("/tmp/project")),
         Vec::new(),
+        /*initial_collaboration_mask*/ None,
     )
     .await?;
 
@@ -258,6 +259,7 @@ async fn resolved_buffered_approval_does_not_become_actionable_after_drain() -> 
     app.enqueue_primary_thread_session(
         test_thread_session(thread_id, test_path_buf("/tmp/project")),
         Vec::new(),
+        /*initial_collaboration_mask*/ None,
     )
     .await?;
     while app_event_rx.try_recv().is_ok() {}
@@ -309,6 +311,78 @@ async fn resolved_buffered_approval_does_not_become_actionable_after_drain() -> 
 }
 
 #[tokio::test]
+async fn enqueue_primary_thread_session_applies_initial_collaboration_mask() -> Result<()> {
+    let (mut app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
+    let thread_id = ThreadId::new();
+    let initial_prompt = "handoff prompt".to_string();
+    let config = app.config.clone();
+    let model = get_model_offline_for_tests(config.model.as_deref());
+    let plan_mask = crate::collaboration_modes::plan_mask(app.model_catalog.as_ref())
+        .expect("expected plan collaboration mode");
+
+    app.chat_widget = ChatWidget::new_with_app_event(ChatWidgetInit {
+        config,
+        frame_requester: crate::tui::FrameRequester::test_dummy(),
+        app_event_tx: app.app_event_tx.clone(),
+        workspace_command_runner: None,
+        initial_user_message: create_initial_user_message(
+            Some(initial_prompt.clone()),
+            Vec::new(),
+            Vec::new(),
+        ),
+        enhanced_keys_supported: false,
+        api_key_configured: false,
+        has_ody_backend_auth: false,
+        model_catalog: app.model_catalog.clone(),
+        feedback: ody_feedback::OdyFeedback::new(),
+        is_first_run: false,
+        runtime_model_provider_base_url: None,
+        model: Some(model),
+        startup_tooltip_override: None,
+        status_line_invalid_items_warned: app.status_line_invalid_items_warned.clone(),
+        terminal_title_invalid_items_warned: app.terminal_title_invalid_items_warned.clone(),
+        session_telemetry: app.session_telemetry.clone(),
+    });
+
+    app.enqueue_primary_thread_session(
+        test_thread_session(thread_id, test_path_buf("/tmp/project")),
+        Vec::new(),
+        Some(plan_mask),
+    )
+    .await?;
+
+    // The chat widget's active mask should be the plan mask we supplied.
+    assert_eq!(
+        app.chat_widget.effective_collaboration_mode().mode,
+        ModeKind::Plan,
+        "initial collaboration mask should be preserved after session configuration"
+    );
+
+    // The submitted user turn should carry Plan mode.
+    let mut op = None;
+    while let Ok(event) = app_event_rx.try_recv() {
+        if let AppEvent::OdyOp(user_op) = event {
+            if matches!(user_op, Op::UserTurn { .. }) {
+                op = Some(user_op);
+                break;
+            }
+        }
+    }
+    let op = op.expect("expected a UserTurn op to be submitted");
+    let Op::UserTurn {
+        collaboration_mode, ..
+    } = op
+    else {
+        panic!("expected UserTurn op, got {op:?}");
+    };
+    let collaboration_mode =
+        collaboration_mode.expect("UserTurn should carry a collaboration mode");
+    assert_eq!(collaboration_mode.mode, ModeKind::Plan);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn enqueue_primary_thread_session_replays_turns_before_initial_prompt_submit() -> Result<()> {
     let (mut app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
     let thread_id = ThreadId::new();
@@ -353,6 +427,7 @@ async fn enqueue_primary_thread_session_replays_turns_before_initial_prompt_subm
                 }],
             }],
         )],
+        /*initial_collaboration_mask*/ None,
     )
     .await?;
 
@@ -4178,8 +4253,12 @@ async fn set_thread_goal_draft_materializes_long_objective_and_confirms_before_p
         .start_thread(app.chat_widget.config_ref())
         .await?;
     let thread_id = started.session.thread_id;
-    app.enqueue_primary_thread_session(started.session, started.turns)
-        .await?;
+    app.enqueue_primary_thread_session(
+        started.session,
+        started.turns,
+        /*initial_collaboration_mask*/ None,
+    )
+    .await?;
     let objective = "x".repeat(MAX_THREAD_GOAL_OBJECTIVE_CHARS + 1);
 
     app.set_thread_goal_draft(
@@ -5720,9 +5799,13 @@ async fn interrupt_without_active_turn_is_treated_as_handled() {
             .await
             .expect("thread/start should succeed");
         let thread_id = started.session.thread_id;
-        app.enqueue_primary_thread_session(started.session, started.turns)
-            .await
-            .expect("primary thread should be registered");
+        app.enqueue_primary_thread_session(
+            started.session,
+            started.turns,
+            /*initial_collaboration_mask*/ None,
+        )
+        .await
+        .expect("primary thread should be registered");
         let op = AppCommand::interrupt();
 
         let handled = Box::pin(app.try_submit_active_thread_op_via_app_server(
@@ -5753,9 +5836,13 @@ async fn override_turn_context_sends_thread_settings_update() {
         let thread_id = started.session.thread_id;
         let initial_model = started.session.model.clone();
         let initial_effort = started.session.reasoning_effort.clone();
-        app.enqueue_primary_thread_session(started.session, started.turns)
-            .await
-            .expect("primary thread should be registered");
+        app.enqueue_primary_thread_session(
+            started.session,
+            started.turns,
+            /*initial_collaboration_mask*/ None,
+        )
+        .await
+        .expect("primary thread should be registered");
         let service_tier = ServiceTier::Fast.request_value().to_string();
         let collaboration_mode = CollaborationMode {
             mode: ModeKind::Plan,

@@ -3,12 +3,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use futures::FutureExt as _;
 use ody_rmcp_client::ElicitationAction;
 use ody_rmcp_client::ElicitationResponse;
 use ody_rmcp_client::LocalStdioServerLauncher;
 use ody_rmcp_client::RmcpClient;
 use ody_utils_cargo_bin::CargoBinError;
-use futures::FutureExt as _;
 use rmcp::model::AnnotateAble;
 use rmcp::model::ClientCapabilities;
 use rmcp::model::ElicitationCapability;

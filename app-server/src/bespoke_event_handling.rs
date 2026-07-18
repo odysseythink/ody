@@ -12,7 +12,6 @@ use crate::thread_state::resolve_server_request_on_thread_listener;
 use crate::thread_status::ThreadWatchActiveGuard;
 use crate::thread_status::ThreadWatchManager;
 use ody_app_server_protocol::AdditionalPermissionProfile as V2AdditionalPermissionProfile;
-use ody_app_server_protocol::OdyErrorInfo as V2OdyErrorInfo;
 use ody_app_server_protocol::CommandAction as V2ParsedCommand;
 use ody_app_server_protocol::CommandExecutionApprovalDecision;
 use ody_app_server_protocol::CommandExecutionRequestApprovalParams;
@@ -44,6 +43,7 @@ use ody_app_server_protocol::ModelVerificationNotification;
 use ody_app_server_protocol::NetworkApprovalContext as V2NetworkApprovalContext;
 use ody_app_server_protocol::NetworkPolicyAmendment as V2NetworkPolicyAmendment;
 use ody_app_server_protocol::NetworkPolicyRuleAction as V2NetworkPolicyRuleAction;
+use ody_app_server_protocol::OdyErrorInfo as V2OdyErrorInfo;
 use ody_app_server_protocol::PermissionsRequestApprovalParams;
 use ody_app_server_protocol::PermissionsRequestApprovalResponse;
 use ody_app_server_protocol::RawResponseItemCompletedNotification;
@@ -92,10 +92,10 @@ use ody_protocol::ThreadId;
 use ody_protocol::items::parse_hook_prompt_message;
 use ody_protocol::models::AdditionalPermissionProfile as CoreAdditionalPermissionProfile;
 use ody_protocol::plan_tool::UpdatePlanArgs;
-use ody_protocol::protocol::OdyErrorInfo as CoreOdyErrorInfo;
 use ody_protocol::protocol::Event;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::ExecApprovalRequestEvent;
+use ody_protocol::protocol::OdyErrorInfo as CoreOdyErrorInfo;
 use ody_protocol::protocol::Op;
 use ody_protocol::protocol::RealtimeEvent;
 use ody_protocol::protocol::ReviewDecision;
@@ -948,10 +948,7 @@ pub(crate) async fn apply_bespoke_event_handling(
             // (and clear pending state) so subsequent rollbacks are unblocked.
             //
             // Don't send a notification for this error.
-            if matches!(
-                ody_error_info,
-                Some(CoreOdyErrorInfo::ThreadRollbackFailed)
-            ) {
+            if matches!(ody_error_info, Some(CoreOdyErrorInfo::ThreadRollbackFailed)) {
                 return handle_thread_rollback_failed(
                     conversation_id,
                     message,
@@ -2175,6 +2172,7 @@ mod tests {
     use anyhow::anyhow;
     use anyhow::bail;
     use chrono::Utc;
+    use core_test_support::load_default_config_for_test;
     use ody_app_server_protocol::AutoReviewDecisionSource;
     use ody_app_server_protocol::GuardianApprovalReviewStatus;
     use ody_app_server_protocol::JSONRPCErrorError;
@@ -2207,7 +2205,6 @@ mod tests {
     use ody_utils_absolute_path::AbsolutePathBuf;
     use ody_utils_absolute_path::test_support::PathBufExt;
     use ody_utils_absolute_path::test_support::test_path_buf;
-    use core_test_support::load_default_config_for_test;
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use tempfile::TempDir;
@@ -3700,9 +3697,7 @@ mod tests {
         handle_token_count_event(
             conversation_id,
             turn_id.clone(),
-            TokenCountEvent {
-                info: None,
-            },
+            TokenCountEvent { info: None },
             &outgoing,
         )
         .await;

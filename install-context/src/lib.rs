@@ -212,8 +212,7 @@ fn install_method_from_exe(
     package_layout: Option<&OdyPackageLayout>,
     is_macos: bool,
 ) -> InstallMethod {
-    if let Some(standalone_method) = standalone_install_method(exe_path, ody_home, package_layout)
-    {
+    if let Some(standalone_method) = standalone_install_method(exe_path, ody_home, package_layout) {
         return standalone_method;
     }
 

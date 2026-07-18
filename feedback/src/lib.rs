@@ -122,8 +122,6 @@ pub fn emit_feedback_request_tags(tags: &FeedbackRequestTags<'_>) {
     );
 }
 
-
-
 #[derive(Clone)]
 pub struct OdyFeedback {
     inner: Arc<FeedbackInner>,

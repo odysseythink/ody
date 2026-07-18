@@ -11,6 +11,8 @@ use app_test_support::TestAppServer;
 use app_test_support::to_response;
 use app_test_support::write_api_key_auth;
 use app_test_support::write_mock_responses_config_toml;
+use core_test_support::responses;
+use core_test_support::skip_if_no_network;
 use ody_app_server_protocol::ItemCompletedNotification;
 use ody_app_server_protocol::ItemStartedNotification;
 use ody_app_server_protocol::JSONRPCError;
@@ -30,8 +32,6 @@ use ody_config::types::AuthCredentialsStoreMode;
 use ody_features::Feature;
 use ody_protocol::models::ContentItem;
 use ody_protocol::models::ResponseItem;
-use core_test_support::responses;
-use core_test_support::skip_if_no_network;
 use pretty_assertions::assert_eq;
 use std::collections::BTreeMap;
 use tempfile::TempDir;
@@ -164,8 +164,7 @@ async fn auto_compaction_remote_emits_started_and_completed_items() -> Result<()
         AuthCredentialsStoreMode::File,
     )?;
 
-    let mut mcp =
-        TestAppServer::new_with_env(ody_home.path(), &[("OPENAI_API_KEY", None)]).await?;
+    let mut mcp = TestAppServer::new_with_env(ody_home.path(), &[("OPENAI_API_KEY", None)]).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
 
     let thread_id = start_thread(&mut mcp).await?;

@@ -183,9 +183,7 @@ async fn plugin_read_returns_canonical_odysseythink_curated_marketplace_name() -
     )?;
     std::fs::create_dir_all(repo_root.path().join("demo-plugin/.ody-plugin"))?;
     std::fs::write(
-        repo_root
-            .path()
-            .join("demo-plugin/.ody-plugin/plugin.json"),
+        repo_root.path().join("demo-plugin/.ody-plugin/plugin.json"),
         r#"{
   "name": "demo-plugin",
   "description": "OpenAI curated plugin"
@@ -224,7 +222,10 @@ enabled = true
 
     assert_eq!(response.plugin.marketplace_name, "odysseythink-curated");
     assert_eq!(response.plugin.marketplace_path, Some(marketplace_path));
-    assert_eq!(response.plugin.summary.id, "demo-plugin@odysseythink-curated");
+    assert_eq!(
+        response.plugin.summary.id,
+        "demo-plugin@odysseythink-curated"
+    );
     assert_eq!(response.plugin.summary.name, "demo-plugin");
     Ok(())
 }

@@ -22,7 +22,8 @@ use super::npm_global_root_check;
 use super::run_command;
 
 const VERSION_FILE_NAME: &str = "version.json";
-const GITHUB_LATEST_RELEASE_URL: &str = "https://api.github.com/repos/odysseythink/ody/releases/latest";
+const GITHUB_LATEST_RELEASE_URL: &str =
+    "https://api.github.com/repos/odysseythink/ody/releases/latest";
 const HOMEBREW_CASK_API_URL: &str = "https://formulae.brew.sh/api/cask/ody.json";
 
 /// Builds the update-health row for the current installation.

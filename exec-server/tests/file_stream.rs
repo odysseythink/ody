@@ -1,6 +1,7 @@
 mod common;
 
 use anyhow::Result;
+use futures::TryStreamExt;
 use ody_exec_server::Environment;
 use ody_exec_server::ExecServerClient;
 use ody_exec_server::ExecServerError;
@@ -19,7 +20,6 @@ use ody_protocol::permissions::FileSystemSandboxPolicy;
 use ody_protocol::permissions::NetworkSandboxPolicy;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path_uri::PathUri;
-use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 use std::sync::Arc;
 #[cfg(any(unix, windows))]

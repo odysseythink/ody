@@ -1,4 +1,5 @@
 use super::*;
+use dunce::canonicalize as canonicalize_path;
 use ody_config::CONFIG_TOML_FILE;
 use ody_config::ConfigLayerEntry;
 use ody_config::ConfigLayerStack;
@@ -11,7 +12,6 @@ use ody_protocol::protocol::SkillScope;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_absolute_path::test_support::PathBufExt;
 use ody_utils_absolute_path::test_support::PathExt;
-use dunce::canonicalize as canonicalize_path;
 use pretty_assertions::assert_eq;
 use std::fs;
 use std::path::Path;
@@ -2260,7 +2260,11 @@ async fn parse_skill_file_defaults_to_inline() {
     )
     .await;
     let outcome = load_skills_from_roots(roots, None).await;
-    let skill = outcome.skills.iter().find(|s| s.name == "inline-skill").unwrap();
+    let skill = outcome
+        .skills
+        .iter()
+        .find(|s| s.name == "inline-skill")
+        .unwrap();
     assert!(matches!(skill.skill_type, SkillType::Inline));
     assert!(skill.triggers.is_empty());
     assert!(skill.hidden_in_modes.is_empty());
@@ -2293,7 +2297,12 @@ async fn parse_skill_file_rejects_unsupported_type() {
     .await;
     let outcome = load_skills_from_roots(roots, None).await;
     assert!(outcome.skills.iter().all(|s| s.name != "bad-skill"));
-    assert!(outcome.errors.iter().any(|e| e.message.contains("unsupported skill type")));
+    assert!(
+        outcome
+            .errors
+            .iter()
+            .any(|e| e.message.contains("unsupported skill type"))
+    );
 }
 
 #[tokio::test]

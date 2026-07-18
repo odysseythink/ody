@@ -40,6 +40,7 @@ pub(crate) struct CustomPromptView {
     textarea_state: RefCell<TextAreaState>,
     paste_burst: PasteBurst,
     completion: Option<ViewCompletion>,
+    secret: bool,
 }
 
 impl CustomPromptView {
@@ -65,7 +66,21 @@ impl CustomPromptView {
             textarea_state: RefCell::new(TextAreaState::default()),
             paste_burst: PasteBurst::default(),
             completion: None,
+            secret: false,
         }
+    }
+
+    /// Create a prompt that masks input (e.g. for API keys).
+    pub(crate) fn new_secret(
+        title: String,
+        placeholder: String,
+        initial_text: String,
+        context_label: Option<String>,
+        on_submit: PromptSubmitted,
+    ) -> Self {
+        let mut view = Self::new(title, placeholder, initial_text, context_label, on_submit);
+        view.secret = true;
+        view
     }
 
     fn handle_key_event_at(&mut self, key_event: KeyEvent, now: Instant) {
@@ -232,10 +247,20 @@ impl Renderable for CustomPromptView {
                     height: text_area_height,
                 };
                 let mut state = self.textarea_state.borrow_mut();
-                StatefulWidgetRef::render_ref(&(&self.textarea), textarea_rect, buf, &mut state);
-                if self.textarea.text().is_empty() {
-                    Paragraph::new(Line::from(self.placeholder.clone().dim()))
-                        .render(textarea_rect, buf);
+                if self.secret {
+                    self.textarea
+                        .render_ref_masked(textarea_rect, buf, &mut state, '*');
+                } else {
+                    StatefulWidgetRef::render_ref(
+                        &(&self.textarea),
+                        textarea_rect,
+                        buf,
+                        &mut state,
+                    );
+                    if self.textarea.text().is_empty() {
+                        Paragraph::new(Line::from(self.placeholder.clone().dim()))
+                            .render(textarea_rect, buf);
+                    }
                 }
             }
         }

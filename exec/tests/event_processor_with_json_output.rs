@@ -39,7 +39,6 @@ use pretty_assertions::assert_eq;
 use serde_json::json;
 
 use ody_exec::AgentMessageItem;
-use ody_exec::OdyStatus;
 use ody_exec::CollabAgentState;
 use ody_exec::CollabAgentStatus;
 use ody_exec::CollabTool;
@@ -60,6 +59,7 @@ use ody_exec::McpToolCallItem;
 use ody_exec::McpToolCallItemError;
 use ody_exec::McpToolCallItemResult;
 use ody_exec::McpToolCallStatus;
+use ody_exec::OdyStatus;
 use ody_exec::PatchApplyStatus;
 use ody_exec::PatchChangeKind;
 use ody_exec::ReasoningItem;

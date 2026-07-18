@@ -32,19 +32,19 @@ use crate::metrics::runtime_metrics::RuntimeMetricsSummary;
 use crate::metrics::timer::Timer;
 use crate::provider::OtelProvider;
 use crate::sanitize_metric_tag_value;
+use eventsource_stream::Event as StreamEvent;
+use eventsource_stream::EventStreamError as StreamError;
 use ody_api::ApiError;
 use ody_api::ResponseEvent;
 use ody_protocol::ThreadId;
 use ody_protocol::config_types::ReasoningSummary;
-use ody_protocol::models::ResponseItem;
 use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::models::ResponseItem;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::ReviewDecision;
 use ody_protocol::protocol::SandboxPolicy;
 use ody_protocol::protocol::SessionSource;
 use ody_protocol::user_input::UserInput;
-use eventsource_stream::Event as StreamEvent;
-use eventsource_stream::EventStreamError as StreamError;
 use opentelemetry_sdk::metrics::data::ResourceMetrics;
 use reqwest::Error;
 use reqwest::Response;
@@ -193,7 +193,11 @@ impl SessionTelemetry {
 
     /// Records the outcome of a Plan-mode approval/exit decision.
     pub fn record_plan_resolved(&self, outcome: &str) {
-        self.counter(PLAN_RESOLVED_METRIC, /*inc*/ 1, &[("outcome", outcome)]);
+        self.counter(
+            PLAN_RESOLVED_METRIC,
+            /*inc*/ 1,
+            &[("outcome", outcome)],
+        );
         log_and_trace_event!(
             self,
             common: {

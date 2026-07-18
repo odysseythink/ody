@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use ody_core_skills::HostSkillsSnapshot;
 use ody_extension_api::FunctionCallError;
 use ody_extension_api::JsonToolOutput;
 use ody_extension_api::ResponsesApiTool;
@@ -9,9 +10,8 @@ use ody_extension_api::ToolName;
 use ody_extension_api::ToolOutput;
 use ody_extension_api::ToolSpec;
 use ody_extension_api::parse_tool_input_schema;
-use ody_core_skills::HostSkillsSnapshot;
-use ody_mcp::ODY_APPS_MCP_SERVER_NAME;
 use ody_mcp::McpResourceClient;
+use ody_mcp::ODY_APPS_MCP_SERVER_NAME;
 use ody_tools::ResponsesApiNamespace;
 use ody_tools::ResponsesApiNamespaceTool;
 use ody_tools::default_namespace_description;
@@ -163,9 +163,7 @@ impl SkillToolAuthority {
     fn into_authority(self) -> SkillAuthority {
         match self {
             Self::Host => SkillAuthority::new(SkillSourceKind::Host, "host"),
-            Self::Executor { root_id } => {
-                SkillAuthority::new(SkillSourceKind::Executor, root_id)
-            }
+            Self::Executor { root_id } => SkillAuthority::new(SkillSourceKind::Executor, root_id),
             Self::Orchestrator => {
                 SkillAuthority::new(SkillSourceKind::Orchestrator, ODY_APPS_MCP_SERVER_NAME)
             }

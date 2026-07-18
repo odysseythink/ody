@@ -1,5 +1,5 @@
-use ody_utils_absolute_path::AbsolutePathBuf;
 use include_dir::Dir;
+use ody_utils_absolute_path::AbsolutePathBuf;
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
 use std::hash::Hash;
@@ -16,9 +16,7 @@ const SYSTEM_SKILLS_MARKER_SALT: &str = "v1";
 
 /// Returns the on-disk cache location for embedded system skills from an absolute ODY_HOME.
 pub fn system_cache_root_dir(ody_home: &AbsolutePathBuf) -> AbsolutePathBuf {
-    ody_home
-        .join(SKILLS_DIR_NAME)
-        .join(SYSTEM_SKILLS_DIR_NAME)
+    ody_home.join(SKILLS_DIR_NAME).join(SYSTEM_SKILLS_DIR_NAME)
 }
 
 /// Installs embedded system skills into `ODY_HOME/skills/.system`.
@@ -208,6 +206,9 @@ mod tests {
         .await;
 
         assert!(outcome.errors.is_empty(), "errors: {:?}", outcome.errors);
-        assert!(!outcome.skills.is_empty(), "system skills should be discovered");
+        assert!(
+            !outcome.skills.is_empty(),
+            "system skills should be discovered"
+        );
     }
 }

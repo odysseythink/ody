@@ -136,8 +136,7 @@ pub(crate) struct ManagedMitmCaTrustBundle {
 }
 
 fn managed_ca_paths() -> Result<(PathBuf, PathBuf)> {
-    let ody_home =
-        find_ody_home().context("failed to resolve ODY_HOME for managed MITM CA")?;
+    let ody_home = find_ody_home().context("failed to resolve ODY_HOME for managed MITM CA")?;
     let proxy_dir = ody_home.join(MANAGED_MITM_CA_DIR);
     Ok((
         proxy_dir.join(MANAGED_MITM_CA_CERT).to_path_buf(),

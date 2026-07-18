@@ -214,15 +214,15 @@ fn otel_export_routing_policy_routes_tool_result_log_and_trace_events() {
     tracing::subscriber::with_default(subscriber, || {
         tracing::callsite::rebuild_interest_cache();
         let manager = SessionTelemetry::new(
-    ThreadId::new(),
-    "gpt-5.1",
-    "gpt-5.1",
-    Some(TelemetryAuthMode::ApiKey),
-    "ody_exec".to_string(),
-    /*log_user_prompts*/ true,
-    "tty".to_string(),
-    SessionSource::Cli,
-);
+            ThreadId::new(),
+            "gpt-5.1",
+            "gpt-5.1",
+            Some(TelemetryAuthMode::ApiKey),
+            "ody_exec".to_string(),
+            /*log_user_prompts*/ true,
+            "tty".to_string(),
+            SessionSource::Cli,
+        );
         let root_span = tracing::info_span!("root");
         let _root_guard = root_span.enter();
         manager.tool_result_with_tags(
@@ -323,15 +323,15 @@ fn otel_export_routing_policy_routes_auth_recovery_log_and_trace_events() {
     tracing::subscriber::with_default(subscriber, || {
         tracing::callsite::rebuild_interest_cache();
         let manager = SessionTelemetry::new(
-    ThreadId::new(),
-    "gpt-5.1",
-    "gpt-5.1",
-    Some(TelemetryAuthMode::ApiKey),
-    "ody_exec".to_string(),
-    /*log_user_prompts*/ true,
-    "tty".to_string(),
-    SessionSource::Cli,
-);
+            ThreadId::new(),
+            "gpt-5.1",
+            "gpt-5.1",
+            Some(TelemetryAuthMode::ApiKey),
+            "ody_exec".to_string(),
+            /*log_user_prompts*/ true,
+            "tty".to_string(),
+            SessionSource::Cli,
+        );
         let root_span = tracing::info_span!("root");
         let _root_guard = root_span.enter();
         manager.record_auth_recovery(

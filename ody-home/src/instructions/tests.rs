@@ -8,9 +8,9 @@ use ody_utils_absolute_path::AbsolutePathBuf;
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 
-use super::OdyHomeUserInstructionsProvider;
 use super::DEFAULT_AGENTS_MD_FILENAME;
 use super::LOCAL_AGENTS_MD_FILENAME;
+use super::OdyHomeUserInstructionsProvider;
 
 fn provider(home: &TempDir) -> OdyHomeUserInstructionsProvider {
     OdyHomeUserInstructionsProvider::new(

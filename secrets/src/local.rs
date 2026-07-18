@@ -372,8 +372,8 @@ fn parse_canonical_key(canonical_key: &str) -> Option<SecretListEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ody_keyring_store::tests::MockKeyringStore;
     use keyring::Error as KeyringError;
+    use ody_keyring_store::tests::MockKeyringStore;
     use pretty_assertions::assert_eq;
 
     #[test]

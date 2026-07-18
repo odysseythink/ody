@@ -36,8 +36,8 @@ fn write_plugin(root: &Path, dir_name: &str, manifest_name: &str) {
 
 #[test]
 fn try_new_rejects_relative_ody_home() {
-    let err = PluginStore::try_new(PathBuf::from("relative"))
-        .expect_err("relative ody home should fail");
+    let err =
+        PluginStore::try_new(PathBuf::from("relative")).expect_err("relative ody home should fail");
     let err = err.to_string().replace('\\', "/");
 
     assert_eq!(
@@ -166,8 +166,11 @@ fn plugin_data_root_derives_path_from_key() {
 fn install_with_version_uses_requested_cache_version() {
     let tmp = tempdir().unwrap();
     write_plugin(tmp.path(), "sample-plugin", "sample-plugin");
-    let plugin_id =
-        PluginId::new("sample-plugin".to_string(), "odysseythink-curated".to_string()).unwrap();
+    let plugin_id = PluginId::new(
+        "sample-plugin".to_string(),
+        "odysseythink-curated".to_string(),
+    )
+    .unwrap();
     let plugin_version = "0123456789abcdef".to_string();
 
     let result = PluginStore::new(tmp.path().to_path_buf())

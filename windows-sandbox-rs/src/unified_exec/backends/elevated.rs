@@ -134,14 +134,8 @@ pub(crate) async fn spawn_windows_sandbox_session_elevated_for_permission_profil
                 &deny_write_paths_override,
                 /*proxy_enforced*/ false,
             )?;
-            spawn_runner_transport_task(
-                ody_home,
-                cwd,
-                sandbox_creds,
-                logs_base_dir,
-                spawn_request,
-            )
-            .await?
+            spawn_runner_transport_task(ody_home, cwd, sandbox_creds, logs_base_dir, spawn_request)
+                .await?
         }
         Err(err) => return Err(err),
     };

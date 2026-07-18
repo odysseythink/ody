@@ -427,12 +427,7 @@ pub(crate) fn gather_read_roots(
     ody_home: &Path,
 ) -> Vec<PathBuf> {
     if permissions.has_full_disk_read_access() {
-        return gather_full_read_roots_for_permissions(
-            command_cwd,
-            permissions,
-            env_map,
-            ody_home,
-        );
+        return gather_full_read_roots_for_permissions(command_cwd, permissions, env_map, ody_home);
     }
 
     let mut roots = gather_helper_read_roots(ody_home);
@@ -705,11 +700,7 @@ fn verify_setup_completed(ody_home: &Path) -> Result<()> {
     }
 }
 
-fn run_setup_exe(
-    payload: &ElevationPayload,
-    needs_elevation: bool,
-    ody_home: &Path,
-) -> Result<()> {
+fn run_setup_exe(payload: &ElevationPayload, needs_elevation: bool, ody_home: &Path) -> Result<()> {
     use windows_sys::Win32::System::Threading::GetExitCodeProcess;
     use windows_sys::Win32::System::Threading::INFINITE;
     use windows_sys::Win32::System::Threading::WaitForSingleObject;

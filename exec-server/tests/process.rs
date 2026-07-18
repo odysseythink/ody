@@ -2,6 +2,7 @@
 
 mod common;
 
+use common::exec_server::exec_server;
 use ody_app_server_protocol::JSONRPCMessage;
 use ody_app_server_protocol::JSONRPCResponse;
 use ody_exec_server::ExecResponse;
@@ -12,7 +13,6 @@ use ody_exec_server::ReadResponse;
 use ody_exec_server::TerminateResponse;
 use ody_exec_server::WriteResponse;
 use ody_exec_server::WriteStatus;
-use common::exec_server::exec_server;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

@@ -676,10 +676,7 @@ impl TestToolServer {
             }
             ImageScenario::ImageOnlyOriginalDetail => {
                 let mut meta = rmcp::model::Meta::new();
-                meta.insert(
-                    "ody/imageDetail".to_string(),
-                    serde_json::json!("original"),
-                );
+                meta.insert("ody/imageDetail".to_string(), serde_json::json!("original"));
                 content.push(rmcp::model::Annotated::new(
                     rmcp::model::RawContent::Image(rmcp::model::RawImageContent {
                         data: valid_data_b64,

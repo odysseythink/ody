@@ -296,10 +296,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(
-            rendered,
-            "Hello, Ody. You are in ody-rs. Ody is repeated."
-        );
+        assert_eq!(rendered, "Hello, Ody. You are in ody-rs. Ody is repeated.");
     }
 
     #[test]
@@ -342,10 +339,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(
-            rendered,
-            "literal open: {{, literal close: }}, value: Ody"
-        );
+        assert_eq!(rendered, "literal open: {{, literal close: }}, value: Ody");
     }
 
     #[test]

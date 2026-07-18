@@ -51,6 +51,5 @@ pub fn write_api_key_auth(
     });
 
     let auth_path = ody_home.join("auth.json");
-    fs::write(&auth_path, serde_json::to_vec_pretty(&auth)?)
-        .context("write auth.json")
+    fs::write(&auth_path, serde_json::to_vec_pretty(&auth)?).context("write auth.json")
 }

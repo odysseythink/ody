@@ -128,6 +128,7 @@ mod line_truncation;
 pub(crate) mod live_wrap;
 pub use live_wrap::RowBuilder;
 
+mod login;
 mod markdown;
 mod markdown_render;
 mod markdown_stream;

@@ -19,8 +19,8 @@ use crate::outgoing_message::ConnectionId;
 use crate::outgoing_message::ConnectionRequestId;
 use crate::outgoing_message::OutgoingMessageSender;
 use crate::outgoing_message::RequestContext;
-use crate::request_processors::AuthRequestProcessor;
 use crate::request_processors::AppsRequestProcessor;
+use crate::request_processors::AuthRequestProcessor;
 use crate::request_processors::CatalogRequestProcessor;
 use crate::request_processors::CommandExecRequestProcessor;
 use crate::request_processors::ConfigRequestProcessor;
@@ -61,8 +61,8 @@ use ody_app_server_protocol::JSONRPCResponse;
 use ody_app_server_protocol::experimental_required_message;
 use ody_arg0::Arg0DispatchPaths;
 use ody_core::ThreadManager;
-use ody_core::workspace_settings;
 use ody_core::config::Config;
+use ody_core::workspace_settings;
 use ody_exec_server::EnvironmentManager;
 use ody_feedback::OdyFeedback;
 use ody_goal_extension::GoalService;
@@ -838,11 +838,9 @@ impl MessageProcessor {
                 .map(|response| Some(response.into())),
             ClientRequest::ExternalAgentConfigDetect { .. }
             | ClientRequest::ExternalAgentConfigImport { .. }
-            | ClientRequest::ExternalAgentConfigImportHistoriesRead { .. } => {
-                Err(internal_error(
-                    "external agent config migration is not supported in this build",
-                ))
-            }
+            | ClientRequest::ExternalAgentConfigImportHistoriesRead { .. } => Err(internal_error(
+                "external agent config migration is not supported in this build",
+            )),
             ClientRequest::ConfigValueWrite { params, .. } => {
                 self.config_processor.value_write(params).await.map(Some)
             }
@@ -1225,9 +1223,7 @@ impl MessageProcessor {
             ClientRequest::Login { params, .. } => {
                 self.auth_processor.login(request_id.clone(), params).await
             }
-            ClientRequest::Logout { .. } => {
-                self.auth_processor.logout(request_id.clone()).await
-            }
+            ClientRequest::Logout { .. } => self.auth_processor.logout(request_id.clone()).await,
             ClientRequest::GetAuthState { params, .. } => {
                 self.auth_processor.get_auth_state(params).await
             }

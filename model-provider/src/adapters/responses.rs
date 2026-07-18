@@ -261,9 +261,7 @@ fn message_to_response_items(
     Ok(items)
 }
 
-fn tool_message_output(
-    content: &[crate::chat_provider::ContentPart],
-) -> FunctionCallOutputPayload {
+fn tool_message_output(content: &[crate::chat_provider::ContentPart]) -> FunctionCallOutputPayload {
     let mut items = Vec::new();
     for part in content {
         match part {
@@ -337,7 +335,8 @@ fn build_tools(
                 description,
                 tools,
             } => {
-                let description = description.unwrap_or_else(|| default_namespace_description(&name));
+                let description =
+                    description.unwrap_or_else(|| default_namespace_description(&name));
                 serde_json::json!({
                     "type": "namespace",
                     "name": name,
@@ -386,15 +385,18 @@ impl<T: HttpTransport + 'static> ChatProvider for ResponsesAdapter<T> {
             .map_err(chat_provider_error_from_api_error)?;
 
         let mut state = common::NormalizeState::default();
-        let mapped = stream.map(move |result: Result<ody_api::ResponseEvent, _>| -> ChatStream {
-            match result
-                .map_err(chat_provider_error_from_api_error)
-                .and_then(|event| common::normalize_response_event_with_state(event, &mut state))
-            {
-                Ok(events) => Box::pin(futures::stream::iter(events.into_iter().map(Ok))),
-                Err(e) => Box::pin(futures::stream::iter(std::iter::once(Err(e)))),
-            }
-        });
+        let mapped = stream.map(
+            move |result: Result<ody_api::ResponseEvent, _>| -> ChatStream {
+                match result
+                    .map_err(chat_provider_error_from_api_error)
+                    .and_then(|event| {
+                        common::normalize_response_event_with_state(event, &mut state)
+                    }) {
+                    Ok(events) => Box::pin(futures::stream::iter(events.into_iter().map(Ok))),
+                    Err(e) => Box::pin(futures::stream::iter(std::iter::once(Err(e)))),
+                }
+            },
+        );
         Ok(Box::pin(mapped.flatten()))
     }
 }

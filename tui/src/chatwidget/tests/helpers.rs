@@ -206,7 +206,7 @@ pub(super) fn test_model_catalog(_config: &Config) -> Arc<ModelCatalog> {
 }
 
 // --- Helpers for tests that need direct construction and event draining ---
-pub(super) async fn make_chatwidget_manual(
+pub(crate) async fn make_chatwidget_manual(
     model_override: Option<&str>,
 ) -> (
     ChatWidget,
@@ -422,7 +422,7 @@ pub(crate) async fn make_chatwidget_manual_with_sender() -> (
     (widget, app_event_tx, rx, op_rx)
 }
 
-pub(super) fn drain_insert_history(
+pub(crate) fn drain_insert_history(
     rx: &mut tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
 ) -> Vec<Vec<ratatui::text::Line<'static>>> {
     let mut out = Vec::new();

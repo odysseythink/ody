@@ -12,6 +12,8 @@ use app_test_support::rollout_path;
 use app_test_support::test_absolute_path;
 use app_test_support::to_response;
 use chrono::Utc;
+use core_test_support::responses;
+use core_test_support::skip_if_no_network;
 use ody_app_server_protocol::AskForApproval;
 use ody_app_server_protocol::CommandExecutionApprovalDecision;
 use ody_app_server_protocol::CommandExecutionRequestApprovalResponse;
@@ -73,8 +75,6 @@ use ody_rollout::read_session_meta_line;
 use ody_state::StateRuntime;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path_uri::LegacyAppPathString;
-use core_test_support::responses;
-use core_test_support::skip_if_no_network;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use std::fs::FileTimes;
@@ -3240,10 +3240,7 @@ stream_max_retries = 0
     )
 }
 
-fn create_config_toml_simple(
-    ody_home: &std::path::Path,
-    server_uri: &str,
-) -> std::io::Result<()> {
+fn create_config_toml_simple(ody_home: &std::path::Path, server_uri: &str) -> std::io::Result<()> {
     let config_toml = ody_home.join("config.toml");
     std::fs::write(
         config_toml,

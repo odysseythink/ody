@@ -449,8 +449,8 @@ pub(crate) async fn handle_submit_artifact(
     // Same flag that decides whether the request_user_input tool is wired up at
     // all (spec_plan.rs); without it (headless / exec / tests) driving a prompt
     // would block the turn forever. Pinned to Design.
-    let can_prompt = expected_mode == ModeKind::Design
-        && turn.config.experimental_request_user_input_enabled;
+    let can_prompt =
+        expected_mode == ModeKind::Design && turn.config.experimental_request_user_input_enabled;
 
     // Whether this call reached the terminal `mark_submitted()` branch. Drives
     // the host-managed post-design next-step menu below.

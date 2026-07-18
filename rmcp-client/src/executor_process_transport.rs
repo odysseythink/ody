@@ -25,6 +25,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use bytes::BytesMut;
+use memchr::memchr;
 use ody_exec_server::ExecOutputStream;
 use ody_exec_server::ExecProcess;
 use ody_exec_server::ExecProcessEvent;
@@ -32,7 +33,6 @@ use ody_exec_server::ExecProcessEventReceiver;
 use ody_exec_server::ProcessId;
 use ody_exec_server::ProcessOutputChunk;
 use ody_exec_server::WriteStatus;
-use memchr::memchr;
 use rmcp::service::RoleClient;
 use rmcp::service::RxJsonRpcMessage;
 use rmcp::service::TxJsonRpcMessage;

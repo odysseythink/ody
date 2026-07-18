@@ -41,7 +41,8 @@ fn environment_fallback_reads_injected_proxy_environment() {
     let env = MapEnv {
         values: HashMap::from([("HTTPS_PROXY".to_string(), "://invalid".to_string())]),
     };
-    let origin = RequestOrigin::parse("https://auth.odysseythink.com/oauth/token").expect("valid URL");
+    let origin =
+        RequestOrigin::parse("https://auth.odysseythink.com/oauth/token").expect("valid URL");
     let result = configure_env_proxy_handling(
         &env,
         reqwest::Client::builder(),
@@ -194,8 +195,14 @@ fn no_proxy_matches_exact_suffix_wildcard_and_port() {
     assert!(!no_proxy_matches_origin("odysseythink.com", &origin));
     assert!(no_proxy_matches_origin(".odysseythink.com", &origin));
     assert!(no_proxy_matches_origin("*.odysseythink.com", &origin));
-    assert!(no_proxy_matches_origin("auth.odysseythink.com:443", &origin));
-    assert!(!no_proxy_matches_origin("auth.odysseythink.com:8443", &origin));
+    assert!(no_proxy_matches_origin(
+        "auth.odysseythink.com:443",
+        &origin
+    ));
+    assert!(!no_proxy_matches_origin(
+        "auth.odysseythink.com:8443",
+        &origin
+    ));
 }
 
 #[test]

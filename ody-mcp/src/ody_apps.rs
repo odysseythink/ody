@@ -247,8 +247,7 @@ pub(crate) fn load_cached_ody_apps_server_info(
 ) -> Option<McpServerInfo> {
     let bytes = std::fs::read(cache_context.server_info_cache_path()).ok()?;
     let cache: OdyAppsServerInfoDiskCache = serde_json::from_slice(&bytes).ok()?;
-    (cache.schema_version == ODY_APPS_SERVER_INFO_CACHE_SCHEMA_VERSION)
-        .then_some(cache.server_info)
+    (cache.schema_version == ODY_APPS_SERVER_INFO_CACHE_SCHEMA_VERSION).then_some(cache.server_info)
 }
 
 fn write_cached_ody_apps_server_info(

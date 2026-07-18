@@ -373,7 +373,9 @@ mod tests {
             ResponseEvent::OutputItemDone(ResponseItem::Message {
                 id: Some("msg-1".into()),
                 role: "assistant".into(),
-                content: vec![ContentItem::OutputText { text: "done".into() }],
+                content: vec![ContentItem::OutputText {
+                    text: "done".into(),
+                }],
                 phase: None,
                 internal_chat_message_metadata_passthrough: None,
             }),

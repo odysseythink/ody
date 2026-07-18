@@ -211,10 +211,7 @@ fn auth_elicitation_message(auth_failure: &OdyAppsConnectorAuthFailure) -> Strin
             "Sign in to {} to use it in Ody.",
             auth_failure.connector_name
         ),
-        _ => format!(
-            "Sign in to {} to continue.",
-            auth_failure.connector_name
-        ),
+        _ => format!("Sign in to {} to continue.", auth_failure.connector_name),
     }
 }
 

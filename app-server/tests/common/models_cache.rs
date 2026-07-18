@@ -4,12 +4,12 @@ use ody_core::test_support::all_model_presets;
 use ody_models_manager::client_version_to_whole;
 use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::model_metadata::ConfigShellToolType;
+use ody_protocol::model_metadata::ModelCapabilities;
 use ody_protocol::model_metadata::ModelInfo;
 use ody_protocol::model_metadata::ModelPreset;
 use ody_protocol::model_metadata::ModelVisibility;
 use ody_protocol::model_metadata::TruncationPolicyConfig;
 use ody_protocol::model_metadata::default_input_modalities;
-use ody_protocol::model_metadata::ModelCapabilities;
 use serde_json::json;
 use std::path::Path;
 

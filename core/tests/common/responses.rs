@@ -7,11 +7,11 @@ use std::time::Duration;
 
 use anyhow::Result;
 use base64::Engine;
-use ody_protocol::models::ContentItem;
-use ody_protocol::models::ResponseItem;
-use ody_protocol::model_metadata::ModelsResponse;
 use futures::SinkExt;
 use futures::StreamExt;
+use ody_protocol::model_metadata::ModelsResponse;
+use ody_protocol::models::ContentItem;
+use ody_protocol::models::ResponseItem;
 use serde_json::Value;
 use tokio::net::TcpListener;
 use tokio::sync::Notify;

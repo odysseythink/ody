@@ -51,10 +51,7 @@ impl SkillsThreadState {
         }
     }
 
-    pub(crate) fn mark_loaded_event_emitted(
-        &self,
-        key: (SkillAuthority, SkillPackageId),
-    ) -> bool {
+    pub(crate) fn mark_loaded_event_emitted(&self, key: (SkillAuthority, SkillPackageId)) -> bool {
         self.loaded_skill_events_emitted
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)

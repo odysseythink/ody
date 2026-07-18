@@ -91,11 +91,11 @@ mod tests {
     use super::extract_response_debug_context;
     use super::telemetry_api_error_message;
     use super::telemetry_transport_error_message;
-    use ody_api::ApiError;
-    use ody_api::TransportError;
     use http::HeaderMap;
     use http::HeaderValue;
     use http::StatusCode;
+    use ody_api::ApiError;
+    use ody_api::TransportError;
     use pretty_assertions::assert_eq;
 
     #[test]

@@ -100,8 +100,7 @@ pub fn should_persist_event_msg(ev: &EventMsg) -> bool {
             // item lifecycle event.
             matches!(
                 event.item,
-                ody_protocol::items::TurnItem::Plan(_)
-                    | ody_protocol::items::TurnItem::Sleep(_)
+                ody_protocol::items::TurnItem::Plan(_) | ody_protocol::items::TurnItem::Sleep(_)
             )
         }
         EventMsg::Error(_)

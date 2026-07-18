@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
+use futures::future::join_all;
 use ody_config::McpServerConfig;
 use ody_config::McpServerTransportConfig;
 use ody_config::types::AuthKeyringBackendKind;
@@ -9,7 +10,6 @@ use ody_protocol::protocol::McpAuthStatus;
 use ody_rmcp_client::OAuthProviderError;
 use ody_rmcp_client::determine_streamable_http_auth_status;
 use ody_rmcp_client::discover_streamable_http_oauth;
-use futures::future::join_all;
 use tracing::warn;
 
 use crate::server::EffectiveMcpServer;

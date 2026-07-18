@@ -189,9 +189,9 @@ fn bytes_to_hex(bytes: &[u8; 32]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ody_install_context::OdyPackageLayout;
     use ody_install_context::InstallContext;
     use ody_install_context::InstallMethod;
+    use ody_install_context::OdyPackageLayout;
     use pretty_assertions::assert_eq;
     use std::fs;
     use tempfile::NamedTempFile;

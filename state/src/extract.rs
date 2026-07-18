@@ -159,10 +159,10 @@ mod tests {
     use chrono::DateTime;
     use chrono::Utc;
     use ody_protocol::ThreadId;
+    use ody_protocol::model_metadata::ReasoningEffort;
     use ody_protocol::models::ContentItem;
     use ody_protocol::models::PermissionProfile;
     use ody_protocol::models::ResponseItem;
-    use ody_protocol::model_metadata::ReasoningEffort;
     use ody_protocol::protocol::AskForApproval;
     use ody_protocol::protocol::EventMsg;
     use ody_protocol::protocol::RolloutItem;

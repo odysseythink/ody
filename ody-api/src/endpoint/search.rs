@@ -4,10 +4,10 @@ use crate::error::ApiError;
 use crate::provider::Provider;
 use crate::search::SearchRequest;
 use crate::search::SearchResponse;
-use ody_client::HttpTransport;
-use ody_client::RequestTelemetry;
 use http::HeaderMap;
 use http::Method;
+use ody_client::HttpTransport;
+use ody_client::RequestTelemetry;
 use serde_json::to_value;
 use std::sync::Arc;
 
@@ -65,6 +65,7 @@ mod tests {
     use crate::search::SearchInput;
     use crate::search::SearchQuery;
     use crate::search::SearchSettings;
+    use http::StatusCode;
     use ody_client::Request;
     use ody_client::RequestBody;
     use ody_client::Response;
@@ -72,7 +73,6 @@ mod tests {
     use ody_client::TransportError;
     use ody_protocol::models::ContentItem;
     use ody_protocol::models::ResponseItem;
-    use http::StatusCode;
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use std::sync::Mutex;

@@ -1258,7 +1258,6 @@ impl PluginsManager {
         );
     }
 
-
     fn schedule_non_curated_plugin_cache_refresh(
         self: &Arc<Self>,
         roots: &[AbsolutePathBuf],
@@ -1322,7 +1321,6 @@ impl PluginsManager {
             warn!("failed to start non-curated plugin cache refresh task: {err}");
         }
     }
-
 
     fn run_non_curated_plugin_cache_refresh_loop(self: Arc<Self>) {
         loop {

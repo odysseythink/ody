@@ -9,11 +9,11 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
+use futures::FutureExt as _;
 use ody_rmcp_client::ElicitationAction;
 use ody_rmcp_client::ElicitationResponse;
 use ody_rmcp_client::LocalStdioServerLauncher;
 use ody_rmcp_client::RmcpClient;
-use futures::FutureExt as _;
 use rmcp::model::ClientCapabilities;
 use rmcp::model::Implementation;
 use rmcp::model::InitializeRequestParams;

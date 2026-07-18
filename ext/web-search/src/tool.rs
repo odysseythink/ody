@@ -1,9 +1,11 @@
+use http::HeaderMap;
 use ody_api::ReqwestTransport;
 use ody_api::SearchClient;
 use ody_api::SearchCommands;
 use ody_api::SearchQuery;
 use ody_api::SearchRequest;
 use ody_api::SearchSettings;
+use ody_client::default_client::build_reqwest_client;
 use ody_core::web_search_action_detail;
 use ody_extension_api::ExtensionTurnItem;
 use ody_extension_api::FunctionCallError;
@@ -14,7 +16,6 @@ use ody_extension_api::ToolName;
 use ody_extension_api::ToolOutput;
 use ody_extension_api::ToolSpec;
 use ody_extension_api::parse_tool_input_schema_without_compaction;
-use ody_client::default_client::build_reqwest_client;
 use ody_model_provider::SharedModelProvider;
 use ody_protocol::items::WebSearchItem;
 use ody_protocol::models::WebSearchAction;
@@ -22,7 +23,6 @@ use ody_tools::ResponsesApiNamespace;
 use ody_tools::ResponsesApiNamespaceTool;
 use ody_tools::ToolExposure;
 use ody_tools::default_namespace_description;
-use http::HeaderMap;
 use url::Url;
 
 use crate::history::recent_input;

@@ -5,6 +5,9 @@ use std::time::Duration;
 
 use anyhow::Result;
 use bytes::Bytes;
+use http::HeaderMap;
+use http::HeaderValue;
+use http::StatusCode;
 use ody_api::ApiError;
 use ody_api::AuthError;
 use ody_api::AuthProvider;
@@ -23,9 +26,6 @@ use ody_protocol::models::ContentItem;
 use ody_protocol::models::ResponseItem;
 use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::SubAgentSource;
-use http::HeaderMap;
-use http::HeaderValue;
-use http::StatusCode;
 use pretty_assertions::assert_eq;
 
 fn assert_path_ends_with(requests: &[Request], suffix: &str) {
