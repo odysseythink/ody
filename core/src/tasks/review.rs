@@ -4,6 +4,7 @@ use ody_prompts::render_review_exit_interrupted;
 use ody_prompts::render_review_exit_success;
 use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::items::TurnItem;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::models::ContentItem;
 use ody_protocol::models::ResponseItem;
 use ody_protocol::protocol::AgentMessageContentDeltaEvent;
@@ -100,6 +101,7 @@ pub(crate) async fn run_one_shot_review(
     cancellation_token: CancellationToken,
     base_instructions: String,
     model: String,
+    reasoning_effort: Option<ReasoningEffort>,
 ) -> Option<ReviewOutputEvent> {
     let receiver = start_review_conversation_with_overrides(
         session,
@@ -108,6 +110,7 @@ pub(crate) async fn run_one_shot_review(
         cancellation_token.clone(),
         Some(base_instructions),
         Some(model),
+        reasoning_effort,
     )
     .await?;
     process_one_shot_review_events(receiver, cancellation_token).await
@@ -119,8 +122,16 @@ async fn start_review_conversation(
     input: Vec<UserInput>,
     cancellation_token: CancellationToken,
 ) -> Option<async_channel::Receiver<Event>> {
-    start_review_conversation_with_overrides(session, ctx, input, cancellation_token, None, None)
-        .await
+    start_review_conversation_with_overrides(
+        session,
+        ctx,
+        input,
+        cancellation_token,
+        None,
+        None,
+        None,
+    )
+    .await
 }
 
 async fn start_review_conversation_with_overrides(
@@ -130,9 +141,16 @@ async fn start_review_conversation_with_overrides(
     cancellation_token: CancellationToken,
     base_instructions_override: Option<String>,
     model_override: Option<String>,
+    reasoning_effort_override: Option<ReasoningEffort>,
 ) -> Option<async_channel::Receiver<Event>> {
     let config = ctx.config.clone();
     let mut sub_agent_config = config.as_ref().clone();
+    // Structured single-shot reviews (e.g. the design adversarial review) pass
+    // `None` reasoning to suppress a long streamed thinking trace that only adds
+    // latency; the model still reasons inside its JSON answer.
+    if let Some(reasoning_effort) = reasoning_effort_override {
+        sub_agent_config.model_reasoning_effort = Some(reasoning_effort);
+    }
     // Carry over review-only feature restrictions so the delegate cannot
     // re-enable blocked tools (web search, collab tools, view image).
     if let Err(err) = sub_agent_config

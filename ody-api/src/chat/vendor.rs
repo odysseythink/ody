@@ -115,11 +115,27 @@ impl ChatVendor {
         }
     }
 
-    /// Apply provider-specific mutations to the fully built request body. Kimi
-    /// accepts the top-level `reasoning_effort` field directly, so no rewrite
-    /// is currently required; this hook remains for future extensions.
+    /// Apply provider-specific mutations to the fully built request body.
+    ///
+    /// GLM (Zhipu) thinking models default to thinking **ON** when the request
+    /// carries no thinking control, which streams a long `reasoning_content`
+    /// trace and roughly doubles latency (measured: a one-line prompt took 12.8s
+    /// with thinking vs 6.7s without; large designs blow past the review
+    /// timeout). ody-rs already treats GLM as non-thinking (see
+    /// [`Self::supports_thinking` in the adapter] and [`Self::emits_reasoning_effort`]),
+    /// so make the wire match that stance by explicitly disabling it. Mirrors
+    /// ody-code's GLM provider, which sends `thinking: { type: "disabled" }` when
+    /// its thinking effort is off (`packages/kosong/src/providers/glm.ts`).
     pub fn apply_request(self, body: &mut Value, request: &ChatCompletionsRequest) {
-        let _ = (body, request);
+        let _ = request;
+        if self == ChatVendor::Glm
+            && let Some(object) = body.as_object_mut()
+        {
+            object.insert(
+                "thinking".into(),
+                serde_json::json!({ "type": "disabled" }),
+            );
+        }
     }
 }
 

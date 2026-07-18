@@ -164,6 +164,8 @@ impl ReviewTestsHandler {
                 cancellation_token,
                 prompt,
                 reviewer_model,
+                // Keep test-review reasoning at its configured default (unchanged).
+                None,
             ),
         )
         .await

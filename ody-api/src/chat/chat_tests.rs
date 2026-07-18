@@ -123,6 +123,21 @@ fn reasoning_effort_emitted_for_kimi_but_not_glm() {
 }
 
 #[test]
+fn glm_disables_thinking_but_others_do_not() {
+    // GLM defaults thinking ON server-side unless told otherwise; ody-rs treats
+    // GLM as non-thinking, so the wire must explicitly disable it.
+    let glm = base_request(ChatVendor::Glm).to_wire();
+    assert_eq!(glm["thinking"], json!({ "type": "disabled" }));
+
+    for vendor in [ChatVendor::Generic, ChatVendor::Kimi, ChatVendor::DeepSeek] {
+        assert!(
+            base_request(vendor).to_wire().get("thinking").is_none(),
+            "{vendor:?} must not carry a thinking field"
+        );
+    }
+}
+
+#[test]
 fn glm_uses_max_tokens_field() {
     let mut glm = base_request(ChatVendor::Glm);
     glm.max_completion_tokens = Some(1024);

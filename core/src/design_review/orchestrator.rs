@@ -9,6 +9,7 @@ use ody_analytics::DesignReviewFailedInput;
 use ody_analytics::DesignReviewFailureReason;
 use ody_analytics::DesignReviewStartedInput;
 use ody_analytics::now_unix_millis;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::protocol::ReviewOutputEvent;
 use ody_protocol::user_input::UserInput;
 use tokio_util::sync::CancellationToken;
@@ -25,7 +26,11 @@ use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
 use crate::tasks::SessionTaskContext;
 
-const DESIGN_REVIEW_TIMEOUT: Duration = Duration::from_secs(600);
+// With the reviewer's reasoning stream disabled (see `run_one_shot_review` call
+// below), the structured critique returns well inside this bound. Kept generous
+// but far below the old 600s so a stalled reviewer no longer blocks finalize for
+// ten minutes.
+const DESIGN_REVIEW_TIMEOUT: Duration = Duration::from_secs(180);
 
 pub(crate) struct DesignReviewOrchestrator;
 
@@ -64,6 +69,12 @@ impl DesignReviewOrchestrator {
             cancellation_token.clone(),
             prompt,
             request.review_model.clone(),
+            // Disable the reviewer's separate reasoning stream. The critique is a
+            // single-shot structured task (emit JSON findings); a long streamed
+            // reasoning trace is pure latency and the usual cause of the review
+            // tripping its timeout (mirrors ody-code's reviewer `.withThinking('off')`).
+            // The model can still reason inside its answer.
+            Some(ReasoningEffort::None),
         );
 
         let review_result = tokio::time::timeout(DESIGN_REVIEW_TIMEOUT, review_future).await;
