@@ -262,3 +262,37 @@ fn design_command_hidden_when_collaboration_modes_disabled() {
             .all(|(_, c)| c != SlashCommand::Design && c != SlashCommand::Plan)
     );
 }
+
+#[tokio::test]
+async fn design_audit_picker_uses_configured_language() {
+    let (mut chat, _rx, _op_rx) =
+        make_chatwidget_manual_with_language(/*model_override*/ None, Some("zh-CN")).await;
+    chat.set_feature_enabled(Feature::CollaborationModes, true);
+
+    chat.dispatch_command(SlashCommand::Design);
+
+    assert!(chat.bottom_pane.has_active_view());
+    assert_eq!(
+        chat.bottom_pane.active_view_id(),
+        Some("design_audit_level_picker")
+    );
+
+    let popup = render_bottom_popup(&chat, /*width*/ 80);
+    let compact = popup.replace(|c: char| c.is_whitespace(), "");
+    assert!(
+        compact.contains("选择设计审计级别"),
+        "expected Chinese title in popup, got:\n{popup}"
+    );
+    assert!(
+        compact.contains("基础"),
+        "expected Chinese 'Basic' item in popup, got:\n{popup}"
+    );
+    assert!(
+        compact.contains("标准"),
+        "expected Chinese 'Standard' item in popup, got:\n{popup}"
+    );
+    assert!(
+        compact.contains("深入"),
+        "expected Chinese 'Deep' item in popup, got:\n{popup}"
+    );
+}

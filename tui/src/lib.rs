@@ -117,6 +117,7 @@ mod goal_display;
 mod goal_files;
 mod history_cell;
 mod hooks_rpc;
+pub mod i18n;
 mod ide_context;
 pub(crate) mod insert_history;
 pub use insert_history::insert_history_lines;

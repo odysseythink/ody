@@ -25,8 +25,8 @@ use ody_config::Sourced;
 use ody_config::ThreadConfigLoader;
 use ody_config::config_toml::ConfigLockfileToml;
 use ody_config::config_toml::ConfigToml;
-use ody_config::config_toml::OdyCodeModelConfig;
 use ody_config::config_toml::DEFAULT_PROJECT_DOC_MAX_BYTES;
+use ody_config::config_toml::OdyCodeModelConfig;
 use ody_config::config_toml::PlanModeConfigToml;
 use ody_config::config_toml::ProjectConfig;
 use ody_config::config_toml::RealtimeAudioConfig;
@@ -2787,71 +2787,6 @@ fn resolve_optional_prompt_text(
     }
 }
 
-/// Map a BCP-47 / POSIX locale string to a human-readable language name
-/// suitable for a model instruction.
-pub(crate) fn map_locale_to_language(locale: &str) -> Option<String> {
-    let primary = locale
-        .split(|c| c == '-' || c == '_')
-        .next()?
-        .to_lowercase();
-    let name = match primary.as_str() {
-        "ar" => "Arabic",
-        "cs" => "Czech",
-        "de" => "German",
-        "el" => "Greek",
-        "en" => "English",
-        "es" => "Spanish",
-        "fr" => "French",
-        "he" => "Hebrew",
-        "hi" => "Hindi",
-        "id" => "Indonesian",
-        "it" => "Italian",
-        "ja" => "Japanese",
-        "ko" => "Korean",
-        "ms" => "Malay",
-        "nl" => "Dutch",
-        "pl" => "Polish",
-        "pt" => "Portuguese",
-        "ru" => "Russian",
-        "sv" => "Swedish",
-        "th" => "Thai",
-        "tr" => "Turkish",
-        "uk" => "Ukrainian",
-        "vi" => "Vietnamese",
-        "zh" => "Chinese",
-        _ => return None,
-    };
-    Some(name.to_string())
-}
-
-/// Detect the user's preferred language from the system locale.
-fn detect_system_language() -> Option<String> {
-    sys_locale::get_locale().and_then(|locale| map_locale_to_language(&locale))
-}
-
-#[cfg(test)]
-mod language_tests {
-    use super::*;
-
-    #[test]
-    fn map_locale_to_language_maps_common_locales() {
-        assert_eq!(
-            map_locale_to_language("zh-Hans_CN").as_deref(),
-            Some("Chinese")
-        );
-        assert_eq!(map_locale_to_language("en-US").as_deref(), Some("English"));
-        assert_eq!(map_locale_to_language("ja_JP").as_deref(), Some("Japanese"));
-        assert_eq!(map_locale_to_language("ko-KR").as_deref(), Some("Korean"));
-        assert_eq!(map_locale_to_language("fr_FR").as_deref(), Some("French"));
-        assert_eq!(map_locale_to_language("de").as_deref(), Some("German"));
-    }
-
-    #[test]
-    fn map_locale_to_language_returns_none_for_unknown_locale() {
-        assert_eq!(map_locale_to_language("xx-XX"), None);
-    }
-}
-
 fn code_mode_toml_config(features: Option<&FeaturesToml>) -> Option<&CodeModeConfigToml> {
     match features?.code_mode.as_ref()? {
         FeatureToml::Enabled(_) => None,
@@ -3725,13 +3660,16 @@ impl Config {
                 .as_ref()
                 .map(|language| language.trim())
                 .filter(|language| !language.is_empty());
-            match explicit_language {
-                None => detect_system_language(),
+            let code = match explicit_language {
+                None => ody_config::locale::detect_system_locale_code(),
                 Some(language) if language.eq_ignore_ascii_case("auto") => {
-                    detect_system_language()
+                    ody_config::locale::detect_system_locale_code()
                 }
-                Some(language) => Some(language.to_string()),
-            }
+                Some(language) => ody_config::locale::parse_locale_code(language),
+            };
+            code.and_then(|code| {
+                ody_config::locale::map_locale_code_to_model_language(&code)
+            })
         };
         let base_instructions = if let Some(language) = effective_language {
             let language_instruction = format!("\n\nThink and respond in {language}.");

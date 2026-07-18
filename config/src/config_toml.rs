@@ -330,11 +330,15 @@ pub struct ConfigToml {
     /// System instructions.
     pub instructions: Option<String>,
 
-    /// Preferred language for model responses and reasoning.
+    /// Preferred language for model responses and reasoning, expressed as a
+    /// BCP-47 primary language code (e.g. `en`, `zh`, `es`, `fr`) or the
+    /// special value `auto` to detect the language from the system locale.
+    ///
     /// When set (or left empty), a short instruction is appended to the base
-    /// instructions asking the model to think and respond in this language.
-    /// Use the special value "auto" to detect the language from the system locale.
-    /// When unset or empty, defaults to "auto".
+    /// instructions asking the model to think and respond in the mapped
+    /// human-readable language name. Human-readable names such as `Chinese`
+    /// are accepted for backwards compatibility. When unset or empty, defaults
+    /// to `auto`.
     pub language: Option<String>,
 
     /// Developer instructions inserted as a `developer` role message.

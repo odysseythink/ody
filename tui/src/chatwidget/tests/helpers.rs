@@ -257,6 +257,62 @@ pub(super) async fn make_chatwidget_manual(
     (widget, rx, op_rx)
 }
 
+/// Like [`make_chatwidget_manual`], but seeds the config with a specific
+/// `language` value before constructing the widget so that i18n resolution is
+/// exercised.
+pub(super) async fn make_chatwidget_manual_with_language(
+    model_override: Option<&str>,
+    language: Option<&str>,
+) -> (
+    ChatWidget,
+    tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
+    tokio::sync::mpsc::UnboundedReceiver<Op>,
+) {
+    let (tx_raw, rx) = unbounded_channel::<AppEvent>();
+    let app_event_tx = AppEventSender::new(tx_raw);
+    let (op_tx, op_rx) = unbounded_channel::<Op>();
+    let mut cfg = test_config().await;
+    cfg.language = language.map(|s| s.to_string());
+    let resolved_model = model_override
+        .map(str::to_owned)
+        .unwrap_or_else(|| get_model_offline_for_tests(cfg.model.as_deref()));
+    if let Some(model) = model_override {
+        cfg.model = Some(model.to_string());
+    }
+    let session_telemetry = test_session_telemetry(&cfg, resolved_model.as_str());
+    let model_catalog = test_model_catalog(&cfg);
+    let common = ChatWidgetInit {
+        config: cfg,
+        frame_requester: FrameRequester::test_dummy(),
+        app_event_tx,
+        workspace_command_runner: None,
+        initial_user_message: None,
+        enhanced_keys_supported: false,
+        api_key_configured: false,
+        has_ody_backend_auth: false,
+        model_catalog,
+        feedback: ody_feedback::OdyFeedback::new(),
+        is_first_run: true,
+        runtime_model_provider_base_url: None,
+        model: Some(resolved_model.clone()),
+        startup_tooltip_override: None,
+        status_line_invalid_items_warned: Arc::new(AtomicBool::new(false)),
+        terminal_title_invalid_items_warned: Arc::new(AtomicBool::new(false)),
+        session_telemetry,
+    };
+    let mut widget = ChatWidget::new_with_op_target(common, super::OdyOpTarget::Direct(op_tx));
+    widget.transcript.active_cell = None;
+    widget.transcript.active_cell_revision = 0;
+    widget.normal_placeholder_text = "Ask Ody to do anything".to_string();
+    widget.side_placeholder_text =
+        "Check recently modified functions for compatibility".to_string();
+    widget
+        .bottom_pane
+        .set_placeholder_text(widget.normal_placeholder_text.clone());
+    widget.set_model(&resolved_model);
+    (widget, rx, op_rx)
+}
+
 // ChatWidget may emit other `Op`s (e.g. history/logging updates) on the same channel; this helper
 // filters until we see a submission op.
 pub(super) fn next_submit_op(op_rx: &mut tokio::sync::mpsc::UnboundedReceiver<Op>) -> Op {

@@ -5426,10 +5426,8 @@ async fn responses_websocket_features_do_not_change_wire_api() -> std::io::Resul
             ..Default::default()
         };
         cfg.model_provider = Some("test".to_string());
-        cfg.model_providers = std::collections::HashMap::from([(
-            "test".to_string(),
-            super::test_provider(),
-        )]);
+        cfg.model_providers =
+            std::collections::HashMap::from([("test".to_string(), super::test_provider())]);
 
         let config = Config::load_from_base_config_with_overrides(
             cfg,
@@ -5491,9 +5489,9 @@ async fn managed_config_overrides_oauth_store_mode() -> anyhow::Result<()> {
     let cfg =
         deserialize_config_toml_with_base(config_layer_stack.effective_config(), ody_home.path())
             .map_err(|e| {
-                tracing::error!("Failed to deserialize overridden config: {e}");
-                e
-            })?;
+            tracing::error!("Failed to deserialize overridden config: {e}");
+            e
+        })?;
     assert_eq!(
         cfg.mcp_oauth_credentials_store,
         Some(OAuthCredentialsStoreMode::Keyring),
@@ -5604,10 +5602,7 @@ async fn managed_config_wins_over_cli_overrides() -> anyhow::Result<()> {
     let ody_home = TempDir::new()?;
     let managed_path = ody_home.path().join("managed_config.toml");
 
-    std::fs::write(
-        ody_home.path().join(CONFIG_TOML_FILE),
-        "model = \"base\"\n",
-    )?;
+    std::fs::write(ody_home.path().join(CONFIG_TOML_FILE), "model = \"base\"\n")?;
     std::fs::write(&managed_path, "model = \"managed_config\"\n")?;
 
     let overrides = LoaderOverrides::with_managed_config_path_for_tests(managed_path);
@@ -5626,9 +5621,9 @@ async fn managed_config_wins_over_cli_overrides() -> anyhow::Result<()> {
     let cfg =
         deserialize_config_toml_with_base(config_layer_stack.effective_config(), ody_home.path())
             .map_err(|e| {
-                tracing::error!("Failed to deserialize overridden config: {e}");
-                e
-            })?;
+            tracing::error!("Failed to deserialize overridden config: {e}");
+            e
+        })?;
 
     assert_eq!(cfg.model.as_deref(), Some("managed_config"));
     Ok(())
@@ -8973,7 +8968,6 @@ async fn derive_sandbox_policy_preserves_windows_downgrade_for_unsupported_fallb
 }
 
 #[test]
-
 #[test]
 fn config_toml_deserializes_mcp_oauth_callback_port() {
     let toml = r#"mcp_oauth_callback_port = 4321"#;
@@ -11133,8 +11127,8 @@ base_url = "https://api.test.com/v1"
     .await
     .expect("load config");
     assert_eq!(config.language, None);
-    let expected = sys_locale::get_locale()
-        .and_then(|locale| map_locale_to_language(&locale))
+    let expected = ody_config::locale::detect_system_locale_code()
+        .and_then(|code| ody_config::locale::map_locale_code_to_model_language(&code))
         .map(|lang| format!("\n\nThink and respond in {lang}."));
     assert_eq!(config.base_instructions, expected);
 }
@@ -11150,11 +11144,11 @@ async fn language_config_is_loaded_and_injected_into_base_instructions() {
     )
     .await
     .expect("load config");
-   assert_eq!(config.language.as_deref(), Some("zh"));
-   assert_eq!(
-       config.base_instructions.as_deref(),
-        Some("\n\nThink and respond in zh.")
-   );
+    assert_eq!(config.language.as_deref(), Some("zh"));
+    assert_eq!(
+        config.base_instructions.as_deref(),
+        Some("\n\nThink and respond in Chinese.")
+    );
 }
 
 #[tokio::test]
@@ -11180,10 +11174,10 @@ base_url = "https://api.test.com/v1"
     )
     .await
     .expect("load config");
-   assert_eq!(
-       config.base_instructions.as_deref(),
-        Some("Be concise\n\nThink and respond in es.")
-   );
+    assert_eq!(
+        config.base_instructions.as_deref(),
+        Some("Be concise\n\nThink and respond in Spanish.")
+    );
 }
 
 #[tokio::test]
@@ -11208,11 +11202,11 @@ base_url = "https://api.test.com/v1"
     )
     .await
     .expect("load config");
-   assert_eq!(config.language.as_deref(), Some("  fr  "));
-   assert_eq!(
-       config.base_instructions.as_deref(),
-        Some("\n\nThink and respond in fr.")
-   );
+    assert_eq!(config.language.as_deref(), Some("  fr  "));
+    assert_eq!(
+        config.base_instructions.as_deref(),
+        Some("\n\nThink and respond in French.")
+    );
 }
 
 #[tokio::test]
@@ -11227,12 +11221,26 @@ async fn language_auto_uses_detected_system_language() {
     .await
     .expect("load config");
     assert_eq!(config.language.as_deref(), Some("auto"));
-   let expected = sys_locale::get_locale()
-       .and_then(|locale| map_locale_to_language(&locale))
+    let expected = ody_config::locale::detect_system_locale_code()
+        .and_then(|code| ody_config::locale::map_locale_code_to_model_language(&code))
         .map(|lang| format!("\n\nThink and respond in {lang}."));
     assert_eq!(config.base_instructions, expected);
 }
 
+#[tokio::test]
+async fn language_unknown_locale_is_not_injected() {
+    let config_toml = test_config_toml_with_language("xx-XX");
+    let ody_home = tempdir().unwrap();
+    let config = Config::load_from_base_config_with_overrides(
+        config_toml,
+        ConfigOverrides::default(),
+        ody_home.abs(),
+    )
+    .await
+    .expect("load config");
+    assert_eq!(config.language.as_deref(), Some("xx-XX"));
+    assert_eq!(config.base_instructions, None);
+}
 
 #[tokio::test]
 async fn load_config_providers_override_model_providers_silently() -> std::io::Result<()> {
@@ -11321,7 +11329,6 @@ api_key = "sk-test"
 
     Ok(())
 }
-
 
 #[test]
 fn configured_model_catalog_builds_from_models_tables() {

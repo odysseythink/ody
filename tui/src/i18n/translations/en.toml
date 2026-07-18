@@ -1,0 +1,8 @@
+design_audit_title = "Select Design Audit Level"
+design_audit_subtitle = "Choose how rigorously assumptions are verified."
+design_audit_basic = "Basic"
+design_audit_basic_description = "Trust clearly-stated user facts; verify only load-bearing assumptions."
+design_audit_standard = "Standard"
+design_audit_standard_description = "Verify every assumption that would be expensive if wrong; record the rest."
+design_audit_deep = "Deep"
+design_audit_deep_description = "Verify nearly everything against sources; treat the repo and upstream as the only ground truth."

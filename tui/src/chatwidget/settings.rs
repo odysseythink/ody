@@ -618,11 +618,8 @@ impl ChatWidget {
 
         let items = vec![
             SelectionItem {
-                name: "Basic".to_string(),
-                description: Some(
-                    "Trust clearly-stated user facts; verify only load-bearing assumptions."
-                        .to_string(),
-                ),
+                name: self.i18n.get("design_audit_basic").to_string(),
+                description: Some(self.i18n.get("design_audit_basic_description").to_string()),
                 actions: vec![make_action(
                     DesignAuditLevel::Basic,
                     pending_user_message.clone(),
@@ -633,9 +630,10 @@ impl ChatWidget {
                 ..Default::default()
             },
             SelectionItem {
-                name: "Standard".to_string(),
+                name: self.i18n.get("design_audit_standard").to_string(),
                 description: Some(
-                    "Verify every assumption that would be expensive if wrong; record the rest."
+                    self.i18n
+                        .get("design_audit_standard_description")
                         .to_string(),
                 ),
                 actions: vec![make_action(
@@ -648,11 +646,8 @@ impl ChatWidget {
                 ..Default::default()
             },
             SelectionItem {
-                name: "Deep".to_string(),
-                description: Some(
-                    "Verify nearly everything against sources; treat the repo and upstream as the only ground truth."
-                        .to_string(),
-                ),
+                name: self.i18n.get("design_audit_deep").to_string(),
+                description: Some(self.i18n.get("design_audit_deep_description").to_string()),
                 actions: vec![make_action(
                     DesignAuditLevel::Deep,
                     pending_user_message.clone(),
@@ -666,8 +661,8 @@ impl ChatWidget {
 
         self.bottom_pane.show_selection_view(SelectionViewParams {
             view_id: Some("design_audit_level_picker"),
-            title: Some("Select Design Audit Level".to_string()),
-            subtitle: Some("Choose how rigorously assumptions are verified.".to_string()),
+            title: Some(self.i18n.get("design_audit_title").to_string()),
+            subtitle: Some(self.i18n.get("design_audit_subtitle").to_string()),
             footer_hint: Some(standard_popup_hint_line()),
             items,
             initial_selected_idx: Some(1),

@@ -36,6 +36,16 @@ impl ChatWidget {
         let side_placeholder =
             SIDE_PLACEHOLDERS[rng.random_range(0..SIDE_PLACEHOLDERS.len())].to_string();
 
+        let locale_code = config
+            .language
+            .as_deref()
+            .map(|language| language.trim())
+            .filter(|language| !language.is_empty() && !language.eq_ignore_ascii_case("auto"))
+            .map(|language| language.to_string())
+            .or_else(ody_config::locale::detect_system_locale_code)
+            .unwrap_or_else(|| "en".to_string());
+        let i18n = I18n::new(&locale_code);
+
         let model_override = model.as_deref();
         let model_for_header = model
             .clone()
@@ -104,6 +114,7 @@ impl ChatWidget {
             transcript: TranscriptState::new(active_cell),
             raw_output_mode: config.tui_raw_output_mode,
             config,
+            i18n,
             effective_service_tier,
             skills_all: Vec::new(),
             skills_initial_state: None,

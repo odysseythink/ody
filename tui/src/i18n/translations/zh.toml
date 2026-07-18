@@ -1,0 +1,8 @@
+design_audit_title = "选择设计审计级别"
+design_audit_subtitle = "选择验证假设的严格程度。"
+design_audit_basic = "基础"
+design_audit_basic_description = "信任用户明确陈述的事实；仅验证关键承重假设。"
+design_audit_standard = "标准"
+design_audit_standard_description = "验证所有一旦出错就会代价高昂的假设；记录其余假设。"
+design_audit_deep = "深入"
+design_audit_deep_description = "几乎对照来源验证所有内容；将仓库和上游作为唯一事实来源。"
