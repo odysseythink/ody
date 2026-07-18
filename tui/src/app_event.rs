@@ -183,6 +183,15 @@ pub(crate) enum AppEvent {
         text: String,
     },
 
+    /// Like [`AppEvent::ClearUiAndSubmitUserMessage`], but the fresh session
+    /// starts in an explicit collaboration mode. Used by the design→plan
+    /// next-step menu's "clear context and enter Plan mode" option so the
+    /// handoff turn runs in Plan mode instead of the fresh session's default.
+    ClearUiAndSubmitUserMessageWithMode {
+        text: String,
+        collaboration_mode: CollaborationModeMask,
+    },
+
     /// Open the resume picker inside the running TUI session.
     OpenResumePicker,
 

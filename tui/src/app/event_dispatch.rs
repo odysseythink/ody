@@ -62,6 +62,26 @@ impl App {
                 )
                 .await;
             }
+            AppEvent::ClearUiAndSubmitUserMessageWithMode {
+                text,
+                collaboration_mode,
+            } => {
+                self.clear_terminal_ui(tui, /*redraw_header*/ false)?;
+                self.reset_app_ui_state_after_clear();
+
+                self.start_fresh_session_with_summary_hint_and_mode(
+                    tui,
+                    app_server,
+                    Some(ThreadStartSource::Clear),
+                    crate::chatwidget::create_initial_user_message(
+                        Some(text),
+                        Vec::new(),
+                        Vec::new(),
+                    ),
+                    Some(collaboration_mode),
+                )
+                .await;
+            }
             AppEvent::OpenResumePicker => {
                 let picker_app_server = match crate::start_app_server_for_picker(
                     &self.config,
@@ -178,7 +198,11 @@ impl App {
                             self.shutdown_current_thread(app_server).await;
                             match self
                                 .replace_chat_widget_with_app_server_thread(
-                                    tui, app_server, forked, /*initial_user_message*/ None,
+                                    tui,
+                                    app_server,
+                                    forked,
+                                    /*initial_user_message*/ None,
+                                    /*initial_collaboration_mask*/ None,
                                 )
                                 .await
                             {

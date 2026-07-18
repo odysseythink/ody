@@ -18,6 +18,8 @@ use crate::bottom_pane::popup_consts::standard_popup_hint_line;
 
 pub(super) const DESIGN_NEXT_STEP_TITLE: &str = "Design ready — what next?";
 pub(super) const DESIGN_NEXT_STEP_ENTER_PLAN: &str = "Enter Plan mode and write the plan";
+pub(super) const DESIGN_NEXT_STEP_COMPACT_PLAN: &str =
+    "Clear context and enter Plan mode";
 pub(super) const DESIGN_NEXT_STEP_STAY: &str = "Stay in Design mode";
 const PLAN_MODE_UNAVAILABLE: &str = "Plan mode unavailable";
 const PLAN_HANDOFF_PROMPT: &str =
@@ -30,14 +32,36 @@ pub(super) fn selection_view_params(
 ) -> SelectionViewParams {
     let subtitle = design_file_path.map(|path| format!("Design file: {}", path.display()));
 
-    let (enter_actions, enter_disabled_reason) = match plan_mask {
+    // The handoff prompt names the design file so the plan turn can read it — the
+    // design is always persisted to disk, so a cleared context can still recover
+    // full intent from the file alone.
+    let handoff_text = match design_file_path {
+        Some(path) => format!("{PLAN_HANDOFF_PROMPT}\n\nDesign file: {}", path.display()),
+        None => PLAN_HANDOFF_PROMPT.to_string(),
+    };
+
+    let (enter_actions, enter_disabled_reason) = match plan_mask.clone() {
         Some(mask) => {
-            let text = match design_file_path {
-                Some(path) => format!("{PLAN_HANDOFF_PROMPT}\n\nDesign file: {}", path.display()),
-                None => PLAN_HANDOFF_PROMPT.to_string(),
-            };
+            let text = handoff_text.clone();
             let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
                 tx.send(AppEvent::SubmitUserMessageWithMode {
+                    text: text.clone(),
+                    collaboration_mode: mask.clone(),
+                });
+            })];
+            (actions, None)
+        }
+        None => (Vec::new(), Some(PLAN_MODE_UNAVAILABLE.to_string())),
+    };
+
+    // Clear-context variant: mirrors the plan-mode "clear context and implement"
+    // option, but hands off into Plan mode. Starts a fresh session so the plan
+    // turn is not weighed down by the whole design conversation.
+    let (compact_actions, compact_disabled_reason) = match plan_mask {
+        Some(mask) => {
+            let text = handoff_text.clone();
+            let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
+                tx.send(AppEvent::ClearUiAndSubmitUserMessageWithMode {
                     text: text.clone(),
                     collaboration_mode: mask.clone(),
                 });
@@ -57,6 +81,17 @@ pub(super) fn selection_view_params(
             is_default: enter_disabled_reason.is_none(),
             actions: enter_actions,
             disabled_reason: enter_disabled_reason,
+            dismiss_on_select: true,
+            ..Default::default()
+        },
+        SelectionItem {
+            name: DESIGN_NEXT_STEP_COMPACT_PLAN.to_string(),
+            description: Some(
+                "Start a fresh context, then enter Plan mode. The plan is written from the design file."
+                    .to_string(),
+            ),
+            actions: compact_actions,
+            disabled_reason: compact_disabled_reason,
             dismiss_on_select: true,
             ..Default::default()
         },
@@ -109,6 +144,40 @@ mod tests {
         let enter = &params.items[0];
         assert_eq!(enter.disabled_reason.as_deref(), Some(PLAN_MODE_UNAVAILABLE));
         assert!(enter.actions.is_empty());
+    }
+
+    #[test]
+    fn offers_three_options_with_compact_plan_in_the_middle() {
+        let params = selection_view_params(Some(plan_mask()), Some(Path::new("/d/design.md")));
+        assert_eq!(params.items.len(), 3);
+        assert_eq!(params.items[0].name, DESIGN_NEXT_STEP_ENTER_PLAN);
+        assert_eq!(params.items[1].name, DESIGN_NEXT_STEP_COMPACT_PLAN);
+        assert_eq!(params.items[2].name, DESIGN_NEXT_STEP_STAY);
+    }
+
+    #[test]
+    fn compact_plan_is_actionable_when_mask_present() {
+        let params = selection_view_params(Some(plan_mask()), None);
+        let compact = &params.items[1];
+        assert!(compact.disabled_reason.is_none());
+        assert_eq!(
+            compact.actions.len(),
+            1,
+            "Clear-context Plan must carry a switch action"
+        );
+        // Only the first (keep-context) option is the default.
+        assert!(!compact.is_default);
+    }
+
+    #[test]
+    fn compact_plan_disabled_when_no_plan_mode() {
+        let params = selection_view_params(None, None);
+        let compact = &params.items[1];
+        assert_eq!(
+            compact.disabled_reason.as_deref(),
+            Some(PLAN_MODE_UNAVAILABLE)
+        );
+        assert!(compact.actions.is_empty());
     }
 
     #[test]

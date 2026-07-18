@@ -533,6 +533,29 @@ impl App {
         session_start_source: Option<ThreadStartSource>,
         initial_user_message: Option<crate::chatwidget::UserMessage>,
     ) {
+        self.start_fresh_session_with_summary_hint_and_mode(
+            tui,
+            app_server,
+            session_start_source,
+            initial_user_message,
+            /*initial_collaboration_mask*/ None,
+        )
+        .await;
+    }
+
+    /// Like [`Self::start_fresh_session_with_summary_hint`], but the fresh
+    /// session's first turn runs in `initial_collaboration_mask` when provided.
+    /// The initial message stays suppressed until the new session is configured,
+    /// so applying the mask on the freshly built widget takes effect before the
+    /// handoff turn is submitted.
+    pub(super) async fn start_fresh_session_with_summary_hint_and_mode(
+        &mut self,
+        tui: &mut tui::Tui,
+        app_server: &mut AppServerSession,
+        session_start_source: Option<ThreadStartSource>,
+        initial_user_message: Option<crate::chatwidget::UserMessage>,
+        initial_collaboration_mask: Option<ody_protocol::config_types::CollaborationModeMask>,
+    ) {
         // Start a fresh in-memory session while preserving resumability via persisted rollout
         // history. If an initial message is provided, `enqueue_primary_thread_session` suppresses it
         // until the new session is configured and any replayed turns have been rendered.
@@ -566,6 +589,7 @@ impl App {
                         app_server,
                         started,
                         initial_user_message,
+                        initial_collaboration_mask,
                     )
                     .await
                 {
@@ -600,6 +624,7 @@ impl App {
         app_server: &mut AppServerSession,
         started: AppServerStartedThread,
         initial_user_message: Option<crate::chatwidget::UserMessage>,
+        initial_collaboration_mask: Option<ody_protocol::config_types::CollaborationModeMask>,
     ) -> Result<()> {
         // Initial messages are for freshly attached primary threads only. Thread switches and
         // resume/fork flows pass `None` so they cannot replay old history and then auto-submit a new
@@ -611,6 +636,12 @@ impl App {
             initial_user_message,
         );
         self.replace_chat_widget(ChatWidget::new_with_app_event(init));
+        // Apply the requested starting mode before the suppressed initial message
+        // is released, so the handoff turn runs in that mode (e.g. Plan for the
+        // design→plan "clear context and enter Plan mode" option).
+        if let Some(mask) = initial_collaboration_mask {
+            self.chat_widget.set_collaboration_mask(mask);
+        }
         self.enqueue_primary_thread_session(started.session, started.turns)
             .await?;
         self.backfill_loaded_subagent_threads(app_server).await;
@@ -798,7 +829,11 @@ impl App {
                     .update_search_dir(self.config.cwd.to_path_buf());
                 match self
                     .replace_chat_widget_with_app_server_thread(
-                        tui, app_server, resumed, /*initial_user_message*/ None,
+                        tui,
+                        app_server,
+                        resumed,
+                        /*initial_user_message*/ None,
+                        /*initial_collaboration_mask*/ None,
                     )
                     .await
                 {
