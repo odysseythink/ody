@@ -3814,3 +3814,46 @@ prefix_rules = []
         Ok(())
     }
 }
+
+#[tokio::test]
+async fn test_review_config_fields_merge_and_default() -> anyhow::Result<()> {
+    let tmp = tempdir()?;
+    tokio::fs::write(
+        tmp.path().join(CONFIG_TOML_FILE),
+        r#"
+test_review_model = "ody-code/test-reviewer"
+test_review_enabled = false
+"#,
+    )
+    .await?;
+
+    let config = ConfigBuilder::default()
+        .ody_home(tmp.path().to_path_buf())
+        .fallback_cwd(Some(tmp.path().to_path_buf()))
+        .loader_overrides(LoaderOverrides::without_managed_config_for_tests())
+        .build()
+        .await?;
+
+    assert_eq!(
+        config.test_review_model.as_deref(),
+        Some("ody-code/test-reviewer")
+    );
+    assert!(!config.test_review_enabled);
+
+    let mut overrides = ConfigOverrides::default();
+    overrides.test_review_enabled = Some(true);
+    let config = ConfigBuilder::default()
+        .ody_home(tmp.path().to_path_buf())
+        .fallback_cwd(Some(tmp.path().to_path_buf()))
+        .loader_overrides(LoaderOverrides::without_managed_config_for_tests())
+        .harness_overrides(overrides)
+        .build()
+        .await?;
+    assert_eq!(
+        config.test_review_model.as_deref(),
+        Some("ody-code/test-reviewer")
+    );
+    assert!(config.test_review_enabled);
+
+    Ok(())
+}

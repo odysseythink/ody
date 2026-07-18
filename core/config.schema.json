@@ -5843,6 +5843,15 @@
       "description": "Suppress warnings about unstable (under development) features.",
       "type": "boolean"
     },
+    "test_review_enabled": {
+      "default": true,
+      "description": "Whether to expose the `ReviewTests` tool so the model can independently review changed test files. Defaults to `true`.",
+      "type": "boolean"
+    },
+    "test_review_model": {
+      "description": "Optional model override for the adversarial review of changed test files triggered by the `ReviewTests` tool (or equivalent reminder). When unset, the review falls back to the current session's active model alias.",
+      "type": "string"
+    },
     "tool_output_token_limit": {
       "description": "Token budget applied when storing tool/function outputs in the context manager.",
       "format": "uint",

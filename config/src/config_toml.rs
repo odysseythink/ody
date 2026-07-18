@@ -258,6 +258,14 @@ pub struct ConfigToml {
 
     /// Provider to use from the model_providers map.
     pub model_provider: Option<String>,
+    /// Optional model override for the adversarial review of changed test
+    /// files triggered by the `ReviewTests` tool (or equivalent reminder). When
+    /// unset, the review falls back to the current session's active model alias.
+    pub test_review_model: Option<String>,
+    /// Whether to expose the `ReviewTests` tool so the model can independently
+    /// review changed test files. Defaults to `true`.
+    #[serde(default = "default_true")]
+    pub test_review_enabled: bool,
 
     /// Size of the context window for the model, in tokens.
     pub model_context_window: Option<i64>,
@@ -1311,6 +1319,26 @@ api_key = ""
         assert_eq!(entry.provider.as_deref(), Some("kimi_gyy"));
         assert_eq!(entry.model.as_deref(), Some("kimi-for-coding"));
         assert_eq!(entry.max_context_size, Some(262144));
+    }
+
+    #[test]
+    fn test_review_fields_deserialize_and_default() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+test_review_model = "ody-code/kimi-for-coding"
+test_review_enabled = false
+"#,
+        )
+        .expect("test_review fields should deserialize");
+        assert_eq!(
+            config.test_review_model.as_deref(),
+            Some("ody-code/kimi-for-coding")
+        );
+        assert!(!config.test_review_enabled);
+
+        let config: ConfigToml = toml::from_str("").expect("empty config should deserialize");
+        assert!(config.test_review_model.is_none());
+        assert!(config.test_review_enabled);
     }
 
     #[test]

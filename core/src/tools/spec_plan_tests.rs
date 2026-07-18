@@ -1676,3 +1676,24 @@ async fn submit_tools_registered_per_mode() {
     .await;
     default_probe.assert_visible_lacks(&["submit_plan", "submit_design"]);
 }
+
+#[tokio::test]
+async fn review_tests_tool_respects_test_review_enabled_config() {
+    let enabled = probe(|turn| {
+        update_config(turn, |config| {
+            config.test_review_enabled = true;
+        });
+    })
+    .await;
+    enabled.assert_visible_contains(&["review_tests"]);
+    enabled.assert_registered_contains(&["review_tests"]);
+
+    let disabled = probe(|turn| {
+        update_config(turn, |config| {
+            config.test_review_enabled = false;
+        });
+    })
+    .await;
+    disabled.assert_visible_lacks(&["review_tests"]);
+    disabled.assert_registered_lacks(&["review_tests"]);
+}

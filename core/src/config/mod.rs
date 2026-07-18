@@ -700,6 +700,12 @@ pub struct Config {
     /// finalizing a design in Design Mode. Falls back to `review_model` when
     /// unset.
     pub design_review_model: Option<String>,
+    /// Optional model override for the adversarial review of changed test files.
+    /// When unset, the `ReviewTests` tool falls back to the current session's
+    /// active model alias.
+    pub test_review_model: Option<String>,
+    /// Whether the `ReviewTests` tool is exposed to the model. Defaults to `true`.
+    pub test_review_enabled: bool,
 
     /// Size of the context window for the model, in tokens.
     pub model_context_window: Option<i64>,
@@ -2492,6 +2498,8 @@ pub struct ConfigOverrides {
     pub model: Option<String>,
     pub review_model: Option<String>,
     pub design_review_model: Option<String>,
+    pub test_review_model: Option<String>,
+    pub test_review_enabled: Option<bool>,
     pub cwd: Option<PathBuf>,
     pub approval_policy: Option<AskForApproval>,
     pub approvals_reviewer: Option<ApprovalsReviewer>,
@@ -3047,6 +3055,8 @@ impl Config {
             model,
             review_model: override_review_model,
             design_review_model: override_design_review_model,
+            test_review_model: override_test_review_model,
+            test_review_enabled: override_test_review_enabled,
             cwd,
             approval_policy: approval_policy_override,
             approvals_reviewer: approvals_reviewer_override,
@@ -3756,6 +3766,8 @@ impl Config {
 
         let review_model = override_review_model.or(cfg.review_model);
         let design_review_model = override_design_review_model.or(cfg.design_review_model);
+        let test_review_model = override_test_review_model.or(cfg.test_review_model);
+        let test_review_enabled = override_test_review_enabled.unwrap_or(cfg.test_review_enabled);
 
         let check_for_update_on_startup = cfg.check_for_update_on_startup.unwrap_or(true);
         let model_catalog =
@@ -3889,6 +3901,8 @@ impl Config {
             service_tier,
             review_model,
             design_review_model,
+            test_review_model,
+            test_review_enabled,
             model_context_window: cfg.model_context_window,
             model_auto_compact_token_limit: cfg.model_auto_compact_token_limit,
             model_auto_compact_token_limit_scope: cfg

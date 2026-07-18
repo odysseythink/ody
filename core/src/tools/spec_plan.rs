@@ -20,6 +20,8 @@ use crate::tools::handlers::ListMcpResourcesHandler;
 use crate::tools::handlers::McpHandler;
 use crate::tools::handlers::NewContextWindowHandler;
 use crate::tools::handlers::PlanHandler;
+use crate::tools::handlers::ReviewTestsHandler;
+
 use crate::tools::handlers::ReadFileHandler;
 use crate::tools::handlers::ReadMcpResourceHandler;
 use crate::tools::handlers::RequestPermissionsHandler;
@@ -753,6 +755,9 @@ fn add_core_utility_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut
         .any(|tool| tool == "test_sync_tool")
     {
         planned_tools.add(TestSyncHandler);
+    }
+    if turn_context.config.test_review_enabled {
+        planned_tools.add(ReviewTestsHandler);
     }
 
     if environment_mode.has_environment() {
