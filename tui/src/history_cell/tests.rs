@@ -147,18 +147,35 @@ fn string_map_to_toml_value(entries: HashMap<String, String>) -> toml::Value {
 }
 
 fn render_lines(lines: &[Line<'static>]) -> Vec<String> {
-    lines
-        .iter()
-        .map(|line| {
-            line.spans
-                .iter()
-                .map(|span| span.content.as_ref())
-                .collect::<String>()
-        })
-        .collect()
-}
+        lines
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect()
+    }
 
-fn render_transcript(cell: &dyn HistoryCell) -> Vec<String> {
+    #[test]
+    fn history_cell_default_collapsible_methods() {
+        let cell = PlainHistoryCell::new(vec![Line::from("hello")]);
+        assert!(
+            !cell.is_collapsible(),
+            "PlainHistoryCell should not be collapsible by default"
+        );
+        assert!(
+            !cell.is_expanded(),
+            "PlainHistoryCell should not be expanded by default"
+        );
+        assert!(
+            !cell.toggle_expanded(),
+            "PlainHistoryCell toggle should remain false because it has no state"
+        );
+    }
+
+    fn render_transcript(cell: &dyn HistoryCell) -> Vec<String> {
     render_lines(&cell.transcript_lines(u16::MAX))
 }
 
