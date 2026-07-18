@@ -117,6 +117,7 @@ mod messages;
 mod notices;
 mod patches;
 mod plans;
+mod preview;
 mod request_user_input;
 mod search;
 mod separators;
@@ -134,6 +135,7 @@ pub(crate) use notices::*;
 pub(crate) use patches::*;
 pub(crate) use plans::render_plan_steps;
 pub(crate) use plans::*;
+pub(crate) use preview::*;
 pub(crate) use request_user_input::*;
 pub(crate) use search::*;
 pub(crate) use separators::*;
@@ -197,6 +199,32 @@ pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync + Any {
     /// Returns rich visible lines plus terminal hyperlink metadata.
     fn display_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
         plain_hyperlink_lines(self.display_lines(width))
+    }
+
+    /// Whether this cell can be expanded/collapsed by the user.
+    ///
+    /// Defaults to `false`. Cells whose content may exceed the preview threshold should
+    /// override this based on whether their rendered content is long enough to benefit from
+    /// collapsing (e.g. `display_lines(width).len() > PLAN_PREVIEW_LINES`).
+    fn is_collapsible(&self) -> bool {
+        false
+    }
+
+    /// Whether this cell is currently in the expanded state.
+    ///
+    /// Defaults to `false`. Cells that store an expanded/collapsed state should override this
+    /// so that keymap handlers and rendering can read the current state without downcasting.
+    fn is_expanded(&self) -> bool {
+        false
+    }
+
+    /// Toggle the expanded/collapsed state of this cell.
+    ///
+    /// Returns the new expanded state. Defaults to `false` because stateless cells cannot change
+    /// their own state. Collapsible cells that store state should override this using interior
+    /// mutability (e.g. `std::sync::atomic::AtomicBool`) so the trait object remains `&self` safe.
+    fn toggle_expanded(&self) -> bool {
+        false
     }
 
     fn display_lines_for_mode(&self, width: u16, mode: HistoryRenderMode) -> Vec<Line<'static>> {
