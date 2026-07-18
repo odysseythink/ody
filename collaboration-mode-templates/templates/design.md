@@ -68,7 +68,9 @@ Then clarify across all seven dimensions, asking **one material question per tur
 6. **Observability** — logs, metrics, traces, how success/failure is seen.
 7. **Operations** — rollout, config, migration, support burden.
 
-**HARD STOP self-check before Step 2.** If you cannot answer all three of "what exactly are we building?", "for whom, and what does success look like?", and "what are the load-bearing unknowns?", do **not** propose solutions — ask the next clarifying question. Whenever a clarifying question has predefined options, use `request_user_input`; otherwise ask a concise plain-text question.
+**HARD STOP self-check before Step 2.** If you cannot answer all three of "what exactly are we building?", "for whom, and what does success look like?", and "what are the load-bearing unknowns?", do **not** propose solutions — ask the next clarifying question.
+
+**Default to `request_user_input` for every clarifying question — a pop-up the user selects from, not a plain-text question they must type an answer to.** Propose your 2–3 best-guess answers as the options (recommended first). The client **always** appends a free-form "None of the above" escape with a notes field, so a pop-up never traps the user into rigid choices — an open-ended question just becomes "here are my best guesses, or tell me otherwise." Only fall back to a plain-text question in the rare case where you genuinely cannot enumerate even two candidate answers. Forcing the user to type free-form prose when you could have offered concrete options is a worse experience and hides your own hypotheses.
 
 ## Step 2 — Propose approaches
 
@@ -137,26 +139,25 @@ Then run the **post-write audit gate**: list every `[C:INFERRED]` item and have 
 When the design is complete and all ## Parts rows are `done` (if split), call `submit_design` **with `final: true`** and the full index markdown. `final: true` is what asks to exit — a checkpoint (`final: false`) never exits, no matter how complete it looks. The host:
 
 1. Checks C1–C8 completeness. If any section is missing, the design is persisted to disk but NOT finalized — a message lists the missing sections, and you stay in Design mode to fix them (then call `submit_design` with `final: true` again).
-2. If all C1–C8 sections are present, the host marks the design submitted and ends the turn cleanly.
+2. If all C1–C8 sections are present, it runs the adversarial review and the **audit-level escalation gate** (see below), then either finalizes or sends you back to revise.
 
 The eight required sections: **C1** Scope In/Out, **C2** Architecture / Design, **C3** Data Models, **C4** Algorithms (pseudocode), **C5** Error Handling / Degradation, **C6** Self-Review, **C7** User final approval recorded, **C8** Reuse Analysis.
 
-**After the host returns "Design submitted"**, you are still in the same turn. Immediately call `request_user_input` as your next action to ask what the user wants to do next. Use exactly these three options (in the user's language), with the recommended option first:
+**Audit-level escalation gate (host-run).** After the completeness check passes, the host runs the adversarial review and escalates the findings whose severity the Step 0 audit level covers (**Basic** = Critical/High, **Standard** += Medium, **Deep** += Low; `speculative` findings never escalate). It presents **all** escalated findings in a **single** prompt — the user picks *accept/defer all* or *some need fixing* (and may note which by number) — you do not run this yourself. If the user chooses to revise, the tool result says the design was NOT finalized and lists what to revise: stay in Design mode, fix those points, and call `submit_design` (`final: true`) again. If the user accepts/defers everything, the design finalizes and the next-step menu (below) follows.
 
-1. **Enter Plan mode** — start writing an implementation plan from the approved design.
-2. **Compact and enter Plan mode** — compact the conversation history first, then switch to Plan mode.
-3. **Stay in Design mode** — keep the design open for further revisions or questions.
+**After `submit_design` returns "Design submitted", the host automatically presents the next-step menu to the user** — Revise the design / Enter Plan mode / Compact then Plan / Stay in Design (the host makes **Revise** the recommended option when the adversarial review found Critical or High issues). Do **not** call `request_user_input` yourself here: the host already did, and the same `submit_design` tool result already carries the user's choice together with the exact instruction to relay. Your only job that turn is to relay that instruction:
 
-If the user chooses **Enter Plan mode**, tell them to run `/plan` next.  
-If the user chooses **Compact and enter Plan mode**, tell them to run `/compact` first, then `/plan` next.  
-If the user chooses **Stay in Design mode**, ask what they would like to revise.  
+- **Enter Plan mode** → tell them to run `/plan`.
+- **Compact then Plan** → tell them to run `/compact`, then `/plan`.
+- **Revise / Stay in Design mode** → stay in Design mode and address the point they raise.
+
 **Do not start implementing.**
 
-If `submit_design` with `final: true` does NOT return "Design submitted" (e.g., it reports missing sections), do not call `request_user_input`; instead stay in Design mode and fix the gaps.
+If `submit_design` with `final: true` does NOT return "Design submitted" (e.g., it reports missing sections), no menu is shown; stay in Design mode and fix the gaps.
 
 ## Turn discipline
 
-End every turn with exactly one of: (a) a single clarifying question, (b) a `submit_design` call (`final: false` to checkpoint, or `final: true` to submit), or (c) the post-submission `request_user_input` next-action prompt described in Step 5. After the audit gate (Step 0) has been asked, there must be no pure-investigation turns that neither ask a question nor call `submit_design` with a design segment.
+End every turn with exactly one of: (a) a single clarifying question, (b) a `submit_design` call (`final: false` to checkpoint, or `final: true` to submit), or (c) after a terminal `submit_design`, relaying the host's next-step choice carried in the tool result (Step 5). After the audit gate (Step 0) has been asked, there must be no pure-investigation turns that neither ask a question nor call `submit_design` with a design segment.
 
 ## Design file location
 

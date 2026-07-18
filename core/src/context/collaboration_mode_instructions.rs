@@ -209,15 +209,17 @@ impl CollaborationModeInstructions {
         let fragment = match level {
             Some(level) => format!(
                 "## Step 0 — Audit level (host-selected)\n\
-                 The user has selected audit level: **{level}** [C:USER]. Verify assumptions according to this level:\n\
+                 The user has selected audit level: **{level}** [C:USER]. It governs two things.\n\n\
+                 (1) How hard you self-verify assumptions:\n\
                  - **Basic** — verify only load-bearing assumptions (architecture, security, data, ops).\n\
                  - **Standard** — verify every assumption that would be expensive if wrong; record the rest in `## Assumptions & Unverified Items`.\n\
                  - **Deep** — verify nearly everything against sources; treat the repo and upstream as the only ground truth.\n\n\
+                 (2) How many adversarial-review findings the host escalates to the user for sign-off when you finalize: **Basic** surfaces Critical/High, **Standard** adds Medium, **Deep** adds Low. You do NOT run this escalation yourself — after `submit_design` with `final: true`, the host presents all level-appropriate findings to the user in a single prompt (accept/defer all, or revise) and only finalizes once they are resolved. A revise request keeps you in Design mode to fix them.\n\n\
                  Do NOT ask the user to choose the audit level again."
             ),
             None => format!(
                 "## Step 0 — Audit level (host-managed, not selected)\n\
-                 No audit level was selected by the host. Default to **Basic** and record `Assumption: audit tier = Basic (auto mode)` in the design's Assumptions section. Do NOT ask the user to choose the level unless these instructions explicitly say no level was selected."
+                 No audit level was selected by the host. Default to **Basic** and record `Assumption: audit tier = Basic (auto mode)` in the design's Assumptions section. At Basic, the host escalates Critical/High adversarial-review findings to the user for sign-off when you finalize. Do NOT ask the user to choose the level unless these instructions explicitly say no level was selected."
             ),
         };
         Self {
@@ -1178,6 +1180,10 @@ mod tests {
         assert!(
             body.contains("Do NOT ask the user to choose the audit level again"),
             "body should tell the model not to re-prompt for the audit level:\n{body}"
+        );
+        assert!(
+            body.contains("escalates to the user for sign-off"),
+            "body should explain the level drives which review findings the host escalates:\n{body}"
         );
     }
 

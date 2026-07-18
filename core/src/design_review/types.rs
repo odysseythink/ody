@@ -55,6 +55,11 @@ pub(crate) enum DesignReviewConfidence {
     High,
     Medium,
     Low,
+    /// The reviewer's own unverified hunch rather than a confirmed defect.
+    /// Mirrors ody-code's `speculative` confidence: such findings are shown for
+    /// the record but never escalated to the user for sign-off, so a reviewer's
+    /// guesses cannot block finalizing the design.
+    Speculative,
 }
 
 impl fmt::Display for DesignReviewConfidence {
@@ -63,6 +68,7 @@ impl fmt::Display for DesignReviewConfidence {
             Self::High => write!(f, "High"),
             Self::Medium => write!(f, "Medium"),
             Self::Low => write!(f, "Low"),
+            Self::Speculative => write!(f, "Speculative"),
         }
     }
 }

@@ -25,7 +25,7 @@ Output strictly as JSON matching this schema:
         "type": "object",
         "properties": {
           "severity": { "enum": ["critical", "high", "medium", "low"] },
-          "confidence": { "enum": ["high", "medium", "low"] },
+          "confidence": { "enum": ["high", "medium", "low", "speculative"] },
           "title": { "type": "string" },
           "detail": { "type": "string" },
           "location": { "type": "string" },
@@ -37,6 +37,11 @@ Output strictly as JSON matching this schema:
   },
   "required": ["overall_assessment", "findings"]
 }
+
+Use "speculative" confidence only when a finding is your own unverified hunch
+rather than a defect you have confirmed against the design or the codebase.
+Speculative findings are recorded but never put in front of the user for
+sign-off, so do not use it to downgrade a real, confirmed problem.
 
 --- DESIGN DOCUMENT ---
 
@@ -133,7 +138,10 @@ pub(crate) fn format_review_appendix(output: &DesignReviewOutput) -> String {
         }
     }
     lines.push(String::new());
-    lines.push("These findings are advisory and do not block exiting Design mode.".to_string());
+    lines.push(
+        "The design has been persisted. The host will now present the next-step menu — do not stop here, and do not start implementing."
+            .to_string(),
+    );
     lines.join("\n")
 }
 
@@ -221,6 +229,10 @@ mod tests {
         assert!(appendix.contains("detail A"));
         assert!(appendix.contains("Location: loc"));
         assert!(appendix.contains("Suggested fix: fix"));
-        assert!(appendix.contains("advisory and do not block"));
+        assert!(appendix.contains("the next-step menu"));
+        assert!(
+            !appendix.contains("exiting Design mode"),
+            "the appendix must not signal exit — the host drives the next step"
+        );
     }
 }

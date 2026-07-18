@@ -4,8 +4,13 @@
 //! `SubmitDesignHandler` are thin shells that call `handle_submit_artifact`.
 
 use crate::design_completeness::design_completeness_report;
+use crate::design_review::escalation::EscalationDecision;
+use crate::design_review::escalation::run_escalation_gate;
+use crate::design_review::next_step::drive_post_design_next_step;
 use crate::design_review::orchestrator::DesignReviewOrchestrator;
 use crate::design_review::orchestrator::format_review_appendix_for_submit;
+use crate::design_review::orchestrator::severity_counts;
+use crate::design_review::types::DesignReviewOutput;
 use crate::design_review::types::DesignReviewRequest;
 use crate::function_tool::FunctionCallError;
 use crate::plan_artifact::PlanWriteOutcome;
@@ -203,7 +208,7 @@ pub(crate) async fn handle_submit_artifact(
     let ToolInvocation {
         session,
         turn,
-        call_id: _,
+        call_id,
         payload,
         ..
     } = invocation;
@@ -371,6 +376,7 @@ pub(crate) async fn handle_submit_artifact(
         .design_review_model
         .clone()
         .or_else(|| turn.config.review_model.clone());
+    let mut review_output: Option<DesignReviewOutput> = None;
     let review_appendix: Option<String> = if should_trigger_design_review(
         expected_mode,
         finalize,
@@ -385,7 +391,11 @@ pub(crate) async fn handle_submit_artifact(
                 .expect("checked above"),
         };
         match DesignReviewOrchestrator::review(&session, &turn, request).await {
-            Ok(output) => Some(format_review_appendix_for_submit(&output)),
+            Ok(output) => {
+                let appendix = format_review_appendix_for_submit(&output);
+                review_output = Some(output);
+                Some(appendix)
+            }
             Err(err) => {
                 let message = format!("Design review failed: {err}");
                 session
@@ -432,6 +442,16 @@ pub(crate) async fn handle_submit_artifact(
         )
     });
 
+    // Whether an interactive frontend can answer request_user_input this turn.
+    // Same flag that decides whether the request_user_input tool is wired up at
+    // all (spec_plan.rs); without it (headless / exec / tests) driving a prompt
+    // would block the turn forever. Pinned to Design.
+    let can_prompt = expected_mode == ModeKind::Design
+        && turn.config.experimental_request_user_input_enabled;
+
+    // Whether this call reached the terminal `mark_submitted()` branch. Drives
+    // the host-managed post-design next-step menu below.
+    let mut did_submit = false;
     let message = if let Some(bad_cells) = bad_cells_message {
         bad_cells
     } else if has_pending_parts {
@@ -466,13 +486,62 @@ pub(crate) async fn handle_submit_artifact(
                 "Plan part saved, but this is a rigor-tier plan and it is {g}. This call was persisted but is NOT treated as final — stay in Plan mode, add the missing section(s) per the rigor-tier addendum instructions, and call submit_plan again with the complete plan."
             )
         }
+    } else if expected_mode == ModeKind::Design && can_prompt {
+        // Level-driven escalation gate (ported from ody-code): put the audit-
+        // level-appropriate review findings in front of the user for accept /
+        // defer / correct before finalizing. A correction request keeps the
+        // design open (does NOT mark_submitted) so Design mode actively resolves
+        // disagreements instead of stopping on an advisory list of problems.
+        match run_escalation_gate(
+            session.as_ref(),
+            turn.as_ref(),
+            call_id.clone(),
+            artifact.design_audit_level(),
+            review_output.as_ref(),
+        )
+        .await
+        {
+            EscalationDecision::Finalize { note } => {
+                artifact.mark_submitted();
+                did_submit = true;
+                match note {
+                    Some(n) => format!("{} submitted\n\n{n}", wording.noun),
+                    None => format!("{} submitted", wording.noun),
+                }
+            }
+            EscalationDecision::Revise { message } => message,
+        }
     } else {
         artifact.mark_submitted();
+        did_submit = true;
         format!("{} submitted", wording.noun)
     };
 
     let message = if let Some(appendix) = review_appendix {
         format!("{message}\n\n{appendix}")
+    } else {
+        message
+    };
+
+    // Runtime backstop for the design dead-end: after the design finalizes, the
+    // host drives the next-step menu itself instead of trusting the model to call
+    // request_user_input (design.md Step 5 — the only step in the flow with no
+    // other enforcement, which silently dropped under long-session drift). Only
+    // fires when `did_submit` (the escalation gate did not send us back to
+    // revise) and an interactive frontend is available.
+    let review_counts = review_output.as_ref().map(|o| severity_counts(&o.findings));
+    let message = if did_submit && can_prompt {
+        match drive_post_design_next_step(
+            session.as_ref(),
+            turn.as_ref(),
+            call_id,
+            review_counts,
+        )
+        .await
+        {
+            Some(next) => format!("{message}\n\n{next}"),
+            None => message,
+        }
     } else {
         message
     };
