@@ -1,6 +1,8 @@
-use ody_core::OdyThread;
+use futures::StreamExt;
+use ody_client::default_client::originator;
 use ody_core::ModelClient;
 use ody_core::NewThread;
+use ody_core::OdyThread;
 use ody_core::Prompt;
 use ody_core::ResponseEvent;
 use ody_core::StartThreadOptions;
@@ -10,7 +12,6 @@ use ody_core::content_items_to_text;
 use ody_core::detached_memory_responses_metadata;
 use ody_core::resolve_installation_id;
 use ody_features::Feature;
-use ody_client::default_client::originator;
 use ody_model_provider::ModelProvider;
 use ody_model_provider::SharedModelProvider;
 use ody_model_provider::create_model_provider;
@@ -31,7 +32,6 @@ use ody_protocol::user_input::UserInput;
 use ody_rollout_trace::InferenceTraceContext;
 use ody_state::StateRuntime;
 use ody_terminal_detection::user_agent;
-use futures::StreamExt;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -79,17 +79,8 @@ impl MemoryStartupContext {
         config: &Config,
         source: SessionSource,
     ) -> Self {
-        let provider = create_model_provider(
-            config.model_provider.clone(),
-        );
-        Self::new_with_provider(
-            thread_manager,
-            thread_id,
-            thread,
-            config,
-            source,
-            provider,
-        )
+        let provider = create_model_provider(config.model_provider.clone());
+        Self::new_with_provider(thread_manager, thread_id, thread, config, source, provider)
     }
 
     #[cfg(test)]
@@ -101,14 +92,7 @@ impl MemoryStartupContext {
         source: SessionSource,
         provider: SharedModelProvider,
     ) -> Self {
-        Self::new_with_provider(
-            thread_manager,
-            thread_id,
-            thread,
-            config,
-            source,
-            provider,
-        )
+        Self::new_with_provider(thread_manager, thread_id, thread, config, source, provider)
     }
 
     fn new_with_provider(

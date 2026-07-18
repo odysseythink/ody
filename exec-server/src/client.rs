@@ -9,9 +9,9 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use arc_swap::ArcSwap;
-use ody_app_server_protocol::JSONRPCNotification;
 use futures::FutureExt;
 use futures::future::BoxFuture;
+use ody_app_server_protocol::JSONRPCNotification;
 use serde_json::Value;
 use tokio::sync::Mutex;
 use tokio::sync::OnceCell;
@@ -1187,11 +1187,11 @@ async fn handle_server_notification(
 
 #[cfg(test)]
 mod tests {
+    use futures::SinkExt;
+    use futures::StreamExt;
     use ody_app_server_protocol::JSONRPCMessage;
     use ody_app_server_protocol::JSONRPCNotification;
     use ody_app_server_protocol::JSONRPCResponse;
-    use futures::SinkExt;
-    use futures::StreamExt;
     use pretty_assertions::assert_eq;
     use std::collections::HashMap;
     #[cfg(unix)]

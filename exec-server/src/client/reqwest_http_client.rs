@@ -8,11 +8,11 @@
 use std::error::Error as StdError;
 use std::time::Duration;
 
-use ody_app_server_protocol::JSONRPCErrorError;
-use ody_client::build_reqwest_client_with_custom_ca;
 use futures::FutureExt;
 use futures::StreamExt;
 use futures::future::BoxFuture;
+use ody_app_server_protocol::JSONRPCErrorError;
+use ody_client::build_reqwest_client_with_custom_ca;
 use reqwest::Method;
 use reqwest::Url;
 use reqwest::header::HeaderMap;

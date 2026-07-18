@@ -24,6 +24,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
+use globset::GlobBuilder;
+use globset::GlobSet;
+use globset::GlobSetBuilder;
 use ody_protocol::error::OdyErr;
 use ody_protocol::error::Result;
 use ody_protocol::permissions::is_protected_metadata_name;
@@ -33,9 +36,6 @@ use ody_protocol::protocol::FileSystemSandboxPolicy;
 use ody_protocol::protocol::FileSystemSpecialPath;
 use ody_protocol::protocol::WritableRoot;
 use ody_utils_absolute_path::AbsolutePathBuf;
-use globset::GlobBuilder;
-use globset::GlobSet;
-use globset::GlobSetBuilder;
 
 /// Linux "platform defaults" that keep common system binaries and dynamic
 /// libraries readable when a split filesystem policy requests `:minimal`.
@@ -1582,8 +1582,7 @@ mod tests {
         let logical_memories = logical_ody.join("memories");
         std::fs::create_dir_all(&logical_home).expect("create logical home");
         std::fs::create_dir_all(&real_memories).expect("create memories dir");
-        std::os::unix::fs::symlink(&real_ody, &logical_ody)
-            .expect("create symlinked ody home");
+        std::os::unix::fs::symlink(&real_ody, &logical_ody).expect("create symlinked ody home");
 
         let logical_memories_root =
             AbsolutePathBuf::from_absolute_path(&logical_memories).expect("absolute memories");

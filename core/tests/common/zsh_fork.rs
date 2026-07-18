@@ -64,8 +64,7 @@ pub fn zsh_fork_runtime(test_name: &str) -> Result<Option<ZshForkRuntime>> {
         );
         return Ok(None);
     }
-    let Ok(main_execve_wrapper_exe) = ody_utils_cargo_bin::cargo_bin("ody-execve-wrapper")
-    else {
+    let Ok(main_execve_wrapper_exe) = ody_utils_cargo_bin::cargo_bin("ody-execve-wrapper") else {
         eprintln!("skipping {test_name}: unable to resolve `ody-execve-wrapper` binary");
         return Ok(None);
     };

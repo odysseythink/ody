@@ -153,11 +153,6 @@ async fn plugin_auth_projection_hides_apps_without_apps_auth() {
     assert!(sample.app_connector_ids.is_empty());
 }
 
-
-
-
-
-
 fn write_plugin_with_version(
     root: &Path,
     dir_name: &str,
@@ -409,8 +404,7 @@ plugins = true
 [plugins."counter-sample@test"]
 enabled = true
 "#;
-    let outcome =
-        load_plugins_from_config(config_toml, ody_home.path(), /*auth_mode*/ None).await;
+    let outcome = load_plugins_from_config(config_toml, ody_home.path(), /*auth_mode*/ None).await;
 
     assert_eq!(outcome.plugins()[0].error, None);
     assert_eq!(
@@ -490,8 +484,7 @@ disabled_tools = ["delete"]
 approval_mode = "approve"
 "#;
 
-    let outcome =
-        load_plugins_from_config(config_toml, ody_home.path(), /*auth_mode*/ None).await;
+    let outcome = load_plugins_from_config(config_toml, ody_home.path(), /*auth_mode*/ None).await;
     let server = outcome.plugins()[0]
         .mcp_servers
         .get("sample")
@@ -587,7 +580,6 @@ fn capability_summary_telemetry_metadata_uses_local_identity() {
     );
 }
 
-
 #[tokio::test]
 async fn load_plugins_resolves_disabled_skill_names_against_loaded_plugin_skills() {
     let ody_home = TempDir::new().unwrap();
@@ -616,8 +608,7 @@ enabled = false
 [plugins."sample@test"]
 enabled = true
 "#;
-    let outcome =
-        load_plugins_from_config(config_toml, ody_home.path(), /*auth_mode*/ None).await;
+    let outcome = load_plugins_from_config(config_toml, ody_home.path(), /*auth_mode*/ None).await;
     let skill_path = std::fs::canonicalize(skill_path)
         .expect("skill path should canonicalize")
         .abs();
@@ -657,8 +648,7 @@ enabled = false
 [plugins."sample@test"]
 enabled = true
 "#;
-    let outcome =
-        load_plugins_from_config(config_toml, ody_home.path(), /*auth_mode*/ None).await;
+    let outcome = load_plugins_from_config(config_toml, ody_home.path(), /*auth_mode*/ None).await;
 
     assert!(outcome.plugins()[0].disabled_skill_paths.is_empty());
     assert!(outcome.plugins()[0].has_enabled_skills);
@@ -1250,8 +1240,6 @@ async fn load_plugins_preserves_disabled_plugins_without_effective_contributions
     assert!(outcome.effective_skill_roots().is_empty());
     assert!(outcome.effective_mcp_servers().is_empty());
 }
-
-
 
 #[test]
 fn capability_index_filters_inactive_and_zero_capability_plugins() {
@@ -2219,7 +2207,6 @@ enabled = true
 
     assert!(matches!(err, MarketplaceError::PluginsDisabled));
 }
-
 
 #[tokio::test]
 async fn read_plugin_for_config_uses_marketplace_manifest_fallback_paths_for_local_source() {

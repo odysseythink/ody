@@ -5,10 +5,10 @@ use anyhow::Context;
 use chrono::DateTime;
 use clap::Parser;
 use clap::ValueEnum;
+use dirs::home_dir;
 use ody_state::LogQuery;
 use ody_state::LogRow;
 use ody_state::StateRuntime;
-use dirs::home_dir;
 use owo_colors::OwoColorize;
 
 #[derive(Debug, Parser)]

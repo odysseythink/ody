@@ -116,7 +116,8 @@ async fn experimental_feature_list_ignores_remote_workspace_policy() -> Result<(
     write_api_key_auth(
         ody_home.path(),
         ApiKeyAuthFixture::new("api-key")
-            .account_id("account-123").plan_type("team"),
+            .account_id("account-123")
+            .plan_type("team"),
         AuthCredentialsStoreMode::File,
     )?;
     Mock::given(method("GET"))

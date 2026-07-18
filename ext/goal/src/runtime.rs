@@ -262,9 +262,7 @@ impl GoalRuntimeHandle {
         }
 
         let (event_name, status) = match reason {
-            ActiveGoalStopReason::TurnError => {
-                ("turn-error", ody_state::ThreadGoalStatus::Blocked)
-            }
+            ActiveGoalStopReason::TurnError => ("turn-error", ody_state::ThreadGoalStatus::Blocked),
             ActiveGoalStopReason::UsageLimit => {
                 ("usage-limit", ody_state::ThreadGoalStatus::UsageLimited)
             }

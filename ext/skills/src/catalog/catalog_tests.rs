@@ -68,8 +68,8 @@ fn flow_skills_are_not_prompt_visible_by_default() {
 fn catalog_filters_by_mode_and_type() {
     let inline = test_entry("inline", SkillType::Inline);
     let knowledge = test_entry("knowledge", SkillType::Knowledge);
-    let hidden_in_plan = test_entry("hidden-in-plan", SkillType::Inline)
-        .with_hidden_in_modes(vec![ModeKind::Plan]);
+    let hidden_in_plan =
+        test_entry("hidden-in-plan", SkillType::Inline).with_hidden_in_modes(vec![ModeKind::Plan]);
     let disabled = test_entry("disabled", SkillType::Inline).disabled();
 
     let mut catalog = SkillCatalog {
@@ -87,8 +87,8 @@ fn catalog_filters_by_mode_and_type() {
     assert!(hidden_in_plan.is_visible_in_mode(ModeKind::Default));
 
     let invocable = test_entry("invocable", SkillType::Inline);
-    let not_invocable = test_entry("not-invocable", SkillType::Inline)
-        .with_disable_model_invocation(true);
+    let not_invocable =
+        test_entry("not-invocable", SkillType::Inline).with_disable_model_invocation(true);
     assert!(invocable.is_model_invocable(ModeKind::Default));
     assert!(!not_invocable.is_model_invocable(ModeKind::Default));
 

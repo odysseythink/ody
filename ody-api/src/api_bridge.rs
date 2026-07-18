@@ -3,10 +3,10 @@ use crate::error::ApiError;
 use base64::Engine;
 use chrono::DateTime;
 use chrono::Utc;
+use http::HeaderMap;
 use ody_protocol::error::OdyErr;
 use ody_protocol::error::RetryLimitReachedError;
 use ody_protocol::error::UnexpectedResponseError;
-use http::HeaderMap;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -103,9 +103,7 @@ pub fn map_api_error(err: ApiError) -> OdyErr {
                 request_id: None,
             }),
             TransportError::Timeout => OdyErr::RequestTimeout,
-            TransportError::Network(msg) | TransportError::Build(msg) => {
-                OdyErr::Stream(msg, None)
-            }
+            TransportError::Network(msg) | TransportError::Build(msg) => OdyErr::Stream(msg, None),
         },
     }
 }

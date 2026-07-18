@@ -1,7 +1,8 @@
 use anyhow::Result;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
-use ody_app_server_protocol::OdyErrorInfo;
+use core_test_support::responses;
+use core_test_support::skip_if_no_network;
 use ody_app_server_protocol::ErrorNotification;
 use ody_app_server_protocol::ItemCompletedNotification;
 use ody_app_server_protocol::ItemStartedNotification;
@@ -11,6 +12,7 @@ use ody_app_server_protocol::ModelRerouteReason;
 use ody_app_server_protocol::ModelReroutedNotification;
 use ody_app_server_protocol::ModelVerification;
 use ody_app_server_protocol::ModelVerificationNotification;
+use ody_app_server_protocol::OdyErrorInfo;
 use ody_app_server_protocol::RequestId;
 use ody_app_server_protocol::ThreadItem;
 use ody_app_server_protocol::ThreadStartParams;
@@ -19,8 +21,6 @@ use ody_app_server_protocol::TurnModerationMetadataNotification;
 use ody_app_server_protocol::TurnStartParams;
 use ody_app_server_protocol::TurnStartResponse;
 use ody_app_server_protocol::UserInput;
-use core_test_support::responses;
-use core_test_support::skip_if_no_network;
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 use tokio::time::timeout;
@@ -187,7 +187,8 @@ async fn response_model_field_mismatch_emits_model_rerouted_notification_v2_when
         responses::ev_assistant_message("msg-1", "Done"),
         responses::ev_completed("resp-1"),
     ]);
-    let response = responses::sse_response(body).insert_header("odysseythink-model", REQUESTED_MODEL);
+    let response =
+        responses::sse_response(body).insert_header("odysseythink-model", REQUESTED_MODEL);
     let _response_mock = responses::mount_response_once(&server, response).await;
 
     let ody_home = TempDir::new()?;

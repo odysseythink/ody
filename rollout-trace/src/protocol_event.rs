@@ -27,8 +27,8 @@ use serde::Serialize;
 use std::time::Duration;
 
 use crate::AgentThreadId;
-use crate::OdyTurnId;
 use crate::ExecutionStatus;
+use crate::OdyTurnId;
 use crate::RawTraceEventPayload;
 
 pub(crate) struct OdyTurnTraceEvent {

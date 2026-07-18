@@ -88,8 +88,7 @@ pub(crate) async fn mount_analytics_capture(server: &MockServer, ody_home: &Path
 
     write_api_key_auth(
         ody_home,
-        ApiKeyAuthFixture::new("api-key")
-            .account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -155,8 +154,7 @@ async fn wait_for_matching_analytics_event(
                 continue;
             };
             for request in &requests {
-                if request.method != "POST"
-                    || request.url.path() != "/ody/analytics-events/events"
+                if request.method != "POST" || request.url.path() != "/ody/analytics-events/events"
                 {
                     continue;
                 }

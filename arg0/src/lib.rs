@@ -522,9 +522,9 @@ mod tests {
     use super::run_main_with_arg0_guard;
     #[cfg(unix)]
     use anyhow::ensure;
-    use ody_install_context::OdyPackageLayout;
     use ody_install_context::InstallContext;
     use ody_install_context::InstallMethod;
+    use ody_install_context::OdyPackageLayout;
     use ody_utils_absolute_path::AbsolutePathBuf;
     use pretty_assertions::assert_eq;
     use std::fs;

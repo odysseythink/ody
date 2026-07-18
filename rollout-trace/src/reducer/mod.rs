@@ -186,12 +186,7 @@ impl TraceReducer {
                 ody_turn_id,
                 thread_id,
             } => {
-                self.start_ody_turn(
-                    event.seq,
-                    event.wall_time_unix_ms,
-                    ody_turn_id,
-                    thread_id,
-                )?;
+                self.start_ody_turn(event.seq, event.wall_time_unix_ms, ody_turn_id, thread_id)?;
             }
             RawTraceEventPayload::OdyTurnEnded {
                 ody_turn_id,

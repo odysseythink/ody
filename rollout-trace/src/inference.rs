@@ -9,17 +9,17 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
-use ody_protocol::models::ResponseItem;
-use ody_protocol::protocol::TokenUsage;
 use http::HeaderMap;
 use http::HeaderValue;
+use ody_protocol::models::ResponseItem;
+use ody_protocol::protocol::TokenUsage;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 use uuid::Uuid;
 
 use crate::model::AgentThreadId;
-use crate::model::OdyTurnId;
 use crate::model::InferenceCallId;
+use crate::model::OdyTurnId;
 use crate::payload::RawPayloadKind;
 use crate::raw_event::RawTraceEventContext;
 use crate::raw_event::RawTraceEventPayload;

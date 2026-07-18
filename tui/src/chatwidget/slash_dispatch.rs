@@ -439,6 +439,9 @@ impl ChatWidget {
             SlashCommand::Quit | SlashCommand::Exit => {
                 self.request_quit_without_confirmation();
             }
+            SlashCommand::Login => {
+                self.start_login_flow(None);
+            }
             SlashCommand::Logout => {
                 self.app_event_tx.send(AppEvent::Logout);
             }
@@ -996,6 +999,24 @@ impl ChatWidget {
             SlashCommand::Pets if !trimmed.is_empty() => {
                 self.select_pet_by_id(args);
             }
+            SlashCommand::Login if !trimmed.is_empty() => {
+                match crate::login::validation::validate_login_provider_name(trimmed) {
+                    Ok(provider) => self.start_login_flow(Some(provider)),
+                    Err(err) => self.add_error_message(err),
+                }
+            }
+            SlashCommand::Login => {
+                self.start_login_flow(None);
+            }
+            SlashCommand::Logout if !trimmed.is_empty() => {
+                match crate::login::validation::validate_login_provider_name(trimmed) {
+                    Ok(provider) => {
+                        self.app_event_tx
+                            .send(AppEvent::LogoutProvider { provider });
+                    }
+                    Err(err) => self.add_error_message(err),
+                }
+            }
             _ => self.dispatch_command(cmd),
         }
         if source == SlashCommandDispatchSource::Live && cmd != SlashCommand::Goal {
@@ -1186,6 +1207,7 @@ impl ChatWidget {
             | SlashCommand::Quit
             | SlashCommand::Exit
             | SlashCommand::Logout
+            | SlashCommand::Login
             | SlashCommand::Mention
             | SlashCommand::Skills
             | SlashCommand::Import

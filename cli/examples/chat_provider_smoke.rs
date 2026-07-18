@@ -82,15 +82,21 @@ async fn main() {
     let config: UserConfig = toml::from_str(&config_text)
         .unwrap_or_else(|e| panic!("failed to parse {}: {}", config_path.display(), e));
 
-    let filter = std::env::var("CHAT_PROVIDER_SMOKE_FILTER")
-        .ok()
-        .map(|s| s.split(',').map(|s| s.trim().to_lowercase()).collect::<Vec<_>>());
+    let filter = std::env::var("CHAT_PROVIDER_SMOKE_FILTER").ok().map(|s| {
+        s.split(',')
+            .map(|s| s.trim().to_lowercase())
+            .collect::<Vec<_>>()
+    });
 
     // Parse default model provider so we can prefer it within its family.
-    let default_provider = config.default_model.as_ref().and_then(|dm| dm.split_once('/').map(|(p, _)| p.to_string()));
+    let default_provider = config
+        .default_model
+        .as_ref()
+        .and_then(|dm| dm.split_once('/').map(|(p, _)| p.to_string()));
 
     // Collect candidates per provider family.
-    let mut candidates: HashMap<ProviderFamily, Vec<(String, String, ProviderConfig)>> = HashMap::new();
+    let mut candidates: HashMap<ProviderFamily, Vec<(String, String, ProviderConfig)>> =
+        HashMap::new();
     for (model_key, model_cfg) in &config.models {
         let provider_cfg = match config.providers.get(&model_cfg.provider) {
             Some(p) => p,
@@ -124,10 +130,11 @@ async fn main() {
                 continue;
             }
         }
-        candidates
-            .entry(family)
-            .or_default()
-            .push((model_cfg.provider.clone(), model_cfg.model.clone(), provider_cfg.clone()));
+        candidates.entry(family).or_default().push((
+            model_cfg.provider.clone(),
+            model_cfg.model.clone(),
+            provider_cfg.clone(),
+        ));
     }
 
     // Prefer the default-model provider when it belongs to a testable family.
@@ -218,7 +225,10 @@ async fn smoke_one(
     };
 
     let debug = std::env::var("CHAT_PROVIDER_SMOKE_DEBUG").is_ok();
-    let mut stream = chat.chat(request).await.map_err(|e| anyhow::anyhow!("chat: {e}"))?;
+    let mut stream = chat
+        .chat(request)
+        .await
+        .map_err(|e| anyhow::anyhow!("chat: {e}"))?;
     let mut text = String::new();
     let mut reasoning = String::new();
     while let Some(result) = stream.next().await {
@@ -231,7 +241,7 @@ async fn smoke_one(
             }
             Ok(ody_model_provider::ChatEvent::ReasoningPart(r)) => reasoning.push_str(&r),
             Ok(ody_model_provider::ChatEvent::Error(e)) => {
-                return Err(anyhow::anyhow!("stream error: {e}"))
+                return Err(anyhow::anyhow!("stream error: {e}"));
             }
             Err(e) => return Err(anyhow::anyhow!("stream item error: {e}")),
             _ => {}

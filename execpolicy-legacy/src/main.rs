@@ -145,9 +145,7 @@ pub enum Output {
 
     /// The safety of the command could not be verified.
     #[serde(rename = "unverified")]
-    Unverified {
-        error: ody_execpolicy_legacy::Error,
-    },
+    Unverified { error: ody_execpolicy_legacy::Error },
 }
 
 fn deserialize_from_json<'de, D>(deserializer: D) -> Result<ExecArg, D::Error>

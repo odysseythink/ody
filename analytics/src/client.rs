@@ -9,7 +9,6 @@ use crate::facts::AnalyticsJsonRpcError;
 use crate::facts::AppInvocation;
 use crate::facts::AppMentionedInput;
 use crate::facts::AppUsedInput;
-use crate::facts::OdyGoalEvent;
 use crate::facts::CustomAnalyticsFact;
 use crate::facts::DesignReviewCompletedInput;
 use crate::facts::DesignReviewFailedInput;
@@ -18,6 +17,7 @@ use crate::facts::ExternalAgentConfigImportCompletedInput;
 use crate::facts::ExternalAgentConfigImportFailureInput;
 use crate::facts::HookRunFact;
 use crate::facts::HookRunInput;
+use crate::facts::OdyGoalEvent;
 use crate::facts::PluginInstallFailedInput;
 use crate::facts::PluginState;
 use crate::facts::PluginStateChangedInput;
@@ -179,10 +179,7 @@ impl AnalyticsEventsQueue {
 }
 
 impl AnalyticsEventsClient {
-    pub fn new(
-        base_url: String,
-        analytics_enabled: Option<bool>,
-    ) -> Self {
+    pub fn new(base_url: String, analytics_enabled: Option<bool>) -> Self {
         let destination = AnalyticsEventsDestination::from_base_url(base_url);
         Self {
             queue: (analytics_enabled != Some(false))

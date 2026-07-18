@@ -1,6 +1,6 @@
 use ody_analytics::AnalyticsEventsClient;
-use ody_analytics::OdyGoalEvent;
 use ody_analytics::GoalEventKind;
+use ody_analytics::OdyGoalEvent;
 
 #[derive(Clone)]
 pub(crate) struct GoalAnalytics {

@@ -438,15 +438,10 @@ pub struct UsageLimitReachedError {
 impl std::fmt::Display for UsageLimitReachedError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(promo_message) = &self.promo_message {
-            return write!(
-                f,
-                "You've hit your usage limit. {promo_message}"
-            );
+            return write!(f, "You've hit your usage limit. {promo_message}");
         }
 
-        let message = format!(
-            "You've hit your usage limit."
-        );
+        let message = format!("You've hit your usage limit.");
 
         write!(f, "{message}")
     }

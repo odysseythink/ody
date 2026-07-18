@@ -161,13 +161,16 @@ enabled = true
             .collect::<Vec<_>>(),
         vec![
             ("linear@odysseythink-curated".to_string(), true, true),
-            ("computer-use@odysseythink-curated".to_string(), false, false),
+            (
+                "computer-use@odysseythink-curated".to_string(),
+                false,
+                false
+            ),
         ]
     );
     assert_eq!(response.marketplace_load_errors, Vec::new());
     Ok(())
 }
-
 
 #[tokio::test]
 async fn plugin_installed_ignores_local_cache_without_catalog() -> Result<()> {
@@ -437,9 +440,7 @@ async fn plugin_list_returns_consistent_local_marketplaces_on_repeated_requests(
 }"#,
     )?;
     std::fs::write(
-        repo_root
-            .path()
-            .join("demo-plugin/.ody-plugin/plugin.json"),
+        repo_root.path().join("demo-plugin/.ody-plugin/plugin.json"),
         r#"{"name":"demo-plugin"}"#,
     )?;
 
@@ -669,7 +670,6 @@ async fn plugin_list_accepts_omitted_cwds() -> Result<()> {
     Ok(())
 }
 
-
 #[tokio::test]
 async fn plugin_list_includes_install_and_enabled_state_from_config() -> Result<()> {
     let ody_home = TempDir::new()?;
@@ -787,10 +787,7 @@ enabled = false
         marketplace.plugins[1].auth_policy,
         PluginAuthPolicy::OnInstall
     );
-    assert_eq!(
-        marketplace.plugins[2].id,
-        "uninstalled-plugin@ody-curated"
-    );
+    assert_eq!(marketplace.plugins[2].id, "uninstalled-plugin@ody-curated");
     assert_eq!(marketplace.plugins[2].name, "uninstalled-plugin");
     assert_eq!(marketplace.plugins[2].installed, false);
     assert_eq!(marketplace.plugins[2].enabled, false);
@@ -1228,11 +1225,6 @@ enabled = true
     Ok(())
 }
 
-
-
-
-
-
 #[tokio::test]
 async fn plugin_list_vertical_kind_returns_empty_without_remote_plugin_enabled() -> Result<()> {
     let ody_home = TempDir::new()?;
@@ -1266,7 +1258,8 @@ async fn plugin_list_vertical_kind_returns_empty_without_remote_plugin_enabled()
 }
 
 #[tokio::test]
-async fn plugin_list_does_not_query_odysseythink_curated_remote_collection_by_default() -> Result<()> {
+async fn plugin_list_does_not_query_odysseythink_curated_remote_collection_by_default() -> Result<()>
+{
     let ody_home = TempDir::new()?;
     let server = MockServer::start().await;
     write_plugins_enabled_config_with_base_url(
@@ -1275,8 +1268,7 @@ async fn plugin_list_does_not_query_odysseythink_curated_remote_collection_by_de
     )?;
     write_api_key_auth(
         ody_home.path(),
-        ApiKeyAuthFixture::new("api-key")
-            .account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -1320,14 +1312,10 @@ async fn plugin_list_does_not_query_odysseythink_curated_remote_collection_by_de
 async fn plugin_list_vertical_kind_noops_when_remote_plugin_enabled() -> Result<()> {
     let ody_home = TempDir::new()?;
     let server = MockServer::start().await;
-    write_remote_plugin_catalog_config(
-        ody_home.path(),
-        &format!("{}/backend-api/", server.uri()),
-    )?;
+    write_remote_plugin_catalog_config(ody_home.path(), &format!("{}/backend-api/", server.uri()))?;
     write_api_key_auth(
         ody_home.path(),
-        ApiKeyAuthFixture::new("api-key")
-            .account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -1372,14 +1360,10 @@ async fn plugin_list_does_not_append_global_remote_when_marketplace_kinds_are_ex
 -> Result<()> {
     let ody_home = TempDir::new()?;
     let server = MockServer::start().await;
-    write_remote_plugin_catalog_config(
-        ody_home.path(),
-        &format!("{}/backend-api/", server.uri()),
-    )?;
+    write_remote_plugin_catalog_config(ody_home.path(), &format!("{}/backend-api/", server.uri()))?;
     write_api_key_auth(
         ody_home.path(),
-        ApiKeyAuthFixture::new("api-key")
-            .account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -1410,13 +1394,6 @@ async fn plugin_list_does_not_append_global_remote_when_marketplace_kinds_are_ex
     Ok(())
 }
 
-
-
-
-
-
-
-
 #[tokio::test]
 async fn plugin_list_omits_shared_with_me_kind_when_plugin_sharing_disabled() -> Result<()> {
     let ody_home = TempDir::new()?;
@@ -1435,8 +1412,7 @@ plugin_sharing = false
     )?;
     write_api_key_auth(
         ody_home.path(),
-        ApiKeyAuthFixture::new("api-key")
-            .account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -1493,8 +1469,7 @@ plugin_sharing = true
     )?;
     write_api_key_auth(
         ody_home.path(),
-        ApiKeyAuthFixture::new("api-key")
-            .account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -1527,7 +1502,6 @@ plugin_sharing = true
     Ok(())
 }
 
-
 #[tokio::test]
 async fn plugin_list_does_not_fetch_remote_marketplaces_when_plugins_disabled() -> Result<()> {
     let ody_home = TempDir::new()?;
@@ -1547,8 +1521,7 @@ remote_plugin = true
     )?;
     write_api_key_auth(
         ody_home.path(),
-        ApiKeyAuthFixture::new("api-key")
-            .account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 
@@ -1573,10 +1546,6 @@ remote_plugin = true
     wait_for_remote_plugin_request_count(&server, "/ps/plugins/list", /*expected_count*/ 0).await?;
     Ok(())
 }
-
-
-
-
 
 async fn wait_for_remote_plugin_request_count(
     server: &MockServer,
@@ -1637,8 +1606,6 @@ fn write_installed_plugin_with_version(
     )?;
     Ok(())
 }
-
-
 
 fn write_remote_plugin_catalog_config(
     ody_home: &std::path::Path,
@@ -1746,4 +1713,3 @@ fn write_curated_marketplace(
     )?;
     Ok(())
 }
-

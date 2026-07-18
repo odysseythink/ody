@@ -3,8 +3,8 @@ use std::pin::Pin;
 
 use crate::Environment;
 use crate::ExecServerError;
-use crate::environment::ODY_EXEC_SERVER_URL_ENV_VAR;
 use crate::environment::LOCAL_ENVIRONMENT_ID;
+use crate::environment::ODY_EXEC_SERVER_URL_ENV_VAR;
 use crate::environment::REMOTE_ENVIRONMENT_ID;
 
 /// Lists the concrete environments available to Ody.

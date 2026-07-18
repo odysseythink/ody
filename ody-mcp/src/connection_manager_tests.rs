@@ -1,4 +1,7 @@
 use super::*;
+use crate::declared_file_input_param_names;
+use crate::elicitation::ElicitationRequestManager;
+use crate::elicitation::elicitation_is_rejected_by_policy;
 use crate::ody_apps::ODY_APPS_TOOLS_CACHE_SCHEMA_VERSION;
 use crate::ody_apps::OdyAppsToolsCacheContext;
 use crate::ody_apps::load_startup_cached_ody_apps_server_info;
@@ -6,9 +9,6 @@ use crate::ody_apps::load_startup_cached_ody_apps_tools_snapshot;
 use crate::ody_apps::read_cached_ody_apps_tools;
 use crate::ody_apps::write_cached_ody_apps_tools;
 use crate::ody_apps::write_cached_ody_apps_tools_if_needed;
-use crate::declared_file_input_param_names;
-use crate::elicitation::ElicitationRequestManager;
-use crate::elicitation::elicitation_is_rejected_by_policy;
 use crate::rmcp_client::AsyncManagedClient;
 use crate::rmcp_client::ManagedClient;
 use crate::rmcp_client::StartupOutcomeError;
@@ -20,6 +20,7 @@ use crate::tools::ToolInfo;
 use crate::tools::filter_tools;
 use crate::tools::normalize_tools_for_model_with_prefix;
 use crate::tools::tool_with_model_visible_input_schema;
+use futures::FutureExt;
 use ody_config::AppToolApproval;
 use ody_config::Constrained;
 use ody_config::McpServerConfig;
@@ -32,7 +33,6 @@ use ody_protocol::mcp::McpServerInfo;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::protocol::GranularApprovalConfig;
 use ody_protocol::protocol::McpAuthStatus;
-use futures::FutureExt;
 use pretty_assertions::assert_eq;
 use rmcp::model::CreateElicitationRequestParams;
 use rmcp::model::ElicitationAction;
@@ -252,15 +252,13 @@ async fn disabled_permissions_auto_accept_elicitation_with_empty_form_schema() {
 
     let response = sender(
         NumberOrString::Number(1),
-        ody_rmcp_client::Elicitation::Mcp(
-            CreateElicitationRequestParams::FormElicitationParams {
-                meta: None,
-                message: "Confirm?".to_string(),
-                requested_schema: rmcp::model::ElicitationSchema::builder()
-                    .build()
-                    .expect("schema should build"),
-            },
-        ),
+        ody_rmcp_client::Elicitation::Mcp(CreateElicitationRequestParams::FormElicitationParams {
+            meta: None,
+            message: "Confirm?".to_string(),
+            requested_schema: rmcp::model::ElicitationSchema::builder()
+                .build()
+                .expect("schema should build"),
+        }),
     )
     .await
     .expect("elicitation should auto accept");
@@ -287,19 +285,17 @@ async fn disabled_permissions_do_not_auto_accept_elicitation_with_requested_fiel
 
     let response = sender(
         NumberOrString::Number(1),
-        ody_rmcp_client::Elicitation::Mcp(
-            CreateElicitationRequestParams::FormElicitationParams {
-                meta: None,
-                message: "What should I say?".to_string(),
-                requested_schema: rmcp::model::ElicitationSchema::builder()
-                    .required_property(
-                        "message",
-                        rmcp::model::PrimitiveSchema::String(rmcp::model::StringSchema::new()),
-                    )
-                    .build()
-                    .expect("schema should build"),
-            },
-        ),
+        ody_rmcp_client::Elicitation::Mcp(CreateElicitationRequestParams::FormElicitationParams {
+            meta: None,
+            message: "What should I say?".to_string(),
+            requested_schema: rmcp::model::ElicitationSchema::builder()
+                .required_property(
+                    "message",
+                    rmcp::model::PrimitiveSchema::String(rmcp::model::StringSchema::new()),
+                )
+                .build()
+                .expect("schema should build"),
+        }),
     )
     .await
     .expect("elicitation should auto decline");
@@ -712,15 +708,11 @@ fn startup_cached_ody_apps_tools_loads_from_disk_cache() {
         &cached_tools,
     );
 
-    let startup_tools = load_startup_cached_ody_apps_tools_snapshot(
-        ODY_APPS_MCP_SERVER_NAME,
-        Some(&cache_context),
-    )
-    .expect("expected startup snapshot to load from cache");
-    let cached_server_info = load_startup_cached_ody_apps_server_info(
-        ODY_APPS_MCP_SERVER_NAME,
-        Some(&cache_context),
-    );
+    let startup_tools =
+        load_startup_cached_ody_apps_tools_snapshot(ODY_APPS_MCP_SERVER_NAME, Some(&cache_context))
+            .expect("expected startup snapshot to load from cache");
+    let cached_server_info =
+        load_startup_cached_ody_apps_server_info(ODY_APPS_MCP_SERVER_NAME, Some(&cache_context));
 
     assert_eq!(startup_tools.len(), 1);
     assert_eq!(startup_tools[0].server_name, ODY_APPS_MCP_SERVER_NAME);
@@ -747,15 +739,11 @@ fn startup_cached_ody_apps_tools_loads_without_server_info_cache() {
     .expect("serialize");
     std::fs::write(cache_path, bytes).expect("write");
 
-    let startup_tools = load_startup_cached_ody_apps_tools_snapshot(
-        ODY_APPS_MCP_SERVER_NAME,
-        Some(&cache_context),
-    )
-    .expect("legacy startup snapshot should remain available");
-    let cached_server_info = load_startup_cached_ody_apps_server_info(
-        ODY_APPS_MCP_SERVER_NAME,
-        Some(&cache_context),
-    );
+    let startup_tools =
+        load_startup_cached_ody_apps_tools_snapshot(ODY_APPS_MCP_SERVER_NAME, Some(&cache_context))
+            .expect("legacy startup snapshot should remain available");
+    let cached_server_info =
+        load_startup_cached_ody_apps_server_info(ODY_APPS_MCP_SERVER_NAME, Some(&cache_context));
 
     assert_eq!(startup_tools.len(), 1);
     assert_eq!(startup_tools[0].callable_name, "calendar_search");
@@ -793,10 +781,7 @@ fn ody_apps_server_info_cache_survives_legacy_tools_cache_write() {
     std::fs::write(cache_path, bytes).expect("write legacy tools cache");
 
     assert_eq!(
-        load_startup_cached_ody_apps_server_info(
-            ODY_APPS_MCP_SERVER_NAME,
-            Some(&cache_context),
-        ),
+        load_startup_cached_ody_apps_server_info(ODY_APPS_MCP_SERVER_NAME, Some(&cache_context),),
         Some(server_info)
     );
     assert!(

@@ -37,4 +37,3 @@ async fn read_default_provider_capabilities() -> Result<()> {
     assert_eq!(received, expected);
     Ok(())
 }
-

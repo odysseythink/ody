@@ -198,10 +198,7 @@ impl App {
                             self.shutdown_current_thread(app_server).await;
                             match self
                                 .replace_chat_widget_with_app_server_thread(
-                                    tui,
-                                    app_server,
-                                    forked,
-                                    /*initial_user_message*/ None,
+                                    tui, app_server, forked, /*initial_user_message*/ None,
                                     /*initial_collaboration_mask*/ None,
                                 )
                                 .await
@@ -370,6 +367,70 @@ impl App {
                         .add_error_message(format!("Logout failed: {err}"));
                 }
             },
+            AppEvent::LoginStart { provider } => {
+                self.chat_widget.start_login_flow(provider);
+            }
+            AppEvent::LoginProviderSelected { provider } => {
+                self.chat_widget.on_login_provider_selected(provider);
+            }
+            AppEvent::LoginAliasSubmitted { provider, alias } => {
+                self.chat_widget.on_login_alias_submitted(provider, alias);
+            }
+            AppEvent::LoginApiKeySubmitted {
+                provider,
+                alias,
+                api_key,
+            } => {
+                self.chat_widget
+                    .on_login_api_key_submitted(provider, alias, api_key);
+            }
+            AppEvent::LoginBaseUrlSubmitted {
+                provider,
+                alias,
+                api_key,
+                base_url,
+            } => {
+                self.chat_widget
+                    .on_login_base_url_submitted(provider, alias, api_key, base_url);
+            }
+            AppEvent::LoginModelsFetched {
+                provider,
+                alias,
+                api_key,
+                base_url,
+                result,
+            } => match result {
+                Ok(models) => {
+                    self.chat_widget
+                        .on_login_models_fetched(provider, alias, api_key, base_url, models);
+                }
+                Err(err) => {
+                    crate::login::telemetry::record_login_failed(
+                        &self.session_telemetry,
+                        provider,
+                        "models_fetch",
+                    );
+                    self.chat_widget
+                        .add_error_message(format!("Failed to verify API key: {err}"));
+                    self.chat_widget
+                        .on_login_api_key_submitted(provider, alias, api_key);
+                }
+            },
+            AppEvent::PersistLoginProvider {
+                provider,
+                alias,
+                api_key,
+                base_url,
+                model_id,
+            } => {
+                self.persist_login_provider(
+                    provider, alias, api_key, base_url, model_id, app_server,
+                )
+                .await;
+            }
+            AppEvent::LogoutProvider { provider } => {
+                self.logout_provider(provider, app_server).await;
+            }
             AppEvent::FatalExitRequest(message) => {
                 return Ok(AppRunControl::Exit(ExitReason::Fatal(message)));
             }

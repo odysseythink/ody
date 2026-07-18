@@ -35,7 +35,7 @@ env_http_headers = { "X-Example-Env-Header" = "EXAMPLE_ENV_VAR" }
         stream_idle_timeout_ms: None,
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
-            capabilities: ProviderCapabilities::default(),
+        capabilities: ProviderCapabilities::default(),
     };
 
     let provider: ModelProviderInfo = toml::from_str(azure_provider_toml).unwrap();
@@ -106,7 +106,7 @@ fn test_supports_remote_compaction_for_azure_name() {
         stream_idle_timeout_ms: None,
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
-            capabilities: ProviderCapabilities::default(),
+        capabilities: ProviderCapabilities::default(),
     };
 
     assert!(provider.supports_remote_compaction());
@@ -130,7 +130,7 @@ fn test_supports_remote_compaction_for_non_odysseythink_non_azure_provider() {
         stream_idle_timeout_ms: None,
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
-            capabilities: ProviderCapabilities::default(),
+        capabilities: ProviderCapabilities::default(),
     };
 
     assert!(!provider.supports_remote_compaction());
@@ -180,10 +180,7 @@ fn test_merge_configured_model_providers_adds_custom_provider() {
     expected.insert("custom".to_string(), expected_custom);
 
     assert_eq!(
-        merge_configured_model_providers(
-            built_in_model_providers(),
-            configured_model_providers,
-        ),
+        merge_configured_model_providers(built_in_model_providers(), configured_model_providers,),
         Ok(expected)
     );
 }
@@ -304,7 +301,6 @@ fn default_provider_capabilities_for_chat_is_conservative() {
     assert!(!caps.web_search);
 }
 
-
 #[test]
 fn test_deserialize_provider_auth_config_allows_zero_refresh_interval() {
     let base_dir = tempdir().unwrap();
@@ -343,7 +339,6 @@ fn normalize_capabilities_fills_responses_defaults() {
     assert!(!provider.capabilities.attestation);
 }
 
-
 #[test]
 fn normalize_capabilities_respects_explicit_values() {
     // With all-false replacement semantics, explicit choices are preserved as
@@ -381,7 +376,9 @@ fn user_defined_provider_gets_wire_api_default_capabilities() {
         },
     );
     let merged = merge_configured_model_providers(built_in, configured).unwrap();
-    let my_responses = merged.get("my-responses").expect("user provider should be present");
+    let my_responses = merged
+        .get("my-responses")
+        .expect("user provider should be present");
     assert_eq!(my_responses.wire_api, WireApi::Responses);
     // Responses 的 provider 级推断默认值包含多项 true；实现前 capabilities 为全 false，会失败。
     assert_eq!(
@@ -410,4 +407,3 @@ fn user_defined_provider_with_explicit_capabilities_is_preserved() {
     let my_chat = merged.get("my-chat").unwrap();
     assert!(my_chat.capabilities.web_search);
 }
-

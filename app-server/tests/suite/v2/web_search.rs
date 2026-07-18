@@ -7,6 +7,7 @@ use app_test_support::ApiKeyAuthFixture;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
 use app_test_support::write_api_key_auth;
+use core_test_support::responses;
 use ody_app_server_protocol::ItemCompletedNotification;
 use ody_app_server_protocol::ItemStartedNotification;
 use ody_app_server_protocol::JSONRPCResponse;
@@ -21,7 +22,6 @@ use ody_app_server_protocol::TurnStartResponse;
 use ody_app_server_protocol::UserInput as V2UserInput;
 use ody_app_server_protocol::WebSearchAction;
 use ody_config::types::AuthCredentialsStoreMode;
-use core_test_support::responses;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
@@ -78,8 +78,7 @@ async fn standalone_web_search_round_trips_output() -> Result<()> {
         AuthCredentialsStoreMode::File,
     )?;
 
-    let mut mcp =
-        TestAppServer::new_with_env(ody_home.path(), &[("OPENAI_API_KEY", None)]).await?;
+    let mut mcp = TestAppServer::new_with_env(ody_home.path(), &[("OPENAI_API_KEY", None)]).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
 
     let thread_req = mcp

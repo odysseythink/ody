@@ -1,5 +1,7 @@
 #![allow(clippy::expect_used)]
 
+use futures::SinkExt;
+use futures::StreamExt;
 use ody_app_server_protocol::JSONRPCMessage;
 use ody_app_server_protocol::JSONRPCResponse;
 use ody_protocol::models::PermissionProfile;
@@ -10,8 +12,6 @@ use ody_protocol::permissions::FileSystemSandboxPolicy;
 use ody_protocol::permissions::FileSystemSpecialPath;
 use ody_protocol::permissions::NetworkSandboxPolicy;
 use ody_utils_path_uri::PathUri;
-use futures::SinkExt;
-use futures::StreamExt;
 use pretty_assertions::assert_eq;
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;

@@ -61,9 +61,7 @@ impl ToolInfo {
     }
 }
 
-pub fn declared_file_input_param_names(
-    meta: Option<&Map<String, JsonValue>>,
-) -> Vec<String> {
+pub fn declared_file_input_param_names(meta: Option<&Map<String, JsonValue>>) -> Vec<String> {
     let Some(meta) = meta else {
         return Vec::new();
     };

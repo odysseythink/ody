@@ -52,50 +52,10 @@ use ody_app_server_protocol::TurnStartResponse;
 use ody_app_server_protocol::TurnStartedNotification;
 use ody_arg0::Arg0DispatchPaths;
 
-use ody_config::CloudConfigBundleLoader;
-use ody_config::ConfigLoadError;
-use ody_config::ConfigLoadOptions;
-use ody_config::LoaderOverrides;
-use ody_config::format_config_error_with_source;
-use ody_core::StateDbHandle;
-use ody_core::check_execpolicy_for_warnings;
-use ody_core::config::Config;
-use ody_core::config::ConfigBuilder;
-use ody_core::config::ConfigOverrides;
-use ody_core::config::ConfigTomlLoadResult;
-use ody_core::config::find_ody_home;
-use ody_core::config::load_config_toml_with_layer_stack;
-use ody_core::config::resolve_profile_v2_config_path;
-use ody_core::find_thread_meta_by_name_str;
-use ody_core::format_exec_policy_error_with_source;
-use ody_core::path_utils;
-use ody_feedback::OdyFeedback;
-use ody_git_utils::get_git_repo_root;
-use ody_client::default_client::set_default_client_residency_requirement;
-use ody_client::default_client::set_default_originator;
-use ody_otel::set_parent_from_context;
-use ody_otel::traceparent_context_from_env;
-use ody_protocol::SessionId;
-use ody_protocol::ThreadId;
-use ody_protocol::config_types::ApprovalsReviewer;
-use ody_protocol::config_types::SandboxMode;
-use ody_protocol::models::ActivePermissionProfile;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::ReviewRequest;
-use ody_protocol::protocol::ReviewTarget;
-use ody_protocol::protocol::RolloutItem;
-use ody_protocol::protocol::RolloutLine;
-use ody_protocol::protocol::SessionConfiguredEvent;
-use ody_protocol::protocol::SessionSource;
-use ody_protocol::user_input::UserInput;
-use ody_utils_absolute_path::AbsolutePathBuf;
-use ody_utils_absolute_path::canonicalize_existing_preserving_symlinks;
-use ody_utils_cli::SharedCliOptions;
 use event_processor_with_human_output::EventProcessorWithHumanOutput;
-pub use event_processor_with_jsonl_output::OdyStatus;
 pub use event_processor_with_jsonl_output::CollectedThreadEvents;
 pub use event_processor_with_jsonl_output::EventProcessorWithJsonOutput;
+pub use event_processor_with_jsonl_output::OdyStatus;
 pub use exec_events::AgentMessageItem;
 pub use exec_events::CollabAgentState;
 pub use exec_events::CollabAgentStatus;
@@ -129,6 +89,46 @@ pub use exec_events::TurnFailedEvent;
 pub use exec_events::TurnStartedEvent;
 pub use exec_events::Usage;
 pub use exec_events::WebSearchItem;
+use ody_client::default_client::set_default_client_residency_requirement;
+use ody_client::default_client::set_default_originator;
+use ody_config::CloudConfigBundleLoader;
+use ody_config::ConfigLoadError;
+use ody_config::ConfigLoadOptions;
+use ody_config::LoaderOverrides;
+use ody_config::format_config_error_with_source;
+use ody_core::StateDbHandle;
+use ody_core::check_execpolicy_for_warnings;
+use ody_core::config::Config;
+use ody_core::config::ConfigBuilder;
+use ody_core::config::ConfigOverrides;
+use ody_core::config::ConfigTomlLoadResult;
+use ody_core::config::find_ody_home;
+use ody_core::config::load_config_toml_with_layer_stack;
+use ody_core::config::resolve_profile_v2_config_path;
+use ody_core::find_thread_meta_by_name_str;
+use ody_core::format_exec_policy_error_with_source;
+use ody_core::path_utils;
+use ody_feedback::OdyFeedback;
+use ody_git_utils::get_git_repo_root;
+use ody_otel::set_parent_from_context;
+use ody_otel::traceparent_context_from_env;
+use ody_protocol::SessionId;
+use ody_protocol::ThreadId;
+use ody_protocol::config_types::ApprovalsReviewer;
+use ody_protocol::config_types::SandboxMode;
+use ody_protocol::models::ActivePermissionProfile;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::ReviewRequest;
+use ody_protocol::protocol::ReviewTarget;
+use ody_protocol::protocol::RolloutItem;
+use ody_protocol::protocol::RolloutLine;
+use ody_protocol::protocol::SessionConfiguredEvent;
+use ody_protocol::protocol::SessionSource;
+use ody_protocol::user_input::UserInput;
+use ody_utils_absolute_path::AbsolutePathBuf;
+use ody_utils_absolute_path::canonicalize_existing_preserving_symlinks;
+use ody_utils_cli::SharedCliOptions;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::future::Future;
@@ -1014,9 +1014,7 @@ fn sandbox_mode_from_permission_profile(
     cwd: &Path,
 ) -> Option<ody_app_server_protocol::SandboxMode> {
     match permission_profile {
-        PermissionProfile::Disabled => {
-            Some(ody_app_server_protocol::SandboxMode::DangerFullAccess)
-        }
+        PermissionProfile::Disabled => Some(ody_app_server_protocol::SandboxMode::DangerFullAccess),
         PermissionProfile::External { .. } => None,
         PermissionProfile::Managed { .. } => {
             let file_system_policy = permission_profile.file_system_sandbox_policy();

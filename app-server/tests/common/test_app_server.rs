@@ -171,12 +171,8 @@ impl TestAppServer {
         ody_home: &Path,
         env_overrides: &[(&str, Option<&str>)],
     ) -> anyhow::Result<Self> {
-        Self::new_with_env_and_args(
-            ody_home,
-            env_overrides,
-            &[DISABLE_PLUGIN_STARTUP_TASKS_ARG],
-        )
-        .await
+        Self::new_with_env_and_args(ody_home, env_overrides, &[DISABLE_PLUGIN_STARTUP_TASKS_ARG])
+            .await
     }
 
     pub async fn new_with_program_and_env(
@@ -1163,10 +1159,7 @@ web_search = true
     }
 
     /// Send an `auth/login/start` JSON-RPC request for API key login.
-    pub async fn send_login_api_key_request(
-        &mut self,
-        api_key: &str,
-    ) -> anyhow::Result<i64> {
+    pub async fn send_login_api_key_request(&mut self, api_key: &str) -> anyhow::Result<i64> {
         let params = serde_json::json!({
             "type": "apiKey",
             "apiKey": api_key,

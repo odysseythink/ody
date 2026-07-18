@@ -9,6 +9,7 @@ use app_test_support::TestAppServer;
 use app_test_support::to_response;
 use app_test_support::write_api_key_auth;
 use axum::Router;
+use core_test_support::responses;
 use ody_app_server::in_process;
 use ody_app_server::in_process::InProcessStartArgs;
 use ody_app_server_protocol::ClientInfo;
@@ -29,7 +30,6 @@ use ody_core::config::ConfigBuilder;
 use ody_exec_server::EnvironmentManager;
 use ody_feedback::OdyFeedback;
 use ody_protocol::protocol::SessionSource;
-use core_test_support::responses;
 use pretty_assertions::assert_eq;
 use rmcp::handler::server::ServerHandler;
 use rmcp::model::ListResourcesResult;
@@ -342,8 +342,7 @@ stream_max_retries = 0
     )?;
     write_api_key_auth(
         ody_home.path(),
-        ApiKeyAuthFixture::new("api-key")
-            .account_id("account-123"),
+        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
         AuthCredentialsStoreMode::File,
     )?;
 

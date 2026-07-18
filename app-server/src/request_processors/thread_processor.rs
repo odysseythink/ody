@@ -1307,8 +1307,7 @@ impl ThreadRequestProcessor {
             cwd: cwd.map(PathBuf::from),
             workspace_roots: runtime_workspace_roots,
             default_permissions: permissions,
-            approval_policy: approval_policy
-                .map(ody_app_server_protocol::AskForApproval::to_core),
+            approval_policy: approval_policy.map(ody_app_server_protocol::AskForApproval::to_core),
             approvals_reviewer: approvals_reviewer
                 .map(ody_app_server_protocol::ApprovalsReviewer::to_core),
             sandbox_mode: sandbox.map(SandboxMode::to_core),

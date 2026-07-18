@@ -7,13 +7,13 @@ use crate::provider::Provider;
 use crate::requests::Compression;
 use crate::sse::spawn_chat_stream;
 use crate::telemetry::SseTelemetry;
+use http::HeaderMap;
+use http::HeaderValue;
+use http::Method;
 use ody_client::EncodedJsonBody;
 use ody_client::HttpTransport;
 use ody_client::RequestCompression;
 use ody_client::RequestTelemetry;
-use http::HeaderMap;
-use http::HeaderValue;
-use http::Method;
 use std::sync::Arc;
 use tracing::instrument;
 

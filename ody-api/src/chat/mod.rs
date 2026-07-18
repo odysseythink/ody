@@ -97,7 +97,11 @@ impl ChatCompletionsRequest {
         }
 
         let tools = convert_tools(&self.tools, self.vendor);
-        tracing::info!(messages_len = messages.len(), tools_len = tools.len(), "chat_completions:to_wire built messages");
+        tracing::info!(
+            messages_len = messages.len(),
+            tools_len = tools.len(),
+            "chat_completions:to_wire built messages"
+        );
 
         // Chat Completions requires all tool_calls from a single assistant turn
         // to live in one assistant message, followed immediately by the tool
@@ -105,7 +109,10 @@ impl ChatCompletionsRequest {
         // a content-only assistant message followed by tool_calls, or multiple
         // consecutive tool_call assistant messages, become a single message.
         let messages = merge_consecutive_assistant_messages(messages);
-        tracing::info!(messages_len = messages.len(), "chat_completions:to_wire merged assistant messages");
+        tracing::info!(
+            messages_len = messages.len(),
+            "chat_completions:to_wire merged assistant messages"
+        );
 
         for (idx, message) in messages.iter().enumerate() {
             let role = message
@@ -142,10 +149,7 @@ impl ChatCompletionsRequest {
         body.insert("messages".into(), Value::Array(messages));
         body.insert("stream".into(), Value::Bool(true));
         // Ask the server to include a final usage chunk when streaming.
-        body.insert(
-            "stream_options".into(),
-            json!({ "include_usage": true }),
-        );
+        body.insert("stream_options".into(), json!({ "include_usage": true }));
 
         if !tools.is_empty() {
             body.insert("tools".into(), Value::Array(tools));
@@ -320,7 +324,9 @@ fn append_item_messages(item: &ResponseItem, messages: &mut Vec<Value>, vendor: 
                 }],
             }));
         }
-        ResponseItem::FunctionCallOutput { call_id, output, .. } => {
+        ResponseItem::FunctionCallOutput {
+            call_id, output, ..
+        } => {
             tracing::info!(call_id = %call_id, "chat_completions: emitting tool response");
             messages.push(json!({
                 "role": "tool",
@@ -328,7 +334,9 @@ fn append_item_messages(item: &ResponseItem, messages: &mut Vec<Value>, vendor: 
                 "content": output.to_string(),
             }));
         }
-        ResponseItem::CustomToolCallOutput { call_id, output, .. } => {
+        ResponseItem::CustomToolCallOutput {
+            call_id, output, ..
+        } => {
             messages.push(json!({
                 "role": "tool",
                 "tool_call_id": vendor.sanitize_tool_call_id(call_id),
@@ -416,7 +424,10 @@ fn convert_tool(tool: &Value, vendor: ChatVendor) -> Option<Value> {
     }
 
     let obj = tool.as_object()?;
-    let kind = obj.get("type").and_then(Value::as_str).unwrap_or("function");
+    let kind = obj
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or("function");
     match kind {
         "function" => {
             let mut function = Map::new();
@@ -427,7 +438,10 @@ fn convert_tool(tool: &Value, vendor: ChatVendor) -> Option<Value> {
                 function.insert("description".into(), description.clone());
             }
             if let Some(parameters) = obj.get("parameters") {
-                function.insert("parameters".into(), vendor.normalize_tool_parameters(parameters));
+                function.insert(
+                    "parameters".into(),
+                    vendor.normalize_tool_parameters(parameters),
+                );
             }
             Some(json!({ "type": "function", "function": Value::Object(function) }))
         }
@@ -540,7 +554,10 @@ fn merge_consecutive_assistant_messages(messages: Vec<Value>) -> Vec<Value> {
                                 if let Some(reasoning) = merged_reasoning
                                     && let Some(obj) = last.as_object_mut()
                                 {
-                                    obj.insert("reasoning_content".into(), Value::String(reasoning));
+                                    obj.insert(
+                                        "reasoning_content".into(),
+                                        Value::String(reasoning),
+                                    );
                                 }
                                 continue;
                             }

@@ -24,8 +24,7 @@ use ody_protocol::config_types::WebSearchMode;
 use crate::tool::WebSearchTool;
 
 #[derive(Clone)]
-struct WebSearchExtension {
-}
+struct WebSearchExtension {}
 
 #[derive(Clone)]
 struct WebSearchExtensionConfig {
@@ -128,9 +127,7 @@ impl ToolContributor for WebSearchExtension {
 
         vec![Arc::new(WebSearchTool {
             session_id: session_store.level_id().to_string(),
-            provider: create_model_provider(
-                config.provider.clone(),
-            ),
+            provider: create_model_provider(config.provider.clone()),
             settings: config.settings.clone(),
         })]
     }

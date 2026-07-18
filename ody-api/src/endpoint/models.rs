@@ -2,13 +2,13 @@ use crate::auth::SharedAuthProvider;
 use crate::endpoint::session::EndpointSession;
 use crate::error::ApiError;
 use crate::provider::Provider;
+use http::HeaderMap;
+use http::Method;
+use http::header::ETAG;
 use ody_client::HttpTransport;
 use ody_client::RequestTelemetry;
 use ody_protocol::model_metadata::ModelInfo;
 use ody_protocol::model_metadata::ModelsResponse;
-use http::HeaderMap;
-use http::Method;
-use http::header::ETAG;
 use std::sync::Arc;
 
 pub struct ModelsClient<T: HttpTransport> {
@@ -78,12 +78,12 @@ mod tests {
     use super::*;
     use crate::auth::AuthProvider;
     use crate::provider::RetryConfig;
+    use http::HeaderMap;
+    use http::StatusCode;
     use ody_client::Request;
     use ody_client::Response;
     use ody_client::StreamResponse;
     use ody_client::TransportError;
-    use http::HeaderMap;
-    use http::StatusCode;
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use std::sync::Arc;

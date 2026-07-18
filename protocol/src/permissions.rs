@@ -4,11 +4,11 @@ use std::io;
 use std::path::Path;
 use std::path::PathBuf;
 
+use globset::GlobBuilder;
+use globset::GlobMatcher;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_absolute_path::canonicalize_preserving_symlinks;
 use ody_utils_path_uri::PathUri;
-use globset::GlobBuilder;
-use globset::GlobMatcher;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -2261,11 +2261,7 @@ mod tests {
                 .read_only_subpaths
                 .contains(&expected_blocked)
         );
-        assert!(
-            writable_roots[0]
-                .read_only_subpaths
-                .contains(&expected_ody)
-        );
+        assert!(writable_roots[0].read_only_subpaths.contains(&expected_ody));
     }
 
     #[cfg(unix)]
@@ -2332,11 +2328,7 @@ mod tests {
                 .read_only_subpaths
                 .contains(&expected_agents)
         );
-        assert!(
-            writable_roots[0]
-                .read_only_subpaths
-                .contains(&expected_ody)
-        );
+        assert!(writable_roots[0].read_only_subpaths.contains(&expected_ody));
     }
 
     #[cfg(unix)]
@@ -2368,10 +2360,7 @@ mod tests {
 
         let writable_roots = policy.get_writable_roots_with_cwd(cwd.path());
         assert_eq!(writable_roots.len(), 1);
-        assert_eq!(
-            writable_roots[0].read_only_subpaths,
-            vec![expected_dot_ody]
-        );
+        assert_eq!(writable_roots[0].read_only_subpaths, vec![expected_dot_ody]);
         assert!(
             !writable_roots[0]
                 .read_only_subpaths
@@ -2573,11 +2562,7 @@ mod tests {
                 .read_only_subpaths
                 .contains(&expected_blocked)
         );
-        assert!(
-            writable_roots[0]
-                .read_only_subpaths
-                .contains(&expected_ody)
-        );
+        assert!(writable_roots[0].read_only_subpaths.contains(&expected_ody));
     }
 
     #[test]

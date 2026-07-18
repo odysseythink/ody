@@ -13,15 +13,14 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
-use ody_api::SharedAuthProvider;
 use crate::McpAuthStatusEntry;
-use crate::ody_apps::OdyAppsToolsCacheContext;
-use crate::ody_apps::OdyAppsToolsCacheKey;
-use crate::ody_apps::write_cached_ody_apps_tools_if_needed;
 use crate::elicitation::ElicitationRequestManager;
 use crate::elicitation::ElicitationReviewerHandle;
 use crate::mcp::ODY_APPS_MCP_SERVER_NAME;
 use crate::mcp::ToolPluginProvenance;
+use crate::ody_apps::OdyAppsToolsCacheContext;
+use crate::ody_apps::OdyAppsToolsCacheKey;
+use crate::ody_apps::write_cached_ody_apps_tools_if_needed;
 use crate::rmcp_client::AsyncManagedClient;
 use crate::rmcp_client::DEFAULT_STARTUP_TIMEOUT;
 use crate::rmcp_client::MCP_TOOLS_FETCH_UNCACHED_DURATION_METRIC;
@@ -41,6 +40,7 @@ use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
 use async_channel::Sender;
+use ody_api::SharedAuthProvider;
 use ody_config::Constrained;
 use ody_config::McpServerTransportConfig;
 use ody_config::types::AuthKeyringBackendKind;
@@ -891,9 +891,7 @@ fn mcp_init_error_display(
             "GitHub MCP does not support OAuth. Log in by adding a personal access token (https://github.com/settings/personal-access-tokens) to your environment and config.toml:\n[mcp_servers.{server_name}]\nbearer_token_env_var = ODY_GITHUB_PERSONAL_ACCESS_TOKEN"
         )
     } else if is_mcp_client_auth_required_error(err) {
-        format!(
-            "The {server_name} MCP server is not logged in. Run `ody mcp login {server_name}`."
-        )
+        format!("The {server_name} MCP server is not logged in. Run `ody mcp login {server_name}`.")
     } else if is_mcp_client_startup_timeout_error(err) {
         let startup_timeout_secs = match entry {
             Some(entry) => match entry

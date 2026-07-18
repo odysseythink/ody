@@ -1,5 +1,12 @@
 use crate::client::AnalyticsEventsQueue;
 use crate::events::AppServerRpcTransport;
+use crate::events::FinalApprovalOutcome;
+use crate::events::GuardianApprovalRequestSource;
+use crate::events::GuardianReviewDecision;
+use crate::events::GuardianReviewEventParams;
+use crate::events::GuardianReviewFailureReason;
+use crate::events::GuardianReviewTerminalStatus;
+use crate::events::GuardianReviewedAction;
 use crate::events::OdyAcceptedLineFingerprintsEventParams;
 use crate::events::OdyAcceptedLineFingerprintsEventRequest;
 use crate::events::OdyAppMentionedEventRequest;
@@ -20,13 +27,6 @@ use crate::events::OdyReviewEventRequest;
 use crate::events::OdyRuntimeMetadata;
 use crate::events::OdyToolItemEventBase;
 use crate::events::OdyTurnEventRequest;
-use crate::events::FinalApprovalOutcome;
-use crate::events::GuardianApprovalRequestSource;
-use crate::events::GuardianReviewDecision;
-use crate::events::GuardianReviewEventParams;
-use crate::events::GuardianReviewFailureReason;
-use crate::events::GuardianReviewTerminalStatus;
-use crate::events::GuardianReviewedAction;
 use crate::events::ReviewResolution;
 use crate::events::ReviewStatus;
 use crate::events::ReviewSubjectKind;
@@ -46,8 +46,6 @@ use crate::facts::AnalyticsJsonRpcError;
 use crate::facts::AppInvocation;
 use crate::facts::AppMentionedInput;
 use crate::facts::AppUsedInput;
-use crate::facts::OdyCompactionEvent;
-use crate::facts::OdyErrKind;
 use crate::facts::CompactionImplementation;
 use crate::facts::CompactionPhase;
 use crate::facts::CompactionReason;
@@ -61,6 +59,8 @@ use crate::facts::HookRunFact;
 use crate::facts::HookRunInput;
 use crate::facts::InputError;
 use crate::facts::InvocationType;
+use crate::facts::OdyCompactionEvent;
+use crate::facts::OdyErrKind;
 use crate::facts::PluginInstallFailedInput;
 use crate::facts::PluginState;
 use crate::facts::PluginStateChangedInput;
@@ -85,7 +85,6 @@ use ody_app_server_protocol::AskForApproval as AppServerAskForApproval;
 use ody_app_server_protocol::ClientInfo;
 use ody_app_server_protocol::ClientRequest;
 use ody_app_server_protocol::ClientResponsePayload;
-use ody_app_server_protocol::OdyErrorInfo;
 use ody_app_server_protocol::CollabAgentTool;
 use ody_app_server_protocol::CollabAgentToolCallStatus;
 use ody_app_server_protocol::CommandAction;
@@ -107,6 +106,7 @@ use ody_app_server_protocol::ItemStartedNotification;
 use ody_app_server_protocol::JSONRPCErrorError;
 use ody_app_server_protocol::McpToolCallStatus;
 use ody_app_server_protocol::NonSteerableTurnKind;
+use ody_app_server_protocol::OdyErrorInfo;
 use ody_app_server_protocol::PatchApplyStatus;
 use ody_app_server_protocol::PermissionsRequestApprovalParams;
 use ody_app_server_protocol::RequestId;
@@ -3319,8 +3319,7 @@ async fn reducer_includes_plugin_id_for_plugin_skill_invocations() {
         thread_id: "thread-1".to_string(),
         turn_id: "turn-1".to_string(),
     };
-    let skill_path =
-        PathBuf::from("/Users/abc/.ody/plugins/cache/test/sample/skills/doc/SKILL.md");
+    let skill_path = PathBuf::from("/Users/abc/.ody/plugins/cache/test/sample/skills/doc/SKILL.md");
 
     reducer
         .ingest(

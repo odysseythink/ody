@@ -160,9 +160,7 @@ mod tests {
                 phase: None,
                 memory_citation: None,
             })),
-            RolloutItem::EventMsg(EventMsg::TokenCount(TokenCountEvent {
-                info: None,
-            })),
+            RolloutItem::EventMsg(EventMsg::TokenCount(TokenCountEvent { info: None })),
             RolloutItem::EventMsg(EventMsg::UserMessage(UserMessageEvent {
                 client_id: None,
                 message: "second turn".to_string(),

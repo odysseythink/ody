@@ -3,6 +3,10 @@ use crate::accepted_lines::accepted_line_fingerprint_event_requests;
 use crate::accepted_lines::accepted_line_fingerprints_from_unified_diff;
 use crate::accepted_lines::accepted_line_repo_hash_for_cwd;
 use crate::events::AppServerRpcTransport;
+use crate::events::FinalApprovalOutcome;
+use crate::events::GuardianReviewEventParams;
+use crate::events::GuardianReviewEventPayload;
+use crate::events::GuardianReviewEventRequest;
 use crate::events::OdyAppMentionedEventRequest;
 use crate::events::OdyAppServerClientMetadata;
 use crate::events::OdyAppUsedEventRequest;
@@ -11,13 +15,13 @@ use crate::events::OdyCollabAgentToolCallEventRequest;
 use crate::events::OdyCommandExecutionEventParams;
 use crate::events::OdyCommandExecutionEventRequest;
 use crate::events::OdyCompactionEventRequest;
-use crate::events::OdyDynamicToolCallEventParams;
 use crate::events::OdyDesignReviewCompletedEventParams;
 use crate::events::OdyDesignReviewCompletedEventRequest;
 use crate::events::OdyDesignReviewFailedEventParams;
 use crate::events::OdyDesignReviewFailedEventRequest;
 use crate::events::OdyDesignReviewStartedEventParams;
 use crate::events::OdyDesignReviewStartedEventRequest;
+use crate::events::OdyDynamicToolCallEventParams;
 use crate::events::OdyDynamicToolCallEventRequest;
 use crate::events::OdyFileChangeEventParams;
 use crate::events::OdyFileChangeEventRequest;
@@ -45,10 +49,6 @@ use crate::events::OdyTurnSteerEventParams;
 use crate::events::OdyTurnSteerEventRequest;
 use crate::events::OdyWebSearchEventParams;
 use crate::events::OdyWebSearchEventRequest;
-use crate::events::FinalApprovalOutcome;
-use crate::events::GuardianReviewEventParams;
-use crate::events::GuardianReviewEventPayload;
-use crate::events::GuardianReviewEventRequest;
 use crate::events::ReviewResolution;
 use crate::events::ReviewStatus;
 use crate::events::ReviewSubjectKind;
@@ -75,8 +75,6 @@ use crate::facts::AnalyticsFact;
 use crate::facts::AnalyticsJsonRpcError;
 use crate::facts::AppMentionedInput;
 use crate::facts::AppUsedInput;
-use crate::facts::OdyCompactionEvent;
-use crate::facts::OdyGoalEvent;
 use crate::facts::CustomAnalyticsFact;
 use crate::facts::DesignReviewCompletedInput;
 use crate::facts::DesignReviewFailedInput;
@@ -84,6 +82,8 @@ use crate::facts::DesignReviewStartedInput;
 use crate::facts::ExternalAgentConfigImportCompletedInput;
 use crate::facts::ExternalAgentConfigImportFailureInput;
 use crate::facts::HookRunInput;
+use crate::facts::OdyCompactionEvent;
+use crate::facts::OdyGoalEvent;
 use crate::facts::PluginInstallFailedInput;
 use crate::facts::PluginState;
 use crate::facts::PluginStateChangedInput;
@@ -106,7 +106,6 @@ use crate::serialize_enum_as_string;
 use crate::usize_to_u64;
 use ody_app_server_protocol::ClientRequest;
 use ody_app_server_protocol::ClientResponse;
-use ody_app_server_protocol::OdyErrorInfo;
 use ody_app_server_protocol::CollabAgentStatus;
 use ody_app_server_protocol::CollabAgentTool;
 use ody_app_server_protocol::CollabAgentToolCallStatus;
@@ -122,6 +121,7 @@ use ody_app_server_protocol::GuardianApprovalReviewStatus;
 use ody_app_server_protocol::InitializeParams;
 use ody_app_server_protocol::McpToolCallStatus;
 use ody_app_server_protocol::NetworkPolicyRuleAction;
+use ody_app_server_protocol::OdyErrorInfo;
 use ody_app_server_protocol::PatchApplyStatus;
 use ody_app_server_protocol::PatchChangeKind;
 use ody_app_server_protocol::RequestId;
@@ -133,9 +133,9 @@ use ody_app_server_protocol::ThreadItem;
 use ody_app_server_protocol::TurnSteerResponse;
 use ody_app_server_protocol::UserInput;
 use ody_app_server_protocol::WebSearchAction;
+use ody_client::default_client::originator;
 use ody_git_utils::collect_git_info;
 use ody_git_utils::get_git_repo_root;
-use ody_client::default_client::originator;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::config_types::Personality;
 use ody_protocol::config_types::ReasoningSummary;
@@ -1930,18 +1930,16 @@ fn tool_item_event(input: ToolItemEventInput<'_>) -> Option<TrackEventRequest> {
                     review_summary,
                 },
             );
-            Some(TrackEventRequest::McpToolCall(
-                OdyMcpToolCallEventRequest {
-                    event_type: "ody_mcp_tool_call_event",
-                    event_params: OdyMcpToolCallEventParams {
-                        base,
-                        mcp_server_name: server.clone(),
-                        mcp_tool_name: tool.clone(),
-                        mcp_error_present: error.is_some(),
-                        plugin_id: plugin_id.clone(),
-                    },
+            Some(TrackEventRequest::McpToolCall(OdyMcpToolCallEventRequest {
+                event_type: "ody_mcp_tool_call_event",
+                event_params: OdyMcpToolCallEventParams {
+                    base,
+                    mcp_server_name: server.clone(),
+                    mcp_tool_name: tool.clone(),
+                    mcp_error_present: error.is_some(),
+                    plugin_id: plugin_id.clone(),
                 },
-            ))
+            }))
         }
         ThreadItem::DynamicToolCall {
             id,

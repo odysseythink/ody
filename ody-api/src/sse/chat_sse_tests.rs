@@ -106,7 +106,10 @@ async fn cached_input_tokens_for(usage_chunk: &str) -> i64 {
 
     match events.last() {
         Some(ResponseEvent::Completed { token_usage, .. }) => {
-            token_usage.as_ref().expect("usage present").cached_input_tokens
+            token_usage
+                .as_ref()
+                .expect("usage present")
+                .cached_input_tokens
         }
         other => panic!("expected Completed, got {other:?}"),
     }
@@ -195,7 +198,9 @@ async fn emits_output_item_added_before_deltas() {
         .expect("expected first text delta");
     let reasoning_delta_index = events
         .iter()
-        .position(|e| matches!(e, ResponseEvent::ReasoningContentDelta { delta, .. } if delta == "think"))
+        .position(
+            |e| matches!(e, ResponseEvent::ReasoningContentDelta { delta, .. } if delta == "think"),
+        )
         .expect("expected reasoning delta");
 
     assert!(
@@ -252,7 +257,8 @@ async fn aggregates_tool_call_across_chunks() {
 #[tokio::test]
 async fn surfaces_error_object() {
     let (tx, mut rx) = mpsc::channel::<Result<ResponseEvent, ApiError>>(8);
-    let body = "data: {\"error\":{\"message\":\"bad request\",\"code\":\"invalid\"}}\n\n".to_string();
+    let body =
+        "data: {\"error\":{\"message\":\"bad request\",\"code\":\"invalid\"}}\n\n".to_string();
     let stream = ReaderStream::new(std::io::Cursor::new(body))
         .map(|chunk| chunk.map_err(|err| TransportError::Network(err.to_string())));
     tokio::spawn(process_chat_sse(

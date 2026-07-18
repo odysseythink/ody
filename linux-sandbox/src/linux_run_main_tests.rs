@@ -307,9 +307,7 @@ fn synthetic_mount_registry_root_is_unique_to_effective_user() {
     let effective_uid = unsafe { libc::geteuid() };
     assert_eq!(
         synthetic_mount_registry_root(),
-        std::env::temp_dir().join(format!(
-            "ody-bwrap-synthetic-mount-targets-{effective_uid}"
-        ))
+        std::env::temp_dir().join(format!("ody-bwrap-synthetic-mount-targets-{effective_uid}"))
     );
 }
 

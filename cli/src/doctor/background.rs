@@ -147,7 +147,10 @@ async fn socket_status(socket_path: &Path) -> SocketStatus {
     }
 
     // ody_app_server_daemon was removed with login deletion; stub as unreachable.
-    SocketStatus::StaleOrUnreachable(format!("cannot probe app server version: {}", socket_path.display()))
+    SocketStatus::StaleOrUnreachable(format!(
+        "cannot probe app server version: {}",
+        socket_path.display()
+    ))
 }
 
 fn concise_probe_error(err: &anyhow::Error, socket_path: &Path) -> String {
@@ -191,8 +194,8 @@ mod tests {
     }
 
     fn create_socket_placeholder(config: &Config) {
-        let socket_path = ody_app_server::app_server_control_socket_path(&config.ody_home)
-            .expect("socket path");
+        let socket_path =
+            ody_app_server::app_server_control_socket_path(&config.ody_home).expect("socket path");
         std::fs::create_dir_all(socket_path.parent().expect("socket parent"))
             .expect("create socket dir");
         std::fs::write(socket_path, "").expect("create socket placeholder");

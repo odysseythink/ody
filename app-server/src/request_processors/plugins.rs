@@ -198,7 +198,6 @@ fn is_valid_remote_plugin_id(plugin_id: &str) -> bool {
             .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '~')
 }
 
-
 impl PluginRequestProcessor {
     pub(crate) fn new(
         thread_manager: Arc<ThreadManager>,
@@ -360,10 +359,7 @@ impl PluginRequestProcessor {
             .map_err(|err| internal_error(format!("failed to reload config: {err}")))
     }
 
-    async fn workspace_ody_plugins_enabled(
-        &self,
-        config: &Config,
-    ) -> bool {
+    async fn workspace_ody_plugins_enabled(&self, config: &Config) -> bool {
         match workspace_settings::ody_plugins_enabled_for_workspace(
             config,
             Some(&self.workspace_settings_cache),
@@ -404,10 +400,7 @@ impl PluginRequestProcessor {
         if !config.features.enabled(Feature::Plugins) {
             return Ok(empty_response());
         }
-        if !self
-            .workspace_ody_plugins_enabled(&config)
-            .await
-        {
+        if !self.workspace_ody_plugins_enabled(&config).await {
             return Ok(empty_response());
         }
         plugins_manager.set_auth_mode(None);
@@ -530,10 +523,7 @@ impl PluginRequestProcessor {
         if !config.features.enabled(Feature::Plugins) {
             return Ok(empty_response());
         }
-        if !self
-            .workspace_ody_plugins_enabled(&config)
-            .await
-        {
+        if !self.workspace_ody_plugins_enabled(&config).await {
             return Ok(empty_response());
         }
         plugins_manager.set_auth_mode(None);
@@ -553,8 +543,7 @@ impl PluginRequestProcessor {
         // Remote-installed plugin marketplaces (synced from the removed hosted plugin catalog)
         // no longer exist, so there is nothing to merge in or de-conflict against here.
         filter_odysseythink_curated_installed_conflicts(
-            &mut data,
-            /*prefer_remote_curated_conflicts*/ false,
+            &mut data, /*prefer_remote_curated_conflicts*/ false,
         );
 
         Ok(PluginInstalledResponse {
@@ -765,9 +754,7 @@ impl PluginRequestProcessor {
     ) -> Result<PluginSkillReadResponse, JSONRPCErrorError> {
         // This only ever read a skill belonging to a plugin from the remote hosted plugin
         // catalog, which has been removed.
-        Err(invalid_request(
-            "plugin/skill/read is no longer supported",
-        ))
+        Err(invalid_request("plugin/skill/read is no longer supported"))
     }
 
     async fn plugin_share_save_response(
@@ -813,7 +800,6 @@ impl PluginRequestProcessor {
         ))
     }
 
-
     async fn plugin_install_response(
         &self,
         params: PluginInstallParams,
@@ -839,10 +825,7 @@ impl PluginRequestProcessor {
         let config_cwd = marketplace_path.as_path().parent().map(Path::to_path_buf);
         let config = self.load_latest_config(config_cwd.clone()).await?;
 
-        if !self
-            .workspace_ody_plugins_enabled(&config)
-            .await
-        {
+        if !self.workspace_ody_plugins_enabled(&config).await {
             return Err(invalid_request(
                 "Ody plugins are disabled for this workspace",
             ));
@@ -879,19 +862,15 @@ impl PluginRequestProcessor {
 
         self.on_effective_plugins_changed();
 
-        let plugin_mcp_servers = load_plugin_mcp_servers(
-            result.installed_path.as_path(),
-            None,
-        )
-        .await;
+        let plugin_mcp_servers =
+            load_plugin_mcp_servers(result.installed_path.as_path(), None).await;
         if !plugin_mcp_servers.is_empty() {
             self.start_plugin_mcp_oauth_logins(&config, plugin_mcp_servers)
                 .await;
         }
 
         let plugin_app_declarations = load_plugin_apps(result.installed_path.as_path()).await;
-        let plugin_apps =
-            ody_plugin::app_connector_ids_from_declarations(&plugin_app_declarations);
+        let plugin_apps = ody_plugin::app_connector_ids_from_declarations(&plugin_app_declarations);
         let apps_needing_auth = self
             .plugin_apps_needing_auth_for_install(
                 &config,
@@ -919,7 +898,6 @@ impl PluginRequestProcessor {
             "plugin/install by remoteMarketplaceName is no longer supported",
         ))
     }
-
 
     async fn plugin_apps_needing_auth_for_install(
         &self,
@@ -1251,4 +1229,3 @@ fn plugin_apps_needing_auth(
         })
         .collect()
 }
-

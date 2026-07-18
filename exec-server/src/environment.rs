@@ -31,13 +31,11 @@ use ody_shell_command::shell_detect::DetectedShell;
 use tokio_util::task::AbortOnDropHandle;
 
 pub const ODY_EXEC_SERVER_URL_ENV_VAR: &str = "ODY_EXEC_SERVER_URL";
-pub const ODY_EXEC_SERVER_NOISE_REGISTRY_URL_ENV_VAR: &str =
-    "ODY_EXEC_SERVER_NOISE_REGISTRY_URL";
+pub const ODY_EXEC_SERVER_NOISE_REGISTRY_URL_ENV_VAR: &str = "ODY_EXEC_SERVER_NOISE_REGISTRY_URL";
 pub const ODY_EXEC_SERVER_NOISE_ENVIRONMENT_ID_ENV_VAR: &str =
     "ODY_EXEC_SERVER_NOISE_ENVIRONMENT_ID";
 pub const ODY_EXEC_SERVER_NOISE_AUTH_TOKEN_ENV_VAR: &str = "ODY_EXEC_SERVER_NOISE_AUTH_TOKEN";
-pub const ODY_EXEC_SERVER_NOISE_ACCOUNT_ID_ENV_VAR: &str =
-    "ODY_EXEC_SERVER_NOISE_ACCOUNT_ID";
+pub const ODY_EXEC_SERVER_NOISE_ACCOUNT_ID_ENV_VAR: &str = "ODY_EXEC_SERVER_NOISE_ACCOUNT_ID";
 
 /// Owns the execution/filesystem environments available to the Ody runtime.
 ///
@@ -644,9 +642,8 @@ mod tests {
     use tokio::time::timeout;
 
     fn test_runtime_paths() -> ExecServerRuntimePaths {
-        ExecServerRuntimePaths::new(
-            std::env::current_exe().expect("current exe"), None)
-        .expect("runtime paths")
+        ExecServerRuntimePaths::new(std::env::current_exe().expect("current exe"), None)
+            .expect("runtime paths")
     }
 
     fn assert_local_environment_unavailable(manager: &EnvironmentManager) {

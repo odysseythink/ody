@@ -1,6 +1,6 @@
 use super::*;
-use ody_core::config::permission_profile_catalog;
 use futures::StreamExt;
+use ody_core::config::permission_profile_catalog;
 
 #[derive(Clone)]
 pub(crate) struct CatalogRequestProcessor {
@@ -220,10 +220,7 @@ impl CatalogRequestProcessor {
             .map_err(|err| internal_error(format!("failed to reload config: {err}")))
     }
 
-    async fn workspace_ody_plugins_enabled(
-        &self,
-        config: &Config,
-    ) -> bool {
+    async fn workspace_ody_plugins_enabled(&self, config: &Config) -> bool {
         match workspace_settings::ody_plugins_enabled_for_workspace(
             config,
             Some(&self.workspace_settings_cache),
@@ -327,9 +324,7 @@ impl CatalogRequestProcessor {
             }
             None => self.load_latest_config(/*fallback_cwd*/ None).await?,
         };
-        let workspace_ody_plugins_enabled = self
-            .workspace_ody_plugins_enabled(&config)
-            .await;
+        let workspace_ody_plugins_enabled = self.workspace_ody_plugins_enabled(&config).await;
 
         let data = FEATURES
             .iter()
@@ -481,9 +476,7 @@ impl CatalogRequestProcessor {
         };
 
         let config = self.load_latest_config(/*fallback_cwd*/ None).await?;
-        let workspace_ody_plugins_enabled = self
-            .workspace_ody_plugins_enabled(&config)
-            .await;
+        let workspace_ody_plugins_enabled = self.workspace_ody_plugins_enabled(&config).await;
         let skills_service = self.thread_manager.skills_service();
         let plugins_manager = self.thread_manager.plugins_manager();
         let fs = self
@@ -613,9 +606,7 @@ impl CatalogRequestProcessor {
                     continue;
                 }
             };
-            let workspace_ody_plugins_enabled = self
-                .workspace_ody_plugins_enabled(&config)
-                .await;
+            let workspace_ody_plugins_enabled = self.workspace_ody_plugins_enabled(&config).await;
             let plugins_enabled =
                 config.features.enabled(Feature::Plugins) && workspace_ody_plugins_enabled;
             let plugin_hooks = if plugins_enabled {

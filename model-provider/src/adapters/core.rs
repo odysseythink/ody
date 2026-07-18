@@ -85,10 +85,7 @@ pub fn to_response_event(event: ChatEvent) -> Vec<ResponseEvent> {
                 finish_reason: None,
             }]
         }
-        ChatEvent::Finish {
-            reason,
-            raw_reason,
-        } => {
+        ChatEvent::Finish { reason, raw_reason } => {
             let end_turn = matches!(reason, FinishReason::Stop | FinishReason::MaxTokens);
             vec![ResponseEvent::Completed {
                 response_id: String::new(),
@@ -610,5 +607,4 @@ mod tests {
         let request = prompt_to_chat_request("m", &prompt, None);
         assert!(request.tools.is_empty());
     }
-
 }

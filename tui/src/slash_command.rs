@@ -59,6 +59,7 @@ pub enum SlashCommand {
     Mcp,
     Apps,
     Plugins,
+    Login,
     Logout,
     Quit,
     Exit,
@@ -142,6 +143,7 @@ impl SlashCommand {
             SlashCommand::Apps => "manage apps",
             SlashCommand::Plugins => "browse plugins",
             SlashCommand::Logout => "log out of Ody",
+            SlashCommand::Login => "log in to an API-key provider",
             SlashCommand::Rollout => "print the rollout file path",
             SlashCommand::TestApproval => "test approval request",
         }
@@ -172,6 +174,8 @@ impl SlashCommand {
                 | SlashCommand::Btw
                 | SlashCommand::Resume
                 | SlashCommand::SandboxReadRoot
+                | SlashCommand::Login
+                | SlashCommand::Logout
         )
     }
 
@@ -210,6 +214,7 @@ impl SlashCommand {
             | SlashCommand::WritingPlan
             | SlashCommand::Clear
             | SlashCommand::Logout
+            | SlashCommand::Login
             | SlashCommand::MemoryDrop
             | SlashCommand::MemoryUpdate => false,
             SlashCommand::Diff
@@ -303,7 +308,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn design_command_parses_and_describes() {
         assert_eq!(SlashCommand::Design.command(), "design");
         assert_eq!(SlashCommand::from_str("design"), Ok(SlashCommand::Design));
@@ -328,5 +332,16 @@ mod tests {
             SlashCommand::from_str("approve"),
             Ok(SlashCommand::AutoReview)
         );
+    }
+    #[test]
+    fn login_command_parses_and_describes() {
+        assert_eq!(SlashCommand::Login.command(), "login");
+        assert_eq!(SlashCommand::from_str("login"), Ok(SlashCommand::Login));
+        assert_eq!(
+            SlashCommand::Login.description(),
+            "log in to an API-key provider"
+        );
+        assert!(!SlashCommand::Login.available_during_task());
+        assert!(SlashCommand::Login.supports_inline_args());
     }
 }

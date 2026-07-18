@@ -17,6 +17,9 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
+use crate::elicitation::ElicitationRequestManager;
+use crate::mcp::ODY_APPS_MCP_SERVER_NAME;
+use crate::mcp::ToolPluginProvenance;
 use crate::ody_apps::CachedOdyAppsToolsLoad;
 use crate::ody_apps::OdyAppsToolsCacheContext;
 use crate::ody_apps::load_cached_ody_apps_tools;
@@ -26,9 +29,6 @@ use crate::ody_apps::normalize_ody_apps_callable_name;
 use crate::ody_apps::normalize_ody_apps_callable_namespace;
 use crate::ody_apps::normalize_ody_apps_tool_title;
 use crate::ody_apps::write_cached_ody_apps_tools_if_needed;
-use crate::elicitation::ElicitationRequestManager;
-use crate::mcp::ODY_APPS_MCP_SERVER_NAME;
-use crate::mcp::ToolPluginProvenance;
 use crate::runtime::McpRuntimeContext;
 use crate::runtime::emit_duration;
 use crate::server::EffectiveMcpServer;
@@ -40,6 +40,9 @@ use crate::tools::tool_with_model_visible_input_schema;
 use anyhow::Result;
 use anyhow::anyhow;
 use async_channel::Sender;
+use futures::future::BoxFuture;
+use futures::future::FutureExt;
+use futures::future::Shared;
 use ody_api::SharedAuthProvider;
 use ody_async_utils::CancelErr;
 use ody_async_utils::OrCancelExt;
@@ -55,9 +58,6 @@ use ody_rmcp_client::ExecutorStdioServerLauncher;
 use ody_rmcp_client::LocalStdioServerLauncher;
 use ody_rmcp_client::RmcpClient;
 use ody_rmcp_client::StdioServerLauncher;
-use futures::future::BoxFuture;
-use futures::future::FutureExt;
-use futures::future::Shared;
 use rmcp::model::ClientCapabilities;
 use rmcp::model::ElicitationCapability;
 use rmcp::model::Implementation;
@@ -103,8 +103,7 @@ impl ManagedClient {
     fn listed_tools(&self) -> Vec<ToolInfo> {
         let total_start = Instant::now();
         if let Some(cache_context) = self.ody_apps_tools_cache_context.as_ref()
-            && let CachedOdyAppsToolsLoad::Hit(tools) =
-                load_cached_ody_apps_tools(cache_context)
+            && let CachedOdyAppsToolsLoad::Hit(tools) = load_cached_ody_apps_tools(cache_context)
         {
             emit_duration(
                 MCP_TOOLS_LIST_DURATION_METRIC,
@@ -486,10 +485,8 @@ async fn start_server_task(
         client_elicitation_capability,
         supports_form_elicitation,
     } = params;
-    let params = mcp_initialize_request_params(
-        client_elicitation_capability,
-        supports_form_elicitation,
-    );
+    let params =
+        mcp_initialize_request_params(client_elicitation_capability, supports_form_elicitation);
 
     let send_elicitation = elicitation_requests.make_sender(server_name.clone(), tx_event);
 

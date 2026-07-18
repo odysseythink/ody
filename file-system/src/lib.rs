@@ -1,4 +1,5 @@
 use bytes::Bytes;
+use futures::Stream;
 use ody_protocol::config_types::WindowsSandboxLevel;
 use ody_protocol::models::ManagedFileSystemPermissions;
 use ody_protocol::models::PermissionProfile;
@@ -11,7 +12,6 @@ use ody_protocol::permissions::NetworkSandboxPolicy;
 use ody_protocol::protocol::SandboxPolicy;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path_uri::PathUri;
-use futures::Stream;
 use std::future::Future;
 use std::io;
 use std::path::Path;

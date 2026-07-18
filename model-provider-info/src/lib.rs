@@ -5,23 +5,26 @@
 //!   2. User-defined entries inside `~/.ody-code/config.toml` under the `model_providers`
 //!      key. These override or extend the defaults at runtime.
 
+use http::HeaderMap;
+use http::header::HeaderName;
+use http::header::HeaderValue;
 use ody_api::Provider as ApiProvider;
 use ody_api::RetryConfig as ApiRetryConfig;
 use ody_api::is_azure_responses_provider;
 use ody_app_server_protocol::AuthMode;
 use ody_protocol::config_types::ModelProviderAuthInfo;
-use ody_protocol::error::OdyErr;
 use ody_protocol::error::EnvVarError;
+use ody_protocol::error::OdyErr;
 use ody_protocol::error::Result as OdyResult;
-use http::HeaderMap;
-use http::header::HeaderName;
-use http::header::HeaderValue;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt;
 use std::time::Duration;
+use strum_macros::AsRefStr;
+use strum_macros::EnumString;
+use strum_macros::IntoStaticStr;
 
 const DEFAULT_STREAM_IDLE_TIMEOUT_MS: u64 = 300_000;
 const DEFAULT_STREAM_MAX_RETRIES: u64 = 5;
@@ -31,7 +34,6 @@ pub const DEFAULT_WEBSOCKET_CONNECT_TIMEOUT_MS: u64 = 15_000;
 const MAX_STREAM_MAX_RETRIES: u64 = 100;
 /// Hard cap for user-configured `request_max_retries`.
 const MAX_REQUEST_MAX_RETRIES: u64 = 100;
-
 
 // OpenAI-compatible third-party Chat Completions providers.
 const KIMI_PROVIDER_NAME: &str = "Kimi";
@@ -48,6 +50,67 @@ const GLM_PROVIDER_NAME: &str = "GLM";
 pub const GLM_PROVIDER_ID: &str = "glm";
 pub const GLM_DEFAULT_BASE_URL: &str = "https://open.bigmodel.cn/api/paas/v4";
 const GLM_ENV_KEY: &str = "GLM_API_KEY";
+
+/// Built-in API-key providers that can be configured interactively via the
+/// TUI `/login` command.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    AsRefStr,
+    EnumString,
+    IntoStaticStr,
+)]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
+#[strum(ascii_case_insensitive)]
+pub enum LoginProvider {
+    Kimi,
+    Deepseek,
+    Glm,
+}
+
+impl LoginProvider {
+    /// Provider alias used in config keys (e.g. `providers.kimi`).
+    pub fn id(self) -> &'static str {
+        let id: &'static str = self.into();
+        id
+    }
+
+    /// Human-facing provider name.
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::Kimi => KIMI_PROVIDER_NAME,
+            Self::Deepseek => DEEPSEEK_PROVIDER_NAME,
+            Self::Glm => GLM_PROVIDER_NAME,
+        }
+    }
+
+    /// Default base URL for this provider.
+    pub fn default_base_url(self) -> &'static str {
+        match self {
+            Self::Kimi => KIMI_DEFAULT_BASE_URL,
+            Self::Deepseek => DEEPSEEK_DEFAULT_BASE_URL,
+            Self::Glm => GLM_DEFAULT_BASE_URL,
+        }
+    }
+
+    /// Suggested default model to pre-select when the `/models` fetch returns
+    /// no models or the user skips the picker.
+    pub fn fallback_model(self) -> &'static str {
+        match self {
+            Self::Kimi => "kimi-k2",
+            Self::Deepseek => "deepseek-chat",
+            Self::Glm => "glm-4-flash",
+        }
+    }
+}
 
 /// Wire protocol that the provider speaks.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, JsonSchema)]
@@ -91,7 +154,13 @@ impl<'de> Deserialize<'de> for WireApi {
             "google_genai" => Ok(Self::GoogleGenAI),
             _ => Err(serde::de::Error::unknown_variant(
                 &value,
-                &["responses", "chat", "anthropic_messages", "google_genai", "local"],
+                &[
+                    "responses",
+                    "chat",
+                    "anthropic_messages",
+                    "google_genai",
+                    "local",
+                ],
             )),
         }
     }
@@ -409,7 +478,7 @@ impl ModelProviderInfo {
 /// Built-in default provider list.
 pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
     // We do not want to be in the business of adjucating which third-party
-    // providers are bundled with Ody CLI, so we only include the OpenAI. 
+    // providers are bundled with Ody CLI, so we only include the OpenAI.
     // Users are encouraged to add to
     // `model_providers` in config.toml to add their own providers.
     [

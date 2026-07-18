@@ -449,11 +449,7 @@ async fn skills_changed_notification_is_emitted_after_skill_change() -> Result<(
     )
     .await??;
 
-    let skill_path = ody_home
-        .path()
-        .join("skills")
-        .join("demo")
-        .join("SKILL.md");
+    let skill_path = ody_home.path().join("skills").join("demo").join("SKILL.md");
     std::fs::write(
         &skill_path,
         "---\nname: demo\ndescription: updated\n---\n\n# Updated\n",

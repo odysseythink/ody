@@ -9,14 +9,14 @@ use crate::common::ResponseEvent;
 use crate::common::ResponseStream;
 use crate::error::ApiError;
 use crate::telemetry::SseTelemetry;
+use eventsource_stream::Eventsource;
+use futures::StreamExt;
 use ody_client::ByteStream;
 use ody_client::StreamResponse;
 use ody_protocol::models::ContentItem;
 use ody_protocol::models::ReasoningItemContent;
 use ody_protocol::models::ResponseItem;
 use ody_protocol::protocol::TokenUsage;
-use eventsource_stream::Eventsource;
-use futures::StreamExt;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -44,7 +44,14 @@ pub fn spawn_chat_stream(
 
     let (tx_event, rx_event) = mpsc::channel::<Result<ResponseEvent, ApiError>>(1600);
     tokio::spawn(async move {
-        process_chat_sse(stream_response.bytes, tx_event, idle_timeout, telemetry, vendor).await;
+        process_chat_sse(
+            stream_response.bytes,
+            tx_event,
+            idle_timeout,
+            telemetry,
+            vendor,
+        )
+        .await;
     });
 
     ResponseStream {
@@ -223,7 +230,10 @@ async fn process_chat_sse(
         let value: Value = match serde_json::from_str(&sse.data) {
             Ok(value) => value,
             Err(parse_err) => {
-                debug!("failed to parse chat SSE data: {parse_err}, data: {}", &sse.data);
+                debug!(
+                    "failed to parse chat SSE data: {parse_err}, data: {}",
+                    &sse.data
+                );
                 continue;
             }
         };
@@ -240,7 +250,10 @@ async fn process_chat_sse(
         let chunk: ChatChunk = match serde_json::from_value(value) {
             Ok(chunk) => chunk,
             Err(parse_err) => {
-                debug!("failed to parse chat SSE chunk: {parse_err}, data: {}", &sse.data);
+                debug!(
+                    "failed to parse chat SSE chunk: {parse_err}, data: {}",
+                    &sse.data
+                );
                 continue;
             }
         };
@@ -298,13 +311,15 @@ async fn process_chat_sse(
                 if !reasoning_item_started {
                     reasoning_item_started = true;
                     if tx_event
-                        .send(Ok(ResponseEvent::OutputItemAdded(ResponseItem::Reasoning {
-                            id: None,
-                            summary: vec![],
-                            content: None,
-                            encrypted_content: None,
-                            internal_chat_message_metadata_passthrough: None,
-                        })))
+                        .send(Ok(ResponseEvent::OutputItemAdded(
+                            ResponseItem::Reasoning {
+                                id: None,
+                                summary: vec![],
+                                content: None,
+                                encrypted_content: None,
+                                internal_chat_message_metadata_passthrough: None,
+                            },
+                        )))
                         .await
                         .is_err()
                     {
@@ -406,9 +421,7 @@ async fn process_chat_sse(
 
     let has_tool_calls = !tool_calls.is_empty();
     for (index, call) in tool_calls {
-        let call_id = call
-            .id
-            .unwrap_or_else(|| format!("call_{index}"));
+        let call_id = call.id.unwrap_or_else(|| format!("call_{index}"));
         let item = ResponseItem::FunctionCall {
             id: None,
             name: call.name,
@@ -460,7 +473,9 @@ async fn process_chat_sse(
 }
 
 fn chat_error(error: ChatError) -> ApiError {
-    let message = error.message.unwrap_or_else(|| "chat completion error".into());
+    let message = error
+        .message
+        .unwrap_or_else(|| "chat completion error".into());
     match error.code.as_deref() {
         Some("context_length_exceeded") => ApiError::ContextWindowExceeded,
         Some("insufficient_quota") => ApiError::QuotaExceeded,

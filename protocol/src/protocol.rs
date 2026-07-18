@@ -33,6 +33,7 @@ use crate::items::TurnItem;
 use crate::mcp::CallToolResult;
 use crate::mcp::RequestId;
 use crate::memory_citation::MemoryCitation;
+use crate::model_metadata::ReasoningEffort as ReasoningEffortConfig;
 use crate::models::ActivePermissionProfile;
 use crate::models::AgentMessageInputContent;
 use crate::models::BaseInstructions;
@@ -46,7 +47,6 @@ use crate::models::ResponseItem;
 use crate::models::SandboxEnforcement;
 use crate::models::WebSearchAction;
 use crate::num_format::format_with_separators;
-use crate::model_metadata::ReasoningEffort as ReasoningEffortConfig;
 use crate::parse_command::ParsedCommand;
 use crate::plan_tool::UpdatePlanArgs;
 use crate::request_permissions::RequestPermissionsEvent;
@@ -2169,7 +2169,6 @@ pub struct TokenCountEvent {
     pub info: Option<TokenUsageInfo>,
 }
 
-
 // Includes prompts, tools and space to call compact.
 const BASELINE_TOKENS: i64 = 12000;
 
@@ -3178,9 +3177,7 @@ impl TruncationPolicy {
     pub fn byte_budget(&self) -> usize {
         match self {
             TruncationPolicy::Bytes(bytes) => *bytes,
-            TruncationPolicy::Tokens(tokens) => {
-                ody_utils_string::approx_bytes_for_tokens(*tokens)
-            }
+            TruncationPolicy::Tokens(tokens) => ody_utils_string::approx_bytes_for_tokens(*tokens),
         }
     }
 }
@@ -4137,7 +4134,6 @@ pub enum PlanModeLogKind {
     SubAgentDelegation,
 }
 
-
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema, TS)]
 pub struct CollabWaitingBeginEvent {
     #[serde(default)]
@@ -4447,10 +4443,7 @@ mod tests {
 
     #[test]
     fn session_source_restriction_product_defaults_non_subagent_sources_to_ody() {
-        assert_eq!(
-            SessionSource::Cli.restriction_product(),
-            Some(Product::Ody)
-        );
+        assert_eq!(SessionSource::Cli.restriction_product(), Some(Product::Ody));
         assert_eq!(
             SessionSource::VSCode.restriction_product(),
             Some(Product::Ody)
@@ -4459,10 +4452,7 @@ mod tests {
             SessionSource::Exec.restriction_product(),
             Some(Product::Ody)
         );
-        assert_eq!(
-            SessionSource::Mcp.restriction_product(),
-            Some(Product::Ody)
-        );
+        assert_eq!(SessionSource::Mcp.restriction_product(), Some(Product::Ody));
         assert_eq!(
             SessionSource::Unknown.restriction_product(),
             Some(Product::Ody)
@@ -4863,10 +4853,7 @@ mod tests {
             vec![
                 (
                     canonical_cwd,
-                    vec![
-                        expected_dot_ody.to_path_buf(),
-                        expected_docs.to_path_buf()
-                    ],
+                    vec![expected_dot_ody.to_path_buf(), expected_docs.to_path_buf()],
                 ),
                 (expected_docs_public.to_path_buf(), Vec::new()),
             ]
@@ -5765,9 +5752,7 @@ mod tests {
         });
 
         let info = TokenUsageInfo::new_or_append(
-            &initial,
-            &last,
-            /*model_context_window*/ None,
+            &initial, &last, /*model_context_window*/ None,
             /*auto_compact_token_limit*/ None,
         )
         .expect("new_or_append should return info");

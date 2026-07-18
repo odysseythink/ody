@@ -475,9 +475,7 @@ fn protocol_status_from_state(status: ody_state::ThreadGoalStatus) -> ThreadGoal
     }
 }
 
-pub(crate) fn state_status_from_protocol(
-    status: ThreadGoalStatus,
-) -> ody_state::ThreadGoalStatus {
+pub(crate) fn state_status_from_protocol(status: ThreadGoalStatus) -> ody_state::ThreadGoalStatus {
     match status {
         ThreadGoalStatus::Active => ody_state::ThreadGoalStatus::Active,
         ThreadGoalStatus::Paused => ody_state::ThreadGoalStatus::Paused,

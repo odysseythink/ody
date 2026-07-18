@@ -16,11 +16,11 @@ use ody_models_manager::model_info::model_catalog_for_provider;
 use ody_protocol::error::OdyErr;
 use ody_protocol::model_metadata::ModelsResponse;
 
-use crate::auth::resolve_provider_auth;
-use crate::models_endpoint::OpenAiModelsEndpoint;
 use crate::adapters::chat::ChatAdapter;
 use crate::adapters::responses::ResponsesAdapter;
+use crate::auth::resolve_provider_auth;
 use crate::chat_provider::ChatProvider;
+use crate::models_endpoint::OpenAiModelsEndpoint;
 
 /// Optional app-visible features that Ody may expose at runtime.
 ///
@@ -127,10 +127,7 @@ pub trait ModelProvider: fmt::Debug + Send + Sync {
 
     /// Returns provider configuration adapted for the API client.
     fn api_provider(&self) -> ModelProviderFuture<'_, ody_protocol::error::Result<Provider>> {
-        Box::pin(async move {
-            self.info()
-                .to_api_provider(None)
-        })
+        Box::pin(async move { self.info().to_api_provider(None) })
     }
 
     /// Returns the provider base URL that will be used at request time.
@@ -141,12 +138,8 @@ pub trait ModelProvider: fmt::Debug + Send + Sync {
     }
 
     /// Returns the auth provider used to attach request credentials.
-    fn api_auth(
-        &self,
-    ) -> ModelProviderFuture<'_, ody_protocol::error::Result<SharedAuthProvider>> {
-        Box::pin(async move {
-            resolve_provider_auth(self.info())
-        })
+    fn api_auth(&self) -> ModelProviderFuture<'_, ody_protocol::error::Result<SharedAuthProvider>> {
+        Box::pin(async move { resolve_provider_auth(self.info()) })
     }
 
     /// Returns a provider-neutral chat adapter for this provider.
@@ -169,9 +162,7 @@ pub type SharedModelProvider = Arc<dyn ModelProvider>;
 
 /// Creates the default runtime model provider for configured provider metadata,
 /// deriving the provider id from the wire API identity.
-pub fn create_model_provider(
-    provider_info: ModelProviderInfo,
-) -> SharedModelProvider {
+pub fn create_model_provider(provider_info: ModelProviderInfo) -> SharedModelProvider {
     create_model_provider_with_id(provider_id_for_wire_api(&provider_info), provider_info)
 }
 
@@ -195,10 +186,7 @@ struct ConfiguredModelProvider {
 }
 
 impl ConfiguredModelProvider {
-    fn new(
-        provider_id: String,
-        provider_info: ModelProviderInfo,
-    ) -> Self {
+    fn new(provider_id: String, provider_info: ModelProviderInfo) -> Self {
         Self {
             provider_id,
             info: provider_info,
@@ -217,29 +205,28 @@ impl ModelProvider for ConfiguredModelProvider {
         Box::pin(async move {
             let api_provider = self.api_provider().await?;
             let auth = self.api_auth().await?;
-            let transport = ody_api::ReqwestTransport::new(
-                ody_client::default_client::build_reqwest_client(),
-            );
+            let transport =
+                ody_api::ReqwestTransport::new(ody_client::default_client::build_reqwest_client());
             let adapter: Box<dyn ChatProvider> = match self.info.wire_api {
-                ody_model_provider_info::WireApi::Responses => {
-                    Box::new(ResponsesAdapter::new(transport, api_provider, auth).with_provider_id(
-                        provider_id_for_wire_api(&self.info),
-                    ))
-                }
+                ody_model_provider_info::WireApi::Responses => Box::new(
+                    ResponsesAdapter::new(transport, api_provider, auth)
+                        .with_provider_id(provider_id_for_wire_api(&self.info)),
+                ),
                 ody_model_provider_info::WireApi::Chat => {
                     let vendor = ody_api::chat::ChatVendor::from_provider(
                         &self.info.name,
                         self.info.base_url.as_deref(),
                     );
-                    Box::new(ChatAdapter::new(transport, api_provider, auth, vendor).with_provider_id(
-                        provider_id_for_wire_api(&self.info),
-                    ))
+                    Box::new(
+                        ChatAdapter::new(transport, api_provider, auth, vendor)
+                            .with_provider_id(provider_id_for_wire_api(&self.info)),
+                    )
                 }
                 _ => {
                     return Err(OdyErr::InvalidRequest(format!(
                         "wire api {:?} is not yet supported by chat_provider",
                         self.info.wire_api
-                    )))
+                    )));
                 }
             };
             Ok(adapter)
@@ -271,13 +258,8 @@ impl ModelProvider for ConfiguredModelProvider {
             return Arc::new(StaticModelsManager::new(catalog));
         }
 
-        let endpoint = Arc::new(OpenAiModelsEndpoint::new(
-            self.info.clone(),
-        ));
-        Arc::new(OpenAiModelsManager::new(
-            ody_home,
-            endpoint,
-        ))
+        let endpoint = Arc::new(OpenAiModelsEndpoint::new(self.info.clone()));
+        Arc::new(OpenAiModelsManager::new(ody_home, endpoint))
     }
 }
 
@@ -328,9 +310,7 @@ mod tests {
 
     #[tokio::test]
     async fn configured_provider_runtime_base_url_uses_configured_base_url() {
-        let provider = create_model_provider(
-            provider_for("https://example.test/v1".to_string()),
-        );
+        let provider = create_model_provider(provider_for("https://example.test/v1".to_string()));
 
         assert_eq!(
             provider
@@ -341,22 +321,16 @@ mod tests {
         );
     }
 
-
     #[test]
     fn custom_non_odysseythink_provider_returns_no_account_state() {
-        let provider = create_model_provider(
-            ModelProviderInfo {
-                name: "Custom".to_string(),
-                base_url: Some("http://localhost:1234/v1".to_string()),
-                wire_api: WireApi::Responses,
-                    ..Default::default()
-            },
-        );
+        let provider = create_model_provider(ModelProviderInfo {
+            name: "Custom".to_string(),
+            base_url: Some("http://localhost:1234/v1".to_string()),
+            wire_api: WireApi::Responses,
+            ..Default::default()
+        });
 
-        assert_eq!(
-            provider.account_state().unwrap(),
-            ProviderAccountState
-        );
+        assert_eq!(provider.account_state().unwrap(), ProviderAccountState);
     }
 
     #[tokio::test]

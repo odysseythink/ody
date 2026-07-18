@@ -384,9 +384,7 @@ impl TraceReducer {
             .ody_turns
             .get(ody_turn_id)
             .map(|turn| turn.thread_id.clone())
-            .with_context(|| {
-                format!("tool call start referenced unknown Ody turn {ody_turn_id}")
-            })
+            .with_context(|| format!("tool call start referenced unknown Ody turn {ody_turn_id}"))
     }
 
     fn validate_tool_turn(&self, thread_id: &str, ody_turn_id: Option<&str>) -> Result<()> {

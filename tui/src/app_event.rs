@@ -25,6 +25,8 @@ use ody_app_server_protocol::PluginUninstallResponse;
 use ody_app_server_protocol::SkillsListResponse;
 use ody_app_server_protocol::ThreadGoalStatus;
 use ody_file_search::FileMatch;
+use ody_model_provider::login::LoginModelInfo;
+use ody_model_provider_info::LoginProvider;
 use ody_protocol::ThreadId;
 use ody_protocol::model_metadata::ModelPreset;
 use ody_utils_absolute_path::AbsolutePathBuf;
@@ -220,6 +222,61 @@ pub(crate) enum AppEvent {
 
     /// Request app-server logout, then exit after it succeeds.
     Logout,
+
+    /// Start the interactive login flow for an API-key provider.
+    LoginStart {
+        provider: Option<LoginProvider>,
+    },
+
+    /// Provider selected in the login flow; prompt for a custom alias.
+    LoginProviderSelected {
+        provider: LoginProvider,
+    },
+
+    /// Alias submitted in the login flow; prompt for an API key.
+    LoginAliasSubmitted {
+        provider: LoginProvider,
+        alias: String,
+    },
+
+    /// API key submitted in the login flow; prompt for an optional base URL.
+    LoginApiKeySubmitted {
+        provider: LoginProvider,
+        alias: String,
+        api_key: String,
+    },
+
+    /// Base URL submitted; fetch the provider's /models endpoint to verify.
+    LoginBaseUrlSubmitted {
+        provider: LoginProvider,
+        alias: String,
+        api_key: String,
+        base_url: String,
+    },
+
+    /// Result of the asynchronous /models fetch used to verify a login.
+    LoginModelsFetched {
+        provider: LoginProvider,
+        alias: String,
+        api_key: String,
+        base_url: String,
+        result: Result<Vec<LoginModelInfo>, String>,
+    },
+
+    /// Persist a configured provider, model alias, and default model to config.
+    PersistLoginProvider {
+        provider: LoginProvider,
+        alias: String,
+        api_key: String,
+        base_url: String,
+        model_id: String,
+    },
+
+    /// Remove all persisted providers of a given provider type and any
+    /// model aliases that belong to them.
+    LogoutProvider {
+        provider: LoginProvider,
+    },
 
     /// Request to exit the application due to a fatal error.
     #[allow(dead_code)]

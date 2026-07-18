@@ -297,7 +297,10 @@ fn sections_text(
         } else {
             "Inferred assumptions in the design:"
         };
-        sections.push(format!("{head}\n{}", assumption_lines(chinese, assumptions)));
+        sections.push(format!(
+            "{head}\n{}",
+            assumption_lines(chinese, assumptions)
+        ));
     }
     if !findings.is_empty() {
         let head = if chinese {
@@ -478,25 +481,55 @@ mod tests {
     #[test]
     fn basic_escalates_only_critical_and_high() {
         use DesignReviewSeverity::*;
-        assert_eq!(escalated_severities(DesignAuditLevel::Basic), &[Critical, High]);
-        assert!(should_escalate(High, DesignReviewConfidence::High, DesignAuditLevel::Basic));
-        assert!(!should_escalate(Medium, DesignReviewConfidence::High, DesignAuditLevel::Basic));
+        assert_eq!(
+            escalated_severities(DesignAuditLevel::Basic),
+            &[Critical, High]
+        );
+        assert!(should_escalate(
+            High,
+            DesignReviewConfidence::High,
+            DesignAuditLevel::Basic
+        ));
+        assert!(!should_escalate(
+            Medium,
+            DesignReviewConfidence::High,
+            DesignAuditLevel::Basic
+        ));
     }
 
     #[test]
     fn escalation_is_monotonic_with_level() {
         use DesignReviewSeverity::*;
-        assert_eq!(escalated_severities(DesignAuditLevel::Standard), &[Critical, High, Medium]);
+        assert_eq!(
+            escalated_severities(DesignAuditLevel::Standard),
+            &[Critical, High, Medium]
+        );
         assert_eq!(
             escalated_severities(DesignAuditLevel::Deep),
             &[Critical, High, Medium, Low]
         );
         // Medium escalates at Standard/Deep but not Basic.
-        assert!(!should_escalate(Medium, DesignReviewConfidence::High, DesignAuditLevel::Basic));
-        assert!(should_escalate(Medium, DesignReviewConfidence::High, DesignAuditLevel::Standard));
+        assert!(!should_escalate(
+            Medium,
+            DesignReviewConfidence::High,
+            DesignAuditLevel::Basic
+        ));
+        assert!(should_escalate(
+            Medium,
+            DesignReviewConfidence::High,
+            DesignAuditLevel::Standard
+        ));
         // Low escalates only at Deep.
-        assert!(!should_escalate(Low, DesignReviewConfidence::High, DesignAuditLevel::Standard));
-        assert!(should_escalate(Low, DesignReviewConfidence::High, DesignAuditLevel::Deep));
+        assert!(!should_escalate(
+            Low,
+            DesignReviewConfidence::High,
+            DesignAuditLevel::Standard
+        ));
+        assert!(should_escalate(
+            Low,
+            DesignReviewConfidence::High,
+            DesignAuditLevel::Deep
+        ));
     }
 
     #[test]

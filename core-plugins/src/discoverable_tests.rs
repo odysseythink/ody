@@ -23,21 +23,20 @@ use tracing::Level;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_test::internal::MockWriter;
 
-
 #[tokio::test]
 async fn returns_api_curated_fallback_plugins_for_direct_provider_auth() {
     let ody_home = tempdir().expect("tempdir should succeed");
     let curated_root = curated_plugins_repo_path(ody_home.path());
-    write_odysseythink_api_curated_marketplace(&curated_root, &["sample", "slack", "odysseythink-developers"]);
+    write_odysseythink_api_curated_marketplace(
+        &curated_root,
+        &["sample", "slack", "odysseythink-developers"],
+    );
 
     let plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
     let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
     plugins_manager.set_auth_mode(Some(AuthMode::ApiKey));
-    let discoverable_plugins = list_discoverable_plugins(
-        &plugins_manager,
-        discovery_input(plugins, &[], &[], &[]),
-    )
-    .await;
+    let discoverable_plugins =
+        list_discoverable_plugins(&plugins_manager, discovery_input(plugins, &[], &[], &[])).await;
 
     assert_eq!(
         discoverable_plugins
@@ -63,11 +62,8 @@ async fn returns_microsoft_fallback_plugins() {
 
     let plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
     let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
-    let discoverable_plugins = list_discoverable_plugins(
-        &plugins_manager,
-        discovery_input(plugins, &[], &[], &[]),
-    )
-    .await;
+    let discoverable_plugins =
+        list_discoverable_plugins(&plugins_manager, discovery_input(plugins, &[], &[], &[])).await;
 
     assert_eq!(
         discoverable_plugins
@@ -81,7 +77,6 @@ async fn returns_microsoft_fallback_plugins() {
         ]
     );
 }
-
 
 #[tokio::test]
 async fn reprojects_cached_skill_availability_for_current_config() {
@@ -102,11 +97,8 @@ async fn reprojects_cached_skill_availability_for_current_config() {
         mcp_server_names: vec!["sample-docs".to_string()],
         app_connector_ids: vec!["connector_calendar".to_string()],
     };
-    let initial = list_discoverable_plugins(
-        &plugins_manager,
-        discovery_input(plugins, &[], &[], &[]),
-    )
-    .await;
+    let initial =
+        list_discoverable_plugins(&plugins_manager, discovery_input(plugins, &[], &[], &[])).await;
     assert_eq!(initial, vec![expected.clone()]);
 
     write_file(
@@ -117,11 +109,8 @@ enabled = false
 "#,
     );
     let plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
-    let after_skill_disabled = list_discoverable_plugins(
-        &plugins_manager,
-        discovery_input(plugins, &[], &[], &[]),
-    )
-    .await;
+    let after_skill_disabled =
+        list_discoverable_plugins(&plugins_manager, discovery_input(plugins, &[], &[], &[])).await;
     assert_eq!(
         after_skill_disabled,
         vec![ToolSuggestDiscoverablePlugin {
@@ -143,11 +132,8 @@ async fn does_not_advertise_skills_when_skill_loading_fails() {
 
     let plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
     let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
-    let discoverable_plugins = list_discoverable_plugins(
-        &plugins_manager,
-        discovery_input(plugins, &[], &[], &[]),
-    )
-    .await;
+    let discoverable_plugins =
+        list_discoverable_plugins(&plugins_manager, discovery_input(plugins, &[], &[], &[])).await;
 
     assert_eq!(
         discoverable_plugins,
@@ -201,8 +187,7 @@ async fn clear_cache_invalidates_cached_tool_suggest_metadata() {
   "description": "After reload"
 }"#,
     );
-    let before_reload =
-        list_discoverable_plugins(&plugins_manager, input.clone()).await;
+    let before_reload = list_discoverable_plugins(&plugins_manager, input.clone()).await;
     assert_eq!(before_reload, expected_cached);
 
     plugins_manager.clear_cache();
@@ -253,11 +238,8 @@ source = "/tmp/{marketplace_name}"
 
     let plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
     let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
-    let discoverable_plugins = list_discoverable_plugins(
-        &plugins_manager,
-        discovery_input(plugins, &[], &[], &[]),
-    )
-    .await;
+    let discoverable_plugins =
+        list_discoverable_plugins(&plugins_manager, discovery_input(plugins, &[], &[], &[])).await;
 
     assert_eq!(discoverable_plugins.len(), 1);
     assert_eq!(discoverable_plugins[0].id, "slack@odysseythink-curated");
@@ -279,11 +261,8 @@ async fn normalizes_description() {
 
     let plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
     let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
-    let discoverable_plugins = list_discoverable_plugins(
-        &plugins_manager,
-        discovery_input(plugins, &[], &[], &[]),
-    )
-    .await;
+    let discoverable_plugins =
+        list_discoverable_plugins(&plugins_manager, discovery_input(plugins, &[], &[], &[])).await;
 
     assert_eq!(
         discoverable_plugins,
@@ -308,11 +287,8 @@ async fn omits_installed_curated_plugins() {
 
     let plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
     let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
-    let discoverable_plugins = list_discoverable_plugins(
-        &plugins_manager,
-        discovery_input(plugins, &[], &[], &[]),
-    )
-    .await;
+    let discoverable_plugins =
+        list_discoverable_plugins(&plugins_manager, discovery_input(plugins, &[], &[], &[])).await;
 
     assert_eq!(discoverable_plugins, Vec::new());
 }
@@ -361,11 +337,8 @@ async fn omits_not_available_curated_plugins() {
 
     let plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
     let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
-    let discoverable_plugins = list_discoverable_plugins(
-        &plugins_manager,
-        discovery_input(plugins, &[], &[], &[]),
-    )
-    .await;
+    let discoverable_plugins =
+        list_discoverable_plugins(&plugins_manager, discovery_input(plugins, &[], &[], &[])).await;
 
     assert_eq!(
         discoverable_plugins
@@ -380,7 +353,10 @@ async fn omits_not_available_curated_plugins() {
 async fn does_not_reload_marketplace_per_plugin() {
     let ody_home = tempdir().expect("tempdir should succeed");
     let curated_root = curated_plugins_repo_path(ody_home.path());
-    write_odysseythink_curated_marketplace(&curated_root, &["slack", "gmail", "odysseythink-developers"]);
+    write_odysseythink_curated_marketplace(
+        &curated_root,
+        &["slack", "gmail", "odysseythink-developers"],
+    );
     install_marketplace_plugin(ody_home.path(), curated_root.as_path(), "slack").await;
 
     let too_long_prompt = "x".repeat(129);
@@ -412,18 +388,18 @@ async fn does_not_reload_marketplace_per_plugin() {
         .finish();
     let _guard = tracing::subscriber::set_default(subscriber);
 
-    let discoverable_plugins = list_discoverable_plugins(
-        &plugins_manager,
-        discovery_input(plugins, &[], &[], &[]),
-    )
-    .await;
+    let discoverable_plugins =
+        list_discoverable_plugins(&plugins_manager, discovery_input(plugins, &[], &[], &[])).await;
 
     assert_eq!(
         discoverable_plugins
             .iter()
             .map(|plugin| plugin.id.as_str())
             .collect::<Vec<_>>(),
-        vec!["gmail@odysseythink-curated", "odysseythink-developers@odysseythink-curated"]
+        vec![
+            "gmail@odysseythink-curated",
+            "odysseythink-developers@odysseythink-curated"
+        ]
     );
 
     let logs = String::from_utf8(buffer.lock().expect("buffer lock").clone())
@@ -448,11 +424,8 @@ async fn does_not_expand_local_plugins_by_installed_apps() {
 
     let plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
     let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
-    let discoverable_plugins = list_discoverable_plugins(
-        &plugins_manager,
-        discovery_input(plugins, &[], &[], &[]),
-    )
-    .await;
+    let discoverable_plugins =
+        list_discoverable_plugins(&plugins_manager, discovery_input(plugins, &[], &[], &[])).await;
 
     assert_eq!(discoverable_plugins, Vec::new());
 }
@@ -558,11 +531,8 @@ source = "/tmp/{sales_marketplace_name}"
 
     let plugins = load_plugins_config(ody_home.path(), ody_home.path()).await;
     let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
-    let discoverable_plugins = list_discoverable_plugins(
-        &plugins_manager,
-        discovery_input(plugins, &[], &[], &[]),
-    )
-    .await;
+    let discoverable_plugins =
+        list_discoverable_plugins(&plugins_manager, discovery_input(plugins, &[], &[], &[])).await;
 
     assert_eq!(discoverable_plugins, Vec::new());
 }

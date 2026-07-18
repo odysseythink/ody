@@ -345,10 +345,12 @@ fn tool_definition_to_value(
         "strict": true,
     });
     if let Some(namespace) = def.namespace {
-        tool
-            .as_object_mut()
+        tool.as_object_mut()
             .expect("tool value is an object")
-            .insert("namespace".to_string(), serde_json::Value::String(namespace));
+            .insert(
+                "namespace".to_string(),
+                serde_json::Value::String(namespace),
+            );
     }
     Ok(tool)
 }
@@ -446,15 +448,18 @@ impl<T: HttpTransport + 'static> ChatProvider for ChatAdapter<T> {
             .map_err(chat_provider_error_from_api_error)?;
 
         let mut state = common::NormalizeState::default();
-        let mapped = stream.map(move |result: Result<ody_api::ResponseEvent, _>| -> ChatStream {
-            match result
-                .map_err(chat_provider_error_from_api_error)
-                .and_then(|event| common::normalize_response_event_with_state(event, &mut state))
-            {
-                Ok(events) => Box::pin(futures::stream::iter(events.into_iter().map(Ok))),
-                Err(e) => Box::pin(futures::stream::iter(std::iter::once(Err(e)))),
-            }
-        });
+        let mapped = stream.map(
+            move |result: Result<ody_api::ResponseEvent, _>| -> ChatStream {
+                match result
+                    .map_err(chat_provider_error_from_api_error)
+                    .and_then(|event| {
+                        common::normalize_response_event_with_state(event, &mut state)
+                    }) {
+                    Ok(events) => Box::pin(futures::stream::iter(events.into_iter().map(Ok))),
+                    Err(e) => Box::pin(futures::stream::iter(std::iter::once(Err(e)))),
+                }
+            },
+        );
         Ok(Box::pin(mapped.flatten()))
     }
 }
@@ -661,7 +666,8 @@ mod tests {
                 },
             ],
         };
-        let request = crate::adapters::core::prompt_to_chat_request("kimi-for-coding", &prompt, None);
+        let request =
+            crate::adapters::core::prompt_to_chat_request("kimi-for-coding", &prompt, None);
         let wire = build_api_request(request, ChatVendor::Kimi)
             .expect("builds")
             .to_wire();
@@ -692,7 +698,8 @@ mod tests {
                 internal_chat_message_metadata_passthrough: None,
             }],
         };
-        let request = crate::adapters::core::prompt_to_chat_request("kimi-for-coding", &prompt, None);
+        let request =
+            crate::adapters::core::prompt_to_chat_request("kimi-for-coding", &prompt, None);
         let wire = build_api_request(request, ChatVendor::Kimi)
             .expect("builds")
             .to_wire();

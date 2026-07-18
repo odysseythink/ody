@@ -12,15 +12,15 @@ use std::io;
 use std::sync::Arc;
 
 use bytes::Bytes;
+use futures::StreamExt;
+use futures::stream;
+use futures::stream::BoxStream;
 use ody_api::SharedAuthProvider;
 use ody_exec_server::ExecServerError;
 use ody_exec_server::HttpClient;
 use ody_exec_server::HttpHeader;
 use ody_exec_server::HttpRequestParams;
 use ody_exec_server::HttpResponseBodyStream;
-use futures::StreamExt;
-use futures::stream;
-use futures::stream::BoxStream;
 use reqwest::StatusCode;
 use reqwest::header::ACCEPT;
 use reqwest::header::AUTHORIZATION;

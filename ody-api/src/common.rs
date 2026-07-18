@@ -1,13 +1,13 @@
 use crate::error::ApiError;
+use futures::Stream;
 use ody_protocol::config_types::ReasoningSummary as ReasoningSummaryConfig;
 use ody_protocol::config_types::Verbosity as VerbosityConfig;
-use ody_protocol::models::ResponseItem;
 use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
+use ody_protocol::models::ResponseItem;
 use ody_protocol::protocol::ModelVerification;
 use ody_protocol::protocol::TokenUsage;
 use ody_protocol::protocol::TurnModerationMetadataEvent;
 use ody_protocol::protocol::W3cTraceContext;
-use futures::Stream;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;

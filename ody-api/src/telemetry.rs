@@ -1,4 +1,5 @@
 use crate::error::ApiError;
+use http::StatusCode;
 use ody_client::Request;
 use ody_client::RequestTelemetry;
 use ody_client::Response;
@@ -6,7 +7,6 @@ use ody_client::RetryPolicy;
 use ody_client::StreamResponse;
 use ody_client::TransportError;
 use ody_client::run_with_retry;
-use http::StatusCode;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;

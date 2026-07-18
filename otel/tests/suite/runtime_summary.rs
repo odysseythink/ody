@@ -1,3 +1,4 @@
+use eventsource_stream::Event as StreamEvent;
 use ody_otel::MetricsClient;
 use ody_otel::MetricsConfig;
 use ody_otel::Result;
@@ -7,7 +8,6 @@ use ody_otel::SessionTelemetry;
 use ody_otel::TelemetryAuthMode;
 use ody_protocol::ThreadId;
 use ody_protocol::protocol::SessionSource;
-use eventsource_stream::Event as StreamEvent;
 use opentelemetry_sdk::metrics::InMemoryMetricExporter;
 use pretty_assertions::assert_eq;
 use std::time::Duration;
@@ -90,16 +90,8 @@ fn runtime_metrics_summary_collects_tool_api_and_streaming_metrics() -> Result<(
             .into(),
     ))));
     manager.record_websocket_event(&ws_timing_response, Duration::from_millis(20));
-    manager.record_duration(
-        "ody.turn.ttft.duration_ms",
-        Duration::from_millis(95),
-        &[],
-    );
-    manager.record_duration(
-        "ody.turn.ttfm.duration_ms",
-        Duration::from_millis(180),
-        &[],
-    );
+    manager.record_duration("ody.turn.ttft.duration_ms", Duration::from_millis(95), &[]);
+    manager.record_duration("ody.turn.ttfm.duration_ms", Duration::from_millis(180), &[]);
 
     let summary = manager
         .runtime_metrics_summary()

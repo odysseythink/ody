@@ -478,6 +478,7 @@ pub fn item_event_to_server_notification(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::v2::PlanModeLogKind as AppPlanModeLogKind;
     use ody_protocol::ThreadId;
     use ody_protocol::protocol::CollabResumeBeginEvent;
     use ody_protocol::protocol::CollabResumeEndEvent;
@@ -485,7 +486,6 @@ mod tests {
     use ody_protocol::protocol::ExecOutputStream;
     use ody_protocol::protocol::PlanModeLogEvent;
     use ody_protocol::protocol::PlanModeLogKind;
-    use crate::protocol::v2::PlanModeLogKind as AppPlanModeLogKind;
     use pretty_assertions::assert_eq;
 
     fn assert_item_started_server_notification(

@@ -378,14 +378,10 @@ impl McpRequestProcessor {
         let request_id = request_id.clone();
 
         tokio::spawn(async move {
-            let result = read_mcp_resource_without_thread(
-                &mcp_config,
-                runtime_context,
-                &server,
-                &uri,
-            )
-            .await
-            .and_then(|result| serde_json::to_value(result).map_err(anyhow::Error::from));
+            let result =
+                read_mcp_resource_without_thread(&mcp_config, runtime_context, &server, &uri)
+                    .await
+                    .and_then(|result| serde_json::to_value(result).map_err(anyhow::Error::from));
             Self::send_mcp_resource_read_response(outgoing, request_id, result).await;
         });
         Ok(())

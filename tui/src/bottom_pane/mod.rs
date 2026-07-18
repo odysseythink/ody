@@ -555,7 +555,7 @@ impl BottomPane {
         self.view_stack.last().map(std::convert::AsRef::as_ref)
     }
 
-    fn push_view(&mut self, view: Box<dyn BottomPaneView>) {
+    pub(crate) fn push_view(&mut self, view: Box<dyn BottomPaneView>) {
         self.view_stack.push(view);
         self.schedule_active_view_frame();
         self.request_redraw();

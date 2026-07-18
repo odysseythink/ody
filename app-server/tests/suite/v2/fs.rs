@@ -282,8 +282,7 @@ async fn fs_methods_cover_current_fs_utils_surface() -> Result<()> {
     )
     .await??;
     let mut entries =
-        to_response::<ody_app_server_protocol::FsReadDirectoryResponse>(readdir_response)?
-            .entries;
+        to_response::<ody_app_server_protocol::FsReadDirectoryResponse>(readdir_response)?.entries;
     entries.sort_by(|left, right| left.file_name.cmp(&right.file_name));
     assert_eq!(
         entries,

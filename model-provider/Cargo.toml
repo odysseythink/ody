@@ -30,6 +30,7 @@ base64 = { workspace = true }
 ody-protocol = { workspace = true }
 ody-response-debug-context = { workspace = true }
 http = { workspace = true }
+reqwest = { workspace = true }
 tokio = { workspace = true, features = ["sync", "time"] }
 tracing = { workspace = true, features = ["log"] }
 

@@ -28,8 +28,8 @@ use ody_protocol::protocol::Event;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::SkillActivatedEvent;
 use ody_protocol::protocol::SkillActivationKind;
-use ody_protocol::protocol::SkillLoadedEvent;
 use ody_protocol::protocol::SkillLoadErrorEvent;
+use ody_protocol::protocol::SkillLoadedEvent;
 use ody_protocol::protocol::WarningEvent;
 use ody_protocol::user_input::UserInput;
 
@@ -163,7 +163,8 @@ where
                 self.emit_warning(thread_store.level_id(), warning.clone());
             }
             for entry in &catalog.entries {
-                if thread_state.mark_loaded_event_emitted((entry.authority.clone(), entry.id.clone()))
+                if thread_state
+                    .mark_loaded_event_emitted((entry.authority.clone(), entry.id.clone()))
                 {
                     self.event_sink.emit(Event {
                         id: thread_store.level_id().to_string(),
@@ -360,8 +361,7 @@ where
                         if next_bytes > config.knowledge_max_contents_bytes {
                             let warning = format!(
                                 "Knowledge skill `{}` skipped: would exceed the knowledge content budget ({} bytes).",
-                                entry.name,
-                                config.knowledge_max_contents_bytes
+                                entry.name, config.knowledge_max_contents_bytes
                             );
                             self.emit_warning(&input.turn_id, warning.clone());
                             warnings.push(warning);

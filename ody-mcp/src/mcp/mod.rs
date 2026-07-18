@@ -36,8 +36,8 @@ use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
 use crate::ResolvedMcpCatalog;
-use crate::ody_apps::ody_apps_tools_cache_key;
 use crate::connection_manager::McpConnectionManager;
+use crate::ody_apps::ody_apps_tools_cache_key;
 use crate::runtime::McpRuntimeContext;
 use crate::server::EffectiveMcpServer;
 
@@ -231,9 +231,7 @@ pub fn configured_mcp_servers(config: &McpConfig) -> HashMap<String, McpServerCo
     config.mcp_server_catalog.configured_servers()
 }
 
-pub fn effective_mcp_servers(
-    config: &McpConfig,
-) -> HashMap<String, EffectiveMcpServer> {
+pub fn effective_mcp_servers(config: &McpConfig) -> HashMap<String, EffectiveMcpServer> {
     effective_mcp_servers_from_configured(configured_mcp_servers(config), config)
 }
 
@@ -557,4 +555,3 @@ async fn collect_mcp_server_status_snapshot_from_manager(
         server_names,
     }
 }
-

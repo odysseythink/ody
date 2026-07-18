@@ -28,10 +28,14 @@ use std::time::Instant;
 
 use anyhow::Context;
 use clap::Parser;
+use http::HeaderMap;
+use http::HeaderValue;
 use ody_api::ApiError;
 use ody_api::ResponsesWebsocketClient;
 use ody_api::is_azure_responses_provider;
 use ody_arg0::Arg0DispatchPaths;
+use ody_client::default_client::build_reqwest_client;
+use ody_client::default_client::default_headers;
 use ody_config::types::McpServerConfig;
 use ody_config::types::McpServerTransportConfig;
 use ody_core::config::Config;
@@ -39,9 +43,9 @@ use ody_core::config::ConfigBuilder;
 use ody_core::config::ConfigOverrides;
 use ody_core::config::find_ody_home;
 use ody_features::FEATURES;
-use ody_install_context::OdyPackageLayout;
 use ody_install_context::InstallContext;
 use ody_install_context::InstallMethod;
+use ody_install_context::OdyPackageLayout;
 use ody_install_context::StandalonePlatform;
 use ody_model_provider::create_model_provider;
 use ody_protocol::protocol::AskForApproval;
@@ -51,10 +55,6 @@ use ody_terminal_detection::TerminalName;
 use ody_terminal_detection::terminal_info;
 use ody_tui::Cli as TuiCli;
 use ody_utils_cli::CliConfigOverrides;
-use http::HeaderMap;
-use http::HeaderValue;
-use ody_client::default_client::build_reqwest_client;
-use ody_client::default_client::default_headers;
 use serde::Serialize;
 use supports_color::Stream;
 
@@ -308,8 +308,7 @@ impl DoctorCheck {
 /// This is the CLI entry point for ody doctor. It does not repair issues;
 /// failures are represented in the report and cause a non-zero process exit so
 /// scripts can distinguish a clean environment from one that needs attention.
-pub 
-fn load_auth_dot_json(
+pub fn load_auth_dot_json(
     _ody_home: &std::path::Path,
     _store_mode: ody_config::types::AuthCredentialsStoreMode,
     _keyring_backend: ody_config::types::AuthKeyringBackendKind,
@@ -889,9 +888,7 @@ fn doctor_managed_by_npm(current_exe: Option<&Path>) -> bool {
 }
 
 fn inherited_managed_env_for_cargo_binary(current_exe: Option<&Path>) -> bool {
-    if env::var_os("ODY_MANAGED_BY_NPM").is_none()
-        && env::var_os("ODY_MANAGED_BY_BUN").is_none()
-    {
+    if env::var_os("ODY_MANAGED_BY_NPM").is_none() && env::var_os("ODY_MANAGED_BY_BUN").is_none() {
         return false;
     }
 
@@ -1179,13 +1176,10 @@ fn auth_check(config: &Config) -> DoctorCheck {
     ));
     details.push(format!("auth file: {}", auth_path.display()));
 
-    let env_auth_vars = [
-        OPENAI_API_KEY_ENV_VAR,
-        ODY_API_KEY_ENV_VAR,
-    ]
-    .into_iter()
-    .filter(|name| env_var_present(name))
-    .collect::<Vec<_>>();
+    let env_auth_vars = [OPENAI_API_KEY_ENV_VAR, ODY_API_KEY_ENV_VAR]
+        .into_iter()
+        .filter(|name| env_var_present(name))
+        .collect::<Vec<_>>();
     if !env_auth_vars.is_empty() {
         details.push(format!(
             "auth env vars present: {}",
@@ -1209,7 +1203,10 @@ fn auth_check(config: &Config) -> DoctorCheck {
     ) {
         Ok(Some(auth)) => {
             details.push(format!("stored auth mode: {}", stored_auth_mode(&auth)));
-            details.push(format!("stored API key: {}", auth.odysseythink_api_key.is_some()));
+            details.push(format!(
+                "stored API key: {}",
+                auth.odysseythink_api_key.is_some()
+            ));
             let auth_issues = stored_auth_issues(&auth, env_var_present);
             details.extend(
                 auth_issues
@@ -2229,9 +2226,7 @@ fn is_rollout_file(path: &Path) -> bool {
             .is_some_and(|name| name.starts_with("rollout-"))
 }
 
-async fn websocket_reachability_check(
-    config: &Config,
-) -> DoctorCheck {
+async fn websocket_reachability_check(config: &Config) -> DoctorCheck {
     let provider = &config.model_provider;
     let mut details = vec![
         format!("model provider: {}", config.model_provider_id),
@@ -2475,11 +2470,8 @@ fn provider_reachability_plan(config: &Config) -> ReachabilityPlan {
     )
     .ok()
     .flatten();
-    let mode = provider_auth_reachability_mode_from_auth(
-        false,
-        env_var_present,
-        stored_auth.as_ref(),
-    );
+    let mode =
+        provider_auth_reachability_mode_from_auth(false, env_var_present, stored_auth.as_ref());
     provider_reachability_plan_from_parts(
         mode,
         &config.model_provider_id,
@@ -2527,7 +2519,8 @@ fn provider_reachability_plan_from_parts(
 ) -> ReachabilityPlan {
     let provider_route_probe_url = provider_base_url
         .or_else(|| {
-            (mode == ProviderAuthReachabilityMode::ApiKey).then_some("https://api.odysseythink.com/v1")
+            (mode == ProviderAuthReachabilityMode::ApiKey)
+                .then_some("https://api.odysseythink.com/v1")
         })
         .and_then(|url| {
             should_probe_models_route(provider_name, url)
@@ -3438,7 +3431,8 @@ mod tests {
                     url: "https://example.com/odysseythink/v1/".to_string(),
                     required: true,
                     route_probe_url: Some(
-                        "https://example.com/odysseythink/v1/models?api-version=2026-01-01".to_string()
+                        "https://example.com/odysseythink/v1/models?api-version=2026-01-01"
+                            .to_string()
                     ),
                 }],
             }
@@ -3531,7 +3525,9 @@ mod tests {
         assert_eq!(check.issues.len(), 1);
         assert_eq!(
             check.issues[0].remedy.as_deref(),
-            Some("Set base_url to the provider API root, for example https://api.odysseythink.com/v1")
+            Some(
+                "Set base_url to the provider API root, for example https://api.odysseythink.com/v1"
+            )
         );
     }
 

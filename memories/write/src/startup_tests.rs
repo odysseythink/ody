@@ -4,6 +4,17 @@ use crate::phase1;
 use crate::phase2;
 use crate::runtime::MemoryStartupContext;
 use crate::start_memories_startup_task;
+use core_test_support::responses::ResponseMock;
+use core_test_support::responses::ResponsesRequest;
+use core_test_support::responses::ev_assistant_message;
+use core_test_support::responses::ev_completed;
+use core_test_support::responses::ev_response_created;
+use core_test_support::responses::mount_sse_once;
+use core_test_support::responses::sse;
+use core_test_support::responses::start_mock_server;
+use core_test_support::test_ody::TestOdy;
+use core_test_support::test_ody::test_ody;
+use core_test_support::wait_for_event;
 use ody_config::types::MemoriesConfig;
 use ody_features::Feature;
 use ody_git_utils::diff_since_latest_init;
@@ -16,26 +27,15 @@ use ody_model_provider::create_model_provider;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_protocol::ThreadId;
 use ody_protocol::config_types::ServiceTier;
-use ody_protocol::models::ContentItem;
-use ody_protocol::models::ResponseItem;
 use ody_protocol::model_metadata::ModelsResponse;
 use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::models::ContentItem;
+use ody_protocol::models::ResponseItem;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::Op;
 use ody_protocol::protocol::RolloutItem;
 use ody_protocol::protocol::RolloutLine;
 use ody_protocol::protocol::SessionSource;
-use core_test_support::responses::ResponseMock;
-use core_test_support::responses::ResponsesRequest;
-use core_test_support::responses::ev_assistant_message;
-use core_test_support::responses::ev_completed;
-use core_test_support::responses::ev_response_created;
-use core_test_support::responses::mount_sse_once;
-use core_test_support::responses::sse;
-use core_test_support::responses::start_mock_server;
-use core_test_support::test_ody::TestOdy;
-use core_test_support::test_ody::test_ody;
-use core_test_support::wait_for_event;
 use pretty_assertions::assert_eq;
 use std::path::Path;
 use std::path::PathBuf;
@@ -323,11 +323,7 @@ async fn memories_startup_phase1_uses_live_thread_service_tier_and_detached_meta
     )
     .await;
     context
-        .stream_stage_one_prompt(
-            &test.config,
-            &ody_core::Prompt::default(),
-            &request_context,
-        )
+        .stream_stage_one_prompt(&test.config, &ody_core::Prompt::default(), &request_context)
         .await?;
     let request = wait_for_single_request(&stage_one).await;
     let metadata_header = request
@@ -420,7 +416,7 @@ async fn run_memory_phase_one_model_request_test(
     let test = build_test_ody_with_memories_config(server, Arc::clone(&home), memories).await?;
     let provider = Arc::new(MockMemoryModelProvider::new(
         test.config.model_provider.clone(),
-            ));
+    ));
     let db = test
         .ody
         .state_db()
@@ -460,7 +456,7 @@ async fn run_memory_phase_two_model_request_test(
     let test = build_test_ody_with_memories_config(server, home.clone(), memories).await?;
     let provider = Arc::new(MockMemoryModelProvider::new(
         test.config.model_provider.clone(),
-            ));
+    ));
     let db = test
         .ody
         .state_db()
@@ -598,7 +594,10 @@ impl ModelProvider for MockMemoryModelProvider {
 
     fn chat_provider(
         &self,
-    ) -> ModelProviderFuture<'_, ody_protocol::error::Result<Box<dyn ody_model_provider::ChatProvider>>> {
+    ) -> ModelProviderFuture<
+        '_,
+        ody_protocol::error::Result<Box<dyn ody_model_provider::ChatProvider>>,
+    > {
         self.delegate.chat_provider()
     }
 
@@ -619,8 +618,7 @@ impl ModelProvider for MockMemoryModelProvider {
         ody_home: PathBuf,
         config_model_catalog: Option<ModelsResponse>,
     ) -> ody_models_manager::manager::SharedModelsManager {
-        self.delegate
-            .models_manager(ody_home, config_model_catalog)
+        self.delegate.models_manager(ody_home, config_model_catalog)
     }
 }
 

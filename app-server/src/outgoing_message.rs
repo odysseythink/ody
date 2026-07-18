@@ -693,16 +693,16 @@ fn now_unix_timestamp_ms() -> u64 {
 mod tests {
     use std::time::Duration;
 
-    use ody_app_server_protocol::LoginCompletedNotification;
-    use ody_app_server_protocol::AuthUpdatedNotification;
     use ody_app_server_protocol::ApplyPatchApprovalParams;
     use ody_app_server_protocol::AuthMode;
+    use ody_app_server_protocol::AuthUpdatedNotification;
     use ody_app_server_protocol::CommandExecutionApprovalDecision;
     use ody_app_server_protocol::CommandExecutionRequestApprovalParams;
     use ody_app_server_protocol::ConfigWarningNotification;
     use ody_app_server_protocol::DynamicToolCallParams;
     use ody_app_server_protocol::FileChangeRequestApprovalParams;
     use ody_app_server_protocol::GuardianWarningNotification;
+    use ody_app_server_protocol::LoginCompletedNotification;
     use ody_app_server_protocol::ModelRerouteReason;
     use ody_app_server_protocol::ModelReroutedNotification;
     use ody_app_server_protocol::ModelVerification;
@@ -721,12 +721,11 @@ mod tests {
 
     #[test]
     fn verify_server_notification_serialization() {
-        let notification =
-            ServerNotification::LoginCompleted(LoginCompletedNotification {
-                login_id: Some(Uuid::nil().to_string()),
-                success: true,
-                error: None,
-            });
+        let notification = ServerNotification::LoginCompleted(LoginCompletedNotification {
+            login_id: Some(Uuid::nil().to_string()),
+            success: true,
+            error: None,
+        });
 
         let jsonrpc_notification = OutgoingMessage::AppServerNotification(notification);
         assert_eq!(
@@ -746,12 +745,11 @@ mod tests {
 
     #[test]
     fn verify_account_login_completed_notification_serialization() {
-        let notification =
-            ServerNotification::LoginCompleted(LoginCompletedNotification {
-                login_id: Some(Uuid::nil().to_string()),
-                success: true,
-                error: None,
-            });
+        let notification = ServerNotification::LoginCompleted(LoginCompletedNotification {
+            login_id: Some(Uuid::nil().to_string()),
+            success: true,
+            error: None,
+        });
 
         let jsonrpc_notification = OutgoingMessage::AppServerNotification(notification);
         assert_eq!(

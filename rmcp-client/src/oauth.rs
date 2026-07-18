@@ -19,6 +19,11 @@
 use anyhow::Context;
 use anyhow::Error;
 use anyhow::Result;
+use oauth2::AccessToken;
+use oauth2::RefreshToken;
+use oauth2::Scope;
+use oauth2::TokenResponse;
+use oauth2::basic::BasicTokenType;
 use ody_config::types::AuthKeyringBackendKind;
 use ody_config::types::OAuthCredentialsStoreMode;
 use ody_secrets::LocalSecretsNamespace;
@@ -26,11 +31,6 @@ use ody_secrets::SecretName;
 use ody_secrets::SecretScope;
 use ody_secrets::SecretsBackendKind;
 use ody_secrets::SecretsManager;
-use oauth2::AccessToken;
-use oauth2::RefreshToken;
-use oauth2::Scope;
-use oauth2::TokenResponse;
-use oauth2::basic::BasicTokenType;
 use rmcp::transport::auth::OAuthTokenResponse;
 use rmcp::transport::auth::VendorExtraTokenFields;
 use serde::Deserialize;
@@ -814,8 +814,8 @@ fn sha_256_prefix(value: &Value) -> Result<String> {
 mod tests {
     use super::*;
     use anyhow::Result;
-    use ody_secrets::compute_keyring_account;
     use keyring::Error as KeyringError;
+    use ody_secrets::compute_keyring_account;
     use pretty_assertions::assert_eq;
     use std::sync::Arc;
     use std::sync::Mutex;

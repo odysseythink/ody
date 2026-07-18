@@ -55,9 +55,7 @@ impl TraceReducer {
         let ody_turn_id = started.ody_turn_id.clone();
         let request_payload = started.request_payload.clone();
         let Some(turn) = self.rollout.ody_turns.get(&ody_turn_id) else {
-            bail!(
-                "inference start {inference_call_id} referenced unknown ody turn {ody_turn_id}"
-            );
+            bail!("inference start {inference_call_id} referenced unknown ody turn {ody_turn_id}");
         };
         if turn.thread_id != thread_id {
             bail!(

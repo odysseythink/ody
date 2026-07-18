@@ -33,9 +33,9 @@ use crate::telemetry::DbKind;
 use crate::telemetry::DbTelemetry;
 use chrono::DateTime;
 use chrono::Utc;
+use log::LevelFilter;
 use ody_protocol::ThreadId;
 use ody_protocol::protocol::RolloutItem;
-use log::LevelFilter;
 use serde_json::Value;
 use sqlx::ConnectOptions;
 use sqlx::QueryBuilder;
@@ -169,12 +169,7 @@ impl StateRuntime {
     /// keeping logs in a dedicated file to reduce lock contention with the
     /// rest of the state store.
     pub async fn init(ody_home: PathBuf, default_provider: String) -> anyhow::Result<Arc<Self>> {
-        Self::init_inner(
-            ody_home,
-            default_provider,
-            /*telemetry_override*/ None,
-        )
-        .await
+        Self::init_inner(ody_home, default_provider, /*telemetry_override*/ None).await
     }
 
     #[cfg(test)]

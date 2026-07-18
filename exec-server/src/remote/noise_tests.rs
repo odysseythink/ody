@@ -2,10 +2,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
-use ody_api::AuthProvider;
-use ody_api::SharedAuthProvider;
 use http::HeaderMap;
 use http::HeaderValue;
+use ody_api::AuthProvider;
+use ody_api::SharedAuthProvider;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
@@ -62,8 +62,7 @@ async fn reconnect_reuses_registration_until_url_is_rejected() -> Result<()> {
     )?;
     let environment_task = tokio::spawn(run_remote_environment(
         config,
-        ExecServerRuntimePaths::new(
-            std::env::current_exe()?, None)?,
+        ExecServerRuntimePaths::new(std::env::current_exe()?, None)?,
     ));
 
     let (first_socket, _peer_addr) = timeout(Duration::from_secs(5), listener.accept()).await??;

@@ -283,10 +283,7 @@ async fn refresh_available_models_keeps_merging_for_api_auth() {
         responses: Mutex::new(vec![remote_models.clone()].into()),
         fetch_count: AtomicUsize::new(0),
     });
-    let manager = odysseythink_manager_for_tests(
-        ody_home.path().to_path_buf(),
-        endpoint.clone(),
-    );
+    let manager = odysseythink_manager_for_tests(ody_home.path().to_path_buf(), endpoint.clone());
     let mut expected = load_remote_models_from_file().expect("bundled models should parse");
     expected.extend(remote_models);
 

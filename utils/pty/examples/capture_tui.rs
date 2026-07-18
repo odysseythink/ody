@@ -4,7 +4,7 @@
 //!
 //! Usage: capture_tui <exe> <out.bin> [cols] [rows] [prompt] [settle_secs] [run_secs]
 
-use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -31,8 +31,7 @@ impl QueryAnswerer {
         loop {
             // CPR request
             if let Some(pos) = find_sub(&self.carry, b"\x1b[6n") {
-                self.answers
-                    .push(format!("\x1b[{rows};1R").into_bytes());
+                self.answers.push(format!("\x1b[{rows};1R").into_bytes());
                 self.log.push("CPR ? -> answered".into());
                 self.carry.drain(..pos + 3);
                 continue;
@@ -68,8 +67,7 @@ impl QueryAnswerer {
             }
             // DECRQM: CSI ? Ps $ p  ->  CSI ? Ps ; 2 $ y
             if let Some((pos, mode)) = find_decrqm(&self.carry) {
-                self.answers
-                    .push(format!("\x1b[?{mode};2$y").into_bytes());
+                self.answers.push(format!("\x1b[?{mode};2$y").into_bytes());
                 self.log.push(format!("DECRQM {mode} ? -> answered"));
                 self.carry.drain(..pos);
                 continue;

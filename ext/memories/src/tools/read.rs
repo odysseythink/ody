@@ -65,8 +65,7 @@ where
     async fn handle_call(
         &self,
         call: ToolCall,
-    ) -> Result<Box<dyn ody_extension_api::ToolOutput>, ody_extension_api::FunctionCallError>
-    {
+    ) -> Result<Box<dyn ody_extension_api::ToolOutput>, ody_extension_api::FunctionCallError> {
         let backend = self.backend.clone();
         let args: ReadArgs = parse_args(&call)?;
         let path = args.path;

@@ -1,9 +1,9 @@
+use http::Method;
+use http::header::HeaderMap;
 use ody_client::Request;
 use ody_client::RequestCompression;
 use ody_client::RetryOn;
 use ody_client::RetryPolicy;
-use http::Method;
-use http::header::HeaderMap;
 use std::collections::HashMap;
 use std::time::Duration;
 use url::Url;

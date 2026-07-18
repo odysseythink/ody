@@ -1,9 +1,9 @@
 #![cfg(not(target_os = "windows"))]
 #![allow(clippy::unwrap_used)]
 
-use ody_client::default_client::ODY_INTERNAL_ORIGINATOR_OVERRIDE_ENV_VAR;
 use core_test_support::responses;
 use core_test_support::test_ody_exec::test_ody_exec;
+use ody_client::default_client::ODY_INTERNAL_ORIGINATOR_OVERRIDE_ENV_VAR;
 use wiremock::matchers::header;
 
 /// Verify that when the server reports an error, `ody-exec` exits with a
@@ -40,8 +40,7 @@ async fn supports_originator_override() -> anyhow::Result<()> {
         responses::ev_assistant_message("response_1", "Hello, world!"),
         responses::ev_completed("response_1"),
     ]);
-    responses::mount_sse_once_match(&server, header("Originator", "ody_exec_override"), body)
-        .await;
+    responses::mount_sse_once_match(&server, header("Originator", "ody_exec_override"), body).await;
 
     test.cmd_with_server(&server)
         .env("ODY_INTERNAL_ORIGINATOR_OVERRIDE", "ody_exec_override")

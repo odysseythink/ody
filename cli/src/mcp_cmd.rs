@@ -448,9 +448,7 @@ async fn run_login(config_overrides: &CliConfigOverrides, login_args: LoginArgs)
     let config = Config::load_with_cli_overrides(overrides)
         .await
         .context("failed to load configuration")?;
-    let mcp_manager = McpManager::new(Arc::new(PluginsManager::new(
-        config.ody_home.to_path_buf(),
-    )));
+    let mcp_manager = McpManager::new(Arc::new(PluginsManager::new(config.ody_home.to_path_buf())));
     let mcp_servers = mcp_manager.configured_servers(&config).await;
 
     let LoginArgs { name, scopes } = login_args;
@@ -503,9 +501,7 @@ async fn run_logout(config_overrides: &CliConfigOverrides, logout_args: LogoutAr
     let config = Config::load_with_cli_overrides(overrides)
         .await
         .context("failed to load configuration")?;
-    let mcp_manager = McpManager::new(Arc::new(PluginsManager::new(
-        config.ody_home.to_path_buf(),
-    )));
+    let mcp_manager = McpManager::new(Arc::new(PluginsManager::new(config.ody_home.to_path_buf())));
     let mcp_servers = mcp_manager.configured_servers(&config).await;
 
     let LogoutArgs { name } = logout_args;
@@ -540,9 +536,7 @@ async fn run_list(config_overrides: &CliConfigOverrides, list_args: ListArgs) ->
     let config = Config::load_with_cli_overrides(overrides)
         .await
         .context("failed to load configuration")?;
-    let mcp_manager = McpManager::new(Arc::new(PluginsManager::new(
-        config.ody_home.to_path_buf(),
-    )));
+    let mcp_manager = McpManager::new(Arc::new(PluginsManager::new(config.ody_home.to_path_buf())));
     let mcp_servers = mcp_manager.configured_servers(&config).await;
     let effective_mcp_servers = mcp_manager.effective_servers(&config).await;
 
@@ -796,9 +790,7 @@ async fn run_get(config_overrides: &CliConfigOverrides, get_args: GetArgs) -> Re
     let config = Config::load_with_cli_overrides(overrides)
         .await
         .context("failed to load configuration")?;
-    let mcp_manager = McpManager::new(Arc::new(PluginsManager::new(
-        config.ody_home.to_path_buf(),
-    )));
+    let mcp_manager = McpManager::new(Arc::new(PluginsManager::new(config.ody_home.to_path_buf())));
     let mcp_servers = mcp_manager.configured_servers(&config).await;
 
     let Some(server) = mcp_servers.get(&get_args.name) else {

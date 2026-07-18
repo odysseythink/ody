@@ -128,11 +128,11 @@ fn deepseek_reasoner_supports_thinking() {
 }
 
 mod capability_tests {
-    use super::default_model_capabilities_for_wire_api;
-    use super::resolve_model_capabilities;
     use super::ModelCapabilities;
     use super::ProviderCapabilities;
     use super::WireApi;
+    use super::default_model_capabilities_for_wire_api;
+    use super::resolve_model_capabilities;
     use ody_protocol::model_metadata::InputModality;
     use ody_protocol::model_metadata::WebSearchToolType;
     use pretty_assertions::assert_eq;
@@ -317,7 +317,6 @@ fn model_catalog_for_custom_chat_returns_fallback() {
     );
 }
 
-
 #[test]
 fn model_catalog_for_unknown_chat_returns_fallback() {
     let info = ModelProviderInfo {
@@ -362,7 +361,10 @@ fn unknown_chat_provider_has_fallback_catalog_with_capabilities() {
     let model = &catalog.models[0];
     assert!(model.capabilities.supports_tools);
     assert!(model.capabilities.supports_vision);
-    assert_eq!(model.capabilities.input_modalities, vec![InputModality::Text, InputModality::Image]);
+    assert_eq!(
+        model.capabilities.input_modalities,
+        vec![InputModality::Text, InputModality::Image]
+    );
     assert!(model.context_window.is_some());
     assert!(model.max_context_window.is_some());
 }
@@ -375,7 +377,10 @@ fn unknown_model_slug_has_nonzero_truncation_budget() {
     let model = model_info_from_slug("totally-unknown-model");
     assert!(model.used_fallback_model_metadata);
     assert_eq!(model.truncation_policy, DEFAULT_TRUNCATION_POLICY);
-    assert_eq!(model.capabilities.truncation_policy, DEFAULT_TRUNCATION_POLICY);
+    assert_eq!(
+        model.capabilities.truncation_policy,
+        DEFAULT_TRUNCATION_POLICY
+    );
 }
 
 #[test]
@@ -388,11 +393,9 @@ fn chat_catalog_models_have_nonzero_truncation_budget() {
         let catalog = model_catalog_for_provider(provider, &info)
             .unwrap_or_else(|| panic!("missing catalog for {provider}"));
         assert!(
-            catalog
-                .models
-                .iter()
-                .all(|m| m.truncation_policy.limit > 0
-                    && m.capabilities.truncation_policy.limit > 0),
+            catalog.models.iter().all(
+                |m| m.truncation_policy.limit > 0 && m.capabilities.truncation_policy.limit > 0
+            ),
             "provider {provider} catalog contains a zero truncation budget"
         );
     }

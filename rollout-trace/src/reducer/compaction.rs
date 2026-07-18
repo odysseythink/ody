@@ -127,9 +127,7 @@ impl TraceReducer {
         }
         self.thread_mut(&thread_id)?;
         let Some(turn) = self.rollout.ody_turns.get(&ody_turn_id) else {
-            bail!(
-                "compaction install {compaction_id} referenced unknown ody turn {ody_turn_id}"
-            );
+            bail!("compaction install {compaction_id} referenced unknown ody turn {ody_turn_id}");
         };
         if turn.thread_id != thread_id {
             bail!(

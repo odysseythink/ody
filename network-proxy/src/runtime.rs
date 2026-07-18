@@ -20,8 +20,8 @@ use crate::state::build_config_state;
 use crate::state::validate_policy_against_constraints;
 use anyhow::Context;
 use anyhow::Result;
-use ody_utils_absolute_path::AbsolutePathBuf;
 use globset::GlobSet;
+use ody_utils_absolute_path::AbsolutePathBuf;
 use serde::Serialize;
 use std::collections::HashSet;
 use std::collections::VecDeque;
@@ -1225,7 +1225,10 @@ mod tests {
             HostBlockDecision::Allowed
         );
         assert_eq!(
-            state.host_blocked("odysseythink.com", /*port*/ 80).await.unwrap(),
+            state
+                .host_blocked("odysseythink.com", /*port*/ 80)
+                .await
+                .unwrap(),
             HostBlockDecision::Blocked(HostBlockReason::NotAllowed)
         );
     }

@@ -5,14 +5,14 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+use futures::FutureExt as _;
+use futures::future::BoxFuture;
 use ody_exec_server::Environment;
 use ody_exec_server::ExecServerError;
 use ody_exec_server::HttpClient;
 use ody_exec_server::HttpRequestParams;
 use ody_exec_server::HttpRequestResponse;
 use ody_exec_server::HttpResponseBodyStream;
-use futures::FutureExt as _;
-use futures::future::BoxFuture;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 

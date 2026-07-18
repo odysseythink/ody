@@ -358,13 +358,12 @@ impl ConfiguredModelSpec {
         // the non-zero truncation budget guarantee).
         caps = resolve_model_capabilities(provider_caps, wire_api, Some(&caps), None, &self.model);
 
-        let mut model = model_info_from_slug_with_provider(
-            &self.model,
-            provider_id,
-            wire_api,
-            provider_caps,
-        );
-        model.display_name = self.display_name.clone().unwrap_or_else(|| self.model.clone());
+        let mut model =
+            model_info_from_slug_with_provider(&self.model, provider_id, wire_api, provider_caps);
+        model.display_name = self
+            .display_name
+            .clone()
+            .unwrap_or_else(|| self.model.clone());
         model.visibility = ModelVisibility::List;
         model.priority = priority;
         model.used_fallback_model_metadata = false;
@@ -379,13 +378,15 @@ impl ConfiguredModelSpec {
         model.truncation_policy = model.capabilities.truncation_policy;
         model.shell_type = model.capabilities.shell_type;
         model.tool_mode = model.capabilities.tool_mode.clone();
-        model.effective_context_window_percent = model.capabilities.effective_context_window_percent;
+        model.effective_context_window_percent =
+            model.capabilities.effective_context_window_percent;
         model
     }
 }
 
 /// Build a single-model fallback descriptor inferred from a wire API.
-fn fallback_catalog_model(provider_id: &str, wire_api: WireApi, context_window: i64) -> ModelInfo {    let mut caps = resolve_model_capabilities(
+fn fallback_catalog_model(provider_id: &str, wire_api: WireApi, context_window: i64) -> ModelInfo {
+    let mut caps = resolve_model_capabilities(
         &ProviderCapabilities::default(),
         wire_api,
         None,
@@ -485,7 +486,8 @@ impl ChatModelSpec {
         model.truncation_policy = model.capabilities.truncation_policy;
         model.shell_type = model.capabilities.shell_type;
         model.tool_mode = model.capabilities.tool_mode.clone();
-        model.effective_context_window_percent = model.capabilities.effective_context_window_percent;
+        model.effective_context_window_percent =
+            model.capabilities.effective_context_window_percent;
         model
     }
 }

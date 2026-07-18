@@ -31,9 +31,7 @@ impl ExecServerRuntimePaths {
     ) -> std::io::Result<Self> {
         Ok(Self {
             ody_self_exe: absolute_path(ody_self_exe)?,
-            ody_linux_sandbox_exe: ody_linux_sandbox_exe
-                .map(absolute_path)
-                .transpose()?,
+            ody_linux_sandbox_exe: ody_linux_sandbox_exe.map(absolute_path).transpose()?,
         })
     }
 }

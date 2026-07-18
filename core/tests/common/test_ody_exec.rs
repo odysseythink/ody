@@ -10,8 +10,7 @@ pub struct TestOdyExecBuilder {
 impl TestOdyExecBuilder {
     pub fn cmd(&self) -> assert_cmd::Command {
         let mut cmd = assert_cmd::Command::new(
-            ody_utils_cargo_bin::cargo_bin("ody-exec")
-                .expect("should find binary for ody-exec"),
+            ody_utils_cargo_bin::cargo_bin("ody-exec").expect("should find binary for ody-exec"),
         );
         cmd.current_dir(self.cwd.path())
             .env("ODY_HOME", self.home.path())
@@ -22,8 +21,10 @@ impl TestOdyExecBuilder {
     pub fn cmd_with_server(&self, server: &MockServer) -> assert_cmd::Command {
         let mut cmd = self.cmd();
         let base = format!("{}/v1", server.uri());
-        cmd.arg("-c")
-            .arg(format!("model_providers.kimi.base_url={}", toml_string_literal(&base)));
+        cmd.arg("-c").arg(format!(
+            "model_providers.kimi.base_url={}",
+            toml_string_literal(&base)
+        ));
         cmd
     }
 

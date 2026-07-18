@@ -25,7 +25,6 @@ use anyhow::bail;
 use clap::ArgAction;
 use clap::Parser;
 use clap::Subcommand;
-use ody_app_server_protocol::LoginCompletedNotification;
 use ody_app_server_protocol::AskForApproval;
 use ody_app_server_protocol::ClientInfo;
 use ody_app_server_protocol::ClientRequest;
@@ -44,6 +43,7 @@ use ody_app_server_protocol::JSONRPCMessage;
 use ody_app_server_protocol::JSONRPCNotification;
 use ody_app_server_protocol::JSONRPCRequest;
 use ody_app_server_protocol::JSONRPCResponse;
+use ody_app_server_protocol::LoginCompletedNotification;
 use ody_app_server_protocol::LoginResponse;
 use ody_app_server_protocol::ModelListParams;
 use ody_app_server_protocol::ModelListResponse;
@@ -472,8 +472,7 @@ pub async fn run() -> Result<()> {
                     "plugin-analytics-mutation-smoke requires --ody-bin and does not support --url"
                 );
             }
-            let ody_bin =
-                ody_bin.context("plugin-analytics-mutation-smoke requires --ody-bin")?;
+            let ody_bin = ody_bin.context("plugin-analytics-mutation-smoke requires --ody-bin")?;
             plugin_analytics_mutation_smoke::run(
                 &ody_bin,
                 &config_overrides,
@@ -1118,8 +1117,8 @@ async fn test_login(endpoint: &Endpoint, config_overrides: &[String]) -> Result<
         let initialize = client.initialize()?;
         println!("< initialize response: {initialize:?}");
 
-        let api_key = std::env::var("OPENAI_API_KEY")
-            .unwrap_or_else(|_| "sk-test-dummy-key".to_string());
+        let api_key =
+            std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| "sk-test-dummy-key".to_string());
         let login_response = client.login_account_api_key(api_key)?;
         println!("< auth/login/start response: {login_response:?}");
 

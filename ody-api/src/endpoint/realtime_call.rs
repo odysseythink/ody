@@ -6,15 +6,15 @@ use crate::endpoint::session::EndpointSession;
 use crate::error::ApiError;
 use crate::provider::Provider;
 use bytes::Bytes;
-use ody_client::HttpTransport;
-use ody_client::Request;
-use ody_client::RequestBody;
-use ody_client::RequestTelemetry;
 use http::HeaderMap;
 use http::HeaderValue;
 use http::Method;
 use http::header::CONTENT_TYPE;
 use http::header::LOCATION;
+use ody_client::HttpTransport;
+use ody_client::Request;
+use ody_client::RequestBody;
+use ody_client::RequestTelemetry;
 use serde::Serialize;
 use serde_json::Value;
 use serde_json::to_string;
@@ -276,12 +276,12 @@ mod tests {
     use crate::endpoint::realtime_websocket::RealtimeOutputModality;
     use crate::endpoint::realtime_websocket::RealtimeSessionMode;
     use crate::provider::RetryConfig;
+    use http::StatusCode;
     use ody_client::Request;
     use ody_client::Response;
     use ody_client::StreamResponse;
     use ody_client::TransportError;
     use ody_protocol::protocol::RealtimeVoice;
-    use http::StatusCode;
     use pretty_assertions::assert_eq;
     use std::sync::Mutex;
     use std::time::Duration;
@@ -402,7 +402,10 @@ mod tests {
 
         let request = transport.last_request.lock().unwrap().clone().unwrap();
         assert_eq!(request.method, Method::POST);
-        assert_eq!(request.url, "https://api.odysseythink.com/v1/realtime/calls");
+        assert_eq!(
+            request.url,
+            "https://api.odysseythink.com/v1/realtime/calls"
+        );
         assert_eq!(
             request.headers.get(CONTENT_TYPE).unwrap(),
             HeaderValue::from_static("application/sdp")

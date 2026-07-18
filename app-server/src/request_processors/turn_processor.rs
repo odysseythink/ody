@@ -651,8 +651,7 @@ impl TurnRequestProcessor {
 
         let runtime_workspace_roots =
             runtime_workspace_roots_request.map(resolve_runtime_workspace_roots);
-        let approval_policy =
-            approval_policy.map(ody_app_server_protocol::AskForApproval::to_core);
+        let approval_policy = approval_policy.map(ody_app_server_protocol::AskForApproval::to_core);
         let approvals_reviewer =
             approvals_reviewer.map(ody_app_server_protocol::ApprovalsReviewer::to_core);
         let sandbox_policy = sandbox_policy.map(|policy| policy.to_core());

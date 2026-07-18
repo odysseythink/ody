@@ -499,9 +499,15 @@ fn foreign_absolute_syntax_deserializes_without_host_interpretation() {
 #[test]
 fn from_path_preserves_foreign_absolute_path_for_uri_conversion() {
     #[cfg(not(windows))]
-    let (foreign_path, expected_uri) = (r"C:\Users\odysseythink\share", "file:///C:/Users/odysseythink/share");
+    let (foreign_path, expected_uri) = (
+        r"C:\Users\odysseythink\share",
+        "file:///C:/Users/odysseythink/share",
+    );
     #[cfg(windows)]
-    let (foreign_path, expected_uri) = ("/home/odysseythink/share", "file:///home/odysseythink/share");
+    let (foreign_path, expected_uri) = (
+        "/home/odysseythink/share",
+        "file:///home/odysseythink/share",
+    );
 
     let path: PathUri = LegacyAppPathString::from_path(std::path::Path::new(foreign_path))
         .try_into()

@@ -254,7 +254,6 @@ fn assistant_content_followed_by_function_calls_merges() {
             role: "assistant".to_string(),
             content: vec![ContentItem::OutputText {
                 text: "I will run both tools.".to_string(),
-
             }],
             phase: None,
             internal_chat_message_metadata_passthrough: None,
@@ -295,11 +294,11 @@ fn vendor_resolution_from_base_url() {
         ChatVendor::from_provider("custom", Some("https://api.deepseek.com/v1")),
         ChatVendor::DeepSeek
     );
+    assert_eq!(ChatVendor::from_provider("GLM", None), ChatVendor::Glm);
     assert_eq!(
-        ChatVendor::from_provider("GLM", None),
-        ChatVendor::Glm
+        ChatVendor::from_provider("whatever", None),
+        ChatVendor::Generic
     );
-    assert_eq!(ChatVendor::from_provider("whatever", None), ChatVendor::Generic);
 }
 
 fn reasoning(text: &str) -> ResponseItem {

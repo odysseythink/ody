@@ -2,14 +2,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use ody_arg0::Arg0DispatchPaths;
+use ody_client::default_client::USER_AGENT_SUFFIX;
+use ody_client::default_client::get_ody_user_agent;
 use ody_core::StateDbHandle;
 use ody_core::ThreadManager;
 use ody_core::config::Config;
 use ody_exec_server::EnvironmentManager;
 use ody_extension_api::empty_extension_registry;
 use ody_home::OdyHomeUserInstructionsProvider;
-use ody_client::default_client::USER_AGENT_SUFFIX;
-use ody_client::default_client::get_ody_user_agent;
 use ody_protocol::ThreadId;
 use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::Submission;
@@ -329,10 +329,7 @@ impl MessageProcessor {
 
         match name.as_ref() {
             "ody" => self.handle_tool_call_ody(id, arguments).await,
-            "ody-reply" => {
-                self.handle_tool_call_ody_session_reply(id, arguments)
-                    .await
-            }
+            "ody-reply" => self.handle_tool_call_ody_session_reply(id, arguments).await,
             _ => {
                 let result = CallToolResult::error(vec![rmcp::model::Content::text(format!(
                     "Unknown tool '{name}'"

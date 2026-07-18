@@ -745,7 +745,10 @@ impl ModelPreset {
     ///
     /// When `include_non_api_models` is true, all models are visible. Otherwise, only
     /// API-supported models are shown.
-    pub fn filter_by_auth(models: Vec<ModelPreset>, include_non_api_models: bool) -> Vec<ModelPreset> {
+    pub fn filter_by_auth(
+        models: Vec<ModelPreset>,
+        include_non_api_models: bool,
+    ) -> Vec<ModelPreset> {
         models
             .into_iter()
             .filter(|model| include_non_api_models || model.supported_in_api)
@@ -826,7 +829,10 @@ mod tests {
         }"#;
         let model: ModelInfo = serde_json::from_str(json).unwrap();
         assert_eq!(model.capabilities.effective_context_window_percent, 95);
-        assert_eq!(model.capabilities.input_modalities, vec![InputModality::Text, InputModality::Image]);
+        assert_eq!(
+            model.capabilities.input_modalities,
+            vec![InputModality::Text, InputModality::Image]
+        );
         assert_eq!(model.capabilities.context_window, None);
         assert!(!model.capabilities.supports_tools);
     }

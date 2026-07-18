@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use crate::AuthProvider;
 use bytes::Bytes;
-use ody_client::build_reqwest_client_with_custom_ca;
 use futures::Stream;
+use ody_client::build_reqwest_client_with_custom_ca;
 use reqwest::StatusCode;
 use reqwest::header::CONTENT_LENGTH;
 use serde::Deserialize;

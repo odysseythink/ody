@@ -1,8 +1,6 @@
 use std::io::Cursor;
 use std::path::Path;
 
-use ody_utils_image::PromptImageMode;
-use ody_utils_image::load_for_prompt_bytes;
 use divan::Bencher;
 use image::DynamicImage;
 use image::ImageFormat;
@@ -10,6 +8,8 @@ use image::Rgb;
 use image::RgbImage;
 use image::Rgba;
 use image::RgbaImage;
+use ody_utils_image::PromptImageMode;
+use ody_utils_image::load_for_prompt_bytes;
 
 const CACHE_MISS_VARIANT_COUNT: usize = 48;
 
