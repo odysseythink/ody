@@ -6,9 +6,9 @@ use std::pin::Pin;
 use ody_app_server_protocol::ConfigLayerSource;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_utils_absolute_path::AbsolutePathBuf;
-use thiserror::Error;
 use serde::Deserialize;
 use serde::Serialize;
+use thiserror::Error;
 use toml::Value as TomlValue;
 
 use crate::ConfigLayerEntry;
@@ -214,14 +214,13 @@ pub fn normalize_session_thread_config(config: SessionThreadConfig) -> SessionTh
 fn session_thread_config_from_toml(
     value: TomlValue,
 ) -> Result<SessionThreadConfig, ThreadConfigLoadError> {
-    let config: SessionThreadConfig =
-        SessionThreadConfig::deserialize(value).map_err(|err| {
-            ThreadConfigLoadError::new(
-                ThreadConfigLoadErrorCode::Parse,
-                /*status_code*/ None,
-                format!("failed to parse session thread config TOML: {err}"),
-            )
-        })?;
+    let config: SessionThreadConfig = SessionThreadConfig::deserialize(value).map_err(|err| {
+        ThreadConfigLoadError::new(
+            ThreadConfigLoadErrorCode::Parse,
+            /*status_code*/ None,
+            format!("failed to parse session thread config TOML: {err}"),
+        )
+    })?;
     Ok(normalize_session_thread_config(config))
 }
 
@@ -272,9 +271,7 @@ fn session_thread_config_to_toml(
                 ThreadConfigLoadError::new(
                     ThreadConfigLoadErrorCode::Parse,
                     /*status_code*/ None,
-                    format!(
-                        "failed to convert session model providers to config TOML: {err}"
-                    ),
+                    format!("failed to convert session model providers to config TOML: {err}"),
                 )
             })?;
             table.insert("model_providers".to_string(), model_providers);
@@ -296,8 +293,8 @@ fn session_thread_config_to_toml(
 #[cfg(test)]
 mod tests {
     use ody_model_provider_info::ModelProviderInfo;
+    use ody_model_provider_info::ProviderCapabilities;
     use ody_model_provider_info::WireApi;
-use ody_model_provider_info::ProviderCapabilities;
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -366,7 +363,10 @@ use ody_model_provider_info::ProviderCapabilities;
         // Build expected TOML programmatically so it matches the loader's
         // serialization, including any new fields like `capabilities`.
         let mut expected_toml = toml::map::Map::new();
-        expected_toml.insert("model_provider".to_string(), toml::Value::String("local".to_string()));
+        expected_toml.insert(
+            "model_provider".to_string(),
+            toml::Value::String("local".to_string()),
+        );
         let mut providers = toml::map::Map::new();
         providers.insert("local".to_string(), provider_toml);
         expected_toml.insert("model_providers".to_string(), toml::Value::Table(providers));
@@ -424,10 +424,10 @@ use ody_model_provider_info::ProviderCapabilities;
             ..Default::default()
         };
 
-        let toml = session_thread_config_to_toml(config.clone())
-            .expect("serialize session thread config");
-        let parsed = session_thread_config_from_toml(toml)
-            .expect("deserialize session thread config");
+        let toml =
+            session_thread_config_to_toml(config.clone()).expect("serialize session thread config");
+        let parsed =
+            session_thread_config_from_toml(toml).expect("deserialize session thread config");
 
         assert_eq!(parsed, config);
     }

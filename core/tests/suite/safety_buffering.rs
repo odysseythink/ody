@@ -1,8 +1,4 @@
 use anyhow::Ok;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::SafetyBufferingEvent;
-use ody_protocol::user_input::UserInput;
 use core_test_support::responses::ev_completed;
 use core_test_support::responses::ev_response_created;
 use core_test_support::responses::mount_response_once;
@@ -13,6 +9,10 @@ use core_test_support::skip_if_no_network;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
 use core_test_support::wait_for_event_match;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::SafetyBufferingEvent;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 

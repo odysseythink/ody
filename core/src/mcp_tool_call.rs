@@ -38,9 +38,9 @@ use ody_connectors::AppToolPolicyEvaluator;
 use ody_connectors::AppToolPolicyInput;
 use ody_features::Feature;
 use ody_hooks::PermissionRequestDecision;
-use ody_mcp::ODY_APPS_MCP_SERVER_NAME;
 use ody_mcp::MCP_TOOL_ODY_APPS_META_KEY;
 use ody_mcp::McpPermissionPromptAutoApproveContext;
+use ody_mcp::ODY_APPS_MCP_SERVER_NAME;
 use ody_mcp::SandboxState;
 use ody_mcp::auth_elicitation_completed_result;
 use ody_mcp::build_auth_elicitation_plan;
@@ -102,8 +102,7 @@ const MCP_RESULT_TELEMETRY_SPAN_KEY: &str = "span";
 const MCP_RESULT_TELEMETRY_TARGET_ID_KEY: &str = "target_id";
 const MCP_RESULT_TELEMETRY_DID_TRIGGER_SERVER_USER_FLOW_KEY: &str = "did_trigger_server_user_flow";
 const MCP_RESULT_TELEMETRY_TARGET_ID_SPAN_ATTR: &str = "ody.mcp.target.id";
-const MCP_RESULT_TELEMETRY_SERVER_USER_FLOW_SPAN_ATTR: &str =
-    "ody.mcp.server_user_flow.triggered";
+const MCP_RESULT_TELEMETRY_SERVER_USER_FLOW_SPAN_ATTR: &str = "ody.mcp.server_user_flow.triggered";
 const MCP_RESULT_TELEMETRY_TARGET_ID_MAX_CHARS: usize = 256;
 const MCP_TOOL_CALL_EVENT_RESULT_MAX_BYTES: usize = DEFAULT_OUTPUT_BYTES_CAP;
 
@@ -1093,10 +1092,7 @@ fn build_mcp_tool_call_request_meta(
             reasoning_effort: turn_context.effective_reasoning_effort(),
         })
     {
-        request_meta.insert(
-            crate::X_ODY_TURN_METADATA_HEADER.to_string(),
-            turn_metadata,
-        );
+        request_meta.insert(crate::X_ODY_TURN_METADATA_HEADER.to_string(), turn_metadata);
     }
 
     if server == ODY_APPS_MCP_SERVER_NAME {

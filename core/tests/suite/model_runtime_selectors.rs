@@ -1,4 +1,16 @@
 use anyhow::Result;
+use core_test_support::responses;
+use core_test_support::responses::ev_assistant_message;
+use core_test_support::responses::ev_completed;
+use core_test_support::responses::ev_response_created;
+use core_test_support::responses::mount_models_once;
+use core_test_support::responses::mount_sse_once;
+use core_test_support::responses::mount_sse_sequence;
+use core_test_support::responses::sse;
+use core_test_support::skip_if_no_network;
+use core_test_support::submit_thread_settings;
+use core_test_support::test_ody::test_ody;
+use core_test_support::wait_for_event;
 use ody_core::config::Config;
 use ody_features::Feature;
 use ody_models_manager::manager::RefreshStrategy;
@@ -15,18 +27,6 @@ use ody_protocol::protocol::MultiAgentVersion;
 use ody_protocol::protocol::Op;
 use ody_protocol::protocol::ThreadSettingsOverrides;
 use ody_protocol::user_input::UserInput;
-use core_test_support::responses;
-use core_test_support::responses::ev_assistant_message;
-use core_test_support::responses::ev_completed;
-use core_test_support::responses::ev_response_created;
-use core_test_support::responses::mount_models_once;
-use core_test_support::responses::mount_sse_once;
-use core_test_support::responses::mount_sse_sequence;
-use core_test_support::responses::sse;
-use core_test_support::skip_if_no_network;
-use core_test_support::submit_thread_settings;
-use core_test_support::test_ody::test_ody;
-use core_test_support::wait_for_event;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use tokio::time::Duration;
@@ -110,8 +110,7 @@ async fn response_for_remote_model(
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_config(configure);
+    let mut builder = test_ody().with_config(configure);
     let test = builder.build(&server).await?;
     let models_manager = test.thread_manager.get_models_manager();
     let available_model = wait_for_model_available(&models_manager, &model_slug).await;
@@ -378,16 +377,12 @@ async fn remote_multi_agent_selector_uses_model_selected_before_first_turn() -> 
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_config(|config| {
-            config.model = Some(ROOT_MODEL.to_string());
-        });
+    let mut builder = test_ody().with_config(|config| {
+        config.model = Some(ROOT_MODEL.to_string());
+    });
     let test = builder.build(&server).await?;
     assert_eq!(
-        (
-            models_mock.requests().len(),
-            test.ody.multi_agent_version(),
-        ),
+        (models_mock.requests().len(), test.ody.multi_agent_version(),),
         (1, None)
     );
 

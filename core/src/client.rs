@@ -66,28 +66,28 @@ use ody_client::default_client::build_reqwest_client;
 use ody_otel::SessionTelemetry;
 use ody_otel::current_span_w3c_trace_context;
 
-use ody_protocol::ThreadId;
-use ody_protocol::config_types::ReasoningSummary as ReasoningSummaryConfig;
-use ody_protocol::config_types::Verbosity as VerbosityConfig;
-use ody_protocol::models::ContentItem;
-use ody_protocol::models::ReasoningItemContent;
-use ody_protocol::models::ResponseItem;
-use ody_protocol::model_metadata::ModelInfo;
-use ody_protocol::protocol::TokenUsage;
-use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
-use ody_protocol::protocol::InternalSessionSource;
-use ody_protocol::protocol::SessionSource;
-use ody_protocol::protocol::W3cTraceContext;
-use ody_rollout_trace::CompactionTraceContext;
-use ody_rollout_trace::InferenceTraceAttempt;
-use ody_rollout_trace::InferenceTraceContext;
-use ody_tools::create_tools_json_for_responses_api;
 use eventsource_stream::Event;
 use eventsource_stream::EventStreamError;
 use futures::StreamExt;
 use http::HeaderMap as ApiHeaderMap;
 use http::HeaderValue;
 use http::StatusCode as HttpStatusCode;
+use ody_protocol::ThreadId;
+use ody_protocol::config_types::ReasoningSummary as ReasoningSummaryConfig;
+use ody_protocol::config_types::Verbosity as VerbosityConfig;
+use ody_protocol::model_metadata::ModelInfo;
+use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
+use ody_protocol::models::ContentItem;
+use ody_protocol::models::ReasoningItemContent;
+use ody_protocol::models::ResponseItem;
+use ody_protocol::protocol::InternalSessionSource;
+use ody_protocol::protocol::SessionSource;
+use ody_protocol::protocol::TokenUsage;
+use ody_protocol::protocol::W3cTraceContext;
+use ody_rollout_trace::CompactionTraceContext;
+use ody_rollout_trace::InferenceTraceAttempt;
+use ody_rollout_trace::InferenceTraceContext;
+use ody_tools::create_tools_json_for_responses_api;
 use reqwest::StatusCode;
 use std::time::Duration;
 use std::time::Instant;
@@ -112,15 +112,15 @@ use crate::responses_metadata::OdyResponsesMetadata;
 use crate::responses_metadata::subagent_header_value;
 use ody_feedback::FeedbackRequestTags;
 use ody_feedback::emit_feedback_request_tags;
-use ody_model_provider::SharedModelProvider;
-use ody_model_provider::create_model_provider;
-use ody_model_provider::adapters::core::prompt_to_chat_request;
 use ody_model_provider::ChatEvent;
 use ody_model_provider::ChatProviderError;
 use ody_model_provider::ContentPart;
 use ody_model_provider::FinishReason;
+use ody_model_provider::SharedModelProvider;
 use ody_model_provider::ToolCall;
 use ody_model_provider::Usage;
+use ody_model_provider::adapters::core::prompt_to_chat_request;
+use ody_model_provider::create_model_provider;
 
 #[cfg(test)]
 use ody_model_provider_info::DEFAULT_WEBSOCKET_CONNECT_TIMEOUT_MS;
@@ -923,29 +923,27 @@ impl ModelClient {
             response_debug.auth_error.as_deref(),
             response_debug.auth_error_code.as_deref(),
         );
-        emit_feedback_request_tags(
-            &FeedbackRequestTags {
-                endpoint: request_route_telemetry.endpoint,
-                auth_header_attached: auth_context.auth_header_attached,
-                auth_header_name: auth_context.auth_header_name,
-                auth_mode: auth_context.auth_mode,
-                auth_retry_after_unauthorized: Some(auth_context.retry_after_unauthorized),
-                auth_recovery_mode: auth_context.recovery_mode,
-                auth_recovery_phase: auth_context.recovery_phase,
-                auth_connection_reused: Some(false),
-                auth_request_id: response_debug.request_id.as_deref(),
-                auth_cf_ray: response_debug.cf_ray.as_deref(),
-                auth_error: response_debug.auth_error.as_deref(),
-                auth_error_code: response_debug.auth_error_code.as_deref(),
-                auth_recovery_followup_success: auth_context
-                    .retry_after_unauthorized
-                    .then_some(result.is_ok()),
-                auth_recovery_followup_status: auth_context
-                    .retry_after_unauthorized
-                    .then_some(status)
-                    .flatten(),
-            },
-        );
+        emit_feedback_request_tags(&FeedbackRequestTags {
+            endpoint: request_route_telemetry.endpoint,
+            auth_header_attached: auth_context.auth_header_attached,
+            auth_header_name: auth_context.auth_header_name,
+            auth_mode: auth_context.auth_mode,
+            auth_retry_after_unauthorized: Some(auth_context.retry_after_unauthorized),
+            auth_recovery_mode: auth_context.recovery_mode,
+            auth_recovery_phase: auth_context.recovery_phase,
+            auth_connection_reused: Some(false),
+            auth_request_id: response_debug.request_id.as_deref(),
+            auth_cf_ray: response_debug.cf_ray.as_deref(),
+            auth_error: response_debug.auth_error.as_deref(),
+            auth_error_code: response_debug.auth_error_code.as_deref(),
+            auth_recovery_followup_success: auth_context
+                .retry_after_unauthorized
+                .then_some(result.is_ok()),
+            auth_recovery_followup_status: auth_context
+                .retry_after_unauthorized
+                .then_some(status)
+                .flatten(),
+        });
         result
     }
 
@@ -1530,9 +1528,15 @@ impl ModelClientSession {
             RequestRouteTelemetry::for_endpoint(CHAT_COMPLETIONS_ENDPOINT),
         );
 
-        let chat_provider = self.client.state.provider.chat_provider().await.map_err(|err| {
-            OdyErr::Stream(format!("failed to create chat provider: {err}"), None)
-        })?;
+        let chat_provider = self
+            .client
+            .state
+            .provider
+            .chat_provider()
+            .await
+            .map_err(|err| {
+                OdyErr::Stream(format!("failed to create chat provider: {err}"), None)
+            })?;
         let mut request = prompt_to_chat_request(&model_info.slug, prompt, effort.clone());
         request.prompt_cache_key = Some(self.client.prompt_cache_key());
         let inference_trace_attempt = inference_trace.start_attempt();
@@ -1554,20 +1558,12 @@ impl ModelClientSession {
                     headers: None,
                     url: None,
                 });
-                inference_trace_attempt.record_failed(
-                    &err,
-                    None,
-                    /*output_items*/ &[],
-                );
+                inference_trace_attempt.record_failed(&err, None, /*output_items*/ &[]);
                 return Err(self.client.state.provider.map_api_error(err));
             }
             Err(err) => {
                 let mapped = err.to_ody_err();
-                inference_trace_attempt.record_failed(
-                    &mapped,
-                    None,
-                    /*output_items*/ &[],
-                );
+                inference_trace_attempt.record_failed(&mapped, None, /*output_items*/ &[]);
                 return Err(mapped);
             }
         }
@@ -1668,7 +1664,6 @@ fn map_response_stream(
     )
 }
 
-
 /// Map a `ChatProvider` `ChatStream` into a `ResponseStream` that downstream
 /// consumers already expect.
 ///
@@ -1748,7 +1743,10 @@ fn map_chat_stream(
                             assistant_item_added = true;
                         }
                     }
-                    assistant_text.as_mut().expect("assistant text initialized").push_str(&text);
+                    assistant_text
+                        .as_mut()
+                        .expect("assistant text initialized")
+                        .push_str(&text);
                     events.push(ResponseEvent::OutputTextDelta(text));
                 }
                 Ok(ChatEvent::ContentPart(ContentPart::Reasoning(text)))
@@ -1766,7 +1764,10 @@ fn map_chat_stream(
                             reasoning_item_added = true;
                         }
                     }
-                    reasoning_text.as_mut().expect("reasoning text initialized").push_str(&text);
+                    reasoning_text
+                        .as_mut()
+                        .expect("reasoning text initialized")
+                        .push_str(&text);
                     events.push(ResponseEvent::ReasoningContentDelta {
                         delta: text,
                         content_index: 0,
@@ -1931,11 +1932,7 @@ fn map_chat_stream(
                 }
                 Err(err) => {
                     let mapped = err.to_ody_err();
-                    inference_trace_attempt.record_failed(
-                        &mapped,
-                        None,
-                        &[],
-                    );
+                    inference_trace_attempt.record_failed(&mapped, None, &[]);
                     session_telemetry.see_event_completed_failed(&mapped);
                     let _ = tx_event.send(Err(mapped)).await;
                     return;
@@ -1959,19 +1956,10 @@ fn map_chat_stream(
                             usage.total_tokens,
                         );
                     }
-                    inference_trace_attempt.record_completed(
-                        response_id,
-                        None,
-                        token_usage,
-                        &[],
-                    );
+                    inference_trace_attempt.record_completed(response_id, None, token_usage, &[]);
                 }
                 if tx_event.send(event).await.is_err() {
-                    inference_trace_attempt.record_cancelled(
-                        STREAM_DROPPED_REASON,
-                        None,
-                        &[],
-                    );
+                    inference_trace_attempt.record_cancelled(STREAM_DROPPED_REASON, None, &[]);
                     return;
                 }
                 if is_terminal {
@@ -2240,31 +2228,29 @@ impl RequestTelemetry for ApiTelemetry {
             debug.auth_error.as_deref(),
             debug.auth_error_code.as_deref(),
         );
-        emit_feedback_request_tags(
-            &FeedbackRequestTags {
-                endpoint: self.request_route_telemetry.endpoint,
-                auth_header_attached: self.auth_context.auth_header_attached,
-                auth_header_name: self.auth_context.auth_header_name,
-                auth_mode: self.auth_context.auth_mode,
-                auth_retry_after_unauthorized: Some(self.auth_context.retry_after_unauthorized),
-                auth_recovery_mode: self.auth_context.recovery_mode,
-                auth_recovery_phase: self.auth_context.recovery_phase,
-                auth_connection_reused: None,
-                auth_request_id: debug.request_id.as_deref(),
-                auth_cf_ray: debug.cf_ray.as_deref(),
-                auth_error: debug.auth_error.as_deref(),
-                auth_error_code: debug.auth_error_code.as_deref(),
-                auth_recovery_followup_success: self
-                    .auth_context
-                    .retry_after_unauthorized
-                    .then_some(error.is_none()),
-                auth_recovery_followup_status: self
-                    .auth_context
-                    .retry_after_unauthorized
-                    .then_some(status)
-                    .flatten(),
-            },
-        );
+        emit_feedback_request_tags(&FeedbackRequestTags {
+            endpoint: self.request_route_telemetry.endpoint,
+            auth_header_attached: self.auth_context.auth_header_attached,
+            auth_header_name: self.auth_context.auth_header_name,
+            auth_mode: self.auth_context.auth_mode,
+            auth_retry_after_unauthorized: Some(self.auth_context.retry_after_unauthorized),
+            auth_recovery_mode: self.auth_context.recovery_mode,
+            auth_recovery_phase: self.auth_context.recovery_phase,
+            auth_connection_reused: None,
+            auth_request_id: debug.request_id.as_deref(),
+            auth_cf_ray: debug.cf_ray.as_deref(),
+            auth_error: debug.auth_error.as_deref(),
+            auth_error_code: debug.auth_error_code.as_deref(),
+            auth_recovery_followup_success: self
+                .auth_context
+                .retry_after_unauthorized
+                .then_some(error.is_none()),
+            auth_recovery_followup_status: self
+                .auth_context
+                .retry_after_unauthorized
+                .then_some(status)
+                .flatten(),
+        });
     }
 }
 
@@ -2293,31 +2279,29 @@ impl WebsocketTelemetry for ApiTelemetry {
             error_message.as_deref(),
             connection_reused,
         );
-        emit_feedback_request_tags(
-            &FeedbackRequestTags {
-                endpoint: self.request_route_telemetry.endpoint,
-                auth_header_attached: self.auth_context.auth_header_attached,
-                auth_header_name: self.auth_context.auth_header_name,
-                auth_mode: self.auth_context.auth_mode,
-                auth_retry_after_unauthorized: Some(self.auth_context.retry_after_unauthorized),
-                auth_recovery_mode: self.auth_context.recovery_mode,
-                auth_recovery_phase: self.auth_context.recovery_phase,
-                auth_connection_reused: Some(connection_reused),
-                auth_request_id: debug.request_id.as_deref(),
-                auth_cf_ray: debug.cf_ray.as_deref(),
-                auth_error: debug.auth_error.as_deref(),
-                auth_error_code: debug.auth_error_code.as_deref(),
-                auth_recovery_followup_success: self
-                    .auth_context
-                    .retry_after_unauthorized
-                    .then_some(error.is_none()),
-                auth_recovery_followup_status: self
-                    .auth_context
-                    .retry_after_unauthorized
-                    .then_some(status)
-                    .flatten(),
-            },
-        );
+        emit_feedback_request_tags(&FeedbackRequestTags {
+            endpoint: self.request_route_telemetry.endpoint,
+            auth_header_attached: self.auth_context.auth_header_attached,
+            auth_header_name: self.auth_context.auth_header_name,
+            auth_mode: self.auth_context.auth_mode,
+            auth_retry_after_unauthorized: Some(self.auth_context.retry_after_unauthorized),
+            auth_recovery_mode: self.auth_context.recovery_mode,
+            auth_recovery_phase: self.auth_context.recovery_phase,
+            auth_connection_reused: Some(connection_reused),
+            auth_request_id: debug.request_id.as_deref(),
+            auth_cf_ray: debug.cf_ray.as_deref(),
+            auth_error: debug.auth_error.as_deref(),
+            auth_error_code: debug.auth_error_code.as_deref(),
+            auth_recovery_followup_success: self
+                .auth_context
+                .retry_after_unauthorized
+                .then_some(error.is_none()),
+            auth_recovery_followup_status: self
+                .auth_context
+                .retry_after_unauthorized
+                .then_some(status)
+                .flatten(),
+        });
     }
 
     fn on_ws_event(

@@ -1184,4 +1184,3 @@ fn design_mode_exec_denied_message_includes_marker_and_command() {
     assert!(msg.contains(DESIGN_MODE_REJECTION_MARKER));
     assert!(msg.contains("git commit"));
 }
-

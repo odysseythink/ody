@@ -2,6 +2,23 @@ use core_test_support::test_ody::local_selections;
 use std::fs;
 
 use anyhow::Result;
+use core_test_support::PathBufExt;
+use core_test_support::apps_test_server::configure_search_capable_model;
+use core_test_support::context_snapshot;
+use core_test_support::context_snapshot::ContextSnapshotOptions;
+use core_test_support::context_snapshot::ContextSnapshotRenderMode;
+use core_test_support::responses;
+use core_test_support::responses::mount_sse_once;
+use core_test_support::responses::sse;
+use core_test_support::responses::start_websocket_server;
+use core_test_support::skip_if_no_network;
+use core_test_support::test_ody::TestOdyBuilder;
+use core_test_support::test_ody::TestOdyHarness;
+use core_test_support::test_ody::test_ody as base_test_ody;
+use core_test_support::test_path_buf;
+use core_test_support::wait_for_event;
+use core_test_support::wait_for_event_match;
+use core_test_support::wait_for_event_with_timeout;
 use ody_core::compact::SUMMARY_PREFIX;
 use ody_features::Feature;
 use ody_protocol::config_types::ServiceTier;
@@ -23,23 +40,6 @@ use ody_protocol::protocol::RealtimeOutputModality;
 use ody_protocol::protocol::RolloutItem;
 use ody_protocol::protocol::RolloutLine;
 use ody_protocol::user_input::UserInput;
-use core_test_support::PathBufExt;
-use core_test_support::apps_test_server::configure_search_capable_model;
-use core_test_support::context_snapshot;
-use core_test_support::context_snapshot::ContextSnapshotOptions;
-use core_test_support::context_snapshot::ContextSnapshotRenderMode;
-use core_test_support::responses;
-use core_test_support::responses::mount_sse_once;
-use core_test_support::responses::sse;
-use core_test_support::responses::start_websocket_server;
-use core_test_support::skip_if_no_network;
-use core_test_support::test_ody::TestOdyBuilder;
-use core_test_support::test_ody::TestOdyHarness;
-use core_test_support::test_ody::test_ody as base_test_ody;
-use core_test_support::test_path_buf;
-use core_test_support::wait_for_event;
-use core_test_support::wait_for_event_match;
-use core_test_support::wait_for_event_with_timeout;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
@@ -172,11 +172,9 @@ fn remote_realtime_test_ody_builder(
     realtime_server: &responses::WebSocketTestServer,
 ) -> TestOdyBuilder {
     let realtime_base_url = realtime_server.uri().to_string();
-    test_ody()
-
-        .with_config(move |config| {
-            config.experimental_realtime_ws_base_url = Some(realtime_base_url);
-        })
+    test_ody().with_config(move |config| {
+        config.experimental_realtime_ws_base_url = Some(realtime_base_url);
+    })
 }
 
 async fn start_remote_realtime_server() -> responses::WebSocketTestServer {
@@ -200,22 +198,21 @@ async fn start_remote_realtime_server() -> responses::WebSocketTestServer {
 }
 
 async fn start_realtime_conversation(ody: &ody_core::OdyThread) -> Result<()> {
-    ody
-        .submit(Op::RealtimeConversationStart(ConversationStartParams {
-            client_managed_handoffs: false,
-            ody_responses_as_items: false,
-            ody_response_item_prefix: None,
-            ody_response_handoff_prefix: None,
-            model: None,
-            output_modality: RealtimeOutputModality::Audio,
-            include_startup_context: true,
-            prompt: Some(Some("backend prompt".to_string())),
-            realtime_session_id: None,
-            transport: None,
-            version: None,
-            voice: None,
-        }))
-        .await?;
+    ody.submit(Op::RealtimeConversationStart(ConversationStartParams {
+        client_managed_handoffs: false,
+        ody_responses_as_items: false,
+        ody_response_item_prefix: None,
+        ody_response_handoff_prefix: None,
+        model: None,
+        output_modality: RealtimeOutputModality::Audio,
+        include_startup_context: true,
+        prompt: Some(Some("backend prompt".to_string())),
+        realtime_session_id: None,
+        transport: None,
+        version: None,
+        voice: None,
+    }))
+    .await?;
 
     wait_for_event_match(ody, |msg| match msg {
         EventMsg::RealtimeConversationStarted(started) => Some(Ok(started.clone())),
@@ -306,10 +303,7 @@ async fn wait_for_turn_complete(ody: &ody_core::OdyThread) {
 async fn remote_compact_replaces_history_for_followups() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = TestOdyHarness::with_builder(
-        test_ody(),
-    )
-    .await?;
+    let harness = TestOdyHarness::with_builder(test_ody()).await?;
     let ody = harness.test().ody.clone();
     let session_id = harness.test().session_configured.session_id.to_string();
     let thread_id = harness.test().session_configured.thread_id.to_string();
@@ -340,35 +334,33 @@ async fn remote_compact_replaces_history_for_followups() -> Result<()> {
     )
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello remote compact".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello remote compact".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_turn_complete(&ody).await;
 
     ody.submit(Op::Compact).await?;
     wait_for_turn_complete(&ody).await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "after compact".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "after compact".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_turn_complete(&ody).await;
 
     let compact_request = compact_mock.single_request();
@@ -598,86 +590,81 @@ async fn assert_remote_manual_compact_request_parity(
     )
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "TURN_ONE_USER".to_string(),
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "TURN_ONE_USER".to_string(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
+    wait_for_turn_complete(&ody).await;
+
+    ody.submit(Op::UserInput {
+        items: vec![
+            UserInput::Text {
+                text: "TURN_TWO_PREFIX".to_string(),
                 text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
-    wait_for_turn_complete(&ody).await;
-
-    ody
-        .submit(Op::UserInput {
-            items: vec![
-                UserInput::Text {
-                    text: "TURN_TWO_PREFIX".to_string(),
-                    text_elements: Vec::new(),
-                },
-                UserInput::Text {
-                    text: "TURN_TWO_SUFFIX".to_string(),
-                    text_elements: Vec::new(),
-                },
-            ],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
-    wait_for_turn_complete(&ody).await;
-
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "TURN_THREE_TOOL_USER".to_string(),
+            },
+            UserInput::Text {
+                text: "TURN_TWO_SUFFIX".to_string(),
                 text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+            },
+        ],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_turn_complete(&ody).await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![
-                UserInput::Image {
-                    image_url,
-                    detail: None,
-                },
-                UserInput::Text {
-                    text: "TURN_FOUR_IMAGE_USER".to_string(),
-                    text_elements: Vec::new(),
-                },
-            ],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "TURN_THREE_TOOL_USER".to_string(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_turn_complete(&ody).await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "TURN_FIVE_USER".to_string(),
+    ody.submit(Op::UserInput {
+        items: vec![
+            UserInput::Image {
+                image_url,
+                detail: None,
+            },
+            UserInput::Text {
+                text: "TURN_FOUR_IMAGE_USER".to_string(),
                 text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+            },
+        ],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
+    wait_for_turn_complete(&ody).await;
+
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "TURN_FIVE_USER".to_string(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_turn_complete(&ody).await;
 
     ody.submit(Op::Compact).await?;
@@ -781,12 +768,9 @@ async fn remote_manual_compact_api_auth_omits_service_tier_and_reuses_prompt_cac
 async fn remote_compact_v2_reuses_compaction_trigger_for_followups() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = TestOdyHarness::with_builder(
-        test_ody()
-            .with_config(|config| {
-                let _ = config.features.enable(Feature::RemoteCompactionV2);
-            }),
-    )
+    let harness = TestOdyHarness::with_builder(test_ody().with_config(|config| {
+        let _ = config.features.enable(Feature::RemoteCompactionV2);
+    }))
     .await?;
     let ody = harness.test().ody.clone();
 
@@ -815,35 +799,33 @@ async fn remote_compact_v2_reuses_compaction_trigger_for_followups() -> Result<(
     )
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello remote compact".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello remote compact".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_turn_complete(&ody).await;
 
     ody.submit(Op::Compact).await?;
     wait_for_turn_complete(&ody).await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "after compact".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "after compact".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_turn_complete(&ody).await;
 
     let response_requests = responses_mock.requests();
@@ -918,14 +900,11 @@ async fn remote_compact_v2_reuses_compaction_trigger_for_followups() -> Result<(
 async fn remote_compact_v2_retries_failures_with_stream_retry_budget() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = TestOdyHarness::with_builder(
-        test_ody()
-            .with_config(|config| {
-                let _ = config.features.enable(Feature::RemoteCompactionV2);
-                config.model_provider.request_max_retries = Some(0);
-                config.model_provider.stream_max_retries = Some(2);
-            }),
-    )
+    let harness = TestOdyHarness::with_builder(test_ody().with_config(|config| {
+        let _ = config.features.enable(Feature::RemoteCompactionV2);
+        config.model_provider.request_max_retries = Some(0);
+        config.model_provider.stream_max_retries = Some(2);
+    }))
     .await?;
     let ody = harness.test().ody.clone();
 
@@ -962,35 +941,33 @@ async fn remote_compact_v2_retries_failures_with_stream_retry_budget() -> Result
     )
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello remote compact".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello remote compact".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_turn_complete(&ody).await;
 
     ody.submit(Op::Compact).await?;
     wait_for_turn_complete(&ody).await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "after compact".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "after compact".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_turn_complete(&ody).await;
 
     let response_requests = responses_mock.requests();
@@ -1029,12 +1006,9 @@ async fn remote_compact_v2_retries_failures_with_stream_retry_budget() -> Result
 async fn remote_compact_v2_accepts_additional_output_items_before_compaction() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = TestOdyHarness::with_builder(
-        test_ody()
-            .with_config(|config| {
-                let _ = config.features.enable(Feature::RemoteCompactionV2);
-            }),
-    )
+    let harness = TestOdyHarness::with_builder(test_ody().with_config(|config| {
+        let _ = config.features.enable(Feature::RemoteCompactionV2);
+    }))
     .await?;
     let ody = harness.test().ody.clone();
 
@@ -1064,35 +1038,33 @@ async fn remote_compact_v2_accepts_additional_output_items_before_compaction() -
     )
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello remote compact".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello remote compact".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_turn_complete(&ody).await;
 
     ody.submit(Op::Compact).await?;
     wait_for_turn_complete(&ody).await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "after compact".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "after compact".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_turn_complete(&ody).await;
 
     let response_requests = responses_mock.requests();
@@ -1170,18 +1142,17 @@ async fn remote_compact_filters_deferred_dynamic_tools() -> Result<()> {
     )
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello remote compact".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello remote compact".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_turn_complete(&ody).await;
 
     ody.submit(Op::Compact).await?;
@@ -1211,10 +1182,7 @@ async fn remote_compact_filters_deferred_dynamic_tools() -> Result<()> {
 async fn remote_compact_runs_automatically() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = TestOdyHarness::with_builder(
-        test_ody(),
-    )
-    .await?;
+    let harness = TestOdyHarness::with_builder(test_ody()).await?;
     let ody = harness.test().ody.clone();
     let session_id = harness.test().session_configured.session_id.to_string();
     let thread_id = harness.test().session_configured.thread_id.to_string();
@@ -1242,18 +1210,17 @@ async fn remote_compact_runs_automatically() -> Result<()> {
     )
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello remote compact".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello remote compact".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
 
     let message = wait_for_event_match(&ody, |event| match event {
         EventMsg::ContextCompacted(_) => Some(true),
@@ -1349,13 +1316,10 @@ async fn remote_compact_trims_function_call_history_to_fit_context_window() -> R
     let retained_command = "echo retained-shell-output";
     let trimmed_command = "yes x | head -n 3000";
 
-    let harness = TestOdyHarness::with_builder(
-        test_ody()
-            .with_config(|config| {
-                config.model_context_window = Some(2_000);
-                config.model_auto_compact_token_limit = Some(200_000);
-            }),
-    )
+    let harness = TestOdyHarness::with_builder(test_ody().with_config(|config| {
+        config.model_context_window = Some(2_000);
+        config.model_auto_compact_token_limit = Some(200_000);
+    }))
     .await?;
     let ody = harness.test().ody.clone();
 
@@ -1378,32 +1342,30 @@ async fn remote_compact_trims_function_call_history_to_fit_context_window() -> R
     )
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: first_user_message.into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: first_user_message.into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: second_user_message.into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: second_user_message.into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
 
     let compact_mock = responses::mount_compact_user_history_with_summary_once(
@@ -1475,13 +1437,10 @@ async fn remote_compact_rewrites_multiple_trailing_function_call_outputs() -> Re
     let first_trimmed_command = "yes x | head -n 3000";
     let second_trimmed_command = "yes y | head -n 3000";
 
-    let harness = TestOdyHarness::with_builder(
-        test_ody()
-            .with_config(|config| {
-                config.model_context_window = Some(2_000);
-                config.model_auto_compact_token_limit = Some(200_000);
-            }),
-    )
+    let harness = TestOdyHarness::with_builder(test_ody().with_config(|config| {
+        config.model_context_window = Some(2_000);
+        config.model_auto_compact_token_limit = Some(200_000);
+    }))
     .await?;
     let ody = harness.test().ody.clone();
 
@@ -1505,32 +1464,30 @@ async fn remote_compact_rewrites_multiple_trailing_function_call_outputs() -> Re
     )
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: first_user_message.into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: first_user_message.into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: second_user_message.into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: second_user_message.into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
 
     let compact_mock = responses::mount_compact_user_history_with_summary_once(
@@ -1591,13 +1548,10 @@ async fn auto_remote_compact_trims_function_call_history_to_fit_context_window()
     let trimmed_call_id = "trimmed-call";
     let retained_command = "echo retained-shell-output";
     let trimmed_command = "yes x | head -n 3000";
-    let harness = TestOdyHarness::with_builder(
-        test_ody()
-            .with_config(|config| {
-                config.model_context_window = Some(2_000);
-                config.model_auto_compact_token_limit = Some(200_000);
-            }),
-    )
+    let harness = TestOdyHarness::with_builder(test_ody().with_config(|config| {
+        config.model_context_window = Some(2_000);
+        config.model_auto_compact_token_limit = Some(200_000);
+    }))
     .await?;
     let ody = harness.test().ody.clone();
 
@@ -1630,32 +1584,30 @@ async fn auto_remote_compact_trims_function_call_history_to_fit_context_window()
     )
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: first_user_message.into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: first_user_message.into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: second_user_message.into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: second_user_message.into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
 
     let compact_mock = responses::mount_compact_user_history_with_summary_once(
@@ -1664,18 +1616,17 @@ async fn auto_remote_compact_trims_function_call_history_to_fit_context_window()
     )
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "turn that triggers auto compact".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "turn that triggers auto compact".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
     assert_eq!(
         compact_mock.requests().len(),
@@ -1777,11 +1728,10 @@ async fn remote_compact_trims_tool_search_output_to_empty_tools_array() -> Resul
         )],
     });
 
-    let mut builder = test_ody()
-        .with_config(|config| {
-            configure_search_capable_model(config);
-            config.model_context_window = Some(2_000);
-        });
+    let mut builder = test_ody().with_config(|config| {
+        configure_search_capable_model(config);
+        config.model_context_window = Some(2_000);
+    });
     let mut test = builder.build(&server).await?;
     let new_thread = test
         .thread_manager
@@ -1791,18 +1741,17 @@ async fn remote_compact_trims_tool_search_output_to_empty_tools_array() -> Resul
     test.session_configured = new_thread.session_configured;
     let ody = test.ody.clone();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "Find the oversized deferred tool".to_string(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "Find the oversized deferred tool".to_string(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_turn_complete(&ody).await;
 
     let compact_mock =
@@ -1838,12 +1787,9 @@ async fn remote_compact_trims_tool_search_output_to_empty_tools_array() -> Resul
 async fn auto_remote_compact_failure_stops_agent_loop() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = TestOdyHarness::with_builder(
-        test_ody()
-            .with_config(|config| {
-                config.model_auto_compact_token_limit = Some(120);
-            }),
-    )
+    let harness = TestOdyHarness::with_builder(test_ody().with_config(|config| {
+        config.model_auto_compact_token_limit = Some(120);
+    }))
     .await?;
     let ody = harness.test().ody.clone();
 
@@ -1870,32 +1816,30 @@ async fn auto_remote_compact_failure_stops_agent_loop() -> Result<()> {
     )
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "turn that exceeds token threshold".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "turn that exceeds token threshold".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "turn that triggers auto compact".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "turn that triggers auto compact".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
 
     let error_message = wait_for_event_match(&ody, |event| match event {
         EventMsg::Error(err) => Some(err.message.clone()),
@@ -1946,12 +1890,9 @@ async fn remote_compact_trim_estimate_uses_session_base_instructions() -> Result
     let retained_command = "printf retained-shell-output";
     let trailing_command = "printf '%020000d' 0";
 
-    let baseline_harness = TestOdyHarness::with_builder(
-        test_ody()
-            .with_config(|config| {
-                config.model_context_window = Some(200_000);
-            }),
-    )
+    let baseline_harness = TestOdyHarness::with_builder(test_ody().with_config(|config| {
+        config.model_context_window = Some(200_000);
+    }))
     .await?;
     let baseline_ody = baseline_harness.test().ody.clone();
 
@@ -2049,16 +1990,13 @@ async fn remote_compact_trim_estimate_uses_session_base_instructions() -> Result
         "expected override instructions to push pre-trim estimate past the context window"
     );
 
-    let override_harness = TestOdyHarness::with_builder(
-        test_ody()
-            .with_config({
-                let override_base_instructions = override_base_instructions.clone();
-                move |config| {
-                    config.model_context_window = Some(override_context_window);
-                    config.base_instructions = Some(override_base_instructions);
-                }
-            }),
-    )
+    let override_harness = TestOdyHarness::with_builder(test_ody().with_config({
+        let override_base_instructions = override_base_instructions.clone();
+        move |config| {
+            config.model_context_window = Some(override_context_window);
+            config.base_instructions = Some(override_base_instructions);
+        }
+    }))
     .await?;
     let override_ody = override_harness.test().ody.clone();
 
@@ -2156,10 +2094,7 @@ async fn remote_compact_trim_estimate_uses_session_base_instructions() -> Result
 async fn remote_manual_compact_emits_context_compaction_items() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = TestOdyHarness::with_builder(
-        test_ody(),
-    )
-    .await?;
+    let harness = TestOdyHarness::with_builder(test_ody()).await?;
     let ody = harness.test().ody.clone();
 
     mount_sse_once(
@@ -2177,18 +2112,17 @@ async fn remote_manual_compact_emits_context_compaction_items() -> Result<()> {
     )
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "manual remote compact".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "manual remote compact".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
 
     ody.submit(Op::Compact).await?;
@@ -2237,10 +2171,7 @@ async fn remote_manual_compact_emits_context_compaction_items() -> Result<()> {
 async fn remote_manual_compact_failure_emits_task_error_event() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = TestOdyHarness::with_builder(
-        test_ody(),
-    )
-    .await?;
+    let harness = TestOdyHarness::with_builder(test_ody()).await?;
     let ody = harness.test().ody.clone();
 
     mount_sse_once(
@@ -2258,18 +2189,17 @@ async fn remote_manual_compact_failure_emits_task_error_event() -> Result<()> {
     )
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "manual remote compact".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "manual remote compact".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
 
     ody.submit(Op::Compact).await?;
@@ -2302,10 +2232,7 @@ async fn remote_manual_compact_failure_emits_task_error_event() -> Result<()> {
 async fn remote_compact_persists_replacement_history_in_rollout() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = TestOdyHarness::with_builder(
-        test_ody(),
-    )
-    .await?;
+    let harness = TestOdyHarness::with_builder(test_ody()).await?;
     let ody = harness.test().ody.clone();
     let rollout_path = harness
         .test()
@@ -2345,18 +2272,17 @@ async fn remote_compact_persists_replacement_history_in_rollout() -> Result<()> 
     )
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "needs compaction".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "needs compaction".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     ody.submit(Op::Compact).await?;
@@ -2441,8 +2367,7 @@ async fn remote_compact_and_resume_refresh_stale_developer_instructions() -> Res
     let server = wiremock::MockServer::start().await;
     let stale_developer_message = "STALE_DEVELOPER_INSTRUCTIONS_SHOULD_BE_REMOVED";
 
-    let mut start_builder =
-        test_ody();
+    let mut start_builder = test_ody();
     let initial = start_builder.build(&server).await?;
     let home = initial.home.clone();
     let rollout_path = initial
@@ -2526,13 +2451,9 @@ async fn remote_compact_and_resume_refresh_stale_developer_instructions() -> Res
     wait_for_event(&initial.ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     initial.ody.submit(Op::Shutdown).await?;
-    wait_for_event(&initial.ody, |ev| {
-        matches!(ev, EventMsg::ShutdownComplete)
-    })
-    .await;
+    wait_for_event(&initial.ody, |ev| matches!(ev, EventMsg::ShutdownComplete)).await;
 
-    let mut resume_builder =
-        test_ody();
+    let mut resume_builder = test_ody();
     let resumed = resume_builder.resume(&server, home, rollout_path).await?;
 
     resumed
@@ -3184,13 +3105,9 @@ async fn snapshot_request_shape_remote_compact_resume_restates_realtime_end() ->
     wait_for_event(&initial.ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     initial.ody.submit(Op::Shutdown).await?;
-    wait_for_event(&initial.ody, |ev| {
-        matches!(ev, EventMsg::ShutdownComplete)
-    })
-    .await;
+    wait_for_event(&initial.ody, |ev| matches!(ev, EventMsg::ShutdownComplete)).await;
 
-    let mut resume_builder =
-        test_ody();
+    let mut resume_builder = test_ody();
     let resumed = resume_builder.resume(&server, home, rollout_path).await?;
 
     resumed
@@ -3237,12 +3154,9 @@ async fn snapshot_request_shape_remote_pre_turn_compaction_including_incoming_us
 -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = TestOdyHarness::with_builder(
-        test_ody()
-            .with_config(|config| {
-                config.model_auto_compact_token_limit = Some(200);
-            }),
-    )
+    let harness = TestOdyHarness::with_builder(test_ody().with_config(|config| {
+        config.model_auto_compact_token_limit = Some(200);
+    }))
     .await?;
     let ody = harness.test().ody.clone();
 
@@ -3284,18 +3198,17 @@ async fn snapshot_request_shape_remote_pre_turn_compaction_including_incoming_us
             )
             .await?;
         }
-        ody
-            .submit(Op::UserInput {
-                items: vec![UserInput::Text {
-                    text: user.to_string(),
-                    text_elements: Vec::new(),
-                }],
-                final_output_json_schema: None,
-                responsesapi_client_metadata: None,
-                additional_context: Default::default(),
-                thread_settings: Default::default(),
-            })
-            .await?;
+        ody.submit(Op::UserInput {
+            items: vec![UserInput::Text {
+                text: user.to_string(),
+                text_elements: Vec::new(),
+            }],
+            final_output_json_schema: None,
+            responsesapi_client_metadata: None,
+            additional_context: Default::default(),
+            thread_settings: Default::default(),
+        })
+        .await?;
         wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
     }
 
@@ -3338,14 +3251,11 @@ async fn snapshot_request_shape_remote_pre_turn_compaction_strips_incoming_model
 
     let previous_model = "gpt-5.4";
     let next_model = "gpt-5.3-ody";
-    let harness = TestOdyHarness::with_builder(
-        test_ody()
-            .with_model(previous_model)
-            .with_config(|config| {
-                config.model_auto_compact_token_limit = Some(200);
-            }),
-    )
-    .await?;
+    let harness =
+        TestOdyHarness::with_builder(test_ody().with_model(previous_model).with_config(|config| {
+            config.model_auto_compact_token_limit = Some(200);
+        }))
+        .await?;
     let ody = harness.test().ody.clone();
 
     let initial_turn_request_mock = responses::mount_sse_once(
@@ -3370,18 +3280,17 @@ async fn snapshot_request_shape_remote_pre_turn_compaction_strips_incoming_model
     )
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "BEFORE_SWITCH_USER".to_string(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "BEFORE_SWITCH_USER".to_string(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     core_test_support::submit_thread_settings(
@@ -3392,18 +3301,17 @@ async fn snapshot_request_shape_remote_pre_turn_compaction_strips_incoming_model
         },
     )
     .await?;
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "AFTER_SWITCH_USER".to_string(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "AFTER_SWITCH_USER".to_string(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     assert_eq!(
@@ -3473,12 +3381,9 @@ async fn snapshot_request_shape_remote_pre_turn_compaction_strips_incoming_model
 async fn snapshot_request_shape_remote_pre_turn_compaction_context_window_exceeded() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = TestOdyHarness::with_builder(
-        test_ody()
-            .with_config(|config| {
-                config.model_auto_compact_token_limit = Some(200);
-            }),
-    )
+    let harness = TestOdyHarness::with_builder(test_ody().with_config(|config| {
+        config.model_auto_compact_token_limit = Some(200);
+    }))
     .await?;
     let ody = harness.test().ody.clone();
 
@@ -3510,32 +3415,30 @@ async fn snapshot_request_shape_remote_pre_turn_compaction_context_window_exceed
     )
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "USER_ONE".to_string(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "USER_ONE".to_string(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "USER_TWO".to_string(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "USER_TWO".to_string(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     let error_message = wait_for_event_match(&ody, |event| match event {
         EventMsg::Error(err) => Some(err.message.clone()),
         _ => None,
@@ -3578,12 +3481,9 @@ async fn snapshot_request_shape_remote_pre_turn_compaction_context_window_exceed
 async fn remote_pre_turn_compact_response_seeds_turn_state() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = TestOdyHarness::with_builder(
-        test_ody()
-            .with_config(|config| {
-                config.model_auto_compact_token_limit = Some(200);
-            }),
-    )
+    let harness = TestOdyHarness::with_builder(test_ody().with_config(|config| {
+        config.model_auto_compact_token_limit = Some(200);
+    }))
     .await?;
     let ody = harness.test().ody.clone();
 
@@ -3615,18 +3515,17 @@ async fn remote_pre_turn_compact_response_seeds_turn_state() -> Result<()> {
     // Phase 1: the first turn raises usage above the pre-turn compact threshold.
     // Phase 2: the next turn compacts before sampling and establishes turn state.
     for text in ["BEFORE_COMPACT_USER", "AFTER_COMPACT_USER"] {
-        ody
-            .submit(Op::UserInput {
-                items: vec![UserInput::Text {
-                    text: text.to_string(),
-                    text_elements: Vec::new(),
-                }],
-                final_output_json_schema: None,
-                responsesapi_client_metadata: None,
-                additional_context: Default::default(),
-                thread_settings: Default::default(),
-            })
-            .await?;
+        ody.submit(Op::UserInput {
+            items: vec![UserInput::Text {
+                text: text.to_string(),
+                text_elements: Vec::new(),
+            }],
+            final_output_json_schema: None,
+            responsesapi_client_metadata: None,
+            additional_context: Default::default(),
+            thread_settings: Default::default(),
+        })
+        .await?;
         wait_for_turn_complete(&ody).await;
     }
 
@@ -3650,12 +3549,9 @@ async fn remote_pre_turn_compact_response_seeds_turn_state() -> Result<()> {
 async fn remote_mid_turn_compact_v1_sends_turn_state_over_http() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = TestOdyHarness::with_builder(
-        test_ody()
-            .with_config(|config| {
-                config.model_auto_compact_token_limit = Some(200);
-            }),
-    )
+    let harness = TestOdyHarness::with_builder(test_ody().with_config(|config| {
+        config.model_auto_compact_token_limit = Some(200);
+    }))
     .await?;
     let ody = harness.test().ody.clone();
     let responses_mock = responses::mount_response_sequence(
@@ -3690,18 +3586,17 @@ async fn remote_mid_turn_compact_v1_sends_turn_state_over_http() -> Result<()> {
     .await;
 
     // Phase 1: sampling mints state and crosses the token limit with a pending tool follow-up.
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "RUN_WITH_MID_TURN_COMPACT".to_string(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "RUN_WITH_MID_TURN_COMPACT".to_string(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_turn_complete(&ody).await;
 
     // Phase 2: v1 compact receives the state established by sampling.
@@ -3732,13 +3627,10 @@ async fn remote_mid_turn_compact_v1_sends_turn_state_over_http() -> Result<()> {
 async fn remote_mid_turn_compact_v2_sends_turn_state_over_http() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = TestOdyHarness::with_builder(
-        test_ody()
-            .with_config(|config| {
-                let _ = config.features.enable(Feature::RemoteCompactionV2);
-                config.model_auto_compact_token_limit = Some(200);
-            }),
-    )
+    let harness = TestOdyHarness::with_builder(test_ody().with_config(|config| {
+        let _ = config.features.enable(Feature::RemoteCompactionV2);
+        config.model_auto_compact_token_limit = Some(200);
+    }))
     .await?;
     let ody = harness.test().ody.clone();
     let responses_mock = responses::mount_response_sequence(
@@ -3774,18 +3666,17 @@ async fn remote_mid_turn_compact_v2_sends_turn_state_over_http() -> Result<()> {
     .await;
 
     // Phase 1: sampling mints state and schedules inline v2 compaction.
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "RUN_WITH_MID_TURN_COMPACT_V2".to_string(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "RUN_WITH_MID_TURN_COMPACT_V2".to_string(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_turn_complete(&ody).await;
 
     let requests = responses_mock.requests();
@@ -3867,11 +3758,10 @@ async fn remote_mid_turn_compact_v2_sends_turn_state_over_websocket() -> Result<
         ],
     ]])
     .await;
-    let mut builder = test_ody()
-        .with_config(|config| {
-            let _ = config.features.enable(Feature::RemoteCompactionV2);
-            config.model_auto_compact_token_limit = Some(200);
-        });
+    let mut builder = test_ody().with_config(|config| {
+        let _ = config.features.enable(Feature::RemoteCompactionV2);
+        config.model_auto_compact_token_limit = Some(200);
+    });
     let test = builder.build_with_websocket_server(&server).await?;
 
     // Phase 1: startup prewarm stays empty, then WebSocket sampling mints state and schedules
@@ -3923,12 +3813,9 @@ async fn remote_mid_turn_compact_v2_sends_turn_state_over_websocket() -> Result<
 async fn snapshot_request_shape_remote_mid_turn_continuation_compaction() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = TestOdyHarness::with_builder(
-        test_ody()
-            .with_config(|config| {
-                config.model_auto_compact_token_limit = Some(200);
-            }),
-    )
+    let harness = TestOdyHarness::with_builder(test_ody().with_config(|config| {
+        config.model_auto_compact_token_limit = Some(200);
+    }))
     .await?;
     let ody = harness.test().ody.clone();
 
@@ -3953,18 +3840,17 @@ async fn snapshot_request_shape_remote_mid_turn_continuation_compaction() -> Res
     )
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "USER_ONE".to_string(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "USER_ONE".to_string(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     assert_eq!(compact_mock.requests().len(), 1);
@@ -3995,12 +3881,9 @@ async fn snapshot_request_shape_remote_mid_turn_compaction_summary_only_reinject
 -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = TestOdyHarness::with_builder(
-        test_ody()
-            .with_config(|config| {
-                config.model_auto_compact_token_limit = Some(200);
-            }),
-    )
+    let harness = TestOdyHarness::with_builder(test_ody().with_config(|config| {
+        config.model_auto_compact_token_limit = Some(200);
+    }))
     .await?;
     let ody = harness.test().ody.clone();
 
@@ -4032,18 +3915,17 @@ async fn snapshot_request_shape_remote_mid_turn_compaction_summary_only_reinject
     )
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "USER_ONE".to_string(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "USER_ONE".to_string(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     assert_eq!(compact_mock.requests().len(), 1);
@@ -4082,12 +3964,9 @@ async fn snapshot_request_shape_remote_mid_turn_compaction_multi_summary_reinjec
 -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = TestOdyHarness::with_builder(
-        test_ody()
-            .with_config(|config| {
-                config.model_auto_compact_token_limit = Some(200);
-            }),
-    )
+    let harness = TestOdyHarness::with_builder(test_ody().with_config(|config| {
+        config.model_auto_compact_token_limit = Some(200);
+    }))
     .await?;
     let ody = harness.test().ody.clone();
 
@@ -4117,35 +3996,33 @@ async fn snapshot_request_shape_remote_mid_turn_compaction_multi_summary_reinjec
     )
     .await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "USER_ONE".to_string(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "USER_ONE".to_string(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     ody.submit(Op::Compact).await?;
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "USER_TWO".to_string(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "USER_TWO".to_string(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     assert_eq!(compact_mock.requests().len(), 2);
@@ -4194,10 +4071,7 @@ async fn snapshot_request_shape_remote_manual_compact_without_previous_user_mess
 {
     skip_if_no_network!(Ok(()));
 
-    let harness = TestOdyHarness::with_builder(
-        test_ody(),
-    )
-    .await?;
+    let harness = TestOdyHarness::with_builder(test_ody()).await?;
     let ody = harness.test().ody.clone();
 
     let responses_mock = responses::mount_sse_once(
@@ -4216,18 +4090,17 @@ async fn snapshot_request_shape_remote_manual_compact_without_previous_user_mess
     ody.submit(Op::Compact).await?;
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "USER_ONE".to_string(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "USER_ONE".to_string(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     assert_eq!(

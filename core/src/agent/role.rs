@@ -217,7 +217,9 @@ mod reload {
     ) -> ConfigOverrides {
         ConfigOverrides {
             cwd: Some(config.cwd.to_path_buf()),
-            model: preserve_current_model.then(|| config.model.clone()).flatten(),
+            model: preserve_current_model
+                .then(|| config.model.clone())
+                .flatten(),
             model_provider: preserve_current_provider.then(|| config.model_provider_id.clone()),
             service_tier: preserve_current_service_tier.then(|| config.service_tier.clone()),
             main_execve_wrapper_exe: config.main_execve_wrapper_exe.clone(),

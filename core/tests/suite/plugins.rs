@@ -6,9 +6,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 use anyhow::Result;
-use ody_features::Feature;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
 use core_test_support::apps_test_server::SEARCH_CALENDAR_CREATE_TOOL;
 use core_test_support::responses::ResponseMock;
 use core_test_support::responses::ResponsesRequest;
@@ -26,6 +23,9 @@ use core_test_support::test_ody::TestOdy;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
 use core_test_support::wait_for_mcp_server;
+use ody_features::Feature;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
 use tempfile::TempDir;
 use wiremock::MockServer;
 
@@ -120,8 +120,7 @@ async fn build_analytics_plugin_test_ody(
     let mut builder = test_ody()
         .with_home(ody_home)
         .with_model("gpt-5.2")
-        .with_config(move |config| {
-        });
+        .with_config(move |config| {});
     Ok(builder
         .build(server)
         .await
@@ -195,14 +194,12 @@ async fn explicit_plugin_mentions_use_mcp_for_api_key_dual_surface_plugins() -> 
     write_plugin_mcp_plugin(ody_home.as_ref(), &rmcp_test_server_bin);
     write_plugin_app_plugin(ody_home.as_ref());
 
-    let mut builder = test_ody()
-        .with_home(ody_home)
-        .with_config(move |config| {
-            config
-                .features
-                .enable(Feature::Apps)
-                .expect("test config should allow feature update");
-        });
+    let mut builder = test_ody().with_home(ody_home).with_config(move |config| {
+        config
+            .features
+            .enable(Feature::Apps)
+            .expect("test config should allow feature update");
+    });
     let test_ody = builder
         .build(&server)
         .await
@@ -210,18 +207,17 @@ async fn explicit_plugin_mentions_use_mcp_for_api_key_dual_surface_plugins() -> 
     let ody = Arc::clone(&test_ody.ody);
     wait_for_mcp_server(&ody, "sample").await?;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![ody_protocol::user_input::UserInput::Mention {
-                name: "sample".into(),
-                path: format!("plugin://{SAMPLE_PLUGIN_CONFIG_NAME}"),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![ody_protocol::user_input::UserInput::Mention {
+            name: "sample".into(),
+            path: format!("plugin://{SAMPLE_PLUGIN_CONFIG_NAME}"),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     let requests = mock.requests();
@@ -277,18 +273,17 @@ async fn explicit_plugin_mentions_track_plugin_used_analytics() -> Result<()> {
     let test_ody = build_analytics_plugin_test_ody(&server, ody_home).await?;
     let ody = Arc::clone(&test_ody.ody);
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![ody_protocol::user_input::UserInput::Mention {
-                name: "sample".into(),
-                path: format!("plugin://{SAMPLE_PLUGIN_CONFIG_NAME}"),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![ody_protocol::user_input::UserInput::Mention {
+            name: "sample".into(),
+            path: format!("plugin://{SAMPLE_PLUGIN_CONFIG_NAME}"),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     let deadline = Instant::now() + Duration::from_secs(10);

@@ -2,9 +2,6 @@ use assert_matches::assert_matches;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
 use core_test_support::responses::ev_completed;
 use core_test_support::responses::ev_function_call;
 use core_test_support::responses::ev_response_created;
@@ -14,6 +11,9 @@ use core_test_support::responses::sse;
 use core_test_support::responses::start_mock_server;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
 use regex_lite::Regex;
 use serde_json::json;
 
@@ -44,19 +44,18 @@ async fn interrupt_long_running_tool_emits_turn_aborted() {
         .ody;
 
     // Kick off a turn that triggers the function call.
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "start sleep".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "start sleep".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     // Wait until the exec begins to avoid a race, then interrupt.
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::ExecCommandBegin(_))).await;
@@ -101,19 +100,18 @@ async fn interrupt_tool_records_history_entries() {
         .unwrap();
     let ody = Arc::clone(&fixture.ody);
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "start history recording".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "start history recording".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::ExecCommandBegin(_))).await;
 
@@ -122,19 +120,18 @@ async fn interrupt_tool_records_history_entries() {
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnAborted(_))).await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "follow up".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "follow up".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -205,19 +202,18 @@ async fn interrupt_persists_turn_aborted_marker_in_next_request() {
         .unwrap();
     let ody = Arc::clone(&fixture.ody);
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "start interrupt marker".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "start interrupt marker".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::ExecCommandBegin(_))).await;
 
@@ -226,19 +222,18 @@ async fn interrupt_persists_turn_aborted_marker_in_next_request() {
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnAborted(_))).await;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "follow up".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "follow up".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 

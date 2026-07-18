@@ -5,8 +5,7 @@ use crate::sandboxing::ExecOptions;
 use crate::shell::ShellType;
 use crate::tools::sandboxing::SandboxAttempt;
 use crate::tools::sandboxing::managed_network_for_sandbox_permissions;
-#[cfg(target_os = "macos")]
-use ody_network_proxy::ODY_PROXY_GIT_SSH_COMMAND_MARKER;
+use core_test_support::PathBufExt;
 use ody_network_proxy::CUSTOM_CA_ENV_KEYS;
 use ody_network_proxy::ConfigReloader;
 use ody_network_proxy::ConfigReloaderFuture;
@@ -15,6 +14,8 @@ use ody_network_proxy::NetworkProxy;
 use ody_network_proxy::NetworkProxyConfig;
 use ody_network_proxy::NetworkProxyConstraints;
 use ody_network_proxy::NetworkProxyState;
+#[cfg(target_os = "macos")]
+use ody_network_proxy::ODY_PROXY_GIT_SSH_COMMAND_MARKER;
 use ody_network_proxy::PROXY_ACTIVE_ENV_KEY;
 use ody_network_proxy::PROXY_ENV_KEYS;
 #[cfg(target_os = "macos")]
@@ -25,7 +26,6 @@ use ody_sandboxing::SandboxManager;
 use ody_sandboxing::SandboxType;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path_uri::PathUri;
-use core_test_support::PathBufExt;
 use pretty_assertions::assert_eq;
 use std::path::PathBuf;
 use std::process::Command;
@@ -280,8 +280,7 @@ fn apply_zsh_fork_path_prepend_uses_shell_parent() {
 fn apply_zsh_fork_path_prepend_moves_existing_shell_parent_to_front() {
     let mut env = HashMap::from([(
         "PATH".to_string(),
-        "/usr/bin:/package/ody-resources/zsh/bin:/bin:/package/ody-resources/zsh/bin"
-            .to_string(),
+        "/usr/bin:/package/ody-resources/zsh/bin:/bin:/package/ody-resources/zsh/bin".to_string(),
     )]);
     let mut runtime_path_prepends = RuntimePathPrepends::default();
 

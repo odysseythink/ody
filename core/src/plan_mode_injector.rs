@@ -2,11 +2,11 @@ use crate::plan_artifact::{ManifestSnapshot, PartRow, PartStatus, PlanArtifact};
 use crate::plan_mode_injector::parts_manifest::{
     RowStatus, normalize_part_path, parse_parts_manifest, row_is_verified_done,
 };
+use crate::turn_timing::now_unix_timestamp_ms;
 use ody_config::config_toml::PlanModeConfigToml;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::protocol::PlanModeLogEvent;
 use ody_protocol::protocol::PlanModeLogKind;
-use crate::turn_timing::now_unix_timestamp_ms;
 use std::path::Path;
 use tracing::warn;
 use uuid::Uuid;
@@ -502,7 +502,11 @@ mod directive_tests {
 | 1 | core.md | models | pending |
 ";
         let result = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
-        assert_eq!(result.logs.len(), 1, "expected one log entry, got {result:?}");
+        assert_eq!(
+            result.logs.len(),
+            1,
+            "expected one log entry, got {result:?}"
+        );
         assert_eq!(result.logs[0].kind, PlanModeLogKind::SplitStarted);
         assert!(
             result.logs[0].message.contains("core.md"),
@@ -556,7 +560,10 @@ mod directive_tests {
         let markdown = "## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 1 | core.md | models | pending |\n| 2 | api.md | endpoints | pending |\n";
         // Turn 1: first time the manifest is seen → StartSplit.
         let first = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
-        assert!(matches!(first.directive, PlanModeDirective::StartSplit { .. }));
+        assert!(matches!(
+            first.directive,
+            PlanModeDirective::StartSplit { .. }
+        ));
         // Turn 2: no part verified done, nothing changed → nudge instead of None.
         let second = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
         assert!(matches!(

@@ -4,9 +4,9 @@ use crate::config::ConfigBuilder;
 use crate::skills_load_input_from_config;
 use ody_config::ConfigLayerStackOrdering;
 use ody_core_plugins::PluginsManager;
-use ody_protocol::models::PermissionProfile;
 use ody_protocol::config_types::ServiceTier;
 use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::models::PermissionProfile;
 use ody_utils_absolute_path::test_support::PathExt;
 use pretty_assertions::assert_eq;
 use std::fs;
@@ -164,12 +164,8 @@ async fn apply_explorer_role_preserves_current_model_and_reasoning_effort() {
 #[tokio::test]
 async fn role_with_a_non_empty_layer_preserves_a_runtime_selected_model() {
     let (home, mut config) = test_config_with_cli_overrides(Vec::new()).await;
-    let role_path = write_role_config(
-        &home,
-        "sandbox-only.toml",
-        "sandbox_mode = \"read-only\"\n",
-    )
-    .await;
+    let role_path =
+        write_role_config(&home, "sandbox-only.toml", "sandbox_mode = \"read-only\"\n").await;
     config.agent_roles.insert(
         "custom".to_string(),
         AgentRoleConfig {
@@ -195,8 +191,7 @@ async fn role_with_a_non_empty_layer_preserves_a_runtime_selected_model() {
 #[tokio::test]
 async fn role_that_sets_a_model_still_wins_over_the_runtime_model() {
     let (home, mut config) = test_config_with_cli_overrides(Vec::new()).await;
-    let role_path =
-        write_role_config(&home, "model-role.toml", "model = \"role-model\"\n").await;
+    let role_path = write_role_config(&home, "model-role.toml", "model = \"role-model\"\n").await;
     config.agent_roles.insert(
         "custom".to_string(),
         AgentRoleConfig {
@@ -537,10 +532,7 @@ enabled = false
     let skills_input = skills_load_input_from_config(&config, effective_skill_roots)
         .with_plugin_skill_snapshots(plugin_skill_snapshots);
     let snapshot = skills_service
-        .snapshot_for_config(
-            &skills_input,
-            Some(Arc::clone(&ody_exec_server::LOCAL_FS)),
-        )
+        .snapshot_for_config(&skills_input, Some(Arc::clone(&ody_exec_server::LOCAL_FS)))
         .await;
     let outcome = snapshot.outcome();
     let skill = outcome

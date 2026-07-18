@@ -440,10 +440,9 @@ async fn save_image_generation_result_saves_base64_to_png_in_ody_home() {
     let expected_path = image_generation_artifact_path(&ody_home, "session-1", "ig_save_base64");
     let _ = std::fs::remove_file(&expected_path);
 
-    let saved_path =
-        save_image_generation_result(&ody_home, "session-1", "ig_save_base64", "Zm9v")
-            .await
-            .expect("image should be saved");
+    let saved_path = save_image_generation_result(&ody_home, "session-1", "ig_save_base64", "Zm9v")
+        .await
+        .expect("image should be saved");
 
     assert_eq!(saved_path, expected_path);
     assert_eq!(std::fs::read(&saved_path).expect("saved file"), b"foo");

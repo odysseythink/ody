@@ -39,8 +39,9 @@ impl<'a> PlanModeTierSelector<'a> {
         // ody-code's plan-mode semantics. Config can still override via tier setting.
         PlanModeTierSelection {
             tier: PlanModeTier::Rigor,
-            rationale: "plan mode: always generate detailed plan (heuristic tier selection removed)"
-                .to_string(),
+            rationale:
+                "plan mode: always generate detailed plan (heuristic tier selection removed)"
+                    .to_string(),
         }
     }
 }
@@ -59,18 +60,17 @@ fn tier_name(tier: PlanModeTier) -> &'static str {
 /// accidental triggers inside plan prose.
 pub fn parse_tier_switch_command(user_message: &str) -> Option<PlanModeTier> {
     static SWITCH_RE: OnceLock<Regex> = OnceLock::new();
-    let switch_re = SWITCH_RE.get_or_init(|| {
-        Regex::new(r"(?i)^\s*/plan-tier\s+(rigor|concise|auto)\s*$").unwrap()
-    });
+    let switch_re = SWITCH_RE
+        .get_or_init(|| Regex::new(r"(?i)^\s*/plan-tier\s+(rigor|concise|auto)\s*$").unwrap());
 
-    switch_re.captures(user_message).and_then(|cap| {
-        match &cap[1].to_lowercase()[..] {
+    switch_re
+        .captures(user_message)
+        .and_then(|cap| match &cap[1].to_lowercase()[..] {
             "rigor" => Some(PlanModeTier::Rigor),
             "concise" => Some(PlanModeTier::Concise),
             "auto" => Some(PlanModeTier::Auto),
             _ => None,
-        }
-    })
+        })
 }
 
 #[cfg(test)]
@@ -110,7 +110,11 @@ mod tests {
         let selector = PlanModeTierSelector::new(Some(&config));
         let selection = selector.select_tier("any prompt");
         assert_eq!(selection.tier, PlanModeTier::Rigor);
-        assert!(selection.rationale.contains("always generate detailed plan"));
+        assert!(
+            selection
+                .rationale
+                .contains("always generate detailed plan")
+        );
     }
 
     #[test]
@@ -119,7 +123,11 @@ mod tests {
         // Test with small prompt that would have triggered Concise before.
         let selection = selector.select_tier("fix typo");
         assert_eq!(selection.tier, PlanModeTier::Rigor);
-        assert!(selection.rationale.contains("always generate detailed plan"));
+        assert!(
+            selection
+                .rationale
+                .contains("always generate detailed plan")
+        );
     }
 
     #[test]
@@ -139,25 +147,41 @@ mod tests {
 "#;
         let selection = selector.select_tier(prompt);
         assert_eq!(selection.tier, PlanModeTier::Rigor);
-        assert!(selection.rationale.contains("always generate detailed plan"));
+        assert!(
+            selection
+                .rationale
+                .contains("always generate detailed plan")
+        );
     }
 
     #[test]
     fn parse_tier_switch_command_matches_valid_commands() {
-        assert_eq!(parse_tier_switch_command("/plan-tier rigor"), Some(PlanModeTier::Rigor));
+        assert_eq!(
+            parse_tier_switch_command("/plan-tier rigor"),
+            Some(PlanModeTier::Rigor)
+        );
         assert_eq!(
             parse_tier_switch_command("  /plan-tier  concise  "),
             Some(PlanModeTier::Concise)
         );
-        assert_eq!(parse_tier_switch_command("/plan-tier auto"), Some(PlanModeTier::Auto));
+        assert_eq!(
+            parse_tier_switch_command("/plan-tier auto"),
+            Some(PlanModeTier::Auto)
+        );
     }
 
     #[test]
     fn parse_tier_switch_command_ignores_non_commands() {
-        assert_eq!(parse_tier_switch_command("Please /plan-tier rigor now"), None);
+        assert_eq!(
+            parse_tier_switch_command("Please /plan-tier rigor now"),
+            None
+        );
         assert_eq!(parse_tier_switch_command("/plan-tier unknown"), None);
         assert_eq!(parse_tier_switch_command("/plan-tier rigor extra"), None);
         assert_eq!(parse_tier_switch_command(""), None);
-        assert_eq!(parse_tier_switch_command("/plan-tier rigor\nmore text"), None);
+        assert_eq!(
+            parse_tier_switch_command("/plan-tier rigor\nmore text"),
+            None
+        );
     }
 }

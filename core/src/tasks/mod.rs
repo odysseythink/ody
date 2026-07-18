@@ -9,8 +9,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use ody_extension_api::ExtensionData;
 use futures::future::BoxFuture;
+use ody_extension_api::ExtensionData;
 use tokio::select;
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
@@ -23,12 +23,12 @@ use tracing::trace;
 use tracing::trace_span;
 use tracing::warn;
 
-use crate::ody_thread::BackgroundTerminalInfo;
 use crate::config::Config;
 use crate::context::ContextualUserFragment;
 use crate::hook_runtime::inspect_pending_input;
 use crate::hook_runtime::record_additional_contexts;
 use crate::hook_runtime::record_pending_input;
+use crate::ody_thread::BackgroundTerminalInfo;
 use crate::session::TurnInput;
 use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
@@ -53,11 +53,11 @@ use ody_protocol::protocol::TurnAbortedEvent;
 use ody_protocol::protocol::TurnCompleteEvent;
 use ody_protocol::protocol::WarningEvent;
 
+pub(crate) use compact::CompactTask;
 use ody_features::Feature;
 use ody_protocol::error::OdyErr;
 use ody_protocol::error::Result as OdyResult;
 use ody_protocol::models::ContentItem;
-pub(crate) use compact::CompactTask;
 pub(crate) use regular::RegularTask;
 pub(crate) use review::ReviewTask;
 pub(crate) use user_shell::UserShellCommandMode;

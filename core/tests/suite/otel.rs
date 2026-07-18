@@ -1,16 +1,3 @@
-use ody_core::config::Constrained;
-use ody_features::Feature;
-use ody_otel::SessionTelemetry;
-use ody_otel::TelemetryAuthMode;
-use ody_protocol::ThreadId;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::model_metadata::ReasoningEffort;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::ReviewDecision;
-use ody_protocol::protocol::SessionSource;
-use ody_protocol::user_input::UserInput;
 use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
 use core_test_support::responses::ev_custom_tool_call;
@@ -30,6 +17,19 @@ use core_test_support::responses::start_mock_server;
 use core_test_support::test_ody::TestOdy;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
+use ody_core::config::Constrained;
+use ody_features::Feature;
+use ody_otel::SessionTelemetry;
+use ody_otel::TelemetryAuthMode;
+use ody_protocol::ThreadId;
+use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::ReviewDecision;
+use ody_protocol::protocol::SessionSource;
+use ody_protocol::user_input::UserInput;
 use std::sync::Mutex;
 use std::time::Duration;
 use tracing::Level;
@@ -118,19 +118,18 @@ async fn responses_api_emits_api_request_event() {
 
     let TestOdy { ody, .. } = test_ody().build(&server).await.unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -164,19 +163,18 @@ async fn process_sse_emits_tracing_for_output_item() {
 
     let TestOdy { ody, .. } = test_ody().build(&server).await.unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -210,19 +208,18 @@ async fn process_sse_emits_failed_event_on_parse_error() {
         .await
         .unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -257,19 +254,18 @@ async fn process_sse_records_failed_event_when_stream_closes_without_completed()
         .await
         .unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -324,19 +320,18 @@ async fn process_sse_failed_event_records_response_error_message() {
         .await
         .unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -389,19 +384,18 @@ async fn process_sse_failed_event_logs_parse_error() {
         .await
         .unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -441,19 +435,18 @@ async fn process_sse_failed_event_logs_missing_error() {
         .await
         .unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -502,19 +495,18 @@ async fn process_sse_failed_event_logs_response_completed_parse_error() {
         .await
         .unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -557,19 +549,18 @@ async fn process_sse_emits_completed_telemetry() {
 
     let TestOdy { ody, .. } = test_ody().build(&server).await.unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -636,19 +627,18 @@ async fn turn_and_completed_response_spans_record_token_usage() {
 
     let TestOdy { ody, .. } = test;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -724,19 +714,18 @@ async fn handle_responses_span_records_response_kind_and_tool_name() {
         .await
         .unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -818,19 +807,18 @@ async fn record_responses_sets_span_fields_for_response_events() {
         .await
         .unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -906,19 +894,18 @@ async fn handle_response_item_records_tool_result_for_custom_tool_call() {
         .await
         .unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -982,28 +969,25 @@ async fn handle_response_item_records_tool_result_for_function_call() {
         .await
         .unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TokenCount(_))).await;
 
     logs_assert(|lines: &[&str]| {
         let line = lines
             .iter()
-            .find(|line| {
-                line.contains("ody.tool_result") && line.contains("call_id=function-call")
-            })
+            .find(|line| line.contains("ody.tool_result") && line.contains("call_id=function-call"))
             .ok_or_else(|| "missing ody.tool_result event".to_string())?;
 
         if !line.contains("tool_name=nonexistent") {
@@ -1059,19 +1043,18 @@ async fn handle_response_item_records_tool_result_for_shell_command_call() {
         .await
         .unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -1145,8 +1128,7 @@ fn sandbox_outcome_assertion<'a>(
         let line = lines
             .iter()
             .find(|line| {
-                line.contains("ody.sandbox_outcome")
-                    && line.contains(&format!("call_id={call_id}"))
+                line.contains("ody.sandbox_outcome") && line.contains(&format!("call_id={call_id}"))
             })
             .ok_or_else(|| format!("missing ody.sandbox_outcome event for {call_id}"))?;
 
@@ -1230,19 +1212,18 @@ async fn handle_shell_command_autoapprove_from_config_records_tool_decision() {
         .await
         .unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
@@ -1285,19 +1266,18 @@ async fn handle_shell_command_user_approved_records_tool_decision() {
         .await
         .unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "approved".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "approved".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     let approval_event =
         wait_for_event(&ody, |ev| matches!(ev, EventMsg::ExecApprovalRequest(_))).await;
@@ -1305,14 +1285,13 @@ async fn handle_shell_command_user_approved_records_tool_decision() {
         panic!("expected ExecApprovalRequest event");
     };
 
-    ody
-        .submit(Op::ExecApproval {
-            id: approval.effective_approval_id(),
-            turn_id: None,
-            decision: ReviewDecision::Approved,
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::ExecApproval {
+        id: approval.effective_approval_id(),
+        turn_id: None,
+        decision: ReviewDecision::Approved,
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TokenCount(_))).await;
 
@@ -1355,19 +1334,18 @@ async fn handle_shell_command_user_approved_for_session_records_tool_decision() 
         .await
         .unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "persist".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "persist".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     let approval_event =
         wait_for_event(&ody, |ev| matches!(ev, EventMsg::ExecApprovalRequest(_))).await;
@@ -1375,14 +1353,13 @@ async fn handle_shell_command_user_approved_for_session_records_tool_decision() 
         panic!("expected ExecApprovalRequest event");
     };
 
-    ody
-        .submit(Op::ExecApproval {
-            id: approval.effective_approval_id(),
-            turn_id: None,
-            decision: ReviewDecision::ApprovedForSession,
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::ExecApproval {
+        id: approval.effective_approval_id(),
+        turn_id: None,
+        decision: ReviewDecision::ApprovedForSession,
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TokenCount(_))).await;
 
@@ -1425,19 +1402,18 @@ async fn handle_sandbox_error_user_approves_retry_records_tool_decision() {
         .await
         .unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "retry".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "retry".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     let approval_event =
         wait_for_event(&ody, |ev| matches!(ev, EventMsg::ExecApprovalRequest(_))).await;
@@ -1445,14 +1421,13 @@ async fn handle_sandbox_error_user_approves_retry_records_tool_decision() {
         panic!("expected ExecApprovalRequest event");
     };
 
-    ody
-        .submit(Op::ExecApproval {
-            id: approval.effective_approval_id(),
-            turn_id: None,
-            decision: ReviewDecision::Approved,
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::ExecApproval {
+        id: approval.effective_approval_id(),
+        turn_id: None,
+        decision: ReviewDecision::Approved,
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TokenCount(_))).await;
 
@@ -1495,19 +1470,18 @@ async fn handle_shell_command_user_denies_records_tool_decision() {
         .await
         .unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "deny".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "deny".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     let approval_event =
         wait_for_event(&ody, |ev| matches!(ev, EventMsg::ExecApprovalRequest(_))).await;
@@ -1515,14 +1489,13 @@ async fn handle_shell_command_user_denies_records_tool_decision() {
         panic!("expected ExecApprovalRequest event");
     };
 
-    ody
-        .submit(Op::ExecApproval {
-            id: approval.effective_approval_id(),
-            turn_id: None,
-            decision: ReviewDecision::Denied,
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::ExecApproval {
+        id: approval.effective_approval_id(),
+        turn_id: None,
+        decision: ReviewDecision::Denied,
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TokenCount(_))).await;
 
@@ -1565,19 +1538,18 @@ async fn handle_sandbox_error_user_approves_for_session_records_tool_decision() 
         .await
         .unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "persist".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "persist".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     let approval_event =
         wait_for_event(&ody, |ev| matches!(ev, EventMsg::ExecApprovalRequest(_))).await;
@@ -1585,14 +1557,13 @@ async fn handle_sandbox_error_user_approves_for_session_records_tool_decision() 
         panic!("expected ExecApprovalRequest event");
     };
 
-    ody
-        .submit(Op::ExecApproval {
-            id: approval.effective_approval_id(),
-            turn_id: None,
-            decision: ReviewDecision::ApprovedForSession,
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::ExecApproval {
+        id: approval.effective_approval_id(),
+        turn_id: None,
+        decision: ReviewDecision::ApprovedForSession,
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TokenCount(_))).await;
 
@@ -1636,19 +1607,18 @@ async fn handle_sandbox_error_user_denies_records_tool_decision() {
         .await
         .unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "deny".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "deny".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     let approval_event =
         wait_for_event(&ody, |ev| matches!(ev, EventMsg::ExecApprovalRequest(_))).await;
@@ -1656,14 +1626,13 @@ async fn handle_sandbox_error_user_denies_records_tool_decision() {
         panic!("expected ExecApprovalRequest event");
     };
 
-    ody
-        .submit(Op::ExecApproval {
-            id: approval.effective_approval_id(),
-            turn_id: None,
-            decision: ReviewDecision::Denied,
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::ExecApproval {
+        id: approval.effective_approval_id(),
+        turn_id: None,
+        decision: ReviewDecision::Denied,
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TokenCount(_))).await;
 

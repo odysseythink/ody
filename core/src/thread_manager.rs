@@ -1,21 +1,23 @@
 use crate::SkillsService;
 use crate::agent::AgentControl;
 use crate::attestation::AttestationProvider;
-use crate::ody_thread::OdyThread;
 use crate::config::Config;
 use crate::config::ThreadStoreConfig;
 use crate::current_time::TimeProvider;
 use crate::environment_selection::TurnEnvironmentSnapshot;
 use crate::environment_selection::default_thread_environment_selections;
 use crate::mcp::McpManager;
+use crate::ody_thread::OdyThread;
 use crate::rollout::truncation;
+use crate::session::INITIAL_SUBMIT_ID;
 use crate::session::Ody;
 use crate::session::OdySpawnArgs;
 use crate::session::OdySpawnOk;
-use crate::session::INITIAL_SUBMIT_ID;
 use crate::session::resolve_multi_agent_version;
 use crate::tasks::InterruptedTurnHistoryMarker;
 use crate::tasks::interrupted_turn_history_marker;
+use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use ody_analytics::AnalyticsEventsClient;
 use ody_app_server_protocol::ThreadHistoryBuilder;
 use ody_app_server_protocol::TurnStatus;
@@ -66,8 +68,6 @@ use ody_thread_store::ThreadStore;
 use ody_thread_store::ThreadStoreError;
 use ody_thread_store::UpdateThreadMetadataParams;
 use ody_utils_absolute_path::AbsolutePathBuf;
-use futures::StreamExt;
-use futures::stream::FuturesUnordered;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -223,17 +223,12 @@ pub(crate) struct ThreadManagerState {
     ops_log: Option<SharedCapturedOps>,
 }
 
-pub fn build_models_manager(
-    config: &Config,
-) -> SharedModelsManager {
+pub fn build_models_manager(config: &Config) -> SharedModelsManager {
     let provider = create_model_provider_with_id(
         config.model_provider_id.clone(),
         config.model_provider.clone(),
     );
-    provider.models_manager(
-        config.ody_home.to_path_buf(),
-        config.model_catalog.clone(),
-    )
+    provider.models_manager(config.ody_home.to_path_buf(), config.model_catalog.clone())
 }
 
 pub fn thread_store_from_config(
@@ -316,9 +311,7 @@ impl ThreadManager {
 
     /// Construct with a provider for tests.
     /// Used for integration tests: should not be used by ordinary business logic.
-    pub(crate) fn with_models_provider_for_tests(
-        provider: ModelProviderInfo,
-    ) -> Self {
+    pub(crate) fn with_models_provider_for_tests(provider: ModelProviderInfo) -> Self {
         Self::with_models_provider_and_catalog_for_tests(provider, None)
     }
 
@@ -327,10 +320,8 @@ impl ThreadManager {
         model_catalog: Option<ModelsResponse>,
     ) -> Self {
         set_thread_manager_test_mode_for_tests(/*enabled*/ true);
-        let ody_home = std::env::temp_dir().join(format!(
-            "ody-thread-manager-test-{}",
-            uuid::Uuid::new_v4()
-        ));
+        let ody_home =
+            std::env::temp_dir().join(format!("ody-thread-manager-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&ody_home)
             .unwrap_or_else(|err| panic!("temp ody home dir create failed: {err}"));
         let mut manager = Self::with_models_provider_home_and_catalog_for_tests(
@@ -548,9 +539,7 @@ impl ThreadManager {
             })
             .await
             .map_err(|err| match err {
-                ThreadStoreError::ThreadNotFound { thread_id } => {
-                    OdyErr::ThreadNotFound(thread_id)
-                }
+                ThreadStoreError::ThreadNotFound { thread_id } => OdyErr::ThreadNotFound(thread_id),
                 err => thread_store_metadata_update_error(thread_id, err),
             })
     }
@@ -1436,9 +1425,7 @@ impl ThreadManagerState {
                 forked_from_thread_id,
             )
             .await;
-        let OdySpawnOk {
-            ody, thread_id, ..
-        } = Box::pin(Ody::spawn(OdySpawnArgs {
+        let OdySpawnOk { ody, thread_id, .. } = Box::pin(Ody::spawn(OdySpawnArgs {
             config,
             user_instructions,
             installation_id: self.installation_id.clone(),

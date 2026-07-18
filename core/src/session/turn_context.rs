@@ -646,12 +646,18 @@ impl Session {
             let decision = if edge {
                 evaluate_design_exit(artifact, next.collaboration_mode.mode, enforcement).await
             } else {
-                HandoffDecision::Allow { reminder: None, logs: Vec::new() }
+                HandoffDecision::Allow {
+                    reminder: None,
+                    logs: Vec::new(),
+                }
             };
 
             // ---- phase 3: re-lock, commit or veto ----
             match decision {
-                HandoffDecision::Veto { missing_report, logs } => {
+                HandoffDecision::Veto {
+                    missing_report,
+                    logs,
+                } => {
                     // No new mode committed: surface the missing-sections list as
                     // hidden model context on the current (still-Design) turn.
                     let source = InternalContextSource::from_static("design_handoff");
@@ -663,7 +669,8 @@ impl Session {
                         self.send_event_raw(Event {
                             id: sub_id.clone(),
                             msg: EventMsg::PlanModeLog(log),
-                        }).await;
+                        })
+                        .await;
                     }
                     Err(OdyErr::InvalidRequest(missing_report))
                 }
@@ -747,7 +754,8 @@ impl Session {
         }
 
         for log in design_handoff_logs {
-            self.send_event(turn_context.as_ref(), EventMsg::PlanModeLog(log)).await;
+            self.send_event(turn_context.as_ref(), EventMsg::PlanModeLog(log))
+                .await;
         }
 
         Ok(turn_context)

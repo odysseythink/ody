@@ -7,15 +7,6 @@ use std::time::Instant;
 
 use anyhow::Context;
 use anyhow::Result;
-use ody_core::sandboxing::SandboxPermissions;
-use ody_features::Feature;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::permissions::FileSystemAccessMode;
-use ody_protocol::permissions::FileSystemPath;
-use ody_protocol::permissions::FileSystemSandboxEntry;
-use ody_protocol::permissions::FileSystemSandboxPolicy;
-use ody_protocol::permissions::NetworkSandboxPolicy;
-use ody_protocol::protocol::AskForApproval;
 use core_test_support::assert_regex_match;
 use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
@@ -30,6 +21,15 @@ use core_test_support::skip_if_no_network;
 use core_test_support::skip_if_sandbox;
 use core_test_support::test_ody::local;
 use core_test_support::test_ody::test_ody;
+use ody_core::sandboxing::SandboxPermissions;
+use ody_features::Feature;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::permissions::FileSystemAccessMode;
+use ody_protocol::permissions::FileSystemPath;
+use ody_protocol::permissions::FileSystemSandboxEntry;
+use ody_protocol::permissions::FileSystemSandboxPolicy;
+use ody_protocol::permissions::NetworkSandboxPolicy;
+use ody_protocol::protocol::AskForApproval;
 use regex_lite::Regex;
 use serde_json::Value;
 use serde_json::json;
@@ -367,26 +367,24 @@ async fn shell_command_enforces_glob_deny_read_policy() -> Result<()> {
     skip_if_sandbox!(Ok(()));
 
     let server = start_mock_server().await;
-    let mut builder = test_ody()
-        .with_model("gpt-5.4")
-        .with_config(move |config| {
-            let mut file_system_sandbox_policy = FileSystemSandboxPolicy::default();
-            file_system_sandbox_policy
-                .entries
-                .push(FileSystemSandboxEntry {
-                    path: FileSystemPath::GlobPattern {
-                        pattern: format!("{}/**/*.env", config.cwd.as_path().display()),
-                    },
-                    access: FileSystemAccessMode::Deny,
-                });
-            config
-                .permissions
-                .set_permission_profile(PermissionProfile::from_runtime_permissions(
-                    &file_system_sandbox_policy,
-                    NetworkSandboxPolicy::Restricted,
-                ))
-                .expect("set permission profile");
-        });
+    let mut builder = test_ody().with_model("gpt-5.4").with_config(move |config| {
+        let mut file_system_sandbox_policy = FileSystemSandboxPolicy::default();
+        file_system_sandbox_policy
+            .entries
+            .push(FileSystemSandboxEntry {
+                path: FileSystemPath::GlobPattern {
+                    pattern: format!("{}/**/*.env", config.cwd.as_path().display()),
+                },
+                access: FileSystemAccessMode::Deny,
+            });
+        config
+            .permissions
+            .set_permission_profile(PermissionProfile::from_runtime_permissions(
+                &file_system_sandbox_policy,
+                NetworkSandboxPolicy::Restricted,
+            ))
+            .expect("set permission profile");
+    });
     let fixture = builder.build(&server).await?;
 
     let fixture_dir = fixture.workspace_path("glob-deny-read");

@@ -4,10 +4,10 @@ use crate::agent::registry::AgentRegistry;
 use crate::agent::role::DEFAULT_ROLE_NAME;
 use crate::agent::role::resolve_role_config;
 use crate::agent::status::is_final;
-use crate::ody_thread::ThreadConfigSnapshot;
 use crate::config::Config;
 use crate::config::RolloutBudgetConfig;
 use crate::environment_selection::TurnEnvironmentSnapshot;
+use crate::ody_thread::ThreadConfigSnapshot;
 use crate::rollout_budget::RolloutBudget;
 use crate::session::emit_subagent_session_started;
 use crate::session_prefix::format_inter_agent_completion_message;
@@ -585,9 +585,7 @@ impl AgentControl {
             return None;
         }
 
-        Some(Arc::clone(
-            &parent_thread.ody.session.services.exec_policy,
-        ))
+        Some(Arc::clone(&parent_thread.ody.session.services.exec_policy))
     }
 
     async fn open_thread_spawn_children(

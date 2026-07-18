@@ -363,9 +363,7 @@ fn response_item_records_turn_ttft(item: &ResponseItem) -> bool {
             }) || content.as_ref().is_some_and(|entries| {
                 entries.iter().any(|entry| match entry {
                     ody_protocol::models::ReasoningItemContent::ReasoningText { text }
-                    | ody_protocol::models::ReasoningItemContent::Text { text } => {
-                        !text.is_empty()
-                    }
+                    | ody_protocol::models::ReasoningItemContent::Text { text } => !text.is_empty(),
                 })
             })
         }

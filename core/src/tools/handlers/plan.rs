@@ -83,8 +83,7 @@ impl PlanHandler {
 
         if turn.collaboration_mode.mode == ModeKind::Plan {
             return Err(FunctionCallError::RespondToModel(
-                "update_plan is not available in Plan mode. Do NOT call it again. "
-                    .to_string()
+                "update_plan is not available in Plan mode. Do NOT call it again. ".to_string()
                     + "Continue exploring or writing the plan. "
                     + "If you already received an answer to a question, do not re-ask it.",
             ));

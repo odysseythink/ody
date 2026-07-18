@@ -10,6 +10,9 @@ use async_channel::Sender;
 use async_channel::TrySendError;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use http::HeaderMap;
+use http::HeaderValue;
+use http::header::AUTHORIZATION;
 use ody_api::ApiError;
 use ody_api::Provider as ApiProvider;
 use ody_api::RealtimeAudioFrame;
@@ -21,14 +24,13 @@ use ody_api::RealtimeWebsocketClient;
 use ody_api::RealtimeWebsocketEvents;
 use ody_api::RealtimeWebsocketWriter;
 use ody_api::map_api_error;
+use ody_client::default_client::default_headers;
 use ody_config::config_toml::RealtimeWsMode;
 use ody_config::config_toml::RealtimeWsVersion;
-use ody_client::default_client::default_headers;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_protocol::error::OdyErr;
 use ody_protocol::error::Result as OdyResult;
 use ody_protocol::models::MessagePhase;
-use ody_protocol::protocol::OdyErrorInfo;
 use ody_protocol::protocol::ConversationAudioParams;
 use ody_protocol::protocol::ConversationSpeechParams;
 use ody_protocol::protocol::ConversationStartParams;
@@ -38,6 +40,7 @@ use ody_protocol::protocol::ConversationTextRole;
 use ody_protocol::protocol::ErrorEvent;
 use ody_protocol::protocol::Event;
 use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::OdyErrorInfo;
 use ody_protocol::protocol::RealtimeConversationClosedEvent;
 use ody_protocol::protocol::RealtimeConversationRealtimeEvent;
 use ody_protocol::protocol::RealtimeConversationSdpEvent;
@@ -46,9 +49,6 @@ use ody_protocol::protocol::RealtimeHandoffRequested;
 use ody_protocol::protocol::RealtimeOutputModality;
 use ody_protocol::protocol::RealtimeVoice;
 use ody_protocol::protocol::RealtimeVoicesList;
-use http::HeaderMap;
-use http::HeaderValue;
-use http::header::AUTHORIZATION;
 use serde_json::json;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -1083,8 +1083,7 @@ pub(crate) async fn handle_audio(
         if sess.conversation.running_state().await.is_some() {
             warn!("realtime audio input failed while the session was already ending");
         } else {
-            send_conversation_error(sess, sub_id, err.to_string(), OdyErrorInfo::BadRequest)
-                .await;
+            send_conversation_error(sess, sub_id, err.to_string(), OdyErrorInfo::BadRequest).await;
         }
     }
 }
@@ -1154,7 +1153,10 @@ fn realtime_request_headers(
     let mut headers = HeaderMap::new();
 
     if version == RealtimeWsVersion::V1 {
-        headers.insert("odysseythink-alpha", HeaderValue::from_static("quicksilver=v1"));
+        headers.insert(
+            "odysseythink-alpha",
+            HeaderValue::from_static("quicksilver=v1"),
+        );
     }
 
     if let Some(realtime_session_id) = realtime_session_id
@@ -1184,8 +1186,7 @@ pub(crate) async fn handle_text(
         if sess.conversation.running_state().await.is_some() {
             warn!("realtime text input failed while the session was already ending");
         } else {
-            send_conversation_error(sess, sub_id, err.to_string(), OdyErrorInfo::BadRequest)
-                .await;
+            send_conversation_error(sess, sub_id, err.to_string(), OdyErrorInfo::BadRequest).await;
         }
     }
 }
@@ -1201,8 +1202,7 @@ pub(crate) async fn handle_speech(
         if sess.conversation.running_state().await.is_some() {
             warn!("realtime speech append failed while the session was already ending");
         } else {
-            send_conversation_error(sess, sub_id, err.to_string(), OdyErrorInfo::BadRequest)
-                .await;
+            send_conversation_error(sess, sub_id, err.to_string(), OdyErrorInfo::BadRequest).await;
         }
     }
 }

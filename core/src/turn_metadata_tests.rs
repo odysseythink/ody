@@ -1,22 +1,22 @@
 use super::*;
 
-use crate::responses_metadata::OdyResponsesRequestKind;
 use crate::responses_metadata::CompactionTurnMetadata;
 use crate::responses_metadata::INSTALLATION_ID_KEY;
+use crate::responses_metadata::OdyResponsesRequestKind;
 use crate::responses_metadata::WINDOW_ID_KEY;
 use crate::sandbox_tags::permission_profile_sandbox_tag;
+use core_test_support::PathBufExt;
+use core_test_support::PathExt;
 use ody_analytics::CompactionImplementation;
 use ody_analytics::CompactionPhase;
 use ody_analytics::CompactionReason;
 use ody_analytics::CompactionTrigger;
-use ody_protocol::models::PermissionProfile;
 use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
+use ody_protocol::models::PermissionProfile;
 use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::SubAgentSource;
 use ody_protocol::protocol::ThreadSource;
 use ody_utils_absolute_path::AbsolutePathBuf;
-use core_test_support::PathBufExt;
-use core_test_support::PathExt;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use std::collections::HashMap;

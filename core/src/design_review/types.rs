@@ -1,8 +1,8 @@
 //! Types for the design-mode adversarial review.
 
-use std::fmt;
 use serde::Deserialize;
 use serde::Serialize;
+use std::fmt;
 
 /// Input to a design review.
 #[derive(Clone, Debug, PartialEq)]

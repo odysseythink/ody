@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
+use http::HeaderMap as ApiHeaderMap;
+use http::HeaderValue;
 use ody_analytics::CompactionImplementation;
 use ody_analytics::CompactionPhase;
 use ody_analytics::CompactionReason;
@@ -12,8 +14,6 @@ use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::SubAgentSource;
 use ody_protocol::protocol::ThreadSource;
 use ody_utils_string::to_ascii_json_string;
-use http::HeaderMap as ApiHeaderMap;
-use http::HeaderValue;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -257,8 +257,7 @@ impl OdyResponsesMetadata {
             let (request_kind, compaction) = request_kind.metadata();
             (Some(request_kind), compaction)
         });
-        let has_turn_identity =
-            request_kind.is_none_or(OdyResponsesRequestKind::has_turn_identity);
+        let has_turn_identity = request_kind.is_none_or(OdyResponsesRequestKind::has_turn_identity);
         let has_request_identity =
             request_kind.is_some_and(OdyResponsesRequestKind::has_turn_identity);
         OdyTurnMetadataPayload {

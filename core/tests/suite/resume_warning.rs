@@ -1,5 +1,8 @@
 #![allow(clippy::unwrap_used)]
 
+use core::time::Duration;
+use core_test_support::load_default_config_for_test;
+use core_test_support::wait_for_event;
 use ody_core::NewThread;
 use ody_protocol::ThreadId;
 use ody_protocol::config_types::ModeKind;
@@ -13,9 +16,6 @@ use ody_protocol::protocol::TurnContextItem;
 use ody_protocol::protocol::TurnStartedEvent;
 use ody_protocol::protocol::UserMessageEvent;
 use ody_protocol::protocol::WarningEvent;
-use core::time::Duration;
-use core_test_support::load_default_config_for_test;
-use core_test_support::wait_for_event;
 use tempfile::TempDir;
 
 fn resume_history(
@@ -93,9 +93,8 @@ async fn emits_warning_when_resumed_model_differs() {
 
     let initial_history = resume_history(&config, "previous-model", &rollout_path);
 
-    let thread_manager = ody_core::test_support::thread_manager_with_models_provider(
-        config.model_provider.clone(),
-    );
+    let thread_manager =
+        ody_core::test_support::thread_manager_with_models_provider(config.model_provider.clone());
 
     // Act: resume the conversation.
     let NewThread {

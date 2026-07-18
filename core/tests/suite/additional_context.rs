@@ -1,11 +1,4 @@
 use anyhow::Result;
-use ody_protocol::items::TurnItem;
-use ody_protocol::protocol::AdditionalContextEntry;
-use ody_protocol::protocol::AdditionalContextKind;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::ItemCompletedEvent;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
 use core_test_support::context_snapshot;
 use core_test_support::context_snapshot::ContextSnapshotOptions;
 use core_test_support::context_snapshot::ContextSnapshotRenderMode;
@@ -17,6 +10,13 @@ use core_test_support::responses::start_mock_server;
 use core_test_support::skip_if_no_network;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event_match;
+use ody_protocol::items::TurnItem;
+use ody_protocol::protocol::AdditionalContextEntry;
+use ody_protocol::protocol::AdditionalContextKind;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::ItemCompletedEvent;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use std::collections::BTreeMap;
 

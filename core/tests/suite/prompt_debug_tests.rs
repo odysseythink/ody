@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use core_test_support::responses::strip_metadata;
 use ody_core::build_prompt_input;
 use ody_core::config::ConfigBuilder;
 use ody_core::config::ConfigOverrides;
@@ -8,7 +9,6 @@ use ody_home::OdyHomeUserInstructionsProvider;
 use ody_protocol::models::ContentItem;
 use ody_protocol::models::ResponseItem;
 use ody_protocol::user_input::UserInput;
-use core_test_support::responses::strip_metadata;
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 

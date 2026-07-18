@@ -48,18 +48,22 @@ mod tests {
         match spec {
             ToolSpec::Function(tool) => {
                 assert_eq!(tool.name, "submit_design");
-                let props = tool.parameters.properties.as_ref().expect("must have properties");
-                assert!(
-                    props.contains_key("design"),
-                    "must have 'design' field"
-                );
+                let props = tool
+                    .parameters
+                    .properties
+                    .as_ref()
+                    .expect("must have properties");
+                assert!(props.contains_key("design"), "must have 'design' field");
                 assert!(
                     !props.contains_key("plan"),
                     "must NOT have 'plan' field (that's submit_plan)"
                 );
                 let req = tool.parameters.required.clone().unwrap_or_default();
                 assert!(req.iter().any(|r| r == "design"), "design must be required");
-                assert!(!req.iter().any(|r| r == "plan"), "plan must not be required");
+                assert!(
+                    !req.iter().any(|r| r == "plan"),
+                    "plan must not be required"
+                );
             }
             _ => panic!("expected Function variant"),
         }

@@ -37,8 +37,7 @@ impl CodeModeExecuteHandler {
         let args =
             ody_code_mode::parse_exec_source(&code).map_err(FunctionCallError::RespondToModel)?;
         let exec = ExecContext { session, turn };
-        let enabled_tools =
-            ody_tools::collect_code_mode_tool_definitions(&self.nested_tool_specs);
+        let enabled_tools = ody_tools::collect_code_mode_tool_definitions(&self.nested_tool_specs);
         let started_at = std::time::Instant::now();
         let started_cell = exec
             .session

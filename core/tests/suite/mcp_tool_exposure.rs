@@ -1,5 +1,4 @@
 use anyhow::Result;
-use ody_features::Feature;
 use core_test_support::apps_test_server::AppsTestServer;
 use core_test_support::apps_test_server::SEARCH_CALENDAR_CREATE_TOOL;
 use core_test_support::apps_test_server::SEARCH_CALENDAR_NAMESPACE;
@@ -11,6 +10,7 @@ use core_test_support::responses::ev_response_created;
 use core_test_support::responses::namespace_child_tool;
 use core_test_support::responses::sse;
 use core_test_support::skip_if_no_network;
+use ody_features::Feature;
 use serde_json::Value;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -29,8 +29,8 @@ async fn code_mode_only_exposes_direct_model_only_mcp_namespaces() -> Result<()>
     )
     .await;
 
-    let mut builder = search_capable_apps_builder(apps_server.base_url.clone())
-        .with_config(move |config| {
+    let mut builder =
+        search_capable_apps_builder(apps_server.base_url.clone()).with_config(move |config| {
             config
                 .features
                 .enable(Feature::CodeModeOnly)

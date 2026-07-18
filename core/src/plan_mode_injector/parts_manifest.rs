@@ -324,7 +324,10 @@ mod tests {
     fn part_file_cell_problem_explains_each_unusable_form() {
         let stem = Path::new("/plans/2026-07-05-topic");
 
-        assert_eq!(part_file_cell_problem(stem, "2026-07-05-topic/core.md"), None);
+        assert_eq!(
+            part_file_cell_problem(stem, "2026-07-05-topic/core.md"),
+            None
+        );
 
         let placeholder = part_file_cell_problem(stem, "<stem>/core.md").unwrap();
         assert!(placeholder.contains("placeholder"), "{placeholder}");

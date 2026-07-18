@@ -284,24 +284,23 @@ fn test_invocation_with_payload(
 
 fn attach_test_trace(session: &mut Session, turn: &TurnContext, root: &Path) -> anyhow::Result<()> {
     let thread_id = session.thread_id;
-    let rollout_thread_trace =
-        ody_rollout_trace::ThreadTraceContext::start_root_in_root_for_test(
-            root,
-            ThreadStartedTraceMetadata {
-                thread_id: thread_id.to_string(),
-                agent_path: "/root".to_string(),
-                task_name: None,
-                nickname: None,
-                agent_role: None,
-                session_source: SessionSource::Exec,
-                cwd: PathBuf::from("/workspace"),
-                rollout_path: None,
-                model: "gpt-test".to_string(),
-                provider_name: "test-provider".to_string(),
-                approval_policy: "never".to_string(),
-                sandbox_policy: "danger-full-access".to_string(),
-            },
-        )?;
+    let rollout_thread_trace = ody_rollout_trace::ThreadTraceContext::start_root_in_root_for_test(
+        root,
+        ThreadStartedTraceMetadata {
+            thread_id: thread_id.to_string(),
+            agent_path: "/root".to_string(),
+            task_name: None,
+            nickname: None,
+            agent_role: None,
+            session_source: SessionSource::Exec,
+            cwd: PathBuf::from("/workspace"),
+            rollout_path: None,
+            model: "gpt-test".to_string(),
+            provider_name: "test-provider".to_string(),
+            approval_policy: "never".to_string(),
+            sandbox_policy: "danger-full-access".to_string(),
+        },
+    )?;
     rollout_thread_trace.record_ody_turn_started(turn.sub_id.as_str());
     session.services.rollout_thread_trace = rollout_thread_trace;
     Ok(())

@@ -314,16 +314,10 @@ impl Session {
         let config = self.get_config().await;
         let mcp_config = self.runtime_mcp_config(config.as_ref()).await;
         let tool_plugin_provenance = ody_mcp::tool_plugin_provenance(&mcp_config);
-        let mcp_servers =
-            effective_mcp_servers_from_configured(mcp_servers, &mcp_config);
-        let host_owned_ody_apps_enabled =
-            host_owned_ody_apps_enabled(&mcp_config);
-        let auth_statuses = compute_auth_statuses(
-            mcp_servers.iter(),
-            store_mode,
-            keyring_backend_kind,
-        )
-        .await;
+        let mcp_servers = effective_mcp_servers_from_configured(mcp_servers, &mcp_config);
+        let host_owned_ody_apps_enabled = host_owned_ody_apps_enabled(&mcp_config);
+        let auth_statuses =
+            compute_auth_statuses(mcp_servers.iter(), store_mode, keyring_backend_kind).await;
         let environment_manager = self.services.turn_environments.environment_manager();
         // TODO(anp): Migrate MCP runtime cwd plumbing to PathUri so foreign environment cwd
         // values can be used without falling back to the legacy host cwd.
@@ -428,10 +422,7 @@ impl Session {
         .await;
     }
 
-    pub(crate) async fn set_form_elicitation_support(
-        &self,
-        supported: bool,
-    ) -> anyhow::Result<()> {
+    pub(crate) async fn set_form_elicitation_support(&self, supported: bool) -> anyhow::Result<()> {
         if self
             .services
             .supports_form_elicitation

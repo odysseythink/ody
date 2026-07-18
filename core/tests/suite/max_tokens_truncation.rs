@@ -1,13 +1,13 @@
+use core_test_support::skip_if_no_network;
+use core_test_support::test_ody::TestOdy;
+use core_test_support::test_ody::test_ody;
+use core_test_support::wait_for_event;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::ProviderCapabilities;
 use ody_model_provider_info::WireApi;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::Op;
 use ody_protocol::user_input::UserInput;
-use core_test_support::skip_if_no_network;
-use core_test_support::test_ody::TestOdy;
-use core_test_support::test_ody::test_ody;
-use core_test_support::wait_for_event;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;
@@ -32,9 +32,8 @@ async fn max_tokens_truncation_emits_warning_and_ends_turn() {
 
     let server = MockServer::start().await;
 
-    let sse =
-        ResponseTemplate::new(200)
-            .set_body_raw(chat_sse_with_finish_reason("length"), "text/event-stream");
+    let sse = ResponseTemplate::new(200)
+        .set_body_raw(chat_sse_with_finish_reason("length"), "text/event-stream");
     Mock::given(method("POST"))
         .and(path("/v1/chat/completions"))
         .respond_with(sse)
@@ -100,10 +99,7 @@ async fn max_tokens_truncation_emits_warning_and_ends_turn() {
 
     // 3) Exactly one model request was made — proves needs_follow_up stayed
     //    false (a follow-up would have issued a second request).
-    let requests = server
-        .received_requests()
-        .await
-        .expect("requests recorded");
+    let requests = server.received_requests().await.expect("requests recorded");
     let model_requests = requests
         .iter()
         .filter(|req| req.url.path() == "/v1/chat/completions")
@@ -120,9 +116,8 @@ async fn normal_stop_finish_reason_emits_no_warning() {
 
     let server = MockServer::start().await;
 
-    let sse =
-        ResponseTemplate::new(200)
-            .set_body_raw(chat_sse_with_finish_reason("stop"), "text/event-stream");
+    let sse = ResponseTemplate::new(200)
+        .set_body_raw(chat_sse_with_finish_reason("stop"), "text/event-stream");
     Mock::given(method("POST"))
         .and(path("/v1/chat/completions"))
         .respond_with(sse)

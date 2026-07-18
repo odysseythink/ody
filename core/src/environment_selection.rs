@@ -3,6 +3,9 @@ use std::fmt;
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
+use futures::FutureExt;
+use futures::future::BoxFuture;
+use futures::future::Shared;
 use ody_exec_server::Environment;
 use ody_exec_server::EnvironmentManager;
 use ody_exec_server::ExecServerError;
@@ -10,9 +13,6 @@ use ody_exec_server::ExecutorFileSystem;
 use ody_protocol::protocol::TurnEnvironmentSelection;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path_uri::PathUri;
-use futures::FutureExt;
-use futures::future::BoxFuture;
-use futures::future::Shared;
 
 use crate::session::turn_context::TurnEnvironment;
 use crate::shell::Shell;
@@ -271,6 +271,8 @@ impl TurnEnvironmentSnapshot {
 mod tests {
     use std::time::Duration;
 
+    use futures::SinkExt;
+    use futures::StreamExt;
     use ody_exec_server::Environment;
     use ody_exec_server::ExecServerRuntimePaths;
     use ody_exec_server::LOCAL_ENVIRONMENT_ID;
@@ -278,8 +280,6 @@ mod tests {
     use ody_protocol::protocol::TurnEnvironmentSelection;
     use ody_utils_absolute_path::AbsolutePathBuf;
     use ody_utils_path_uri::PathUri;
-    use futures::SinkExt;
-    use futures::StreamExt;
     use pretty_assertions::assert_eq;
     use serde_json::Value;
     use tokio::net::TcpListener;

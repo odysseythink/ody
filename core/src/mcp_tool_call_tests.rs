@@ -8,6 +8,13 @@ use crate::state::ActiveTurn;
 use crate::test_support::models_manager_with_provider;
 use crate::tools::hook_names::HookToolName;
 use crate::turn_metadata::McpTurnMetadataContext;
+use core_test_support::hooks::trusted_config_layer_stack;
+use core_test_support::responses::ev_assistant_message;
+use core_test_support::responses::ev_completed;
+use core_test_support::responses::ev_response_created;
+use core_test_support::responses::mount_sse_once;
+use core_test_support::responses::sse;
+use core_test_support::responses::start_mock_server;
 use ody_config::CONFIG_TOML_FILE;
 use ody_config::config_toml::ConfigToml;
 use ody_config::types::AppConfig;
@@ -33,13 +40,6 @@ use ody_rollout_trace::ToolDispatchPayload;
 use ody_rollout_trace::ToolDispatchRequester;
 use ody_rollout_trace::replay_bundle;
 use ody_utils_path_uri::PathUri;
-use core_test_support::hooks::trusted_config_layer_stack;
-use core_test_support::responses::ev_assistant_message;
-use core_test_support::responses::ev_completed;
-use core_test_support::responses::ev_response_created;
-use core_test_support::responses::mount_sse_once;
-use core_test_support::responses::sse;
-use core_test_support::responses::start_mock_server;
 use pretty_assertions::assert_eq;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -280,24 +280,23 @@ fn attach_trace_bundle(
     turn_context: &TurnContext,
     root: &Path,
 ) -> anyhow::Result<()> {
-    let rollout_thread_trace =
-        ody_rollout_trace::ThreadTraceContext::start_root_in_root_for_test(
-            root,
-            ThreadStartedTraceMetadata {
-                thread_id: session.thread_id.to_string(),
-                agent_path: "/root".to_string(),
-                task_name: None,
-                nickname: None,
-                agent_role: None,
-                session_source: SessionSource::Exec,
-                cwd: PathBuf::from("/workspace"),
-                rollout_path: None,
-                model: "gpt-test".to_string(),
-                provider_name: "test-provider".to_string(),
-                approval_policy: "never".to_string(),
-                sandbox_policy: "danger-full-access".to_string(),
-            },
-        )?;
+    let rollout_thread_trace = ody_rollout_trace::ThreadTraceContext::start_root_in_root_for_test(
+        root,
+        ThreadStartedTraceMetadata {
+            thread_id: session.thread_id.to_string(),
+            agent_path: "/root".to_string(),
+            task_name: None,
+            nickname: None,
+            agent_role: None,
+            session_source: SessionSource::Exec,
+            cwd: PathBuf::from("/workspace"),
+            rollout_path: None,
+            model: "gpt-test".to_string(),
+            provider_name: "test-provider".to_string(),
+            approval_policy: "never".to_string(),
+            sandbox_policy: "danger-full-access".to_string(),
+        },
+    )?;
     rollout_thread_trace.record_ody_turn_started(turn_context.sub_id.as_str());
     session.services.rollout_thread_trace = rollout_thread_trace;
     Ok(())
@@ -2417,15 +2416,11 @@ async fn guardian_mode_skips_auto_when_annotations_do_not_require_approval() {
     config.model_provider.base_url = Some(format!("{}/v1", server.uri()));
     config.approvals_reviewer = ApprovalsReviewer::AutoReview;
     let config = Arc::new(config);
-    let models_manager = models_manager_with_provider(
-        config.ody_home.to_path_buf(),
-        config.model_provider.clone(),
-    );
+    let models_manager =
+        models_manager_with_provider(config.ody_home.to_path_buf(), config.model_provider.clone());
     session.services.models_manager = models_manager;
     turn_context.config = Arc::clone(&config);
-    turn_context.provider = create_model_provider(
-        config.model_provider.clone(),
-    );
+    turn_context.provider = create_model_provider(config.model_provider.clone());
 
     let session = Arc::new(session);
     let turn_context = Arc::new(turn_context);
@@ -2702,15 +2697,11 @@ async fn guardian_mode_mcp_denial_returns_rationale_message() {
     config.model_provider.base_url = Some(format!("{}/v1", server.uri()));
     config.approvals_reviewer = ApprovalsReviewer::AutoReview;
     let config = Arc::new(config);
-    let models_manager = models_manager_with_provider(
-        config.ody_home.to_path_buf(),
-        config.model_provider.clone(),
-    );
+    let models_manager =
+        models_manager_with_provider(config.ody_home.to_path_buf(), config.model_provider.clone());
     session.services.models_manager = models_manager;
     turn_context.config = Arc::clone(&config);
-    turn_context.provider = create_model_provider(
-        config.model_provider.clone(),
-    );
+    turn_context.provider = create_model_provider(config.model_provider.clone());
 
     let session = Arc::new(session);
     let turn_context = Arc::new(turn_context);
@@ -2926,9 +2917,7 @@ async fn approve_mode_skips_guardian_in_every_permission_mode() {
         );
         session.services.models_manager = models_manager;
         turn_context.config = Arc::clone(&config);
-        turn_context.provider = create_model_provider(
-            config.model_provider.clone(),
-        );
+        turn_context.provider = create_model_provider(config.model_provider.clone());
 
         let session = Arc::new(session);
         let turn_context = Arc::new(turn_context);

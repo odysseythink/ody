@@ -1,5 +1,8 @@
 #![allow(clippy::unwrap_used)]
 
+use core::time::Duration;
+use core_test_support::load_default_config_for_test;
+use core_test_support::wait_for_event;
 use ody_config::CONFIG_TOML_FILE;
 use ody_core::NewThread;
 use ody_features::Feature;
@@ -7,9 +10,6 @@ use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::InitialHistory;
 use ody_protocol::protocol::WarningEvent;
 use ody_utils_absolute_path::AbsolutePathBuf;
-use core::time::Duration;
-use core_test_support::load_default_config_for_test;
-use core_test_support::wait_for_event;
 use tempfile::TempDir;
 use tokio::time::timeout;
 use toml::toml;
@@ -30,9 +30,8 @@ async fn emits_warning_when_unstable_features_enabled_via_config() {
         toml! { features = { apply_patch_streaming_events = true } }.into(),
     );
 
-    let thread_manager = ody_core::test_support::thread_manager_with_models_provider(
-        config.model_provider.clone(),
-    );
+    let thread_manager =
+        ody_core::test_support::thread_manager_with_models_provider(config.model_provider.clone());
 
     let NewThread {
         thread: conversation,
@@ -73,9 +72,8 @@ async fn suppresses_warning_when_configured() {
         toml! { features = { apply_patch_streaming_events = true } }.into(),
     );
 
-    let thread_manager = ody_core::test_support::thread_manager_with_models_provider(
-        config.model_provider.clone(),
-    );
+    let thread_manager =
+        ody_core::test_support::thread_manager_with_models_provider(config.model_provider.clone());
 
     let NewThread {
         thread: conversation,

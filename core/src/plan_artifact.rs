@@ -720,21 +720,27 @@ mod tests {
             ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-00000000000a").unwrap(),
             "2026-07-16",
         );
-        first.write_plan("# Refactor Auth\n\nfirst plan\n", true).await;
+        first
+            .write_plan("# Refactor Auth\n\nfirst plan\n", true)
+            .await;
 
         let second = PlanArtifact::new_temp(
             plans_base_dir,
             ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-00000000000b").unwrap(),
             "2026-07-16",
         );
-        let outcome = second.write_plan("# Refactor Auth\n\nsecond plan\n", true).await;
+        let outcome = second
+            .write_plan("# Refactor Auth\n\nsecond plan\n", true)
+            .await;
 
         let second_path = match outcome {
             PlanWriteOutcome::Written { path } => path,
             other => panic!("expected Written, got {other:?}"),
         };
         assert!(
-            second_path.to_string_lossy().ends_with("2026-07-16-refactor_auth_2.md"),
+            second_path
+                .to_string_lossy()
+                .ends_with("2026-07-16-refactor_auth_2.md"),
             "second same-titled plan should claim a suffixed name, got {second_path:?}"
         );
         assert_eq!(
@@ -766,7 +772,8 @@ mod tests {
 
         match outcome {
             PlanWriteOutcome::Written { path } => assert!(
-                path.to_string_lossy().ends_with("2026-07-16-split_topic_2.md"),
+                path.to_string_lossy()
+                    .ends_with("2026-07-16-split_topic_2.md"),
                 "a surviving stem dir must be treated as claimed, got {path:?}"
             ),
             other => panic!("expected Written, got {other:?}"),
@@ -784,14 +791,19 @@ mod tests {
         let second = artifact.write_plan("# Refactor Auth\n\nv2\n", true).await;
 
         let (first_path, second_path) = match (first, second) {
-            (
-                PlanWriteOutcome::Written { path: a },
-                PlanWriteOutcome::Written { path: b },
-            ) => (a, b),
+            (PlanWriteOutcome::Written { path: a }, PlanWriteOutcome::Written { path: b }) => {
+                (a, b)
+            }
             other => panic!("expected both writes to persist, got {other:?}"),
         };
-        assert_eq!(first_path, second_path, "a revision must not spawn a new file");
-        assert_eq!(std::fs::read_to_string(&second_path).unwrap(), "# Refactor Auth\n\nv2\n");
+        assert_eq!(
+            first_path, second_path,
+            "a revision must not spawn a new file"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&second_path).unwrap(),
+            "# Refactor Auth\n\nv2\n"
+        );
     }
 
     #[tokio::test]

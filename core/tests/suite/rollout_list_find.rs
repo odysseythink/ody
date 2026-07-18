@@ -108,10 +108,9 @@ async fn find_handles_gitignore_covering_ody_home_directory() {
     let id = Uuid::new_v4();
     let expected = write_minimal_rollout_with_id(&ody_home, id);
 
-    let found =
-        find_thread_path_by_id_str(&ody_home, &id.to_string(), /*state_db_ctx*/ None)
-            .await
-            .unwrap();
+    let found = find_thread_path_by_id_str(&ody_home, &id.to_string(), /*state_db_ctx*/ None)
+        .await
+        .unwrap();
 
     assert_eq!(found, Some(expected));
 }

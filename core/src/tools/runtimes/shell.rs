@@ -40,6 +40,7 @@ use crate::tools::sandboxing::ToolRuntime;
 use crate::tools::sandboxing::managed_network_for_sandbox_permissions;
 use crate::tools::sandboxing::sandbox_permissions_preserving_denied_reads;
 use crate::tools::sandboxing::with_cached_approval;
+use futures::future::BoxFuture;
 use ody_network_proxy::NetworkProxy;
 use ody_protocol::exec_output::ExecToolCallOutput;
 use ody_protocol::models::AdditionalPermissionProfile;
@@ -47,7 +48,6 @@ use ody_protocol::protocol::ReviewDecision;
 use ody_sandboxing::SandboxablePreference;
 use ody_shell_command::powershell::prefix_powershell_script_with_utf8;
 use ody_utils_absolute_path::AbsolutePathBuf;
-use futures::future::BoxFuture;
 use std::collections::HashMap;
 use tokio_util::sync::CancellationToken;
 

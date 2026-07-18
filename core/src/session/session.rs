@@ -490,7 +490,11 @@ impl Session {
             };
             let new_mode = next.collaboration_mode.mode;
             let edge = previous_mode == ModeKind::Design && new_mode != ModeKind::Design;
-            let artifact = if edge { state.last_design_artifact() } else { None };
+            let artifact = if edge {
+                state.last_design_artifact()
+            } else {
+                None
+            };
             let enforcement = state
                 .session_configuration
                 .original_config_do_not_use
@@ -509,12 +513,16 @@ impl Session {
             )
             .await
         } else {
-            HandoffDecision::Allow { reminder: None, logs: Vec::new() }
+            HandoffDecision::Allow {
+                reminder: None,
+                logs: Vec::new(),
+            }
         };
         match decision {
-            HandoffDecision::Veto { missing_report, logs: _ } => {
-                Err(OdyErr::InvalidRequest(missing_report))
-            }
+            HandoffDecision::Veto {
+                missing_report,
+                logs: _,
+            } => Err(OdyErr::InvalidRequest(missing_report)),
             HandoffDecision::Allow { reminder, logs } => {
                 let mut state = self.state.lock().await;
                 state.session_configuration = next;

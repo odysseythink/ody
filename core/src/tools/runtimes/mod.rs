@@ -11,9 +11,9 @@ use crate::shell::ShellType;
 use crate::tools::sandboxing::ToolError;
 #[cfg(unix)]
 use ody_install_context::InstallContext;
+use ody_network_proxy::CUSTOM_CA_ENV_KEYS;
 #[cfg(target_os = "macos")]
 use ody_network_proxy::ODY_PROXY_GIT_SSH_COMMAND_MARKER;
-use ody_network_proxy::CUSTOM_CA_ENV_KEYS;
 use ody_network_proxy::PROXY_ACTIVE_ENV_KEY;
 use ody_network_proxy::PROXY_ENV_KEYS;
 #[cfg(target_os = "macos")]

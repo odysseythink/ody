@@ -1,6 +1,5 @@
 //! Root of the `ody-core` library.
 #![recursion_limit = "256"]
-
 // Prevent accidental direct writes to stdout/stderr in library code. All
 // user-visible output must go through the appropriate abstraction (e.g.,
 // the TUI or the tracing stack).
@@ -19,13 +18,13 @@ pub(crate) mod session;
 pub use responses_metadata::OdyResponsesMetadata;
 pub use session::SteerInputError;
 pub use turn_metadata::detached_memory_responses_metadata;
-mod ody_thread;
 mod compact_remote;
 mod compact_remote_v2;
 mod config_lock;
+mod design_audit_level_selector;
 mod design_completeness;
 mod design_review;
-mod design_audit_level_selector;
+mod ody_thread;
 pub use ody_thread::BackgroundTerminalInfo;
 pub use ody_thread::OdyThread;
 pub use ody_thread::OdyThreadSettingsOverrides;
@@ -35,12 +34,10 @@ pub use ody_thread::TryStartTurnIfIdleRejectionReason;
 pub use session::turn_context::TurnContext;
 mod agent;
 mod attestation;
-mod ody_delegate;
 mod command_canonicalization;
 pub mod config;
 pub mod connectors;
 pub mod context;
-pub mod workspace_settings;
 mod context_manager;
 mod current_time;
 mod environment_selection;
@@ -59,6 +56,8 @@ mod mcp_tool_approval_templates;
 mod mcp_tool_exposure;
 mod network_policy_decision;
 pub(crate) mod network_proxy_loader;
+mod ody_delegate;
+pub mod workspace_settings;
 pub use mcp::McpManager;
 pub use network_proxy_loader::MtimeConfigReloader;
 pub use network_proxy_loader::build_network_proxy_state;
@@ -134,11 +133,11 @@ pub(crate) mod agents_md;
 pub use agents_md::DEFAULT_AGENTS_MD_FILENAME;
 pub use agents_md::LOCAL_AGENTS_MD_FILENAME;
 pub use agents_md::LoadedAgentsMd;
-mod rollout;
-mod rollout_budget;
 pub(crate) mod plan_artifact;
 pub(crate) mod plan_mode_injector;
 pub(crate) mod plan_mode_tier_selector;
+mod rollout;
+mod rollout_budget;
 pub(crate) mod safety;
 mod session_rollout_init_error;
 pub mod shell;
@@ -191,7 +190,6 @@ pub use client::X_ODY_TURN_METADATA_HEADER;
 pub use client_common::Prompt;
 pub use client_common::ResponseEvent;
 pub use client_common::ResponseStream;
-pub use ody_prompts::REVIEW_PROMPT;
 pub use compact::content_items_to_text;
 pub use current_time::TimeFuture;
 pub use current_time::TimeProvider;
@@ -201,6 +199,7 @@ pub use exec_policy::check_execpolicy_for_warnings;
 pub use exec_policy::format_exec_policy_error_with_source;
 pub use exec_policy::load_exec_policy;
 pub use installation_id::resolve_installation_id;
+pub use ody_prompts::REVIEW_PROMPT;
 pub mod compact;
 mod memory_usage;
 pub mod otel_init;

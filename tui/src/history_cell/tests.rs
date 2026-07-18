@@ -2313,19 +2313,30 @@ fn reasoning_summary_block_collapses_long_content_and_can_expand() {
         "Line 1
 Line 2
 Line 3
-Line 4".to_string(),
+Line 4"
+            .to_string(),
         &test_cwd(),
         /*transcript_only*/ false,
     );
 
     // Collapsed by default: only the first two preview lines plus a hint are shown.
     let collapsed = render_lines(&cell.display_lines(/*width*/ 80));
-    assert_eq!(collapsed, vec!["• Line 1", "  Line 2", "  ... (2 more lines, alt+o to expand)"]);
+    assert_eq!(
+        collapsed,
+        vec![
+            "• Line 1",
+            "  Line 2",
+            "  ... (2 more lines, alt+o to expand)"
+        ]
+    );
 
     // After expanding, the full content is rendered.
     cell.set_expanded(true);
     let expanded = render_lines(&cell.display_lines(/*width*/ 80));
-    assert_eq!(expanded, vec!["• Line 1", "  Line 2", "  Line 3", "  Line 4"]);
+    assert_eq!(
+        expanded,
+        vec!["• Line 1", "  Line 2", "  Line 3", "  Line 4"]
+    );
 }
 
 #[test]

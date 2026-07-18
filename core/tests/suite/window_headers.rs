@@ -1,11 +1,5 @@
 use super::compact::COMPACT_WARNING_MESSAGE;
 use anyhow::Result;
-use ody_core::OdyThread;
-use ody_core::compact::SUMMARIZATION_PROMPT;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::WarningEvent;
-use ody_protocol::user_input::UserInput;
 use core_test_support::responses::ResponsesRequest;
 use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
@@ -15,6 +9,12 @@ use core_test_support::responses::start_mock_server;
 use core_test_support::skip_if_no_network;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
+use ody_core::OdyThread;
+use ody_core::compact::SUMMARIZATION_PROMPT;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::WarningEvent;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use std::sync::Arc;
 
@@ -100,18 +100,17 @@ async fn window_id_advances_after_compact_persists_on_resume_and_resets_on_fork(
 }
 
 async fn submit_user_turn(ody: &Arc<OdyThread>, text: &str) -> Result<()> {
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: text.to_string(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: text.to_string(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_event(ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
     Ok(())
 }

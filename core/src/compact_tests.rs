@@ -1,7 +1,7 @@
 use super::*;
 use ody_model_provider_info::ModelProviderInfo;
-use ody_model_provider_info::WireApi;
 use ody_model_provider_info::ProviderCapabilities;
+use ody_model_provider_info::WireApi;
 use ody_protocol::models::DEFAULT_IMAGE_DETAIL;
 use ody_protocol::models::InternalChatMessageMetadataPassthrough;
 use pretty_assertions::assert_eq;
@@ -192,7 +192,10 @@ fn collect_user_messages_skips_messages_before_last_summary() {
 
     let collected = collect_user_messages(&items);
 
-    assert_eq!(vec![compacted_user_message("new topic question")], collected);
+    assert_eq!(
+        vec![compacted_user_message("new topic question")],
+        collected
+    );
 }
 
 #[test]
@@ -233,8 +236,10 @@ fn summary_text_is_framed_as_prior_background_with_authoritative_latest_message(
     // structurally marked as prior background and must end by pointing the model
     // at the user's most recent message, not the summary's leftover agenda. This
     // mirrors the runtime construction in `run_auto_compact`.
-    let summary_text =
-        format!("{SUMMARY_PREFIX}\n{body}\n{SUMMARY_FOOTER}", body = "Remaining Work: finish task X");
+    let summary_text = format!(
+        "{SUMMARY_PREFIX}\n{body}\n{SUMMARY_FOOTER}",
+        body = "Remaining Work: finish task X"
+    );
 
     // Detection still works: the summary remains anchored by SUMMARY_PREFIX.
     assert!(is_summary_message(&summary_text));
@@ -376,7 +381,7 @@ fn should_use_remote_compact_task_for_azure_provider() {
         stream_idle_timeout_ms: None,
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
-            capabilities: ProviderCapabilities::default(),
+        capabilities: ProviderCapabilities::default(),
     };
 
     assert!(should_use_remote_compact_task(&provider));

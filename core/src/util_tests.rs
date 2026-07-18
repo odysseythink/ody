@@ -75,24 +75,22 @@ fn emit_feedback_request_tags_records_sentry_feedback_fields() {
         })
         .set_default();
 
-    emit_feedback_request_tags(
-        &FeedbackRequestTags {
-            endpoint: "/responses",
-            auth_header_attached: true,
-            auth_header_name: Some("authorization"),
-            auth_mode: Some("api_key"),
-            auth_retry_after_unauthorized: Some(false),
-            auth_recovery_mode: Some("managed"),
-            auth_recovery_phase: Some("refresh_token"),
-            auth_connection_reused: Some(true),
-            auth_request_id: Some("req-123"),
-            auth_cf_ray: Some("ray-123"),
-            auth_error: Some("missing_authorization_header"),
-            auth_error_code: Some("token_expired"),
-            auth_recovery_followup_success: Some(true),
-            auth_recovery_followup_status: Some(200),
-        },
-    );
+    emit_feedback_request_tags(&FeedbackRequestTags {
+        endpoint: "/responses",
+        auth_header_attached: true,
+        auth_header_name: Some("authorization"),
+        auth_mode: Some("api_key"),
+        auth_retry_after_unauthorized: Some(false),
+        auth_recovery_mode: Some("managed"),
+        auth_recovery_phase: Some("refresh_token"),
+        auth_connection_reused: Some(true),
+        auth_request_id: Some("req-123"),
+        auth_cf_ray: Some("ray-123"),
+        auth_error: Some("missing_authorization_header"),
+        auth_error_code: Some("token_expired"),
+        auth_recovery_followup_success: Some(true),
+        auth_recovery_followup_status: Some(200),
+    });
 
     let tags = tags.lock().unwrap().clone();
     assert_eq!(
@@ -268,7 +266,6 @@ fn emit_feedback_request_tags_preserves_latest_auth_fields_after_unauthorized() 
     );
     assert_eq!(*event_count.lock().unwrap(), 1);
 }
-
 
 #[test]
 fn normalize_thread_name_trims_and_rejects_empty() {

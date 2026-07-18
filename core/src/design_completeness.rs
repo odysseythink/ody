@@ -130,7 +130,10 @@ pub fn find_missing_design_sections(content: &str) -> Vec<String> {
         (c1_scope(), "Scope or Scope In/Out section"),
         (c2_architecture(), "Architecture or Design section"),
         (c3_data_models(), "Data Models section"),
-        (c4_algorithms(), "Algorithms or Implementation Notes section"),
+        (
+            c4_algorithms(),
+            "Algorithms or Implementation Notes section",
+        ),
         (c5_error_handling(), "Error Handling section"),
         (c6_self_review(), "Self-Review section"),
         (c7_user_approval(), "User Approval section"),
@@ -174,7 +177,11 @@ mod tests {
     fn empty_document_reports_many_missing_sections() {
         let missing = find_missing_design_sections("");
         assert!(missing.iter().any(|m| m.contains("sufficient content")));
-        assert!(missing.iter().any(|m| m.contains("at least 3 design sections")));
+        assert!(
+            missing
+                .iter()
+                .any(|m| m.contains("at least 3 design sections"))
+        );
         for expected in [
             "Scope or Scope In/Out section",
             "Architecture or Design section",
@@ -264,7 +271,9 @@ mod tests {
         );
         let missing = find_missing_design_sections(design);
         assert!(
-            missing.iter().any(|m| m.contains("at least 3 design sections (found 2)")),
+            missing
+                .iter()
+                .any(|m| m.contains("at least 3 design sections (found 2)")),
             "expected heading-count gate with found=2; got {missing:?}"
         );
     }

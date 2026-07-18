@@ -13,9 +13,9 @@ use ody_connectors::app_is_enabled;
 use ody_connectors::apps_config_from_layer_stack;
 use ody_connectors::merge::merge_connectors;
 use ody_connectors::merge::merge_plugin_connectors;
-use ody_plugin::AppConnectorId;
 use ody_exec_server::EnvironmentManager;
 use ody_exec_server::ExecServerRuntimePaths;
+use ody_plugin::AppConnectorId;
 use ody_tools::DiscoverableTool;
 use tracing::instrument;
 
@@ -26,9 +26,9 @@ use ody_config::types::ApprovalsReviewer;
 use ody_config::types::ToolSuggestDiscoverableType;
 use ody_core_plugins::PluginsManager;
 use ody_features::Feature;
-use ody_mcp::ODY_APPS_MCP_SERVER_NAME;
 use ody_mcp::MCP_TOOL_ODY_APPS_META_KEY;
 use ody_mcp::McpConnectionManager;
+use ody_mcp::ODY_APPS_MCP_SERVER_NAME;
 use ody_mcp::ToolInfo;
 use ody_mcp::ToolPluginProvenance;
 
@@ -152,10 +152,8 @@ pub async fn list_accessible_connectors_from_mcp_tools_with_options_and_status(
     // TODO: Wire callers that already own an EnvironmentManager into
     // list_accessible_connectors_from_mcp_tools_with_environment_manager instead
     // of constructing a temporary manager here.
-    let local_runtime_paths = ExecServerRuntimePaths::from_optional_paths(
-        config.ody_self_exe.clone(),
-        None,
-    )?;
+    let local_runtime_paths =
+        ExecServerRuntimePaths::from_optional_paths(config.ody_self_exe.clone(), None)?;
     let environment_manager =
         EnvironmentManager::from_ody_home(config.ody_home.clone(), Some(local_runtime_paths))
             .await?;
@@ -197,9 +195,7 @@ pub async fn list_accessible_connectors_from_mcp_tools_with_mcp_manager(
     })
 }
 
-fn accessible_connectors_cache_key(
-    _config: &Config,
-) -> AccessibleConnectorsCacheKey {
+fn accessible_connectors_cache_key(_config: &Config) -> AccessibleConnectorsCacheKey {
     // Account-specific connector metadata is no longer available.
     AccessibleConnectorsCacheKey {
         account_id: None,
@@ -269,9 +265,7 @@ fn tool_suggest_connector_ids(
 }
 
 #[instrument(level = "trace", skip_all)]
-async fn cached_directory_connectors_for_tool_suggest(
-    _config: &Config,
-) -> Vec<AppInfo> {
+async fn cached_directory_connectors_for_tool_suggest(_config: &Config) -> Vec<AppInfo> {
     // Remote directory connectors are no longer available.
     Vec::new()
 }

@@ -36,9 +36,7 @@ fn create_apply_patch_tool_documents_environment_id_only_when_requested() {
     let with = function_tool(/*include_environment_id*/ true);
 
     let description_of = |tool: ResponsesApiTool| {
-        tool.parameters
-            .properties
-            .expect("parameters.properties")["input"]
+        tool.parameters.properties.expect("parameters.properties")["input"]
             .description
             .clone()
             .expect("input.description")

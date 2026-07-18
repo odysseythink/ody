@@ -1,5 +1,4 @@
 use anyhow::Result;
-use ody_features::Feature;
 use core_test_support::responses::ev_completed;
 use core_test_support::responses::ev_function_call;
 use core_test_support::responses::ev_response_created;
@@ -7,6 +6,7 @@ use core_test_support::responses::sse;
 use core_test_support::responses::sse_response;
 use core_test_support::responses::start_mock_server;
 use core_test_support::test_ody::test_ody;
+use ody_features::Feature;
 use regex_lite::Regex;
 use serde_json::Value;
 use serde_json::json;

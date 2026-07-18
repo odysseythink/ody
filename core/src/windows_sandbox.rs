@@ -1,11 +1,11 @@
 use crate::config::Config;
 use crate::config::edit::ConfigEditsBuilder;
+use ody_client::default_client::originator;
 use ody_config::config_toml::ConfigToml;
 use ody_config::types::WindowsSandboxModeToml;
 use ody_features::Feature;
 use ody_features::Features;
 use ody_features::FeaturesToml;
-use ody_client::default_client::originator;
 use ody_otel::sanitize_metric_tag_value;
 use ody_protocol::config_types::WindowsSandboxLevel;
 use ody_protocol::models::PermissionProfile;

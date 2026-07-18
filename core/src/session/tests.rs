@@ -2072,14 +2072,10 @@ async fn record_initial_history_seeds_token_info_from_rollout() {
     };
 
     rollout_items.push(RolloutItem::EventMsg(EventMsg::TokenCount(
-        TokenCountEvent {
-            info: Some(info1),
-        },
+        TokenCountEvent { info: Some(info1) },
     )));
     rollout_items.push(RolloutItem::EventMsg(EventMsg::TokenCount(
-        TokenCountEvent {
-            info: None,
-        },
+        TokenCountEvent { info: None },
     )));
     rollout_items.push(RolloutItem::EventMsg(EventMsg::TokenCount(
         TokenCountEvent {
@@ -2087,9 +2083,7 @@ async fn record_initial_history_seeds_token_info_from_rollout() {
         },
     )));
     rollout_items.push(RolloutItem::EventMsg(EventMsg::TokenCount(
-        TokenCountEvent {
-            info: None,
-        },
+        TokenCountEvent { info: None },
     )));
 
     session

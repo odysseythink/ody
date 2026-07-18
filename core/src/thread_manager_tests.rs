@@ -7,19 +7,20 @@ use crate::session::session::SessionSettingsUpdate;
 use crate::session::tests::make_session_and_context;
 use crate::tasks::InterruptedTurnHistoryMarker;
 use crate::tasks::interrupted_turn_history_marker;
+use core_test_support::PathBufExt;
+use core_test_support::PathExt;
+use core_test_support::responses::mount_models_once;
 use ody_config::McpServerConfig;
 use ody_config::McpServerTransportConfig;
 use ody_extension_api::empty_extension_registry;
 use ody_models_manager::manager::RefreshStrategy;
 use ody_protocol::capabilities::CapabilityRootLocation;
-use ody_protocol::config_types::ModelProviderAuthInfo;
-use ody_utils_absolute_path::AbsolutePathBuf;
-use std::num::NonZeroU64;
 use ody_protocol::capabilities::SelectedCapabilityRoot;
+use ody_protocol::config_types::ModelProviderAuthInfo;
+use ody_protocol::model_metadata::ModelsResponse;
 use ody_protocol::models::ContentItem;
 use ody_protocol::models::ReasoningItemReasoningSummary;
 use ody_protocol::models::ResponseItem;
-use ody_protocol::model_metadata::ModelsResponse;
 use ody_protocol::protocol::AgentMessageEvent;
 use ody_protocol::protocol::InitialHistory;
 use ody_protocol::protocol::InternalSessionSource;
@@ -28,11 +29,10 @@ use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::ThreadSource;
 use ody_protocol::protocol::TurnStartedEvent;
 use ody_protocol::protocol::UserMessageEvent;
+use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path_uri::PathUri;
-use core_test_support::PathBufExt;
-use core_test_support::PathExt;
-use core_test_support::responses::mount_models_once;
 use pretty_assertions::assert_eq;
+use std::num::NonZeroU64;
 use std::time::Duration;
 use tempfile::tempdir;
 use wiremock::MockServer;
@@ -672,7 +672,6 @@ async fn explicit_installation_id_skips_ody_home_file() {
     config.cwd = config.ody_home.abs();
     std::fs::create_dir_all(&config.ody_home).expect("create ody home");
 
-
     let installation_id = uuid::Uuid::new_v4().to_string();
     let state_db = init_state_db(&config).await;
     let thread_store = thread_store_from_config(&config, state_db.clone());
@@ -831,7 +830,6 @@ async fn resume_stopped_thread_from_rollout_preserves_thread_source() {
     config.cwd = config.ody_home.abs();
     std::fs::create_dir_all(&config.ody_home).expect("create ody home");
 
-
     let state_db = init_state_db(&config).await;
     let thread_store = thread_store_from_config(&config, state_db.clone());
     let manager = ThreadManager::new(
@@ -918,7 +916,6 @@ async fn rollout_path_resume_and_fork_read_history_through_thread_store() {
     };
     std::fs::create_dir_all(&config.ody_home).expect("create ody home");
 
-
     let state_db = init_state_db(&config).await;
     let thread_store = thread_store_from_config(&config, state_db.clone());
     let in_memory_store = thread_store
@@ -950,10 +947,7 @@ async fn rollout_path_resume_and_fork_read_history_through_thread_store() {
         .expect("shutdown source thread");
     let _ = manager.remove_thread(&source.thread_id).await;
 
-    let rollout_path = config
-        .ody_home
-        .join("rollouts/source.jsonl")
-        .to_path_buf();
+    let rollout_path = config.ody_home.join("rollouts/source.jsonl").to_path_buf();
     let resumed = manager
         .resume_thread_with_history(
             config.clone(),
@@ -1031,7 +1025,6 @@ async fn new_uses_active_provider_for_model_refresh() {
         refresh_interval_ms: 0,
         cwd: AbsolutePathBuf::current_dir().unwrap_or_else(|_| config.cwd.clone()),
     });
-
 
     let manager = ThreadManager::new(
         &config,
@@ -1251,7 +1244,6 @@ async fn interrupted_fork_snapshot_does_not_synthesize_turn_id_for_legacy_histor
     config.cwd = config.ody_home.abs();
     std::fs::create_dir_all(&config.ody_home).expect("create ody home");
 
-
     let state_db = init_state_db(&config).await;
     let manager = ThreadManager::new(
         &config,
@@ -1357,7 +1349,6 @@ async fn interrupted_fork_snapshot_preserves_explicit_turn_id() {
     config.cwd = config.ody_home.abs();
     std::fs::create_dir_all(&config.ody_home).expect("create ody home");
 
-
     let state_db = init_state_db(&config).await;
     let manager = ThreadManager::new(
         &config,
@@ -1452,7 +1443,6 @@ async fn interrupted_fork_snapshot_uses_persisted_mid_turn_history_without_live_
     config.ody_home = temp_dir.path().join("ody-home").abs();
     config.cwd = config.ody_home.abs();
     std::fs::create_dir_all(&config.ody_home).expect("create ody home");
-
 
     let state_db = init_state_db(&config).await;
     let manager = ThreadManager::new(

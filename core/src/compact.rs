@@ -8,22 +8,23 @@ use crate::hook_runtime::PostCompactHookOutcome;
 use crate::hook_runtime::PreCompactHookOutcome;
 use crate::hook_runtime::run_post_compact_hooks;
 use crate::hook_runtime::run_pre_compact_hooks;
+use crate::responses_metadata::CompactionTurnMetadata;
 use crate::responses_metadata::OdyResponsesMetadata;
 use crate::responses_metadata::OdyResponsesRequestKind;
-use crate::responses_metadata::CompactionTurnMetadata;
 #[cfg(test)]
 use crate::session::PreviousTurnSettings;
 use crate::session::session::Session;
 use crate::session::turn::get_last_assistant_message_from_turn;
 use crate::session::turn_context::TurnContext;
 use crate::util::backoff;
-use ody_analytics::OdyCompactionEvent;
+use futures::prelude::*;
 use ody_analytics::CompactionImplementation;
 use ody_analytics::CompactionPhase;
 use ody_analytics::CompactionReason;
 use ody_analytics::CompactionStatus;
 use ody_analytics::CompactionStrategy;
 use ody_analytics::CompactionTrigger;
+use ody_analytics::OdyCompactionEvent;
 use ody_analytics::now_unix_seconds;
 use ody_protocol::error::OdyErr;
 use ody_protocol::error::Result as OdyResult;
@@ -33,18 +34,17 @@ use ody_protocol::models::ContentItem;
 use ody_protocol::models::InternalChatMessageMetadataPassthrough;
 use ody_protocol::models::ResponseInputItem;
 use ody_protocol::models::ResponseItem;
+use ody_protocol::plan_tool::PlanItemArg;
+use ody_protocol::plan_tool::StepStatus;
 use ody_protocol::protocol::CompactedItem;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::TurnStartedEvent;
 use ody_protocol::protocol::WarningEvent;
 use ody_protocol::user_input::UserInput;
-use ody_protocol::plan_tool::PlanItemArg;
-use ody_protocol::plan_tool::StepStatus;
 use ody_rollout_trace::InferenceTraceContext;
 use ody_utils_output_truncation::TruncationPolicy;
 use ody_utils_output_truncation::approx_token_count;
 use ody_utils_output_truncation::truncate_text;
-use futures::prelude::*;
 use tracing::error;
 
 use ody_model_provider_info::ModelProviderInfo;
@@ -311,7 +311,8 @@ async fn run_compact_task_inner_impl(
     // replaced history, so a summary that omits it loses the plan outright. It
     // goes inside the wrapper, as prior state -- SUMMARY_FOOTER still lands last
     // so the topic-drift guidance keeps recency.
-    let summary_suffix = summary_body_with_plan(&summary_suffix, sess.active_plan().await.as_deref());
+    let summary_suffix =
+        summary_body_with_plan(&summary_suffix, sess.active_plan().await.as_deref());
     let summary_text = format!("{SUMMARY_PREFIX}\n{summary_suffix}\n{SUMMARY_FOOTER}");
     let user_messages = collect_user_messages(history_items);
 
@@ -432,8 +433,7 @@ impl CompactionAnalyticsAttempt {
                 strategy: CompactionStrategy::Memento,
                 status,
                 ody_error_kind: ody_error.map(Into::into),
-                ody_error_http_status_code: ody_error
-                    .and_then(OdyErr::http_status_code_value),
+                ody_error_http_status_code: ody_error.and_then(OdyErr::http_status_code_value),
                 active_context_tokens_before,
                 active_context_tokens_after,
                 retained_image_count,

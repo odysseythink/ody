@@ -344,7 +344,11 @@ mod tests {
             None,
         )
         .expect("should produce instructions");
-        assert!(instructions.body().contains("Split plans larger than 8 tasks."));
+        assert!(
+            instructions
+                .body()
+                .contains("Split plans larger than 8 tasks.")
+        );
         assert!(!instructions.body().contains("{{ split_threshold }}"));
     }
 
@@ -843,9 +847,14 @@ mod tests {
     #[test]
     fn rigor_tier_does_not_receive_concise_rules() {
         let mode = plan_mode_with_instructions("Plan the work.");
-        let instructions =
-            CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8), None, None, None)
-                .expect("should produce instructions");
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            None,
+            None,
+            None,
+        )
+        .expect("should produce instructions");
         let body = instructions.body();
 
         assert!(
@@ -891,15 +900,26 @@ mod tests {
     fn tier_is_declared_explicitly_in_the_prompt() {
         let mode = plan_mode_with_instructions("Plan the work.");
 
-        let rigor =
-            CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8), None, None, None)
-                .expect("should produce instructions");
+        let rigor = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            None,
+            None,
+            None,
+        )
+        .expect("should produce instructions");
         assert!(
-            rigor.body().starts_with("## Plan tier: rigor (host-selected)"),
+            rigor
+                .body()
+                .starts_with("## Plan tier: rigor (host-selected)"),
             "the tier declaration must lead the prompt; got: {:?}",
             &rigor.body()[..rigor.body().len().min(80)]
         );
-        assert!(rigor.body().contains("You are writing a **rigor-tier** plan."));
+        assert!(
+            rigor
+                .body()
+                .contains("You are writing a **rigor-tier** plan.")
+        );
 
         let config = PlanModeConfigToml {
             tier: Some(PlanModeTier::Concise),
@@ -954,7 +974,10 @@ mod tests {
             body.contains("## Rigor tier addendum: Structured workflow"),
             "auto must re-resolve to a real tier contract, not compose nothing"
         );
-        assert!(!body.contains("**auto-tier**"), "auto is not a renderable tier");
+        assert!(
+            !body.contains("**auto-tier**"),
+            "auto is not a renderable tier"
+        );
     }
 
     /// The rigor workflow must live in exactly one place. It was duplicated into `plan.md`, so
@@ -963,13 +986,19 @@ mod tests {
     #[test]
     fn rigor_workflow_is_not_duplicated_in_base_template() {
         let mode = plan_mode_with_instructions("Plan the work.");
-        let instructions =
-            CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8), None, None, None)
-                .expect("should produce instructions");
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            None,
+            None,
+            None,
+        )
+        .expect("should produce instructions");
         let body = instructions.body();
 
         assert_eq!(
-            body.matches("**Understand** — explore the codebase").count(),
+            body.matches("**Understand** — explore the codebase")
+                .count(),
             1,
             "the five-step workflow must render exactly once, from PLAN_RIGOR_WORKFLOW only"
         );
@@ -1003,7 +1032,9 @@ mod tests {
         .expect("should produce instructions");
         let body = instructions.body();
         assert!(body.contains("## Rigor tier addendum: Structured workflow"));
-        assert!(body.contains("## Rigor tier addendum: Task skeleton and test-first implementation"));
+        assert!(
+            body.contains("## Rigor tier addendum: Task skeleton and test-first implementation")
+        );
         assert!(body.contains("## Dependency Overview"));
     }
 
@@ -1020,9 +1051,14 @@ mod tests {
             None,
         )
         .expect("should produce instructions");
-        let without_prompt =
-            CollaborationModeInstructions::from_collaboration_mode(&mode, Some(8), None, None, None)
-                .expect("should produce instructions");
+        let without_prompt = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(8),
+            None,
+            None,
+            None,
+        )
+        .expect("should produce instructions");
         assert_eq!(with_prompt.body(), without_prompt.body());
     }
 

@@ -29,9 +29,8 @@ pub fn features_schema(schema_gen: &mut SchemaGenerator) -> Schema {
         if feature.id == ody_features::Feature::CodeMode {
             validation.properties.insert(
                 feature.key.to_string(),
-                schema_gen.subschema_for::<ody_features::FeatureToml<
-                    ody_features::CodeModeConfigToml,
-                >>(),
+                schema_gen
+                    .subschema_for::<ody_features::FeatureToml<ody_features::CodeModeConfigToml>>(),
             );
             continue;
         }

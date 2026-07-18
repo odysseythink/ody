@@ -1,9 +1,9 @@
-use ody_protocol::model_metadata::ReasoningEffort;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
 use core_test_support::responses::start_mock_server;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
+use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
 use pretty_assertions::assert_eq;
 
 const CONFIG_TOML: &str = "config.toml";

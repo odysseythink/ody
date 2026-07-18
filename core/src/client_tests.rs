@@ -10,6 +10,7 @@ use crate::GenerateAttestationFuture;
 use crate::responses_metadata::OdyResponsesMetadata;
 use crate::test_support::TestOdyResponsesRequestKind;
 use crate::test_support::responses_metadata as test_responses_metadata;
+use futures::StreamExt;
 use ody_api::ApiError;
 use ody_api::ResponseEvent;
 use ody_model_provider::SharedModelProvider;
@@ -18,11 +19,11 @@ use ody_model_provider_info::WireApi;
 use ody_model_provider_info::create_kimi_provider;
 use ody_otel::SessionTelemetry;
 use ody_protocol::ThreadId;
-use ody_protocol::models::ContentItem;
-use ody_protocol::models::ResponseItem;
+use ody_protocol::model_metadata::ModelCapabilities;
 use ody_protocol::model_metadata::ModelInfo;
 use ody_protocol::model_metadata::ReasoningEffort;
-use ody_protocol::model_metadata::ModelCapabilities;
+use ody_protocol::models::ContentItem;
+use ody_protocol::models::ResponseItem;
 use ody_protocol::protocol::InternalSessionSource;
 use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::SubAgentSource;
@@ -33,7 +34,6 @@ use ody_rollout_trace::RawTraceEventPayload;
 use ody_rollout_trace::RolloutTrace;
 use ody_rollout_trace::TraceWriter;
 use ody_rollout_trace::replay_bundle;
-use futures::StreamExt;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -941,15 +941,15 @@ fn test_model_client_with_provider(provider: ModelProviderInfo) -> ModelClient {
 
 fn create_test_session_telemetry() -> SessionTelemetry {
     SessionTelemetry::new(
-      ThreadId::new(),
-      "test-model",
-      "test-model",
-      None,
-      "test-originator".to_string(),
-      false,
-      "test-terminal".to_string(),
-      SessionSource::Cli,
-  )
+        ThreadId::new(),
+        "test-model",
+        "test-model",
+        None,
+        "test-originator".to_string(),
+        false,
+        "test-terminal".to_string(),
+        SessionSource::Cli,
+    )
 }
 
 fn test_prompt_for_chat_provider() -> crate::client_common::Prompt {
@@ -957,7 +957,9 @@ fn test_prompt_for_chat_provider() -> crate::client_common::Prompt {
         input: vec![ResponseItem::Message {
             id: None,
             role: "user".into(),
-            content: vec![ContentItem::InputText { text: "hello".into() }],
+            content: vec![ContentItem::InputText {
+                text: "hello".into(),
+            }],
             phase: None,
             internal_chat_message_metadata_passthrough: None,
         }],

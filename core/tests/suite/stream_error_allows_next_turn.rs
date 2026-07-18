@@ -1,9 +1,3 @@
-use ody_model_provider_info::ModelProviderInfo;
-use ody_model_provider_info::WireApi;
-use ody_model_provider_info::ProviderCapabilities;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
 use core_test_support::responses::ev_completed;
 use core_test_support::responses::ev_response_created;
 use core_test_support::responses::sse;
@@ -11,6 +5,12 @@ use core_test_support::skip_if_no_network;
 use core_test_support::test_ody::TestOdy;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
+use ody_model_provider_info::ModelProviderInfo;
+use ody_model_provider_info::ProviderCapabilities;
+use ody_model_provider_info::WireApi;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;
@@ -80,7 +80,7 @@ async fn continue_after_stream_error() {
         stream_idle_timeout_ms: Some(2_000),
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
-            capabilities: ProviderCapabilities::default(),
+        capabilities: ProviderCapabilities::default(),
     };
 
     let TestOdy { ody, .. } = test_ody()
@@ -92,19 +92,18 @@ async fn continue_after_stream_error() {
         .await
         .unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "first message".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "first message".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     // Expect an Error followed by TurnComplete so the session is released.
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::Error(_))).await;
@@ -114,19 +113,18 @@ async fn continue_after_stream_error() {
     // 2) Second turn: now send another prompt that should succeed using the
     // mock server SSE stream. If the agent failed to clear the running task on
     // error above, this submission would be rejected/queued indefinitely.
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "follow up".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "follow up".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 }

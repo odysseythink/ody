@@ -1,14 +1,6 @@
 #![cfg(not(target_os = "windows"))]
 
 use anyhow::Result;
-use ody_core::config::Constrained;
-use ody_core::sandboxing::SandboxPermissions;
-use ody_protocol::config_types::ApprovalsReviewer;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::SandboxPolicy;
-use ody_protocol::user_input::UserInput;
 use core_test_support::fs_wait;
 use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
@@ -23,6 +15,14 @@ use core_test_support::skip_if_sandbox;
 use core_test_support::test_ody::local_selections;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
+use ody_core::config::Constrained;
+use ody_core::sandboxing::SandboxPermissions;
+use ody_protocol::config_types::ApprovalsReviewer;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::SandboxPolicy;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;

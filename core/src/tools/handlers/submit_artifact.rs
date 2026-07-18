@@ -86,8 +86,11 @@ fn parts_manifest_cell_problems(stem_dir: &Path, markdown: &str) -> Vec<String> 
 
 fn rigor_structure_gap(plan: &str) -> Option<String> {
     let lower = plan.to_lowercase();
-    let has_spec_coverage = lower.contains("## spec coverage") || lower.contains("## spec-coverage");
-    let self_review_heading = lower.find("## self-review").or_else(|| lower.find("## self review"));
+    let has_spec_coverage =
+        lower.contains("## spec coverage") || lower.contains("## spec-coverage");
+    let self_review_heading = lower
+        .find("## self-review")
+        .or_else(|| lower.find("## self review"));
 
     match (has_spec_coverage, self_review_heading) {
         (false, None) => Some(
@@ -100,9 +103,7 @@ fn rigor_structure_gap(plan: &str) -> Option<String> {
             let section_start = heading_idx + "## self-review".len();
             let section = &lower[section_start..];
             let section_end = section.find("\n## ").unwrap_or(section.len());
-            let checklist_items = section[..section_end]
-                .matches("- [ ]")
-                .count()
+            let checklist_items = section[..section_end].matches("- [ ]").count()
                 + section[..section_end].matches("- [x]").count();
             if checklist_items < REQUIRED_SELF_REVIEW_ITEMS {
                 Some(format!(
@@ -430,7 +431,10 @@ pub(crate) async fn handle_submit_artifact(
         match artifact.stem_dir() {
             Some(stem_dir) => format!(
                 "{} part saved. This {} is split into multiple parts and pending parts remain — stay in {} mode and keep writing them one per turn; do not treat this call as final. Write each part file at exactly {}/<part-name>.md (use the file names from the ## Parts table).",
-                wording.noun, wording.noun, wording.mode_name, stem_dir.display()
+                wording.noun,
+                wording.noun,
+                wording.mode_name,
+                stem_dir.display()
             ),
             None => format!(
                 "{} part saved. This {} is split into multiple parts and pending parts remain — stay in {} mode and keep writing them one per turn; do not treat this call as final.",
@@ -491,8 +495,7 @@ mod tests {
         let stem = Path::new("/plans/2026-07-16-pinnedtodowidget_implementation_plan");
 
         // Shipped once: the template's own examples used this notation, so the model copied it.
-        let placeholders =
-            manifest_with(["<stem>/core-widget.md", "<stem>/tests.md"]);
+        let placeholders = manifest_with(["<stem>/core-widget.md", "<stem>/tests.md"]);
         let problems = parts_manifest_cell_problems(stem, &placeholders);
         assert_eq!(problems.len(), 2, "{problems:?}");
         assert!(problems[0].contains("placeholder"), "{problems:?}");
@@ -548,7 +551,10 @@ mod tests {
     fn split_threshold_gap_flags_exceeding_threshold() {
         let plan = format!("# Plan\n\n{}", tasks_with(13));
         let gap = split_threshold_gap(&plan, 3).expect("13 tasks exceeds threshold 3");
-        assert!(gap.contains("13"), "gap should mention the actual task count: {gap}");
+        assert!(
+            gap.contains("13"),
+            "gap should mention the actual task count: {gap}"
+        );
         assert!(gap.contains("## Parts"));
     }
 
@@ -572,14 +578,15 @@ mod tests {
     fn count_task_headings_ignores_non_task_headings() {
         // MUST-SURVIVE: prose-ish headings that merely contain "Task" must not
         // be counted, or ordinary single-file plans would trip the split check.
-        let plan =
-            "### Task Breakdown\n\n### Tasks\n\n### Task: overview\n\n### Random heading\n\n## Parts\n";
+        let plan = "### Task Breakdown\n\n### Tasks\n\n### Task: overview\n\n### Random heading\n\n## Parts\n";
         assert_eq!(count_task_headings(plan), 0);
     }
 
     #[test]
     fn split_threshold_gap_message_names_expected_format() {
-        let plan = (1..=9).map(|n| format!("### Task {n}\n")).collect::<String>();
+        let plan = (1..=9)
+            .map(|n| format!("### Task {n}\n"))
+            .collect::<String>();
         let gap = split_threshold_gap(&plan, 8).expect("9 tasks should exceed threshold 8");
         assert!(
             gap.contains("### Task N"),
@@ -644,7 +651,10 @@ mod tests {
             self_review_with(3)
         );
         let gap = rigor_structure_gap(&plan).expect("only 3 of 7 items present");
-        assert!(gap.contains('3'), "gap message should mention the actual count: {gap}");
+        assert!(
+            gap.contains('3'),
+            "gap message should mention the actual count: {gap}"
+        );
     }
 
     #[test]
@@ -658,7 +668,10 @@ mod tests {
             "- [ ] a\n- [ ] b\n- [ ] c\n- [ ] d\n- [ ] e\n"
         );
         let gap = rigor_structure_gap(&plan).expect("only 2 real self-review items");
-        assert!(gap.contains('2'), "gap message should mention 2, not count past the next heading: {gap}");
+        assert!(
+            gap.contains('2'),
+            "gap message should mention 2, not count past the next heading: {gap}"
+        );
     }
 
     /// Regression test: this is the actual heading set from a real session's
@@ -733,5 +746,4 @@ mod tests {
             Some("gpt-review"),
         ));
     }
-
 }

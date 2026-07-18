@@ -25,7 +25,6 @@ use ody_protocol::items::TurnItem;
 use ody_protocol::items::UserMessageItem;
 use ody_protocol::models::ResponseItem;
 use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::OdyErrorInfo;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::HookCompletedEvent;
 use ody_protocol::protocol::HookEventName;
@@ -33,6 +32,7 @@ use ody_protocol::protocol::HookRunStatus;
 use ody_protocol::protocol::HookRunSummary;
 use ody_protocol::protocol::HookSource;
 use ody_protocol::protocol::HookStartedEvent;
+use ody_protocol::protocol::OdyErrorInfo;
 use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::SubAgentSource;
 use ody_thread_store::ReadThreadParams;
@@ -110,10 +110,7 @@ pub(crate) async fn run_pending_session_start_hooks(
         // start hooks.
         let target = match &turn_context.session_source {
             SessionSource::SubAgent(SubAgentSource::ThreadSpawn { agent_role, .. })
-                if matches!(
-                    session_start_source,
-                    ody_hooks::SessionStartSource::Startup
-                ) =>
+                if matches!(session_start_source, ody_hooks::SessionStartSource::Startup) =>
             {
                 let context = subagent_hook_context(sess, agent_role);
                 StartHookTarget::SubagentStart {

@@ -1,3 +1,12 @@
+use core_test_support::PathBufExt;
+use core_test_support::responses;
+use core_test_support::responses::ResponseMock;
+use core_test_support::responses::mount_sse_sequence;
+use core_test_support::responses::start_mock_server;
+use core_test_support::skip_if_no_network;
+use core_test_support::test_ody::local_selections;
+use core_test_support::test_ody::test_ody;
+use core_test_support::wait_for_event;
 use ody_core::OdyThread;
 use ody_core::REVIEW_PROMPT;
 use ody_core::config::Config;
@@ -17,15 +26,6 @@ use ody_protocol::protocol::ReviewTarget;
 use ody_protocol::protocol::RolloutItem;
 use ody_protocol::protocol::RolloutLine;
 use ody_protocol::user_input::UserInput;
-use core_test_support::PathBufExt;
-use core_test_support::responses;
-use core_test_support::responses::ResponseMock;
-use core_test_support::responses::mount_sse_sequence;
-use core_test_support::responses::start_mock_server;
-use core_test_support::skip_if_no_network;
-use core_test_support::test_ody::local_selections;
-use core_test_support::test_ody::test_ody;
-use core_test_support::wait_for_event;
 use pretty_assertions::assert_eq;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -71,17 +71,16 @@ async fn review_op_emits_lifecycle_and_review_output() {
     let ody = new_conversation_for_server(&server, ody_home.clone(), |_| {}).await;
 
     // Submit review request.
-    ody
-        .submit(Op::Review {
-            review_request: ReviewRequest {
-                target: ReviewTarget::Custom {
-                    instructions: "Please review my changes".to_string(),
-                },
-                user_facing_hint: None,
+    ody.submit(Op::Review {
+        review_request: ReviewRequest {
+            target: ReviewTarget::Custom {
+                instructions: "Please review my changes".to_string(),
             },
-        })
-        .await
-        .unwrap();
+            user_facing_hint: None,
+        },
+    })
+    .await
+    .unwrap();
 
     // Verify lifecycle: Entered -> Exited(Some(review)) -> TurnComplete.
     let _entered = wait_for_event(&ody, |ev| matches!(ev, EventMsg::EnteredReviewMode(_))).await;
@@ -217,17 +216,16 @@ async fn review_op_with_plain_text_emits_review_fallback() {
     let ody_home = Arc::new(TempDir::new().unwrap());
     let ody = new_conversation_for_server(&server, ody_home.clone(), |_| {}).await;
 
-    ody
-        .submit(Op::Review {
-            review_request: ReviewRequest {
-                target: ReviewTarget::Custom {
-                    instructions: "Plain text review".to_string(),
-                },
-                user_facing_hint: None,
+    ody.submit(Op::Review {
+        review_request: ReviewRequest {
+            target: ReviewTarget::Custom {
+                instructions: "Plain text review".to_string(),
             },
-        })
-        .await
-        .unwrap();
+            user_facing_hint: None,
+        },
+    })
+    .await
+    .unwrap();
 
     let _entered = wait_for_event(&ody, |ev| matches!(ev, EventMsg::EnteredReviewMode(_))).await;
     let closed = wait_for_event(&ody, |ev| matches!(ev, EventMsg::ExitedReviewMode(_))).await;
@@ -273,17 +271,16 @@ async fn review_filters_agent_message_related_events() {
     let ody_home = Arc::new(TempDir::new().unwrap());
     let ody = new_conversation_for_server(&server, ody_home.clone(), |_| {}).await;
 
-    ody
-        .submit(Op::Review {
-            review_request: ReviewRequest {
-                target: ReviewTarget::Custom {
-                    instructions: "Filter streaming events".to_string(),
-                },
-                user_facing_hint: None,
+    ody.submit(Op::Review {
+        review_request: ReviewRequest {
+            target: ReviewTarget::Custom {
+                instructions: "Filter streaming events".to_string(),
             },
-        })
-        .await
-        .unwrap();
+            user_facing_hint: None,
+        },
+    })
+    .await
+    .unwrap();
 
     let mut saw_entered = false;
     let mut saw_exited = false;
@@ -347,17 +344,16 @@ async fn review_does_not_emit_agent_message_on_structured_output() {
     let ody_home = Arc::new(TempDir::new().unwrap());
     let ody = new_conversation_for_server(&server, ody_home.clone(), |_| {}).await;
 
-    ody
-        .submit(Op::Review {
-            review_request: ReviewRequest {
-                target: ReviewTarget::Custom {
-                    instructions: "check structured".to_string(),
-                },
-                user_facing_hint: None,
+    ody.submit(Op::Review {
+        review_request: ReviewRequest {
+            target: ReviewTarget::Custom {
+                instructions: "check structured".to_string(),
             },
-        })
-        .await
-        .unwrap();
+            user_facing_hint: None,
+        },
+    })
+    .await
+    .unwrap();
 
     // Drain events until TurnComplete; ensure we only see a final
     // AgentMessage (no streaming assistant messages).
@@ -404,17 +400,16 @@ async fn review_uses_custom_review_model_from_config() {
     })
     .await;
 
-    ody
-        .submit(Op::Review {
-            review_request: ReviewRequest {
-                target: ReviewTarget::Custom {
-                    instructions: "use custom model".to_string(),
-                },
-                user_facing_hint: None,
+    ody.submit(Op::Review {
+        review_request: ReviewRequest {
+            target: ReviewTarget::Custom {
+                instructions: "use custom model".to_string(),
             },
-        })
-        .await
-        .unwrap();
+            user_facing_hint: None,
+        },
+    })
+    .await
+    .unwrap();
 
     // Wait for completion
     let _entered = wait_for_event(&ody, |ev| matches!(ev, EventMsg::EnteredReviewMode(_))).await;
@@ -454,17 +449,16 @@ async fn review_uses_session_model_when_review_model_unset() {
     })
     .await;
 
-    ody
-        .submit(Op::Review {
-            review_request: ReviewRequest {
-                target: ReviewTarget::Custom {
-                    instructions: "use session model".to_string(),
-                },
-                user_facing_hint: None,
+    ody.submit(Op::Review {
+        review_request: ReviewRequest {
+            target: ReviewTarget::Custom {
+                instructions: "use session model".to_string(),
             },
-        })
-        .await
-        .unwrap();
+            user_facing_hint: None,
+        },
+    })
+    .await
+    .unwrap();
 
     let _entered = wait_for_event(&ody, |ev| matches!(ev, EventMsg::EnteredReviewMode(_))).await;
     let _closed = wait_for_event(&ody, |ev| {
@@ -570,17 +564,16 @@ async fn review_input_isolated_from_parent_history() {
 
     // Submit review request; it must start fresh (no parent history in `input`).
     let review_prompt = "Please review only this".to_string();
-    ody
-        .submit(Op::Review {
-            review_request: ReviewRequest {
-                target: ReviewTarget::Custom {
-                    instructions: review_prompt.clone(),
-                },
-                user_facing_hint: None,
+    ody.submit(Op::Review {
+        review_request: ReviewRequest {
+            target: ReviewTarget::Custom {
+                instructions: review_prompt.clone(),
             },
-        })
-        .await
-        .unwrap();
+            user_facing_hint: None,
+        },
+    })
+    .await
+    .unwrap();
 
     let _entered = wait_for_event(&ody, |ev| matches!(ev, EventMsg::EnteredReviewMode(_))).await;
     let _closed = wait_for_event(&ody, |ev| {
@@ -682,17 +675,16 @@ async fn review_history_surfaces_in_parent_session() {
     let ody = new_conversation_for_server(&server, ody_home.clone(), |_| {}).await;
 
     // 1) Run a review turn that produces an assistant message (isolated in child).
-    ody
-        .submit(Op::Review {
-            review_request: ReviewRequest {
-                target: ReviewTarget::Custom {
-                    instructions: "Start a review".to_string(),
-                },
-                user_facing_hint: None,
+    ody.submit(Op::Review {
+        review_request: ReviewRequest {
+            target: ReviewTarget::Custom {
+                instructions: "Start a review".to_string(),
             },
-        })
-        .await
-        .unwrap();
+            user_facing_hint: None,
+        },
+    })
+    .await
+    .unwrap();
     let _entered = wait_for_event(&ody, |ev| matches!(ev, EventMsg::EnteredReviewMode(_))).await;
     let _closed = wait_for_event(&ody, |ev| {
         matches!(
@@ -707,19 +699,18 @@ async fn review_history_surfaces_in_parent_session() {
 
     // 2) Continue in the parent session; request input must not include any review items.
     let followup = "back to parent".to_string();
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: followup.clone(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: followup.clone(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
     let _complete = wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     // Inspect the second request (parent turn) input contents.
@@ -831,17 +822,16 @@ async fn review_uses_overridden_cwd_for_base_branch_merge_base() {
     .await
     .unwrap();
 
-    ody
-        .submit(Op::Review {
-            review_request: ReviewRequest {
-                target: ReviewTarget::BaseBranch {
-                    branch: "main".to_string(),
-                },
-                user_facing_hint: None,
+    ody.submit(Op::Review {
+        review_request: ReviewRequest {
+            target: ReviewTarget::BaseBranch {
+                branch: "main".to_string(),
             },
-        })
-        .await
-        .unwrap();
+            user_facing_hint: None,
+        },
+    })
+    .await
+    .unwrap();
 
     let _entered = wait_for_event(&ody, |ev| matches!(ev, EventMsg::EnteredReviewMode(_))).await;
     let _complete = wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
@@ -900,12 +890,10 @@ where
     F: FnOnce(&mut Config) + Send + 'static,
 {
     let base_url = format!("{}/v1", server.uri());
-    let mut builder = test_ody()
-        .with_home(ody_home)
-        .with_config(move |config| {
-            config.model_provider.base_url = Some(base_url.clone());
-            mutator(config);
-        });
+    let mut builder = test_ody().with_home(ody_home).with_config(move |config| {
+        config.model_provider.base_url = Some(base_url.clone());
+        mutator(config);
+    });
     builder
         .build(server)
         .await

@@ -1,6 +1,7 @@
 use crate::shell::ShellType;
 
 use super::*;
+use core_test_support::test_path_buf;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::permissions::FileSystemAccessMode;
 use ody_protocol::permissions::FileSystemPath;
@@ -13,7 +14,6 @@ use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::SandboxPolicy;
 use ody_protocol::protocol::TurnContextItem;
 use ody_utils_absolute_path::test_support::PathBufExt;
-use core_test_support::test_path_buf;
 use pretty_assertions::assert_eq;
 use std::path::Path;
 use std::path::PathBuf;
@@ -112,7 +112,10 @@ fn serialize_environment_context_with_foreign_windows_cwd() {
 #[test]
 fn serialize_environment_context_with_network() {
     let network = NetworkContext::new(
-        vec!["api.example.com".to_string(), "*.odysseythink.com".to_string()],
+        vec![
+            "api.example.com".to_string(),
+            "*.odysseythink.com".to_string(),
+        ],
         vec!["blocked.example.com".to_string()],
     );
     let context = environment_state(

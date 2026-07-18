@@ -226,7 +226,6 @@ async fn request_user_input_round_trip_for_mode(
     Ok(())
 }
 
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn request_user_input_interrupt_emits_deferred_token_count() -> anyhow::Result<()> {
     skip_if_no_network!(Ok(()));

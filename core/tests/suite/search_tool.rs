@@ -2,21 +2,6 @@
 #![allow(clippy::unwrap_used)]
 
 use anyhow::Result;
-use ody_config::types::McpServerConfig;
-use ody_config::types::McpServerTransportConfig;
-use ody_protocol::dynamic_tools::DynamicToolCallOutputContentItem;
-use ody_protocol::dynamic_tools::DynamicToolFunctionSpec;
-use ody_protocol::dynamic_tools::DynamicToolNamespaceSpec;
-use ody_protocol::dynamic_tools::DynamicToolNamespaceTool;
-use ody_protocol::dynamic_tools::DynamicToolResponse;
-use ody_protocol::dynamic_tools::DynamicToolSpec;
-use ody_protocol::models::FunctionCallOutputPayload;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::McpInvocation;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
 use core_test_support::apps_test_server::AppsTestServer;
 use core_test_support::apps_test_server::AppsTestToolLoading;
 use core_test_support::apps_test_server::CALENDAR_CREATE_EVENT_MCP_APP_RESOURCE_URI;
@@ -49,6 +34,21 @@ use core_test_support::stdio_server_bin;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
 use core_test_support::wait_for_mcp_server;
+use ody_config::types::McpServerConfig;
+use ody_config::types::McpServerTransportConfig;
+use ody_protocol::dynamic_tools::DynamicToolCallOutputContentItem;
+use ody_protocol::dynamic_tools::DynamicToolFunctionSpec;
+use ody_protocol::dynamic_tools::DynamicToolNamespaceSpec;
+use ody_protocol::dynamic_tools::DynamicToolNamespaceTool;
+use ody_protocol::dynamic_tools::DynamicToolResponse;
+use ody_protocol::dynamic_tools::DynamicToolSpec;
+use ody_protocol::models::FunctionCallOutputPayload;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::McpInvocation;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
@@ -318,10 +318,9 @@ async fn app_search_sources_are_hidden_for_api_key_auth() -> Result<()> {
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_config(move |config| {
-            configure_search_capable_apps(config, apps_server.base_url.as_str())
-        });
+    let mut builder = test_ody().with_config(move |config| {
+        configure_search_capable_apps(config, apps_server.base_url.as_str())
+    });
     let test = builder.build(&server).await?;
 
     test.submit_turn_with_approval_and_permission_profile(
@@ -1082,40 +1081,39 @@ async fn tool_search_indexes_only_enabled_non_app_mcp_tools() -> Result<()> {
     .await;
 
     let rmcp_test_server_bin = stdio_server_bin()?;
-    let mut builder =
-        configured_builder(apps_server.base_url.clone()).with_config(move |config| {
-            let mut servers = config.mcp_servers.get().clone();
-            servers.insert(
-                "rmcp".to_string(),
-                McpServerConfig {
-                    transport: McpServerTransportConfig::Stdio {
-                        command: rmcp_test_server_bin,
-                        args: Vec::new(),
-                        env: None,
-                        env_vars: Vec::new(),
-                        cwd: None,
-                    },
-                    environment_id: "local".to_string(),
-                    enabled: true,
-                    required: false,
-                    disabled_reason: None,
-                    startup_timeout_sec: Some(Duration::from_secs(10)),
-                    tool_timeout_sec: None,
-                    default_tools_approval_mode: None,
-                    enabled_tools: Some(vec!["echo".to_string(), "image".to_string()]),
-                    disabled_tools: Some(vec!["image".to_string()]),
-                    scopes: None,
-                    oauth: None,
-                    oauth_resource: None,
-                    supports_parallel_tool_calls: false,
-                    tools: HashMap::new(),
+    let mut builder = configured_builder(apps_server.base_url.clone()).with_config(move |config| {
+        let mut servers = config.mcp_servers.get().clone();
+        servers.insert(
+            "rmcp".to_string(),
+            McpServerConfig {
+                transport: McpServerTransportConfig::Stdio {
+                    command: rmcp_test_server_bin,
+                    args: Vec::new(),
+                    env: None,
+                    env_vars: Vec::new(),
+                    cwd: None,
                 },
-            );
-            config
-                .mcp_servers
-                .set(servers)
-                .expect("test mcp servers should accept any configuration");
-        });
+                environment_id: "local".to_string(),
+                enabled: true,
+                required: false,
+                disabled_reason: None,
+                startup_timeout_sec: Some(Duration::from_secs(10)),
+                tool_timeout_sec: None,
+                default_tools_approval_mode: None,
+                enabled_tools: Some(vec!["echo".to_string(), "image".to_string()]),
+                disabled_tools: Some(vec!["image".to_string()]),
+                scopes: None,
+                oauth: None,
+                oauth_resource: None,
+                supports_parallel_tool_calls: false,
+                tools: HashMap::new(),
+            },
+        );
+        config
+            .mcp_servers
+            .set(servers)
+            .expect("test mcp servers should accept any configuration");
+    });
     let test = builder.build(&server).await?;
     wait_for_mcp_server(&test.ody, "rmcp").await?;
 
@@ -1208,40 +1206,39 @@ async fn tool_search_surfaced_mcp_tool_errors_are_returned_to_model() -> Result<
     .await;
 
     let rmcp_test_server_bin = stdio_server_bin()?;
-    let mut builder =
-        configured_builder(apps_server.base_url.clone()).with_config(move |config| {
-            let mut servers = config.mcp_servers.get().clone();
-            servers.insert(
-                "rmcp".to_string(),
-                McpServerConfig {
-                    transport: McpServerTransportConfig::Stdio {
-                        command: rmcp_test_server_bin,
-                        args: Vec::new(),
-                        env: None,
-                        env_vars: Vec::new(),
-                        cwd: None,
-                    },
-                    environment_id: "local".to_string(),
-                    enabled: true,
-                    required: false,
-                    disabled_reason: None,
-                    startup_timeout_sec: Some(Duration::from_secs(10)),
-                    tool_timeout_sec: None,
-                    default_tools_approval_mode: None,
-                    enabled_tools: Some(vec!["echo".to_string()]),
-                    disabled_tools: None,
-                    scopes: None,
-                    oauth: None,
-                    oauth_resource: None,
-                    supports_parallel_tool_calls: false,
-                    tools: HashMap::new(),
+    let mut builder = configured_builder(apps_server.base_url.clone()).with_config(move |config| {
+        let mut servers = config.mcp_servers.get().clone();
+        servers.insert(
+            "rmcp".to_string(),
+            McpServerConfig {
+                transport: McpServerTransportConfig::Stdio {
+                    command: rmcp_test_server_bin,
+                    args: Vec::new(),
+                    env: None,
+                    env_vars: Vec::new(),
+                    cwd: None,
                 },
-            );
-            config
-                .mcp_servers
-                .set(servers)
-                .expect("test mcp servers should accept any configuration");
-        });
+                environment_id: "local".to_string(),
+                enabled: true,
+                required: false,
+                disabled_reason: None,
+                startup_timeout_sec: Some(Duration::from_secs(10)),
+                tool_timeout_sec: None,
+                default_tools_approval_mode: None,
+                enabled_tools: Some(vec!["echo".to_string()]),
+                disabled_tools: None,
+                scopes: None,
+                oauth: None,
+                oauth_resource: None,
+                supports_parallel_tool_calls: false,
+                tools: HashMap::new(),
+            },
+        );
+        config
+            .mcp_servers
+            .set(servers)
+            .expect("test mcp servers should accept any configuration");
+    });
     let test = builder.build(&server).await?;
     wait_for_mcp_server(&test.ody, "rmcp").await?;
 
@@ -1356,40 +1353,39 @@ async fn tool_search_uses_non_app_mcp_server_instructions_as_namespace_descripti
     .await;
 
     let rmcp_test_server_bin = stdio_server_bin()?;
-    let mut builder =
-        configured_builder(apps_server.base_url.clone()).with_config(move |config| {
-            let mut servers = config.mcp_servers.get().clone();
-            servers.insert(
-                "rmcp".to_string(),
-                McpServerConfig {
-                    transport: McpServerTransportConfig::Stdio {
-                        command: rmcp_test_server_bin,
-                        args: Vec::new(),
-                        env: None,
-                        env_vars: Vec::new(),
-                        cwd: None,
-                    },
-                    environment_id: "local".to_string(),
-                    enabled: true,
-                    required: false,
-                    disabled_reason: None,
-                    startup_timeout_sec: Some(Duration::from_secs(10)),
-                    tool_timeout_sec: None,
-                    default_tools_approval_mode: None,
-                    enabled_tools: Some(vec!["echo".to_string()]),
-                    disabled_tools: None,
-                    scopes: None,
-                    oauth: None,
-                    oauth_resource: None,
-                    supports_parallel_tool_calls: false,
-                    tools: HashMap::new(),
+    let mut builder = configured_builder(apps_server.base_url.clone()).with_config(move |config| {
+        let mut servers = config.mcp_servers.get().clone();
+        servers.insert(
+            "rmcp".to_string(),
+            McpServerConfig {
+                transport: McpServerTransportConfig::Stdio {
+                    command: rmcp_test_server_bin,
+                    args: Vec::new(),
+                    env: None,
+                    env_vars: Vec::new(),
+                    cwd: None,
                 },
-            );
-            config
-                .mcp_servers
-                .set(servers)
-                .expect("test mcp servers should accept any configuration");
-        });
+                environment_id: "local".to_string(),
+                enabled: true,
+                required: false,
+                disabled_reason: None,
+                startup_timeout_sec: Some(Duration::from_secs(10)),
+                tool_timeout_sec: None,
+                default_tools_approval_mode: None,
+                enabled_tools: Some(vec!["echo".to_string()]),
+                disabled_tools: None,
+                scopes: None,
+                oauth: None,
+                oauth_resource: None,
+                supports_parallel_tool_calls: false,
+                tools: HashMap::new(),
+            },
+        );
+        config
+            .mcp_servers
+            .set(servers)
+            .expect("test mcp servers should accept any configuration");
+    });
     let test = builder.build(&server).await?;
     wait_for_mcp_server(&test.ody, "rmcp").await?;
 

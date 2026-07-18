@@ -175,7 +175,10 @@ mod tests {
         assert_eq!(finding.confidence, DesignReviewConfidence::Medium);
         assert_eq!(finding.title, "Missing authz check");
         assert_eq!(finding.location.as_deref(), Some("## Architecture"));
-        assert_eq!(finding.suggested_fix.as_deref(), Some("Add a permission guard."));
+        assert_eq!(
+            finding.suggested_fix.as_deref(),
+            Some("Add a permission guard.")
+        );
     }
 
     #[test]
@@ -192,7 +195,10 @@ mod tests {
         let output = parse_design_review_output(text);
         assert_eq!(output.findings.len(), 1);
         assert_eq!(output.findings[0].severity, DesignReviewSeverity::Low);
-        assert_eq!(output.findings[0].title, "Review output could not be structured");
+        assert_eq!(
+            output.findings[0].title,
+            "Review output could not be structured"
+        );
         assert!(output.findings[0].detail.contains(text));
     }
 
@@ -200,16 +206,14 @@ mod tests {
     fn format_appendix_includes_all_findings_and_advisory_note() {
         let output = DesignReviewOutput {
             overall_assessment: "Two issues.".to_string(),
-            findings: vec![
-                DesignReviewFinding {
-                    severity: DesignReviewSeverity::High,
-                    confidence: DesignReviewConfidence::Medium,
-                    title: "A".to_string(),
-                    detail: "detail A".to_string(),
-                    location: Some("loc".to_string()),
-                    suggested_fix: Some("fix".to_string()),
-                },
-            ],
+            findings: vec![DesignReviewFinding {
+                severity: DesignReviewSeverity::High,
+                confidence: DesignReviewConfidence::Medium,
+                title: "A".to_string(),
+                detail: "detail A".to_string(),
+                location: Some("loc".to_string()),
+                suggested_fix: Some("fix".to_string()),
+            }],
         };
         let appendix = format_review_appendix(&output);
         assert!(appendix.contains("## Adversarial design review findings"));

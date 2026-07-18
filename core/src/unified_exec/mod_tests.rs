@@ -1,8 +1,8 @@
 use super::head_tail_buffer::HeadTailBuffer;
 use super::*;
-use crate::ody_thread::BackgroundTerminalInfo;
 use crate::exec::ExecCapturePolicy;
 use crate::exec::ExecExpiration;
+use crate::ody_thread::BackgroundTerminalInfo;
 use crate::sandboxing::ExecRequest;
 use crate::session::session::Session;
 use crate::session::tests::make_session_and_context;
@@ -10,6 +10,9 @@ use crate::session::turn_context::TurnContext;
 use crate::tools::context::ExecCommandToolOutput;
 use crate::unified_exec::WriteStdinRequest;
 use crate::unified_exec::process::OutputHandles;
+use core_test_support::get_remote_test_env;
+use core_test_support::skip_if_sandbox;
+use core_test_support::test_ody::test_env as remote_test_env;
 use ody_exec_server::ExecProcess;
 use ody_exec_server::ExecProcessEventReceiver;
 use ody_exec_server::ExecProcessFuture;
@@ -23,9 +26,6 @@ use ody_sandboxing::SandboxType;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_output_truncation::TruncationPolicy;
 use ody_utils_output_truncation::approx_token_count;
-use core_test_support::get_remote_test_env;
-use core_test_support::skip_if_sandbox;
-use core_test_support::test_ody::test_env as remote_test_env;
 use pretty_assertions::assert_eq;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -557,11 +557,7 @@ async fn requests_with_large_timeout_are_capped() -> anyhow::Result<()> {
     let (session, turn) = test_session_and_turn().await;
 
     let result = exec_command(
-        &session,
-        &turn,
-        "echo ody",
-        /*yield_time_ms*/ 120_000,
-        /*workdir*/ None,
+        &session, &turn, "echo ody", /*yield_time_ms*/ 120_000, /*workdir*/ None,
     )
     .await?;
 
@@ -580,11 +576,7 @@ async fn requests_with_large_timeout_are_capped() -> anyhow::Result<()> {
 async fn completed_commands_do_not_persist_sessions() -> anyhow::Result<()> {
     let (session, turn) = test_session_and_turn().await;
     let result = exec_command(
-        &session,
-        &turn,
-        "echo ody",
-        /*yield_time_ms*/ 2_500,
-        /*workdir*/ None,
+        &session, &turn, "echo ody", /*yield_time_ms*/ 2_500, /*workdir*/ None,
     )
     .await?;
 

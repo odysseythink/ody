@@ -1,8 +1,8 @@
 use crate::ThreadManager;
 use crate::agent::AgentControl;
-use crate::ody_thread::OdyThread;
 use crate::config::Config;
 use crate::config::test_config;
+use crate::ody_thread::OdyThread;
 use crate::thread_manager::ThreadManagerState;
 use ody_features::Feature;
 use ody_protocol::ThreadId;

@@ -24,30 +24,6 @@ use ody_features::Feature;
 use ody_model_provider::create_model_provider;
 
 use crate::config::TEST_PROVIDER_ID;
-use ody_models_manager::manager::StaticModelsManager;
-use ody_network_proxy::NetworkProxyConfig;
-use ody_protocol::ThreadId;
-use ody_protocol::approvals::NetworkApprovalProtocol;
-use ody_protocol::config_types::ApprovalsReviewer;
-use ody_protocol::models::ContentItem;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::models::ResponseItem;
-use ody_protocol::model_metadata::ModelsResponse;
-use ody_protocol::permissions::FileSystemAccessMode;
-use ody_protocol::permissions::FileSystemPath;
-use ody_protocol::permissions::FileSystemSandboxEntry;
-use ody_protocol::permissions::FileSystemSandboxPolicy;
-use ody_protocol::permissions::NetworkSandboxPolicy;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::Event;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::GranularApprovalConfig;
-use ody_protocol::protocol::GuardianAssessmentStatus;
-use ody_protocol::protocol::GuardianRiskLevel;
-use ody_protocol::protocol::GuardianUserAuthorization;
-use ody_protocol::protocol::ReviewDecision;
-use ody_protocol::protocol::RolloutItem;
-use ody_protocol::protocol::TurnCompleteEvent;
 use core_test_support::PathBufExt;
 use core_test_support::TempDirExt;
 use core_test_support::context_snapshot;
@@ -68,6 +44,30 @@ use core_test_support::streaming_sse::start_streaming_sse_server;
 use core_test_support::test_path_buf;
 use insta::Settings;
 use insta::assert_snapshot;
+use ody_models_manager::manager::StaticModelsManager;
+use ody_network_proxy::NetworkProxyConfig;
+use ody_protocol::ThreadId;
+use ody_protocol::approvals::NetworkApprovalProtocol;
+use ody_protocol::config_types::ApprovalsReviewer;
+use ody_protocol::model_metadata::ModelsResponse;
+use ody_protocol::models::ContentItem;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::models::ResponseItem;
+use ody_protocol::permissions::FileSystemAccessMode;
+use ody_protocol::permissions::FileSystemPath;
+use ody_protocol::permissions::FileSystemSandboxEntry;
+use ody_protocol::permissions::FileSystemSandboxPolicy;
+use ody_protocol::permissions::NetworkSandboxPolicy;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::Event;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::GranularApprovalConfig;
+use ody_protocol::protocol::GuardianAssessmentStatus;
+use ody_protocol::protocol::GuardianRiskLevel;
+use ody_protocol::protocol::GuardianUserAuthorization;
+use ody_protocol::protocol::ReviewDecision;
+use ody_protocol::protocol::RolloutItem;
+use ody_protocol::protocol::TurnCompleteEvent;
 use pretty_assertions::assert_eq;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -243,8 +243,7 @@ async fn guardian_test_session_turn_and_rx(
         .models_manager = models_manager;
     let turn_mut = Arc::get_mut(&mut turn).expect("turn should be uniquely owned");
     turn_mut.config = Arc::clone(&config);
-    turn_mut.provider =
-        create_model_provider(config.model_provider.clone());
+    turn_mut.provider = create_model_provider(config.model_provider.clone());
     turn_mut.user_instructions = None;
 
     (session, turn, rx)
@@ -1443,11 +1442,9 @@ async fn guardian_request_model_for_auto_review(
         GuardianTestCatalog::Bundled => {}
         GuardianTestCatalog::ParentOnly => {
             let parent_model = turn.model_info.clone();
-            let models_manager = StaticModelsManager::new(
-                ModelsResponse {
-                    models: vec![parent_model],
-                },
-            );
+            let models_manager = StaticModelsManager::new(ModelsResponse {
+                models: vec![parent_model],
+            });
             Arc::get_mut(&mut session)
                 .expect("session should be unique")
                 .services
@@ -2287,8 +2284,7 @@ async fn guardian_review_surfaces_responses_api_errors_in_rejection_reason() -> 
         .models_manager = models_manager;
     let turn_mut = Arc::get_mut(&mut turn).expect("turn should be uniquely owned");
     turn_mut.config = Arc::clone(&config);
-    turn_mut.provider =
-        create_model_provider(config.model_provider.clone());
+    turn_mut.provider = create_model_provider(config.model_provider.clone());
     turn_mut.user_instructions = None;
 
     seed_guardian_parent_history(&session, &turn).await;

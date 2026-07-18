@@ -190,10 +190,7 @@ fn checkpoint_plan(statuses: &[StepStatus]) -> Vec<PlanItemArg> {
 fn task_checkpoint_fires_on_a_finished_task_in_a_large_context() {
     let plan = checkpoint_plan(&[StepStatus::Completed, StepStatus::InProgress]);
     assert!(task_checkpoint_due(
-        0.5,
-        &plan,
-        /*crossed_boundary*/ true,
-        /*context_window*/ 249_036,
+        0.5, &plan, /*crossed_boundary*/ true, /*context_window*/ 249_036,
         /*total_tokens*/ 154_587,
     ));
 }

@@ -822,21 +822,20 @@ fn add_collaboration_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mu
         } else {
             let agent_type_description =
                 agent_type_description(turn_context, context.default_agent_type_description);
-            let exposure = if crate::safety::is_read_only_session_mode(
-                turn_context.collaboration_mode.mode,
-            ) {
-                // In Plan/Design mode, exploration IS the job, and delegating it to a
-                // read-only `explorer` is what keeps the planning context free. A
-                // Deferred tool is absent from the model's initial tool list — it
-                // would have to discover spawn_agent through tool_search before it
-                // could ever choose to delegate, so in practice it never does, and
-                // every search lands in the planning context instead.
-                ToolExposure::Direct
-            } else if search_tool_enabled(turn_context) {
-                ToolExposure::Deferred
-            } else {
-                ToolExposure::Direct
-            };
+            let exposure =
+                if crate::safety::is_read_only_session_mode(turn_context.collaboration_mode.mode) {
+                    // In Plan/Design mode, exploration IS the job, and delegating it to a
+                    // read-only `explorer` is what keeps the planning context free. A
+                    // Deferred tool is absent from the model's initial tool list — it
+                    // would have to discover spawn_agent through tool_search before it
+                    // could ever choose to delegate, so in practice it never does, and
+                    // every search lands in the planning context instead.
+                    ToolExposure::Direct
+                } else if search_tool_enabled(turn_context) {
+                    ToolExposure::Deferred
+                } else {
+                    ToolExposure::Direct
+                };
             planned_tools.add_with_exposure(
                 SpawnAgentHandler::new(SpawnAgentToolOptions {
                     available_models: turn_context.available_models.clone(),

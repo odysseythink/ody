@@ -24,8 +24,6 @@ use crate::tools::events::ToolEmitter;
 use crate::tools::events::ToolEventCtx;
 use crate::tools::handlers::apply_granted_turn_permissions;
 use crate::tools::handlers::apply_patch_spec::create_apply_patch_tool;
-use serde::Deserialize;
-use tracing::debug;
 use crate::tools::handlers::resolve_tool_environment;
 use crate::tools::handlers::updated_hook_command;
 use crate::tools::hook_names::HookToolName;
@@ -57,6 +55,8 @@ use ody_tools::ToolName;
 use ody_tools::ToolSpec;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path_uri::PathUri;
+use serde::Deserialize;
+use tracing::debug;
 
 const APPLY_PATCH_ARGUMENT_DIFF_BUFFER_INTERVAL: Duration = Duration::from_millis(500);
 /// Handles `apply_patch` requests and routes verified patches to the selected
@@ -433,9 +433,11 @@ fn write_permissions_for_paths(
 /// Extracts the raw patch text used as the command-shaped hook input for apply_patch.
 fn apply_patch_payload_command(payload: &ToolPayload) -> Option<String> {
     match payload {
-        ToolPayload::Function { arguments } => serde_json::from_str::<ApplyPatchToolArgs>(arguments)
-            .ok()
-            .map(|args| args.input),
+        ToolPayload::Function { arguments } => {
+            serde_json::from_str::<ApplyPatchToolArgs>(arguments)
+                .ok()
+                .map(|args| args.input)
+        }
         _ => None,
     }
 }

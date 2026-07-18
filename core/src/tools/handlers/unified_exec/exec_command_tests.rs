@@ -16,7 +16,10 @@ use tokio::sync::Mutex;
 
 async fn plan_mode_invocation_for_command(
     cmd: &str,
-) -> (ToolInvocation, async_channel::Receiver<ody_protocol::protocol::Event>) {
+) -> (
+    ToolInvocation,
+    async_channel::Receiver<ody_protocol::protocol::Event>,
+) {
     let (session, turn, rx) = make_session_and_context_with_rx().await;
 
     let mut turn = Arc::try_unwrap(turn).expect("turn Arc should be unique");
@@ -75,7 +78,11 @@ async fn plan_mode_exec_denial_uses_display_and_emits_warning() {
     loop {
         let event = rx.recv().await.expect("expected event");
         match event.msg {
-            EventMsg::Warning(WarningEvent { message }) if message.contains(PLAN_MODE_REJECTION_MARKER) => break,
+            EventMsg::Warning(WarningEvent { message })
+                if message.contains(PLAN_MODE_REJECTION_MARKER) =>
+            {
+                break;
+            }
             _ => continue,
         }
     }

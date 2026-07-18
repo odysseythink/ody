@@ -49,8 +49,7 @@ pub(super) async fn spawn_review_thread(
         .permissions
         .shell_environment_policy
         .clone();
-    per_turn_config =
-        Arc::unwrap_or_clone(parent_turn_context.config.clone());
+    per_turn_config = Arc::unwrap_or_clone(parent_turn_context.config.clone());
     per_turn_config.compact_prompt = parent_turn_context.config.compact_prompt.clone();
     if let Err(err) = per_turn_config.web_search_mode.set(review_web_search_mode) {
         let fallback_value = per_turn_config.web_search_mode.value();

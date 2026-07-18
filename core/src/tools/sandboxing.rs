@@ -11,6 +11,8 @@ use crate::session::turn_context::TurnContext;
 use crate::state::SessionServices;
 use crate::tools::hook_names::HookToolName;
 use crate::tools::network_approval::NetworkApprovalSpec;
+use futures::Future;
+use futures::future::BoxFuture;
 use ody_file_system::FileSystemSandboxContext;
 use ody_network_proxy::NetworkProxy;
 use ody_protocol::approvals::ExecPolicyAmendment;
@@ -29,8 +31,6 @@ use ody_sandboxing::policy_transforms::effective_permission_profile;
 use ody_tools::ToolName;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path_uri::PathUri;
-use futures::Future;
-use futures::future::BoxFuture;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -444,9 +444,7 @@ impl<'a> SandboxAttempt<'a> {
                 environment_id,
                 network,
                 sandbox_policy_cwd: self.sandbox_cwd,
-                linux_sandbox_exe: self
-                    .ody_linux_sandbox_exe
-                    .map(std::path::PathBuf::as_path),
+                linux_sandbox_exe: self.ody_linux_sandbox_exe.map(std::path::PathBuf::as_path),
                 use_legacy_landlock: self.use_legacy_landlock,
                 windows_sandbox_level: self.windows_sandbox_level,
                 windows_sandbox_private_desktop: self.windows_sandbox_private_desktop,

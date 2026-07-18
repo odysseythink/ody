@@ -36,8 +36,7 @@ pub(crate) async fn rewrite_mcp_tool_arguments_for_odysseythink_files(
             continue;
         };
         let Some(uploaded_value) =
-            rewrite_argument_value_for_odysseythink_files(turn_context, field_name, value)
-                .await?
+            rewrite_argument_value_for_odysseythink_files(turn_context, field_name, value).await?
         else {
             continue;
         };
@@ -73,13 +72,9 @@ async fn rewrite_argument_value_for_odysseythink_files(
                 let Some(file_path) = item.as_str() else {
                     return Ok(None);
                 };
-                let rewritten = build_uploaded_argument_value(
-                    turn_context,
-                    field_name,
-                    Some(index),
-                    file_path,
-                )
-                .await?;
+                let rewritten =
+                    build_uploaded_argument_value(turn_context, field_name, Some(index), file_path)
+                        .await?;
                 rewritten_values.push(rewritten);
             }
             Ok(Some(JsonValue::Array(rewritten_values)))

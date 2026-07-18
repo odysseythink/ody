@@ -1,12 +1,6 @@
 //! Verifies that the agent retries when the SSE stream terminates before
 //! delivering a `response.completed` event.
 
-use ody_model_provider_info::ModelProviderInfo;
-use ody_model_provider_info::WireApi;
-use ody_model_provider_info::ProviderCapabilities;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
 use core_test_support::responses;
 use core_test_support::skip_if_no_network;
 use core_test_support::streaming_sse::StreamingSseChunk;
@@ -14,6 +8,12 @@ use core_test_support::streaming_sse::start_streaming_sse_server;
 use core_test_support::test_ody::TestOdy;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
+use ody_model_provider_info::ModelProviderInfo;
+use ody_model_provider_info::ProviderCapabilities;
+use ody_model_provider_info::WireApi;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
 
 fn sse_incomplete() -> String {
     responses::sse(vec![serde_json::json!({
@@ -63,7 +63,7 @@ async fn retries_on_early_close() {
         stream_idle_timeout_ms: Some(2000),
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
-            capabilities: ProviderCapabilities::default(),
+        capabilities: ProviderCapabilities::default(),
     };
 
     let TestOdy { ody, .. } = test_ody()
@@ -74,19 +74,18 @@ async fn retries_on_early_close() {
         .await
         .unwrap();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
 
     // Wait until TurnComplete (should succeed after retry).
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;

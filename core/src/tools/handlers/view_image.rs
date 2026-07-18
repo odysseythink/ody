@@ -1,12 +1,12 @@
 use ody_protocol::items::ImageViewItem;
 use ody_protocol::items::TurnItem;
+use ody_protocol::model_metadata::InputModality;
 use ody_protocol::models::DEFAULT_IMAGE_DETAIL;
 use ody_protocol::models::FunctionCallOutputBody;
 use ody_protocol::models::FunctionCallOutputContentItem;
 use ody_protocol::models::FunctionCallOutputPayload;
 use ody_protocol::models::ImageDetail;
 use ody_protocol::models::ResponseInputItem;
-use ody_protocol::model_metadata::InputModality;
 use ody_utils_image::data_url_from_bytes;
 use serde::Deserialize;
 
@@ -268,10 +268,10 @@ mod tests {
     use crate::tools::context::ToolCallSource;
     use crate::tools::context::ToolInvocation;
     use crate::turn_diff_tracker::TurnDiffTracker;
+    use core_test_support::TempDirExt;
     use ody_protocol::models::PermissionProfile;
     use ody_utils_absolute_path::AbsolutePathBuf;
     use ody_utils_path_uri::PathUri;
-    use core_test_support::TempDirExt;
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use std::sync::Arc;
@@ -423,8 +423,7 @@ mod tests {
 
         replace_primary_environment_cwd(&mut turn, image_cwd.clone());
         let file_path = image_cwd.join("notes.json");
-        std::fs::write(file_path.as_path(), br#"{ "message": "hello" }"#)
-            .expect("write test file");
+        std::fs::write(file_path.as_path(), br#"{ "message": "hello" }"#).expect("write test file");
         turn.permission_profile = PermissionProfile::Disabled;
 
         let result = ViewImageHandler::default()

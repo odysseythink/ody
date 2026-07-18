@@ -70,10 +70,7 @@ fn canonicalizes_powershell_wrappers_to_stable_script_key() {
 
     assert_eq!(
         canonicalize_command_for_approval(&command_a),
-        vec![
-            "__ody_powershell_script__".to_string(),
-            script.to_string(),
-        ]
+        vec!["__ody_powershell_script__".to_string(), script.to_string(),]
     );
     assert_eq!(
         canonicalize_command_for_approval(&command_a),

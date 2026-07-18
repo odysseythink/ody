@@ -1,9 +1,5 @@
 #![cfg(not(target_os = "windows"))]
 
-use ody_features::Feature;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
 use core_test_support::responses::ev_completed;
 use core_test_support::responses::ev_response_created;
 use core_test_support::responses::mount_sse_once;
@@ -12,6 +8,10 @@ use core_test_support::responses::start_mock_server;
 use core_test_support::skip_if_no_network;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
+use ody_features::Feature;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn request_body_is_not_compressed_when_compression_feature_enabled() -> anyhow::Result<()> {
@@ -34,18 +34,17 @@ async fn request_body_is_not_compressed_when_compression_feature_enabled() -> an
     });
     let ody = builder.build(&server).await?.ody;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "do not compress".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "do not compress".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
 
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 

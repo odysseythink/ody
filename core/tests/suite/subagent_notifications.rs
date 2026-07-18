@@ -1,18 +1,4 @@
 use anyhow::Result;
-use ody_core::StartThreadOptions;
-use ody_core::ThreadConfigSnapshot;
-use ody_core::config::AgentRoleConfig;
-use ody_features::Feature;
-use ody_protocol::ThreadId;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::model_metadata::ReasoningEffort;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::InitialHistory;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::SessionSource;
-use ody_protocol::protocol::SubAgentSource;
-use ody_protocol::user_input::UserInput;
 use core_test_support::hooks::trust_discovered_hooks;
 use core_test_support::responses::ResponsesRequest;
 use core_test_support::responses::ev_assistant_message;
@@ -35,6 +21,20 @@ use core_test_support::test_ody::local_selections;
 use core_test_support::test_ody::test_ody;
 use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event_match;
+use ody_core::StartThreadOptions;
+use ody_core::ThreadConfigSnapshot;
+use ody_core::config::AgentRoleConfig;
+use ody_features::Feature;
+use ody_protocol::ThreadId;
+use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::InitialHistory;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::SessionSource;
+use ody_protocol::protocol::SubAgentSource;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
@@ -353,11 +353,7 @@ async fn setup_turn_one_with_custom_spawned_child(
     configure_test: impl FnOnce(
         core_test_support::test_ody::TestOdyBuilder,
     ) -> core_test_support::test_ody::TestOdyBuilder,
-) -> Result<(
-    TestOdy,
-    String,
-    core_test_support::responses::ResponseMock,
-)> {
+) -> Result<(TestOdy, String, core_test_support::responses::ResponseMock)> {
     let spawn_args = serde_json::to_string(&spawn_args)?;
 
     mount_sse_once_match(

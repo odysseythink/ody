@@ -26,22 +26,46 @@ pub(crate) struct RigorFragmentNode {
 /// Kept independent of composition order deliberately — `assert_topological_order` below is
 /// what actually checks the chain in `collaboration_mode_instructions.rs` against this graph.
 pub(crate) const RIGOR_FRAGMENT_GRAPH: &[RigorFragmentNode] = &[
-    RigorFragmentNode { name: "WORKFLOW", hard_dependencies: &[] },
-    RigorFragmentNode { name: "COVERAGE", hard_dependencies: &[] },
-    RigorFragmentNode { name: "TASK_SKELETON", hard_dependencies: &[] },
-    RigorFragmentNode { name: "SELFREVIEW", hard_dependencies: &["COVERAGE"] },
+    RigorFragmentNode {
+        name: "WORKFLOW",
+        hard_dependencies: &[],
+    },
+    RigorFragmentNode {
+        name: "COVERAGE",
+        hard_dependencies: &[],
+    },
+    RigorFragmentNode {
+        name: "TASK_SKELETON",
+        hard_dependencies: &[],
+    },
+    RigorFragmentNode {
+        name: "SELFREVIEW",
+        hard_dependencies: &["COVERAGE"],
+    },
     RigorFragmentNode {
         name: "INVARIANTS",
         hard_dependencies: &["COVERAGE", "SELFREVIEW"],
     },
-    RigorFragmentNode { name: "GROUNDING", hard_dependencies: &[] },
-    RigorFragmentNode { name: "SCOPE", hard_dependencies: &["GROUNDING"] },
-    RigorFragmentNode { name: "RENAME", hard_dependencies: &[] },
+    RigorFragmentNode {
+        name: "GROUNDING",
+        hard_dependencies: &[],
+    },
+    RigorFragmentNode {
+        name: "SCOPE",
+        hard_dependencies: &["GROUNDING"],
+    },
+    RigorFragmentNode {
+        name: "RENAME",
+        hard_dependencies: &[],
+    },
     RigorFragmentNode {
         name: "RISKS",
         hard_dependencies: &["COVERAGE", "SELFREVIEW"],
     },
-    RigorFragmentNode { name: "SPLIT", hard_dependencies: &[] },
+    RigorFragmentNode {
+        name: "SPLIT",
+        hard_dependencies: &[],
+    },
     RigorFragmentNode {
         name: "TURN_DISCIPLINE",
         hard_dependencies: &["SPLIT"],
@@ -143,7 +167,9 @@ mod tests {
                 let dep_index = RIGOR_COMPOSITION_ORDER
                     .iter()
                     .position(|n| n == dep)
-                    .unwrap_or_else(|| panic!("dependency {dep} of {name} missing from composition order"));
+                    .unwrap_or_else(|| {
+                        panic!("dependency {dep} of {name} missing from composition order")
+                    });
                 assert!(
                     dep_index < index,
                     "{name} is composed at position {index} but its hard dependency {dep} \

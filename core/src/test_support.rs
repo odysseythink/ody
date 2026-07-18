@@ -61,9 +61,7 @@ pub fn set_deterministic_process_ids(enabled: bool) {
     unified_exec::set_deterministic_process_ids_for_tests(enabled);
 }
 
-pub fn thread_manager_with_models_provider(
-    provider: ModelProviderInfo,
-) -> ThreadManager {
+pub fn thread_manager_with_models_provider(provider: ModelProviderInfo) -> ThreadManager {
     ThreadManager::with_models_provider_for_tests(provider)
 }
 
@@ -72,11 +70,7 @@ pub fn thread_manager_with_models_provider_and_home(
     ody_home: PathBuf,
     environment_manager: Arc<EnvironmentManager>,
 ) -> ThreadManager {
-    ThreadManager::with_models_provider_and_home_for_tests(
-        provider,
-        ody_home,
-        environment_manager,
-    )
+    ThreadManager::with_models_provider_and_home_for_tests(provider, ody_home, environment_manager)
 }
 
 pub fn thread_manager_with_models_provider_home_and_state(

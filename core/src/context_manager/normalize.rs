@@ -1,8 +1,8 @@
+use ody_protocol::model_metadata::InputModality;
 use ody_protocol::models::ContentItem;
 use ody_protocol::models::FunctionCallOutputContentItem;
 use ody_protocol::models::FunctionCallOutputPayload;
 use ody_protocol::models::ResponseItem;
-use ody_protocol::model_metadata::InputModality;
 use std::collections::HashSet;
 
 use crate::util::error_or_panic;

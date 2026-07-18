@@ -29,10 +29,16 @@ pub(crate) struct PendingDesignHandoff {
 #[derive(Debug)]
 pub(crate) enum HandoffDecision {
     /// The switch may commit. `reminder` is `Some` only when `new == Plan`.
-    Allow { reminder: Option<String>, logs: Vec<PlanModeLogEvent> },
+    Allow {
+        reminder: Option<String>,
+        logs: Vec<PlanModeLogEvent>,
+    },
     /// The switch is rejected (Strict + incomplete). `missing_report` is the
     /// user-facing missing-sections list.
-    Veto { missing_report: String, logs: Vec<PlanModeLogEvent> },
+    Veto {
+        missing_report: String,
+        logs: Vec<PlanModeLogEvent>,
+    },
 }
 
 pub(crate) async fn evaluate_design_exit(
@@ -64,7 +70,10 @@ pub(crate) async fn evaluate_design_exit(
             new_mode,
             format!("Switching from Design mode to {new_mode:?}."),
         ));
-        return HandoffDecision::Allow { reminder: None, logs };
+        return HandoffDecision::Allow {
+            reminder: None,
+            logs,
+        };
     }
     let path = artifact
         .as_ref()
@@ -99,10 +108,7 @@ pub(crate) async fn evaluate_design_exit(
     }
 }
 
-fn make_design_completeness_log(
-    complete: bool,
-    report: Option<&str>,
-) -> PlanModeLogEvent {
+fn make_design_completeness_log(complete: bool, report: Option<&str>) -> PlanModeLogEvent {
     let message = if complete {
         "Design completeness check passed.".to_string()
     } else {
@@ -224,15 +230,13 @@ mod tests {
 
     #[tokio::test]
     async fn evaluate_strict_incomplete_vetoes() {
-        let decision =
-            evaluate_design_exit(None, ModeKind::Plan, PlanEnforcement::Strict).await;
+        let decision = evaluate_design_exit(None, ModeKind::Plan, PlanEnforcement::Strict).await;
         assert!(matches!(decision, HandoffDecision::Veto { .. }));
     }
 
     #[tokio::test]
     async fn evaluate_advisory_incomplete_allows_plan_with_reminder() {
-        let decision =
-            evaluate_design_exit(None, ModeKind::Plan, PlanEnforcement::Advisory).await;
+        let decision = evaluate_design_exit(None, ModeKind::Plan, PlanEnforcement::Advisory).await;
         assert!(matches!(
             decision,
             HandoffDecision::Allow {
@@ -254,14 +258,14 @@ mod tests {
 
     #[tokio::test]
     async fn evaluate_advisory_emits_design_completeness_log() {
-        let decision =
-            evaluate_design_exit(None, ModeKind::Plan, PlanEnforcement::Advisory).await;
+        let decision = evaluate_design_exit(None, ModeKind::Plan, PlanEnforcement::Advisory).await;
         let logs = match decision {
             HandoffDecision::Allow { logs, .. } => logs,
             other => panic!("expected Allow, got {other:?}"),
         };
         assert!(
-            logs.iter().any(|log| log.kind == PlanModeLogKind::DesignCompletenessCheck),
+            logs.iter()
+                .any(|log| log.kind == PlanModeLogKind::DesignCompletenessCheck),
             "expected a design completeness log, got {logs:?}"
         );
     }

@@ -59,7 +59,10 @@ pub struct SkillsConfig {
     pub knowledge_microagents_enabled: Option<bool>,
 
     /// Maximum number of knowledge skills that may be loaded in a single turn.
-    #[serde(default = "default_max_skills", skip_serializing_if = "is_default_max_skills")]
+    #[serde(
+        default = "default_max_skills",
+        skip_serializing_if = "is_default_max_skills"
+    )]
     pub knowledge_max_skills_per_turn: usize,
 
     /// Maximum total size of knowledge skill contents in bytes.

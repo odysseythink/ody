@@ -63,7 +63,8 @@ fn complete_design_markdown() -> String {
         "user final approval captured before handoff.\n\n",
         "## Reuse Analysis\n",
         "component reuse survey of existing components follows.\n",
-    ).to_string()
+    )
+    .to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -136,7 +137,11 @@ async fn submit_design_rejected_in_plan_mode() -> anyhow::Result<()> {
 
     let req = mock.single_request();
     let (output_text, success) = call_output(&req, call_id);
-    assert_eq!(success, Some(false), "call in Plan mode must return error (success=false)");
+    assert_eq!(
+        success,
+        Some(false),
+        "call in Plan mode must return error (success=false)"
+    );
     assert!(
         output_text.contains("only available in Design mode"),
         "error must name Design mode: {output_text}"
@@ -222,7 +227,9 @@ async fn submit_design_persists_and_ends_turn() -> anyhow::Result<()> {
     assert_eq!(completed.text, design_markdown);
 
     // T3 assertion: file persisted in .ody-code/designs/.
-    let plan_path = completed.plan_file_path.expect("plan_file_path must be set");
+    let plan_path = completed
+        .plan_file_path
+        .expect("plan_file_path must be set");
     assert!(
         plan_path.starts_with(cwd.path()),
         "design path {plan_path:?} should be under cwd"
@@ -237,7 +244,10 @@ async fn submit_design_persists_and_ends_turn() -> anyhow::Result<()> {
         "design file must be under designs/ directory: {path_str}"
     );
     let persisted = tokio::fs::read_to_string(&plan_path).await?;
-    assert_eq!(persisted, design_markdown, "persisted design must match submitted markdown");
+    assert_eq!(
+        persisted, design_markdown,
+        "persisted design must match submitted markdown"
+    );
 
     // T3 assertion: output is "Design submitted".
     let req = mock.single_request();
@@ -347,9 +357,14 @@ async fn submit_design_rejects_incomplete_c1_c8() -> anyhow::Result<()> {
     assert_eq!(first_completed.text, incomplete);
 
     // T4 assertion: file WAS persisted despite being incomplete.
-    let first_path = first_completed.plan_file_path.expect("plan_file_path must be set even for incomplete");
+    let first_path = first_completed
+        .plan_file_path
+        .expect("plan_file_path must be set even for incomplete");
     let persisted = tokio::fs::read_to_string(&first_path).await?;
-    assert_eq!(persisted, incomplete, "incomplete design must still be persisted to disk");
+    assert_eq!(
+        persisted, incomplete,
+        "incomplete design must still be persisted to disk"
+    );
 
     // Second completion (complete design).
     let second_completed = wait_for_event_match(&ody, |event| match event {
@@ -363,11 +378,20 @@ async fn submit_design_rejects_incomplete_c1_c8() -> anyhow::Result<()> {
     assert_eq!(second_completed.text, complete);
 
     let requests = response_mock.requests();
-    assert_eq!(requests.len(), 2, "incomplete must trigger retry; got {} requests", requests.len());
+    assert_eq!(
+        requests.len(),
+        2,
+        "incomplete must trigger retry; got {} requests",
+        requests.len()
+    );
 
     // T4 assertion: first call output contains "NOT final" or "incomplete".
     let (first_output, first_success) = call_output(&requests[0], call_id);
-    assert_eq!(first_success, Some(true), "incomplete design call is not an error (success=true, but non-terminal)");
+    assert_eq!(
+        first_success,
+        Some(true),
+        "incomplete design call is not an error (success=true, but non-terminal)"
+    );
     assert!(
         first_output.contains("NOT final") || first_output.contains("incomplete"),
         "first output must indicate non-final state: {first_output}"
@@ -488,7 +512,10 @@ async fn submit_design_split_pending_part_returns_stem_dir() -> anyhow::Result<(
     );
 
     // T5 assertion: must NOT say "Design submitted".
-    assert_ne!(index_output, "Design submitted", "split call must not be terminal");
+    assert_ne!(
+        index_output, "Design submitted",
+        "split call must not be terminal"
+    );
 
     // T5 assertion: must NOT contain "Plan mode" (no cross-mode language leak).
     assert!(
@@ -609,7 +636,11 @@ async fn submit_design_rejects_naked_index_after_done_parts() -> anyhow::Result<
     // When no parts are verified-done (file exists), the guard does NOT fire,
     // and the bare submission succeeds.
     let (bare_output, bare_success) = call_output(&requests[1], bare_call_id);
-    assert_eq!(bare_success, Some(true), "bare submission when nothing verified-done must succeed");
+    assert_eq!(
+        bare_success,
+        Some(true),
+        "bare submission when nothing verified-done must succeed"
+    );
     let _ = bare_output;
 
     Ok(())

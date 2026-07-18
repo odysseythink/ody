@@ -1,11 +1,11 @@
 use super::*;
 use crate::sandboxing::SandboxPermissions;
+use core_test_support::PathBufExt;
+use core_test_support::test_path_buf;
 use ody_network_proxy::BlockedRequestArgs;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::permissions::NetworkSandboxPolicy;
 use ody_protocol::protocol::AskForApproval;
-use core_test_support::PathBufExt;
-use core_test_support::test_path_buf;
 use pretty_assertions::assert_eq;
 use tokio_util::sync::CancellationToken;
 

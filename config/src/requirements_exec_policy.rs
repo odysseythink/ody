@@ -1,10 +1,10 @@
+use multimap::MultiMap;
 use ody_execpolicy::Decision;
 use ody_execpolicy::Policy;
 use ody_execpolicy::RuleRef;
 use ody_execpolicy::rule::PatternToken;
 use ody_execpolicy::rule::PrefixPattern;
 use ody_execpolicy::rule::PrefixRule;
-use multimap::MultiMap;
 use serde::Deserialize;
 use std::sync::Arc;
 use thiserror::Error;

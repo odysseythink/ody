@@ -3,28 +3,6 @@ use anyhow::Result;
 use chrono::Utc;
 use ody_config::config_toml::RealtimeWsVersion;
 
-use ody_protocol::ThreadId;
-use ody_protocol::models::ContentItem;
-use ody_protocol::models::ResponseItem;
-use ody_protocol::protocol::OdyErrorInfo;
-use ody_protocol::protocol::ConversationAudioParams;
-use ody_protocol::protocol::ConversationStartParams;
-use ody_protocol::protocol::ConversationStartTransport;
-use ody_protocol::protocol::ConversationTextParams;
-use ody_protocol::protocol::ConversationTextRole;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::InitialHistory;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::RealtimeAudioFrame;
-use ody_protocol::protocol::RealtimeConversationRealtimeEvent;
-use ody_protocol::protocol::RealtimeConversationVersion;
-use ody_protocol::protocol::RealtimeEvent;
-use ody_protocol::protocol::RealtimeNoopRequested;
-use ody_protocol::protocol::RealtimeOutputModality;
-use ody_protocol::protocol::RealtimeVoice;
-use ody_protocol::protocol::RolloutItem;
-use ody_protocol::protocol::SessionSource;
-use ody_protocol::user_input::UserInput;
 use core_test_support::responses;
 use core_test_support::responses::WebSocketConnectionConfig;
 use core_test_support::responses::start_mock_server;
@@ -37,6 +15,28 @@ use core_test_support::test_ody::TestOdy;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
 use core_test_support::wait_for_event_match;
+use ody_protocol::ThreadId;
+use ody_protocol::models::ContentItem;
+use ody_protocol::models::ResponseItem;
+use ody_protocol::protocol::ConversationAudioParams;
+use ody_protocol::protocol::ConversationStartParams;
+use ody_protocol::protocol::ConversationStartTransport;
+use ody_protocol::protocol::ConversationTextParams;
+use ody_protocol::protocol::ConversationTextRole;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::InitialHistory;
+use ody_protocol::protocol::OdyErrorInfo;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::RealtimeAudioFrame;
+use ody_protocol::protocol::RealtimeConversationRealtimeEvent;
+use ody_protocol::protocol::RealtimeConversationVersion;
+use ody_protocol::protocol::RealtimeEvent;
+use ody_protocol::protocol::RealtimeNoopRequested;
+use ody_protocol::protocol::RealtimeOutputModality;
+use ody_protocol::protocol::RealtimeVoice;
+use ody_protocol::protocol::RolloutItem;
+use ody_protocol::protocol::SessionSource;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
@@ -176,9 +176,7 @@ where
     }
 }
 
-fn run_realtime_conversation_test_in_subprocess(
-    test_name: &str,
-) -> Result<()> {
+fn run_realtime_conversation_test_in_subprocess(test_name: &str) -> Result<()> {
     let mut command = Command::new(std::env::current_exe()?);
     command
         .arg("--exact")
@@ -2281,22 +2279,21 @@ async fn conversation_startup_context_current_thread_selects_many_turns_by_budge
         .await?;
     let ody = resumed_thread.thread;
 
-    ody
-        .submit(Op::RealtimeConversationStart(ConversationStartParams {
-            client_managed_handoffs: false,
-            ody_responses_as_items: false,
-            ody_response_item_prefix: None,
-            ody_response_handoff_prefix: None,
-            model: None,
-            output_modality: RealtimeOutputModality::Audio,
-            include_startup_context: true,
-            prompt: Some(Some("backend prompt".to_string())),
-            realtime_session_id: None,
-            transport: None,
-            version: None,
-            voice: None,
-        }))
-        .await?;
+    ody.submit(Op::RealtimeConversationStart(ConversationStartParams {
+        client_managed_handoffs: false,
+        ody_responses_as_items: false,
+        ody_response_item_prefix: None,
+        ody_response_handoff_prefix: None,
+        model: None,
+        output_modality: RealtimeOutputModality::Audio,
+        include_startup_context: true,
+        prompt: Some(Some("backend prompt".to_string())),
+        realtime_session_id: None,
+        transport: None,
+        version: None,
+        voice: None,
+    }))
+    .await?;
 
     let startup_context_request = wait_for_matching_websocket_request(
         &realtime_server,

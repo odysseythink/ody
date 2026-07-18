@@ -1,12 +1,3 @@
-use ody_core::config::Constrained;
-use ody_core::sandboxing::SandboxPermissions;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::ReviewDecision;
-use ody_protocol::protocol::ReviewRequest;
-use ody_protocol::protocol::ReviewTarget;
 use core_test_support::responses::ev_apply_patch_custom_tool_call;
 use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
@@ -20,6 +11,15 @@ use core_test_support::responses::start_mock_server;
 use core_test_support::skip_if_no_network;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
+use ody_core::config::Constrained;
+use ody_core::sandboxing::SandboxPermissions;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::ReviewDecision;
+use ody_protocol::protocol::ReviewRequest;
+use ody_protocol::protocol::ReviewTarget;
 use pretty_assertions::assert_eq;
 
 /// Delegate should surface ExecApprovalRequest from sub-agent and proceed
@@ -85,10 +85,7 @@ async fn ody_delegate_forwards_exec_approval_and_proceeds_on_approval() {
         .expect("submit review");
 
     // Lifecycle: Entered -> ExecApprovalRequest -> Exited(Some) -> TurnComplete.
-    wait_for_event(&test.ody, |ev| {
-        matches!(ev, EventMsg::EnteredReviewMode(_))
-    })
-    .await;
+    wait_for_event(&test.ody, |ev| matches!(ev, EventMsg::EnteredReviewMode(_))).await;
 
     // Expect parent-side approval request (forwarded by delegate).
     let approval_event = wait_for_event(&test.ody, |ev| {
@@ -109,10 +106,7 @@ async fn ody_delegate_forwards_exec_approval_and_proceeds_on_approval() {
         .await
         .expect("submit exec approval");
 
-    wait_for_event(&test.ody, |ev| {
-        matches!(ev, EventMsg::ExitedReviewMode(_))
-    })
-    .await;
+    wait_for_event(&test.ody, |ev| matches!(ev, EventMsg::ExitedReviewMode(_))).await;
     wait_for_event(&test.ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 }
 
@@ -168,10 +162,7 @@ async fn ody_delegate_forwards_patch_approval_and_proceeds_on_decision() {
         .await
         .expect("submit review");
 
-    wait_for_event(&test.ody, |ev| {
-        matches!(ev, EventMsg::EnteredReviewMode(_))
-    })
-    .await;
+    wait_for_event(&test.ody, |ev| matches!(ev, EventMsg::EnteredReviewMode(_))).await;
     let approval_event = wait_for_event(&test.ody, |ev| {
         matches!(ev, EventMsg::ApplyPatchApprovalRequest(_))
     })
@@ -189,10 +180,7 @@ async fn ody_delegate_forwards_patch_approval_and_proceeds_on_decision() {
         .await
         .expect("submit patch approval");
 
-    wait_for_event(&test.ody, |ev| {
-        matches!(ev, EventMsg::ExitedReviewMode(_))
-    })
-    .await;
+    wait_for_event(&test.ody, |ev| matches!(ev, EventMsg::ExitedReviewMode(_))).await;
     wait_for_event(&test.ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 }
 

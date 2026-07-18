@@ -226,13 +226,15 @@ impl ReasoningSummaryCell {
     pub(crate) fn toggle_expanded(&self) -> bool {
         let current = self.expanded.load(std::sync::atomic::Ordering::Relaxed);
         let new = !current;
-        self.expanded.store(new, std::sync::atomic::Ordering::Relaxed);
+        self.expanded
+            .store(new, std::sync::atomic::Ordering::Relaxed);
         new
     }
 
     #[cfg(test)]
     pub(crate) fn set_expanded(&self, expanded: bool) {
-        self.expanded.store(expanded, std::sync::atomic::Ordering::Relaxed);
+        self.expanded
+            .store(expanded, std::sync::atomic::Ordering::Relaxed);
     }
 
     fn lines(&self, width: u16) -> Vec<Line<'static>> {
@@ -266,11 +268,7 @@ impl ReasoningSummaryCell {
     }
 
     /// Truncate a long wrapped reasoning block and append a hint line.
-    fn apply_collapse_hint(
-        &self,
-        wrapped: Vec<Line<'static>>,
-        width: u16,
-    ) -> Vec<Line<'static>> {
+    fn apply_collapse_hint(&self, wrapped: Vec<Line<'static>>, width: u16) -> Vec<Line<'static>> {
         if self.expanded.load(std::sync::atomic::Ordering::Relaxed)
             || wrapped.len() <= REASONING_PREVIEW_LINES
         {

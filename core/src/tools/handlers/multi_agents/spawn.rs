@@ -88,7 +88,10 @@ async fn handle_spawn_agent(
         )
         .await;
 
-    if matches!(turn.collaboration_mode.mode, ModeKind::Plan | ModeKind::Design) {
+    if matches!(
+        turn.collaboration_mode.mode,
+        ModeKind::Plan | ModeKind::Design
+    ) {
         session
             .send_event(
                 &turn,

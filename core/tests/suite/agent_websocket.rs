@@ -1,6 +1,4 @@
 use anyhow::Result;
-use ody_features::Feature;
-use ody_protocol::config_types::ServiceTier;
 use core_test_support::responses::WebSocketConnectionConfig;
 use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
@@ -10,6 +8,8 @@ use core_test_support::responses::start_websocket_server;
 use core_test_support::responses::start_websocket_server_with_headers;
 use core_test_support::skip_if_no_network;
 use core_test_support::test_ody::test_ody;
+use ody_features::Feature;
+use ody_protocol::config_types::ServiceTier;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use std::time::Duration;

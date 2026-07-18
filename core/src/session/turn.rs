@@ -104,6 +104,8 @@ use ody_protocol::models::ContentItem;
 use ody_protocol::models::MessagePhase;
 use ody_protocol::models::ResponseInputItem;
 use ody_protocol::models::ResponseItem;
+use ody_protocol::plan_tool::PlanItemArg;
+use ody_protocol::plan_tool::StepStatus;
 use ody_protocol::protocol::AgentMessageContentDeltaEvent;
 use ody_protocol::protocol::AgentReasoningSectionBreakEvent;
 use ody_protocol::protocol::ErrorEvent;
@@ -116,8 +118,6 @@ use ody_protocol::protocol::SafetyBufferingEvent;
 use ody_protocol::protocol::TurnDiffEvent;
 use ody_protocol::protocol::WarningEvent;
 use ody_protocol::user_input::UserInput;
-use ody_protocol::plan_tool::PlanItemArg;
-use ody_protocol::plan_tool::StepStatus;
 use ody_tools::ToolName;
 use ody_tools::filter_request_plugin_install_discoverable_tools_for_client;
 use ody_utils_stream_parser::AssistantTextChunk;
@@ -1415,7 +1415,8 @@ async fn run_session_mode_after_turn(
     }
 
     for log in plan_mode_logs {
-        sess.send_event(turn_context, EventMsg::PlanModeLog(log)).await;
+        sess.send_event(turn_context, EventMsg::PlanModeLog(log))
+            .await;
     }
 
     Ok(())
@@ -2352,7 +2353,10 @@ async fn try_run_sampling_request(
                         name,
                         namespace,
                         ..
-                    } => Some((call_id.clone(), ToolName::new(namespace.clone(), name.clone()))),
+                    } => Some((
+                        call_id.clone(),
+                        ToolName::new(namespace.clone(), name.clone()),
+                    )),
                     _ => None,
                 };
                 if let Some((call_id, tool_name)) = streamed_tool_call {

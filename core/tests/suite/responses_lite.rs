@@ -2,21 +2,21 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use anyhow::Result;
+use core_test_support::responses;
+use core_test_support::skip_if_no_network;
+use core_test_support::test_ody::test_ody;
+use core_test_support::wait_for_event;
 use ody_core::config::Config;
 use ody_extension_api::ExtensionRegistry;
 use ody_extension_api::ExtensionRegistryBuilder;
 use ody_features::Feature;
 use ody_protocol::config_types::WebSearchMode;
-use ody_protocol::models::ImageDetail;
 use ody_protocol::model_metadata::InputModality;
+use ody_protocol::models::ImageDetail;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::Op;
 use ody_protocol::user_input::UserInput;
 use ody_web_search_extension::install as install_web_search_extension;
-use core_test_support::responses;
-use core_test_support::skip_if_no_network;
-use core_test_support::test_ody::test_ody;
-use core_test_support::wait_for_event;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 

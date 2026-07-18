@@ -1,40 +1,4 @@
 #![allow(clippy::unwrap_used)]
-use ody_api::WS_REQUEST_HEADER_TRACEPARENT_CLIENT_METADATA_KEY;
-use ody_api::WS_REQUEST_HEADER_TRACESTATE_CLIENT_METADATA_KEY;
-use ody_core::OdyResponsesMetadata;
-use ody_core::ModelClient;
-use ody_core::ModelClientSession;
-use ody_core::Prompt;
-use ody_core::ResponseEvent;
-use ody_core::X_RESPONSESAPI_INCLUDE_TIMING_METRICS_HEADER;
-use ody_features::Feature;
-use ody_model_provider_info::ModelProviderInfo;
-use ody_model_provider_info::WireApi;
-use ody_model_provider_info::ProviderCapabilities;
-use ody_otel::MetricsClient;
-use ody_otel::MetricsConfig;
-use ody_otel::SessionTelemetry;
-use ody_otel::TelemetryAuthMode;
-use ody_otel::current_span_w3c_trace_context;
-use ody_protocol::SessionId;
-use ody_protocol::ThreadId;
-use ody_protocol::config_types::ReasoningSummary;
-use ody_protocol::config_types::ServiceTier;
-use ody_protocol::models::BaseInstructions;
-use ody_protocol::models::ContentItem;
-use ody_protocol::models::ResponseItem;
-use ody_protocol::model_metadata::ModelInfo;
-use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::SessionSource;
-use ody_protocol::protocol::W3cTraceContext;
-use ody_protocol::user_input::UserInput;
-use ody_rollout_trace::ConversationPart;
-use ody_rollout_trace::InferenceTraceContext;
-use ody_rollout_trace::RawTraceEventPayload;
-use ody_rollout_trace::TraceWriter;
-use ody_rollout_trace::replay_bundle;
 use core_test_support::TestOdyResponsesRequestKind;
 use core_test_support::load_default_config_for_test;
 use core_test_support::responses::WebSocketConnectionConfig;
@@ -50,6 +14,42 @@ use core_test_support::test_ody::test_ody;
 use core_test_support::tracing::install_test_tracing;
 use core_test_support::wait_for_event;
 use futures::StreamExt;
+use ody_api::WS_REQUEST_HEADER_TRACEPARENT_CLIENT_METADATA_KEY;
+use ody_api::WS_REQUEST_HEADER_TRACESTATE_CLIENT_METADATA_KEY;
+use ody_core::ModelClient;
+use ody_core::ModelClientSession;
+use ody_core::OdyResponsesMetadata;
+use ody_core::Prompt;
+use ody_core::ResponseEvent;
+use ody_core::X_RESPONSESAPI_INCLUDE_TIMING_METRICS_HEADER;
+use ody_features::Feature;
+use ody_model_provider_info::ModelProviderInfo;
+use ody_model_provider_info::ProviderCapabilities;
+use ody_model_provider_info::WireApi;
+use ody_otel::MetricsClient;
+use ody_otel::MetricsConfig;
+use ody_otel::SessionTelemetry;
+use ody_otel::TelemetryAuthMode;
+use ody_otel::current_span_w3c_trace_context;
+use ody_protocol::SessionId;
+use ody_protocol::ThreadId;
+use ody_protocol::config_types::ReasoningSummary;
+use ody_protocol::config_types::ServiceTier;
+use ody_protocol::model_metadata::ModelInfo;
+use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
+use ody_protocol::models::BaseInstructions;
+use ody_protocol::models::ContentItem;
+use ody_protocol::models::ResponseItem;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::SessionSource;
+use ody_protocol::protocol::W3cTraceContext;
+use ody_protocol::user_input::UserInput;
+use ody_rollout_trace::ConversationPart;
+use ody_rollout_trace::InferenceTraceContext;
+use ody_rollout_trace::RawTraceEventPayload;
+use ody_rollout_trace::TraceWriter;
+use ody_rollout_trace::replay_bundle;
 use opentelemetry_sdk::metrics::InMemoryMetricExporter;
 use pretty_assertions::assert_eq;
 use serde_json::json;
@@ -129,10 +129,7 @@ fn turn_metadata(harness: &WebsocketTestHarness, turn_id: Option<&str>) -> OdyRe
     responses_metadata(harness, turn_id, TestOdyResponsesRequestKind::Turn)
 }
 
-fn prewarm_metadata(
-    harness: &WebsocketTestHarness,
-    turn_id: Option<&str>,
-) -> OdyResponsesMetadata {
+fn prewarm_metadata(harness: &WebsocketTestHarness, turn_id: Option<&str>) -> OdyResponsesMetadata {
     responses_metadata(harness, turn_id, TestOdyResponsesRequestKind::Prewarm)
 }
 

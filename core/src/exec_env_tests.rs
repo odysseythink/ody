@@ -1,6 +1,6 @@
 use super::*;
-use ody_protocol::config_types::ShellEnvironmentPolicyInherit;
 use maplit::hashmap;
+use ody_protocol::config_types::ShellEnvironmentPolicyInherit;
 use pretty_assertions::assert_eq;
 
 fn make_vars(pairs: &[(&str, &str)]) -> Vec<(String, String)> {

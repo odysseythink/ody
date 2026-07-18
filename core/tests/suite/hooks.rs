@@ -3,25 +3,6 @@ use std::path::Path;
 
 use anyhow::Context;
 use anyhow::Result;
-use ody_core::config::Config;
-use ody_core::config::Constrained;
-use ody_features::Feature;
-use ody_model_provider_info::ModelProviderInfo;
-use ody_model_provider_info::built_in_model_providers;
-use ody_plugin::PluginHookSource;
-use ody_plugin::PluginId;
-use ody_protocol::items::parse_hook_prompt_fragment;
-use ody_protocol::models::ContentItem;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::models::ResponseItem;
-use ody_protocol::permissions::NetworkSandboxPolicy;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::RolloutItem;
-use ody_protocol::protocol::RolloutLine;
-use ody_protocol::user_input::UserInput;
-use ody_utils_absolute_path::AbsolutePathBuf;
 use core_test_support::hooks::trust_discovered_hooks;
 use core_test_support::hooks::trust_hooks;
 use core_test_support::managed_network_requirements_loader;
@@ -44,6 +25,25 @@ use core_test_support::streaming_sse::StreamingSseChunk;
 use core_test_support::streaming_sse::start_streaming_sse_server;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
+use ody_core::config::Config;
+use ody_core::config::Constrained;
+use ody_features::Feature;
+use ody_model_provider_info::ModelProviderInfo;
+use ody_model_provider_info::built_in_model_providers;
+use ody_plugin::PluginHookSource;
+use ody_plugin::PluginId;
+use ody_protocol::items::parse_hook_prompt_fragment;
+use ody_protocol::models::ContentItem;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::models::ResponseItem;
+use ody_protocol::permissions::NetworkSandboxPolicy;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::RolloutItem;
+use ody_protocol::protocol::RolloutLine;
+use ody_protocol::user_input::UserInput;
+use ody_utils_absolute_path::AbsolutePathBuf;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use std::sync::Arc;
@@ -96,8 +96,7 @@ fn code_mode_custom_tool_output_text(output_item: &Value) -> String {
 }
 
 fn non_odysseythink_model_provider(server: &wiremock::MockServer) -> ModelProviderInfo {
-    let mut provider =
-        built_in_model_providers()["kimi"].clone();
+    let mut provider = built_in_model_providers()["kimi"].clone();
     provider.name = "OpenAI (test)".into();
     provider.base_url = Some(format!("{}/v1", server.uri()));
     provider.supports_websockets = false;

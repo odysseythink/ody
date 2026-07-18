@@ -24,6 +24,7 @@ use crate::tools::lifecycle::notify_tool_finish;
 use crate::tools::lifecycle::notify_tool_start;
 use crate::tools::tool_dispatch_trace::ToolDispatchTrace;
 use crate::util::error_or_panic;
+use futures::future::BoxFuture;
 use ody_extension_api::ToolCallOutcome;
 use ody_protocol::models::FunctionCallOutputPayload;
 use ody_protocol::models::ResponseInputItem;
@@ -32,7 +33,6 @@ use ody_rollout::state_db;
 use ody_tools::ToolName;
 use ody_tools::ToolSearchInfo;
 use ody_tools::ToolSpec;
-use futures::future::BoxFuture;
 use serde_json::Value;
 use tracing::instrument;
 

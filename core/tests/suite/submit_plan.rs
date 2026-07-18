@@ -433,10 +433,13 @@ async fn submit_plan_allows_dropping_parts_table_when_nothing_done_yet() -> anyh
     assert_eq!(final_completed.text, single_file_markdown);
 
     let requests = response_mock.requests();
-    assert_eq!(requests.len(), 2, "no further sampling round should be needed");
+    assert_eq!(
+        requests.len(),
+        2,
+        "no further sampling round should be needed"
+    );
 
-    let (single_file_output, single_file_success) =
-        call_output(&requests[1], single_file_call_id);
+    let (single_file_output, single_file_success) = call_output(&requests[1], single_file_call_id);
     assert_eq!(
         single_file_success,
         Some(true),

@@ -31,6 +31,7 @@ use crate::strict_config::ignored_toml_value_field;
 use crate::strict_config::unknown_feature_toml_value_field;
 use crate::thread_config::ThreadConfigContext;
 use crate::thread_config::ThreadConfigLoader;
+use dunce::canonicalize as normalize_path;
 use ody_app_server_protocol::ConfigLayerSource;
 use ody_file_system::ExecutorFileSystem;
 use ody_git_utils::resolve_root_git_project_for_trust;
@@ -41,7 +42,6 @@ use ody_protocol::protocol::AskForApproval;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_absolute_path::AbsolutePathBufGuard;
 use ody_utils_path_uri::PathUri;
-use dunce::canonicalize as normalize_path;
 use serde::Deserialize;
 use std::io;
 use std::path::Path;
@@ -1273,8 +1273,7 @@ async fn load_project_layers(
                     )?;
                 }
                 let ignored_project_config_keys = sanitize_project_config(&mut config);
-                let config =
-                    resolve_relative_paths_in_config_toml(config, dot_ody_abs.as_path())?;
+                let config = resolve_relative_paths_in_config_toml(config, dot_ody_abs.as_path())?;
                 let config = merge_root_checkout_project_hooks(
                     fs,
                     config,

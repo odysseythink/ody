@@ -1,19 +1,5 @@
 use anyhow::Result;
 use anyhow::anyhow;
-use ody_core::ForkSnapshot;
-use ody_core::StartThreadOptions;
-use ody_exec_server::CreateDirectoryOptions;
-use ody_exec_server::LOCAL_ENVIRONMENT_ID;
-use ody_exec_server::REMOTE_ENVIRONMENT_ID;
-use ody_features::Feature;
-use ody_home::OdyHomeUserInstructionsProvider;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::InitialHistory;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::TurnEnvironmentSelection;
-use ody_protocol::user_input::UserInput;
-use ody_utils_absolute_path::AbsolutePathBuf;
-use ody_utils_path_uri::PathUri;
 use core_test_support::PathBufExt;
 use core_test_support::create_directory_symlink;
 use core_test_support::get_remote_test_env;
@@ -29,6 +15,20 @@ use core_test_support::test_ody::RecordingUserInstructionsProvider;
 use core_test_support::test_ody::TestOdyBuilder;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
+use ody_core::ForkSnapshot;
+use ody_core::StartThreadOptions;
+use ody_exec_server::CreateDirectoryOptions;
+use ody_exec_server::LOCAL_ENVIRONMENT_ID;
+use ody_exec_server::REMOTE_ENVIRONMENT_ID;
+use ody_features::Feature;
+use ody_home::OdyHomeUserInstructionsProvider;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::InitialHistory;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::TurnEnvironmentSelection;
+use ody_protocol::user_input::UserInput;
+use ody_utils_absolute_path::AbsolutePathBuf;
+use ody_utils_path_uri::PathUri;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use std::sync::Arc;
@@ -137,23 +137,22 @@ fn request_body_contains(request: &wiremock::Request, text: &str) -> bool {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn agents_override_is_preferred_over_agents_md() -> Result<()> {
-    let instructions =
-        agents_instructions(test_ody().with_workspace_setup(|cwd, fs| async move {
-            let agents_md = cwd.join("AGENTS.md");
-            let override_md = cwd.join("AGENTS.override.md");
-            let agents_md_uri = PathUri::from_host_native_path(&agents_md)?;
-            let override_md_uri = PathUri::from_host_native_path(&override_md)?;
-            fs.write_file(&agents_md_uri, b"base doc".to_vec(), /*sandbox*/ None)
-                .await?;
-            fs.write_file(
-                &override_md_uri,
-                b"override doc".to_vec(),
-                /*sandbox*/ None,
-            )
+    let instructions = agents_instructions(test_ody().with_workspace_setup(|cwd, fs| async move {
+        let agents_md = cwd.join("AGENTS.md");
+        let override_md = cwd.join("AGENTS.override.md");
+        let agents_md_uri = PathUri::from_host_native_path(&agents_md)?;
+        let override_md_uri = PathUri::from_host_native_path(&override_md)?;
+        fs.write_file(&agents_md_uri, b"base doc".to_vec(), /*sandbox*/ None)
             .await?;
-            Ok::<(), anyhow::Error>(())
-        }))
+        fs.write_file(
+            &override_md_uri,
+            b"override doc".to_vec(),
+            /*sandbox*/ None,
+        )
         .await?;
+        Ok::<(), anyhow::Error>(())
+    }))
+    .await?;
 
     assert!(
         instructions.contains("override doc"),
@@ -411,9 +410,7 @@ async fn loads_user_instructions_without_a_primary_environment() -> Result<()> {
     let global_source =
         write_global_file(home.as_ref(), GLOBAL_AGENTS_FILENAME, GLOBAL_INSTRUCTIONS)?;
     let provider = Arc::new(RecordingUserInstructionsProvider::new(Arc::new(
-        OdyHomeUserInstructionsProvider::new(AbsolutePathBuf::try_from(
-            home.path().to_path_buf(),
-        )?),
+        OdyHomeUserInstructionsProvider::new(AbsolutePathBuf::try_from(home.path().to_path_buf())?),
     )));
 
     let mut builder = test_ody()
@@ -619,9 +616,7 @@ async fn multi_environment_thread_loads_every_project_and_keeps_creation_snapsho
     let global_source =
         write_global_file(home.as_ref(), GLOBAL_AGENTS_FILENAME, GLOBAL_INSTRUCTIONS)?;
     let provider = Arc::new(RecordingUserInstructionsProvider::new(Arc::new(
-        OdyHomeUserInstructionsProvider::new(AbsolutePathBuf::try_from(
-            home.path().to_path_buf(),
-        )?),
+        OdyHomeUserInstructionsProvider::new(AbsolutePathBuf::try_from(home.path().to_path_buf())?),
     )));
     let local_root = TempDir::new()?;
     let local_source = local_root.path().join(GLOBAL_AGENTS_FILENAME);

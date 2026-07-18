@@ -14,11 +14,11 @@ use ody_protocol::config_types::WindowsSandboxLevel;
 use ody_protocol::error::OdyErr;
 use ody_protocol::error::Result as OdyResult;
 use ody_protocol::mcp::CallToolResult;
+use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::models::ActivePermissionProfile;
 use ody_protocol::models::ContentItem;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::models::ResponseItem;
-use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::protocol::AdditionalContextEntry;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::Event;
@@ -224,10 +224,7 @@ impl OdyThread {
     }
 
     pub async fn emit_thread_idle_lifecycle_if_idle(&self) {
-        self.ody
-            .session
-            .emit_thread_idle_lifecycle_if_idle()
-            .await;
+        self.ody.session.emit_thread_idle_lifecycle_if_idle().await;
     }
 
     #[doc(hidden)]
@@ -636,9 +633,9 @@ impl OdyThread {
     pub async fn increment_out_of_band_elicitation_count(&self) -> OdyResult<u64> {
         let mut guard = self.out_of_band_elicitation_count.lock().await;
         let was_zero = *guard == 0;
-        *guard = guard.checked_add(1).ok_or_else(|| {
-            OdyErr::Fatal("out-of-band elicitation count overflowed".to_string())
-        })?;
+        *guard = guard
+            .checked_add(1)
+            .ok_or_else(|| OdyErr::Fatal("out-of-band elicitation count overflowed".to_string()))?;
 
         if was_zero {
             self.ody

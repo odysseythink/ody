@@ -357,6 +357,7 @@ use ody_protocol::model_metadata::ReasoningEffort as ReasoningEffortConfig;
 use ody_protocol::models::LocalImagePreparation;
 use ody_protocol::models::ResponseInputItem;
 use ody_protocol::models::ResponseItem;
+use ody_protocol::plan_tool::PlanItemArg;
 use ody_protocol::protocol::ApplyPatchApprovalRequestEvent;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::CompactedItem;
@@ -389,7 +390,6 @@ use ody_protocol::protocol::TokenUsageInfo;
 use ody_protocol::protocol::TurnModerationMetadataEvent;
 use ody_protocol::protocol::WarningEvent;
 use ody_protocol::user_input::UserInput;
-use ody_protocol::plan_tool::PlanItemArg;
 use ody_tools::ToolEnvironmentMode;
 use ody_tools::UnifiedExecShellMode;
 use ody_utils_absolute_path::AbsolutePathBuf;
@@ -3555,12 +3555,11 @@ impl Session {
         if let Some(token_usage) = token_usage {
             let token_info = {
                 let mut state = self.state.lock().await;
-                state
-                    .update_token_info_from_usage(
-                        token_usage,
-                        turn_context.model_context_window(),
-                        turn_context.model_info.auto_compact_token_limit(),
-                    );
+                state.update_token_info_from_usage(
+                    token_usage,
+                    turn_context.model_context_window(),
+                    turn_context.model_info.auto_compact_token_limit(),
+                );
                 if matches!(
                     turn_context.config.model_auto_compact_token_limit_scope,
                     AutoCompactTokenLimitScope::BodyAfterPrefix

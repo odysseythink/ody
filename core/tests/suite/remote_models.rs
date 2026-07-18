@@ -1,28 +1,5 @@
 #![cfg(not(target_os = "windows"))]
 use anyhow::Result;
-use ody_model_provider_info::ModelProviderInfo;
-use ody_model_provider_info::built_in_model_providers;
-use ody_model_provider_info::ProviderCapabilities;
-use ody_models_manager::bundled_models_response;
-use ody_models_manager::manager::RefreshStrategy;
-use ody_models_manager::manager::SharedModelsManager;
-use ody_protocol::config_types::ReasoningSummary;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::model_metadata::ConfigShellToolType;
-use ody_protocol::model_metadata::ModelInfo;
-use ody_protocol::model_metadata::ModelPreset;
-use ody_protocol::model_metadata::ModelVisibility;
-use ody_protocol::model_metadata::ModelsResponse;
-use ody_protocol::model_metadata::ReasoningEffort;
-use ody_protocol::model_metadata::ReasoningEffortPreset;
-use ody_protocol::model_metadata::TruncationPolicyConfig;
-use ody_protocol::model_metadata::default_input_modalities;
-use ody_protocol::model_metadata::ModelCapabilities;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::ExecCommandSource;
-use ody_protocol::protocol::Op;
-use ody_protocol::user_input::UserInput;
 use core_test_support::TempDirExt;
 use core_test_support::load_default_config_for_test;
 use core_test_support::responses::ev_assistant_message;
@@ -42,6 +19,29 @@ use core_test_support::test_ody::test_ody;
 use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event;
 use core_test_support::wait_for_event_match;
+use ody_model_provider_info::ModelProviderInfo;
+use ody_model_provider_info::ProviderCapabilities;
+use ody_model_provider_info::built_in_model_providers;
+use ody_models_manager::bundled_models_response;
+use ody_models_manager::manager::RefreshStrategy;
+use ody_models_manager::manager::SharedModelsManager;
+use ody_protocol::config_types::ReasoningSummary;
+use ody_protocol::model_metadata::ConfigShellToolType;
+use ody_protocol::model_metadata::ModelCapabilities;
+use ody_protocol::model_metadata::ModelInfo;
+use ody_protocol::model_metadata::ModelPreset;
+use ody_protocol::model_metadata::ModelVisibility;
+use ody_protocol::model_metadata::ModelsResponse;
+use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffortPreset;
+use ody_protocol::model_metadata::TruncationPolicyConfig;
+use ody_protocol::model_metadata::default_input_modalities;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::ExecCommandSource;
+use ody_protocol::protocol::Op;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use tempfile::TempDir;
@@ -151,18 +151,17 @@ async fn remote_models_config_context_window_override_clamps_to_max_context_wind
         .build(&server)
         .await?;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "check context window".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "check context window".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
 
     let turn_started_event = wait_for_event(&ody, |event| {
         matches!(
@@ -217,18 +216,17 @@ async fn remote_models_config_override_above_max_uses_max_context_window() -> Re
         .build(&server)
         .await?;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "check context window".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "check context window".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
 
     let turn_started_event = wait_for_event(&ody, |event| {
         matches!(
@@ -282,18 +280,17 @@ async fn remote_models_use_context_window_when_config_override_is_absent() -> Re
         .build(&server)
         .await?;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "check context window".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "check context window".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
 
     let turn_started_event = wait_for_event(&ody, |event| {
         matches!(
@@ -361,18 +358,17 @@ async fn remote_models_long_model_slug_is_sent_with_custom_reasoning() -> Result
         .build(&server)
         .await?;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "check model slug".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "check model slug".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
 
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
 
@@ -411,18 +407,17 @@ async fn namespaced_model_slug_uses_catalog_metadata_without_fallback_warning() 
         .build(&server)
         .await?;
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "check namespaced model metadata".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "check namespaced model metadata".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
 
     let mut fallback_warning_count = 0;
     loop {
@@ -497,7 +492,7 @@ async fn remote_models_remote_model_uses_unified_exec() -> Result<()> {
         effective_context_window_percent: 95,
         experimental_supported_tools: Vec::new(),
         capabilities: ModelCapabilities::default(),
-};
+    };
 
     let models_mock = mount_models_once(
         &server,
@@ -507,10 +502,9 @@ async fn remote_models_remote_model_uses_unified_exec() -> Result<()> {
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_config(|config| {
-            config.model = Some("gpt-5.4".to_string());
-        });
+    let mut builder = test_ody().with_config(|config| {
+        config.model = Some("gpt-5.4".to_string());
+    });
     let TestOdy {
         ody,
         cwd,
@@ -568,25 +562,24 @@ async fn remote_models_remote_model_uses_unified_exec() -> Result<()> {
     let cwd_path = cwd.abs();
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::Disabled, cwd_path.as_path());
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "run call".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
-                environments: Some(local_selections(cwd_path)),
-                approval_policy: Some(AskForApproval::Never),
-                sandbox_policy: Some(sandbox_policy),
-                permission_profile,
-                summary: Some(ReasoningSummary::Auto),
-                ..Default::default()
-            },
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "run call".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(cwd_path)),
+            approval_policy: Some(AskForApproval::Never),
+            sandbox_policy: Some(sandbox_policy),
+            permission_profile,
+            summary: Some(ReasoningSummary::Auto),
+            ..Default::default()
+        },
+    })
+    .await?;
 
     let begin_event = wait_for_event_match(&ody, |msg| match msg {
         EventMsg::ExecCommandBegin(event) if event.call_id == call_id => Some(event.clone()),
@@ -626,10 +619,9 @@ async fn remote_models_truncation_policy_without_override_preserves_remote() -> 
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_config(|config| {
-            config.model = Some("gpt-5.4".to_string());
-        });
+    let mut builder = test_ody().with_config(|config| {
+        config.model = Some("gpt-5.4".to_string());
+    });
     let test = builder.build(&server).await?;
 
     let models_manager = test.thread_manager.get_models_manager();
@@ -671,11 +663,10 @@ async fn remote_models_truncation_policy_with_tool_output_override() -> Result<(
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_config(|config| {
-            config.model = Some("gpt-5.4".to_string());
-            config.tool_output_token_limit = Some(50);
-        });
+    let mut builder = test_ody().with_config(|config| {
+        config.model = Some("gpt-5.4".to_string());
+        config.tool_output_token_limit = Some(50);
+    });
     let test = builder.build(&server).await?;
 
     let models_manager = test.thread_manager.get_models_manager();
@@ -747,7 +738,7 @@ async fn remote_models_apply_remote_base_instructions() -> Result<()> {
         effective_context_window_percent: 95,
         experimental_supported_tools: Vec::new(),
         capabilities: ModelCapabilities::default(),
-};
+    };
     mount_models_once(
         &server,
         ModelsResponse {
@@ -766,10 +757,9 @@ async fn remote_models_apply_remote_base_instructions() -> Result<()> {
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_config(|config| {
-            config.model = Some("gpt-5.2".to_string());
-        });
+    let mut builder = test_ody().with_config(|config| {
+        config.model = Some("gpt-5.2".to_string());
+    });
     let TestOdy {
         ody,
         cwd,
@@ -793,25 +783,24 @@ async fn remote_models_apply_remote_base_instructions() -> Result<()> {
     let cwd_path = cwd.abs();
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::Disabled, cwd_path.as_path());
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "hello remote".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
-                environments: Some(local_selections(cwd_path)),
-                approval_policy: Some(AskForApproval::Never),
-                sandbox_policy: Some(sandbox_policy),
-                permission_profile,
-                summary: Some(ReasoningSummary::Auto),
-                ..Default::default()
-            },
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "hello remote".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(cwd_path)),
+            approval_policy: Some(AskForApproval::Never),
+            sandbox_policy: Some(sandbox_policy),
+            permission_profile,
+            summary: Some(ReasoningSummary::Auto),
+            ..Default::default()
+        },
+    })
+    .await?;
 
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
 

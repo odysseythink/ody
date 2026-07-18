@@ -175,10 +175,7 @@ impl McpManager {
     }
 
     /// Returns runtime servers after auth gating and compatibility built-ins.
-    pub async fn effective_servers(
-        &self,
-        config: &Config,
-    ) -> HashMap<String, EffectiveMcpServer> {
+    pub async fn effective_servers(&self, config: &Config) -> HashMap<String, EffectiveMcpServer> {
         let mcp_config = self.runtime_config(config).await;
         effective_mcp_servers(&mcp_config)
     }

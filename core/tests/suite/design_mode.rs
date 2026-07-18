@@ -14,12 +14,12 @@ use core_test_support::test_ody::test_ody;
 use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event;
 use core_test_support::wait_for_event_match;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::protocol::AskForApproval;
 use ody_protocol::config_types::CollaborationMode;
 use ody_protocol::config_types::DesignAuditLevel;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::config_types::Settings;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::COLLABORATION_MODE_CLOSE_TAG;
 use ody_protocol::protocol::COLLABORATION_MODE_OPEN_TAG;
 use ody_protocol::protocol::EventMsg;
@@ -415,10 +415,12 @@ async fn design_mode_injects_selected_audit_level() -> Result<()> {
     );
 
     Ok(())
-
 }
 
-fn call_output(req: &core_test_support::responses::ResponsesRequest, call_id: &str) -> (String, Option<bool>) {
+fn call_output(
+    req: &core_test_support::responses::ResponsesRequest,
+    call_id: &str,
+) -> (String, Option<bool>) {
     let raw = req.function_call_output(call_id);
     assert_eq!(
         raw.get("call_id").and_then(serde_json::Value::as_str),
@@ -458,8 +460,8 @@ fn complete_design_markdown() -> String {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn submit_design_final_triggers_adversarial_review_and_appends_findings()
--> anyhow::Result<()> {
+async fn submit_design_final_triggers_adversarial_review_and_appends_findings() -> anyhow::Result<()>
+{
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
@@ -495,8 +497,7 @@ async fn submit_design_final_triggers_adversarial_review_and_appends_findings()
         ev_completed("resp-2"),
     ]);
 
-    let response_mock =
-        mount_sse_sequence(&server, vec![first_response, second_response]).await;
+    let response_mock = mount_sse_sequence(&server, vec![first_response, second_response]).await;
 
     let mut builder = test_ody().with_config(|config| {
         config.review_model = Some("review-model".to_string());
@@ -506,32 +507,33 @@ async fn submit_design_final_triggers_adversarial_review_and_appends_findings()
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::Disabled, test.cwd.path());
 
-    test.ody.submit(Op::UserInput {
-        items: vec![UserInput::Text {
-            text: "please finalize the design".into(),
-            text_elements: Vec::new(),
-        }],
-        final_output_json_schema: None,
-        responsesapi_client_metadata: None,
-        additional_context: Default::default(),
-        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
-            environments: Some(local_selections(test.config.cwd.clone())),
-            approval_policy: Some(AskForApproval::Never),
-            sandbox_policy: Some(sandbox_policy),
-            permission_profile,
-            collaboration_mode: Some(CollaborationMode {
-                mode: ModeKind::Design,
-                settings: Settings {
-                    model: test.session_configured.model.clone(),
-                    reasoning_effort: None,
-                    developer_instructions: None,
-                    design_audit_level: None,
-                },
-            }),
-            ..Default::default()
-        },
-    })
-    .await?;
+    test.ody
+        .submit(Op::UserInput {
+            items: vec![UserInput::Text {
+                text: "please finalize the design".into(),
+                text_elements: Vec::new(),
+            }],
+            final_output_json_schema: None,
+            responsesapi_client_metadata: None,
+            additional_context: Default::default(),
+            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+                environments: Some(local_selections(test.config.cwd.clone())),
+                approval_policy: Some(AskForApproval::Never),
+                sandbox_policy: Some(sandbox_policy),
+                permission_profile,
+                collaboration_mode: Some(CollaborationMode {
+                    mode: ModeKind::Design,
+                    settings: Settings {
+                        model: test.session_configured.model.clone(),
+                        reasoning_effort: None,
+                        developer_instructions: None,
+                        design_audit_level: None,
+                    },
+                }),
+                ..Default::default()
+            },
+        })
+        .await?;
 
     let _completed = wait_for_event_match(&test.ody, |event| match event {
         EventMsg::ItemCompleted(_) => Some(()),
@@ -591,8 +593,7 @@ async fn submit_design_final_triggers_adversarial_review_and_appends_findings()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn submit_design_final_skips_review_when_review_model_unset()
--> anyhow::Result<()> {
+async fn submit_design_final_skips_review_when_review_model_unset() -> anyhow::Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
@@ -650,8 +651,7 @@ async fn submit_design_final_skips_review_when_review_model_unset()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn submit_design_final_review_fail_open_on_unparseable_output()
--> anyhow::Result<()> {
+async fn submit_design_final_review_fail_open_on_unparseable_output() -> anyhow::Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
@@ -672,8 +672,7 @@ async fn submit_design_final_review_fail_open_on_unparseable_output()
         ev_completed("resp-2"),
     ]);
 
-    let response_mock =
-        mount_sse_sequence(&server, vec![first_response, second_response]).await;
+    let response_mock = mount_sse_sequence(&server, vec![first_response, second_response]).await;
 
     let mut builder = test_ody().with_config(|config| {
         config.review_model = Some("review-model".to_string());
@@ -683,32 +682,33 @@ async fn submit_design_final_review_fail_open_on_unparseable_output()
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::Disabled, test.cwd.path());
 
-    test.ody.submit(Op::UserInput {
-        items: vec![UserInput::Text {
-            text: "please finalize the design".into(),
-            text_elements: Vec::new(),
-        }],
-        final_output_json_schema: None,
-        responsesapi_client_metadata: None,
-        additional_context: Default::default(),
-        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
-            environments: Some(local_selections(test.config.cwd.clone())),
-            approval_policy: Some(AskForApproval::Never),
-            sandbox_policy: Some(sandbox_policy),
-            permission_profile,
-            collaboration_mode: Some(CollaborationMode {
-                mode: ModeKind::Design,
-                settings: Settings {
-                    model: test.session_configured.model.clone(),
-                    reasoning_effort: None,
-                    developer_instructions: None,
-                    design_audit_level: None,
-                },
-            }),
-            ..Default::default()
-        },
-    })
-    .await?;
+    test.ody
+        .submit(Op::UserInput {
+            items: vec![UserInput::Text {
+                text: "please finalize the design".into(),
+                text_elements: Vec::new(),
+            }],
+            final_output_json_schema: None,
+            responsesapi_client_metadata: None,
+            additional_context: Default::default(),
+            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+                environments: Some(local_selections(test.config.cwd.clone())),
+                approval_policy: Some(AskForApproval::Never),
+                sandbox_policy: Some(sandbox_policy),
+                permission_profile,
+                collaboration_mode: Some(CollaborationMode {
+                    mode: ModeKind::Design,
+                    settings: Settings {
+                        model: test.session_configured.model.clone(),
+                        reasoning_effort: None,
+                        developer_instructions: None,
+                        design_audit_level: None,
+                    },
+                }),
+                ..Default::default()
+            },
+        })
+        .await?;
 
     let _completed = wait_for_event_match(&test.ody, |event| match event {
         EventMsg::ItemCompleted(_) => Some(()),

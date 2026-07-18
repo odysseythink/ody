@@ -1,11 +1,4 @@
 use anyhow::Result;
-use ody_core::config::RolloutBudgetConfig;
-use ody_features::Feature;
-use ody_model_provider_info::built_in_model_providers;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::TurnAbortReason;
-use ody_protocol::user_input::UserInput;
 use core_test_support::responses::ResponsesRequest;
 use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
@@ -19,6 +12,13 @@ use core_test_support::responses::start_mock_server;
 use core_test_support::skip_if_no_network;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
+use ody_core::config::RolloutBudgetConfig;
+use ody_features::Feature;
+use ody_model_provider_info::built_in_model_providers;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::TurnAbortReason;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use std::time::Duration;
@@ -419,9 +419,7 @@ async fn restates_the_current_remainder_after_rollback() -> Result<()> {
         .await?;
 
     test.submit_turn("rolled-back turn").await?;
-    test.ody
-        .submit(Op::ThreadRollback { num_turns: 1 })
-        .await?;
+    test.ody.submit(Op::ThreadRollback { num_turns: 1 }).await?;
     wait_for_event(&test.ody, |event| {
         matches!(event, EventMsg::ThreadRolledBack(_))
     })

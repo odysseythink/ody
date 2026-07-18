@@ -2,14 +2,14 @@ use std::io::Cursor;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
-use ody_protocol::models::FunctionCallOutputBody;
-use ody_protocol::models::FunctionCallOutputPayload;
-use ody_utils_image::data_url_from_bytes;
 use image::DynamicImage;
 use image::GenericImageView;
 use image::ImageBuffer;
 use image::ImageFormat;
 use image::Rgba;
+use ody_protocol::models::FunctionCallOutputBody;
+use ody_protocol::models::FunctionCallOutputPayload;
+use ody_utils_image::data_url_from_bytes;
 use pretty_assertions::assert_eq;
 
 use super::*;

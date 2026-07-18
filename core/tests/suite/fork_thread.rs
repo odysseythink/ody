@@ -1,3 +1,9 @@
+use core_test_support::responses::ev_completed;
+use core_test_support::responses::ev_response_created;
+use core_test_support::responses::sse;
+use core_test_support::skip_if_no_network;
+use core_test_support::test_ody::test_ody;
+use core_test_support::wait_for_event;
 use ody_core::ForkSnapshot;
 use ody_core::NewThread;
 use ody_core::parse_turn_item;
@@ -9,12 +15,6 @@ use ody_protocol::protocol::ResumedHistory;
 use ody_protocol::protocol::RolloutItem;
 use ody_protocol::protocol::RolloutLine;
 use ody_protocol::user_input::UserInput;
-use core_test_support::responses::ev_completed;
-use core_test_support::responses::ev_response_created;
-use core_test_support::responses::sse;
-use core_test_support::skip_if_no_network;
-use core_test_support::test_ody::test_ody;
-use core_test_support::wait_for_event;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;
@@ -48,19 +48,18 @@ async fn fork_thread_twice_drops_to_first_message() {
 
     // Send three user messages; wait for three completed turns.
     for text in ["first", "second", "third"] {
-        ody
-            .submit(Op::UserInput {
-                items: vec![UserInput::Text {
-                    text: text.to_string(),
-                    text_elements: Vec::new(),
-                }],
-                final_output_json_schema: None,
-                responsesapi_client_metadata: None,
-                additional_context: Default::default(),
-                thread_settings: Default::default(),
-            })
-            .await
-            .unwrap();
+        ody.submit(Op::UserInput {
+            items: vec![UserInput::Text {
+                text: text.to_string(),
+                text_elements: Vec::new(),
+            }],
+            final_output_json_schema: None,
+            responsesapi_client_metadata: None,
+            additional_context: Default::default(),
+            thread_settings: Default::default(),
+        })
+        .await
+        .unwrap();
         let _ = wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
     }
 
@@ -95,8 +94,7 @@ async fn fork_thread_twice_drops_to_first_message() {
 
     // Fork once with n=1 → drops the last user input and everything after.
     let NewThread {
-        thread: ody_fork1,
-        ..
+        thread: ody_fork1, ..
     } = thread_manager
         .fork_thread(
             ForkSnapshot::TruncateBeforeNthUserMessage(1),
@@ -119,8 +117,7 @@ async fn fork_thread_twice_drops_to_first_message() {
 
     // Fork again with n=0 → drops the (new) last user message, leaving only the first.
     let NewThread {
-        thread: ody_fork2,
-        ..
+        thread: ody_fork2, ..
     } = thread_manager
         .fork_thread(
             ForkSnapshot::TruncateBeforeNthUserMessage(0),
@@ -170,19 +167,18 @@ async fn fork_thread_from_history_does_not_require_source_rollout_path() {
     let ody = test.ody.clone();
     let thread_manager = test.thread_manager.clone();
 
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "fork me from stored history".to_string(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await
-        .unwrap();
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "fork me from stored history".to_string(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await
+    .unwrap();
     let _ = wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     let source_path = ody.rollout_path().expect("source rollout path");

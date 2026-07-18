@@ -342,7 +342,6 @@ async fn verify_request_plugin_install_completed(
     }
 }
 
-
 async fn refresh_missing_requested_connectors(
     session: &crate::session::session::Session,
     turn: &crate::session::turn_context::TurnContext,
@@ -391,12 +390,14 @@ fn verified_plugin_install_completed(
 ) -> bool {
     let plugins_input = config.plugins_config_input();
     plugins_manager
-        .list_marketplaces_for_config(&plugins_input, &[], /*include_odysseythink_curated*/ true)
+        .list_marketplaces_for_config(
+            &plugins_input,
+            &[],
+            /*include_odysseythink_curated*/ true,
+        )
         .ok()
         .into_iter()
         .flat_map(|outcome| outcome.marketplaces)
         .flat_map(|marketplace| marketplace.plugins.into_iter())
         .any(|plugin| plugin.id == tool_id && plugin.installed)
 }
-
-

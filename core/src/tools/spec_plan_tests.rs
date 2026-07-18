@@ -1556,8 +1556,10 @@ async fn spawn_agent_guidance_encourages_delegating_exploration() {
         "spawn_agent must actively steer exploration at a sub-agent: {description}"
     );
     assert!(
-        !description.contains("prefer delegating concrete code-change worker subtasks over \
-                               read-only explorer analysis"),
+        !description.contains(
+            "prefer delegating concrete code-change worker subtasks over \
+                               read-only explorer analysis"
+        ),
         "the line disparaging read-only explorers contradicts the new guidance and must be gone"
     );
 }

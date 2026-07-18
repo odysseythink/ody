@@ -2217,11 +2217,7 @@ async fn resume_thread_subagent_restores_stored_metadata() {
         .get_thread(child_thread_id)
         .await
         .expect("child thread should exist");
-    child_thread
-        .ody
-        .session
-        .ensure_rollout_materialized()
-        .await;
+    child_thread.ody.session.ensure_rollout_materialized().await;
     child_thread
         .ody
         .session

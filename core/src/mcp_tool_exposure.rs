@@ -24,11 +24,7 @@ pub(crate) fn build_mcp_tool_exposure(
 ) -> McpToolExposure {
     let mut deferred_tools = filter_non_ody_apps_mcp_tools_only(all_mcp_tools);
     if let Some(connectors) = connectors {
-        deferred_tools.extend(filter_ody_apps_mcp_tools(
-            all_mcp_tools,
-            connectors,
-            config,
-        ));
+        deferred_tools.extend(filter_ody_apps_mcp_tools(all_mcp_tools, connectors, config));
     }
 
     if !search_tool_enabled {
@@ -47,9 +43,7 @@ pub(crate) fn build_mcp_tool_exposure(
 fn filter_non_ody_apps_mcp_tools_only(mcp_tools: &[McpToolInfo]) -> Vec<McpToolInfo> {
     mcp_tools
         .iter()
-        .filter(|tool| {
-            tool.server_name != ODY_APPS_MCP_SERVER_NAME && tool_is_model_visible(tool)
-        })
+        .filter(|tool| tool.server_name != ODY_APPS_MCP_SERVER_NAME && tool_is_model_visible(tool))
         .cloned()
         .collect()
 }

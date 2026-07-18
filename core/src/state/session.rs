@@ -334,10 +334,7 @@ impl SessionState {
         self.plan_mode_last_manifest_snapshot.clone()
     }
 
-    pub(crate) fn set_plan_mode_last_manifest_snapshot(
-        &mut self,
-        snapshot: ManifestSnapshot,
-    ) {
+    pub(crate) fn set_plan_mode_last_manifest_snapshot(&mut self, snapshot: ManifestSnapshot) {
         self.plan_mode_last_manifest_snapshot = Some(snapshot);
     }
 
@@ -353,7 +350,6 @@ impl SessionState {
         self.last_design_artifact = None;
     }
 }
-
 
 #[cfg(test)]
 #[path = "session_tests.rs"]

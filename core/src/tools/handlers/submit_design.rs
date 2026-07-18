@@ -78,10 +78,7 @@ mod tests {
     #[test]
     fn handler_tool_name_is_submit_design() {
         let handler = SubmitDesignHandler;
-        assert_eq!(
-            handler.tool_name().name.as_str(),
-            "submit_design"
-        );
+        assert_eq!(handler.tool_name().name.as_str(), "submit_design");
     }
 
     #[test]
@@ -90,7 +87,11 @@ mod tests {
         match spec {
             ToolSpec::Function(tool) => {
                 assert_eq!(tool.name, "submit_design");
-                let props = tool.parameters.properties.as_ref().expect("must have properties");
+                let props = tool
+                    .parameters
+                    .properties
+                    .as_ref()
+                    .expect("must have properties");
                 assert!(
                     props.contains_key("design"),
                     "spec must have 'design' property field"
@@ -143,7 +144,10 @@ mod tests {
     fn submit_design_args_parses_final_true() {
         let args: SubmitDesignArgs =
             serde_json::from_str(r#"{"design": "x", "final": true}"#).expect("valid JSON");
-        assert!(args.is_final, "final=true must deserialize to is_final=true");
+        assert!(
+            args.is_final,
+            "final=true must deserialize to is_final=true"
+        );
     }
 
     #[test]
@@ -151,8 +155,15 @@ mod tests {
         let spec = SubmitDesignHandler.spec();
         match spec {
             ToolSpec::Function(tool) => {
-                let props = tool.parameters.properties.as_ref().expect("must have properties");
-                assert!(props.contains_key("final"), "spec must expose the 'final' flag");
+                let props = tool
+                    .parameters
+                    .properties
+                    .as_ref()
+                    .expect("must have properties");
+                assert!(
+                    props.contains_key("final"),
+                    "spec must expose the 'final' flag"
+                );
                 let required = tool.parameters.required.clone().unwrap_or_default();
                 assert!(
                     !required.iter().any(|r| r == "final"),

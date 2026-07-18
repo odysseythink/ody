@@ -3,13 +3,6 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use anyhow::Result;
-use ody_features::Feature;
-use ody_protocol::config_types::ServiceTier;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::protocol::RolloutItem;
-use ody_protocol::protocol::RolloutLine;
-use ody_protocol::user_input::UserInput;
 use core_test_support::hooks::trust_discovered_hooks;
 use core_test_support::responses;
 use core_test_support::responses::ResponseMock;
@@ -17,6 +10,13 @@ use core_test_support::skip_if_no_network;
 use core_test_support::test_ody::TestOdyHarness;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
+use ody_features::Feature;
+use ody_protocol::config_types::ServiceTier;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::protocol::RolloutItem;
+use ody_protocol::protocol::RolloutLine;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
@@ -488,19 +488,16 @@ async fn build_harness_inner(
     auto_compact_limit: Option<i64>,
 ) -> Result<TestOdyHarness> {
     fs::create_dir_all(FIXED_CWD)?;
-    let mut builder = test_ody()
-        .with_pre_build_hook(|home| {
-            fs::write(home.join("AGENTS.md"), USER_INSTRUCTIONS)
-                .expect("write global instructions");
-        });
+    let mut builder = test_ody().with_pre_build_hook(|home| {
+        fs::write(home.join("AGENTS.md"), USER_INSTRUCTIONS).expect("write global instructions");
+    });
     if hooks {
         builder = builder.with_pre_build_hook(write_manual_compact_hooks);
     }
     TestOdyHarness::with_builder(builder.with_config(move |config| {
-        config.cwd = ody_utils_absolute_path::AbsolutePathBuf::from_absolute_path(PathBuf::from(
-            FIXED_CWD,
-        ))
-        .expect("fixed cwd should be absolute");
+        config.cwd =
+            ody_utils_absolute_path::AbsolutePathBuf::from_absolute_path(PathBuf::from(FIXED_CWD))
+                .expect("fixed cwd should be absolute");
         config.developer_instructions = Some("PARITY_DEVELOPER_INSTRUCTIONS".to_string());
         if settings.service_tier_fast {
             config.service_tier = Some(ServiceTier::Fast.request_value().to_string());
@@ -583,15 +580,14 @@ async fn capture_from_requests(
 }
 
 async fn submit_user_input(ody: &ody_core::OdyThread, items: Vec<UserInput>) -> Result<()> {
-    ody
-        .submit(Op::UserInput {
-            items,
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items,
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: Default::default(),
+    })
+    .await?;
     wait_for_turn_complete(ody).await;
     Ok(())
 }

@@ -1,3 +1,4 @@
+use futures::Stream;
 pub use ody_api::ResponseEvent;
 use ody_protocol::error::Result;
 use ody_protocol::models::BaseInstructions;
@@ -5,7 +6,6 @@ use ody_protocol::models::ContentItem;
 use ody_protocol::models::FunctionCallOutputContentItem;
 use ody_protocol::models::ResponseItem;
 use ody_tools::ToolSpec;
-use futures::Stream;
 use serde_json::Value;
 use std::pin::Pin;
 use std::task::Context;
@@ -121,7 +121,6 @@ impl Drop for ResponseStream {
     }
 }
 
-
 impl ody_model_provider::adapters::core::Prompt for Prompt {
     fn get_formatted_input_for_request(&self, use_responses_lite: bool) -> Vec<ResponseItem> {
         self.get_formatted_input_for_request(use_responses_lite)
@@ -143,7 +142,6 @@ impl ody_model_provider::adapters::core::Prompt for Prompt {
         self.output_schema_strict
     }
 }
-
 
 #[cfg(test)]
 #[path = "client_common_tests.rs"]

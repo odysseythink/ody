@@ -1,10 +1,10 @@
 use super::*;
+use core_test_support::PathBufExt;
+use core_test_support::PathExt;
 use ody_apply_patch::MaybeApplyPatchVerified;
 use ody_exec_server::LOCAL_FS;
 use ody_protocol::permissions::FileSystemSandboxPolicy;
 use ody_protocol::protocol::FileChange;
-use core_test_support::PathBufExt;
-use core_test_support::PathExt;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use std::collections::HashMap;
@@ -329,7 +329,10 @@ fn write_permissions_for_paths_keep_dirs_outside_workspace_root() {
 
 async fn plan_mode_invocation_for_payload(
     payload: ToolPayload,
-) -> (ToolInvocation, async_channel::Receiver<ody_protocol::protocol::Event>) {
+) -> (
+    ToolInvocation,
+    async_channel::Receiver<ody_protocol::protocol::Event>,
+) {
     let (session, turn, rx) = make_session_and_context_with_rx().await;
 
     let mut turn = Arc::try_unwrap(turn).expect("turn Arc should be unique");
@@ -373,7 +376,10 @@ async fn plan_mode_patch_denial_emits_warning() {
         msg.contains(PLAN_MODE_REJECTION_MARKER),
         "denial message should contain marker: {msg}"
     );
-    assert!(msg.contains("hello.txt"), "denial message should name file: {msg}");
+    assert!(
+        msg.contains("hello.txt"),
+        "denial message should name file: {msg}"
+    );
 
     loop {
         let event = rx.recv().await.expect("expected event");

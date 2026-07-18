@@ -404,11 +404,7 @@ async fn windows_powershell_snapshot_includes_sections() -> Result<()> {
 }
 
 async fn write_rollout_stub(ody_home: &Path, session_id: ThreadId) -> Result<PathBuf> {
-    let dir = ody_home
-        .join("sessions")
-        .join("2025")
-        .join("01")
-        .join("01");
+    let dir = ody_home.join("sessions").join("2025").join("01").join("01");
     fs::create_dir_all(&dir).await?;
     let path = dir.join(format!("rollout-2025-01-01T00-00-00-{session_id}.jsonl"));
     fs::write(&path, "").await?;

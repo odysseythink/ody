@@ -1,5 +1,6 @@
 #![cfg(target_os = "macos")]
 
+use core_test_support::PathExt;
 use ody_core::exec::ExecCapturePolicy;
 use ody_core::exec::ExecParams;
 use ody_core::exec::process_exec_tool_call;
@@ -11,7 +12,6 @@ use ody_protocol::exec_output::ExecToolCallOutput;
 use ody_protocol::models::PermissionProfile;
 use ody_sandboxing::SandboxType;
 use ody_sandboxing::get_platform_sandbox;
-use core_test_support::PathExt;
 use std::collections::HashMap;
 use tempfile::TempDir;
 

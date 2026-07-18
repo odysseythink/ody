@@ -1,24 +1,4 @@
 use anyhow::Result;
-use ody_features::Feature;
-use ody_models_manager::manager::RefreshStrategy;
-use ody_protocol::config_types::ApprovalsReviewer;
-use ody_protocol::config_types::ReasoningSummary;
-use ody_protocol::models::PermissionProfile;
-use ody_protocol::model_metadata::ConfigShellToolType;
-use ody_protocol::model_metadata::ModelInfo;
-use ody_protocol::model_metadata::ModelVisibility;
-use ody_protocol::model_metadata::ModelsResponse;
-use ody_protocol::model_metadata::ReasoningEffort;
-use ody_protocol::model_metadata::ReasoningEffortPreset;
-use ody_protocol::model_metadata::TruncationPolicyConfig;
-use ody_protocol::model_metadata::default_input_modalities;
-use ody_protocol::model_metadata::ModelCapabilities;
-use ody_protocol::protocol::AskForApproval;
-use ody_protocol::protocol::EventMsg;
-use ody_protocol::protocol::Op;
-use ody_protocol::request_permissions::PermissionGrantScope;
-use ody_protocol::request_permissions::RequestPermissionsResponse;
-use ody_protocol::user_input::UserInput;
 use core_test_support::TempDirExt;
 use core_test_support::responses::ev_apply_patch_custom_tool_call;
 use core_test_support::responses::ev_assistant_message;
@@ -35,6 +15,26 @@ use core_test_support::test_ody::local_selections;
 use core_test_support::test_ody::test_ody;
 use core_test_support::test_ody::turn_permission_fields;
 use core_test_support::wait_for_event;
+use ody_features::Feature;
+use ody_models_manager::manager::RefreshStrategy;
+use ody_protocol::config_types::ApprovalsReviewer;
+use ody_protocol::config_types::ReasoningSummary;
+use ody_protocol::model_metadata::ConfigShellToolType;
+use ody_protocol::model_metadata::ModelCapabilities;
+use ody_protocol::model_metadata::ModelInfo;
+use ody_protocol::model_metadata::ModelVisibility;
+use ody_protocol::model_metadata::ModelsResponse;
+use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::model_metadata::ReasoningEffortPreset;
+use ody_protocol::model_metadata::TruncationPolicyConfig;
+use ody_protocol::model_metadata::default_input_modalities;
+use ody_protocol::models::PermissionProfile;
+use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::Op;
+use ody_protocol::request_permissions::PermissionGrantScope;
+use ody_protocol::request_permissions::RequestPermissionsResponse;
+use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use wiremock::MockServer;
@@ -106,19 +106,18 @@ async fn remote_model_override_uses_catalog_model_for_strict_auto_review() -> Re
     )
     .await;
 
-    let mut builder = test_ody()
-        .with_config(|config| {
-            config.model = Some("gpt-5.4".to_string());
-            config.approvals_reviewer = ApprovalsReviewer::User;
-            config
-                .features
-                .enable(Feature::ExecPermissionApprovals)
-                .expect("test config should allow feature update");
-            config
-                .features
-                .enable(Feature::RequestPermissionsTool)
-                .expect("test config should allow feature update");
-        });
+    let mut builder = test_ody().with_config(|config| {
+        config.model = Some("gpt-5.4".to_string());
+        config.approvals_reviewer = ApprovalsReviewer::User;
+        config
+            .features
+            .enable(Feature::ExecPermissionApprovals)
+            .expect("test config should allow feature update");
+        config
+            .features
+            .enable(Feature::RequestPermissionsTool)
+            .expect("test config should allow feature update");
+    });
     let TestOdy {
         ody,
         cwd,
@@ -151,24 +150,23 @@ async fn remote_model_override_uses_catalog_model_for_strict_auto_review() -> Re
     let cwd_path = cwd.abs();
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::read_only(), cwd_path.as_path());
-    ody
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: "run the Guardian model override check".into(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: None,
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
-                environments: Some(local_selections(cwd_path)),
-                approval_policy: Some(AskForApproval::OnRequest),
-                sandbox_policy: Some(sandbox_policy),
-                permission_profile,
-                ..Default::default()
-            },
-        })
-        .await?;
+    ody.submit(Op::UserInput {
+        items: vec![UserInput::Text {
+            text: "run the Guardian model override check".into(),
+            text_elements: Vec::new(),
+        }],
+        final_output_json_schema: None,
+        responsesapi_client_metadata: None,
+        additional_context: Default::default(),
+        thread_settings: ody_protocol::protocol::ThreadSettingsOverrides {
+            environments: Some(local_selections(cwd_path)),
+            approval_policy: Some(AskForApproval::OnRequest),
+            sandbox_policy: Some(sandbox_policy),
+            permission_profile,
+            ..Default::default()
+        },
+    })
+    .await?;
 
     let permissions_request = wait_for_event(&ody, |event| {
         matches!(
@@ -181,16 +179,15 @@ async fn remote_model_override_uses_catalog_model_for_strict_auto_review() -> Re
         panic!("expected request_permissions before completion");
     };
     assert_eq!(permissions_request.call_id, permissions_call_id);
-    ody
-        .submit(Op::RequestPermissionsResponse {
-            id: permissions_request.call_id,
-            response: RequestPermissionsResponse {
-                permissions: permissions_request.permissions,
-                scope: PermissionGrantScope::Turn,
-                strict_auto_review: true,
-            },
-        })
-        .await?;
+    ody.submit(Op::RequestPermissionsResponse {
+        id: permissions_request.call_id,
+        response: RequestPermissionsResponse {
+            permissions: permissions_request.permissions,
+            scope: PermissionGrantScope::Turn,
+            strict_auto_review: true,
+        },
+    })
+    .await?;
 
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
 

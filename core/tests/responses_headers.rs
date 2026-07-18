@@ -1,12 +1,18 @@
 use std::process::Command;
 use std::sync::Arc;
 
+use core_test_support::TestOdyResponsesRequestKind;
+use core_test_support::load_default_config_for_test;
+use core_test_support::responses;
+use core_test_support::responses_metadata as test_responses_metadata;
+use core_test_support::test_ody::test_ody;
+use futures::StreamExt;
 use ody_core::ModelClient;
 use ody_core::Prompt;
 use ody_core::ResponseEvent;
 use ody_model_provider_info::ModelProviderInfo;
-use ody_model_provider_info::WireApi;
 use ody_model_provider_info::ProviderCapabilities;
+use ody_model_provider_info::WireApi;
 use ody_otel::SessionTelemetry;
 use ody_otel::TelemetryAuthMode;
 use ody_protocol::ThreadId;
@@ -14,12 +20,6 @@ use ody_protocol::models::ContentItem;
 use ody_protocol::models::ResponseItem;
 use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::SubAgentSource;
-use core_test_support::TestOdyResponsesRequestKind;
-use core_test_support::load_default_config_for_test;
-use core_test_support::responses;
-use core_test_support::responses_metadata as test_responses_metadata;
-use core_test_support::test_ody::test_ody;
-use futures::StreamExt;
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 use wiremock::matchers::header;
@@ -84,7 +84,7 @@ async fn responses_stream_includes_subagent_header_on_review() {
         stream_idle_timeout_ms: Some(5_000),
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
-            capabilities: ProviderCapabilities::default(),
+        capabilities: ProviderCapabilities::default(),
     };
 
     let ody_home = TempDir::new().expect("failed to create TempDir");
@@ -100,8 +100,7 @@ async fn responses_stream_includes_subagent_header_on_review() {
     let thread_id = ThreadId::new();
     let auth_mode = TelemetryAuthMode::ApiKey;
     let session_source = SessionSource::SubAgent(SubAgentSource::Review);
-    let model_info =
-        ody_core::test_support::construct_model_info_offline(model.as_str(), &config);
+    let model_info = ody_core::test_support::construct_model_info_offline(model.as_str(), &config);
     let expected_window_id = format!("{thread_id}:0");
     let session_telemetry = SessionTelemetry::new(
         thread_id,
@@ -212,7 +211,7 @@ async fn responses_stream_includes_subagent_header_on_other() {
         stream_idle_timeout_ms: Some(5_000),
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
-            capabilities: ProviderCapabilities::default(),
+        capabilities: ProviderCapabilities::default(),
     };
 
     let ody_home = TempDir::new().expect("failed to create TempDir");
@@ -228,19 +227,18 @@ async fn responses_stream_includes_subagent_header_on_other() {
     let thread_id = ThreadId::new();
     let auth_mode = TelemetryAuthMode::ApiKey;
     let session_source = SessionSource::SubAgent(SubAgentSource::Other("my-task".to_string()));
-    let model_info =
-        ody_core::test_support::construct_model_info_offline(model.as_str(), &config);
+    let model_info = ody_core::test_support::construct_model_info_offline(model.as_str(), &config);
 
     let session_telemetry = SessionTelemetry::new(
-    thread_id,
-    model.as_str(),
-    model_info.slug.as_str(),
-    Some(auth_mode),
-    "test_originator".to_string(),
-    /*log_user_prompts*/ false,
-    "test".to_string(),
-    session_source.clone(),
-);
+        thread_id,
+        model.as_str(),
+        model_info.slug.as_str(),
+        Some(auth_mode),
+        "test_originator".to_string(),
+        /*log_user_prompts*/ false,
+        "test".to_string(),
+        session_source.clone(),
+    );
 
     let client = ModelClient::new(
         thread_id,

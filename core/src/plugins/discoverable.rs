@@ -51,5 +51,3 @@ pub(crate) async fn list_tool_suggest_discoverable_plugins(
                 .collect()
         })
 }
-
-

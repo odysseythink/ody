@@ -9,8 +9,6 @@ use ody_model_provider_info::WireApi;
 use ody_protocol::config_types::ModelProviderAuthInfo;
 use ody_utils_absolute_path::AbsolutePathBuf;
 
-use crate::config_toml::OdyCodeOAuthRef;
-use crate::config_toml::OdyCodeProviderConfig;
 use super::SessionThreadConfig;
 use super::ThreadConfigContext;
 use super::ThreadConfigLoadError;
@@ -19,6 +17,8 @@ use super::ThreadConfigLoader;
 use super::ThreadConfigLoaderFuture;
 use super::ThreadConfigSource;
 use super::UserThreadConfig;
+use crate::config_toml::OdyCodeOAuthRef;
+use crate::config_toml::OdyCodeProviderConfig;
 use proto::thread_config_loader_client::ThreadConfigLoaderClient;
 
 #[path = "proto/ody.thread_config.v1.rs"]
@@ -147,15 +147,16 @@ fn session_thread_config_from_proto(
     let providers = config
         .providers
         .into_iter()
-        .map(|(id, provider)| {
-            ody_code_provider_from_proto(provider).map(|provider| (id, provider))
-        })
+        .map(|(id, provider)| ody_code_provider_from_proto(provider).map(|provider| (id, provider)))
         .collect::<Result<HashMap<_, _>, _>>()?;
 
     Ok(SessionThreadConfig {
         model_provider: config.model_provider.clone(),
         model_providers,
-        default_provider: config.default_provider.clone().or(config.model_provider.clone()),
+        default_provider: config
+            .default_provider
+            .clone()
+            .or(config.model_provider.clone()),
         default_model: config.default_model,
         providers,
         features: config.features.into_iter().collect::<BTreeMap<_, _>>(),
@@ -182,9 +183,7 @@ fn ody_code_provider_from_proto(
     })
 }
 
-fn ody_code_oauth_ref_from_proto(
-    oauth: proto::OdyCodeOAuthRef,
-) -> OdyCodeOAuthRef {
+fn ody_code_oauth_ref_from_proto(oauth: proto::OdyCodeOAuthRef) -> OdyCodeOAuthRef {
     OdyCodeOAuthRef {
         storage: oauth.storage,
         key: oauth.key,
@@ -232,7 +231,7 @@ fn model_provider_from_proto(
         stream_idle_timeout_ms: provider.stream_idle_timeout_ms,
         websocket_connect_timeout_ms: provider.websocket_connect_timeout_ms,
         supports_websockets: provider.supports_websockets,
-            capabilities: ProviderCapabilities::default(),
+        capabilities: ProviderCapabilities::default(),
     };
     Ok((id, info))
 }
@@ -258,9 +257,7 @@ fn session_thread_config_to_proto(config: SessionThreadConfig) -> proto::Session
 }
 
 #[cfg(test)]
-fn ody_code_provider_to_proto(
-    provider: OdyCodeProviderConfig,
-) -> proto::OdyCodeProviderConfig {
+fn ody_code_provider_to_proto(provider: OdyCodeProviderConfig) -> proto::OdyCodeProviderConfig {
     proto::OdyCodeProviderConfig {
         r#type: provider.r#type,
         api_key: provider.api_key,
@@ -374,9 +371,7 @@ fn proto_string_map(values: HashMap<String, String>) -> proto::StringMap {
 fn proto_wire_api(wire_api: WireApi) -> proto::WireApi {
     match wire_api {
         WireApi::Responses => proto::WireApi::Responses,
-        WireApi::Chat
-        | WireApi::AnthropicMessages
-        | WireApi::GoogleGenAI => proto::WireApi::Chat
+        WireApi::Chat | WireApi::AnthropicMessages | WireApi::GoogleGenAI => proto::WireApi::Chat,
     }
 }
 
@@ -532,10 +527,7 @@ mod tests {
                         key: "local".to_string(),
                     }),
                     env: HashMap::from([("FOO".to_string(), "bar".to_string())]),
-                    custom_headers: HashMap::from([(
-                        "X-Test".to_string(),
-                        "enabled".to_string(),
-                    )]),
+                    custom_headers: HashMap::from([("X-Test".to_string(), "enabled".to_string())]),
                 },
             )]),
             features: BTreeMap::from([("plugins".to_string(), false)]),

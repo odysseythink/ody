@@ -3,7 +3,6 @@ mod injection;
 mod mentions;
 mod render;
 
-
 pub(crate) use ody_plugin::PluginCapabilitySummary;
 
 pub(crate) use discoverable::list_tool_suggest_discoverable_plugins;

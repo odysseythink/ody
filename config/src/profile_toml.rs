@@ -112,12 +112,11 @@ api_key = "sk-test"
         .expect("profile with providers should deserialize");
 
         assert_eq!(profile.default_provider, Some("kimi_gyy".to_string()));
-        assert_eq!(profile.default_model, Some("kimi_gyy/kimi-for-coding".to_string()));
-        assert!(profile.providers.as_ref().unwrap().contains_key("kimi_gyy"));
         assert_eq!(
-            profile.providers.unwrap()["kimi_gyy"].r#type,
-            "kimi"
+            profile.default_model,
+            Some("kimi_gyy/kimi-for-coding".to_string())
         );
+        assert!(profile.providers.as_ref().unwrap().contains_key("kimi_gyy"));
+        assert_eq!(profile.providers.unwrap()["kimi_gyy"].r#type, "kimi");
     }
 }
-

@@ -41,10 +41,8 @@ pub struct SessionThreadConfig {
     #[prost(string, optional, tag = "5")]
     pub default_model: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(map = "string, message", tag = "6")]
-    pub providers: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        OdyCodeProviderConfig,
-    >,
+    pub providers:
+        ::std::collections::HashMap<::prost::alloc::string::String, OdyCodeProviderConfig>,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct UserThreadConfig {}
@@ -146,12 +144,11 @@ pub struct OdyCodeProviderConfig {
     #[prost(message, optional, tag = "5")]
     pub oauth: ::core::option::Option<OdyCodeOAuthRef>,
     #[prost(map = "string, string", tag = "6")]
-    pub env: ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    pub env:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
     #[prost(map = "string, string", tag = "7")]
-    pub custom_headers: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub custom_headers:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct OdyCodeOAuthRef {

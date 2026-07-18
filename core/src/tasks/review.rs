@@ -16,8 +16,8 @@ use ody_protocol::protocol::ReviewOutputEvent;
 use ody_protocol::protocol::SubAgentSource;
 use tokio_util::sync::CancellationToken;
 
-use crate::ody_delegate::run_ody_thread_one_shot;
 use crate::config::Constrained;
+use crate::ody_delegate::run_ody_thread_one_shot;
 use crate::review_format::format_review_findings_block;
 use crate::review_format::render_review_output_text;
 use crate::session::TurnInput;
@@ -56,11 +56,11 @@ impl SessionTask for ReviewTask {
         input: Vec<TurnInput>,
         cancellation_token: CancellationToken,
     ) -> SessionTaskResult {
-        session.session.services.session_telemetry.counter(
-            "ody.task.review",
-            /*inc*/ 1,
-            &[],
-        );
+        session
+            .session
+            .services
+            .session_telemetry
+            .counter("ody.task.review", /*inc*/ 1, &[]);
 
         let mut user_input = Vec::new();
         for item in input {
@@ -119,15 +119,8 @@ async fn start_review_conversation(
     input: Vec<UserInput>,
     cancellation_token: CancellationToken,
 ) -> Option<async_channel::Receiver<Event>> {
-    start_review_conversation_with_overrides(
-        session,
-        ctx,
-        input,
-        cancellation_token,
-        None,
-        None,
-    )
-    .await
+    start_review_conversation_with_overrides(session, ctx, input, cancellation_token, None, None)
+        .await
 }
 
 async fn start_review_conversation_with_overrides(
@@ -153,7 +146,8 @@ async fn start_review_conversation_with_overrides(
     let _ = sub_agent_config.features.disable(Feature::MultiAgentV2);
 
     // Set explicit review rubric for the sub-agent
-    sub_agent_config.base_instructions = base_instructions_override.or(Some(crate::REVIEW_PROMPT.to_string()));
+    sub_agent_config.base_instructions =
+        base_instructions_override.or(Some(crate::REVIEW_PROMPT.to_string()));
     sub_agent_config.permissions.approval_policy = Constrained::allow_only(AskForApproval::Never);
 
     let model = model_override.unwrap_or_else(|| {

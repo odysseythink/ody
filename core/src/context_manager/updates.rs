@@ -13,9 +13,9 @@ use ody_execpolicy::Policy;
 use ody_features::Feature;
 use ody_protocol::config_types::MultiAgentMode;
 use ody_protocol::config_types::Personality;
+use ody_protocol::model_metadata::ModelInfo;
 use ody_protocol::models::ContentItem;
 use ody_protocol::models::ResponseItem;
-use ody_protocol::model_metadata::ModelInfo;
 use ody_protocol::protocol::TurnContextItem;
 
 fn build_permissions_update_item(
@@ -68,7 +68,10 @@ fn build_collaboration_mode_update_item(
         Some(
             CollaborationModeInstructions::from_collaboration_mode(
                 &next.collaboration_mode,
-                next.config.plan_mode.as_ref().and_then(|pm| pm.split_threshold),
+                next.config
+                    .plan_mode
+                    .as_ref()
+                    .and_then(|pm| pm.split_threshold),
                 None,
                 next.config.plan_mode.as_ref(),
                 next.plan_artifact.as_deref(),
