@@ -44,6 +44,8 @@ pub fn create_update_plan_tool() -> ToolSpec {
         description: r#"Updates the task plan.
 Provide an optional explanation and a list of plan items, each with a step and status.
 At most one step can be in_progress at a time.
+
+Use this tool proactively and often to keep the plan in sync with real progress: after you finish a step, call `update_plan` again to mark that step `completed` and set the next step `in_progress` before continuing with more tool calls. Do not batch-complete multiple steps at the very end, and do not let the plan go stale while you keep working. Only mark a step `completed` when it is genuinely done (tests pass, edits applied); if you hit a blocker, keep the step `in_progress` or add a new pending step describing what must be resolved.
 "#
         .to_string(),
         strict: false,

@@ -1126,6 +1126,56 @@ async fn run_task_checkpoint(
     .await
 }
 
+/// How many turns a plan may sit untouched before the staleness reminder fires.
+/// Mirrored on both the write and reminder counters, so a stale plan is nudged
+/// at most once per this many turns rather than every turn.
+const PLAN_STALENESS_REMINDER_TURNS: usize = 10;
+
+/// Nudges the model to advance its `update_plan` checklist when it has an
+/// unfinished plan it has not touched for `PLAN_STALENESS_REMINDER_TURNS` turns.
+///
+/// The `update_plan` prompt guidance is soft, so weaker instruction-followers
+/// build a plan and then keep coding without ever marking steps complete,
+/// leaving the client-visible Todo frozen at its initial state. This re-surfaces
+/// the current (stale) checklist as an internal reminder so the model self-
+/// corrects. Runs only outside read-only session modes; Plan/Design mode has its
+/// own rigor-reminder cadence in `run_session_mode_after_turn`.
+async fn run_plan_staleness_reminder(sess: &Arc<Session>, turn_context: &Arc<TurnContext>) {
+    let Some(plan) = sess
+        .tick_plan_staleness_reminder(PLAN_STALENESS_REMINDER_TURNS)
+        .await
+    else {
+        return;
+    };
+
+    let reminder_text = render_plan_staleness_reminder(&plan);
+    let source = InternalContextSource::from_static("plan_staleness_reminder");
+    let fragment = InternalModelContextFragment::new(source, reminder_text);
+    let item: ResponseItem = ContextualUserFragment::into(fragment);
+    sess.record_conversation_items(turn_context, std::slice::from_ref(&item))
+        .await;
+}
+
+fn render_plan_staleness_reminder(plan: &[PlanItemArg]) -> String {
+    let mut items = String::new();
+    for (index, item) in plan.iter().enumerate() {
+        let status = match item.status {
+            StepStatus::Pending => "pending",
+            StepStatus::InProgress => "in_progress",
+            StepStatus::Completed => "completed",
+        };
+        items.push_str(&format!("{}. [{status}] {}\n", index + 1, item.step));
+    }
+    format!(
+        "The task plan has not been updated in a while. If you have made progress, call \
+         `update_plan` to mark finished steps `completed` and set the step you are now working on \
+         `in_progress`; rewrite or clear the plan if it no longer matches your work. Keep exactly \
+         one step in_progress. This is a gentle reminder — do not mention it to the user.\n\n\
+         Current plan:\n{}",
+        items.trim_end()
+    )
+}
+
 /// Returns true only when both turns declare compaction compatibility hashes and they differ.
 /// A missing hash does not provide enough information to trigger compaction.
 fn comp_hash_changed(previous: Option<&str>, current: Option<&str>) -> bool {
@@ -2681,14 +2731,20 @@ async fn try_run_sampling_request(
                 }
             }
         }
-    } else if let Err(err) = run_task_checkpoint(&sess, &turn_context, client_session).await {
-        if matches!(err, OdyErr::TurnAborted) {
-            return Err(err);
+    } else {
+        if let Err(err) = run_task_checkpoint(&sess, &turn_context, client_session).await {
+            if matches!(err, OdyErr::TurnAborted) {
+                return Err(err);
+            }
+            let error = err.to_ody_protocol_error();
+            sess.emit_turn_error_lifecycle(turn_context.as_ref(), error.clone())
+                .await;
+            error!(error = ?error, "Failed to run task checkpoint");
         }
-        let error = err.to_ody_protocol_error();
-        sess.emit_turn_error_lifecycle(turn_context.as_ref(), error.clone())
-            .await;
-        error!(error = ?error, "Failed to run task checkpoint");
+        // Nudge the model to keep its Todo checklist in sync when it has an
+        // unfinished plan it has stopped advancing. Runs after the checkpoint so
+        // a compaction this turn carries the fresh plan, not a reminder fragment.
+        run_plan_staleness_reminder(&sess, &turn_context).await;
     }
 
     outcome

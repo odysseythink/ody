@@ -5,6 +5,7 @@ use crate::plan_artifact::PlanArtifact;
 use ody_protocol::models::AdditionalPermissionProfile;
 use ody_protocol::models::ResponseItem;
 use ody_protocol::plan_tool::PlanItemArg;
+use ody_protocol::plan_tool::StepStatus;
 use ody_sandboxing::policy_transforms::merge_permission_profiles;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -60,6 +61,12 @@ pub(crate) struct SessionState {
     /// the baseline, so a plan that arrives already part-done cannot be mistaken
     /// for a task having just finished.
     last_plan_done_count: Option<usize>,
+    /// Turns elapsed since the last `update_plan` write, used to detect a plan
+    /// that has gone stale while the model keeps working without advancing it.
+    turns_since_plan_write: usize,
+    /// Turns elapsed since the last plan-staleness reminder was injected, so a
+    /// stale plan is nudged periodically rather than every single turn.
+    turns_since_plan_reminder: usize,
 }
 
 impl SessionState {
@@ -84,12 +91,51 @@ impl SessionState {
             last_design_artifact: None,
             active_plan: None,
             last_plan_done_count: None,
+            turns_since_plan_write: 0,
+            turns_since_plan_reminder: 0,
         }
     }
 
     /// Record the checklist from the latest `update_plan` call.
     pub(crate) fn set_active_plan(&mut self, plan: Vec<PlanItemArg>) {
         self.active_plan = if plan.is_empty() { None } else { Some(plan) };
+        // A fresh write resets the staleness clock: the plan now reflects the
+        // model's current understanding, and the next reminder should wait a
+        // full interval rather than firing immediately.
+        self.turns_since_plan_write = 0;
+        self.turns_since_plan_reminder = 0;
+    }
+
+    /// Advance the plan-staleness counters by one turn and decide whether a
+    /// reminder is due.
+    ///
+    /// Returns the current checklist to surface back to the model when it has an
+    /// unfinished plan that has not been touched for `threshold` turns (and a
+    /// reminder has not fired within the last `threshold` turns). Returns `None`
+    /// when there is no active plan, the plan is fully completed, or the cadence
+    /// says no reminder is due yet.
+    pub(crate) fn tick_plan_staleness_reminder(
+        &mut self,
+        threshold: usize,
+    ) -> Option<Vec<PlanItemArg>> {
+        let plan = self.active_plan.as_ref()?;
+        // Only nudge while there is still unfinished work; a fully completed
+        // plan needs no advancing and a reminder would only add noise.
+        let all_completed = plan
+            .iter()
+            .all(|item| matches!(item.status, StepStatus::Completed));
+        if all_completed {
+            return None;
+        }
+
+        self.turns_since_plan_write = self.turns_since_plan_write.saturating_add(1);
+        self.turns_since_plan_reminder = self.turns_since_plan_reminder.saturating_add(1);
+
+        if self.turns_since_plan_write >= threshold && self.turns_since_plan_reminder >= threshold {
+            self.turns_since_plan_reminder = 0;
+            return Some(plan.clone());
+        }
+        None
     }
 
     pub(crate) fn active_plan(&self) -> Option<&[PlanItemArg]> {

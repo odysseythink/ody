@@ -1212,6 +1212,14 @@ impl Session {
         state.observe_plan_done_count(done)
     }
 
+    pub(crate) async fn tick_plan_staleness_reminder(
+        &self,
+        threshold: usize,
+    ) -> Option<Vec<PlanItemArg>> {
+        let mut state = self.state.lock().await;
+        state.tick_plan_staleness_reminder(threshold)
+    }
+
     pub(crate) async fn set_plan_mode_last_manifest_snapshot(&self, snapshot: ManifestSnapshot) {
         let mut state = self.state.lock().await;
         state.set_plan_mode_last_manifest_snapshot(snapshot);

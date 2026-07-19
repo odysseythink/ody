@@ -1011,6 +1011,7 @@ fn test_model_info_for_chat_provider() -> ModelInfo {
         tool_mode: None,
         multi_agent_version: None,
         capabilities: ModelCapabilities::default(),
+        provider: "test-provider".into(),
     }
 }
 
