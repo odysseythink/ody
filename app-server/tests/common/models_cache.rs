@@ -33,6 +33,7 @@ fn preset_to_info(preset: &ModelPreset, priority: i32) -> ModelInfo {
         service_tiers: preset.service_tiers.clone(),
         default_service_tier: preset.default_service_tier.clone(),
         upgrade: preset.upgrade.as_ref().map(Into::into),
+        provider: preset.provider.clone(),
         base_instructions: "base instructions".to_string(),
         model_messages: None,
         supports_reasoning_summaries: false,

@@ -4,10 +4,127 @@
 //! into another, especially while Plan mode is active.
 
 use super::*;
+use ratatui::buffer::Buffer;
+use ratatui::text::{Line, Span};
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
+/// Availability of the thinking toggle for a given model preset.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ThinkingAvailability {
+    AlwaysOn,
+    Toggle,
+    Unsupported,
+}
+
+/// Shared mutable state for the model picker: the current thinking draft.
+struct ModelPickerState {
+    thinking: AtomicBool,
+    availability: AtomicBool,
+}
+
+impl ModelPickerState {
+    fn new(thinking: bool, availability: ThinkingAvailability) -> Self {
+        let (thinking_val, availability_val) = match availability {
+            ThinkingAvailability::AlwaysOn => (true, 0),
+            ThinkingAvailability::Toggle => (thinking, 1),
+            ThinkingAvailability::Unsupported => (false, 2),
+        };
+        Self {
+            thinking: AtomicBool::new(thinking_val),
+            availability: AtomicBool::new(availability_val == 1),
+        }
+    }
+
+    fn toggle_thinking(&self) {
+        if self.is_toggle() {
+            self.thinking.fetch_not(Ordering::SeqCst);
+        }
+    }
+
+    fn thinking(&self) -> bool {
+        self.thinking.load(Ordering::SeqCst)
+    }
+
+    fn availability(&self) -> ThinkingAvailability {
+        if self.availability.load(Ordering::SeqCst) {
+            ThinkingAvailability::Toggle
+        } else if self.thinking.load(Ordering::SeqCst) {
+            ThinkingAvailability::AlwaysOn
+        } else {
+            ThinkingAvailability::Unsupported
+        }
+    }
+
+    fn is_toggle(&self) -> bool {
+        self.availability.load(Ordering::SeqCst)
+    }
+}
+
+/// Header that renders the model picker title, subtitle, hint, and optional
+/// base-URL override warning.
+struct ModelPickerHeader {
+    title: String,
+    subtitle: String,
+    warning: Option<Line<'static>>,
+    hint: Line<'static>,
+}
+
+impl Renderable for ModelPickerHeader {
+    fn render(&self, area: Rect, buf: &mut Buffer) {
+        let mut lines: Vec<Line> = Vec::new();
+        lines.push(Line::from(self.title.clone().bold()));
+        lines.push(Line::from(self.subtitle.clone().dim()));
+        if let Some(warning) = &self.warning {
+            lines.push(warning.clone());
+        }
+        lines.push(self.hint.clone().dim());
+        Paragraph::new(lines).render(area, buf);
+    }
+
+    fn desired_height(&self, _width: u16) -> u16 {
+        let mut height = 3u16;
+        if self.warning.is_some() {
+            height += 1;
+        }
+        height
+    }
+}
+
+/// Footer-style control that renders the thinking toggle state at the bottom of
+/// the model picker so it updates live when `/` is pressed.
+struct ModelPickerThinkingControl {
+    state: Arc<ModelPickerState>,
+}
+
+impl Renderable for ModelPickerThinkingControl {
+    fn render(&self, area: Rect, buf: &mut Buffer) {
+        let label = match self.state.availability() {
+            ThinkingAvailability::AlwaysOn => {
+                "Thinking  (/ to toggle)   [ Always on ]".to_string()
+            }
+            ThinkingAvailability::Unsupported => {
+                "Thinking  (/ to toggle)   [ Off ] unsupported".to_string()
+            }
+            ThinkingAvailability::Toggle => {
+                if self.state.thinking() {
+                    "Thinking  (/ to toggle)   [ On ]  Off".to_string()
+                } else {
+                    "Thinking  (/ to toggle)   On   [ Off ]".to_string()
+                }
+            }
+        };
+        Line::from(label).render(area, buf);
+    }
+
+    fn desired_height(&self, _width: u16) -> u16 {
+        1
+    }
+}
 
 impl ChatWidget {
-    /// Open a popup to choose a quick auto model. Selecting "All models"
-    /// opens the full picker with every available preset.
+    /// Open the tabbed model picker aligned with the upstream `/model` UX.
     pub(crate) fn open_model_popup(&mut self) {
         if !self.is_session_configured() {
             self.add_info_message(
@@ -27,19 +144,330 @@ impl ChatWidget {
                 return;
             }
         };
-        self.open_model_popup_with_presets(presets);
+        self.open_model_picker(presets, None);
     }
 
-    fn model_menu_header(&self, title: &str, subtitle: &str) -> Box<dyn Renderable> {
-        let title = title.to_string();
-        let subtitle = subtitle.to_string();
-        let mut header = ColumnRenderable::new();
-        header.push(Line::from(title.bold()));
-        header.push(Line::from(subtitle.dim()));
-        if let Some(warning) = self.model_menu_warning_line() {
-            header.push(warning);
+    /// Open the model picker with a specific model pre-selected.
+    /// If the model is not available, shows an error and falls back to the default picker.
+    pub(crate) fn open_model_popup_with_selected(&mut self, selected_model: &str) {
+        if !self.is_session_configured() {
+            self.add_info_message(
+                "Model selection is disabled until startup completes.".to_string(),
+                /*hint*/ None,
+            );
+            return;
         }
-        Box::new(header)
+
+        let presets: Vec<ModelPreset> = match self.model_catalog.try_list_models() {
+            Ok(models) => models.into_iter().filter(|p| p.show_in_picker).collect(),
+            Err(_) => {
+                self.add_info_message(
+                    "Models are being updated; please try /model again in a moment.".to_string(),
+                    /*hint*/ None,
+                );
+                return;
+            }
+        };
+
+        let selected_exists = presets.iter().any(|p| p.model.as_str() == selected_model);
+        if !selected_exists {
+            self.add_error_message(format!("Unknown model alias: {selected_model}"));
+            return;
+        }
+
+        self.open_model_picker(presets, Some(selected_model));
+    }
+
+    /// Open a tabbed model picker with a specific list of models.
+    pub(crate) fn open_all_models_popup(
+        &mut self,
+        models: Vec<ModelPreset>,
+        selected_model: Option<&str>,
+    ) {
+        self.open_model_picker(models, selected_model);
+    }
+
+    /// Test helper to open the model picker with a specific set of presets.
+    #[cfg(test)]
+    pub(crate) fn open_model_popup_with_presets(&mut self, presets: Vec<ModelPreset>) {
+        self.open_model_picker(presets, None);
+    }
+
+    fn provider_display_name(provider: &str) -> String {
+        match provider {
+            "kimi" => "Kimi".to_string(),
+            "deepseek" => "DeepSeek".to_string(),
+            "glm" => "GLM".to_string(),
+            "openai" => "OpenAI".to_string(),
+            "anthropic" => "Anthropic".to_string(),
+            "google" => "Google".to_string(),
+            _ => provider.to_string(),
+        }
+    }
+
+    fn thinking_availability(preset: &ModelPreset) -> ThinkingAvailability {
+        let has_none = preset
+            .supported_reasoning_efforts
+            .iter()
+            .any(|o| o.effort == ReasoningEffortConfig::None);
+        let has_thinking = preset
+            .supported_reasoning_efforts
+            .iter()
+            .any(|o| o.effort != ReasoningEffortConfig::None);
+
+        if !has_thinking {
+            ThinkingAvailability::Unsupported
+        } else if !has_none {
+            ThinkingAvailability::AlwaysOn
+        } else {
+            ThinkingAvailability::Toggle
+        }
+    }
+
+    fn reasoning_effort_for_thinking(
+        preset: &ModelPreset,
+        thinking: bool,
+    ) -> Option<ReasoningEffortConfig> {
+        let thinking_efforts: Vec<_> = preset
+            .supported_reasoning_efforts
+            .iter()
+            .filter(|o| o.effort != ReasoningEffortConfig::None)
+            .collect();
+
+        match Self::thinking_availability(preset) {
+            ThinkingAvailability::Unsupported => Some(ReasoningEffortConfig::None),
+            ThinkingAvailability::AlwaysOn => {
+                if thinking_efforts.len() == 1 {
+                    Some(thinking_efforts[0].effort.clone())
+                } else if preset.default_reasoning_effort != ReasoningEffortConfig::None {
+                    Some(preset.default_reasoning_effort.clone())
+                } else {
+                    thinking_efforts.first().map(|o| o.effort.clone())
+                }
+            }
+            ThinkingAvailability::Toggle => {
+                if !thinking {
+                    Some(ReasoningEffortConfig::None)
+                } else if thinking_efforts.len() == 1 {
+                    Some(thinking_efforts[0].effort.clone())
+                } else if preset.default_reasoning_effort != ReasoningEffortConfig::None {
+                    Some(preset.default_reasoning_effort.clone())
+                } else {
+                    thinking_efforts.first().map(|o| o.effort.clone())
+                }
+            }
+        }
+    }
+
+    /// Build a model picker item for the tabbed view.
+    fn build_model_picker_item(
+        &self,
+        preset: &ModelPreset,
+        current_model: &str,
+        state: Arc<ModelPickerState>,
+        should_prompt_plan_mode_scope: bool,
+    ) -> SelectionItem {
+        let description =
+            (!preset.description.is_empty()).then_some(preset.description.to_string());
+        let model = preset.model.clone();
+        let is_current = preset.model.as_str() == current_model;
+        let model_for_action = model.clone();
+        let preset_for_action = preset.clone();
+        let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
+            let effort = Self::reasoning_effort_for_thinking(&preset_for_action, state.thinking());
+            if should_prompt_plan_mode_scope {
+                tx.send(AppEvent::OpenPlanReasoningScopePrompt {
+                    model: model_for_action.clone(),
+                    effort,
+                });
+            } else {
+                tx.send(AppEvent::UpdateModel(model_for_action.clone()));
+                tx.send(AppEvent::UpdateReasoningEffort(effort.clone()));
+                tx.send(AppEvent::PersistModelSelection {
+                    model: model_for_action.clone(),
+                    effort,
+                });
+            }
+        })];
+        SelectionItem {
+            name: model,
+            description,
+            is_current,
+            is_default: preset.is_default,
+            search_value: Some(format!(
+                "{} {} {}",
+                preset.model,
+                preset.display_name,
+                preset.provider
+            )),
+            actions,
+            dismiss_on_select: true,
+            ..Default::default()
+        }
+    }
+
+    /// Build the tabbed model picker view.
+    fn open_model_picker(&mut self, presets: Vec<ModelPreset>, selected_model: Option<&str>) {
+        let presets: Vec<ModelPreset> = presets.into_iter().filter(|p| p.show_in_picker).collect();
+        if presets.is_empty() {
+            self.add_info_message(
+                "No models configured. Run /login to sign in, or /provider to add a provider from a model catalog.".to_string(),
+                /*hint*/ None,
+            );
+            return;
+        }
+
+        let current_model = self.current_model().to_string();
+        let selected_model = selected_model
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| current_model.clone());
+
+        // Determine the initial thinking state from the currently selected model.
+        let current_preset = presets.iter().find(|p| p.model == current_model);
+        let initial_thinking = current_preset
+            .map(|p| Self::reasoning_effort_for_thinking(p, true))
+            .flatten()
+            .is_some();
+        let initial_availability = current_preset
+            .map(Self::thinking_availability)
+            .unwrap_or(ThinkingAvailability::Unsupported);
+        let state = Arc::new(ModelPickerState::new(initial_thinking, initial_availability));
+
+        // Precompute plan-mode reasoning scope prompts for each preset.
+        let mut scope_prompts: HashMap<String, bool> = HashMap::new();
+        for preset in &presets {
+            let effort = Self::reasoning_effort_for_thinking(preset, state.thinking());
+            let should_prompt = self.should_prompt_plan_mode_reasoning_scope(&preset.model, effort);
+            scope_prompts.insert(preset.model.clone(), should_prompt);
+        }
+
+        // Group presets by provider. Preserve insertion order of first appearance.
+        let mut provider_groups: Vec<(String, Vec<&ModelPreset>)> = Vec::new();
+        for preset in &presets {
+            let provider = if preset.provider.is_empty() {
+                "all".to_string()
+            } else {
+                preset.provider.clone()
+            };
+            if let Some(pos) = provider_groups.iter().position(|(p, _)| p == &provider) {
+                provider_groups[pos].1.push(preset);
+            } else {
+                provider_groups.push((provider, vec![preset]));
+            }
+        }
+
+        // The selected model determines the initial active tab.
+        let selected_preset = presets.iter().find(|p| p.model == selected_model);
+        let initial_provider = selected_preset
+            .map(|p| {
+                if p.provider.is_empty() {
+                    "all".to_string()
+                } else {
+                    p.provider.clone()
+                }
+            })
+            .unwrap_or_else(|| {
+                provider_groups
+                    .first()
+                    .map(|(id, _)| id.clone())
+                    .unwrap_or_else(|| "all".to_string())
+            });
+
+        // Build the shared header that is placed on every tab so it remains visible
+        // regardless of which provider tab is active.
+        let hint = Line::from(
+            "↑↓ model · ←→ page · / thinking · Enter apply · Esc cancel · Tab/Shift+Tab provider",
+        );
+        let header = Box::new(ModelPickerHeader {
+            title: "Select a model".to_string(),
+            subtitle: "type to search".to_string(),
+            warning: self.model_menu_warning_line(),
+            hint: hint.clone(),
+        });
+        let thinking_control = Box::new(ModelPickerThinkingControl {
+            state: state.clone(),
+        });
+
+        // Build the "All" tab first, then per-provider tabs.
+        let mut tabs: Vec<SelectionTab> = Vec::new();
+        let mut all_items: Vec<SelectionItem> = Vec::new();
+        for (_, group_presets) in &provider_groups {
+            for preset in group_presets {
+                let should_prompt = *scope_prompts.get(&preset.model).unwrap_or(&false);
+                all_items.push(self.build_model_picker_item(
+                    preset,
+                    &current_model,
+                    state.clone(),
+                    should_prompt,
+                ));
+            }
+        }
+        tabs.push(SelectionTab {
+            id: "all".to_string(),
+            label: "All".to_string(),
+            header: Box::new(ModelPickerHeader {
+                title: "Select a model".to_string(),
+                subtitle: "type to search".to_string(),
+                warning: self.model_menu_warning_line(),
+                hint: hint.clone(),
+            }),
+            items: all_items,
+        });
+        for (provider_id, group_presets) in &provider_groups {
+            // The "All" tab already covers the "all" provider group; avoid a duplicate tab.
+            if provider_id == "all" {
+                continue;
+            }
+            let items = group_presets
+                .iter()
+                .map(|preset| {
+                    let should_prompt = *scope_prompts.get(&preset.model).unwrap_or(&false);
+                    self.build_model_picker_item(preset, &current_model, state.clone(), should_prompt)
+                })
+                .collect();
+            tabs.push(SelectionTab {
+                id: provider_id.clone(),
+                label: Self::provider_display_name(provider_id),
+                header: Box::new(ModelPickerHeader {
+                    title: "Select a model".to_string(),
+                    subtitle: "type to search".to_string(),
+                    warning: self.model_menu_warning_line(),
+                    hint: hint.clone(),
+                }),
+                items,
+            });
+        }
+
+        let initial_tab_id = if tabs.iter().any(|t| t.id == initial_provider) {
+            initial_provider
+        } else {
+            "all".to_string()
+        };
+
+        let selected_state = state.clone();
+        let custom_handler: CustomKeyHandlerCallback = Some(Box::new(move |key_event, _tx| {
+            if key_event.code == KeyCode::Char('/')
+                && key_event.modifiers == KeyModifiers::NONE
+            {
+                selected_state.toggle_thinking();
+                return true;
+            }
+            false
+        }));
+
+        let initial_selected_idx = presets.iter().position(|p| p.model == selected_model);
+
+        self.bottom_pane.show_selection_view(SelectionViewParams {
+            header,
+            tabs,
+            initial_tab_id: Some(initial_tab_id),
+            initial_selected_idx,
+            is_searchable: true,
+            custom_key_handler: custom_handler,
+            stacked_side_content: Some(thinking_control),
+            footer_hint: Some(Line::from("")),
+            ..Default::default()
+        });
     }
 
     fn model_menu_warning_line(&self) -> Option<Line<'static>> {
@@ -67,150 +495,6 @@ impl ChatWidget {
         }
 
         Some(trimmed.to_string())
-    }
-
-    pub(crate) fn open_model_popup_with_presets(&mut self, presets: Vec<ModelPreset>) {
-        let presets: Vec<ModelPreset> = presets
-            .into_iter()
-            .filter(|preset| preset.show_in_picker)
-            .collect();
-
-        let current_model = self.current_model();
-        let current_label = presets
-            .iter()
-            .find(|preset| preset.model.as_str() == current_model)
-            .map(|preset| preset.model.to_string())
-            .unwrap_or_else(|| self.model_display_name().to_string());
-
-        let (mut auto_presets, other_presets): (Vec<ModelPreset>, Vec<ModelPreset>) = presets
-            .into_iter()
-            .partition(|preset| Self::is_auto_model(&preset.model));
-
-        if auto_presets.is_empty() {
-            self.open_all_models_popup(other_presets);
-            return;
-        }
-
-        auto_presets.sort_by_key(|preset| Self::auto_model_order(&preset.model));
-        let mut items: Vec<SelectionItem> = auto_presets
-            .into_iter()
-            .map(|preset| {
-                let description =
-                    (!preset.description.is_empty()).then_some(preset.description.clone());
-                let model = preset.model.clone();
-                let should_prompt_plan_mode_scope = self.should_prompt_plan_mode_reasoning_scope(
-                    model.as_str(),
-                    Some(preset.default_reasoning_effort.clone()),
-                );
-                let actions = Self::model_selection_actions(
-                    model.clone(),
-                    Some(preset.default_reasoning_effort.clone()),
-                    should_prompt_plan_mode_scope,
-                );
-                SelectionItem {
-                    name: model.clone(),
-                    description,
-                    is_current: model.as_str() == current_model,
-                    is_default: preset.is_default,
-                    actions,
-                    dismiss_on_select: true,
-                    ..Default::default()
-                }
-            })
-            .collect();
-
-        if !other_presets.is_empty() {
-            let all_models = other_presets;
-            let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-                tx.send(AppEvent::OpenAllModelsPopup {
-                    models: all_models.clone(),
-                });
-            })];
-
-            let is_current = !items.iter().any(|item| item.is_current);
-            let description = Some(format!(
-                "Choose a specific model and reasoning level (current: {current_label})"
-            ));
-
-            items.push(SelectionItem {
-                name: "All models".to_string(),
-                description,
-                is_current,
-                actions,
-                dismiss_on_select: true,
-                ..Default::default()
-            });
-        }
-
-        let header = self.model_menu_header(
-            "Select Model",
-            "Pick a quick auto mode or browse all models.",
-        );
-        self.bottom_pane.show_selection_view(SelectionViewParams {
-            footer_hint: Some(standard_popup_hint_line()),
-            items,
-            header,
-            ..Default::default()
-        });
-    }
-
-    fn is_auto_model(model: &str) -> bool {
-        model.starts_with("ody-auto-")
-    }
-
-    fn auto_model_order(model: &str) -> usize {
-        match model {
-            "ody-auto-fast" => 0,
-            "ody-auto-balanced" => 1,
-            "ody-auto-thorough" => 2,
-            _ => 3,
-        }
-    }
-
-    pub(crate) fn open_all_models_popup(&mut self, presets: Vec<ModelPreset>) {
-        if presets.is_empty() {
-            self.add_info_message(
-                "No additional models are available right now.".to_string(),
-                /*hint*/ None,
-            );
-            return;
-        }
-
-        let mut items: Vec<SelectionItem> = Vec::new();
-        for preset in presets.into_iter() {
-            let description =
-                (!preset.description.is_empty()).then_some(preset.description.to_string());
-            let is_current = preset.model.as_str() == self.current_model();
-            let single_supported_effort = preset.supported_reasoning_efforts.len() == 1;
-            let preset_for_action = preset.clone();
-            let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-                let preset_for_event = preset_for_action.clone();
-                tx.send(AppEvent::OpenReasoningPopup {
-                    model: preset_for_event,
-                });
-            })];
-            items.push(SelectionItem {
-                name: preset.model.clone(),
-                description,
-                is_current,
-                is_default: preset.is_default,
-                actions,
-                dismiss_on_select: single_supported_effort,
-                dismiss_parent_on_child_accept: !single_supported_effort,
-                ..Default::default()
-            });
-        }
-
-        let header = self.model_menu_header(
-            "Select Model and Effort",
-            "Access legacy models by running ody -m <model_name> or in your config.toml",
-        );
-        self.bottom_pane.show_selection_view(SelectionViewParams {
-            footer_hint: Some(self.bottom_pane.standard_popup_hint_line()),
-            items,
-            header,
-            ..Default::default()
-        });
     }
 
     fn model_selection_actions(
@@ -348,6 +632,7 @@ impl ChatWidget {
     }
 
     /// Open a popup to choose the reasoning effort (stage 2) for the given model.
+    /// Kept for compatibility with callers that directly open the reasoning popup.
     pub(crate) fn open_reasoning_popup(&mut self, preset: ModelPreset) {
         let default_effort = preset.default_reasoning_effort;
         let supported = preset.supported_reasoning_efforts;
@@ -490,7 +775,9 @@ impl ChatWidget {
 
         self.bottom_pane.show_selection_view(SelectionViewParams {
             header: Box::new(header),
-            footer_hint: Some(standard_popup_hint_line()),
+            footer_hint: Some(Line::from(
+                "↑↓ to navigate · enter to select · esc to cancel",
+            )),
             items,
             initial_selected_idx,
             ..Default::default()

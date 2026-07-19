@@ -209,6 +209,9 @@ pub struct ModelPreset {
     pub default_reasoning_effort: ReasoningEffort,
     /// Supported reasoning effort options.
     pub supported_reasoning_efforts: Vec<ReasoningEffortPreset>,
+    /// Provider identifier for grouping models in the picker.
+    #[serde(default)]
+    pub provider: String,
     /// Whether this model supports personality-specific instructions.
     #[serde(default)]
     pub supports_personality: bool,
@@ -474,6 +477,9 @@ pub struct ModelInfo {
     pub supported_reasoning_levels: Vec<ReasoningEffortPreset>,
     pub shell_type: ConfigShellToolType,
     pub visibility: ModelVisibility,
+    /// Provider identifier for grouping models in the picker.
+    #[serde(default)]
+    pub provider: String,
     pub supported_in_api: bool,
     pub priority: i32,
     #[serde(default)]
@@ -692,6 +698,7 @@ impl From<ModelInfo> for ModelPreset {
                 .default_reasoning_level
                 .unwrap_or(ReasoningEffort::None),
             supported_reasoning_efforts: info.supported_reasoning_levels.clone(),
+            provider: info.provider.clone(),
             supports_personality,
             additional_speed_tiers: info.additional_speed_tiers,
             service_tiers: info.service_tiers,
@@ -898,6 +905,7 @@ mod tests {
                 truncation_policy: TruncationPolicyConfig::bytes(/*limit*/ 10_000),
                 auto_compact_token_limit: None,
             },
+            provider: "test".to_string(),
         }
     }
 

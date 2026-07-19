@@ -122,6 +122,11 @@ pub(crate) type OnSelectionChangedCallback =
 /// Ctrl+C).  Used by the theme picker to restore the pre-open theme.
 pub(crate) type OnCancelCallback = Option<Box<dyn Fn(&AppEventSender) + Send + Sync>>;
 
+/// Custom key handler invoked before the default list key handling.
+/// Returns true if the event was consumed and should not be processed further.
+pub(crate) type CustomKeyHandlerCallback =
+    Option<Box<dyn Fn(KeyEvent, &AppEventSender) -> bool + Send + Sync>>;
+
 /// One row in a [`ListSelectionView`] selection list.
 ///
 /// This is the source-of-truth model for row state before filtering and
@@ -205,6 +210,9 @@ pub(crate) struct SelectionViewParams {
 
     /// Called when the picker is dismissed via Esc/Ctrl+C without selecting.
     pub on_cancel: OnCancelCallback,
+
+    /// Optional custom key handler invoked before the default list key handling.
+    pub custom_key_handler: CustomKeyHandlerCallback,
 }
 
 impl Default for SelectionViewParams {
@@ -234,6 +242,7 @@ impl Default for SelectionViewParams {
             on_selection_changed: None,
             allow_cancel: true,
             on_cancel: None,
+            custom_key_handler: None,
         }
     }
 }
@@ -278,6 +287,9 @@ pub(crate) struct ListSelectionView {
 
     /// Called when the picker is dismissed via Esc/Ctrl+C without selecting.
     on_cancel: OnCancelCallback,
+
+    /// Optional custom key handler invoked before the default list key handling.
+    custom_key_handler: CustomKeyHandlerCallback,
     keymap: ListKeymap,
 }
 
@@ -350,6 +362,7 @@ impl ListSelectionView {
             on_selection_changed: params.on_selection_changed,
             allow_cancel: params.allow_cancel,
             on_cancel: params.on_cancel,
+            custom_key_handler: params.custom_key_handler,
             keymap,
         };
         s.apply_filter();
@@ -511,7 +524,7 @@ impl ListSelectionView {
                     let prefix = if is_selected { '›' } else { ' ' };
                     let name = item.name.as_str();
                     let marker = if item.is_current {
-                        " (current)"
+                        " ← current"
                     } else if item.is_default {
                         " (default)"
                     } else {
@@ -915,6 +928,15 @@ impl ListSelectionView {
 
 impl BottomPaneView for ListSelectionView {
     fn handle_key_event(&mut self, key_event: KeyEvent) {
+        // Give custom handlers first shot at the event before default list
+        // navigation, so callers can bind keys like '/' for model thinking toggle.
+        if let Some(handler) = &self.custom_key_handler {
+            let app_event_tx = self.app_event_tx.clone();
+            if handler(key_event, &app_event_tx) {
+                return;
+            }
+        }
+
         // Searchable lists reserve printable characters for query input. This
         // keeps vim-style plain j/k/h/l useful in non-search lists without
         // making those letters impossible to type into a filter.

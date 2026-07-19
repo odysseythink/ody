@@ -1,11 +1,12 @@
 ---
 source: tui/src/bottom_pane/list_selection_view.rs
+assertion_line: 1661
 expression: "render_lines_with_width(&view, 40)"
 ---
                                         
   Select Approval Mode                  
                                         
-› 1. Read Only (current)  Ody can read  
+› 1. Read Only ← current  Ody can read  
                           files         
                                         
   Note: Use /setup-default-sandbox to   

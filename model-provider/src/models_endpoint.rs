@@ -27,12 +27,16 @@ const MODELS_ENDPOINT: &str = "/models";
 /// Provider-owned OpenAI-compatible `/models` endpoint.
 #[derive(Debug)]
 pub(crate) struct OpenAiModelsEndpoint {
+    provider_id: String,
     provider_info: ModelProviderInfo,
 }
 
 impl OpenAiModelsEndpoint {
-    pub(crate) fn new(provider_info: ModelProviderInfo) -> Self {
-        Self { provider_info }
+    pub(crate) fn new(provider_id: String, provider_info: ModelProviderInfo) -> Self {
+        Self {
+            provider_id,
+            provider_info,
+        }
     }
 
     async fn uses_ody_backend(&self) -> bool {
@@ -57,13 +61,17 @@ impl OpenAiModelsEndpoint {
         let client = ModelsClient::new(transport, api_provider, api_auth)
             .with_telemetry(Some(request_telemetry));
 
-        timeout(
+        let mut models = timeout(
             MODELS_REFRESH_TIMEOUT,
             client.list_models(client_version, HeaderMap::new()),
         )
         .await
         .map_err(|_| OdyErr::Timeout)?
-        .map_err(map_api_error)
+        .map_err(map_api_error)?;
+        for model in &mut models.0 {
+            model.provider = self.provider_id.clone();
+        }
+        Ok(models)
     }
 }
 

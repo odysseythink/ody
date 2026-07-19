@@ -90,6 +90,9 @@ pub struct Model {
     pub hidden: bool,
     pub supported_reasoning_efforts: Vec<ReasoningEffortOption>,
     pub default_reasoning_effort: ReasoningEffort,
+    /// Provider identifier for grouping models in the picker.
+    #[serde(default)]
+    pub provider: String,
     #[serde(default = "default_input_modalities")]
     pub input_modalities: Vec<InputModality>,
     #[serde(default)]

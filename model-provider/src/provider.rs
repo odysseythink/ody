@@ -258,7 +258,10 @@ impl ModelProvider for ConfiguredModelProvider {
             return Arc::new(StaticModelsManager::new(catalog));
         }
 
-        let endpoint = Arc::new(OpenAiModelsEndpoint::new(self.info.clone()));
+        let endpoint = Arc::new(OpenAiModelsEndpoint::new(
+            self.provider_id.clone(),
+            self.info.clone(),
+        ));
         Arc::new(OpenAiModelsManager::new(ody_home, endpoint))
     }
 }

@@ -1,18 +1,22 @@
 ---
 source: tui/src/chatwidget/tests/popups_and_settings.rs
+assertion_line: 2866
 expression: popup
 ---
-  Select Model and Effort
-  Access legacy models by running ody -m <model_name> or in your config.toml
+  Select a model
+  type to search
   Warning: OpenAI base URL is overridden to https://api.moonshot.ai/v1. Select
+  ↑↓ model · ←→ page · / thinking · Enter apply · Esc cancel · Tab/Shift+Tab p
 
-  1. gpt-5.5 (default)  Frontier model for complex coding, research, and real-
-                        world work.
-  2. gpt-5.4            Strong model for everyday coding.
-  3. gpt-5.4-mini       Small, fast, and cost-efficient model for simpler
-                        coding tasks.
-  4. gpt-5.3-ody        Coding-optimized model.
-› 5. gpt-5.2 (current)  Optimized for professional work and long-running
-                        agents.
+  [All]
 
-  Press enter to confirm or esc to go back
+
+  gpt-5.5 (default)  Frontier model for complex coding, research, and real-
+                     world work.
+  gpt-5.4            Strong model for everyday coding.
+  gpt-5.4-mini       Small, fast, and cost-efficient model for simpler coding
+                     tasks.
+  gpt-5.3-ody        Coding-optimized model.
+› gpt-5.2 ← current  Optimized for professional work and long-running agents.
+
+  Thinking  (/ to toggle)   [ Always on ]

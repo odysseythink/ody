@@ -41,6 +41,7 @@ fn model_from_preset(preset: ModelPreset) -> Model {
             preset.supported_reasoning_efforts,
         ),
         default_reasoning_effort: preset.default_reasoning_effort,
+        provider: preset.provider,
         input_modalities: preset.input_modalities,
         supports_personality: preset.supports_personality,
         additional_speed_tiers: preset.additional_speed_tiers,

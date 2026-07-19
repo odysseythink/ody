@@ -114,7 +114,7 @@ impl SlashCommand {
             SlashCommand::Stop => "stop all background terminals",
             SlashCommand::MemoryDrop => "DO NOT USE",
             SlashCommand::MemoryUpdate => "DO NOT USE",
-            SlashCommand::Model => "choose what model and reasoning effort to use",
+            SlashCommand::Model => "Switch LLM model",
             SlashCommand::Ide => {
                 "include current selection, open files, and other context from your IDE"
             }
@@ -176,6 +176,7 @@ impl SlashCommand {
                 | SlashCommand::SandboxReadRoot
                 | SlashCommand::Login
                 | SlashCommand::Logout
+                | SlashCommand::Model
         )
     }
 

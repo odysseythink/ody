@@ -1,8 +1,9 @@
 ---
 source: tui/src/bottom_pane/command_popup.rs
+assertion_line: 430
 expression: commands
 ---
-/model - choose what model and reasoning effort to use
+/model - Switch LLM model
 /ide - include current selection, open files, and other context from your IDE
 /permissions - choose what Ody is allowed to do
 /keymap - remap TUI shortcuts
@@ -35,6 +36,7 @@ expression: commands
 /theme - choose a syntax highlighting theme
 /pets - choose or hide the terminal pet
 /mcp - list configured MCP tools; use /mcp verbose for details
+/login - log in to an API-key provider
 /logout - log out of Ody
 /exit - exit Ody
 /feedback - send logs to maintainers

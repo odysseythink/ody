@@ -890,7 +890,9 @@ impl App {
                     .open_plan_reasoning_scope_prompt(model, effort);
             }
             AppEvent::OpenAllModelsPopup { models } => {
-                self.chat_widget.open_all_models_popup(models);
+                let current_model = self.chat_widget.current_model().to_string();
+                self.chat_widget
+                    .open_all_models_popup(models, Some(&current_model));
             }
             AppEvent::OpenFullAccessConfirmation {
                 preset,

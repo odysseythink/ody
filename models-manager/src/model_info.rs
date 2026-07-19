@@ -183,6 +183,7 @@ pub fn model_info_from_slug_with_provider(
         supported_reasoning_levels: Vec::new(),
         shell_type: caps.shell_type,
         visibility: ModelVisibility::None,
+        provider: provider_id.to_string(),
         supported_in_api: true,
         priority: 99,
         additional_speed_tiers: Vec::new(),

@@ -1017,6 +1017,10 @@ impl ChatWidget {
                     Err(err) => self.add_error_message(err),
                 }
             }
+            SlashCommand::Model if !trimmed.is_empty() => {
+                self.open_model_popup_with_selected(trimmed);
+                self.defer_input_until_settings_applied();
+            }
             _ => self.dispatch_command(cmd),
         }
         if source == SlashCommandDispatchSource::Live && cmd != SlashCommand::Goal {

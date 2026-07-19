@@ -1142,6 +1142,7 @@ fn model_preset_from_api_model(model: ApiModel) -> ModelPreset {
                 description: effort.description,
             })
             .collect(),
+        provider: model.provider,
         supports_personality: model.supports_personality,
         additional_speed_tiers: model.additional_speed_tiers,
         service_tiers: model
