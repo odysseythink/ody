@@ -1,7 +1,8 @@
 ---
 source: tui/src/history_cell/tests.rs
+assertion_line: 2205
 expression: rendered
 ---
 • Todo
-  └ □ Define error taxonomy
-    □ Implement mapping to user messages
+  └ ☐ Define error taxonomy
+    ☐ Implement mapping to user messages

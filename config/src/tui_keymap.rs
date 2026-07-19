@@ -124,8 +124,10 @@ pub struct TuiChatKeymap {
     pub decrease_reasoning_effort: Option<KeybindingsSpec>,
     /// Increase the active reasoning effort.
     pub increase_reasoning_effort: Option<KeybindingsSpec>,
-    /// Expand or collapse the most recent reasoning block in the transcript.
-    pub toggle_reasoning_expansion: Option<KeybindingsSpec>,
+    /// Expand or collapse the most recent collapsible history cell in the transcript.
+    pub toggle_history_cell_expansion: Option<KeybindingsSpec>,
+    /// Open the most recent collapsible history cell in a full-screen overlay.
+    pub open_history_cell_overlay: Option<KeybindingsSpec>,
     /// Edit the most recently queued message.
     pub edit_queued_message: Option<KeybindingsSpec>,
 }

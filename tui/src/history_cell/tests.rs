@@ -384,6 +384,7 @@ fn proposed_plan_cell_unwraps_markdown_fenced_table() {
         None,
     );
 
+    plan.toggle_expanded();
     let rendered = render_lines(&plan.display_lines(/*width*/ 80));
 
     assert!(
@@ -2787,5 +2788,111 @@ fn session_header_hides_logo_below_compact_width() {
     assert!(
         !title_rows.is_empty(),
         "title should still render without logo"
+    );
+}
+
+#[test]
+fn proposed_plan_cell_collapses_and_expands() {
+    let source = (1..=20)
+        .map(|i| format!("- Step {i}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let cell = new_proposed_plan(source, &test_cwd(), None);
+    assert!(cell.is_collapsible(), "long plan should be collapsible");
+    assert!(!cell.is_expanded(), "collapsed by default");
+    let collapsed = render_lines(&cell.display_lines(80));
+    assert!(
+        collapsed.iter().any(|l| l.contains("alt+o to expand")),
+        "collapsed plan should show expand hint: {collapsed:?}"
+    );
+    cell.toggle_expanded();
+    let expanded = render_lines(&cell.display_lines(80));
+    assert!(expanded.len() > collapsed.len(), "expanded plan should be taller");
+}
+
+#[test]
+fn agent_markdown_cell_collapses_and_expands() {
+    let source = (1..=10)
+        .map(|i| format!("Line {i}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let cell = AgentMarkdownCell::new(source, &test_cwd());
+    assert!(cell.is_collapsible(), "long assistant message should be collapsible");
+    assert!(!cell.is_expanded(), "collapsed by default");
+    let collapsed = render_lines(&cell.display_lines(80));
+    assert!(
+        collapsed.iter().any(|l| l.contains("alt+o to expand")),
+        "collapsed message should show expand hint: {collapsed:?}"
+    );
+    cell.toggle_expanded();
+    let expanded = render_lines(&cell.display_lines(80));
+    assert!(expanded.len() > collapsed.len(), "expanded message should be taller");
+}
+
+#[test]
+fn mcp_tool_call_cell_collapses_long_result() {
+    let invocation = McpInvocation {
+        server: "search".into(),
+        tool: "find_docs".into(),
+        arguments: Some(json!({"query": "rust"})),
+    };
+    let mut cell = new_active_mcp_tool_call("call-collapse".into(), invocation, false);
+    assert!(!cell.is_collapsible(), "tool call without result is not collapsible");
+    let result = CallToolResult {
+        content: vec![text_block("line 1\nline 2\nline 3\nline 4\nline 5")],
+        is_error: None,
+        structured_content: None,
+        meta: None,
+    };
+    assert!(cell.complete(Duration::from_millis(1), Ok(result)).is_none());
+    assert!(cell.is_collapsible(), "tool call with multi-line result is collapsible");
+    assert!(!cell.is_expanded(), "collapsed by default");
+    let collapsed = render_lines(&cell.display_lines(80));
+    assert!(
+        collapsed.iter().any(|l| l.contains("alt+o to expand")),
+        "collapsed tool result should show expand hint: {collapsed:?}"
+    );
+    cell.toggle_expanded();
+    let expanded = render_lines(&cell.display_lines(80));
+    assert!(expanded.len() > collapsed.len(), "expanded tool result should be taller");
+}
+
+#[test]
+fn large_plan_renders_in_generous_time() {
+    let source = (1..=5000)
+        .map(|i| format!("- Step {i}: do something important here"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let cell = new_proposed_plan(source, &test_cwd(), None);
+    let start = std::time::Instant::now();
+    let lines = cell.display_lines(80);
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed.as_secs_f64() < 2.0,
+        "rendering 200k-char plan took too long: {elapsed:?}"
+    );
+    assert!(
+        lines.len() <= PLAN_PREVIEW_LINES + 1,
+        "collapsed large plan should be truncated to preview + hint: {lines:?}"
+    );
+}
+
+#[test]
+fn large_agent_markdown_renders_in_generous_time() {
+    let source = (1..=5000)
+        .map(|i| format!("Line {i} with some extra text to wrap"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let cell = AgentMarkdownCell::new(source, &test_cwd());
+    let start = std::time::Instant::now();
+    let lines = cell.display_lines(80);
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed.as_secs_f64() < 2.0,
+        "rendering 200k-char assistant message took too long: {elapsed:?}"
+    );
+    assert!(
+        lines.len() <= MESSAGE_PREVIEW_LINES + 1,
+        "collapsed large message should be truncated to preview + hint: {lines:?}"
     );
 }

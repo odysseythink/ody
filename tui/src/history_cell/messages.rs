@@ -314,6 +314,21 @@ impl HistoryCell for ReasoningSummaryCell {
             raw_lines_from_source(self.content.trim())
         }
     }
+
+    fn is_collapsible(&self) -> bool {
+        self.content.lines().count() > REASONING_PREVIEW_LINES
+    }
+
+    fn is_expanded(&self) -> bool {
+        self.expanded.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn toggle_expanded(&self) -> bool {
+        let current = self.expanded.load(std::sync::atomic::Ordering::Relaxed);
+        let new = !current;
+        self.expanded.store(new, std::sync::atomic::Ordering::Relaxed);
+        new
+    }
 }
 
 #[derive(Debug)]
@@ -394,6 +409,7 @@ impl HistoryCell for AgentMessageCell {
 pub(crate) struct AgentMarkdownCell {
     markdown_source: String,
     cwd: PathBuf,
+    expanded: std::sync::atomic::AtomicBool,
 }
 
 impl AgentMarkdownCell {
@@ -406,16 +422,11 @@ impl AgentMarkdownCell {
         Self {
             markdown_source,
             cwd: cwd.to_path_buf(),
+            expanded: std::sync::atomic::AtomicBool::new(false),
         }
     }
-}
 
-impl HistoryCell for AgentMarkdownCell {
-    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
-        visible_lines(self.display_hyperlink_lines(width))
-    }
-
-    fn display_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+    fn full_display_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
         let Some(wrap_width) =
             crate::width::usable_content_width_u16(width, /*reserved_cols*/ 2)
         else {
@@ -435,13 +446,49 @@ impl HistoryCell for AgentMarkdownCell {
         );
         prefix_hyperlink_lines(lines, "• ".dim(), "  ".into())
     }
+}
+
+impl HistoryCell for AgentMarkdownCell {
+    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        visible_lines(self.display_hyperlink_lines(width))
+    }
+
+    fn display_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        let full = self.full_display_hyperlink_lines(width);
+        if self.is_expanded() || !self.is_collapsible() {
+            return full;
+        }
+        let visible = visible_lines(full);
+        let truncated = truncate_lines_with_hint(
+            visible,
+            MESSAGE_PREVIEW_LINES,
+            false,
+            |remaining| collapse_hint(remaining),
+        );
+        plain_hyperlink_lines(truncated)
+    }
 
     fn transcript_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
-        self.display_hyperlink_lines(width)
+        self.full_display_hyperlink_lines(width)
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
         raw_lines_from_source(&self.markdown_source)
+    }
+
+    fn is_collapsible(&self) -> bool {
+        self.markdown_source.lines().count() > MESSAGE_PREVIEW_LINES
+    }
+
+    fn is_expanded(&self) -> bool {
+        self.expanded.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn toggle_expanded(&self) -> bool {
+        let current = self.expanded.load(std::sync::atomic::Ordering::Relaxed);
+        let new = !current;
+        self.expanded.store(new, std::sync::atomic::Ordering::Relaxed);
+        new
     }
 }
 

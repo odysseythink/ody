@@ -127,6 +127,7 @@ pub(crate) fn new_proposed_plan(
         plan_markdown,
         cwd: cwd.to_path_buf(),
         plan_file_path,
+        expanded: std::sync::atomic::AtomicBool::new(false),
     }
 }
 
@@ -155,6 +156,7 @@ pub(crate) struct ProposedPlanCell {
     cwd: PathBuf,
     /// Path to the persisted plan file, shown as a subtle indicator when available.
     plan_file_path: Option<PathBuf>,
+    expanded: std::sync::atomic::AtomicBool,
 }
 
 /// Transient proposed-plan history emitted while a plan is still streaming.
@@ -174,6 +176,51 @@ impl HistoryCell for ProposedPlanCell {
     }
 
     fn display_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        let full = self.full_display_hyperlink_lines(width);
+        if self.is_expanded() || !self.is_collapsible() {
+            return full;
+        }
+        let visible = visible_lines(full);
+        let truncated = truncate_lines_with_hint(
+            visible,
+            PLAN_PREVIEW_LINES,
+            false,
+            |remaining| collapse_hint(remaining),
+        );
+        plain_hyperlink_lines(truncated)
+    }
+
+    fn transcript_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        self.full_display_hyperlink_lines(width)
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        let mut lines = Vec::new();
+        if let Some(path) = &self.plan_file_path {
+            lines.push(Line::from(format!("Plan file: {}", path.display())));
+        }
+        lines.extend(raw_lines_from_source(&self.plan_markdown));
+        lines
+    }
+
+    fn is_collapsible(&self) -> bool {
+        self.plan_markdown.lines().count() > PLAN_PREVIEW_LINES
+    }
+
+    fn is_expanded(&self) -> bool {
+        self.expanded.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn toggle_expanded(&self) -> bool {
+        let current = self.expanded.load(std::sync::atomic::Ordering::Relaxed);
+        let new = !current;
+        self.expanded.store(new, std::sync::atomic::Ordering::Relaxed);
+        new
+    }
+}
+
+impl ProposedPlanCell {
+    fn full_display_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
         let mut lines = vec![
             HyperlinkLine::new(vec!["• ".dim(), "Proposed Plan".bold()].into()),
             HyperlinkLine::new(Line::from(" ")),
@@ -200,19 +247,6 @@ impl HistoryCell for ProposedPlanCell {
         plan_lines.push(HyperlinkLine::new(Line::from(" ")));
 
         lines.extend(plan_lines.into_iter().map(|line| line.style(plan_style)));
-        lines
-    }
-
-    fn transcript_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
-        self.display_hyperlink_lines(width)
-    }
-
-    fn raw_lines(&self) -> Vec<Line<'static>> {
-        let mut lines = Vec::new();
-        if let Some(path) = &self.plan_file_path {
-            lines.push(Line::from(format!("Plan file: {}", path.display())));
-        }
-        lines.extend(raw_lines_from_source(&self.plan_markdown));
         lines
     }
 }

@@ -409,8 +409,16 @@ impl ChatWidget {
             .as_ref()
             .is_some_and(|info| self.handle_app_server_steer_rejected_error(info))
         {
-        } else {
-            self.on_error(message);
+            return;
+        }
+        match ody_error_info {
+            Some(AppServerOdyErrorInfo::CyberPolicy) => self.on_cyber_policy_error(),
+            Some(AppServerOdyErrorInfo::ServerOverloaded) => {
+                self.finalize_turn();
+                self.on_warning(message);
+                self.maybe_send_next_queued_input();
+            }
+            _ => self.on_error(message),
         }
     }
 

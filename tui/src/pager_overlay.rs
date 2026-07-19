@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use crate::chatwidget::ActiveCellTranscriptKey;
 use crate::history_cell::HistoryCell;
+use crate::history_cell::HistoryRenderMode;
 use crate::history_cell::UserHistoryCell;
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
@@ -74,6 +75,22 @@ impl Overlay {
         keymap: PagerKeymap,
     ) -> Self {
         Self::Static(StaticOverlay::with_renderables(renderables, title, keymap))
+    }
+
+    pub(crate) fn new_static_with_cell(
+        cell: Arc<dyn HistoryCell>,
+        title: String,
+        keymap: PagerKeymap,
+    ) -> Self {
+        Self::Static(StaticOverlay::with_renderables(
+            vec![Box::new(CachedRenderable::new(CellRenderable {
+                cell,
+                style: Style::default(),
+                mode: CellRenderableMode::Display,
+            }))],
+            title,
+            keymap,
+        ))
     }
 
     pub(crate) fn handle_event(&mut self, tui: &mut tui::Tui, event: TuiEvent) -> Result<()> {
@@ -391,14 +408,25 @@ impl Renderable for CachedRenderable {
     }
 }
 
+enum CellRenderableMode {
+    Transcript,
+    Display,
+}
+
 struct CellRenderable {
     cell: Arc<dyn HistoryCell>,
     style: Style,
+    mode: CellRenderableMode,
 }
 
 impl Renderable for CellRenderable {
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        let hyperlink_lines = self.cell.transcript_hyperlink_lines(area.width);
+        let hyperlink_lines = match self.mode {
+            CellRenderableMode::Transcript => self.cell.transcript_hyperlink_lines(area.width),
+            CellRenderableMode::Display => {
+                self.cell.display_hyperlink_lines_for_mode(area.width, HistoryRenderMode::Rich)
+            }
+        };
         let p = Paragraph::new(Text::from(visible_lines(hyperlink_lines.clone())))
             .style(self.style)
             .wrap(Wrap { trim: false });
@@ -407,7 +435,12 @@ impl Renderable for CellRenderable {
     }
 
     fn desired_height(&self, width: u16) -> u16 {
-        self.cell.desired_transcript_height(width)
+        match self.mode {
+            CellRenderableMode::Transcript => self.cell.desired_transcript_height(width),
+            CellRenderableMode::Display => {
+                self.cell.desired_height_for_mode(width, HistoryRenderMode::Rich)
+            }
+        }
     }
 }
 
@@ -498,11 +531,13 @@ impl TranscriptOverlay {
                         } else {
                             user_message_style()
                         },
+                        mode: CellRenderableMode::Transcript,
                     })) as Box<dyn Renderable>
                 } else {
                     Box::new(CachedRenderable::new(CellRenderable {
                         cell: c.clone(),
                         style: Style::default(),
+                        mode: CellRenderableMode::Transcript,
                     })) as Box<dyn Renderable>
                 };
                 if !c.is_stream_continuation() && i > 0 {

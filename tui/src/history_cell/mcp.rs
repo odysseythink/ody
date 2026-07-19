@@ -31,6 +31,7 @@ pub(crate) struct McpToolCallCell {
     duration: Option<Duration>,
     result: Option<Result<ody_protocol::mcp::CallToolResult, String>>,
     animations_enabled: bool,
+    expanded: std::sync::atomic::AtomicBool,
 }
 
 #[derive(Debug, Clone)]
@@ -53,6 +54,7 @@ impl McpToolCallCell {
             duration: None,
             result: None,
             animations_enabled,
+            expanded: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -86,22 +88,14 @@ impl McpToolCallCell {
         self.result = Some(Err("interrupted".to_string()));
     }
 
-    fn render_content_block(block: &serde_json::Value, width: usize) -> String {
+    fn render_content_block(block: &serde_json::Value, _width: usize) -> String {
         let content = match serde_json::from_value::<rmcp::model::Content>(block.clone()) {
             Ok(content) => content,
-            Err(_) => {
-                return format_and_truncate_tool_result(
-                    &block.to_string(),
-                    TOOL_CALL_MAX_LINES,
-                    width,
-                );
-            }
+            Err(_) => return format_tool_result(&block.to_string()),
         };
 
         match content.raw {
-            rmcp::model::RawContent::Text(text) => {
-                format_and_truncate_tool_result(&text.text, TOOL_CALL_MAX_LINES, width)
-            }
+            rmcp::model::RawContent::Text(text) => format_tool_result(&text.text),
             rmcp::model::RawContent::Image(_) => "<image content>".to_string(),
             rmcp::model::RawContent::Audio(_) => "<audio content>".to_string(),
             rmcp::model::RawContent::Resource(resource) => {
@@ -116,8 +110,8 @@ impl McpToolCallCell {
     }
 }
 
-impl HistoryCell for McpToolCallCell {
-    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+impl McpToolCallCell {
+    fn full_display_lines(&self, width: u16) -> Vec<Line<'static>> {
         let mut lines: Vec<Line<'static>> = Vec::new();
         let status = self.success();
         let bullet = match status {
@@ -183,11 +177,7 @@ impl HistoryCell for McpToolCallCell {
                     }
                 }
                 Err(err) => {
-                    let err_text = format_and_truncate_tool_result(
-                        &format!("Error: {err}"),
-                        TOOL_CALL_MAX_LINES,
-                        width as usize,
-                    );
+                    let err_text = format_tool_result(&format!("Error: {err}"));
                     let err_line = Line::from(err_text.dim());
                     let wrapped = adaptive_wrap_line(
                         &err_line,
@@ -243,6 +233,52 @@ impl HistoryCell for McpToolCallCell {
             return None;
         }
         Some((self.start_time.elapsed().as_millis() / 50) as u64)
+    }
+}
+
+impl HistoryCell for McpToolCallCell {
+    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let full = self.full_display_lines(width);
+        if self.is_expanded() || !self.is_collapsible() {
+            return full;
+        }
+        truncate_lines_with_hint(
+            full,
+            TOOL_RESULT_PREVIEW_LINES,
+            false,
+            |remaining| collapse_hint(remaining),
+        )
+    }
+
+    fn display_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        plain_hyperlink_lines(self.display_lines(width))
+    }
+
+    fn transcript_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        plain_hyperlink_lines(self.full_display_lines(width))
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        self.raw_lines()
+    }
+
+    fn is_collapsible(&self) -> bool {
+        self.result.is_some() && self.full_display_lines(80).len() > TOOL_RESULT_PREVIEW_LINES
+    }
+
+    fn is_expanded(&self) -> bool {
+        self.expanded.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn toggle_expanded(&self) -> bool {
+        let current = self.expanded.load(std::sync::atomic::Ordering::Relaxed);
+        let new = !current;
+        self.expanded.store(new, std::sync::atomic::Ordering::Relaxed);
+        new
+    }
+
+    fn transcript_animation_tick(&self) -> Option<u64> {
+        self.transcript_animation_tick()
     }
 }
 

@@ -33,6 +33,21 @@ pub(crate) fn format_and_truncate_tool_result(
     }
 }
 
+
+/// Format a tool result for display without truncating it.
+///
+/// If the text is valid JSON, it is returned in a compact single-line format that Ratatui can wrap
+/// cleanly; otherwise the original text is returned as-is. This is the full-content counterpart to
+/// [`format_and_truncate_tool_result`], used when a cell is expanded or shown in a full-screen
+/// overlay.
+pub(crate) fn format_tool_result(text: &str) -> String {
+    if let Some(formatted_json) = format_json_compact(text) {
+        formatted_json
+    } else {
+        text.to_string()
+    }
+}
+
 /// Format JSON text in a compact single-line format with spaces for better Ratatui wrapping.
 /// Ex: `{"a":"b",c:["d","e"]}` -> `{"a": "b", "c": ["d", "e"]}`
 /// Returns the formatted JSON string if the input is valid JSON, otherwise returns None.

@@ -4,6 +4,7 @@ expression: popup
 ---
   Select Model and Effort
   Access legacy models by running ody -m <model_name> or in your config.toml
+  Warning: OpenAI base URL is overridden to https://api.moonshot.ai/v1. Select
 
   1. gpt-5.5 (default)  Frontier model for complex coding, research, and real-
                         world work.

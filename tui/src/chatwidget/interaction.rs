@@ -40,13 +40,26 @@ impl ChatWidget {
         if key_event.kind == KeyEventKind::Press
             && self
                 .chat_keymap
-                .toggle_reasoning_expansion
+                .toggle_history_cell_expansion
                 .is_pressed(key_event)
         {
             self.bottom_pane.clear_quit_shortcut_hint();
             self.quit_shortcut_expires_at = None;
             self.quit_shortcut_key = None;
-            self.app_event_tx.send(AppEvent::ToggleReasoningExpansion);
+            self.app_event_tx.send(AppEvent::ToggleHistoryCellExpansion);
+            return;
+        }
+
+        if key_event.kind == KeyEventKind::Press
+            && self
+                .chat_keymap
+                .open_history_cell_overlay
+                .is_pressed(key_event)
+        {
+            self.bottom_pane.clear_quit_shortcut_hint();
+            self.quit_shortcut_expires_at = None;
+            self.quit_shortcut_key = None;
+            self.app_event_tx.send(AppEvent::OpenMostRecentCollapsibleCellOverlay);
             return;
         }
 

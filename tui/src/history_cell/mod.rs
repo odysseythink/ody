@@ -42,7 +42,7 @@ use crate::terminal_hyperlinks::visible_lines;
 use crate::test_support::PathBufExt;
 #[cfg(test)]
 use crate::test_support::test_path_buf;
-use crate::text_formatting::format_and_truncate_tool_result;
+use crate::text_formatting::format_tool_result;
 use crate::text_formatting::truncate_text;
 use crate::tooltips;
 use crate::ui_consts::LIVE_PREFIX_COLS;

@@ -4,16 +4,15 @@ expression: sanitized
 ---
 /status
 
-╭─────────────────────────────────────────────────────────────────────────╮
-│  >_ odysseythink ody (v0.0.0)                                           │
-│  Model:            gpt-5.1-ody-max (reasoning high, summaries detailed) │
-│  Directory: [[workspace]]                                               │
-│  Permissions:      Workspace (Ask for approval)                         │
-│  Agents.md:        <none>                                               │
-│  Account:          API key configured                                   │
-│                                                                         │
-│  Token usage:      1.9K total  (1K input + 900 output)                  │
-│  Context window:   100% left (2.25K used / 272K)                        │
-│  5h limit:         [██████░░░░░░░░░░░░░░] 28% left (resets 03:14)       │
-│  Weekly limit:     [███████████░░░░░░░░░] 55% left (resets 03:24)       │
-╰─────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────────╮
+│  >_ odysseythink ody (v0.0.0)                          │
+│  Model:            kimi-for-coding (reasoning high)    │
+│  Model provider:   Kimi                                │
+│  Directory: [[workspace]]                              │
+│  Permissions:      Workspace (Ask for approval)        │
+│  Agents.md:        <none>                              │
+│  Auth:             API key configured                  │
+│                                                        │
+│  Token usage:      1.9K total  (1K input + 900 output) │
+│  Context window:   100% left (2.25K used / 272K)       │
+╰────────────────────────────────────────────────────────╯

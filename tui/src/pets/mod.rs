@@ -1,4 +1,4 @@
-//! Ambient terminal pets configured from the /pets slash command.
+﻿//! Ambient terminal pets configured from the /pets slash command.
 //!
 //! The TUI treats built-in and custom pets differently on purpose:
 //! built-in pets are versioned application assets fetched on demand into a
@@ -258,7 +258,7 @@ mod tests {
     #[test]
     fn ambient_pet_image_restores_cursor_after_drawing() {
         let dir = tempfile::tempdir().unwrap();
-        let frame = dir.path().join("frame.png");
+        let frame = dir.path().join("frame.bin");
         std::fs::write(&frame, b"png").unwrap();
         let request = AmbientPetDraw {
             frame,
@@ -289,7 +289,7 @@ mod tests {
     #[test]
     fn kitty_pet_image_clear_deletes_without_moving_cursor() {
         let dir = tempfile::tempdir().unwrap();
-        let frame = dir.path().join("frame.png");
+        let frame = dir.path().join("frame.bin");
         std::fs::write(&frame, b"png").unwrap();
         let request = AmbientPetDraw {
             frame,
@@ -319,7 +319,7 @@ mod tests {
     #[test]
     fn kitty_local_file_pet_image_uses_file_reference_without_inline_payload() {
         let dir = tempfile::tempdir().unwrap();
-        let frame = dir.path().join("frame.png");
+        let frame = dir.path().join("frame.bin");
         std::fs::write(&frame, b"png").unwrap();
         let request = AmbientPetDraw {
             frame,
@@ -348,7 +348,7 @@ mod tests {
     #[test]
     fn sixel_pet_image_clears_cell_area_before_redrawing() {
         let dir = tempfile::tempdir().unwrap();
-        let frame = dir.path().join("frame.png");
+        let frame = dir.path().join("frame.bin");
         std::fs::write(&frame, b"png").unwrap();
         let sixel_dir = dir.path().join("sixel");
         std::fs::create_dir(&sixel_dir).unwrap();
@@ -379,7 +379,7 @@ mod tests {
     #[test]
     fn sixel_pet_image_clear_erases_last_drawn_area() {
         let dir = tempfile::tempdir().unwrap();
-        let frame = dir.path().join("frame.png");
+        let frame = dir.path().join("frame.bin");
         std::fs::write(&frame, b"png").unwrap();
         let sixel_dir = dir.path().join("sixel");
         std::fs::create_dir(&sixel_dir).unwrap();

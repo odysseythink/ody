@@ -86,8 +86,10 @@ pub(crate) struct ChatKeymap {
     pub(crate) decrease_reasoning_effort: Vec<KeyBinding>,
     /// Increase the active reasoning effort.
     pub(crate) increase_reasoning_effort: Vec<KeyBinding>,
-    /// Expand or collapse the most recent reasoning block in the transcript.
-    pub(crate) toggle_reasoning_expansion: Vec<KeyBinding>,
+    /// Expand or collapse the most recent collapsible history cell in the transcript.
+    pub(crate) toggle_history_cell_expansion: Vec<KeyBinding>,
+    /// Open the most recent collapsible history cell in a full-screen overlay.
+    pub(crate) open_history_cell_overlay: Vec<KeyBinding>,
     /// Edit the most recently queued message.
     pub(crate) edit_queued_message: Vec<KeyBinding>,
 }
@@ -442,10 +444,15 @@ impl RuntimeKeymap {
                 &defaults.chat.increase_reasoning_effort,
                 "tui.keymap.chat.increase_reasoning_effort",
             )?,
-            toggle_reasoning_expansion: resolve_bindings(
-                keymap.chat.toggle_reasoning_expansion.as_ref(),
-                &defaults.chat.toggle_reasoning_expansion,
-                "tui.keymap.chat.toggle_reasoning_expansion",
+            toggle_history_cell_expansion: resolve_bindings(
+                keymap.chat.toggle_history_cell_expansion.as_ref(),
+                &defaults.chat.toggle_history_cell_expansion,
+                "tui.keymap.chat.toggle_history_cell_expansion",
+            )?,
+            open_history_cell_overlay: resolve_bindings(
+                keymap.chat.open_history_cell_overlay.as_ref(),
+                &defaults.chat.open_history_cell_overlay,
+                "tui.keymap.chat.open_history_cell_overlay",
             )?,
             edit_queued_message: resolve_bindings(
                 keymap.chat.edit_queued_message.as_ref(),
@@ -934,7 +941,10 @@ impl RuntimeKeymap {
                     alt(KeyCode::Char('.')),
                     shift(KeyCode::Up)
                 ],
-                toggle_reasoning_expansion: default_bindings![alt(KeyCode::Char('o'))],
+                toggle_history_cell_expansion: default_bindings![alt(KeyCode::Char('o'))],
+                open_history_cell_overlay: default_bindings![raw(
+                    KeyBinding::new(KeyCode::Char('o'), KeyModifiers::ALT | KeyModifiers::SHIFT)
+                )],
                 edit_queued_message: default_bindings![alt(KeyCode::Up), shift(KeyCode::Left)],
             },
             composer: ComposerKeymap {
@@ -1193,8 +1203,8 @@ impl RuntimeKeymap {
                     self.chat.increase_reasoning_effort.as_slice(),
                 ),
                 (
-                    "chat.toggle_reasoning_expansion",
-                    self.chat.toggle_reasoning_expansion.as_slice(),
+                    "chat.toggle_history_cell_expansion",
+                    self.chat.toggle_history_cell_expansion.as_slice(),
                 ),
                 (
                     "chat.edit_queued_message",
@@ -1240,8 +1250,8 @@ impl RuntimeKeymap {
                     self.chat.increase_reasoning_effort.as_slice(),
                 ),
                 (
-                    "chat.toggle_reasoning_expansion",
-                    self.chat.toggle_reasoning_expansion.as_slice(),
+                    "chat.toggle_history_cell_expansion",
+                    self.chat.toggle_history_cell_expansion.as_slice(),
                 ),
                 (
                     "chat.edit_queued_message",
@@ -1354,8 +1364,12 @@ impl RuntimeKeymap {
                     self.chat.increase_reasoning_effort.as_slice(),
                 ),
                 (
-                    "chat.toggle_reasoning_expansion",
-                    self.chat.toggle_reasoning_expansion.as_slice(),
+                    "chat.toggle_history_cell_expansion",
+                    self.chat.toggle_history_cell_expansion.as_slice(),
+                ),
+                (
+                    "chat.open_history_cell_overlay",
+                    self.chat.open_history_cell_overlay.as_slice(),
                 ),
                 ("composer.submit", self.composer.submit.as_slice()),
                 ("toggle_vim_mode", self.app.toggle_vim_mode.as_slice()),
@@ -2248,8 +2262,15 @@ mod tests {
             vec![key_hint::alt(KeyCode::Up), key_hint::shift(KeyCode::Left)]
         );
         assert_eq!(
-            runtime.chat.toggle_reasoning_expansion,
+            runtime.chat.toggle_history_cell_expansion,
             vec![key_hint::alt(KeyCode::Char('o'))]
+        );
+        assert_eq!(
+            runtime.chat.open_history_cell_overlay,
+            vec![KeyBinding::new(
+                KeyCode::Char('o'),
+                KeyModifiers::ALT | KeyModifiers::SHIFT
+            )]
         );
         assert_eq!(
             runtime.composer.history_search_previous,

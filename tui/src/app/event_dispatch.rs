@@ -250,22 +250,39 @@ impl App {
             AppEvent::InsertHistoryCell(cell) => {
                 self.insert_history_cell(tui, cell);
             }
-            AppEvent::ToggleReasoningExpansion => {
+            AppEvent::ToggleHistoryCellExpansion => {
                 for cell in self.transcript_cells.iter().rev() {
-                    if let Some(reasoning) = cell
-                        .as_any()
-                        .downcast_ref::<history_cell::ReasoningSummaryCell>()
-                    {
-                        reasoning.toggle_expanded();
+                    if cell.is_collapsible() {
+                        cell.toggle_expanded();
                         break;
                     }
                 }
                 if let Err(err) = self.reflow_transcript_now(tui) {
-                    tracing::warn!(error = %err, "failed to reflow transcript after reasoning toggle");
+                    tracing::warn!(error = %err, "failed to reflow transcript after history cell toggle");
                     self.chat_widget
                         .add_error_message(format!("Failed to redraw transcript: {err}"));
                 }
                 tui.frame_requester().schedule_frame();
+            }
+            AppEvent::OpenMostRecentCollapsibleCellOverlay => {
+                if let Some((idx, cell)) = self
+                    .transcript_cells
+                    .iter()
+                    .enumerate()
+                    .rev()
+                    .find(|(_, cell)| cell.is_collapsible())
+                {
+                    if !cell.is_expanded() {
+                        cell.toggle_expanded();
+                    }
+                    let _ = tui.enter_alt_screen();
+                    self.overlay = Some(Overlay::new_static_with_cell(
+                        self.transcript_cells[idx].clone(),
+                        "C E L L".to_string(),
+                        self.keymap.pager.clone(),
+                    ));
+                    tui.frame_requester().schedule_frame();
+                }
             }
             AppEvent::EndInitialHistoryReplayBuffer => {
                 self.finish_initial_history_replay_buffer(tui);
