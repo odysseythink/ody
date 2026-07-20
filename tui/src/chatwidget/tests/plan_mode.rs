@@ -1,6 +1,28 @@
 use super::*;
 use pretty_assertions::assert_eq;
 
+/// Simulate a finalized `submit_plan` completion arriving over the live event
+/// path — which is what arms the post-plan next-step menu. `submit_plan` always
+/// finalizes (Plan mode has no checkpoint), so its completed plan item carries
+/// `finalized: true`. A direct `on_plan_item_completed` only renders; the menu
+/// flag is set by `handle_thread_item` from the item's `finalized` field.
+fn complete_finalized_plan_item(chat: &mut ChatWidget, text: &str) {
+    chat.handle_server_notification(
+        ServerNotification::ItemCompleted(ItemCompletedNotification {
+            thread_id: String::new(),
+            turn_id: "turn-plan".to_string(),
+            completed_at_ms: 0,
+            item: AppServerThreadItem::Plan {
+                id: "plan-item".to_string(),
+                text: text.to_string(),
+                plan_file_path: None,
+                finalized: true,
+            },
+        }),
+        /*replay_kind*/ None,
+    );
+}
+
 #[test]
 fn plan_mode_nudge_matches_only_standalone_plain_text_keyword() {
     assert!(contains_plan_keyword("plan"));
@@ -915,7 +937,7 @@ async fn plan_implementation_popup_shows_once_when_replay_precedes_live_turn_com
 
     chat.on_task_started();
     chat.on_plan_delta("- Step 1\n- Step 2\n".to_string());
-    chat.on_plan_item_completed("- Step 1\n- Step 2\n".to_string(), None);
+    complete_finalized_plan_item(&mut chat, "- Step 1\n- Step 2\n");
 
     chat.replay_thread_turns(
         vec![AppServerTurn {
@@ -1036,7 +1058,7 @@ async fn plan_implementation_popup_shows_after_proposed_plan_output() {
 
     chat.on_task_started();
     chat.on_plan_delta("- Step 1\n- Step 2\n".to_string());
-    chat.on_plan_item_completed("- Step 1\n- Step 2\n".to_string(), None);
+    complete_finalized_plan_item(&mut chat, "- Step 1\n- Step 2\n");
     chat.on_task_complete(
         /*last_agent_message*/ None, /*duration_ms*/ None, /*from_replay*/ false,
     );
@@ -1058,13 +1080,7 @@ async fn plan_implementation_popup_skips_when_steer_follows_proposed_plan() {
     chat.thread_id = Some(ThreadId::new());
 
     chat.on_task_started();
-    chat.on_plan_item_completed(
-        "- Step 1
-- Step 2
-"
-        .to_string(),
-        None,
-    );
+    complete_finalized_plan_item(&mut chat, "- Step 1\n- Step 2\n");
     chat.bottom_pane
         .set_composer_text("Please continue.".to_string(), Vec::new(), Vec::new());
     chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -1102,12 +1118,7 @@ async fn plan_implementation_popup_shows_after_new_plan_follows_steer() {
     chat.thread_id = Some(ThreadId::new());
 
     chat.on_task_started();
-    chat.on_plan_item_completed(
-        "- Initial plan
-"
-        .to_string(),
-        None,
-    );
+    complete_finalized_plan_item(&mut chat, "- Initial plan\n");
     chat.bottom_pane
         .set_composer_text("Please revise.".to_string(), Vec::new(), Vec::new());
     chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -1124,12 +1135,7 @@ async fn plan_implementation_popup_shows_after_new_plan_follows_steer() {
     }
 
     complete_user_message(&mut chat, "user-1", "Please revise.");
-    chat.on_plan_item_completed(
-        "- Revised plan
-"
-        .to_string(),
-        None,
-    );
+    complete_finalized_plan_item(&mut chat, "- Revised plan\n");
     chat.on_task_complete(
         /*last_agent_message*/ None, /*duration_ms*/ None, /*from_replay*/ false,
     );

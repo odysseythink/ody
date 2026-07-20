@@ -39,7 +39,7 @@ pub(super) struct TranscriptState {
     pub(super) had_work_activity: bool,
     /// Whether the current turn emitted a proposed plan item that has not been superseded by a
     /// later steer.
-    pub(super) saw_plan_item_this_turn: bool,
+    pub(super) saw_finalized_plan_item_this_turn: bool,
     /// Latest `update_plan` checklist task counts for terminal-title rendering.
     pub(super) last_plan_progress: Option<(usize, usize)>,
     /// Incremental buffer for streamed plan content.
@@ -110,7 +110,7 @@ impl TranscriptState {
 
     pub(super) fn reset_turn_flags(&mut self) {
         self.saw_copy_source_this_turn = false;
-        self.saw_plan_item_this_turn = false;
+        self.saw_finalized_plan_item_this_turn = false;
         self.had_work_activity = false;
         self.latest_proposed_plan_markdown = None;
         self.latest_proposed_plan_file_path = None;

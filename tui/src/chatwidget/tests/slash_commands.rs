@@ -1310,6 +1310,7 @@ async fn slash_copy_state_tracks_plan_item_completion() {
                 id: "plan-1".to_string(),
                 text: plan_text.clone(),
                 plan_file_path: None,
+                finalized: false,
             },
         }),
         /*replay_kind*/ None,

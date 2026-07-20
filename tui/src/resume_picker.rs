@@ -5797,6 +5797,7 @@ session_picker_view = "dense"
                         id: String::from("plan-1"),
                         text: String::from("1. Do the thing"),
                         plan_file_path: None,
+                        finalized: false,
                     },
                 ],
                 status: ody_app_server_protocol::TurnStatus::Completed,

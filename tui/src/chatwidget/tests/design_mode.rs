@@ -296,3 +296,58 @@ async fn design_audit_picker_uses_configured_language() {
         "expected Chinese 'Deep' item in popup, got:\n{popup}"
     );
 }
+
+/// A non-terminal design checkpoint (`submit_design final: false`) must NOT arm
+/// the post-design next-step menu. The model ends its turn to ask a clarifying
+/// question between checkpoints, so `TurnComplete` fires while the design is
+/// still a skeleton — keying the menu off the mere presence of a completed plan
+/// item used to pop "Design ready — what next?" mid-design. Only a *finalized*
+/// completed item arms it. Regression test for that bug.
+#[tokio::test]
+async fn design_checkpoint_does_not_arm_next_step_menu_but_finalize_does() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.set_feature_enabled(Feature::CollaborationModes, /*enabled*/ true);
+    let mut mask = collaboration_modes::design_mask(chat.model_catalog.as_ref())
+        .expect("expected design collaboration mode");
+    mask.design_audit_level = Some(Some(DesignAuditLevel::Standard));
+    chat.set_collaboration_mask(mask);
+    assert_eq!(chat.active_collaboration_mode_kind(), ModeKind::Design);
+
+    let plan_item = |finalized: bool| {
+        ServerNotification::ItemCompleted(ItemCompletedNotification {
+            thread_id: String::new(),
+            turn_id: "turn-1".to_string(),
+            completed_at_ms: 0,
+            item: AppServerThreadItem::Plan {
+                id: "design-1".to_string(),
+                text: "# Draft design\n\n## Scope In\n- something".to_string(),
+                plan_file_path: None,
+                finalized,
+            },
+        })
+    };
+
+    // Checkpoint: completed plan item with finalized = false.
+    chat.handle_server_notification(plan_item(/*finalized*/ false), /*replay_kind*/ None);
+    assert!(
+        !chat.transcript.saw_finalized_plan_item_this_turn,
+        "a checkpoint must not arm the next-step menu"
+    );
+    chat.maybe_prompt_design_next_step();
+    assert!(
+        !chat.bottom_pane.has_active_view(),
+        "checkpoint must not open the post-design next-step menu"
+    );
+
+    // Finalization: completed plan item with finalized = true.
+    chat.handle_server_notification(plan_item(/*finalized*/ true), /*replay_kind*/ None);
+    assert!(
+        chat.transcript.saw_finalized_plan_item_this_turn,
+        "a finalized design must arm the next-step menu"
+    );
+    chat.maybe_prompt_design_next_step();
+    assert!(
+        chat.bottom_pane.has_active_view(),
+        "finalized design must open the post-design next-step menu"
+    );
+}

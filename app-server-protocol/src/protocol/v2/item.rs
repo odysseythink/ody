@@ -247,6 +247,11 @@ pub enum ThreadItem {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         plan_file_path: Option<PathBuf>,
+        /// Whether this completed plan/design item finalized the artifact (a
+        /// terminal `submit_*`), as opposed to a non-terminal checkpoint. Drives
+        /// the post-plan / post-design next-step menu. Defaults to `false`.
+        #[serde(default)]
+        finalized: bool,
     },
     #[serde(rename_all = "camelCase")]
     #[ts(rename_all = "camelCase")]
@@ -850,6 +855,7 @@ impl From<CoreTurnItem> for ThreadItem {
                 id: plan.id,
                 text: plan.text,
                 plan_file_path: plan.plan_file_path,
+                finalized: plan.finalized,
             },
             CoreTurnItem::Reasoning(reasoning) => ThreadItem::Reasoning {
                 id: reasoning.id,

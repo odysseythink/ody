@@ -110,8 +110,18 @@ impl ChatWidget {
             ThreadItem::Plan {
                 text,
                 plan_file_path,
+                finalized,
                 ..
-            } => self.on_plan_item_completed(text, plan_file_path),
+            } => {
+                self.on_plan_item_completed(text, plan_file_path);
+                // Only a terminal (finalized) submit_plan/submit_design may arm
+                // the post-plan / post-design next-step menu. A non-terminal
+                // checkpoint completes a plan item too, but the model then ends
+                // its turn to ask a clarifying question — arming the menu on that
+                // would pop it mid-design. Assign (not OR) so a later checkpoint
+                // in the same turn correctly disarms an earlier finalize attempt.
+                self.transcript.saw_finalized_plan_item_this_turn = finalized;
+            }
             ThreadItem::Reasoning {
                 summary, content, ..
             } => {

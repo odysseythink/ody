@@ -161,7 +161,12 @@ impl ChatWidget {
         let should_restore_after_stream = self.plan_stream_controller.is_some();
         self.transcript.plan_delta_buffer.clear();
         self.transcript.plan_item_active = false;
-        self.transcript.saw_plan_item_this_turn = true;
+        // NOTE: `saw_finalized_plan_item_this_turn` (which gates the post-plan / post-design
+        // next-step menu) is intentionally NOT set here. A non-terminal checkpoint
+        // (`submit_design final: false`) also completes a plan item, and the model
+        // then ends its turn to ask a clarifying question — so setting the flag on
+        // every completed item wrongly popped the menu mid-design. The flag is now
+        // set by `handle_thread_item` only when the item is `finalized`.
         let (finalized_streamed_cell, consolidated_plan_source) =
             if let Some(mut controller) = self.plan_stream_controller.take() {
                 let had_live_tail = controller.has_live_tail();

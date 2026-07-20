@@ -253,6 +253,7 @@ fn final_message_from_turn_items_uses_latest_agent_message() {
             id: "plan-1".to_string(),
             text: "plan".to_string(),
             plan_file_path: None,
+            finalized: false,
         },
         ThreadItem::AgentMessage {
             id: "msg-2".to_string(),
@@ -277,11 +278,13 @@ fn final_message_from_turn_items_falls_back_to_latest_plan() {
             id: "plan-1".to_string(),
             text: "first plan".to_string(),
             plan_file_path: None,
+            finalized: false,
         },
         ThreadItem::Plan {
             id: "plan-2".to_string(),
             text: "final plan".to_string(),
             plan_file_path: None,
+            finalized: false,
         },
     ]);
 
