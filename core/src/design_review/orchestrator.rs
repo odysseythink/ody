@@ -30,7 +30,7 @@ use crate::tasks::SessionTaskContext;
 // below), the structured critique returns well inside this bound. Kept generous
 // but far below the old 600s so a stalled reviewer no longer blocks finalize for
 // ten minutes.
-const DESIGN_REVIEW_TIMEOUT: Duration = Duration::from_secs(180);
+const DESIGN_REVIEW_TIMEOUT: Duration = Duration::from_secs(240);
 
 pub(crate) struct DesignReviewOrchestrator;
 
