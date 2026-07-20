@@ -310,8 +310,6 @@ impl ChatWidget {
             return (false, None);
         }
 
-        self.maybe_apply_ide_context(&mut items);
-
         let collaboration_mode = if self.collaboration_modes_enabled() {
             self.active_collaboration_mask
                 .as_ref()

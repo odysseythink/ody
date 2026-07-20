@@ -544,30 +544,11 @@ impl ChatWidget {
         local_images: Vec<PathBuf>,
         remote_image_urls: Vec<String>,
     ) -> UserMessageDisplay {
-        let (message, prompt_request_offset) =
-            crate::ide_context::extract_prompt_request_with_offset(&message);
-        let prompt_request_end = prompt_request_offset + message.len();
-        // Prompt context uses the same delimiter and stripping behavior as the desktop app and IDE
-        // extension. The raw user message goes to the agent, but every surface renders only the
-        // request after that delimiter, so keep elements inside the visible request and shift their
-        // byte ranges to match.
-        let text_elements = text_elements
-            .into_iter()
-            .filter_map(|element| {
-                let range = element.byte_range;
-                if range.start < prompt_request_offset || range.end > prompt_request_end {
-                    return None;
-                }
-
-                Some(element.map_range(|range| ByteRange {
-                    start: range.start - prompt_request_offset,
-                    end: range.end - prompt_request_offset,
-                }))
-            })
-            .collect();
+        // IDE context prompt prefix stripping was removed along with the /ide feature.
+        // Text elements are passed through unchanged.
 
         UserMessageDisplay {
-            message: message.to_string(),
+            message,
             remote_image_urls,
             local_images,
             text_elements,

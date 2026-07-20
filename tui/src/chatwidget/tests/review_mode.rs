@@ -363,7 +363,7 @@ async fn restore_thread_input_state_restores_pending_steers_without_downgrading_
     let mut pending_steers = VecDeque::new();
     pending_steers.push_back(UserMessage::from("pending steer"));
     let expected_compare_key = PendingSteerCompareKey {
-        message: "hidden IDE context\npending steer".to_string(),
+        message: "pending steer".to_string(),
         image_count: 0,
     };
     let mut pending_steer_compare_keys = VecDeque::new();

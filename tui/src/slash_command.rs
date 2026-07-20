@@ -13,7 +13,6 @@ pub enum SlashCommand {
     // DO NOT ALPHA-SORT! Enum order is presentation order in the popup, so
     // more frequently used commands should be listed first.
     Model,
-    Ide,
     Permissions,
     Keymap,
     Vim,
@@ -115,9 +114,6 @@ impl SlashCommand {
             SlashCommand::MemoryDrop => "DO NOT USE",
             SlashCommand::MemoryUpdate => "DO NOT USE",
             SlashCommand::Model => "Switch LLM model",
-            SlashCommand::Ide => {
-                "include current selection, open files, and other context from your IDE"
-            }
             SlashCommand::Personality => "choose a communication style for Ody",
             SlashCommand::Plan => "switch to Plan mode",
             SlashCommand::Design => "switch to Design mode",
@@ -165,7 +161,6 @@ impl SlashCommand {
                 | SlashCommand::Design
                 | SlashCommand::WritingPlan
                 | SlashCommand::Goal
-                | SlashCommand::Ide
                 | SlashCommand::Keymap
                 | SlashCommand::Mcp
                 | SlashCommand::Raw
@@ -189,7 +184,6 @@ impl SlashCommand {
                 | SlashCommand::Diff
                 | SlashCommand::Mention
                 | SlashCommand::Status
-                | SlashCommand::Ide
         )
     }
 
@@ -242,7 +236,6 @@ impl SlashCommand {
             | SlashCommand::Statusline
             | SlashCommand::AutoReview
             | SlashCommand::Feedback
-            | SlashCommand::Ide
             | SlashCommand::Quit
             | SlashCommand::Exit
             | SlashCommand::Side
@@ -299,7 +292,6 @@ mod tests {
     #[test]
     fn certain_commands_are_available_during_task() {
         assert!(SlashCommand::Goal.available_during_task());
-        assert!(SlashCommand::Ide.available_during_task());
         assert!(SlashCommand::Title.available_during_task());
         assert!(SlashCommand::Statusline.available_during_task());
         assert!(SlashCommand::Raw.available_during_task());
