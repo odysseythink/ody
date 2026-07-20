@@ -1,5 +1,8 @@
 use super::*;
+use crate::models::model_from_preset;
 use futures::StreamExt;
+use ody_protocol::model_metadata::ModelInfo;
+use ody_protocol::model_metadata::ModelPreset;
 use ody_core::config::permission_profile_catalog;
 
 #[derive(Clone)]
@@ -154,7 +157,7 @@ impl CatalogRequestProcessor {
         &self,
         params: ModelListParams,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
-        Self::list_models(self.thread_manager.clone(), params)
+        Self::list_models(self.thread_manager.clone(), self.config.clone(), params)
             .await
             .map(|response| Some(response.into()))
     }
@@ -239,6 +242,7 @@ impl CatalogRequestProcessor {
 
     async fn list_models(
         thread_manager: Arc<ThreadManager>,
+        config: Arc<Config>,
         params: ModelListParams,
     ) -> Result<ModelListResponse, JSONRPCErrorError> {
         let ModelListParams {
@@ -246,7 +250,19 @@ impl CatalogRequestProcessor {
             cursor,
             include_hidden,
         } = params;
-        let models = supported_models(thread_manager, include_hidden.unwrap_or(false)).await;
+        let include_hidden = include_hidden.unwrap_or(false);
+        let models = if let Some(catalog) = config.configured_model_catalog.as_ref() {
+            catalog
+                .models
+                .clone()
+                .into_iter()
+                .map(ModelInfo::into)
+                .filter(|preset: &ModelPreset| include_hidden || preset.show_in_picker)
+                .map(model_from_preset)
+                .collect()
+        } else {
+            supported_models(thread_manager, include_hidden).await
+        };
         let total = models.len();
 
         if total == 0 {

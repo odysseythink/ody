@@ -1,7 +1,9 @@
 //! Config-edit builders for the TUI `/login` flow.
 
 use ody_app_server_protocol::ConfigEdit;
+use ody_config::config_toml::OdyCodeModelConfig;
 use ody_model_provider_info::LoginProvider;
+use std::collections::HashMap;
 
 use crate::config_update::replace_config_value;
 
@@ -43,12 +45,11 @@ pub(crate) fn build_login_model_edits(
     model_id: &str,
     display_name: Option<&str>,
 ) -> Vec<ConfigEdit> {
-    let provider_id = provider.id();
     let model_alias = format!("{alias}/{model_id}");
     let mut edits = vec![
         replace_config_value(
             format!("models.\"{model_alias}\".provider"),
-            serde_json::json!(provider_id),
+            serde_json::json!(alias),
         ),
         replace_config_value(
             format!("models.\"{model_alias}\".model"),
@@ -72,6 +73,7 @@ pub(crate) fn build_login_model_edits(
 /// to it, and clear the default model if it points to the removed provider.
 pub(crate) fn build_logout_provider_edits(
     aliases_to_remove: &[String],
+    configured_models: &HashMap<String, OdyCodeModelConfig>,
     default_model: Option<&str>,
 ) -> Vec<ConfigEdit> {
     use crate::config_update::clear_config_value;
@@ -83,6 +85,16 @@ pub(crate) fn build_logout_provider_edits(
     let mut edits = Vec::new();
     for alias in aliases_to_remove {
         edits.push(clear_config_value(format!("providers.{alias}")));
+
+        let mut matching_models: Vec<&str> = configured_models
+            .keys()
+            .filter(|key| key.starts_with(&format!("{alias}/")))
+            .map(|s| s.as_str())
+            .collect();
+        matching_models.sort();
+        for model_key in matching_models {
+            edits.push(clear_config_value(format!("models.\"{model_key}\"")));
+        }
     }
 
     if let Some(model) = default_model {
