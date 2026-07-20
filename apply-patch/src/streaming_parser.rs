@@ -11,6 +11,7 @@ use crate::parser::Hunk;
 use crate::parser::MOVE_TO_MARKER;
 use crate::parser::ParseError;
 use crate::parser::UPDATE_FILE_MARKER;
+use crate::parser::LineSource;
 use crate::parser::UpdateFileChunk;
 
 use Hunk::*;
@@ -278,6 +279,7 @@ impl StreamingPatchParser {
                             change_context: None,
                             old_lines: Vec::new(),
                             new_lines: Vec::new(),
+                            new_line_sources: Vec::new(),
                             is_end_of_file: false,
                         });
                         self.state.mode = StreamingParserMode::UpdateFile { hunk_line_number };
@@ -286,9 +288,10 @@ impl StreamingPatchParser {
 
                     if let Some(change_context) = update_line.strip_prefix(CHANGE_CONTEXT_MARKER) {
                         chunks.push(UpdateFileChunk {
-                            change_context: Some(change_context.to_string()),
+                            change_context: Some(normalize_diff_header(change_context).to_string()),
                             old_lines: Vec::new(),
                             new_lines: Vec::new(),
+                            new_line_sources: Vec::new(),
                             is_end_of_file: false,
                         });
                         self.state.mode = StreamingParserMode::UpdateFile { hunk_line_number };
@@ -317,29 +320,73 @@ impl StreamingPatchParser {
                                 change_context: None,
                                 old_lines: Vec::new(),
                                 new_lines: Vec::new(),
+                                new_line_sources: Vec::new(),
                                 is_end_of_file: false,
                             });
                         }
                         if let Some(chunk) = chunks.last_mut() {
                             chunk.old_lines.push(String::new());
                             chunk.new_lines.push(String::new());
+                            chunk.new_line_sources.push(LineSource::Context);
                         }
                         self.state.mode = StreamingParserMode::UpdateFile { hunk_line_number };
                         return Ok(());
                     }
 
-                    if let Some(line_to_add) = line.strip_prefix(' ') {
+                    // Context lines in unified-diff format begin with a single space
+                    // marker. Models frequently omit that marker, so when the line does not
+                    // start with a diff marker we treat the raw line as verbatim content.
+                    // This preserves indentation while still accepting strict diff-style hunks.
+                    if line.starts_with(' ') {
+                        let line_to_add = line.strip_prefix(' ').unwrap();
                         if chunks.is_empty() {
                             chunks.push(UpdateFileChunk {
                                 change_context: None,
                                 old_lines: Vec::new(),
                                 new_lines: Vec::new(),
+                                new_line_sources: Vec::new(),
                                 is_end_of_file: false,
                             });
                         }
                         if let Some(chunk) = chunks.last_mut() {
                             chunk.old_lines.push(line_to_add.to_string());
                             chunk.new_lines.push(line_to_add.to_string());
+                            chunk.new_line_sources.push(LineSource::Context);
+                        }
+                        self.state.mode = StreamingParserMode::UpdateFile { hunk_line_number };
+                        return Ok(());
+                    }
+
+                    if !line.starts_with('+') && !line.starts_with('-') {
+                        // In strict diff syntax, a bare line following a removed line is an
+                        // error because it looks like a missing `+` counterpart. Models often
+                        // omit the leading space marker on context lines, so we only enforce
+                        // that rule immediately after a `-` line; after `+` or other context,
+                        // bare context lines are tolerated.
+                        if chunks.last().is_some_and(|chunk| {
+                            chunk.old_lines.len() == chunk.new_lines.len() + 1
+                        }) {
+                            return Err(InvalidHunkError {
+                                message: format!(
+                                    "Expected update hunk to start with a @@ context marker, got: '{line}'"
+                                ),
+                                line_number: self.line_number,
+                            });
+                        }
+                        let line_to_add = line;
+                        if chunks.is_empty() {
+                            chunks.push(UpdateFileChunk {
+                                change_context: None,
+                                old_lines: Vec::new(),
+                                new_lines: Vec::new(),
+                                new_line_sources: Vec::new(),
+                                is_end_of_file: false,
+                            });
+                        }
+                        if let Some(chunk) = chunks.last_mut() {
+                            chunk.old_lines.push(line_to_add.to_string());
+                            chunk.new_lines.push(line_to_add.to_string());
+                            chunk.new_line_sources.push(LineSource::Context);
                         }
                         self.state.mode = StreamingParserMode::UpdateFile { hunk_line_number };
                         return Ok(());
@@ -351,11 +398,13 @@ impl StreamingPatchParser {
                                 change_context: None,
                                 old_lines: Vec::new(),
                                 new_lines: Vec::new(),
+                                new_line_sources: Vec::new(),
                                 is_end_of_file: false,
                             });
                         }
                         if let Some(chunk) = chunks.last_mut() {
                             chunk.new_lines.push(line_to_add.to_string());
+                            chunk.new_line_sources.push(LineSource::Added);
                         }
                         self.state.mode = StreamingParserMode::UpdateFile { hunk_line_number };
                         return Ok(());
@@ -367,6 +416,7 @@ impl StreamingPatchParser {
                                 change_context: None,
                                 old_lines: Vec::new(),
                                 new_lines: Vec::new(),
+                                new_line_sources: Vec::new(),
                                 is_end_of_file: false,
                             });
                         }
@@ -445,6 +495,7 @@ mod tests {
                     change_context: None,
                     old_lines: vec!["old".to_string()],
                     new_lines: vec!["new".to_string()],
+                    new_line_sources: vec![LineSource::Added],
                     is_end_of_file: false,
                 }],
             }])
@@ -635,12 +686,14 @@ mod tests {
                         change_context: None,
                         old_lines: vec!["old a".to_string(), "*** Update File: b.txt".to_string()],
                         new_lines: vec!["new a".to_string(), "*** Update File: b.txt".to_string()],
+                        new_line_sources: vec![LineSource::Added, LineSource::Context],
                         is_end_of_file: false,
                     },
                     UpdateFileChunk {
                         change_context: None,
                         old_lines: vec!["old b".to_string()],
                         new_lines: vec!["new b".to_string()],
+                        new_line_sources: vec![LineSource::Added],
                         is_end_of_file: false,
                     },
                 ],
@@ -680,6 +733,11 @@ mod tests {
                         String::new(),
                         "context after".to_string(),
                     ],
+                    new_line_sources: vec![
+                        LineSource::Context,
+                        LineSource::Context,
+                        LineSource::Context,
+                    ],
                     is_end_of_file: false,
                 }],
             }])
@@ -700,6 +758,7 @@ mod tests {
                     change_context: None,
                     old_lines: Vec::new(),
                     new_lines: vec!["quux".to_string()],
+                    new_line_sources: vec![LineSource::Added],
                     is_end_of_file: true,
                 }],
             }])
@@ -718,6 +777,7 @@ mod tests {
                     change_context: None,
                     old_lines: vec!["old".to_string()],
                     new_lines: vec!["new".to_string()],
+                    new_line_sources: vec![LineSource::Added],
                     is_end_of_file: false,
                 }],
             }])
@@ -733,6 +793,7 @@ mod tests {
                     change_context: None,
                     old_lines: vec!["old\r".to_string()],
                     new_lines: vec!["new".to_string()],
+                    new_line_sources: vec![LineSource::Added],
                     is_end_of_file: false,
                 }],
             }])
@@ -769,6 +830,7 @@ mod tests {
                     change_context: None,
                     old_lines: vec!["old".to_string()],
                     new_lines: vec!["new".to_string()],
+                    new_line_sources: vec![LineSource::Added],
                     is_end_of_file: false,
                 }],
             }])
@@ -782,6 +844,7 @@ mod tests {
                     change_context: None,
                     old_lines: vec!["old".to_string()],
                     new_lines: vec!["new".to_string()],
+                    new_line_sources: vec![LineSource::Added],
                     is_end_of_file: false,
                 }],
             }])
@@ -941,4 +1004,60 @@ mod tests {
             })
         );
     }
+}
+/// Strip a standard unified-diff hunk header prefix (e.g. `-275,6 +275,11 @@`)
+/// from an `@@` context line. Some models emit `@@ -a,b +c,d @@ context` even
+/// though our format only wants the optional context after `@@ `. This keeps the
+/// parser lenient without changing the tool's semantics.
+fn normalize_diff_header(context: &str) -> &str {
+    let trimmed = context.trim_start();
+    // Unified diff header: `-<n>[,<n>] +<n>[,<n>] @@` followed by optional context.
+    let bytes = trimmed.as_bytes();
+    let mut i = 0;
+
+    // Parse optional leading `-'` section
+    if i < bytes.len() && bytes[i] == b'-' {
+        i += 1;
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            i += 1;
+        }
+        if i < bytes.len() && bytes[i] == b',' {
+            i += 1;
+            while i < bytes.len() && bytes[i].is_ascii_digit() {
+                i += 1;
+            }
+        }
+    }
+
+    // Skip whitespace
+    while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1;
+    }
+
+    // Parse optional leading `+'` section
+    if i < bytes.len() && bytes[i] == b'+' {
+        i += 1;
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            i += 1;
+        }
+        if i < bytes.len() && bytes[i] == b',' {
+            i += 1;
+            while i < bytes.len() && bytes[i].is_ascii_digit() {
+                i += 1;
+            }
+        }
+    }
+
+    // Skip whitespace
+    while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1;
+    }
+
+    // Strip trailing `@@` if present
+    if i + 2 <= bytes.len() && &bytes[i..i + 2] == b"@@" {
+        i += 2;
+    }
+
+    // Return whatever follows, trimmed of leading whitespace
+    trimmed.get(i..).unwrap_or("").trim_start()
 }

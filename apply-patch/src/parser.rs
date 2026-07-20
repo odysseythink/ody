@@ -111,6 +111,14 @@ impl Hunk {
 #[cfg(test)]
 use Hunk::*;
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum LineSource {
+    /// Line was present in both the old and new versions of the file (a context line).
+    Context,
+    /// Line was added in the new version of the file.
+    Added,
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct UpdateFileChunk {
     /// A single line of context used to narrow down the position of the chunk
@@ -121,6 +129,11 @@ pub struct UpdateFileChunk {
     /// `old_lines` must occur strictly after `change_context`.
     pub old_lines: Vec<String>,
     pub new_lines: Vec<String>,
+
+    /// Tracks which entries in `new_lines` are context lines (unchanged) versus added lines.
+    /// This lets the applier preserve the original file's indentation for context lines even
+    /// when the patch omits the unified-diff leading-space marker.
+    pub new_line_sources: Vec<LineSource>,
 
     /// If set to true, `old_lines` must occur at the end of the source file.
     /// (Tolerance around trailing newlines should be encouraged.)
@@ -345,6 +358,7 @@ fn test_parse_patch() {
                     change_context: Some("def f():".to_string()),
                     old_lines: vec!["    pass".to_string()],
                     new_lines: vec!["    return 123".to_string()],
+                    new_line_sources: vec![LineSource::Added],
                     is_end_of_file: false
                 }]
             }
@@ -372,6 +386,7 @@ fn test_parse_patch() {
                     change_context: None,
                     old_lines: vec![],
                     new_lines: vec!["line".to_string()],
+                    new_line_sources: vec![LineSource::Added],
                     is_end_of_file: false
                 }],
             },
@@ -402,6 +417,7 @@ fn test_parse_patch() {
                 change_context: None,
                 old_lines: vec!["import foo".to_string()],
                 new_lines: vec!["import foo".to_string(), "bar".to_string()],
+                new_line_sources: vec![LineSource::Context, LineSource::Added],
                 is_end_of_file: false,
             }],
         }]
@@ -422,6 +438,7 @@ fn test_parse_patch_preserves_end_of_file_marker() {
                     change_context: None,
                     old_lines: Vec::new(),
                     new_lines: vec!["quux".to_string()],
+                    new_line_sources: vec![LineSource::Added],
                     is_end_of_file: true,
                 }],
             }],
@@ -470,6 +487,7 @@ fn test_parse_patch_accepts_relative_and_absolute_hunk_paths() {
                     change_context: None,
                     old_lines: vec!["old".to_string()],
                     new_lines: vec!["new".to_string()],
+                    new_line_sources: vec![LineSource::Added],
                     is_end_of_file: false
                 }]
             },
@@ -548,6 +566,7 @@ fn test_parse_patch_lenient() {
             change_context: None,
             old_lines: vec!["import foo".to_string()],
             new_lines: vec!["import foo".to_string(), "bar".to_string()],
+            new_line_sources: vec![LineSource::Context, LineSource::Added],
             is_end_of_file: false,
         }],
     }];

@@ -17,6 +17,7 @@ use ody_exec_server::RemoveOptions;
 use ody_utils_path_uri::PathUri;
 use ody_utils_path_uri::PathUriParseError;
 pub use parser::Hunk;
+pub use parser::LineSource;
 pub use parser::ParseError;
 use parser::ParseError::*;
 pub use parser::UpdateFileChunk;
@@ -792,7 +793,45 @@ fn compute_replacements(
         }
 
         if let Some(start_idx) = found {
-            replacements.push((start_idx, pattern.len(), new_slice.to_vec()));
+            // Reconstruct the replacement lines. Context lines (unchanged between old and new)
+            // should use the original file's content so that indentation is preserved even when
+            // the patch omits the unified-diff leading-space marker. Added lines use the patch
+            // text verbatim.
+            let replacement_new_lines = if chunk.new_line_sources.is_empty() {
+                // Fallback for chunks parsed without source information: use the new slice as-is.
+                new_slice.to_vec()
+            } else {
+                let mut reconstructed = Vec::with_capacity(new_slice.len());
+                let mut old_idx = 0;
+                let mut original_idx = start_idx;
+                for (new_line, source) in new_slice.iter().zip(chunk.new_line_sources.iter()) {
+                    match source {
+                        LineSource::Context => {
+                            // Skip removed lines in old_lines until we align with this context line.
+                            while old_idx < pattern.len()
+                                && pattern[old_idx] != *new_line
+                            {
+                                original_idx += 1;
+                                old_idx += 1;
+                            }
+                            if old_idx < pattern.len() {
+                                reconstructed.push(original_lines[original_idx].clone());
+                                original_idx += 1;
+                                old_idx += 1;
+                            } else {
+                                // Should not happen if the patch is well-formed; fall back to the
+                                // patch text so we don't lose data.
+                                reconstructed.push(new_line.clone());
+                            }
+                        }
+                        LineSource::Added => {
+                            reconstructed.push(new_line.clone());
+                        }
+                    }
+                }
+                reconstructed
+            };
+            replacements.push((start_idx, pattern.len(), replacement_new_lines));
             line_index = start_idx + pattern.len();
         } else {
             return Err(ApplyPatchError::ComputeReplacements(format!(
@@ -1723,4 +1762,117 @@ g
 
         assert!(!delta.is_exact());
     }
+
+    #[tokio::test]
+    async fn test_update_file_with_diff_line_numbers_in_context() {
+        // Models frequently emit standard unified-diff hunk headers like
+        // `@@ -275,6 +275,11 @@ pub enum AppEvent {` even though our format
+        // only wants the optional context after `@@ `. This test verifies that
+        // such patches are accepted and applied correctly.
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("app_event.rs");
+        fs::write(
+            &path,
+            "pub enum AppEvent {\n    LogoutProvider,\n    FatalExitRequest,\n}\n",
+        )
+        .unwrap();
+
+        let patch = format!(
+            "*** Update File: {}\n@@ -1,4 +1,5 @@ pub enum AppEvent {{\n    LogoutProvider,\n+    LogoutProviderAlias,\n    FatalExitRequest,\n*** End of File",
+            path.display()
+        );
+        let patch = wrap_patch(&patch);
+
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        apply_patch(
+            &patch,
+            &PathUri::from_host_native_path(dir.path()).expect("absolute test path"),
+            &mut stdout,
+            &mut stderr,
+            LOCAL_FS.as_ref(),
+            /*sandbox*/ None,
+        )
+        .await
+        .unwrap();
+
+        let contents = fs::read_to_string(path).unwrap();
+        assert!(contents.contains("LogoutProviderAlias"));
+        assert!(stderr.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_eof_marker_in_middle_of_file_falls_back_to_global_search() {
+        // Models frequently misuse `*** End of File` for hunks that modify the
+        // middle of a file. Verify that the matcher falls back to a global search
+        // and still applies the change correctly.
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("middle.txt");
+        fs::write(&path, "fn a\nfn b\nfn c\n").unwrap();
+
+        let patch = format!(
+            "*** Update File: {}\n fn b\n+fn b_alias\n fn c\n*** End of File",
+            path.display()
+        );
+        let patch = wrap_patch(&patch);
+
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        apply_patch(
+            &patch,
+            &PathUri::from_host_native_path(dir.path()).expect("absolute test path"),
+            &mut stdout,
+            &mut stderr,
+            LOCAL_FS.as_ref(),
+            /*sandbox*/ None,
+        )
+        .await
+        .unwrap();
+
+        let contents = fs::read_to_string(path).unwrap();
+        assert_eq!(contents, "fn a\nfn b\nfn b_alias\nfn c\n");
+        assert!(stderr.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_update_file_preserves_indentation_when_context_omits_leading_space() {
+        // Models often emit context lines without the unified-diff leading-space marker.
+        // If the file uses indentation, the context lines in the patch are emitted verbatim
+        // (e.g. four spaces) and should not have their first space stripped, which would
+        // corrupt the file.
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("indented.rs");
+        fs::write(
+            &path,
+            "pub enum AppEvent {\n    LogoutProvider,\n    FatalExitRequest,\n}\n",
+        )
+        .unwrap();
+
+        let patch = format!(
+            "*** Update File: {}\n    LogoutProvider,\n+    LogoutProviderAlias,\n    FatalExitRequest,\n*** End of File",
+            path.display()
+        );
+        let patch = wrap_patch(&patch);
+
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        apply_patch(
+            &patch,
+            &PathUri::from_host_native_path(dir.path()).expect("absolute test path"),
+            &mut stdout,
+            &mut stderr,
+            LOCAL_FS.as_ref(),
+            /*sandbox*/ None,
+        )
+        .await
+        .unwrap();
+
+        let contents = fs::read_to_string(path).unwrap();
+        assert_eq!(
+            contents,
+            "pub enum AppEvent {\n    LogoutProvider,\n    LogoutProviderAlias,\n    FatalExitRequest,\n}\n"
+        );
+        assert!(stderr.is_empty());
+    }
+
 }
