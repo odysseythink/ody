@@ -1,6 +1,6 @@
 ---
 source: tui/src/history_cell/tests.rs
-assertion_line: 507
+assertion_line: 508
 expression: rendered
 ---
 rich before:
@@ -13,7 +13,9 @@ rich before:
   
    Col     Value
   ━━━━━━  ━━━━━━━
-... (3 more lines, alt+o to expand)
+   code    x = 1
+  
+  copy me
 • Called
   └ workspace.inspect({"path":"README.md
         "})
@@ -47,7 +49,9 @@ rich after:
   
    Col     Value
   ━━━━━━  ━━━━━━━
-... (3 more lines, alt+o to expand)
+   code    x = 1
+  
+  copy me
 • Called
   └ workspace.inspect({"path":"README.md
         "})

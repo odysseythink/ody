@@ -7,6 +7,7 @@ use super::resize_reflow::trailing_run_start;
 use super::*;
 use crate::config_update::format_config_error;
 use crate::external_agent_config_migration_flow::ExternalAgentConfigMigrationFlowOutcome;
+use crate::history_cell::TOGGLE_HISTORY_CELL_BATCH_COUNT;
 #[cfg(target_os = "windows")]
 use ody_config::types::WindowsSandboxModeToml;
 
@@ -251,10 +252,14 @@ impl App {
                 self.insert_history_cell(tui, cell);
             }
             AppEvent::ToggleHistoryCellExpansion => {
+                let mut toggled = 0usize;
                 for cell in self.transcript_cells.iter().rev() {
                     if cell.is_collapsible() {
                         cell.toggle_expanded();
-                        break;
+                        toggled += 1;
+                        if toggled >= TOGGLE_HISTORY_CELL_BATCH_COUNT {
+                            break;
+                        }
                     }
                 }
                 if let Err(err) = self.reflow_transcript_now(tui) {

@@ -17,6 +17,10 @@ pub(crate) const PLAN_PREVIEW_LINES: usize = 5;
 /// Number of wrapped logical lines to show before collapsing an MCP tool result.
 pub(crate) const TOOL_RESULT_PREVIEW_LINES: usize = 3;
 
+/// Number of collapsible history cells toggled by a single alt+o press.
+/// Only the most recent N collapsible cells are expanded/collapsed as a group.
+pub(crate) const TOGGLE_HISTORY_CELL_BATCH_COUNT: usize = 3;
+
 /// Collapse `lines` to `preview_lines` plus a trailing hint, unless already expanded or short.
 ///
 /// The `make_hint` callback receives the number of remaining lines and should produce a

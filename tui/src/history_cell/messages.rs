@@ -477,7 +477,9 @@ impl HistoryCell for AgentMarkdownCell {
     }
 
     fn is_collapsible(&self) -> bool {
-        self.markdown_source.lines().count() > MESSAGE_PREVIEW_LINES
+        // Ordinary assistant messages render fully like ody-code; only special
+        // cells (reasoning, plans, tool results) remain collapsible.
+        false
     }
 
     fn is_expanded(&self) -> bool {

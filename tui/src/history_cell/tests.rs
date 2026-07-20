@@ -2817,16 +2817,16 @@ fn agent_markdown_cell_collapses_and_expands() {
         .collect::<Vec<_>>()
         .join("\n");
     let cell = AgentMarkdownCell::new(source, &test_cwd());
-    assert!(cell.is_collapsible(), "long assistant message should be collapsible");
-    assert!(!cell.is_expanded(), "collapsed by default");
-    let collapsed = render_lines(&cell.display_lines(80));
     assert!(
-        collapsed.iter().any(|l| l.contains("alt+o to expand")),
-        "collapsed message should show expand hint: {collapsed:?}"
+        !cell.is_collapsible(),
+        "ordinary assistant messages should never fold"
     );
-    cell.toggle_expanded();
-    let expanded = render_lines(&cell.display_lines(80));
-    assert!(expanded.len() > collapsed.len(), "expanded message should be taller");
+    let rendered = render_lines(&cell.display_lines(80));
+    assert!(
+        !rendered.iter().any(|l| l.contains("alt+o to expand")),
+        "ordinary assistant message should not show collapse hint: {rendered:?}"
+    );
+    assert_eq!(rendered.len(), 10, "all lines should be visible");
 }
 
 #[test]
@@ -2884,6 +2884,10 @@ fn large_agent_markdown_renders_in_generous_time() {
         .collect::<Vec<_>>()
         .join("\n");
     let cell = AgentMarkdownCell::new(source, &test_cwd());
+    assert!(
+        !cell.is_collapsible(),
+        "ordinary assistant messages should never fold regardless of size"
+    );
     let start = std::time::Instant::now();
     let lines = cell.display_lines(80);
     let elapsed = start.elapsed();
@@ -2892,7 +2896,7 @@ fn large_agent_markdown_renders_in_generous_time() {
         "rendering 200k-char assistant message took too long: {elapsed:?}"
     );
     assert!(
-        lines.len() <= MESSAGE_PREVIEW_LINES + 1,
-        "collapsed large message should be truncated to preview + hint: {lines:?}"
+        lines.len() > MESSAGE_PREVIEW_LINES + 1,
+        "large assistant message should render fully without collapsing: {lines:?}"
     );
 }
