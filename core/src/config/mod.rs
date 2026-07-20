@@ -1078,6 +1078,16 @@ pub struct Config {
     /// Optional verbosity control for GPT-5 models (Responses API `text.verbosity`).
     pub model_verbosity: Option<Verbosity>,
 
+    /// User-declared `[models."provider/model"]` entries from config.toml.
+    /// Kept alongside the active-provider catalog so the model picker can
+    /// surface models for all configured providers, not just the active one.
+    pub configured_models: HashMap<String, OdyCodeModelConfig>,
+
+    /// Full model catalog built from `configured_models` for all providers.
+    /// Used by the `/model` picker when the user has explicitly configured
+    /// models; falls back to the bundled/remote catalog when empty.
+    pub configured_model_catalog: Option<ModelsResponse>,
+
     /// Whether Ody-owned clients should respect host system proxy settings.
     pub respect_system_proxy: bool,
 
@@ -1992,11 +2002,79 @@ fn configured_model_catalog(
         })
         .collect();
     configured_model_catalog_for_provider(
-        model_provider_id,
-        model_provider.wire_api,
-        &model_provider.capabilities,
-        &entries,
-    )
+       model_provider_id,
+       model_provider.wire_api,
+       &model_provider.capabilities,
+       &entries,
+   )
+}
+
+/// Build a model catalog from user-declared `[models."provider/model"]`
+/// config tables, spanning all configured providers.
+///
+/// This is used by the `/model` picker so models for every configured
+/// provider alias are visible, not just the active provider. Returns `None`
+/// when no configured model targets a known Chat Completions provider, so
+/// callers can fall back to the bundled/remote catalog.
+fn configured_model_catalog_all_providers(
+    models: &HashMap<String, OdyCodeModelConfig>,
+    model_providers: &HashMap<String, ModelProviderInfo>,
+) -> Option<ModelsResponse> {
+    if models.is_empty() {
+        return None;
+    }
+
+    let mut all_models = Vec::new();
+    for (provider_id, provider) in model_providers {
+        if !provider.is_chat_completions() {
+            continue;
+        }
+        let entries: Vec<ConfiguredModelSpec> = models
+            .iter()
+            .filter(|(key, model)| {
+                model
+                    .provider
+                    .as_deref()
+                    .unwrap_or_else(|| key.split_once('/').map(|(p, _)| p).unwrap_or(""))
+                    == provider_id
+            })
+            .map(|(key, model)| {
+                let (key_provider, key_model) = key
+                    .split_once('/')
+                    .map_or((None, None), |(p, m)| (Some(p), Some(m)));
+                ConfiguredModelSpec {
+                    provider: model
+                        .provider
+                        .clone()
+                        .or_else(|| key_provider.map(str::to_string))
+                        .unwrap_or_default(),
+                    model: model
+                        .model
+                        .clone()
+                        .or_else(|| key_model.map(str::to_string))
+                        .unwrap_or_else(|| key.clone()),
+                    max_context_size: model.max_context_size,
+                    max_output_size: model.max_output_size,
+                    capabilities: model.capabilities.clone(),
+                    display_name: model.display_name.clone(),
+                }
+            })
+            .collect();
+        if let Some(mut response) = configured_model_catalog_for_provider(
+            provider_id,
+            provider.wire_api,
+            &provider.capabilities,
+            &entries,
+        ) {
+            all_models.append(&mut response.models);
+        }
+    }
+
+    if all_models.is_empty() {
+        None
+    } else {
+        Some(ModelsResponse { models: all_models })
+    }
 }
 
 fn filter_mcp_servers_by_requirements(
@@ -3779,8 +3857,10 @@ impl Config {
         let check_for_update_on_startup = cfg.check_for_update_on_startup.unwrap_or(true);
         let model_catalog =
             load_model_catalog(cfg.model_catalog_json.clone())?.or(configured_catalog);
+        let configured_model_catalog =
+            configured_model_catalog_all_providers(&configured_models, &model_providers);
 
-        let log_dir = cfg
+       let log_dir = cfg
             .log_dir
             .as_ref()
             .map(AbsolutePathBuf::to_path_buf)
@@ -4040,6 +4120,8 @@ impl Config {
             model_catalog,
             model_verbosity: cfg.model_verbosity,
             respect_system_proxy,
+            configured_models,
+            configured_model_catalog,
             apps_mcp_product_sku: cfg.apps_mcp_product_sku.clone(),
             realtime_audio: cfg
                 .audio
