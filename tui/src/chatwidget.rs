@@ -1362,7 +1362,7 @@ impl ChatWidget {
 
     /// Request a shutdown-first quit.
     ///
-    /// This is used for explicit quit commands (`/quit`, `/exit`, `/logout`) and for
+    /// This is used for explicit quit commands (`/quit`, `/exit`) and for
     /// the double-press Ctrl+C/Ctrl+D quit shortcut.
     fn request_quit_without_confirmation(&self) {
         self.app_event_tx
@@ -1853,6 +1853,14 @@ impl ChatWidget {
         self.config.memories = config.memories.clone();
         self.config.terminal_resize_reflow = config.terminal_resize_reflow;
         self.sync_mentions_v2_enabled();
+    }
+
+    /// Keep the widget's view of provider/model configuration in sync with the
+    /// freshly reloaded app config after login/logout or other config edits.
+    pub(crate) fn sync_provider_config(&mut self, config: &Config) {
+        self.config.model_providers = config.model_providers.clone();
+        self.config.configured_models = config.configured_models.clone();
+        self.config.model = config.model.clone();
     }
 
     pub(crate) fn token_usage(&self) -> TokenUsage {

@@ -220,9 +220,6 @@ pub(crate) enum AppEvent {
     /// background tasks, rollout flush, or child process cleanup).
     Exit(ExitMode),
 
-    /// Request app-server logout, then exit after it succeeds.
-    Logout,
-
     /// Start the interactive login flow for an API-key provider.
     LoginStart {
         provider: Option<LoginProvider>,

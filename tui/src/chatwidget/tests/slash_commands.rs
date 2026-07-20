@@ -1286,7 +1286,7 @@ async fn slash_logout_without_args_does_not_emit_global_logout() {
     // Drain any setup events and ensure no logout-related event is emitted.
     while let Ok(event) = rx.try_recv() {
         assert!(
-            !matches!(event, AppEvent::Logout | AppEvent::LogoutProviderAlias { .. }),
+            !matches!(event, AppEvent::LogoutProviderAlias { .. }),
             "/logout without args should not emit a logout event when no providers are configured"
         );
     }
@@ -1301,7 +1301,7 @@ async fn slash_logout_with_unknown_provider_does_not_emit_logout_events() {
     // Drain any setup events and ensure no logout-related event is emitted for invalid input.
     while let Ok(event) = rx.try_recv() {
         assert!(
-            !matches!(event, AppEvent::Logout | AppEvent::LogoutProviderAlias { .. }),
+            !matches!(event, AppEvent::LogoutProviderAlias { .. }),
             "invalid provider name should not emit a logout event"
         );
     }

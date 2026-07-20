@@ -376,19 +376,6 @@ impl App {
                 }
                 return Ok(self.handle_exit_mode(app_server, mode).await);
             }
-            AppEvent::Logout => match app_server.logout().await {
-                Ok(()) => {
-                    self.show_shutdown_feedback(tui)?;
-                    return Ok(self
-                        .handle_exit_mode(app_server, ExitMode::ShutdownFirst)
-                        .await);
-                }
-                Err(err) => {
-                    tracing::error!("failed to logout: {err}");
-                    self.chat_widget
-                        .add_error_message(format!("Logout failed: {err}"));
-                }
-            },
             AppEvent::LoginStart { provider } => {
                 self.chat_widget.start_login_flow(provider);
             }

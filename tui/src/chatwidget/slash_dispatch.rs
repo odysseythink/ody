@@ -1286,16 +1286,7 @@ impl ChatWidget {
             LoginProvider::Glm,
         ]
         .into_iter()
-        .filter(|p| !self.configured_aliases_for_provider(*p).is_empty())
         .collect();
-
-        if providers.is_empty() {
-            self.add_info_message(
-                "No API-key providers are configured to log out.".to_string(),
-                None,
-            );
-            return;
-        }
 
         let items: Vec<SelectionItem> = providers
             .into_iter()
@@ -1331,7 +1322,7 @@ impl ChatWidget {
         let aliases = self.configured_aliases_for_provider(provider);
         if aliases.is_empty() {
             self.add_info_message(
-                format!("No {} provider accounts are configured.", provider.id()),
+                format!("No {} provider aliases configured.", provider.id()),
                 None,
             );
             return;

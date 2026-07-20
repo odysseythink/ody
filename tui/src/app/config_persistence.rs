@@ -216,6 +216,7 @@ impl App {
             .await?;
         self.apply_runtime_policy_overrides(&mut config);
         self.config = config;
+        self.chat_widget.sync_provider_config(&self.config);
         self.chat_widget.sync_plugin_mentions_config(&self.config);
         Ok(())
     }
@@ -1563,5 +1564,52 @@ terminal_resize_reflow_max_rows = 9000
             app.chat_widget.config_ref().tui_pet.as_deref(),
             Some(crate::pets::DISABLED_PET_ID)
         );
+    }
+
+    #[tokio::test]
+    async fn refresh_in_memory_config_from_disk_syncs_provider_config_to_chat_widget() -> Result<()> {
+        let mut app = make_test_app().await;
+        let ody_home = tempdir()?;
+        app.config.ody_home = ody_home.path().to_path_buf().abs();
+
+        // Persist a provider alias to disk.
+        ConfigEditsBuilder::for_config(&app.config)
+            .with_edits([
+                ConfigEdit::SetPath {
+                    segments: vec![
+                        "providers".to_string(),
+                        "kimi_1".to_string(),
+                        "type".to_string(),
+                    ],
+                    value: "kimi".into(),
+                },
+                ConfigEdit::SetPath {
+                    segments: vec![
+                        "providers".to_string(),
+                        "kimi_1".to_string(),
+                        "api_key".to_string(),
+                    ],
+                    value: "secret".into(),
+                },
+            ])
+            .apply()
+            .await
+            .expect("persist provider");
+
+        // Simulate stale in-memory state in both app and widget.
+        app.config.model_providers.clear();
+        app.chat_widget.sync_provider_config(&app.config);
+        assert!(
+            !app.chat_widget.config_ref().model_providers.contains_key("kimi_1"),
+            "precondition: widget should start stale"
+        );
+
+        app.refresh_in_memory_config_from_disk().await?;
+
+        assert!(
+            app.chat_widget.config_ref().model_providers.contains_key("kimi_1"),
+            "chat widget should see provider reloaded from disk"
+        );
+        Ok(())
     }
 }
