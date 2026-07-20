@@ -56,6 +56,7 @@ fn test_model_info(
         supported_reasoning_levels,
         shell_type: ConfigShellToolType::ShellCommand,
         visibility,
+        provider: String::new(),
         supported_in_api: true,
         input_modalities: default_input_modalities(),
         used_fallback_model_metadata: false,

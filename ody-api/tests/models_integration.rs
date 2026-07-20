@@ -73,6 +73,7 @@ async fn models_client_hits_models_endpoint() {
             ],
             shell_type: ConfigShellToolType::ShellCommand,
             visibility: ModelVisibility::List,
+            provider: String::new(),
             supported_in_api: true,
             priority: 1,
             additional_speed_tiers: Vec::new(),
