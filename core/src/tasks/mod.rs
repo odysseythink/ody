@@ -2,6 +2,7 @@ mod compact;
 mod lifecycle;
 mod regular;
 mod review;
+pub(crate) use review::DESIGN_REVIEW_SUBAGENT_LABEL;
 pub(crate) use review::run_one_shot_review;
 mod user_shell;
 

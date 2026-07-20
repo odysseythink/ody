@@ -1697,3 +1697,44 @@ async fn review_tests_tool_respects_test_review_enabled_config() {
     disabled.assert_visible_lacks(&["review_tests"]);
     disabled.assert_registered_lacks(&["review_tests"]);
 }
+
+#[tokio::test]
+async fn design_review_subagent_gets_no_model_tools() {
+    // Baseline: an ordinary turn exposes tools, so an empty list below is the
+    // gate doing its job, not the fixture starting empty.
+    let baseline = probe(|_| {}).await;
+    assert!(
+        !baseline.visible_names.is_empty(),
+        "baseline turn should expose tools"
+    );
+
+    // The adversarial design review is a pure single-shot critique and must be
+    // handed ZERO tools, or the expensive reviewer loops on
+    // apply_patch/submit_design/exec/read_file and edges into the review timeout.
+    let review = probe(|turn| {
+        turn.session_source = SessionSource::SubAgent(SubAgentSource::Other(
+            crate::tasks::DESIGN_REVIEW_SUBAGENT_LABEL.to_string(),
+        ));
+    })
+    .await;
+    assert!(
+        review.visible_names.is_empty(),
+        "design review must expose no model-visible tools, got {:?}",
+        review.visible_names
+    );
+    assert!(
+        review.registered_names.is_empty(),
+        "design review must register no tools, got {:?}",
+        review.registered_names
+    );
+
+    // The tool-using `/review` code review keeps its tools.
+    let code_review = probe(|turn| {
+        turn.session_source = SessionSource::SubAgent(SubAgentSource::Review);
+    })
+    .await;
+    assert!(
+        !code_review.visible_names.is_empty(),
+        "/review code review should still expose tools"
+    );
+}

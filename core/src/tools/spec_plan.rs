@@ -196,10 +196,18 @@ fn build_tool_specs_and_registry(
         wait_agent_timeouts: wait_agent_timeout_options(turn_context),
     };
     let mut planned_tools = PlannedTools::default();
-    add_tool_sources(&context, &mut planned_tools);
-    apply_direct_model_only_namespace_overrides(turn_context, &mut planned_tools);
-    append_tool_search_executor(&context, &mut planned_tools);
-    prepend_code_mode_executors(&context, &mut planned_tools);
+    // The adversarial design review is a pure single-shot critique over the design
+    // document (embedded in its prompt); it must not be handed any tools. Left with
+    // the parent's inherited Design mode + environment it would otherwise receive
+    // submit_design / apply_patch / update_plan / read_file / grep / exec and loop
+    // for several turns, tripling latency and edging into the review timeout. Skip
+    // every tool source and hand it an empty registry.
+    if !is_toolless_design_review(turn_context) {
+        add_tool_sources(&context, &mut planned_tools);
+        apply_direct_model_only_namespace_overrides(turn_context, &mut planned_tools);
+        append_tool_search_executor(&context, &mut planned_tools);
+        prepend_code_mode_executors(&context, &mut planned_tools);
+    }
     build_model_visible_specs_and_registry(turn_context, planned_tools)
 }
 
@@ -336,6 +344,18 @@ pub(crate) fn tool_suggest_enabled(turn_context: &TurnContext) -> bool {
 
 fn namespace_tools_enabled(turn_context: &TurnContext) -> bool {
     turn_context.provider.capabilities().namespace_tools
+}
+
+/// The adversarial design-review sub-agent (tagged with
+/// [`crate::tasks::review::DESIGN_REVIEW_SUBAGENT_LABEL`]) is a pure single-shot
+/// critique and must be handed no model-visible tools. The tool-using `/review`
+/// code review keeps [`SubAgentSource::Review`] and is unaffected.
+fn is_toolless_design_review(turn_context: &TurnContext) -> bool {
+    matches!(
+        &turn_context.session_source,
+        SessionSource::SubAgent(SubAgentSource::Other(label))
+            if label == crate::tasks::DESIGN_REVIEW_SUBAGENT_LABEL
+    )
 }
 
 fn multi_agent_v2_enabled(turn_context: &TurnContext) -> bool {

@@ -32,6 +32,12 @@ use super::SessionTask;
 use super::SessionTaskContext;
 use super::SessionTaskResult;
 
+/// Sub-agent source label for the adversarial design review. It is deliberately
+/// distinct from [`SubAgentSource::Review`] (which the tool-using `/review` code
+/// review keeps) so the tool planner can recognize the design review and expose
+/// it zero model-visible tools — see `spec_plan::build_tool_specs_and_registry`.
+pub(crate) const DESIGN_REVIEW_SUBAGENT_LABEL: &str = "design_review";
+
 #[derive(Clone, Copy)]
 pub(crate) struct ReviewTask;
 
@@ -111,6 +117,10 @@ pub(crate) async fn run_one_shot_review(
         Some(base_instructions),
         Some(model),
         reasoning_effort,
+        // The adversarial design review is a pure critique over the design
+        // document (which is already in the prompt): give it NO exploration
+        // tools. See the disable block below for why.
+        /*disable_exploration_tools*/ true,
     )
     .await?;
     process_one_shot_review_events(receiver, cancellation_token).await
@@ -130,6 +140,8 @@ async fn start_review_conversation(
         None,
         None,
         None,
+        // The `/review` code review legitimately explores the codebase.
+        /*disable_exploration_tools*/ false,
     )
     .await
 }
@@ -142,6 +154,7 @@ async fn start_review_conversation_with_overrides(
     base_instructions_override: Option<String>,
     model_override: Option<String>,
     reasoning_effort_override: Option<ReasoningEffort>,
+    disable_exploration_tools: bool,
 ) -> Option<async_channel::Receiver<Event>> {
     let config = ctx.config.clone();
     let mut sub_agent_config = config.as_ref().clone();
@@ -186,7 +199,54 @@ async fn start_review_conversation_with_overrides(
             .clone()
             .unwrap_or_else(|| ctx.model_info.slug.clone())
     });
-    sub_agent_config.model = Some(model);
+    // A review model given as a namespaced slug `"<provider_id>/<model>"` (e.g.
+    // `design_review_model = "glm_1/glm-5.1"`) needs two things fixed up, because
+    // `sub_agent_config` is a clone of the *parent* config:
+    //
+    // 1. Provider. The clone still carries the parent's `model_provider` (e.g.
+    //    `kimi`); overriding only `model` sends the request with the parent's
+    //    vendor, silently skipping vendor-specific wire behavior — notably GLM's
+    //    `thinking: { type: "disabled" }`. A GLM review then streamed a full
+    //    thinking trace (~2x latency) and blew past the review timeout.
+    // 2. Wire model name. `model_info.slug` is sent to the wire verbatim, and a
+    //    namespaced slug is kept as-is (see `construct_model_info_from_candidates`),
+    //    so GLM receives `glm_1/glm-5.1` and rejects it (error 1211 模型不存在).
+    //    The provider wants its own model name (`glm-5.1`).
+    //
+    // The main agent never trips either because its `model` is already resolved
+    // to the bare provider model name. Resolve both together, and only when the
+    // provider is known — otherwise leave the slug untouched.
+    let resolved = model.split_once('/').and_then(|(provider_id, suffix)| {
+        let info = sub_agent_config.model_providers.get(provider_id).cloned()?;
+        let wire_model = sub_agent_config
+            .configured_models
+            .get(&model)
+            .and_then(|entry| entry.model.clone())
+            .unwrap_or_else(|| suffix.to_string());
+        Some((provider_id.to_string(), info, wire_model))
+    });
+    if let Some((provider_id, info, wire_model)) = resolved {
+        sub_agent_config.model_provider_id = provider_id;
+        sub_agent_config.model_provider = info;
+        sub_agent_config.model = Some(wire_model);
+    } else {
+        sub_agent_config.model = Some(model);
+    }
+    // The adversarial DESIGN review must be a pure, single-shot critique over the
+    // design document (already embedded in the prompt): it raises risks, and that
+    // is all. Exploring the codebase and patching the design in response to a risk
+    // is the (cheaper) main Design-mode model's job on revise. But the review
+    // sub-agent is a clone of the parent, so without intervention it inherits the
+    // parent's Design mode + environment and is handed submit_design, apply_patch,
+    // update_plan, read_file, grep, exec, … — which the expensive reviewer then
+    // uses to loop for multiple turns, roughly tripling latency and pushing it to
+    // the edge of the review timeout. We tag it with a dedicated sub-agent source
+    // so the tool planner (`spec_plan`) can hand it zero model-visible tools.
+    let subagent_source = if disable_exploration_tools {
+        SubAgentSource::Other(DESIGN_REVIEW_SUBAGENT_LABEL.to_string())
+    } else {
+        SubAgentSource::Review
+    };
     (run_ody_thread_one_shot(
         sub_agent_config,
         session.models_manager(),
@@ -194,7 +254,7 @@ async fn start_review_conversation_with_overrides(
         session.clone_session(),
         ctx.clone(),
         cancellation_token,
-        SubAgentSource::Review,
+        subagent_source,
         /*final_output_json_schema*/ None,
         /*initial_history*/ None,
     )
