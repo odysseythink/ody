@@ -96,7 +96,7 @@ pub(super) const KEYMAP_ACTIONS: &[KeymapActionDescriptor] = &[
     action("chat", "Chat", "interrupt_turn", "Interrupt the active turn."),
     action("chat", "Chat", "decrease_reasoning_effort", "Decrease reasoning effort."),
     action("chat", "Chat", "increase_reasoning_effort", "Increase reasoning effort."),
-    action("chat", "Chat", "toggle_history_cell_expansion", "Expand or collapse the most recent collapsible history cell."),
+    action("chat", "Chat", "toggle_history_cell_expansion", "Expand or collapse the most recent batch of collapsible history cells."),
     action("chat", "Chat", "open_history_cell_overlay", "Open the most recent collapsible history cell in a full-screen overlay."),
     action("chat", "Chat", "edit_queued_message", "Edit the most recently queued message."),
     action("composer", "Composer", "submit", "Submit the current composer draft."),
