@@ -206,150 +206,151 @@ pub(crate) enum EscalationDecision {
     Revise { message: String },
 }
 
-const QUESTION_ID: &str = "design_review_signoff";
+/// Per-item sign-off question ids are `{QUESTION_ID_PREFIX}{index}`, where index
+/// matches the order items are queued (findings most-severe-first, then
+/// assumptions). Aggregation maps each answer back to its item by this id.
+const QUESTION_ID_PREFIX: &str = "design_review_signoff_";
 
-/// The two batch choices for the escalated findings, presented in ONE prompt so
-/// the user signs off on all of them at once rather than answering N sequential
-/// questions. Returns `(is_finalize, label, description)`.
-fn batch_options(chinese: bool) -> [(bool, &'static str, &'static str); 2] {
-    if chinese {
-        [
-            (
-                true,
-                "接受 / 推迟全部，完成设计",
-                "认可这些问题（或记为实现阶段处理的已知风险），直接最终确定设计。",
-            ),
-            (
-                false,
-                "有要修正的，留在 Design 模式",
-                "留下继续修改。可在备注（tab）里写明要改哪几条（按编号）。",
-            ),
-        ]
-    } else {
-        [
-            (
-                true,
-                "Accept / defer all — finalize",
-                "Acknowledge these (or log them as known risks for implementation) and finalize the design now.",
-            ),
-            (
-                false,
-                "Some need fixing — stay in Design",
-                "Keep the design open to revise. Use notes (tab) to say which items, by number.",
-            ),
-        ]
+/// One escalated item shown on its own sign-off page. Modelling findings and
+/// assumptions uniformly lets the gate queue them as a single ordered list of
+/// per-item questions and map every answer back to what it signed off.
+enum SignoffItem<'a> {
+    Finding(&'a DesignReviewFinding),
+    Assumption(&'a Assumption),
+}
+
+impl SignoffItem<'_> {
+    /// Short bracketed tag for the question header — severity for a finding,
+    /// confidence for an assumption — so the user sees the stakes at a glance.
+    fn tag(&self, chinese: bool) -> String {
+        match self {
+            SignoffItem::Finding(f) => format!("[{}]", f.severity),
+            SignoffItem::Assumption(a) => {
+                let c = match (a.confidence, chinese) {
+                    (AssumptionConfidence::High, true) => "高把握假设",
+                    (AssumptionConfidence::Medium, true) => "中把握假设",
+                    (AssumptionConfidence::Low, true) => "低把握假设",
+                    (AssumptionConfidence::High, false) => "assumption · high",
+                    (AssumptionConfidence::Medium, false) => "assumption · med",
+                    (AssumptionConfidence::Low, false) => "assumption · low",
+                };
+                format!("[{c}]")
+            }
+        }
+    }
+
+    /// The single item rendered as the question body (and reused verbatim as the
+    /// revise-list bullet). One item per page, so this is never crammed against
+    /// others — it can carry more detail than the old one-line-per-item list did.
+    fn body(&self, chinese: bool) -> String {
+        match self {
+            SignoffItem::Finding(f) => format!("{} — {}", f.title, truncate(&f.detail, 300)),
+            SignoffItem::Assumption(a) => {
+                if a.impact.trim().is_empty() {
+                    truncate(&a.text, 300)
+                } else if chinese {
+                    format!(
+                        "{} — 影响若错：{}",
+                        truncate(&a.text, 200),
+                        truncate(&a.impact, 160)
+                    )
+                } else {
+                    format!(
+                        "{} — impact if wrong: {}",
+                        truncate(&a.text, 200),
+                        truncate(&a.impact, 160)
+                    )
+                }
+            }
+        }
     }
 }
 
-fn is_finalize_answer(chinese: bool, answer: &str) -> bool {
-    batch_options(chinese)
-        .into_iter()
-        .any(|(is_finalize, label, _)| is_finalize && label == answer)
-}
-
-fn finding_lines(findings: &[&DesignReviewFinding]) -> String {
+/// Queue findings (already sorted most-severe-first) then assumptions as one
+/// ordered list. Index in this list is the question suffix, so the order here is
+/// exactly the paging order the user walks with ←/→.
+fn signoff_items<'a>(
+    assumptions: &'a [&'a Assumption],
+    findings: &'a [&'a DesignReviewFinding],
+) -> Vec<SignoffItem<'a>> {
     findings
         .iter()
-        .enumerate()
-        .map(|(i, f)| {
-            format!(
-                "{}. [{}] {} — {}",
-                i + 1,
-                f.severity,
-                f.title,
-                truncate(&f.detail, 160)
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+        .map(|f| SignoffItem::Finding(*f))
+        .chain(assumptions.iter().map(|a| SignoffItem::Assumption(*a)))
+        .collect()
 }
 
-fn assumption_lines(chinese: bool, assumptions: &[&Assumption]) -> String {
-    assumptions
+/// The three per-item choices. Index 0 (Accept) is the highlighted default, so a
+/// user who just presses through — or skips to the last page and submits —
+/// finalizes; only an explicit "needs fixing" on an item blocks the design.
+fn signoff_options(chinese: bool) -> Vec<RequestUserInputQuestionOption> {
+    let triples = if chinese {
+        [
+            ("接受", "认可这条，记为可接受的已知风险。"),
+            ("推迟到实现阶段", "先不改设计，留到实现阶段处理。"),
+            ("需要修正", "这条要改：留在 Design 模式修正后再最终确定。"),
+        ]
+    } else {
+        [
+            ("Accept", "Acknowledge this as an acceptable known risk."),
+            (
+                "Defer to implementation",
+                "Leave the design as-is; handle it during implementation.",
+            ),
+            (
+                "Needs fixing",
+                "This must change: stay in Design and revise before finalizing.",
+            ),
+        ]
+    };
+    triples
+        .into_iter()
+        .map(|(label, description)| RequestUserInputQuestionOption {
+            label: label.to_string(),
+            description: description.to_string(),
+        })
+        .collect()
+}
+
+/// The one label that blocks finalize. Everything else (Accept, Defer, a
+/// free-text Other, or an unanswered page) is treated as non-blocking.
+fn needs_fix_label(chinese: bool) -> &'static str {
+    if chinese { "需要修正" } else { "Needs fixing" }
+}
+
+/// One `request_user_input` question per escalated item, so the TUI paginates
+/// them (←/→) with a single digestible item per page instead of one giant
+/// truncated list. Findings come first (most severe first), then assumptions;
+/// index in `items` is the question-id suffix used to map answers back. The last
+/// page submits every answer at once, and unanswered pages default to Accept.
+fn build_signoff_questions(chinese: bool, items: &[SignoffItem<'_>]) -> RequestUserInputArgs {
+    let total = items.len();
+    let questions = items
         .iter()
         .enumerate()
-        .map(|(i, a)| {
-            let impact = if a.impact.trim().is_empty() {
-                String::new()
-            } else if chinese {
-                format!(" — 影响若错：{}", truncate(&a.impact, 120))
+        .map(|(i, item)| {
+            let progress = if chinese {
+                format!("签核 {}/{total}", i + 1)
             } else {
-                format!(" — impact if wrong: {}", truncate(&a.impact, 120))
+                format!("Sign-off {}/{total}", i + 1)
             };
-            format!("{}. {}{}", i + 1, truncate(&a.text, 160), impact)
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-/// The two-section body listing every escalated assumption and finding, with a
-/// localized heading before each present section. Shared by the prompt and the
-/// revise message so both show the same detail.
-fn sections_text(
-    chinese: bool,
-    assumptions: &[&Assumption],
-    findings: &[&DesignReviewFinding],
-) -> String {
-    let mut sections = Vec::new();
-    if !assumptions.is_empty() {
-        let head = if chinese {
-            "设计中的推断假设（需你确认）："
-        } else {
-            "Inferred assumptions in the design:"
-        };
-        sections.push(format!(
-            "{head}\n{}",
-            assumption_lines(chinese, assumptions)
-        ));
-    }
-    if !findings.is_empty() {
-        let head = if chinese {
-            "对抗审查发现："
-        } else {
-            "Adversarial-review findings:"
-        };
-        sections.push(format!("{head}\n{}", finding_lines(findings)));
-    }
-    sections.join("\n\n")
-}
-
-/// One batched prompt listing every escalated assumption AND finding in two
-/// labeled sections, with a single accept-all vs revise choice. This is the
-/// merged sign-off gate: what used to be a separate model-driven inferred-
-/// decision prompt (Step 4.5) is now folded in here, host-driven and detailed.
-fn build_signoff_prompt(
-    chinese: bool,
-    assumptions: &[&Assumption],
-    findings: &[&DesignReviewFinding],
-    level: DesignAuditLevel,
-) -> RequestUserInputArgs {
-    let body = sections_text(chinese, assumptions, findings);
-    let total = assumptions.len() + findings.len();
-    let question = if chinese {
-        format!(
-            "在 {level} 等级下，最终确定设计前需要你签核以下 {total} 项：\n\n{body}\n\n怎么处理？"
-        )
-    } else {
-        format!(
-            "Before finalizing at the {level} level, sign off on the following {total} item(s):\n\n{body}\n\nHow do you want to proceed?"
-        )
-    };
-    let options = batch_options(chinese)
-        .into_iter()
-        .map(|(_, label, desc)| RequestUserInputQuestionOption {
-            label: label.to_string(),
-            description: desc.to_string(),
+            let question = if chinese {
+                format!("请签核此项（{}）：\n\n{}", progress, item.body(chinese))
+            } else {
+                format!("Sign off on this item ({}):\n\n{}", progress, item.body(chinese))
+            };
+            RequestUserInputQuestion {
+                id: format!("{QUESTION_ID_PREFIX}{i}"),
+                header: format!("{} {progress}", item.tag(chinese)),
+                question,
+                is_other: false,
+                is_secret: false,
+                options: Some(signoff_options(chinese)),
+            }
         })
         .collect();
     RequestUserInputArgs {
-        questions: vec![RequestUserInputQuestion {
-            id: QUESTION_ID.to_string(),
-            header: if chinese { "签核确认" } else { "Sign-off" }.to_string(),
-            question,
-            is_other: false,
-            is_secret: false,
-            options: Some(options),
-        }],
+        questions,
         auto_resolution_ms: None,
     }
 }
@@ -363,48 +364,48 @@ fn truncate(s: &str, max: usize) -> String {
     out
 }
 
-/// Message returned to the model when the user wants to revise. Lists every
-/// escalated assumption and finding and appends any notes the user typed about
-/// which to fix.
-fn build_revise(
-    chinese: bool,
-    assumptions: &[&Assumption],
-    findings: &[&DesignReviewFinding],
-    notes: &[String],
-) -> String {
-    let list = sections_text(chinese, assumptions, findings);
-    let notes_line = {
-        let joined = notes
-            .iter()
-            .map(|n| n.trim())
-            .filter(|n| !n.is_empty())
-            .collect::<Vec<_>>()
-            .join(" ");
-        if joined.is_empty() {
-            String::new()
-        } else if chinese {
-            format!("\n\n用户备注：{joined}")
-        } else {
-            format!("\n\nUser notes: {joined}")
-        }
-    };
+/// Message returned to the model when the user flagged one or more items to fix.
+/// Lists ONLY the flagged items (each with its own page note, if any) — not the
+/// whole audit — so the model gets a tight, actionable revise list.
+fn build_revise(chinese: bool, flagged: &[(String, String)]) -> String {
+    let list = flagged
+        .iter()
+        .enumerate()
+        .map(|(i, (body, note))| {
+            let note = note.trim();
+            if note.is_empty() {
+                format!("{}. {body}", i + 1)
+            } else if chinese {
+                format!("{}. {body}\n   备注：{note}", i + 1)
+            } else {
+                format!("{}. {body}\n   note: {note}", i + 1)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
     if chinese {
         format!(
-            "设计未最终确定：你选择留在 Design 模式修正。需要处理：\n\n{list}{notes_line}\n\n修改设计后再用 `submit_design`（`final: true`）重新提交，不要开始实现。"
+            "设计未最终确定：你标记了以下项需要修正。需要处理：\n\n{list}\n\n修改设计后再用 `submit_design`（`final: true`）重新提交，不要开始实现。"
         )
     } else {
         format!(
-            "Design NOT finalized: you chose to revise. Findings to address:\n\n{list}{notes_line}\n\nRevise the design, then resubmit with `submit_design` (`final: true`). Do not start implementing."
+            "Design NOT finalized: you flagged the following to fix. Address:\n\n{list}\n\nRevise the design, then resubmit with `submit_design` (`final: true`). Do not start implementing."
         )
     }
 }
 
-/// Run the level-driven sign-off gate. Presents ALL escalated assumptions AND
-/// review findings in ONE prompt and returns whether the design may finalize.
-/// This is the merged gate: the inferred-decision sign-off that used to be a
-/// separate model-driven Step 4.5 prompt is now sourced from the design's
-/// `## Assumptions & Unverified Items` table and shown here alongside the
-/// adversarial findings. If nothing escalates, finalizes silently.
+/// Run the level-driven sign-off gate. Presents each escalated assumption AND
+/// review finding on its own paginated page (←/→) and returns whether the design
+/// may finalize. This is the merged gate: the inferred-decision sign-off that
+/// used to be a separate model-driven Step 4.5 prompt is now sourced from the
+/// design's `## Assumptions & Unverified Items` table and shown here alongside
+/// the adversarial findings. If nothing escalates, finalizes silently.
+///
+/// Aggregation is opt-in-to-block: an item keeps the design open ONLY if its page
+/// was explicitly answered "needs fixing". Accept, Defer, a free-text Other, or
+/// an unanswered page all finalize — so pressing through (or skipping straight to
+/// the last page and submitting) accepts everything, while flagging one item
+/// stays in Design with just that item to fix.
 pub(crate) async fn run_escalation_gate(
     session: &Session,
     turn: &TurnContext,
@@ -427,7 +428,8 @@ pub(crate) async fn run_escalation_gate(
     }
 
     let chinese = transcript_is_chinese(turn.config.language.as_deref());
-    let args = build_signoff_prompt(chinese, &assumptions, &findings, level);
+    let items = signoff_items(&assumptions, &findings);
+    let args = build_signoff_questions(chinese, &items);
     let Some(response) = session.request_user_input(turn, call_id, args).await else {
         // Cancelled / no active turn — do not silently finalize past unresolved
         // critical findings; keep the design open for revision.
@@ -439,22 +441,32 @@ pub(crate) async fn run_escalation_gate(
         return EscalationDecision::Revise { message };
     };
 
-    let answer = response.answers.get(QUESTION_ID);
-    let primary = answer
-        .and_then(|a| a.answers.first())
-        .cloned()
-        .unwrap_or_default();
-    // Only the explicit "accept/defer all" choice finalizes. The revise option,
-    // a free-text "Other", or an empty answer all keep the design open — never
-    // finalize past unresolved findings by default.
-    if is_finalize_answer(chinese, &primary) {
+    let needs_fix = needs_fix_label(chinese);
+    let flagged: Vec<(String, String)> = items
+        .iter()
+        .enumerate()
+        .filter_map(|(i, item)| {
+            let answer = response.answers.get(&format!("{QUESTION_ID_PREFIX}{i}"))?;
+            let picked = answer.answers.first().map(String::as_str).unwrap_or_default();
+            if picked != needs_fix {
+                return None;
+            }
+            // The page's optional note is appended by the client as `user_note: …`.
+            let note = answer
+                .answers
+                .iter()
+                .find_map(|a| a.strip_prefix("user_note: "))
+                .unwrap_or_default()
+                .to_string();
+            Some((item.body(chinese), note))
+        })
+        .collect();
+
+    if flagged.is_empty() {
         EscalationDecision::Finalize { note: None }
     } else {
-        let notes: Vec<String> = answer
-            .map(|a| a.answers.iter().skip(1).cloned().collect())
-            .unwrap_or_default();
         EscalationDecision::Revise {
-            message: build_revise(chinese, &assumptions, &findings, &notes),
+            message: build_revise(chinese, &flagged),
         }
     }
 }
@@ -565,7 +577,7 @@ mod tests {
     }
 
     #[test]
-    fn prompt_is_one_batched_question_listing_findings_and_assumptions() {
+    fn prompt_is_one_page_per_item_findings_first_then_assumptions() {
         use DesignReviewConfidence::High as C;
         use DesignReviewSeverity::*;
         let f1 = finding(Critical, C, "plaintext key");
@@ -573,19 +585,24 @@ mod tests {
         let a1 = assumption("overlay reuse", AssumptionConfidence::Low, "rewrite UI");
         let f_refs = vec![&f1, &f2];
         let a_refs = vec![&a1];
-        let menu = build_signoff_prompt(false, &a_refs, &f_refs, DesignAuditLevel::Standard);
-        // One prompt, not one-per-item — the whole point of the batching/merge.
-        assert_eq!(menu.questions.len(), 1);
-        // Two batch choices (accept-all vs revise); the client auto-adds Other.
-        assert_eq!(menu.questions[0].options.as_ref().unwrap().len(), 2);
-        let q = &menu.questions[0].question;
-        // Both sections appear in the single question's text.
-        assert!(q.contains("plaintext key"));
-        assert!(q.contains("weak validation"));
-        assert!(q.contains("overlay reuse"));
-        assert!(q.contains("rewrite UI")); // assumption impact is inlined
-        assert!(q.contains("Standard"));
-        assert!(q.contains("3 item")); // 2 findings + 1 assumption
+        let items = signoff_items(&a_refs, &f_refs);
+        let menu = build_signoff_questions(false, &items);
+        // One page per escalated item — no more one giant truncated dump.
+        assert_eq!(menu.questions.len(), 3);
+        // Three per-item choices (Accept / Defer / Needs fixing); client adds Other.
+        assert_eq!(menu.questions[0].options.as_ref().unwrap().len(), 3);
+        // Findings come first (most severe first), assumptions last; each page
+        // carries exactly its own item.
+        assert!(menu.questions[0].question.contains("plaintext key"));
+        assert!(menu.questions[0].header.contains("Critical"));
+        assert!(menu.questions[0].header.contains("Sign-off 1/3"));
+        assert!(menu.questions[1].question.contains("weak validation"));
+        assert!(menu.questions[2].question.contains("overlay reuse"));
+        assert!(menu.questions[2].question.contains("rewrite UI")); // impact inlined
+        assert!(menu.questions[2].header.contains("assumption"));
+        // Stable ids the aggregator maps answers back through.
+        assert_eq!(menu.questions[0].id, "design_review_signoff_0");
+        assert_eq!(menu.questions[2].id, "design_review_signoff_2");
     }
 
     #[test]
@@ -650,36 +667,36 @@ mod tests {
     }
 
     #[test]
-    fn finalize_answer_finalizes() {
-        let (_, label, _) = batch_options(false)[0];
-        assert!(is_finalize_answer(false, label));
-        assert!(!is_finalize_answer(false, batch_options(false)[1].1));
-        assert!(!is_finalize_answer(false, "some free text"));
+    fn only_needs_fix_is_the_blocking_label() {
+        // The one label that keeps the design open; the highlighted default
+        // (index 0) is Accept, which finalizes.
+        assert_eq!(needs_fix_label(false), "Needs fixing");
+        assert_eq!(signoff_options(false)[0].label, "Accept");
+        assert_ne!(signoff_options(false)[0].label, needs_fix_label(false));
+        assert_eq!(needs_fix_label(true), "需要修正");
     }
 
     #[test]
-    fn revise_message_lists_findings_assumptions_and_notes() {
-        use DesignReviewConfidence::High as C;
-        use DesignReviewSeverity::*;
-        let f1 = finding(Critical, C, "plaintext key");
-        let a1 = assumption("overlay reuse", AssumptionConfidence::Low, "rewrite UI");
-        let f_refs = vec![&f1];
-        let a_refs = vec![&a1];
-        let msg = build_revise(false, &a_refs, &f_refs, &["fix items 1 and 2".to_string()]);
+    fn revise_message_lists_only_flagged_items_with_their_notes() {
+        let flagged = vec![
+            (
+                "plaintext key — detail".to_string(),
+                "encrypt it".to_string(),
+            ),
+            ("overlay reuse — impact if wrong: rewrite UI".to_string(), String::new()),
+        ];
+        let msg = build_revise(false, &flagged);
         assert!(msg.contains("NOT finalized"));
-        assert!(msg.contains("plaintext key"));
-        assert!(msg.contains("overlay reuse"));
-        assert!(msg.contains("fix items 1 and 2"));
+        assert!(msg.contains("1. plaintext key"));
+        assert!(msg.contains("note: encrypt it"));
+        assert!(msg.contains("2. overlay reuse"));
         assert!(msg.contains("Do not start implementing"));
     }
 
     #[test]
-    fn revise_message_omits_notes_line_when_empty() {
-        use DesignReviewConfidence::High as C;
-        use DesignReviewSeverity::*;
-        let f1 = finding(High, C, "weak validation");
-        let refs = vec![&f1];
-        let msg = build_revise(false, &[], &refs, &[String::new()]);
-        assert!(!msg.contains("User notes"));
+    fn revise_message_omits_note_line_when_empty() {
+        let msg = build_revise(false, &[("weak validation — detail".to_string(), String::new())]);
+        assert!(msg.contains("1. weak validation"));
+        assert!(!msg.contains("note:"));
     }
 }

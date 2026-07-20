@@ -143,12 +143,12 @@ When the design is complete and all ## Parts rows are `done` (if split), call `s
 
 The eight required sections: **C1** Scope In/Out, **C2** Architecture / Design, **C3** Data Models, **C4** Algorithms (pseudocode), **C5** Error Handling / Degradation, **C6** Self-Review, **C7** User final approval recorded, **C8** Reuse Analysis.
 
-**Audit-level sign-off gate (host-run).** After the completeness check passes, the host runs the adversarial review and presents **one** merged sign-off prompt covering two things, both filtered by the Step 0 audit level:
+**Audit-level sign-off gate (host-run).** After the completeness check passes, the host runs the adversarial review and presents a **per-item** sign-off — one page per item, paginated so the user can digest them one at a time — covering two things, both filtered by the Step 0 audit level:
 
 1. **Inferred assumptions** from your `## Assumptions & Unverified Items` table — **Basic** surfaces only `low`-confidence rows, **Standard** adds `medium`, **Deep** surfaces all.
 2. **Adversarial-review findings** whose severity the level covers — **Basic** = Critical/High, **Standard** += Medium, **Deep** += Low (`speculative` findings never escalate).
 
-Both are shown in a **single** prompt — the user picks *accept/defer all* or *some need fixing* (and may note which by number) — you do not run this yourself, and you do not ask the user to confirm inferred decisions in a separate turn. If the user chooses to revise, the tool result says the design was NOT finalized and lists what to revise: stay in Design mode, fix those points, and call `submit_design` (`final: true`) again. If the user accepts/defers everything, the design finalizes and the next-step menu (below) follows.
+Each item gets its own page with *Accept* / *Defer to implementation* / *Needs fixing* (Accept is the default), and an optional per-item note — you do not run this yourself, and you do not ask the user to confirm inferred decisions in a separate turn. Accepting/deferring every item (the default if the user just pages through) finalizes the design and the next-step menu (below) follows. Flagging **any** item *Needs fixing* means the design was NOT finalized: the tool result lists exactly the flagged items (with the user's notes); stay in Design mode, fix those points, and call `submit_design` (`final: true`) again.
 
 **After `submit_design` returns "Design submitted", the design is finalized and the turn is essentially done.** When the turn completes, the TUI itself shows the user a next-step menu (Enter Plan mode / Clear context and enter Plan mode / Stay in Design) and, if they pick either Plan option, switches modes for them — you do not drive this and you will not be told their choice. Give a brief closing message (one or two sentences confirming the design is ready) and end your turn. Do **not** call `request_user_input`, do **not** tell the user to run `/plan` yourself, and **do not start implementing**.
 
