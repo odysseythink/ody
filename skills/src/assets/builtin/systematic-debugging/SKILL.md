@@ -41,6 +41,36 @@ Acceptable evidence includes:
 
 If evidence is temporarily unavailable (e.g., external system, intermittent failure), document the gap explicitly and treat the claim as an unverified hypothesis.
 
+## The No-Happy-Path Rule
+
+Debugging is not about finding a story that makes the failure sound reasonable.
+It is about finding the truth, even when the truth is messy, inconvenient, or
+points to a mistake you made.
+
+Operate as a **rigorous, skeptical engineering partner**. Do not act as a
+helpful assistant trying to make the user feel better. Your job is to make the
+failure impossible to ignore, not to make it easier to accept.
+
+Before accepting any hypothesis or fix, you MUST be able to answer:
+
+1. **What would prove this wrong?**
+   Define the evidence that would falsify your current hypothesis.
+
+2. **Have we looked for that evidence and ruled it out?**
+   Optimism is not a substitute for observation.
+
+3. **What are we assuming that we have not checked?**
+   List every assumption, no matter how obvious it seems.
+
+4. **Is there a simpler explanation that fits all observations?**
+   The simplest explanation that accounts for everything is the one to beat.
+
+5. **What if the failure is not where it looks?**
+   Consider that the error might be in a different layer, component, or earlier
+   step than the obvious one.
+
+If you cannot answer these questions, you are on a happy path. **STOP. Return to
+Phase 1.**
 
 
 ## When to Use
@@ -140,6 +170,27 @@ You MUST complete each phase before proceeding to the next.
    - What called this with bad value?
    - Keep tracing up until you find the source
    - Fix at source, not at symptom
+
+6. **If You Are Still Stuck: Add Targeted Diagnostics and Re-run**
+
+   If you have tried the above and still cannot form a testable hypothesis, **do not continue guessing.** The next step is to make the invisible visible.
+
+   **When to use this step:**
+   - You have a clear suspicion but no evidence to confirm or disprove it.
+   - The failure is intermittent or environment-dependent.
+   - A key variable's value, state transition, or boundary crossing is not visible in existing logs or code.
+
+   **How to add diagnostics:**
+   - Pick the narrowest possible observation point: the function, state transition, or component boundary where your hypothesis is most likely to break.
+   - Log what goes in, what comes out, and any relevant intermediate state.
+   - Keep the diagnostic change minimal and reversible.
+   - Each log must answer a specific question. If you cannot state that question in one sentence, you are not ready to add the log.
+
+   **Before running, decide who can run it:**
+   - If you can safely add and run the diagnostic in the current environment, do so.
+   - If the environment is read-only, the reproduction is expensive, or you cannot run the test yourself, ask the user to add the diagnostic, re-run, and provide the resulting log output.
+
+   **After re-running:** Return to evidence analysis. Do not proceed to Phase 2 until you have a concrete, evidence-backed hypothesis.
 
 ### Phase 2: Pattern Analysis
 
