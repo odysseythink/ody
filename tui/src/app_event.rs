@@ -278,6 +278,18 @@ pub(crate) enum AppEvent {
         provider: LoginProvider,
     },
 
+    /// Remove a single persisted provider alias and any model aliases that belong
+    /// to it, and clear the default model if it points to the removed provider.
+    LogoutProviderAlias {
+        provider: LoginProvider,
+        alias: String,
+    },
+
+    /// Provider selected in the logout flow; show aliases for that provider.
+    LogoutProviderSelected {
+        provider: LoginProvider,
+    },
+
     /// Request to exit the application due to a fatal error.
     #[allow(dead_code)]
     FatalExitRequest(String),

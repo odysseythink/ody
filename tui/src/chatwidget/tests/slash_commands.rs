@@ -1276,12 +1276,35 @@ async fn slash_quit_requests_exit() {
 }
 
 #[tokio::test]
-async fn slash_logout_requests_app_server_logout() {
+async fn slash_logout_without_args_does_not_emit_global_logout() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
 
+    // With no providers configured, /logout shows an info notice instead of
+    // emitting a global logout event.
     chat.dispatch_command(SlashCommand::Logout);
 
-    assert_matches!(rx.try_recv(), Ok(AppEvent::Logout));
+    // Drain any setup events and ensure no logout-related event is emitted.
+    while let Ok(event) = rx.try_recv() {
+        assert!(
+            !matches!(event, AppEvent::Logout | AppEvent::LogoutProviderAlias { .. }),
+            "/logout without args should not emit a logout event when no providers are configured"
+        );
+    }
+}
+
+#[tokio::test]
+async fn slash_logout_with_unknown_provider_does_not_emit_logout_events() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    chat.dispatch_command_with_args(SlashCommand::Logout, "unknown".to_string(), vec![]);
+
+    // Drain any setup events and ensure no logout-related event is emitted for invalid input.
+    while let Ok(event) = rx.try_recv() {
+        assert!(
+            !matches!(event, AppEvent::Logout | AppEvent::LogoutProviderAlias { .. }),
+            "invalid provider name should not emit a logout event"
+        );
+    }
 }
 
 #[tokio::test]

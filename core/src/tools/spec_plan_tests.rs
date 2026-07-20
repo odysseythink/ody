@@ -1565,7 +1565,7 @@ async fn spawn_agent_guidance_encourages_delegating_exploration() {
 }
 
 /// Cross-layer guard against the bug this whole change started from: the base
-/// instructions used to tell the model to explore with tools ody-rs did not
+/// instructions used to tell the model to explore with tools ody did not
 /// register, so it fell back to raw `rg`/`cat` shell calls. A prompt may only
 /// name a tool the tool plan actually exposes — assert the two agree instead of
 /// trusting that they do.

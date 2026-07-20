@@ -1,6 +1,6 @@
-# Bazel in ody-rs
+# Bazel in ody
 
-This repository uses Bazel to build the Rust workspace under `ody-rs`.
+This repository uses Bazel to build the Rust workspace under `ody`.
 Cargo remains the source of truth for crates and features, while Bazel
 provides hermetic builds, toolchains, and cross-platform artifacts.
 
@@ -9,14 +9,14 @@ As of 6/1/2026, this setup is still experimental as we stabilize it.
 ## High-level layout
 
 - `../MODULE.bazel` defines Bazel dependencies and Rust toolchains.
-- `rules_rs` imports third-party crates from `ody-rs/Cargo.toml` and
-  `ody-rs/Cargo.lock` via `crate.from_cargo(...)` and exposes them under
+- `rules_rs` imports third-party crates from `ody/Cargo.toml` and
+  `ody/Cargo.lock` via `crate.from_cargo(...)` and exposes them under
   `@crates`.
 - `../defs.bzl` provides `ody_rust_crate`, which wraps `rust_library`,
   `rust_binary`, and `rust_test` so Bazel targets line up with Cargo conventions.
   It provides a sane set of defaults that work for most first-party crates, but may
   need tweaks in some cases.
-- Each crate in `ody-rs/*/BUILD.bazel` typically uses `ody_rust_crate` and
+- Each crate in `ody/*/BUILD.bazel` typically uses `ody_rust_crate` and
   makes some adjustments if the crate needs additional compile-time or runtime data,
   or other customizations.
 
@@ -127,7 +127,7 @@ To exercise the generic remote configuration with your key:
 ```bash
 BUILDBUDDY_API_KEY=... GITHUB_REPOSITORY=my-fork/ody \
   ./.github/scripts/run_bazel_with_buildbuddy.py \
-  build --config=ci-linux //ody-rs/cli:ody
+  build --config=ci-linux //ody/cli:ody
 ```
 
 The wrapper selects the OpenAI host only inside GitHub Actions for a trusted

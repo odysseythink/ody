@@ -3,7 +3,7 @@ Quickstart for running and hitting `ody app-server`.
 
 ## Quickstart
 
-Run from `<reporoot>/ody-rs`.
+Run from `<reporoot>/ody`.
 
 ```bash
 # 1) Build debug ody binary

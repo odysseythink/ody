@@ -834,6 +834,71 @@ impl App {
         );
     }
 
+    pub(super) async fn logout_provider_alias(
+        &mut self,
+        provider: LoginProvider,
+        alias: String,
+        app_server: &mut AppServerSession,
+    ) {
+        // Guard: only remove aliases that actually match the requested provider type.
+        let is_matching_alias = self
+            .config
+            .model_providers
+            .get(&alias)
+            .map(|p| match provider {
+                LoginProvider::Kimi => p.is_kimi(),
+                LoginProvider::Deepseek => p.is_deepseek(),
+                LoginProvider::Glm => p.is_glm(),
+            })
+            .unwrap_or(false);
+        if !is_matching_alias {
+            self.chat_widget
+                .add_error_message(format!("'{alias}' is not a configured {} alias.", provider.id()));
+            return;
+        }
+
+        let edits = build_logout_provider_edits(
+            &[alias.clone()],
+            &self.config.configured_models,
+            self.config.model.as_deref(),
+        );
+        if edits.is_empty() {
+            self.chat_widget
+                .add_info_message(format!("No configuration found for '{alias}'."), None);
+            return;
+        }
+
+        let write_response = match crate::config_update::write_config_batch(
+            app_server.request_handle(),
+            edits,
+        )
+        .await
+        {
+            Ok(response) => response,
+            Err(err) => {
+                tracing::error!(error = %err, "failed to persist alias logout");
+                self.chat_widget
+                    .add_error_message(format!("Failed to log out: {err}"));
+                return;
+            }
+        };
+
+        if write_response.status == WriteStatus::OkOverridden {
+            let message = overridden_write_message(&write_response);
+            self.chat_widget
+                .add_error_message(format!("Logout saved but not applied: {message}"));
+            return;
+        }
+
+        self.refresh_in_memory_config_from_disk_best_effort("logout provider alias")
+            .await;
+        telemetry::record_logout(&self.session_telemetry, Some(provider));
+        self.chat_widget.add_info_message(
+            format!("Logged out of {} alias '{alias}'.", provider.id()),
+            None,
+        );
+    }
+
     pub(super) fn reasoning_label(reasoning_effort: Option<&ReasoningEffortConfig>) -> String {
         match reasoning_effort {
             None | Some(ReasoningEffortConfig::None) => "default".to_string(),

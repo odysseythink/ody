@@ -296,7 +296,7 @@ pub(crate) fn new_active_mcp_tool_call(
 /// exists” affordance separate from the main MCP tool call cell.
 ///
 /// Manual testing tip:
-/// - Run the rmcp stdio test server (`ody-rs/rmcp-client/src/bin/test_stdio_server.rs`) and
+/// - Run the rmcp stdio test server (`ody/rmcp-client/src/bin/test_stdio_server.rs`) and
 ///   register it as an MCP server via `ody mcp add`.
 /// - Use its `image_scenario` tool with cases like `text_then_image`,
 ///   `invalid_base64_then_image`, or `invalid_image_bytes_then_image` to ensure this path triggers

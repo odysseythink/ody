@@ -453,7 +453,7 @@ fn ody_binary(repo_root: &Path) -> Result<PathBuf> {
         return Ok(path);
     }
 
-    let fallback = repo_root.join("ody-rs/target/debug/ody");
+    let fallback = repo_root.join("ody/target/debug/ody");
     anyhow::ensure!(
         fallback.is_file(),
         "ody binary is unavailable; run `cargo build -p ody-cli` first"

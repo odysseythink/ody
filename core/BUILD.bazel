@@ -13,20 +13,20 @@ ody_rust_crate(
     ),
     crate_name = "ody_core",
     extra_binaries = [
-        "//ody-rs/bwrap:bwrap",
-        "//ody-rs/linux-sandbox:ody-linux-sandbox",
-        "//ody-rs/rmcp-client:test_stdio_server",
-        "//ody-rs/rmcp-client:test_streamable_http_server",
-        "//ody-rs/cli:ody",
-        "//ody-rs/windows-sandbox-rs:ody-command-runner",
-        "//ody-rs/windows-sandbox-rs:ody-windows-sandbox-setup",
+        "//ody/bwrap:bwrap",
+        "//ody/linux-sandbox:ody-linux-sandbox",
+        "//ody/rmcp-client:test_stdio_server",
+        "//ody/rmcp-client:test_streamable_http_server",
+        "//ody/cli:ody",
+        "//ody/windows-sandbox-rs:ody-command-runner",
+        "//ody/windows-sandbox-rs:ody-windows-sandbox-setup",
     ],
     integration_test_timeout = "long",
     run_tests_with_wine_exec = True,
     rustc_env = {
         # Keep manifest-root path lookups inside the Bazel execroot for code
         # that relies on env!("CARGO_MANIFEST_DIR").
-        "CARGO_MANIFEST_DIR": "ody-rs/core",
+        "CARGO_MANIFEST_DIR": "ody/core",
     },
     test_data_extra = [
         "config.schema.json",

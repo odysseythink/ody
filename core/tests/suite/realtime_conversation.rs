@@ -2387,7 +2387,7 @@ async fn conversation_startup_context_falls_back_to_workspace_map() -> Result<()
         }
     });
     let test = builder.build_with_websocket_server(&startup_server).await?;
-    fs::create_dir_all(test.workspace_path("ody-rs/core"))?;
+    fs::create_dir_all(test.workspace_path("ody/core"))?;
     fs::write(test.workspace_path("notes.txt"), "workspace marker")?;
 
     test.ody
@@ -2421,7 +2421,7 @@ async fn conversation_startup_context_falls_back_to_workspace_map() -> Result<()
     assert!(startup_context.contains(STARTUP_CONTEXT_HEADER));
     assert!(startup_context.contains("## Machine / Workspace Map"));
     assert!(startup_context.contains("notes.txt"));
-    assert!(startup_context.contains("ody-rs/"));
+    assert!(startup_context.contains("ody/"));
 
     startup_server.shutdown().await;
     realtime_server.shutdown().await;

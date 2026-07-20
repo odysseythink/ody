@@ -397,7 +397,7 @@ pub struct ConfigToml {
 
     /// Preferred backend for storing MCP OAuth credentials.
     /// keyring: Use an OS-specific keyring service.
-    ///          https://github.com/odysseythink/ody/blob/main/ody-rs/rmcp-client/src/oauth.rs#L2
+    ///          https://github.com/odysseythink/ody/blob/main/ody/rmcp-client/src/oauth.rs#L2
     /// file: Use a file in the Ody home directory.
     /// auto (default): Use the OS-specific keyring service if available, otherwise use a file.
     #[serde(default)]
@@ -719,7 +719,7 @@ pub struct OdyCodeModelConfig {
 }
 
 impl ConfigToml {
-    /// Convert ody-code compatible `providers` into ody-rs `ModelProviderInfo` entries.
+    /// Convert ody-code compatible `providers` into ody `ModelProviderInfo` entries.
     pub fn convert_ody_code_providers(&self) -> HashMap<String, ModelProviderInfo> {
         use ody_model_provider_info::WireApi;
 

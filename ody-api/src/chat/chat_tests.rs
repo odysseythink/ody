@@ -124,7 +124,7 @@ fn reasoning_effort_emitted_for_kimi_but_not_glm() {
 
 #[test]
 fn glm_disables_thinking_but_others_do_not() {
-    // GLM defaults thinking ON server-side unless told otherwise; ody-rs treats
+    // GLM defaults thinking ON server-side unless told otherwise; ody treats
     // GLM as non-thinking, so the wire must explicitly disable it.
     let glm = base_request(ChatVendor::Glm).to_wire();
     assert_eq!(glm["thinking"], json!({ "type": "disabled" }));

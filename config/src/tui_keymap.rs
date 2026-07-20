@@ -2,7 +2,7 @@
 //!
 //! This module defines the on-disk `[tui.keymap]` contract used by
 //! `~/.ody-code/config.toml` and normalizes user-entered key specs into canonical
-//! forms consumed by runtime keymap resolution in `ody-rs/tui/src/keymap.rs`.
+//! forms consumed by runtime keymap resolution in `ody/tui/src/keymap.rs`.
 //!
 //! Responsibilities:
 //!

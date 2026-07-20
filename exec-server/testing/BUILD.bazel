@@ -7,10 +7,10 @@ rust_library(
     crate_name = "wine_exec_server_test_support",
     crate_root = "wine_exec_server.rs",
     target_compatible_with = ["@platforms//os:linux"],
-    visibility = ["//ody-rs/core/tests/remote_env_windows:__pkg__"],
+    visibility = ["//ody/core/tests/remote_env_windows:__pkg__"],
     deps = [
         "//bazel/rules/testing/wine:wine_test_support",
-        "//ody-rs/utils/cargo-bin",
+        "//ody/utils/cargo-bin",
         "@crates//:anyhow",
         "@crates//:tokio",
     ],
@@ -41,7 +41,7 @@ rust_binary(
     target_compatible_with = ["@platforms//os:windows"],
     visibility = ["//visibility:public"],
     deps = [
-        "//ody-rs/exec-server",
+        "//ody/exec-server",
         "@crates//:tokio",
     ],
 )

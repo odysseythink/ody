@@ -20,7 +20,7 @@ use ody_protocol::request_user_input::RequestUserInputQuestionOption;
 
 /// Severities that escalate to the user at a given audit level. Monotonic: a
 /// stricter level is a superset of a looser one. Mirrors ody-code's
-/// `escalatedSeverities`, extended for ody-rs's extra `Critical` tier (which
+/// `escalatedSeverities`, extended for ody's extra `Critical` tier (which
 /// escalates at every level).
 fn escalated_severities(level: DesignAuditLevel) -> &'static [DesignReviewSeverity] {
     use DesignReviewSeverity::*;

@@ -15,7 +15,7 @@ use wiremock::matchers::method;
 use wiremock::matchers::path;
 
 /// Chat Completions SSE body whose terminal content chunk carries
-/// `finish_reason`, followed by a usage chunk (production-realistic: ody-rs
+/// `finish_reason`, followed by a usage chunk (production-realistic: ody
 /// always requests `stream_options.include_usage`).
 fn chat_sse_with_finish_reason(finish_reason: &str) -> String {
     format!(

@@ -14,6 +14,7 @@ use crate::bottom_pane::slash_commands::SlashCommandItem;
 use crate::bottom_pane::slash_commands::find_slash_command;
 use crate::goal_display::GOAL_USAGE;
 use crate::goal_files::GoalDraft;
+use ody_model_provider_info::LoginProvider;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SlashCommandDispatchSource {
@@ -443,7 +444,7 @@ impl ChatWidget {
                 self.start_login_flow(None);
             }
             SlashCommand::Logout => {
-                self.app_event_tx.send(AppEvent::Logout);
+                self.show_logout_provider_picker();
             }
             SlashCommand::Copy => {
                 self.copy_last_agent_markdown();
@@ -1005,8 +1006,7 @@ impl ChatWidget {
             SlashCommand::Logout if !trimmed.is_empty() => {
                 match crate::login::validation::validate_login_provider_name(trimmed) {
                     Ok(provider) => {
-                        self.app_event_tx
-                            .send(AppEvent::LogoutProvider { provider });
+                        self.show_logout_alias_picker(provider);
                     }
                     Err(err) => self.add_error_message(err),
                 }
@@ -1264,5 +1264,108 @@ impl ChatWidget {
         ));
         self.bottom_pane.drain_pending_submission_state();
         false
+    }
+
+    fn configured_aliases_for_provider(&self, provider: LoginProvider) -> Vec<String> {
+        self.config
+            .model_providers
+            .iter()
+            .filter(|(_, p)| match provider {
+                LoginProvider::Kimi => p.is_kimi(),
+                LoginProvider::Deepseek => p.is_deepseek(),
+                LoginProvider::Glm => p.is_glm(),
+            })
+            .map(|(alias, _)| alias.clone())
+            .collect()
+    }
+
+    pub(crate) fn show_logout_provider_picker(&mut self) {
+        let providers: Vec<LoginProvider> = [
+            LoginProvider::Kimi,
+            LoginProvider::Deepseek,
+            LoginProvider::Glm,
+        ]
+        .into_iter()
+        .filter(|p| !self.configured_aliases_for_provider(*p).is_empty())
+        .collect();
+
+        if providers.is_empty() {
+            self.add_info_message(
+                "No API-key providers are configured to log out.".to_string(),
+                None,
+            );
+            return;
+        }
+
+        let items: Vec<SelectionItem> = providers
+            .into_iter()
+            .map(|provider| {
+                let display = provider.display_name().to_string();
+                let id = provider.id().to_string();
+                let provider_for_action = provider;
+                SelectionItem {
+                    name: display,
+                    description: Some(format!("Log out of a {id} account")),
+                    actions: vec![Box::new(move |tx| {
+                        tx.send(AppEvent::LogoutProviderSelected {
+                            provider: provider_for_action,
+                        });
+                    })],
+                    dismiss_on_select: true,
+                    ..Default::default()
+                }
+            })
+            .collect();
+
+        self.bottom_pane.show_selection_view(SelectionViewParams {
+            title: Some("Select provider to log out".to_string()),
+            subtitle: Some("Choose a provider account to remove".to_string()),
+            footer_hint: Some(standard_popup_hint_line()),
+            items,
+            ..Default::default()
+        });
+        self.request_redraw();
+    }
+
+    pub(crate) fn show_logout_alias_picker(&mut self, provider: LoginProvider) {
+        let aliases = self.configured_aliases_for_provider(provider);
+        if aliases.is_empty() {
+            self.add_info_message(
+                format!("No {} provider accounts are configured.", provider.id()),
+                None,
+            );
+            return;
+        }
+
+        let provider_name = provider.display_name().to_string();
+        let provider_id = provider.id().to_string();
+        let items: Vec<SelectionItem> = aliases
+            .into_iter()
+            .map(|alias| {
+                let alias_for_action = alias.clone();
+                let provider_for_action = provider;
+                SelectionItem {
+                    name: alias.clone(),
+                    description: Some(format!("Remove {provider_id} account '{alias}'")),
+                    actions: vec![Box::new(move |tx| {
+                        tx.send(AppEvent::LogoutProviderAlias {
+                            provider: provider_for_action,
+                            alias: alias_for_action.clone(),
+                        });
+                    })],
+                    dismiss_on_select: true,
+                    ..Default::default()
+                }
+            })
+            .collect();
+
+        self.bottom_pane.show_selection_view(SelectionViewParams {
+            title: Some(format!("Select {provider_name} account to log out")),
+            subtitle: Some("Choose an account to remove".to_string()),
+            footer_hint: Some(standard_popup_hint_line()),
+            items,
+            ..Default::default()
+        });
+        self.request_redraw();
     }
 }

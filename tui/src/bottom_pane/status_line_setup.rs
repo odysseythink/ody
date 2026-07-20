@@ -633,7 +633,7 @@ mod tests {
                 ),
                 (
                     StatusLineItem::CurrentDir.preview_item(),
-                    "~/ody-rs".to_string(),
+                    "~/ody".to_string(),
                 ),
                 (
                     StatusLineItem::GitBranch.preview_item(),

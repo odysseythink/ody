@@ -31,36 +31,55 @@ pub(crate) fn seek_sequence(
     } else {
         start
     };
-    // Exact match first.
-    for i in search_start..=lines.len().saturating_sub(pattern.len()) {
-        if lines[i..i + pattern.len()] == *pattern {
-            return Some(i);
-        }
-    }
-    // Then rstrip match.
-    for i in search_start..=lines.len().saturating_sub(pattern.len()) {
-        let mut ok = true;
-        for (p_idx, pat) in pattern.iter().enumerate() {
-            if lines[i + p_idx].trim_end() != pat.trim_end() {
-                ok = false;
-                break;
+
+    // Helper that runs all four matching strategies from a given start index.
+    let try_match = |search_start: usize| -> Option<usize> {
+        // Exact match first.
+        for i in search_start..=lines.len().saturating_sub(pattern.len()) {
+            if lines[i..i + pattern.len()] == *pattern {
+                return Some(i);
             }
         }
-        if ok {
-            return Some(i);
-        }
-    }
-    // Finally, trim both sides to allow more lenience.
-    for i in search_start..=lines.len().saturating_sub(pattern.len()) {
-        let mut ok = true;
-        for (p_idx, pat) in pattern.iter().enumerate() {
-            if lines[i + p_idx].trim() != pat.trim() {
-                ok = false;
-                break;
+        // Then rstrip match.
+        for i in search_start..=lines.len().saturating_sub(pattern.len()) {
+            let mut ok = true;
+            for (p_idx, pat) in pattern.iter().enumerate() {
+                if lines[i + p_idx].trim_end() != pat.trim_end() {
+                    ok = false;
+                    break;
+                }
+            }
+            if ok {
+                return Some(i);
             }
         }
-        if ok {
-            return Some(i);
+        // Then trim both sides to allow more lenience.
+        for i in search_start..=lines.len().saturating_sub(pattern.len()) {
+            let mut ok = true;
+            for (p_idx, pat) in pattern.iter().enumerate() {
+                if lines[i + p_idx].trim() != pat.trim() {
+                    ok = false;
+                    break;
+                }
+            }
+            if ok {
+                return Some(i);
+            }
+        }
+        None
+    };
+
+    if let Some(idx) = try_match(search_start) {
+        return Some(idx);
+    }
+
+    // If eof was requested but the pattern was not found at the end of the
+    // file, fall back to a global search. Models frequently misuse
+    // `*** End of File` for hunks that modify the middle of a file, so this
+    // fallback preserves correctness while being lenient.
+    if eof && search_start != start {
+        if let Some(idx) = try_match(start) {
+            return Some(idx);
         }
     }
 

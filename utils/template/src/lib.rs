@@ -292,11 +292,11 @@ mod tests {
     fn render_replaces_placeholders_with_and_without_whitespace() {
         let rendered = render(
             "Hello, {{ name }}. You are in {{place}}. {{ name }} is repeated.",
-            [("name", "Ody"), ("place", "ody-rs")],
+            [("name", "Ody"), ("place", "ody")],
         )
         .unwrap();
 
-        assert_eq!(rendered, "Hello, Ody. You are in ody-rs. Ody is repeated.");
+        assert_eq!(rendered, "Hello, Ody. You are in ody. Ody is repeated.");
     }
 
     #[test]

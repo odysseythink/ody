@@ -253,7 +253,7 @@ fn guardian_shell_request(id: &str) -> GuardianApprovalRequest {
     GuardianApprovalRequest::Shell {
         id: id.to_string(),
         command: vec!["git".to_string(), "push".to_string()],
-        cwd: test_path_buf("/repo/ody-rs/core").abs(),
+        cwd: test_path_buf("/repo/ody/core").abs(),
         sandbox_permissions: crate::sandboxing::SandboxPermissions::UseDefault,
         additional_permissions: None,
         justification: Some("Need to push the reviewed docs fix.".to_string()),
@@ -351,7 +351,7 @@ fn guardian_snapshot_options() -> ContextSnapshotOptions {
 
 fn normalize_guardian_snapshot_paths(text: String) -> String {
     let mut text = text;
-    for canonical_path in ["/repo/ody-rs/core", "/repo"] {
+    for canonical_path in ["/repo/ody/core", "/repo"] {
         let platform_path = test_path_buf(canonical_path).display().to_string();
         if platform_path == canonical_path {
             continue;
@@ -433,7 +433,7 @@ async fn build_guardian_prompt_full_mode_preserves_initial_review_format() -> an
         GuardianApprovalRequest::Shell {
             id: "shell-1".to_string(),
             command: vec!["git".to_string(), "push".to_string()],
-            cwd: test_path_buf("/repo/ody-rs/core").abs(),
+            cwd: test_path_buf("/repo/ody/core").abs(),
             sandbox_permissions: crate::sandboxing::SandboxPermissions::UseDefault,
             additional_permissions: None,
             justification: Some("Need to push the reviewed docs fix.".to_string()),
@@ -547,7 +547,7 @@ async fn build_guardian_prompt_delta_mode_preserves_original_numbering() -> anyh
         GuardianApprovalRequest::Shell {
             id: "shell-2".to_string(),
             command: vec!["git".to_string(), "push".to_string()],
-            cwd: test_path_buf("/repo/ody-rs/core").abs(),
+            cwd: test_path_buf("/repo/ody/core").abs(),
             sandbox_permissions: crate::sandboxing::SandboxPermissions::UseDefault,
             additional_permissions: None,
             justification: Some("Need to push the second docs fix.".to_string()),
@@ -585,7 +585,7 @@ async fn build_guardian_prompt_delta_mode_handles_empty_delta() -> anyhow::Resul
         GuardianApprovalRequest::Shell {
             id: "shell-2".to_string(),
             command: vec!["git".to_string(), "push".to_string()],
-            cwd: test_path_buf("/repo/ody-rs/core").abs(),
+            cwd: test_path_buf("/repo/ody/core").abs(),
             sandbox_permissions: crate::sandboxing::SandboxPermissions::UseDefault,
             additional_permissions: None,
             justification: Some("Need to push the second docs fix.".to_string()),
@@ -620,7 +620,7 @@ async fn build_guardian_prompt_stale_delta_cursor_falls_back_to_full_prompt() ->
         GuardianApprovalRequest::Shell {
             id: "shell-3".to_string(),
             command: vec!["git".to_string(), "push".to_string()],
-            cwd: test_path_buf("/repo/ody-rs/core").abs(),
+            cwd: test_path_buf("/repo/ody/core").abs(),
             sandbox_permissions: crate::sandboxing::SandboxPermissions::UseDefault,
             additional_permissions: None,
             justification: Some("Need to push the docs fix.".to_string()),
@@ -705,7 +705,7 @@ async fn build_guardian_prompt_stale_delta_version_falls_back_to_full_prompt() -
         GuardianApprovalRequest::Shell {
             id: "shell-4".to_string(),
             command: vec!["git".to_string(), "push".to_string()],
-            cwd: test_path_buf("/repo/ody-rs/core").abs(),
+            cwd: test_path_buf("/repo/ody/core").abs(),
             sandbox_permissions: crate::sandboxing::SandboxPermissions::UseDefault,
             additional_permissions: None,
             justification: Some("Need to push after the compaction.".to_string()),
@@ -1465,7 +1465,7 @@ async fn guardian_request_model_for_auto_review(
         GuardianApprovalRequest::Shell {
             id: "shell-1".to_string(),
             command: vec!["git".to_string(), "push".to_string()],
-            cwd: test_path_buf("/repo/ody-rs/core").abs(),
+            cwd: test_path_buf("/repo/ody/core").abs(),
             sandbox_permissions: crate::sandboxing::SandboxPermissions::UseDefault,
             additional_permissions: None,
             justification: None,
@@ -1701,7 +1701,7 @@ async fn guardian_review_request_layout_matches_model_visible_request_snapshot()
             "origin".to_string(),
             "guardian-approval-mvp".to_string(),
         ],
-        cwd: test_path_buf("/repo/ody-rs/core").abs(),
+        cwd: test_path_buf("/repo/ody/core").abs(),
         sandbox_permissions: crate::sandboxing::SandboxPermissions::UseDefault,
         additional_permissions: None,
         justification: Some("Need to push the reviewed docs fix to the repo remote.".to_string()),
@@ -1894,7 +1894,7 @@ async fn guardian_reuses_prompt_cache_key_and_appends_prior_reviews() -> anyhow:
     let first_request = GuardianApprovalRequest::Shell {
         id: "shell-1".to_string(),
         command: vec!["git".to_string(), "push".to_string()],
-        cwd: test_path_buf("/repo/ody-rs/core").abs(),
+        cwd: test_path_buf("/repo/ody/core").abs(),
         sandbox_permissions: crate::sandboxing::SandboxPermissions::UseDefault,
         additional_permissions: None,
         justification: Some("Need to push the first docs fix.".to_string()),
@@ -1941,7 +1941,7 @@ async fn guardian_reuses_prompt_cache_key_and_appends_prior_reviews() -> anyhow:
             "push".to_string(),
             "--force-with-lease".to_string(),
         ],
-        cwd: test_path_buf("/repo/ody-rs/core").abs(),
+        cwd: test_path_buf("/repo/ody/core").abs(),
         sandbox_permissions: crate::sandboxing::SandboxPermissions::UseDefault,
         additional_permissions: None,
         justification: Some("Need to push the second docs fix.".to_string()),
@@ -1984,7 +1984,7 @@ async fn guardian_reuses_prompt_cache_key_and_appends_prior_reviews() -> anyhow:
     let third_request = GuardianApprovalRequest::Shell {
         id: "shell-3".to_string(),
         command: vec!["git".to_string(), "push".to_string()],
-        cwd: test_path_buf("/repo/ody-rs/core").abs(),
+        cwd: test_path_buf("/repo/ody/core").abs(),
         sandbox_permissions: crate::sandboxing::SandboxPermissions::UseDefault,
         additional_permissions: None,
         justification: Some("Need to push the third docs fix.".to_string()),
@@ -2176,7 +2176,7 @@ async fn guardian_reused_trunk_ignores_stale_prior_turn_completion() -> anyhow::
         GuardianApprovalRequest::Shell {
             id: "shell-1".to_string(),
             command: vec!["git".to_string(), "push".to_string()],
-            cwd: test_path_buf("/repo/ody-rs/core").abs(),
+            cwd: test_path_buf("/repo/ody/core").abs(),
             sandbox_permissions: crate::sandboxing::SandboxPermissions::UseDefault,
             additional_permissions: None,
             justification: Some("Need to push the first docs fix.".to_string()),
@@ -2219,7 +2219,7 @@ async fn guardian_reused_trunk_ignores_stale_prior_turn_completion() -> anyhow::
         GuardianApprovalRequest::Shell {
             id: "shell-2".to_string(),
             command: vec!["git".to_string(), "push".to_string()],
-            cwd: test_path_buf("/repo/ody-rs/core").abs(),
+            cwd: test_path_buf("/repo/ody/core").abs(),
             sandbox_permissions: crate::sandboxing::SandboxPermissions::UseDefault,
             additional_permissions: None,
             justification: Some("Need to push the second docs fix.".to_string()),
@@ -2296,7 +2296,7 @@ async fn guardian_review_surfaces_responses_api_errors_in_rejection_reason() -> 
         GuardianApprovalRequest::Shell {
             id: "shell-guardian-error".to_string(),
             command: vec!["git".to_string(), "push".to_string()],
-            cwd: test_path_buf("/repo/ody-rs/core").abs(),
+            cwd: test_path_buf("/repo/ody/core").abs(),
             sandbox_permissions: crate::sandboxing::SandboxPermissions::UseDefault,
             additional_permissions: None,
             justification: Some("Need to push the reviewed docs fix.".to_string()),
@@ -2682,7 +2682,7 @@ async fn guardian_ephemeral_retry_preserves_parallel_trunk_and_fork_history() ->
         let initial_request = GuardianApprovalRequest::Shell {
             id: "shell-guardian-1".to_string(),
             command: vec!["git".to_string(), "status".to_string()],
-            cwd: test_path_buf("/repo/ody-rs/core").abs(),
+            cwd: test_path_buf("/repo/ody/core").abs(),
             sandbox_permissions: crate::sandboxing::SandboxPermissions::UseDefault,
             additional_permissions: None,
             justification: Some("Inspect repo state before proceeding.".to_string()),
@@ -2725,7 +2725,7 @@ async fn guardian_ephemeral_retry_preserves_parallel_trunk_and_fork_history() ->
         let second_request = GuardianApprovalRequest::Shell {
             id: "shell-guardian-2".to_string(),
             command: vec!["git".to_string(), "diff".to_string()],
-            cwd: test_path_buf("/repo/ody-rs/core").abs(),
+            cwd: test_path_buf("/repo/ody/core").abs(),
             sandbox_permissions: crate::sandboxing::SandboxPermissions::UseDefault,
             additional_permissions: None,
             justification: Some("Inspect pending changes before proceeding.".to_string()),
@@ -2733,7 +2733,7 @@ async fn guardian_ephemeral_retry_preserves_parallel_trunk_and_fork_history() ->
         let third_request = GuardianApprovalRequest::Shell {
             id: "shell-guardian-3".to_string(),
             command: vec!["git".to_string(), "push".to_string()],
-            cwd: test_path_buf("/repo/ody-rs/core").abs(),
+            cwd: test_path_buf("/repo/ody/core").abs(),
             sandbox_permissions: crate::sandboxing::SandboxPermissions::UseDefault,
             additional_permissions: None,
             justification: Some("Inspect whether pushing is safe before proceeding.".to_string()),

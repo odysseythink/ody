@@ -8,7 +8,7 @@ path.
 
 ```sh
 bazel test \
-  //ody-rs/core/tests/remote_env_windows:smoke-test \
+  //ody/core/tests/remote_env_windows:smoke-test \
   --test_output=errors
 ```
 

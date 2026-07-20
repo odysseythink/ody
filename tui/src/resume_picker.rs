@@ -3471,7 +3471,7 @@ mod tests {
             "5h ago",
             "4h ago",
             Some(branch),
-            Some("~/code/ody.etraut-animations-false-improvements/ody-rs"),
+            Some("~/code/ody.etraut-animations-false-improvements/ody"),
             /*show_cwd*/ true,
             /*width*/ 140,
         );
@@ -3482,7 +3482,7 @@ mod tests {
 
     #[test]
     fn footer_cwd_truncates_to_responsive_column() {
-        let cwd = "~/code/ody.owner-extremely-long-worktree-name-that-needs-truncating/ody-rs";
+        let cwd = "~/code/ody.owner-extremely-long-worktree-name-that-needs-truncating/ody";
         let branch = "owner/branch";
         let footer = render_footer_lines(
             ThreadSortKey::UpdatedAt,
@@ -3509,7 +3509,7 @@ mod tests {
             "5h ago",
             "4h ago",
             Some("owner/branch"),
-            Some("~/code/ody.owner-worktree/ody-rs"),
+            Some("~/code/ody.owner-worktree/ody"),
             /*show_cwd*/ false,
             /*width*/ 80,
         );
@@ -4673,7 +4673,7 @@ session_picker_view = "dense"
             created_at: parse_timestamp_str("2026-04-28T16:30:00Z"),
             updated_at: parse_timestamp_str("2026-04-28T17:45:00Z"),
             cwd: Some(PathBuf::from(
-                "/Users/felipe.coury/code/ody.fcoury-session-picker/ody-rs",
+                "/Users/felipe.coury/code/ody.fcoury-session-picker/ody",
             )),
             git_branch: Some(String::from("fcoury/session-picker")),
         }
@@ -4724,7 +4724,7 @@ session_picker_view = "dense"
             render_dense_row_snapshot(
                 /*show_all*/ false,
                 Some(PathBuf::from(
-                    "/Users/felipe.coury/code/ody.fcoury-session-picker/ody-rs"
+                    "/Users/felipe.coury/code/ody.fcoury-session-picker/ody"
                 )),
                 /*width*/ 100,
             )
@@ -4883,7 +4883,7 @@ session_picker_view = "dense"
             ProviderFilter::MatchDefault(String::from("kimi")),
             /*show_all*/ false,
             Some(PathBuf::from(
-                "/Users/felipe.coury/code/ody.fcoury-session-picker/ody-rs",
+                "/Users/felipe.coury/code/ody.fcoury-session-picker/ody",
             )),
             SessionPickerAction::Resume,
         );

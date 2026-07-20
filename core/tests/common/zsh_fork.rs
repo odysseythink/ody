@@ -122,7 +122,7 @@ where
 
 fn find_test_zsh_path() -> Result<Option<PathBuf>> {
     let repo_root = ody_utils_cargo_bin::repo_root()?;
-    let dotslash_zsh = repo_root.join("ody-rs/app-server/tests/suite/zsh");
+    let dotslash_zsh = repo_root.join("ody/app-server/tests/suite/zsh");
     if !dotslash_zsh.is_file() {
         eprintln!(
             "skipping zsh-fork test: shared zsh DotSlash file not found at {}",

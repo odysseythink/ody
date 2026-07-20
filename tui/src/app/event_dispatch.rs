@@ -453,6 +453,12 @@ impl App {
             AppEvent::LogoutProvider { provider } => {
                 self.logout_provider(provider, app_server).await;
             }
+            AppEvent::LogoutProviderAlias { provider, alias } => {
+                self.logout_provider_alias(provider, alias, app_server).await;
+            }
+            AppEvent::LogoutProviderSelected { provider } => {
+                self.chat_widget.show_logout_alias_picker(provider);
+            }
             AppEvent::FatalExitRequest(message) => {
                 return Ok(AppRunControl::Exit(ExitReason::Fatal(message)));
             }

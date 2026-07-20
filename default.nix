@@ -14,7 +14,7 @@ rustPlatform.buildRustPackage (_: {
   env.PKG_CONFIG_PATH = lib.makeSearchPathOutput "dev" "lib/pkgconfig" (
     [ openssl ] ++ lib.optionals stdenv.isLinux [ libcap ]
   );
-  pname = "ody-rs";
+  pname = "ody";
   inherit version;
   cargoLock.lockFile = ./Cargo.lock;
   doCheck = false;

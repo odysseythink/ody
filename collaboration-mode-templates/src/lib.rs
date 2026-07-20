@@ -23,8 +23,8 @@ pub const PLAN_RIGOR_TURN_DISCIPLINE: &str =
 mod template_tests {
     use super::*;
 
-    /// The templates may only name tools ody-rs actually registers. The
-    /// inherited-from-ody-code wording named `Read/Grep/Glob`, which ody-rs did
+    /// The templates may only name tools ody actually registers. The
+    /// inherited-from-ody-code wording named `Read/Grep/Glob`, which ody did
     /// not ship; the model looked for them, found nothing, and fell back to raw
     /// `rg`/`cat` shell calls — the most context-expensive exploration path
     /// available. The tools now exist under their real names, so pin those.
@@ -36,7 +36,7 @@ mod template_tests {
         for (name, body) in [("PLAN", PLAN), ("PLAN_RIGOR_WORKFLOW", PLAN_RIGOR_WORKFLOW)] {
             assert!(
                 !body.contains("Read/Grep/Glob"),
-                "{name} names Read/Grep/Glob; ody-rs registers `read_file`/`grep`/`glob`"
+                "{name} names Read/Grep/Glob; ody registers `read_file`/`grep`/`glob`"
             );
             for tool in ["`grep`", "`glob`", "`read_file`"] {
                 assert!(

@@ -5,7 +5,7 @@ This crate implements the business logic for Ody. It is designed to be used by t
 ## Wine-exec integration tests
 
 On x86-64 Linux, run the shared suite against the Windows exec server with
-`bazel test //ody-rs/core:core-all-wine-exec-test`. Temporary blockers use a
+`bazel test //ody/core:core-all-wine-exec-test`. Temporary blockers use a
 source-local `skip_if_wine_exec!` call and reason.
 
 ## Dependencies

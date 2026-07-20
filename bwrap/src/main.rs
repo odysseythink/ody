@@ -35,7 +35,7 @@ fn main() {
 Notes:
 - ensure the target OS is Linux
 - libcap headers must be available via pkg-config
-- bubblewrap sources expected at ody-rs/vendor/bubblewrap (default)"#
+- bubblewrap sources expected at ody/vendor/bubblewrap (default)"#
     );
 }
 

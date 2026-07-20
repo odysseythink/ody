@@ -774,11 +774,11 @@ fn load_location_suffix_regexes() {
 #[test]
 fn file_link_hides_destination() {
     let text = render_markdown_text_for_cwd(
-        "[ody-rs/tui/src/markdown_render.rs](/Users/example/code/ody/ody-rs/tui/src/markdown_render.rs)",
+        "[ody/tui/src/markdown_render.rs](/Users/example/code/ody/ody/tui/src/markdown_render.rs)",
         Path::new("/Users/example/code/ody"),
     );
     let expected =
-        Text::from(Line::from_iter(["ody-rs/tui/src/markdown_render.rs".cyan()]));
+        Text::from(Line::from_iter(["ody/tui/src/markdown_render.rs".cyan()]));
     assert_eq!(text, expected);
 }
 
@@ -797,11 +797,11 @@ fn file_link_decodes_percent_encoded_bare_path_destination() {
 #[test]
 fn file_link_appends_line_number_when_label_lacks_it() {
     let text = render_markdown_text_for_cwd(
-        "[markdown_render.rs](/Users/example/code/ody/ody-rs/tui/src/markdown_render.rs:74)",
+        "[markdown_render.rs](/Users/example/code/ody/ody/tui/src/markdown_render.rs:74)",
         Path::new("/Users/example/code/ody"),
     );
     let expected = Text::from(Line::from_iter([
-        "ody-rs/tui/src/markdown_render.rs:74".cyan(),
+        "ody/tui/src/markdown_render.rs:74".cyan(),
     ]));
     assert_eq!(text, expected);
 }
@@ -810,7 +810,7 @@ fn file_link_appends_line_number_when_label_lacks_it() {
 fn file_link_keeps_absolute_paths_outside_cwd() {
     let text = render_markdown_text_for_cwd(
         "[README.md:74](/Users/example/code/ody/README.md:74)",
-        Path::new("/Users/example/code/ody/ody-rs/tui"),
+        Path::new("/Users/example/code/ody/ody/tui"),
     );
     let expected = Text::from(Line::from_iter(["/Users/example/code/ody/README.md:74".cyan()]));
     assert_eq!(text, expected);
@@ -819,12 +819,12 @@ fn file_link_keeps_absolute_paths_outside_cwd() {
 #[test]
 fn file_link_appends_hash_anchor_when_label_lacks_it() {
     let text = render_markdown_text_for_cwd(
-        "[markdown_render.rs](file:///Users/example/code/ody/ody-rs/tui/src/markdown_render.rs#L74C3)",
+        "[markdown_render.rs](file:///Users/example/code/ody/ody/tui/src/markdown_render.rs#L74C3)",
         Path::new("/Users/example/code/ody"),
     );
     let expected =
         Text::from(Line::from_iter([
-            "ody-rs/tui/src/markdown_render.rs:74:3".cyan(),
+            "ody/tui/src/markdown_render.rs:74:3".cyan(),
         ]));
     assert_eq!(text, expected);
 }
@@ -832,12 +832,12 @@ fn file_link_appends_hash_anchor_when_label_lacks_it() {
 #[test]
 fn file_link_uses_target_path_for_hash_anchor() {
     let text = render_markdown_text_for_cwd(
-        "[markdown_render.rs#L74C3](file:///Users/example/code/ody/ody-rs/tui/src/markdown_render.rs#L74C3)",
+        "[markdown_render.rs#L74C3](file:///Users/example/code/ody/ody/tui/src/markdown_render.rs#L74C3)",
         Path::new("/Users/example/code/ody"),
     );
     let expected =
         Text::from(Line::from_iter([
-            "ody-rs/tui/src/markdown_render.rs:74:3".cyan(),
+            "ody/tui/src/markdown_render.rs:74:3".cyan(),
         ]));
     assert_eq!(text, expected);
 }
@@ -845,12 +845,12 @@ fn file_link_uses_target_path_for_hash_anchor() {
 #[test]
 fn file_link_appends_range_when_label_lacks_it() {
     let text = render_markdown_text_for_cwd(
-        "[markdown_render.rs](/Users/example/code/ody/ody-rs/tui/src/markdown_render.rs:74:3-76:9)",
+        "[markdown_render.rs](/Users/example/code/ody/ody/tui/src/markdown_render.rs:74:3-76:9)",
         Path::new("/Users/example/code/ody"),
     );
     let expected =
         Text::from(Line::from_iter([
-            "ody-rs/tui/src/markdown_render.rs:74:3-76:9".cyan(),
+            "ody/tui/src/markdown_render.rs:74:3-76:9".cyan(),
         ]));
     assert_eq!(text, expected);
 }
@@ -858,12 +858,12 @@ fn file_link_appends_range_when_label_lacks_it() {
 #[test]
 fn file_link_uses_target_path_for_range() {
     let text = render_markdown_text_for_cwd(
-        "[markdown_render.rs:74:3-76:9](/Users/example/code/ody/ody-rs/tui/src/markdown_render.rs:74:3-76:9)",
+        "[markdown_render.rs:74:3-76:9](/Users/example/code/ody/ody/tui/src/markdown_render.rs:74:3-76:9)",
         Path::new("/Users/example/code/ody"),
     );
     let expected =
         Text::from(Line::from_iter([
-            "ody-rs/tui/src/markdown_render.rs:74:3-76:9".cyan(),
+            "ody/tui/src/markdown_render.rs:74:3-76:9".cyan(),
         ]));
     assert_eq!(text, expected);
 }
@@ -871,12 +871,12 @@ fn file_link_uses_target_path_for_range() {
 #[test]
 fn file_link_appends_hash_range_when_label_lacks_it() {
     let text = render_markdown_text_for_cwd(
-        "[markdown_render.rs](file:///Users/example/code/ody/ody-rs/tui/src/markdown_render.rs#L74C3-L76C9)",
+        "[markdown_render.rs](file:///Users/example/code/ody/ody/tui/src/markdown_render.rs#L74C3-L76C9)",
         Path::new("/Users/example/code/ody"),
     );
     let expected =
         Text::from(Line::from_iter([
-            "ody-rs/tui/src/markdown_render.rs:74:3-76:9".cyan(),
+            "ody/tui/src/markdown_render.rs:74:3-76:9".cyan(),
         ]));
     assert_eq!(text, expected);
 }
@@ -884,13 +884,13 @@ fn file_link_appends_hash_range_when_label_lacks_it() {
 #[test]
 fn multiline_file_link_label_after_styled_prefix_does_not_panic() {
     let text = render_markdown_text_for_cwd(
-        "**bold** plain [foo\nbar](file:///Users/example/code/ody/ody-rs/tui/src/markdown_render.rs#L74C3)",
+        "**bold** plain [foo\nbar](file:///Users/example/code/ody/ody/tui/src/markdown_render.rs#L74C3)",
         Path::new("/Users/example/code/ody"),
     );
     let expected = Text::from(Line::from_iter([
         "bold".bold(),
         " plain ".into(),
-        "ody-rs/tui/src/markdown_render.rs:74:3".cyan(),
+        "ody/tui/src/markdown_render.rs:74:3".cyan(),
     ]));
     assert_eq!(text, expected);
 }
@@ -898,12 +898,12 @@ fn multiline_file_link_label_after_styled_prefix_does_not_panic() {
 #[test]
 fn file_link_uses_target_path_for_hash_range() {
     let text = render_markdown_text_for_cwd(
-        "[markdown_render.rs#L74C3-L76C9](file:///Users/example/code/ody/ody-rs/tui/src/markdown_render.rs#L74C3-L76C9)",
+        "[markdown_render.rs#L74C3-L76C9](file:///Users/example/code/ody/ody/tui/src/markdown_render.rs#L74C3-L76C9)",
         Path::new("/Users/example/code/ody"),
     );
     let expected =
         Text::from(Line::from_iter([
-            "ody-rs/tui/src/markdown_render.rs:74:3-76:9".cyan(),
+            "ody/tui/src/markdown_render.rs:74:3-76:9".cyan(),
         ]));
     assert_eq!(text, expected);
 }
@@ -923,7 +923,7 @@ fn url_link_shows_destination() {
 #[test]
 fn markdown_render_file_link_snapshot() {
     let text = render_markdown_text_for_cwd(
-        "See [markdown_render.rs:74](/Users/example/code/ody/ody-rs/tui/src/markdown_render.rs:74).",
+        "See [markdown_render.rs:74](/Users/example/code/ody/ody/tui/src/markdown_render.rs:74).",
         Path::new("/Users/example/code/ody"),
     );
     let rendered = text
@@ -944,7 +944,7 @@ fn markdown_render_file_link_snapshot() {
 #[test]
 fn unordered_list_local_file_link_stays_inline_with_following_text() {
     let text = render_markdown_text_with_width_and_cwd(
-        "- [binary](/Users/example/code/ody/ody-rs/README.md:93): core is the agent/business logic, tui is the terminal UI, exec is the headless automation surface, and cli is the top-level multitool binary.",
+        "- [binary](/Users/example/code/ody/ody/README.md:93): core is the agent/business logic, tui is the terminal UI, exec is the headless automation surface, and cli is the top-level multitool binary.",
         Some(72),
         Some(Path::new("/Users/example/code/ody")),
     );
@@ -961,7 +961,7 @@ fn unordered_list_local_file_link_stays_inline_with_following_text() {
     assert_eq!(
         rendered,
         vec![
-            "- ody-rs/README.md:93: core is the agent/business logic, tui is the",
+            "- ody/README.md:93: core is the agent/business logic, tui is the",
             "  terminal UI, exec is the headless automation surface, and cli is the",
             "  top-level multitool binary.",
         ]
@@ -971,7 +971,7 @@ fn unordered_list_local_file_link_stays_inline_with_following_text() {
 #[test]
 fn unordered_list_local_file_link_soft_break_before_colon_stays_inline() {
     let text = render_markdown_text_with_width_and_cwd(
-        "- [binary](/Users/example/code/ody/ody-rs/README.md:93)\n  : core is the agent/business logic.",
+        "- [binary](/Users/example/code/ody/ody/README.md:93)\n  : core is the agent/business logic.",
         Some(72),
         Some(Path::new("/Users/example/code/ody")),
     );
@@ -987,14 +987,14 @@ fn unordered_list_local_file_link_soft_break_before_colon_stays_inline() {
         .collect::<Vec<_>>();
     assert_eq!(
         rendered,
-        vec!["- ody-rs/README.md:93: core is the agent/business logic.",]
+        vec!["- ody/README.md:93: core is the agent/business logic.",]
     );
 }
 
 #[test]
 fn consecutive_unordered_list_local_file_links_do_not_detach_paths() {
     let text = render_markdown_text_with_width_and_cwd(
-        "- [binary](/Users/example/code/ody/ody-rs/README.md:93)\n  : cli is the top-level multitool binary.\n- [expectations](/Users/example/code/ody/ody-rs/core/README.md:1)\n  : ody-core owns the real runtime behavior.",
+        "- [binary](/Users/example/code/ody/ody/README.md:93)\n  : cli is the top-level multitool binary.\n- [expectations](/Users/example/code/ody/ody/core/README.md:1)\n  : ody-core owns the real runtime behavior.",
         Some(72),
         Some(Path::new("/Users/example/code/ody")),
     );
@@ -1011,8 +1011,8 @@ fn consecutive_unordered_list_local_file_links_do_not_detach_paths() {
     assert_eq!(
         rendered,
         vec![
-            "- ody-rs/README.md:93: cli is the top-level multitool binary.",
-            "- ody-rs/core/README.md:1: ody-core owns the real runtime behavior.",
+            "- ody/README.md:93: cli is the top-level multitool binary.",
+            "- ody/core/README.md:1: ody-core owns the real runtime behavior.",
         ]
     );
 }
@@ -1658,8 +1658,8 @@ fn table_separates_logical_rows_after_wrapped_content() {
 fn table_wraps_file_paths_before_collapsing_narrative_columns_snapshot() {
     let md = r#"| Unit | Files | Adds | Removes | What It Adds |
 |---|---:|---:|---:|---|
-| Suggestion engine and unit coverage | [next_prompt_suggestion.rs](/Users/example/code/ody/ody-rs/core/src/next_prompt_suggestion.rs:1), [next_prompt_suggestion_tests.rs](/Users/example/code/ody/ody-rs/core/src/next_prompt_suggestion_tests.rs:1) | 704 | 0 | Sampling workflow, stable-history checks, tool-flow suppression, fast reasoning profile, filtering rules, cancellation and timeout. |
-| Model instruction fragment and contextual isolation | [next_prompt_suggestion.rs](/Users/example/code/ody/ody-rs/core/src/context/next_prompt_suggestion.rs:1), [contextual_user_message_tests.rs](/Users/example/code/ody/ody-rs/core/src/context/contextual_user_message_tests.rs:1) | 54 | 0 | Synthetic suggestion prompt and an isolation test for ordinary user text. |
+| Suggestion engine and unit coverage | [next_prompt_suggestion.rs](/Users/example/code/ody/ody/core/src/next_prompt_suggestion.rs:1), [next_prompt_suggestion_tests.rs](/Users/example/code/ody/ody/core/src/next_prompt_suggestion_tests.rs:1) | 704 | 0 | Sampling workflow, stable-history checks, tool-flow suppression, fast reasoning profile, filtering rules, cancellation and timeout. |
+| Model instruction fragment and contextual isolation | [next_prompt_suggestion.rs](/Users/example/code/ody/ody/core/src/context/next_prompt_suggestion.rs:1), [contextual_user_message_tests.rs](/Users/example/code/ody/ody/core/src/context/contextual_user_message_tests.rs:1) | 54 | 0 | Synthetic suggestion prompt and an isolation test for ordinary user text. |
 "#;
     let text = render_markdown_text_with_width_and_cwd(
         md,

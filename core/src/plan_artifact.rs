@@ -625,7 +625,7 @@ mod tests {
         // length cap, so a /writing-plan prompt embedding two absolute file paths
         // produced 150+ char filenames. `sanitize_name` must cap output length
         // regardless of caller.
-        let long_prompt = "请阅读文件 .ody-code/designs/2026-07-10-d6-design-plan-handoff.md 的内容，并将其转换为一份完整、可执行的执行计划，写入计划文件 /Users/ranwei/workspace/rust_work/ody-rs/.ody-code/plans/2026-07-10-d6-design-plan-handoff.md。";
+        let long_prompt = "请阅读文件 .ody-code/designs/2026-07-10-d6-design-plan-handoff.md 的内容，并将其转换为一份完整、可执行的执行计划，写入计划文件 /Users/ranwei/workspace/rust_work/ody/.ody-code/plans/2026-07-10-d6-design-plan-handoff.md。";
         let slug = sanitize_plan_slug(long_prompt);
         assert!(
             slug.len() <= 60,

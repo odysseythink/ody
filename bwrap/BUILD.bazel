@@ -19,10 +19,10 @@ ody_rust_crate(
 
 cc_library(
     name = "bwrap-ffi",
-    srcs = ["//ody-rs/vendor:bubblewrap_c_sources"],
+    srcs = ["//ody/vendor:bubblewrap_c_sources"],
     hdrs = [
         "config.h",
-        "//ody-rs/vendor:bubblewrap_headers",
+        "//ody/vendor:bubblewrap_headers",
     ],
     copts = [
         "-D_GNU_SOURCE",

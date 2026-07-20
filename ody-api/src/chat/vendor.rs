@@ -124,7 +124,7 @@ impl ChatVendor {
     /// carries no thinking control, which streams a long `reasoning_content`
     /// trace and roughly doubles latency (measured: a one-line prompt took 12.8s
     /// with thinking vs 6.7s without; large designs blow past the review
-    /// timeout). ody-rs already treats GLM as non-thinking (see
+    /// timeout). ody already treats GLM as non-thinking (see
     /// [`Self::supports_thinking` in the adapter] and [`Self::emits_reasoning_effort`]),
     /// so make the wire match that stance by explicitly disabling it. Mirrors
     /// ody-code's GLM provider, which sends `thinking: { type: "disabled" }` when

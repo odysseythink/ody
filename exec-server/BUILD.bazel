@@ -7,7 +7,7 @@ ody_rust_crate(
         "@crates//:toml",
     ],
     extra_binaries = [
-        "//ody-rs/bwrap:bwrap",
+        "//ody/bwrap:bwrap",
     ],
     integration_compile_data_extra = [
         "src/proto/ody.exec_server.relay.v1.rs",

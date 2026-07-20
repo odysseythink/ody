@@ -3,14 +3,14 @@
 This directory owns reusable memory crates and the memory pipeline documentation.
 
 Runtime orchestration for Phase 1 and Phase 2 still lives in `ody-core` under
-`ody-rs/core/src/memories/`.
+`ody/core/src/memories/`.
 
 ## Crates
 
-- `ody-rs/memories/read` (`ody-memories-read`) owns the read path:
+- `ody/memories/read` (`ody-memories-read`) owns the read path:
   memory developer-instruction injection, memory citation parsing, and
   read-usage telemetry classification.
-- `ody-rs/memories/write` (`ody-memories-write`) owns the write path:
+- `ody/memories/write` (`ody-memories-write`) owns the write path:
   Phase 1 and Phase 2 prompt rendering, filesystem artifact helpers,
   workspace diff helpers, and extension resource pruning.
 

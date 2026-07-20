@@ -681,7 +681,7 @@ mod tests {
     #[test]
     fn supports_cd_and_rg_files() {
         assert_parsed(
-            &shlex_split_safe("cd ody-rs && rg --files"),
+            &shlex_split_safe("cd ody && rg --files"),
             vec![ParsedCommand::ListFiles {
                 cmd: "rg --files".to_string(),
                 path: None,
@@ -691,13 +691,13 @@ mod tests {
 
     #[test]
     fn supports_single_string_script_with_cd_and_pipe() {
-        let inner = r#"cd /Users/pakrym/code/ody && rg -n "ody_api" ody-rs -S | head -n 50"#;
+        let inner = r#"cd /Users/pakrym/code/ody && rg -n "ody_api" ody -S | head -n 50"#;
         assert_parsed(
             &vec_str(&["bash", "-lc", inner]),
             vec![ParsedCommand::Search {
-                cmd: "rg -n ody_api ody-rs -S".to_string(),
+                cmd: "rg -n ody_api ody -S".to_string(),
                 query: Some("ody_api".to_string()),
-                path: Some("ody-rs".to_string()),
+                path: Some("ody".to_string()),
             }],
         );
     }
