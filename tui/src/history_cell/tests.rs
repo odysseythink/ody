@@ -147,35 +147,35 @@ fn string_map_to_toml_value(entries: HashMap<String, String>) -> toml::Value {
 }
 
 fn render_lines(lines: &[Line<'static>]) -> Vec<String> {
-        lines
-            .iter()
-            .map(|line| {
-                line.spans
-                    .iter()
-                    .map(|span| span.content.as_ref())
-                    .collect::<String>()
-            })
-            .collect()
-    }
+    lines
+        .iter()
+        .map(|line| {
+            line.spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<String>()
+        })
+        .collect()
+}
 
-    #[test]
-    fn history_cell_default_collapsible_methods() {
-        let cell = PlainHistoryCell::new(vec![Line::from("hello")]);
-        assert!(
-            !cell.is_collapsible(),
-            "PlainHistoryCell should not be collapsible by default"
-        );
-        assert!(
-            !cell.is_expanded(),
-            "PlainHistoryCell should not be expanded by default"
-        );
-        assert!(
-            !cell.toggle_expanded(),
-            "PlainHistoryCell toggle should remain false because it has no state"
-        );
-    }
+#[test]
+fn history_cell_default_collapsible_methods() {
+    let cell = PlainHistoryCell::new(vec![Line::from("hello")]);
+    assert!(
+        !cell.is_collapsible(),
+        "PlainHistoryCell should not be collapsible by default"
+    );
+    assert!(
+        !cell.is_expanded(),
+        "PlainHistoryCell should not be expanded by default"
+    );
+    assert!(
+        !cell.toggle_expanded(),
+        "PlainHistoryCell toggle should remain false because it has no state"
+    );
+}
 
-    fn render_transcript(cell: &dyn HistoryCell) -> Vec<String> {
+fn render_transcript(cell: &dyn HistoryCell) -> Vec<String> {
     render_lines(&cell.transcript_lines(u16::MAX))
 }
 
@@ -2807,7 +2807,10 @@ fn proposed_plan_cell_collapses_and_expands() {
     );
     cell.toggle_expanded();
     let expanded = render_lines(&cell.display_lines(80));
-    assert!(expanded.len() > collapsed.len(), "expanded plan should be taller");
+    assert!(
+        expanded.len() > collapsed.len(),
+        "expanded plan should be taller"
+    );
 }
 
 #[test]
@@ -2837,15 +2840,24 @@ fn mcp_tool_call_cell_collapses_long_result() {
         arguments: Some(json!({"query": "rust"})),
     };
     let mut cell = new_active_mcp_tool_call("call-collapse".into(), invocation, false);
-    assert!(!cell.is_collapsible(), "tool call without result is not collapsible");
+    assert!(
+        !cell.is_collapsible(),
+        "tool call without result is not collapsible"
+    );
     let result = CallToolResult {
         content: vec![text_block("line 1\nline 2\nline 3\nline 4\nline 5")],
         is_error: None,
         structured_content: None,
         meta: None,
     };
-    assert!(cell.complete(Duration::from_millis(1), Ok(result)).is_none());
-    assert!(cell.is_collapsible(), "tool call with multi-line result is collapsible");
+    assert!(
+        cell.complete(Duration::from_millis(1), Ok(result))
+            .is_none()
+    );
+    assert!(
+        cell.is_collapsible(),
+        "tool call with multi-line result is collapsible"
+    );
     assert!(!cell.is_expanded(), "collapsed by default");
     let collapsed = render_lines(&cell.display_lines(80));
     assert!(
@@ -2854,7 +2866,10 @@ fn mcp_tool_call_cell_collapses_long_result() {
     );
     cell.toggle_expanded();
     let expanded = render_lines(&cell.display_lines(80));
-    assert!(expanded.len() > collapsed.len(), "expanded tool result should be taller");
+    assert!(
+        expanded.len() > collapsed.len(),
+        "expanded tool result should be taller"
+    );
 }
 
 #[test]

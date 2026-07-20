@@ -181,12 +181,9 @@ impl HistoryCell for ProposedPlanCell {
             return full;
         }
         let visible = visible_lines(full);
-        let truncated = truncate_lines_with_hint(
-            visible,
-            PLAN_PREVIEW_LINES,
-            false,
-            |remaining| collapse_hint(remaining),
-        );
+        let truncated = truncate_lines_with_hint(visible, PLAN_PREVIEW_LINES, false, |remaining| {
+            collapse_hint(remaining)
+        });
         plain_hyperlink_lines(truncated)
     }
 
@@ -214,7 +211,8 @@ impl HistoryCell for ProposedPlanCell {
     fn toggle_expanded(&self) -> bool {
         let current = self.expanded.load(std::sync::atomic::Ordering::Relaxed);
         let new = !current;
-        self.expanded.store(new, std::sync::atomic::Ordering::Relaxed);
+        self.expanded
+            .store(new, std::sync::atomic::Ordering::Relaxed);
         new
     }
 }

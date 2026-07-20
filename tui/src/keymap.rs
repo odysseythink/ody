@@ -942,9 +942,10 @@ impl RuntimeKeymap {
                     shift(KeyCode::Up)
                 ],
                 toggle_history_cell_expansion: default_bindings![alt(KeyCode::Char('o'))],
-                open_history_cell_overlay: default_bindings![raw(
-                    KeyBinding::new(KeyCode::Char('o'), KeyModifiers::ALT | KeyModifiers::SHIFT)
-                )],
+                open_history_cell_overlay: default_bindings![raw(KeyBinding::new(
+                    KeyCode::Char('o'),
+                    KeyModifiers::ALT | KeyModifiers::SHIFT
+                ))],
                 edit_queued_message: default_bindings![alt(KeyCode::Up), shift(KeyCode::Left)],
             },
             composer: ComposerKeymap {

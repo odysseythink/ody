@@ -141,8 +141,6 @@ pub struct InProcessStartArgs {
     pub config_warnings: Vec<ConfigWarningNotification>,
     /// Session source stamped into thread/session metadata.
     pub session_source: SessionSource,
-    /// Whether auth loading should honor the `ODY_API_KEY` environment variable.
-    pub enable_ody_api_key_env: bool,
     /// Initialize params used for initial handshake.
     pub initialize: InitializeParams,
     /// Capacity used for all runtime queues (clamped to at least 1).
@@ -775,7 +773,6 @@ mod tests {
             environment_manager: Arc::new(EnvironmentManager::default_for_tests()),
             config_warnings: Vec::new(),
             session_source,
-            enable_ody_api_key_env: false,
             initialize: InitializeParams {
                 client_info: ClientInfo {
                     name: "ody-in-process-test".to_string(),

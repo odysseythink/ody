@@ -7,8 +7,8 @@ use super::*;
 use ratatui::buffer::Buffer;
 use ratatui::text::{Line, Span};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Availability of the thinking toggle for a given model preset.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -101,9 +101,7 @@ struct ModelPickerThinkingControl {
 impl Renderable for ModelPickerThinkingControl {
     fn render(&self, area: Rect, buf: &mut Buffer) {
         let label = match self.state.availability() {
-            ThinkingAvailability::AlwaysOn => {
-                "Thinking  (/ to toggle)   [ Always on ]".to_string()
-            }
+            ThinkingAvailability::AlwaysOn => "Thinking  (/ to toggle)   [ Always on ]".to_string(),
             ThinkingAvailability::Unsupported => {
                 "Thinking  (/ to toggle)   [ Off ] unsupported".to_string()
             }
@@ -296,9 +294,7 @@ impl ChatWidget {
             is_default: preset.is_default,
             search_value: Some(format!(
                 "{} {} {}",
-                preset.model,
-                preset.display_name,
-                preset.provider
+                preset.model, preset.display_name, preset.provider
             )),
             actions,
             dismiss_on_select: true,
@@ -331,7 +327,10 @@ impl ChatWidget {
         let initial_availability = current_preset
             .map(Self::thinking_availability)
             .unwrap_or(ThinkingAvailability::Unsupported);
-        let state = Arc::new(ModelPickerState::new(initial_thinking, initial_availability));
+        let state = Arc::new(ModelPickerState::new(
+            initial_thinking,
+            initial_availability,
+        ));
 
         // Precompute plan-mode reasoning scope prompts for each preset.
         let mut scope_prompts: HashMap<String, bool> = HashMap::new();
@@ -422,7 +421,12 @@ impl ChatWidget {
                 .iter()
                 .map(|preset| {
                     let should_prompt = *scope_prompts.get(&preset.model).unwrap_or(&false);
-                    self.build_model_picker_item(preset, &current_model, state.clone(), should_prompt)
+                    self.build_model_picker_item(
+                        preset,
+                        &current_model,
+                        state.clone(),
+                        should_prompt,
+                    )
                 })
                 .collect();
             tabs.push(SelectionTab {
@@ -446,9 +450,7 @@ impl ChatWidget {
 
         let selected_state = state.clone();
         let custom_handler: CustomKeyHandlerCallback = Some(Box::new(move |key_event, _tx| {
-            if key_event.code == KeyCode::Char('/')
-                && key_event.modifiers == KeyModifiers::NONE
-            {
+            if key_event.code == KeyCode::Char('/') && key_event.modifiers == KeyModifiers::NONE {
                 selected_state.toggle_thinking();
                 return true;
             }

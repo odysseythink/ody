@@ -72,7 +72,11 @@ fn build_logout_provider_edits_clears_provider_table() {
 #[test]
 fn build_logout_provider_edits_clears_default_model_when_owned_by_provider() {
     let aliases = vec!["work-kimi".to_string()];
-    let edits = build_logout_provider_edits(&aliases, &std::collections::HashMap::new(), Some("work-kimi/kimi-k2"));
+    let edits = build_logout_provider_edits(
+        &aliases,
+        &std::collections::HashMap::new(),
+        Some("work-kimi/kimi-k2"),
+    );
     assert_eq!(edits.len(), 2);
     assert_eq!(edits[1].key_path, "model");
     assert_eq!(edits[1].value, serde_json::Value::Null);
@@ -81,14 +85,19 @@ fn build_logout_provider_edits_clears_default_model_when_owned_by_provider() {
 #[test]
 fn build_logout_provider_edits_keeps_default_model_when_not_owned_by_provider() {
     let aliases = vec!["work-kimi".to_string()];
-    let edits = build_logout_provider_edits(&aliases, &std::collections::HashMap::new(), Some("other/gpt-5"));
+    let edits = build_logout_provider_edits(
+        &aliases,
+        &std::collections::HashMap::new(),
+        Some("other/gpt-5"),
+    );
     assert_eq!(edits.len(), 1);
     assert_eq!(edits[0].key_path, "providers.work-kimi");
 }
 
 #[test]
 fn build_logout_provider_edits_returns_empty_when_no_aliases() {
-    let edits: Vec<ody_app_server_protocol::ConfigEdit> = build_logout_provider_edits(&[], &std::collections::HashMap::new(), None);
+    let edits: Vec<ody_app_server_protocol::ConfigEdit> =
+        build_logout_provider_edits(&[], &std::collections::HashMap::new(), None);
     assert!(edits.is_empty());
 }
 
@@ -100,10 +109,7 @@ fn build_logout_provider_edits_clears_matching_models() {
         "work-kimi/kimi-k2".to_string(),
         OdyCodeModelConfig::default(),
     );
-    models.insert(
-        "other/gpt-5".to_string(),
-        OdyCodeModelConfig::default(),
-    );
+    models.insert("other/gpt-5".to_string(), OdyCodeModelConfig::default());
     let edits = build_logout_provider_edits(&aliases, &models, None);
     assert_eq!(edits.len(), 2);
     assert_eq!(edits[0].key_path, "providers.work-kimi");

@@ -1,9 +1,9 @@
 use super::*;
 use crate::models::model_from_preset;
 use futures::StreamExt;
+use ody_core::config::permission_profile_catalog;
 use ody_protocol::model_metadata::ModelInfo;
 use ody_protocol::model_metadata::ModelPreset;
-use ody_core::config::permission_profile_catalog;
 
 #[derive(Clone)]
 pub(crate) struct CatalogRequestProcessor {

@@ -586,10 +586,7 @@ pub(crate) fn status_line_right_indicator_line(
         .or_else(|| goal_status_indicator_line(goal_status_indicator));
     let mut line: Option<Line<'static>> = None;
 
-    for indicator in [primary_indicator]
-        .into_iter()
-        .flatten()
-    {
+    for indicator in [primary_indicator].into_iter().flatten() {
         if let Some(line) = line.as_mut() {
             line.push_span(" · ".dim());
             for span in indicator.spans {
@@ -1552,7 +1549,6 @@ mod tests {
         terminal.backend().vt100().screen().contents()
     }
 
-
     #[test]
     fn footer_snapshots() {
         snapshot_footer(
@@ -1901,7 +1897,6 @@ mod tests {
             Some(CollaborationModeIndicator::Plan),
             context_window_line(Some(50), /*used_tokens*/ None),
         );
-
 
         let props = FooterProps {
             mode: FooterMode::ComposerEmpty,
