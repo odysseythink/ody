@@ -513,7 +513,7 @@ impl TestOdyBuilder {
         #[cfg(target_os = "linux")]
         let local_runtime_paths = ody_exec_server::ExecServerRuntimePaths::from_optional_paths(
             std::env::current_exe().ok(),
-            find_ody_linux_sandbox_exe().ok(),
+            crate::find_ody_linux_sandbox_exe().ok(),
         )?;
         #[cfg(not(target_os = "linux"))]
         let local_runtime_paths =
