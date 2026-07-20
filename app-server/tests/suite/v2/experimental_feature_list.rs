@@ -1,11 +1,9 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use app_test_support::ApiKeyAuthFixture;
 use app_test_support::TestAppServer;
 use app_test_support::create_mock_responses_server_repeating_assistant;
 use app_test_support::to_response;
-use app_test_support::write_api_key_auth;
 use ody_app_server_protocol::ConfigReadParams;
 use ody_app_server_protocol::ConfigReadResponse;
 use ody_app_server_protocol::ExperimentalFeature;
@@ -20,7 +18,6 @@ use ody_app_server_protocol::RequestId;
 use ody_app_server_protocol::ThreadStartParams;
 use ody_app_server_protocol::ThreadStartResponse;
 use ody_config::LoaderOverrides;
-use ody_config::types::AuthCredentialsStoreMode;
 use ody_core::config::ConfigBuilder;
 use ody_features::FEATURES;
 use ody_features::Stage;
@@ -112,13 +109,6 @@ async fn experimental_feature_list_ignores_remote_workspace_policy() -> Result<(
 "#,
             server.uri()
         ),
-    )?;
-    write_api_key_auth(
-        ody_home.path(),
-        ApiKeyAuthFixture::new("api-key")
-            .account_id("account-123")
-            .plan_type("team"),
-        AuthCredentialsStoreMode::File,
     )?;
     Mock::given(method("GET"))
         .and(path("/backend-api/accounts/account-123/settings"))

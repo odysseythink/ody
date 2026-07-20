@@ -1,8 +1,5 @@
 use anyhow::Result;
-use app_test_support::ApiKeyAuthFixture;
 use app_test_support::DEFAULT_CLIENT_NAME;
-use app_test_support::write_api_key_auth;
-use ody_config::types::AuthCredentialsStoreMode;
 use ody_config::types::OtelExporterKind;
 use ody_config::types::OtelHttpProtocol;
 use ody_core::config::ConfigBuilder;
@@ -86,11 +83,6 @@ pub(crate) async fn mount_analytics_capture(server: &MockServer, ody_home: &Path
         .mount(server)
         .await;
 
-    write_api_key_auth(
-        ody_home,
-        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
-        AuthCredentialsStoreMode::File,
-    )?;
 
     Ok(())
 }

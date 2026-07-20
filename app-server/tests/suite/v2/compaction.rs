@@ -6,10 +6,8 @@
 //! 3) Assert: verify item/started + item/completed notifications for context compaction.
 
 use anyhow::Result;
-use app_test_support::ApiKeyAuthFixture;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
-use app_test_support::write_api_key_auth;
 use app_test_support::write_mock_responses_config_toml;
 use core_test_support::responses;
 use core_test_support::skip_if_no_network;
@@ -28,7 +26,6 @@ use ody_app_server_protocol::TurnCompletedNotification;
 use ody_app_server_protocol::TurnStartParams;
 use ody_app_server_protocol::TurnStartResponse;
 use ody_app_server_protocol::UserInput as V2UserInput;
-use ody_config::types::AuthCredentialsStoreMode;
 use ody_features::Feature;
 use ody_protocol::models::ContentItem;
 use ody_protocol::models::ResponseItem;
@@ -157,11 +154,6 @@ async fn auto_compaction_remote_emits_started_and_completed_items() -> Result<()
         Some(true),
         "mock_provider",
         COMPACT_PROMPT,
-    )?;
-    write_api_key_auth(
-        ody_home.path(),
-        ApiKeyAuthFixture::new("access-key").plan_type("pro"),
-        AuthCredentialsStoreMode::File,
     )?;
 
     let mut mcp = TestAppServer::new_with_env(ody_home.path(), &[("OPENAI_API_KEY", None)]).await?;

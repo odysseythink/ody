@@ -2,10 +2,8 @@ use std::time::Duration;
 
 use anyhow::Result;
 use anyhow::bail;
-use app_test_support::ApiKeyAuthFixture;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
-use app_test_support::write_api_key_auth;
 use ody_app_server_protocol::JSONRPCResponse;
 use ody_app_server_protocol::PluginAuthPolicy;
 use ody_app_server_protocol::PluginInstallPolicy;
@@ -18,7 +16,6 @@ use ody_app_server_protocol::PluginMarketplaceEntry;
 use ody_app_server_protocol::PluginSource;
 use ody_app_server_protocol::PluginSummary;
 use ody_app_server_protocol::RequestId;
-use ody_config::types::AuthCredentialsStoreMode;
 use ody_core::config::set_project_trust_level;
 use ody_protocol::config_types::TrustLevel;
 use ody_utils_absolute_path::AbsolutePathBuf;
@@ -1266,11 +1263,6 @@ async fn plugin_list_does_not_query_odysseythink_curated_remote_collection_by_de
         ody_home.path(),
         &format!("{}/backend-api/", server.uri()),
     )?;
-    write_api_key_auth(
-        ody_home.path(),
-        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
-        AuthCredentialsStoreMode::File,
-    )?;
 
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
     timeout(DEFAULT_TIMEOUT, mcp.initialize()).await??;
@@ -1313,11 +1305,6 @@ async fn plugin_list_vertical_kind_noops_when_remote_plugin_enabled() -> Result<
     let ody_home = TempDir::new()?;
     let server = MockServer::start().await;
     write_remote_plugin_catalog_config(ody_home.path(), &format!("{}/backend-api/", server.uri()))?;
-    write_api_key_auth(
-        ody_home.path(),
-        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
-        AuthCredentialsStoreMode::File,
-    )?;
 
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
     timeout(DEFAULT_TIMEOUT, mcp.initialize()).await??;
@@ -1361,11 +1348,6 @@ async fn plugin_list_does_not_append_global_remote_when_marketplace_kinds_are_ex
     let ody_home = TempDir::new()?;
     let server = MockServer::start().await;
     write_remote_plugin_catalog_config(ody_home.path(), &format!("{}/backend-api/", server.uri()))?;
-    write_api_key_auth(
-        ody_home.path(),
-        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
-        AuthCredentialsStoreMode::File,
-    )?;
 
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
     timeout(DEFAULT_TIMEOUT, mcp.initialize()).await??;
@@ -1409,11 +1391,6 @@ plugin_sharing = false
 "#,
             server.uri()
         ),
-    )?;
-    write_api_key_auth(
-        ody_home.path(),
-        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
-        AuthCredentialsStoreMode::File,
     )?;
 
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
@@ -1467,11 +1444,6 @@ plugin_sharing = true
             server.uri()
         ),
     )?;
-    write_api_key_auth(
-        ody_home.path(),
-        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
-        AuthCredentialsStoreMode::File,
-    )?;
 
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
     timeout(DEFAULT_TIMEOUT, mcp.initialize()).await??;
@@ -1518,11 +1490,6 @@ remote_plugin = true
 "#,
             server.uri()
         ),
-    )?;
-    write_api_key_auth(
-        ody_home.path(),
-        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
-        AuthCredentialsStoreMode::File,
     )?;
 
     let mut mcp = TestAppServer::new(ody_home.path()).await?;

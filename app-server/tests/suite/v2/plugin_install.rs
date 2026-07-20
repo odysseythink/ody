@@ -7,12 +7,10 @@ use std::time::Duration;
 
 use anyhow::Result;
 use anyhow::bail;
-use app_test_support::ApiKeyAuthFixture;
 use app_test_support::DEFAULT_CLIENT_NAME;
 use app_test_support::TestAppServer;
 use app_test_support::start_analytics_events_server;
 use app_test_support::to_response;
-use app_test_support::write_api_key_auth;
 use axum::Json;
 use axum::Router;
 use axum::extract::State;
@@ -33,7 +31,6 @@ use ody_app_server_protocol::PluginAvailability;
 use ody_app_server_protocol::PluginInstallParams;
 use ody_app_server_protocol::PluginInstallResponse;
 use ody_app_server_protocol::RequestId;
-use ody_config::types::AuthCredentialsStoreMode;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use pretty_assertions::assert_eq;
 use rmcp::handler::server::ServerHandler;
@@ -315,11 +312,6 @@ async fn plugin_install_starts_mcp_oauth_with_formerly_disallowed_plugin_app() -
 
     let ody_home = TempDir::new()?;
     write_connectors_config(ody_home.path(), &apps_server_url)?;
-    write_api_key_auth(
-        ody_home.path(),
-        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
-        AuthCredentialsStoreMode::File,
-    )?;
 
     let repo_root = TempDir::new()?;
     write_plugin_marketplace(
@@ -868,11 +860,7 @@ remote_plugin = true
 
 fn configure_remote_plugin_test(ody_home: &std::path::Path, server: &MockServer) -> Result<()> {
     write_remote_plugin_catalog_config(ody_home, &format!("{}/backend-api/", server.uri()))?;
-    write_api_key_auth(
-        ody_home,
-        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
-        AuthCredentialsStoreMode::File,
-    )
+    Ok(())
 }
 
 fn configure_remote_plugin_with_apps_test(
@@ -893,11 +881,7 @@ connectors = true
             server.uri()
         ),
     )?;
-    write_api_key_auth(
-        ody_home,
-        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
-        AuthCredentialsStoreMode::File,
-    )
+    Ok(())
 }
 
 async fn mount_remote_plugin_bundle(

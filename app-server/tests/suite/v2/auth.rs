@@ -13,7 +13,6 @@ use ody_app_server_protocol::LoginResponse;
 use ody_app_server_protocol::LogoutResponse;
 use ody_app_server_protocol::RequestId;
 use ody_app_server_protocol::ServerNotification;
-use ody_config::types::AuthCredentialsStoreMode;
 use pretty_assertions::assert_eq;
 use std::path::Path;
 use std::time::Duration;

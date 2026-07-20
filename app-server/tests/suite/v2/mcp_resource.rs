@@ -4,10 +4,8 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use anyhow::Result;
-use app_test_support::ApiKeyAuthFixture;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
-use app_test_support::write_api_key_auth;
 use axum::Router;
 use core_test_support::responses;
 use ody_app_server::in_process;
@@ -25,7 +23,6 @@ use ody_app_server_protocol::UserInput;
 use ody_arg0::Arg0DispatchPaths;
 use ody_config::CloudConfigBundleLoader;
 use ody_config::LoaderOverrides;
-use ody_config::types::AuthCredentialsStoreMode;
 use ody_core::config::ConfigBuilder;
 use ody_exec_server::EnvironmentManager;
 use ody_feedback::OdyFeedback;
@@ -339,11 +336,6 @@ request_max_retries = 0
 stream_max_retries = 0
 "#
         ),
-    )?;
-    write_api_key_auth(
-        ody_home.path(),
-        ApiKeyAuthFixture::new("api-key").account_id("account-123"),
-        AuthCredentialsStoreMode::File,
     )?;
 
     let mut mcp = TestAppServer::new(ody_home.path()).await?;

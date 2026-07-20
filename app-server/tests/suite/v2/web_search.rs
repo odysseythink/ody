@@ -3,10 +3,8 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
-use app_test_support::ApiKeyAuthFixture;
 use app_test_support::TestAppServer;
 use app_test_support::to_response;
-use app_test_support::write_api_key_auth;
 use core_test_support::responses;
 use ody_app_server_protocol::ItemCompletedNotification;
 use ody_app_server_protocol::ItemStartedNotification;
@@ -21,7 +19,6 @@ use ody_app_server_protocol::TurnStartParams;
 use ody_app_server_protocol::TurnStartResponse;
 use ody_app_server_protocol::UserInput as V2UserInput;
 use ody_app_server_protocol::WebSearchAction;
-use ody_config::types::AuthCredentialsStoreMode;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
@@ -72,11 +69,6 @@ async fn standalone_web_search_round_trips_output() -> Result<()> {
 
     let ody_home = TempDir::new()?;
     create_config_toml(ody_home.path(), &server.uri())?;
-    write_api_key_auth(
-        ody_home.path(),
-        ApiKeyAuthFixture::new("access-key"),
-        AuthCredentialsStoreMode::File,
-    )?;
 
     let mut mcp = TestAppServer::new_with_env(ody_home.path(), &[("OPENAI_API_KEY", None)]).await?;
     timeout(DEFAULT_READ_TIMEOUT, mcp.initialize()).await??;
