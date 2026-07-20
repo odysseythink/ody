@@ -264,6 +264,7 @@ pub(crate) async fn handle_submit_artifact(
                 id: item_id.clone(),
                 text: String::new(),
                 plan_file_path: None,
+                finalized: false,
             }),
         )
         .await;
@@ -411,6 +412,26 @@ pub(crate) async fn handle_submit_artifact(
     // `## Assumptions & Unverified Items` table out of it.
     let design_markdown = markdown.clone();
 
+    // Whether this call will reach the terminal `mark_submitted()` branch.
+    //
+    // Design content is rendered by the client only on this completed event (in
+    // Design mode `PlanDelta` is dropped — see `on_plan_delta`), and the design
+    // must be visible *before* the interactive escalation gate below prompts the
+    // user, so the completed event has to stay here, ahead of the gate — it
+    // cannot be deferred until `did_submit` is finally known. So `finalized` is
+    // computed from what is knowable now: every non-terminal outcome
+    // (checkpoint, pending parts, a completeness gap, or an unfollowable `File`
+    // cell) is decided by this point. The one residual case where this can read
+    // `true` while the artifact does not finalize is an escalation-gate
+    // "revise" — but a revise returns the tool result to the model and the turn
+    // continues, so no `TurnComplete` (and thus no next-step menu) fires until a
+    // later real finalize. `finalized` is what gates that menu: a checkpoint
+    // (`final: false`) also reaches `TurnComplete` because the model ends its
+    // turn to ask a clarifying question, so keying the menu off the mere
+    // presence of a plan item wrongly popped it mid-design.
+    let will_finalize =
+        finalize && gap.is_none() && !has_pending_parts && bad_part_cells.is_empty();
+
     // 8. Emit completed event
     session
         .emit_turn_item_completed(
@@ -419,6 +440,7 @@ pub(crate) async fn handle_submit_artifact(
                 id: item_id,
                 text: markdown,
                 plan_file_path: persisted_path,
+                finalized: will_finalize,
             }),
         )
         .await;
@@ -526,6 +548,11 @@ pub(crate) async fn handle_submit_artifact(
     } else {
         message
     };
+
+    debug_assert!(
+        !will_finalize || did_submit || (expected_mode == ModeKind::Design && can_prompt),
+        "will_finalize may only diverge from did_submit on the interactive escalation-gate path"
+    );
 
     // The post-design next-step menu (Enter Plan / Stay) lives in the TUI, not
     // here: collaboration mode is owned by the client, so only the TUI can act

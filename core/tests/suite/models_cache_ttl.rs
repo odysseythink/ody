@@ -344,6 +344,7 @@ fn test_remote_model(slug: &str, priority: i32) -> ModelInfo {
         ],
         shell_type: ConfigShellToolType::ShellCommand,
         visibility: ModelVisibility::List,
+        provider: String::new(),
         supported_in_api: true,
         priority,
         additional_speed_tiers: Vec::new(),

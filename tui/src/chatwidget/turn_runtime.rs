@@ -186,7 +186,7 @@ impl ChatWidget {
         // Keep this flag for replayed completion events so a subsequent live TurnComplete can
         // still show the prompt once after thread switch replay.
         if !from_replay {
-            self.transcript.saw_plan_item_this_turn = false;
+            self.transcript.saw_finalized_plan_item_this_turn = false;
         }
         // Plan updates are shown live in the pinned plan widget (like ody-code's Todo panel)
         // and are not written to the scrolling transcript, to avoid duplicates.
@@ -217,7 +217,7 @@ impl ChatWidget {
         if self.active_mode_kind() != ModeKind::Plan {
             return;
         }
-        if !self.transcript.saw_plan_item_this_turn {
+        if !self.transcript.saw_finalized_plan_item_this_turn {
             return;
         }
         if !self.bottom_pane.no_modal_or_popup_active() {
@@ -228,10 +228,14 @@ impl ChatWidget {
     }
 
     /// After a design finalizes in Design mode, offer the next step. Mirrors
-    /// [`Self::maybe_prompt_plan_implementation`]; gated the same way. A design
-    /// session is a single turn that only reaches `TurnComplete` after the final
-    /// `submit_design` (checkpoints stay inside the turn), so `saw_plan_item_this_turn`
-    /// here means the design was finalized.
+    /// [`Self::maybe_prompt_plan_implementation`]; gated the same way.
+    ///
+    /// The gate is `saw_finalized_plan_item_this_turn`, set only by a *finalized*
+    /// completed plan item (`submit_design` with `final: true` that actually
+    /// reached `mark_submitted()`). A non-terminal checkpoint (`final: false`)
+    /// also reaches `TurnComplete` — the model ends its turn to ask a clarifying
+    /// question between checkpoints — so gating on the mere presence of a plan
+    /// item used to pop this menu while the design was still a skeleton.
     pub(super) fn maybe_prompt_design_next_step(&mut self) {
         if !self.collaboration_modes_enabled() {
             return;
@@ -242,7 +246,7 @@ impl ChatWidget {
         if self.active_mode_kind() != ModeKind::Design {
             return;
         }
-        if !self.transcript.saw_plan_item_this_turn {
+        if !self.transcript.saw_finalized_plan_item_this_turn {
             return;
         }
         if !self.bottom_pane.no_modal_or_popup_active() {

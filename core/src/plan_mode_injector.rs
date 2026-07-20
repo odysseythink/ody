@@ -217,29 +217,7 @@ impl PlanModeInjector {
         if mode != ModeKind::Plan {
             return None;
         }
-        let current_turn = artifact.next_plan_mode_turn();
-        let (last_full_turn, last_any_turn) = artifact.last_reminder_turns();
-
-        // Before the first full reminder has been injected, suppress sparse
-        // reminders so the initial full contract (already present in context)
-        // isn't diluted by partial pointers ahead of the first scheduled full
-        // refresh. When full refresh is disabled (`full_refresh_turns == 0`),
-        // leave `last_any_turn` untouched so sparse cadence starts normally.
-        let full_refresh = plan_mode_config
-            .and_then(|c| c.full_refresh_turns)
-            .unwrap_or(5);
-        let last_any_turn_for_selection = if full_refresh > 0 && last_full_turn == Some(0) {
-            Some(current_turn.saturating_sub(1))
-        } else {
-            last_any_turn
-        };
-
-        let kind = select_reminder(
-            current_turn,
-            last_full_turn,
-            last_any_turn_for_selection,
-            plan_mode_config,
-        )?;
+        let (kind, current_turn) = advance_and_select_reminder(artifact, plan_mode_config)?;
         let text = match kind {
             ReminderKind::Full => render_full_reminder(),
             ReminderKind::Sparse => render_sparse_reminder(),
@@ -248,7 +226,6 @@ impl PlanModeInjector {
             .and_then(|c| c.split_threshold)
             .unwrap_or(8);
         let text = render_threshold_placeholders(&text, split_threshold);
-        artifact.record_reminder_injected(kind == ReminderKind::Full, current_turn);
         let log = make_log(
             PlanModeLogKind::RigorReminder,
             match kind {
@@ -259,6 +236,87 @@ impl PlanModeInjector {
         );
         Some((kind, text, vec![log]))
     }
+
+    /// Design-mode counterpart to [`Self::render_reminder_if_due`].
+    ///
+    /// Design Mode's contract is injected once at entry and then never
+    /// reinforced (the plan reminder path above self-guards to Plan), so over a
+    /// long design session the operating rules — above all "use a
+    /// `request_user_input` pop-up for every closed-choice prompt" and "end each
+    /// turn with `request_user_input` or `submit_design`" — get buried and the
+    /// model drifts to plain-text questions and skips the adversarial
+    /// self-review. This re-injects a full or condensed Design reminder on the
+    /// same cadence the Plan path uses. Mirrors ody-code's `DesignModeInjector`.
+    pub fn render_design_reminder_if_due(
+        artifact: &PlanArtifact,
+        plan_mode_config: Option<&PlanModeConfigToml>,
+        mode: ModeKind,
+    ) -> Option<(ReminderKind, String, Vec<PlanModeLogEvent>)> {
+        if mode != ModeKind::Design {
+            return None;
+        }
+        let (kind, current_turn) = advance_and_select_reminder(artifact, plan_mode_config)?;
+        let text = match kind {
+            ReminderKind::Full => render_design_full_reminder(),
+            ReminderKind::Sparse => render_design_sparse_reminder(),
+        };
+        let log = make_log(
+            PlanModeLogKind::RigorReminder,
+            match kind {
+                ReminderKind::Full => "Injecting full design reminder.".to_string(),
+                ReminderKind::Sparse => "Injecting sparse design reminder.".to_string(),
+            },
+            Some(format!("turn={}", current_turn)),
+        );
+        Some((kind, text, vec![log]))
+    }
+}
+
+/// Advances the per-artifact turn counter, selects whether a full/sparse
+/// reminder is due this turn on the shared cadence, and records the injection.
+/// Mode-agnostic — the caller supplies the mode-specific reminder text.
+///
+/// Returns `Some((kind, current_turn))` when a reminder is due, else `None`.
+fn advance_and_select_reminder(
+    artifact: &PlanArtifact,
+    plan_mode_config: Option<&PlanModeConfigToml>,
+) -> Option<(ReminderKind, usize)> {
+    let current_turn = artifact.next_plan_mode_turn();
+    let (last_full_turn, last_any_turn) = artifact.last_reminder_turns();
+
+    // Before the first full reminder has been injected, suppress sparse
+    // reminders so the initial full contract (already present in context)
+    // isn't diluted by partial pointers ahead of the first scheduled full
+    // refresh. When full refresh is disabled (`full_refresh_turns == 0`),
+    // leave `last_any_turn` untouched so sparse cadence starts normally.
+    let full_refresh = plan_mode_config
+        .and_then(|c| c.full_refresh_turns)
+        .unwrap_or(5);
+    let last_any_turn_for_selection = if full_refresh > 0 && last_full_turn == Some(0) {
+        Some(current_turn.saturating_sub(1))
+    } else {
+        last_any_turn
+    };
+
+    let kind = select_reminder(
+        current_turn,
+        last_full_turn,
+        last_any_turn_for_selection,
+        plan_mode_config,
+    )?;
+    artifact.record_reminder_injected(kind == ReminderKind::Full, current_turn);
+    Some((kind, current_turn))
+}
+
+/// Renders the full Design-mode reminder (re-injected on the full cadence).
+pub fn render_design_full_reminder() -> String {
+    ody_collaboration_mode_templates::DESIGN_FULL_REMINDER.to_string()
+}
+
+/// Renders the condensed Design-mode reminder (re-injected between full
+/// reinjections to keep the operating rules alive without full repetition).
+pub fn render_design_sparse_reminder() -> String {
+    ody_collaboration_mode_templates::DESIGN_SPARSE_REMINDER.to_string()
 }
 
 fn make_log(kind: PlanModeLogKind, message: String, detail: Option<String>) -> PlanModeLogEvent {
@@ -930,6 +988,115 @@ mod directive_tests {
                 ),
                 None,
                 "Design mode must never receive a Plan rigor-tier reminder"
+            );
+        }
+    }
+
+    #[test]
+    fn design_reminders_restate_the_load_bearing_rules() {
+        let full = render_design_full_reminder();
+        assert!(
+            full.contains("request_user_input"),
+            "full design reminder must restate the pop-up rule:\n{full}"
+        );
+        assert!(
+            full.contains("Popups are mandatory"),
+            "full design reminder must mandate pop-ups for closed choices:\n{full}"
+        );
+        assert!(
+            full.contains("Turn discipline"),
+            "full design reminder must restate turn discipline:\n{full}"
+        );
+        assert!(
+            full.to_lowercase().contains("self-review"),
+            "full design reminder must restate the adversarial self-review:\n{full}"
+        );
+
+        let sparse = render_design_sparse_reminder();
+        assert!(
+            sparse.contains("request_user_input"),
+            "sparse design reminder must keep the pop-up rule alive:\n{sparse}"
+        );
+        assert!(
+            sparse.contains("End every turn"),
+            "sparse design reminder must restate turn discipline:\n{sparse}"
+        );
+    }
+
+    #[test]
+    fn render_design_reminder_if_due_follows_full_sparse_cadence() {
+        let tmp = tempfile::tempdir().unwrap();
+        let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let thread_id = ThreadId::from_string("00000000-0000-0000-0000-000000000003").unwrap();
+        let artifact = PlanArtifact::new_design(plans_base_dir, thread_id, "2026-07-04");
+        let config = PlanModeConfigToml::default();
+
+        // Turns 1-4: the entry contract is still fresh; nothing is due.
+        for _ in 1..=4 {
+            assert_eq!(
+                PlanModeInjector::render_design_reminder_if_due(
+                    &artifact,
+                    Some(&config),
+                    ModeKind::Design
+                ),
+                None,
+                "no design reminder before turn 5"
+            );
+        }
+
+        // Turn 5: full design reminder.
+        let (kind, text, _logs) = PlanModeInjector::render_design_reminder_if_due(
+            &artifact,
+            Some(&config),
+            ModeKind::Design,
+        )
+        .expect("turn 5 should emit a full design reminder");
+        assert_eq!(kind, ReminderKind::Full);
+        assert!(
+            text.contains("Popups are mandatory") && text.contains("request_user_input"),
+            "full design reminder should carry the pop-up mandate:\n{text}"
+        );
+
+        // Turn 6: deduplicated after full at turn 5.
+        assert_eq!(
+            PlanModeInjector::render_design_reminder_if_due(
+                &artifact,
+                Some(&config),
+                ModeKind::Design
+            ),
+            None,
+            "turn 6 should be deduplicated"
+        );
+
+        // Turn 7: sparse design reminder.
+        let (kind, _text, _logs) = PlanModeInjector::render_design_reminder_if_due(
+            &artifact,
+            Some(&config),
+            ModeKind::Design,
+        )
+        .expect("turn 7 should emit a sparse design reminder");
+        assert_eq!(kind, ReminderKind::Sparse);
+    }
+
+    #[test]
+    fn render_design_reminder_if_due_never_fires_for_plan_mode() {
+        // The Design reminder text must never leak into a Plan session, so the
+        // function self-guards to Design regardless of how the call site is gated.
+        let tmp = tempfile::tempdir().unwrap();
+        let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let thread_id = ThreadId::from_string("00000000-0000-0000-0000-000000000004").unwrap();
+        let artifact = PlanArtifact::new_temp(plans_base_dir, thread_id, "2026-07-10");
+        let config = PlanModeConfigToml::default();
+
+        for _ in 1..=7 {
+            assert_eq!(
+                PlanModeInjector::render_design_reminder_if_due(
+                    &artifact,
+                    Some(&config),
+                    ModeKind::Plan
+                ),
+                None,
+                "Plan mode must never receive a Design reminder"
             );
         }
     }

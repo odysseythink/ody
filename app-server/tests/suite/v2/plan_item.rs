@@ -90,6 +90,7 @@ async fn plan_mode_submit_plan_emits_plan_item() -> Result<()> {
         id,
         text,
         plan_file_path,
+        ..
     } = plan_item
     else {
         unreachable!();

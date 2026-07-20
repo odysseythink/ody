@@ -123,6 +123,17 @@ pub struct PlanItem {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub plan_file_path: Option<PathBuf>,
+    /// Whether this completed plan/design item represents a terminal
+    /// *finalization* (the `submit_*` call actually `mark_submitted()` the
+    /// artifact), as opposed to a non-terminal checkpoint (`final: false`) or a
+    /// submission the completeness/escalation gate sent back to revise. The
+    /// host-driven post-plan / post-design next-step menu keys off this: a
+    /// checkpoint reaches `TurnComplete` too (the model ends its turn to ask a
+    /// clarifying question), so gating the menu on the mere presence of a plan
+    /// item wrongly popped it mid-design. Defaults to `false` for backward
+    /// compatibility with rollouts written before this field existed.
+    #[serde(default)]
+    pub finalized: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, TS, JsonSchema)]
@@ -675,6 +686,7 @@ mod tests {
             id: "plan-1".to_string(),
             text: "# Plan".to_string(),
             plan_file_path: Some(PathBuf::from("/tmp/plan.md")),
+            finalized: false,
         };
         let json = serde_json::to_string(&item).unwrap();
         assert!(json.contains("\"planFilePath\":\"/tmp/plan.md\""));
@@ -687,5 +699,8 @@ mod tests {
         let json = r##"{"id":"plan-1","text":"# Plan"}"##;
         let parsed: PlanItem = serde_json::from_str(json).unwrap();
         assert_eq!(parsed.plan_file_path, None);
+        // Rollouts written before `finalized` existed must deserialize with it
+        // defaulting to false — an old checkpoint must never read as finalized.
+        assert!(!parsed.finalized);
     }
 }

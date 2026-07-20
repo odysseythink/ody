@@ -385,7 +385,7 @@ impl ChatWidget {
 
         if let Some(pending_steer) = pending_steer {
             self.input_queue.pending_steers.push_back(pending_steer);
-            self.transcript.saw_plan_item_this_turn = false;
+            self.transcript.saw_finalized_plan_item_this_turn = false;
             self.refresh_pending_input_preview();
         }
 

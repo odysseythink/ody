@@ -217,3 +217,48 @@ fn task_checkpoint_holds_when_no_work_remains() {
     let plan = checkpoint_plan(&[StepStatus::Completed, StepStatus::Completed]);
     assert!(!task_checkpoint_due(0.5, &plan, true, 249_036, 200_000));
 }
+
+#[tokio::test]
+async fn design_mode_records_reminder_during_early_clarification() {
+    // Simulate the early clarification phase: the model has not written any
+    // design yet (no submit_design), so the hook runs with empty markdown. The
+    // Design reminder — above all the `request_user_input` pop-up rule — must
+    // still be re-injected on cadence, since that phase is exactly where the
+    // model drifts to plain-text questions.
+    let (sess, tc, rx) = crate::session::tests::make_session_and_context_with_rx().await;
+    let mut tc = tc;
+    let tc_mut = Arc::get_mut(&mut tc).expect("turn context arc should be unique in test");
+    tc_mut.collaboration_mode.mode = ModeKind::Design;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+    let thread_id = ThreadId::from_string("00000000-0000-0000-0000-000000000005").unwrap();
+    let artifact = PlanArtifact::new_design(plans_base_dir, thread_id, "2026-07-04");
+    artifact.finalize_name("topic").await.unwrap();
+    tc_mut.plan_artifact = Some(Arc::new(artifact));
+
+    let mut client_session = crate::session::tests::test_model_client_session();
+
+    // No design written yet — empty markdown, as the production call site passes
+    // for Design turns before the first submit_design.
+    for _ in 1..=5 {
+        run_session_mode_after_turn(&sess, &tc, &mut client_session, "")
+            .await
+            .expect("design after-turn hook should succeed with no design written yet");
+    }
+
+    let mut found_reminder = false;
+    while let Ok(event) = rx.try_recv() {
+        if let ody_protocol::protocol::EventMsg::RawResponseItem(raw) = event.msg {
+            if let ody_protocol::models::ResponseItem::Message { content, .. } = raw.item {
+                if content.iter().any(|c| matches!(c, ody_protocol::models::ContentItem::InputText { text } if text.contains("request_user_input") && text.contains("Popups are mandatory"))) {
+                    found_reminder = true;
+                }
+            }
+        }
+    }
+    assert!(
+        found_reminder,
+        "a Design reminder restating the request_user_input pop-up rule should be recorded by turn 5"
+    );
+}

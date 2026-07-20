@@ -376,6 +376,7 @@ fn turn_items_for_thread_returns_matching_turn_items() {
                     id: "plan-1".to_string(),
                     text: "ship it".to_string(),
                     plan_file_path: None,
+                    finalized: false,
                 }],
                 status: ody_app_server_protocol::TurnStatus::Completed,
                 error: None,

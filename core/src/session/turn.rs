@@ -1448,14 +1448,21 @@ async fn run_session_mode_after_turn(
             .await;
     }
 
-    // Periodic rigor-tier reminder reinjection (P2.3). Plan-only:
-    // render_reminder_if_due self-guards `mode != Plan → None`.
-    if let Some((reminder_kind, reminder_text, reminder_logs)) =
-        PlanModeInjector::render_reminder_if_due(artifact, plan_mode_config, mode)
-    {
-        let source = InternalContextSource::from_static(match reminder_kind {
-            ReminderKind::Full => "plan_mode_full_reminder",
-            ReminderKind::Sparse => "plan_mode_sparse_reminder",
+    // Periodic reminder reinjection on the shared cadence. Each helper
+    // self-guards on mode, so at most one fires per turn: the Plan path
+    // re-injects the rigor-tier contract, the Design path re-injects the Design
+    // operating rules (pop-up-for-choices, turn discipline, adversarial
+    // self-review) that would otherwise decay after the single entry injection.
+    let reminder = PlanModeInjector::render_reminder_if_due(artifact, plan_mode_config, mode)
+        .or_else(|| {
+            PlanModeInjector::render_design_reminder_if_due(artifact, plan_mode_config, mode)
+        });
+    if let Some((reminder_kind, reminder_text, reminder_logs)) = reminder {
+        let source = InternalContextSource::from_static(match (mode, reminder_kind) {
+            (ModeKind::Design, ReminderKind::Full) => "design_mode_full_reminder",
+            (ModeKind::Design, ReminderKind::Sparse) => "design_mode_sparse_reminder",
+            (_, ReminderKind::Full) => "plan_mode_full_reminder",
+            (_, ReminderKind::Sparse) => "plan_mode_sparse_reminder",
         });
         let fragment = InternalModelContextFragment::new(source, reminder_text);
         let item: ResponseItem = ContextualUserFragment::into(fragment);
@@ -2712,7 +2719,23 @@ async fn try_run_sampling_request(
 
     if is_read_only_session_mode(turn_context.collaboration_mode.mode) {
         if let Some(artifact) = turn_context.plan_artifact.as_ref() {
-            if let Some(plan_markdown) = artifact.last_plan_text() {
+            // Design reminders must fire on every design turn — including the
+            // early clarification turns before the first `submit_design`, when no
+            // design text exists yet. That is exactly the phase where the model
+            // drifts to plain-text questions instead of `request_user_input`
+            // pop-ups, so a reminder gated on "a design has been written" would
+            // miss it. Plan keeps its existing gate (reminders start only once a
+            // plan exists); passing an empty string to the hook is safe — it
+            // parses no manifest, emits no directive, and stores nothing.
+            let plan_markdown = match (
+                turn_context.collaboration_mode.mode,
+                artifact.last_plan_text(),
+            ) {
+                (_, Some(text)) => Some(text),
+                (ModeKind::Design, None) => Some(String::new()),
+                (_, None) => None,
+            };
+            if let Some(plan_markdown) = plan_markdown {
                 if let Err(err) = run_session_mode_after_turn(
                     &sess,
                     &turn_context,
