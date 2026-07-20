@@ -23,6 +23,26 @@ NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST
 
 If you haven't completed Phase 1, you cannot propose fixes.
 
+## The Evidence Rule
+
+Before proposing a fix or declaring a root cause, you MUST cite evidence supporting that conclusion.
+
+Acceptable evidence includes:
+- Code snippets (the actual lines involved)
+- Log output or stack traces
+- Database records or query results
+- Configuration files or environment variables
+- Test output or reproduction steps
+- Network traces / API responses
+
+**Hypotheses are NOT conclusions.** If you haven't verified it yet, state it as: "Hypothesis: X. Evidence needed: Y. Next verification step: Z."
+
+**Do not present speculation as fact.** Phrases like "probably because", "maybe it's", or "I suspect" are warning signs that you need to gather evidence first.
+
+If evidence is temporarily unavailable (e.g., external system, intermittent failure), document the gap explicitly and treat the claim as an unverified hypothesis.
+
+
+
 ## When to Use
 
 Use for ANY technical issue:
@@ -186,10 +206,20 @@ You MUST complete each phase before proceeding to the next.
    - No "while I'm here" improvements
    - No bundled refactoring
 
-3. **Verify Fix**
-   - Test passes now?
-   - No other tests broken?
-   - Issue actually resolved?
+3. **Verify Fix with Controlled Comparison**
+
+   Verification must be repeatable, not a single lucky run:
+   
+   - **Establish baseline first:** reproduce the failure before the fix.
+     - Failing test, bad log, error state — capture it.
+   - **Apply the fix and re-run the same input / conditions.**
+     - Confirm the failure disappears.
+   - **For intermittent, multi-factor, or environmental issues, use a control:**
+     - Keep an unmodified reference environment or version.
+     - Confirm the failure still happens there while the fixed version passes.
+     - This rules out "it just stopped happening on its own".
+   - **Check for regressions:** no other tests broken?
+   - **Only when the controlled comparison passes can you call the fix successful.**
 
 4. **If Fix Doesn't Work**
    - STOP
@@ -256,6 +286,7 @@ If you catch yourself thinking:
 | "Reference too long, I'll adapt the pattern" | Partial understanding guarantees bugs. Read it completely. |
 | "I see the problem, let me fix it" | Seeing symptoms ≠ understanding root cause. |
 | "One more fix attempt" (after 2+ failures) | 3+ failures = architectural problem. Question pattern, don't fix again. |
+| "I ran it once and it worked" | One successful run doesn't rule out luck, timing, or environment. Use a controlled, repeatable comparison. |
 
 ## Quick Reference
 
@@ -264,7 +295,7 @@ If you catch yourself thinking:
 | **1. Root Cause** | Read errors, reproduce, check changes, gather evidence | Understand WHAT and WHY |
 | **2. Pattern** | Find working examples, compare | Identify differences |
 | **3. Hypothesis** | Form theory, test minimally | Confirmed or new hypothesis |
-| **4. Implementation** | Create test, fix, verify | Bug resolved, tests pass |
+| **4. Implementation** | Create test, fix, verify with controlled comparison | Bug resolved, tests pass, comparison confirms fix |
 
 ## When Process Reveals "No Root Cause"
 
