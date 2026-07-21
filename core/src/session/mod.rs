@@ -1230,12 +1230,16 @@ impl Session {
         state.set_last_design_artifact(artifact);
     }
 
-    /// Fingerprints already signed off (accept/defer) in an earlier revise round
-    /// of the current design, used by the escalation gate to suppress re-review
-    /// duplicates.
-    pub(crate) async fn design_signoff_seen(&self) -> std::collections::HashSet<String> {
-        let state = self.state.lock().await;
-        state.design_signoff_seen()
+    /// Fingerprints already signed off (accept/defer) for the design identified
+    /// by `key` (its normalized title), used by the escalation gate to suppress
+    /// re-review duplicates. Resets the set if `key` names a different design than
+    /// the one it was accumulated for.
+    pub(crate) async fn design_signoff_seen_for(
+        &self,
+        key: String,
+    ) -> std::collections::HashSet<String> {
+        let mut state = self.state.lock().await;
+        state.design_signoff_seen_for(&key)
     }
 
     pub(crate) async fn record_design_signoff_seen(&self, fingerprints: Vec<String>) {

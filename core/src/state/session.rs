@@ -58,6 +58,11 @@ pub(crate) struct SessionState {
     /// the delta (new findings + items still flagged for fixing). Cleared when a
     /// design finalizes, so the next design starts fresh.
     design_signoff_seen: HashSet<String>,
+    /// Identity (normalized title) of the design `design_signoff_seen` was
+    /// accumulated for. If the next design carries a different title — the
+    /// previous one was abandoned without finalizing — the set belonged to a
+    /// different design and is reset before it can leak stale suppressions.
+    design_signoff_key: Option<String>,
     /// Latest `update_plan` checklist, kept outside the conversation.
     ///
     /// The tool call that carries it lives in history, which compaction
@@ -100,6 +105,7 @@ impl SessionState {
             plan_mode_last_manifest_snapshot: None,
             last_design_artifact: None,
             design_signoff_seen: HashSet::new(),
+            design_signoff_key: None,
             active_plan: None,
             last_plan_done_count: None,
             turns_since_plan_write: 0,
@@ -407,9 +413,16 @@ impl SessionState {
         self.last_design_artifact = None;
     }
 
-    /// Snapshot of the fingerprints already dispositioned (accept/defer) in an
-    /// earlier revise round of the current design.
-    pub(crate) fn design_signoff_seen(&self) -> HashSet<String> {
+    /// Fingerprints already dispositioned (accept/defer) for the design
+    /// identified by `key` (its normalized title). If `key` differs from the
+    /// design the set was accumulated for, the set belonged to a different design
+    /// that never finalized — it is reset first so the new design cannot inherit
+    /// stale suppressions.
+    pub(crate) fn design_signoff_seen_for(&mut self, key: &str) -> HashSet<String> {
+        if self.design_signoff_key.as_deref() != Some(key) {
+            self.design_signoff_seen.clear();
+            self.design_signoff_key = Some(key.to_string());
+        }
         self.design_signoff_seen.clone()
     }
 
@@ -426,6 +439,7 @@ impl SessionState {
     /// one must start from an empty set).
     pub(crate) fn clear_design_signoff_seen(&mut self) {
         self.design_signoff_seen.clear();
+        self.design_signoff_key = None;
     }
 }
 

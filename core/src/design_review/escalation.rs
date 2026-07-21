@@ -390,6 +390,21 @@ fn build_signoff_questions(
     }
 }
 
+/// Identity of a design across revise rounds: its normalized `# ` title. A
+/// revise keeps the same title, so the sign-off memory carries over; a brand-new
+/// design has a different title, so the memory resets and cannot leak stale
+/// suppressions from a design that was abandoned without finalizing. Falls back
+/// to the empty string when the design has no heading (the completeness gate
+/// mandates one, so this is only a defensive default).
+fn design_title_key(markdown: &str) -> String {
+    markdown
+        .lines()
+        .map(str::trim)
+        .find_map(|line| line.strip_prefix("# "))
+        .map(normalize_fingerprint)
+        .unwrap_or_default()
+}
+
 /// Collapse case and internal whitespace so trivially-different renderings of the
 /// same title/text hash to one key.
 fn normalize_fingerprint(s: &str) -> String {
@@ -481,7 +496,9 @@ pub(crate) async fn run_escalation_gate(
     // round, and re-confirming an already-accepted risk is what made the count
     // feel like it never fell. Only the delta (new findings + items still flagged
     // for fixing) is put in front of the user.
-    let seen = session.design_signoff_seen().await;
+    let seen = session
+        .design_signoff_seen_for(design_title_key(design_markdown))
+        .await;
     let items: Vec<SignoffItem<'_>> = all_items
         .iter()
         .copied()
@@ -787,6 +804,21 @@ mod tests {
             SignoffItem::Finding(&f).fingerprint(),
             SignoffItem::Assumption(&asm).fingerprint()
         );
+    }
+
+    #[test]
+    fn design_title_key_identifies_a_design_across_rounds() {
+        // Same title (any case / spacing) → same key, so a revise round keeps the
+        // sign-off memory; a different title → different key, so it resets.
+        let r1 = "# Add   OAuth Login\n\nbody v1\n";
+        let r2 = "#   add oauth login\n\nbody v2 (revised)\n";
+        let other = "# Refactor cache layer\n";
+        assert_eq!(design_title_key(r1), design_title_key(r2));
+        assert_ne!(design_title_key(r1), design_title_key(other));
+        // A `##` subheading is not mistaken for the title.
+        assert_eq!(design_title_key("## Overview\n# Real Title\n"), "real title");
+        // No heading → empty fallback, still stable.
+        assert_eq!(design_title_key("no heading here\n"), "");
     }
 
     #[test]
