@@ -43,12 +43,31 @@ rather than a defect you have confirmed against the design or the codebase.
 Speculative findings are recorded but never put in front of the user for
 sign-off, so do not use it to downgrade a real, confirmed problem.
 
+Be concise so the full JSON is returned complete: keep each "detail" to at most
+two or three sentences and each "suggested_fix" to one. Prefer the highest-signal
+findings over an exhaustive list — a response that is cut off mid-JSON is unusable.
+
 --- DESIGN DOCUMENT ---
 
 "#;
 
 pub(crate) fn build_design_review_prompt(design_markdown: &str) -> String {
     format!("{DESIGN_REVIEW_PROMPT_PREFIX}{design_markdown}")
+}
+
+/// Title of the give-up fallback finding synthesized when the reviewer's output
+/// cannot be structured at all. Marked [`DesignReviewConfidence::Speculative`] so
+/// the sign-off gate never escalates it — a raw, possibly-truncated JSON dump
+/// must never be shown to the user as an item to accept/defer/fix.
+pub(crate) const UNSTRUCTURED_REVIEW_TITLE: &str = "Review output could not be structured";
+
+/// Whether `output` is the give-up fallback (the reviewer output could not be
+/// parsed or salvaged). The orchestrator uses this to surface a visible warning
+/// so the failure is not silent.
+pub(crate) fn review_was_unstructured(output: &DesignReviewOutput) -> bool {
+    output.findings.len() == 1
+        && output.findings[0].title == UNSTRUCTURED_REVIEW_TITLE
+        && output.findings[0].confidence == DesignReviewConfidence::Speculative
 }
 
 pub(crate) fn parse_design_review_output(text: &str) -> DesignReviewOutput {
@@ -62,17 +81,144 @@ pub(crate) fn parse_design_review_output(text: &str) -> DesignReviewOutput {
     {
         return output.into();
     }
+    // Best-effort recovery: a reviewer that hits the output-token cap mid-array
+    // emits JSON that never closes, so both exact parses fail. Rather than lose
+    // every real finding to the fallback below, salvage each COMPLETE finding
+    // object before the truncation point.
+    if let Some(output) = salvage_review_output(text) {
+        return output;
+    }
+    // Give up. The fallback is Speculative so the sign-off gate never puts this
+    // raw dump in front of the user; it stays as advisory text in the review
+    // appendix, and the orchestrator emits a warning (see `review_was_unstructured`).
+    // The detail is bounded so the appendix does not carry a giant broken blob.
     DesignReviewOutput {
         overall_assessment: String::new(),
         findings: vec![DesignReviewFinding {
             severity: DesignReviewSeverity::Low,
-            confidence: DesignReviewConfidence::Low,
-            title: "Review output could not be structured".to_string(),
-            detail: text.to_string(),
+            confidence: DesignReviewConfidence::Speculative,
+            title: UNSTRUCTURED_REVIEW_TITLE.to_string(),
+            detail: bounded_detail(text, 400),
             location: None,
             suggested_fix: None,
         }],
     }
+}
+
+fn bounded_detail(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    let mut out: String = s.chars().take(max).collect();
+    out.push('…');
+    out
+}
+
+/// Salvage complete finding objects from a truncated/malformed review JSON. Walks
+/// the `findings` array element by element and keeps every object that parses,
+/// stopping at the first that does not (the truncated tail). Returns `None` when
+/// no complete finding could be recovered, so the caller falls through to the
+/// unstructured fallback.
+fn salvage_review_output(text: &str) -> Option<DesignReviewOutput> {
+    let findings_key = text.find("\"findings\"")?;
+    let arr_start = findings_key + text[findings_key..].find('[')?;
+    let bytes = text.as_bytes();
+    let mut i = arr_start + 1;
+    let mut findings = Vec::new();
+    while i < bytes.len() {
+        match bytes[i] {
+            b']' => break,
+            b',' => i += 1,
+            b if (b as char).is_whitespace() => i += 1,
+            b'{' => {
+                let Some(end) = find_object_end(bytes, i) else {
+                    break; // object is truncated — stop, keep what we have
+                };
+                match serde_json::from_str::<RawDesignReviewFinding>(&text[i..end]) {
+                    Ok(f) => findings.push(DesignReviewFinding::from(f)),
+                    Err(_) => break,
+                }
+                i = end;
+            }
+            _ => break,
+        }
+    }
+    if findings.is_empty() {
+        return None;
+    }
+    let overall_assessment = extract_json_string_field(text, "overall_assessment").unwrap_or_default();
+    Some(DesignReviewOutput {
+        overall_assessment,
+        findings,
+    })
+}
+
+/// Given the index of an opening `{`, return the index just past its matching
+/// `}`, honoring string literals and escapes. `None` if the object never closes
+/// (truncated input).
+fn find_object_end(bytes: &[u8], open: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut in_str = false;
+    let mut escaped = false;
+    for (offset, &b) in bytes[open..].iter().enumerate() {
+        if in_str {
+            if escaped {
+                escaped = false;
+            } else if b == b'\\' {
+                escaped = true;
+            } else if b == b'"' {
+                in_str = false;
+            }
+            continue;
+        }
+        match b {
+            b'"' => in_str = true,
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(open + offset + 1);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Extract a top-level JSON string field's value (unescaped) by scanning, so a
+/// truncated document whose object won't fully parse can still yield its
+/// `overall_assessment`. `None` if the key is absent or its value isn't a string.
+fn extract_json_string_field(text: &str, key: &str) -> Option<String> {
+    let bytes = text.as_bytes();
+    let key_pos = text.find(&format!("\"{key}\""))?;
+    let mut i = key_pos + key.len() + 2;
+    while i < bytes.len() && bytes[i] != b':' {
+        i += 1;
+    }
+    i += 1;
+    while i < bytes.len() && bytes[i] != b'"' {
+        if !(bytes[i] as char).is_whitespace() {
+            return None;
+        }
+        i += 1;
+    }
+    let start = i; // opening quote
+    i += 1;
+    let mut escaped = false;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if escaped {
+            escaped = false;
+        } else if b == b'\\' {
+            escaped = true;
+        } else if b == b'"' {
+            // `start..=i` is a complete JSON string literal; let serde unescape it.
+            return serde_json::from_str::<String>(&text[start..=i]).ok();
+        }
+        i += 1;
+    }
+    None
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -198,16 +344,46 @@ mod tests {
     }
 
     #[test]
-    fn parse_unparseable_text_fallback_to_low_finding() {
+    fn parse_unparseable_text_falls_back_to_nonescalating_finding() {
         let text = "I think this looks fine.";
         let output = parse_design_review_output(text);
         assert_eq!(output.findings.len(), 1);
         assert_eq!(output.findings[0].severity, DesignReviewSeverity::Low);
+        // Crucially Speculative, so the sign-off gate never surfaces this raw dump
+        // as an item to accept/defer/fix.
         assert_eq!(
-            output.findings[0].title,
-            "Review output could not be structured"
+            output.findings[0].confidence,
+            DesignReviewConfidence::Speculative
         );
+        assert_eq!(output.findings[0].title, UNSTRUCTURED_REVIEW_TITLE);
         assert!(output.findings[0].detail.contains(text));
+        assert!(review_was_unstructured(&output));
+    }
+
+    #[test]
+    fn salvage_recovers_complete_findings_from_truncated_json() {
+        // A response cut off mid-array (the outer object and array never close,
+        // and the last finding object is incomplete). Both exact parses fail; the
+        // salvage path must recover the two complete findings and drop the partial
+        // tail — never fall through to the unstructured dump.
+        let text = "```json\n{\n  \"overall_assessment\": \"Missing edge cases, see below.\",\n  \"findings\": [\n    {\"severity\": \"critical\", \"confidence\": \"high\", \"title\": \"Overwrites user shell config\", \"detail\": \"No consent or undo.\"},\n    {\"severity\": \"high\", \"confidence\": \"medium\", \"title\": \"Hardcoded C: paths\", \"detail\": \"Ignores WOW64.\"},\n    {\"severity\": \"medium\", \"confidence\": \"low\", \"title\": \"Non-atomic writ";
+        let output = parse_design_review_output(text);
+        assert!(!review_was_unstructured(&output));
+        assert_eq!(output.overall_assessment, "Missing edge cases, see below.");
+        assert_eq!(output.findings.len(), 2);
+        assert_eq!(output.findings[0].severity, DesignReviewSeverity::Critical);
+        assert_eq!(output.findings[0].title, "Overwrites user shell config");
+        assert_eq!(output.findings[1].title, "Hardcoded C: paths");
+    }
+
+    #[test]
+    fn salvage_handles_braces_inside_string_values() {
+        // A `}` inside a string value must not be mistaken for the object end.
+        let text = "{\"overall_assessment\": \"ok\", \"findings\": [{\"severity\": \"low\", \"confidence\": \"low\", \"title\": \"brace } in title\", \"detail\": \"has { and } chars\"}], \"trailing garbage that breaks exact parse";
+        let output = parse_design_review_output(text);
+        assert!(!review_was_unstructured(&output));
+        assert_eq!(output.findings.len(), 1);
+        assert_eq!(output.findings[0].title, "brace } in title");
     }
 
     #[test]
