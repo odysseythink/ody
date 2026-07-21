@@ -103,25 +103,55 @@ You MUST complete each phase before proceeding to the next.
 
 **BEFORE attempting ANY fix:**
 
-1. **Read Error Messages Carefully**
+1. **Clarify Ambiguous Language Before Investigating**
+
+   Before you read error messages or gather evidence, check whether the user's description contains a term that is ambiguous **in this specific debugging context**. A term is worth clarifying only if multiple meanings would lead to *different root-cause investigation paths*. If the meaning is already obvious from logs, stack traces, or code context, do not ask.
+
+   **When to clarify (all must be true):**
+   - The user relies on a multi-meaning term (e.g., "报错", "挂了", "不行了", "卡住", "失败", "慢", "没反应").
+   - The term could refer to at least two different failure modes in this codebase.
+   - Choosing the wrong meaning would send the investigation down the wrong path.
+
+   **How to clarify:**
+   1. Identify the ambiguous term(s).
+   2. Based on the current code, recent changes, and any available logs, list the most likely meanings as concrete options.
+   3. For each option, state what evidence you would look for first if that option were correct.
+   4. Ask the user to confirm or correct, and always include an escape hatch: "都不是，我的意思是...".
+
+   **Example:**
+   > 你提到的"报错"可能指几种不同情况：
+   > 1. 编译错误：我会先看 `cargo check` 输出和最近的代码改动。
+   > 2. 运行时 panic：我会先找 panic 信息和调用栈。
+   > 3. 测试失败：我会先运行失败的测试并看断言输出。
+   > 4. 工具/脚本返回非零退出码：我会先看 stderr 和 stdout。
+   >
+   > 你遇到的是哪一种？如果不是以上，请直接描述。
+
+   **Do not:**
+   - Clarify terms already disambiguated by context.
+   - Ask about multiple unrelated terms at once.
+   - Present options without linking them to concrete evidence paths.
+   - Continue to Phase 1 until the ambiguity is resolved.
+
+2. **Read Error Messages Carefully**
    - Don't skip past errors or warnings
    - They often contain the exact solution
    - Read stack traces completely
    - Note line numbers, file paths, error codes
 
-2. **Reproduce Consistently**
+3. **Reproduce Consistently**
    - Can you trigger it reliably?
    - What are the exact steps?
    - Does it happen every time?
    - If not reproducible → gather more data, don't guess
 
-3. **Check Recent Changes**
+4. **Check Recent Changes**
    - What changed that could cause this?
    - Git diff, recent commits
    - New dependencies, config changes
    - Environmental differences
 
-4. **Gather Evidence in Multi-Component Systems**
+5. **Gather Evidence in Multi-Component Systems**
 
    **WHEN system has multiple components (CI → build → signing, API → service → database):**
 
@@ -159,7 +189,7 @@ You MUST complete each phase before proceeding to the next.
 
    **This reveals:** Which layer fails (secrets → workflow ✓, workflow → build ✗)
 
-5. **Trace Data Flow**
+6. **Trace Data Flow**
 
    **WHEN error is deep in call stack:**
 
@@ -171,7 +201,7 @@ You MUST complete each phase before proceeding to the next.
    - Keep tracing up until you find the source
    - Fix at source, not at symptom
 
-6. **If You Are Still Stuck: Add Targeted Diagnostics and Re-run**
+7. **If You Are Still Stuck: Add Targeted Diagnostics and Re-run**
 
    If you have tried the above and still cannot form a testable hypothesis, **do not continue guessing.** The next step is to make the invisible visible.
 
