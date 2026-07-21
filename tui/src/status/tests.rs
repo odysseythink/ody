@@ -4,7 +4,6 @@ use crate::history_cell::HistoryCell;
 use crate::legacy_core::config::Config;
 use crate::legacy_core::config::ConfigBuilder;
 use crate::legacy_core::config::PermissionProfileSnapshot;
-use crate::status::StatusAuthDisplay;
 use crate::status::remote_connection::RemoteConnectionStatus;
 use crate::test_support::PathBufExt;
 use crate::test_support::test_path_buf;
@@ -103,9 +102,6 @@ fn set_workspace_cwd(config: &mut Config, cwd: AbsolutePathBuf) {
         .set_workspace_roots(config.workspace_roots.clone());
 }
 
-fn test_status_auth_display() -> Option<StatusAuthDisplay> {
-    Some(StatusAuthDisplay::ApiKey)
-}
 
 fn token_info_for(model_slug: &str, config: &Config, usage: &TokenUsage) -> TokenUsageInfo {
     let context_window =
@@ -178,7 +174,6 @@ fn permissions_text_for(config: &Config) -> Option<String> {
     let model_slug = get_model_offline_for_tests(config.model.as_deref());
     let composite = new_status_output(
         config,
-        test_status_auth_display().as_ref(),
         /*token_info*/ None,
         &usage,
         &None,
@@ -215,7 +210,6 @@ async fn status_snapshot_includes_reasoning_details() {
         .set_permission_profile(PermissionProfile::workspace_write())
         .expect("set permission profile");
 
-    let auth_display = test_status_auth_display();
     let usage = TokenUsage {
         input_tokens: 1_200,
         cached_input_tokens: 200,
@@ -235,7 +229,6 @@ async fn status_snapshot_includes_reasoning_details() {
     let reasoning_effort_override = Some(Some(ReasoningEffort::High));
     let composite = new_status_output(
         &config,
-        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -548,7 +541,6 @@ async fn status_snapshot_shows_active_user_defined_profile() {
 
     let composite = new_status_output(
         &config,
-        test_status_auth_display().as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -594,7 +586,6 @@ async fn status_snapshot_shows_auto_review_permissions() {
 
     let composite = new_status_output(
         &config,
-        test_status_auth_display().as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -669,7 +660,6 @@ async fn status_snapshot_includes_forked_from() {
     config.model_provider_id = "kimi".to_string();
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
-    let auth_display = test_status_auth_display();
     let usage = TokenUsage {
         input_tokens: 800,
         cached_input_tokens: 0,
@@ -692,7 +682,6 @@ async fn status_snapshot_includes_forked_from() {
 
     let composite = new_status_output(
         &config,
-        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &Some(session_id),
@@ -720,7 +709,6 @@ async fn status_card_token_usage_excludes_cached_tokens() {
     config.model = Some("kimi-for-coding".to_string());
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
-    let auth_display = test_status_auth_display();
     let usage = TokenUsage {
         input_tokens: 1_200,
         cached_input_tokens: 200,
@@ -738,7 +726,6 @@ async fn status_card_token_usage_excludes_cached_tokens() {
     let token_info = token_info_for(&model_slug, &config, &usage);
     let composite = new_status_output(
         &config,
-        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -764,7 +751,6 @@ async fn status_snapshot_shows_missing_limits_message() {
     config.model = Some("kimi-for-coding".to_string());
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
-    let auth_display = test_status_auth_display();
     let usage = TokenUsage {
         input_tokens: 500,
         cached_input_tokens: 0,
@@ -782,7 +768,6 @@ async fn status_snapshot_shows_missing_limits_message() {
     let token_info = token_info_for(&model_slug, &config, &usage);
     let composite = new_status_output(
         &config,
-        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -810,7 +795,6 @@ async fn status_snapshot_uses_default_reasoning_when_config_empty() {
     config.model = Some("kimi-for-coding".to_string());
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
-    let auth_display = test_status_auth_display();
     let usage = TokenUsage {
         input_tokens: 500,
         cached_input_tokens: 0,
@@ -834,7 +818,6 @@ async fn status_snapshot_uses_default_reasoning_when_config_empty() {
         &config,
         /*runtime_model_provider_base_url*/ None,
         Some(&remote_connection),
-        auth_display.as_ref(),
         Some(&token_info),
         &usage,
         &None,
@@ -862,7 +845,6 @@ async fn status_context_window_uses_last_usage() {
     let mut config = test_config(&temp_home).await;
     config.model_context_window = Some(272_000);
 
-    let auth_display = test_status_auth_display();
     let total_usage = TokenUsage {
         input_tokens: 12_800,
         cached_input_tokens: 0,
@@ -892,7 +874,6 @@ async fn status_context_window_uses_last_usage() {
     };
     let composite = new_status_output(
         &config,
-        auth_display.as_ref(),
         Some(&token_info),
         &total_usage,
         &None,

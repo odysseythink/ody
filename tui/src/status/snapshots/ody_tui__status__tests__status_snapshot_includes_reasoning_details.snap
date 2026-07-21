@@ -11,7 +11,6 @@ expression: sanitized
 │  Directory: [[workspace]]                              │
 │  Permissions:      Workspace (Ask for approval)        │
 │  Agents.md:        <none>                              │
-│  Auth:             API key configured                  │
 │                                                        │
 │  Token usage:      1.9K total  (1K input + 900 output) │
 │  Context window:   100% left (2.25K used / 272K)       │

@@ -33,7 +33,6 @@ pub(crate) fn format_and_truncate_tool_result(
     }
 }
 
-
 /// Format a tool result for display without truncating it.
 ///
 /// If the text is valid JSON, it is returned in a compact single-line format that Ratatui can wrap

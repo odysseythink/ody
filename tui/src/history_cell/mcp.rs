@@ -242,12 +242,9 @@ impl HistoryCell for McpToolCallCell {
         if self.is_expanded() || !self.is_collapsible() {
             return full;
         }
-        truncate_lines_with_hint(
-            full,
-            TOOL_RESULT_PREVIEW_LINES,
-            false,
-            |remaining| collapse_hint(remaining),
-        )
+        truncate_lines_with_hint(full, TOOL_RESULT_PREVIEW_LINES, false, |remaining| {
+            collapse_hint(remaining)
+        })
     }
 
     fn display_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
@@ -273,7 +270,8 @@ impl HistoryCell for McpToolCallCell {
     fn toggle_expanded(&self) -> bool {
         let current = self.expanded.load(std::sync::atomic::Ordering::Relaxed);
         let new = !current;
-        self.expanded.store(new, std::sync::atomic::Ordering::Relaxed);
+        self.expanded
+            .store(new, std::sync::atomic::Ordering::Relaxed);
         new
     }
 

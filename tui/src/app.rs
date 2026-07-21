@@ -730,7 +730,6 @@ impl App {
             initial_user_message,
             enhanced_keys_supported: self.enhanced_keys_supported,
             api_key_configured: self.chat_widget.api_key_configured(),
-            has_ody_backend_auth: self.chat_widget.has_ody_backend_auth(),
             model_catalog: self.model_catalog.clone(),
             feedback: self.feedback.clone(),
             is_first_run: false,
@@ -817,8 +816,6 @@ impl App {
         let feedback_audience = bootstrap.feedback_audience;
         let auth_mode = bootstrap.auth_mode;
         let api_key_configured = matches!(auth_mode, Some(TelemetryAuthMode::ApiKey));
-        let has_ody_backend_auth = api_key_configured;
-
         let session_telemetry = SessionTelemetry::new(
             ThreadId::new(),
             model.as_str(),
@@ -882,7 +879,6 @@ impl App {
                     ),
                     enhanced_keys_supported,
                     api_key_configured,
-                    has_ody_backend_auth,
                     model_catalog: model_catalog.clone(),
                     feedback: feedback.clone(),
                     is_first_run,
@@ -916,7 +912,6 @@ impl App {
                     ),
                     enhanced_keys_supported,
                     api_key_configured,
-                    has_ody_backend_auth,
                     model_catalog: model_catalog.clone(),
                     feedback: feedback.clone(),
                     is_first_run,
@@ -953,7 +948,6 @@ impl App {
                     ),
                     enhanced_keys_supported,
                     api_key_configured,
-                    has_ody_backend_auth,
                     model_catalog: model_catalog.clone(),
                     feedback: feedback.clone(),
                     is_first_run,

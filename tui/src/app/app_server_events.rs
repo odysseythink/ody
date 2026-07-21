@@ -75,9 +75,8 @@ impl App {
             }
             ServerNotification::AuthUpdated(notification) => {
                 let api_key_configured = matches!(notification.auth_mode, Some(AuthMode::ApiKey));
-                let has_ody_backend_auth = api_key_configured;
                 self.chat_widget
-                    .update_auth_state(api_key_configured, has_ody_backend_auth);
+                    .update_auth_state(api_key_configured);
                 return;
             }
             ServerNotification::ExternalAgentConfigImportCompleted(_) => {

@@ -59,7 +59,8 @@ impl ChatWidget {
             self.bottom_pane.clear_quit_shortcut_hint();
             self.quit_shortcut_expires_at = None;
             self.quit_shortcut_key = None;
-            self.app_event_tx.send(AppEvent::OpenMostRecentCollapsibleCellOverlay);
+            self.app_event_tx
+                .send(AppEvent::OpenMostRecentCollapsibleCellOverlay);
             return;
         }
 

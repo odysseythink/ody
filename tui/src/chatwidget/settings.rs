@@ -199,24 +199,17 @@ impl ChatWidget {
         self.api_key_configured
     }
 
-    pub(crate) fn has_ody_backend_auth(&self) -> bool {
-        self.has_ody_backend_auth
-    }
-
     pub(crate) fn update_auth_state(
         &mut self,
         api_key_configured: bool,
-        has_ody_backend_auth: bool,
     ) {
         // Auth-update notifications are the identity boundary. The visible auth fields can
         // be identical across two auth states, so always invalidate auth-scoped requests and data.
         let had_refreshing_status_outputs = !self.refreshing_status_outputs.is_empty();
-        let now = Local::now();
         if had_refreshing_status_outputs {
             self.request_redraw();
         }
         self.api_key_configured = api_key_configured;
-        self.has_ody_backend_auth = has_ody_backend_auth;
         self.bottom_pane
             .set_connectors_enabled(self.connectors_enabled());
         self.refresh_status_surfaces();

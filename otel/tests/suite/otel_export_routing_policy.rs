@@ -479,7 +479,6 @@ fn otel_export_routing_policy_routes_api_request_auth_observability() {
         .with_auth_env(AuthEnvTelemetryMetadata {
             odysseythink_api_key_env_present: true,
             ody_api_key_env_present: false,
-            ody_api_key_env_enabled: true,
             provider_env_key_name: Some("configured".to_string()),
             provider_env_key_present: Some(true),
         });
@@ -571,12 +570,6 @@ fn otel_export_routing_policy_routes_api_request_auth_observability() {
         request_log_attrs.get("auth.error").map(String::as_str),
         Some("missing_authorization_header")
     );
-    assert_eq!(
-        request_log_attrs
-            .get("auth.env_ody_api_key_enabled")
-            .map(String::as_str),
-        Some("true")
-    );
     let spans = span_exporter.get_finished_spans().expect("span export");
     let conversation_trace_event =
         find_span_event_by_name_attr(&spans[0].events.events, "ody.conversation_starts");
@@ -660,7 +653,6 @@ fn otel_export_routing_policy_routes_websocket_connect_auth_observability() {
         .with_auth_env(AuthEnvTelemetryMetadata {
             odysseythink_api_key_env_present: true,
             ody_api_key_env_present: false,
-            ody_api_key_env_enabled: true,
             provider_env_key_name: Some("configured".to_string()),
             provider_env_key_present: Some(true),
         });
@@ -775,7 +767,6 @@ fn otel_export_routing_policy_routes_websocket_request_transport_observability()
         .with_auth_env(AuthEnvTelemetryMetadata {
             odysseythink_api_key_env_present: true,
             ody_api_key_env_present: false,
-            ody_api_key_env_enabled: true,
             provider_env_key_name: Some("configured".to_string()),
             provider_env_key_present: Some(true),
         });

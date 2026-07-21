@@ -233,7 +233,6 @@ pub(crate) async fn make_chatwidget_manual(
         initial_user_message: None,
         enhanced_keys_supported: false,
         api_key_configured: false,
-        has_ody_backend_auth: false,
         model_catalog,
         feedback: ody_feedback::OdyFeedback::new(),
         is_first_run: true,
@@ -289,7 +288,6 @@ pub(super) async fn make_chatwidget_manual_with_language(
         initial_user_message: None,
         enhanced_keys_supported: false,
         api_key_configured: false,
-        has_ody_backend_auth: false,
         model_catalog,
         feedback: ody_feedback::OdyFeedback::new(),
         is_first_run: true,
@@ -348,7 +346,6 @@ pub(super) fn assert_no_submit_op(op_rx: &mut tokio::sync::mpsc::UnboundedReceiv
 
 pub(crate) fn set_api_key_auth(chat: &mut ChatWidget) {
     chat.api_key_configured = true;
-    chat.has_ody_backend_auth = true;
     chat.model_catalog = test_model_catalog(&chat.config);
 }
 

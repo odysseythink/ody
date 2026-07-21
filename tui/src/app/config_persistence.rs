@@ -797,7 +797,11 @@ impl App {
             })
             .map(|(alias, _)| alias.clone())
             .collect();
-        let edits = build_logout_provider_edits(&aliases_to_remove, &self.config.configured_models, self.config.model.as_deref());
+        let edits = build_logout_provider_edits(
+            &aliases_to_remove,
+            &self.config.configured_models,
+            self.config.model.as_deref(),
+        );
         if edits.is_empty() {
             self.chat_widget
                 .add_info_message(format!("No {} provider configured.", provider.id()), None);
@@ -853,8 +857,10 @@ impl App {
             })
             .unwrap_or(false);
         if !is_matching_alias {
-            self.chat_widget
-                .add_error_message(format!("'{alias}' is not a configured {} alias.", provider.id()));
+            self.chat_widget.add_error_message(format!(
+                "'{alias}' is not a configured {} alias.",
+                provider.id()
+            ));
             return;
         }
 

@@ -52,9 +52,9 @@ use ody_config::RemoteThreadConfigLoader;
 use ody_config::ThreadConfigLoader;
 use ody_config::config_toml::ConfigToml;
 use ody_core::config::Config;
-pub use ody_core::otel_init::build_provider as build_otel_provider;
 use ody_core::language_backfill::LanguageBackfillStatus;
 use ody_core::language_backfill::backfill_language_if_needed as core_backfill_language_if_needed;
+pub use ody_core::otel_init::build_provider as build_otel_provider;
 use ody_core::personality_migration::PersonalityMigrationStatus;
 use ody_core::personality_migration::maybe_migrate_personality;
 pub use ody_exec_server::EnvironmentManager;
@@ -363,8 +363,6 @@ pub struct InProcessClientStartArgs {
     pub config_warnings: Vec<ConfigWarningNotification>,
     /// Session source recorded in app-server thread metadata.
     pub session_source: SessionSource,
-    /// Whether auth loading should honor the `ODY_API_KEY` environment variable.
-    pub enable_ody_api_key_env: bool,
     /// Client name reported during initialize.
     pub client_name: String,
     /// Client version reported during initialize.
@@ -427,7 +425,6 @@ impl InProcessClientStartArgs {
             environment_manager: self.environment_manager,
             config_warnings: self.config_warnings,
             session_source: self.session_source,
-            enable_ody_api_key_env: self.enable_ody_api_key_env,
             initialize,
             channel_capacity: self.channel_capacity,
         }
@@ -1042,7 +1039,6 @@ mod tests {
             environment_manager: Arc::new(EnvironmentManager::default_for_tests()),
             config_warnings: Vec::new(),
             session_source,
-            enable_ody_api_key_env: false,
             client_name: "ody-app-server-client-test".to_string(),
             client_version: "0.0.0-test".to_string(),
             experimental_api: true,
@@ -1435,7 +1431,6 @@ mod tests {
             environment_manager: Arc::new(EnvironmentManager::default_for_tests()),
             config_warnings: Vec::new(),
             session_source: SessionSource::Exec,
-            enable_ody_api_key_env: false,
             client_name: "ody-app-server-client-test".to_string(),
             client_version: "0.0.0-test".to_string(),
             experimental_api: true,

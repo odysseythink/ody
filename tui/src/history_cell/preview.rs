@@ -1,4 +1,4 @@
-﻿//! Preview constants and truncation helpers for collapsible history cells.
+//! Preview constants and truncation helpers for collapsible history cells.
 //!
 //! This module is intentionally minimal: it only exposes the preview thresholds
 //! and a shared truncation helper. The actual decision of whether a cell is
@@ -44,7 +44,11 @@ pub(crate) fn truncate_lines_with_hint(
 
 pub(crate) fn collapse_hint(remaining: usize) -> Line<'static> {
     let more_lines = if remaining == 1 { "line" } else { "lines" };
-    Line::from(format!("... ({remaining} more {more_lines}, alt+o to expand)")).dim().italic()
+    Line::from(format!(
+        "... ({remaining} more {more_lines}, alt+o to expand)"
+    ))
+    .dim()
+    .italic()
 }
 
 #[cfg(test)]
@@ -93,8 +97,7 @@ mod tests {
     #[test]
     fn truncate_expanded_keeps_all_lines() {
         let lines = (1..=10).map(|i| Line::from(i.to_string())).collect();
-        let out =
-            truncate_lines_with_hint(lines, 5, true, |_remaining| Line::from("hint"));
+        let out = truncate_lines_with_hint(lines, 5, true, |_remaining| Line::from("hint"));
         assert_eq!(render_lines(&out).len(), 10);
     }
 }

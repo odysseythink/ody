@@ -423,9 +423,9 @@ impl Renderable for CellRenderable {
     fn render(&self, area: Rect, buf: &mut Buffer) {
         let hyperlink_lines = match self.mode {
             CellRenderableMode::Transcript => self.cell.transcript_hyperlink_lines(area.width),
-            CellRenderableMode::Display => {
-                self.cell.display_hyperlink_lines_for_mode(area.width, HistoryRenderMode::Rich)
-            }
+            CellRenderableMode::Display => self
+                .cell
+                .display_hyperlink_lines_for_mode(area.width, HistoryRenderMode::Rich),
         };
         let p = Paragraph::new(Text::from(visible_lines(hyperlink_lines.clone())))
             .style(self.style)
@@ -437,9 +437,9 @@ impl Renderable for CellRenderable {
     fn desired_height(&self, width: u16) -> u16 {
         match self.mode {
             CellRenderableMode::Transcript => self.cell.desired_transcript_height(width),
-            CellRenderableMode::Display => {
-                self.cell.desired_height_for_mode(width, HistoryRenderMode::Rich)
-            }
+            CellRenderableMode::Display => self
+                .cell
+                .desired_height_for_mode(width, HistoryRenderMode::Rich),
         }
     }
 }

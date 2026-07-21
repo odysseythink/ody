@@ -42,7 +42,6 @@ async fn experimental_mode_plan_is_ignored_on_startup() {
         initial_user_message: None,
         enhanced_keys_supported: false,
         api_key_configured: false,
-        has_ody_backend_auth: false,
         model_catalog: test_model_catalog(&cfg),
         feedback: ody_feedback::OdyFeedback::new(),
         is_first_run: true,

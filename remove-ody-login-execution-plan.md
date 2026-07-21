@@ -154,7 +154,7 @@ Depends on: 4.3
 
 Depends on: 3.2
 
-- 当前 `otel/src/events/session_telemetry.rs` 仍包含 `AuthEnvTelemetryMetadata` 和 `ody_api_key_env_present` / `ody_api_key_env_enabled` 字段。
+ - 当前 `otel/src/events/session_telemetry.rs` 仍包含 `AuthEnvTelemetryMetadata` 和 `ody_api_key_env_present` 字段；`ody_api_key_env_enabled` 已随 `enable_ody_api_key_env` 死代码清理一并删除。
 - 选择：
   - **A（推荐）**：完全删除 `AuthEnvTelemetryMetadata` 中的 Ody auth 字段，同步清理 `otel/tests/suite/otel_export_routing_policy.rs`。
   - **B**：保留精简版，仅记录第三方 key（KIMI/DEEPSEEK/GLM）存在性。

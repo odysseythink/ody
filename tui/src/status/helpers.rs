@@ -1,6 +1,5 @@
 use crate::exec_command::relativize_to_home;
 use crate::legacy_core::config::Config;
-use crate::status::StatusAuthDisplay;
 use crate::text_formatting;
 use chrono::DateTime;
 use chrono::Local;
@@ -87,12 +86,6 @@ pub(crate) fn compose_agents_summary(config: &Config, paths: &[PathUri]) -> Stri
     } else {
         rels.join(", ")
     }
-}
-
-pub(crate) fn compose_auth_display(
-    auth_display: Option<&StatusAuthDisplay>,
-) -> Option<StatusAuthDisplay> {
-    auth_display.cloned()
 }
 
 pub(crate) fn format_tokens_compact(value: i64) -> String {

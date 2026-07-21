@@ -549,7 +549,6 @@ where
         config_warnings,
         session_source: serde_json::from_value(serde_json::json!("cli"))
             .unwrap_or_else(|err| panic!("cli session source should deserialize: {err}")),
-        enable_ody_api_key_env: false,
         client_name: "ody-tui".to_string(),
         client_version: env!("CARGO_PKG_VERSION").to_string(),
         experimental_api: true,
@@ -1042,11 +1041,8 @@ pub async fn run_main(
             // Persist the detected system language into config.toml when unset, so
             // the model's language directive no longer depends on run-time locale
             // detection (which silently drops to English when it fails to resolve).
-            match ody_app_server_client::backfill_language_if_needed(
-                &config.ody_home,
-                &config_toml,
-            )
-            .await
+            match ody_app_server_client::backfill_language_if_needed(&config.ody_home, &config_toml)
+                .await
             {
                 Ok(true) => {
                     config = load_config_or_exit(
