@@ -8,6 +8,7 @@
 
 use super::glob;
 use super::grep;
+use super::jq;
 use super::lexically_normalize;
 use super::read;
 use std::path::Path;
@@ -192,5 +193,130 @@ fn parent_traversal_is_normalized_away() {
     assert!(
         !normalized.starts_with("/repo"),
         "a traversal that escapes the root must not still look like it is inside it"
+    );
+}
+
+// ── jq ────────────────────────────────────────────────────────────────
+
+#[test]
+fn jq_selects_matching_jsonl_lines() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("log.jsonl");
+    std::fs::write(
+        &path,
+        "{\"type\":\"response_item\",\"turn_id\":\"a\"}\n{\"type\":\"event\",\"turn_id\":\"a\"}\n{\"type\":\"response_item\",\"turn_id\":\"b\"}\n",
+    )
+    .unwrap();
+    let (out, _) = jq::run_for_test("select(.type == \"response_item\")", &path).unwrap();
+    assert!(
+        out.contains(r#"{"type":"response_item","turn_id":"a"}"#),
+        "{}",
+        out
+    );
+    assert!(
+        out.contains(r#"{"type":"response_item","turn_id":"b"}"#),
+        "{}",
+        out
+    );
+    assert!(
+        !out.contains("\"type\":\"event\""),
+        "event should be filtered out: {}",
+        out
+    );
+}
+
+#[test]
+fn jq_extracts_nested_field() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("nested.json");
+    std::fs::write(&path, "{\"payload\":{\"turn_id\":\"x\",\"attempts\":3}}").unwrap();
+    let (out, _) = jq::run_for_test(".payload.turn_id", &path).unwrap();
+    assert_eq!(out.trim(), "\"x\"", "{}", out);
+}
+
+#[test]
+fn jq_maps_field_from_each_line() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("log.jsonl");
+    std::fs::write(&path, "{\"n\":1}\n{\"n\":2}\n{\"n\":3}\n").unwrap();
+    let (out, _) = jq::run_for_test(".n", &path).unwrap();
+    assert_eq!(out.trim(), "1\n2\n3", "{}", out);
+}
+
+#[test]
+fn jq_rejects_invalid_filter() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("empty.json");
+    std::fs::write(&path, "{}").unwrap();
+    let err = jq::run_for_test("select(", &path).expect_err("invalid filter must be rejected");
+    assert!(
+        format!("{err:?}").contains("is not valid")
+            || format!("{err:?}").contains("could not be compiled"),
+        "{err:?}"
+    );
+}
+
+#[test]
+fn jq_rejects_invalid_json() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("broken.json");
+    std::fs::write(&path, "not json").unwrap();
+    let err = jq::run_for_test(".", &path).expect_err("invalid JSON must be rejected");
+    assert!(format!("{err:?}").contains("not valid JSON"), "{err:?}");
+}
+
+#[test]
+fn jq_array_mode_wraps_results() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("log.jsonl");
+    std::fs::write(&path, "{\"n\":1}\n{\"n\":2}\n").unwrap();
+    let (out, _) = jq::run_with_options_for_test(".n", &path, None, None, Some("array")).unwrap();
+    assert_eq!(out.trim(), "[1,2]", "{}", out);
+}
+
+#[test]
+fn jq_offset_and_limit_pages_results() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("log.jsonl");
+    std::fs::write(&path, "{\"n\":1}\n{\"n\":2}\n{\"n\":3}\n{\"n\":4}\n").unwrap();
+    // 1-based offset: start at result 2, limit 1 -> only result 2.
+    let (out, truncated) =
+        jq::run_with_options_for_test(".n", &path, Some(2), Some(1), None).unwrap();
+
+    // The output includes the pagination notice because only 1 of 4 results fit.
+    assert!(out.starts_with("2"), "expected result 2 first: {out}");
+    assert!(
+        out.contains("showing 1 of 4"),
+        "expected pagination notice: {out}"
+    );
+    assert!(truncated, "must signal more results exist");
+}
+
+#[test]
+fn jq_reports_empty_results() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("log.jsonl");
+    std::fs::write(&path, "{\"n\":1}\n{\"n\":2}\n").unwrap();
+    let (out, _) = jq::run_for_test("select(.n > 5)", &path).unwrap();
+    assert!(
+        out.contains("No results"),
+        "empty filter results should be reported clearly: {out}"
+    );
+}
+
+#[test]
+fn jq_rejects_oversized_file_with_clear_message() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("huge.json");
+    // Start a JSON object, then pad past MAX_BYTES so the truncation lands mid-value.
+    let mut content = String::from(r#"{"data":"#);
+    content.push_str(&"x".repeat(200 * 1024));
+    std::fs::write(&path, content).unwrap();
+    let err =
+        jq::run_for_test(".data", &path).expect_err("oversized truncated JSON must be rejected");
+    let msg = format!("{err:?}");
+    assert!(
+        msg.contains("larger than") || msg.contains("100 KiB"),
+        "expected size-related error, got: {msg}"
     );
 }

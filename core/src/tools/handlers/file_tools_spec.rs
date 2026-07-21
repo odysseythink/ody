@@ -1,4 +1,5 @@
-//! Schemas for the structured file-exploration tools: `read_file`, `grep`, `glob`.
+
+//! Schemas for the structured file-exploration tools: `read_file`, `grep`, `glob`, `jq`.
 //!
 //! These exist to keep codebase exploration out of the raw-shell path. A model
 //! that explores with `rg`/`cat` through `shell_command` dumps unshaped stdout
@@ -21,6 +22,7 @@ use std::collections::BTreeMap;
 pub const READ_FILE_TOOL_NAME: &str = "read_file";
 pub const GREP_TOOL_NAME: &str = "grep";
 pub const GLOB_TOOL_NAME: &str = "glob";
+pub const JQ_TOOL_NAME: &str = "jq";
 
 /// Maximum lines returned by a single `read_file` call.
 pub const MAX_LINES: usize = 1000;
@@ -56,7 +58,8 @@ pub fn create_read_file_tool(options: FileToolOptions) -> ToolSpec {
         (
             "path".to_string(),
             JsonSchema::string(Some(
-                "Path to the file to read. Absolute, or relative to the working directory."
+                "Path to the file to read. Absolute paths may point outside the working directory; \
+                 relative paths are resolved against it."
                     .to_string(),
             )),
         ),
@@ -253,6 +256,88 @@ pub fn create_glob_tool(options: FileToolOptions) -> ToolSpec {
     })
 }
 
+pub fn create_jq_tool(options: FileToolOptions) -> ToolSpec {
+    let mut properties = BTreeMap::from([
+        (
+            "path".to_string(),
+            JsonSchema::string(Some(
+                "Path to a JSON or JSONL file. Absolute paths may point outside the working \
+                 directory; relative paths are resolved against it."
+                    .to_string(),
+            )),
+        ),
+        (
+            "filter".to_string(),
+            JsonSchema::string(Some(
+                "jq filter expression applied to each JSON value in the file. For JSONL files, the filter runs once per line.".to_string(),
+            )),
+        ),
+        (
+            "output_mode".to_string(),
+            JsonSchema::string_enum(
+                vec![json!("lines"), json!("array")],
+                Some(
+                    "Shape of the result. `lines` (the DEFAULT) returns one JSON value per line. \
+                     `array` returns all results wrapped in a JSON array."
+                        .to_string(),
+                ),
+            ),
+        ),
+        (
+            "offset".to_string(),
+            JsonSchema::integer(Some(
+                "1-based result to start from. Omit to start at 1. Negative values read from the \
+                 end of the result set."
+                    .to_string(),
+            )),
+        ),
+        (
+            "limit".to_string(),
+            JsonSchema::integer(Some(
+                "Maximum number of results to return. Defaults to an internal cap. Page through \
+                 large results with `offset` rather than raising this."
+                    .to_string(),
+            )),
+        ),
+    ]);
+    environment_id_property(&mut properties, options);
+
+    ToolSpec::Function(ResponsesApiTool {
+        name: JQ_TOOL_NAME.to_string(),
+        description:
+            "Run a jq filter against a JSON or JSONL file. Prefer this over shell `jq` when the \
+             data is already known: output is capped and shaped before it reaches the conversation. \
+             Use `read_file` first if you are unsure whether the file is valid JSON/JSONL."
+                .to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::object(
+            properties,
+            Some(vec!["path".to_string(), "filter".to_string()]),
+            Some(false.into()),
+        ),
+        output_schema: Some(jq_output_schema()),
+    })
+}
+
+fn jq_output_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "content": {
+                "type": "string",
+                "description": "The jq results, either newline-separated JSON values (`lines` mode) or a JSON array (`array` mode)."
+            },
+            "truncated": {
+                "type": "boolean",
+                "description": "True when more results were available than returned; page on with `offset`."
+            }
+        },
+        "required": ["content", "truncated"],
+        "additionalProperties": false
+    })
+}
+
 fn read_file_output_schema() -> Value {
     json!({
         "type": "object",
@@ -378,5 +463,11 @@ mod tests {
                 "expected `{required}` to be the required argument: {json}"
             );
         }
+        let jq_json = spec_json(&create_jq_tool(FileToolOptions::default()));
+        assert!(
+            jq_json.contains("\"required\":[\"path\",\"filter\"]")
+                || jq_json.contains("\"required\":[\"filter\",\"path\"]"),
+            "expected jq to require both path and filter: {jq_json}"
+        );
     }
 }

@@ -1,3 +1,4 @@
+use super::PathAccessMode;
 use super::local_search_root;
 use super::pagination_notice;
 use crate::function_tool::FunctionCallError;
@@ -96,6 +97,7 @@ impl ToolExecutor<ToolInvocation> for GlobHandler {
                 turn.as_ref(),
                 args.environment_id.as_deref(),
                 args.path.as_deref(),
+                PathAccessMode::WorkspaceRelativeOnly,
             )?;
             let (paths, truncated) = run(&args, root.as_path())?;
             Ok(boxed_tool_output(GlobOutput { paths, truncated }))

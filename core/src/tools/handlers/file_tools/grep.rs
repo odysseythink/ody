@@ -1,3 +1,4 @@
+use super::PathAccessMode;
 use super::local_search_root;
 use super::pagination_notice;
 use crate::function_tool::FunctionCallError;
@@ -125,6 +126,7 @@ impl ToolExecutor<ToolInvocation> for GrepHandler {
                 turn.as_ref(),
                 args.environment_id.as_deref(),
                 args.path.as_deref(),
+                PathAccessMode::WorkspaceRelativeOnly,
             )?;
             let (matches, truncated) = run(&args, root.as_path())?;
             Ok(boxed_tool_output(GrepOutput { matches, truncated }))
@@ -219,8 +221,8 @@ fn run(args: &GrepArgs, root: &Path) -> Result<(String, bool), FunctionCallError
         let display = path
             .strip_prefix(root)
             .unwrap_or(path)
-            .display()
-            .to_string();
+            .to_string_lossy()
+            .replace('\\', "/");
         let lines: Vec<&str> = text.lines().collect();
         let mut file_matched = false;
 

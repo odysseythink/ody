@@ -1,3 +1,4 @@
+use super::PathAccessMode;
 use super::local_search_root;
 use crate::function_tool::FunctionCallError;
 use crate::tools::context::FunctionToolOutput;
@@ -93,6 +94,7 @@ impl ToolExecutor<ToolInvocation> for ReadFileHandler {
                 turn.as_ref(),
                 args.environment_id.as_deref(),
                 Some(&args.path),
+                PathAccessMode::AbsoluteOutsideAllowed,
             )?;
 
             let bytes = std::fs::read(abs_path.as_path()).map_err(|err| {

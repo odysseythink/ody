@@ -22,6 +22,7 @@ use crate::tools::handlers::NewContextWindowHandler;
 use crate::tools::handlers::PlanHandler;
 use crate::tools::handlers::ReviewTestsHandler;
 
+use crate::tools::handlers::JqHandler;
 use crate::tools::handlers::ReadFileHandler;
 use crate::tools::handlers::ReadMcpResourceHandler;
 use crate::tools::handlers::RequestPermissionsHandler;
@@ -676,6 +677,7 @@ fn add_file_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut Planned
     planned_tools.add(ReadFileHandler::new(options));
     planned_tools.add(GrepHandler::new(options));
     planned_tools.add(GlobHandler::new(options));
+    planned_tools.add(JqHandler::new(options));
 }
 
 #[instrument(level = "trace", skip_all)]

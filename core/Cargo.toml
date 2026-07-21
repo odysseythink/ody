@@ -95,6 +95,9 @@ image = { workspace = true, features = ["jpeg", "png", "webp"] }
 indexmap = { workspace = true }
 globset = { workspace = true }
 ignore = { workspace = true }
+jaq-core = { workspace = true }
+jaq-json = { workspace = true }
+jaq-std = { workspace = true }
 libc = { workspace = true }
 once_cell = { workspace = true }
 rand = { workspace = true }
