@@ -131,6 +131,7 @@ pub(crate) enum ToolEmitter {
         changes: HashMap<PathBuf, FileChange>,
         auto_approved: bool,
         environment_id: Option<String>,
+        source: Option<String>,
     },
     UnifiedExec {
         command: Vec<String>,
@@ -161,6 +162,21 @@ impl ToolEmitter {
             changes,
             auto_approved,
             environment_id: Some(environment_id),
+            source: None,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn file_change_for_environment(
+        changes: HashMap<PathBuf, FileChange>,
+        environment_id: String,
+        source: String,
+    ) -> Self {
+        Self::ApplyPatch {
+            changes,
+            auto_approved: true,
+            environment_id: Some(environment_id),
+            source: Some(source),
         }
     }
 
@@ -207,6 +223,7 @@ impl ToolEmitter {
                 Self::ApplyPatch {
                     changes,
                     auto_approved,
+                    source,
                     ..
                 },
                 ToolEventStage::Begin,
@@ -218,6 +235,7 @@ impl ToolEmitter {
                             id: ctx.call_id.to_string(),
                             changes: changes.clone(),
                             status: None,
+                            source: source.clone(),
                             auto_approved: Some(*auto_approved),
                             stdout: None,
                             stderr: None,
@@ -229,6 +247,7 @@ impl ToolEmitter {
                 Self::ApplyPatch {
                     changes,
                     environment_id,
+                    source,
                     ..
                 },
                 ToolEventStage::Success {
@@ -247,6 +266,7 @@ impl ToolEmitter {
                 emit_patch_end(
                     ctx,
                     changes.clone(),
+                    source.clone(),
                     output.stdout.text.clone(),
                     output.stderr.text.clone(),
                     status,
@@ -255,12 +275,13 @@ impl ToolEmitter {
                 .await;
             }
             (
-                Self::ApplyPatch { changes, .. },
+                Self::ApplyPatch { changes, source, .. },
                 ToolEventStage::Failure(ToolEventFailure::Output(output)),
             ) => {
                 emit_patch_end(
                     ctx,
                     changes.clone(),
+                    source.clone(),
                     output.stdout.text.clone(),
                     output.stderr.text.clone(),
                     if output.exit_code == 0 {
@@ -273,12 +294,13 @@ impl ToolEmitter {
                 .await;
             }
             (
-                Self::ApplyPatch { changes, .. },
+                Self::ApplyPatch { changes, source, .. },
                 ToolEventStage::Failure(ToolEventFailure::Message(message)),
             ) => {
                 emit_patch_end(
                     ctx,
                     changes.clone(),
+                    source.clone(),
                     String::new(),
                     (*message).to_string(),
                     PatchApplyStatus::Failed,
@@ -290,6 +312,7 @@ impl ToolEmitter {
                 Self::ApplyPatch {
                     changes,
                     environment_id,
+                    source,
                     ..
                 },
                 ToolEventStage::Failure(ToolEventFailure::Rejected {
@@ -300,6 +323,7 @@ impl ToolEmitter {
                 emit_patch_end(
                     ctx,
                     changes.clone(),
+                    source.clone(),
                     String::new(),
                     (*message).to_string(),
                     PatchApplyStatus::Declined,
@@ -570,6 +594,7 @@ async fn emit_exec_end(
 async fn emit_patch_end(
     ctx: ToolEventCtx<'_>,
     changes: HashMap<PathBuf, FileChange>,
+    source: Option<String>,
     stdout: String,
     stderr: String,
     status: PatchApplyStatus,
@@ -582,6 +607,7 @@ async fn emit_patch_end(
                 id: ctx.call_id.to_string(),
                 changes,
                 status: Some(status),
+                source,
                 auto_approved: None,
                 stdout: Some(stdout),
                 stderr: Some(stderr),
@@ -618,6 +644,43 @@ async fn emit_patch_end(
                 .send_event(ctx.turn, EventMsg::TurnDiff(TurnDiffEvent { unified_diff }))
                 .await;
         }
+    }
+}
+/// Emits a completed `TurnItem::FileChange` for a direct local write/edit tool
+/// such as `write_file` or `edit_file`, followed by a `TurnDiff` event carrying
+/// the precomputed unified diff.
+///
+/// Unlike `emit_patch_end`, this does not interact with the `TurnDiffTracker`
+/// because the tracker is built around `ody_apply_patch::AppliedPatchDelta`. The
+/// unified diff is emitted directly so the turn still surfaces the change.
+pub(crate) async fn emit_direct_file_change(
+    ctx: ToolEventCtx<'_>,
+    path: PathBuf,
+    change: FileChange,
+    source: &str,
+    stdout: String,
+    stderr: String,
+    unified_diff: Option<String>,
+) {
+    ctx.session
+        .emit_turn_item_completed(
+            ctx.turn,
+            TurnItem::FileChange(FileChangeItem {
+                id: ctx.call_id.to_string(),
+                changes: HashMap::from([(path, change)]),
+                status: Some(PatchApplyStatus::Completed),
+                source: Some(source.to_string()),
+                auto_approved: None,
+                stdout: Some(stdout),
+                stderr: Some(stderr),
+            }),
+        )
+        .await;
+
+    if let Some(unified_diff) = unified_diff {
+        ctx.session
+            .send_event(ctx.turn, EventMsg::TurnDiff(TurnDiffEvent { unified_diff }))
+            .await;
     }
 }
 
@@ -663,6 +726,7 @@ mod tests {
             changes: HashMap::new(),
             auto_approved: false,
             environment_id: None,
+            source: None,
         }
         .finish(
             ToolEventCtx::new(session.as_ref(), turn.as_ref(), "call-id", Some(&tracker)),
@@ -751,6 +815,7 @@ mod tests {
             emit_patch_end(
                 ToolEventCtx::new(session.as_ref(), turn.as_ref(), "call-id", Some(&tracker)),
                 HashMap::new(),
+                None,
                 String::new(),
                 String::new(),
                 PatchApplyStatus::Completed,
@@ -800,6 +865,7 @@ mod tests {
         emit_patch_end(
             ToolEventCtx::new(session.as_ref(), turn.as_ref(), "call-id", Some(&tracker)),
             HashMap::new(),
+            None,
             String::new(),
             String::new(),
             PatchApplyStatus::Completed,

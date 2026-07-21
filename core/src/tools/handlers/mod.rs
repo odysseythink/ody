@@ -67,6 +67,8 @@ pub use file_tools::GlobHandler;
 pub use file_tools::GrepHandler;
 pub use file_tools::JqHandler;
 pub use file_tools::ReadFileHandler;
+pub use file_tools::WriteFileHandler;
+pub use file_tools::EditFileHandler;
 pub use get_context_remaining::GetContextRemainingHandler;
 pub use list_available_plugins_to_install::ListAvailablePluginsToInstallHandler;
 pub use mcp::McpHandler;

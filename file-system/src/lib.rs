@@ -38,6 +38,11 @@ pub struct CopyOptions {
     pub recursive: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RenameOptions {
+    pub overwrite: bool,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FileMetadata {
     pub is_directory: bool,
@@ -263,4 +268,31 @@ pub trait ExecutorFileSystem: Send + Sync {
         copy_options: CopyOptions,
         sandbox: Option<&'a FileSystemSandboxContext>,
     ) -> ExecutorFileSystemFuture<'a, ()>;
+
+    /// Renames (moves) a file or directory within the filesystem.
+    ///
+    /// The default implementation falls back to copy followed by remove, which
+    /// is correct for simple files but may not be atomic. Native implementations
+    /// (local filesystems) should override this with a real rename.
+    fn rename<'a>(
+        &'a self,
+        source_path: &'a PathUri,
+        destination_path: &'a PathUri,
+        rename_options: RenameOptions,
+        sandbox: Option<&'a FileSystemSandboxContext>,
+    ) -> ExecutorFileSystemFuture<'a, ()> {
+        let _ = rename_options;
+        Box::pin(async move {
+            let copy_options = CopyOptions {
+                recursive: true,
+            };
+            self.copy(source_path, destination_path, copy_options, sandbox)
+                .await?;
+            let remove_options = RemoveOptions {
+                recursive: true,
+                force: false,
+            };
+            self.remove(source_path, remove_options, sandbox).await
+        })
+    }
 }

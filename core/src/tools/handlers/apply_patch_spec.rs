@@ -55,7 +55,9 @@ pub fn create_apply_patch_tool(include_environment_id: bool) -> ToolSpec {
     ToolSpec::Function(ResponsesApiTool {
         name: APPLY_PATCH_TOOL_NAME.to_string(),
         description:
-            "Edit files by applying a patch. Use this to create, update, delete, or move files."
+            "Edit files by applying a patch. Use this to create, update, delete, or move files. \
+             The first line must be exactly `*** Begin Patch` and the last line must be exactly \
+             `*** End Patch`; do not prefix either marker with `+` or `-`."
                 .to_string(),
         strict: false,
         defer_loading: None,

@@ -25,6 +25,8 @@ use crate::tools::handlers::ReviewTestsHandler;
 use crate::tools::handlers::JqHandler;
 use crate::tools::handlers::ReadFileHandler;
 use crate::tools::handlers::ReadMcpResourceHandler;
+use crate::tools::handlers::WriteFileHandler;
+use crate::tools::handlers::EditFileHandler;
 use crate::tools::handlers::RequestPermissionsHandler;
 use crate::tools::handlers::RequestPluginInstallHandler;
 use crate::tools::handlers::RequestUserInputHandler;
@@ -678,6 +680,8 @@ fn add_file_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut Planned
     planned_tools.add(GrepHandler::new(options));
     planned_tools.add(GlobHandler::new(options));
     planned_tools.add(JqHandler::new(options));
+    planned_tools.add(WriteFileHandler::new(options));
+    planned_tools.add(EditFileHandler::new(options));
 }
 
 #[instrument(level = "trace", skip_all)]

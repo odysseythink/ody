@@ -72,6 +72,7 @@ pub use ody_file_system::FileSystemSandboxContext;
 pub use ody_file_system::ReadDirectoryEntry;
 pub use ody_file_system::RemoveOptions;
 pub use process::ExecBackend;
+pub use ody_file_system::RenameOptions;
 pub use process::ExecBackendFuture;
 pub use process::ExecProcess;
 pub use process::ExecProcessEvent;

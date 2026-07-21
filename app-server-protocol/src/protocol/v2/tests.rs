@@ -2595,6 +2595,7 @@ fn core_turn_item_into_thread_item_converts_supported_variants() {
         .into_iter()
         .collect(),
         status: Some(ody_protocol::protocol::PatchApplyStatus::Completed),
+        source: None,
         auto_approved: None,
         stdout: Some("Done!".to_string()),
         stderr: Some(String::new()),

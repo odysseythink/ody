@@ -255,19 +255,46 @@ fn check_start_and_end_lines_strict(
     first_line: Option<&&str>,
     last_line: Option<&&str>,
 ) -> Result<(), ParseError> {
-    let first_line = first_line.map(|line| line.trim());
-    let last_line = last_line.map(|line| line.trim());
+    let first_trimmed = first_line.map(|line| line.trim());
+    let last_trimmed = last_line.map(|line| line.trim());
 
-    match (first_line, last_line) {
+    match (first_trimmed, last_trimmed) {
         (Some(first), Some(last)) if first == BEGIN_PATCH_MARKER && last == END_PATCH_MARKER => {
             Ok(())
         }
-        (Some(first), _) if first != BEGIN_PATCH_MARKER => Err(InvalidPatchError(String::from(
-            "The first line of the patch must be '*** Begin Patch'",
-        ))),
-        _ => Err(InvalidPatchError(String::from(
-            "The last line of the patch must be '*** End Patch'",
-        ))),
+        (Some(first), _) if first != BEGIN_PATCH_MARKER => {
+            let raw = first_line.copied().unwrap_or("");
+            if raw.starts_with('+') && raw.contains(BEGIN_PATCH_MARKER) {
+                Err(InvalidPatchError(String::from(
+                    "The first line must be '*** Begin Patch' exactly; it looks like it has an extra '+' prefix."
+                )))
+            } else if raw.starts_with('-') && raw.contains(BEGIN_PATCH_MARKER) {
+                Err(InvalidPatchError(String::from(
+                    "The first line must be '*** Begin Patch' exactly; it looks like it has an extra '-' prefix."
+                )))
+            } else {
+                Err(InvalidPatchError(String::from(
+                    "The first line of the patch must be '*** Begin Patch'",
+                )))
+            }
+        }
+        _ => {
+            let raw = last_line.copied().unwrap_or("");
+            if raw.starts_with('+') && raw.contains(END_PATCH_MARKER) {
+                Err(InvalidPatchError(String::from(
+                    "The last line must be '*** End Patch' exactly; it looks like it has an extra '+' prefix. \
+                     Make sure the closing marker is not inside an Add File section."
+                )))
+            } else if raw.starts_with('-') && raw.contains(END_PATCH_MARKER) {
+                Err(InvalidPatchError(String::from(
+                    "The last line must be '*** End Patch' exactly; it looks like it has an extra '-' prefix."
+                )))
+            } else {
+                Err(InvalidPatchError(String::from(
+                    "The last line of the patch must be '*** End Patch'",
+                )))
+            }
+        }
     }
 }
 
@@ -676,5 +703,50 @@ fn test_parse_patch_environment_id_preamble() {
         Err(InvalidPatchError(
             "apply_patch environment_id cannot be empty".to_string()
         ))
+    );
+
+    // Common mistake: prefixing the closing marker with '+' inside an Add File section.
+    assert!(
+        matches!(
+            parse_patch_text(
+                "*** Begin Patch\n\
+                 *** Add File: hello.txt\n\
+                 +hello\n\
+                 +*** End Patch",
+                ParseMode::Strict
+            ),
+            Err(InvalidPatchError(msg)) if msg.contains("extra '+' prefix")
+        ),
+        "expected a specific error when the closing marker is prefixed with '+'"
+    );
+
+    // Common mistake: prefixing the closing marker with '-'.
+    assert!(
+        matches!(
+            parse_patch_text(
+                "*** Begin Patch\n\
+                 *** Add File: hello.txt\n\
+                 +hello\n\
+                 -*** End Patch",
+                ParseMode::Strict
+            ),
+            Err(InvalidPatchError(msg)) if msg.contains("extra '-' prefix")
+        ),
+        "expected a specific error when the closing marker is prefixed with '-'"
+    );
+
+    // Common mistake: prefixing the opening marker with '+'.
+    assert!(
+        matches!(
+            parse_patch_text(
+                "+*** Begin Patch\n\
+                 *** Add File: hello.txt\n\
+                 +hello\n\
+                 *** End Patch",
+                ParseMode::Strict
+            ),
+            Err(InvalidPatchError(msg)) if msg.contains("extra '+' prefix")
+        ),
+        "expected a specific error when the opening marker is prefixed with '+'"
     );
 }

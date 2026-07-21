@@ -45,3 +45,21 @@ fn create_apply_patch_tool_documents_environment_id_only_when_requested() {
     assert!(!description_of(without).contains("*** Environment ID:"));
     assert!(description_of(with).contains("*** Environment ID:"));
 }
+
+#[test]
+fn create_apply_patch_tool_warns_against_prefixed_markers() {
+    let tool = function_tool(/*include_environment_id*/ false);
+    let description = tool.description;
+    assert!(
+        description.contains("do not prefix"),
+        "apply_patch description should warn models not to prefix markers: {description}"
+    );
+    assert!(
+        description.contains("*** Begin Patch"),
+        "apply_patch description should name the begin marker: {description}"
+    );
+    assert!(
+        description.contains("*** End Patch"),
+        "apply_patch description should name the end marker: {description}"
+    );
+}

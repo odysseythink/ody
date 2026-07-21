@@ -24,6 +24,7 @@ use crate::ReadDirectoryEntry;
 use crate::RemoveOptions;
 use crate::regular_file;
 use crate::sandboxed_file_system::SandboxedFileSystem;
+use crate::RenameOptions;
 
 const MAX_READ_FILE_BYTES: u64 = 512 * 1024 * 1024;
 
@@ -192,6 +193,19 @@ impl LocalFileSystem {
             .copy(source_path, destination_path, options, sandbox)
             .await
     }
+
+    async fn rename(
+        &self,
+        source_path: &PathUri,
+        destination_path: &PathUri,
+        options: RenameOptions,
+        sandbox: Option<&FileSystemSandboxContext>,
+    ) -> FileSystemResult<()> {
+        let (file_system, sandbox) = self.file_system_for(sandbox)?;
+        file_system
+            .rename(source_path, destination_path, options, sandbox)
+            .await
+    }
 }
 
 impl ExecutorFileSystem for LocalFileSystem {
@@ -272,6 +286,22 @@ impl ExecutorFileSystem for LocalFileSystem {
         sandbox: Option<&'a FileSystemSandboxContext>,
     ) -> ExecutorFileSystemFuture<'a, ()> {
         Box::pin(LocalFileSystem::copy(
+            self,
+            source_path,
+            destination_path,
+            options,
+            sandbox,
+        ))
+    }
+
+    fn rename<'a>(
+        &'a self,
+        source_path: &'a PathUri,
+        destination_path: &'a PathUri,
+        options: RenameOptions,
+        sandbox: Option<&'a FileSystemSandboxContext>,
+    ) -> ExecutorFileSystemFuture<'a, ()> {
+        Box::pin(LocalFileSystem::rename(
             self,
             source_path,
             destination_path,
@@ -395,6 +425,19 @@ impl UnsandboxedFileSystem {
             )
             .await
     }
+
+    async fn rename(
+        &self,
+        source_path: &PathUri,
+        destination_path: &PathUri,
+        options: RenameOptions,
+        sandbox: Option<&FileSystemSandboxContext>,
+    ) -> FileSystemResult<()> {
+        reject_platform_sandbox_context(sandbox)?;
+        self.file_system
+            .rename(source_path, destination_path, options, /*sandbox*/ None)
+            .await
+    }
 }
 
 impl ExecutorFileSystem for UnsandboxedFileSystem {
@@ -477,6 +520,22 @@ impl ExecutorFileSystem for UnsandboxedFileSystem {
         sandbox: Option<&'a FileSystemSandboxContext>,
     ) -> ExecutorFileSystemFuture<'a, ()> {
         Box::pin(UnsandboxedFileSystem::copy(
+            self,
+            source_path,
+            destination_path,
+            options,
+            sandbox,
+        ))
+    }
+
+    fn rename<'a>(
+        &'a self,
+        source_path: &'a PathUri,
+        destination_path: &'a PathUri,
+        options: RenameOptions,
+        sandbox: Option<&'a FileSystemSandboxContext>,
+    ) -> ExecutorFileSystemFuture<'a, ()> {
+        Box::pin(UnsandboxedFileSystem::rename(
             self,
             source_path,
             destination_path,
@@ -688,6 +747,28 @@ impl DirectFileSystem {
         .await
         .map_err(|err| io::Error::other(format!("filesystem task failed: {err}")))?
     }
+
+    async fn rename(
+        &self,
+        source_path: &PathUri,
+        destination_path: &PathUri,
+        options: RenameOptions,
+        sandbox: Option<&FileSystemSandboxContext>,
+    ) -> FileSystemResult<()> {
+        reject_sandbox_context(sandbox)?;
+        let source_path = source_path.to_abs_path()?;
+        let destination_path = destination_path.to_abs_path()?;
+        if options.overwrite {
+            if let Ok(metadata) = tokio::fs::symlink_metadata(destination_path.as_path()).await {
+                if metadata.is_dir() {
+                    tokio::fs::remove_dir_all(destination_path.as_path()).await?;
+                } else {
+                    tokio::fs::remove_file(destination_path.as_path()).await?;
+                }
+            }
+        }
+        tokio::fs::rename(source_path.as_path(), destination_path.as_path()).await
+    }
 }
 
 impl ExecutorFileSystem for DirectFileSystem {
@@ -768,6 +849,22 @@ impl ExecutorFileSystem for DirectFileSystem {
         sandbox: Option<&'a FileSystemSandboxContext>,
     ) -> ExecutorFileSystemFuture<'a, ()> {
         Box::pin(DirectFileSystem::copy(
+            self,
+            source_path,
+            destination_path,
+            options,
+            sandbox,
+        ))
+    }
+
+    fn rename<'a>(
+        &'a self,
+        source_path: &'a PathUri,
+        destination_path: &'a PathUri,
+        options: RenameOptions,
+        sandbox: Option<&'a FileSystemSandboxContext>,
+    ) -> ExecutorFileSystemFuture<'a, ()> {
+        Box::pin(DirectFileSystem::rename(
             self,
             source_path,
             destination_path,

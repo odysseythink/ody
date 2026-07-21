@@ -22,7 +22,9 @@ use std::collections::BTreeMap;
 pub const READ_FILE_TOOL_NAME: &str = "read_file";
 pub const GREP_TOOL_NAME: &str = "grep";
 pub const GLOB_TOOL_NAME: &str = "glob";
-pub const JQ_TOOL_NAME: &str = "jq";
+ pub const JQ_TOOL_NAME: &str = "jq";
+ pub const WRITE_FILE_TOOL_NAME: &str = "write_file";
+ pub const EDIT_FILE_TOOL_NAME: &str = "edit_file";
 
 /// Maximum lines returned by a single `read_file` call.
 pub const MAX_LINES: usize = 1000;
@@ -392,6 +394,139 @@ fn glob_output_schema() -> Value {
     })
 }
 
+
+fn write_file_output_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "success": {
+                "type": "boolean",
+                "description": "True when the file was written successfully."
+            },
+            "bytes_written": {
+                "type": "integer",
+                "description": "Number of bytes written to the file."
+            }
+        },
+        "required": ["success", "bytes_written"],
+        "additionalProperties": false
+    })
+}
+
+fn edit_file_output_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "success": {
+                "type": "boolean",
+                "description": "True when the edit was applied successfully."
+            },
+            "replacements": {
+                "type": "integer",
+                "description": "Number of occurrences of old_string that were replaced."
+            }
+        },
+        "required": ["success", "replacements"],
+        "additionalProperties": false
+    })
+}
+
+pub fn create_write_file_tool(options: FileToolOptions) -> ToolSpec {
+    let mut properties = BTreeMap::from([
+        (
+            "path".to_string(),
+            JsonSchema::string(Some(
+                "Path to the file to write. Relative paths are resolved against the working \
+                 directory; absolute paths may point outside it but must be inside the workspace."
+                    .to_string(),
+            )),
+        ),
+        (
+            "content".to_string(),
+            JsonSchema::string(Some(
+                "The full content to write to the file. Existing content is overwritten unless \
+                 `append` is true.".to_string(),
+            )),
+        ),
+        (
+            "append".to_string(),
+            JsonSchema::boolean(Some(
+                "If true, append `content` to the end of the file instead of overwriting it. \
+                 Defaults to false.".to_string(),
+            )),
+        ),
+    ]);
+    environment_id_property(&mut properties, options);
+
+    ToolSpec::Function(ResponsesApiTool {
+        name: WRITE_FILE_TOOL_NAME.to_string(),
+        description:
+            "Write content to a file. Use this to create a new file or overwrite an existing \
+             file. For surgical edits to an existing file, prefer `edit_file` or `apply_patch`. \
+             The parent directory is created automatically if it does not exist."
+                .to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::object(
+            properties,
+            Some(vec!["path".to_string(), "content".to_string()]),
+            Some(false.into()),
+        ),
+        output_schema: Some(write_file_output_schema()),
+    })
+}
+
+pub fn create_edit_file_tool(options: FileToolOptions) -> ToolSpec {
+    let mut properties = BTreeMap::from([
+        (
+            "path".to_string(),
+            JsonSchema::string(Some(
+                "Path to the file to edit. Relative paths are resolved against the working \
+                 directory; absolute paths may point outside it but must be inside the workspace."
+                    .to_string(),
+            )),
+        ),
+        (
+            "old_string".to_string(),
+            JsonSchema::string(Some(
+                "The exact existing string to replace. Must match at least once.".to_string(),
+            )),
+        ),
+        (
+            "new_string".to_string(),
+            JsonSchema::string(Some("The string to put in place of `old_string`.".to_string())),
+        ),
+        (
+            "replace_all".to_string(),
+            JsonSchema::boolean(Some(
+                "If true, replace every occurrence of `old_string`; otherwise replace only the \
+                 first. Defaults to false.".to_string(),
+            )),
+        ),
+    ]);
+    environment_id_property(&mut properties, options);
+
+    ToolSpec::Function(ResponsesApiTool {
+        name: EDIT_FILE_TOOL_NAME.to_string(),
+        description:
+            "Edit a file by replacing a specific string. Use this for small, localized changes \
+             where `old_string` is unique enough to locate unambiguously. For multi-hunk or \
+             complex edits, use `apply_patch`."
+                .to_string(),
+        strict: false,
+        defer_loading: None,
+        parameters: JsonSchema::object(
+            properties,
+            Some(vec![
+                "path".to_string(),
+                "old_string".to_string(),
+                "new_string".to_string(),
+            ]),
+            Some(false.into()),
+        ),
+        output_schema: Some(edit_file_output_schema()),
+    })
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -468,6 +603,66 @@ mod tests {
             jq_json.contains("\"required\":[\"path\",\"filter\"]")
                 || jq_json.contains("\"required\":[\"filter\",\"path\"]"),
             "expected jq to require both path and filter: {jq_json}"
+        );
+    }
+
+    #[test]
+    fn write_file_requires_path_and_content() {
+        let json = spec_json(&create_write_file_tool(FileToolOptions::default()));
+        assert!(
+            json.contains("\"required\":[\"path\",\"content\"]"),
+            "write_file must require path and content: {json}"
+        );
+        assert!(json.contains("append"), "write_file must expose append: {json}");
+    }
+
+    #[test]
+    fn edit_file_requires_path_old_and_new_string() {
+        let json = spec_json(&create_edit_file_tool(FileToolOptions::default()));
+        assert!(
+            json.contains("\"required\":[\"old_string\",\"new_string\",\"path\"]")
+                || json.contains("\"required\":[\"path\",\"old_string\",\"new_string\"]")
+                || json.contains("\"required\":[\"path\",\"new_string\",\"old_string\"]")
+                || json.contains("\"required\":[\"old_string\",\"path\",\"new_string\"]")
+                || json.contains("\"required\":[\"new_string\",\"path\",\"old_string\"]")
+                || json.contains("\"required\":[\"new_string\",\"old_string\",\"path\"]"),
+            "edit_file must require path, old_string and new_string: {json}"
+        );
+        assert!(json.contains("replace_all"), "edit_file must expose replace_all: {json}");
+    }
+
+    #[test]
+    fn write_file_and_edit_file_opt_in_environment_id() {
+        let without = spec_json(&create_write_file_tool(FileToolOptions::default()));
+        assert!(!without.contains("environment_id"));
+        let with = spec_json(&create_write_file_tool(FileToolOptions {
+            include_environment_id: true,
+        }));
+        assert!(with.contains("environment_id"));
+
+        let without = spec_json(&create_edit_file_tool(FileToolOptions::default()));
+        assert!(!without.contains("environment_id"));
+        let with = spec_json(&create_edit_file_tool(FileToolOptions {
+            include_environment_id: true,
+        }));
+        assert!(with.contains("environment_id"));
+    }
+
+    #[test]
+    fn write_file_prefers_surgical_tools_in_description() {
+        let json = spec_json(&create_write_file_tool(FileToolOptions::default()));
+        assert!(
+            json.contains("prefer `edit_file` or `apply_patch`"),
+            "write_file description should guide models toward surgical tools: {json}"
+        );
+    }
+
+    #[test]
+    fn edit_file_prefers_apply_patch_for_complex_edits() {
+        let json = spec_json(&create_edit_file_tool(FileToolOptions::default()));
+        assert!(
+            json.contains("use `apply_patch`"),
+            "edit_file description should guide models toward apply_patch for complex edits: {json}"
         );
     }
 }

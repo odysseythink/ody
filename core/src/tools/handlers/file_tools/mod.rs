@@ -20,6 +20,9 @@ mod glob;
 mod grep;
 mod jq;
 mod read;
+mod write;
+mod edit;
+mod write_edit;
 
 #[cfg(test)]
 mod tests;
@@ -28,6 +31,8 @@ pub use glob::GlobHandler;
 pub use grep::GrepHandler;
 pub use jq::JqHandler;
 pub use read::ReadFileHandler;
+pub use write::WriteFileHandler;
+pub use edit::EditFileHandler;
 
 use crate::function_tool::FunctionCallError;
 use crate::session::turn_context::TurnContext;

@@ -5009,6 +5009,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 status: None,
+                source: None,
                 auto_approved: Some(true),
                 stdout: None,
                 stderr: None,
@@ -5118,6 +5119,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 status: Some(PatchApplyStatus::Completed),
+                source: None,
                 auto_approved: None,
                 stdout: Some("Done!".into()),
                 stderr: Some(String::new()),

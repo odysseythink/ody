@@ -27,3 +27,21 @@
 - Design Mode is a collaboration mode entered via `/design`. It is read-only except for the current design file under `.ody-code/designs/` and its `<stem>/` split parts.
 - When switching from Design to Plan mode, the session injects a handoff reminder that references the approved design file. The design must pass the C1–C8 completeness gate; with `enforcement = "Strict"` an incomplete design blocks the switch.
 - Design Mode intentionally shares `PlanModeConfigToml` configuration (`enforcement`, `split_threshold`, `split_plan_compaction_ratio`) with Plan Mode.
+
+## File editing tools
+
+- `write_file` / `edit_file` are direct local-filesystem tools in `core/src/tools/handlers/file_tools/`. They reject `environment_id` / remote roots and are gated by the normal permission profile plus any turn-granted write permissions.
+- Use `write_file` for creating, overwriting, or appending whole files.
+- Use `edit_file` for small surgical string replacements (`old_string` -> `new_string`, with an optional `replace_all`).
+- Use `apply_patch` for multi-file or multi-hunk changes; `apply_patch` is the canonical patch format and should be preferred for complex edits.
+- Shared helpers live in `core/src/tools/handlers/file_tools/write_edit.rs`:
+  - `resolve_write_path` / `resolve_write_cwd` for path resolution.
+  - `ensure_write_allowed` for permission checks (reuses `write_permissions_for_paths` + `apply_granted_turn_permissions`).
+  - `atomic_write` for atomic file writes (temp file + `rename`).
+  - `compute_unified_diff` / `file_change_for_write` for diff reporting; diffs are skipped for content larger than `MAX_FILE_SIZE_FOR_DIFF` (1 MiB).
+
+## apply_patch format
+
+- Patch marker lines (`*** Begin Patch`, `*** End Patch`, `*** Add File`, `*** Update File`, `*** Delete File`, `*** End of File`) must be written exactly — do **not** prefix them with `+` or `-`.
+- The parser detects common mistakes such as `+*** End Patch` / `-*** End Patch` / `+*** Begin Patch` and reports a clear error telling the model to remove the prefix.
+- Content lines inside hunks still use `+` / `-` / ` ` prefixes as normal unified-diff content.

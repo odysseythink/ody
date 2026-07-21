@@ -398,7 +398,7 @@ fn file_paths_for_action(action: &ApplyPatchAction) -> Vec<PathUri> {
     keys
 }
 
-fn write_permissions_for_paths(
+ pub(crate) fn write_permissions_for_paths(
     file_paths: &[AbsolutePathBuf],
     file_system_sandbox_policy: &ody_protocol::permissions::FileSystemSandboxPolicy,
     cwd: &AbsolutePathBuf,
