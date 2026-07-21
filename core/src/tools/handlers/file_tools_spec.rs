@@ -317,7 +317,9 @@ pub fn create_jq_tool(options: FileToolOptions) -> ToolSpec {
         description:
             "Run a jq filter against a JSON or JSONL file. Prefer this over `read_file` for \
              JSON/JSONL files when you want to filter, count, or page through structured data. \
-             Output is capped and shaped before it reaches the conversation."
+             Example filters: `.` to pretty-print, `select(.type == \"function_call\")` to filter \
+             objects, `.field` to extract a field, `length` to count. Output is capped and shaped \
+             before it reaches the conversation."
                 .to_string(),
         strict: false,
         defer_loading: None,
@@ -604,6 +606,12 @@ mod tests {
             json.contains("Prefer this over `read_file`"),
             "jq description should encourage using jq over read_file for JSON/JSONL: {json}"
         );
+        for example in ["`select(.type == \\\"function_call\\\")`", "`.field`", "`length`"] {
+            assert!(
+                json.contains(example),
+                "jq description should include concrete example filter `{example}`: {json}"
+            );
+        }
     }
 
     #[test]

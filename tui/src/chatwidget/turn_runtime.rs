@@ -356,6 +356,11 @@ impl ChatWidget {
         self.last_unified_wait = None;
         self.unified_exec_wait_streak = None;
         self.adaptive_chunking.reset();
+        // Any reasoning still pending on turn end (e.g. interrupted turns or
+        // turns with no assistant message) should not be lost.
+        for cell in std::mem::take(&mut self.pending_reasoning_cells) {
+            self.add_boxed_history(cell);
+        }
         self.stream_controller = None;
         self.plan_stream_controller = None;
         self.status_state.pending_status_indicator_restore = false;

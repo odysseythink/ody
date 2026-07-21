@@ -28,6 +28,7 @@ impl App {
         cwd: PathBuf,
         scrollback_reflow: ConsolidationScrollbackReflow,
         deferred_history_cell: Option<Box<dyn HistoryCell>>,
+        pending_reasoning_cells: Vec<Box<dyn HistoryCell>>,
     ) -> Result<()> {
         // Some finalize paths must preserve a last provisional stream cell long
         // enough for queue ordering, then fold it into the canonical
@@ -39,6 +40,10 @@ impl App {
             }
             self.transcript_cells.push(cell);
         }
+
+        let pending_reasoning: Vec<Arc<dyn HistoryCell>> =
+            pending_reasoning_cells.into_iter().map(Arc::from).collect();
+        let has_pending_reasoning = !pending_reasoning.is_empty();
 
         // Walk backward to find the contiguous run of streaming AgentMessageCells that
         // belong to the just-finalized stream.
@@ -54,15 +59,37 @@ impl App {
             );
             let consolidated: Arc<dyn HistoryCell> =
                 Arc::new(history_cell::AgentMarkdownCell::new(source, &cwd));
-            self.transcript_cells
-                .splice(start..end, std::iter::once(consolidated.clone()));
+            let replacement: Vec<Arc<dyn HistoryCell>> = pending_reasoning
+                .into_iter()
+                .chain(std::iter::once(consolidated.clone()))
+                .collect();
+            self.transcript_cells.splice(start..end, replacement);
 
             if let Some(Overlay::Transcript(t)) = &mut self.overlay {
-                t.consolidate_cells(start..end, consolidated.clone());
+                t.replace_cells(self.transcript_cells.clone());
                 tui.frame_requester().schedule_frame();
             }
 
+            // Inserting pending reasoning before the consolidated message changes the
+            // scrollback, so force a full reflow when there is deferred reasoning.
+            let scrollback_reflow = if has_pending_reasoning {
+                ConsolidationScrollbackReflow::Required
+            } else {
+                scrollback_reflow
+            };
             self.finish_agent_message_consolidation(tui, scrollback_reflow)?;
+        } else if has_pending_reasoning {
+            tracing::debug!(
+                "ConsolidateAgentMessage: appending {count} pending reasoning cells",
+                count = pending_reasoning.len(),
+            );
+            self.transcript_cells.extend(pending_reasoning);
+            if let Some(Overlay::Transcript(t)) = &mut self.overlay {
+                t.replace_cells(self.transcript_cells.clone());
+                tui.frame_requester().schedule_frame();
+            }
+            // New cells at the end still need to be written to scrollback.
+            self.finish_required_stream_reflow(tui)?;
         } else {
             tracing::debug!(
                 "ConsolidateAgentMessage: no cells to consolidate(start={start}, end={end})",

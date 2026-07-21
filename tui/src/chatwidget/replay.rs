@@ -135,7 +135,7 @@ impl ChatWidget {
                         }
                     }
                 }
-                self.on_agent_reasoning_final();
+                self.on_agent_reasoning_final(from_replay);
             }
             item @ ThreadItem::CommandExecution {
                 status: ody_app_server_protocol::CommandExecutionStatus::InProgress,

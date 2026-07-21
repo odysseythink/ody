@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 use serde::Serialize;
+use std::time::Duration;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum ShellType {
@@ -292,6 +293,159 @@ pub fn default_user_shell_from_path(user_shell_path: Option<PathBuf>) -> Detecte
 
         shell_with_fallback.unwrap_or_else(ultimate_fallback_shell)
     }
+}
+
+/// Filesystem / environment abstraction so Windows bash detection can be
+/// tested without touching the real disk or environment variables.
+pub trait FsChecker: Send + Sync {
+    fn is_file(&self, path: &std::path::Path) -> bool;
+    fn env_var(&self, name: &str) -> Option<String>;
+    fn path_env(&self) -> Option<String>;
+    /// Returns true when the path is a working bash executable. On real systems
+    /// this runs `bash --version` with a short timeout; tests can override it.
+    fn is_bash_executable(&self, path: &std::path::Path) -> bool;
+}
+
+/// Real filesystem implementation used in production.
+pub struct RealFsChecker;
+
+impl FsChecker for RealFsChecker {
+    fn is_file(&self, path: &std::path::Path) -> bool {
+        path.is_file()
+    }
+
+    fn env_var(&self, name: &str) -> Option<String> {
+        std::env::var(name).ok()
+    }
+
+    fn path_env(&self) -> Option<String> {
+        std::env::var("PATH").ok()
+    }
+
+    fn is_bash_executable(&self, path: &std::path::Path) -> bool {
+        is_usable_bash(path)
+    }
+}
+
+/// Result of Windows bash auto-detection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WindowsBashDetection {
+    pub shell: DetectedShell,
+    /// When `true`, the bash path came from a well-known fixed installation
+    /// directory (Git, MSYS2, Cygwin, Scoop). Only fixed-path detections are
+    /// offered for persistence; PATH-only bash is used for the current session
+    /// only.
+    pub is_fixed_path: bool,
+}
+
+#[cfg(windows)]
+const WINDOWS_BASH_FIXED_PATHS: &[&str] = &[
+    r"C:\Program Files\Git\usr\bin\bash.exe",
+    r"C:\Program Files\Git\bin\bash.exe",
+    r"C:\Program Files (x86)\Git\usr\bin\bash.exe",
+    r"C:\Program Files (x86)\Git\bin\bash.exe",
+    r"C:\msys64\usr\bin\bash.exe",
+    r"C:\msys2\usr\bin\bash.exe",
+    r"C:\cygwin64\bin\bash.exe",
+    r"C:\cygwin\bin\bash.exe",
+];
+
+#[cfg(not(windows))]
+const WINDOWS_BASH_FIXED_PATHS: &[&str] = &[];
+
+/// Paths or path fragments that indicate a WSL/bash-on-Ubuntu shim rather than
+/// a native Windows bash executable. These are never used for shell execution.
+#[cfg(windows)]
+fn is_wsl_bash_path(path: &std::path::Path) -> bool {
+    let path_lower = path.to_string_lossy().to_lowercase();
+    path_lower.contains("windowsapps")
+        || path_lower.contains("wsl")
+        || path_lower.contains(r"windows\system32\bash.exe")
+        || path_lower.contains(r"windows\syswow64\bash.exe")
+}
+
+#[cfg(not(windows))]
+fn is_wsl_bash_path(_path: &std::path::Path) -> bool {
+    false
+}
+
+/// Returns whether `path` looks like a native Windows bash executable and
+/// responds to `bash --version` within one second.
+fn is_usable_bash(path: &std::path::Path) -> bool {
+    let mut child = match std::process::Command::new(path)
+        .arg("--version")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(_) => return false,
+    };
+
+    let start = std::time::Instant::now();
+    let timeout = Duration::from_secs(1);
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return status.success(),
+            Ok(None) => {
+                if start.elapsed() >= timeout {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return false;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(_) => return false,
+        }
+    }
+}
+
+/// Scan fixed installation paths and, if none work, fall back to PATH.
+/// Returns the first usable bash candidate. `is_fixed_path` is `true` only when
+/// the candidate came from the fixed-path list.
+pub fn detect_windows_bash(fs: &dyn FsChecker) -> Option<WindowsBashDetection> {
+    if cfg!(not(windows)) {
+        return None;
+    }
+
+    // Fixed paths first: these are the only ones we offer to persist.
+    for &candidate in WINDOWS_BASH_FIXED_PATHS {
+        let path = std::path::Path::new(candidate);
+        if fs.is_file(path) && !is_wsl_bash_path(path) && fs.is_bash_executable(path) {
+            return Some(WindowsBashDetection {
+                shell: DetectedShell {
+                    shell_type: ShellType::Bash,
+                    shell_path: path.to_path_buf(),
+                },
+                is_fixed_path: true,
+            });
+        }
+    }
+
+    // Fall back to PATH entries. PATH bash is used for the current session only
+    // and is not offered for persistence.
+    let path_entries = fs.path_env().unwrap_or_default();
+    for dir in std::env::split_paths(&path_entries) {
+        let candidate = dir.join("bash.exe");
+        if fs.is_file(&candidate)
+            && !is_wsl_bash_path(&candidate)
+            && WINDOWS_BASH_FIXED_PATHS
+                .iter()
+                .all(|&fixed| std::path::Path::new(fixed) != candidate)
+            && fs.is_bash_executable(&candidate)
+        {
+            return Some(WindowsBashDetection {
+                shell: DetectedShell {
+                    shell_type: ShellType::Bash,
+                    shell_path: candidate,
+                },
+                is_fixed_path: false,
+            });
+        }
+    }
+
+    None
 }
 
 #[cfg(test)]

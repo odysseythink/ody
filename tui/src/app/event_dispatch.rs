@@ -297,6 +297,7 @@ impl App {
                 cwd,
                 scrollback_reflow,
                 deferred_history_cell,
+                pending_reasoning_cells,
             } => {
                 self.handle_consolidate_agent_message(
                     tui,
@@ -304,6 +305,7 @@ impl App {
                     cwd,
                     scrollback_reflow,
                     deferred_history_cell,
+                    pending_reasoning_cells,
                 )?;
             }
             AppEvent::ConsolidateProposedPlan(source) => {
@@ -994,7 +996,7 @@ impl App {
                     );
                     return Ok(AppRunControl::Continue);
                 }
-                #[cfg(target_os = "windows")]
+                #[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
                 {
                     let setup_permissions = match self
                         .windows_setup_permissions(&preset, profile_selection.as_ref())
@@ -1091,6 +1093,14 @@ impl App {
                         tx.send(event);
                     });
                 }
+                #[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+                {
+                    let _ = (preset, profile_selection);
+                    self.chat_widget.add_info_message(
+                        "Windows sandbox is not enabled in this build.".to_string(),
+                        /*hint*/ None,
+                    );
+                }
                 #[cfg(not(target_os = "windows"))]
                 {
                     let _ = (preset, profile_selection);
@@ -1113,7 +1123,7 @@ impl App {
                     );
                     return Ok(AppRunControl::Continue);
                 }
-                #[cfg(target_os = "windows")]
+                #[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
                 {
                     let setup_permissions = match self
                         .windows_setup_permissions(&preset, profile_selection.as_ref())
@@ -1165,6 +1175,14 @@ impl App {
                             profile_selection,
                         });
                     });
+                }
+                #[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+                {
+                    let _ = (preset, profile_selection);
+                    self.chat_widget.add_info_message(
+                        "Windows sandbox is not enabled in this build.".to_string(),
+                        /*hint*/ None,
+                    );
                 }
                 #[cfg(not(target_os = "windows"))]
                 {

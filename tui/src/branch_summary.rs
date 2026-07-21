@@ -101,14 +101,24 @@ pub(crate) async fn current_branch_name(
     runner: &dyn WorkspaceCommandExecutor,
     cwd: &Path,
 ) -> Option<String> {
+    tracing::debug!(cwd = %cwd.display(), "status_line: requesting current branch name");
     let output = run_git_command(runner, cwd, &["branch", "--show-current"])
         .await
         .ok()?;
     if !output.success() {
+        tracing::debug!(
+            cwd = %cwd.display(),
+            exit_code = ?output.exit_code,
+            stdout = %output.stdout,
+            stderr = %output.stderr,
+            "status_line: git branch lookup failed"
+        );
         return None;
     }
 
-    Some(output.stdout.trim().to_string()).filter(|name| !name.is_empty())
+    let branch = Some(output.stdout.trim().to_string()).filter(|name| !name.is_empty());
+    tracing::debug!(cwd = %cwd.display(), ?branch, "status_line: git branch lookup result");
+    branch
 }
 
 /// Resolves PR and branch-change metadata for one status-line working directory.
@@ -120,9 +130,16 @@ pub(crate) async fn status_line_git_summary(
     runner: &dyn WorkspaceCommandExecutor,
     cwd: &Path,
 ) -> StatusLineGitSummary {
+    tracing::debug!(cwd = %cwd.display(), "status_line: requesting git summary");
     let (pull_request, branch_change_stats) = tokio::join!(
         open_pull_request(runner, cwd),
         branch_diff_stats_to_default_branch(runner, cwd),
+    );
+    tracing::debug!(
+        cwd = %cwd.display(),
+        has_pull_request = pull_request.is_some(),
+        has_branch_change_stats = branch_change_stats.is_some(),
+        "status_line: git summary result"
     );
     StatusLineGitSummary {
         pull_request,
@@ -139,10 +156,12 @@ async fn branch_diff_stats_to_default_branch(
     runner: &dyn WorkspaceCommandExecutor,
     cwd: &Path,
 ) -> Option<GitBranchDiffStats> {
+    tracing::debug!(cwd = %cwd.display(), "status_line: requesting branch diff stats");
     let git_dir = run_git_command(runner, cwd, &["rev-parse", "--git-dir"])
         .await
         .ok()?;
     if !git_dir.success() {
+        tracing::debug!(cwd = %cwd.display(), "status_line: rev-parse --git-dir failed");
         return None;
     }
 
@@ -155,6 +174,7 @@ async fn branch_diff_stats_to_default_branch(
     .await
     .ok()?;
     if !merge_base.success() {
+        tracing::debug!(cwd = %cwd.display(), "status_line: merge-base failed");
         return None;
     }
     let merge_base = merge_base.stdout.trim();
@@ -167,6 +187,7 @@ async fn branch_diff_stats_to_default_branch(
         .await
         .ok()?;
     if !numstat.success() {
+        tracing::debug!(cwd = %cwd.display(), "status_line: diff --numstat failed");
         return None;
     }
 
@@ -184,10 +205,12 @@ async fn branch_diff_stats_to_default_branch(
             .unwrap_or(0);
     }
 
-    Some(GitBranchDiffStats {
+    let stats = Some(GitBranchDiffStats {
         additions,
         deletions,
-    })
+    });
+    tracing::debug!(cwd = %cwd.display(), ?stats, "status_line: branch diff stats result");
+    stats
 }
 
 /// Returns git remotes in the order used for default-branch discovery.
@@ -477,13 +500,35 @@ async fn run_git_command(
     let mut argv = Vec::with_capacity(args.len() + 1);
     argv.push("git".to_string());
     argv.extend(args.iter().map(|arg| (*arg).to_string()));
-    runner
+    let result = runner
         .run(
             WorkspaceCommand::new(argv)
                 .cwd(cwd.to_path_buf())
                 .env("GIT_OPTIONAL_LOCKS", "0"),
         )
-        .await
+        .await;
+    match &result {
+        Ok(output) => {
+            tracing::debug!(
+                cwd = %cwd.display(),
+                git_args = ?args,
+                success = output.success(),
+                exit_code = output.exit_code,
+                stdout = %output.stdout.trim(),
+                stderr = %output.stderr.trim(),
+                "status_line: run_git_command output"
+            );
+        }
+        Err(err) => {
+            tracing::debug!(
+                cwd = %cwd.display(),
+                git_args = ?args,
+                error = %err,
+                "status_line: run_git_command error"
+            );
+        }
+    }
+    result
 }
 
 /// Runs a GitHub CLI command through the workspace-command abstraction.

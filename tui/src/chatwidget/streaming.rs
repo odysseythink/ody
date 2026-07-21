@@ -18,6 +18,7 @@ impl ChatWidget {
 
     pub(super) fn flush_answer_stream_with_separator(&mut self) {
         let had_stream_controller = self.stream_controller.is_some();
+        let pending_reasoning_cells = std::mem::take(&mut self.pending_reasoning_cells);
         if let Some(mut controller) = self.stream_controller.take() {
             let scrollback_reflow = if controller.has_live_tail() {
                 crate::app_event::ConsolidationScrollbackReflow::Required
@@ -45,7 +46,13 @@ impl ChatWidget {
                     cwd: self.config.cwd.to_path_buf(),
                     scrollback_reflow,
                     deferred_history_cell,
+                    pending_reasoning_cells,
                 });
+            }
+        } else if !pending_reasoning_cells.is_empty() {
+            // No active assistant stream; append any deferred reasoning now.
+            for cell in pending_reasoning_cells {
+                self.add_boxed_history(cell);
             }
         }
         self.adaptive_chunking.reset();
@@ -225,7 +232,7 @@ impl ChatWidget {
         self.request_redraw();
     }
 
-    pub(super) fn on_agent_reasoning_final(&mut self) {
+    pub(super) fn on_agent_reasoning_final(&mut self, from_replay: bool) {
         // At the end of a reasoning block, record transcript-only content.
         self.full_reasoning_buffer.push_str(&self.reasoning_buffer);
         self.reasoning_stream_active = false;
@@ -235,7 +242,11 @@ impl ChatWidget {
                 self.full_reasoning_buffer.clone(),
                 &self.config.cwd,
             );
-            self.add_boxed_history(cell);
+            if from_replay {
+                self.add_boxed_history(cell);
+            } else {
+                self.pending_reasoning_cells.push(cell);
+            }
         }
         self.reasoning_buffer.clear();
         self.full_reasoning_buffer.clear();

@@ -114,7 +114,8 @@ impl ToolExecutor<ToolInvocation> for ReadFileHandler {
             };
             let text = String::from_utf8_lossy(slice);
 
-            let (content, line_capped) = render(&text, args.offset, args.limit)?;
+            let (mut content, line_capped) = render(&text, args.offset, args.limit)?;
+            append_jq_hint_if_json(abs_path.as_path(), &mut content);
             Ok(boxed_tool_output(ReadFileOutput {
                 content,
                 truncated: byte_capped || line_capped,
@@ -197,6 +198,19 @@ fn truncate_line(line: &str) -> String {
     format!("{kept}… [line truncated]")
 }
 
+/// Appends a hint pointing models at `jq` when the file is JSON/JSONL.
+fn append_jq_hint_if_json(path: &std::path::Path, content: &mut String) {
+    let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+        return;
+    };
+    if ext.eq_ignore_ascii_case("json") || ext.eq_ignore_ascii_case("jsonl") {
+        content.push_str(
+            "\n\nThis file is JSON/JSONL. Use `jq` if you need to filter, count, or paginate \
+             structured data instead of reading raw lines.",
+        );
+    }
+}
+
 /// Largest index <= `max` that is a UTF-8 character boundary.
 fn floor_char_boundary(bytes: &[u8], max: usize) -> usize {
     let mut index = max.min(bytes.len());
@@ -204,4 +218,45 @@ fn floor_char_boundary(bytes: &[u8], max: usize) -> usize {
         index -= 1;
     }
     index
+}
+
+#[cfg(test)]
+mod read_tests {
+    use super::append_jq_hint_if_json;
+    use std::path::PathBuf;
+
+    #[test]
+    fn appends_hint_for_json() {
+        let mut content = "     1\t{}\n".to_string();
+        append_jq_hint_if_json(&PathBuf::from("data.json"), &mut content);
+        assert!(content.contains("Use `jq`"), "JSON file should get jq hint: {content}");
+    }
+
+    #[test]
+    fn appends_hint_for_jsonl() {
+        let mut content = "     1\t{}\n".to_string();
+        append_jq_hint_if_json(&PathBuf::from("log.jsonl"), &mut content);
+        assert!(content.contains("Use `jq`"), "JSONL file should get jq hint: {content}");
+    }
+
+    #[test]
+    fn appends_hint_for_uppercase_json_extension() {
+        let mut content = "     1\t{}\n".to_string();
+        append_jq_hint_if_json(&PathBuf::from("config.JSON"), &mut content);
+        assert!(content.contains("Use `jq`"), "uppercase JSON extension should get jq hint: {content}");
+    }
+
+    #[test]
+    fn skips_hint_for_non_json() {
+        let mut content = "     1\tfoo\n".to_string();
+        append_jq_hint_if_json(&PathBuf::from("README.md"), &mut content);
+        assert!(!content.contains("Use `jq`"), "non-JSON file should not get jq hint: {content}");
+    }
+
+    #[test]
+    fn skips_hint_for_no_extension() {
+        let mut content = "     1\t{}\n".to_string();
+        append_jq_hint_if_json(&PathBuf::from("Makefile"), &mut content);
+        assert!(!content.contains("Use `jq`"), "file without extension should not get jq hint: {content}");
+    }
 }

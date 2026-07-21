@@ -591,6 +591,9 @@ pub(crate) struct ChatWidget {
     full_reasoning_buffer: String,
     // Tracks whether a reasoning stream is currently producing transient tail output.
     reasoning_stream_active: bool,
+    /// Reasoning summaries finalized during a live turn are held here until the
+    /// next assistant message stream finalizes, so they render before the message.
+    pending_reasoning_cells: Vec<Box<dyn HistoryCell>>,
     status_state: StatusState,
     review: ReviewState,
     // Active hook runs render in a dedicated live cell so they can run alongside tools.
@@ -978,10 +981,12 @@ impl ChatWidget {
 
     pub(crate) fn open_feedback_consent(&mut self, category: crate::app_event::FeedbackCategory) {
         let snapshot = self.feedback.snapshot(self.thread_id);
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
         let include_windows_sandbox_log =
             ody_windows_sandbox::current_log_file_path_for_ody_home(&self.config.ody_home)
                 .is_file();
+        #[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+        let include_windows_sandbox_log = false;
         #[cfg(not(target_os = "windows"))]
         let include_windows_sandbox_log = false;
         let params = crate::bottom_pane::feedback_upload_consent_params(

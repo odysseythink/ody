@@ -96,6 +96,7 @@ pub(super) use ody_app_server_protocol::PluginReadResponse;
 pub(super) use ody_app_server_protocol::PluginSource;
 pub(super) use ody_app_server_protocol::PluginSummary;
 pub(super) use ody_app_server_protocol::ReasoningSummaryTextDeltaNotification;
+pub(super) use ody_app_server_protocol::AgentMessageDeltaNotification;
 pub(super) use ody_app_server_protocol::ReviewTarget;
 pub(super) use ody_app_server_protocol::ServerNotification;
 pub(super) use ody_app_server_protocol::SkillSummary;

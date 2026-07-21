@@ -162,6 +162,7 @@ impl ChatWidget {
     /// Results are dropped when they target an out-of-date cwd to avoid rendering stale branch
     /// names after directory changes.
     pub(crate) fn set_status_line_branch(&mut self, cwd: PathBuf, branch: Option<String>) {
+        tracing::debug!(cwd = %cwd.display(), ?branch, "status_line: received branch update");
         if self.status_line_branch_cwd.as_ref() != Some(&cwd) {
             self.status_line_branch_pending = false;
             return;
@@ -178,6 +179,12 @@ impl ChatWidget {
         cwd: PathBuf,
         summary: StatusLineGitSummary,
     ) {
+        tracing::debug!(
+            cwd = %cwd.display(),
+            has_pull_request = summary.pull_request.is_some(),
+            has_branch_change_stats = summary.branch_change_stats.is_some(),
+            "status_line: received git summary update"
+        );
         if self.status_line_git_summary_cwd.as_ref() != Some(&cwd) {
             self.status_line_git_summary_pending = false;
             return;

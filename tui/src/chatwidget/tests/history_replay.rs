@@ -1038,6 +1038,26 @@ async fn live_reasoning_summary_is_not_rendered_twice_when_item_completes() {
         /*replay_kind*/ None,
     );
 
+    // Live reasoning is deferred until the assistant message stream or turn end.
+    assert!(rx.try_recv().is_err(), "reasoning should not be inserted until turn ends");
+
+    chat.handle_server_notification(
+        ServerNotification::TurnCompleted(TurnCompletedNotification {
+            thread_id: "thread-1".to_string(),
+            turn: AppServerTurn {
+                id: "turn-1".to_string(),
+                items_view: ody_app_server_protocol::TurnItemsView::Full,
+                items: Vec::new(),
+                status: AppServerTurnStatus::Completed,
+                error: None,
+                started_at: Some(0),
+                completed_at: Some(0),
+                duration_ms: Some(0),
+            },
+        }),
+        /*replay_kind*/ None,
+    );
+
     let rendered = match rx.try_recv() {
         Ok(AppEvent::InsertHistoryCell(cell)) => {
             lines_to_single_string(&cell.transcript_lines(/*width*/ 80))
@@ -1045,6 +1065,100 @@ async fn live_reasoning_summary_is_not_rendered_twice_when_item_completes() {
         other => panic!("expected InsertHistoryCell, got {other:?}"),
     };
     assert_eq!(rendered.matches("Summary only").count(), 1);
+}
+
+#[tokio::test]
+async fn live_reasoning_deferred_until_message_consolidation() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.show_welcome_banner = false;
+
+    chat.handle_server_notification(
+        ServerNotification::TurnStarted(TurnStartedNotification {
+            thread_id: "thread-1".to_string(),
+            turn: AppServerTurn {
+                id: "turn-1".to_string(),
+                items_view: ody_app_server_protocol::TurnItemsView::Full,
+                items: Vec::new(),
+                status: AppServerTurnStatus::InProgress,
+                error: None,
+                started_at: Some(0),
+                completed_at: None,
+                duration_ms: None,
+            },
+        }),
+        /*replay_kind*/ None,
+    );
+    let _ = drain_insert_history(&mut rx);
+
+    chat.handle_server_notification(
+        ServerNotification::AgentMessageDelta(AgentMessageDeltaNotification {
+            thread_id: "thread-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            item_id: "message-1".to_string(),
+            delta: "final answer".to_string(),
+        }),
+        /*replay_kind*/ None,
+    );
+
+    chat.handle_server_notification(
+        ServerNotification::ReasoningSummaryTextDelta(ReasoningSummaryTextDeltaNotification {
+            thread_id: "thread-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            item_id: "reasoning-1".to_string(),
+            delta: "thinking".to_string(),
+            summary_index: 0,
+        }),
+        /*replay_kind*/ None,
+    );
+
+    chat.handle_server_notification(
+        ServerNotification::ItemCompleted(ItemCompletedNotification {
+            thread_id: "thread-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            completed_at_ms: 0,
+            item: AppServerThreadItem::Reasoning {
+                id: "reasoning-1".to_string(),
+                summary: vec!["thinking".to_string()],
+                content: Vec::new(),
+            },
+        }),
+        /*replay_kind*/ None,
+    );
+
+    chat.handle_server_notification(
+        ServerNotification::ItemCompleted(ItemCompletedNotification {
+            thread_id: "thread-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            completed_at_ms: 0,
+            item: AppServerThreadItem::AgentMessage {
+                id: "message-1".to_string(),
+                text: "final answer".to_string(),
+                phase: None,
+                memory_citation: None,
+            },
+        }),
+        /*replay_kind*/ None,
+    );
+
+    let mut saw_consolidate = false;
+    while let Ok(event) = rx.try_recv() {
+        if let AppEvent::ConsolidateAgentMessage {
+            pending_reasoning_cells,
+            ..
+        } = event
+        {
+            saw_consolidate = true;
+            assert_eq!(
+                pending_reasoning_cells.len(),
+                1,
+                "reasoning should be deferred into the consolidation event"
+            );
+        }
+    }
+    assert!(
+        saw_consolidate,
+        "expected ConsolidateAgentMessage with pending reasoning"
+    );
 }
 
 #[tokio::test]

@@ -524,13 +524,16 @@ impl ChatWidget {
             return;
         }
         let Some(runner) = self.workspace_command_runner.clone() else {
+            tracing::debug!("status_line: workspace_command_runner is None, skipping branch lookup");
             self.status_line_branch_lookup_complete = true;
             return;
         };
+        tracing::debug!(cwd = %cwd.display(), "status_line: spawning branch lookup");
         self.status_line_branch_pending = true;
         let tx = self.app_event_tx.clone();
         tokio::spawn(async move {
             let branch = branch_summary::current_branch_name(runner.as_ref(), &cwd).await;
+            tracing::debug!(cwd = %cwd.display(), ?branch, "status_line: branch lookup completed, sending event");
             tx.send(AppEvent::StatusLineBranchUpdated { cwd, branch });
         });
     }
@@ -540,13 +543,16 @@ impl ChatWidget {
             return;
         }
         let Some(runner) = self.workspace_command_runner.clone() else {
+            tracing::debug!("status_line: workspace_command_runner is None, skipping git summary lookup");
             self.status_line_git_summary_lookup_complete = true;
             return;
         };
+        tracing::debug!(cwd = %cwd.display(), "status_line: spawning git summary lookup");
         self.status_line_git_summary_pending = true;
         let tx = self.app_event_tx.clone();
         tokio::spawn(async move {
             let summary = branch_summary::status_line_git_summary(runner.as_ref(), &cwd).await;
+            tracing::debug!(cwd = %cwd.display(), "status_line: git summary lookup completed, sending event");
             tx.send(AppEvent::StatusLineGitSummaryUpdated { cwd, summary });
         });
     }

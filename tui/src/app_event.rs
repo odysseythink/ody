@@ -658,11 +658,14 @@ pub(crate) enum AppEvent {
     /// terminal scrollback to be rebuilt from the consolidated source-backed cell.
     /// `deferred_history_cell` lets callers add the final stream tail to the
     /// transcript without first writing its provisional render to scrollback.
+    /// `pending_reasoning_cells` carries reasoning finalized while the assistant
+    /// message stream was active; inserted before the consolidated message.
     ConsolidateAgentMessage {
         source: String,
         cwd: PathBuf,
         scrollback_reflow: ConsolidationScrollbackReflow,
         deferred_history_cell: Option<Box<dyn HistoryCell>>,
+        pending_reasoning_cells: Vec<Box<dyn HistoryCell>>,
     },
 
     /// Replace the contiguous run of streaming `ProposedPlanStreamCell`s at the
