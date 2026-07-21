@@ -110,13 +110,14 @@ You MUST complete each phase before proceeding to the next.
    **When to clarify (all must be true):**
    - The user relies on a multi-meaning term (e.g., "报错", "挂了", "不行了", "卡住", "失败", "慢", "没反应").
    - The term could refer to at least two different failure modes in this codebase.
-   - Choosing the wrong meaning would send the investigation down the wrong path.
+   - Choosing the wrong meaning would send the investigation down a materially different path, AND the user has not already provided enough context (logs, code snippets, examples, session paths) to disambiguate it.
 
    **How to clarify:**
    1. Identify the ambiguous term(s).
    2. Based on the current code, recent changes, and any available logs, list the most likely meanings as concrete options.
    3. For each option, state what evidence you would look for first if that option were correct.
    4. Ask the user to confirm or correct, and always include an escape hatch: "都不是，我的意思是...".
+   5. **If evidence would disambiguate, fetch it.** When the user has already provided a log, session path, or code example, start reading it immediately while asking the clarification question. Do not wait for an answer before gathering evidence.
 
    **Example:**
    > 你提到的"报错"可能指几种不同情况：
@@ -125,13 +126,14 @@ You MUST complete each phase before proceeding to the next.
    > 3. 测试失败：我会先运行失败的测试并看断言输出。
    > 4. 工具/脚本返回非零退出码：我会先看 stderr 和 stdout。
    >
-   > 你遇到的是哪一种？如果不是以上，请直接描述。
+   > 你遇到的是哪一种？如果不是以上，请直接描述。我会同时根据你提供的信息先读取相关证据。
 
    **Do not:**
    - Clarify terms already disambiguated by context.
    - Ask about multiple unrelated terms at once.
    - Present options without linking them to concrete evidence paths.
-   - Continue to Phase 1 until the ambiguity is resolved.
+   - Stop investigating just to wait for clarification when the user has already provided concrete evidence (logs, code snippets, examples, session paths).
+   - Output tool calls as XML tags inside assistant message text (e.g., `<function=shell_command>`, `<tool=...>`). These are not executed. If you intend to use a tool, emit a real `function_call` / `tool_call`.
 
 2. **Read Error Messages Carefully**
    - Don't skip past errors or warnings
