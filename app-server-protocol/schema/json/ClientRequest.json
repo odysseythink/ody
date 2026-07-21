@@ -1219,15 +1219,6 @@
       ],
       "type": "object"
     },
-    "GetAuthStateParams": {
-      "properties": {
-        "refreshToken": {
-          "description": "When `true`, requests a proactive token refresh before returning.\n\nThis flag is no longer used; API key auth does not require a refresh flow.",
-          "type": "boolean"
-        }
-      },
-      "type": "object"
-    },
     "HookMigration": {
       "properties": {
         "name": {
@@ -1427,30 +1418,6 @@
         "incomplete"
       ],
       "type": "string"
-    },
-    "LoginParams": {
-      "oneOf": [
-        {
-          "properties": {
-            "apiKey": {
-              "type": "string"
-            },
-            "type": {
-              "enum": [
-                "apiKey"
-              ],
-              "title": "ApiKeyLoginParamsType",
-              "type": "string"
-            }
-          },
-          "required": [
-            "apiKey",
-            "type"
-          ],
-          "title": "ApiKeyLoginParams",
-          "type": "object"
-        }
-      ]
     },
     "MarketplaceAddParams": {
       "properties": {
@@ -6224,53 +6191,6 @@
         },
         "method": {
           "enum": [
-            "auth/login/start"
-          ],
-          "title": "Auth/login/startRequestMethod",
-          "type": "string"
-        },
-        "params": {
-          "$ref": "#/definitions/LoginParams"
-        }
-      },
-      "required": [
-        "id",
-        "method",
-        "params"
-      ],
-      "title": "Auth/login/startRequest",
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/definitions/RequestId"
-        },
-        "method": {
-          "enum": [
-            "auth/logout"
-          ],
-          "title": "Auth/logoutRequestMethod",
-          "type": "string"
-        },
-        "params": {
-          "type": "null"
-        }
-      },
-      "required": [
-        "id",
-        "method"
-      ],
-      "title": "Auth/logoutRequest",
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/definitions/RequestId"
-        },
-        "method": {
-          "enum": [
             "feedback/upload"
           ],
           "title": "Feedback/uploadRequestMethod",
@@ -6552,30 +6472,6 @@
         "method"
       ],
       "title": "ConfigRequirements/readRequest",
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/definitions/RequestId"
-        },
-        "method": {
-          "enum": [
-            "auth/read"
-          ],
-          "title": "Auth/readRequestMethod",
-          "type": "string"
-        },
-        "params": {
-          "$ref": "#/definitions/GetAuthStateParams"
-        }
-      },
-      "required": [
-        "id",
-        "method",
-        "params"
-      ],
-      "title": "Auth/readRequest",
       "type": "object"
     },
     {

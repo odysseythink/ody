@@ -20,7 +20,6 @@ use crate::outgoing_message::ConnectionRequestId;
 use crate::outgoing_message::OutgoingMessageSender;
 use crate::outgoing_message::RequestContext;
 use crate::request_processors::AppsRequestProcessor;
-use crate::request_processors::AuthRequestProcessor;
 use crate::request_processors::CatalogRequestProcessor;
 use crate::request_processors::CommandExecRequestProcessor;
 use crate::request_processors::ConfigRequestProcessor;
@@ -101,7 +100,6 @@ pub(crate) struct MessageProcessor {
     outgoing: Arc<OutgoingMessageSender>,
     models_refresh_worker: ModelsRefreshWorker,
     skills_watcher: Arc<SkillsWatcher>,
-    auth_processor: AuthRequestProcessor,
     apps_processor: AppsRequestProcessor,
     catalog_processor: CatalogRequestProcessor,
     command_exec_processor: CommandExecRequestProcessor,
@@ -302,12 +300,6 @@ impl MessageProcessor {
         let workspace_settings_cache =
             Arc::new(workspace_settings::WorkspaceSettingsCache::default());
         let app_list_shutdown_token = CancellationToken::new();
-        let auth_processor = AuthRequestProcessor::new(
-            Arc::clone(&thread_manager),
-            outgoing.clone(),
-            Arc::clone(&config),
-            config_manager.clone(),
-        );
         let apps_processor = AppsRequestProcessor::new(
             Arc::clone(&thread_manager),
             outgoing.clone(),
@@ -436,7 +428,6 @@ impl MessageProcessor {
             outgoing,
             models_refresh_worker,
             skills_watcher,
-            auth_processor,
             apps_processor,
             catalog_processor,
             command_exec_processor,
@@ -1219,16 +1210,6 @@ impl MessageProcessor {
                 self.windows_sandbox_processor
                     .windows_sandbox_setup_start(&request_id, params)
                     .await
-            }
-            ClientRequest::Login { params, .. } => {
-                self.auth_processor.login(request_id.clone(), params).await
-            }
-            ClientRequest::Logout { .. } => self.auth_processor.logout(request_id.clone()).await,
-            ClientRequest::GetAuthState { params, .. } => {
-                self.auth_processor.get_auth_state(params).await
-            }
-            ClientRequest::GetAuthStatus { params, .. } => {
-                self.auth_processor.get_auth_status(params).await
             }
             ClientRequest::GitDiffToRemote { params, .. } => {
                 self.git_processor.git_diff_to_remote(params).await

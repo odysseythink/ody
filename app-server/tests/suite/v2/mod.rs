@@ -1,6 +1,5 @@
 mod analytics;
 mod app_list;
-mod auth;
 mod client_metadata;
 mod collaboration_mode_list;
 #[cfg(unix)]

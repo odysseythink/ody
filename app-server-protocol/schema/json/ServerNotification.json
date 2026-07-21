@@ -435,40 +435,6 @@
         }
       ]
     },
-    "AuthMode": {
-      "description": "Authentication mode for model providers.",
-      "oneOf": [
-        {
-          "description": "API key provided by the caller and stored by Ody.",
-          "enum": [
-            "apikey"
-          ],
-          "type": "string"
-        },
-        {
-          "description": "No authentication.",
-          "enum": [
-            "unauthenticated"
-          ],
-          "type": "string"
-        }
-      ]
-    },
-    "AuthUpdatedNotification": {
-      "properties": {
-        "authMode": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/AuthMode"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "type": "object"
-    },
     "AutoReviewDecisionSource": {
       "description": "[UNSTABLE] Source that produced a terminal approval auto-review decision.",
       "enum": [
@@ -2134,29 +2100,6 @@
     "LegacyAppPathString": {
       "type": "string"
     },
-    "LoginCompletedNotification": {
-      "properties": {
-        "error": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "loginId": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "success": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "success"
-      ],
-      "type": "object"
-    },
     "McpServerOauthLoginCompletedNotification": {
       "properties": {
         "error": {
@@ -3796,6 +3739,11 @@
         {
           "description": "EXPERIMENTAL - proposed plan item content. The completed plan item is authoritative and may not match the concatenation of `PlanDelta` text.",
           "properties": {
+            "finalized": {
+              "default": false,
+              "description": "Whether this completed plan/design item finalized the artifact (a terminal `submit_*`), as opposed to a non-terminal checkpoint. Drives the post-plan / post-design next-step menu. Defaults to `false`.",
+              "type": "boolean"
+            },
             "id": {
               "type": "string"
             },
@@ -6239,26 +6187,6 @@
       "properties": {
         "method": {
           "enum": [
-            "auth/updated"
-          ],
-          "title": "Auth/updatedNotificationMethod",
-          "type": "string"
-        },
-        "params": {
-          "$ref": "#/definitions/AuthUpdatedNotification"
-        }
-      },
-      "required": [
-        "method",
-        "params"
-      ],
-      "title": "Auth/updatedNotification",
-      "type": "object"
-    },
-    {
-      "properties": {
-        "method": {
-          "enum": [
             "app/list/updated"
           ],
           "title": "App/list/updatedNotificationMethod",
@@ -6815,26 +6743,6 @@
         "params"
       ],
       "title": "WindowsSandbox/setupCompletedNotification",
-      "type": "object"
-    },
-    {
-      "properties": {
-        "method": {
-          "enum": [
-            "auth/login/completed"
-          ],
-          "title": "Auth/login/completedNotificationMethod",
-          "type": "string"
-        },
-        "params": {
-          "$ref": "#/definitions/LoginCompletedNotification"
-        }
-      },
-      "required": [
-        "method",
-        "params"
-      ],
-      "title": "Auth/login/completedNotification",
       "type": "object"
     }
   ],

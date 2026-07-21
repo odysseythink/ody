@@ -43,8 +43,6 @@ use ody_app_server_protocol::JSONRPCMessage;
 use ody_app_server_protocol::JSONRPCNotification;
 use ody_app_server_protocol::JSONRPCRequest;
 use ody_app_server_protocol::JSONRPCResponse;
-use ody_app_server_protocol::LoginCompletedNotification;
-use ody_app_server_protocol::LoginResponse;
 use ody_app_server_protocol::ModelListParams;
 use ody_app_server_protocol::ModelListResponse;
 use ody_app_server_protocol::RequestId;
@@ -229,8 +227,6 @@ enum CliCommand {
         #[arg(long)]
         abort_on: Option<usize>,
     },
-    /// Trigger the API key login flow and wait for completion.
-    TestLogin,
     /// List the available models from the Ody app-server.
     #[command(name = "model-list")]
     ModelList,
@@ -407,11 +403,6 @@ pub async fn run() -> Result<()> {
                 &dynamic_tools,
             )
             .await
-        }
-        CliCommand::TestLogin => {
-            ensure_dynamic_tools_unused(&dynamic_tools, "test-login")?;
-            let endpoint = resolve_endpoint(ody_bin, url)?;
-            test_login(&endpoint, &config_overrides).await
         }
         CliCommand::ModelList => {
             ensure_dynamic_tools_unused(&dynamic_tools, "model-list")?;
@@ -1112,25 +1103,6 @@ async fn send_follow_up_v2(
     .await
 }
 
-async fn test_login(endpoint: &Endpoint, config_overrides: &[String]) -> Result<()> {
-    with_client("test-login", endpoint, config_overrides, |client| {
-        let initialize = client.initialize()?;
-        println!("< initialize response: {initialize:?}");
-
-        let api_key =
-            std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| "sk-test-dummy-key".to_string());
-        let login_response = client.login_account_api_key(api_key)?;
-        println!("< auth/login/start response: {login_response:?}");
-
-        if matches!(login_response, LoginResponse::ApiKey {}) {
-            println!("API key login accepted by app-server.");
-            Ok(())
-        } else {
-            bail!("expected apiKey login response");
-        }
-    })
-    .await
-}
 
 async fn model_list(endpoint: &Endpoint, config_overrides: &[String]) -> Result<()> {
     with_client("model-list", endpoint, config_overrides, |client| {
@@ -1653,15 +1625,6 @@ impl OdyClient {
         self.send_request(request, request_id, "turn/start")
     }
 
-    fn login_account_api_key(&mut self, api_key: String) -> Result<LoginResponse> {
-        let request_id = self.request_id();
-        let request = ClientRequest::Login {
-            request_id: request_id.clone(),
-            params: ody_app_server_protocol::LoginParams::ApiKey { api_key },
-        };
-
-        self.send_request(request, request_id, "auth/login/start")
-    }
 
     fn model_list(&mut self, params: ModelListParams) -> Result<ModelListResponse> {
         let request_id = self.request_id();
@@ -1709,30 +1672,6 @@ impl OdyClient {
         self.send_request(request, request_id, "thread/decrement_elicitation")
     }
 
-    fn wait_for_account_login_completion(
-        &mut self,
-        expected_login_id: &str,
-    ) -> Result<LoginCompletedNotification> {
-        loop {
-            let notification = self.next_notification()?;
-
-            if let Ok(server_notification) = ServerNotification::try_from(notification) {
-                match server_notification {
-                    ServerNotification::LoginCompleted(completion) => {
-                        if completion.login_id.as_deref() == Some(expected_login_id) {
-                            return Ok(completion);
-                        }
-
-                        println!(
-                            "[ignoring auth/login/completed for unexpected login_id: {:?}]",
-                            completion.login_id
-                        );
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
 
     fn stream_turn(&mut self, thread_id: &str, turn_id: &str) -> Result<()> {
         loop {

@@ -163,7 +163,6 @@ pub(super) fn server_notification_thread_target(
         }
         ServerNotification::SkillsChanged(_)
         | ServerNotification::McpServerOauthLoginCompleted(_)
-        | ServerNotification::AuthUpdated(_)
         | ServerNotification::AppListUpdated(_)
         | ServerNotification::ExternalAgentConfigImportProgress(_)
         | ServerNotification::ExternalAgentConfigImportCompleted(_)
@@ -177,7 +176,7 @@ pub(super) fn server_notification_thread_target(
         | ServerNotification::FsChanged(_)
         | ServerNotification::WindowsWorldWritableWarning(_)
         | ServerNotification::WindowsSandboxSetupCompleted(_)
-        | ServerNotification::LoginCompleted(_) => None,
+        => None,
     };
 
     match thread_id {

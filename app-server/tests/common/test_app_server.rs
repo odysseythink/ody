@@ -34,8 +34,6 @@ use ody_app_server_protocol::FsRemoveParams;
 use ody_app_server_protocol::FsUnwatchParams;
 use ody_app_server_protocol::FsWatchParams;
 use ody_app_server_protocol::FsWriteFileParams;
-use ody_app_server_protocol::GetAuthStateParams;
-use ody_app_server_protocol::GetAuthStatusParams;
 use ody_app_server_protocol::GetConversationSummaryParams;
 use ody_app_server_protocol::HooksListParams;
 use ody_app_server_protocol::InitializeCapabilities;
@@ -391,15 +389,6 @@ web_search = true
         }
     }
 
-    /// Send a `getAuthStatus` JSON-RPC request.
-    pub async fn send_get_auth_status_request(
-        &mut self,
-        params: GetAuthStatusParams,
-    ) -> anyhow::Result<i64> {
-        let params = Some(serde_json::to_value(params)?);
-        self.send_request("getAuthStatus", params).await
-    }
-
     /// Send a `getConversationSummary` JSON-RPC request.
     pub async fn send_get_conversation_summary_request(
         &mut self,
@@ -407,15 +396,6 @@ web_search = true
     ) -> anyhow::Result<i64> {
         let params = Some(serde_json::to_value(params)?);
         self.send_request("getConversationSummary", params).await
-    }
-
-    /// Send an `auth/read` JSON-RPC request.
-    pub async fn send_get_auth_state_request(
-        &mut self,
-        params: GetAuthStateParams,
-    ) -> anyhow::Result<i64> {
-        let params = Some(serde_json::to_value(params)?);
-        self.send_request("auth/read", params).await
     }
 
     /// Send a `feedback/upload` JSON-RPC request.
@@ -1151,20 +1131,6 @@ web_search = true
     ) -> anyhow::Result<i64> {
         let params = Some(serde_json::to_value(params)?);
         self.send_request("fs/unwatch", params).await
-    }
-
-    /// Send an `auth/logout` JSON-RPC request.
-    pub async fn send_logout_request(&mut self) -> anyhow::Result<i64> {
-        self.send_request("auth/logout", /*params*/ None).await
-    }
-
-    /// Send an `auth/login/start` JSON-RPC request for API key login.
-    pub async fn send_login_api_key_request(&mut self, api_key: &str) -> anyhow::Result<i64> {
-        let params = serde_json::json!({
-            "type": "apiKey",
-            "apiKey": api_key,
-        });
-        self.send_request("auth/login/start", Some(params)).await
     }
 
     /// Send a `fuzzyFileSearch` JSON-RPC request.

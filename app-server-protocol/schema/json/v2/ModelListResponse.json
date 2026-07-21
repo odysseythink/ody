@@ -79,6 +79,11 @@
         "model": {
           "type": "string"
         },
+        "provider": {
+          "default": "",
+          "description": "Provider identifier for grouping models in the picker.",
+          "type": "string"
+        },
         "serviceTiers": {
           "default": [],
           "items": {

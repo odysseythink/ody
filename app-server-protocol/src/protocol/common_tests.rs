@@ -23,7 +23,6 @@ fn client_response_payload_returns_jsonrpc_parts_and_client_response() -> Result
     assert_eq!(request_id, RequestId::Integer(7));
     Ok(())
 }
-
 #[test]
 fn auth_mode_serializes_to_lowercase() {
     assert_eq!(
@@ -40,6 +39,8 @@ fn auth_mode_serializes_to_lowercase() {
 fn auth_mode_deserializes_legacy_provider_as_error() {
     assert!(serde_json::from_str::<AuthMode>("\"legacy-provider\"").is_err());
 }
+
+
 
 #[test]
 fn interrupt_conversation_payload_stays_jsonrpc_only() -> Result<()> {

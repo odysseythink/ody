@@ -695,14 +695,12 @@ mod tests {
 
     use ody_app_server_protocol::ApplyPatchApprovalParams;
     use ody_app_server_protocol::AuthMode;
-    use ody_app_server_protocol::AuthUpdatedNotification;
     use ody_app_server_protocol::CommandExecutionApprovalDecision;
     use ody_app_server_protocol::CommandExecutionRequestApprovalParams;
     use ody_app_server_protocol::ConfigWarningNotification;
     use ody_app_server_protocol::DynamicToolCallParams;
     use ody_app_server_protocol::FileChangeRequestApprovalParams;
     use ody_app_server_protocol::GuardianWarningNotification;
-    use ody_app_server_protocol::LoginCompletedNotification;
     use ody_app_server_protocol::ModelRerouteReason;
     use ody_app_server_protocol::ModelReroutedNotification;
     use ody_app_server_protocol::ModelVerification;
@@ -719,73 +717,6 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn verify_server_notification_serialization() {
-        let notification = ServerNotification::LoginCompleted(LoginCompletedNotification {
-            login_id: Some(Uuid::nil().to_string()),
-            success: true,
-            error: None,
-        });
-
-        let jsonrpc_notification = OutgoingMessage::AppServerNotification(notification);
-        assert_eq!(
-            json!({
-                "method": "auth/login/completed",
-                "params": {
-                    "loginId": Uuid::nil().to_string(),
-                    "success": true,
-                    "error": null,
-                },
-            }),
-            serde_json::to_value(jsonrpc_notification)
-                .expect("ensure the strum macros serialize the method field correctly"),
-            "ensure the strum macros serialize the method field correctly"
-        );
-    }
-
-    #[test]
-    fn verify_account_login_completed_notification_serialization() {
-        let notification = ServerNotification::LoginCompleted(LoginCompletedNotification {
-            login_id: Some(Uuid::nil().to_string()),
-            success: true,
-            error: None,
-        });
-
-        let jsonrpc_notification = OutgoingMessage::AppServerNotification(notification);
-        assert_eq!(
-            json!({
-                "method": "auth/login/completed",
-                "params": {
-                    "loginId": Uuid::nil().to_string(),
-                    "success": true,
-                    "error": null,
-                },
-            }),
-            serde_json::to_value(jsonrpc_notification)
-                .expect("ensure the notification serializes correctly"),
-            "ensure the notification serializes correctly"
-        );
-    }
-
-    #[test]
-    fn verify_account_updated_notification_serialization() {
-        let notification = ServerNotification::AuthUpdated(AuthUpdatedNotification {
-            auth_mode: Some(AuthMode::ApiKey),
-        });
-
-        let jsonrpc_notification = OutgoingMessage::AppServerNotification(notification);
-        assert_eq!(
-            json!({
-                "method": "auth/updated",
-                "params": {
-                    "authMode": "apikey",
-                },
-            }),
-            serde_json::to_value(jsonrpc_notification)
-                .expect("ensure the notification serializes correctly"),
-            "ensure the notification serializes correctly"
-        );
-    }
 
     #[test]
     fn verify_config_warning_notification_serialization() {

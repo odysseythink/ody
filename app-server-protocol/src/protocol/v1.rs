@@ -21,8 +21,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use ts_rs::TS;
 
-use crate::protocol::common::AuthMode;
-
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct InitializeParams {
@@ -116,12 +114,6 @@ pub struct ConversationGitInfo {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct LoginApiKeyParams {
-    pub api_key: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
 pub struct GitDiffToRemoteResponse {
     pub sha: GitSha,
     pub diff: String,
@@ -176,25 +168,11 @@ pub struct GitDiffToRemoteParams {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct GetAuthStatusParams {
-    pub include_token: Option<bool>,
-    pub refresh_token: Option<bool>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
 pub struct ExecOneOffCommandParams {
     pub command: Vec<String>,
     pub timeout_ms: Option<u64>,
     pub cwd: Option<PathBuf>,
     pub sandbox_policy: Option<SandboxPolicy>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct GetAuthStatusResponse {
-    pub auth_method: Option<AuthMode>,
-    pub auth_token: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone, PartialEq, Serialize, JsonSchema, TS)]

@@ -905,20 +905,6 @@ client_request_definitions! {
         response: v2::WindowsSandboxReadinessResponse,
     },
 
-    Login => "auth/login/start" {
-        params: v2::LoginParams,
-        inspect_params: true,
-        serialization: global("auth"),
-        response: v2::LoginResponse,
-    },
-
-
-    Logout => "auth/logout" {
-        params: #[ts(type = "undefined")] #[serde(skip_serializing_if = "Option::is_none")] Option<()>,
-        serialization: global("auth"),
-        response: v2::LogoutResponse,
-    },
-
     FeedbackUpload => "feedback/upload" {
         params: v2::FeedbackUploadParams,
         serialization: None,
@@ -1018,12 +1004,6 @@ client_request_definitions! {
         response: v2::ConfigRequirementsReadResponse,
     },
 
-    GetAuthState => "auth/read" {
-        params: v2::GetAuthStateParams,
-        serialization: global("auth"),
-        response: v2::GetAuthStateResponse,
-    },
-
     /// DEPRECATED APIs below
     GetConversationSummary {
         params: v1::GetConversationSummaryParams,
@@ -1034,12 +1014,6 @@ client_request_definitions! {
         params: v1::GitDiffToRemoteParams,
         serialization: None,
         response: v1::GitDiffToRemoteResponse,
-    },
-    /// DEPRECATED in favor of GetAuthState
-    GetAuthStatus {
-        params: v1::GetAuthStatusParams,
-        serialization: global("auth"),
-        response: v1::GetAuthStatusResponse,
     },
     // Legacy fuzzy search cancellation is intentionally concurrent: clients reuse a
     // cancellation token so a newer request can cancel an older in-flight search.
@@ -1527,7 +1501,6 @@ server_notification_definitions! {
     McpToolCallProgress => "item/mcpToolCall/progress" (v2::McpToolCallProgressNotification),
     McpServerOauthLoginCompleted => "mcpServer/oauthLogin/completed" (v2::McpServerOauthLoginCompletedNotification),
     McpServerStatusUpdated => "mcpServer/startupStatus/updated" (v2::McpServerStatusUpdatedNotification),
-    AuthUpdated => "auth/updated" (v2::AuthUpdatedNotification),
     AppListUpdated => "app/list/updated" (v2::AppListUpdatedNotification),
     ExternalAgentConfigImportProgress => "externalAgentConfig/import/progress" (v2::ExternalAgentConfigImportProgressNotification),
     ExternalAgentConfigImportCompleted => "externalAgentConfig/import/completed" (v2::ExternalAgentConfigImportCompletedNotification),
@@ -1568,11 +1541,6 @@ server_notification_definitions! {
     /// Notifies the user of world-writable directories on Windows, which cannot be protected by the sandbox.
     WindowsWorldWritableWarning => "windows/worldWritableWarning" (v2::WindowsWorldWritableWarningNotification),
     WindowsSandboxSetupCompleted => "windowsSandbox/setupCompleted" (v2::WindowsSandboxSetupCompletedNotification),
-
-    #[serde(rename = "auth/login/completed")]
-    #[ts(rename = "auth/login/completed")]
-    #[strum(serialize = "auth/login/completed")]
-    LoginCompleted(v2::LoginCompletedNotification),
 
 }
 
@@ -1828,17 +1796,6 @@ mod tests {
         assert_eq!(
             config_read.serialization_scope(),
             Some(ClientRequestSerializationScope::GlobalSharedRead("config"))
-        );
-
-        let auth_state_read = ClientRequest::GetAuthState {
-            request_id: request_id(),
-            params: v2::GetAuthStateParams {
-                refresh_token: false,
-            },
-        };
-        assert_eq!(
-            auth_state_read.serialization_scope(),
-            Some(ClientRequestSerializationScope::Global("auth"))
         );
 
         let thread_goal_set = ClientRequest::ThreadGoalSet {
@@ -2420,92 +2377,6 @@ mod tests {
             }),
             serde_json::to_value(&request)?,
         );
-        Ok(())
-    }
-
-    #[test]
-    fn serialize_login_api_key() -> Result<()> {
-        let request = ClientRequest::Login {
-            request_id: RequestId::Integer(2),
-            params: v2::LoginParams::ApiKey {
-                api_key: "secret".to_string(),
-            },
-        };
-        assert_eq!(
-            json!({
-                "method": "auth/login/start",
-                "id": 2,
-                "params": {
-                    "type": "apiKey",
-                    "apiKey": "secret"
-                }
-            }),
-            serde_json::to_value(&request)?,
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn serialize_logout() -> Result<()> {
-        let request = ClientRequest::Logout {
-            request_id: RequestId::Integer(5),
-            params: None,
-        };
-        assert_eq!(
-            json!({
-                "method": "auth/logout",
-                "id": 5,
-            }),
-            serde_json::to_value(&request)?,
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn serialize_get_auth_state() -> Result<()> {
-        let request = ClientRequest::GetAuthState {
-            request_id: RequestId::Integer(6),
-            params: v2::GetAuthStateParams {
-                refresh_token: false,
-            },
-        };
-        assert_eq!(
-            json!({
-                "method": "auth/read",
-                "id": 6,
-                "params": {}
-            }),
-            serde_json::to_value(&request)?,
-        );
-        let request = ClientRequest::GetAuthState {
-            request_id: RequestId::Integer(7),
-            params: v2::GetAuthStateParams {
-                refresh_token: true,
-            },
-        };
-        assert_eq!(
-            json!({
-                "method": "auth/read",
-                "id": 7,
-                "params": {
-                    "refreshToken": true
-                }
-            }),
-            serde_json::to_value(&request)?,
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn auth_state_serializes_fields_in_camel_case() -> Result<()> {
-        let api_key = v2::AuthState::ApiKey {};
-        assert_eq!(
-            json!({
-                "type": "apiKey",
-            }),
-            serde_json::to_value(&api_key)?,
-        );
-
         Ok(())
     }
 

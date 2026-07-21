@@ -821,62 +821,6 @@
         }
       ]
     },
-    "AuthMode": {
-      "description": "Authentication mode for model providers.",
-      "oneOf": [
-        {
-          "description": "API key provided by the caller and stored by Ody.",
-          "enum": [
-            "apikey"
-          ],
-          "type": "string"
-        },
-        {
-          "description": "No authentication.",
-          "enum": [
-            "unauthenticated"
-          ],
-          "type": "string"
-        }
-      ]
-    },
-    "AuthState": {
-      "oneOf": [
-        {
-          "properties": {
-            "type": {
-              "enum": [
-                "apiKey"
-              ],
-              "title": "ApiKeyAuthStateType",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type"
-          ],
-          "title": "ApiKeyAuthState",
-          "type": "object"
-        }
-      ]
-    },
-    "AuthUpdatedNotification": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "properties": {
-        "authMode": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/AuthMode"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "title": "AuthUpdatedNotification",
-      "type": "object"
-    },
     "AutoCompactTokenLimitScope": {
       "description": "Selects which part of the active context is charged against `model_auto_compact_token_limit`.",
       "oneOf": [
@@ -2544,53 +2488,6 @@
             },
             "method": {
               "enum": [
-                "auth/login/start"
-              ],
-              "title": "Auth/login/startRequestMethod",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/definitions/LoginParams"
-            }
-          },
-          "required": [
-            "id",
-            "method",
-            "params"
-          ],
-          "title": "Auth/login/startRequest",
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/definitions/RequestId"
-            },
-            "method": {
-              "enum": [
-                "auth/logout"
-              ],
-              "title": "Auth/logoutRequestMethod",
-              "type": "string"
-            },
-            "params": {
-              "type": "null"
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "title": "Auth/logoutRequest",
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/definitions/RequestId"
-            },
-            "method": {
-              "enum": [
                 "feedback/upload"
               ],
               "title": "Feedback/uploadRequestMethod",
@@ -2872,30 +2769,6 @@
             "method"
           ],
           "title": "ConfigRequirements/readRequest",
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/definitions/RequestId"
-            },
-            "method": {
-              "enum": [
-                "auth/read"
-              ],
-              "title": "Auth/readRequestMethod",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/definitions/GetAuthStateParams"
-            }
-          },
-          "required": [
-            "id",
-            "method",
-            "params"
-          ],
-          "title": "Auth/readRequest",
           "type": "object"
         },
         {
@@ -6053,34 +5926,6 @@
       "title": "FuzzyFileSearchSessionUpdatedNotification",
       "type": "object"
     },
-    "GetAuthStateParams": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "properties": {
-        "refreshToken": {
-          "description": "When `true`, requests a proactive token refresh before returning.\n\nThis flag is no longer used; API key auth does not require a refresh flow.",
-          "type": "boolean"
-        }
-      },
-      "title": "GetAuthStateParams",
-      "type": "object"
-    },
-    "GetAuthStateResponse": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "properties": {
-        "authState": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/AuthState"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "title": "GetAuthStateResponse",
-      "type": "object"
-    },
     "GitInfo": {
       "properties": {
         "branch": {
@@ -7174,84 +7019,6 @@
       ],
       "type": "string"
     },
-    "LoginCompletedNotification": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "properties": {
-        "error": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "loginId": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "success": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "success"
-      ],
-      "title": "LoginCompletedNotification",
-      "type": "object"
-    },
-    "LoginParams": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "oneOf": [
-        {
-          "properties": {
-            "apiKey": {
-              "type": "string"
-            },
-            "type": {
-              "enum": [
-                "apiKey"
-              ],
-              "title": "ApiKeyv2::LoginParamsType",
-              "type": "string"
-            }
-          },
-          "required": [
-            "apiKey",
-            "type"
-          ],
-          "title": "ApiKeyv2::LoginParams",
-          "type": "object"
-        }
-      ],
-      "title": "LoginParams"
-    },
-    "LoginResponse": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "oneOf": [
-        {
-          "properties": {
-            "type": {
-              "enum": [
-                "apiKey"
-              ],
-              "title": "ApiKeyv2::LoginResponseType",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type"
-          ],
-          "title": "ApiKeyv2::LoginResponse",
-          "type": "object"
-        }
-      ],
-      "title": "LoginResponse"
-    },
-    "LogoutResponse": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "LogoutResponse",
-      "type": "object"
-    },
     "ManagedHooksRequirements": {
       "properties": {
         "PermissionRequest": {
@@ -8084,6 +7851,11 @@
           "type": "boolean"
         },
         "model": {
+          "type": "string"
+        },
+        "provider": {
+          "default": "",
+          "description": "Provider identifier for grouping models in the picker.",
           "type": "string"
         },
         "serviceTiers": {
@@ -12442,26 +12214,6 @@
           "properties": {
             "method": {
               "enum": [
-                "auth/updated"
-              ],
-              "title": "Auth/updatedNotificationMethod",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/definitions/AuthUpdatedNotification"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "title": "Auth/updatedNotification",
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "enum": [
                 "app/list/updated"
               ],
               "title": "App/list/updatedNotificationMethod",
@@ -13018,26 +12770,6 @@
             "params"
           ],
           "title": "WindowsSandbox/setupCompletedNotification",
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "enum": [
-                "auth/login/completed"
-              ],
-              "title": "Auth/login/completedNotificationMethod",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/definitions/LoginCompletedNotification"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "title": "Auth/login/completedNotification",
           "type": "object"
         }
       ],
@@ -14491,6 +14223,11 @@
         {
           "description": "EXPERIMENTAL - proposed plan item content. The completed plan item is authoritative and may not match the concatenation of `PlanDelta` text.",
           "properties": {
+            "finalized": {
+              "default": false,
+              "description": "Whether this completed plan/design item finalized the artifact (a terminal `submit_*`), as opposed to a non-terminal checkpoint. Drives the post-plan / post-design next-step menu. Defaults to `false`.",
+              "type": "boolean"
+            },
             "id": {
               "type": "string"
             },

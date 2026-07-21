@@ -814,8 +814,12 @@ impl App {
         }
         let model_catalog = Arc::new(ModelCatalog::new(available_models.clone()));
         let feedback_audience = bootstrap.feedback_audience;
-        let auth_mode = bootstrap.auth_mode;
-        let api_key_configured = matches!(auth_mode, Some(TelemetryAuthMode::ApiKey));
+        let api_key_configured = bootstrap.api_key_configured;
+        let auth_mode = if api_key_configured {
+            Some(TelemetryAuthMode::ApiKey)
+        } else {
+            None
+        };
         let session_telemetry = SessionTelemetry::new(
             ThreadId::new(),
             model.as_str(),

@@ -21,7 +21,6 @@ use ody_app_server_client::AppServerPath;
 use ody_app_server_client::AppServerRequestHandle;
 use ody_app_server_client::TypedRequestError;
 use ody_app_server_protocol::AskForApproval;
-use ody_app_server_protocol::AuthState;
 use ody_app_server_protocol::ClientRequest;
 use ody_app_server_protocol::ConfigBatchWriteParams;
 use ody_app_server_protocol::ConfigWriteResponse;
@@ -30,10 +29,7 @@ use ody_app_server_protocol::ExternalAgentConfigDetectResponse;
 use ody_app_server_protocol::ExternalAgentConfigImportParams;
 use ody_app_server_protocol::ExternalAgentConfigImportResponse;
 use ody_app_server_protocol::ExternalAgentConfigMigrationItem;
-use ody_app_server_protocol::GetAuthStateParams;
-use ody_app_server_protocol::GetAuthStateResponse;
 use ody_app_server_protocol::JSONRPCErrorError;
-use ody_app_server_protocol::LogoutResponse;
 use ody_app_server_protocol::MemoryResetResponse;
 use ody_app_server_protocol::Model as ApiModel;
 use ody_app_server_protocol::ModelListParams;
@@ -105,7 +101,6 @@ use ody_app_server_protocol::TurnStartResponse;
 use ody_app_server_protocol::TurnSteerParams;
 use ody_app_server_protocol::TurnSteerResponse;
 use ody_app_server_protocol::UserInput;
-use ody_otel::TelemetryAuthMode;
 use ody_protocol::ThreadId;
 use ody_protocol::approvals::GuardianAssessmentEvent;
 use ody_protocol::config_types::SERVICE_TIER_DEFAULT_REQUEST_VALUE;
@@ -151,7 +146,7 @@ fn is_thread_settings_update_unsupported(source: &JSONRPCErrorError) -> bool {
 /// its first frame without waiting for the rate-limit round-trip.
 pub(crate) struct AppServerBootstrap {
     pub(crate) duration: Duration,
-    pub(crate) auth_mode: Option<TelemetryAuthMode>,
+    pub(crate) api_key_configured: bool,
     pub(crate) default_model: String,
     pub(crate) feedback_audience: FeedbackAudience,
     pub(crate) available_models: Vec<ModelPreset>,
@@ -243,7 +238,7 @@ impl AppServerSession {
 
     pub(crate) async fn bootstrap(&mut self, config: &Config) -> Result<AppServerBootstrap> {
         let started_at = Instant::now();
-        let auth_state = self.read_auth_state().await?;
+        let api_key_configured = is_api_key_configured(config);
         let model_request_id = self.next_request_id();
         let models: ModelListResponse = self
             .client
@@ -277,35 +272,13 @@ impl AppServerSession {
             .wrap_err("model/list returned no models for TUI bootstrap")?;
         self.default_model = Some(default_model.clone());
         self.available_models = available_models.clone();
-
-        let auth_mode = match auth_state.auth_state {
-            Some(AuthState::ApiKey {}) => Some(TelemetryAuthMode::ApiKey),
-            None => None,
-        };
         Ok(AppServerBootstrap {
             duration: started_at.elapsed(),
-            auth_mode,
+            api_key_configured,
             default_model,
             feedback_audience: FeedbackAudience::External,
             available_models,
         })
-    }
-
-    /// Fetches the current auth state without refreshing the auth token.
-    ///
-    /// Used by both `bootstrap` (to populate the initial UI)
-    /// (to check auth mode without the overhead of a full bootstrap).
-    pub(crate) async fn read_auth_state(&mut self) -> Result<GetAuthStateResponse> {
-        let request_id = self.next_request_id();
-        self.client
-            .request_typed(ClientRequest::GetAuthState {
-                request_id,
-                params: GetAuthStateParams {
-                    refresh_token: false,
-                },
-            })
-            .await
-            .map_err(|err| bootstrap_request_error("auth/read failed during TUI bootstrap", err))
     }
 
     pub(crate) async fn external_agent_config_detect(
@@ -892,19 +865,6 @@ impl AppServerSession {
             .wrap_err("thread/goal/clear failed in TUI")
     }
 
-    pub(crate) async fn logout(&mut self) -> Result<()> {
-        let request_id = self.next_request_id();
-        let _: LogoutResponse = self
-            .client
-            .request_typed(ClientRequest::Logout {
-                request_id,
-                params: None,
-            })
-            .await
-            .wrap_err("auth/logout failed in TUI")?;
-        Ok(())
-    }
-
     pub(crate) async fn thread_unsubscribe(&mut self, thread_id: ThreadId) -> Result<()> {
         let request_id = self.next_request_id();
         let _: ThreadUnsubscribeResponse = self
@@ -1165,6 +1125,17 @@ fn model_preset_from_api_model(model: ApiModel) -> ModelPreset {
         supported_in_api: true,
         input_modalities: model.input_modalities,
     }
+}
+
+/// Returns whether the currently configured model provider has credentials
+/// available locally (API key, bearer token, or command-backed auth).
+fn is_api_key_configured(config: &Config) -> bool {
+    let Some(provider) = config.model_providers.get(&config.model_provider_id) else {
+        return false;
+    };
+    provider.api_key().ok().flatten().is_some()
+        || provider.experimental_bearer_token.is_some()
+        || provider.auth.is_some()
 }
 
 fn approvals_reviewer_override_from_config(

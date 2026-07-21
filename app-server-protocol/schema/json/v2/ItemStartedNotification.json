@@ -634,6 +634,11 @@
         {
           "description": "EXPERIMENTAL - proposed plan item content. The completed plan item is authoritative and may not match the concatenation of `PlanDelta` text.",
           "properties": {
+            "finalized": {
+              "default": false,
+              "description": "Whether this completed plan/design item finalized the artifact (a terminal `submit_*`), as opposed to a non-terminal checkpoint. Drives the post-plan / post-design next-step menu. Defaults to `false`.",
+              "type": "boolean"
+            },
             "id": {
               "type": "string"
             },

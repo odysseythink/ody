@@ -192,8 +192,6 @@ impl ChatWidget {
                 }
             }
             ServerNotification::ServerRequestResolved(_)
-            | ServerNotification::AuthUpdated(_)
-            | ServerNotification::LoginCompleted(_)
             | ServerNotification::ThreadStarted(_)
             | ServerNotification::ThreadStatusChanged(_)
             | ServerNotification::ThreadArchived(_)

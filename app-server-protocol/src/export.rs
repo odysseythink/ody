@@ -2896,7 +2896,6 @@ permissionProfile?: string | null};
             })
             .collect();
         let missing_client_request_methods: Vec<String> = [
-            "auth/logout",
             "config/mcpServer/reload",
             "configRequirements/read",
             "fuzzyFileSearch",

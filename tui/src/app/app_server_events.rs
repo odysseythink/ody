@@ -9,7 +9,6 @@ use crate::app_event::AppEvent;
 use crate::app_event::ConnectorsSnapshot;
 use crate::app_server_session::AppServerSession;
 use ody_app_server_client::AppServerEvent;
-use ody_app_server_protocol::AuthMode;
 use ody_app_server_protocol::ServerNotification;
 use ody_app_server_protocol::ServerRequest;
 
@@ -72,12 +71,6 @@ impl App {
             }
             ServerNotification::McpServerStatusUpdated(_) => {
                 self.refresh_mcp_startup_expected_servers_from_config();
-            }
-            ServerNotification::AuthUpdated(notification) => {
-                let api_key_configured = matches!(notification.auth_mode, Some(AuthMode::ApiKey));
-                self.chat_widget
-                    .update_auth_state(api_key_configured);
-                return;
             }
             ServerNotification::ExternalAgentConfigImportCompleted(_) => {
                 let should_report_completion =
