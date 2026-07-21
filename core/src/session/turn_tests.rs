@@ -262,3 +262,40 @@ async fn design_mode_records_reminder_during_early_clarification() {
         "a Design reminder restating the request_user_input pop-up rule should be recorded by turn 5"
     );
 }
+
+
+#[test]
+fn design_mode_text_contains_closed_choice_detects_popup_candidates() {
+    // Plain-text A/B/C questions should be caught.
+    assert!(design_mode_text_contains_closed_choice(
+        "A. strict failure
+B. automatic degradation
+C. semi-auto
+
+Which do you choose?"
+    ));
+    assert!(design_mode_text_contains_closed_choice(
+        "- A) yes
+- B) no
+
+Select one."
+    ));
+    assert!(design_mode_text_contains_closed_choice(
+        "1. inside file_tools
+2. separate module
+
+你选哪个？"
+    ));
+
+    // Non-question option lists should not be caught.
+    assert!(!design_mode_text_contains_closed_choice(
+        "We will implement A. strict failure and B. automatic degradation."
+    ));
+    assert!(!design_mode_text_contains_closed_choice(
+        "The options are A and B."
+    ));
+    assert!(!design_mode_text_contains_closed_choice(
+        "No options here."
+    ));
+    assert!(!design_mode_text_contains_closed_choice(""));
+}

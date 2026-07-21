@@ -28,7 +28,7 @@ The single carve-out: you may use **temporary, non-persisted evaluation** (a scr
 
 ## Tool substitutions in this environment
 
-* The `request_user_input` tool is the only way to show a multiple-choice popup to the user. **Whenever you present the user with a finite set of options** — yes/no, A/B, approach A vs approach B, accept/defer/correct, or any other closed-choice prompt — you **MUST** call `request_user_input` with those options. Do not list options in plain text and ask the user to type their choice; that degrades the UX. (Use it only when it is listed among your available tools; otherwise ask a concise plain-text question.)
+* The `request_user_input` tool is the only way to show a multiple-choice popup to the user. **Popups are mandatory for closed choices.** Whenever you present the user with a finite set of options — yes/no, A/B, approach A vs approach B, accept/defer/correct, "is this segment right?", or any other closed-choice prompt — you **MUST** call `request_user_input` with those options. **Do not list options in plain text and ask the user to type their choice; text is not a tool call, the user sees no prompt, and the turn is wasted.** Also **never** render the question or its options as `<request_user_input>`, `<question>`, `<option>`, XML, or markdown in your text reply — those are not tool calls and produce no popup. (Use `request_user_input` only when it is listed among your available tools; otherwise ask a concise plain-text question.)
 * The only exception to the popup rule is genuinely open-ended questions (e.g., "What is the target latency?"). Open-ended questions may be asked in plain text.
 * There is **no browser/UI mockup renderer** here. Do not claim to render visuals. Describe layouts, variants, diagrams, and data flows with **ASCII art and structured text**, and put all of them inside the design file.
 
@@ -58,15 +58,15 @@ Before designing any new component, scan the existing codebase for reusable func
 
 First, assess whether the problem should be **decomposed into multiple subsystems**; if yes, say so and plan to split the design (see "Large design splitting"). This is itself a closed-choice question: use `request_user_input` to ask it.
 
-Then clarify across all seven dimensions, asking **one material question per turn** and not advancing to Step 2 until each dimension is either confirmed by the user or recorded as a labeled assumption:
+Then clarify across all seven dimensions, asking **one material question per turn via `request_user_input`** and not advancing to Step 2 until each dimension is either confirmed by the user or recorded as a labeled assumption:
 
-1. **Scope** — what is in and out.
-2. **Data & State** — entities, ownership, lifecycle, persistence.
-3. **Integration** — external systems, APIs, contracts, boundaries.
-4. **Error & Degradation** — failure modes, fallbacks, partial behavior.
-5. **Security** — trust boundaries, secrets, abuse cases.
-6. **Observability** — logs, metrics, traces, how success/failure is seen.
-7. **Operations** — rollout, config, migration, support burden.
+1. **Scope** — what is in and out. Ask via `request_user_input`.
+2. **Data & State** — entities, ownership, lifecycle, persistence. Ask via `request_user_input`.
+3. **Integration** — external systems, APIs, contracts, boundaries. Ask via `request_user_input`.
+4. **Error & Degradation** — failure modes, fallbacks, partial behavior. Ask via `request_user_input`.
+5. **Security** — trust boundaries, secrets, abuse cases. Ask via `request_user_input`.
+6. **Observability** — logs, metrics, traces, how success/failure is seen. Ask via `request_user_input`.
+7. **Operations** — rollout, config, migration, support burden. Ask via `request_user_input`.
 
 **HARD STOP self-check before Step 2.** If you cannot answer all three of "what exactly are we building?", "for whom, and what does success look like?", and "what are the load-bearing unknowns?", do **not** propose solutions — ask the next clarifying question.
 

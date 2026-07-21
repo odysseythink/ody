@@ -41,6 +41,8 @@ struct JqArgs {
     output_mode: Option<String>,
     #[serde(default)]
     environment_id: Option<String>,
+    #[serde(default)]
+    count: Option<bool>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -143,6 +145,23 @@ fn run(args: &JqArgs, abs_path: &Path) -> Result<(String, bool), FunctionCallErr
     } else {
         &bytes[..]
     };
+
+    // Count is a separate operation: it streams through the whole file and returns
+    // the number of input values, which for JSONL equals the line count. This lets
+    // models discover file size before paging through it with offset/limit.
+    if args.count == Some(true) {
+        let mut count = 0usize;
+        for result in read::parse_many(&bytes[..]) {
+            result.map_err(|err| {
+                FunctionCallError::RespondToModel(format!(
+                    "`{}` is not valid JSON/JSONL: {err}",
+                    abs_path.display()
+                ))
+            })?;
+            count += 1;
+        }
+        return Ok((count.to_string(), false));
+    }
 
     let program = File {
         code: args.filter.as_str(),
@@ -290,6 +309,7 @@ pub(super) fn run_for_test(filter: &str, root: &Path) -> Result<(String, bool), 
             limit: None,
             output_mode: None,
             environment_id: None,
+            count: None,
         },
         root,
     )
@@ -311,7 +331,24 @@ pub(super) fn run_with_options_for_test(
             limit,
             output_mode: output_mode.map(|s| s.to_string()),
             environment_id: None,
+            count: None,
         },
         root,
+    )
+}
+
+#[cfg(test)]
+pub(super) fn run_with_count_for_test(path: &Path) -> Result<(String, bool), FunctionCallError> {
+    run(
+        &JqArgs {
+            path: path.to_string_lossy().to_string(),
+            filter: ".".to_string(),
+            offset: None,
+            limit: None,
+            output_mode: None,
+            environment_id: None,
+            count: Some(true),
+        },
+        path,
     )
 }

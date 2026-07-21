@@ -18,6 +18,7 @@ use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
 use crate::tools::parallel::ToolCallRuntime;
 use crate::tools::router::ToolRouter;
+use ody_tools::ToolName;
 use futures::Future;
 use ody_memories_read::citations::parse_memory_citation;
 use ody_memories_read::citations::thread_ids_from_memory_citation;
@@ -311,6 +312,7 @@ pub(crate) struct OutputItemResult {
     pub last_agent_message: Option<String>,
     pub needs_follow_up: bool,
     pub tool_future: Option<InFlightFuture<'static>>,
+    pub is_request_user_input_call: bool,
 }
 
 pub(crate) struct HandleOutputCtx {
@@ -422,6 +424,7 @@ pub(crate) async fn handle_output_item_done(
                 .await;
 
             let payload_preview = call.payload.log_payload().into_owned();
+            let is_request_user_input = call.tool_name == ToolName::plain("request_user_input");
             tracing::info!(
                 thread_id = %ctx.sess.thread_id,
                 "ToolCall: {} {}",
@@ -439,6 +442,7 @@ pub(crate) async fn handle_output_item_done(
                     .handle_tool_call(call, cancellation_token),
             );
 
+            output.is_request_user_input_call = is_request_user_input;
             output.needs_follow_up = true;
             output.tool_future = Some(tool_future);
         }

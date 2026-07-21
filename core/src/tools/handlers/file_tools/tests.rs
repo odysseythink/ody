@@ -305,6 +305,33 @@ fn jq_reports_empty_results() {
 }
 
 #[test]
+fn jq_count_returns_number_of_input_values() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("log.jsonl");
+    std::fs::write(&path, "{\"n\":1}\n{\"n\":2}\n{\"n\":3}\n").unwrap();
+    let (out, _) = jq::run_with_count_for_test(&path).unwrap();
+    assert_eq!(out.trim(), "3", "expected 3 JSONL values, got: {out}");
+}
+
+#[test]
+fn jq_count_works_for_single_json() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("single.json");
+    std::fs::write(&path, r#"{"n":1}"#).unwrap();
+    let (out, _) = jq::run_with_count_for_test(&path).unwrap();
+    assert_eq!(out.trim(), "1", "expected 1 JSON value, got: {out}");
+}
+
+#[test]
+fn jq_count_rejects_invalid_json() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("broken.json");
+    std::fs::write(&path, "not json").unwrap();
+    let err = jq::run_with_count_for_test(&path).expect_err("invalid JSON must be rejected");
+    assert!(format!("{err:?}").contains("not valid JSON"), "{err:?}");
+}
+
+#[test]
 fn jq_rejects_oversized_file_with_clear_message() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("huge.json");

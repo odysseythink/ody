@@ -31,7 +31,7 @@ pub const MAX_LINES: usize = 1000;
 /// Maximum characters retained per line; longer lines are truncated in place.
 pub const MAX_LINE_LENGTH: usize = 2000;
 /// Maximum bytes read from a file in a single call.
-pub const MAX_BYTES: usize = 100 * 1024;
+pub const MAX_BYTES: usize = 100 * 1024 * 1024;
 /// Maximum result rows returned by `grep`/`glob` before pagination kicks in.
 pub const DEFAULT_HEAD_LIMIT: usize = 250;
 
@@ -301,15 +301,23 @@ pub fn create_jq_tool(options: FileToolOptions) -> ToolSpec {
                     .to_string(),
             )),
         ),
+        (
+            "count".to_string(),
+            JsonSchema::boolean(Some(
+                "Return the number of input values in the file instead of running the filter. \
+                 For JSONL files this equals the line count. The filter is ignored when this is true."
+                    .to_string(),
+            )),
+        ),
     ]);
     environment_id_property(&mut properties, options);
 
     ToolSpec::Function(ResponsesApiTool {
         name: JQ_TOOL_NAME.to_string(),
         description:
-            "Run a jq filter against a JSON or JSONL file. Prefer this over shell `jq` when the \
-             data is already known: output is capped and shaped before it reaches the conversation. \
-             Use `read_file` first if you are unsure whether the file is valid JSON/JSONL."
+            "Run a jq filter against a JSON or JSONL file. Prefer this over `read_file` for \
+             JSON/JSONL files when you want to filter, count, or page through structured data. \
+             Output is capped and shaped before it reaches the conversation."
                 .to_string(),
         strict: false,
         defer_loading: None,
@@ -583,6 +591,19 @@ mod tests {
             include_environment_id: true,
         }));
         assert!(with.contains("environment_id"));
+    }
+
+    #[test]
+    fn jq_prefers_itself_for_json_files() {
+        let json = spec_json(&create_jq_tool(FileToolOptions::default()));
+        assert!(
+            !json.contains("Use `read_file` first"),
+            "jq should not tell models to use read_file first; it should be the default for JSON/JSONL: {json}"
+        );
+        assert!(
+            json.contains("Prefer this over `read_file`"),
+            "jq description should encourage using jq over read_file for JSON/JSONL: {json}"
+        );
     }
 
     #[test]

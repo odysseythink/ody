@@ -163,6 +163,46 @@ const EMPTY_COMPLETION_NUDGE: &str = "Your previous response was empty — no me
 either take the next concrete action (call the appropriate tool) or, if the task is \
 already complete, reply with a short summary of what you did.";
 
+/// Detects a plain-text multiple-choice prompt that should have been delivered via
+/// `request_user_input` in Design Mode.
+///
+/// Looks for option markers (A/B/C/D or 1/2/3/4) combined with a question marker
+/// (question mark or words like "choose" / "select" / "pick" / "选"). This is a
+/// heuristic, not a parser: it intentionally errs on the side of catching
+/// closed-choice prompts that the model emitted as text instead of as a popup.
+fn design_mode_text_contains_closed_choice(text: &str) -> bool {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    let lower = trimmed.to_lowercase();
+
+    // Option markers: at least two of A/B/C/D or 1/2/3/4 in list form.
+    let has_option_list = (lower.contains("a.") && lower.contains("b."))
+        || (lower.contains("a)") && lower.contains("b)"))
+        || (lower.contains("- a") && lower.contains("- b"))
+        || (lower.contains("1.") && lower.contains("2."));
+
+    if !has_option_list {
+        return false;
+    }
+
+    // Question markers: the text ends with a question mark or explicitly asks
+    // the user to choose between the options.
+    let has_question_marker = trimmed.ends_with('?')
+        || lower.contains("choose")
+        || lower.contains("select")
+        || lower.contains("pick")
+        || lower.contains("which")
+        || lower.contains("选")
+        || lower.contains("which option")
+        || lower.contains("you choose")
+        || lower.contains("your choice")
+        || lower.contains("choose one");
+
+    has_question_marker
+}
+
 pub(crate) async fn run_turn(
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
@@ -348,6 +388,7 @@ pub(crate) async fn run_turn(
                 let SamplingRequestResult {
                     needs_follow_up: model_needs_follow_up,
                     last_agent_message: sampling_request_last_agent_message,
+                    has_request_user_input_call,
                 } = sampling_request_output;
                 if sampling_request_last_agent_message.is_some() || model_needs_follow_up {
                     turn_had_activity = true;
@@ -383,6 +424,39 @@ pub(crate) async fn run_turn(
                 {
                     last_agent_message = sampling_request_last_agent_message;
                     break;
+                }
+
+                // Design Mode guard: closed-choice prompts must be delivered via
+                // request_user_input. If the model answered with plain text that
+                // contains a multiple-choice question, steer it back to the popup.
+                if turn_context.collaboration_mode.mode == ModeKind::Design
+                    && !has_request_user_input_call
+                    && !model_needs_follow_up
+                {
+                    if let Some(text) = sampling_request_last_agent_message.as_deref()
+                        && design_mode_text_contains_closed_choice(text)
+                    {
+                        warn!(
+                            turn_id = %turn_context.sub_id,
+                            "design mode assistant message contained a closed-choice prompt without request_user_input; steering back to popup"
+                        );
+                        let nudge = ResponseItem::Message {
+                            id: Some(uuid::Uuid::new_v4().to_string()),
+                            role: "user".to_string(),
+                            content: vec![ContentItem::InputText {
+                                text: "Your previous reply contained a closed-choice prompt, but you did not call `request_user_input`. In Design Mode, every closed-choice prompt must be presented through the `request_user_input` popup. Please call `request_user_input` with the same options now.".to_string(),
+                            }],
+                            phase: None,
+                            internal_chat_message_metadata_passthrough: None,
+                        };
+                        sess.record_conversation_items(
+                            &turn_context,
+                            std::slice::from_ref(&nudge),
+                        )
+                        .await;
+                        can_drain_pending_input = false;
+                        continue;
+                    }
                 }
 
                 trace!(
@@ -1786,6 +1860,7 @@ pub(crate) async fn built_tools(
 struct SamplingRequestResult {
     needs_follow_up: bool,
     last_agent_message: Option<String>,
+    has_request_user_input_call: bool,
 }
 
 /// Ephemeral per-response state for streaming a single proposed plan.
@@ -2249,6 +2324,7 @@ async fn try_run_sampling_request(
         FuturesOrdered::new();
     let mut needs_follow_up = false;
     let mut last_agent_message: Option<String> = None;
+    let mut has_request_user_input_call = false;
     let mut active_item: Option<TurnItem> = None;
     let mut active_tool_argument_diff_consumer: Option<(
         String,
@@ -2392,11 +2468,13 @@ async fn try_run_sampling_request(
                     last_agent_message = Some(agent_message);
                 }
                 needs_follow_up |= output_result.needs_follow_up;
+                has_request_user_input_call |= output_result.is_request_user_input_call;
                 // todo: remove before stabilizing multi-agent v2
                 if preempt_for_mailbox_mail && sess.input_queue.has_pending_mailbox_items().await {
                     break Ok(SamplingRequestResult {
                         needs_follow_up: true,
                         last_agent_message,
+                        has_request_user_input_call,
                     });
                 }
             }
@@ -2565,6 +2643,7 @@ async fn try_run_sampling_request(
                 break Ok(SamplingRequestResult {
                     needs_follow_up,
                     last_agent_message,
+                    has_request_user_input_call,
                 });
             }
             ResponseEvent::OutputTextDelta(delta) => {
