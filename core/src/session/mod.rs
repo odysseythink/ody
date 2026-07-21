@@ -1230,6 +1230,24 @@ impl Session {
         state.set_last_design_artifact(artifact);
     }
 
+    /// Fingerprints already signed off (accept/defer) in an earlier revise round
+    /// of the current design, used by the escalation gate to suppress re-review
+    /// duplicates.
+    pub(crate) async fn design_signoff_seen(&self) -> std::collections::HashSet<String> {
+        let state = self.state.lock().await;
+        state.design_signoff_seen()
+    }
+
+    pub(crate) async fn record_design_signoff_seen(&self, fingerprints: Vec<String>) {
+        let mut state = self.state.lock().await;
+        state.record_design_signoff_seen(fingerprints);
+    }
+
+    pub(crate) async fn clear_design_signoff_seen(&self) {
+        let mut state = self.state.lock().await;
+        state.clear_design_signoff_seen();
+    }
+
     pub(crate) async fn auto_compact_window_snapshot(&self) -> AutoCompactWindowSnapshot {
         let state = self.state.lock().await;
         state.auto_compact_window_snapshot()

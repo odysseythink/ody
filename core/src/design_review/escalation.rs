@@ -214,12 +214,27 @@ const QUESTION_ID_PREFIX: &str = "design_review_signoff_";
 /// One escalated item shown on its own sign-off page. Modelling findings and
 /// assumptions uniformly lets the gate queue them as a single ordered list of
 /// per-item questions and map every answer back to what it signed off.
+#[derive(Clone, Copy)]
 enum SignoffItem<'a> {
     Finding(&'a DesignReviewFinding),
     Assumption(&'a Assumption),
 }
 
 impl SignoffItem<'_> {
+    /// Stable-enough identity for cross-round de-duplication. The stateless
+    /// reviewer tends to reproduce the same finding title / assumption text when
+    /// the underlying risk is unchanged, so a normalized title (findings) or text
+    /// (assumptions) matches a risk the user already dispositioned in an earlier
+    /// revise round. Namespaced by kind so a finding and an assumption that happen
+    /// to share wording never collide. Not perfect — a reworded title re-escalates
+    /// (fails safe: shows it again) rather than being wrongly hidden.
+    fn fingerprint(&self) -> String {
+        match self {
+            SignoffItem::Finding(f) => format!("F:{}", normalize_fingerprint(&f.title)),
+            SignoffItem::Assumption(a) => format!("A:{}", normalize_fingerprint(&a.text)),
+        }
+    }
+
     /// Short bracketed tag for the question header — severity for a finding,
     /// confidence for an assumption — so the user sees the stakes at a glance.
     fn tag(&self, chinese: bool) -> String {
@@ -323,8 +338,22 @@ fn needs_fix_label(chinese: bool) -> &'static str {
 /// truncated list. Findings come first (most severe first), then assumptions;
 /// index in `items` is the question-id suffix used to map answers back. The last
 /// page submits every answer at once, and unanswered pages default to Accept.
-fn build_signoff_questions(chinese: bool, items: &[SignoffItem<'_>]) -> RequestUserInputArgs {
+fn build_signoff_questions(
+    chinese: bool,
+    items: &[SignoffItem<'_>],
+    suppressed: usize,
+) -> RequestUserInputArgs {
     let total = items.len();
+    // Suffix that tells the user this round is smaller because already-confirmed
+    // risks were carried over, so a shrinking count reads as progress rather than
+    // "where did the rest go?".
+    let skipped = if suppressed == 0 {
+        String::new()
+    } else if chinese {
+        format!("，已略过 {suppressed} 项此前已确认")
+    } else {
+        format!(", {suppressed} already-confirmed skipped")
+    };
     let questions = items
         .iter()
         .enumerate()
@@ -335,9 +364,15 @@ fn build_signoff_questions(chinese: bool, items: &[SignoffItem<'_>]) -> RequestU
                 format!("Sign-off {}/{total}", i + 1)
             };
             let question = if chinese {
-                format!("请签核此项（{}）：\n\n{}", progress, item.body(chinese))
+                format!(
+                    "请签核此项（{progress}{skipped}）：\n\n{}",
+                    item.body(chinese)
+                )
             } else {
-                format!("Sign off on this item ({}):\n\n{}", progress, item.body(chinese))
+                format!(
+                    "Sign off on this item ({progress}{skipped}):\n\n{}",
+                    item.body(chinese)
+                )
             };
             RequestUserInputQuestion {
                 id: format!("{QUESTION_ID_PREFIX}{i}"),
@@ -353,6 +388,15 @@ fn build_signoff_questions(chinese: bool, items: &[SignoffItem<'_>]) -> RequestU
         questions,
         auto_resolution_ms: None,
     }
+}
+
+/// Collapse case and internal whitespace so trivially-different renderings of the
+/// same title/text hash to one key.
+fn normalize_fingerprint(s: &str) -> String {
+    s.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
 }
 
 fn truncate(s: &str, max: usize) -> String {
@@ -424,12 +468,36 @@ pub(crate) async fn run_escalation_gate(
         None => Vec::new(),
     };
     if assumptions.is_empty() && findings.is_empty() {
+        // Design finalizes with nothing to sign off — the effort is done, so a
+        // future design starts from an empty suppression set.
+        session.clear_design_signoff_seen().await;
+        return EscalationDecision::Finalize { note: None };
+    }
+
+    let all_items = signoff_items(&assumptions, &findings);
+
+    // Suppress items the user already dispositioned (accept/defer) in an earlier
+    // revise round of THIS design: the stateless reviewer re-raises them every
+    // round, and re-confirming an already-accepted risk is what made the count
+    // feel like it never fell. Only the delta (new findings + items still flagged
+    // for fixing) is put in front of the user.
+    let seen = session.design_signoff_seen().await;
+    let items: Vec<SignoffItem<'_>> = all_items
+        .iter()
+        .copied()
+        .filter(|item| !seen.contains(&item.fingerprint()))
+        .collect();
+    let suppressed = all_items.len() - items.len();
+
+    if items.is_empty() {
+        // Everything that escalated this round was already signed off — nothing
+        // new to ask. Finalize and reset the per-design memory.
+        session.clear_design_signoff_seen().await;
         return EscalationDecision::Finalize { note: None };
     }
 
     let chinese = transcript_is_chinese(turn.config.language.as_deref());
-    let items = signoff_items(&assumptions, &findings);
-    let args = build_signoff_questions(chinese, &items);
+    let args = build_signoff_questions(chinese, &items, suppressed);
     let Some(response) = session.request_user_input(turn, call_id, args).await else {
         // Cancelled / no active turn — do not silently finalize past unresolved
         // critical findings; keep the design open for revision.
@@ -442,15 +510,18 @@ pub(crate) async fn run_escalation_gate(
     };
 
     let needs_fix = needs_fix_label(chinese);
-    let flagged: Vec<(String, String)> = items
-        .iter()
-        .enumerate()
-        .filter_map(|(i, item)| {
-            let answer = response.answers.get(&format!("{QUESTION_ID_PREFIX}{i}"))?;
-            let picked = answer.answers.first().map(String::as_str).unwrap_or_default();
-            if picked != needs_fix {
-                return None;
-            }
+    let mut flagged: Vec<(String, String)> = Vec::new();
+    // Fingerprints the user actively dispositioned as non-blocking this round, so
+    // a re-review after a revise does not surface them again. Only *explicit*
+    // Accept / Defer / Other picks are remembered — an unanswered page is left out
+    // so the user gets another look at it next round rather than it vanishing.
+    let mut newly_seen: Vec<String> = Vec::new();
+    for (i, item) in items.iter().enumerate() {
+        let Some(answer) = response.answers.get(&format!("{QUESTION_ID_PREFIX}{i}")) else {
+            continue;
+        };
+        let picked = answer.answers.first().map(String::as_str).unwrap_or_default();
+        if picked == needs_fix {
             // The page's optional note is appended by the client as `user_note: …`.
             let note = answer
                 .answers
@@ -458,11 +529,19 @@ pub(crate) async fn run_escalation_gate(
                 .find_map(|a| a.strip_prefix("user_note: "))
                 .unwrap_or_default()
                 .to_string();
-            Some((item.body(chinese), note))
-        })
-        .collect();
+            flagged.push((item.body(chinese), note));
+        } else {
+            newly_seen.push(item.fingerprint());
+        }
+    }
+
+    if !newly_seen.is_empty() {
+        session.record_design_signoff_seen(newly_seen).await;
+    }
 
     if flagged.is_empty() {
+        // Design finalizes — clear the per-design memory for the next design.
+        session.clear_design_signoff_seen().await;
         EscalationDecision::Finalize { note: None }
     } else {
         EscalationDecision::Revise {
@@ -586,7 +665,7 @@ mod tests {
         let f_refs = vec![&f1, &f2];
         let a_refs = vec![&a1];
         let items = signoff_items(&a_refs, &f_refs);
-        let menu = build_signoff_questions(false, &items);
+        let menu = build_signoff_questions(false, &items, 0);
         // One page per escalated item — no more one giant truncated dump.
         assert_eq!(menu.questions.len(), 3);
         // Three per-item choices (Accept / Defer / Needs fixing); client adds Other.
@@ -691,6 +770,42 @@ mod tests {
         assert!(msg.contains("note: encrypt it"));
         assert!(msg.contains("2. overlay reuse"));
         assert!(msg.contains("Do not start implementing"));
+    }
+
+    #[test]
+    fn fingerprint_is_kind_namespaced_and_normalized() {
+        use DesignReviewConfidence::High as C;
+        use DesignReviewSeverity::*;
+        // Case + internal-whitespace differences collapse to the same key.
+        let a = SignoffItem::Finding(&finding(High, C, "Missing  rate LIMITING"));
+        let b = SignoffItem::Finding(&finding(Critical, C, "missing rate limiting"));
+        assert_eq!(a.fingerprint(), b.fingerprint());
+        // A finding and an assumption with identical wording never collide.
+        let f = finding(High, C, "shared wording");
+        let asm = assumption("shared wording", AssumptionConfidence::Low, "x");
+        assert_ne!(
+            SignoffItem::Finding(&f).fingerprint(),
+            SignoffItem::Assumption(&asm).fingerprint()
+        );
+    }
+
+    #[test]
+    fn suppressed_note_only_appears_when_carrying_items_over() {
+        use DesignReviewConfidence::High as C;
+        use DesignReviewSeverity::*;
+        let f = finding(Critical, C, "plaintext key");
+        let f_refs = [&f];
+        let items = signoff_items(&[], &f_refs);
+        // No carry-over: no skipped note.
+        let clean = build_signoff_questions(true, &items, 0);
+        assert!(!clean.questions[0].question.contains("已略过"));
+        // With carry-over: the shrinking count is explained on the page.
+        let carried = build_signoff_questions(true, &items, 12);
+        assert!(carried.questions[0].question.contains("已略过 12 项此前已确认"));
+        // The English form too, and the short header chip stays free of it.
+        let en = build_signoff_questions(false, &items, 3);
+        assert!(en.questions[0].question.contains("3 already-confirmed skipped"));
+        assert!(!en.questions[0].header.contains("already-confirmed"));
     }
 
     #[test]

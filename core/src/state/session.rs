@@ -48,6 +48,16 @@ pub(crate) struct SessionState {
     next_turn_is_first: bool,
     plan_mode_last_manifest_snapshot: Option<ManifestSnapshot>,
     last_design_artifact: Option<Arc<PlanArtifact>>,
+    /// Fingerprints of design-review sign-off items the user has already
+    /// dispositioned as non-blocking (Accept / Defer to implementation) in an
+    /// earlier revise round of the *current* design. The adversarial reviewer is
+    /// stateless and re-derives its full finding list every `submit_design`, so
+    /// without this the same already-accepted risks re-escalate to the user each
+    /// round and the sign-off count never falls — it feels like risk piling up.
+    /// The gate suppresses items whose fingerprint is in this set, showing only
+    /// the delta (new findings + items still flagged for fixing). Cleared when a
+    /// design finalizes, so the next design starts fresh.
+    design_signoff_seen: HashSet<String>,
     /// Latest `update_plan` checklist, kept outside the conversation.
     ///
     /// The tool call that carries it lives in history, which compaction
@@ -89,6 +99,7 @@ impl SessionState {
             next_turn_is_first: true,
             plan_mode_last_manifest_snapshot: None,
             last_design_artifact: None,
+            design_signoff_seen: HashSet::new(),
             active_plan: None,
             last_plan_done_count: None,
             turns_since_plan_write: 0,
@@ -394,6 +405,27 @@ impl SessionState {
 
     pub(crate) fn clear_last_design_artifact(&mut self) {
         self.last_design_artifact = None;
+    }
+
+    /// Snapshot of the fingerprints already dispositioned (accept/defer) in an
+    /// earlier revise round of the current design.
+    pub(crate) fn design_signoff_seen(&self) -> HashSet<String> {
+        self.design_signoff_seen.clone()
+    }
+
+    /// Record fingerprints the user just signed off as non-blocking, so a later
+    /// re-review does not re-surface them.
+    pub(crate) fn record_design_signoff_seen(
+        &mut self,
+        fingerprints: impl IntoIterator<Item = String>,
+    ) {
+        self.design_signoff_seen.extend(fingerprints);
+    }
+
+    /// Reset the per-design sign-off memory (the design finalized, so the next
+    /// one must start from an empty set).
+    pub(crate) fn clear_design_signoff_seen(&mut self) {
+        self.design_signoff_seen.clear();
     }
 }
 
