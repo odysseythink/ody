@@ -3,7 +3,7 @@ use std::os::unix::process::ExitStatusExt;
 
 use std::collections::HashMap;
 use std::io;
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::ExitStatus;
@@ -517,7 +517,7 @@ async fn get_raw_output_result(
         &WindowsSandboxFilesystemOverrides,
     >,
 ) -> Result<RawExecToolCallOutput> {
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
     if sandbox == SandboxType::WindowsRestrictedToken {
         return exec_windows_sandbox(
             params,
@@ -528,11 +528,17 @@ async fn get_raw_output_result(
         )
         .await;
     }
+    #[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+    if sandbox == SandboxType::WindowsRestrictedToken {
+        return Err(OdyErr::Io(io::Error::other(
+            "windows sandbox is not enabled: compile with --features windows-sandbox",
+        )));
+    }
 
     exec(params, network_sandbox_policy, stdout_stream, after_spawn).await
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 fn extract_create_process_as_user_error_code(err: &str) -> Option<String> {
     let marker = "CreateProcessAsUserW failed: ";
     let start = err.find(marker)? + marker.len();
@@ -545,7 +551,7 @@ fn extract_create_process_as_user_error_code(err: &str) -> Option<String> {
     }
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 fn windowsapps_path_kind(path: &str) -> &'static str {
     let lower = path.to_ascii_lowercase();
     if lower.contains("\\program files\\windowsapps\\") {
@@ -560,7 +566,7 @@ fn windowsapps_path_kind(path: &str) -> &'static str {
     "other"
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 fn record_windows_sandbox_spawn_failure(
     command_path: Option<&str>,
     windows_sandbox_level: ody_protocol::config_types::WindowsSandboxLevel,
@@ -598,7 +604,7 @@ fn record_windows_sandbox_spawn_failure(
     }
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 async fn exec_windows_sandbox(
     params: ExecParams,
     permission_profile: &PermissionProfile,

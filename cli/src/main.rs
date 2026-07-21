@@ -36,6 +36,7 @@ mod marketplace_cmd;
 mod mcp_cmd;
 mod plugin_cmd;
 #[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 mod sandbox_setup;
 mod state_db_recovery;
 #[cfg(not(windows))]
@@ -1185,7 +1186,7 @@ async fn cli_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             .await?;
         }
         Some(Subcommand::Sandbox(mut sandbox_cli)) => {
-            #[cfg(target_os = "windows")]
+            #[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
             if let Some(setup_cli) = sandbox_setup::parse_setup_command(&sandbox_cli.command)? {
                 reject_remote_mode_for_subcommand(
                     root_remote.as_deref(),
@@ -1194,6 +1195,16 @@ async fn cli_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                 )?;
                 sandbox_setup::run(setup_cli).await?;
                 return Ok(());
+            }
+            #[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+            if sandbox_cli
+                .command
+                .first()
+                .is_some_and(|cmd| cmd == "setup")
+            {
+                anyhow::bail!(
+                    "`ody sandbox setup` is not enabled: compile with --features windows-sandbox"
+                );
             }
             reject_remote_mode_for_subcommand(
                 root_remote.as_deref(),
@@ -1223,13 +1234,20 @@ async fn cli_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                 loader_overrides,
             )
             .await?;
-            #[cfg(target_os = "windows")]
+            #[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
             ody_cli::run_command_under_windows_sandbox(
                 sandbox_cli,
                 arg0_paths.ody_linux_sandbox_exe.clone(),
                 loader_overrides,
             )
             .await?;
+            #[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+            {
+                let _ = (sandbox_cli, loader_overrides);
+                anyhow::bail!(
+                    "`ody sandbox` on Windows is not enabled: compile with --features windows-sandbox"
+                );
+            }
             #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
             {
                 let _ = loader_overrides;

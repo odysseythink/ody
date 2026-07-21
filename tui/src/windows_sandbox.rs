@@ -10,14 +10,14 @@ use crate::legacy_core::config::Config;
 use ody_config::types::WindowsSandboxModeToml;
 use ody_features::Feature;
 use ody_protocol::config_types::WindowsSandboxLevel;
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows"))]
 use ody_protocol::models::PermissionProfile;
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows"))]
 use ody_utils_absolute_path::AbsolutePathBuf;
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows"))]
 use std::collections::HashMap;
 use std::path::Path;
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows"))]
 use std::path::PathBuf;
 
 pub(crate) fn level_from_config(config: &Config) -> WindowsSandboxLevel {
@@ -34,15 +34,20 @@ pub(crate) fn level_from_config(config: &Config) -> WindowsSandboxLevel {
     }
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 pub(crate) use ody_windows_sandbox::sandbox_setup_is_complete;
+
+#[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+pub(crate) fn sandbox_setup_is_complete(_ody_home: &Path) -> bool {
+    false
+}
 
 #[cfg(not(target_os = "windows"))]
 pub(crate) fn sandbox_setup_is_complete(_ody_home: &Path) -> bool {
     false
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 pub(crate) fn run_elevated_setup(
     permission_profile: &PermissionProfile,
     workspace_roots: &[AbsolutePathBuf],
@@ -66,7 +71,29 @@ pub(crate) fn run_elevated_setup(
     )
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+pub(crate) fn run_elevated_setup(
+    _permission_profile: &PermissionProfile,
+    _workspace_roots: &[AbsolutePathBuf],
+    _command_cwd: &Path,
+    _env_map: &HashMap<String, String>,
+    _ody_home: &Path,
+) -> anyhow::Result<()> {
+    anyhow::bail!("elevated Windows sandbox setup is only available when the windows-sandbox feature is enabled")
+}
+
+#[cfg(not(target_os = "windows"))]
+pub(crate) fn run_elevated_setup(
+    _permission_profile: &PermissionProfile,
+    _workspace_roots: &[AbsolutePathBuf],
+    _command_cwd: &Path,
+    _env_map: &HashMap<String, String>,
+    _ody_home: &Path,
+) -> anyhow::Result<()> {
+    anyhow::bail!("elevated Windows sandbox setup is only supported on Windows")
+}
+
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 pub(crate) fn elevated_setup_failure_details(err: &anyhow::Error) -> Option<(String, String)> {
     let failure = ody_windows_sandbox::extract_setup_failure(err)?;
     Some((
@@ -75,7 +102,17 @@ pub(crate) fn elevated_setup_failure_details(err: &anyhow::Error) -> Option<(Str
     ))
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+pub(crate) fn elevated_setup_failure_details(_err: &anyhow::Error) -> Option<(String, String)> {
+    None
+}
+
+#[cfg(not(target_os = "windows"))]
+pub(crate) fn elevated_setup_failure_details(_err: &anyhow::Error) -> Option<(String, String)> {
+    None
+}
+
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 pub(crate) fn elevated_setup_failure_metric_name(err: &anyhow::Error) -> &'static str {
     if ody_windows_sandbox::extract_setup_failure(err).is_some_and(|failure| {
         matches!(
@@ -89,7 +126,17 @@ pub(crate) fn elevated_setup_failure_metric_name(err: &anyhow::Error) -> &'stati
     }
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+pub(crate) fn elevated_setup_failure_metric_name(_err: &anyhow::Error) -> &'static str {
+    panic!("elevated_setup_failure_metric_name is only supported when the windows-sandbox feature is enabled")
+}
+
+#[cfg(not(target_os = "windows"))]
+pub(crate) fn elevated_setup_failure_metric_name(_err: &anyhow::Error) -> &'static str {
+    panic!("elevated_setup_failure_metric_name is only supported on Windows")
+}
+
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 pub(crate) fn grant_read_root_non_elevated(
     permission_profile: &PermissionProfile,
     workspace_roots: &[AbsolutePathBuf],
@@ -119,4 +166,28 @@ pub(crate) fn grant_read_root_non_elevated(
         /*proxy_enforced*/ false,
     )?;
     Ok(canonical_root)
+}
+
+#[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+pub(crate) fn grant_read_root_non_elevated(
+    _permission_profile: &PermissionProfile,
+    _workspace_roots: &[AbsolutePathBuf],
+    _command_cwd: &Path,
+    _env_map: &HashMap<String, String>,
+    _ody_home: &Path,
+    _read_root: &Path,
+) -> anyhow::Result<PathBuf> {
+    anyhow::bail!("Windows sandbox read-root grants are only available when the windows-sandbox feature is enabled")
+}
+
+#[cfg(not(target_os = "windows"))]
+pub(crate) fn grant_read_root_non_elevated(
+    _permission_profile: &PermissionProfile,
+    _workspace_roots: &[AbsolutePathBuf],
+    _command_cwd: &Path,
+    _env_map: &HashMap<String, String>,
+    _ody_home: &Path,
+    _read_root: &Path,
+) -> anyhow::Result<PathBuf> {
+    anyhow::bail!("Windows sandbox read-root grants are only supported on Windows")
 }

@@ -459,11 +459,16 @@ impl SandboxManager {
         &self,
         request: SandboxDirectSpawnTransformRequest<'_>,
     ) -> Result<SandboxExecRequest, SandboxTransformError> {
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
         {
             let ody_home = ody_utils_home_dir::find_ody_home()
                 .map_err(|err| SandboxTransformError::WindowsSandboxPreparation(err.to_string()))?;
             self.transform_for_direct_spawn_with_ody_home(request, ody_home.as_path())
+        }
+
+        #[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+        {
+            self.transform(request.transform)
         }
 
         #[cfg(not(target_os = "windows"))]
@@ -472,7 +477,7 @@ impl SandboxManager {
         }
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
     fn transform_for_direct_spawn_with_ody_home(
         &self,
         request: SandboxDirectSpawnTransformRequest<'_>,
@@ -491,7 +496,7 @@ impl SandboxManager {
     }
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 fn wrap_windows_sandbox_exec_request_for_direct_spawn(
     request: &mut SandboxExecRequest,
     workspace_roots: &[AbsolutePathBuf],

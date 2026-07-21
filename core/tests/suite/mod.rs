@@ -131,5 +131,5 @@ mod view_image;
 mod web_search;
 mod websocket_fallback;
 mod window_headers;
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 mod windows_sandbox;

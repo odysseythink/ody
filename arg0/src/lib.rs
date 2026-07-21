@@ -9,7 +9,7 @@ use ody_exec_server::ODY_FS_HELPER_ARG1;
 use ody_install_context::InstallContext;
 use ody_sandboxing::landlock::ODY_LINUX_SANDBOX_ARG0;
 use ody_utils_home_dir::find_ody_home;
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 use ody_windows_sandbox::ODY_WINDOWS_SANDBOX_ARG1;
 #[cfg(unix)]
 use std::os::unix::fs::symlink;
@@ -101,7 +101,7 @@ pub fn arg0_dispatch() -> Option<Arg0PathEntryGuard> {
     if argv1 == ODY_FS_HELPER_ARG1 {
         ody_exec_server::run_fs_helper_main();
     }
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
     if argv1 == ODY_WINDOWS_SANDBOX_ARG1 {
         ody_windows_sandbox::run_windows_sandbox_wrapper_main();
     }

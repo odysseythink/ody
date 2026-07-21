@@ -213,7 +213,7 @@ async fn run_command_under_sandbox(
     // remaining cwd-dependent policy resolution. `:workspace_roots` entries in
     // the effective profile have already been materialized from config roots.
     let sandbox_policy_cwd = cwd.clone();
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
     let workspace_roots = config.effective_workspace_roots();
 
     let env = create_env(
@@ -223,9 +223,13 @@ async fn run_command_under_sandbox(
 
     // Special-case Windows sandbox: execute and exit the process to emulate inherited stdio.
     if let SandboxType::Windows = sandbox_type {
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
         {
             run_command_under_windows_session(&config, command, cwd, workspace_roots, env).await;
+        }
+        #[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+        {
+            anyhow::bail!("Windows sandbox is not enabled: compile with --features windows-sandbox");
         }
         #[cfg(not(target_os = "windows"))]
         {
@@ -362,6 +366,7 @@ async fn run_command_under_sandbox(
 }
 
 #[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 async fn run_command_under_windows_session(
     config: &Config,
     command: Vec<String>,

@@ -81,6 +81,8 @@ pub fn resolve_windows_restricted_token_filesystem_overrides(
     sandbox_policy_cwd: &AbsolutePathBuf,
     windows_sandbox_level: WindowsSandboxLevel,
 ) -> std::result::Result<Option<WindowsSandboxFilesystemOverrides>, String> {
+    #[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
+    {
     if sandbox != SandboxType::WindowsRestrictedToken
         || windows_sandbox_level == WindowsSandboxLevel::Elevated
     {
@@ -209,6 +211,13 @@ pub fn resolve_windows_restricted_token_filesystem_overrides(
             .map(|path| AbsolutePathBuf::from_absolute_path(path).map_err(|err| err.to_string()))
             .collect::<std::result::Result<_, _>>()?,
     }))
+    }
+
+    #[cfg(not(all(target_os = "windows", feature = "windows-sandbox")))]
+    {
+        let _ = (sandbox, permission_profile, sandbox_policy_cwd, windows_sandbox_level);
+        Ok(None)
+    }
 }
 
 pub fn resolve_windows_elevated_filesystem_overrides(
@@ -217,6 +226,8 @@ pub fn resolve_windows_elevated_filesystem_overrides(
     sandbox_policy_cwd: &AbsolutePathBuf,
     use_windows_elevated_backend: bool,
 ) -> std::result::Result<Option<WindowsSandboxFilesystemOverrides>, String> {
+    #[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
+    {
     if sandbox != SandboxType::WindowsRestrictedToken || !use_windows_elevated_backend {
         return Ok(None);
     }
@@ -338,6 +349,18 @@ pub fn resolve_windows_elevated_filesystem_overrides(
         additional_deny_read_paths,
         additional_deny_write_paths,
     }))
+    }
+
+    #[cfg(not(all(target_os = "windows", feature = "windows-sandbox")))]
+    {
+        let _ = (
+            sandbox,
+            permission_profile,
+            sandbox_policy_cwd,
+            use_windows_elevated_backend,
+        );
+        Ok(None)
+    }
 }
 
 fn normalize_windows_override_path(path: &Path) -> std::result::Result<PathBuf, String> {

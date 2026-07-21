@@ -20,6 +20,11 @@ workspace = true
 # runtime (off by default so local dev builds skip compiling/linking V8).
 # Code-mode-executing tests are gated behind this feature.
 v8 = ["ody-code-mode/v8"]
+# Enables the Windows restricted-token/elevated sandbox backend. Off by default
+# so local dev builds skip compiling/linking the Windows sandbox crate; release
+# / packaging builds for Windows must pass `--features windows-sandbox` for
+# Windows sandbox execution to work at runtime.
+windows-sandbox = ["dep:ody-windows-sandbox"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -83,7 +88,7 @@ ody-utils-pty = { workspace = true }
 ody-utils-string = { workspace = true }
 ody-utils-stream-parser = { workspace = true }
 ody-utils-template = { workspace = true }
-ody-windows-sandbox = { package = "ody-windows-sandbox", path = "../windows-sandbox-rs" }
+ody-windows-sandbox = { package = "ody-windows-sandbox", path = "../windows-sandbox-rs", optional = true }
 csv = { workspace = true }
 dirs = { workspace = true }
 dunce = { workspace = true }

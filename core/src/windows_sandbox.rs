@@ -102,9 +102,14 @@ pub fn legacy_windows_sandbox_mode_from_entries(
     }
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 pub fn sandbox_setup_is_complete(ody_home: &Path) -> bool {
     ody_windows_sandbox::sandbox_setup_is_complete(ody_home)
+}
+
+#[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+pub fn sandbox_setup_is_complete(_ody_home: &Path) -> bool {
+    false
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -112,7 +117,7 @@ pub fn sandbox_setup_is_complete(_ody_home: &Path) -> bool {
     false
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 pub fn elevated_setup_failure_details(err: &anyhow::Error) -> Option<(String, String)> {
     let failure = ody_windows_sandbox::extract_setup_failure(err)?;
     let code = failure.code.as_str().to_string();
@@ -120,12 +125,17 @@ pub fn elevated_setup_failure_details(err: &anyhow::Error) -> Option<(String, St
     Some((code, message))
 }
 
+#[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+pub fn elevated_setup_failure_details(_err: &anyhow::Error) -> Option<(String, String)> {
+    None
+}
+
 #[cfg(not(target_os = "windows"))]
 pub fn elevated_setup_failure_details(_err: &anyhow::Error) -> Option<(String, String)> {
     None
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 pub fn elevated_setup_failure_metric_name(err: &anyhow::Error) -> &'static str {
     if ody_windows_sandbox::extract_setup_failure(err).is_some_and(|failure| {
         matches!(
@@ -139,12 +149,17 @@ pub fn elevated_setup_failure_metric_name(err: &anyhow::Error) -> &'static str {
     }
 }
 
+#[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+pub fn elevated_setup_failure_metric_name(_err: &anyhow::Error) -> &'static str {
+    panic!("elevated_setup_failure_metric_name is only supported when the windows-sandbox feature is enabled")
+}
+
 #[cfg(not(target_os = "windows"))]
 pub fn elevated_setup_failure_metric_name(_err: &anyhow::Error) -> &'static str {
     panic!("elevated_setup_failure_metric_name is only supported on Windows")
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 pub fn run_elevated_setup(
     permission_profile: &PermissionProfile,
     workspace_roots: &[AbsolutePathBuf],
@@ -169,9 +184,25 @@ pub fn run_elevated_setup(
     )
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 pub fn run_elevated_provisioning_setup(ody_home: &Path, real_user: &str) -> anyhow::Result<()> {
     ody_windows_sandbox::run_elevated_provisioning_setup(ody_home, real_user)
+}
+
+#[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+pub fn run_elevated_setup(
+    _permission_profile: &PermissionProfile,
+    _workspace_roots: &[AbsolutePathBuf],
+    _command_cwd: &Path,
+    _env_map: &HashMap<String, String>,
+    _ody_home: &Path,
+) -> anyhow::Result<()> {
+    anyhow::bail!("elevated Windows sandbox setup is only available when the windows-sandbox feature is enabled")
+}
+
+#[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+pub fn run_elevated_provisioning_setup(_ody_home: &Path, _real_user: &str) -> anyhow::Result<()> {
+    anyhow::bail!("elevated Windows sandbox setup is only available when the windows-sandbox feature is enabled")
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -190,7 +221,7 @@ pub fn run_elevated_provisioning_setup(_ody_home: &Path, _real_user: &str) -> an
     anyhow::bail!("elevated Windows sandbox setup is only supported on Windows")
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 pub fn run_legacy_setup_preflight(
     permission_profile: &PermissionProfile,
     workspace_roots: &[AbsolutePathBuf],
@@ -207,7 +238,7 @@ pub fn run_legacy_setup_preflight(
     )
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 pub fn run_setup_refresh_with_extra_read_roots(
     permission_profile: &PermissionProfile,
     workspace_roots: &[AbsolutePathBuf],
@@ -225,6 +256,29 @@ pub fn run_setup_refresh_with_extra_read_roots(
         extra_read_roots,
         /*proxy_enforced*/ false,
     )
+}
+
+#[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+pub fn run_legacy_setup_preflight(
+    _permission_profile: &PermissionProfile,
+    _workspace_roots: &[AbsolutePathBuf],
+    _command_cwd: &Path,
+    _env_map: &HashMap<String, String>,
+    _ody_home: &Path,
+) -> anyhow::Result<()> {
+    anyhow::bail!("legacy Windows sandbox setup is only available when the windows-sandbox feature is enabled")
+}
+
+#[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+pub fn run_setup_refresh_with_extra_read_roots(
+    _permission_profile: &PermissionProfile,
+    _workspace_roots: &[AbsolutePathBuf],
+    _command_cwd: &Path,
+    _env_map: &HashMap<String, String>,
+    _ody_home: &Path,
+    _extra_read_roots: Vec<PathBuf>,
+) -> anyhow::Result<()> {
+    anyhow::bail!("Windows sandbox read-root refresh is only available when the windows-sandbox feature is enabled")
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -393,7 +447,7 @@ fn emit_windows_sandbox_setup_failure_metrics(
     );
 
     if matches!(mode, WindowsSandboxSetupMode::Elevated) {
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
         {
             let mut failure_tags: Vec<(&str, &str)> = vec![("originator", originator_tag)];
             let mut code_tag: Option<String> = None;
@@ -412,6 +466,14 @@ fn emit_windows_sandbox_setup_failure_metrics(
                 elevated_setup_failure_metric_name(_err),
                 /*inc*/ 1,
                 &failure_tags,
+            );
+        }
+        #[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+        {
+            let _ = metrics.counter(
+                "ody.windows_sandbox.elevated_setup_failure",
+                /*inc*/ 1,
+                &[("originator", originator_tag), ("code", "not_compiled")],
             );
         }
     } else {

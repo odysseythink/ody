@@ -280,7 +280,7 @@ fn auto_review_rollout_filename(thread_id: ThreadId) -> String {
     format!("auto-review-rollout-{thread_id}.jsonl")
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 fn windows_sandbox_log_attachment(ody_home: &Path) -> Option<FeedbackAttachmentPath> {
     let sandbox_log_path = ody_windows_sandbox::current_log_file_path_for_ody_home(ody_home);
     sandbox_log_path
@@ -291,12 +291,17 @@ fn windows_sandbox_log_attachment(ody_home: &Path) -> Option<FeedbackAttachmentP
         })
 }
 
+#[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+fn windows_sandbox_log_attachment(_ody_home: &Path) -> Option<FeedbackAttachmentPath> {
+    None
+}
+
 #[cfg(not(target_os = "windows"))]
 fn windows_sandbox_log_attachment(_ody_home: &Path) -> Option<FeedbackAttachmentPath> {
     None
 }
 
-#[cfg(all(test, target_os = "windows"))]
+#[cfg(all(test, target_os = "windows", feature = "windows-sandbox"))]
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;

@@ -26,7 +26,7 @@ impl ChatWidget {
             && !crate::windows_sandbox::sandbox_setup_is_complete(self.config.ody_home.as_path())
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
     pub(crate) fn world_writable_warning_details(&self) -> Option<(Vec<String>, usize, bool)> {
         if self
             .config
@@ -58,6 +58,12 @@ impl ChatWidget {
             Ok(_) => None,
             Err(_) => Some((Vec::new(), 0, true)),
         }
+    }
+
+    #[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+    #[allow(dead_code)]
+    pub(crate) fn world_writable_warning_details(&self) -> Option<(Vec<String>, usize, bool)> {
+        None
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -297,7 +303,7 @@ impl ChatWidget {
             description: None,
             actions: vec![Box::new(move |tx| {
                 quit_otel.counter(
-                    "ody.windows_sandbox.elevated_prompt_quit",
+                    "ody.windows_sandbox.fallback_prompt_quit",
                     /*inc*/ 1,
                     &[],
                 );

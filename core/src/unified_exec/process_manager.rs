@@ -975,7 +975,14 @@ impl UnifiedExecProcessManager {
     ) -> Result<UnifiedExecProcess, UnifiedExecError> {
         let inherited_fds = spawn_lifecycle.inherited_fds();
 
-        #[cfg(target_os = "windows")]
+        #[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+        if request.sandbox == ody_sandboxing::SandboxType::WindowsRestrictedToken {
+            return Err(UnifiedExecError::create_process(
+                "windows sandbox is not enabled: compile with --features windows-sandbox".to_string(),
+            ));
+        }
+
+        #[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
         if request.sandbox == ody_sandboxing::SandboxType::WindowsRestrictedToken {
             // TODO(anp): Keep PathUri through the Windows sandbox launch boundary.
             let native_cwd =

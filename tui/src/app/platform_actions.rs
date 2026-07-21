@@ -13,7 +13,7 @@ pub(super) struct WindowsSandboxState {
 }
 
 impl App {
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
     pub(super) fn spawn_world_writable_scan(
         cwd: AbsolutePathBuf,
         workspace_roots: Vec<AbsolutePathBuf>,
@@ -46,9 +46,20 @@ impl App {
             }
         });
     }
+
+    #[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+    pub(super) fn spawn_world_writable_scan(
+        _cwd: AbsolutePathBuf,
+        _workspace_roots: Vec<AbsolutePathBuf>,
+        _env_map: std::collections::HashMap<String, String>,
+        _logs_base_dir: AbsolutePathBuf,
+        _permission_profile: PermissionProfile,
+        _tx: AppEventSender,
+    ) {
+    }
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 fn send_world_writable_scan_failed(tx: &AppEventSender) {
     tx.send(AppEvent::OpenWorldWritableWarningConfirmation {
         preset: None,
@@ -57,6 +68,10 @@ fn send_world_writable_scan_failed(tx: &AppEventSender) {
         extra_count: 0usize,
         failed_scan: true,
     });
+}
+
+#[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+fn send_world_writable_scan_failed(_tx: &AppEventSender) {
 }
 
 pub(super) fn side_return_shortcut_matches(key_event: KeyEvent) -> bool {

@@ -12,12 +12,19 @@ doctest = false
 [lints]
 workspace = true
 
+[features]
+# Enables the Windows restricted-token/elevated sandbox backend. Off by default
+# so local dev builds skip compiling/linking the Windows sandbox crate; release
+# / packaging builds for Windows must pass `--features windows-sandbox` for
+# Windows sandbox execution to work at runtime.
+windows-sandbox = ["dep:ody-windows-sandbox"]
+
 [dependencies]
 ody-network-proxy = { workspace = true }
 ody-protocol = { workspace = true }
 ody-utils-absolute-path = { workspace = true }
 ody-utils-path-uri = { workspace = true }
-ody-windows-sandbox = { workspace = true }
+ody-windows-sandbox = { workspace = true, optional = true }
 dunce = { workspace = true }
 libc = { workspace = true }
 serde_json = { workspace = true }
