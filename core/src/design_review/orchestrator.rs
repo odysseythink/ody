@@ -10,7 +10,9 @@ use ody_analytics::DesignReviewFailureReason;
 use ody_analytics::DesignReviewStartedInput;
 use ody_analytics::now_unix_millis;
 use ody_protocol::model_metadata::ReasoningEffort;
+use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::ReviewOutputEvent;
+use ody_protocol::protocol::WarningEvent;
 use ody_protocol::user_input::UserInput;
 use tokio_util::sync::CancellationToken;
 
@@ -83,6 +85,27 @@ impl DesignReviewOrchestrator {
         match review_result {
             Ok(Some(review_output)) => {
                 let output = to_design_review_output(review_output);
+                // Parsing produced only the give-up fallback (output unparseable
+                // even after salvage — usually a response cut off mid-JSON). Make
+                // that visible instead of silently finalizing with no findings:
+                // the fallback is Speculative, so it will not reach the sign-off
+                // gate, and without this the user would see neither findings nor
+                // any signal that the review did not structure.
+                if crate::design_review::prompt::review_was_unstructured(&output) {
+                    let message = if turn
+                        .config
+                        .language
+                        .as_deref()
+                        .is_some_and(|l| l.to_ascii_lowercase().starts_with("zh"))
+                    {
+                        "对抗性评审的输出无法结构化（可能被截断），本轮findings已跳过签核。".to_string()
+                    } else {
+                        "Adversarial review output could not be structured (likely truncated); its findings were skipped for sign-off this round.".to_string()
+                    };
+                    session
+                        .send_event(turn.as_ref(), EventMsg::Warning(WarningEvent { message }))
+                        .await;
+                }
                 emit_completed(
                     session,
                     &session.services.analytics_events_client,
