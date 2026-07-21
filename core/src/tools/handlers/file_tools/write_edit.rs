@@ -22,19 +22,46 @@ pub(crate) const MAX_FILE_SIZE_FOR_DIFF: usize = 1024 * 1024;
 
 /// Resolves the local path a write/edit tool should operate on.
 ///
-/// Write/edit tools are confined to the workspace; absolute paths outside the
-/// working directory are rejected.
+/// Write/edit tools are confined to the workspace by default. Absolute paths
+/// outside the working directory are rejected unless they point to an
+/// Ody-managed skill resource (project skill assets or system skills under
+/// $ODY_HOME/skills/.system).
 pub(crate) async fn resolve_write_path(
     turn: &TurnContext,
     environment_id: Option<&str>,
     path: &str,
 ) -> Result<AbsolutePathBuf, FunctionCallError> {
-    local_search_root(
+    // Try the normal workspace-relative resolution first.
+    if let Ok(resolved) = local_search_root(
         turn,
         environment_id,
         Some(path),
         PathAccessMode::WorkspaceRelativeOnly,
-    )
+    ) {
+        return Ok(resolved);
+    }
+
+    // If that fails, allow absolute paths that target Ody-managed skill
+    // directories to resolve outside the workspace.
+    let resolved = local_search_root(
+        turn,
+        environment_id,
+        Some(path),
+        PathAccessMode::AbsoluteOutsideAllowed,
+    )?;
+    let cwd = resolve_write_cwd(turn, environment_id).await?;
+    if is_ody_managed_skill_path(&resolved, turn, &cwd) {
+        Ok(resolved)
+    } else {
+        // Re-run the original workspace-only resolution to produce the
+        // correct "escapes the working directory" error.
+        local_search_root(
+            turn,
+            environment_id,
+            Some(path),
+            PathAccessMode::WorkspaceRelativeOnly,
+        )
+    }
 }
 
 /// Returns the absolute cwd of the selected environment, or an error if the
@@ -91,6 +118,9 @@ pub(crate) async fn ensure_write_allowed(
     );
 
     if !final_policy.can_write_path_with_cwd(path.as_path(), cwd.as_path()) {
+        if is_ody_managed_skill_path(path, turn, cwd) {
+            return Ok(final_policy);
+        }
         return Err(FunctionCallError::RespondToModel(format!(
             "write to `{}` is not permitted by the current sandbox policy. Use `apply_patch` or \
              `shell_command` if you need to write outside the allowed paths.",
@@ -99,6 +129,32 @@ pub(crate) async fn ensure_write_allowed(
     }
 
     Ok(final_policy)
+}
+
+/// Checks whether `path` is an Ody-managed skill resource that should be writable
+/// even when it falls outside the workspace root.
+///
+/// This covers:
+/// - project-embedded / builtin skill assets under `<cwd>/skills/src/assets`
+/// - user-scope system skills installed under `<ody_home>/skills/.system`
+fn is_ody_managed_skill_path(
+    path: &AbsolutePathBuf,
+    turn: &TurnContext,
+    cwd: &AbsolutePathBuf,
+) -> bool {
+    // 1. Project-local skill assets (embedded or builtin).
+    let project_skills_root = cwd.join("skills").join("src").join("assets");
+    if path.starts_with(project_skills_root.as_path()) {
+        return true;
+    }
+
+    // 2. User-level system skills installed under $ODY_HOME/skills/.system.
+    let system_skills_root = turn.config.ody_home.join("skills").join(".system");
+    if path.starts_with(system_skills_root.as_path()) {
+        return true;
+    }
+
+    false
 }
 
 /// Writes `contents` to `path` atomically using a temporary file and rename.

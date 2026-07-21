@@ -302,5 +302,180 @@ mod tests {
         assert_eq!(content, "first
 second
 ");
+    #[tokio::test]
+    async fn write_file_to_project_skill_assets_with_absolute_path() {
+        let (session, mut turn, _rx) = make_session_and_context_with_rx().await;
+        let workspace = tempfile::tempdir().expect("tempdir");
+        set_cwd_to_temp(&mut turn, workspace.path());
+
+        let assets_dir = workspace.path().join("skills").join("src").join("assets");
+        std::fs::create_dir_all(&assets_dir).expect("create assets dir");
+        let target = assets_dir.join("systematic-debugging").join("SKILL.md");
+
+        let invocation = invocation_for_write(
+            session,
+            turn,
+            "write-project-skill",
+            json!({
+                "path": target.to_string_lossy().to_string(),
+                "content": "updated project skill
+"
+            }),
+        )
+        .await;
+        let handler = WriteFileHandler::new(FileToolOptions::default());
+        handler.handle(invocation).await.expect("write to project skill assets succeeds");
+
+        let content = std::fs::read_to_string(&target).expect("read");
+        assert_eq!(content, "updated project skill
+");
+    }
+
+    #[tokio::test]
+    async fn write_file_to_system_skill_directory_outside_workspace() {
+        let (session, mut turn, _rx) = make_session_and_context_with_rx().await;
+        let workspace = tempfile::tempdir().expect("tempdir");
+        set_cwd_to_temp(&mut turn, workspace.path());
+
+        let ody_home = turn.config.ody_home.as_path();
+        let system_skill_dir = ody_home.join("skills").join(".system");
+        let target = system_skill_dir.join("systematic-debugging").join("SKILL.md");
+        std::fs::create_dir_all(target.parent().unwrap()).expect("create system skill dir");
+
+        let invocation = invocation_for_write(
+            session,
+            turn,
+            "write-system-skill",
+            json!({
+                "path": target.to_string_lossy().to_string(),
+                "content": "updated system skill
+"
+            }),
+        )
+        .await;
+        let handler = WriteFileHandler::new(FileToolOptions::default());
+        handler.handle(invocation).await.expect("write to system skill dir succeeds");
+
+        let content = std::fs::read_to_string(&target).expect("read");
+        assert_eq!(content, "updated system skill
+");
+    }
+
+    #[tokio::test]
+    async fn write_file_outside_workspace_still_rejected_for_non_skill_paths() {
+        let (session, mut turn, _rx) = make_session_and_context_with_rx().await;
+        let workspace = tempfile::tempdir().expect("tempdir");
+        let outside = tempfile::tempdir().expect("tempdir");
+        set_cwd_to_temp(&mut turn, workspace.path());
+
+        let target = outside.path().join("evil.txt");
+
+        let invocation = invocation_for_write(
+            session,
+            turn,
+            "write-outside",
+            json!({
+                "path": target.to_string_lossy().to_string(),
+                "content": "should not write
+"
+            }),
+        )
+        .await;
+        let handler = WriteFileHandler::new(FileToolOptions::default());
+        let result = handler.handle(invocation).await;
+        assert!(result.is_err(), "expected write outside workspace to fail");
+        assert!(
+            !target.exists(),
+            "file outside workspace should not have been created"
+        );
+    }
+    }
+
+    #[tokio::test]
+    async fn write_file_to_project_skill_assets_with_absolute_path() {
+        let (session, mut turn, _rx) = make_session_and_context_with_rx().await;
+        let workspace = tempfile::tempdir().expect("tempdir");
+        set_cwd_to_temp(&mut turn, workspace.path());
+
+        let assets_dir = workspace.path().join("skills").join("src").join("assets");
+        std::fs::create_dir_all(&assets_dir).expect("create assets dir");
+        let target = assets_dir.join("systematic-debugging").join("SKILL.md");
+
+        let invocation = invocation_for_write(
+            session,
+            turn,
+            "write-project-skill",
+            json!({
+                "path": target.to_string_lossy().to_string(),
+                "content": "updated project skill
+"
+            }),
+        )
+        .await;
+        let handler = WriteFileHandler::new(FileToolOptions::default());
+        handler.handle(invocation).await.expect("write to project skill assets succeeds");
+
+        let content = std::fs::read_to_string(&target).expect("read");
+        assert_eq!(content, "updated project skill
+");
+    }
+
+    #[tokio::test]
+    async fn write_file_to_system_skill_directory_outside_workspace() {
+        let (session, mut turn, _rx) = make_session_and_context_with_rx().await;
+        let workspace = tempfile::tempdir().expect("tempdir");
+        set_cwd_to_temp(&mut turn, workspace.path());
+
+        let ody_home = turn.config.ody_home.as_path();
+        let system_skill_dir = ody_home.join("skills").join(".system");
+        let target = system_skill_dir.join("systematic-debugging").join("SKILL.md");
+        std::fs::create_dir_all(target.parent().unwrap()).expect("create system skill dir");
+
+        let invocation = invocation_for_write(
+            session,
+            turn,
+            "write-system-skill",
+            json!({
+                "path": target.to_string_lossy().to_string(),
+                "content": "updated system skill
+"
+            }),
+        )
+        .await;
+        let handler = WriteFileHandler::new(FileToolOptions::default());
+        handler.handle(invocation).await.expect("write to system skill dir succeeds");
+
+        let content = std::fs::read_to_string(&target).expect("read");
+        assert_eq!(content, "updated system skill
+");
+    }
+
+    #[tokio::test]
+    async fn write_file_outside_workspace_still_rejected_for_non_skill_paths() {
+        let (session, mut turn, _rx) = make_session_and_context_with_rx().await;
+        let workspace = tempfile::tempdir().expect("tempdir");
+        let outside = tempfile::tempdir().expect("tempdir");
+        set_cwd_to_temp(&mut turn, workspace.path());
+
+        let target = outside.path().join("evil.txt");
+
+        let invocation = invocation_for_write(
+            session,
+            turn,
+            "write-outside",
+            json!({
+                "path": target.to_string_lossy().to_string(),
+                "content": "should not write
+"
+            }),
+        )
+        .await;
+        let handler = WriteFileHandler::new(FileToolOptions::default());
+        let result = handler.handle(invocation).await;
+        assert!(result.is_err(), "expected write outside workspace to fail");
+        assert!(
+            !target.exists(),
+            "file outside workspace should not have been created"
+        );
     }
 }

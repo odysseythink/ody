@@ -327,4 +327,36 @@ b
             "expected 'could not find' error"
         );
     }
+
+    #[tokio::test]
+    async fn edit_file_to_system_skill_directory_outside_workspace() {
+        let (session, mut turn, _rx) = make_session_and_context_with_rx().await;
+        let workspace = tempfile::tempdir().expect("tempdir");
+        set_cwd_to_temp(&mut turn, workspace.path());
+
+        let ody_home = turn.config.ody_home.as_path();
+        let system_skill_dir = ody_home.join("skills").join(".system");
+        let target = system_skill_dir.join("systematic-debugging").join("SKILL.md");
+        std::fs::create_dir_all(target.parent().unwrap()).expect("create system skill dir");
+        std::fs::write(&target, "old system skill
+").expect("write initial content");
+
+        let invocation = invocation_for_edit(
+            session,
+            turn,
+            "edit-system-skill",
+            json!({
+                "path": target.to_string_lossy().to_string(),
+                "old_string": "old system skill",
+                "new_string": "updated system skill"
+            }),
+        )
+        .await;
+        let handler = EditFileHandler::new(FileToolOptions::default());
+        handler.handle(invocation).await.expect("edit to system skill dir succeeds");
+
+        let content = std::fs::read_to_string(&target).expect("read");
+        assert_eq!(content, "updated system skill
+");
+    }
 }
