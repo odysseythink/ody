@@ -88,9 +88,9 @@ pub fn create_read_file_tool(options: FileToolOptions) -> ToolSpec {
         description: format!(
             "Read a file from the filesystem, returned as numbered lines. Prefer this over shell \
              `cat`/`sed`: it caps output at {MAX_LINES} lines, {MAX_LINE_LENGTH} characters per \
-             line, and {} KiB, so a large file cannot flood the conversation. Use `offset`/`limit` \
-             to read only the region you care about — locate it with `grep` first.",
-            MAX_BYTES / 1024
+             line, and {} MiB, so a large file cannot flood the conversation. Use `offset`/`limit` \
+             to read only the region you care about — locate it with `grep` first. For JSON or JSONL files, prefer `jq` for filtering, counting, or paging.",
+            MAX_BYTES / 1024 / 1024
         ),
         strict: false,
         defer_loading: None,
@@ -201,7 +201,7 @@ pub fn create_grep_tool(options: FileToolOptions) -> ToolSpec {
             "Search file contents with a regular expression. Prefer this over shelling out to `rg`: \
              it returns matching FILE PATHS by default instead of every matching line, which is what \
              keeps a broad search from flooding the conversation. Typical flow: `grep` to find the \
-             files, then `read_file` on the few that matter. Respects .gitignore."
+             files, then `read_file` on the few that matter. Respects .gitignore. For JSON or JSONL files, prefer `jq` (`filter` or `count`) over text search; it understands structure and can page outside the workspace."
                 .to_string(),
         strict: false,
         defer_loading: None,
@@ -568,7 +568,7 @@ mod tests {
     #[test]
     fn read_file_states_its_caps() {
         let json = spec_json(&create_read_file_tool(FileToolOptions::default()));
-        for expected in ["1000", "2000", "100 KiB"] {
+        for expected in ["1000", "2000", "100 MiB"] {
             assert!(
                 json.contains(expected),
                 "read_file must state its {expected} cap so the model pages instead of dumping: {json}"
@@ -612,6 +612,24 @@ mod tests {
                 "jq description should include concrete example filter `{example}`: {json}"
             );
         }
+    }
+
+    #[test]
+    fn read_file_prefers_jq_for_json_files() {
+        let json = spec_json(&create_read_file_tool(FileToolOptions::default()));
+        assert!(
+            json.contains("For JSON or JSONL files, prefer `jq`"),
+            "read_file description should guide models to jq for JSON/JSONL: {json}"
+        );
+    }
+
+    #[test]
+    fn grep_prefers_jq_for_json_files() {
+        let json = spec_json(&create_grep_tool(FileToolOptions::default()));
+        assert!(
+            json.contains("For JSON or JSONL files, prefer `jq`"),
+            "grep description should guide models to jq for JSON/JSONL: {json}"
+        );
     }
 
     #[test]
