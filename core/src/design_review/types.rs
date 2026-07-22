@@ -9,6 +9,11 @@ use std::fmt;
 pub(crate) struct DesignReviewRequest {
     pub design_markdown: String,
     pub review_model: String,
+    /// Risks the user already ACCEPTED or DEFERRED in earlier rounds of this same
+    /// design (the sign-off-seen fingerprints, `F:`/`A:`-prefixed). Fed back into
+    /// the reviewer prompt so a stateless re-review stops re-raising them and the
+    /// finding count can actually fall across rounds. Empty on the first pass.
+    pub accepted_risks: Vec<String>,
 }
 
 /// Structured output of a design review.
@@ -27,6 +32,35 @@ pub(crate) struct DesignReviewFinding {
     pub detail: String,
     pub location: Option<String>,
     pub suggested_fix: Option<String>,
+}
+
+impl DesignReviewFinding {
+    /// Cross-round identity of a finding, `F:`-namespaced to match the escalation
+    /// gate's `SignoffItem::Finding` fingerprint. A finding whose fingerprint is in
+    /// the session's sign-off-seen set names a risk the user already accepted or
+    /// deferred, so the appendix can mark it "carried over" instead of re-listing
+    /// it as new.
+    pub(crate) fn fingerprint(&self) -> String {
+        format!("F:{}", normalize_fingerprint(&self.title))
+    }
+}
+
+/// Collapse case and internal whitespace so trivially-different renderings of the
+/// same title/text hash to one key. Shared by the escalation sign-off gate and
+/// the review appendix so both dedup against the same identity.
+pub(crate) fn normalize_fingerprint(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
+}
+
+/// The human-readable risk text behind a sign-off fingerprint: strip the `F:` /
+/// `A:` kind namespace so an already-accepted risk can be listed back to the
+/// reviewer as a plain title. A fingerprint without a recognized prefix is
+/// returned unchanged.
+pub(crate) fn fingerprint_readable(fingerprint: &str) -> &str {
+    fingerprint
+        .strip_prefix("F:")
+        .or_else(|| fingerprint.strip_prefix("A:"))
+        .unwrap_or(fingerprint)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]

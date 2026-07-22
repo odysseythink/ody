@@ -366,8 +366,16 @@ fn apply_plan_mode_gate_to_exec_requirement(
     command: &[String],
     cwd: &std::path::Path,
     plan_artifact: Option<&crate::plan_artifact::PlanArtifact>,
+    sandbox_available: bool,
 ) -> ExecApprovalRequirement {
-    match plan_mode_gate_for_exec(mode, enforcement, command, cwd, plan_artifact) {
+    match plan_mode_gate_for_exec(
+        mode,
+        enforcement,
+        command,
+        cwd,
+        plan_artifact,
+        sandbox_available,
+    ) {
         PlanGateDecision::Allow => requirement,
         PlanGateDecision::Deny { reason } => ExecApprovalRequirement::Forbidden { reason },
         PlanGateDecision::Ask { reason } => match requirement {
@@ -1176,6 +1184,14 @@ impl UnifiedExecProcessManager {
             .to_abs_path()
             .map(|p| p.to_path_buf())
             .unwrap_or_else(|_| std::path::PathBuf::from("."));
+        // Whether the host can actually confine an exec command in an OS sandbox
+        // on this platform/config. Gates the spike carve-out: no sandbox → a
+        // demo under `.ody-code/spikes/` is not auto-run (see plan_mode_gate_for_exec).
+        let sandbox_available = ody_sandboxing::get_platform_sandbox(
+            context.turn.windows_sandbox_level
+                != ody_protocol::config_types::WindowsSandboxLevel::Disabled,
+        )
+        .is_some();
         let exec_approval_requirement = apply_plan_mode_gate_to_exec_requirement(
             exec_approval_requirement,
             &context.turn.collaboration_mode,
@@ -1183,6 +1199,7 @@ impl UnifiedExecProcessManager {
             &request.command,
             &plan_scope_cwd,
             context.turn.plan_artifact.as_deref(),
+            sandbox_available,
         );
         let req = UnifiedExecToolRequest {
             command: request.command.clone(),

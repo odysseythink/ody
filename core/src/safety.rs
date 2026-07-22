@@ -104,7 +104,15 @@ pub fn plan_mode_gate_for_patch(
             .to_abs_path()
             .ok()
             .map(|abs_path| {
-                plan_artifact.is_some_and(|artifact| artifact.is_plan_file_path(abs_path.as_path()))
+                plan_artifact.is_some_and(|artifact| {
+                    // The plan/design index (and its split parts) is always writable;
+                    // so is anything under `.ody-code/spikes/`, the throwaway scratch
+                    // directory for minimal-experiment demos. Writing spike *files* is
+                    // harmless — it is *running* them that the exec gate guards on
+                    // sandbox availability.
+                    artifact.is_plan_file_path(abs_path.as_path())
+                        || artifact.is_spike_path(abs_path.as_path())
+                })
             })
             .unwrap_or(false)
     });
@@ -137,6 +145,23 @@ const DESIGN_MODE_EXEC_DENIED_REASON: &str = "Design mode is read-only. This com
 const DESIGN_MODE_EXEC_ASK_REASON: &str =
     "This command may modify files while in Design mode. Please confirm before running.";
 
+/// Denial reason when a spike (minimal-experiment) command runs from inside the
+/// `.ody-code/spikes/` directory but no OS sandbox is available (e.g. Windows
+/// with the sandbox disabled). Running the demo would be unsandboxed and could
+/// touch real resources, so the spike degrades to "mark, don't execute".
+const SPIKE_NO_SANDBOX_DENIED_REASON: &str = "Cannot auto-run this spike: no OS sandbox is available on this platform, so the demo would run unsandboxed and could touch real databases, files, or networks. Record the empirical-validation item in the design/plan instead and let the user run the demo, or switch to Default mode to run it deliberately.";
+const SPIKE_NO_SANDBOX_ASK_REASON: &str = "No OS sandbox is available, so running this spike demo will be unsandboxed and may touch real databases, files, or networks. Confirm before running.";
+
+/// Returns a human-readable no-sandbox spike-denial message that includes the
+/// rejected command and the appropriate mode's stable rejection marker.
+fn spike_no_sandbox_denied_message(mode: ModeKind, command: &str) -> String {
+    let marker = match mode {
+        ModeKind::Design => DESIGN_MODE_REJECTION_MARKER,
+        _ => PLAN_MODE_REJECTION_MARKER,
+    };
+    format!("{SPIKE_NO_SANDBOX_DENIED_REASON} {marker} (command: {command})")
+}
+
 /// Returns a human-readable Plan-mode exec-denial message that includes the
 /// rejected command and the stable rejection marker.
 pub fn plan_mode_exec_denied_message(command: &str) -> String {
@@ -165,12 +190,19 @@ enum PlanModeExecClassification {
 /// file or its `<stem>/*.md` part directory is allowed, so that split-plan
 /// part files can be created with `mkdir`/shell redirection when the model's
 /// tool set has no `apply_patch`-style file-write tool.
+///
+/// `sandbox_available` is whether the host can actually confine this command in
+/// an OS sandbox. It gates the spike carve-out: a command whose `cwd` is inside
+/// `.ody-code/spikes/` is a minimal-experiment demo, allowed to run when a
+/// sandbox will confine it, but denied (or asked) when none is available so the
+/// demo cannot reach real resources unconfined.
 pub fn plan_mode_gate_for_exec(
     mode: &CollaborationMode,
     enforcement: PlanEnforcement,
     command: &[String],
     cwd: &Path,
     plan_artifact: Option<&PlanArtifact>,
+    sandbox_available: bool,
 ) -> PlanGateDecision {
     if !is_read_only_session_mode(mode.mode) {
         return PlanGateDecision::Allow;
@@ -187,6 +219,26 @@ pub fn plan_mode_gate_for_exec(
             PLAN_MODE_EXEC_ASK_REASON.to_string(),
         ),
     };
+
+    // Spike carve-out: a command whose working directory is inside the
+    // `.ody-code/spikes/` scratch directory is a minimal-experiment demo. When a
+    // sandbox will confine it, allow it regardless of enforcement (the sandbox is
+    // the safety mechanism). When no sandbox is available, do not auto-run it —
+    // degrade to Deny/Ask so the demo cannot touch real resources unconfined.
+    if plan_artifact.is_some_and(|artifact| artifact.is_spike_path(cwd)) {
+        if sandbox_available {
+            return PlanGateDecision::Allow;
+        }
+        return match enforcement {
+            PlanEnforcement::Strict => PlanGateDecision::Deny {
+                reason: spike_no_sandbox_denied_message(mode.mode, &command_for_display),
+            },
+            PlanEnforcement::Ask => PlanGateDecision::Ask {
+                reason: SPIKE_NO_SANDBOX_ASK_REASON.to_string(),
+            },
+            PlanEnforcement::Advisory => PlanGateDecision::Allow,
+        };
+    }
 
     match classify_command_for_plan_mode(command) {
         PlanModeExecClassification::ReadOnly => PlanGateDecision::Allow,

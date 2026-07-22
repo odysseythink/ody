@@ -2,7 +2,6 @@
 name: executing-plans
 description: Use when you have a written implementation plan to execute in a separate session with review checkpoints
 namespace: core
-upstream: superpowers@v5.1.0
 ---
 
 # Executing Plans

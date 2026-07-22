@@ -348,6 +348,24 @@ impl PlanArtifact {
         ody_utils_path::paths_match_after_normalization(&stem_dir, target)
     }
 
+    /// The `.ody-code/spikes/` scratch directory: a gitignored sandbox where
+    /// Plan/Design mode may write and (when a real sandbox is available) run
+    /// minimal-experiment "spike" demos to validate load-bearing assumptions.
+    /// It is a sibling of `plans/` and `designs/`, shared across both modes.
+    pub fn spikes_dir(&self) -> PathBuf {
+        self.plans_base_dir.as_path().join("spikes")
+    }
+
+    /// Returns true if `target` is the spikes directory itself or any path
+    /// under it. Both paths are logically normalized (`.`/`..` resolved without
+    /// touching the filesystem) so a not-yet-created spike file still matches —
+    /// `paths_match_after_normalization` would fall back to raw equality here
+    /// because `canonicalize` fails on a path that does not exist yet.
+    pub fn is_spike_path(&self, target: &Path) -> bool {
+        let spikes = logical_normalize(&self.spikes_dir());
+        logical_normalize(target).starts_with(&spikes)
+    }
+
     pub fn restore_or_create(
         plans_base_dir: AbsolutePathBuf,
         thread_id: ody_protocol::ThreadId,
@@ -376,6 +394,24 @@ impl PlanArtifact {
             _ => Self::new_temp(plans_base_dir, thread_id, date),
         }
     }
+}
+
+/// Resolve `.`/`..` components without touching the filesystem, so that a path
+/// which does not exist yet (a spike file about to be written) can still be
+/// prefix-compared. Mirrors the normalization used by the Plan-mode exec gate
+/// in `safety.rs`.
+fn logical_normalize(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for comp in path.components() {
+        match comp {
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            std::path::Component::CurDir => {}
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
 }
 
 fn allocate_temp_path(

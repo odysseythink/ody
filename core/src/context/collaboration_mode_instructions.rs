@@ -85,6 +85,7 @@ impl CollaborationModeInstructions {
             .with_rigor_scope()
             .with_rigor_rename()
             .with_rigor_risks()
+            .with_rigor_spike()
             .with_rigor_split()
             .with_rigor_turn_discipline()
     }
@@ -186,6 +187,13 @@ impl CollaborationModeInstructions {
 
     pub(crate) fn with_rigor_risks(self) -> Self {
         let fragment = ody_collaboration_mode_templates::PLAN_RIGOR_RISKS;
+        Self {
+            instructions: format!("{}\n\n{}", self.instructions, fragment),
+        }
+    }
+
+    pub(crate) fn with_rigor_spike(self) -> Self {
+        let fragment = ody_collaboration_mode_templates::PLAN_RIGOR_SPIKE;
         Self {
             instructions: format!("{}\n\n{}", self.instructions, fragment),
         }
@@ -750,6 +758,7 @@ mod tests {
         assert!(body.contains("## Source-grounding mandate"));
         assert!(body.contains("## Out-of-scope / false-positive discipline"));
         assert!(body.contains("## Rename-vs-delete decision prompt"));
+        assert!(body.contains("## Rigor tier addendum: Minimal experiments (spikes)"));
         assert!(body.contains("## Rigor tier addendum: Large plan splitting & Parts manifest"));
         assert!(body.contains("## Rigor tier addendum: Turn discipline (when to submit the plan)"));
     }

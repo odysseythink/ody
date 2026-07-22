@@ -57,7 +57,7 @@ impl DesignReviewOrchestrator {
             Arc::clone(session),
             Arc::clone(&turn.extension_data),
         ));
-        let prompt = build_design_review_prompt(&request.design_markdown);
+        let prompt = build_design_review_prompt(&request.design_markdown, &request.accepted_risks);
         let input = vec![UserInput::Text {
             text: "Review the design above and return JSON findings.".to_string(),
             text_elements: Vec::new(),
@@ -146,8 +146,12 @@ impl DesignReviewOrchestrator {
     }
 }
 
-pub(crate) fn format_review_appendix_for_submit(output: &DesignReviewOutput) -> String {
-    format_review_appendix(output)
+pub(crate) fn format_review_appendix_for_submit(
+    output: &DesignReviewOutput,
+    seen: &std::collections::HashSet<String>,
+    chinese: bool,
+) -> String {
+    format_review_appendix(output, seen, chinese)
 }
 
 fn to_design_review_output(review_output: ReviewOutputEvent) -> DesignReviewOutput {

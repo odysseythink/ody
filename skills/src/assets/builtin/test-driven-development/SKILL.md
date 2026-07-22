@@ -2,7 +2,6 @@
 name: test-driven-development
 description: Use when implementing any feature or bugfix, before writing implementation code
 namespace: core
-upstream: superpowers@v5.1.0
 ---
 
 # Test-Driven Development (TDD)
