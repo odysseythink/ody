@@ -952,69 +952,6 @@ fn create_test_session_telemetry() -> SessionTelemetry {
     )
 }
 
-fn test_prompt_for_chat_provider() -> crate::client_common::Prompt {
-    crate::client_common::Prompt {
-        input: vec![ResponseItem::Message {
-            id: None,
-            role: "user".into(),
-            content: vec![ContentItem::InputText {
-                text: "hello".into(),
-            }],
-            phase: None,
-            internal_chat_message_metadata_passthrough: None,
-        }],
-        tools: Vec::new(),
-        parallel_tool_calls: false,
-        base_instructions: Default::default(),
-        output_schema: None,
-        output_schema_strict: true,
-    }
-}
-
-fn test_model_info_for_chat_provider() -> ModelInfo {
-    ModelInfo {
-        slug: "test-model".into(),
-        display_name: "Test Model".into(),
-        description: None,
-        default_reasoning_level: None,
-        supported_reasoning_levels: Vec::new(),
-        shell_type: ody_protocol::model_metadata::ConfigShellToolType::Default,
-        visibility: ody_protocol::model_metadata::ModelVisibility::List,
-        supported_in_api: true,
-        priority: 0,
-        additional_speed_tiers: Vec::new(),
-        service_tiers: Vec::new(),
-        default_service_tier: None,
-        availability_nux: None,
-        upgrade: None,
-        base_instructions: "You are a helpful assistant.".into(),
-        model_messages: None,
-        supports_reasoning_summaries: false,
-        default_reasoning_summary: ody_protocol::config_types::ReasoningSummary::None,
-        support_verbosity: false,
-        default_verbosity: None,
-        web_search_tool_type: ody_protocol::model_metadata::WebSearchToolType::Text,
-        truncation_policy: ody_protocol::model_metadata::TruncationPolicyConfig::bytes(1_000_000),
-        supports_parallel_tool_calls: false,
-        supports_image_detail_original: false,
-        context_window: None,
-        max_context_window: None,
-        auto_compact_token_limit: None,
-        comp_hash: None,
-        effective_context_window_percent: 90,
-        experimental_supported_tools: Vec::new(),
-        input_modalities: Vec::new(),
-        used_fallback_model_metadata: false,
-        supports_search_tool: false,
-        use_responses_lite: false,
-        auto_review_model_override: None,
-        tool_mode: None,
-        multi_agent_version: None,
-        capabilities: ModelCapabilities::default(),
-        provider: "test-provider".into(),
-    }
-}
-
 /// The reasoning analog of the cache regression: `Usage.cached_input_tokens` was
 /// silently dropped by this mapping and rebuilt as a hardcoded 0. Reasoning
 /// tokens ride the same path, so pin them here too — the plumbing is only

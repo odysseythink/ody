@@ -1,6 +1,5 @@
 use super::*;
 use crate::ModelsManagerConfig;
-use ody_model_provider_info::ModelProviderInfo;
 use ody_protocol::model_metadata::InputModality;
 use pretty_assertions::assert_eq;
 
@@ -77,55 +76,7 @@ fn model_context_window_uses_model_value_without_override() {
     assert_eq!(updated, model);
 }
 
-#[test]
-fn model_catalog_for_provider_lists_known_chat_vendors() {
-    use ody_protocol::model_metadata::ModelVisibility;
 
-    for (provider, expected_slug) in [
-        ("kimi", "kimi-k2-0711"),
-        ("deepseek", "deepseek-reasoner"),
-        ("glm", "glm-4.6"),
-    ] {
-        let info = ModelProviderInfo {
-            wire_api: WireApi::Chat,
-            ..Default::default()
-        };
-        let catalog = model_catalog_for_provider(provider, &info)
-            .unwrap_or_else(|| panic!("missing catalog for {provider}"));
-        assert!(
-            catalog.models.iter().any(|m| m.slug == expected_slug),
-            "expected {expected_slug} in {provider} catalog"
-        );
-        // Curated models should be visible in the picker.
-        assert!(
-            catalog
-                .models
-                .iter()
-                .all(|m| m.visibility == ModelVisibility::List && !m.used_fallback_model_metadata)
-        );
-    }
-}
-
-#[test]
-fn deepseek_reasoner_supports_thinking() {
-    let info = ModelProviderInfo {
-        wire_api: WireApi::Chat,
-        ..Default::default()
-    };
-    let catalog = model_catalog_for_provider("deepseek", &info).unwrap();
-    let reasoner = catalog
-        .models
-        .iter()
-        .find(|m| m.slug == "deepseek-reasoner")
-        .unwrap();
-    assert!(reasoner.supports_reasoning_summaries);
-    let chat = catalog
-        .models
-        .iter()
-        .find(|m| m.slug == "deepseek-chat")
-        .unwrap();
-    assert!(!chat.supports_reasoning_summaries);
-}
 
 mod capability_tests {
     use super::ModelCapabilities;
@@ -299,41 +250,7 @@ mod capability_tests {
     }
 }
 
-#[test]
-fn model_catalog_for_custom_chat_returns_fallback() {
-    let info = ModelProviderInfo {
-        wire_api: WireApi::Chat,
-        ..Default::default()
-    };
-    let catalog = model_catalog_for_provider("custom", &info)
-        .expect("custom chat provider should return a fallback catalog");
-    assert!(!catalog.models.is_empty());
-    assert!(
-        catalog
-            .models
-            .iter()
-            .any(|m| m.used_fallback_model_metadata),
-        "custom chat fallback model should be marked as fallback"
-    );
-}
 
-#[test]
-fn model_catalog_for_unknown_chat_returns_fallback() {
-    let info = ModelProviderInfo {
-        wire_api: WireApi::Chat,
-        ..Default::default()
-    };
-    let catalog = model_catalog_for_provider("unknown", &info)
-        .expect("unknown chat provider should return a fallback catalog");
-    assert!(!catalog.models.is_empty());
-    assert!(
-        catalog
-            .models
-            .iter()
-            .any(|m| m.used_fallback_model_metadata),
-        "unknown chat fallback model should be marked as fallback"
-    );
-}
 
 #[test]
 fn unknown_model_slug_has_conservative_fallback_capabilities() {
@@ -348,26 +265,6 @@ fn unknown_model_slug_has_conservative_fallback_capabilities() {
     assert!(!model.capabilities.supports_search_tool);
 }
 
-#[test]
-fn unknown_chat_provider_has_fallback_catalog_with_capabilities() {
-    let info = ModelProviderInfo {
-        name: "Unknown Chat".to_string(),
-        wire_api: WireApi::Chat,
-        ..Default::default()
-    };
-    let catalog = model_catalog_for_provider("unknown-chat", &info)
-        .expect("Chat provider should always have a fallback catalog");
-    assert_eq!(catalog.models.len(), 1);
-    let model = &catalog.models[0];
-    assert!(model.capabilities.supports_tools);
-    assert!(model.capabilities.supports_vision);
-    assert_eq!(
-        model.capabilities.input_modalities,
-        vec![InputModality::Text, InputModality::Image]
-    );
-    assert!(model.context_window.is_some());
-    assert!(model.max_context_window.is_some());
-}
 
 #[test]
 fn unknown_model_slug_has_nonzero_truncation_budget() {
@@ -383,23 +280,6 @@ fn unknown_model_slug_has_nonzero_truncation_budget() {
     );
 }
 
-#[test]
-fn chat_catalog_models_have_nonzero_truncation_budget() {
-    let info = ModelProviderInfo {
-        wire_api: WireApi::Chat,
-        ..Default::default()
-    };
-    for provider in ["kimi", "deepseek", "glm", "custom"] {
-        let catalog = model_catalog_for_provider(provider, &info)
-            .unwrap_or_else(|| panic!("missing catalog for {provider}"));
-        assert!(
-            catalog.models.iter().all(
-                |m| m.truncation_policy.limit > 0 && m.capabilities.truncation_policy.limit > 0
-            ),
-            "provider {provider} catalog contains a zero truncation budget"
-        );
-    }
-}
 
 #[test]
 fn configured_model_catalog_returns_none_without_matching_provider() {

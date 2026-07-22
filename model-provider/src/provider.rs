@@ -12,7 +12,6 @@ use ody_model_provider_info::ProviderCapabilities as ModelProviderInfoCapabiliti
 use ody_models_manager::manager::OpenAiModelsManager;
 use ody_models_manager::manager::SharedModelsManager;
 use ody_models_manager::manager::StaticModelsManager;
-use ody_models_manager::model_info::model_catalog_for_provider;
 use ody_protocol::error::OdyErr;
 use ody_protocol::model_metadata::ModelsResponse;
 
@@ -250,14 +249,6 @@ impl ModelProvider for ConfiguredModelProvider {
             return Arc::new(StaticModelsManager::new(model_catalog));
         }
 
-        // OpenAI-compatible Chat Completions providers (Kimi / DeepSeek / GLM)
-        // do not expose the ody `/models` catalog; serve a bundled static list.
-        if self.info.is_chat_completions()
-            && let Some(catalog) = model_catalog_for_provider(&self.provider_id, &self.info)
-        {
-            return Arc::new(StaticModelsManager::new(catalog));
-        }
-
         let endpoint = Arc::new(OpenAiModelsEndpoint::new(
             self.provider_id.clone(),
             self.info.clone(),
@@ -355,22 +346,6 @@ mod tests {
                 .and_then(|value| value.to_str().ok()),
             Some("Bearer provider-token")
         );
-    }
-
-    #[tokio::test]
-    async fn configured_provider_with_id_uses_given_id() {
-        let info = ModelProviderInfo {
-            name: "my-provider".into(),
-            base_url: Some("http://localhost:1234/v1".into()),
-            wire_api: WireApi::Chat,
-            ..Default::default()
-        };
-        let provider = create_model_provider_with_id("my-provider", info);
-        let manager = provider.models_manager(PathBuf::from("/tmp/ody-models-test"), None);
-        let catalog = manager.raw_model_catalog(RefreshStrategy::Offline).await;
-
-        assert_eq!(catalog.models.len(), 1);
-        assert_eq!(catalog.models[0].slug, "my-provider");
     }
 
     #[test]

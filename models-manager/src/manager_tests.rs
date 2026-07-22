@@ -501,3 +501,21 @@ fn bundled_models_have_populated_capabilities() {
         );
     }
 }
+
+#[test]
+fn bundled_models_include_supported_chat_vendors() {
+    let response = crate::bundled_models_response().expect("bundled models.json should parse");
+    let slugs: std::collections::HashSet<_> = response.models.iter().map(|m| m.slug.as_str()).collect();
+    for expected in [
+        "kimi-k2.5",
+        "kimi-k3",
+        "deepseek-chat",
+        "deepseek-v4-pro",
+        "deepseek-v4-flash",
+        "glm-4.5",
+        "glm-5",
+        "glm-5.2",
+    ] {
+        assert!(slugs.contains(expected), "bundled models.json missing {expected}");
+    }
+}

@@ -393,7 +393,7 @@ fn sample_turn_resolved_config(thread_id: &str, turn_id: &str) -> TurnResolvedCo
         submission_type: None,
         ephemeral: false,
         session_source: SessionSource::Exec,
-        model: "gpt-5".to_string(),
+        model: "kimi-for-coding".to_string(),
         model_provider: "kimi".to_string(),
         permission_profile: CorePermissionProfile::read_only(),
         permission_profile_cwd: PathBuf::from("/tmp"),

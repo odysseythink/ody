@@ -191,3 +191,28 @@ fn build_logout_provider_edits_clears_default_model_and_matching_models() {
     assert_eq!(edits[1].key_path, r#"models."work-kimi/kimi-k2""#);
     assert_eq!(edits[2].key_path, "default_model");
 }
+
+#[test]
+fn build_login_model_edits_writes_model_metadata_from_bundled_catalog() {
+    // deepseek-v4-pro is present in models.json and has known metadata.
+    let edits = build_login_model_edits(
+        "work-deepseek",
+        LoginProvider::Deepseek,
+        "deepseek-v4-pro",
+        None,
+    );
+
+    // provider, model, max_context_size, max_output_size, capabilities, clear model, default_model
+    assert_eq!(edits.len(), 7);
+    assert_eq!(edits[0].key_path, r#"models."work-deepseek/deepseek-v4-pro".provider"#);
+    assert_eq!(edits[1].key_path, r#"models."work-deepseek/deepseek-v4-pro".model"#);
+    assert_eq!(edits[2].key_path, r#"models."work-deepseek/deepseek-v4-pro".max_context_size"#);
+    assert_eq!(edits[2].value, serde_json::json!(1_000_000));
+    assert_eq!(edits[3].key_path, r#"models."work-deepseek/deepseek-v4-pro".max_output_size"#);
+    assert_eq!(edits[3].value, serde_json::json!(384_000));
+    assert_eq!(edits[4].key_path, r#"models."work-deepseek/deepseek-v4-pro".capabilities"#);
+    assert_eq!(edits[4].value, serde_json::json!(["tool_use", "thinking"]));
+    assert_eq!(edits[5].key_path, "model");
+    assert_eq!(edits[6].key_path, "default_model");
+    assert_eq!(edits[6].value, serde_json::json!("work-deepseek/deepseek-v4-pro"));
+}
