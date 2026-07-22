@@ -11,6 +11,7 @@ use crate::design_review::types::DesignReviewConfidence;
 use crate::design_review::types::DesignReviewFinding;
 use crate::design_review::types::DesignReviewOutput;
 use crate::design_review::types::DesignReviewSeverity;
+use crate::design_review::types::normalize_fingerprint;
 use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
 use ody_protocol::config_types::DesignAuditLevel;
@@ -61,7 +62,7 @@ fn escalated_findings(
 /// Whether the transcript language is Chinese, mirroring how core derives the
 /// effective language for model instructions (explicit config value, else the
 /// system locale).
-fn transcript_is_chinese(language: Option<&str>) -> bool {
+pub(crate) fn transcript_is_chinese(language: Option<&str>) -> bool {
     let resolved = match language.map(str::trim).filter(|l| !l.is_empty()) {
         Some(l) if l.eq_ignore_ascii_case("auto") => {
             ody_config::locale::detect_system_locale_code()
@@ -230,7 +231,7 @@ impl SignoffItem<'_> {
     /// (fails safe: shows it again) rather than being wrongly hidden.
     fn fingerprint(&self) -> String {
         match self {
-            SignoffItem::Finding(f) => format!("F:{}", normalize_fingerprint(&f.title)),
+            SignoffItem::Finding(f) => f.fingerprint(),
             SignoffItem::Assumption(a) => format!("A:{}", normalize_fingerprint(&a.text)),
         }
     }
@@ -396,22 +397,13 @@ fn build_signoff_questions(
 /// suppressions from a design that was abandoned without finalizing. Falls back
 /// to the empty string when the design has no heading (the completeness gate
 /// mandates one, so this is only a defensive default).
-fn design_title_key(markdown: &str) -> String {
+pub(crate) fn design_title_key(markdown: &str) -> String {
     markdown
         .lines()
         .map(str::trim)
         .find_map(|line| line.strip_prefix("# "))
         .map(normalize_fingerprint)
         .unwrap_or_default()
-}
-
-/// Collapse case and internal whitespace so trivially-different renderings of the
-/// same title/text hash to one key.
-fn normalize_fingerprint(s: &str) -> String {
-    s.split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase()
 }
 
 fn truncate(s: &str, max: usize) -> String {

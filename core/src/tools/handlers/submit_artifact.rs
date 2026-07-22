@@ -5,7 +5,9 @@
 
 use crate::design_completeness::design_completeness_report;
 use crate::design_review::escalation::EscalationDecision;
+use crate::design_review::escalation::design_title_key;
 use crate::design_review::escalation::run_escalation_gate;
+use crate::design_review::escalation::transcript_is_chinese;
 use crate::design_review::orchestrator::DesignReviewOrchestrator;
 use crate::design_review::orchestrator::format_review_appendix_for_submit;
 use crate::design_review::types::DesignReviewOutput;
@@ -383,15 +385,26 @@ pub(crate) async fn handle_submit_artifact(
         has_pending_parts,
         effective_design_review_model.as_deref(),
     ) {
+        // Risks the user already accepted/deferred in earlier rounds of THIS
+        // design. Fetched before the review so the (stateless) reviewer is told
+        // not to re-raise them, and reused to annotate the appendix so carried-over
+        // findings read as progress rather than fresh problems. Calling this here
+        // sets the per-design key; the escalation gate below reads the same key and
+        // set idempotently.
+        let seen = session
+            .design_signoff_seen_for(design_title_key(&markdown))
+            .await;
+        let chinese = transcript_is_chinese(turn.config.language.as_deref());
         let request = DesignReviewRequest {
             design_markdown: markdown.clone(),
             review_model: effective_design_review_model
                 .clone()
                 .expect("checked above"),
+            accepted_risks: seen.iter().cloned().collect(),
         };
         match DesignReviewOrchestrator::review(&session, &turn, request).await {
             Ok(output) => {
-                let appendix = format_review_appendix_for_submit(&output);
+                let appendix = format_review_appendix_for_submit(&output, &seen, chinese);
                 review_output = Some(output);
                 Some(appendix)
             }
