@@ -5,11 +5,15 @@
 //! loop.
 
 use super::*;
-use crate::login::config::build_login_model_edits;
+use crate::app_server_session::model_preset_from_api_model;
+use crate::model_catalog::ModelCatalog;
+use crate::login::config::build_login_models_edits;
 use crate::login::config::build_login_provider_edits;
 use crate::login::config::build_logout_provider_edits;
 use crate::login::telemetry;
+use ody_model_provider::login::LoginModelInfo;
 use ody_model_provider_info::LoginProvider;
+use std::sync::Arc;
 #[cfg(target_os = "windows")]
 use ody_utils_approval_presets::ApprovalPreset;
 
@@ -730,13 +734,23 @@ impl App {
         model_id: String,
         app_server: &mut AppServerSession,
     ) {
+        let fetched_models = self
+            .chat_widget
+            .take_last_fetched_login_models()
+            .map(|(_, _, models)| models)
+            .unwrap_or_else(|| {
+                vec![LoginModelInfo {
+                    id: model_id.clone(),
+                    display_name: model_id.clone(),
+                }]
+            });
+
         let mut edits = build_login_provider_edits(&alias, provider, &api_key, Some(&base_url));
-        let display_name = Some(model_id.as_str());
-        edits.extend(build_login_model_edits(
+        edits.extend(build_login_models_edits(
             &alias,
             provider,
+            &fetched_models,
             &model_id,
-            display_name,
         ));
 
         let write_response = match crate::config_update::write_config_batch(
@@ -761,14 +775,30 @@ impl App {
             return;
         }
 
+        self.refresh_in_memory_config_from_disk_best_effort("login provider")
+            .await;
+
+        match app_server.list_models().await {
+            Ok(response) => {
+                let available_models = response
+                    .data
+                    .into_iter()
+                    .map(model_preset_from_api_model)
+                    .collect::<Vec<_>>();
+                let new_catalog = Arc::new(crate::model_catalog::ModelCatalog::new(available_models));
+                self.model_catalog = new_catalog.clone();
+                self.chat_widget.set_model_catalog(new_catalog);
+            }
+            Err(err) => {
+                tracing::warn!(error = %err, "failed to refresh model catalog after login");
+            }
+        }
+
         let model_alias = format!("{alias}/{model_id}");
         self.chat_widget.set_model(&model_alias);
         self.sync_active_thread_model_setting(app_server, model_alias.clone())
             .await;
         self.sync_active_thread_service_tier_to_cached_session()
-            .await;
-
-        self.refresh_in_memory_config_from_disk_best_effort("login provider")
             .await;
 
         telemetry::record_login_succeeded(&self.session_telemetry, provider);

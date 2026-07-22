@@ -2,6 +2,8 @@
 
 use super::*;
 use crate::app_event::AppEvent;
+use ody_model_provider::login::LoginModelInfo;
+use ody_model_provider_info::LoginProvider;
 use ody_protocol::config_types::DesignAuditLevel;
 
 impl ChatWidget {
@@ -193,6 +195,16 @@ impl ChatWidget {
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn model_catalog(&self) -> Arc<ModelCatalog> {
         self.model_catalog.clone()
+    }
+
+    pub(crate) fn set_model_catalog(&mut self, model_catalog: Arc<ModelCatalog>) {
+        self.model_catalog = model_catalog;
+    }
+
+    pub(crate) fn take_last_fetched_login_models(
+        &mut self,
+    ) -> Option<(LoginProvider, String, Vec<LoginModelInfo>)> {
+        self.last_fetched_login_models.take()
     }
 
     pub(crate) fn api_key_configured(&self) -> bool {

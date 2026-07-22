@@ -6,7 +6,8 @@ use ody_model_provider_info::LoginProvider;
 use std::collections::HashMap;
 
 use crate::login::config::{
-    build_login_model_edits, build_login_provider_edits, build_logout_provider_edits,
+    build_login_model_edits, build_login_models_edits, build_login_provider_edits,
+    build_logout_provider_edits,
 };
 
 #[test]
@@ -57,6 +58,57 @@ fn build_login_model_edits_omits_display_name_when_none() {
     assert_eq!(edits.len(), 3);
     assert_eq!(edits[2].key_path, "model");
     assert_eq!(edits[2].value, serde_json::json!("work-kimi/kimi-k2"));
+}
+
+#[test]
+fn build_login_models_edits_writes_all_fetched_models_and_default() {
+    use ody_model_provider::login::LoginModelInfo;
+
+    let models = vec![
+        LoginModelInfo {
+            id: "model-a".to_string(),
+            display_name: "Model A".to_string(),
+        },
+        LoginModelInfo {
+            id: "model-b".to_string(),
+            display_name: "Model B".to_string(),
+        },
+    ];
+    let edits =
+        build_login_models_edits("work-kimi", LoginProvider::Kimi, &models, "model-a");
+
+    assert_eq!(edits.len(), 7);
+    assert_eq!(edits[0].key_path, r#"models."work-kimi/model-a".provider"#);
+    assert_eq!(edits[0].value, serde_json::json!("work-kimi"));
+    assert_eq!(edits[1].key_path, r#"models."work-kimi/model-a".model"#);
+    assert_eq!(edits[1].value, serde_json::json!("model-a"));
+    assert_eq!(edits[2].key_path, r#"models."work-kimi/model-a".display_name"#);
+    assert_eq!(edits[2].value, serde_json::json!("Model A"));
+    assert_eq!(edits[3].key_path, r#"models."work-kimi/model-b".provider"#);
+    assert_eq!(edits[3].value, serde_json::json!("work-kimi"));
+    assert_eq!(edits[4].key_path, r#"models."work-kimi/model-b".model"#);
+    assert_eq!(edits[4].value, serde_json::json!("model-b"));
+    assert_eq!(edits[5].key_path, r#"models."work-kimi/model-b".display_name"#);
+    assert_eq!(edits[5].value, serde_json::json!("Model B"));
+    assert_eq!(edits[6].key_path, "model");
+    assert_eq!(edits[6].value, serde_json::json!("work-kimi/model-a"));
+}
+
+#[test]
+fn build_login_models_edits_skips_display_name_when_same_as_id() {
+    use ody_model_provider::login::LoginModelInfo;
+
+    let models = vec![LoginModelInfo {
+        id: "model-a".to_string(),
+        display_name: "model-a".to_string(),
+    }];
+    let edits =
+        build_login_models_edits("work-kimi", LoginProvider::Kimi, &models, "model-a");
+
+    assert_eq!(edits.len(), 3);
+    assert_eq!(edits[0].key_path, r#"models."work-kimi/model-a".provider"#);
+    assert_eq!(edits[1].key_path, r#"models."work-kimi/model-a".model"#);
+    assert_eq!(edits[2].key_path, "model");
 }
 
 #[test]

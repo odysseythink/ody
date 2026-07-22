@@ -207,6 +207,7 @@ impl ChatWidget {
         base_url: String,
         models: Vec<LoginModelInfo>,
     ) {
+        self.last_fetched_login_models = Some((provider, alias.clone(), models.clone()));
         if models.is_empty() {
             self.add_error_message(
                 "No models returned by the provider. Please check the base URL.".to_string(),

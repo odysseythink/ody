@@ -76,6 +76,8 @@ use crate::text_formatting::proper_join;
 use crate::token_usage::TokenUsage;
 use crate::token_usage::TokenUsageInfo;
 use crate::version::ODY_CLI_VERSION;
+use ody_model_provider::login::LoginModelInfo;
+use ody_model_provider_info::LoginProvider;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -528,6 +530,10 @@ pub(crate) struct ChatWidget {
     pre_plan_mode_model: Option<String>,
     api_key_configured: bool,
     model_catalog: Arc<ModelCatalog>,
+    /// The full list of models fetched during the active `/login` flow. Used to
+    /// persist every available model (not just the one the user selected) when
+    /// the login is confirmed.
+    last_fetched_login_models: Option<(LoginProvider, String, Vec<LoginModelInfo>)>,
     session_telemetry: SessionTelemetry,
     session_header: SessionHeader,
     initial_user_message: Option<UserMessage>,

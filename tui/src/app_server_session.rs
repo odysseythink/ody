@@ -281,6 +281,22 @@ impl AppServerSession {
         })
     }
 
+    /// List all available models from the app server using the current config state.
+    pub(crate) async fn list_models(&mut self) -> Result<ModelListResponse> {
+        let request_id = self.next_request_id();
+        self.client
+            .request_typed(ClientRequest::ModelList {
+                request_id,
+                params: ModelListParams {
+                    cursor: None,
+                    limit: None,
+                    include_hidden: Some(true),
+                },
+            })
+            .await
+            .wrap_err("model/list failed")
+    }
+
     pub(crate) async fn external_agent_config_detect(
         &mut self,
         params: ExternalAgentConfigDetectParams,
@@ -1072,7 +1088,7 @@ pub(crate) async fn start_thread_with_request_handle(
     started_thread_from_start_response(response, &config, thread_params_mode).await
 }
 
-fn model_preset_from_api_model(model: ApiModel) -> ModelPreset {
+pub(crate) fn model_preset_from_api_model(model: ApiModel) -> ModelPreset {
     let upgrade = model.upgrade.map(|upgrade_id| {
         let upgrade_info = model.upgrade_info.clone();
         ModelUpgrade {

@@ -6,6 +6,7 @@ use ody_model_provider_info::LoginProvider;
 use std::collections::HashMap;
 
 use crate::config_update::replace_config_value;
+use ody_model_provider::login::LoginModelInfo;
 
 /// Build config edits for a newly configured provider.
 ///
@@ -45,26 +46,43 @@ pub(crate) fn build_login_model_edits(
     model_id: &str,
     display_name: Option<&str>,
 ) -> Vec<ConfigEdit> {
-    let model_alias = format!("{alias}/{model_id}");
-    let mut edits = vec![
-        replace_config_value(
+    let display_name = display_name.unwrap_or(model_id);
+    let model = LoginModelInfo {
+        id: model_id.to_string(),
+        display_name: display_name.to_string(),
+    };
+    build_login_models_edits(alias, provider, &[model], model_id)
+}
+
+/// Build config edits that persist every model fetched during `/login` and set
+/// the user-selected model as the default.
+pub(crate) fn build_login_models_edits(
+    alias: &str,
+    provider: LoginProvider,
+    models: &[LoginModelInfo],
+    selected_model_id: &str,
+) -> Vec<ConfigEdit> {
+    let mut edits = Vec::new();
+    for model in models {
+        let model_alias = format!("{alias}/{}", model.id);
+        edits.push(replace_config_value(
             format!("models.\"{model_alias}\".provider"),
             serde_json::json!(alias),
-        ),
-        replace_config_value(
-            format!("models.\"{model_alias}\".model"),
-            serde_json::json!(model_id),
-        ),
-    ];
-    if let Some(display_name) = display_name {
-        edits.push(replace_config_value(
-            format!("models.\"{model_alias}\".display_name"),
-            serde_json::json!(display_name),
         ));
+        edits.push(replace_config_value(
+            format!("models.\"{model_alias}\".model"),
+            serde_json::json!(model.id),
+        ));
+        if !model.display_name.is_empty() && model.display_name != model.id {
+            edits.push(replace_config_value(
+                format!("models.\"{model_alias}\".display_name"),
+                serde_json::json!(model.display_name),
+            ));
+        }
     }
     edits.push(replace_config_value(
         "model",
-        serde_json::json!(model_alias),
+        serde_json::json!(format!("{alias}/{selected_model_id}")),
     ));
     edits
 }

@@ -122,6 +122,7 @@ impl ChatWidget {
             pre_plan_mode_model: None,
             api_key_configured,
             model_catalog,
+            last_fetched_login_models: None,
             session_telemetry,
             session_header: SessionHeader::new(header_model),
             initial_user_message,
