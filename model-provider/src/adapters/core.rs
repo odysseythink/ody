@@ -116,13 +116,30 @@ pub fn is_terminal(event: &ResponseEvent) -> bool {
 fn map_effort(
     effort: Option<&ody_protocol::model_metadata::ReasoningEffort>,
 ) -> crate::chat_provider::ThinkingEffort {
-    use ody_protocol::model_metadata::ReasoningEffort as Effort;
+    use crate::chat_provider::ThinkingEffort;
     match effort {
-        None | Some(Effort::None) => crate::chat_provider::ThinkingEffort::Off,
-        Some(Effort::Minimal) | Some(Effort::Low) => crate::chat_provider::ThinkingEffort::Low,
-        Some(Effort::Medium) => crate::chat_provider::ThinkingEffort::Medium,
-        Some(Effort::High) | Some(Effort::XHigh) => crate::chat_provider::ThinkingEffort::High,
-        Some(Effort::Ultra) | Some(Effort::Custom(_)) => crate::chat_provider::ThinkingEffort::Max,
+        None => ThinkingEffort::Off,
+        Some(effort) => effort_to_thinking(effort),
+    }
+}
+
+/// Map a concrete `ReasoningEffort` to the wire-neutral `ThinkingEffort`.
+///
+/// `max` is not a first-class `ReasoningEffort` variant (it parses to
+/// `Custom("max")`), so it — along with `ultra` and any other custom value —
+/// maps to `Max`.
+fn effort_to_thinking(
+    effort: &ody_protocol::model_metadata::ReasoningEffort,
+) -> crate::chat_provider::ThinkingEffort {
+    use ody_protocol::model_metadata::ReasoningEffort as Effort;
+    use crate::chat_provider::ThinkingEffort;
+    match effort {
+        Effort::None => ThinkingEffort::Off,
+        Effort::Minimal | Effort::Low => ThinkingEffort::Low,
+        Effort::Medium => ThinkingEffort::Medium,
+        Effort::High => ThinkingEffort::High,
+        Effort::XHigh => ThinkingEffort::XHigh,
+        Effort::Ultra | Effort::Custom(_) => ThinkingEffort::Max,
     }
 }
 
@@ -138,6 +155,7 @@ pub fn prompt_to_chat_request(
     model: &str,
     prompt: &dyn Prompt,
     effort: Option<ody_protocol::model_metadata::ReasoningEffort>,
+    supported_efforts: &[ody_protocol::model_metadata::ReasoningEffort],
 ) -> ChatRequest {
     let formatted = prompt.get_formatted_input_for_request(/*use_responses_lite*/ false);
     let mut messages = Vec::new();
@@ -161,6 +179,7 @@ pub fn prompt_to_chat_request(
         messages,
         tools,
         thinking_effort: map_effort(effort.as_ref()),
+        supported_thinking_efforts: supported_efforts.iter().map(effort_to_thinking).collect(),
         max_tokens: None,
         temperature: None,
         top_p: None,
@@ -478,7 +497,7 @@ mod tests {
     #[test]
     fn prompt_to_chat_request_round_trip() {
         let prompt = sample_prompt_with_text();
-        let request = prompt_to_chat_request("test-model", &prompt, None);
+        let request = prompt_to_chat_request("test-model", &prompt, None, &[]);
         assert_eq!(request.model, "test-model");
         assert_eq!(request.messages.len(), 1);
         assert_eq!(request.messages[0].role, Role::User);
@@ -501,7 +520,7 @@ mod tests {
             }],
             tools: Vec::new(),
         };
-        let request = prompt_to_chat_request("m", &prompt, None);
+        let request = prompt_to_chat_request("m", &prompt, None, &[]);
         assert_eq!(request.messages.len(), 1);
         assert_eq!(request.messages[0].tool_calls.len(), 1);
         assert_eq!(request.messages[0].tool_calls[0].id, "call_1");
@@ -530,7 +549,7 @@ mod tests {
                 output_schema: None,
             })],
         };
-        let request = prompt_to_chat_request("m", &prompt, None);
+        let request = prompt_to_chat_request("m", &prompt, None, &[]);
         assert_eq!(request.tools.len(), 1);
         assert_eq!(request.tools[0].name, "read_file");
         assert_eq!(request.tools[0].description, "Read a file from disk.");
@@ -575,7 +594,7 @@ mod tests {
                 ],
             })],
         };
-        let request = prompt_to_chat_request("m", &prompt, None);
+        let request = prompt_to_chat_request("m", &prompt, None, &[]);
         let names: Vec<_> = request.tools.iter().map(|t| t.name.as_str()).collect();
         assert_eq!(names, vec!["read", "write"]);
     }
@@ -604,7 +623,7 @@ mod tests {
                 },
             ],
         };
-        let request = prompt_to_chat_request("m", &prompt, None);
+        let request = prompt_to_chat_request("m", &prompt, None, &[]);
         assert!(request.tools.is_empty());
     }
 }

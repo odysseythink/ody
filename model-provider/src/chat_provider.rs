@@ -16,6 +16,12 @@ pub struct ChatRequest {
     pub messages: Vec<Message>,
     pub tools: Vec<ToolDefinition>,
     pub thinking_effort: ThinkingEffort,
+    /// Thinking-effort levels the selected model advertises. Empty means the
+    /// model exposes no discrete reasoning levels, in which case no
+    /// `reasoning_effort` is sent. This is the model-driven gate that replaced
+    /// the old per-vendor hardcoded support list.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub supported_thinking_efforts: Vec<ThinkingEffort>,
     pub max_tokens: Option<u32>,
     pub temperature: Option<f32>,
     pub top_p: Option<f32>,

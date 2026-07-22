@@ -132,7 +132,8 @@ fn build_api_request(
     log_invalid_function_names(&tools, vendor);
     log_invalid_message_function_names(&input, vendor);
 
-    let reasoning_effort = reasoning_effort_for_request(request.thinking_effort, vendor)?;
+    let reasoning_effort =
+        reasoning_effort_for_request(request.thinking_effort, &request.supported_thinking_efforts)?;
 
     Ok(ChatCompletionsRequest {
         model: request.model,
@@ -149,34 +150,32 @@ fn build_api_request(
     })
 }
 
+/// Resolve the wire `reasoning_effort` value from the desired effort, clamped to
+/// the levels the model advertises.
+///
+/// `supported` comes from the model's metadata (empty when the model exposes no
+/// discrete reasoning levels), so gating is model-driven rather than keyed off
+/// the vendor. An empty `supported` list therefore sends no `reasoning_effort`.
+/// GLM is additionally stripped downstream by `ChatVendor::emits_reasoning_effort`.
 fn reasoning_effort_for_request(
     thinking_effort: ThinkingEffort,
-    vendor: ChatVendor,
+    supported: &[ThinkingEffort],
 ) -> Result<Option<String>, ChatProviderError> {
     if thinking_effort == ThinkingEffort::Off {
         return Ok(None);
     }
-    let supported = match vendor {
-        ChatVendor::DeepSeek => vec![
-            ThinkingEffort::Low,
-            ThinkingEffort::Medium,
-            ThinkingEffort::High,
-        ],
-        _ => vec![],
-    };
-    let effort = clamp_thinking_effort(thinking_effort, &supported).ok_or_else(|| {
+    let effort = clamp_thinking_effort(thinking_effort, supported).ok_or_else(|| {
         ChatProviderError::Unsupported {
             capability: "thinking effort".into(),
         }
     })?;
-    if effort == ThinkingEffort::Off {
-        return Ok(None);
-    }
     let value = match effort {
+        ThinkingEffort::Off => return Ok(None),
         ThinkingEffort::Low => "low",
         ThinkingEffort::Medium => "medium",
         ThinkingEffort::High => "high",
-        _ => unreachable!("clamp_thinking_effort should not return unsupported effort"),
+        ThinkingEffort::XHigh => "xhigh",
+        ThinkingEffort::Max => "max",
     };
     Ok(Some(value.to_string()))
 }
@@ -526,10 +525,13 @@ mod tests {
     }
 
     #[test]
-    fn build_request_ignores_thinking_for_unsupported_vendor() {
+    fn build_request_ignores_thinking_when_model_advertises_no_levels() {
+        // Model-driven gating: with no advertised reasoning levels, a desired
+        // effort is dropped regardless of vendor.
         let request = ChatRequest {
-            model: "kimi-k2".into(),
+            model: "kimi-for-coding".into(),
             thinking_effort: ThinkingEffort::High,
+            supported_thinking_efforts: vec![],
             messages: vec![Message {
                 role: Role::User,
                 content: vec![ContentPart::Text("hi".into())],
@@ -543,20 +545,54 @@ mod tests {
     }
 
     #[test]
-    fn build_request_maps_deepseek_thinking() {
-        let request = ChatRequest {
-            model: "deepseek-chat".into(),
-            thinking_effort: ThinkingEffort::High,
-            messages: vec![Message {
-                role: Role::User,
-                content: vec![ContentPart::Text("hi".into())],
-                tool_calls: vec![],
-                tool_call_id: None,
-            }],
-            ..Default::default()
+    fn build_request_maps_advertised_thinking_levels() {
+        // DeepSeek advertises up to xhigh; k3 advertises max. The wire value is
+        // clamped to what the model advertises.
+        let make = |vendor, effort, supported: Vec<ThinkingEffort>| {
+            let request = ChatRequest {
+                model: "m".into(),
+                thinking_effort: effort,
+                supported_thinking_efforts: supported,
+                messages: vec![Message {
+                    role: Role::User,
+                    content: vec![ContentPart::Text("hi".into())],
+                    tool_calls: vec![],
+                    tool_call_id: None,
+                }],
+                ..Default::default()
+            };
+            build_api_request(request, vendor)
+                .expect("builds")
+                .reasoning_effort
         };
-        let api_request = build_api_request(request, ChatVendor::DeepSeek).expect("builds");
-        assert_eq!(api_request.reasoning_effort, Some("high".to_string()));
+
+        let deepseek_levels = vec![
+            ThinkingEffort::Low,
+            ThinkingEffort::Medium,
+            ThinkingEffort::High,
+            ThinkingEffort::XHigh,
+            ThinkingEffort::Max,
+        ];
+        assert_eq!(
+            make(ChatVendor::DeepSeek, ThinkingEffort::High, deepseek_levels.clone()),
+            Some("high".to_string())
+        );
+        assert_eq!(
+            make(ChatVendor::DeepSeek, ThinkingEffort::XHigh, deepseek_levels),
+            Some("xhigh".to_string())
+        );
+
+        // k3 advertises low/high/max; a desired Max maps to "max".
+        let k3_levels = vec![ThinkingEffort::Low, ThinkingEffort::High, ThinkingEffort::Max];
+        assert_eq!(
+            make(ChatVendor::Kimi, ThinkingEffort::Max, k3_levels.clone()),
+            Some("max".to_string())
+        );
+        // A desired Medium clamps down to the nearest advertised level (low).
+        assert_eq!(
+            make(ChatVendor::Kimi, ThinkingEffort::Medium, k3_levels),
+            Some("low".to_string())
+        );
     }
 
     #[test]
@@ -667,7 +703,7 @@ mod tests {
             ],
         };
         let request =
-            crate::adapters::core::prompt_to_chat_request("kimi-for-coding", &prompt, None);
+            crate::adapters::core::prompt_to_chat_request("kimi-for-coding", &prompt, None, &[]);
         let wire = build_api_request(request, ChatVendor::Kimi)
             .expect("builds")
             .to_wire();
@@ -699,7 +735,7 @@ mod tests {
             }],
         };
         let request =
-            crate::adapters::core::prompt_to_chat_request("kimi-for-coding", &prompt, None);
+            crate::adapters::core::prompt_to_chat_request("kimi-for-coding", &prompt, None, &[]);
         let wire = build_api_request(request, ChatVendor::Kimi)
             .expect("builds")
             .to_wire();

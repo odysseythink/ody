@@ -126,7 +126,20 @@
       "slug": "deepseek-reasoner",
       "display_name": "DeepSeek Reasoner",
       "description": "DeepSeek reasoning model for multi-step analysis, math, coding, and tools",
-      "supported_reasoning_levels": [],
+      "supported_reasoning_levels": [
+        {
+          "effort": "low",
+          "description": "Faster, lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning"
+        }
+      ],
       "shell_type": "default",
       "visibility": "list",
       "provider": "deepseek",
@@ -179,15 +192,34 @@
           "mode": "bytes",
           "limit": 10000
         },
-        "max_output_tokens": 384000
+        "max_output_tokens": 384000,
+        "thinking_effort": [
+          "low",
+          "medium",
+          "high"
+        ]
       },
-      "max_output_tokens": 384000
+      "max_output_tokens": 384000,
+      "default_reasoning_level": "medium"
     },
     {
       "slug": "deepseek-v4-flash",
       "display_name": "DeepSeek V4 Flash",
       "description": "Fast DeepSeek V4 lane for economical reasoning, coding, and long-context work",
-      "supported_reasoning_levels": [],
+      "supported_reasoning_levels": [
+        {
+          "effort": "low",
+          "description": "Faster, lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning"
+        }
+      ],
       "shell_type": "default",
       "visibility": "list",
       "provider": "deepseek",
@@ -240,15 +272,34 @@
           "mode": "bytes",
           "limit": 10000
         },
-        "max_output_tokens": 384000
+        "max_output_tokens": 384000,
+        "thinking_effort": [
+          "low",
+          "medium",
+          "high"
+        ]
       },
-      "max_output_tokens": 384000
+      "max_output_tokens": 384000,
+      "default_reasoning_level": "medium"
     },
     {
       "slug": "deepseek-v4-pro",
       "display_name": "DeepSeek V4 Pro",
       "description": "Open MoE flagship with million-token context for coding and long agent runs",
-      "supported_reasoning_levels": [],
+      "supported_reasoning_levels": [
+        {
+          "effort": "low",
+          "description": "Faster, lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning"
+        }
+      ],
       "shell_type": "default",
       "visibility": "list",
       "provider": "deepseek",
@@ -301,9 +352,15 @@
           "mode": "bytes",
           "limit": 10000
         },
-        "max_output_tokens": 384000
+        "max_output_tokens": 384000,
+        "thinking_effort": [
+          "low",
+          "medium",
+          "high"
+        ]
       },
-      "max_output_tokens": 384000
+      "max_output_tokens": 384000,
+      "default_reasoning_level": "medium"
     },
     {
       "slug": "glm-4.5",
@@ -1543,7 +1600,20 @@
       "slug": "k3",
       "display_name": "Kimi K3",
       "description": "Multimodal Kimi model with 1M context and toggleable max-effort thinking for long-horizon agent work",
-      "supported_reasoning_levels": [],
+      "supported_reasoning_levels": [
+        {
+          "effort": "low",
+          "description": "Faster, lighter reasoning"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning"
+        },
+        {
+          "effort": "max",
+          "description": "Maximum reasoning effort"
+        }
+      ],
       "shell_type": "default",
       "visibility": "list",
       "provider": "kimi",
@@ -1598,9 +1668,15 @@
           "mode": "bytes",
           "limit": 10000
         },
-        "max_output_tokens": 131072
+        "max_output_tokens": 131072,
+        "thinking_effort": [
+          "low",
+          "high",
+          "max"
+        ]
       },
-      "max_output_tokens": 131072
+      "max_output_tokens": 131072,
+      "default_reasoning_level": "high"
     }
   ]
 }

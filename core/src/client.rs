@@ -1537,7 +1537,13 @@ impl ModelClientSession {
             .map_err(|err| {
                 OdyErr::Stream(format!("failed to create chat provider: {err}"), None)
             })?;
-        let mut request = prompt_to_chat_request(&model_info.slug, prompt, effort.clone());
+        let supported_efforts: Vec<ReasoningEffortConfig> = model_info
+            .supported_reasoning_levels
+            .iter()
+            .map(|level| level.effort.clone())
+            .collect();
+        let mut request =
+            prompt_to_chat_request(&model_info.slug, prompt, effort.clone(), &supported_efforts);
         request.prompt_cache_key = Some(self.client.prompt_cache_key());
         let inference_trace_attempt = inference_trace.start_attempt();
         let stream_result = chat_provider.chat(request).await;
