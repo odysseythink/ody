@@ -1445,6 +1445,10 @@ impl App {
                             message.push_str(&label);
                         }
                         self.chat_widget.add_info_message(message, /*hint*/ None);
+                        self.refresh_in_memory_config_from_disk_best_effort("model selection")
+                            .await;
+                        self.chat_widget
+                            .sync_active_model_provider_config(&self.config);
                     }
                     Err(err) => {
                         let error = format_config_error(&err);

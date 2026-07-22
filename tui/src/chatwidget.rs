@@ -1872,6 +1872,15 @@ impl ChatWidget {
         self.config.model = config.model.clone();
     }
 
+    /// Sync the active model provider fields from a freshly reloaded config.
+    /// Used after  so the status bar reflects the newly selected provider
+    /// without forcing a login/logout-style provider list refresh.
+    pub(crate) fn sync_active_model_provider_config(&mut self, config: &Config) {
+        self.config.model_provider_id = config.model_provider_id.clone();
+        self.config.model_provider = config.model_provider.clone();
+        self.config.model_context_window = config.model_context_window;
+    }
+
     pub(crate) fn token_usage(&self) -> TokenUsage {
         self.token_info
             .as_ref()

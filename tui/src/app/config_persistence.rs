@@ -794,10 +794,6 @@ impl App {
             }
         }
 
-        let model_alias = format!("{alias}/{model_id}");
-        self.chat_widget.set_model(&model_alias);
-        self.sync_active_thread_model_setting(app_server, model_alias.clone())
-            .await;
         self.sync_active_thread_service_tier_to_cached_session()
             .await;
 
