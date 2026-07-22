@@ -10,14 +10,13 @@ use crate::legacy_core::config::Config;
 use ody_config::types::WindowsSandboxModeToml;
 use ody_features::Feature;
 use ody_protocol::config_types::WindowsSandboxLevel;
-#[cfg(all(target_os = "windows"))]
+// These types appear in the signatures of the non-Windows stub fns below too, so
+// they must be imported on every target the module compiles for (it is built on
+// non-Windows under `cfg(test)`; see `mod windows_sandbox` in lib.rs).
 use ody_protocol::models::PermissionProfile;
-#[cfg(all(target_os = "windows"))]
 use ody_utils_absolute_path::AbsolutePathBuf;
-#[cfg(all(target_os = "windows"))]
 use std::collections::HashMap;
 use std::path::Path;
-#[cfg(all(target_os = "windows"))]
 use std::path::PathBuf;
 
 pub(crate) fn level_from_config(config: &Config) -> WindowsSandboxLevel {
