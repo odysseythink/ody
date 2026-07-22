@@ -30,7 +30,7 @@ impl ChatVendor {
             _ => {}
         }
         if let Some(base_url) = base_url {
-            if base_url.contains("moonshot") {
+            if base_url.contains("moonshot") || base_url.contains("kimi") {
                 return ChatVendor::Kimi;
             }
             if base_url.contains("deepseek") {

@@ -337,6 +337,36 @@ impl ConfiguredModelSpec {
     }
 }
 
+/// Providers whose bundled models ship Ody personality instructions.
+///
+/// Personality is a pure prompt-layer feature: it swaps a `{{ personality }}`
+/// placeholder in the model instructions for a short personality blurb, so any
+/// instruction-following model supports it once we supply the template and the
+/// per-personality text below. It requires no special model/provider capability
+/// (unlike reasoning levels, which the provider API must actually honor).
+pub fn provider_supports_personality(provider: &str) -> bool {
+    matches!(provider, "kimi" | "deepseek" | "glm")
+}
+
+/// Build personality-enabled `ModelMessages` from a model's base instructions.
+///
+/// The template is the model's own `base_instructions` with a `{{ personality }}`
+/// placeholder prepended; [`ModelInfo::get_model_instructions`] swaps the
+/// placeholder for the selected personality blurb (empty for the default), so the
+/// non-personality output is the base instructions unchanged.
+pub fn personality_messages_from_base_instructions(base_instructions: &str) -> ModelMessages {
+    ModelMessages {
+        instructions_template: Some(format!(
+            "{PERSONALITY_PLACEHOLDER}\n\n{base_instructions}"
+        )),
+        instructions_variables: Some(ModelInstructionsVariables {
+            personality_default: Some(String::new()),
+            personality_friendly: Some(LOCAL_FRIENDLY_TEMPLATE.to_string()),
+            personality_pragmatic: Some(LOCAL_PRAGMATIC_TEMPLATE.to_string()),
+        }),
+    }
+}
+
 fn local_personality_messages_for_slug(slug: &str) -> Option<ModelMessages> {
     match slug {
         "gpt-5.2-ody" | "exp-ody-personality" => Some(ModelMessages {

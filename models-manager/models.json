@@ -1414,7 +1414,7 @@
       "max_output_tokens": 262144
     },
     {
-      "slug": "kimi-k2.7-code",
+      "slug": "kimi-for-coding",
       "display_name": "Kimi K2.7 Code",
       "description": "Coding-focused Kimi model, stronger on long-horizon repo work with less overthinking",
       "supported_reasoning_levels": [],
@@ -1477,7 +1477,7 @@
       "max_output_tokens": 262144
     },
     {
-      "slug": "kimi-k2.7-code-highspeed",
+      "slug": "kimi-for-coding-highspeed",
       "display_name": "Kimi K2.7 Code Highspeed",
       "description": "Lower-latency Kimi Code variant for interactive edits and coding-agent loops",
       "supported_reasoning_levels": [],
@@ -1540,7 +1540,7 @@
       "max_output_tokens": 262144
     },
     {
-      "slug": "kimi-k3",
+      "slug": "k3",
       "display_name": "Kimi K3",
       "description": "Multimodal Kimi model with 1M context and toggleable max-effort thinking for long-horizon agent work",
       "supported_reasoning_levels": [],

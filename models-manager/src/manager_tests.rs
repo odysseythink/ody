@@ -503,12 +503,57 @@ fn bundled_models_have_populated_capabilities() {
 }
 
 #[test]
+fn bundled_models_support_personality_for_kimi_deepseek_glm() {
+    let response = crate::bundled_models_response().expect("bundled models.json should parse");
+    assert!(
+        !response.models.is_empty(),
+        "bundled models.json should contain models"
+    );
+    for model in &response.models {
+        // Every bundled model belongs to one of these providers, so all of them
+        // should advertise personality support with a substituting placeholder.
+        assert!(
+            crate::model_info::provider_supports_personality(&model.provider),
+            "unexpected provider {} without personality coverage",
+            model.provider
+        );
+        assert!(
+            model.supports_personality(),
+            "bundled model {} should support personality",
+            model.slug
+        );
+
+        // Default personality leaves the base instructions intact; a named
+        // personality prepends its blurb.
+        let default = model.get_model_instructions(/*personality*/ None);
+        assert!(
+            default.contains(&model.base_instructions),
+            "default instructions for {} should preserve base_instructions",
+            model.slug
+        );
+        assert!(
+            !default.contains("{{ personality }}"),
+            "default instructions for {} should strip the placeholder",
+            model.slug
+        );
+        let friendly = model.get_model_instructions(Some(
+            ody_protocol::config_types::Personality::Friendly,
+        ));
+        assert!(
+            friendly.contains("team morale"),
+            "friendly instructions for {} should include the friendly blurb",
+            model.slug
+        );
+    }
+}
+
+#[test]
 fn bundled_models_include_supported_chat_vendors() {
     let response = crate::bundled_models_response().expect("bundled models.json should parse");
     let slugs: std::collections::HashSet<_> = response.models.iter().map(|m| m.slug.as_str()).collect();
     for expected in [
         "kimi-k2.5",
-        "kimi-k3",
+        "k3",
         "deepseek-chat",
         "deepseek-v4-pro",
         "deepseek-v4-flash",

@@ -38,7 +38,7 @@ const MAX_REQUEST_MAX_RETRIES: u64 = 100;
 // OpenAI-compatible third-party Chat Completions providers.
 const KIMI_PROVIDER_NAME: &str = "Kimi";
 pub const KIMI_PROVIDER_ID: &str = "kimi";
-pub const KIMI_DEFAULT_BASE_URL: &str = "https://api.moonshot.ai/v1";
+pub const KIMI_DEFAULT_BASE_URL: &str = "https://api.kimi.com/coding/v1";
 const KIMI_ENV_KEY: &str = "KIMI_API_KEY";
 
 const DEEPSEEK_PROVIDER_NAME: &str = "DeepSeek";
@@ -105,7 +105,7 @@ impl LoginProvider {
     /// no models or the user skips the picker.
     pub fn fallback_model(self) -> &'static str {
         match self {
-            Self::Kimi => "kimi-k2",
+            Self::Kimi => "kimi-for-coding",
             Self::Deepseek => "deepseek-chat",
             Self::Glm => "glm-4-flash",
         }

@@ -291,6 +291,10 @@ fn vendor_resolution_from_base_url() {
         ChatVendor::Kimi
     );
     assert_eq!(
+        ChatVendor::from_provider("custom", Some("https://api.kimi.com/coding/v1")),
+        ChatVendor::Kimi
+    );
+    assert_eq!(
         ChatVendor::from_provider("custom", Some("https://api.deepseek.com/v1")),
         ChatVendor::DeepSeek
     );
