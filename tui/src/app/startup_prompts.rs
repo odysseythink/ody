@@ -183,6 +183,7 @@ pub(super) fn apply_accepted_model_migration(
     app_event_tx: &AppEventSender,
     from_model: String,
     target_model: String,
+    provider_id: String,
     target_default_effort: ReasoningEffortConfig,
 ) {
     app_event_tx.send(AppEvent::PersistModelMigrationPromptAcknowledged {
@@ -197,6 +198,7 @@ pub(super) fn apply_accepted_model_migration(
         target_default_effort.clone(),
     )));
     app_event_tx.send(AppEvent::PersistModelSelection {
+        provider_id,
         model: target_model,
         effort: Some(target_default_effort),
     });
@@ -330,6 +332,7 @@ pub(super) async fn handle_model_migration_prompt_if_needed(
                     app_event_tx,
                     model.to_string(),
                     target_model.clone(),
+                    target_preset.provider.clone(),
                     target_preset.default_reasoning_effort.clone(),
                 );
             }

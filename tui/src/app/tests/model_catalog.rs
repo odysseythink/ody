@@ -233,6 +233,7 @@ async fn accepted_model_migration_persists_target_default_reasoning_effort() {
         &app_event_tx,
         "gpt-5.2".to_string(),
         "gpt-5.4".to_string(),
+        "openai".to_string(),
         ReasoningEffortConfig::Medium,
     );
 
@@ -264,8 +265,8 @@ async fn accepted_model_migration_persists_target_default_reasoning_effort() {
     let persist_selection = rx.try_recv().expect("persist model selection event");
     assert_matches!(
         persist_selection,
-        AppEvent::PersistModelSelection { model, effort }
-            if model == "gpt-5.4" && effort == Some(ReasoningEffortConfig::Medium)
+        AppEvent::PersistModelSelection { provider_id, model, effort }
+            if provider_id == "openai" && model == "gpt-5.4" && effort == Some(ReasoningEffortConfig::Medium)
     );
 }
 

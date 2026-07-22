@@ -59,6 +59,7 @@ fn trusted_project_edit(project_path: &Path) -> ConfigEdit {
 }
 
 pub(crate) fn build_model_selection_edits(
+    provider_id: &str,
     model: &str,
     effort: Option<impl ToString>,
 ) -> Vec<ConfigEdit> {
@@ -72,7 +73,11 @@ pub(crate) fn build_model_selection_edits(
         },
     );
     vec![
-        replace_config_value("model", serde_json::json!(model)),
+        clear_config_value("model"),
+        replace_config_value(
+            "default_model",
+            serde_json::json!(format!("{provider_id}/{model}")),
+        ),
         effort_edit,
     ]
 }

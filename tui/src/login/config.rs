@@ -5,7 +5,7 @@ use ody_config::config_toml::OdyCodeModelConfig;
 use ody_model_provider_info::LoginProvider;
 use std::collections::HashMap;
 
-use crate::config_update::replace_config_value;
+use crate::config_update::{clear_config_value, replace_config_value};
 use ody_model_provider::login::LoginModelInfo;
 
 /// Build config edits for a newly configured provider.
@@ -80,8 +80,9 @@ pub(crate) fn build_login_models_edits(
             ));
         }
     }
+    edits.push(clear_config_value("model"));
     edits.push(replace_config_value(
-        "model",
+        "default_model",
         serde_json::json!(format!("{alias}/{selected_model_id}")),
     ));
     edits
@@ -121,7 +122,7 @@ pub(crate) fn build_logout_provider_edits(
                 .iter()
                 .any(|a| a.eq_ignore_ascii_case(alias))
             {
-                edits.push(clear_config_value("model"));
+                edits.push(clear_config_value("default_model"));
             }
         }
     }

@@ -1,5 +1,6 @@
 use super::*;
 use color_eyre::eyre::WrapErr;
+use ody_protocol::model_metadata::ReasoningEffort;
 use pretty_assertions::assert_eq;
 use std::path::Path;
 
@@ -21,6 +22,34 @@ fn trusted_project_edit_targets_project_trust_level() {
             merge_strategy: MergeStrategy::Replace,
         }
     );
+}
+
+#[test]
+fn build_model_selection_edits_writes_default_model_and_clears_legacy_model() {
+    let edits = build_model_selection_edits(
+        "work-kimi",
+        "kimi-k2",
+        Some(ReasoningEffort::Medium),
+    );
+    assert_eq!(edits.len(), 3);
+    assert_eq!(edits[0].key_path, "model");
+    assert_eq!(edits[0].value, serde_json::Value::Null);
+    assert_eq!(edits[1].key_path, "default_model");
+    assert_eq!(edits[1].value, serde_json::json!("work-kimi/kimi-k2"));
+    assert_eq!(edits[2].key_path, "model_reasoning_effort");
+    assert_eq!(edits[2].value, serde_json::json!("medium"));
+}
+
+#[test]
+fn build_model_selection_edits_clears_reasoning_effort_when_none() {
+    let edits = build_model_selection_edits(
+        "work-kimi",
+        "kimi-k2",
+        None::<ReasoningEffort>,
+    );
+    assert_eq!(edits.len(), 3);
+    assert_eq!(edits[2].key_path, "model_reasoning_effort");
+    assert_eq!(edits[2].value, serde_json::Value::Null);
 }
 
 #[test]

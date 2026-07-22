@@ -886,9 +886,13 @@ impl App {
             AppEvent::OpenReasoningPopup { model } => {
                 self.chat_widget.open_reasoning_popup(model);
             }
-            AppEvent::OpenPlanReasoningScopePrompt { model, effort } => {
+            AppEvent::OpenPlanReasoningScopePrompt {
+                provider_id,
+                model,
+                effort,
+            } => {
                 self.chat_widget
-                    .open_plan_reasoning_scope_prompt(model, effort);
+                    .open_plan_reasoning_scope_prompt(provider_id, model, effort);
             }
             AppEvent::OpenAllModelsPopup { models } => {
                 let current_model = self.chat_widget.current_model().to_string();
@@ -1414,10 +1418,15 @@ impl App {
                     let _ = (preset, mode, profile_selection);
                 }
             }
-            AppEvent::PersistModelSelection { model, effort } => {
+            AppEvent::PersistModelSelection {
+                provider_id,
+                model,
+                effort,
+            } => {
                 match crate::config_update::write_config_batch(
                     app_server.request_handle(),
                     crate::config_update::build_model_selection_edits(
+                        provider_id.as_str(),
                         model.as_str(),
                         effort.as_ref(),
                     ),
