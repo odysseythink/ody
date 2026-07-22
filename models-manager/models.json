@@ -138,6 +138,10 @@
         {
           "effort": "high",
           "description": "Deeper reasoning"
+        },
+        {
+          "effort": "max",
+          "description": "Maximum reasoning effort"
         }
       ],
       "shell_type": "default",
@@ -196,7 +200,8 @@
         "thinking_effort": [
           "low",
           "medium",
-          "high"
+          "high",
+          "max"
         ]
       },
       "max_output_tokens": 384000,
@@ -218,6 +223,10 @@
         {
           "effort": "high",
           "description": "Deeper reasoning"
+        },
+        {
+          "effort": "max",
+          "description": "Maximum reasoning effort"
         }
       ],
       "shell_type": "default",
@@ -276,7 +285,8 @@
         "thinking_effort": [
           "low",
           "medium",
-          "high"
+          "high",
+          "max"
         ]
       },
       "max_output_tokens": 384000,
@@ -298,6 +308,10 @@
         {
           "effort": "high",
           "description": "Deeper reasoning"
+        },
+        {
+          "effort": "max",
+          "description": "Maximum reasoning effort"
         }
       ],
       "shell_type": "default",
@@ -356,7 +370,8 @@
         "thinking_effort": [
           "low",
           "medium",
-          "high"
+          "high",
+          "max"
         ]
       },
       "max_output_tokens": 384000,
@@ -366,7 +381,12 @@
       "slug": "glm-4.5",
       "display_name": "GLM-4.5",
       "description": "Hybrid-reasoning GLM release that made the 4.5 line broadly useful",
-      "supported_reasoning_levels": [],
+      "supported_reasoning_levels": [
+        {
+          "effort": "high",
+          "description": "Enable extended thinking (higher latency)"
+        }
+      ],
       "shell_type": "default",
       "visibility": "list",
       "provider": "glm",
@@ -419,7 +439,10 @@
           "mode": "bytes",
           "limit": 10000
         },
-        "max_output_tokens": 98304
+        "max_output_tokens": 98304,
+        "thinking_effort": [
+          "high"
+        ]
       },
       "max_output_tokens": 98304
     },
@@ -427,7 +450,12 @@
       "slug": "glm-4.5-air",
       "display_name": "GLM-4.5-Air",
       "description": "Lighter GLM-4.5 variant for fast coding assistance and cheaper agents",
-      "supported_reasoning_levels": [],
+      "supported_reasoning_levels": [
+        {
+          "effort": "high",
+          "description": "Enable extended thinking (higher latency)"
+        }
+      ],
       "shell_type": "default",
       "visibility": "list",
       "provider": "glm",
@@ -480,7 +508,10 @@
           "mode": "bytes",
           "limit": 10000
         },
-        "max_output_tokens": 98304
+        "max_output_tokens": 98304,
+        "thinking_effort": [
+          "high"
+        ]
       },
       "max_output_tokens": 98304
     },
@@ -488,7 +519,12 @@
       "slug": "glm-4.5-flash",
       "display_name": "GLM-4.5-Flash",
       "description": "Efficient GLM model for fast reasoning, coding, and agent workflows",
-      "supported_reasoning_levels": [],
+      "supported_reasoning_levels": [
+        {
+          "effort": "high",
+          "description": "Enable extended thinking (higher latency)"
+        }
+      ],
       "shell_type": "default",
       "visibility": "list",
       "provider": "glm",
@@ -541,7 +577,10 @@
           "mode": "bytes",
           "limit": 10000
         },
-        "max_output_tokens": 98304
+        "max_output_tokens": 98304,
+        "thinking_effort": [
+          "high"
+        ]
       },
       "max_output_tokens": 98304
     },
@@ -549,7 +588,12 @@
       "slug": "glm-4.5v",
       "display_name": "GLM-4.5V",
       "description": "GLM vision model for visual reasoning, documents, and multimodal agents",
-      "supported_reasoning_levels": [],
+      "supported_reasoning_levels": [
+        {
+          "effort": "high",
+          "description": "Enable extended thinking (higher latency)"
+        }
+      ],
       "shell_type": "default",
       "visibility": "list",
       "provider": "glm",
@@ -604,7 +648,10 @@
           "mode": "bytes",
           "limit": 10000
         },
-        "max_output_tokens": 16384
+        "max_output_tokens": 16384,
+        "thinking_effort": [
+          "high"
+        ]
       },
       "max_output_tokens": 16384
     },
@@ -612,7 +659,12 @@
       "slug": "glm-4.6",
       "display_name": "GLM-4.6",
       "description": "Late GLM-4 workhorse for coding agents, reasoning, and structured tasks",
-      "supported_reasoning_levels": [],
+      "supported_reasoning_levels": [
+        {
+          "effort": "high",
+          "description": "Enable extended thinking (higher latency)"
+        }
+      ],
       "shell_type": "default",
       "visibility": "list",
       "provider": "glm",
@@ -665,7 +717,10 @@
           "mode": "bytes",
           "limit": 10000
         },
-        "max_output_tokens": 131072
+        "max_output_tokens": 131072,
+        "thinking_effort": [
+          "high"
+        ]
       },
       "max_output_tokens": 131072
     },
@@ -673,7 +728,12 @@
       "slug": "glm-4.6v",
       "display_name": "GLM-4.6V",
       "description": "GLM vision model for visual reasoning, documents, and multimodal agents",
-      "supported_reasoning_levels": [],
+      "supported_reasoning_levels": [
+        {
+          "effort": "high",
+          "description": "Enable extended thinking (higher latency)"
+        }
+      ],
       "shell_type": "default",
       "visibility": "list",
       "provider": "glm",
@@ -728,7 +788,10 @@
           "mode": "bytes",
           "limit": 10000
         },
-        "max_output_tokens": 32768
+        "max_output_tokens": 32768,
+        "thinking_effort": [
+          "high"
+        ]
       },
       "max_output_tokens": 32768
     },
@@ -736,7 +799,12 @@
       "slug": "glm-4.7",
       "display_name": "GLM-4.7",
       "description": "Mature GLM model for dependable coding, reasoning, and structured agent tasks",
-      "supported_reasoning_levels": [],
+      "supported_reasoning_levels": [
+        {
+          "effort": "high",
+          "description": "Enable extended thinking (higher latency)"
+        }
+      ],
       "shell_type": "default",
       "visibility": "list",
       "provider": "glm",
@@ -789,7 +857,10 @@
           "mode": "bytes",
           "limit": 10000
         },
-        "max_output_tokens": 131072
+        "max_output_tokens": 131072,
+        "thinking_effort": [
+          "high"
+        ]
       },
       "max_output_tokens": 131072
     },
@@ -797,7 +868,12 @@
       "slug": "glm-4.7-flash",
       "display_name": "GLM-4.7-Flash",
       "description": "Budget GLM lane for fast coding help, routing, and everyday automation",
-      "supported_reasoning_levels": [],
+      "supported_reasoning_levels": [
+        {
+          "effort": "high",
+          "description": "Enable extended thinking (higher latency)"
+        }
+      ],
       "shell_type": "default",
       "visibility": "list",
       "provider": "glm",
@@ -850,7 +926,10 @@
           "mode": "bytes",
           "limit": 10000
         },
-        "max_output_tokens": 131072
+        "max_output_tokens": 131072,
+        "thinking_effort": [
+          "high"
+        ]
       },
       "max_output_tokens": 131072
     },
@@ -858,7 +937,12 @@
       "slug": "glm-4.7-flashx",
       "display_name": "GLM-4.7-FlashX",
       "description": "Efficient GLM model for fast reasoning, coding, and agent workflows",
-      "supported_reasoning_levels": [],
+      "supported_reasoning_levels": [
+        {
+          "effort": "high",
+          "description": "Enable extended thinking (higher latency)"
+        }
+      ],
       "shell_type": "default",
       "visibility": "list",
       "provider": "glm",
@@ -911,7 +995,10 @@
           "mode": "bytes",
           "limit": 10000
         },
-        "max_output_tokens": 131072
+        "max_output_tokens": 131072,
+        "thinking_effort": [
+          "high"
+        ]
       },
       "max_output_tokens": 131072
     },
@@ -919,7 +1006,12 @@
       "slug": "glm-5",
       "display_name": "GLM-5",
       "description": "General GLM flagship for coding, analysis, and tool-heavy engineering workflows",
-      "supported_reasoning_levels": [],
+      "supported_reasoning_levels": [
+        {
+          "effort": "high",
+          "description": "Enable extended thinking (higher latency)"
+        }
+      ],
       "shell_type": "default",
       "visibility": "list",
       "provider": "glm",
@@ -972,7 +1064,10 @@
           "mode": "bytes",
           "limit": 10000
         },
-        "max_output_tokens": 131072
+        "max_output_tokens": 131072,
+        "thinking_effort": [
+          "high"
+        ]
       },
       "max_output_tokens": 131072
     },
@@ -980,7 +1075,12 @@
       "slug": "glm-5-turbo",
       "display_name": "GLM-5-Turbo",
       "description": "Faster GLM-5 lane for coding agents that need lower latency",
-      "supported_reasoning_levels": [],
+      "supported_reasoning_levels": [
+        {
+          "effort": "high",
+          "description": "Enable extended thinking (higher latency)"
+        }
+      ],
       "shell_type": "default",
       "visibility": "list",
       "provider": "glm",
@@ -1033,7 +1133,10 @@
           "mode": "bytes",
           "limit": 10000
         },
-        "max_output_tokens": 131072
+        "max_output_tokens": 131072,
+        "thinking_effort": [
+          "high"
+        ]
       },
       "max_output_tokens": 131072
     },
@@ -1041,7 +1144,12 @@
       "slug": "glm-5.1",
       "display_name": "GLM-5.1",
       "description": "Strong GLM coding model for agentic engineering, terminals, and repository generation",
-      "supported_reasoning_levels": [],
+      "supported_reasoning_levels": [
+        {
+          "effort": "high",
+          "description": "Enable extended thinking (higher latency)"
+        }
+      ],
       "shell_type": "default",
       "visibility": "list",
       "provider": "glm",
@@ -1094,7 +1202,10 @@
           "mode": "bytes",
           "limit": 10000
         },
-        "max_output_tokens": 131072
+        "max_output_tokens": 131072,
+        "thinking_effort": [
+          "high"
+        ]
       },
       "max_output_tokens": 131072
     },
@@ -1102,7 +1213,12 @@
       "slug": "glm-5.2",
       "display_name": "GLM-5.2",
       "description": "Open flagship GLM for long-horizon coding agents and million-token context work",
-      "supported_reasoning_levels": [],
+      "supported_reasoning_levels": [
+        {
+          "effort": "high",
+          "description": "Enable extended thinking (higher latency)"
+        }
+      ],
       "shell_type": "default",
       "visibility": "list",
       "provider": "glm",
@@ -1155,7 +1271,10 @@
           "mode": "bytes",
           "limit": 10000
         },
-        "max_output_tokens": 131072
+        "max_output_tokens": 131072,
+        "thinking_effort": [
+          "high"
+        ]
       },
       "max_output_tokens": 131072
     },
@@ -1163,7 +1282,12 @@
       "slug": "glm-5v-turbo",
       "display_name": "GLM-5V-Turbo",
       "description": "Fast GLM vision model for screenshots, documents, and multimodal agent tasks",
-      "supported_reasoning_levels": [],
+      "supported_reasoning_levels": [
+        {
+          "effort": "high",
+          "description": "Enable extended thinking (higher latency)"
+        }
+      ],
       "shell_type": "default",
       "visibility": "list",
       "provider": "glm",
@@ -1218,7 +1342,10 @@
           "mode": "bytes",
           "limit": 10000
         },
-        "max_output_tokens": 131072
+        "max_output_tokens": 131072,
+        "thinking_effort": [
+          "high"
+        ]
       },
       "max_output_tokens": 131072
     },

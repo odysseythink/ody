@@ -120,21 +120,28 @@ impl ChatVendor {
 
     /// Apply provider-specific mutations to the fully built request body.
     ///
-    /// GLM (Zhipu) thinking models default to thinking **ON** when the request
-    /// carries no thinking control, which streams a long `reasoning_content`
-    /// trace and roughly doubles latency (measured: a one-line prompt took 12.8s
-    /// with thinking vs 6.7s without; large designs blow past the review
-    /// timeout). ody already treats GLM as non-thinking (see
-    /// [`Self::supports_thinking` in the adapter] and [`Self::emits_reasoning_effort`]),
-    /// so make the wire match that stance by explicitly disabling it. Mirrors
-    /// ody-code's GLM provider, which sends `thinking: { type: "disabled" }` when
-    /// its thinking effort is off (`packages/kosong/src/providers/glm.ts`).
+    /// GLM (Zhipu) thinking is binary and controlled by `thinking: { type }`, not
+    /// by `reasoning_effort`. Left uncontrolled it defaults **ON** server-side,
+    /// which streams a long `reasoning_content` trace and roughly doubles latency
+    /// (measured: a one-line prompt took 12.8s with thinking vs 6.7s without), so
+    /// ody keeps it **off by default** and only enables it when the selected model
+    /// advertises a reasoning level and the user picked one. We reuse
+    /// `reasoning_effort` (which is never emitted on GLM's wire, see
+    /// [`Self::emits_reasoning_effort`]) purely as the on/off signal. Mirrors
+    /// ody-code's GLM provider (`packages/kosong/src/providers/glm.ts`).
     pub fn apply_request(self, body: &mut Value, request: &ChatCompletionsRequest) {
-        let _ = request;
         if self == ChatVendor::Glm
             && let Some(object) = body.as_object_mut()
         {
-            object.insert("thinking".into(), serde_json::json!({ "type": "disabled" }));
+            let thinking_type = if request.reasoning_effort.is_some() {
+                "enabled"
+            } else {
+                "disabled"
+            };
+            object.insert(
+                "thinking".into(),
+                serde_json::json!({ "type": thinking_type }),
+            );
         }
     }
 }

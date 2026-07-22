@@ -123,11 +123,21 @@ fn reasoning_effort_emitted_for_kimi_but_not_glm() {
 }
 
 #[test]
-fn glm_disables_thinking_but_others_do_not() {
-    // GLM defaults thinking ON server-side unless told otherwise; ody treats
-    // GLM as non-thinking, so the wire must explicitly disable it.
-    let glm = base_request(ChatVendor::Glm).to_wire();
-    assert_eq!(glm["thinking"], json!({ "type": "disabled" }));
+fn glm_thinking_toggles_on_reasoning_effort() {
+    // GLM defaults thinking ON server-side; ody keeps it off unless a reasoning
+    // level was selected, in which case `thinking:{type:enabled}` turns it on.
+    // `reasoning_effort` itself is never emitted on GLM's wire.
+    let glm_off = base_request(ChatVendor::Glm).to_wire();
+    assert_eq!(glm_off["thinking"], json!({ "type": "disabled" }));
+
+    let mut glm_on = base_request(ChatVendor::Glm);
+    glm_on.reasoning_effort = Some("high".to_string());
+    let glm_on = glm_on.to_wire();
+    assert_eq!(glm_on["thinking"], json!({ "type": "enabled" }));
+    assert!(
+        glm_on.get("reasoning_effort").is_none(),
+        "GLM must not emit reasoning_effort on the wire"
+    );
 
     for vendor in [ChatVendor::Generic, ChatVendor::Kimi, ChatVendor::DeepSeek] {
         assert!(
