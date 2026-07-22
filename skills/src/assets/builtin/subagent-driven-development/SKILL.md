@@ -2,7 +2,6 @@
 name: subagent-driven-development
 description: Use when executing implementation plans with independent tasks in the current session
 namespace: core
-upstream: superpowers@v5.1.0
 ---
 
 # Subagent-Driven Development

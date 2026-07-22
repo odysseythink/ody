@@ -2,7 +2,6 @@
 name: dispatching-parallel-agents
 description: Use when facing 2+ independent tasks that can be worked on without shared state or sequential dependencies
 namespace: core
-upstream: superpowers@v5.1.0
 ---
 
 # Dispatching Parallel Agents
