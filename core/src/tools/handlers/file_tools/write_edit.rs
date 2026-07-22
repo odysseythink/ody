@@ -36,7 +36,7 @@ pub(crate) async fn resolve_write_path(
         turn,
         environment_id,
         Some(path),
-        PathAccessMode::WorkspaceRelativeOnly,
+        PathAccessMode::AbsoluteOutsideAllowed,
     ) {
         return Ok(resolved);
     }
@@ -59,7 +59,7 @@ pub(crate) async fn resolve_write_path(
             turn,
             environment_id,
             Some(path),
-            PathAccessMode::WorkspaceRelativeOnly,
+            PathAccessMode::AbsoluteOutsideAllowed,
         )
     }
 }
