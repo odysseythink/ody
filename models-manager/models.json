@@ -128,20 +128,12 @@
       "description": "DeepSeek reasoning model for multi-step analysis, math, coding, and tools",
       "supported_reasoning_levels": [
         {
-          "effort": "low",
-          "description": "Faster, lighter reasoning"
-        },
-        {
           "effort": "medium",
-          "description": "Balanced reasoning"
-        },
-        {
-          "effort": "high",
-          "description": "Deeper reasoning"
+          "description": "Standard reasoning"
         },
         {
           "effort": "max",
-          "description": "Maximum reasoning effort"
+          "description": "Deep reasoning (slower)"
         }
       ],
       "shell_type": "default",
@@ -198,9 +190,7 @@
         },
         "max_output_tokens": 384000,
         "thinking_effort": [
-          "low",
           "medium",
-          "high",
           "max"
         ]
       },
@@ -213,20 +203,12 @@
       "description": "Fast DeepSeek V4 lane for economical reasoning, coding, and long-context work",
       "supported_reasoning_levels": [
         {
-          "effort": "low",
-          "description": "Faster, lighter reasoning"
-        },
-        {
           "effort": "medium",
-          "description": "Balanced reasoning"
-        },
-        {
-          "effort": "high",
-          "description": "Deeper reasoning"
+          "description": "Standard reasoning"
         },
         {
           "effort": "max",
-          "description": "Maximum reasoning effort"
+          "description": "Deep reasoning (slower)"
         }
       ],
       "shell_type": "default",
@@ -283,9 +265,7 @@
         },
         "max_output_tokens": 384000,
         "thinking_effort": [
-          "low",
           "medium",
-          "high",
           "max"
         ]
       },
@@ -298,20 +278,12 @@
       "description": "Open MoE flagship with million-token context for coding and long agent runs",
       "supported_reasoning_levels": [
         {
-          "effort": "low",
-          "description": "Faster, lighter reasoning"
-        },
-        {
           "effort": "medium",
-          "description": "Balanced reasoning"
-        },
-        {
-          "effort": "high",
-          "description": "Deeper reasoning"
+          "description": "Standard reasoning"
         },
         {
           "effort": "max",
-          "description": "Maximum reasoning effort"
+          "description": "Deep reasoning (slower)"
         }
       ],
       "shell_type": "default",
@@ -368,9 +340,7 @@
         },
         "max_output_tokens": 384000,
         "thinking_effort": [
-          "low",
           "medium",
-          "high",
           "max"
         ]
       },
