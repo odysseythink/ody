@@ -22,6 +22,7 @@ pub mod profile_toml;
 mod project_root_markers;
 mod requirements_exec_policy;
 mod requirements_layers;
+pub mod shell_auto_detect;
 pub mod schema;
 mod skills_config;
 mod state;
@@ -171,3 +172,7 @@ pub use thread_config::ThreadConfigLoaderFuture;
 pub use thread_config::ThreadConfigSource;
 pub use thread_config::UserThreadConfig;
 pub use toml::Value as TomlValue;
+
+pub use shell_auto_detect::ConfigFileLock;
+pub use shell_auto_detect::ShellConfigResult;
+pub use shell_auto_detect::resolve_windows_shell;

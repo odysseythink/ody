@@ -1157,6 +1157,7 @@ fn session_configured_from_thread_response(
         reasoning_effort,
         initial_messages: None,
         network_proxy: None,
+        user_notification: None,
         rollout_path,
     })
 }

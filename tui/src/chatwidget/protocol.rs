@@ -164,6 +164,9 @@ impl ChatWidget {
                     .map(|details| format!("{}: {details}", notification.summary))
                     .unwrap_or(notification.summary),
             ),
+            ServerNotification::InfoMessage(notification) => {
+                self.add_info_message(notification.message, None);
+            }
             ServerNotification::McpServerStatusUpdated(notification) => {
                 self.on_mcp_server_status_updated(notification)
             }

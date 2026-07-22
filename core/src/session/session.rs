@@ -14,9 +14,11 @@ use ody_protocol::config_types::ServiceTier;
 use ody_protocol::permissions::FileSystemPath;
 use ody_protocol::permissions::FileSystemSpecialPath;
 use ody_protocol::protocol::MultiAgentVersion;
+use ody_protocol::protocol::NotificationLevel;
 use ody_protocol::protocol::ThreadSource;
 use ody_protocol::protocol::TurnEnvironmentSelection;
 use ody_protocol::protocol::TurnEnvironmentSelections;
+use ody_protocol::protocol::UserNotification;
 use std::sync::OnceLock;
 use tokio::sync::Semaphore;
 
@@ -1203,6 +1205,19 @@ impl Session {
                         )
                     }),
                     rollout_path,
+                    user_notification: config.shell_config_result.as_ref().and_then(|result| {
+                        if result.auto_detected_and_persisted {
+                            Some(UserNotification {
+                                level: NotificationLevel::Info,
+                                message: format!(
+                                    "已自动检测到 bash 并将其绝对路径 '{}' 写入 config.toml。",
+                                    result.shell.display()
+                                ),
+                            })
+                        } else {
+                            None
+                        }
+                    }),
                 }),
             })
             .chain(post_session_configured_events.into_iter());

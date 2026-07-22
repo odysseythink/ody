@@ -4913,6 +4913,26 @@
           "properties": {
             "method": {
               "enum": [
+                "infoMessage"
+              ],
+              "title": "InfoMessageNotificationMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/InfoMessageNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "title": "InfoMessageNotification",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "enum": [
                 "fuzzyFileSearch/sessionUpdated"
               ],
               "title": "FuzzyFileSearch/sessionUpdatedNotificationMethod",
@@ -10164,6 +10184,20 @@
           "original"
         ],
         "type": "string"
+      },
+      "InfoMessageNotification": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "message": {
+            "description": "Localized informational message for the user.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "InfoMessageNotification",
+        "type": "object"
       },
       "InputModality": {
         "description": "Canonical user-input modality tags advertised by a model.",

@@ -22,7 +22,9 @@ use ody_config::ProfileV2Name;
 use ody_config::ResidencyRequirement;
 use ody_config::SandboxModeRequirement;
 use ody_config::Sourced;
+use ody_config::ShellConfigResult;
 use ody_config::ThreadConfigLoader;
+use ody_config::resolve_windows_shell;
 use ody_config::config_toml::ConfigLockfileToml;
 use ody_config::config_toml::ConfigToml;
 use ody_config::config_toml::DEFAULT_PROJECT_DOC_MAX_BYTES;
@@ -777,6 +779,10 @@ pub struct Config {
     /// login shell elsewhere).
     pub shell: Option<String>,
 
+    /// Metadata about how `shell` was resolved. Set when Windows auto-detects
+    /// a native bash and persists the absolute path to the user's config.
+    pub shell_config_result: Option<ShellConfigResult>,
+
     /// Developer instructions override injected as a separate message.
     pub developer_instructions: Option<String>,
 
@@ -1421,7 +1427,7 @@ impl ConfigBuilder {
         // relative paths to absolute paths based on the parent folder of the
         // respective config file, so we should be safe to deserialize without
         // AbsolutePathBufGuard here.
-        let config_toml: ConfigToml = match merged_toml.try_into() {
+        let mut config_toml: ConfigToml = match merged_toml.try_into() {
             Ok(config_toml) => config_toml,
             Err(err) => {
                 if let Some(config_error) = ody_config::first_layer_config_error::<ConfigToml>(
@@ -1439,6 +1445,16 @@ impl ConfigBuilder {
                 return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, err));
             }
         };
+
+        let shell_config_result = resolve_windows_shell(
+            ody_home.as_path(),
+            config_toml.shell.as_deref(),
+        )
+        .await;
+        if let Some(ref result) = shell_config_result {
+            config_toml.shell = Some(result.shell.to_string_lossy().to_string());
+        }
+
         let config_lock_settings = config_toml
             .debug
             .as_ref()
@@ -1467,6 +1483,7 @@ impl ConfigBuilder {
                 harness_overrides,
                 ody_home,
                 lock_config_layer_stack,
+                shell_config_result,
             )
             .await?;
             config.config_lock_toml = Some(Arc::new(expected_lock_config));
@@ -1481,6 +1498,7 @@ impl ConfigBuilder {
             harness_overrides,
             ody_home,
             config_layer_stack,
+            shell_config_result,
         )
         .await
     }
@@ -1745,6 +1763,7 @@ impl Config {
             },
             refreshed_config.ody_home.clone(),
             config_layer_stack,
+            None,
         )
         .await
     }
@@ -1790,6 +1809,7 @@ impl Config {
             ConfigOverrides::default(),
             ody_home,
             ConfigLayerStack::default(),
+            None,
         )
         .await
     }
@@ -3082,6 +3102,7 @@ impl Config {
             overrides,
             ody_home,
             config_layer_stack,
+            None,
         )
         .await
     }
@@ -3092,6 +3113,7 @@ impl Config {
         overrides: ConfigOverrides,
         ody_home: AbsolutePathBuf,
         config_layer_stack: ConfigLayerStack,
+        shell_config_result: Option<ShellConfigResult>,
     ) -> std::io::Result<Self> {
         // Keep the large config-construction future off small test thread stacks.
         Box::pin(async move {
@@ -4021,6 +4043,7 @@ impl Config {
             language: cfg.language.clone(),
             model_language: effective_language,
             shell: cfg.shell.clone(),
+            shell_config_result,
             personality,
             developer_instructions,
             compact_prompt,

@@ -225,6 +225,7 @@ async fn config_summary_entries_include_runtime_workspace_roots() {
         reasoning_effort: None,
         initial_messages: None,
         network_proxy: None,
+        user_notification: None,
         rollout_path: None,
     };
 

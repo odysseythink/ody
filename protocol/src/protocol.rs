@@ -3685,6 +3685,26 @@ pub struct SessionNetworkProxyRuntime {
     pub socks_addr: String,
 }
 
+/// Notification level for a user-facing notification.
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "protocol/")]
+pub enum NotificationLevel {
+    /// Non-critical informational message.
+    Info,
+}
+
+/// A user-facing notification that should be shown once when a session is configured.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "protocol/")]
+pub struct UserNotification {
+    /// Severity level of the notification.
+    pub level: NotificationLevel,
+    /// Localized message to display to the user.
+    pub message: String,
+}
+
 #[derive(Debug, Clone, Serialize, JsonSchema, TS)]
 pub struct SessionConfiguredEvent {
     pub session_id: SessionId,
@@ -3746,6 +3766,11 @@ pub struct SessionConfiguredEvent {
     #[ts(optional)]
     pub network_proxy: Option<SessionNetworkProxyRuntime>,
 
+    /// Optional user-facing notification to show once on session startup.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub user_notification: Option<UserNotification>,
+
     /// Path in which the rollout is stored. Can be `None` for ephemeral threads
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rollout_path: Option<PathBuf>,
@@ -3784,6 +3809,8 @@ impl<'de> Deserialize<'de> for SessionConfiguredEvent {
             reasoning_effort: Option<ReasoningEffortConfig>,
             initial_messages: Option<Vec<EventMsg>>,
             network_proxy: Option<SessionNetworkProxyRuntime>,
+            #[serde(default)]
+            user_notification: Option<UserNotification>,
             rollout_path: Option<PathBuf>,
         }
 
@@ -3817,6 +3844,7 @@ impl<'de> Deserialize<'de> for SessionConfiguredEvent {
             reasoning_effort: wire.reasoning_effort,
             initial_messages: wire.initial_messages,
             network_proxy: wire.network_proxy,
+            user_notification: wire.user_notification,
             rollout_path: wire.rollout_path,
         })
     }
@@ -5581,6 +5609,7 @@ mod tests {
                 reasoning_effort: Some(ReasoningEffortConfig::default()),
                 initial_messages: None,
                 network_proxy: None,
+                user_notification: None,
                 rollout_path: Some(rollout_file.path().to_path_buf()),
             }),
         };

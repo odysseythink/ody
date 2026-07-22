@@ -7,7 +7,9 @@ use ody_config::ConfigLayerEntry;
 use ody_config::ConfigLayerStack;
 use ody_config::ProfileV2Name;
 use ody_config::RequirementSource;
+use ody_config::ShellConfigResult;
 use ody_config::Sourced;
+use ody_config::resolve_windows_shell;
 use ody_config::config_toml::AgentRoleToml;
 use ody_config::config_toml::AgentsToml;
 use ody_config::config_toml::AutoReviewToml;
@@ -4420,6 +4422,7 @@ async fn rebuild_preserving_session_layers_refreshes_requirements() -> std::io::
         },
         ody_home.abs(),
         refreshed_layer_stack,
+        None,
     )
     .await?;
     let thread_layer_stack = ConfigLayerStack::new(
@@ -4487,6 +4490,7 @@ async fn rebuild_preserving_session_layers_refreshes_requirements() -> std::io::
         },
         ody_home.abs(),
         thread_layer_stack,
+        None,
     )
     .await?;
     let config = thread_config
@@ -4581,6 +4585,7 @@ async fn rebuild_preserving_session_layers_refreshes_plugin_derived_mcp_config()
         },
         ody_home.abs(),
         refreshed_layer_stack,
+        None,
     )
     .await?;
     let thread_layer_stack = ConfigLayerStack::new(
@@ -4610,6 +4615,7 @@ async fn rebuild_preserving_session_layers_refreshes_plugin_derived_mcp_config()
         },
         ody_home.abs(),
         thread_layer_stack,
+        None,
     )
     .await?;
     let config = thread_config
@@ -6900,6 +6906,7 @@ async fn load_config_uses_requirements_guardian_policy_config() -> std::io::Resu
         },
         ody_home.abs(),
         config_layer_stack,
+        None,
     )
     .await?;
 
@@ -6985,6 +6992,7 @@ async fn requirements_guardian_policy_beats_auto_review() -> std::io::Result<()>
         },
         ody_home.abs(),
         config_layer_stack,
+        None,
     )
     .await?;
 
@@ -7043,6 +7051,7 @@ async fn load_config_ignores_empty_requirements_guardian_policy_config() -> std:
         },
         ody_home.abs(),
         config_layer_stack,
+        None,
     )
     .await?;
 
@@ -7181,6 +7190,7 @@ config_file = "./agents/researcher.toml"
         },
         ody_home.abs(),
         config_layer_stack,
+        None,
     )
     .await?;
 
@@ -8688,6 +8698,7 @@ async fn test_requirements_web_search_mode_allowlist_does_not_warn_when_unset() 
         },
         fixture.ody_home(),
         config_layer_stack,
+        None,
     )
     .await?;
 
@@ -11380,4 +11391,73 @@ max_context_size = 272000
         ..Default::default()
     };
     assert!(configured_model_catalog(&cfg.models, "openai", &provider).is_none());
+}
+
+
+#[tokio::test]
+async fn shell_config_result_is_stored_in_config() {
+    let tmp = tempdir().unwrap();
+    let home = tmp.path().to_path_buf().abs();
+    let shell_path = std::path::PathBuf::from(r"C:\Program Files\Git\bin\bash.exe");
+    let shell_config_result = ShellConfigResult {
+        shell: shell_path.clone(),
+        auto_detected_and_persisted: true,
+    };
+
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml::default(),
+        ConfigOverrides {
+            cwd: Some(home.as_path().to_path_buf()),
+            ..Default::default()
+        },
+        home,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(config.shell_config_result, None);
+
+    let config_with_result = Config::load_config_with_layer_stack(
+        LOCAL_FS.as_ref(),
+        ConfigToml::default(),
+        ConfigOverrides {
+            cwd: Some(tmp.path().to_path_buf()),
+            ..Default::default()
+        },
+        tmp.path().to_path_buf().abs(),
+        ConfigLayerStack::default(),
+        Some(shell_config_result.clone()),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        config_with_result.shell_config_result,
+        Some(shell_config_result)
+    );
+}
+
+#[tokio::test]
+#[cfg(windows)]
+async fn windows_shell_auto_detection_persists_and_sets_shell() {
+    let tmp = tempdir().unwrap();
+    let home = tmp.path().to_path_buf().abs();
+
+    let result = resolve_windows_shell(home.as_path(), None).await;
+
+    if let Some(shell_config_result) = result {
+        assert!(
+            shell_config_result.shell.is_absolute(),
+            "detected shell should be an absolute path"
+        );
+        let config_path = home.as_path().join(ody_config::CONFIG_TOML_FILE);
+        let contents = std::fs::read_to_string(&config_path).unwrap();
+        let doc = contents.parse::<toml_edit::DocumentMut>().unwrap();
+        assert_eq!(
+            doc["shell"].as_str(),
+            Some(shell_config_result.shell.to_string_lossy().as_ref())
+        );
+    } else {
+        // No bash available in this environment; skip the persistence assertions.
+    }
 }

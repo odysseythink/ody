@@ -1953,6 +1953,18 @@
       ],
       "type": "string"
     },
+    "InfoMessageNotification": {
+      "properties": {
+        "message": {
+          "description": "Localized informational message for the user.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "type": "object"
+    },
     "ItemCompletedNotification": {
       "properties": {
         "completedAtMs": {
@@ -6502,6 +6514,26 @@
         "params"
       ],
       "title": "ConfigWarningNotification",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "infoMessage"
+          ],
+          "title": "InfoMessageNotificationMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/InfoMessageNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "title": "InfoMessageNotification",
       "type": "object"
     },
     {

@@ -27,10 +27,12 @@ ody-git-utils = { workspace = true }
 ody-model-provider-info = { workspace = true }
 ody-network-proxy = { workspace = true }
 ody-protocol = { workspace = true }
+ody-shell-command = { workspace = true }
 ody-utils-absolute-path = { workspace = true }
 ody-utils-path = { workspace = true }
 ody-utils-path-uri = { workspace = true }
 dunce = { workspace = true }
+fs2 = { workspace = true }
 futures = { workspace = true, features = ["alloc", "std"] }
 gethostname = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
@@ -44,7 +46,7 @@ serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["fs"] }
+tokio = { workspace = true, features = ["fs", "rt"] }
 toml = { workspace = true, features = ["preserve_order"] }
 toml_edit = { workspace = true }
 sys-locale = { workspace = true }

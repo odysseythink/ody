@@ -159,6 +159,7 @@ mod reload {
             ),
             config.ody_home.clone(),
             config_layer_stack,
+            None,
         )
         .await?;
         Ok(next_config)

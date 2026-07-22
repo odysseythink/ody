@@ -1,6 +1,7 @@
 use super::*;
 use crate::error_code::method_not_found;
 use ody_app_server_protocol::SelectedCapabilityRoot;
+use ody_app_server_protocol::InfoMessageNotification;
 use ody_extension_api::ExtensionDataInit;
 use ody_protocol::config_types::MultiAgentMode;
 use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_DANGER_FULL_ACCESS;
@@ -1276,6 +1277,22 @@ impl ThreadRequestProcessor {
                 otel.name = "app_server.thread_start.notify_started",
             ))
             .await;
+
+        if let Some(user_notification) = session_configured.user_notification {
+            listener_task_context
+                .outgoing
+                .send_server_notification(ServerNotification::InfoMessage(
+                    InfoMessageNotification {
+                        message: user_notification.message,
+                    },
+                ))
+                .instrument(tracing::info_span!(
+                    "app_server.thread_start.notify_info",
+                    otel.name = "app_server.thread_start.notify_info",
+                ))
+                .await;
+        }
+
         session_telemetry.record_startup_phase(
             "thread_start_total",
             thread_start_started_at.elapsed(),
