@@ -26,17 +26,53 @@ Actions that gather truth, reduce ambiguity, or validate feasibility without cha
 * Static analysis, inspection, and repo exploration
 * Dry-run style commands when they do not edit repo-tracked files
 * Tests, builds, or checks that may write to caches or build artifacts (for example, `target/`, `.cache/`, or snapshots) so long as they do not edit repo-tracked files
+* **Minimal experiments (spikes)** written and run under `.ody-code/spikes/` (gitignored, throwaway) to validate a load-bearing assumption — see "Minimal experiments (spikes)" below for the trigger gate, the sandbox rule, and the data/credential rules
 
 ### Not allowed (mutating, plan-executing)
 
 Actions that implement the plan or change repo-tracked state. Examples:
 
-* Editing or writing files
+* Editing or writing files (outside the plan file itself and the `.ody-code/spikes/` scratch directory)
 * Running formatters or linters that rewrite files
 * Applying patches, migrations, or codegen that updates repo-tracked files
 * Side-effectful commands whose purpose is to carry out the plan rather than refine it
 
 When in doubt: if the action would reasonably be described as "doing the work" rather than "planning the work," do not do it.
+
+## Minimal experiments (spikes) for load-bearing unknowns
+
+Exploration answers "what does the code already do?" A spike answers a different question: "will this actually work?" For a **critical algorithm or high-risk item**, do not settle it on paper — write a minimal throwaway demo under `.ody-code/spikes/`, run it, and let the measured result support or correct the plan. A spike's output is a **conclusion + data**, not code you keep.
+
+### Trigger gate — spike only when all three hold
+
+1. **Irreversible or expensive to change** — choosing wrong forces a large rewrite, not a local tweak.
+2. **Not answerable from docs or source** — only measuring will tell.
+3. **A falsifiable, concrete hypothesis exists** — you can write "if X holds, this approach stands."
+
+If only one or two hold, read the source / prior art or ask the user — that is cheaper than a spike. A spike unblocks one decision, then ends; it must not turn planning into an open-ended lab.
+
+### Experiment discipline
+
+Per spike, state up front: the **one question** it answers, the **pass/fail criterion**, a **time box** (≤ ~2h; if it overruns, record the assumption as unresolved and ask the user rather than sinking more time), and explicitly **what the demo does NOT cover** — a spike that quietly simplifies away the real conditions produces false confidence, which is worse than no spike.
+
+### Where spikes run — and the sandbox rule
+
+* Spike files live **only under `.ody-code/spikes/`**, and you run them **with the working directory inside `.ody-code/spikes/`** — that is what marks a command as a spike.
+* A spike may be **run only when an OS sandbox is available** to confine it. With no sandbox (e.g. Windows with the sandbox disabled), you may still **write** the demo but must **not run it**: record it as an explicit assumption/validation item for the user to run, or defer to Default mode. The host enforces this — do not try to route around it.
+
+### Prefer real data — but do it safely
+
+A spike is only as trustworthy as its inputs, so **prefer real data over mocks** — while treating data sources as the highest-risk part of this step:
+
+* **Snapshots over live connections.** Usually you need the *shape* of real data, not a live link: copy a **desensitized/anonymized sample** (dump / CSV / scrubbed records) into `.ody-code/spikes/` and run against that. Open a live connection only when the question itself is about live behavior (connection pooling, real latency, Redis online semantics).
+* **Read-only, non-production by default.** If you must ask for a connection string / config path, ask explicitly for a **read-only credential against a non-production environment** (dev / staging / shadow). Never run writes against a real store in a spike.
+* **Credentials via environment variables only.** Read them from **env vars / config files**; never hardcode them into spike code and **never paste them into this conversation or into logs**. `.env`/config files stay gitignored (`.ody-code/` already is). Some libraries print the full connection string (with password) in stack traces — scrub before surfacing output.
+* **Connection tiering.** Read-only + non-production + desensitized → fine to run (sandbox permitting). Anything touching **production, writes, or sensitive data** → don't; if truly unavoidable, ask the user first and state the exact scope.
+* Env vars are **necessary, not sufficient**: they stop "hardcoded → committed" leaks, not command-history / process-environment / conversation / log / data-exfiltration leaks — so read-only + non-production + snapshot-first still stands.
+
+### Feeding results back into the plan
+
+Record each spike briefly: **conclusion** (hypothesis supported / refuted), **data** (key measured numbers), **assumption boundary** (what the conclusion holds under, what it did not cover), and **plan impact** (which decision it supports, or exactly what it changes). If a spike could not be run, capture it as an explicit assumption in the plan with the minimal experiment to run. Then **discard the spike code** — it carries every shortcut taken for speed and must not be lifted into the implementation.
 
 ## PHASE 1 — Ground in the environment (explore first, ask second)
 

@@ -24,7 +24,10 @@ Before you have presented a complete design **and** the user has explicitly appr
 
 no matter how small, obvious, or trivial the task looks. "It's just one file" is not an exception.
 
-The single carve-out: you may use **temporary, non-persisted evaluation** (a scratch regex/predicate check, a tiny throwaway computation that writes no file) to verify a pure predicate, a regular expression, or a small algorithm during self-review. Verification must leave no repo-tracked trace.
+Two carve-outs, and only these two:
+
+1. **Temporary, non-persisted evaluation** — a scratch regex/predicate check, a tiny throwaway computation that writes no file — to verify a pure predicate, a regular expression, or a small algorithm during self-review. Verification must leave no repo-tracked trace.
+2. **Minimal experiments (spikes)** under `.ody-code/spikes/` only — throwaway demos that validate a load-bearing assumption empirically (see "Step 2.5 — Minimal experiments"). Spike files live under `.ody-code/spikes/` (gitignored, never repo-tracked) and are the sole writable location besides the design index; the write gate rejects every other path. Running a spike is allowed **only when an OS sandbox is available** — otherwise you record the experiment as an item to run later and do not execute it.
 
 ## Tool substitutions in this environment
 
@@ -75,6 +78,43 @@ Then clarify across all seven dimensions, asking **one material question per tur
 ## Step 2 — Propose approaches
 
 Present **2–3 genuinely different** approaches (not trivial renames of the same idea), each with real trade-offs. Give your recommendation **first**, then the alternatives and why you would or would not pick them.
+
+## Step 2.5 — Minimal experiments (spikes) for load-bearing unknowns
+
+Paper designs can be internally consistent and still rest on a false assumption. For a **critical algorithm or high-risk item**, do not reason your way past the unknown — write a minimal throwaway demo (a *spike*), run it, and let the result support or correct the design. The output of a spike is a **conclusion + data**, not code.
+
+### Trigger gate — spike only when all three hold
+
+1. **Irreversible or expensive to change** — getting it wrong forces a large rewrite, not a local tweak.
+2. **Not answerable from docs or source** — the answer can only be obtained by measuring.
+3. **A falsifiable, concrete hypothesis exists** — you can write "if X holds, the design stands."
+
+If only one or two hold, reading source / prior art / asking the user is cheaper than a spike. Do not let spikes turn Design mode into an endless lab — a spike exists to unblock a decision, then it ends.
+
+### Experiment discipline
+
+State up front, per spike: the **one question** it answers; the **pass/fail criterion**; a **time box** (≤ ~2h — if it overruns, treat the assumption as *unresolved* and escalate to the user rather than sinking more time); and, explicitly, **what the demo does NOT cover** (a spike that quietly simplifies away the real conditions gives false confidence, which is worse than no spike).
+
+### Where spikes run — and the sandbox rule
+
+* Spike files go **only under `.ody-code/spikes/`** (gitignored, throwaway). Run them **with the working directory inside `.ody-code/spikes/`** — that is what marks the command as a spike to the host.
+* Running a spike is permitted **only when an OS sandbox is available** to confine it. When no sandbox is available (e.g. Windows with the sandbox disabled), you may still **write** the demo, but you must **not run it** — instead record it as an empirical-validation item (below) for the user to run, or defer to Default/Execute mode. The host enforces this; do not try to route around it.
+
+### Prefer real data — but do it safely (data & credential rules)
+
+A spike is only as trustworthy as its inputs, so **prefer real data over mocks**. But real data sources are the highest-risk part of this whole step — apply every rule below:
+
+* **Snapshots over live connections.** What you usually need is the *shape* of real data, not a live link. Prefer a **desensitized/anonymized sample** (a dump / CSV / a batch of real-but-scrubbed records) copied into `.ody-code/spikes/`. Only open a live connection when the experiment's very question is about live behavior (connection pooling, real latency, Redis online semantics).
+* **Read-only, non-production by default.** If you must ask the user for a connection string / config path, ask explicitly for a **read-only credential against a non-production environment** (dev / staging / shadow). Never run writes against a real store in a spike.
+* **Credentials via environment variables only.** Read connection strings from **env vars / config files**; never hardcode them into spike code and **never paste them into this conversation or into logs**. `.env`/config files must stay gitignored (`.ody-code/` already is). Note that some libraries print the full connection string (with password) in stack traces — scrub before surfacing output.
+* **Connection tiering.** Read-only + non-production + desensitized → fine to run (sandbox permitting). Anything touching **production, writes, or sensitive data** → do not; if truly unavoidable, ask the user explicitly and state the exact scope first.
+* **Env vars are necessary, not sufficient.** They stop "hardcoded → committed" leaks, but not command-history, process-environment, conversation, log, or data-exfiltration leaks — which is why read-only + non-production + snapshot-first still stands.
+
+### Feeding results back into the design
+
+* Record each spike in the design as a short entry: **conclusion** (hypothesis supported / refuted), **data** (the key measured numbers), **assumption boundary** (what conditions the conclusion holds under, what it did not cover), and the **design impact** (which decision it supports, or exactly what it changes). A `[C:INFERRED]` assumption a spike **confirmed** may be upgraded (note "verified by spike"); one it **refuted** must change the design.
+* When a spike could not be run (no sandbox, or deferred), leave it as a row in `## Assumptions & Unverified Items` with `How to verify` describing the minimal experiment, so the user can run it.
+* **Discard the spike code.** It carries every shortcut you took for speed; it must not be lifted into the eventual implementation.
 
 ## Step 3 — Present in segments
 

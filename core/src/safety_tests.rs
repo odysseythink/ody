@@ -50,6 +50,7 @@ fn plan_gate_exec_strict_allows_heredoc_body_containing_pipe_and_ampersand_text(
         &cmd,
         tmp.path(),
         Some(&artifact),
+        true,
     );
     assert_eq!(
         decision,
@@ -816,7 +817,8 @@ fn plan_gate_exec_read_only_allowed_in_strict() {
                 PlanEnforcement::Strict,
                 &cmd,
                 std::path::Path::new("/repo"),
-                None
+                None,
+                true
             ),
             PlanGateDecision::Allow,
             "expected {cmd:?} to be read-only"
@@ -845,7 +847,8 @@ fn plan_gate_exec_known_write_strict_denies() {
                     PlanEnforcement::Strict,
                     &cmd,
                     std::path::Path::new("/repo"),
-                    None
+                    None,
+                    true
                 ),
                 PlanGateDecision::Deny { .. }
             ),
@@ -869,7 +872,8 @@ fn plan_gate_exec_indeterminate_strict_asks() {
                     PlanEnforcement::Strict,
                     &cmd,
                     std::path::Path::new("/repo"),
-                    None
+                    None,
+                    true
                 ),
                 PlanGateDecision::Ask { .. }
             ),
@@ -888,7 +892,8 @@ fn plan_gate_exec_ask_enforcement_asks_for_non_readonly() {
                     PlanEnforcement::Ask,
                     &cmd,
                     std::path::Path::new("/repo"),
-                    None
+                    None,
+                    true
                 ),
                 PlanGateDecision::Ask { .. }
             ),
@@ -906,7 +911,8 @@ fn plan_gate_exec_advisory_allows_everything() {
                 PlanEnforcement::Advisory,
                 &cmd,
                 std::path::Path::new("/repo"),
-                None
+                None,
+                true
             ),
             PlanGateDecision::Allow,
             "advisory should behave like the legacy prompt-only plan mode"
@@ -928,7 +934,8 @@ fn plan_gate_exec_default_mode_zero_regression() {
                     enforcement,
                     &cmd,
                     std::path::Path::new("/repo"),
-                    None
+                    None,
+                    true
                 ),
                 PlanGateDecision::Allow,
                 "Default mode must never gate exec"
@@ -954,6 +961,7 @@ fn plan_gate_exec_strict_allows_mkdir_of_plan_stem_dir() {
         &cmd,
         tmp.path(),
         Some(&artifact),
+        true,
     );
     assert_eq!(decision, PlanGateDecision::Allow);
 }
@@ -976,6 +984,7 @@ fn plan_gate_exec_strict_allows_redirect_write_under_plan_stem_dir() {
         &cmd,
         tmp.path(),
         Some(&artifact),
+        true,
     );
     assert_eq!(decision, PlanGateDecision::Allow);
 }
@@ -993,6 +1002,7 @@ fn plan_gate_exec_strict_allows_redirect_write_to_plan_file_itself() {
         &cmd,
         tmp.path(),
         Some(&artifact),
+        true,
     );
     assert_eq!(decision, PlanGateDecision::Allow);
 }
@@ -1013,6 +1023,7 @@ fn plan_gate_exec_strict_denies_mkdir_outside_plan_scope() {
         &cmd,
         tmp.path(),
         Some(&artifact),
+        true,
     );
     assert!(matches!(decision, PlanGateDecision::Deny { .. }));
 }
@@ -1031,6 +1042,7 @@ fn plan_gate_exec_strict_denies_compound_command_even_within_plan_scope() {
         &cmd,
         tmp.path(),
         Some(&artifact),
+        true,
     );
     assert!(
         matches!(decision, PlanGateDecision::Deny { .. }),
@@ -1052,6 +1064,7 @@ fn plan_gate_exec_strict_still_denies_rm_within_plan_scope() {
         &cmd,
         tmp.path(),
         Some(&artifact),
+        true,
     );
     assert!(
         matches!(decision, PlanGateDecision::Deny { .. }),
@@ -1076,6 +1089,7 @@ fn design_gate_exec_strict_allows_mkdir_of_design_stem_dir() {
         &cmd,
         tmp.path(),
         Some(&artifact),
+        true,
     );
     assert_eq!(decision, PlanGateDecision::Allow);
 }
@@ -1099,7 +1113,8 @@ fn design_gate_exec_read_only_allowed_in_strict() {
                 PlanEnforcement::Strict,
                 &cmd,
                 std::path::Path::new("/repo"),
-                None
+                None,
+                true
             ),
             PlanGateDecision::Allow,
             "expected {cmd:?} to be read-only in Design mode"
@@ -1122,6 +1137,7 @@ fn design_gate_exec_known_write_strict_denies() {
             &cmd,
             std::path::Path::new("/repo"),
             None,
+            true,
         );
         assert!(
             matches!(decision, PlanGateDecision::Deny { .. }),
@@ -1147,6 +1163,7 @@ fn design_gate_exec_indeterminate_strict_asks() {
             &cmd,
             std::path::Path::new("/repo"),
             None,
+            true,
         );
         assert!(
             matches!(decision, PlanGateDecision::Ask { .. }),
@@ -1170,12 +1187,115 @@ fn design_gate_exec_advisory_allows_everything() {
                 PlanEnforcement::Advisory,
                 &cmd,
                 std::path::Path::new("/repo"),
-                None
+                None,
+                true
             ),
             PlanGateDecision::Allow,
             "advisory should behave like prompt-only Design mode"
         );
     }
+}
+
+#[test]
+fn plan_gate_patch_allows_write_into_spikes_dir() {
+    // Writing a spike (minimal-experiment) demo file into `.ody-code/spikes/` is
+    // always allowed in Plan mode, even under Strict — it is running it, not
+    // writing it, that the exec gate guards on sandbox availability.
+    let tmp = TempDir::new().unwrap();
+    let artifact = plan_artifact_at(tmp.path());
+    let spike_file = artifact.spikes_dir().join("probe.py");
+    let action = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&spike_file.abs()),
+        "print('hi')".to_string(),
+    );
+    let decision = plan_mode_gate_for_patch(
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &action,
+        Some(&artifact),
+    );
+    assert_eq!(decision, PlanGateDecision::Allow);
+}
+
+#[test]
+fn plan_gate_exec_spike_allowed_with_sandbox() {
+    // A command whose cwd is inside `.ody-code/spikes/` is a spike demo. With a
+    // sandbox available it runs even under Strict, and even for a command that
+    // would otherwise be Indeterminate (→ Ask) outside the spike dir.
+    let tmp = TempDir::new().unwrap();
+    let artifact = plan_artifact_at(tmp.path());
+    let spike_cwd = artifact.spikes_dir();
+    let cmd = vec_str(&["python", "probe.py"]);
+    let decision = plan_mode_gate_for_exec(
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &cmd,
+        &spike_cwd,
+        Some(&artifact),
+        /* sandbox_available */ true,
+    );
+    assert_eq!(decision, PlanGateDecision::Allow);
+}
+
+#[test]
+fn plan_gate_exec_spike_denied_without_sandbox_in_strict() {
+    // Same spike command, but no sandbox is available: it must not auto-run.
+    let tmp = TempDir::new().unwrap();
+    let artifact = plan_artifact_at(tmp.path());
+    let spike_cwd = artifact.spikes_dir();
+    let cmd = vec_str(&["python", "probe.py"]);
+    let decision = plan_mode_gate_for_exec(
+        &plan_mode(),
+        PlanEnforcement::Strict,
+        &cmd,
+        &spike_cwd,
+        Some(&artifact),
+        /* sandbox_available */ false,
+    );
+    match decision {
+        PlanGateDecision::Deny { reason } => {
+            assert!(
+                reason.contains("no OS sandbox"),
+                "no-sandbox spike denial should explain why: {reason}"
+            );
+            assert!(reason.contains(PLAN_MODE_REJECTION_MARKER));
+        }
+        other => panic!("expected Deny without a sandbox, got {other:?}"),
+    }
+}
+
+#[test]
+fn plan_gate_exec_spike_no_sandbox_ask_enforcement_asks() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = plan_artifact_at(tmp.path());
+    let spike_cwd = artifact.spikes_dir();
+    let cmd = vec_str(&["python", "probe.py"]);
+    let decision = plan_mode_gate_for_exec(
+        &plan_mode(),
+        PlanEnforcement::Ask,
+        &cmd,
+        &spike_cwd,
+        Some(&artifact),
+        /* sandbox_available */ false,
+    );
+    assert!(matches!(decision, PlanGateDecision::Ask { .. }));
+}
+
+#[test]
+fn design_gate_exec_spike_allowed_with_sandbox() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = design_artifact_at(tmp.path());
+    let spike_cwd = artifact.spikes_dir();
+    let cmd = vec_str(&["python", "probe.py"]);
+    let decision = plan_mode_gate_for_exec(
+        &design_mode(),
+        PlanEnforcement::Strict,
+        &cmd,
+        &spike_cwd,
+        Some(&artifact),
+        /* sandbox_available */ true,
+    );
+    assert_eq!(decision, PlanGateDecision::Allow);
 }
 
 #[test]

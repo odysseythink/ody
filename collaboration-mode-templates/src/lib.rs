@@ -15,6 +15,7 @@ pub const PLAN_RIGOR_GROUNDING: &str = include_str!("../templates/plan_rigor_gro
 pub const PLAN_RIGOR_SCOPE: &str = include_str!("../templates/plan_rigor_scope.md");
 pub const PLAN_RIGOR_RENAME: &str = include_str!("../templates/plan_rigor_rename.md");
 pub const PLAN_RIGOR_RISKS: &str = include_str!("../templates/plan_rigor_risks.md");
+pub const PLAN_RIGOR_SPIKE: &str = include_str!("../templates/plan_rigor_spike.md");
 pub const PLAN_RIGOR_SPLIT: &str = include_str!("../templates/plan_rigor_split.md");
 pub const PLAN_RIGOR_TURN_DISCIPLINE: &str =
     include_str!("../templates/plan_rigor_turn_discipline.md");

@@ -2,7 +2,6 @@
 name: systematic-debugging
 description: Use when encountering any bug, test failure, or unexpected behavior, before proposing fixes
 namespace: core
-upstream: superpowers@v5.1.0
 ---
 
 # Systematic Debugging
@@ -71,6 +70,24 @@ Before accepting any hypothesis or fix, you MUST be able to answer:
 
 If you cannot answer these questions, you are on a happy path. **STOP. Return to
 Phase 1.**
+
+## The Minimal-Experiment Rule
+
+For a **critical or high-risk hypothesis** — one where guessing wrong is expensive, or where the behavior can only be known by observing it — do not argue your way to a conclusion. Write the **smallest possible experiment** (a throwaway reproduction, a one-off probe script, a targeted diagnostic) that would confirm or falsify it, run it, and let the result decide. This is the concrete form of the Evidence Rule; Phase 1 (step 7) and Phase 3 (Test Minimally) are where it lives.
+
+State, before running: the **one question** the experiment answers, its **pass/fail criterion**, and explicitly **what it does not cover** — an experiment that quietly simplifies away the real conditions produces false confidence, which is worse than none.
+
+### Prefer real data — but handle it safely
+
+A reproduction is only as trustworthy as its inputs, so **prefer real data over mocks** when the bug depends on the shape, scale, or messiness of real data. Real data sources are the highest-risk part of debugging — apply every rule below:
+
+- **Snapshots over live connections.** Usually you need the *shape* of the data, not a live link. Prefer a **desensitized/anonymized sample** (a dump, a CSV, a batch of scrubbed records) copied into an isolated scratch location. Connect to a live store only when the bug itself is about live behavior (connection pooling, real latency, online semantics).
+- **Read-only, non-production by default.** If you need a connection string or config path, use a **read-only credential against a non-production environment** (dev / staging / shadow). Never run a reproduction that **writes** against a real store, and never run a destructive repro against production.
+- **Credentials via environment variables only.** Read them from **env vars / config files**; never hardcode them into a repro script and **never paste them into this conversation, into logs, or into a bug report**. Keep any `.env`/config file out of version control. Note that some libraries print the full connection string (with password) in stack traces — scrub before surfacing output.
+- **Connection tiering.** Read-only + non-production + desensitized → fine to run. Anything touching **production, writes, or sensitive data** → don't; if it is truly unavoidable, ask your human partner first and state the exact scope.
+- **Run repros in a throwaway, isolated location** (a scratch dir, a temp file, a disposable script), not inside the code you are shipping. Env vars stop "hardcoded → committed" credential leaks, but not command-history, process-environment, conversation, log, or data-exfiltration leaks — which is why read-only + non-production + snapshot-first still stands.
+
+Feed the result back as evidence: **conclusion + the data that shows it + the boundary of what it proves.** Then discard the experiment's code — it carries every shortcut you took for speed and must not be lifted into the fix.
 
 
 ## When to Use

@@ -1,6 +1,6 @@
 # Plan Mode Rigor Tier — Fragment Catalog
 
-The Rigor tier of Plan mode is composed from 11 independent Markdown fragments in
+The Rigor tier of Plan mode is composed from 12 independent Markdown fragments in
 `collaboration-mode-templates/templates/plan_rigor_*.md`, registered as constants in
 `collaboration-mode-templates/src/lib.rs`, and chained onto the base `plan.md` instructions in
 `core/src/context/collaboration_mode_instructions.rs::from_collaboration_mode`.
@@ -46,6 +46,7 @@ this.with_rigor_workflow()
     .with_rigor_scope()
     .with_rigor_rename()
     .with_rigor_risks()
+    .with_rigor_spike()
     .with_rigor_split()
     .with_rigor_turn_discipline();
 ```
@@ -211,6 +212,25 @@ of `RIGOR_FRAGMENT_GRAPH` — that graph and its drift test cover the rigor chai
 - **Change frequency:** medium — the risk-category list may grow as new failure classes are
   discovered in review.
 
+### 9.5. SPIKE — `plan_rigor_spike.md`
+
+- **Says:** for the 1–3 most-expensive-if-wrong decisions, correctness must be backed by either a
+  spike result (conclusion + data from a demo run under `.ody-code/spikes/`) or an explicit,
+  user-visible assumption whose mitigation is a named validation task; ties unrun/unmeasurable
+  risks into the `## Risks & Open Questions` table; and reiterates that spike code is discarded,
+  never turned into a task. The general trigger gate / sandbox rule / data-and-credential rules
+  live in the tier-neutral "Minimal experiments (spikes)" section of base `plan.md`; this fragment
+  only adds the rigor-tier *mandate*.
+- **Explicit dependency phrase:** "In addition to the Dependency Overview, Spec-coverage table,
+  Self-review, and the `## Risks & Open Questions` table above" → requires COVERAGE, SELFREVIEW,
+  and RISKS to have rendered first.
+- **Depends on:** COVERAGE, SELFREVIEW, RISKS (hard requirements, textually referenced).
+- **Referenced by:** nothing explicit.
+- **Change frequency:** medium — the data/credential safety rules and sandbox gating may tighten
+  as real spike sessions surface new failure modes. The runtime half of this feature (the
+  `.ody-code/spikes/` write/exec carve-out) lives in `core/src/safety.rs` +
+  `core/src/plan_artifact.rs`; keep the prompt and the gate in sync.
+
 ### 10. SPLIT — `plan_rigor_split.md` (178 lines, largest)
 
 - **Says:** when to split a plan (>`{{ split_threshold }}` tasks or multi-subsystem), the
@@ -254,6 +274,8 @@ WORKFLOW (no deps)
   │     │     ├─▶ INVARIANTS (HARD: "...and Self-review above")
   │     │     │
   │     │     └─▶ RISKS (HARD: "...and Self-review")
+  │     │           │
+  │     │           └─▶ SPIKE (HARD: "...and the Risks & Open Questions table above")
   │     │
   │     └─▶ RISKS (HARD, same as above — RISKS needs both COVERAGE and SELFREVIEW)
   │
@@ -309,7 +331,7 @@ same graph as data so a test can catch future violations automatically.
 
 ## Do not reorder the chain without re-reading this file
 
-The 11-call chain in `from_collaboration_mode` is not arbitrary — it is one valid topological
+The 12-call chain in `from_collaboration_mode` is not arbitrary — it is one valid topological
 sort of the HARD-edge graph above. There are other valid orderings, but changing the order
 without checking the HARD edges can silently produce a rigor-tier plan where SELFREVIEW says
 "the Dependency Overview and Spec-coverage table above" and there is no such table above.

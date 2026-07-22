@@ -21,7 +21,7 @@ pub(crate) struct RigorFragmentNode {
     pub(crate) hard_dependencies: &'static [&'static str],
 }
 
-/// The 11 Rigor tier fragments and their hard dependencies, in no particular order.
+/// The 12 Rigor tier fragments and their hard dependencies, in no particular order.
 ///
 /// Kept independent of composition order deliberately — `assert_topological_order` below is
 /// what actually checks the chain in `collaboration_mode_instructions.rs` against this graph.
@@ -63,6 +63,10 @@ pub(crate) const RIGOR_FRAGMENT_GRAPH: &[RigorFragmentNode] = &[
         hard_dependencies: &["COVERAGE", "SELFREVIEW"],
     },
     RigorFragmentNode {
+        name: "SPIKE",
+        hard_dependencies: &["COVERAGE", "SELFREVIEW", "RISKS"],
+    },
+    RigorFragmentNode {
         name: "SPLIT",
         hard_dependencies: &[],
     },
@@ -84,6 +88,7 @@ pub(crate) const RIGOR_COMPOSITION_ORDER: &[&str] = &[
     "SCOPE",
     "RENAME",
     "RISKS",
+    "SPIKE",
     "SPLIT",
     "TURN_DISCIPLINE",
 ];
@@ -198,6 +203,7 @@ mod tests {
             "SCOPE",
             "RENAME",
             "RISKS",
+            "SPIKE",
             "SPLIT",
             "TURN_DISCIPLINE",
         ];
