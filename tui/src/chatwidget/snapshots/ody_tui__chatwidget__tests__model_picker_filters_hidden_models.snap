@@ -1,11 +1,10 @@
 ---
 source: tui/src/chatwidget/tests/popups_and_settings.rs
-assertion_line: 2920
 expression: popup
 ---
   Select a model
   type to search
-  Warning: OpenAI base URL is overridden to https://api.moonshot.ai/v1. Select
+  Warning: OpenAI base URL is overridden to https://api.kimi.com/coding/v1. Se
   ↑↓ model · ←→ page · / thinking · Enter apply · Esc cancel · Tab/Shift+Tab p
 
   All  [test]

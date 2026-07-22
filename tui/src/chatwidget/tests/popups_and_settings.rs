@@ -2857,7 +2857,7 @@ async fn memories_reset_confirmation_sends_event_on_confirm() {
 
 #[tokio::test]
 async fn model_selection_popup_snapshot() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.2")).await;
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("kimi-k2.5")).await;
     chat.thread_id = Some(ThreadId::new());
     chat.open_model_popup();
 
@@ -2867,7 +2867,7 @@ async fn model_selection_popup_snapshot() {
 
 #[tokio::test]
 async fn personality_selection_popup_snapshot() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.3-ody")).await;
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("kimi-for-coding")).await;
     chat.thread_id = Some(ThreadId::new());
     chat.open_personality_popup();
 
@@ -2929,8 +2929,8 @@ async fn model_picker_hides_show_in_picker_false_models_from_cache() {
 
 #[tokio::test]
 async fn server_overloaded_error_does_not_switch_models() {
-    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5.3-ody")).await;
-    chat.set_model("gpt-5.3-ody");
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("kimi-for-coding")).await;
+    chat.set_model("kimi-for-coding");
     while rx.try_recv().is_ok() {}
     while op_rx.try_recv().is_ok() {}
 
@@ -2943,7 +2943,7 @@ async fn server_overloaded_error_does_not_switch_models() {
     while let Ok(event) = rx.try_recv() {
         if let AppEvent::UpdateModel(model) = event {
             assert_eq!(
-                model, "gpt-5.3-ody",
+                model, "kimi-for-coding",
                 "did not expect model switch on server-overloaded error"
             );
         }
@@ -2961,19 +2961,13 @@ async fn server_overloaded_error_does_not_switch_models() {
 
 #[tokio::test]
 async fn model_reasoning_selection_popup_snapshot() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("k3")).await;
 
     set_api_key_auth(&mut chat);
     chat.set_reasoning_effort(Some(ReasoningEffortConfig::High));
 
-    let mut preset = get_available_model(&chat, "gpt-5.4");
-    preset.supported_reasoning_efforts.insert(
-        2,
-        ReasoningEffortPreset {
-            effort: ReasoningEffortConfig::Custom("max".to_string()),
-            description: "Maximum available reasoning".to_string(),
-        },
-    );
+    // k3 natively advertises [low, high, max]; no need to inject a custom level.
+    let preset = get_available_model(&chat, "k3");
     chat.open_reasoning_popup(preset);
 
     let popup = render_bottom_popup(&chat, /*width*/ 80);
@@ -2982,20 +2976,17 @@ async fn model_reasoning_selection_popup_snapshot() {
 
 #[tokio::test]
 async fn model_reasoning_selection_popup_applies_custom_effort() {
-    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
+    // k3 natively advertises a custom "max" effort ([low, high, max]). Selecting
+    // it should emit the custom effort verbatim.
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("k3")).await;
     let custom_effort = ReasoningEffortConfig::Custom("max".to_string());
-    chat.set_reasoning_effort(Some(ReasoningEffortConfig::XHigh));
+    chat.set_reasoning_effort(Some(ReasoningEffortConfig::High));
 
-    let mut preset = get_available_model(&chat, "gpt-5.4");
-    preset
-        .supported_reasoning_efforts
-        .push(ReasoningEffortPreset {
-            effort: custom_effort.clone(),
-            description: "Maximum available reasoning".to_string(),
-        });
+    let preset = get_available_model(&chat, "k3");
     chat.open_reasoning_popup(preset);
     while rx.try_recv().is_ok() {}
 
+    // Highlight starts on High (current effort); move down to max and select it.
     chat.handle_key_event(KeyEvent::from(KeyCode::Down));
     chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
 
@@ -3010,34 +3001,23 @@ async fn model_reasoning_selection_popup_applies_custom_effort() {
         selected_effort_events,
         vec![
             (None, Some(custom_effort.clone())),
-            (Some("gpt-5.4".to_string()), Some(custom_effort)),
+            (Some("k3".to_string()), Some(custom_effort)),
         ]
     );
 }
 
-#[tokio::test]
-async fn model_reasoning_selection_popup_extra_high_warning_snapshot() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.2")).await;
-
-    set_api_key_auth(&mut chat);
-    chat.set_reasoning_effort(Some(ReasoningEffortConfig::XHigh));
-
-    let preset = get_available_model(&chat, "gpt-5.2");
-    chat.open_reasoning_popup(preset);
-
-    let popup = render_bottom_popup(&chat, /*width*/ 80);
-    assert_chatwidget_snapshot!("model_reasoning_selection_popup_extra_high_warning", popup);
-}
-
 async fn assert_reasoning_shortcuts_update_effort(
     key_events: [KeyEvent; 2],
+    start_effort: ReasoningEffortConfig,
     expected_effort: ReasoningEffortConfig,
     expect_model_update: bool,
 ) {
     for key_event in key_events {
-        let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
+        let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("k3")).await;
         chat.thread_id = Some(ThreadId::new());
-        chat.set_reasoning_effort(Some(ReasoningEffortConfig::Medium));
+        // k3 advertises [low, high, max]; start from a real ladder member so the
+        // raise/lower shortcuts move deterministically.
+        chat.set_reasoning_effort(Some(start_effort.clone()));
 
         chat.handle_key_event(key_event);
 
@@ -3045,7 +3025,7 @@ async fn assert_reasoning_shortcuts_update_effort(
         if expect_model_update {
             assert!(
                 events.iter().any(
-                    |event| matches!(event, AppEvent::UpdateModel(model) if model == "gpt-5.4")
+                    |event| matches!(event, AppEvent::UpdateModel(model) if model == "k3")
                 ),
                 "expected model update event for {key_event:?}; events: {events:?}"
             );
@@ -3073,6 +3053,7 @@ async fn reasoning_up_shortcuts_raise_reasoning_effort() {
             KeyEvent::new(KeyCode::Char('.'), KeyModifiers::ALT),
             KeyEvent::new(KeyCode::Up, KeyModifiers::SHIFT),
         ],
+        /*start_effort*/ ReasoningEffortConfig::Low,
         ReasoningEffortConfig::High,
         /*expect_model_update*/ true,
     )
@@ -3086,6 +3067,7 @@ async fn reasoning_down_shortcuts_lower_reasoning_effort() {
             KeyEvent::new(KeyCode::Char(','), KeyModifiers::ALT),
             KeyEvent::new(KeyCode::Down, KeyModifiers::SHIFT),
         ],
+        /*start_effort*/ ReasoningEffortConfig::High,
         ReasoningEffortConfig::Low,
         /*expect_model_update*/ false,
     )
@@ -3094,7 +3076,7 @@ async fn reasoning_down_shortcuts_lower_reasoning_effort() {
 
 #[tokio::test]
 async fn reasoning_shortcut_clears_armed_quit_shortcut() {
-    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("k3")).await;
     chat.thread_id = Some(ThreadId::new());
     chat.set_reasoning_effort(Some(ReasoningEffortConfig::Medium));
     chat.arm_quit_shortcut(key_hint::ctrl(KeyCode::Char('c')));
@@ -3115,7 +3097,7 @@ async fn reasoning_shortcut_clears_armed_quit_shortcut() {
 
 #[tokio::test]
 async fn reasoning_shortcut_is_ignored_with_model_popup_open() {
-    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("k3")).await;
     chat.thread_id = Some(ThreadId::new());
     chat.set_reasoning_effort(Some(ReasoningEffortConfig::Medium));
     chat.open_model_popup();
@@ -3134,26 +3116,6 @@ async fn reasoning_shortcut_is_ignored_with_model_popup_open() {
             .iter()
             .all(|event| !matches!(event, AppEvent::PersistModelSelection { .. })),
         "did not expect model persistence while popup is active; events: {events:?}"
-    );
-}
-
-#[tokio::test]
-async fn reasoning_popup_shows_extra_high_with_space() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
-
-    set_api_key_auth(&mut chat);
-
-    let preset = get_available_model(&chat, "gpt-5.4");
-    chat.open_reasoning_popup(preset);
-
-    let popup = render_bottom_popup(&chat, /*width*/ 120);
-    assert!(
-        popup.contains("Extra high"),
-        "expected popup to include 'Extra high'; popup: {popup}"
-    );
-    assert!(
-        !popup.contains("Extrahigh"),
-        "expected popup not to include 'Extrahigh'; popup: {popup}"
     );
 }
 
@@ -3260,11 +3222,11 @@ async fn feedback_good_result_consent_popup_includes_connectivity_diagnostics_fi
 
 #[tokio::test]
 async fn reasoning_popup_escape_returns_to_model_popup() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("k3")).await;
     chat.thread_id = Some(ThreadId::new());
     chat.open_model_popup();
 
-    let preset = get_available_model(&chat, "gpt-5.4");
+    let preset = get_available_model(&chat, "k3");
     chat.open_reasoning_popup(preset);
 
     let before_escape = render_bottom_popup(&chat, /*width*/ 80);

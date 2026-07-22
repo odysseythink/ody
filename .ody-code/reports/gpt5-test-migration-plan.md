@@ -4,18 +4,28 @@
 
 `models.json` 已被另一个 agent 修改为仅保留 `kimi/deepseek/glm` 三个供应商，所有 `gpt-5.x` 模型均被移除。但大量测试代码和产品逻辑里仍保留对 `gpt-5.x` 的硬编码引用，导致测试失败。
 
+## 落地进展（2026-07 更新）
+
+- ✅ **personality 已真实支持**（commit d35a2b7）：kimi/deepseek/glm 全系在加载时注入 `model_messages`，`supports_personality()` 为真。**不再需要在 test helper 里伪造 personality。**
+- ✅ **reasoning levels 已真实支持且模型驱动**（d35a2b7→811801e）：k3 `[low,high,max]`、DeepSeek reasoner/v4 `[medium,max]`、GLM 单档思考开关。**不再需要伪造 reasoning。** 详见 `reasoning-levels-provider-audit.md`。
+- ✅ **Kimi 端点/slug 对齐**：`kimi-k2.7-code`→`kimi-for-coding`、`kimi-k3`→`k3`（官方 Kimi Code API id）。本文映射表已更新。
+- ✅ **tui lib 测试编译阻塞已修**（commit ab28cc0，`windows_sandbox.rs` 跨平台 import bug，与 gpt-5 无关）。此前 `cargo test -p ody-tui --lib` 直接编译失败，现已可跑。
+- 🗑️ **`fast` / service tier：决策为删除相关测试**。当前 models.json 无任何模型带 `service_tiers`；产品不再有 fast 模型，故 gpt-5 专有的 fast/状态栏测试直接删除。
+- ⏳ **未做**：slug 批量替换 + 产品硬编码清理（步骤 1/3）。当前基线：`plan_mode` 80/87、`popups_and_settings` 64/74、`core model_switching` 0/12。
+
 ## 失败根因
 
 GPT-5 模型在旧测试中不仅是 slug，还承载了几个测试依赖的元数据：
 
-- `personality` 支持（`model_messages` 包含 `{{ personality }}` 占位符）
-- `reasoning_levels`（`medium` / `high` 等）
-- `fast` service tier（状态栏显示 `fast`）
-- 部分测试硬编码了 `provider_id == "kimi"` 或 `"openai"`
+- ~~`personality` 支持~~ → **现在真实模型已支持**（见落地进展），无需伪造。
+- ~~`reasoning_levels`~~ → **现在真实模型已支持**，无需伪造。
+- `fast` service tier（状态栏显示 `fast`）→ **仍无真实模型承载**，需注入或补 tier。
+- 部分测试硬编码了 `provider_id == "kimi"` 或 `"openai"` → 断言需改成真实 provider。
 
-现在 `models.json` 只保留 kimi/deepseek/glm，因此修复需要两步：
-1. 让产品/测试元数据对齐新模型；
-2. 把测试里的 `gpt-5.x` slug 替换为当前支持的模型。
+现在 `models.json` 只保留 kimi/deepseek/glm，剩余修复主要是：
+1. 把测试里的 `gpt-5.x` slug 替换为当前支持的模型；
+2. 处理少数硬编码判断与 `fast` tier；
+（personality/reasoning 元数据已在产品层落地，不再是测试负担。）
 
 ---
 
@@ -23,12 +33,12 @@ GPT-5 模型在旧测试中不仅是 slug，还承载了几个测试依赖的元
 
 | 旧 slug | 建议映射到 | 说明 |
 |---|---|---|
-| `gpt-5.4` | `kimi-k3` | 大模型、1M context，可承担“fast” tier |
+| `gpt-5.4` | `k3` | 大模型、1M context，可承担“fast” tier |
 | `gpt-5.2` | `kimi-k2.5` | 标准模型，无 fast |
-| `gpt-5.3-ody` | `kimi-k2.7-code` | 代码/个性模型 |
+| `gpt-5.3-ody` | `kimi-for-coding` | 代码/个性模型 |
 | `gpt-5.4-mini` | `glm-4.5` | 小模型，可切换 provider |
-| `gpt-5.1-ody` | `kimi-k2.7-code` | 同 `gpt-5.3-ody` |
-| `gpt-5.1-ody-max` | `kimi-k3` | 大模型 |
+| `gpt-5.1-ody` | `kimi-for-coding` | 同 `gpt-5.3-ody` |
+| `gpt-5.1-ody-max` | `k3` | 大模型 |
 | `gpt-5.1-test` | `kimi-k2.5` | 任意可用模型 |
 
 > 如果某些测试只要求“两个不同模型”，也可以把 `gpt-5.4`/`gpt-5.2` 都映射到 `kimi` 家的两个模型，不一定照搬上表。
@@ -56,88 +66,20 @@ let warn_for_model = false;
 
 其它如 `app_server_event_targets.rs` 测试里的 `"gpt-5.4"` 是测试数据，随测试一起替换。
 
-### 2. 给测试用模型注入缺失的元数据
+### 2. 测试模型的元数据（大部分已由真实 catalog 提供）
 
-TUI 测试通过 `test_model_catalog()` 加载真实 catalog，但真实模型现在没有 `personality` / `reasoning` / `fast` 这些测试需要的能力。建议在 `tui/src/chatwidget/tests/helpers.rs` 里给测试模型“注入”这些能力：
+统一测试常量（放 `tui/src/chatwidget/tests/helpers.rs`）：
 
 ```rust
-use ody_protocol::model_metadata::{
-    ModelInstructionsVariables, ModelMessages, ModelServiceTier, ReasoningEffort, ReasoningEffortPreset,
-};
-
-pub(crate) const TEST_MODEL_FAST: &str = "kimi-k3";
+pub(crate) const TEST_MODEL_FAST: &str = "k3";
 pub(crate) const TEST_MODEL_STANDARD: &str = "kimi-k2.5";
-pub(crate) const TEST_MODEL_CODE: &str = "kimi-k2.7-code";
+pub(crate) const TEST_MODEL_CODE: &str = "kimi-for-coding";
 pub(crate) const TEST_MODEL_MINI: &str = "glm-4.5";
-
-pub(super) fn test_model_catalog(_config: &Config) -> Arc<ModelCatalog> {
-    let mut presets = crate::test_support::TEST_MODEL_PRESETS.clone();
-    for preset in &mut presets {
-        if matches!(
-            preset.model.as_str(),
-            TEST_MODEL_FAST | TEST_MODEL_STANDARD | TEST_MODEL_CODE | TEST_MODEL_MINI
-        ) {
-            preset.supports_personality = true;
-        }
-        if matches!(preset.model.as_str(), TEST_MODEL_FAST | TEST_MODEL_STANDARD) {
-            preset.default_reasoning_effort = ReasoningEffort::Medium;
-            preset.supported_reasoning_efforts = vec![ReasoningEffortPreset {
-                effort: ReasoningEffort::Medium,
-                description: "medium".to_string(),
-            }];
-        }
-        if preset.model == TEST_MODEL_FAST {
-            preset.service_tiers.push(ModelServiceTier {
-                id: ServiceTier::Fast.request_value().to_string(),
-                name: "fast".to_string(),
-                description: "Fastest inference with increased plan usage".to_string(),
-            });
-        }
-    }
-    Arc::new(ModelCatalog::new(presets))
-}
 ```
 
-同时把 `set_fast_mode_test_catalog` 里的 slug 改成新常量，并给 `test_model_info` 补上 `provider` 和 `model_messages`：
-
-```rust
-fn test_model_info(slug: &str, priority: i32, supports_fast_mode: bool) -> ModelInfo {
-    // ...
-    serde_json::from_value(json!({
-        "slug": slug,
-        "display_name": slug,
-        "description": format!("{slug} description"),
-        "provider": "kimi",
-        "model_messages": {
-            "instructions_template": "You are Ody, a coding agent.\n\n{{ personality }}\n\nbase instructions",
-            "instructions_variables": {
-                "personality_default": "",
-                "personality_friendly": "friendly",
-                "personality_pragmatic": "pragmatic"
-            }
-        },
-        "default_reasoning_level": "medium",
-        // ... 其余字段保持不变
-    }))
-}
-```
-
-```rust
-pub(crate) fn set_fast_mode_test_catalog(chat: &mut ChatWidget) {
-    let models: Vec<ModelPreset> = ModelsResponse {
-        models: vec![
-            test_model_info(TEST_MODEL_FAST, 0, true),
-            test_model_info(TEST_MODEL_STANDARD, 1, false),
-        ],
-    }
-    .models
-    .into_iter()
-    .map(Into::into)
-    .collect();
-
-    chat.model_catalog = Arc::new(ModelCatalog::new(models));
-}
-```
+- **personality / reasoning 不需要再注入**：真实 catalog 里这些模型已带 `model_messages`（personality）和 `supported_reasoning_levels`（k3/deepseek/glm）。测试直接用真实能力即可，删掉原先 helper 里伪造 `supports_personality = true` / `supported_reasoning_efforts = …` 的代码。
+- **`fast` service tier：决策为删除相关测试**。models.json 无任何模型带 tier，产品也不再有 fast 模型，故 `fast`/状态栏 fast 的 gpt-5 专有测试（如 `set_fast_mode_test_catalog` 及其调用者）直接删除，不迁移。
+- `set_fast_mode_test_catalog` 里的 slug 换成上面常量即可；`test_model_info` 不用再手工塞 `model_messages`（真实模型已有）。
 
 ### 3. 按 crate 替换测试字符串
 
@@ -191,6 +133,7 @@ cargo test -p ody-app-server --tests
 
 ## 关键提醒
 
-- 不要简单地把 `gpt-5.4` 全局替换成某个字符串就完事；`plan_mode` 测试依赖 reasoning 和 personality，必须先让测试模型拥有这些能力。
-- 如果产品层希望 `kimi/deepseek/glm` 真实支持 personality / reasoning levels，更好的做法是在 `models-manager/src/model_info.rs` 或 `models.json` 里给这些模型补上元数据，而不是只在测试 helper 里伪造。
-- 建议先把 `model_popups.rs` 的 `warn_for_model` 硬编码去掉，否则即使 slug 替换完，某些 reasoning popup 测试仍可能行为异常。
+- ~~personality / reasoning 需先让测试模型拥有能力~~ → **已在产品层落地**（真实 catalog 提供），现在 `plan_mode` 依赖的 reasoning/personality 直接来自真实模型。迁移时反而要**删掉** helper 里旧的伪造代码，避免与真实能力冲突。
+- **`fast` tier：决策为删除**。没有真实模型带 tier，产品也不再有 fast 模型；`fast`/状态栏 fast 的 gpt-5 专有测试直接删除，不迁移。
+- 建议先把 `model_popups.rs:678` 的 `warn_for_model` 硬编码（`gpt-5.1-ody` / `gpt-5.1-ody-max` / `gpt-5.2`）去掉或改成基于能力，否则即使 slug 替换完，某些 reasoning popup 测试仍可能行为异常。其它产品残留：`core/src/session/mod.rs:2879`（cyber fallback 文案）、`config/src/types.rs:815`（配置键 `hide_gpt-5.1-ody-max_migration_prompt`，改名有兼容性风险）、`tui/src/model_migration.rs`（OpenAI 迁移表）。
+- provider 断言：把 `provider_id == "openai"` 改成对应真实 provider（`kimi` / `deepseek` / `glm`）。

@@ -675,9 +675,10 @@ impl ChatWidget {
             let effort_label = Self::reasoning_effort_label(effort);
             format!("⚠ {effort_label} reasoning effort can quickly consume Plus plan rate limits.")
         });
-        let warn_for_model = preset.model.starts_with("gpt-5.1-ody")
-            || preset.model.starts_with("gpt-5.1-ody-max")
-            || preset.model.starts_with("gpt-5.2");
+        // Warn whenever the model exposes a high/xhigh reasoning level, since
+        // those quickly consume plan rate limits. (Previously keyed off specific
+        // gpt-5 slugs; now capability-driven so it works for any provider.)
+        let warn_for_model = warn_effort.is_some();
 
         let mut choices: Vec<ReasoningEffortConfig> = supported
             .iter()

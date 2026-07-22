@@ -1,14 +1,13 @@
 ---
 source: tui/src/chatwidget/tests/popups_and_settings.rs
-assertion_line: 2980
 expression: popup
 ---
-  Select Reasoning Level for gpt-5.4
+  Select Reasoning Level for k3
 
-  1. Low               Fast responses with lighter reasoning
-  2. Medium (default)  Balances speed and reasoning depth for everyday tasks
-  3. max               Maximum available reasoning
-› 4. High ← current    Greater reasoning depth for complex problems
-  5. Extra high        Extra high reasoning depth for complex problems
+  1. Low                       Faster, lighter reasoning
+› 2. High (default) ← current  Deeper reasoning
+                               ⚠ High reasoning effort can quickly consume
+                               Plus plan rate limits.
+  3. max                       Maximum reasoning effort
 
   ↑↓ to navigate · enter to select · esc to cancel

@@ -1,22 +1,29 @@
 ---
 source: tui/src/chatwidget/tests/popups_and_settings.rs
-assertion_line: 2866
 expression: popup
 ---
   Select a model
   type to search
-  Warning: OpenAI base URL is overridden to https://api.moonshot.ai/v1. Select
+  Warning: OpenAI base URL is overridden to https://api.kimi.com/coding/v1. Se
   ↑↓ model · ←→ page · / thinking · Enter apply · Esc cancel · Tab/Shift+Tab p
 
-  [All]
+  All  DeepSeek  GLM  [Kimi]
 
 
-  gpt-5.5 (default)  Frontier model for complex coding, research, and real-
-                     world work.
-  gpt-5.4            Strong model for everyday coding.
-  gpt-5.4-mini       Small, fast, and cost-efficient model for simpler coding
-                     tasks.
-  gpt-5.3-ody        Coding-optimized model.
-› gpt-5.2 ← current  Optimized for professional work and long-running agents.
+› kimi-k2-thinking           Thinking Kimi model for slower research passes,
+                             planning, and hard technical questions
+  kimi-k2-thinking-turbo     Kimi reasoning model for long-horizon research,
+                             planning, and tool use
+  kimi-k2.5 ← current        Earlier Kimi frontier model for long-context
+                             agents, coding, and multimodal work
+  kimi-k2.6                  Multimodal Kimi workhorse for agent loops, coding
+                             tasks, and visual context
+  kimi-for-coding            Coding-focused Kimi model, stronger on long-
+                             horizon repo work with less overthinking
+  kimi-for-coding-highspeed  Lower-latency Kimi Code variant for interactive
+                             edits and coding-agent loops
+  k3                         Multimodal Kimi model with 1M context and
+                             toggleable max-effort thinking for long-horizon
+                             agent work
 
-  Thinking  (/ to toggle)   [ Always on ]
+  Thinking  (/ to toggle)   [ Off ] unsupported
