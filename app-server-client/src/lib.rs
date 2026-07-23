@@ -92,7 +92,9 @@ pub mod legacy_core {
     }
 }
 
-const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
+// ody: Windows 上使用更短的 shutdown 超时，避免 Git bash/Cygwin fork 失败导致退出 hang 住。
+// 升级触发条件：如果 Windows 上仍频繁出现退出 hang 住或孤儿进程，需要改为 Job Object 强制终止。
+const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(if cfg!(windows) { 2 } else { 5 });
 
 /// Runs the embedded app-server personality migration.
 ///
@@ -779,7 +781,11 @@ impl InProcessAppServerClient {
 
         if let Err(_elapsed) = timeout(SHUTDOWN_TIMEOUT, &mut worker_handle).await {
             worker_handle.abort();
-            let _ = worker_handle.await;
+            // ody: Windows 上 abort 后不再等待 worker 完成，避免 Cygwin fork 失败卡死主进程。
+            // 升级触发条件：如果孤儿进程或资源泄漏成为问题，改为 Job Object 或进程组信号。
+            if !cfg!(windows) {
+                let _ = worker_handle.await;
+            }
         }
         Ok(())
     }
