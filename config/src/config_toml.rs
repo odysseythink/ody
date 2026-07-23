@@ -914,6 +914,12 @@ pub struct DesignReviewDebateToml {
     pub advocate_model: Option<String>,
     pub skeptic_model: Option<String>,
     pub judge_model: Option<String>,
+    /// v1.5b (opt-in, default `false`): allow the Judge to REFUTE a weak critic
+    /// finding. A refuted finding is never deleted — it is retained, downgraded to
+    /// `speculative` confidence, and annotated with the Judge's reason (shown as
+    /// "contested by debate"). Off ⇒ the debate only ever ADDS findings (v1.5a).
+    #[serde(default)]
+    pub contest_critic: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
@@ -1322,6 +1328,22 @@ mod tests {
         assert!(debate.enable);
         assert_eq!(debate.rounds, Some(2));
         assert_eq!(debate.judge_model.as_deref(), Some("glm_1/glm-5.1"));
+        // contest_critic omitted ⇒ defaults false (v1.5b is opt-in).
+        assert!(!debate.contest_critic);
+    }
+
+    #[test]
+    fn design_review_debate_contest_critic_opt_in() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+                [design_review.debate]
+                enable = true
+                contest_critic = true
+            "#,
+        )
+        .expect("contest_critic should deserialize");
+        let debate = config.design_review.unwrap().debate.unwrap();
+        assert!(debate.contest_critic);
     }
 
     #[test]

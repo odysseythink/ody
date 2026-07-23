@@ -4,6 +4,7 @@ use crate::design_review::types::DesignReviewConfidence;
 use crate::design_review::types::DesignReviewFinding;
 use crate::design_review::types::DesignReviewOutput;
 use crate::design_review::types::DesignReviewSeverity;
+use crate::design_review::types::FindingProvenance;
 use crate::design_review::types::fingerprint_readable;
 use serde::Deserialize;
 use serde::Serialize;
@@ -131,6 +132,21 @@ that surfaced nothing beyond the CRITIC FINDINGS.
 
 "#;
 
+/// Appended to the Judge prompt ONLY when `contest_critic` is enabled (v1.5b).
+/// Lets the Judge flag a critic finding it is confident is a false positive; the
+/// caller retains it as Contested (Speculative + reason), never deletes it.
+const JUDGE_CONTEST_SPEC: &str = r#"Additionally, you MAY refute a CRITIC FINDING you are confident is a FALSE
+POSITIVE — one the Advocate refuted with concrete evidence, or that misreads the
+design. List each such finding in a top-level "refuted" array alongside "findings":
+
+  "refuted": [ { "title": "<the critic finding's EXACT title>", "reason": "<why it is wrong>" } ]
+
+Refute SPARINGLY and only at high confidence: a refuted finding is downgraded, not
+deleted. Omit "refuted" (or use []) when you are not confident any critic finding
+is wrong. Never refute a finding merely because it is inconvenient to the design.
+
+"#;
+
 const CRITIC_FINDINGS_MARKER: &str =
     "--- CRITIC FINDINGS (already reported — do not repeat) ---\n\n";
 
@@ -232,11 +248,13 @@ pub(crate) fn build_judge_prompt(
     critic_findings: &[DesignReviewFinding],
     transcript: &str,
     accepted_risks: &[String],
+    allow_contest: bool,
 ) -> String {
     let accepted_block = format_accepted_risks_block(accepted_risks);
     let critic_block = render_critic_findings(critic_findings);
+    let contest_block = if allow_contest { JUDGE_CONTEST_SPEC } else { "" };
     format!(
-        "{JUDGE_INTRO}{FINDINGS_OUTPUT_SPEC}{accepted_block}{DESIGN_DOCUMENT_MARKER}{design_markdown}\n\n{critic_block}{DEBATE_TRANSCRIPT_MARKER}{transcript}"
+        "{JUDGE_INTRO}{FINDINGS_OUTPUT_SPEC}{contest_block}{accepted_block}{DESIGN_DOCUMENT_MARKER}{design_markdown}\n\n{critic_block}{DEBATE_TRANSCRIPT_MARKER}{transcript}"
     )
 }
 
@@ -315,6 +333,7 @@ pub(crate) fn parse_design_review_output(text: &str) -> DesignReviewOutput {
             detail: bounded_detail(text, 400),
             location: None,
             suggested_fix: None,
+            provenance: FindingProvenance::Critic,
         }],
     }
 }
@@ -440,6 +459,18 @@ fn extract_json_string_field(text: &str, key: &str) -> Option<String> {
 struct RawDesignReviewOutput {
     overall_assessment: String,
     findings: Vec<RawDesignReviewFinding>,
+    /// v1.5b Judge output: critic findings the Judge deems false positives.
+    /// Absent in every other reviewer's output (serde default → empty).
+    #[serde(default)]
+    refuted: Vec<RawRefutation>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+struct RawRefutation {
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    reason: String,
 }
 
 impl From<RawDesignReviewOutput> for DesignReviewOutput {
@@ -449,6 +480,48 @@ impl From<RawDesignReviewOutput> for DesignReviewOutput {
             findings: raw.findings.into_iter().map(Into::into).collect(),
         }
     }
+}
+
+/// A critic finding the Judge (v1.5b) declared a false positive, with its reason.
+/// Matched back to the critic set by fingerprint so the finding can be marked
+/// Contested (never deleted).
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Refutation {
+    pub title: String,
+    pub reason: String,
+}
+
+/// Parse the Judge's output into `(net-new findings, refutations)`. Findings use
+/// the same salvage-tolerant path as the critic (`parse_design_review_output`);
+/// refutations are best-effort from a cleanly-parseable object. A truncated tail
+/// simply loses the refutations — acceptable, since a lost refutation just leaves
+/// the critic finding upheld (the safe direction).
+pub(crate) fn parse_judge_output(text: &str) -> (DesignReviewOutput, Vec<Refutation>) {
+    (parse_design_review_output(text), extract_refutations(text))
+}
+
+fn extract_refutations(text: &str) -> Vec<Refutation> {
+    let raw: Option<RawDesignReviewOutput> =
+        serde_json::from_str(text).ok().or_else(|| {
+            let start = text.find('{')?;
+            let end = text.rfind('}')?;
+            if start < end {
+                serde_json::from_str(text.get(start..=end)?).ok()
+            } else {
+                None
+            }
+        });
+    raw.map(|r| {
+        r.refuted
+            .into_iter()
+            .filter(|x| !x.title.trim().is_empty())
+            .map(|x| Refutation {
+                title: x.title,
+                reason: x.reason,
+            })
+            .collect()
+    })
+    .unwrap_or_default()
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -472,6 +545,8 @@ impl From<RawDesignReviewFinding> for DesignReviewFinding {
             detail: raw.detail,
             location: raw.location,
             suggested_fix: raw.suggested_fix,
+            // Provenance is orchestration state, never carried in model JSON.
+            provenance: FindingProvenance::Critic,
         }
     }
 }
@@ -550,8 +625,15 @@ pub(crate) fn format_review_appendix(
 }
 
 fn push_finding(lines: &mut Vec<String>, finding: &DesignReviewFinding) {
+    // Provenance tag so the reader can tell critic findings, debate-contributed
+    // findings, and (v1.5b) contested ones apart at a glance.
+    let tag = match finding.provenance {
+        FindingProvenance::Critic => "",
+        FindingProvenance::Debate => " _(via debate)_",
+        FindingProvenance::Contested => " _(contested by debate)_",
+    };
     lines.push(format!(
-        "- **[{}] {}** (confidence: {})",
+        "- **[{}] {}** (confidence: {}){tag}",
         finding.severity, finding.title, finding.confidence
     ));
     lines.push(format!("  - {}", finding.detail));
@@ -594,7 +676,7 @@ mod tests {
 
     #[test]
     fn judge_prompt_reuses_findings_schema_and_carries_transcript() {
-        let prompt = build_judge_prompt("# Design", &[], "[Advocate]: x\n\n[Skeptic]: y", &[]);
+        let prompt = build_judge_prompt("# Design", &[], "[Advocate]: x\n\n[Skeptic]: y", &[], false);
         // Same JSON contract as the single-shot critic → same parser applies.
         assert!(prompt.contains("Output strictly as JSON"));
         assert!(prompt.contains("\"overall_assessment\""));
@@ -613,7 +695,7 @@ mod tests {
     #[test]
     fn judge_prompt_instructs_net_new_only_when_seeded() {
         let critic = [finding(DesignReviewSeverity::High, "Missing authz check")];
-        let prompt = build_judge_prompt("# Design", &critic, "[Skeptic]: y", &[]);
+        let prompt = build_judge_prompt("# Design", &critic, "[Skeptic]: y", &[], false);
         // The critic block is present and the Judge is told not to re-emit it.
         assert!(prompt.contains("--- CRITIC FINDINGS"));
         assert!(prompt.contains("Missing authz check"));
@@ -621,6 +703,39 @@ mod tests {
         assert!(prompt.contains("already covered by the CRITIC FINDINGS"));
         // Still the same JSON contract → shared parser applies.
         assert!(prompt.contains("Output strictly as JSON"));
+        // contest off ⇒ no refutation spec.
+        assert!(!prompt.contains("\"refuted\""));
+    }
+
+    #[test]
+    fn judge_prompt_adds_refutation_spec_only_when_contest_enabled() {
+        let critic = [finding(DesignReviewSeverity::High, "Maybe-false positive")];
+        let off = build_judge_prompt("# Design", &critic, "[Skeptic]: y", &[], false);
+        assert!(!off.contains("\"refuted\""));
+        let on = build_judge_prompt("# Design", &critic, "[Skeptic]: y", &[], true);
+        assert!(on.contains("\"refuted\""));
+        assert!(on.contains("FALSE\nPOSITIVE") || on.contains("FALSE POSITIVE"));
+        assert!(on.contains("downgraded, not"));
+        // Refutation spec never replaces the findings contract.
+        assert!(on.contains("Output strictly as JSON"));
+    }
+
+    #[test]
+    fn parse_judge_output_extracts_refutations_and_findings() {
+        let text = r#"{
+            "overall_assessment": "one net-new",
+            "findings": [ {"severity":"medium","confidence":"high","title":"New gap","detail":"x."} ],
+            "refuted": [ {"title":"Bogus critic claim","reason":"Advocate showed the API already guards this."} ]
+        }"#;
+        let (output, refuted) = parse_judge_output(text);
+        assert_eq!(output.findings.len(), 1);
+        assert_eq!(output.findings[0].title, "New gap");
+        assert_eq!(refuted.len(), 1);
+        assert_eq!(refuted[0].title, "Bogus critic claim");
+        assert!(refuted[0].reason.contains("already guards"));
+        // A findings-only (critic-style) payload yields no refutations.
+        let (_o, none) = parse_judge_output(r#"{"overall_assessment":"","findings":[]}"#);
+        assert!(none.is_empty());
     }
 
     #[test]
@@ -679,6 +794,7 @@ mod tests {
             detail: "The migration is not atomic. A crash mid-run corrupts config.".to_string(),
             location: None,
             suggested_fix: Some("Write to a temp file then rename.".to_string()),
+            provenance: FindingProvenance::Critic,
         }];
         let block = render_critic_findings(&findings);
         assert!(block.starts_with("--- CRITIC FINDINGS"));
@@ -807,6 +923,7 @@ mod tests {
                 detail: "detail A".to_string(),
                 location: Some("loc".to_string()),
                 suggested_fix: Some("fix".to_string()),
+                provenance: FindingProvenance::Critic,
             }],
         };
         let appendix = format_review_appendix(&output, &HashSet::new(), false);
@@ -833,7 +950,30 @@ mod tests {
             detail: format!("detail for {title}"),
             location: None,
             suggested_fix: None,
+            provenance: FindingProvenance::Critic,
         }
+    }
+
+    #[test]
+    fn appendix_tags_findings_by_provenance() {
+        let mut critic = finding(DesignReviewSeverity::High, "Critic one");
+        let mut debate = finding(DesignReviewSeverity::Medium, "Debate one");
+        debate.provenance = FindingProvenance::Debate;
+        let mut contested = finding(DesignReviewSeverity::Low, "Contested one");
+        contested.provenance = FindingProvenance::Contested;
+        let output = DesignReviewOutput {
+            overall_assessment: String::new(),
+            findings: vec![critic.clone(), debate, contested],
+        };
+        let appendix = format_review_appendix(&output, &HashSet::new(), false);
+        // Critic findings carry no tag; debate/contested are marked. (The `finding`
+        // helper fixes confidence at High; the first arg is severity.)
+        assert!(appendix.contains("Critic one** (confidence: High)\n"));
+        assert!(appendix.contains("Debate one** (confidence: High) _(via debate)_"));
+        assert!(appendix.contains("Contested one** (confidence: High) _(contested by debate)_"));
+        // Critic tag is empty — no trailing italics on the critic line.
+        assert!(!appendix.contains("Critic one** (confidence: High) _("));
+        let _ = critic;
     }
 
     #[test]

@@ -18,10 +18,11 @@ use tokio_util::sync::CancellationToken;
 use crate::design_review::debate::types::DebateConfig;
 use crate::design_review::debate::types::DebateRole;
 use crate::design_review::debate::types::DebateTranscript;
+use crate::design_review::prompt::Refutation;
 use crate::design_review::prompt::build_advocate_prompt;
 use crate::design_review::prompt::build_judge_prompt;
 use crate::design_review::prompt::build_skeptic_prompt;
-use crate::design_review::prompt::parse_design_review_output;
+use crate::design_review::prompt::parse_judge_output;
 use crate::design_review::types::DesignReviewError;
 use crate::design_review::types::DesignReviewFinding;
 use crate::design_review::types::DesignReviewOutput;
@@ -32,6 +33,15 @@ use crate::tasks::SessionTaskContext;
 use crate::tasks::run_one_shot_review;
 
 pub(crate) struct DebateOrchestrator;
+
+/// What the debate produced: the Judge's net-new findings, plus (v1.5b, only when
+/// `contest_critic` is on) the critic findings the Judge deemed false positives.
+/// The caller unions `findings` into the critic set and applies `refutations` to
+/// it (marking them Contested — never deleting).
+pub(crate) struct DebateOutcome {
+    pub findings: DesignReviewOutput,
+    pub refutations: Vec<Refutation>,
+}
 
 /// Pure: the ordered `(role, round)` plan for the persona phase (Advocate on
 /// even turns, Skeptic on odd), terminating at `2 * rounds`. The Judge is a
@@ -63,7 +73,7 @@ impl DebateOrchestrator {
         request: &DesignReviewRequest,
         cfg: &DebateConfig,
         critic_findings: &[DesignReviewFinding],
-    ) -> Result<DesignReviewOutput, DesignReviewError> {
+    ) -> Result<DebateOutcome, DesignReviewError> {
         let session_ctx = Arc::new(SessionTaskContext::new(
             Arc::clone(session),
             Arc::clone(&turn.extension_data),
@@ -108,6 +118,7 @@ impl DebateOrchestrator {
             critic_findings,
             &transcript.render(),
             &request.accepted_risks,
+            cfg.contest_critic,
         );
         let judge_event = Self::one_call(
             &session_ctx,
@@ -120,8 +131,14 @@ impl DebateOrchestrator {
         .await
         .ok_or_else(|| DesignReviewError::Degraded("Judge produced no output".to_string()))?;
         // Reuse the single-shot parser + salvage so a fenced/truncated judge
-        // response is handled exactly as today's critic response is.
-        Ok(parse_design_review_output(&judge_event.overall_explanation))
+        // response is handled exactly as today's critic response is; additionally
+        // extract any refutations (empty unless contest_critic put the spec in the
+        // prompt).
+        let (findings, refutations) = parse_judge_output(&judge_event.overall_explanation);
+        Ok(DebateOutcome {
+            findings,
+            refutations,
+        })
     }
 
     /// One persona/judge sub-session. `None` on empty/timeout/cancel (the caller

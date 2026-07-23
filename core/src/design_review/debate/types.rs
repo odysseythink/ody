@@ -82,6 +82,10 @@ pub(crate) struct DebateConfig {
     /// Per-turn wall-clock budget: the single-shot review's total budget sliced
     /// across all `2*rounds + 1` calls so the debate cannot exceed it in sum.
     pub per_turn_timeout: Duration,
+    /// v1.5b (opt-in): allow the Judge to refute weak critic findings → they are
+    /// retained as `Contested` (Speculative + reason), never deleted. Off ⇒ v1.5a
+    /// behavior (debate only adds).
+    pub contest_critic: bool,
 }
 
 impl DebateConfig {
@@ -116,6 +120,7 @@ impl DebateConfig {
             fallback_design_review_model: design_review_model.map(str::to_string),
             fallback_review_model: review_model.map(str::to_string),
             per_turn_timeout: DESIGN_REVIEW_TIMEOUT / calls,
+            contest_critic: debate.contest_critic,
         })
     }
 
@@ -146,6 +151,7 @@ mod tests {
             advocate_model: None,
             skeptic_model: None,
             judge_model: None,
+            contest_critic: false,
         }
     }
 

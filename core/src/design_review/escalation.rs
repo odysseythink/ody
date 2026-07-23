@@ -583,6 +583,7 @@ mod tests {
             detail: "detail".to_string(),
             location: None,
             suggested_fix: None,
+            provenance: crate::design_review::types::FindingProvenance::Critic,
         }
     }
 

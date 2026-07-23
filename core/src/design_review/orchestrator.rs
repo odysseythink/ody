@@ -18,14 +18,18 @@ use tokio_util::sync::CancellationToken;
 
 use crate::design_review::debate::orchestrator::DebateOrchestrator;
 use crate::design_review::debate::types::DebateConfig;
+use crate::design_review::prompt::Refutation;
 use crate::design_review::prompt::build_design_review_prompt;
 use crate::design_review::prompt::format_review_appendix;
 use crate::design_review::prompt::parse_design_review_output;
+use crate::design_review::types::DesignReviewConfidence;
 use crate::design_review::types::DesignReviewError;
 use crate::design_review::types::DesignReviewFinding;
 use crate::design_review::types::DesignReviewOutput;
 use crate::design_review::types::DesignReviewRequest;
 use crate::design_review::types::DesignReviewSeverity;
+use crate::design_review::types::FindingProvenance;
+use crate::design_review::types::normalize_fingerprint;
 use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
 use crate::tasks::SessionTaskContext;
@@ -162,7 +166,7 @@ impl DesignReviewOrchestrator {
         session: &Arc<Session>,
         turn: &Arc<TurnContext>,
         request: &DesignReviewRequest,
-        output: DesignReviewOutput,
+        mut output: DesignReviewOutput,
     ) -> DesignReviewOutput {
         let Some(cfg) = DebateConfig::from_config(turn.config.as_ref()) else {
             return output;
@@ -171,7 +175,14 @@ impl DesignReviewOrchestrator {
         // the gap and returns net-new findings. `output` is kept verbatim — the
         // borrow ends before `union_findings` consumes it below.
         match DebateOrchestrator::run(session, turn, request, &cfg, &output.findings).await {
-            Ok(debate) => union_findings(output, debate),
+            Ok(debate) => {
+                // v1.5b (opt-in): mark critic findings the Judge refuted as
+                // Contested — retained, downgraded to Speculative, never deleted.
+                if cfg.contest_critic {
+                    apply_refutations(&mut output, &debate.refutations);
+                }
+                union_findings(output, debate.findings)
+            }
             Err(err) => {
                 let message = if turn
                     .config
@@ -195,28 +206,46 @@ impl DesignReviewOrchestrator {
 /// Merge debate findings into the single-shot set, de-duplicated by
 /// `DesignReviewFinding::fingerprint()` (the same identity the cross-round
 /// sign-off gate uses). Single-shot (critic) findings win ties and are never
-/// dropped. When the debate contributes net-new findings, a one-line provenance
-/// note listing their titles is appended to `overall_assessment` so the reader can
-/// see which findings came from the debate (v1.5a — no per-finding schema change).
+/// dropped. Each net-new debate finding is stamped `FindingProvenance::Debate` so
+/// the appendix tags it "_(via debate)_" (Task 4 — replaces the earlier
+/// assessment-line note with a per-finding marker).
 fn union_findings(mut base: DesignReviewOutput, debate: DesignReviewOutput) -> DesignReviewOutput {
     let mut seen: std::collections::HashSet<String> =
         base.findings.iter().map(|f| f.fingerprint()).collect();
-    let mut added_titles: Vec<String> = Vec::new();
-    for finding in debate.findings {
+    for mut finding in debate.findings {
         if seen.insert(finding.fingerprint()) {
-            added_titles.push(finding.title.clone());
+            finding.provenance = FindingProvenance::Debate;
             base.findings.push(finding);
         }
     }
-    if !added_titles.is_empty() {
-        let note = format!("[Debate added: {}]", added_titles.join("; "));
-        if base.overall_assessment.trim().is_empty() {
-            base.overall_assessment = note;
-        } else {
-            base.overall_assessment = format!("{}\n\n{note}", base.overall_assessment);
+    base
+}
+
+/// v1.5b: mark each critic finding the Judge refuted as `Contested` — downgraded
+/// to `Speculative` (so the sign-off gate never surfaces it as an item to
+/// accept/defer/fix) and annotated with the Judge's reason. Findings are NEVER
+/// removed, so even an over-eager Judge cannot make finalize lose a critic finding
+/// (design D8 / R8 mitigation). Matched by the same fingerprint the union and
+/// sign-off gate use, so a title the Judge reworded simply doesn't match and the
+/// finding stays upheld (the safe direction).
+fn apply_refutations(output: &mut DesignReviewOutput, refutations: &[Refutation]) {
+    if refutations.is_empty() {
+        return;
+    }
+    let by_fp: std::collections::HashMap<String, &str> = refutations
+        .iter()
+        .map(|r| (format!("F:{}", normalize_fingerprint(&r.title)), r.reason.as_str()))
+        .collect();
+    for f in &mut output.findings {
+        if let Some(reason) = by_fp.get(&f.fingerprint()) {
+            f.provenance = FindingProvenance::Contested;
+            f.confidence = DesignReviewConfidence::Speculative;
+            let reason = reason.trim();
+            if !reason.is_empty() {
+                f.detail = format!("{} [Debate contested: {reason}]", f.detail);
+            }
         }
     }
-    base
 }
 
 pub(crate) fn format_review_appendix_for_submit(
@@ -326,6 +355,7 @@ mod tests {
                 detail: "d".to_string(),
                 location: None,
                 suggested_fix: None,
+                provenance: FindingProvenance::Critic,
             },
             DesignReviewFinding {
                 severity: DesignReviewSeverity::High,
@@ -334,6 +364,7 @@ mod tests {
                 detail: "d".to_string(),
                 location: None,
                 suggested_fix: None,
+                provenance: FindingProvenance::Critic,
             },
             DesignReviewFinding {
                 severity: DesignReviewSeverity::High,
@@ -342,6 +373,7 @@ mod tests {
                 detail: "d".to_string(),
                 location: None,
                 suggested_fix: None,
+                provenance: FindingProvenance::Critic,
             },
         ];
         let counts = severity_counts(&findings);
@@ -359,6 +391,7 @@ mod tests {
             detail: "d".to_string(),
             location: None,
             suggested_fix: None,
+            provenance: FindingProvenance::Critic,
         }
     }
 
@@ -381,15 +414,13 @@ mod tests {
         // Single-shot finding wins the tie (original casing preserved).
         assert!(merged.findings.iter().any(|f| f.title == "Auth Loss"));
         assert!(!merged.findings.iter().any(|f| f.title == "auth loss"));
-        // Critic assessment retained; provenance note names only the net-new
-        // debate finding ("Missing test"), not the collapsed duplicate.
-        assert!(merged.overall_assessment.contains("single"));
-        assert!(
-            merged
-                .overall_assessment
-                .contains("[Debate added: Missing test]")
-        );
-        assert!(!merged.overall_assessment.contains("auth loss"));
+        // Critic assessment retained unchanged (provenance is now per-finding).
+        assert_eq!(merged.overall_assessment, "single");
+        // Only the net-new debate finding is stamped Debate; critic findings stay Critic.
+        let by = |t: &str| merged.findings.iter().find(|f| f.title == t).unwrap().provenance;
+        assert_eq!(by("Missing test"), FindingProvenance::Debate);
+        assert_eq!(by("Concurrency gap"), FindingProvenance::Critic);
+        assert_eq!(by("Auth Loss"), FindingProvenance::Critic);
     }
 
     #[test]
@@ -398,5 +429,33 @@ mod tests {
         let merged = union_findings(single, output("", &[]));
         assert_eq!(merged.findings.len(), 1);
         assert_eq!(merged.overall_assessment, "single");
+    }
+
+    #[test]
+    fn apply_refutations_contests_without_deleting() {
+        let mut out = output("assessment", &["Real bug", "Bogus claim"]);
+        let refs = vec![Refutation {
+            title: "bogus claim".to_string(), // case-insensitive fingerprint match
+            reason: "Advocate showed the guard already exists.".to_string(),
+        }];
+        apply_refutations(&mut out, &refs);
+        // Nothing deleted — both findings survive.
+        assert_eq!(out.findings.len(), 2);
+        let bogus = out.findings.iter().find(|f| f.title == "Bogus claim").unwrap();
+        // Contested: downgraded to Speculative (never escalates), tagged, annotated.
+        assert_eq!(bogus.provenance, FindingProvenance::Contested);
+        assert_eq!(bogus.confidence, DesignReviewConfidence::Speculative);
+        assert!(bogus.detail.contains("[Debate contested: Advocate showed"));
+        // The unrefuted finding is untouched.
+        let real = out.findings.iter().find(|f| f.title == "Real bug").unwrap();
+        assert_eq!(real.provenance, FindingProvenance::Critic);
+        assert_eq!(real.confidence, DesignReviewConfidence::High);
+    }
+
+    #[test]
+    fn apply_refutations_noop_when_empty() {
+        let mut out = output("a", &["x"]);
+        apply_refutations(&mut out, &[]);
+        assert_eq!(out.findings[0].provenance, FindingProvenance::Critic);
     }
 }

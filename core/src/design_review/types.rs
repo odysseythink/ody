@@ -23,6 +23,21 @@ pub(crate) struct DesignReviewOutput {
     pub findings: Vec<DesignReviewFinding>,
 }
 
+/// Where a finding came from, for the review appendix. Set by the orchestration
+/// (NOT by the model): the single-shot critic's findings are [`Self::Critic`];
+/// findings the debate surfaced beyond the critic are [`Self::Debate`]; a critic
+/// finding the debate's Judge refuted (v1.5b, opt-in via `contest_critic`) is
+/// retained as [`Self::Contested`] (downgraded to Speculative, never deleted).
+/// Not part of the model's JSON contract, so it never affects parsing or
+/// [`DesignReviewFinding::fingerprint`] (which is title-only).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum FindingProvenance {
+    #[default]
+    Critic,
+    Debate,
+    Contested,
+}
+
 /// A single adversarial finding.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct DesignReviewFinding {
@@ -32,6 +47,10 @@ pub(crate) struct DesignReviewFinding {
     pub detail: String,
     pub location: Option<String>,
     pub suggested_fix: Option<String>,
+    /// Provenance for the appendix. Defaults to [`FindingProvenance::Critic`];
+    /// the debate orchestration overwrites it for debate-contributed / contested
+    /// findings. Never set from parsed model output.
+    pub provenance: FindingProvenance,
 }
 
 impl DesignReviewFinding {
