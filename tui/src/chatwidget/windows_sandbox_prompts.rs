@@ -462,7 +462,7 @@ impl ChatWidget {
     ) {
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
     pub(crate) fn maybe_prompt_windows_sandbox_enable(&mut self, show_now: bool) {
         let windows_sandbox_level = crate::windows_sandbox::level_from_config(&self.config);
         let setup_is_required = windows_sandbox_level == WindowsSandboxLevel::Disabled
@@ -475,6 +475,11 @@ impl ChatWidget {
         {
             self.open_windows_sandbox_enable_prompt(preset, /*profile_selection*/ None);
         }
+    }
+
+    #[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+    pub(crate) fn maybe_prompt_windows_sandbox_enable(&mut self, _show_now: bool) {
+        // Sandbox backend is not compiled in; never show the NUX setup prompt.
     }
 
     #[cfg(not(target_os = "windows"))]
