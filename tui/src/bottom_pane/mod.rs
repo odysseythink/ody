@@ -445,7 +445,10 @@ impl BottomPane {
         match &mut self.planning_log {
             Some(widget) => widget.push(notification),
             None => {
-                let mut widget = PlanningLogWidget::new();
+                let mut widget = PlanningLogWidget::new(
+                    self.frame_requester.clone(),
+                    self.animations_enabled,
+                );
                 widget.push(notification);
                 self.planning_log = Some(widget);
             }
