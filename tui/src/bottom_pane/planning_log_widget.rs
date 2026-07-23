@@ -31,7 +31,7 @@ use crate::wrapping::adaptive_wrap_lines;
 const MAX_ENTRIES: usize = 4;
 
 /// Duration of the breath animation for a newly pushed planning log entry.
-const BREATH_DURATION: Duration = Duration::from_millis(1800);
+const BREATH_DURATION: Duration = Duration::from_millis(4500);
 
 /// Number of full breathing cycles within the animation window.
 ///
