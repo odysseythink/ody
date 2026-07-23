@@ -1,7 +1,7 @@
 # `/logout` 无法删除 `kimi`：问题分析与设计改进
 
 **日期**: 2026-07-21  
-**状态**: 已定位根因，待修复  
+**状态**: 已修复（通过架构变更自然消除）  
 **相关模块**: `tui`, `core/src/config`, `model-provider-info`, `ody-config`
 
 ---
@@ -166,6 +166,40 @@ let is_matching_alias = self
 
 ---
 
+## 2.5 修复确认
+
+原问题已不需要按第 4 章的"短期修复"方案打补丁。仓库在 2026-07-23 的清理中直接改变了 `Config.model_providers` 的语义：
+
+1. `core/src/config/mod.rs:3621-3624` 明确将 `model_providers` 改为**仅解析用户配置的 aliases**，不再合并内置 provider type IDs。注释原文：
+
+   ```rust
+   // Resolve only user-configured aliases in this map. Built-in provider type
+   // IDs are resolved on demand below so that menus such as /logout do not
+   // present built-in providers as if they were user accounts.
+   let model_providers = configured_model_providers;
+   ```
+
+2. 内置 provider type IDs 改为**按需解析**：
+
+   ```rust
+   let model_provider = model_providers
+       .get(&model_provider_id)
+       .cloned()
+       .or_else(|| built_in_provider_by_id(&model_provider_id))
+       .ok_or_else(|| { ... })?;
+   ```
+
+3. 产生旧 bug 的两个函数已被移除，仓库中不再存在：
+   - `built_in_model_providers()`（原 `model-provider-info/src/lib.rs:479-493`）
+   - `merge_configured_model_providers()`（原 `core/src/config/mod.rs:3580-3582`）
+
+由于 `/logout` 菜单的数据源 `configured_aliases_for_provider` 仍然遍历 `self.config.model_providers`（见第 2.3 节），而 `model_providers` 现在只含用户 alias，内置 `kimi`/`deepseek`/`glm` 根本不会出现在可删除账号列表中。因此：
+
+- 用户**看不到** `"kimi"` 作为可删除账号。
+- 删除逻辑也**不会**对内置 type ID 执行无效的 `clear_config_value("providers.kimi")`。
+
+---
+
 ## 3. 根因分析
 
 问题的本质不是配置没删干净，而是**概念模型不统一**：
@@ -180,98 +214,55 @@ let is_matching_alias = self
 
 | key 来源 | 语义 | 是否可删除 |
 |---|---|---|
-| `built_in_model_providers()` | provider type ID（如 `kimi`） | 否 |
+| 内置 provider type ID（如 `kimi`） | provider type，按需通过 `built_in_provider_by_id` 解析 | 否 |
 | `cfg.normalized_providers()` | 用户自定义 alias（如 `kimi_ranweiwei`） | 是 |
 
-把这两个不同语义的数据结构放进同一个 map，是当前设计问题的根源。
+> **注**：当前代码已经取消了 `built_in_model_providers()` 与 `model_providers` 的合并；内置 type ID 不再进入该 map，因此根源机制已发生变化。
 
 ---
 
 ## 4. 短期修复（最小改动）
 
-目标：让 `/logout` 只展示用户实际创建的 alias，内置 provider type ID 不再出现在可删除列表中。
-目标：让 `/logout` 只展示用户实际创建的 alias，内置 provider type ID 不再出现在可删除列表中。
+> **状态：已通过架构变更自然完成，本节方案无需实施，仅保留作历史参考。**
+
+原方案的目标是让 `/logout` 只展示用户实际创建的 alias。当前代码通过"`model_providers` 仅含用户配置 + 内置 provider 按需解析"已经实现了同一目标，且改动更小、语义更清晰。
 
 ### 4.1 在 `core` 的 `Config` 中记录用户配置的 alias 集合
 
-在 `core/src/config/mod.rs` 的 `Config` 结构体新增：
-
-```rust
-/// Provider aliases explicitly configured by the user, excluding built-in providers.
-pub user_configured_provider_aliases: HashSet<String>,
-```
-
-在 `load_config_with_layer_stack` 中初始化：
-
-```rust
-let configured_model_providers = cfg.normalized_providers();
-let user_configured_provider_aliases: HashSet<String> =
-    configured_model_providers.keys().cloned().collect();
-```
+**无需实施。** 当前 `model_providers` 本身已经等于"用户配置的 alias 集合"。
 
 ### 4.2 在 TUI 中同步该字段
 
-`tui/src/chatwidget.rs` 的 `sync_provider_config`：
-
-```rust
-pub(crate) fn sync_provider_config(&mut self, config: &Config) {
-    self.config.model_providers = config.model_providers.clone();
-    self.config.configured_models = config.configured_models.clone();
-    self.config.model = config.model.clone();
-    self.config.user_configured_provider_aliases =
-        config.user_configured_provider_aliases.clone();
-}
-```
+**无需实施。**
 
 ### 4.3 修改 `/logout` 菜单数据来源
 
-`tui/src/chatwidget/slash_dispatch.rs` 的 `configured_aliases_for_provider`：
-
-```rust
-fn configured_aliases_for_provider(&self, provider: LoginProvider) -> Vec<String> {
-    self.config
-        .user_configured_provider_aliases
-        .iter()
-        .filter(|alias| {
-            self.config
-                .model_providers
-                .get(*alias)
-                .map(|p| match provider {
-                    LoginProvider::Kimi => p.is_kimi(),
-                    LoginProvider::Deepseek => p.is_deepseek(),
-                    LoginProvider::Glm => p.is_glm(),
-                })
-                .unwrap_or(false)
-        })
-        .cloned()
-        .collect()
-}
-```
+**无需实施。** `configured_aliases_for_provider` 遍历的 `model_providers` 已不含内置 provider，行为已符合预期。
 
 ### 4.4 修改删除 guard
 
-`tui/src/app/config_persistence.rs` 的 `logout_provider_alias`：
-
-```rust
-let is_matching_alias = self.config.user_configured_provider_aliases.contains(&alias)
-    && self
-        .config
-        .model_providers
-        .get(&alias)
-        .map(|p| match provider { ... })
-        .unwrap_or(false);
-```
-
-如果 `alias` 不在用户配置集合中，直接拒绝并提示“该 alias 不是用户配置，无法删除”。
+**无需实施。** 由于可删除列表本身已经过滤掉内置 type ID，guard 不会收到 `"kimi"` 这类输入。
 
 ### 4.5 补充测试
 
-- 测试 `configured_aliases_for_provider` 不返回内置 `kimi`/`deepseek`/`glm`。
-- 测试 `logout_provider_alias` 对内置 `kimi` 返回错误或不生成任何编辑。
+**建议保留。** 应补充回归测试，确保 `configured_aliases_for_provider` 不返回内置 `kimi`/`deepseek`/`glm`，防止未来有人重新引入合并逻辑。
 
 ---
 
 ## 5. 长期设计改进
+
+> **状态：部分已自然完成，部分仍值得推进。**
+
+当前架构变更已经实现了本章最核心的目标之一：把"用户配置的 alias"和"内置 provider type ID"从同一个 `model_providers` map 里分开。因此以下子 phase 的状态需要调整：
+
+- **5.0 数据模型最终方案决策**：`model_providers` 现在明确只承载用户 aliases，语义已经拆分。如需进一步形式化，可降低为普通设计讨论。
+- **5.1 保留 ID 单一事实来源**：仍然值得做。当前保留 ID 列表仍分散在 `tui/src/login/validation.rs` 和 `built_in_provider_by_id` 的硬编码字符串中。
+- **5.2 在 `Config` 中暴露 `user_configured_provider_aliases`**：已不需要。`model_providers` 现在就是这个集合。
+- **5.3 TUI 登出流程切换到用户 alias 源**：已不需要。登出流程已经在使用仅含用户 alias 的 `model_providers`。
+- **5.4 重构 `Config.model_providers` 语义**：核心目标已达成，但字段名和访问 helper 仍可进一步澄清。
+- **5.5 迁移 `model_providers` 调用点**：仍有价值。仓库中仍有 100+ 处使用 `model_providers`，现在可以按"运行时 effective provider"语义统一梳理。
+- **5.6 回归测试与废弃处理**：仍应执行，尤其是 `/logout` 不展示内置 type ID 的回归测试。
+- **5.7 文档更新**：仍应执行，包括本报告结论和 `docs/multi_provider.md`。
 
 短期修复是在现有架构上打补丁。长期应该把 **provider type catalog** 和 **user provider aliases** 在数据模型上彻底分开。
 
@@ -550,18 +541,19 @@ let is_matching_alias = self.config.user_configured_provider_aliases.contains(&a
 
 ## 6. 结论
 
-> “provider 和 provider alias 是两个概念，不应该混在一起。”
+> **原 bug 已不存在。**
 
-这个判断是正确的。当前代码在登录侧已经意识到了这一点（`validate_custom_alias` 禁止保留 ID 作为 alias），但在登出侧和 `Config.model_providers` 的数据模型上把它们混成了一个 map，导致：
+报告第 1–2 章描述的"`/logout` 无法删除 `kimi`"现象，在 2026-07-23 的架构变更后已经自然消失：
 
-- `/logout` 菜单把内置 provider type ID 显示为“可删除账号”；
-- 删除内置 `kimi` 没有实际效果；
-- 用户反复删除仍会复现。
+1. `Config.model_providers` 不再合并内置 provider，仅保留用户配置的 aliases。
+2. 内置 provider type IDs（`kimi`/`deepseek`/`glm`）改为按需通过 `built_in_provider_by_id` 解析。
+3. 产生 bug 的 `built_in_model_providers()` 和 `merge_configured_model_providers()` 已被删除。
 
-这不仅是实现 bug，更是**概念模型不一致**带来的设计问题。推荐的修复方向是：
+因此，用户现在不会在 `/logout` 菜单中看到可删除的内置 `kimi` 账号，也不会触发无效的删除操作。
 
-1. 短期：在登出流程中区分“用户配置 alias”和“内置 provider type ID”，只展示和删除前者。
-2. 长期：在数据模型上拆分 `provider type catalog` 和 `user provider aliases`，避免同一字段承载两种语义。
+不过，报告提出的**概念模型分离**方向仍然有价值：保留 ID 的单一事实来源、全仓库 `model_providers` 调用点的语义澄清、以及回归测试，仍建议按第 5 章调整后的节奏推进。
+
+**最终状态：具体 bug 已修复；长期数据模型清理可继续作为常规技术债处理。**
 
 ---
 
@@ -572,6 +564,7 @@ let is_matching_alias = self.config.user_configured_provider_aliases.contains(&a
 - `tui/src/app/config_persistence.rs:842-907` — `/logout` 删除逻辑
 - `tui/src/login/config.rs:74-112` — 生成删除配置编辑
 - `tui/src/chatwidget.rs:1856-1862` — provider 配置同步到 widget
-- `core/src/config/mod.rs:3580-3582` — 合并内置与用户 provider
+- `core/src/config/mod.rs:3621-3638` — `model_providers` 仅解析用户配置 aliases，内置 provider 按需解析
+- `core/src/config/mod.rs:1995-2002` — 内置 provider 按需解析入口 `built_in_provider_by_id`
 - `model-provider-info/src/lib.rs:40` — `KIMI_PROVIDER_ID = "kimi"`
-- `model-provider-info/src/lib.rs:479-512` — 内置 provider 定义与合并逻辑
+- `model-provider-info/src/lib.rs` — `create_kimi_provider()` / `create_deepseek_provider()` / `create_glm_provider()`（原合并逻辑已删除）
