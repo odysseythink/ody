@@ -83,12 +83,13 @@ use ody_mcp::McpServerRegistration;
 use ody_mcp::ResolvedMcpCatalog;
 use ody_memories_read::memory_root;
 use ody_model_provider_info::ModelProviderInfo;
+use ody_model_provider_info::create_deepseek_provider;
+use ody_model_provider_info::create_glm_provider;
+use ody_model_provider_info::create_kimi_provider;
 #[cfg(test)]
 use ody_model_provider_info::ProviderCapabilities;
 #[cfg(test)]
 use ody_model_provider_info::WireApi;
-use ody_model_provider_info::built_in_model_providers;
-use ody_model_provider_info::merge_configured_model_providers;
 use ody_models_manager::ModelsManagerConfig;
 use ody_models_manager::model_info::ConfiguredModelSpec;
 use ody_models_manager::model_info::configured_model_catalog_for_provider;
@@ -971,7 +972,10 @@ pub struct Config {
     /// to 127.0.0.1 (using `mcp_oauth_callback_port` when provided).
     pub mcp_oauth_callback_url: Option<String>,
 
-    /// Combined provider map (defaults plus user-defined providers).
+    /// User-configured provider aliases only. Built-in provider type IDs such as
+    /// `kimi`, `deepseek`, and `glm` are resolved on demand and are not included
+    /// here so that logout menus and other consumers do not treat them as
+    /// deletable user accounts.
     pub model_providers: HashMap<String, ModelProviderInfo>,
 
     /// Maximum number of bytes to include from an AGENTS.md project doc file.
@@ -1985,6 +1989,19 @@ fn load_model_catalog(
     model_catalog_json
         .map(|path| load_catalog_json(&path))
         .transpose()
+}
+
+/// Return a built-in provider definition for a reserved provider type ID, if any.
+///
+/// This is used as a fallback when the active provider ID is a built-in type
+/// (e.g. `kimi`) but the user has not created a custom alias with that ID.
+fn built_in_provider_by_id(id: &str) -> Option<ModelProviderInfo> {
+    match id {
+        "kimi" => Some(create_kimi_provider()),
+        "deepseek" => Some(create_deepseek_provider()),
+        "glm" => Some(create_glm_provider()),
+        _ => None,
+    }
 }
 
 /// Build a model catalog from user-declared `[models."provider/model"]`
@@ -3604,22 +3621,24 @@ impl Config {
         validate_model_providers(&configured_model_providers)
             .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidData, message))?;
 
-        let model_providers =
-            merge_configured_model_providers(built_in_model_providers(), configured_model_providers)
-                .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidData, message))?;
+        // Resolve only user-configured aliases in this map. Built-in provider type
+        // IDs are resolved on demand below so that menus such as /logout do not
+        // present built-in providers as if they were user accounts.
+        let model_providers = configured_model_providers;
         let model_provider_id = model_provider
             .or(default_provider)
             .or(cfg.model_provider)
             .unwrap_or_else(|| "kimi".to_string());
         let model_provider = model_providers
             .get(&model_provider_id)
+            .cloned()
+            .or_else(|| built_in_provider_by_id(&model_provider_id))
             .ok_or_else(|| {
                 std::io::Error::new(
                     std::io::ErrorKind::NotFound,
                     format!("Model provider `{model_provider_id}` not found"),
                 )
-            })?
-            .clone();
+            })?;
 
         // Computed early: `cfg` is partially moved by later field extractions.
         let configured_catalog =

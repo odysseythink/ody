@@ -2842,6 +2842,44 @@ async fn empty_config_defaults_to_builtin_profile_for_trusted_project() -> std::
             "expected :workspace metadata carveouts, policy: {policy:?}"
         );
     }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn empty_config_uses_builtin_default_provider_without_mixing_into_aliases(
+) -> std::io::Result<()> {
+    let ody_home = TempDir::new()?;
+    let cwd = TempDir::new()?;
+    let project_key = cwd.path().to_string_lossy().to_string();
+
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml {
+            projects: Some(HashMap::from([(
+                project_key,
+                ProjectConfig {
+                    trust_level: Some(TrustLevel::Trusted),
+                },
+            )])),
+            ..Default::default()
+        },
+        ConfigOverrides {
+            cwd: Some(cwd.path().to_path_buf()),
+            ..Default::default()
+        },
+        ody_home.abs(),
+    )
+    .await?;
+
+    // No user-configured aliases means the map should be empty. Built-in type
+    // IDs such as "kimi" must not appear as deletable aliases.
+    assert!(
+        config.model_providers.is_empty(),
+        "expected no user-configured aliases, got: {:?}",
+        config.model_providers.keys().collect::<Vec<_>>()
+    );
+    assert_eq!(config.model_provider_id, "kimi");
+    assert_eq!(config.model_provider.name, "Kimi");
     Ok(())
 }
 
