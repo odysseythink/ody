@@ -263,7 +263,6 @@ async fn design_mode_records_reminder_during_early_clarification() {
     );
 }
 
-
 #[test]
 fn design_mode_text_contains_closed_choice_detects_popup_candidates() {
     // Plain-text A/B/C questions should be caught.
@@ -294,8 +293,6 @@ Select one."
     assert!(!design_mode_text_contains_closed_choice(
         "The options are A and B."
     ));
-    assert!(!design_mode_text_contains_closed_choice(
-        "No options here."
-    ));
+    assert!(!design_mode_text_contains_closed_choice("No options here."));
     assert!(!design_mode_text_contains_closed_choice(""));
 }

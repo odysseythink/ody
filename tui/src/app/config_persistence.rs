@@ -6,16 +6,16 @@
 
 use super::*;
 use crate::app_server_session::model_preset_from_api_model;
-use crate::model_catalog::ModelCatalog;
 use crate::login::config::build_login_models_edits;
 use crate::login::config::build_login_provider_edits;
 use crate::login::config::build_logout_provider_edits;
 use crate::login::telemetry;
+use crate::model_catalog::ModelCatalog;
 use ody_model_provider::login::LoginModelInfo;
 use ody_model_provider_info::LoginProvider;
-use std::sync::Arc;
 #[cfg(target_os = "windows")]
 use ody_utils_approval_presets::ApprovalPreset;
+use std::sync::Arc;
 
 #[cfg(target_os = "windows")]
 pub(super) struct WindowsSetupPermissions {
@@ -785,7 +785,8 @@ impl App {
                     .into_iter()
                     .map(model_preset_from_api_model)
                     .collect::<Vec<_>>();
-                let new_catalog = Arc::new(crate::model_catalog::ModelCatalog::new(available_models));
+                let new_catalog =
+                    Arc::new(crate::model_catalog::ModelCatalog::new(available_models));
                 self.model_catalog = new_catalog.clone();
                 self.chat_widget.set_model_catalog(new_catalog);
             }
@@ -1599,7 +1600,8 @@ terminal_resize_reflow_max_rows = 9000
     }
 
     #[tokio::test]
-    async fn refresh_in_memory_config_from_disk_syncs_provider_config_to_chat_widget() -> Result<()> {
+    async fn refresh_in_memory_config_from_disk_syncs_provider_config_to_chat_widget() -> Result<()>
+    {
         let mut app = make_test_app().await;
         let ody_home = tempdir()?;
         app.config.ody_home = ody_home.path().to_path_buf().abs();
@@ -1632,14 +1634,20 @@ terminal_resize_reflow_max_rows = 9000
         app.config.model_providers.clear();
         app.chat_widget.sync_provider_config(&app.config);
         assert!(
-            !app.chat_widget.config_ref().model_providers.contains_key("kimi_1"),
+            !app.chat_widget
+                .config_ref()
+                .model_providers
+                .contains_key("kimi_1"),
             "precondition: widget should start stale"
         );
 
         app.refresh_in_memory_config_from_disk().await?;
 
         assert!(
-            app.chat_widget.config_ref().model_providers.contains_key("kimi_1"),
+            app.chat_widget
+                .config_ref()
+                .model_providers
+                .contains_key("kimi_1"),
             "chat widget should see provider reloaded from disk"
         );
         Ok(())

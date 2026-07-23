@@ -331,7 +331,11 @@ fn signoff_options(chinese: bool) -> Vec<RequestUserInputQuestionOption> {
 /// The one label that blocks finalize. Everything else (Accept, Defer, a
 /// free-text Other, or an unanswered page) is treated as non-blocking.
 fn needs_fix_label(chinese: bool) -> &'static str {
-    if chinese { "需要修正" } else { "Needs fixing" }
+    if chinese {
+        "需要修正"
+    } else {
+        "Needs fixing"
+    }
 }
 
 /// One `request_user_input` question per escalated item, so the TUI paginates
@@ -529,7 +533,11 @@ pub(crate) async fn run_escalation_gate(
         let Some(answer) = response.answers.get(&format!("{QUESTION_ID_PREFIX}{i}")) else {
             continue;
         };
-        let picked = answer.answers.first().map(String::as_str).unwrap_or_default();
+        let picked = answer
+            .answers
+            .first()
+            .map(String::as_str)
+            .unwrap_or_default();
         if picked == needs_fix {
             // The page's optional note is appended by the client as `user_note: …`.
             let note = answer
@@ -771,7 +779,10 @@ mod tests {
                 "plaintext key — detail".to_string(),
                 "encrypt it".to_string(),
             ),
-            ("overlay reuse — impact if wrong: rewrite UI".to_string(), String::new()),
+            (
+                "overlay reuse — impact if wrong: rewrite UI".to_string(),
+                String::new(),
+            ),
         ];
         let msg = build_revise(false, &flagged);
         assert!(msg.contains("NOT finalized"));
@@ -808,7 +819,10 @@ mod tests {
         assert_eq!(design_title_key(r1), design_title_key(r2));
         assert_ne!(design_title_key(r1), design_title_key(other));
         // A `##` subheading is not mistaken for the title.
-        assert_eq!(design_title_key("## Overview\n# Real Title\n"), "real title");
+        assert_eq!(
+            design_title_key("## Overview\n# Real Title\n"),
+            "real title"
+        );
         // No heading → empty fallback, still stable.
         assert_eq!(design_title_key("no heading here\n"), "");
     }
@@ -825,16 +839,27 @@ mod tests {
         assert!(!clean.questions[0].question.contains("已略过"));
         // With carry-over: the shrinking count is explained on the page.
         let carried = build_signoff_questions(true, &items, 12);
-        assert!(carried.questions[0].question.contains("已略过 12 项此前已确认"));
+        assert!(
+            carried.questions[0]
+                .question
+                .contains("已略过 12 项此前已确认")
+        );
         // The English form too, and the short header chip stays free of it.
         let en = build_signoff_questions(false, &items, 3);
-        assert!(en.questions[0].question.contains("3 already-confirmed skipped"));
+        assert!(
+            en.questions[0]
+                .question
+                .contains("3 already-confirmed skipped")
+        );
         assert!(!en.questions[0].header.contains("already-confirmed"));
     }
 
     #[test]
     fn revise_message_omits_note_line_when_empty() {
-        let msg = build_revise(false, &[("weak validation — detail".to_string(), String::new())]);
+        let msg = build_revise(
+            false,
+            &[("weak validation — detail".to_string(), String::new())],
+        );
         assert!(msg.contains("1. weak validation"));
         assert!(!msg.contains("note:"));
     }

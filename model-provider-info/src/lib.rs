@@ -475,41 +475,6 @@ impl ModelProviderInfo {
     }
 }
 
-/// Built-in default provider list.
-pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
-    // We do not want to be in the business of adjucating which third-party
-    // providers are bundled with Ody CLI, so we only include the OpenAI.
-    // Users are encouraged to add to
-    // `model_providers` in config.toml to add their own providers.
-    [
-        // OpenAI-compatible third-party Chat Completions providers.
-        (KIMI_PROVIDER_ID, create_kimi_provider()),
-        (DEEPSEEK_PROVIDER_ID, create_deepseek_provider()),
-        (GLM_PROVIDER_ID, create_glm_provider()),
-    ]
-    .into_iter()
-    .map(|(k, v)| (k.to_string(), v))
-    .collect()
-}
-
-/// Merge configured providers into the built-in provider catalog.
-///
-/// Configured providers extend the built-in set. Built-in providers are not
-/// overridable. After merging, all providers are normalized so their
-/// capability matrices reflect their wire API and other declared fields.
-pub fn merge_configured_model_providers(
-    mut model_providers: HashMap<String, ModelProviderInfo>,
-    configured_model_providers: HashMap<String, ModelProviderInfo>,
-) -> Result<HashMap<String, ModelProviderInfo>, String> {
-    for (key, provider) in configured_model_providers {
-        model_providers.entry(key).or_insert(provider);
-    }
-    for provider in model_providers.values_mut() {
-        provider.normalize_capabilities();
-    }
-
-    Ok(model_providers)
-}
 
 /// Build an OpenAI-compatible Chat Completions provider (Kimi / DeepSeek / GLM).
 fn create_chat_provider(

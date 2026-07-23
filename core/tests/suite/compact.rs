@@ -23,7 +23,7 @@ use ody_core::config::Config;
 use ody_features::Feature;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::ProviderCapabilities;
-use ody_model_provider_info::built_in_model_providers;
+use ody_model_provider_info::create_kimi_provider;
 use ody_models_manager::bundled_models_response;
 use ody_protocol::config_types::AutoCompactTokenLimitScope;
 use ody_protocol::items::TurnItem;
@@ -310,7 +310,7 @@ with Path(r"{manual_post_log_path}").open("a", encoding="utf-8") as handle:
 }
 
 fn non_odysseythink_model_provider(server: &MockServer) -> ModelProviderInfo {
-    let mut provider = built_in_model_providers()["kimi"].clone();
+    let mut provider = create_kimi_provider();
     provider.name = "OpenAI (test)".into();
     provider.base_url = Some(format!("{}/v1", server.uri()));
     provider.supports_websockets = false;
@@ -395,7 +395,7 @@ fn remote_v2_compaction_response() -> String {
 }
 
 fn local_compaction_provider(server: &wiremock::MockServer) -> ModelProviderInfo {
-    let mut provider = built_in_model_providers()["kimi"].clone();
+    let mut provider = create_kimi_provider();
     provider.name = "OpenAI-compatible test provider".to_string();
     provider.base_url = Some(format!("{}/v1", server.uri()));
     provider.supports_websockets = false;

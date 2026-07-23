@@ -19,7 +19,6 @@ use core_test_support::TempDirExt;
 use ody_extension_api::empty_extension_registry;
 use ody_features::Feature;
 use ody_model_provider::create_model_provider;
-use ody_model_provider_info::built_in_model_providers;
 use ody_models_manager::bundled_models_response;
 use ody_protocol::AgentPath;
 use ody_protocol::ThreadId;

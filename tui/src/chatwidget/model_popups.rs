@@ -846,11 +846,10 @@ impl ChatWidget {
         effort: Option<ReasoningEffortConfig>,
     ) {
         self.apply_model_and_effort_without_persist(model.clone(), effort.clone());
-        self.app_event_tx
-            .send(AppEvent::PersistModelSelection {
-                provider_id,
-                model,
-                effort,
-            });
+        self.app_event_tx.send(AppEvent::PersistModelSelection {
+            provider_id,
+            model,
+            effort,
+        });
     }
 }

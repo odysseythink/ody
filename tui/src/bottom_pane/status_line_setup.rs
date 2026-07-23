@@ -493,10 +493,7 @@ mod tests {
     #[test]
     fn preview_uses_runtime_values() {
         let preview_data = StatusSurfacePreviewData::from_iter([
-            (
-                StatusLineItem::ModelName.preview_item(),
-                "k3".to_string(),
-            ),
+            (StatusLineItem::ModelName.preview_item(), "k3".to_string()),
             (
                 StatusLineItem::CurrentDir.preview_item(),
                 "/repo".to_string(),
@@ -575,10 +572,7 @@ mod tests {
     #[test]
     fn preview_includes_thread_title() {
         let preview_data = StatusSurfacePreviewData::from_iter([
-            (
-                StatusLineItem::ModelName.preview_item(),
-                "k3".to_string(),
-            ),
+            (StatusLineItem::ModelName.preview_item(), "k3".to_string()),
             (
                 StatusLineItem::ThreadTitle.preview_item(),
                 "Roadmap cleanup".to_string(),

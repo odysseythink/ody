@@ -37,7 +37,7 @@ use ody_features::Feature;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::ProviderCapabilities;
 use ody_model_provider_info::WireApi;
-use ody_model_provider_info::built_in_model_providers;
+use ody_model_provider_info::create_kimi_provider;
 use ody_models_manager::bundled_models_response;
 use ody_otel::SessionTelemetry;
 use ody_protocol::ThreadId;
@@ -248,7 +248,7 @@ async fn non_odysseythink_responses_requests_omit_item_passthrough_metadata() {
         sse(vec![ev_response_created("resp1"), ev_completed("resp1")]),
     )
     .await;
-    let mut provider = built_in_model_providers()["kimi"].clone();
+    let mut provider = create_kimi_provider();
     provider.name = "Test Responses".to_string();
     provider.base_url = Some(format!("{}/v1", server.uri()));
     provider.supports_websockets = false;
@@ -1268,7 +1268,7 @@ async fn prefers_apikey_when_config_prefers_apikey() {
         base_url: Some(format!("{}/v1", server.uri())),
         supports_websockets: false,
         capabilities: ProviderCapabilities::default(),
-        ..built_in_model_providers()["kimi"].clone()
+        ..create_kimi_provider()
     };
 
     // Init session

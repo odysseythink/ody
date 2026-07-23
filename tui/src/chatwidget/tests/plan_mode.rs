@@ -590,7 +590,11 @@ async fn reasoning_selection_in_plan_mode_model_switch_does_not_open_scope_promp
 #[tokio::test]
 async fn plan_reasoning_scope_popup_all_modes_persists_global_and_plan_override() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("k3")).await;
-    chat.open_plan_reasoning_scope_prompt("kimi".to_string(), "k3".to_string(), Some(ReasoningEffortConfig::High));
+    chat.open_plan_reasoning_scope_prompt(
+        "kimi".to_string(),
+        "k3".to_string(),
+        Some(ReasoningEffortConfig::High),
+    );
 
     chat.handle_key_event(KeyEvent::from(KeyCode::Down));
     chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
@@ -658,7 +662,11 @@ async fn open_plan_reasoning_scope_prompt_sets_pending_notification() {
     chat.config.tui_notifications.notifications =
         Notifications::Custom(vec!["plan-mode-prompt".to_string()]);
 
-    chat.open_plan_reasoning_scope_prompt("kimi".to_string(), "k3".to_string(), Some(ReasoningEffortConfig::High));
+    chat.open_plan_reasoning_scope_prompt(
+        "kimi".to_string(),
+        "k3".to_string(),
+        Some(ReasoningEffortConfig::High),
+    );
 
     assert_matches!(
         chat.pending_notification,
@@ -776,7 +784,11 @@ async fn plan_reasoning_scope_popup_mentions_built_in_plan_default_when_no_overr
 #[tokio::test]
 async fn plan_reasoning_scope_popup_plan_only_does_not_update_all_modes_reasoning() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("k3")).await;
-    chat.open_plan_reasoning_scope_prompt("kimi".to_string(), "k3".to_string(), Some(ReasoningEffortConfig::High));
+    chat.open_plan_reasoning_scope_prompt(
+        "kimi".to_string(),
+        "k3".to_string(),
+        Some(ReasoningEffortConfig::High),
+    );
 
     chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
 

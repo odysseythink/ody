@@ -83,7 +83,6 @@ pub(crate) async fn mount_analytics_capture(server: &MockServer, ody_home: &Path
         .mount(server)
         .await;
 
-
     Ok(())
 }
 

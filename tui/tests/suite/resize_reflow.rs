@@ -75,11 +75,7 @@ async fn tmux_split_preserves_fresh_session_composer_row_after_resize_reflow() -
         "resize reflow sentinel",
         Duration::from_secs(/*secs*/ 15),
     )?;
-    wait_for_capture_contains(
-        &ody_pane,
-        "k3 default",
-        Duration::from_secs(/*secs*/ 15),
-    )?;
+    wait_for_capture_contains(&ody_pane, "k3 default", Duration::from_secs(/*secs*/ 15))?;
     let draft = "Notice where we are here in terms of y location.";
     check(
         Command::new("tmux")
@@ -242,11 +238,7 @@ async fn tmux_width_resize_restore_keeps_visible_content_anchored() -> Result<()
         "resize reflow sentinel",
         Duration::from_secs(/*secs*/ 15),
     )?;
-    wait_for_capture_contains(
-        &ody_pane,
-        "k3 default",
-        Duration::from_secs(/*secs*/ 15),
-    )?;
+    wait_for_capture_contains(&ody_pane, "k3 default", Duration::from_secs(/*secs*/ 15))?;
     let draft = "Notice where we are here in terms of y location.";
     check(
         Command::new("tmux")
@@ -362,11 +354,7 @@ async fn run_repeated_resize_smoke() -> Result<()> {
         "resize reflow sentinel",
         Duration::from_secs(/*secs*/ 15),
     )?;
-    wait_for_capture_contains(
-        &ody_pane,
-        "k3 default",
-        Duration::from_secs(/*secs*/ 15),
-    )?;
+    wait_for_capture_contains(&ody_pane, "k3 default", Duration::from_secs(/*secs*/ 15))?;
     let draft = "Notice where we are here in terms of y location.";
     check(
         Command::new("tmux")

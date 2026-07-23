@@ -536,9 +536,8 @@ fn bundled_models_support_personality_for_kimi_deepseek_glm() {
             "default instructions for {} should strip the placeholder",
             model.slug
         );
-        let friendly = model.get_model_instructions(Some(
-            ody_protocol::config_types::Personality::Friendly,
-        ));
+        let friendly =
+            model.get_model_instructions(Some(ody_protocol::config_types::Personality::Friendly));
         assert!(
             friendly.contains("team morale"),
             "friendly instructions for {} should include the friendly blurb",
@@ -550,7 +549,8 @@ fn bundled_models_support_personality_for_kimi_deepseek_glm() {
 #[test]
 fn bundled_models_include_supported_chat_vendors() {
     let response = crate::bundled_models_response().expect("bundled models.json should parse");
-    let slugs: std::collections::HashSet<_> = response.models.iter().map(|m| m.slug.as_str()).collect();
+    let slugs: std::collections::HashSet<_> =
+        response.models.iter().map(|m| m.slug.as_str()).collect();
     for expected in [
         "kimi-k2.5",
         "k3",
@@ -561,6 +561,9 @@ fn bundled_models_include_supported_chat_vendors() {
         "glm-5",
         "glm-5.2",
     ] {
-        assert!(slugs.contains(expected), "bundled models.json missing {expected}");
+        assert!(
+            slugs.contains(expected),
+            "bundled models.json missing {expected}"
+        );
     }
 }

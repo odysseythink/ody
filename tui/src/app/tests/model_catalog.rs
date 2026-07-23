@@ -287,4 +287,3 @@ async fn model_migration_prompt_skips_when_target_missing_or_hidden() {
     ));
     assert!(target_preset_for_upgrade(&with_hidden_target, "k3").is_none());
 }
-

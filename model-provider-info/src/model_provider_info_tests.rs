@@ -2,7 +2,6 @@ use super::*;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_absolute_path::AbsolutePathBufGuard;
 use pretty_assertions::assert_eq;
-use std::collections::HashMap;
 use std::num::NonZeroU64;
 use tempfile::tempdir;
 
@@ -53,26 +52,6 @@ wire_api = "chat"
 
     let provider = toml::from_str::<ModelProviderInfo>(provider_toml).unwrap();
     assert_eq!(provider.wire_api, WireApi::Chat);
-}
-
-#[test]
-fn built_in_chat_providers_are_registered() {
-    let providers = built_in_model_providers();
-    for (id, env_key) in [
-        ("kimi", "KIMI_API_KEY"),
-        ("deepseek", "DEEPSEEK_API_KEY"),
-        ("glm", "GLM_API_KEY"),
-    ] {
-        let provider = providers
-            .get(id)
-            .unwrap_or_else(|| panic!("missing built-in provider {id}"));
-        assert_eq!(provider.wire_api, WireApi::Chat);
-        assert_eq!(provider.env_key.as_deref(), Some(env_key));
-        assert!(provider.base_url.is_some());
-    }
-    assert!(providers["kimi"].is_kimi());
-    assert!(providers["deepseek"].is_deepseek());
-    assert!(providers["glm"].is_glm());
 }
 
 #[test]
@@ -164,26 +143,6 @@ args = ["--format=text"]
     );
 }
 
-#[test]
-fn test_merge_configured_model_providers_adds_custom_provider() {
-    let custom_provider = ModelProviderInfo {
-        name: "Custom".to_string(),
-        base_url: Some("https://example.com/v1".to_string()),
-        ..ModelProviderInfo::default()
-    };
-    let configured_model_providers =
-        std::collections::HashMap::from([("custom".to_string(), custom_provider.clone())]);
-
-    let mut expected = built_in_model_providers();
-    let mut expected_custom = custom_provider;
-    expected_custom.normalize_capabilities();
-    expected.insert("custom".to_string(), expected_custom);
-
-    assert_eq!(
-        merge_configured_model_providers(built_in_model_providers(), configured_model_providers,),
-        Ok(expected)
-    );
-}
 
 #[test]
 fn provider_capabilities_default_is_conservative() {
@@ -363,47 +322,3 @@ fn normalize_capabilities_respects_explicit_values() {
     assert!(!provider.capabilities.attestation);
 }
 
-#[test]
-fn user_defined_provider_gets_wire_api_default_capabilities() {
-    let built_in = built_in_model_providers();
-    let mut configured = HashMap::new();
-    configured.insert(
-        "my-responses".to_string(),
-        ModelProviderInfo {
-            name: "My Responses".to_string(),
-            wire_api: WireApi::Responses,
-            ..Default::default()
-        },
-    );
-    let merged = merge_configured_model_providers(built_in, configured).unwrap();
-    let my_responses = merged
-        .get("my-responses")
-        .expect("user provider should be present");
-    assert_eq!(my_responses.wire_api, WireApi::Responses);
-    // Responses 的 provider 级推断默认值包含多项 true；实现前 capabilities 为全 false，会失败。
-    assert_eq!(
-        my_responses.capabilities,
-        default_provider_capabilities_for_wire_api(WireApi::Responses)
-    );
-}
-
-#[test]
-fn user_defined_provider_with_explicit_capabilities_is_preserved() {
-    let built_in = built_in_model_providers();
-    let mut configured = HashMap::new();
-    configured.insert(
-        "my-chat".to_string(),
-        ModelProviderInfo {
-            name: "My Chat".to_string(),
-            wire_api: WireApi::Chat,
-            capabilities: ProviderCapabilities {
-                web_search: true,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-    );
-    let merged = merge_configured_model_providers(built_in, configured).unwrap();
-    let my_chat = merged.get("my-chat").unwrap();
-    assert!(my_chat.capabilities.web_search);
-}

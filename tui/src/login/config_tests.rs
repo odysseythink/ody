@@ -78,21 +78,26 @@ fn build_login_models_edits_writes_all_fetched_models_and_default() {
             display_name: "Model B".to_string(),
         },
     ];
-    let edits =
-        build_login_models_edits("work-kimi", LoginProvider::Kimi, &models, "model-a");
+    let edits = build_login_models_edits("work-kimi", LoginProvider::Kimi, &models, "model-a");
 
     assert_eq!(edits.len(), 8);
     assert_eq!(edits[0].key_path, r#"models."work-kimi/model-a".provider"#);
     assert_eq!(edits[0].value, serde_json::json!("work-kimi"));
     assert_eq!(edits[1].key_path, r#"models."work-kimi/model-a".model"#);
     assert_eq!(edits[1].value, serde_json::json!("model-a"));
-    assert_eq!(edits[2].key_path, r#"models."work-kimi/model-a".display_name"#);
+    assert_eq!(
+        edits[2].key_path,
+        r#"models."work-kimi/model-a".display_name"#
+    );
     assert_eq!(edits[2].value, serde_json::json!("Model A"));
     assert_eq!(edits[3].key_path, r#"models."work-kimi/model-b".provider"#);
     assert_eq!(edits[3].value, serde_json::json!("work-kimi"));
     assert_eq!(edits[4].key_path, r#"models."work-kimi/model-b".model"#);
     assert_eq!(edits[4].value, serde_json::json!("model-b"));
-    assert_eq!(edits[5].key_path, r#"models."work-kimi/model-b".display_name"#);
+    assert_eq!(
+        edits[5].key_path,
+        r#"models."work-kimi/model-b".display_name"#
+    );
     assert_eq!(edits[5].value, serde_json::json!("Model B"));
     assert_eq!(edits[6].key_path, "model");
     assert_eq!(edits[6].value, serde_json::Value::Null);
@@ -108,8 +113,7 @@ fn build_login_models_edits_skips_display_name_when_same_as_id() {
         id: "model-a".to_string(),
         display_name: "model-a".to_string(),
     }];
-    let edits =
-        build_login_models_edits("work-kimi", LoginProvider::Kimi, &models, "model-a");
+    let edits = build_login_models_edits("work-kimi", LoginProvider::Kimi, &models, "model-a");
 
     assert_eq!(edits.len(), 4);
     assert_eq!(edits[0].key_path, r#"models."work-kimi/model-a".provider"#);
@@ -204,15 +208,33 @@ fn build_login_model_edits_writes_model_metadata_from_bundled_catalog() {
 
     // provider, model, max_context_size, max_output_size, capabilities, clear model, default_model
     assert_eq!(edits.len(), 7);
-    assert_eq!(edits[0].key_path, r#"models."work-deepseek/deepseek-v4-pro".provider"#);
-    assert_eq!(edits[1].key_path, r#"models."work-deepseek/deepseek-v4-pro".model"#);
-    assert_eq!(edits[2].key_path, r#"models."work-deepseek/deepseek-v4-pro".max_context_size"#);
+    assert_eq!(
+        edits[0].key_path,
+        r#"models."work-deepseek/deepseek-v4-pro".provider"#
+    );
+    assert_eq!(
+        edits[1].key_path,
+        r#"models."work-deepseek/deepseek-v4-pro".model"#
+    );
+    assert_eq!(
+        edits[2].key_path,
+        r#"models."work-deepseek/deepseek-v4-pro".max_context_size"#
+    );
     assert_eq!(edits[2].value, serde_json::json!(1_000_000));
-    assert_eq!(edits[3].key_path, r#"models."work-deepseek/deepseek-v4-pro".max_output_size"#);
+    assert_eq!(
+        edits[3].key_path,
+        r#"models."work-deepseek/deepseek-v4-pro".max_output_size"#
+    );
     assert_eq!(edits[3].value, serde_json::json!(384_000));
-    assert_eq!(edits[4].key_path, r#"models."work-deepseek/deepseek-v4-pro".capabilities"#);
+    assert_eq!(
+        edits[4].key_path,
+        r#"models."work-deepseek/deepseek-v4-pro".capabilities"#
+    );
     assert_eq!(edits[4].value, serde_json::json!(["tool_use", "thinking"]));
     assert_eq!(edits[5].key_path, "model");
     assert_eq!(edits[6].key_path, "default_model");
-    assert_eq!(edits[6].value, serde_json::json!("work-deepseek/deepseek-v4-pro"));
+    assert_eq!(
+        edits[6].value,
+        serde_json::json!("work-deepseek/deepseek-v4-pro")
+    );
 }

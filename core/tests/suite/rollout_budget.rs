@@ -14,7 +14,7 @@ use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
 use ody_core::config::RolloutBudgetConfig;
 use ody_features::Feature;
-use ody_model_provider_info::built_in_model_providers;
+use ody_model_provider_info::create_kimi_provider;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::Op;
 use ody_protocol::protocol::TurnAbortReason;
@@ -284,7 +284,7 @@ async fn compaction_budget_exhaustion_aborts_without_error_or_retry(remote_v2: b
         ])
     };
     let responses = mount_sse_sequence(&server, vec![compact_response]).await;
-    let mut model_provider = built_in_model_providers()["kimi"].clone();
+    let mut model_provider = create_kimi_provider();
     model_provider.base_url = Some(format!("{}/v1", server.uri()));
     model_provider.supports_websockets = false;
     if !remote_v2 {
@@ -348,7 +348,7 @@ async fn restates_the_current_remainder_after_compaction() -> Result<()> {
         ],
     )
     .await;
-    let mut model_provider = built_in_model_providers()["kimi"].clone();
+    let mut model_provider = create_kimi_provider();
     model_provider.name = "OpenAI-compatible test provider".to_string();
     model_provider.base_url = Some(format!("{}/v1", server.uri()));
     model_provider.supports_websockets = false;

@@ -220,12 +220,14 @@ async fn model_and_personality_change_only_appends_model_instructions() -> Resul
     )
     .await;
 
-    let mut builder = test_ody().with_model("kimi-for-coding").with_config(|config| {
-        config
-            .features
-            .enable(Feature::Personality)
-            .expect("test config should allow feature update");
-    });
+    let mut builder = test_ody()
+        .with_model("kimi-for-coding")
+        .with_config(|config| {
+            config
+                .features
+                .enable(Feature::Personality)
+                .expect("test config should allow feature update");
+        });
     let test = builder.build(&server).await?;
     let next_model = "exp-ody-personality";
 

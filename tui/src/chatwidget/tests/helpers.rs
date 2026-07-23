@@ -390,9 +390,7 @@ fn test_model_info(slug: &str, priority: i32, supports_fast_mode: bool) -> Model
 pub(crate) fn set_fast_mode_test_catalog(chat: &mut ChatWidget) {
     let models: Vec<ModelPreset> = ModelsResponse {
         models: vec![
-            test_model_info(
-                "k3", /*priority*/ 0, /*supports_fast_mode*/ true,
-            ),
+            test_model_info("k3", /*priority*/ 0, /*supports_fast_mode*/ true),
             test_model_info(
                 "kimi-for-coding",
                 /*priority*/ 1,

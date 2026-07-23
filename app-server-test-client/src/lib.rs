@@ -1103,7 +1103,6 @@ async fn send_follow_up_v2(
     .await
 }
 
-
 async fn model_list(endpoint: &Endpoint, config_overrides: &[String]) -> Result<()> {
     with_client("model-list", endpoint, config_overrides, |client| {
         let initialize = client.initialize()?;
@@ -1625,7 +1624,6 @@ impl OdyClient {
         self.send_request(request, request_id, "turn/start")
     }
 
-
     fn model_list(&mut self, params: ModelListParams) -> Result<ModelListResponse> {
         let request_id = self.request_id();
         let request = ClientRequest::ModelList {
@@ -1671,7 +1669,6 @@ impl OdyClient {
 
         self.send_request(request, request_id, "thread/decrement_elicitation")
     }
-
 
     fn stream_turn(&mut self, thread_id: &str, turn_id: &str) -> Result<()> {
         loop {

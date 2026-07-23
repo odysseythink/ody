@@ -266,11 +266,11 @@ fn check_start_and_end_lines_strict(
             let raw = first_line.copied().unwrap_or("");
             if raw.starts_with('+') && raw.contains(BEGIN_PATCH_MARKER) {
                 Err(InvalidPatchError(String::from(
-                    "The first line must be '*** Begin Patch' exactly; it looks like it has an extra '+' prefix."
+                    "The first line must be '*** Begin Patch' exactly; it looks like it has an extra '+' prefix.",
                 )))
             } else if raw.starts_with('-') && raw.contains(BEGIN_PATCH_MARKER) {
                 Err(InvalidPatchError(String::from(
-                    "The first line must be '*** Begin Patch' exactly; it looks like it has an extra '-' prefix."
+                    "The first line must be '*** Begin Patch' exactly; it looks like it has an extra '-' prefix.",
                 )))
             } else {
                 Err(InvalidPatchError(String::from(
@@ -283,11 +283,11 @@ fn check_start_and_end_lines_strict(
             if raw.starts_with('+') && raw.contains(END_PATCH_MARKER) {
                 Err(InvalidPatchError(String::from(
                     "The last line must be '*** End Patch' exactly; it looks like it has an extra '+' prefix. \
-                     Make sure the closing marker is not inside an Add File section."
+                     Make sure the closing marker is not inside an Add File section.",
                 )))
             } else if raw.starts_with('-') && raw.contains(END_PATCH_MARKER) {
                 Err(InvalidPatchError(String::from(
-                    "The last line must be '*** End Patch' exactly; it looks like it has an extra '-' prefix."
+                    "The last line must be '*** End Patch' exactly; it looks like it has an extra '-' prefix.",
                 )))
             } else {
                 Err(InvalidPatchError(String::from(

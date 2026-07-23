@@ -105,18 +105,14 @@ impl ToolExecutor<ToolInvocation> for EditFileHandler {
                 )));
             };
             let args: EditFileArgs = parse_arguments(&arguments)?;
-            let abs_path = resolve_write_path(
+            let abs_path =
+                resolve_write_path(turn.as_ref(), args.environment_id.as_deref(), &args.path)
+                    .await?;
+            let cwd = resolve_write_cwd(turn.as_ref(), args.environment_id.as_deref()).await?;
+            let Some(turn_environment) = crate::tools::handlers::resolve_tool_environment(
                 turn.as_ref(),
                 args.environment_id.as_deref(),
-                &args.path,
-            )
-            .await?;
-            let cwd = resolve_write_cwd(turn.as_ref(), args.environment_id.as_deref()).await?;
-            let Some(turn_environment) =
-                crate::tools::handlers::resolve_tool_environment(
-                    turn.as_ref(),
-                    args.environment_id.as_deref(),
-                )?
+            )?
             else {
                 return Err(FunctionCallError::RespondToModel(
                     "edit_file is unavailable in this session".to_string(),
@@ -165,11 +161,8 @@ impl ToolExecutor<ToolInvocation> for EditFileHandler {
 
             atomic_write(&abs_path, new_content.as_bytes()).await?;
 
-            let change = file_change_for_write(
-                abs_path.as_path(),
-                Some(&old_content),
-                &new_content,
-            );
+            let change =
+                file_change_for_write(abs_path.as_path(), Some(&old_content), &new_content);
             let unified_diff = if let FileChange::Update { unified_diff, .. } = &change {
                 Some(unified_diff.clone())
             } else {
@@ -182,12 +175,7 @@ impl ToolExecutor<ToolInvocation> for EditFileHandler {
                 .map(|(_, change)| change)
                 .expect("single file change");
             emit_direct_file_change(
-                ToolEventCtx::new(
-                    session.as_ref(),
-                    turn.as_ref(),
-                    &call_id,
-                    None,
-                ),
+                ToolEventCtx::new(session.as_ref(), turn.as_ref(), &call_id, None),
                 path_buf,
                 change,
                 EDIT_FILE_TOOL_NAME,
@@ -203,7 +191,6 @@ impl ToolExecutor<ToolInvocation> for EditFileHandler {
 }
 
 impl CoreToolRuntime for EditFileHandler {}
-
 
 #[cfg(test)]
 mod tests {
@@ -257,9 +244,13 @@ mod tests {
     async fn edit_file_replaces_first_occurrence() {
         let (session, mut turn, _rx) = make_session_and_context_with_rx().await;
         let dir = tempfile::tempdir().expect("tempdir");
-        std::fs::write(dir.path().join("config.txt"), "foo=1
+        std::fs::write(
+            dir.path().join("config.txt"),
+            "foo=1
 foo=2
-").unwrap();
+",
+        )
+        .unwrap();
         set_cwd_to_temp(&mut turn, dir.path());
 
         let invocation = invocation_for_edit(
@@ -273,19 +264,26 @@ foo=2
         handler.handle(invocation).await.expect("edit succeeds");
 
         let content = std::fs::read_to_string(dir.path().join("config.txt")).expect("read");
-        assert_eq!(content, "foo=9
+        assert_eq!(
+            content,
+            "foo=9
 foo=2
-");
+"
+        );
     }
 
     #[tokio::test]
     async fn edit_file_replaces_all_occurrences() {
         let (session, mut turn, _rx) = make_session_and_context_with_rx().await;
         let dir = tempfile::tempdir().expect("tempdir");
-        std::fs::write(dir.path().join("items.txt"), "a
+        std::fs::write(
+            dir.path().join("items.txt"),
+            "a
 a
 a
-").unwrap();
+",
+        )
+        .unwrap();
         set_cwd_to_temp(&mut turn, dir.path());
 
         let invocation = invocation_for_edit(
@@ -299,18 +297,25 @@ a
         handler.handle(invocation).await.expect("edit succeeds");
 
         let content = std::fs::read_to_string(dir.path().join("items.txt")).expect("read");
-        assert_eq!(content, "b
+        assert_eq!(
+            content,
+            "b
 b
 b
-");
+"
+        );
     }
 
     #[tokio::test]
     async fn edit_file_rejects_missing_old_string() {
         let (session, mut turn, _rx) = make_session_and_context_with_rx().await;
         let dir = tempfile::tempdir().expect("tempdir");
-        std::fs::write(dir.path().join("stable.txt"), "unchanged
-").unwrap();
+        std::fs::write(
+            dir.path().join("stable.txt"),
+            "unchanged
+",
+        )
+        .unwrap();
         set_cwd_to_temp(&mut turn, dir.path());
 
         let invocation = invocation_for_edit(
@@ -336,10 +341,16 @@ b
 
         let ody_home = turn.config.ody_home.as_path();
         let system_skill_dir = ody_home.join("skills").join(".system");
-        let target = system_skill_dir.join("systematic-debugging").join("SKILL.md");
+        let target = system_skill_dir
+            .join("systematic-debugging")
+            .join("SKILL.md");
         std::fs::create_dir_all(target.parent().unwrap()).expect("create system skill dir");
-        std::fs::write(&target, "old system skill
-").expect("write initial content");
+        std::fs::write(
+            &target,
+            "old system skill
+",
+        )
+        .expect("write initial content");
 
         let invocation = invocation_for_edit(
             session,
@@ -353,10 +364,16 @@ b
         )
         .await;
         let handler = EditFileHandler::new(FileToolOptions::default());
-        handler.handle(invocation).await.expect("edit to system skill dir succeeds");
+        handler
+            .handle(invocation)
+            .await
+            .expect("edit to system skill dir succeeds");
 
         let content = std::fs::read_to_string(&target).expect("read");
-        assert_eq!(content, "updated system skill
-");
+        assert_eq!(
+            content,
+            "updated system skill
+"
+        );
     }
 }

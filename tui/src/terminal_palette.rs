@@ -262,7 +262,6 @@ mod imp {
         _colors: Option<crate::terminal_probe::DefaultColors>,
     ) {
     }
-
 }
 
 /// The subset of Xterm colors that are usually consistent across terminals.

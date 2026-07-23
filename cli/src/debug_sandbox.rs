@@ -229,7 +229,9 @@ async fn run_command_under_sandbox(
         }
         #[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
         {
-            anyhow::bail!("Windows sandbox is not enabled: compile with --features windows-sandbox");
+            anyhow::bail!(
+                "Windows sandbox is not enabled: compile with --features windows-sandbox"
+            );
         }
         #[cfg(not(target_os = "windows"))]
         {

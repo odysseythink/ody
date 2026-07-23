@@ -21,7 +21,7 @@ use core_test_support::wait_for_event;
 use core_test_support::wait_for_event_match;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::ProviderCapabilities;
-use ody_model_provider_info::built_in_model_providers;
+use ody_model_provider_info::create_kimi_provider;
 use ody_models_manager::bundled_models_response;
 use ody_models_manager::manager::RefreshStrategy;
 use ody_models_manager::manager::SharedModelsManager;
@@ -96,7 +96,7 @@ async fn remote_models_get_model_info_uses_longest_matching_prefix() -> Result<(
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         capabilities: ProviderCapabilities::default(),
-        ..built_in_model_providers()["kimi"].clone()
+        ..create_kimi_provider()
     };
     let manager = ody_core::test_support::models_manager_with_provider(
         ody_home.path().to_path_buf(),
@@ -125,8 +125,7 @@ async fn remote_models_config_context_window_override_clamps_to_max_context_wind
 
     let server = MockServer::start().await;
     let requested_model = "k3-test";
-    let mut remote_model =
-        test_remote_model("k3", ModelVisibility::List, /*priority*/ 1_000);
+    let mut remote_model = test_remote_model("k3", ModelVisibility::List, /*priority*/ 1_000);
     remote_model.context_window = Some(273_000);
     remote_model.max_context_window = Some(400_000);
     remote_model.effective_context_window_percent = 100;
@@ -190,8 +189,7 @@ async fn remote_models_config_override_above_max_uses_max_context_window() -> Re
 
     let server = MockServer::start().await;
     let requested_model = "k3-test";
-    let mut remote_model =
-        test_remote_model("k3", ModelVisibility::List, /*priority*/ 1_000);
+    let mut remote_model = test_remote_model("k3", ModelVisibility::List, /*priority*/ 1_000);
     remote_model.context_window = Some(273_000);
     remote_model.max_context_window = Some(400_000);
     remote_model.effective_context_window_percent = 100;
@@ -255,8 +253,7 @@ async fn remote_models_use_context_window_when_config_override_is_absent() -> Re
 
     let server = MockServer::start().await;
     let requested_model = "k3-test";
-    let mut remote_model =
-        test_remote_model("k3", ModelVisibility::List, /*priority*/ 1_000);
+    let mut remote_model = test_remote_model("k3", ModelVisibility::List, /*priority*/ 1_000);
     remote_model.context_window = Some(273_000);
     remote_model.max_context_window = Some(400_000);
     remote_model.effective_context_window_percent = 100;
@@ -837,7 +834,7 @@ async fn remote_models_do_not_append_removed_builtin_presets() -> Result<()> {
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         capabilities: ProviderCapabilities::default(),
-        ..built_in_model_providers()["kimi"].clone()
+        ..create_kimi_provider()
     };
     let manager = ody_core::test_support::models_manager_with_provider(
         ody_home.path().to_path_buf(),
@@ -897,7 +894,7 @@ async fn remote_models_merge_adds_new_high_priority_first() -> Result<()> {
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         capabilities: ProviderCapabilities::default(),
-        ..built_in_model_providers()["kimi"].clone()
+        ..create_kimi_provider()
     };
     let manager = ody_core::test_support::models_manager_with_provider(
         ody_home.path().to_path_buf(),
@@ -943,7 +940,7 @@ async fn remote_models_merge_replaces_overlapping_model() -> Result<()> {
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         capabilities: ProviderCapabilities::default(),
-        ..built_in_model_providers()["kimi"].clone()
+        ..create_kimi_provider()
     };
     let manager = ody_core::test_support::models_manager_with_provider(
         ody_home.path().to_path_buf(),
@@ -986,7 +983,7 @@ async fn remote_models_merge_preserves_bundled_models_on_empty_response() -> Res
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         capabilities: ProviderCapabilities::default(),
-        ..built_in_model_providers()["kimi"].clone()
+        ..create_kimi_provider()
     };
     let manager = ody_core::test_support::models_manager_with_provider(
         ody_home.path().to_path_buf(),
@@ -1027,7 +1024,7 @@ async fn remote_models_request_times_out_after_5s() -> Result<()> {
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         capabilities: ProviderCapabilities::default(),
-        ..built_in_model_providers()["kimi"].clone()
+        ..create_kimi_provider()
     };
     let manager = ody_core::test_support::models_manager_with_provider(
         ody_home.path().to_path_buf(),
@@ -1098,7 +1095,7 @@ async fn remote_models_hide_picker_only_models() -> Result<()> {
     let provider = ModelProviderInfo {
         base_url: Some(format!("{}/v1", server.uri())),
         capabilities: ProviderCapabilities::default(),
-        ..built_in_model_providers()["kimi"].clone()
+        ..create_kimi_provider()
     };
     let manager = ody_core::test_support::models_manager_with_provider(
         ody_home.path().to_path_buf(),

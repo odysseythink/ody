@@ -574,7 +574,11 @@ mod tests {
             ThinkingEffort::Max,
         ];
         assert_eq!(
-            make(ChatVendor::DeepSeek, ThinkingEffort::High, deepseek_levels.clone()),
+            make(
+                ChatVendor::DeepSeek,
+                ThinkingEffort::High,
+                deepseek_levels.clone()
+            ),
             Some("high".to_string())
         );
         assert_eq!(
@@ -583,7 +587,11 @@ mod tests {
         );
 
         // k3 advertises low/high/max; a desired Max maps to "max".
-        let k3_levels = vec![ThinkingEffort::Low, ThinkingEffort::High, ThinkingEffort::Max];
+        let k3_levels = vec![
+            ThinkingEffort::Low,
+            ThinkingEffort::High,
+            ThinkingEffort::Max,
+        ];
         assert_eq!(
             make(ChatVendor::Kimi, ThinkingEffort::Max, k3_levels.clone()),
             Some("max".to_string())

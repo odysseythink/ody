@@ -76,8 +76,6 @@ fn model_context_window_uses_model_value_without_override() {
     assert_eq!(updated, model);
 }
 
-
-
 mod capability_tests {
     use super::ModelCapabilities;
     use super::ProviderCapabilities;
@@ -250,8 +248,6 @@ mod capability_tests {
     }
 }
 
-
-
 #[test]
 fn unknown_model_slug_has_conservative_fallback_capabilities() {
     let model = model_info_from_slug("totally-unknown-model");
@@ -264,7 +260,6 @@ fn unknown_model_slug_has_conservative_fallback_capabilities() {
     assert!(model.capabilities.supports_vision);
     assert!(!model.capabilities.supports_search_tool);
 }
-
 
 #[test]
 fn unknown_model_slug_has_nonzero_truncation_budget() {
@@ -279,7 +274,6 @@ fn unknown_model_slug_has_nonzero_truncation_budget() {
         DEFAULT_TRUNCATION_POLICY
     );
 }
-
 
 #[test]
 fn configured_model_catalog_returns_none_without_matching_provider() {

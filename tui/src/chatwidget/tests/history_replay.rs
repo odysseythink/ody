@@ -1039,7 +1039,10 @@ async fn live_reasoning_summary_is_not_rendered_twice_when_item_completes() {
     );
 
     // Live reasoning is deferred until the assistant message stream or turn end.
-    assert!(rx.try_recv().is_err(), "reasoning should not be inserted until turn ends");
+    assert!(
+        rx.try_recv().is_err(),
+        "reasoning should not be inserted until turn ends"
+    );
 
     chat.handle_server_notification(
         ServerNotification::TurnCompleted(TurnCompletedNotification {

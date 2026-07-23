@@ -41,13 +41,18 @@ impl FsChecker for MockFsChecker {
 #[test]
 fn detect_windows_bash_prefers_fixed_paths() {
     let mut fs = MockFsChecker::default();
-    fs.files
-        .insert(PathBuf::from(r"C:\Program Files\Git\usr\bin\bash.exe"), true);
+    fs.files.insert(
+        PathBuf::from(r"C:\Program Files\Git\usr\bin\bash.exe"),
+        true,
+    );
     fs.working_bash_paths
         .push(PathBuf::from(r"C:\Program Files\Git\usr\bin\bash.exe"));
 
     let detection = detect_windows_bash(&fs).expect("bash should be detected");
-    assert_eq!(detection.shell.shell_path, PathBuf::from(r"C:\Program Files\Git\usr\bin\bash.exe"));
+    assert_eq!(
+        detection.shell.shell_path,
+        PathBuf::from(r"C:\Program Files\Git\usr\bin\bash.exe")
+    );
     assert!(detection.is_fixed_path);
 }
 
@@ -65,7 +70,10 @@ fn detect_windows_bash_skips_wsl_paths() {
         .push(PathBuf::from(r"C:\msys64\usr\bin\bash.exe"));
 
     let detection = detect_windows_bash(&fs).expect("bash should be detected");
-    assert_eq!(detection.shell.shell_path, PathBuf::from(r"C:\msys64\usr\bin\bash.exe"));
+    assert_eq!(
+        detection.shell.shell_path,
+        PathBuf::from(r"C:\msys64\usr\bin\bash.exe")
+    );
     assert!(detection.is_fixed_path);
 }
 
@@ -78,7 +86,10 @@ fn detect_windows_bash_falls_back_to_path() {
     fs.working_bash_paths.push(path_bash);
 
     let detection = detect_windows_bash(&fs).expect("bash should be detected");
-    assert_eq!(detection.shell.shell_path, PathBuf::from(r"C:\CustomTools\bash.exe"));
+    assert_eq!(
+        detection.shell.shell_path,
+        PathBuf::from(r"C:\CustomTools\bash.exe")
+    );
     assert!(!detection.is_fixed_path);
 }
 
@@ -91,8 +102,10 @@ fn detect_windows_bash_returns_none_when_no_candidate_works() {
 #[test]
 fn detect_windows_bash_ignores_non_executable_files() {
     let mut fs = MockFsChecker::default();
-    fs.files
-        .insert(PathBuf::from(r"C:\Program Files\Git\usr\bin\bash.exe"), true);
+    fs.files.insert(
+        PathBuf::from(r"C:\Program Files\Git\usr\bin\bash.exe"),
+        true,
+    );
     // file exists but is not a working bash executable
 
     assert!(detect_windows_bash(&fs).is_none());
@@ -117,8 +130,10 @@ fn detect_windows_bash_returns_none_on_non_windows() {
 fn detect_windows_bash_fixed_path_ordering() {
     let mut fs = MockFsChecker::default();
     // Mark the first two fixed paths as present and working; expect the first.
-    fs.files
-        .insert(PathBuf::from(r"C:\Program Files\Git\usr\bin\bash.exe"), true);
+    fs.files.insert(
+        PathBuf::from(r"C:\Program Files\Git\usr\bin\bash.exe"),
+        true,
+    );
     fs.files
         .insert(PathBuf::from(r"C:\Program Files\Git\bin\bash.exe"), true);
     fs.working_bash_paths
@@ -127,6 +142,9 @@ fn detect_windows_bash_fixed_path_ordering() {
         .push(PathBuf::from(r"C:\Program Files\Git\bin\bash.exe"));
 
     let detection = detect_windows_bash(&fs).expect("bash should be detected");
-    assert_eq!(detection.shell.shell_path, PathBuf::from(r"C:\Program Files\Git\usr\bin\bash.exe"));
+    assert_eq!(
+        detection.shell.shell_path,
+        PathBuf::from(r"C:\Program Files\Git\usr\bin\bash.exe")
+    );
     assert!(detection.is_fixed_path);
 }

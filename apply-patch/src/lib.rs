@@ -808,9 +808,7 @@ fn compute_replacements(
                     match source {
                         LineSource::Context => {
                             // Skip removed lines in old_lines until we align with this context line.
-                            while old_idx < pattern.len()
-                                && pattern[old_idx] != *new_line
-                            {
+                            while old_idx < pattern.len() && pattern[old_idx] != *new_line {
                                 original_idx += 1;
                                 old_idx += 1;
                             }
@@ -1874,5 +1872,4 @@ g
         );
         assert!(stderr.is_empty());
     }
-
 }

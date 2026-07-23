@@ -35,7 +35,7 @@ use ody_features::Feature;
 use ody_home::OdyHomeUserInstructionsProvider;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::ProviderCapabilities;
-use ody_model_provider_info::built_in_model_providers;
+use ody_model_provider_info::create_kimi_provider;
 use ody_models_manager::bundled_models_response;
 use ody_protocol::model_metadata::ModelInfo;
 use ody_protocol::model_metadata::ModelsResponse;
@@ -659,7 +659,7 @@ impl TestOdyBuilder {
             // a test explicitly opts into websocket coverage.
             supports_websockets: false,
             capabilities: ProviderCapabilities::default(),
-            ..built_in_model_providers()["kimi"].clone()
+            ..create_kimi_provider()
         };
         let cwd = Arc::new(TempDir::new()?);
         for hook in self.pre_build_hooks.drain(..) {

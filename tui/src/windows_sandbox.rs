@@ -78,7 +78,9 @@ pub(crate) fn run_elevated_setup(
     _env_map: &HashMap<String, String>,
     _ody_home: &Path,
 ) -> anyhow::Result<()> {
-    anyhow::bail!("elevated Windows sandbox setup is only available when the windows-sandbox feature is enabled")
+    anyhow::bail!(
+        "elevated Windows sandbox setup is only available when the windows-sandbox feature is enabled"
+    )
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -127,7 +129,9 @@ pub(crate) fn elevated_setup_failure_metric_name(err: &anyhow::Error) -> &'stati
 
 #[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
 pub(crate) fn elevated_setup_failure_metric_name(_err: &anyhow::Error) -> &'static str {
-    panic!("elevated_setup_failure_metric_name is only supported when the windows-sandbox feature is enabled")
+    panic!(
+        "elevated_setup_failure_metric_name is only supported when the windows-sandbox feature is enabled"
+    )
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -176,7 +180,9 @@ pub(crate) fn grant_read_root_non_elevated(
     _ody_home: &Path,
     _read_root: &Path,
 ) -> anyhow::Result<PathBuf> {
-    anyhow::bail!("Windows sandbox read-root grants are only available when the windows-sandbox feature is enabled")
+    anyhow::bail!(
+        "Windows sandbox read-root grants are only available when the windows-sandbox feature is enabled"
+    )
 }
 
 #[cfg(not(target_os = "windows"))]

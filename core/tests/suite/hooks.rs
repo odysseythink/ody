@@ -29,7 +29,7 @@ use ody_core::config::Config;
 use ody_core::config::Constrained;
 use ody_features::Feature;
 use ody_model_provider_info::ModelProviderInfo;
-use ody_model_provider_info::built_in_model_providers;
+use ody_model_provider_info::create_kimi_provider;
 use ody_plugin::PluginHookSource;
 use ody_plugin::PluginId;
 use ody_protocol::items::parse_hook_prompt_fragment;
@@ -96,7 +96,7 @@ fn code_mode_custom_tool_output_text(output_item: &Value) -> String {
 }
 
 fn non_odysseythink_model_provider(server: &wiremock::MockServer) -> ModelProviderInfo {
-    let mut provider = built_in_model_providers()["kimi"].clone();
+    let mut provider = create_kimi_provider();
     provider.name = "OpenAI (test)".into();
     provider.base_url = Some(format!("{}/v1", server.uri()));
     provider.supports_websockets = false;

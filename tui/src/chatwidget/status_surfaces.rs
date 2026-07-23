@@ -524,7 +524,9 @@ impl ChatWidget {
             return;
         }
         let Some(runner) = self.workspace_command_runner.clone() else {
-            tracing::debug!("status_line: workspace_command_runner is None, skipping branch lookup");
+            tracing::debug!(
+                "status_line: workspace_command_runner is None, skipping branch lookup"
+            );
             self.status_line_branch_lookup_complete = true;
             return;
         };
@@ -543,7 +545,9 @@ impl ChatWidget {
             return;
         }
         let Some(runner) = self.workspace_command_runner.clone() else {
-            tracing::debug!("status_line: workspace_command_runner is None, skipping git summary lookup");
+            tracing::debug!(
+                "status_line: workspace_command_runner is None, skipping git summary lookup"
+            );
             self.status_line_git_summary_lookup_complete = true;
             return;
         };

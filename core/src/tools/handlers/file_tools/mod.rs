@@ -1,4 +1,3 @@
-
 //! Structured file-exploration tools: `read_file`, `grep`, `glob`, `jq`.
 //!
 //! These replace the raw-shell exploration path (`rg`, `cat`, `find` through
@@ -16,23 +15,23 @@
 //! execute remotely. Do not remove that guard without switching the traversal
 //! to the `ExecutorFileSystem` trait.
 
+mod edit;
 mod glob;
 mod grep;
 mod jq;
 mod read;
 mod write;
-mod edit;
 mod write_edit;
 
 #[cfg(test)]
 mod tests;
 
+pub use edit::EditFileHandler;
 pub use glob::GlobHandler;
 pub use grep::GrepHandler;
 pub use jq::JqHandler;
 pub use read::ReadFileHandler;
 pub use write::WriteFileHandler;
-pub use edit::EditFileHandler;
 
 use crate::function_tool::FunctionCallError;
 use crate::session::turn_context::TurnContext;

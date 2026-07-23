@@ -828,8 +828,7 @@ mod thread_processor_behavior_tests {
     {
         let mut request_overrides = None;
         let mut typesafe_overrides = ConfigOverrides::default();
-        let persisted_metadata =
-            test_thread_metadata(Some("k3"), Some(ReasoningEffort::High))?;
+        let persisted_metadata = test_thread_metadata(Some("k3"), Some(ReasoningEffort::High))?;
 
         merge_persisted_resume_metadata(
             &mut request_overrides,
@@ -837,10 +836,7 @@ mod thread_processor_behavior_tests {
             &persisted_metadata,
         );
 
-        assert_eq!(
-            typesafe_overrides.model,
-            Some("k3".to_string())
-        );
+        assert_eq!(typesafe_overrides.model, Some("k3".to_string()));
         assert_eq!(
             typesafe_overrides.model_provider,
             Some("mock_provider".to_string())
@@ -865,8 +861,7 @@ mod thread_processor_behavior_tests {
             model: Some("kimi-for-coding".to_string()),
             ..Default::default()
         };
-        let persisted_metadata =
-            test_thread_metadata(Some("k3"), Some(ReasoningEffort::High))?;
+        let persisted_metadata = test_thread_metadata(Some("k3"), Some(ReasoningEffort::High))?;
 
         merge_persisted_resume_metadata(
             &mut request_overrides,
@@ -874,7 +869,10 @@ mod thread_processor_behavior_tests {
             &persisted_metadata,
         );
 
-        assert_eq!(typesafe_overrides.model, Some("kimi-for-coding".to_string()));
+        assert_eq!(
+            typesafe_overrides.model,
+            Some("kimi-for-coding".to_string())
+        );
         assert_eq!(typesafe_overrides.model_provider, None);
         assert_eq!(
             request_overrides,
@@ -894,8 +892,7 @@ mod thread_processor_behavior_tests {
             serde_json::Value::String("kimi-for-coding".to_string()),
         )]));
         let mut typesafe_overrides = ConfigOverrides::default();
-        let persisted_metadata =
-            test_thread_metadata(Some("k3"), Some(ReasoningEffort::High))?;
+        let persisted_metadata = test_thread_metadata(Some("k3"), Some(ReasoningEffort::High))?;
 
         merge_persisted_resume_metadata(
             &mut request_overrides,
@@ -923,8 +920,7 @@ mod thread_processor_behavior_tests {
             model_provider: Some("oss".to_string()),
             ..Default::default()
         };
-        let persisted_metadata =
-            test_thread_metadata(Some("k3"), Some(ReasoningEffort::High))?;
+        let persisted_metadata = test_thread_metadata(Some("k3"), Some(ReasoningEffort::High))?;
 
         merge_persisted_resume_metadata(
             &mut request_overrides,
@@ -946,8 +942,7 @@ mod thread_processor_behavior_tests {
             serde_json::Value::String("low".to_string()),
         )]));
         let mut typesafe_overrides = ConfigOverrides::default();
-        let persisted_metadata =
-            test_thread_metadata(Some("k3"), Some(ReasoningEffort::High))?;
+        let persisted_metadata = test_thread_metadata(Some("k3"), Some(ReasoningEffort::High))?;
 
         merge_persisted_resume_metadata(
             &mut request_overrides,

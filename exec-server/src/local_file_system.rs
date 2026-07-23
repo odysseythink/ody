@@ -22,9 +22,9 @@ use crate::FileSystemResult;
 use crate::FileSystemSandboxContext;
 use crate::ReadDirectoryEntry;
 use crate::RemoveOptions;
+use crate::RenameOptions;
 use crate::regular_file;
 use crate::sandboxed_file_system::SandboxedFileSystem;
-use crate::RenameOptions;
 
 const MAX_READ_FILE_BYTES: u64 = 512 * 1024 * 1024;
 
@@ -435,7 +435,12 @@ impl UnsandboxedFileSystem {
     ) -> FileSystemResult<()> {
         reject_platform_sandbox_context(sandbox)?;
         self.file_system
-            .rename(source_path, destination_path, options, /*sandbox*/ None)
+            .rename(
+                source_path,
+                destination_path,
+                options,
+                /*sandbox*/ None,
+            )
             .await
     }
 }

@@ -717,7 +717,6 @@ mod tests {
 
     use super::*;
 
-
     #[test]
     fn verify_config_warning_notification_serialization() {
         let notification = ServerNotification::ConfigWarning(ConfigWarningNotification {

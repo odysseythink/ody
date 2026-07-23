@@ -211,10 +211,7 @@ impl ChatWidget {
         self.api_key_configured
     }
 
-    pub(crate) fn update_auth_state(
-        &mut self,
-        api_key_configured: bool,
-    ) {
+    pub(crate) fn update_auth_state(&mut self, api_key_configured: bool) {
         // Auth-update notifications are the identity boundary. The visible auth fields can
         // be identical across two auth states, so always invalidate auth-scoped requests and data.
         let had_refreshing_status_outputs = !self.refreshing_status_outputs.is_empty();

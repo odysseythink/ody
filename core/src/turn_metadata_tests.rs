@@ -442,10 +442,7 @@ fn turn_metadata_state_includes_model_and_reasoning_effort_only_in_request_meta(
             reasoning_effort: None,
         })
         .expect("turn metadata should be present");
-    assert_eq!(
-        meta_without_reasoning_effort["model"].as_str(),
-        Some("k3")
-    );
+    assert_eq!(meta_without_reasoning_effort["model"].as_str(), Some("k3"));
     assert!(
         meta_without_reasoning_effort
             .get("reasoning_effort")

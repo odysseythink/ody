@@ -1,7 +1,7 @@
 use super::*;
 use crate::error_code::method_not_found;
-use ody_app_server_protocol::SelectedCapabilityRoot;
 use ody_app_server_protocol::InfoMessageNotification;
+use ody_app_server_protocol::SelectedCapabilityRoot;
 use ody_extension_api::ExtensionDataInit;
 use ody_protocol::config_types::MultiAgentMode;
 use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_DANGER_FULL_ACCESS;

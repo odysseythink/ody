@@ -2952,8 +2952,7 @@ mod tests {
 
     #[test]
     fn resume_model_flag_applies_when_no_root_flags() {
-        let interactive =
-            finalize_resume_from_args(["ody", "resume", "-m", "kimi-k2.5"].as_ref());
+        let interactive = finalize_resume_from_args(["ody", "resume", "-m", "kimi-k2.5"].as_ref());
 
         assert_eq!(interactive.model.as_deref(), Some("kimi-k2.5"));
         assert!(interactive.resume_picker);

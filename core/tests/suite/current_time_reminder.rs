@@ -25,7 +25,7 @@ use ody_core::TimeProvider;
 use ody_core::config::CurrentTimeReminderConfig;
 use ody_features::CurrentTimeSource;
 use ody_features::Feature;
-use ody_model_provider_info::built_in_model_providers;
+use ody_model_provider_info::create_kimi_provider;
 use ody_protocol::ThreadId;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::protocol::EventMsg;
@@ -188,7 +188,7 @@ async fn current_time_reminder_is_refreshed_after_compaction() -> Result<()> {
         ],
     )
     .await;
-    let mut model_provider = built_in_model_providers()["kimi"].clone();
+    let mut model_provider = create_kimi_provider();
     model_provider.name = "OpenAI-compatible test provider".to_string();
     model_provider.base_url = Some(format!("{}/v1", server.uri()));
     model_provider.supports_websockets = false;

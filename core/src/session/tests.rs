@@ -3495,10 +3495,7 @@ async fn turn_context_with_model_updates_model_fields() {
     let expected_model_info = session
         .services
         .models_manager
-        .get_model_info(
-            "k3",
-            &updated.config.as_ref().to_models_manager_config(),
-        )
+        .get_model_info("k3", &updated.config.as_ref().to_models_manager_config())
         .await;
 
     assert_eq!(updated.config.model.as_deref(), Some("k3"));

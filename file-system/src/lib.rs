@@ -283,9 +283,7 @@ pub trait ExecutorFileSystem: Send + Sync {
     ) -> ExecutorFileSystemFuture<'a, ()> {
         let _ = rename_options;
         Box::pin(async move {
-            let copy_options = CopyOptions {
-                recursive: true,
-            };
+            let copy_options = CopyOptions { recursive: true };
             self.copy(source_path, destination_path, copy_options, sandbox)
                 .await?;
             let remove_options = RemoveOptions {

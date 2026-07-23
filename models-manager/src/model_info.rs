@@ -356,9 +356,7 @@ pub fn provider_supports_personality(provider: &str) -> bool {
 /// non-personality output is the base instructions unchanged.
 pub fn personality_messages_from_base_instructions(base_instructions: &str) -> ModelMessages {
     ModelMessages {
-        instructions_template: Some(format!(
-            "{PERSONALITY_PLACEHOLDER}\n\n{base_instructions}"
-        )),
+        instructions_template: Some(format!("{PERSONALITY_PLACEHOLDER}\n\n{base_instructions}")),
         instructions_variables: Some(ModelInstructionsVariables {
             personality_default: Some(String::new()),
             personality_friendly: Some(LOCAL_FRIENDLY_TEMPLATE.to_string()),

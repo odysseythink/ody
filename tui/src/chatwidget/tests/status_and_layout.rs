@@ -686,9 +686,6 @@ async fn commentary_completion_restores_status_indicator_before_exec_begin() {
     assert_eq!(chat.bottom_pane.status_indicator_visible(), true);
 }
 
-
-
-
 // Snapshot test: ChatWidget at very small heights (idle)
 // Ensures overall layout behaves when terminal height is extremely constrained.
 #[tokio::test]
@@ -1331,9 +1328,6 @@ async fn completed_turn_clears_visible_running_hook() {
     );
 }
 
-
-
-
 #[tokio::test]
 async fn terminal_title_model_updates_on_model_change_without_manual_refresh() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("k3")).await;
@@ -1344,9 +1338,11 @@ async fn terminal_title_model_updates_on_model_change_without_manual_refresh() {
 
     chat.set_model("kimi-for-coding");
 
-    assert_eq!(chat.last_terminal_title, Some("kimi-for-coding".to_string()));
+    assert_eq!(
+        chat.last_terminal_title,
+        Some("kimi-for-coding".to_string())
+    );
 }
-
 
 #[tokio::test]
 async fn status_line_reasoning_updates_on_mode_switch_without_manual_refresh() {
@@ -1459,8 +1455,6 @@ async fn renamed_thread_footer_title_snapshot() {
         normalized_backend_snapshot(terminal.backend())
     );
 }
-
-
 
 #[tokio::test]
 async fn status_line_goal_active_token_budget_footer_snapshot() {

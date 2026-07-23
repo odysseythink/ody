@@ -131,8 +131,8 @@ fn map_effort(
 fn effort_to_thinking(
     effort: &ody_protocol::model_metadata::ReasoningEffort,
 ) -> crate::chat_provider::ThinkingEffort {
-    use ody_protocol::model_metadata::ReasoningEffort as Effort;
     use crate::chat_provider::ThinkingEffort;
+    use ody_protocol::model_metadata::ReasoningEffort as Effort;
     match effort {
         Effort::None => ThinkingEffort::Off,
         Effort::Minimal | Effort::Low => ThinkingEffort::Low,

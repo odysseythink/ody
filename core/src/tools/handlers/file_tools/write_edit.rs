@@ -96,8 +96,14 @@ pub(crate) async fn ensure_write_allowed(
     cwd: &AbsolutePathBuf,
 ) -> Result<FileSystemSandboxPolicy, FunctionCallError> {
     let granted_permissions = merge_permission_profiles(
-        session.granted_session_permissions(environment_id).await.as_ref(),
-        session.granted_turn_permissions(environment_id).await.as_ref(),
+        session
+            .granted_session_permissions(environment_id)
+            .await
+            .as_ref(),
+        session
+            .granted_turn_permissions(environment_id)
+            .await
+            .as_ref(),
     );
     let base_policy = turn.file_system_sandbox_policy();
     let policy_with_granted =
@@ -158,7 +164,10 @@ fn is_ody_managed_skill_path(
 }
 
 /// Writes `contents` to `path` atomically using a temporary file and rename.
-pub(crate) async fn atomic_write(path: &AbsolutePathBuf, contents: &[u8]) -> Result<(), FunctionCallError> {
+pub(crate) async fn atomic_write(
+    path: &AbsolutePathBuf,
+    contents: &[u8],
+) -> Result<(), FunctionCallError> {
     let parent = path.parent().ok_or_else(|| {
         FunctionCallError::RespondToModel(format!(
             "path `{}` has no parent directory",
@@ -260,10 +269,22 @@ mod tests {
     #[test]
     fn compute_unified_diff_produces_valid_unified_diff() {
         let diff = compute_unified_diff("foo\n", "bar\n", Path::new("src.txt"));
-        assert!(diff.contains("--- a/src.txt"), "diff must contain old header: {diff}");
-        assert!(diff.contains("+++ b/src.txt"), "diff must contain new header: {diff}");
-        assert!(diff.contains("-foo"), "diff must contain removed line: {diff}");
-        assert!(diff.contains("+bar"), "diff must contain added line: {diff}");
+        assert!(
+            diff.contains("--- a/src.txt"),
+            "diff must contain old header: {diff}"
+        );
+        assert!(
+            diff.contains("+++ b/src.txt"),
+            "diff must contain new header: {diff}"
+        );
+        assert!(
+            diff.contains("-foo"),
+            "diff must contain removed line: {diff}"
+        );
+        assert!(
+            diff.contains("+bar"),
+            "diff must contain added line: {diff}"
+        );
     }
 
     #[test]
@@ -279,9 +300,18 @@ mod tests {
     fn file_change_for_existing_file_is_update_with_diff() {
         let change = file_change_for_write(Path::new("existing.txt"), Some("old\n"), "new\n");
         match change {
-            FileChange::Update { unified_diff, move_path } => {
-                assert!(unified_diff.contains("-old"), "diff must show old content: {unified_diff}");
-                assert!(unified_diff.contains("+new"), "diff must show new content: {unified_diff}");
+            FileChange::Update {
+                unified_diff,
+                move_path,
+            } => {
+                assert!(
+                    unified_diff.contains("-old"),
+                    "diff must show old content: {unified_diff}"
+                );
+                assert!(
+                    unified_diff.contains("+new"),
+                    "diff must show new content: {unified_diff}"
+                );
                 assert!(move_path.is_none(), "move_path must be None");
             }
             other => panic!("expected Update change for existing file: {other:?}"),

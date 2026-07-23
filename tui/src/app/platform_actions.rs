@@ -71,8 +71,7 @@ fn send_world_writable_scan_failed(tx: &AppEventSender) {
 }
 
 #[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
-fn send_world_writable_scan_failed(_tx: &AppEventSender) {
-}
+fn send_world_writable_scan_failed(_tx: &AppEventSender) {}
 
 pub(super) fn side_return_shortcut_matches(key_event: KeyEvent) -> bool {
     matches!(

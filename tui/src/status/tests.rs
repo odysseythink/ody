@@ -102,7 +102,6 @@ fn set_workspace_cwd(config: &mut Config, cwd: AbsolutePathBuf) {
         .set_workspace_roots(config.workspace_roots.clone());
 }
 
-
 fn token_info_for(model_slug: &str, config: &Config, usage: &TokenUsage) -> TokenUsageInfo {
     let context_window =
         construct_model_info_offline_for_tests(model_slug, &config.to_models_manager_config())

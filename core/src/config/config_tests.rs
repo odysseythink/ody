@@ -9,7 +9,6 @@ use ody_config::ProfileV2Name;
 use ody_config::RequirementSource;
 use ody_config::ShellConfigResult;
 use ody_config::Sourced;
-use ody_config::resolve_windows_shell;
 use ody_config::config_toml::AgentRoleToml;
 use ody_config::config_toml::AgentsToml;
 use ody_config::config_toml::AutoReviewToml;
@@ -36,6 +35,7 @@ use ody_config::permissions_toml::NetworkToml;
 use ody_config::permissions_toml::PermissionProfileToml;
 use ody_config::permissions_toml::PermissionsToml;
 use ody_config::permissions_toml::WorkspaceRootsToml;
+use ody_config::resolve_windows_shell;
 use ody_config::types::AppToolApproval;
 use ody_config::types::ApprovalsReviewer;
 use ody_config::types::BundledSkillsConfig;
@@ -2847,8 +2847,8 @@ async fn empty_config_defaults_to_builtin_profile_for_trusted_project() -> std::
 }
 
 #[tokio::test]
-async fn empty_config_uses_builtin_default_provider_without_mixing_into_aliases(
-) -> std::io::Result<()> {
+async fn empty_config_uses_builtin_default_provider_without_mixing_into_aliases()
+-> std::io::Result<()> {
     let ody_home = TempDir::new()?;
     let cwd = TempDir::new()?;
     let project_key = cwd.path().to_string_lossy().to_string();
@@ -11430,7 +11430,6 @@ max_context_size = 272000
     };
     assert!(configured_model_catalog(&cfg.models, "openai", &provider).is_none());
 }
-
 
 #[tokio::test]
 async fn shell_config_result_is_stored_in_config() {

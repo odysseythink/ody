@@ -151,7 +151,9 @@ pub fn elevated_setup_failure_metric_name(err: &anyhow::Error) -> &'static str {
 
 #[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
 pub fn elevated_setup_failure_metric_name(_err: &anyhow::Error) -> &'static str {
-    panic!("elevated_setup_failure_metric_name is only supported when the windows-sandbox feature is enabled")
+    panic!(
+        "elevated_setup_failure_metric_name is only supported when the windows-sandbox feature is enabled"
+    )
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -197,12 +199,16 @@ pub fn run_elevated_setup(
     _env_map: &HashMap<String, String>,
     _ody_home: &Path,
 ) -> anyhow::Result<()> {
-    anyhow::bail!("elevated Windows sandbox setup is only available when the windows-sandbox feature is enabled")
+    anyhow::bail!(
+        "elevated Windows sandbox setup is only available when the windows-sandbox feature is enabled"
+    )
 }
 
 #[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
 pub fn run_elevated_provisioning_setup(_ody_home: &Path, _real_user: &str) -> anyhow::Result<()> {
-    anyhow::bail!("elevated Windows sandbox setup is only available when the windows-sandbox feature is enabled")
+    anyhow::bail!(
+        "elevated Windows sandbox setup is only available when the windows-sandbox feature is enabled"
+    )
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -266,7 +272,9 @@ pub fn run_legacy_setup_preflight(
     _env_map: &HashMap<String, String>,
     _ody_home: &Path,
 ) -> anyhow::Result<()> {
-    anyhow::bail!("legacy Windows sandbox setup is only available when the windows-sandbox feature is enabled")
+    anyhow::bail!(
+        "legacy Windows sandbox setup is only available when the windows-sandbox feature is enabled"
+    )
 }
 
 #[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
@@ -278,7 +286,9 @@ pub fn run_setup_refresh_with_extra_read_roots(
     _ody_home: &Path,
     _extra_read_roots: Vec<PathBuf>,
 ) -> anyhow::Result<()> {
-    anyhow::bail!("Windows sandbox read-root refresh is only available when the windows-sandbox feature is enabled")
+    anyhow::bail!(
+        "Windows sandbox read-root refresh is only available when the windows-sandbox feature is enabled"
+    )
 }
 
 #[cfg(not(target_os = "windows"))]

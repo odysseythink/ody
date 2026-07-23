@@ -21,14 +21,13 @@ use ody_config::PluginRequirementsToml;
 use ody_config::ProfileV2Name;
 use ody_config::ResidencyRequirement;
 use ody_config::SandboxModeRequirement;
-use ody_config::Sourced;
 use ody_config::ShellConfigResult;
+use ody_config::Sourced;
 use ody_config::ThreadConfigLoader;
-use ody_config::resolve_windows_shell;
 use ody_config::config_toml::ConfigLockfileToml;
 use ody_config::config_toml::ConfigToml;
-use ody_config::config_toml::DesignReviewDebateToml;
 use ody_config::config_toml::DEFAULT_PROJECT_DOC_MAX_BYTES;
+use ody_config::config_toml::DesignReviewDebateToml;
 use ody_config::config_toml::OdyCodeModelConfig;
 use ody_config::config_toml::PlanModeConfigToml;
 use ody_config::config_toml::ProjectConfig;
@@ -39,6 +38,7 @@ use ody_config::config_toml::validate_model_providers;
 use ody_config::loader::load_config_layers_state;
 use ody_config::loader::project_trust_key;
 use ody_config::permissions_toml::PermissionsToml;
+use ody_config::resolve_windows_shell;
 use ody_config::sandbox_mode_requirement_for_permission_profile;
 use ody_config::types::ApprovalsReviewer;
 use ody_config::types::AuthCredentialsStoreMode;
@@ -83,13 +83,13 @@ use ody_mcp::McpServerRegistration;
 use ody_mcp::ResolvedMcpCatalog;
 use ody_memories_read::memory_root;
 use ody_model_provider_info::ModelProviderInfo;
-use ody_model_provider_info::create_deepseek_provider;
-use ody_model_provider_info::create_glm_provider;
-use ody_model_provider_info::create_kimi_provider;
 #[cfg(test)]
 use ody_model_provider_info::ProviderCapabilities;
 #[cfg(test)]
 use ody_model_provider_info::WireApi;
+use ody_model_provider_info::create_deepseek_provider;
+use ody_model_provider_info::create_glm_provider;
+use ody_model_provider_info::create_kimi_provider;
 use ody_models_manager::ModelsManagerConfig;
 use ody_models_manager::model_info::ConfiguredModelSpec;
 use ody_models_manager::model_info::configured_model_catalog_for_provider;
@@ -1455,11 +1455,8 @@ impl ConfigBuilder {
             }
         };
 
-        let shell_config_result = resolve_windows_shell(
-            ody_home.as_path(),
-            config_toml.shell.as_deref(),
-        )
-        .await;
+        let shell_config_result =
+            resolve_windows_shell(ody_home.as_path(), config_toml.shell.as_deref()).await;
         if let Some(ref result) = shell_config_result {
             config_toml.shell = Some(result.shell.to_string_lossy().to_string());
         }
@@ -2044,11 +2041,11 @@ fn configured_model_catalog(
         })
         .collect();
     configured_model_catalog_for_provider(
-       model_provider_id,
-       model_provider.wire_api,
-       &model_provider.capabilities,
-       &entries,
-   )
+        model_provider_id,
+        model_provider.wire_api,
+        &model_provider.capabilities,
+        &entries,
+    )
 }
 
 /// Build a model catalog from user-declared `[models."provider/model"]`

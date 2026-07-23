@@ -49,7 +49,10 @@ impl DesignReviewFinding {
 /// same title/text hash to one key. Shared by the escalation sign-off gate and
 /// the review appendix so both dedup against the same identity.
 pub(crate) fn normalize_fingerprint(s: &str) -> String {
-    s.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
+    s.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
 }
 
 /// The human-readable risk text behind a sign-off fingerprint: strip the `F:` /

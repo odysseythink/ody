@@ -986,7 +986,8 @@ impl UnifiedExecProcessManager {
         #[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
         if request.sandbox == ody_sandboxing::SandboxType::WindowsRestrictedToken {
             return Err(UnifiedExecError::create_process(
-                "windows sandbox is not enabled: compile with --features windows-sandbox".to_string(),
+                "windows sandbox is not enabled: compile with --features windows-sandbox"
+                    .to_string(),
             ));
         }
 

@@ -120,7 +120,8 @@ pub(crate) async fn run_one_shot_review(
         // The adversarial design review is a pure critique over the design
         // document (which is already in the prompt): give it NO exploration
         // tools. See the disable block below for why.
-        /*disable_exploration_tools*/ true,
+        /*disable_exploration_tools*/
+        true,
     )
     .await?;
     process_one_shot_review_events(receiver, cancellation_token).await
@@ -141,7 +142,8 @@ async fn start_review_conversation(
         None,
         None,
         // The `/review` code review legitimately explores the codebase.
-        /*disable_exploration_tools*/ false,
+        /*disable_exploration_tools*/
+        false,
     )
     .await
 }

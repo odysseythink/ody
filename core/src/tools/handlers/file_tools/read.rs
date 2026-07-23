@@ -229,34 +229,49 @@ mod read_tests {
     fn appends_hint_for_json() {
         let mut content = "     1\t{}\n".to_string();
         append_jq_hint_if_json(&PathBuf::from("data.json"), &mut content);
-        assert!(content.contains("Use `jq`"), "JSON file should get jq hint: {content}");
+        assert!(
+            content.contains("Use `jq`"),
+            "JSON file should get jq hint: {content}"
+        );
     }
 
     #[test]
     fn appends_hint_for_jsonl() {
         let mut content = "     1\t{}\n".to_string();
         append_jq_hint_if_json(&PathBuf::from("log.jsonl"), &mut content);
-        assert!(content.contains("Use `jq`"), "JSONL file should get jq hint: {content}");
+        assert!(
+            content.contains("Use `jq`"),
+            "JSONL file should get jq hint: {content}"
+        );
     }
 
     #[test]
     fn appends_hint_for_uppercase_json_extension() {
         let mut content = "     1\t{}\n".to_string();
         append_jq_hint_if_json(&PathBuf::from("config.JSON"), &mut content);
-        assert!(content.contains("Use `jq`"), "uppercase JSON extension should get jq hint: {content}");
+        assert!(
+            content.contains("Use `jq`"),
+            "uppercase JSON extension should get jq hint: {content}"
+        );
     }
 
     #[test]
     fn skips_hint_for_non_json() {
         let mut content = "     1\tfoo\n".to_string();
         append_jq_hint_if_json(&PathBuf::from("README.md"), &mut content);
-        assert!(!content.contains("Use `jq`"), "non-JSON file should not get jq hint: {content}");
+        assert!(
+            !content.contains("Use `jq`"),
+            "non-JSON file should not get jq hint: {content}"
+        );
     }
 
     #[test]
     fn skips_hint_for_no_extension() {
         let mut content = "     1\t{}\n".to_string();
         append_jq_hint_if_json(&PathBuf::from("Makefile"), &mut content);
-        assert!(!content.contains("Use `jq`"), "file without extension should not get jq hint: {content}");
+        assert!(
+            !content.contains("Use `jq`"),
+            "file without extension should not get jq hint: {content}"
+        );
     }
 }

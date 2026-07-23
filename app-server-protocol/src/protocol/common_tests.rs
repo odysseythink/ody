@@ -40,8 +40,6 @@ fn auth_mode_deserializes_legacy_provider_as_error() {
     assert!(serde_json::from_str::<AuthMode>("\"legacy-provider\"").is_err());
 }
 
-
-
 #[test]
 fn interrupt_conversation_payload_stays_jsonrpc_only() -> Result<()> {
     let (request_id, result, payload) =

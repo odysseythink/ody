@@ -93,11 +93,7 @@ async fn interrupt_tool_records_history_entries() {
     let server = start_mock_server().await;
     let response_mock = mount_sse_sequence(&server, vec![first_body, follow_up_body]).await;
 
-    let fixture = test_ody()
-        .with_model("k3")
-        .build(&server)
-        .await
-        .unwrap();
+    let fixture = test_ody().with_model("k3").build(&server).await.unwrap();
     let ody = Arc::clone(&fixture.ody);
 
     ody.submit(Op::UserInput {
@@ -195,11 +191,7 @@ async fn interrupt_persists_turn_aborted_marker_in_next_request() {
     let server = start_mock_server().await;
     let response_mock = mount_sse_sequence(&server, vec![first_body, follow_up_body]).await;
 
-    let fixture = test_ody()
-        .with_model("k3")
-        .build(&server)
-        .await
-        .unwrap();
+    let fixture = test_ody().with_model("k3").build(&server).await.unwrap();
     let ody = Arc::clone(&fixture.ody);
 
     ody.submit(Op::UserInput {

@@ -275,7 +275,9 @@ impl ToolEmitter {
                 .await;
             }
             (
-                Self::ApplyPatch { changes, source, .. },
+                Self::ApplyPatch {
+                    changes, source, ..
+                },
                 ToolEventStage::Failure(ToolEventFailure::Output(output)),
             ) => {
                 emit_patch_end(
@@ -294,7 +296,9 @@ impl ToolEmitter {
                 .await;
             }
             (
-                Self::ApplyPatch { changes, source, .. },
+                Self::ApplyPatch {
+                    changes, source, ..
+                },
                 ToolEventStage::Failure(ToolEventFailure::Message(message)),
             ) => {
                 emit_patch_end(

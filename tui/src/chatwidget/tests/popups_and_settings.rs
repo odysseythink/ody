@@ -3024,9 +3024,9 @@ async fn assert_reasoning_shortcuts_update_effort(
         let events = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
         if expect_model_update {
             assert!(
-                events.iter().any(
-                    |event| matches!(event, AppEvent::UpdateModel(model) if model == "k3")
-                ),
+                events
+                    .iter()
+                    .any(|event| matches!(event, AppEvent::UpdateModel(model) if model == "k3")),
                 "expected model update event for {key_event:?}; events: {events:?}"
             );
         }

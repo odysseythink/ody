@@ -178,8 +178,14 @@ async fn run_code_mode_turn_with_config(
     code: &str,
     configure: impl FnOnce(&mut Config) + Send + 'static,
 ) -> Result<(TestOdy, ResponseMock)> {
-    run_code_mode_turn_with_model_and_config(server, prompt, code, "test-kimi-for-coding", configure)
-        .await
+    run_code_mode_turn_with_model_and_config(
+        server,
+        prompt,
+        code,
+        "test-kimi-for-coding",
+        configure,
+    )
+    .await
 }
 
 async fn run_code_mode_turn_with_model_and_config(
@@ -305,7 +311,10 @@ text(result);
     let search_body = search_request
         .body_json::<Value>()
         .expect("search request body should be JSON");
-    assert_eq!(search_body["model"], serde_json::json!("test-kimi-for-coding"));
+    assert_eq!(
+        search_body["model"],
+        serde_json::json!("test-kimi-for-coding")
+    );
     assert_eq!(
         search_body["commands"],
         serde_json::json!({

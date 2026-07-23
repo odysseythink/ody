@@ -69,8 +69,6 @@ pub use ody_extension_api::empty_extension_registry;
 pub use ody_features::Feature;
 pub use ody_features::Features;
 pub use ody_home::OdyHomeUserInstructionsProvider;
-
-pub use ody_model_provider_info::built_in_model_providers;
 pub use ody_models_manager::manager::RefreshStrategy;
 pub use ody_models_manager::manager::SharedModelsManager;
 pub use ody_protocol::ThreadId;

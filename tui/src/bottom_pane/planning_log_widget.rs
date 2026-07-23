@@ -158,7 +158,10 @@ impl PlanningLogWidget {
         // vertical room as possible.
         let entry = self.entries.back().expect("non-empty entries");
         let line = self.render_entry_line(entry, width, now, /*is_latest*/ true);
-        vec![truncate_line_with_ellipsis_if_overflow(line, width as usize)]
+        vec![truncate_line_with_ellipsis_if_overflow(
+            line,
+            width as usize,
+        )]
     }
 
     fn render_expanded(&self, width: u16, now: Instant) -> Vec<Line<'static>> {
@@ -235,8 +238,8 @@ impl BreathAnimation {
             return 1.0;
         }
         let elapsed = now.saturating_duration_since(arrival);
-        let cycle_progress = (elapsed.as_secs_f32() % BREATH_DURATION.as_secs_f32())
-            / BREATH_DURATION.as_secs_f32();
+        let cycle_progress =
+            (elapsed.as_secs_f32() % BREATH_DURATION.as_secs_f32()) / BREATH_DURATION.as_secs_f32();
         let phase = cycle_progress * BREATH_CYCLE_COUNT * 2.0 * std::f32::consts::PI;
         let cosine_env = (1.0 - phase.cos()) / 2.0;
         1.0 - (1.0 - BREATH_MIN_FACTOR) * cosine_env

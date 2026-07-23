@@ -1,4 +1,3 @@
-
 //! Schemas for the structured file-exploration tools: `read_file`, `grep`, `glob`, `jq`.
 //!
 //! These exist to keep codebase exploration out of the raw-shell path. A model
@@ -22,9 +21,9 @@ use std::collections::BTreeMap;
 pub const READ_FILE_TOOL_NAME: &str = "read_file";
 pub const GREP_TOOL_NAME: &str = "grep";
 pub const GLOB_TOOL_NAME: &str = "glob";
- pub const JQ_TOOL_NAME: &str = "jq";
- pub const WRITE_FILE_TOOL_NAME: &str = "write_file";
- pub const EDIT_FILE_TOOL_NAME: &str = "edit_file";
+pub const JQ_TOOL_NAME: &str = "jq";
+pub const WRITE_FILE_TOOL_NAME: &str = "write_file";
+pub const EDIT_FILE_TOOL_NAME: &str = "edit_file";
 
 /// Maximum lines returned by a single `read_file` call.
 pub const MAX_LINES: usize = 1000;
@@ -404,7 +403,6 @@ fn glob_output_schema() -> Value {
     })
 }
 
-
 fn write_file_output_schema() -> Value {
     json!({
         "type": "object",
@@ -455,14 +453,16 @@ pub fn create_write_file_tool(options: FileToolOptions) -> ToolSpec {
             "content".to_string(),
             JsonSchema::string(Some(
                 "The full content to write to the file. Existing content is overwritten unless \
-                 `append` is true.".to_string(),
+                 `append` is true."
+                    .to_string(),
             )),
         ),
         (
             "append".to_string(),
             JsonSchema::boolean(Some(
                 "If true, append `content` to the end of the file instead of overwriting it. \
-                 Defaults to false.".to_string(),
+                 Defaults to false."
+                    .to_string(),
             )),
         ),
     ]);
@@ -504,13 +504,16 @@ pub fn create_edit_file_tool(options: FileToolOptions) -> ToolSpec {
         ),
         (
             "new_string".to_string(),
-            JsonSchema::string(Some("The string to put in place of `old_string`.".to_string())),
+            JsonSchema::string(Some(
+                "The string to put in place of `old_string`.".to_string(),
+            )),
         ),
         (
             "replace_all".to_string(),
             JsonSchema::boolean(Some(
                 "If true, replace every occurrence of `old_string`; otherwise replace only the \
-                 first. Defaults to false.".to_string(),
+                 first. Defaults to false."
+                    .to_string(),
             )),
         ),
     ]);
@@ -606,7 +609,11 @@ mod tests {
             json.contains("Prefer this over `read_file`"),
             "jq description should encourage using jq over read_file for JSON/JSONL: {json}"
         );
-        for example in ["`select(.type == \\\"function_call\\\")`", "`.field`", "`length`"] {
+        for example in [
+            "`select(.type == \\\"function_call\\\")`",
+            "`.field`",
+            "`length`",
+        ] {
             assert!(
                 json.contains(example),
                 "jq description should include concrete example filter `{example}`: {json}"
@@ -660,7 +667,10 @@ mod tests {
             json.contains("\"required\":[\"path\",\"content\"]"),
             "write_file must require path and content: {json}"
         );
-        assert!(json.contains("append"), "write_file must expose append: {json}");
+        assert!(
+            json.contains("append"),
+            "write_file must expose append: {json}"
+        );
     }
 
     #[test]
@@ -675,7 +685,10 @@ mod tests {
                 || json.contains("\"required\":[\"new_string\",\"old_string\",\"path\"]"),
             "edit_file must require path, old_string and new_string: {json}"
         );
-        assert!(json.contains("replace_all"), "edit_file must expose replace_all: {json}");
+        assert!(
+            json.contains("replace_all"),
+            "edit_file must expose replace_all: {json}"
+        );
     }
 
     #[test]

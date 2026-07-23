@@ -8,10 +8,10 @@ use crate::parser::EMPTY_CHANGE_CONTEXT_MARKER;
 use crate::parser::END_PATCH_MARKER;
 use crate::parser::EOF_MARKER;
 use crate::parser::Hunk;
+use crate::parser::LineSource;
 use crate::parser::MOVE_TO_MARKER;
 use crate::parser::ParseError;
 use crate::parser::UPDATE_FILE_MARKER;
-use crate::parser::LineSource;
 use crate::parser::UpdateFileChunk;
 
 use Hunk::*;
@@ -363,9 +363,10 @@ impl StreamingPatchParser {
                         // omit the leading space marker on context lines, so we only enforce
                         // that rule immediately after a `-` line; after `+` or other context,
                         // bare context lines are tolerated.
-                        if chunks.last().is_some_and(|chunk| {
-                            chunk.old_lines.len() == chunk.new_lines.len() + 1
-                        }) {
+                        if chunks
+                            .last()
+                            .is_some_and(|chunk| chunk.old_lines.len() == chunk.new_lines.len() + 1)
+                        {
                             return Err(InvalidHunkError {
                                 message: format!(
                                     "Expected update hunk to start with a @@ context marker, got: '{line}'"

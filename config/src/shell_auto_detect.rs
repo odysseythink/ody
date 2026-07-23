@@ -185,10 +185,7 @@ mod tests {
 
         let contents = std::fs::read_to_string(&config_path).unwrap();
         let doc = contents.parse::<toml_edit::DocumentMut>().unwrap();
-        assert_eq!(
-            doc["shell"].as_str(),
-            Some(r"C:\msys64\usr\bin\bash.exe")
-        );
+        assert_eq!(doc["shell"].as_str(), Some(r"C:\msys64\usr\bin\bash.exe"));
     }
 
     #[tokio::test]

@@ -449,11 +449,8 @@ pub(crate) async fn run_turn(
                             phase: None,
                             internal_chat_message_metadata_passthrough: None,
                         };
-                        sess.record_conversation_items(
-                            &turn_context,
-                            std::slice::from_ref(&nudge),
-                        )
-                        .await;
+                        sess.record_conversation_items(&turn_context, std::slice::from_ref(&nudge))
+                            .await;
                         can_drain_pending_input = false;
                         continue;
                     }

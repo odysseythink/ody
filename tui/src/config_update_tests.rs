@@ -26,11 +26,7 @@ fn trusted_project_edit_targets_project_trust_level() {
 
 #[test]
 fn build_model_selection_edits_writes_default_model_and_clears_legacy_model() {
-    let edits = build_model_selection_edits(
-        "work-kimi",
-        "kimi-k2",
-        Some(ReasoningEffort::Medium),
-    );
+    let edits = build_model_selection_edits("work-kimi", "kimi-k2", Some(ReasoningEffort::Medium));
     assert_eq!(edits.len(), 3);
     assert_eq!(edits[0].key_path, "model");
     assert_eq!(edits[0].value, serde_json::Value::Null);
@@ -42,11 +38,7 @@ fn build_model_selection_edits_writes_default_model_and_clears_legacy_model() {
 
 #[test]
 fn build_model_selection_edits_clears_reasoning_effort_when_none() {
-    let edits = build_model_selection_edits(
-        "work-kimi",
-        "kimi-k2",
-        None::<ReasoningEffort>,
-    );
+    let edits = build_model_selection_edits("work-kimi", "kimi-k2", None::<ReasoningEffort>);
     assert_eq!(edits.len(), 3);
     assert_eq!(edits[2].key_path, "model_reasoning_effort");
     assert_eq!(edits[2].value, serde_json::Value::Null);

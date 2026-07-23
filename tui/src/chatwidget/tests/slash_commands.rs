@@ -26,7 +26,6 @@ fn force_old_iterm2_pet_image_unsupported(chat: &mut ChatWidget) {
     ));
 }
 
-
 fn complete_turn_with_message(chat: &mut ChatWidget, turn_id: &str, message: Option<&str>) {
     if let Some(message) = message {
         complete_assistant_message(
@@ -85,7 +84,6 @@ fn next_add_to_history_event(rx: &mut tokio::sync::mpsc::UnboundedReceiver<AppEv
         }
     }
 }
-
 
 #[tokio::test]
 async fn slash_compact_eagerly_queues_follow_up_before_turn_start() {
@@ -386,10 +384,9 @@ async fn queued_settings_selection_applies_before_next_input() {
     }
 
     match next_submit_op(&mut op_rx) {
-        Op::UserTurn { model, effort, .. } => assert_eq!(
-            (model, effort),
-            ("k3".to_string(), Some(selected_effort))
-        ),
+        Op::UserTurn { model, effort, .. } => {
+            assert_eq!((model, effort), ("k3".to_string(), Some(selected_effort)))
+        }
         other => panic!("expected queued message with updated model, got {other:?}"),
     }
     assert!(chat.input_queue.queued_user_messages.is_empty());
@@ -2209,13 +2206,6 @@ async fn slash_rollout_handles_missing_path() {
         "expected missing rollout path message: {rendered}"
     );
 }
-
-
-
-
-
-
-
 
 #[tokio::test]
 async fn raw_slash_command_toggles_and_accepts_on_off_args() {

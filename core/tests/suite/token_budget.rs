@@ -22,7 +22,7 @@ use ody_config::types::McpServerConfig;
 use ody_config::types::McpServerTransportConfig;
 use ody_core::config::TokenBudgetConfig;
 use ody_features::Feature;
-use ody_model_provider_info::built_in_model_providers;
+use ody_model_provider_info::create_kimi_provider;
 use ody_protocol::protocol::CONTEXT_WINDOW_CLOSE_TAG;
 use ody_protocol::protocol::CONTEXT_WINDOW_OPEN_TAG;
 use ody_protocol::protocol::EventMsg;
@@ -406,7 +406,7 @@ async fn token_budget_context_uses_new_window_after_compaction() -> Result<()> {
     )
     .await;
 
-    let mut model_provider = built_in_model_providers()["kimi"].clone();
+    let mut model_provider = create_kimi_provider();
     model_provider.name = "OpenAI-compatible test provider".to_string();
     model_provider.base_url = Some(format!("{}/v1", server.uri()));
     model_provider.supports_websockets = false;

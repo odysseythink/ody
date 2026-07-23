@@ -176,8 +176,7 @@ pub(super) fn server_notification_thread_target(
         | ServerNotification::ProcessExited(_)
         | ServerNotification::FsChanged(_)
         | ServerNotification::WindowsWorldWritableWarning(_)
-        | ServerNotification::WindowsSandboxSetupCompleted(_)
-        => None,
+        | ServerNotification::WindowsSandboxSetupCompleted(_) => None,
     };
 
     match thread_id {

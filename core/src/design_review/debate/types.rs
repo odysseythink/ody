@@ -178,9 +178,12 @@ mod tests {
     #[test]
     fn model_for_falls_back_through_the_chain() {
         // No per-seat override -> falls back to design_review_model.
-        let cfg = DebateConfig::resolve(Some(&debate(true, Some(1))), Some("dr-model"), None)
-            .unwrap();
-        assert_eq!(cfg.model_for(DebateRole::Judge).as_deref(), Some("dr-model"));
+        let cfg =
+            DebateConfig::resolve(Some(&debate(true, Some(1))), Some("dr-model"), None).unwrap();
+        assert_eq!(
+            cfg.model_for(DebateRole::Judge).as_deref(),
+            Some("dr-model")
+        );
 
         // Per-seat override wins for its own seat only.
         let mut d = debate(true, Some(1));
