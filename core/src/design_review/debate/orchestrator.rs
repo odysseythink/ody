@@ -23,6 +23,7 @@ use crate::design_review::prompt::build_judge_prompt;
 use crate::design_review::prompt::build_skeptic_prompt;
 use crate::design_review::prompt::parse_design_review_output;
 use crate::design_review::types::DesignReviewError;
+use crate::design_review::types::DesignReviewFinding;
 use crate::design_review::types::DesignReviewOutput;
 use crate::design_review::types::DesignReviewRequest;
 use crate::session::session::Session;
@@ -51,12 +52,17 @@ fn persona_turn_plan(rounds: u8) -> Vec<(DebateRole, u8)> {
 
 impl DebateOrchestrator {
     /// Run the debate and synthesize findings, or `Err(Degraded)` (caller falls
-    /// back to the single-shot review).
+    /// back to the single-shot review). `critic_findings` are the single-shot
+    /// critic's output (v1.5a): they seed every persona/judge turn so the debate
+    /// targets the gap the critic left, and the Judge emits only findings beyond
+    /// them. The caller keeps `critic_findings` verbatim — the debate never
+    /// mutates or drops them.
     pub(crate) async fn run(
         session: &Arc<Session>,
         turn: &Arc<TurnContext>,
         request: &DesignReviewRequest,
         cfg: &DebateConfig,
+        critic_findings: &[DesignReviewFinding],
     ) -> Result<DesignReviewOutput, DesignReviewError> {
         let session_ctx = Arc::new(SessionTaskContext::new(
             Arc::clone(session),
@@ -71,12 +77,18 @@ impl DebateOrchestrator {
                 DesignReviewError::Degraded(format!("no model configured for {}", role.label()))
             })?;
             let prompt = match role {
-                DebateRole::Advocate => {
-                    build_advocate_prompt(&request.design_markdown, &transcript.render())
-                }
-                DebateRole::Skeptic => {
-                    build_skeptic_prompt(&request.design_markdown, &transcript.render())
-                }
+                DebateRole::Advocate => build_advocate_prompt(
+                    &request.design_markdown,
+                    critic_findings,
+                    &request.accepted_risks,
+                    &transcript.render(),
+                ),
+                DebateRole::Skeptic => build_skeptic_prompt(
+                    &request.design_markdown,
+                    critic_findings,
+                    &request.accepted_risks,
+                    &transcript.render(),
+                ),
                 DebateRole::Judge => unreachable!("Judge is not part of the persona plan"),
             };
             let event = Self::one_call(&session_ctx, turn, &cancellation_token, prompt, model, cfg)
@@ -93,15 +105,20 @@ impl DebateOrchestrator {
         })?;
         let judge_prompt = build_judge_prompt(
             &request.design_markdown,
+            critic_findings,
             &transcript.render(),
             &request.accepted_risks,
         );
-        let judge_event =
-            Self::one_call(&session_ctx, turn, &cancellation_token, judge_prompt, judge_model, cfg)
-                .await
-                .ok_or_else(|| {
-                    DesignReviewError::Degraded("Judge produced no output".to_string())
-                })?;
+        let judge_event = Self::one_call(
+            &session_ctx,
+            turn,
+            &cancellation_token,
+            judge_prompt,
+            judge_model,
+            cfg,
+        )
+        .await
+        .ok_or_else(|| DesignReviewError::Degraded("Judge produced no output".to_string()))?;
         // Reuse the single-shot parser + salvage so a fenced/truncated judge
         // response is handled exactly as today's critic response is.
         Ok(parse_design_review_output(&judge_event.overall_explanation))

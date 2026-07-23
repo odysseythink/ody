@@ -64,7 +64,10 @@ const DESIGN_DOCUMENT_MARKER: &str = "--- DESIGN DOCUMENT ---\n\n";
 /// a block instructs the (otherwise stateless) reviewer not to re-raise them, so
 /// the finding count converges across revise rounds instead of re-reporting risks
 /// the user already dispositioned.
-pub(crate) fn build_design_review_prompt(design_markdown: &str, accepted_risks: &[String]) -> String {
+pub(crate) fn build_design_review_prompt(
+    design_markdown: &str,
+    accepted_risks: &[String],
+) -> String {
     let accepted_block = format_accepted_risks_block(accepted_risks);
     format!(
         "{DESIGN_REVIEW_INTRO}{FINDINGS_OUTPUT_SPEC}{accepted_block}{DESIGN_DOCUMENT_MARKER}{design_markdown}"
@@ -98,6 +101,8 @@ Keep it to about 300 words. Prose only — do NOT emit JSON.
 const ADVOCATE_INTRO: &str = r#"You are the ADVOCATE in a structured design debate.
 Build the strongest evidence-based case that the design's load-bearing decisions
 are correct and sufficient. Refute the Skeptic's latest attacks point by point.
+Where the CRITIC FINDINGS below raise a concern, either concede it honestly or
+show with concrete evidence why it is a non-issue.
 
 "#;
 
@@ -105,54 +110,133 @@ const SKEPTIC_INTRO: &str = r#"You are the SKEPTIC in a structured design debate
 Attack the design by inversion: what would GUARANTEE it fails? Surface failure
 modes, unstated assumptions, missing tests, concurrency/ordering hazards, resource
 limits, and cheaper alternatives the design did not consider or defer honestly.
+The CRITIC FINDINGS below are a FLOOR, not a ceiling: do NOT restate them. Your
+job is to find failure modes the critic MISSED — systemic, cross-cutting gaps
+(tests, concurrency/ordering, resource limits, deferred-decision risks).
 
 "#;
 
 const JUDGE_INTRO: &str = r#"You are the JUDGE of a structured design debate. You did NOT participate; you
-synthesize. You are given the design and a transcript of an Advocate defending it
-and a Skeptic attacking it.
+synthesize. You are given the design, a list of CRITIC FINDINGS already reported
+by a separate reviewer, and a transcript of an Advocate defending the design and a
+Skeptic attacking it.
 
-For each Skeptic attack the Advocate did NOT convincingly refute with concrete
-evidence, emit ONE finding. Do NOT emit a finding for an attack the Advocate
-soundly refuted. An attack the Advocate merely dented (not refuted) is a finding
-with "speculative" confidence. Reserve an empty findings list for a design the
-Skeptic genuinely could not dent.
+The CRITIC FINDINGS will be included in the final report REGARDLESS of what you
+do — do NOT re-emit them. Emit ONE finding ONLY for a Skeptic attack that is BOTH
+(a) not convincingly refuted by the Advocate with concrete evidence, AND (b) NOT
+already covered by the CRITIC FINDINGS. Do NOT emit a finding for an attack the
+Advocate soundly refuted. An attack the Advocate merely dented (not refuted) is a
+finding with "speculative" confidence. Reserve an empty findings list for a debate
+that surfaced nothing beyond the CRITIC FINDINGS.
 
 "#;
 
-/// Build the Advocate turn prompt. `transcript` is the debate so far (may be empty
-/// on the opening turn).
-pub(crate) fn build_advocate_prompt(design_markdown: &str, transcript: &str) -> String {
-    build_persona_prompt(ADVOCATE_INTRO, design_markdown, transcript)
+const CRITIC_FINDINGS_MARKER: &str =
+    "--- CRITIC FINDINGS (already reported — do not repeat) ---\n\n";
+
+/// Compact, one-line-per-finding rendering of the single-shot critic's findings,
+/// injected into the debate (v1.5a / design Addendum D7) so the personas and Judge
+/// target the GAP the critic left rather than re-deriving what it already found.
+/// Deliberately prose, not JSON, and only the first sentence of each `detail`, so
+/// the seeded block stays small. Empty string when there are no findings — the
+/// marker then vanishes from the prompt entirely.
+pub(crate) fn render_critic_findings(findings: &[DesignReviewFinding]) -> String {
+    if findings.is_empty() {
+        return String::new();
+    }
+    let mut block = String::from(CRITIC_FINDINGS_MARKER);
+    for f in findings {
+        block.push_str(&format!(
+            "- [{}] {} — {}\n",
+            f.severity,
+            f.title,
+            first_sentence(&f.detail)
+        ));
+    }
+    block.push('\n');
+    block
+}
+
+/// The first sentence of `detail` (through the first period followed by a space),
+/// or the whole thing bounded to a short length when there is no such break. Keeps
+/// the seeded critic block to one line per finding.
+fn first_sentence(detail: &str) -> String {
+    let t = detail.trim();
+    match t.find(". ") {
+        Some(i) => t[..=i].to_string(),
+        None => bounded_detail(t, 160),
+    }
+}
+
+/// Build the Advocate turn prompt. `critic_findings` seeds the debate with the
+/// single-shot critic's output (v1.5a); `accepted_risks` are the user's prior
+/// sign-offs (so the Skeptic stops re-raising them); `transcript` is the debate so
+/// far (may be empty on the opening turn).
+pub(crate) fn build_advocate_prompt(
+    design_markdown: &str,
+    critic_findings: &[DesignReviewFinding],
+    accepted_risks: &[String],
+    transcript: &str,
+) -> String {
+    build_persona_prompt(
+        ADVOCATE_INTRO,
+        design_markdown,
+        critic_findings,
+        accepted_risks,
+        transcript,
+    )
 }
 
 /// Build the Skeptic turn prompt.
-pub(crate) fn build_skeptic_prompt(design_markdown: &str, transcript: &str) -> String {
-    build_persona_prompt(SKEPTIC_INTRO, design_markdown, transcript)
+pub(crate) fn build_skeptic_prompt(
+    design_markdown: &str,
+    critic_findings: &[DesignReviewFinding],
+    accepted_risks: &[String],
+    transcript: &str,
+) -> String {
+    build_persona_prompt(
+        SKEPTIC_INTRO,
+        design_markdown,
+        critic_findings,
+        accepted_risks,
+        transcript,
+    )
 }
 
-fn build_persona_prompt(intro: &str, design_markdown: &str, transcript: &str) -> String {
+fn build_persona_prompt(
+    intro: &str,
+    design_markdown: &str,
+    critic_findings: &[DesignReviewFinding],
+    accepted_risks: &[String],
+    transcript: &str,
+) -> String {
+    let accepted_block = format_accepted_risks_block(accepted_risks);
+    let critic_block = render_critic_findings(critic_findings);
     let transcript_block = if transcript.is_empty() {
         String::new()
     } else {
         format!("{DEBATE_TRANSCRIPT_MARKER}{transcript}\n\n")
     };
     format!(
-        "{intro}{PERSONA_COMMON_RULES}{DESIGN_DOCUMENT_MARKER}{design_markdown}\n\n{transcript_block}"
+        "{intro}{PERSONA_COMMON_RULES}{accepted_block}{DESIGN_DOCUMENT_MARKER}{design_markdown}\n\n{critic_block}{transcript_block}"
     )
 }
 
 /// Build the Judge synthesis prompt. Reuses `FINDINGS_OUTPUT_SPEC` (same JSON the
 /// single-shot critic emits) and the same accepted-risks carry-over block, so the
-/// existing parser and cross-round dedup apply unchanged.
+/// existing parser and cross-round dedup apply unchanged. `critic_findings` are
+/// injected so the Judge emits only findings the debate surfaced BEYOND the
+/// critic's (v1.5a): the critic's findings are carried verbatim by the caller.
 pub(crate) fn build_judge_prompt(
     design_markdown: &str,
+    critic_findings: &[DesignReviewFinding],
     transcript: &str,
     accepted_risks: &[String],
 ) -> String {
     let accepted_block = format_accepted_risks_block(accepted_risks);
+    let critic_block = render_critic_findings(critic_findings);
     format!(
-        "{JUDGE_INTRO}{FINDINGS_OUTPUT_SPEC}{accepted_block}{DESIGN_DOCUMENT_MARKER}{design_markdown}\n\n{DEBATE_TRANSCRIPT_MARKER}{transcript}"
+        "{JUDGE_INTRO}{FINDINGS_OUTPUT_SPEC}{accepted_block}{DESIGN_DOCUMENT_MARKER}{design_markdown}\n\n{critic_block}{DEBATE_TRANSCRIPT_MARKER}{transcript}"
     )
 }
 
@@ -276,7 +360,8 @@ fn salvage_review_output(text: &str) -> Option<DesignReviewOutput> {
     if findings.is_empty() {
         return None;
     }
-    let overall_assessment = extract_json_string_field(text, "overall_assessment").unwrap_or_default();
+    let overall_assessment =
+        extract_json_string_field(text, "overall_assessment").unwrap_or_default();
     Some(DesignReviewOutput {
         overall_assessment,
         findings,
@@ -509,7 +594,7 @@ mod tests {
 
     #[test]
     fn judge_prompt_reuses_findings_schema_and_carries_transcript() {
-        let prompt = build_judge_prompt("# Design", "[Advocate]: x\n\n[Skeptic]: y", &[]);
+        let prompt = build_judge_prompt("# Design", &[], "[Advocate]: x\n\n[Skeptic]: y", &[]);
         // Same JSON contract as the single-shot critic → same parser applies.
         assert!(prompt.contains("Output strictly as JSON"));
         assert!(prompt.contains("\"overall_assessment\""));
@@ -519,11 +604,28 @@ mod tests {
         assert!(prompt.contains("did NOT participate"));
         assert!(prompt.contains("--- DEBATE TRANSCRIPT ---"));
         assert!(prompt.contains("[Skeptic]: y"));
+        // No critic findings supplied → the seeded block (and its marker) vanish.
+        // (The JUDGE_INTRO instruction text still references CRITIC FINDINGS, so
+        // key off the block MARKER, not the phrase.)
+        assert!(!prompt.contains("--- CRITIC FINDINGS"));
+    }
+
+    #[test]
+    fn judge_prompt_instructs_net_new_only_when_seeded() {
+        let critic = [finding(DesignReviewSeverity::High, "Missing authz check")];
+        let prompt = build_judge_prompt("# Design", &critic, "[Skeptic]: y", &[]);
+        // The critic block is present and the Judge is told not to re-emit it.
+        assert!(prompt.contains("--- CRITIC FINDINGS"));
+        assert!(prompt.contains("Missing authz check"));
+        assert!(prompt.contains("do NOT re-emit"));
+        assert!(prompt.contains("already covered by the CRITIC FINDINGS"));
+        // Still the same JSON contract → shared parser applies.
+        assert!(prompt.contains("Output strictly as JSON"));
     }
 
     #[test]
     fn persona_prompts_carry_anti_conformity_and_novelty_and_no_json() {
-        let skeptic = build_skeptic_prompt("# Design", "[Advocate]: opening");
+        let skeptic = build_skeptic_prompt("# Design", &[], &[], "[Advocate]: opening");
         assert!(skeptic.contains("You are the SKEPTIC"));
         assert!(skeptic.contains("ANTI-CONFORMITY"));
         assert!(skeptic.contains("name the specific flaw"));
@@ -533,10 +635,60 @@ mod tests {
         assert!(!skeptic.contains("Output strictly as JSON"));
 
         // Opening advocate turn has no transcript block.
-        let advocate = build_advocate_prompt("# Design", "");
+        let advocate = build_advocate_prompt("# Design", &[], &[], "");
         assert!(advocate.contains("You are the ADVOCATE"));
         assert!(!advocate.contains("--- DEBATE TRANSCRIPT ---"));
         assert!(!advocate.contains("Output strictly as JSON"));
+    }
+
+    #[test]
+    fn skeptic_prompt_injects_critic_findings_and_accepted_risks() {
+        let critic = [finding(
+            DesignReviewSeverity::Critical,
+            "Concurrent config write",
+        )];
+        let accepted = ["F:missing rate limiting".to_string()];
+        let skeptic = build_skeptic_prompt("# Design", &critic, &accepted, "");
+        // Critic block present, with the R9 anchoring directive.
+        assert!(skeptic.contains("--- CRITIC FINDINGS"));
+        assert!(skeptic.contains("Concurrent config write"));
+        assert!(skeptic.contains("FLOOR, not a ceiling"));
+        // Accepted-risks block now reaches the persona (fixes consequence #4).
+        assert!(skeptic.contains("PREVIOUSLY ACCEPTED RISKS"));
+        assert!(skeptic.contains("- missing rate limiting"));
+        // Still prose, never JSON.
+        assert!(!skeptic.contains("Output strictly as JSON"));
+    }
+
+    #[test]
+    fn empty_critic_findings_omit_the_block() {
+        let skeptic = build_skeptic_prompt("# Design", &[], &[], "");
+        // No seeded block: key off the MARKER (the intro still mentions the phrase).
+        assert!(!skeptic.contains("--- CRITIC FINDINGS"));
+        // The floor/ceiling sentence lives in the intro, so it is still present,
+        // but with no findings there is nothing to restate — harmless.
+        assert!(!skeptic.contains("PREVIOUSLY ACCEPTED RISKS"));
+    }
+
+    #[test]
+    fn render_critic_findings_is_compact_first_sentence_prose() {
+        let findings = [DesignReviewFinding {
+            severity: DesignReviewSeverity::High,
+            confidence: DesignReviewConfidence::Medium,
+            title: "No rollback".to_string(),
+            detail: "The migration is not atomic. A crash mid-run corrupts config.".to_string(),
+            location: None,
+            suggested_fix: Some("Write to a temp file then rename.".to_string()),
+        }];
+        let block = render_critic_findings(&findings);
+        assert!(block.starts_with("--- CRITIC FINDINGS"));
+        assert!(block.contains("[High] No rollback — The migration is not atomic."));
+        // Only the first sentence — the second is dropped from the seed.
+        assert!(!block.contains("corrupts config"));
+        // Prose, not JSON — no object braces leak in.
+        assert!(!block.contains('{'));
+        // Empty input → empty string, no marker.
+        assert!(render_critic_findings(&[]).is_empty());
     }
 
     #[test]

@@ -106,7 +106,8 @@ impl DesignReviewOrchestrator {
                         .as_deref()
                         .is_some_and(|l| l.to_ascii_lowercase().starts_with("zh"))
                     {
-                        "对抗性评审的输出无法结构化（可能被截断），本轮findings已跳过签核。".to_string()
+                        "对抗性评审的输出无法结构化（可能被截断），本轮findings已跳过签核。"
+                            .to_string()
                     } else {
                         "Adversarial review output could not be structured (likely truncated); its findings were skipped for sign-off this round.".to_string()
                     };
@@ -166,7 +167,10 @@ impl DesignReviewOrchestrator {
         let Some(cfg) = DebateConfig::from_config(turn.config.as_ref()) else {
             return output;
         };
-        match DebateOrchestrator::run(session, turn, request, &cfg).await {
+        // Seed the debate with the critic's findings (v1.5a): the debate targets
+        // the gap and returns net-new findings. `output` is kept verbatim — the
+        // borrow ends before `union_findings` consumes it below.
+        match DebateOrchestrator::run(session, turn, request, &cfg, &output.findings).await {
             Ok(debate) => union_findings(output, debate),
             Err(err) => {
                 let message = if turn
@@ -190,23 +194,26 @@ impl DesignReviewOrchestrator {
 
 /// Merge debate findings into the single-shot set, de-duplicated by
 /// `DesignReviewFinding::fingerprint()` (the same identity the cross-round
-/// sign-off gate uses). Single-shot findings win ties; the debate's
-/// `overall_assessment` is appended so both critiques are visible.
+/// sign-off gate uses). Single-shot (critic) findings win ties and are never
+/// dropped. When the debate contributes net-new findings, a one-line provenance
+/// note listing their titles is appended to `overall_assessment` so the reader can
+/// see which findings came from the debate (v1.5a — no per-finding schema change).
 fn union_findings(mut base: DesignReviewOutput, debate: DesignReviewOutput) -> DesignReviewOutput {
     let mut seen: std::collections::HashSet<String> =
         base.findings.iter().map(|f| f.fingerprint()).collect();
+    let mut added_titles: Vec<String> = Vec::new();
     for finding in debate.findings {
         if seen.insert(finding.fingerprint()) {
+            added_titles.push(finding.title.clone());
             base.findings.push(finding);
         }
     }
-    let debate_assessment = debate.overall_assessment.trim();
-    if !debate_assessment.is_empty() {
+    if !added_titles.is_empty() {
+        let note = format!("[Debate added: {}]", added_titles.join("; "));
         if base.overall_assessment.trim().is_empty() {
-            base.overall_assessment = debate_assessment.to_string();
+            base.overall_assessment = note;
         } else {
-            base.overall_assessment =
-                format!("{}\n\n[Debate] {debate_assessment}", base.overall_assessment);
+            base.overall_assessment = format!("{}\n\n{note}", base.overall_assessment);
         }
     }
     base
@@ -374,9 +381,15 @@ mod tests {
         // Single-shot finding wins the tie (original casing preserved).
         assert!(merged.findings.iter().any(|f| f.title == "Auth Loss"));
         assert!(!merged.findings.iter().any(|f| f.title == "auth loss"));
-        // Both assessments visible.
+        // Critic assessment retained; provenance note names only the net-new
+        // debate finding ("Missing test"), not the collapsed duplicate.
         assert!(merged.overall_assessment.contains("single"));
-        assert!(merged.overall_assessment.contains("[Debate] debate"));
+        assert!(
+            merged
+                .overall_assessment
+                .contains("[Debate added: Missing test]")
+        );
+        assert!(!merged.overall_assessment.contains("auth loss"));
     }
 
     #[test]
