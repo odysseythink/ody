@@ -21,8 +21,8 @@ fn manager_attaches_metadata_tags_to_metrics() -> Result<()> {
     let (metrics, exporter) = build_metrics_with_defaults(&[("service", "ody-cli")])?;
     let manager = SessionTelemetry::new(
         ThreadId::new(),
-        "gpt-5.1",
-        "gpt-5.1",
+        "kimi-k2.5",
+        "kimi-k2.5",
         Some(TelemetryAuthMode::ApiKey),
         "test_originator".to_string(),
         /*log_user_prompts*/ true,
@@ -58,7 +58,7 @@ fn manager_attaches_metadata_tags_to_metrics() -> Result<()> {
             "auth_mode".to_string(),
             TelemetryAuthMode::ApiKey.to_string(),
         ),
-        ("model".to_string(), "gpt-5.1".to_string()),
+        ("model".to_string(), "kimi-k2.5".to_string()),
         ("originator".to_string(), "test_originator".to_string()),
         ("service".to_string(), "ody-cli".to_string()),
         ("session_source".to_string(), "cli".to_string()),
@@ -114,8 +114,8 @@ fn manager_attaches_optional_service_name_tag() -> Result<()> {
     let (metrics, exporter) = build_metrics_with_defaults(&[])?;
     let manager = SessionTelemetry::new(
         ThreadId::new(),
-        "gpt-5.1",
-        "gpt-5.1",
+        "kimi-k2.5",
+        "kimi-k2.5",
         /*auth_mode*/ None,
         "test_originator".to_string(),
         /*log_user_prompts*/ false,
@@ -156,8 +156,8 @@ fn manager_records_plugin_install_suggestion_metric() -> Result<()> {
     let (metrics, exporter) = build_metrics_with_defaults(&[])?;
     let manager = SessionTelemetry::new(
         ThreadId::new(),
-        "gpt-5.1",
-        "gpt-5.1",
+        "kimi-k2.5",
+        "kimi-k2.5",
         Some(TelemetryAuthMode::ApiKey),
         "test_originator".to_string(),
         /*log_user_prompts*/ false,
@@ -208,8 +208,8 @@ fn manager_records_plugin_install_elicitation_sent_metric() -> Result<()> {
     let (metrics, exporter) = build_metrics_with_defaults(&[])?;
     let manager = SessionTelemetry::new(
         ThreadId::new(),
-        "gpt-5.1",
-        "gpt-5.1",
+        "kimi-k2.5",
+        "kimi-k2.5",
         Some(TelemetryAuthMode::ApiKey),
         "test_originator".to_string(),
         /*log_user_prompts*/ false,
@@ -249,8 +249,8 @@ fn manager_records_plan_resolved_counter_with_outcome_tag() -> Result<()> {
     let (metrics, exporter) = build_metrics_with_defaults(&[])?;
     let manager = SessionTelemetry::new(
         ThreadId::new(),
-        "gpt-5.1",
-        "gpt-5.1",
+        "kimi-k2.5",
+        "kimi-k2.5",
         Some(TelemetryAuthMode::ApiKey),
         "test_originator".to_string(),
         /*log_user_prompts*/ true,

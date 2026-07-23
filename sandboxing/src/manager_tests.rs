@@ -456,6 +456,7 @@ fn transform_for_direct_spawn_windows_preserves_only_wrapper_setup_identity() {
 
 #[cfg(target_os = "windows")]
 #[test]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 fn transform_for_direct_spawn_windows_materializes_inner_helper() {
     let ody_home = tempfile::TempDir::new().expect("ody home");
     let helper_dir = tempfile::TempDir::new().expect("helper dir");
@@ -512,7 +513,7 @@ fn transform_for_direct_spawn_windows_materializes_inner_helper() {
                     environment_id: None,
                     network: None,
                     sandbox_policy_cwd: &cwd_uri,
-                    ody_linux_sandbox_exe: None,
+                    linux_sandbox_exe: None,
                     use_legacy_landlock: false,
                     windows_sandbox_level: WindowsSandboxLevel::Elevated,
                     windows_sandbox_private_desktop: false,

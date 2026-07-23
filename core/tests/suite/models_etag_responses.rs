@@ -45,7 +45,7 @@ async fn refresh_models_on_models_etag_mismatch_and_avoid_duplicate_models_fetch
     )
     .await;
 
-    let mut builder = test_ody().with_model("gpt-5.2").with_config(|config| {
+    let mut builder = test_ody().with_model("kimi-k2.5").with_config(|config| {
         // Keep this test deterministic: no request retries, and a small stream retry budget.
         config.model_provider.request_max_retries = Some(0);
         config.model_provider.stream_max_retries = Some(1);

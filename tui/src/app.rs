@@ -143,8 +143,6 @@ use ody_features::Feature;
 use ody_features::FeaturesToml;
 use ody_model_provider::create_model_provider;
 use ody_model_provider_info::ModelProviderInfo;
-use ody_models_manager::model_presets::HIDE_GPT_5_1_ODY_MAX_MIGRATION_PROMPT_CONFIG;
-use ody_models_manager::model_presets::HIDE_GPT5_1_MIGRATION_PROMPT_CONFIG;
 use ody_otel::SessionTelemetry;
 use ody_otel::TelemetryAuthMode;
 use ody_protocol::ThreadId;

@@ -1,6 +1,5 @@
 ---
 source: tui/src/keymap_setup.rs
-assertion_line: 1093
 expression: snapshot
 ---
 tab: All (110 selectable)
@@ -23,6 +22,6 @@ Toggle Raw Output | alt-r | Global toggle_raw_output Toggle Raw Output Toggle ra
 Interrupt Turn | esc | Chat interrupt_turn Interrupt Turn Interrupt the active turn. esc Default
 Decrease Reasoning Effort | alt-,, shift-down | Chat decrease_reasoning_effort Decrease Reasoning Effort Decrease reasoning effort. alt-,, shift-down Default
 Increase Reasoning Effort | alt-., shift-up | Chat increase_reasoning_effort Increase Reasoning Effort Increase reasoning effort. alt-., shift-up Default
-Toggle History Cell Expansion | alt-o | Chat toggle_history_cell_expansion Toggle History Cell Expansion Expand or collapse the most recent collapsible history cell. alt-o Default
+Toggle History Cell Expansion | alt-o | Chat toggle_history_cell_expansion Toggle History Cell Expansion Expand or collapse the most recent batch of collapsible history cells. alt-o Default
 Open History Cell Overlay | alt-shift-o | Chat open_history_cell_overlay Open History Cell Overlay Open the most recent collapsible history cell in a full-screen overlay. alt-shift-o Default
 Edit Queued Message | alt-up, shift-left | Chat edit_queued_message Edit Queued Message Edit the most recently queued message. alt-up, shift-left Default

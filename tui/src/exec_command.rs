@@ -45,9 +45,23 @@ where
         return None;
     }
 
-    let home_dir = home_dir()?;
-    let rel = path.strip_prefix(&home_dir).ok()?;
-    Some(rel.to_path_buf())
+    let mut home_candidates: Vec<PathBuf> = Vec::new();
+    if let Some(home) = home_dir() {
+        home_candidates.push(home);
+    }
+    #[cfg(target_os = "windows")]
+    if let Some(userprofile) = std::env::var_os("USERPROFILE") {
+        home_candidates.push(PathBuf::from(userprofile));
+    }
+
+    let path = dunce::simplified(path);
+    for home in home_candidates {
+        let home = dunce::simplified(&home);
+        if let Ok(rel) = path.strip_prefix(home) {
+            return Some(rel.to_path_buf());
+        }
+    }
+    None
 }
 
 #[cfg(test)]

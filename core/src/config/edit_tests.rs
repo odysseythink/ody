@@ -21,14 +21,14 @@ fn blocking_set_model_top_level() {
     apply_blocking(
         ody_home,
         &[ConfigEdit::SetModel {
-            model: Some("gpt-5.4".to_string()),
+            model: Some("k3".to_string()),
             effort: Some(ReasoningEffort::High),
         }],
     )
     .expect("persist");
 
     let contents = std::fs::read_to_string(ody_home.join(CONFIG_TOML_FILE)).expect("read config");
-    let expected = r#"model = "gpt-5.4"
+    let expected = r#"model = "k3"
 model_reasoning_effort = "high"
 "#;
     assert_eq!(contents, expected);
@@ -427,7 +427,7 @@ fn blocking_set_model_writes_through_symlink_chain() {
     apply_blocking(
         ody_home,
         &[ConfigEdit::SetModel {
-            model: Some("gpt-5.4".to_string()),
+            model: Some("k3".to_string()),
             effort: Some(ReasoningEffort::High),
         }],
     )
@@ -437,7 +437,7 @@ fn blocking_set_model_writes_through_symlink_chain() {
     assert!(meta.file_type().is_symlink());
 
     let contents = std::fs::read_to_string(&target_path).expect("read target");
-    let expected = r#"model = "gpt-5.4"
+    let expected = r#"model = "k3"
 model_reasoning_effort = "high"
 "#;
     assert_eq!(contents, expected);
@@ -459,7 +459,7 @@ fn blocking_set_model_replaces_symlink_on_cycle() {
     apply_blocking(
         ody_home,
         &[ConfigEdit::SetModel {
-            model: Some("gpt-5.4".to_string()),
+            model: Some("k3".to_string()),
             effort: None,
         }],
     )
@@ -469,7 +469,7 @@ fn blocking_set_model_replaces_symlink_on_cycle() {
     assert!(!meta.file_type().is_symlink());
 
     let contents = std::fs::read_to_string(&config_path).expect("read config");
-    let expected = r#"model = "gpt-5.4"
+    let expected = r#"model = "k3"
 "#;
     assert_eq!(contents, expected);
 }
@@ -633,7 +633,7 @@ hide_full_access_warning = true
 }
 
 #[test]
-fn blocking_set_hide_gpt5_1_migration_prompt_preserves_table() {
+fn blocking_set_hide_model_migration_prompt_preserves_table() {
     let tmp = tempdir().expect("tmpdir");
     let ody_home = tmp.path();
     std::fs::write(
@@ -646,7 +646,7 @@ existing = "value"
     apply_blocking(
         ody_home,
         &[ConfigEdit::SetNoticeHideModelMigrationPrompt(
-            "hide_gpt5_1_migration_prompt".to_string(),
+            "hide_k3_migration_prompt".to_string(),
             true,
         )],
     )
@@ -655,13 +655,13 @@ existing = "value"
     let contents = std::fs::read_to_string(ody_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = r#"[notice]
 existing = "value"
-hide_gpt5_1_migration_prompt = true
+hide_k3_migration_prompt = true
 "#;
     assert_eq!(contents, expected);
 }
 
 #[test]
-fn blocking_set_hide_gpt_5_1_ody_max_migration_prompt_preserves_table() {
+fn blocking_set_hide_dashed_model_migration_prompt_preserves_table() {
     let tmp = tempdir().expect("tmpdir");
     let ody_home = tmp.path();
     std::fs::write(
@@ -674,7 +674,7 @@ existing = "value"
     apply_blocking(
         ody_home,
         &[ConfigEdit::SetNoticeHideModelMigrationPrompt(
-            "hide_gpt-5.1-ody-max_migration_prompt".to_string(),
+            "hide-deepseek-chat_migration_prompt".to_string(),
             true,
         )],
     )
@@ -683,7 +683,7 @@ existing = "value"
     let contents = std::fs::read_to_string(ody_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = r#"[notice]
 existing = "value"
-"hide_gpt-5.1-ody-max_migration_prompt" = true
+hide-deepseek-chat_migration_prompt = true
 "#;
     assert_eq!(contents, expected);
 }
@@ -702,8 +702,8 @@ existing = "value"
     apply_blocking(
         ody_home,
         &[ConfigEdit::RecordModelMigrationSeen {
-            from: "gpt-5.2".to_string(),
-            to: "gpt-5.4".to_string(),
+            from: "kimi-k2.5".to_string(),
+            to: "k3".to_string(),
         }],
     )
     .expect("persist");
@@ -713,7 +713,7 @@ existing = "value"
 existing = "value"
 
 [notice.model_migrations]
-"gpt-5.2" = "gpt-5.4"
+"kimi-k2.5" = "k3"
 "#;
     assert_eq!(contents, expected);
 }
@@ -1244,13 +1244,13 @@ async fn async_builder_set_model_persists() {
     let ody_home = tmp.path().to_path_buf();
 
     ConfigEditsBuilder::new(&ody_home)
-        .set_model(Some("gpt-5.4"), Some(ReasoningEffort::High))
+        .set_model(Some("k3"), Some(ReasoningEffort::High))
         .apply()
         .await
         .expect("persist");
 
     let contents = std::fs::read_to_string(ody_home.join(CONFIG_TOML_FILE)).expect("read config");
-    let expected = r#"model = "gpt-5.4"
+    let expected = r#"model = "k3"
 model_reasoning_effort = "high"
 "#;
     assert_eq!(contents, expected);
@@ -1272,11 +1272,11 @@ model_reasoning_effort = "low"
         std::fs::read_to_string(ody_home.join(CONFIG_TOML_FILE)).expect("read config");
     assert_eq!(contents, initial_expected);
 
-    let updated_expected = r#"model = "gpt-5.4"
+    let updated_expected = r#"model = "k3"
 model_reasoning_effort = "high"
 "#;
     ConfigEditsBuilder::new(ody_home)
-        .set_model(Some("gpt-5.4"), Some(ReasoningEffort::High))
+        .set_model(Some("k3"), Some(ReasoningEffort::High))
         .apply_blocking()
         .expect("persist update");
     contents = std::fs::read_to_string(ody_home.join(CONFIG_TOML_FILE)).expect("read config");

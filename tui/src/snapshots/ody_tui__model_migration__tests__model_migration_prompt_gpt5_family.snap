@@ -3,11 +3,11 @@ source: tui/src/model_migration.rs
 expression: terminal.backend()
 ---
 
-> Ody just got an upgrade. Introducing gpt-5.1.
+> Ody just got an upgrade. Introducing k3.
 
-  We recommend switching from gpt-5 to gpt-5.1.
+  We recommend switching from k3 to k3.
 
   Broad world knowledge with strong general reasoning. Learn more
-  about gpt-5.1 at https://www.ody.com/models/gpt-5.1
+  about k3 at https://www.ody.com/models/k3
 
   Press enter to continue

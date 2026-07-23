@@ -5452,7 +5452,7 @@ mod tests {
             "cwd": test_path_buf("/tmp"),
             "approval_policy": "never",
             "sandbox_policy": { "type": "danger-full-access" },
-            "model": "gpt-5",
+            "model": "k3",
             "summary": "auto",
         }))?;
 
@@ -5504,7 +5504,7 @@ mod tests {
                 "cwd": test_path_buf("/tmp"),
                 "approval_policy": "never",
                 "sandbox_policy": { "type": "danger-full-access" },
-                "model": "gpt-5",
+                "model": "k3",
                 "summary": "auto",
             });
             value["multi_agent_mode"] = serde_json::to_value(multi_agent_mode)?;
@@ -5545,7 +5545,7 @@ mod tests {
                     access: FileSystemAccessMode::Deny,
                 },
             ])),
-            model: "gpt-5".to_string(),
+            model: "k3".to_string(),
             comp_hash: None,
             personality: None,
             collaboration_mode: None,

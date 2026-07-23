@@ -156,17 +156,8 @@ pub(super) fn should_show_model_migration_prompt(
     false
 }
 
-pub(super) fn migration_prompt_hidden(config: &Config, migration_config_key: &str) -> bool {
-    match migration_config_key {
-        HIDE_GPT_5_1_ODY_MAX_MIGRATION_PROMPT_CONFIG => config
-            .notices
-            .hide_gpt_5_1_ody_max_migration_prompt
-            .unwrap_or(false),
-        HIDE_GPT5_1_MIGRATION_PROMPT_CONFIG => {
-            config.notices.hide_gpt5_1_migration_prompt.unwrap_or(false)
-        }
-        _ => false,
-    }
+pub(super) fn migration_prompt_hidden(_config: &Config, _migration_config_key: &str) -> bool {
+    false
 }
 
 pub(super) fn target_preset_for_upgrade<'a>(

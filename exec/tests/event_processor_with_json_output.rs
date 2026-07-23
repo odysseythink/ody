@@ -721,7 +721,7 @@ fn collab_spawn_begin_and_end_emit_item_events() {
                 sender_thread_id: "thread-parent".to_string(),
                 receiver_thread_ids: Vec::new(),
                 prompt: Some("draft a plan".to_string()),
-                model: Some("gpt-5".to_string()),
+                model: Some("kimi-k2.5".to_string()),
                 reasoning_effort: None,
                 agents_states: std::collections::HashMap::new(),
             },
@@ -738,7 +738,7 @@ fn collab_spawn_begin_and_end_emit_item_events() {
                 sender_thread_id: "thread-parent".to_string(),
                 receiver_thread_ids: vec!["thread-child".to_string()],
                 prompt: Some("draft a plan".to_string()),
-                model: Some("gpt-5".to_string()),
+                model: Some("kimi-k2.5".to_string()),
                 reasoning_effort: None,
                 agents_states: std::collections::HashMap::from([(
                     "thread-child".to_string(),
@@ -1648,8 +1648,8 @@ fn model_reroute_surfaces_as_error_item() {
         ody_app_server_protocol::ModelReroutedNotification {
             thread_id: "thread-1".to_string(),
             turn_id: "turn-1".to_string(),
-            from_model: "gpt-5".to_string(),
-            to_model: "gpt-5-mini".to_string(),
+            from_model: "kimi-k2.5".to_string(),
+            to_model: "glm-4.5".to_string(),
             reason: ody_app_server_protocol::ModelRerouteReason::HighRiskCyberActivity,
         },
     ));
@@ -1663,7 +1663,7 @@ fn model_reroute_surfaces_as_error_item() {
     assert_eq!(
         item.details,
         ThreadItemDetails::Error(ErrorItem {
-            message: "model rerouted: gpt-5 -> gpt-5-mini (HighRiskCyberActivity)".to_string(),
+            message: "model rerouted: kimi-k2.5 -> glm-4.5 (HighRiskCyberActivity)".to_string(),
         })
     );
 }

@@ -82,7 +82,7 @@ async fn apply_explorer_role_sets_model_and_adds_session_flags_layer() {
         .await
         .expect("explorer role should apply");
 
-    assert_eq!(config.model.as_deref(), Some("gpt-5.4-mini"));
+    assert_eq!(config.model.as_deref(), Some("glm-4.5"));
     assert_eq!(config.model_reasoning_effort, Some(ReasoningEffort::Medium));
     assert_eq!(session_flags_layer_count(&config), before_layers + 1);
 }
@@ -134,7 +134,7 @@ async fn apply_explorer_role_preserves_current_model_and_reasoning_effort() {
     let (_home, mut config) = test_config_with_cli_overrides(vec![
         (
             "model".to_string(),
-            TomlValue::String("gpt-5.4-mini".to_string()),
+            TomlValue::String("glm-4.5".to_string()),
         ),
         (
             "model_reasoning_effort".to_string(),
@@ -147,7 +147,7 @@ async fn apply_explorer_role_preserves_current_model_and_reasoning_effort() {
         .await
         .expect("explorer role should apply");
 
-    assert_eq!(config.model.as_deref(), Some("gpt-5.4-mini"));
+    assert_eq!(config.model.as_deref(), Some("glm-4.5"));
     assert_eq!(config.model_reasoning_effort, Some(ReasoningEffort::High));
 }
 
@@ -592,7 +592,7 @@ fn spawn_tool_spec_marks_role_locked_model_and_reasoning_effort() {
     let role_path = tempdir.path().join("researcher.toml");
     fs::write(
             &role_path,
-            "developer_instructions = \"Research carefully\"\nmodel = \"gpt-5\"\nmodel_reasoning_effort = \"high\"\n",
+            "developer_instructions = \"Research carefully\"\nmodel = \"kimi-k2.5\"\nmodel_reasoning_effort = \"high\"\n",
         )
         .expect("write role config");
     let user_defined_roles = BTreeMap::from([(
@@ -607,7 +607,7 @@ fn spawn_tool_spec_marks_role_locked_model_and_reasoning_effort() {
     let spec = spawn_tool_spec::build(&user_defined_roles);
 
     assert!(spec.contains(
-            "Research carefully.\n- This role's model is set to `gpt-5` and its reasoning effort is set to `high`. These settings cannot be changed."
+            "Research carefully.\n- This role's model is set to `kimi-k2.5` and its reasoning effort is set to `high`. These settings cannot be changed."
         ));
 }
 

@@ -304,7 +304,7 @@ async fn memories_startup_phase1_uses_live_thread_service_tier_and_detached_meta
     let request_context = context
         .stage_one_request_context(
             &test.config,
-            test.config.model.as_deref().unwrap_or("gpt-5.4-mini"),
+            test.config.model.as_deref().unwrap_or("glm-4.5"),
             ReasoningEffort::Low,
         )
         .await;

@@ -32,7 +32,7 @@ fn collab_mode(mode: ModeKind, instructions: Option<&str>) -> CollaborationMode 
     CollaborationMode {
         mode,
         settings: Settings {
-            model: "gpt-5.4".to_string(),
+            model: "k3".to_string(),
             reasoning_effort: None,
             developer_instructions: instructions.map(str::to_string),
             design_audit_level: None,
@@ -169,7 +169,7 @@ async fn design_mode_renders_split_threshold_from_plan_config() -> Result<()> {
                 collaboration_mode: Some(CollaborationMode {
                     mode: ModeKind::Design,
                     settings: Settings {
-                        model: "gpt-5.4".to_string(),
+                        model: "k3".to_string(),
                         reasoning_effort: None,
                         developer_instructions: Some(
                             "Split designs larger than {{ split_threshold }} subsystems."
@@ -390,7 +390,7 @@ async fn design_mode_injects_selected_audit_level() -> Result<()> {
                 collaboration_mode: Some(CollaborationMode {
                     mode: ModeKind::Design,
                     settings: Settings {
-                        model: "gpt-5.4".to_string(),
+                        model: "k3".to_string(),
                         reasoning_effort: None,
                         developer_instructions: None,
                         design_audit_level: Some(DesignAuditLevel::Standard),

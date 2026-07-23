@@ -740,7 +740,7 @@ async fn queued_restore_with_remote_images_keeps_local_placeholder_mapping() {
 
 #[tokio::test]
 async fn interrupted_turn_restore_keeps_active_mode_for_resubmission() {
-    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual(Some("kimi-k2.5")).await;
     chat.thread_id = Some(ThreadId::new());
     chat.set_feature_enabled(Feature::CollaborationModes, /*enabled*/ true);
 
@@ -775,7 +775,6 @@ async fn interrupted_turn_restore_keeps_active_mode_for_resubmission() {
     match next_submit_op(&mut op_rx) {
         Op::UserTurn {
             collaboration_mode: Some(CollaborationMode { mode, .. }),
-            personality: None,
             ..
         } => assert_eq!(mode, expected_mode),
         other => {

@@ -109,8 +109,8 @@ fn otel_export_routing_policy_routes_user_prompt_log_and_trace_events() {
         tracing::callsite::rebuild_interest_cache();
         let manager = SessionTelemetry::new(
             ThreadId::new(),
-            "gpt-5.1",
-            "gpt-5.1",
+            "kimi-k2.5",
+            "kimi-k2.5",
             Some(TelemetryAuthMode::ApiKey),
             "ody_exec".to_string(),
             /*log_user_prompts*/ true,
@@ -215,8 +215,8 @@ fn otel_export_routing_policy_routes_tool_result_log_and_trace_events() {
         tracing::callsite::rebuild_interest_cache();
         let manager = SessionTelemetry::new(
             ThreadId::new(),
-            "gpt-5.1",
-            "gpt-5.1",
+            "kimi-k2.5",
+            "kimi-k2.5",
             Some(TelemetryAuthMode::ApiKey),
             "ody_exec".to_string(),
             /*log_user_prompts*/ true,
@@ -324,8 +324,8 @@ fn otel_export_routing_policy_routes_auth_recovery_log_and_trace_events() {
         tracing::callsite::rebuild_interest_cache();
         let manager = SessionTelemetry::new(
             ThreadId::new(),
-            "gpt-5.1",
-            "gpt-5.1",
+            "kimi-k2.5",
+            "kimi-k2.5",
             Some(TelemetryAuthMode::ApiKey),
             "ody_exec".to_string(),
             /*log_user_prompts*/ true,
@@ -468,8 +468,8 @@ fn otel_export_routing_policy_routes_api_request_auth_observability() {
         tracing::callsite::rebuild_interest_cache();
         let manager = SessionTelemetry::new(
             ThreadId::new(),
-            "gpt-5.1",
-            "gpt-5.1",
+            "kimi-k2.5",
+            "kimi-k2.5",
             Some(TelemetryAuthMode::ApiKey),
             "ody_exec".to_string(),
             /*log_user_prompts*/ true,
@@ -642,8 +642,8 @@ fn otel_export_routing_policy_routes_websocket_connect_auth_observability() {
         tracing::callsite::rebuild_interest_cache();
         let manager = SessionTelemetry::new(
             ThreadId::new(),
-            "gpt-5.1",
-            "gpt-5.1",
+            "kimi-k2.5",
+            "kimi-k2.5",
             Some(TelemetryAuthMode::ApiKey),
             "ody_exec".to_string(),
             /*log_user_prompts*/ true,
@@ -756,8 +756,8 @@ fn otel_export_routing_policy_routes_websocket_request_transport_observability()
         tracing::callsite::rebuild_interest_cache();
         let manager = SessionTelemetry::new(
             ThreadId::new(),
-            "gpt-5.1",
-            "gpt-5.1",
+            "kimi-k2.5",
+            "kimi-k2.5",
             Some(TelemetryAuthMode::ApiKey),
             "ody_exec".to_string(),
             /*log_user_prompts*/ true,

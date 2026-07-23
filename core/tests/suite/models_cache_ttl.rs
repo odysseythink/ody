@@ -59,7 +59,7 @@ async fn renews_cache_ttl_on_matching_models_etag() -> Result<()> {
 
     let mut builder = test_ody();
     builder = builder.with_config(|config| {
-        config.model = Some("gpt-5.2".to_string());
+        config.model = Some("kimi-k2.5".to_string());
         config.model_provider.request_max_retries = Some(0);
         config.model_provider.stream_max_retries = Some(1);
     });

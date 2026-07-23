@@ -865,7 +865,7 @@ async fn config_batch_write_rejects_legacy_profile_tables() -> Result<()> {
         &tmp_dir,
         r#"
 [profiles."team.prod"]
-model = "gpt-5.3-spark"
+model = "glm-4.5"
 "#,
     )?;
 
@@ -878,7 +878,7 @@ model = "gpt-5.3-spark"
             edits: vec![
                 ConfigEdit {
                     key_path: "profiles.\"team.prod\".model".to_string(),
-                    value: json!("gpt-5.5"),
+                    value: json!("k3"),
                     merge_strategy: MergeStrategy::Replace,
                 },
                 ConfigEdit {
@@ -912,7 +912,7 @@ model = "gpt-5.3-spark"
         toml::from_str(&std::fs::read_to_string(ody_home.join("config.toml"))?)?;
     assert_eq!(
         config["profiles"]["team.prod"]["model"].as_str(),
-        Some("gpt-5.3-spark")
+        Some("glm-4.5")
     );
     assert_eq!(config.get("items"), None);
 

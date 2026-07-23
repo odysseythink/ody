@@ -809,11 +809,6 @@ pub struct Notice {
     pub fast_default_opt_out: Option<bool>,
     /// Tracks whether the user opted out of the rate limit model switch reminder.
     pub hide_rate_limit_model_nudge: Option<bool>,
-    /// Tracks whether the user has seen the model migration prompt
-    pub hide_gpt5_1_migration_prompt: Option<bool>,
-    /// Tracks whether the user has seen the gpt-5.1-ody-max migration prompt
-    #[serde(rename = "hide_gpt-5.1-ody-max_migration_prompt")]
-    pub hide_gpt_5_1_ody_max_migration_prompt: Option<bool>,
     /// Tracks acknowledged model migrations as old->new model slug mappings.
     #[serde(default)]
     pub model_migrations: BTreeMap<String, String>,

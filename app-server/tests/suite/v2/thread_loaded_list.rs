@@ -125,7 +125,7 @@ stream_max_retries = 0
 async fn start_thread(mcp: &mut TestAppServer) -> Result<String> {
     let req_id = mcp
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.2".to_string()),
+            model: Some("kimi-k2.5".to_string()),
             ..Default::default()
         })
         .await?;

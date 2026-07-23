@@ -396,7 +396,7 @@ async fn review_uses_custom_review_model_from_config() {
     // Choose a review model different from the main model; ensure it is used.
     let ody = new_conversation_for_server(&server, ody_home.clone(), |cfg| {
         cfg.model = Some("gpt-4.1".to_string());
-        cfg.review_model = Some("gpt-5.4".to_string());
+        cfg.review_model = Some("k3".to_string());
     })
     .await;
 
@@ -428,7 +428,7 @@ async fn review_uses_custom_review_model_from_config() {
     let request = request_log.single_request();
     assert_eq!(request.path(), "/v1/responses");
     let body = request.body_json();
-    assert_eq!(body["model"].as_str().unwrap(), "gpt-5.4");
+    assert_eq!(body["model"].as_str().unwrap(), "k3");
 
     let _ody_home_guard = ody_home;
     server.verify().await;

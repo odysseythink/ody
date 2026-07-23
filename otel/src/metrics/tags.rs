@@ -89,7 +89,7 @@ mod tests {
             session_source: "exec",
             originator: "ody_exec",
             service_name: None,
-            model: "gpt-5.1",
+            model: "k3",
             app_version: "1.2.3",
         }
         .into_tags()
@@ -100,7 +100,7 @@ mod tests {
             vec![
                 (SESSION_SOURCE_TAG, "exec"),
                 (ORIGINATOR_TAG, "ody_exec"),
-                (MODEL_TAG, "gpt-5.1"),
+                (MODEL_TAG, "k3"),
                 (APP_VERSION_TAG, "1.2.3"),
             ]
         );

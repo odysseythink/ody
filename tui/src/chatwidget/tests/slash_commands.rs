@@ -1,5 +1,4 @@
 use super::*;
-use crate::bottom_pane::slash_commands::ServiceTierCommand;
 use pretty_assertions::assert_eq;
 use serial_test::serial;
 
@@ -27,13 +26,6 @@ fn force_old_iterm2_pet_image_unsupported(chat: &mut ChatWidget) {
     ));
 }
 
-fn fast_tier_command() -> ServiceTierCommand {
-    ServiceTierCommand {
-        id: ServiceTier::Fast.request_value().to_string(),
-        name: "fast".to_string(),
-        description: "Fastest inference with increased plan usage".to_string(),
-    }
-}
 
 fn complete_turn_with_message(chat: &mut ChatWidget, turn_id: &str, message: Option<&str>) {
     if let Some(message) = message {
@@ -94,34 +86,6 @@ fn next_add_to_history_event(rx: &mut tokio::sync::mpsc::UnboundedReceiver<AppEv
     }
 }
 
-#[tokio::test]
-async fn service_tier_commands_lowercase_catalog_names() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
-    let mut preset = get_available_model(&chat, "gpt-5.4");
-    let expected_description = preset
-        .service_tiers
-        .iter()
-        .find(|tier| tier.id == ServiceTier::Fast.request_value())
-        .expect("fast tier")
-        .description
-        .clone();
-    preset
-        .service_tiers
-        .iter_mut()
-        .find(|tier| tier.id == ServiceTier::Fast.request_value())
-        .expect("fast tier")
-        .name = "Fast".to_string();
-    chat.model_catalog = std::sync::Arc::new(ModelCatalog::new(vec![preset]));
-
-    assert_eq!(
-        chat.current_model_service_tier_commands(),
-        vec![ServiceTierCommand {
-            id: ServiceTier::Fast.request_value().to_string(),
-            name: "fast".to_string(),
-            description: expected_description,
-        }]
-    );
-}
 
 #[tokio::test]
 async fn slash_compact_eagerly_queues_follow_up_before_turn_start() {
@@ -327,7 +291,7 @@ async fn assert_cancelled_queued_menu_drains_next_input(
     expected_popup_text: &str,
     cancel_key: KeyEvent,
 ) {
-    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5.2")).await;
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("kimi-k2.5")).await;
     chat.thread_id = Some(ThreadId::new());
     handle_turn_started(&mut chat, "turn-1");
 
@@ -384,9 +348,9 @@ async fn queued_slash_menu_cancel_drains_next_input() {
 
 #[tokio::test]
 async fn queued_settings_selection_applies_before_next_input() {
-    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5.3-ody")).await;
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("kimi-for-coding")).await;
     chat.thread_id = Some(ThreadId::new());
-    let mut preset = get_available_model(&chat, "gpt-5.4");
+    let mut preset = get_available_model(&chat, "k3");
     preset.supported_reasoning_efforts.truncate(1);
     let selected_effort = preset.supported_reasoning_efforts[0].effort.clone();
     chat.model_catalog = std::sync::Arc::new(ModelCatalog::new(vec![preset]));
@@ -424,7 +388,7 @@ async fn queued_settings_selection_applies_before_next_input() {
     match next_submit_op(&mut op_rx) {
         Op::UserTurn { model, effort, .. } => assert_eq!(
             (model, effort),
-            ("gpt-5.4".to_string(), Some(selected_effort))
+            ("k3".to_string(), Some(selected_effort))
         ),
         other => panic!("expected queued message with updated model, got {other:?}"),
     }
@@ -1188,7 +1152,7 @@ async fn slash_rename_without_existing_thread_name_starts_empty() {
 
 #[tokio::test]
 async fn usage_error_slash_command_is_available_from_local_recall() {
-    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.3-ody")).await;
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("kimi-for-coding")).await;
 
     submit_composer_text(&mut chat, "/raw maybe");
 
@@ -1666,7 +1630,7 @@ async fn queued_follow_up_suppresses_agent_turn_complete_notification() {
 
 #[tokio::test]
 async fn queued_menu_slash_keeps_agent_turn_complete_notification() {
-    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5.2")).await;
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual(Some("kimi-k2.5")).await;
     chat.thread_id = Some(ThreadId::new());
     handle_turn_started(&mut chat, "turn-1");
     queue_composer_text_with_tab(&mut chat, "/model");
@@ -2246,241 +2210,12 @@ async fn slash_rollout_handles_missing_path() {
     );
 }
 
-#[tokio::test]
-async fn fast_slash_command_updates_and_persists_local_service_tier() {
-    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
-    set_fast_mode_test_catalog(&mut chat);
-    chat.set_feature_enabled(Feature::FastMode, /*enabled*/ true);
-    chat.bottom_pane.set_task_running(/*running*/ true);
 
-    submit_composer_text(&mut chat, "/fast");
 
-    let events = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
-    assert!(
-        events.iter().any(|event| matches!(
-            event,
-            AppEvent::OdyOp(Op::OverrideTurnContext {
-                service_tier: Some(Some(service_tier)),
-                ..
-            }) if service_tier == ServiceTier::Fast.request_value()
-        )),
-        "expected fast-mode override app event; events: {events:?}"
-    );
-    assert!(
-        events.iter().any(|event| matches!(
-            event,
-            AppEvent::PersistServiceTierSelection {
-                service_tier: Some(service_tier),
-            }
-            if service_tier == ServiceTier::Fast.request_value()
-        )),
-        "expected fast-mode persistence app event; events: {events:?}"
-    );
 
-    assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
-}
 
-#[tokio::test]
-async fn fast_keybinding_toggle_uses_same_events_as_fast_slash_command() {
-    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
-    set_fast_mode_test_catalog(&mut chat);
-    chat.set_feature_enabled(Feature::FastMode, /*enabled*/ true);
 
-    chat.toggle_fast_mode_from_ui();
 
-    let events = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
-    assert!(
-        events.iter().any(|event| matches!(
-            event,
-            AppEvent::OdyOp(Op::OverrideTurnContext {
-                service_tier: Some(Some(service_tier)),
-                ..
-            }) if service_tier == ServiceTier::Fast.request_value()
-        )),
-        "expected fast-mode override app event; events: {events:?}"
-    );
-    assert!(
-        events.iter().any(|event| matches!(
-            event,
-            AppEvent::PersistServiceTierSelection {
-                service_tier: Some(service_tier),
-            }
-            if service_tier == ServiceTier::Fast.request_value()
-        )),
-        "expected fast-mode persistence app event; events: {events:?}"
-    );
-
-    assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
-}
-
-#[tokio::test]
-async fn fast_keybinding_toggle_requires_feature_and_idle_surface() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
-    set_fast_mode_test_catalog(&mut chat);
-    chat.set_feature_enabled(Feature::FastMode, /*enabled*/ false);
-
-    assert!(!chat.can_toggle_fast_mode_from_keybinding());
-
-    chat.set_feature_enabled(Feature::FastMode, /*enabled*/ true);
-    assert!(chat.can_toggle_fast_mode_from_keybinding());
-
-    chat.bottom_pane.set_task_running(/*running*/ true);
-    assert!(!chat.can_toggle_fast_mode_from_keybinding());
-}
-
-#[tokio::test]
-async fn user_turn_carries_service_tier_after_fast_toggle() {
-    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
-    chat.thread_id = Some(ThreadId::new());
-    set_api_key_auth(&mut chat);
-    set_fast_mode_test_catalog(&mut chat);
-    chat.set_feature_enabled(Feature::FastMode, /*enabled*/ true);
-
-    chat.handle_service_tier_command_dispatch(fast_tier_command());
-
-    let _events = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
-
-    chat.bottom_pane
-        .set_composer_text("hello".to_string(), Vec::new(), Vec::new());
-    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
-
-    match next_submit_op(&mut op_rx) {
-        Op::UserTurn {
-            service_tier: Some(Some(service_tier)),
-            ..
-        } if service_tier == ServiceTier::Fast.request_value() => {}
-        other => panic!("expected Op::UserTurn with fast service tier, got {other:?}"),
-    }
-}
-
-#[tokio::test]
-async fn model_switch_recomputes_catalog_default_service_tier() {
-    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5.3-ody")).await;
-    chat.thread_id = Some(ThreadId::new());
-    set_api_key_auth(&mut chat);
-    set_fast_mode_test_catalog(&mut chat);
-    chat.set_feature_enabled(Feature::FastMode, /*enabled*/ true);
-
-    let mut models = chat.model_catalog.try_list_models().expect("test catalog");
-    let default_model = models
-        .iter_mut()
-        .find(|model| model.model == "gpt-5.4")
-        .expect("gpt-5.4 test model");
-    default_model.default_service_tier = Some(ServiceTier::Fast.request_value().to_string());
-    chat.model_catalog = std::sync::Arc::new(ModelCatalog::new(models));
-    chat.refresh_effective_service_tier();
-
-    assert_eq!(chat.current_service_tier(), None);
-
-    chat.set_model("gpt-5.4");
-    assert_eq!(
-        chat.current_service_tier(),
-        Some(ServiceTier::Fast.request_value())
-    );
-
-    chat.set_model("gpt-5.3-ody");
-    assert_eq!(chat.current_service_tier(), None);
-
-    chat.bottom_pane
-        .set_composer_text("hello".to_string(), Vec::new(), Vec::new());
-    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
-
-    match next_submit_op(&mut op_rx) {
-        Op::UserTurn {
-            service_tier: Some(Some(service_tier)),
-            ..
-        } if service_tier == SERVICE_TIER_DEFAULT_REQUEST_VALUE => {}
-        other => panic!("expected Op::UserTurn with default service tier override, got {other:?}"),
-    }
-}
-
-#[tokio::test]
-async fn queued_fast_slash_applies_before_next_queued_message() {
-    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
-    chat.thread_id = Some(ThreadId::new());
-    set_api_key_auth(&mut chat);
-    set_fast_mode_test_catalog(&mut chat);
-    chat.set_feature_enabled(Feature::FastMode, /*enabled*/ true);
-    handle_turn_started(&mut chat, "turn-1");
-
-    queue_composer_text_with_tab(&mut chat, "/fast");
-    queue_composer_text_with_tab(&mut chat, "hello after fast");
-
-    complete_turn_with_message(&mut chat, "turn-1", Some("done"));
-
-    let events = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
-    assert!(
-        events.iter().any(|event| matches!(
-            event,
-            AppEvent::OdyOp(Op::OverrideTurnContext {
-                service_tier: Some(Some(service_tier)),
-                ..
-            }) if service_tier == ServiceTier::Fast.request_value()
-        )),
-        "expected queued /fast to update service tier before next turn; events: {events:?}"
-    );
-
-    match next_submit_op(&mut op_rx) {
-        Op::UserTurn {
-            items,
-            service_tier: Some(Some(service_tier)),
-            ..
-        } if service_tier == ServiceTier::Fast.request_value() => assert_eq!(
-            items,
-            vec![UserInput::Text {
-                text: "hello after fast".to_string(),
-                text_elements: Vec::new(),
-            }]
-        ),
-        other => panic!("expected queued message to submit with fast tier, got {other:?}"),
-    }
-}
-
-#[tokio::test]
-async fn user_turn_sends_standard_override_after_fast_is_turned_off() {
-    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
-    chat.thread_id = Some(ThreadId::new());
-    set_api_key_auth(&mut chat);
-    set_fast_mode_test_catalog(&mut chat);
-    chat.set_feature_enabled(Feature::FastMode, /*enabled*/ true);
-
-    chat.handle_service_tier_command_dispatch(fast_tier_command());
-    let _events = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
-
-    chat.handle_service_tier_command_dispatch(fast_tier_command());
-    let events = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
-    assert!(
-        events.iter().any(|event| matches!(
-            event,
-            AppEvent::OdyOp(Op::OverrideTurnContext {
-                service_tier: Some(Some(service_tier)),
-                ..
-            }) if service_tier == SERVICE_TIER_DEFAULT_REQUEST_VALUE
-        )),
-        "expected fast-mode off default service tier app event; events: {events:?}"
-    );
-    assert!(
-        events.iter().any(|event| matches!(
-            event,
-            AppEvent::PersistServiceTierSelection {
-                service_tier: Some(service_tier)
-            } if service_tier == SERVICE_TIER_DEFAULT_REQUEST_VALUE
-        )),
-        "expected default service tier persistence app event; events: {events:?}"
-    );
-
-    chat.bottom_pane
-        .set_composer_text("hello".to_string(), Vec::new(), Vec::new());
-    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
-
-    match next_submit_op(&mut op_rx) {
-        Op::UserTurn {
-            service_tier: Some(Some(service_tier)),
-            ..
-        } if service_tier == SERVICE_TIER_DEFAULT_REQUEST_VALUE => {}
-        other => panic!("expected Op::UserTurn with default service tier override, got {other:?}"),
-    }
-}
 
 #[tokio::test]
 async fn raw_slash_command_toggles_and_accepts_on_off_args() {
@@ -2568,7 +2303,7 @@ async fn compact_queues_user_messages_snapshot() {
 
 #[tokio::test]
 async fn slash_writing_plan_missing_file_shows_error() {
-    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(Some("kimi-k2.5")).await;
     chat.thread_id = Some(ThreadId::new());
     let plan_mask = collaboration_modes::plan_mask(chat.model_catalog.as_ref())
         .expect("expected plan collaboration mode");
@@ -2594,7 +2329,7 @@ async fn slash_writing_plan_missing_file_shows_error() {
 
 #[tokio::test]
 async fn slash_writing_plan_submits_source_without_guessing_an_output_path() {
-    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5")).await;
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("kimi-k2.5")).await;
     chat.thread_id = Some(ThreadId::new());
     let plan_mask = collaboration_modes::plan_mask(chat.model_catalog.as_ref())
         .expect("expected plan collaboration mode");

@@ -1533,7 +1533,7 @@ async fn stdio_image_responses_preserve_original_detail_metadata() -> anyhow::Re
     let rmcp_test_server_bin = remote_aware_stdio_server_bin()?;
 
     let fixture = test_ody()
-        .with_model("gpt-5.3-ody")
+        .with_model("kimi-for-coding")
         .with_config(move |config| {
             insert_mcp_server(
                 config,

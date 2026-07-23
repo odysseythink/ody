@@ -3249,8 +3249,8 @@ async fn snapshot_request_shape_remote_pre_turn_compaction_strips_incoming_model
 -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let previous_model = "gpt-5.4";
-    let next_model = "gpt-5.3-ody";
+    let previous_model = "k3";
+    let next_model = "kimi-for-coding";
     let harness =
         TestOdyHarness::with_builder(test_ody().with_model(previous_model).with_config(|config| {
             config.model_auto_compact_token_limit = Some(200);

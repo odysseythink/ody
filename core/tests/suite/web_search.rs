@@ -32,7 +32,7 @@ async fn web_search_mode_cached_sets_external_web_access_false() {
     ]);
     let resp_mock = responses::mount_sse_once(&server, sse).await;
 
-    let mut builder = test_ody().with_model("gpt-5.4").with_config(|config| {
+    let mut builder = test_ody().with_model("k3").with_config(|config| {
         config
             .web_search_mode
             .set(WebSearchMode::Cached)
@@ -70,7 +70,7 @@ async fn web_search_mode_takes_precedence_over_legacy_flags() {
     ]);
     let resp_mock = responses::mount_sse_once(&server, sse).await;
 
-    let mut builder = test_ody().with_model("gpt-5.4").with_config(|config| {
+    let mut builder = test_ody().with_model("k3").with_config(|config| {
         config
             .features
             .enable(Feature::WebSearchRequest)
@@ -112,7 +112,7 @@ async fn web_search_mode_defaults_to_cached_when_features_disabled() {
     ]);
     let resp_mock = responses::mount_sse_once(&server, sse).await;
 
-    let mut builder = test_ody().with_model("gpt-5.4").with_config(|config| {
+    let mut builder = test_ody().with_model("k3").with_config(|config| {
         config
             .web_search_mode
             .set(WebSearchMode::Cached)
@@ -167,7 +167,7 @@ async fn web_search_mode_updates_between_turns_with_permission_profile() {
     )
     .await;
 
-    let mut builder = test_ody().with_model("gpt-5.4").with_config(|config| {
+    let mut builder = test_ody().with_model("k3").with_config(|config| {
         config
             .web_search_mode
             .set(WebSearchMode::Cached)
@@ -241,7 +241,7 @@ location = { country = "US", city = "New York", timezone = "America/New_York" }
     )
     .expect("write config.toml");
 
-    let mut builder = test_ody().with_model("gpt-5.3-ody").with_home(home);
+    let mut builder = test_ody().with_model("kimi-for-coding").with_home(home);
     let test = builder
         .build(&server)
         .await
@@ -290,7 +290,7 @@ async fn indexed_web_search_mode_sets_index_gate() {
     std::fs::write(home.path().join("config.toml"), r#"web_search = "indexed""#)
         .expect("write config.toml");
 
-    let mut builder = test_ody().with_model("gpt-5.3-ody").with_home(home);
+    let mut builder = test_ody().with_model("kimi-for-coding").with_home(home);
     let test = builder
         .build(&server)
         .await

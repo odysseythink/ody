@@ -22,8 +22,8 @@ fn runtime_metrics_summary_collects_tool_api_and_streaming_metrics() -> Result<(
     )?;
     let manager = SessionTelemetry::new(
         ThreadId::new(),
-        "gpt-5.1",
-        "gpt-5.1",
+        "kimi-k2.5",
+        "kimi-k2.5",
         Some(TelemetryAuthMode::ApiKey),
         "test_originator".to_string(),
         /*log_user_prompts*/ true,

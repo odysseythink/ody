@@ -48,7 +48,7 @@ async fn tool_call_output_configured_limit_chars_type() -> Result<()> {
     let server = start_mock_server().await;
 
     // Use a model that exposes the shell_command tool.
-    let mut builder = test_ody().with_model("gpt-5.2").with_config(|config| {
+    let mut builder = test_ody().with_model("kimi-k2.5").with_config(|config| {
         config.tool_output_token_limit = Some(100_000);
     });
 
@@ -127,7 +127,7 @@ async fn tool_call_output_exceeds_limit_truncated_chars_limit() -> Result<()> {
     let server = start_mock_server().await;
 
     // Use a model that exposes the shell_command tool.
-    let mut builder = test_ody().with_model("gpt-5.2");
+    let mut builder = test_ody().with_model("kimi-k2.5");
 
     let fixture = builder.build(&server).await?;
 
@@ -204,7 +204,7 @@ async fn tool_call_output_exceeds_limit_truncated_for_model() -> Result<()> {
     let server = start_mock_server().await;
 
     // Use a model that exposes the shell_command tool.
-    let mut builder = test_ody().with_model("gpt-5.4");
+    let mut builder = test_ody().with_model("k3");
     let fixture = builder.build(&server).await?;
 
     let call_id = "shell-too-large";
@@ -283,7 +283,7 @@ async fn tool_call_output_truncated_only_once() -> Result<()> {
 
     let server = start_mock_server().await;
 
-    let mut builder = test_ody().with_model("gpt-5.4");
+    let mut builder = test_ody().with_model("k3");
     let fixture = builder.build(&server).await?;
     let call_id = "shell-single-truncation";
     let command = if cfg!(windows) {
@@ -574,7 +574,7 @@ async fn token_policy_marker_reports_tokens() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
-    let mut builder = test_ody().with_model("gpt-5.4").with_config(|config| {
+    let mut builder = test_ody().with_model("k3").with_config(|config| {
         config.tool_output_token_limit = Some(50); // small budget to force truncation
     });
     let fixture = builder.build(&server).await?;
@@ -625,7 +625,7 @@ async fn byte_policy_marker_reports_bytes() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
-    let mut builder = test_ody().with_model("gpt-5.2").with_config(|config| {
+    let mut builder = test_ody().with_model("kimi-k2.5").with_config(|config| {
         config.tool_output_token_limit = Some(50); // ~200 byte cap
     });
     let fixture = builder.build(&server).await?;
@@ -676,7 +676,7 @@ async fn shell_command_output_not_truncated_with_custom_limit() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
-    let mut builder = test_ody().with_model("gpt-5.4").with_config(|config| {
+    let mut builder = test_ody().with_model("k3").with_config(|config| {
         config.tool_output_token_limit = Some(50_000); // ample budget
     });
     let fixture = builder.build(&server).await?;

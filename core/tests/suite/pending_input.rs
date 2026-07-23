@@ -119,7 +119,7 @@ fn response_completed_chunks(response_id: &str) -> Vec<StreamingSseChunk> {
 
 async fn build_ody(server: &StreamingSseServer) -> Arc<OdyThread> {
     test_ody()
-        .with_model("gpt-5.4")
+        .with_model("k3")
         .build_with_streaming_server(server)
         .await
         .expect("build streaming Ody test session")
@@ -300,7 +300,7 @@ async fn steer_interrupts_wait_agent_and_is_sent_in_follow_up_request() {
     let (server, _completions) =
         start_streaming_sse_server(vec![first_chunks, response_completed_chunks("resp-2")]).await;
     let ody = test_ody()
-        .with_model("gpt-5.4")
+        .with_model("k3")
         .with_config(|config| {
             config
                 .features
@@ -378,7 +378,7 @@ async fn any_new_input_interrupts_sleep() {
     ])
     .await;
     let ody = test_ody()
-        .with_model("gpt-5.4")
+        .with_model("k3")
         .with_config(|config| {
             config
                 .features
@@ -523,7 +523,7 @@ async fn injected_user_input_triggers_follow_up_request_with_deltas() {
         start_streaming_sse_server(vec![first_chunks, second_chunks]).await;
 
     let ody = test_ody()
-        .with_model("gpt-5.4")
+        .with_model("k3")
         .build_with_streaming_server(&server)
         .await
         .unwrap()
@@ -791,7 +791,7 @@ async fn steered_user_input_waits_for_model_continuation_after_mid_turn_compact(
     .await;
 
     let ody = test_ody()
-        .with_model("gpt-5.4")
+        .with_model("k3")
         .with_config(|config| {
             config.model_provider.name = "OpenAI (test)".to_string();
             config.model_provider.supports_websockets = false;
@@ -876,7 +876,7 @@ async fn steered_user_input_follows_compact_when_only_the_steer_needs_follow_up(
             .await;
 
     let ody = test_ody()
-        .with_model("gpt-5.4")
+        .with_model("k3")
         .with_config(|config| {
             config.model_provider.name = "OpenAI (test)".to_string();
             config.model_provider.supports_websockets = false;
@@ -993,7 +993,7 @@ async fn steered_user_input_waits_when_tool_output_triggers_compact_before_next_
     .await;
 
     let test = test_ody()
-        .with_model("gpt-5.4")
+        .with_model("k3")
         .with_config(|config| {
             config.model_provider.name = "OpenAI (test)".to_string();
             config.model_provider.supports_websockets = false;

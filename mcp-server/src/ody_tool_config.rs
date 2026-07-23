@@ -26,7 +26,7 @@ pub struct OdyToolCallParam {
     /// The *initial user prompt* to start the Ody conversation.
     pub prompt: String,
 
-    /// Optional override for the model name (e.g. 'gpt-5.2', 'gpt-5.2-ody').
+    /// Optional override for the model name (e.g. 'glm-4.5', 'k3-ody').
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
 
@@ -331,7 +331,7 @@ mod tests {
                 "type": "string"
               },
               "model": {
-                "description": "Optional override for the model name (e.g. 'gpt-5.2', 'gpt-5.2-ody').",
+                "description": "Optional override for the model name (e.g. 'glm-4.5', 'k3-ody').",
                 "type": "string"
               },
               "prompt": {

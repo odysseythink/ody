@@ -3443,7 +3443,7 @@ mod tests {
                 new_agent_nickname: Some("Scout".into()),
                 new_agent_role: Some("explorer".into()),
                 prompt: "inspect the repo".into(),
-                model: "gpt-5.4-mini".into(),
+                model: "glm-4.5".into(),
                 reasoning_effort: ody_protocol::model_metadata::ReasoningEffort::Medium,
                 status: AgentStatus::Running,
             }),
@@ -3465,7 +3465,7 @@ mod tests {
                 sender_thread_id: "00000000-0000-0000-0000-000000000001".into(),
                 receiver_thread_ids: vec!["00000000-0000-0000-0000-000000000002".into()],
                 prompt: Some("inspect the repo".into()),
-                model: Some("gpt-5.4-mini".into()),
+                model: Some("glm-4.5".into()),
                 reasoning_effort: Some(ody_protocol::model_metadata::ReasoningEffort::Medium),
                 agents_states: [(
                     "00000000-0000-0000-0000-000000000002".into(),

@@ -71,8 +71,8 @@ fn manager_snapshot_metrics_collects_without_shutdown() -> Result<()> {
     let metrics = MetricsClient::new(config)?;
     let manager = SessionTelemetry::new(
         ThreadId::new(),
-        "gpt-5.1",
-        "gpt-5.1",
+        "kimi-k2.5",
+        "kimi-k2.5",
         Some(TelemetryAuthMode::ApiKey),
         "test_originator".to_string(),
         /*log_user_prompts*/ true,
@@ -110,7 +110,7 @@ fn manager_snapshot_metrics_collects_without_shutdown() -> Result<()> {
             "auth_mode".to_string(),
             TelemetryAuthMode::ApiKey.to_string(),
         ),
-        ("model".to_string(), "gpt-5.1".to_string()),
+        ("model".to_string(), "kimi-k2.5".to_string()),
         ("originator".to_string(), "test_originator".to_string()),
         ("service".to_string(), "ody-cli".to_string()),
         ("session_source".to_string(), "cli".to_string()),

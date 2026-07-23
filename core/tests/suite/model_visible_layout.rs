@@ -100,7 +100,7 @@ async fn snapshot_model_visible_layout_turn_overrides() -> Result<()> {
     )
     .await;
 
-    let mut builder = test_ody().with_model("gpt-5.3-ody").with_config(|config| {
+    let mut builder = test_ody().with_model("kimi-for-coding").with_config(|config| {
         config
             .features
             .enable(Feature::Personality)
@@ -224,7 +224,7 @@ async fn snapshot_model_visible_layout_cwd_change_does_not_refresh_agents() -> R
     )
     .await;
 
-    let mut builder = test_ody().with_model("gpt-5.3-ody");
+    let mut builder = test_ody().with_model("kimi-for-coding");
     let test = builder.build(&server).await?;
     let cwd_one = test.cwd_path().join("agents_one");
     let cwd_two = test.cwd_path().join("agents_two");
@@ -341,7 +341,7 @@ async fn snapshot_model_visible_layout_resume_with_personality_change() -> Resul
 
     let server = start_mock_server().await;
     let mut initial_builder = test_ody().with_config(|config| {
-        config.model = Some("gpt-5.2".to_string());
+        config.model = Some("kimi-k2.5".to_string());
     });
     let initial = initial_builder.build(&server).await?;
     let ody = Arc::clone(&initial.ody);
@@ -386,7 +386,7 @@ async fn snapshot_model_visible_layout_resume_with_personality_change() -> Resul
     .await;
 
     let mut resume_builder = test_ody().with_config(|config| {
-        config.model = Some("gpt-5.3-ody".to_string());
+        config.model = Some("kimi-for-coding".to_string());
         config
             .features
             .enable(Feature::Personality)
@@ -456,7 +456,7 @@ async fn snapshot_model_visible_layout_resume_override_matches_rollout_model() -
 
     let server = start_mock_server().await;
     let mut initial_builder = test_ody().with_config(|config| {
-        config.model = Some("gpt-5.2".to_string());
+        config.model = Some("kimi-k2.5".to_string());
     });
     let initial = initial_builder.build(&server).await?;
     let ody = Arc::clone(&initial.ody);
@@ -501,7 +501,7 @@ async fn snapshot_model_visible_layout_resume_override_matches_rollout_model() -
     .await;
 
     let mut resume_builder = test_ody().with_config(|config| {
-        config.model = Some("gpt-5.3-ody".to_string());
+        config.model = Some("kimi-for-coding".to_string());
     });
     let resumed = resume_builder.resume(&server, home, rollout_path).await?;
     let resume_override_cwd = resumed.cwd_path().join(PRETURN_CONTEXT_DIFF_CWD);
@@ -511,7 +511,7 @@ async fn snapshot_model_visible_layout_resume_override_matches_rollout_model() -
         &resumed.ody,
         ody_protocol::protocol::ThreadSettingsOverrides {
             environments: Some(local_selections(resume_override_cwd)),
-            model: Some("gpt-5.2".to_string()),
+            model: Some("kimi-k2.5".to_string()),
             ..Default::default()
         },
     )

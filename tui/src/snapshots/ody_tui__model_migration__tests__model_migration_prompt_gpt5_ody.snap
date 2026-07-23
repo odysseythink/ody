@@ -3,12 +3,11 @@ source: tui/src/model_migration.rs
 expression: terminal.backend()
 ---
 
-> Ody just got an upgrade. Introducing gpt-5.1-ody-max.
+> Ody just got an upgrade. Introducing k3-ody.
 
-  We recommend switching from gpt-5-ody to gpt-5.1-ody-max.
+  We recommend switching from k3-ody to k3-ody.
 
   Ody-optimized flagship for deep and fast reasoning. Learn
-  more about gpt-5.1-ody-max at
-  https://www.ody.com/models/gpt-5.1-ody-max
+  more about k3-ody at https://www.ody.com/models/k3-ody
 
   Press enter to continue

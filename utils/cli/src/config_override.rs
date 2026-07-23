@@ -200,17 +200,17 @@ mod tests {
     #[test]
     fn prepends_root_overrides() {
         let mut subcommand_overrides = CliConfigOverrides {
-            raw_overrides: vec![r#"model="gpt-5.2""#.to_string()],
+            raw_overrides: vec![r#"model="glm-4.5""#.to_string()],
         };
         subcommand_overrides.prepend_root_overrides(CliConfigOverrides {
-            raw_overrides: vec![r#"model="gpt-5.1""#.to_string()],
+            raw_overrides: vec![r#"model="k3""#.to_string()],
         });
 
         assert_eq!(
             subcommand_overrides.raw_overrides,
             vec![
-                r#"model="gpt-5.1""#.to_string(),
-                r#"model="gpt-5.2""#.to_string(),
+                r#"model="k3""#.to_string(),
+                r#"model="glm-4.5""#.to_string(),
             ]
         );
     }

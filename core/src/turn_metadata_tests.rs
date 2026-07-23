@@ -26,7 +26,7 @@ use tokio::process::Command;
 
 fn test_mcp_turn_metadata_context() -> McpTurnMetadataContext<'static> {
     McpTurnMetadataContext {
-        model: "gpt-5.4",
+        model: "k3",
         reasoning_effort: Some(ReasoningEffortConfig::High),
     }
 }
@@ -433,18 +433,18 @@ fn turn_metadata_state_includes_model_and_reasoning_effort_only_in_request_meta(
         .current_meta_value_for_mcp_request(test_mcp_turn_metadata_context())
         .expect("turn metadata should be present");
     assert!(meta.get("request_kind").is_none());
-    assert_eq!(meta["model"].as_str(), Some("gpt-5.4"));
+    assert_eq!(meta["model"].as_str(), Some("k3"));
     assert_eq!(meta["reasoning_effort"].as_str(), Some("high"));
 
     let meta_without_reasoning_effort = state
         .current_meta_value_for_mcp_request(McpTurnMetadataContext {
-            model: "gpt-5.4",
+            model: "k3",
             reasoning_effort: None,
         })
         .expect("turn metadata should be present");
     assert_eq!(
         meta_without_reasoning_effort["model"].as_str(),
-        Some("gpt-5.4")
+        Some("k3")
     );
     assert!(
         meta_without_reasoning_effort
@@ -677,7 +677,7 @@ fn turn_metadata_state_merges_client_metadata_without_replacing_reserved_fields(
     let meta = state
         .current_meta_value_for_mcp_request(test_mcp_turn_metadata_context())
         .expect("turn metadata should be present");
-    assert_eq!(meta["model"].as_str(), Some("gpt-5.4"));
+    assert_eq!(meta["model"].as_str(), Some("k3"));
     assert_eq!(meta["reasoning_effort"].as_str(), Some("high"));
     assert!(meta.get(WINDOW_ID_KEY).is_none());
     assert_eq!(state.workspace_kind().as_deref(), Some("projectless"));

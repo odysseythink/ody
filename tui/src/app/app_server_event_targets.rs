@@ -218,7 +218,7 @@ mod tests {
                 network_access: false,
             },
             active_permission_profile: None,
-            model: "gpt-5.4".to_string(),
+            model: "k3".to_string(),
             model_provider: "kimi".to_string(),
             service_tier: None,
             effort: Some(ReasoningEffort::High),
@@ -226,7 +226,7 @@ mod tests {
             collaboration_mode: CollaborationMode {
                 mode: ModeKind::Default,
                 settings: Settings {
-                    model: "gpt-5.4".to_string(),
+                    model: "k3".to_string(),
                     reasoning_effort: Some(ReasoningEffort::High),
                     developer_instructions: None,
                     design_audit_level: None,

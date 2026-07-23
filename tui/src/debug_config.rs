@@ -997,7 +997,7 @@ mod tests {
     fn debug_config_output_lists_session_flag_key_value_pairs() {
         let session_flags = toml::from_str::<TomlValue>(
             r#"
-model = "gpt-5"
+model = "k3"
 [sandbox_workspace_write]
 network_access = true
 writable_roots = ["/tmp"]
@@ -1017,7 +1017,7 @@ writable_roots = ["/tmp"]
 
         let rendered = render_stack_to_text(&stack);
         assert!(rendered.contains("session-flags (enabled)"));
-        assert!(rendered.contains("     - model = \"gpt-5\""));
+        assert!(rendered.contains("     - model = \"k3\""));
         assert!(rendered.contains("     - sandbox_workspace_write.network_access = true"));
         assert!(rendered.contains("sandbox_workspace_write.writable_roots"));
         assert!(rendered.contains("/tmp"));

@@ -795,7 +795,7 @@ async fn record_responses_sets_span_fields_for_response_events() {
     .await;
 
     let TestOdy { ody, .. } = test_ody()
-        .with_model("gpt-5.4")
+        .with_model("k3")
         .with_config(|config| {
             config.model_reasoning_effort = Some(ReasoningEffort::High);
             config
@@ -1155,8 +1155,8 @@ fn sandbox_outcome_assertion<'a>(
 fn sandbox_outcome_event_records_outcome() {
     let telemetry = SessionTelemetry::new(
         ThreadId::new(),
-        "gpt-5.5",
-        "gpt-5.5",
+        "k3",
+        "k3",
         Some(TelemetryAuthMode::ApiKey),
         "Ody_Desktop".to_string(),
         /*log_user_prompts*/ false,

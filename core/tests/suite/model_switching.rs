@@ -155,9 +155,9 @@ async fn model_change_appends_model_instructions_developer_message() -> Result<(
     )
     .await;
 
-    let mut builder = test_ody().with_model("gpt-5.3-ody");
+    let mut builder = test_ody().with_model("kimi-for-coding");
     let test = builder.build(&server).await?;
-    let next_model = "gpt-5.4";
+    let next_model = "k3";
 
     test.ody
         .submit(read_only_user_turn(
@@ -220,7 +220,7 @@ async fn model_and_personality_change_only_appends_model_instructions() -> Resul
     )
     .await;
 
-    let mut builder = test_ody().with_model("gpt-5.3-ody").with_config(|config| {
+    let mut builder = test_ody().with_model("kimi-for-coding").with_config(|config| {
         config
             .features
             .enable(Feature::Personality)

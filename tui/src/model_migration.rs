@@ -430,15 +430,15 @@ mod tests {
         let screen = ModelMigrationScreen::new(
             FrameRequester::test_dummy(),
             migration_copy_for_models(
-                "gpt-5.1-ody-mini",
-                "gpt-5.1-ody-max",
+                "glm-4.5",
+                "k3-ody",
                 /*model_link*/ None,
                 Some(
-                    "Upgrade to gpt-5.2-ody for the latest and greatest agentic coding model."
+                    "Upgrade to k3-ody for the latest and greatest agentic coding model."
                         .to_string(),
                 ),
                 /*migration_markdown*/ None,
-                "gpt-5.1-ody-max".to_string(),
+                "k3-ody".to_string(),
                 Some("Ody-optimized flagship for deep and fast reasoning.".to_string()),
                 /*can_opt_out*/ true,
             ),
@@ -462,12 +462,12 @@ mod tests {
         let screen = ModelMigrationScreen::new(
             FrameRequester::test_dummy(),
             migration_copy_for_models(
-                "gpt-5",
-                "gpt-5.1",
-                Some("https://www.ody.com/models/gpt-5.1".to_string()),
+                "k3",
+                "k3",
+                Some("https://www.ody.com/models/k3".to_string()),
                 /*migration_copy*/ None,
                 /*migration_markdown*/ None,
-                "gpt-5.1".to_string(),
+                "k3".to_string(),
                 Some("Broad world knowledge with strong general reasoning.".to_string()),
                 /*can_opt_out*/ false,
             ),
@@ -489,12 +489,12 @@ mod tests {
         let screen = ModelMigrationScreen::new(
             FrameRequester::test_dummy(),
             migration_copy_for_models(
-                "gpt-5-ody",
-                "gpt-5.1-ody-max",
-                Some("https://www.ody.com/models/gpt-5.1-ody-max".to_string()),
+                "k3-ody",
+                "k3-ody",
+                Some("https://www.ody.com/models/k3-ody".to_string()),
                 /*migration_copy*/ None,
                 /*migration_markdown*/ None,
-                "gpt-5.1-ody-max".to_string(),
+                "k3-ody".to_string(),
                 Some("Ody-optimized flagship for deep and fast reasoning.".to_string()),
                 /*can_opt_out*/ false,
             ),
@@ -516,12 +516,12 @@ mod tests {
         let screen = ModelMigrationScreen::new(
             FrameRequester::test_dummy(),
             migration_copy_for_models(
-                "gpt-5-ody-mini",
-                "gpt-5.1-ody-mini",
-                Some("https://www.ody.com/models/gpt-5.1-ody-mini".to_string()),
+                "glm-4.5",
+                "glm-4.5",
+                Some("https://www.ody.com/models/glm-4.5".to_string()),
                 /*migration_copy*/ None,
                 /*migration_markdown*/ None,
-                "gpt-5.1-ody-mini".to_string(),
+                "glm-4.5".to_string(),
                 Some("Optimized for ody. Cheaper, faster, but less capable.".to_string()),
                 /*can_opt_out*/ false,
             ),

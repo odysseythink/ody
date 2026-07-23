@@ -297,7 +297,7 @@ async fn spawn_agent_fork_context_rejects_child_model_overrides() {
             "spawn_agent",
             function_payload(json!({
                 "message": "inspect this repo",
-                "model": "gpt-5-child-override",
+                "model": "k3-child-override",
                 "reasoning_effort": "low",
                 "fork_context": true
             })),
@@ -385,7 +385,7 @@ async fn multi_agent_v2_spawn_defaults_to_full_fork_and_rejects_child_model_over
             function_payload(json!({
                 "message": "inspect this repo",
                 "task_name": "fork_context_v2",
-                "model": "gpt-5-child-override",
+                "model": "k3-child-override",
                 "reasoning_effort": "low"
             })),
         ))
@@ -425,7 +425,7 @@ async fn spawn_agent_service_tier_override_validates_the_effective_child_model()
                 "spawn_agent",
                 function_payload(json!({
                     "message": "inspect this repo",
-                    "model": "gpt-5.4",
+                    "model": "k3",
                     "service_tier": ServiceTier::Fast.request_value()
                 })),
             ))
@@ -456,7 +456,7 @@ async fn spawn_agent_service_tier_override_validates_the_effective_child_model()
                 "spawn_agent",
                 function_payload(json!({
                     "message": "inspect this repo",
-                    "model": "gpt-5.4",
+                    "model": "k3",
                     "service_tier": "turbo"
                 })),
             ))
@@ -467,7 +467,7 @@ async fn spawn_agent_service_tier_override_validates_the_effective_child_model()
         assert_eq!(
             err,
             FunctionCallError::RespondToModel(
-                "Service tier `turbo` is not supported for model `gpt-5.4`. Supported service tiers: priority"
+                "Service tier `turbo` is not supported for model `k3`. Supported service tiers: priority"
                     .to_string()
             )
         );
@@ -482,7 +482,7 @@ async fn spawn_agent_service_tier_override_validates_the_effective_child_model()
                 "spawn_agent",
                 function_payload(json!({
                     "message": "inspect this repo",
-                    "model": "gpt-5.3-ody",
+                    "model": "kimi-for-coding",
                     "service_tier": ServiceTier::Fast.request_value()
                 })),
             ))
@@ -493,7 +493,7 @@ async fn spawn_agent_service_tier_override_validates_the_effective_child_model()
         assert_eq!(
             err,
             FunctionCallError::RespondToModel(
-                "Service tier `priority` is not supported for model `gpt-5.3-ody`. Supported service tiers: none"
+                "Service tier `priority` is not supported for model `kimi-for-coding`. Supported service tiers: none"
                     .to_string()
             )
         );
@@ -510,7 +510,7 @@ async fn spawn_agent_service_tier_inheritance_preserves_supported_or_configured_
     {
         let (mut session, turn) = make_session_and_context().await;
         let mut turn = turn
-            .with_model("gpt-5.4".to_string(), &session.services.models_manager)
+            .with_model("k3".to_string(), &session.services.models_manager)
             .await;
         let mut config = (*turn.config).clone();
         config.service_tier = Some(ServiceTier::Fast.request_value().to_string());
@@ -551,7 +551,7 @@ async fn spawn_agent_service_tier_inheritance_preserves_supported_or_configured_
     {
         let (mut session, turn) = make_session_and_context().await;
         let mut turn = turn
-            .with_model("gpt-5.4".to_string(), &session.services.models_manager)
+            .with_model("k3".to_string(), &session.services.models_manager)
             .await;
         let mut config = (*turn.config).clone();
         config.service_tier = Some(ServiceTier::Fast.request_value().to_string());
@@ -571,7 +571,7 @@ async fn spawn_agent_service_tier_inheritance_preserves_supported_or_configured_
                 "spawn_agent",
                 function_payload(json!({
                     "message": "inspect this repo",
-                    "model": "gpt-5.3-ody"
+                    "model": "kimi-for-coding"
                 })),
             ))
             .await
@@ -601,7 +601,7 @@ async fn spawn_agent_service_tier_inheritance_preserves_supported_or_configured_
             .join("service-tier-role.toml");
         tokio::fs::write(
             &role_config_path,
-            r#"model = "gpt-5.4"
+            r#"model = "k3"
 service_tier = "priority"
 "#,
         )
@@ -665,7 +665,7 @@ async fn spawn_agent_role_service_tier_falls_back_to_supported_parent_tier() {
 
     let (mut session, turn) = make_session_and_context().await;
     let mut turn = turn
-        .with_model("gpt-5.4".to_string(), &session.services.models_manager)
+        .with_model("k3".to_string(), &session.services.models_manager)
         .await;
     tokio::fs::create_dir_all(&turn.config.ody_home)
         .await
@@ -673,7 +673,7 @@ async fn spawn_agent_role_service_tier_falls_back_to_supported_parent_tier() {
     let role_config_path = turn.config.ody_home.as_path().join("tiered-role.toml");
     tokio::fs::write(
         &role_config_path,
-        r#"model = "gpt-5.4"
+        r#"model = "k3"
 service_tier = "turbo"
 "#,
     )
@@ -737,7 +737,7 @@ async fn spawn_agent_role_service_tier_does_not_hide_invalid_spawn_request() {
     let role_config_path = turn.config.ody_home.as_path().join("tiered-role.toml");
     tokio::fs::write(
         &role_config_path,
-        r#"model = "gpt-5.4"
+        r#"model = "k3"
 service_tier = "priority"
 "#,
     )
@@ -772,7 +772,7 @@ service_tier = "priority"
     assert_eq!(
         result.err(),
         Some(FunctionCallError::RespondToModel(
-            "Service tier `turbo` is not supported for model `gpt-5.4`. Supported service tiers: priority"
+            "Service tier `turbo` is not supported for model `k3`. Supported service tiers: priority"
                 .to_string()
         ))
     );
@@ -787,7 +787,7 @@ async fn spawn_agent_full_history_fork_accepts_explicit_service_tier() {
 
     let (mut session, turn) = make_session_and_context().await;
     let turn = turn
-        .with_model("gpt-5.4".to_string(), &session.services.models_manager)
+        .with_model("k3".to_string(), &session.services.models_manager)
         .await;
     let manager = thread_manager();
     let root = manager
@@ -835,7 +835,7 @@ async fn multi_agent_v2_full_history_fork_accepts_explicit_service_tier() {
 
     let (mut session, turn) = make_session_and_context().await;
     let mut turn = turn
-        .with_model("gpt-5.4".to_string(), &session.services.models_manager)
+        .with_model("k3".to_string(), &session.services.models_manager)
         .await;
     let mut config = (*turn.config).clone();
     config

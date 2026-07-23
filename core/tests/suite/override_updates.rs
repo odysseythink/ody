@@ -18,7 +18,7 @@ fn collab_mode_with_instructions(instructions: Option<&str>) -> CollaborationMod
     CollaborationMode {
         mode: ModeKind::Default,
         settings: Settings {
-            model: "gpt-5.4".to_string(),
+            model: "k3".to_string(),
             reasoning_effort: None,
             developer_instructions: instructions.map(str::to_string),
             design_audit_level: None,

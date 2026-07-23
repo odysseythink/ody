@@ -32,12 +32,12 @@ const SCHEMA: &str = r#"
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn ody_returns_json_result_for_gpt5() -> anyhow::Result<()> {
-    ody_returns_json_result("gpt-5.4".to_string()).await
+    ody_returns_json_result("k3".to_string()).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn ody_returns_json_result_for_gpt5_ody() -> anyhow::Result<()> {
-    ody_returns_json_result("gpt-5.4".to_string()).await
+    ody_returns_json_result("k3".to_string()).await
 }
 
 async fn ody_returns_json_result(model: String) -> anyhow::Result<()> {

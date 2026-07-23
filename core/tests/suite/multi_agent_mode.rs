@@ -94,7 +94,7 @@ async fn ultra_reasoning_uses_max_and_proactive_mode() -> Result<()> {
     )
     .await;
     let test = test_ody()
-        .with_model_info_override("gpt-5.4", add_ultra_reasoning)
+        .with_model_info_override("k3", add_ultra_reasoning)
         .with_config(configure_ultra)
         .build(&server)
         .await?;
@@ -137,7 +137,7 @@ async fn leaving_ultra_after_cold_resume_emits_explicit_mode() -> Result<()> {
     )
     .await;
     let initial = test_ody()
-        .with_model_info_override("gpt-5.4", add_ultra_reasoning)
+        .with_model_info_override("k3", add_ultra_reasoning)
         .with_config(configure_ultra)
         .build(&server)
         .await?;
@@ -152,7 +152,7 @@ async fn leaving_ultra_after_cold_resume_emits_explicit_mode() -> Result<()> {
     drop(initial);
 
     let mut resume_builder = test_ody()
-        .with_model_info_override("gpt-5.4", add_ultra_reasoning)
+        .with_model_info_override("k3", add_ultra_reasoning)
         .with_config(configure_ultra);
     let resumed = resume_builder.resume(&server, home, rollout_path).await?;
     submit_turn(&resumed.ody, "after resume", Some(ReasoningEffort::High)).await?;
@@ -194,7 +194,7 @@ async fn ultra_on_multi_agent_v1_uses_max_without_mode_instructions() -> Result<
     )
     .await;
     let test = test_ody()
-        .with_model_info_override("gpt-5.4", add_ultra_reasoning)
+        .with_model_info_override("k3", add_ultra_reasoning)
         .with_config(|config| {
             config.model_reasoning_effort = Some(ReasoningEffort::Ultra);
         })

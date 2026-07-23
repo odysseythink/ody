@@ -60,8 +60,8 @@ impl StatusSurfacePreviewItem {
             StatusSurfacePreviewItem::FastMode => "Fast on",
             StatusSurfacePreviewItem::RawOutput => "raw output",
             StatusSurfacePreviewItem::WorkspaceHeadline => "Workspace headline",
-            StatusSurfacePreviewItem::Model => "gpt-5.2-ody",
-            StatusSurfacePreviewItem::ModelWithReasoning => "gpt-5.2-ody medium",
+            StatusSurfacePreviewItem::Model => "k3-ody",
+            StatusSurfacePreviewItem::ModelWithReasoning => "k3-ody medium",
             StatusSurfacePreviewItem::Reasoning => "medium",
             StatusSurfacePreviewItem::TaskProgress => "Tasks 0/0",
         }

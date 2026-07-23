@@ -182,7 +182,7 @@ async fn shell_command_escalated_permissions_rejected_then_ok() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
-    let mut builder = test_ody().with_model("test-gpt-5-ody");
+    let mut builder = test_ody().with_model("test-kimi-for-coding");
     let test = builder.build(&server).await?;
 
     let command = "echo shell ok";
@@ -276,7 +276,7 @@ async fn sandbox_denied_shell_command_returns_original_output() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
-    let mut builder = test_ody().with_model("gpt-5.4");
+    let mut builder = test_ody().with_model("k3");
     let fixture = builder.build(&server).await?;
 
     let call_id = "sandbox-denied-shell-command";
@@ -367,7 +367,7 @@ async fn shell_command_enforces_glob_deny_read_policy() -> Result<()> {
     skip_if_sandbox!(Ok(()));
 
     let server = start_mock_server().await;
-    let mut builder = test_ody().with_model("gpt-5.4").with_config(move |config| {
+    let mut builder = test_ody().with_model("k3").with_config(move |config| {
         let mut file_system_sandbox_policy = FileSystemSandboxPolicy::default();
         file_system_sandbox_policy
             .entries
@@ -532,7 +532,7 @@ async fn shell_command_timeout_includes_timeout_prefix_and_metadata() -> Result<
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
-    let mut builder = test_ody().with_model("test-gpt-5-ody");
+    let mut builder = test_ody().with_model("test-kimi-for-coding");
     let test = builder.build(&server).await?;
 
     let call_id = "shell-command-timeout";
@@ -618,7 +618,7 @@ async fn shell_command_timeout_handles_background_grandchild_stdout() -> Result<
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
-    let mut builder = test_ody().with_model("gpt-5.4").with_config(|config| {
+    let mut builder = test_ody().with_model("k3").with_config(|config| {
         config
             .permissions
             .set_permission_profile(PermissionProfile::Disabled)

@@ -1425,7 +1425,7 @@ fn default_collaboration_mode() -> CollaborationMode {
     CollaborationMode {
         mode: ModeKind::Default,
         settings: Settings {
-            model: "gpt-5".to_string(),
+            model: "kimi-k2.5".to_string(),
             reasoning_effort: None,
             developer_instructions: None,
             design_audit_level: None,

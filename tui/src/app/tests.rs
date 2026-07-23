@@ -4086,7 +4086,7 @@ async fn ctrl_l_clear_ui_after_long_transcript_reuses_clear_header_snapshot() {
 async fn clear_ui_header_shows_fast_status_for_fast_capable_models() {
     let mut app = make_test_app().await;
     app.config.cwd = test_path_buf("/tmp/project").abs();
-    app.chat_widget.set_model("gpt-5.4");
+    app.chat_widget.set_model("k3");
     set_fast_mode_test_catalog(&mut app.chat_widget);
     app.chat_widget
         .set_reasoning_effort(Some(ReasoningEffortConfig::XHigh));
@@ -5844,7 +5844,7 @@ async fn override_turn_context_sends_thread_settings_update() {
         let collaboration_mode = CollaborationMode {
             mode: ModeKind::Plan,
             settings: Settings {
-                model: "gpt-5.4".to_string(),
+                model: "k3".to_string(),
                 reasoning_effort: Some(ReasoningEffortConfig::High),
                 developer_instructions: None,
                 design_audit_level: None,
@@ -5859,7 +5859,7 @@ async fn override_turn_context_sends_thread_settings_update() {
                 ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_WORKSPACE,
             )),
             /*windows_sandbox_level*/ None,
-            Some("gpt-5.4".to_string()),
+            Some("k3".to_string()),
             Some(Some(ReasoningEffortConfig::High)),
             /*summary*/ None,
             Some(Some(service_tier.clone())),
@@ -5883,7 +5883,7 @@ async fn override_turn_context_sends_thread_settings_update() {
         );
 
         let notification = next_thread_settings_updated(&mut app_server, thread_id).await;
-        assert_eq!(notification.thread_settings.model, "gpt-5.4");
+        assert_eq!(notification.thread_settings.model, "k3");
         assert_eq!(
             notification.thread_settings.effort,
             Some(ReasoningEffortConfig::High)
@@ -5966,13 +5966,13 @@ async fn thread_setting_update_params_sync_model_and_default_reasoning() {
     let thread_id = ThreadId::new();
     app.active_thread_id = Some(thread_id);
 
-    app.chat_widget.set_model("gpt-5.4");
+    app.chat_widget.set_model("k3");
     let params = app
-        .active_thread_model_setting_update_params("gpt-5.4".to_string())
+        .active_thread_model_setting_update_params("k3".to_string())
         .expect("active thread should produce update params");
 
     assert_eq!(params.thread_id, thread_id.to_string());
-    assert_eq!(params.model, Some("gpt-5.4".to_string()));
+    assert_eq!(params.model, Some("k3".to_string()));
     assert_eq!(
         params
             .collaboration_mode
@@ -5980,7 +5980,7 @@ async fn thread_setting_update_params_sync_model_and_default_reasoning() {
             .expect("collaboration mode should sync with model")
             .settings
             .model,
-        "gpt-5.4"
+        "k3"
     );
 
     app.chat_widget

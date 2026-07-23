@@ -230,7 +230,7 @@ fn turn_context_item_filesystem_uses_workspace_roots_instead_of_cwd() {
         permission_profile: Some(workspace_write_permission_profile_with_private_denials()),
         network: None,
         file_system_sandbox_policy: None,
-        model: "gpt-5".to_string(),
+        model: "kimi-k2.5".to_string(),
         comp_hash: None,
         personality: None,
         collaboration_mode: None,
