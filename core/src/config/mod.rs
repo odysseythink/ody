@@ -27,6 +27,7 @@ use ody_config::ThreadConfigLoader;
 use ody_config::resolve_windows_shell;
 use ody_config::config_toml::ConfigLockfileToml;
 use ody_config::config_toml::ConfigToml;
+use ody_config::config_toml::DesignReviewDebateToml;
 use ody_config::config_toml::DEFAULT_PROJECT_DOC_MAX_BYTES;
 use ody_config::config_toml::OdyCodeModelConfig;
 use ody_config::config_toml::PlanModeConfigToml;
@@ -702,6 +703,10 @@ pub struct Config {
     /// finalizing a design in Design Mode. Falls back to `review_model` when
     /// unset.
     pub design_review_model: Option<String>,
+    /// Resolved `[design_review.debate]` table (the single-shot design review is
+    /// augmented with a bounded Advocate/Skeptic/Judge debate when this is
+    /// `Some` with `enable = true`). `None` ⇒ debate off (default).
+    pub design_review_debate: Option<DesignReviewDebateToml>,
     /// Optional model override for the adversarial review of changed test files.
     /// When unset, the `ReviewTests` tool falls back to the current session's
     /// active model alias.
@@ -3873,6 +3878,7 @@ impl Config {
 
         let review_model = override_review_model.or(cfg.review_model);
         let design_review_model = override_design_review_model.or(cfg.design_review_model);
+        let design_review_debate = cfg.design_review.and_then(|dr| dr.debate);
         let test_review_model = override_test_review_model.or(cfg.test_review_model);
         let test_review_enabled = override_test_review_enabled.unwrap_or(cfg.test_review_enabled);
 
@@ -4135,6 +4141,7 @@ impl Config {
                 .or(show_raw_agent_reasoning)
                 .unwrap_or(true),
             guardian_policy_config,
+            design_review_debate,
             model_reasoning_effort: cfg.model_reasoning_effort,
             plan_mode_reasoning_effort: cfg.plan_mode_reasoning_effort,
             plan_mode: cfg.plan_mode.clone(),

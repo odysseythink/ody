@@ -114,6 +114,10 @@ pub(crate) enum DesignReviewError {
     Parse(String),
     Timeout,
     Cancelled,
+    /// A debate turn produced no usable output (empty/timeout/cancel) or no
+    /// model was configured for a seat, so the debate was abandoned. The caller
+    /// degrades to the single-shot review.
+    Degraded(String),
 }
 
 impl fmt::Display for DesignReviewError {
@@ -124,6 +128,7 @@ impl fmt::Display for DesignReviewError {
             Self::Parse(msg) => write!(f, "failed to parse review output: {msg}"),
             Self::Timeout => write!(f, "review timed out"),
             Self::Cancelled => write!(f, "review was cancelled"),
+            Self::Degraded(msg) => write!(f, "debate degraded to single-shot review: {msg}"),
         }
     }
 }

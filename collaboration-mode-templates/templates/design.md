@@ -183,7 +183,7 @@ When the design is complete and all ## Parts rows are `done` (if split), call `s
 
 The eight required sections: **C1** Scope In/Out, **C2** Architecture / Design, **C3** Data Models, **C4** Algorithms (pseudocode), **C5** Error Handling / Degradation, **C6** Self-Review, **C7** User final approval recorded, **C8** Reuse Analysis.
 
-**Audit-level sign-off gate (host-run).** After the completeness check passes, the host runs the adversarial review and presents a **per-item** sign-off — one page per item, paginated so the user can digest them one at a time — covering two things, both filtered by the Step 0 audit level:
+**Audit-level sign-off gate (host-run).** After the completeness check passes, the host runs the adversarial review (which, when `[design_review.debate]` is enabled in config, augments its single-shot critique with a bounded Advocate/Skeptic/Judge debate and unions the findings) and presents a **per-item** sign-off — one page per item, paginated so the user can digest them one at a time — covering two things, both filtered by the Step 0 audit level:
 
 1. **Inferred assumptions** from your `## Assumptions & Unverified Items` table — **Basic** surfaces only `low`-confidence rows, **Standard** adds `medium`, **Deep** surfaces all.
 2. **Adversarial-review findings** whose severity the level covers — **Basic** = Critical/High, **Standard** += Medium, **Deep** += Low (`speculative` findings never escalate).

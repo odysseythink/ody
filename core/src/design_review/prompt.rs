@@ -9,13 +9,19 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashSet;
 
-const DESIGN_REVIEW_PROMPT_PREFIX: &str = r#"You are an adversarial reviewer for a software design document.
+const DESIGN_REVIEW_INTRO: &str = r#"You are an adversarial reviewer for a software design document.
 Your goal is to BREAK the design, not praise it.
 'Looks fine' is a losing answer.
 Focus on: missing edge cases, unverified assumptions, integration risks,
 security gaps, testability, operational concerns, and scope creep.
 
-Output strictly as JSON matching this schema:
+"#;
+
+/// The JSON output contract shared by the single-shot critic AND the debate
+/// Judge, so both produce output the same parser (`parse_review_output` /
+/// `review_was_unstructured`) consumes. Keep these two callers in lockstep — a
+/// schema change here must serve both.
+const FINDINGS_OUTPUT_SPEC: &str = r#"Output strictly as JSON matching this schema:
 
 {
   "type": "object",
@@ -60,7 +66,94 @@ const DESIGN_DOCUMENT_MARKER: &str = "--- DESIGN DOCUMENT ---\n\n";
 /// the user already dispositioned.
 pub(crate) fn build_design_review_prompt(design_markdown: &str, accepted_risks: &[String]) -> String {
     let accepted_block = format_accepted_risks_block(accepted_risks);
-    format!("{DESIGN_REVIEW_PROMPT_PREFIX}{accepted_block}{DESIGN_DOCUMENT_MARKER}{design_markdown}")
+    format!(
+        "{DESIGN_REVIEW_INTRO}{FINDINGS_OUTPUT_SPEC}{accepted_block}{DESIGN_DOCUMENT_MARKER}{design_markdown}"
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Debate prompts (Advocate / Skeptic / Judge). The Advocate and Skeptic emit
+// argumentative prose; only the Judge emits the JSON findings contract, reusing
+// `FINDINGS_OUTPUT_SPEC` so the existing parser applies unchanged. See the
+// approved design `.ody-code/designs/2026-07-23-design-debate-mode.md` (C4/D6).
+// ---------------------------------------------------------------------------
+
+const DEBATE_TRANSCRIPT_MARKER: &str = "--- DEBATE TRANSCRIPT ---\n\n";
+
+/// Directives common to both personas: single-sided argument, anti-conformity,
+/// and (after round 0) the novelty gate. Borrowed from the Council of High
+/// Intelligence protocol (see design Prior Art).
+const PERSONA_COMMON_RULES: &str = r#"Rules:
+- You argue ONE side only. Do NOT be balanced or even-handed.
+- Engage the opponent's most recent turn directly; do not talk past it.
+- ANTI-CONFORMITY: concede a point ONLY when you can name the specific flaw the
+  opponent exposed in your argument. If you cannot name the flaw, do not concede.
+- NOVELTY: if the transcript already contains earlier turns, this turn MUST add
+  at least one NEW claim, attack, or piece of evidence. Restating your prior turn
+  wastes the round.
+Keep it to about 300 words. Prose only — do NOT emit JSON.
+
+"#;
+
+const ADVOCATE_INTRO: &str = r#"You are the ADVOCATE in a structured design debate.
+Build the strongest evidence-based case that the design's load-bearing decisions
+are correct and sufficient. Refute the Skeptic's latest attacks point by point.
+
+"#;
+
+const SKEPTIC_INTRO: &str = r#"You are the SKEPTIC in a structured design debate.
+Attack the design by inversion: what would GUARANTEE it fails? Surface failure
+modes, unstated assumptions, missing tests, concurrency/ordering hazards, resource
+limits, and cheaper alternatives the design did not consider or defer honestly.
+
+"#;
+
+const JUDGE_INTRO: &str = r#"You are the JUDGE of a structured design debate. You did NOT participate; you
+synthesize. You are given the design and a transcript of an Advocate defending it
+and a Skeptic attacking it.
+
+For each Skeptic attack the Advocate did NOT convincingly refute with concrete
+evidence, emit ONE finding. Do NOT emit a finding for an attack the Advocate
+soundly refuted. An attack the Advocate merely dented (not refuted) is a finding
+with "speculative" confidence. Reserve an empty findings list for a design the
+Skeptic genuinely could not dent.
+
+"#;
+
+/// Build the Advocate turn prompt. `transcript` is the debate so far (may be empty
+/// on the opening turn).
+pub(crate) fn build_advocate_prompt(design_markdown: &str, transcript: &str) -> String {
+    build_persona_prompt(ADVOCATE_INTRO, design_markdown, transcript)
+}
+
+/// Build the Skeptic turn prompt.
+pub(crate) fn build_skeptic_prompt(design_markdown: &str, transcript: &str) -> String {
+    build_persona_prompt(SKEPTIC_INTRO, design_markdown, transcript)
+}
+
+fn build_persona_prompt(intro: &str, design_markdown: &str, transcript: &str) -> String {
+    let transcript_block = if transcript.is_empty() {
+        String::new()
+    } else {
+        format!("{DEBATE_TRANSCRIPT_MARKER}{transcript}\n\n")
+    };
+    format!(
+        "{intro}{PERSONA_COMMON_RULES}{DESIGN_DOCUMENT_MARKER}{design_markdown}\n\n{transcript_block}"
+    )
+}
+
+/// Build the Judge synthesis prompt. Reuses `FINDINGS_OUTPUT_SPEC` (same JSON the
+/// single-shot critic emits) and the same accepted-risks carry-over block, so the
+/// existing parser and cross-round dedup apply unchanged.
+pub(crate) fn build_judge_prompt(
+    design_markdown: &str,
+    transcript: &str,
+    accepted_risks: &[String],
+) -> String {
+    let accepted_block = format_accepted_risks_block(accepted_risks);
+    format!(
+        "{JUDGE_INTRO}{FINDINGS_OUTPUT_SPEC}{accepted_block}{DESIGN_DOCUMENT_MARKER}{design_markdown}\n\n{DEBATE_TRANSCRIPT_MARKER}{transcript}"
+    )
 }
 
 /// The "previously accepted risks" preamble, or empty when there are none. Titles
@@ -400,6 +493,50 @@ mod tests {
         assert!(prompt.contains("BREAK the design"));
         // No accepted risks → no carry-over preamble at all.
         assert!(!prompt.contains("PREVIOUSLY ACCEPTED RISKS"));
+    }
+
+    #[test]
+    fn single_shot_prompt_text_is_unchanged_by_the_spec_split() {
+        // The single-shot critic prompt must remain byte-stable after splitting
+        // the shared FINDINGS_OUTPUT_SPEC out of the old monolithic prefix.
+        let design = "# D";
+        let prompt = build_design_review_prompt(design, &[]);
+        assert!(prompt.starts_with("You are an adversarial reviewer"));
+        assert!(prompt.contains("BREAK the design"));
+        assert!(prompt.contains("Output strictly as JSON"));
+        assert!(prompt.ends_with("--- DESIGN DOCUMENT ---\n\n# D"));
+    }
+
+    #[test]
+    fn judge_prompt_reuses_findings_schema_and_carries_transcript() {
+        let prompt = build_judge_prompt("# Design", "[Advocate]: x\n\n[Skeptic]: y", &[]);
+        // Same JSON contract as the single-shot critic → same parser applies.
+        assert!(prompt.contains("Output strictly as JSON"));
+        assert!(prompt.contains("\"overall_assessment\""));
+        assert!(prompt.contains("\"severity\""));
+        // Judge framing + transcript present; personas do not re-review from scratch.
+        assert!(prompt.contains("You are the JUDGE"));
+        assert!(prompt.contains("did NOT participate"));
+        assert!(prompt.contains("--- DEBATE TRANSCRIPT ---"));
+        assert!(prompt.contains("[Skeptic]: y"));
+    }
+
+    #[test]
+    fn persona_prompts_carry_anti_conformity_and_novelty_and_no_json() {
+        let skeptic = build_skeptic_prompt("# Design", "[Advocate]: opening");
+        assert!(skeptic.contains("You are the SKEPTIC"));
+        assert!(skeptic.contains("ANTI-CONFORMITY"));
+        assert!(skeptic.contains("name the specific flaw"));
+        assert!(skeptic.contains("NOVELTY"));
+        assert!(skeptic.contains("--- DEBATE TRANSCRIPT ---"));
+        // Personas argue in prose, never JSON.
+        assert!(!skeptic.contains("Output strictly as JSON"));
+
+        // Opening advocate turn has no transcript block.
+        let advocate = build_advocate_prompt("# Design", "");
+        assert!(advocate.contains("You are the ADVOCATE"));
+        assert!(!advocate.contains("--- DEBATE TRANSCRIPT ---"));
+        assert!(!advocate.contains("Output strictly as JSON"));
     }
 
     #[test]

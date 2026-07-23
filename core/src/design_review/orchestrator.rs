@@ -16,6 +16,8 @@ use ody_protocol::protocol::WarningEvent;
 use ody_protocol::user_input::UserInput;
 use tokio_util::sync::CancellationToken;
 
+use crate::design_review::debate::orchestrator::DebateOrchestrator;
+use crate::design_review::debate::types::DebateConfig;
 use crate::design_review::prompt::build_design_review_prompt;
 use crate::design_review::prompt::format_review_appendix;
 use crate::design_review::prompt::parse_design_review_output;
@@ -32,7 +34,7 @@ use crate::tasks::SessionTaskContext;
 // below), the structured critique returns well inside this bound. Kept generous
 // but far below the old 600s so a stalled reviewer no longer blocks finalize for
 // ten minutes.
-const DESIGN_REVIEW_TIMEOUT: Duration = Duration::from_secs(240);
+pub(crate) const DESIGN_REVIEW_TIMEOUT: Duration = Duration::from_secs(240);
 
 pub(crate) struct DesignReviewOrchestrator;
 
@@ -84,7 +86,13 @@ impl DesignReviewOrchestrator {
 
         match review_result {
             Ok(Some(review_output)) => {
-                let output = to_design_review_output(review_output);
+                let mut output = to_design_review_output(review_output);
+                // Augment the single-shot critique with the bounded debate when
+                // `[design_review.debate]` is enabled: union the Judge's findings
+                // into the single-shot set (dedup by fingerprint). Any debate
+                // failure keeps the single-shot output unchanged — the debate can
+                // only ever add findings, never make finalize worse (design D3/C5).
+                output = Self::augment_with_debate(session, turn, &request, output).await;
                 // Parsing produced only the give-up fallback (output unparseable
                 // even after salvage — usually a response cut off mid-JSON). Make
                 // that visible instead of silently finalizing with no findings:
@@ -144,6 +152,64 @@ impl DesignReviewOrchestrator {
             }
         }
     }
+
+    /// When `[design_review.debate]` is enabled, run the bounded debate and
+    /// union its findings into the single-shot `output` (dedup by fingerprint).
+    /// Disabled ⇒ `output` returned unchanged. Debate failure ⇒ `output`
+    /// unchanged plus a non-fatal warning (degrade, never block).
+    async fn augment_with_debate(
+        session: &Arc<Session>,
+        turn: &Arc<TurnContext>,
+        request: &DesignReviewRequest,
+        output: DesignReviewOutput,
+    ) -> DesignReviewOutput {
+        let Some(cfg) = DebateConfig::from_config(turn.config.as_ref()) else {
+            return output;
+        };
+        match DebateOrchestrator::run(session, turn, request, &cfg).await {
+            Ok(debate) => union_findings(output, debate),
+            Err(err) => {
+                let message = if turn
+                    .config
+                    .language
+                    .as_deref()
+                    .is_some_and(|l| l.to_ascii_lowercase().starts_with("zh"))
+                {
+                    "设计辩论未完成，已回退到单发对抗性评审。".to_string()
+                } else {
+                    format!("Design debate did not complete ({err}); using the single-shot review.")
+                };
+                session
+                    .send_event(turn.as_ref(), EventMsg::Warning(WarningEvent { message }))
+                    .await;
+                output
+            }
+        }
+    }
+}
+
+/// Merge debate findings into the single-shot set, de-duplicated by
+/// `DesignReviewFinding::fingerprint()` (the same identity the cross-round
+/// sign-off gate uses). Single-shot findings win ties; the debate's
+/// `overall_assessment` is appended so both critiques are visible.
+fn union_findings(mut base: DesignReviewOutput, debate: DesignReviewOutput) -> DesignReviewOutput {
+    let mut seen: std::collections::HashSet<String> =
+        base.findings.iter().map(|f| f.fingerprint()).collect();
+    for finding in debate.findings {
+        if seen.insert(finding.fingerprint()) {
+            base.findings.push(finding);
+        }
+    }
+    let debate_assessment = debate.overall_assessment.trim();
+    if !debate_assessment.is_empty() {
+        if base.overall_assessment.trim().is_empty() {
+            base.overall_assessment = debate_assessment.to_string();
+        } else {
+            base.overall_assessment =
+                format!("{}\n\n[Debate] {debate_assessment}", base.overall_assessment);
+        }
+    }
+    base
 }
 
 pub(crate) fn format_review_appendix_for_submit(
@@ -276,5 +342,48 @@ mod tests {
         assert_eq!(counts.high, 2);
         assert_eq!(counts.medium, 0);
         assert_eq!(counts.low, 0);
+    }
+
+    fn finding(title: &str) -> DesignReviewFinding {
+        DesignReviewFinding {
+            severity: DesignReviewSeverity::High,
+            confidence: DesignReviewConfidence::High,
+            title: title.to_string(),
+            detail: "d".to_string(),
+            location: None,
+            suggested_fix: None,
+        }
+    }
+
+    fn output(assessment: &str, titles: &[&str]) -> DesignReviewOutput {
+        DesignReviewOutput {
+            overall_assessment: assessment.to_string(),
+            findings: titles.iter().map(|t| finding(t)).collect(),
+        }
+    }
+
+    #[test]
+    fn union_dedups_overlapping_titles_by_fingerprint() {
+        // "Auth Loss" vs "auth loss" hash to the same fingerprint (case/space
+        // normalized), so the overlap collapses.
+        let single = output("single", &["Concurrency gap", "Auth Loss"]);
+        let debate = output("debate", &["auth loss", "Missing test"]);
+        let merged = union_findings(single, debate);
+        let titles: Vec<&str> = merged.findings.iter().map(|f| f.title.as_str()).collect();
+        assert_eq!(titles, vec!["Concurrency gap", "Auth Loss", "Missing test"]);
+        // Single-shot finding wins the tie (original casing preserved).
+        assert!(merged.findings.iter().any(|f| f.title == "Auth Loss"));
+        assert!(!merged.findings.iter().any(|f| f.title == "auth loss"));
+        // Both assessments visible.
+        assert!(merged.overall_assessment.contains("single"));
+        assert!(merged.overall_assessment.contains("[Debate] debate"));
+    }
+
+    #[test]
+    fn union_with_empty_debate_is_identity_on_findings() {
+        let single = output("single", &["only"]);
+        let merged = union_findings(single, output("", &[]));
+        assert_eq!(merged.findings.len(), 1);
+        assert_eq!(merged.overall_assessment, "single");
     }
 }

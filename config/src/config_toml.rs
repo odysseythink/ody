@@ -256,6 +256,13 @@ pub struct ConfigToml {
     /// to `review_model` for backwards compatibility.
     pub design_review_model: Option<String>,
 
+    /// Optional `[design_review]` table. Currently carries only the `debate`
+    /// sub-table that turns the single-shot adversarial review into a bounded
+    /// Advocate/Skeptic/Judge debate. The legacy flat `design_review_model`
+    /// key above is intentionally kept for backwards compatibility and is NOT
+    /// moved under this table.
+    pub design_review: Option<DesignReviewToml>,
+
     /// Provider to use from the model_providers map.
     pub model_provider: Option<String>,
     /// Optional model override for the adversarial review of changed test
@@ -879,6 +886,36 @@ pub struct AutoReviewToml {
     pub policy: Option<String>,
 }
 
+/// `[design_review]` table. Holds the optional `debate` sub-table.
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct DesignReviewToml {
+    /// `[design_review.debate]` — when present and `enable = true`, the design
+    /// adversarial review augments its single-shot critic with a bounded
+    /// Advocate/Skeptic/Judge debate.
+    pub debate: Option<DesignReviewDebateToml>,
+}
+
+/// `[design_review.debate]` sub-table. Absent or `enable = false` ⇒ debate off
+/// (the single-shot review path is unchanged).
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct DesignReviewDebateToml {
+    /// Master switch. Defaults to `false` (opt-in).
+    #[serde(default)]
+    pub enable: bool,
+    /// Advocate↔Skeptic back-and-forth rounds. Defaults to 1; clamped to
+    /// `1..=3` at resolution time.
+    pub rounds: Option<u8>,
+    /// Per-seat model overrides. Each falls back to `design_review_model`, then
+    /// `review_model`, when unset. Recommended: cheap Advocate, capable
+    /// adversarial Skeptic, strongest Judge (the Judge is the highest-leverage
+    /// seat — it emits the findings).
+    pub advocate_model: Option<String>,
+    pub skeptic_model: Option<String>,
+    pub judge_model: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct ProjectConfig {
@@ -1263,6 +1300,51 @@ mod tests {
 
         let config: ConfigToml = toml::from_str("").expect("empty config should deserialize");
         assert!(config.shell.is_none());
+    }
+
+    #[test]
+    fn design_review_debate_table_deserializes() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+                [design_review.debate]
+                enable = true
+                rounds = 2
+                advocate_model = "kimi_ranweiwei/kimi-for-coding"
+                skeptic_model = "deepseek_1/deepseek-v4-pro"
+                judge_model = "glm_1/glm-5.1"
+            "#,
+        )
+        .expect("design_review.debate table should deserialize");
+        let debate = config
+            .design_review
+            .and_then(|dr| dr.debate)
+            .expect("debate sub-table present");
+        assert!(debate.enable);
+        assert_eq!(debate.rounds, Some(2));
+        assert_eq!(debate.judge_model.as_deref(), Some("glm_1/glm-5.1"));
+    }
+
+    #[test]
+    fn legacy_flat_design_review_model_still_parses_without_the_table() {
+        // The user's live config uses the flat top-level key. Adding the
+        // `[design_review]` table must not break that back-compat path.
+        let config: ConfigToml = toml::from_str(r#"design_review_model = "glm_1/glm-5.1""#)
+            .expect("legacy flat design_review_model should still deserialize");
+        assert_eq!(config.design_review_model.as_deref(), Some("glm_1/glm-5.1"));
+        assert!(config.design_review.is_none());
+    }
+
+    #[test]
+    fn design_review_debate_defaults_when_fields_omitted() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+                [design_review.debate]
+            "#,
+        )
+        .expect("empty debate table should deserialize with defaults");
+        let debate = config.design_review.unwrap().debate.unwrap();
+        assert!(!debate.enable);
+        assert_eq!(debate.rounds, None);
     }
 
     #[test]
