@@ -222,9 +222,9 @@ impl BreathAnimation {
         if !self.animations_enabled {
             return false;
         }
-        let elapsed = now.saturating_duration_since(arrival);
-        elapsed < BREATH_DURATION
-            && self.consecutive_slow_frames.get() < BREATH_SLOW_FRAME_LIMIT
+        let _ = now;
+        let _ = arrival;
+        self.consecutive_slow_frames.get() < BREATH_SLOW_FRAME_LIMIT
     }
 
     fn breath_factor(&self, now: Instant, arrival: Instant) -> f32 {
@@ -235,16 +235,11 @@ impl BreathAnimation {
             return 1.0;
         }
         let elapsed = now.saturating_duration_since(arrival);
-        if elapsed >= BREATH_DURATION {
-            return 1.0;
-        }
-
-        let progress = elapsed.as_secs_f32() / BREATH_DURATION.as_secs_f32();
-        let phase = progress * BREATH_CYCLE_COUNT * 2.0 * std::f32::consts::PI;
+        let cycle_progress = (elapsed.as_secs_f32() % BREATH_DURATION.as_secs_f32())
+            / BREATH_DURATION.as_secs_f32();
+        let phase = cycle_progress * BREATH_CYCLE_COUNT * 2.0 * std::f32::consts::PI;
         let cosine_env = (1.0 - phase.cos()) / 2.0;
-        let fade_window = 1.0 - progress;
-        let amplitude = cosine_env * fade_window;
-        1.0 - (1.0 - BREATH_MIN_FACTOR) * amplitude
+        1.0 - (1.0 - BREATH_MIN_FACTOR) * cosine_env
     }
 
     fn schedule_next_frame(&self, now: Instant) {
@@ -422,16 +417,12 @@ mod tests {
     }
 
     #[test]
-    fn breath_factor_boundaries_and_disabled() {
+    fn breath_factor_cycles_and_disabled() {
         let requester = FrameRequester::test_dummy();
         let breath = BreathAnimation::new(requester, true);
         let arrival = Instant::now();
 
         assert_eq!(breath.breath_factor(arrival, arrival), 1.0);
-        assert_eq!(
-            breath.breath_factor(arrival + BREATH_DURATION + Duration::from_millis(1), arrival),
-            1.0
-        );
 
         let mid = breath.breath_factor(arrival + BREATH_DURATION / 2, arrival);
         assert!(
@@ -439,6 +430,20 @@ mod tests {
             "mid factor {} should be in [{}, 1.0]",
             mid,
             BREATH_MIN_FACTOR
+        );
+
+        assert_eq!(
+            breath.breath_factor(arrival + BREATH_DURATION, arrival),
+            1.0
+        );
+
+        let min_time = arrival + BREATH_DURATION / 3;
+        let min_factor = breath.breath_factor(min_time, arrival);
+        assert!(
+            (min_factor - BREATH_MIN_FACTOR).abs() < 0.01,
+            "expected factor near {} at 1/3 cycle, got {}",
+            BREATH_MIN_FACTOR,
+            min_factor
         );
 
         let disabled = BreathAnimation::new(FrameRequester::test_dummy(), false);
