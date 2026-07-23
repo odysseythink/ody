@@ -77,7 +77,7 @@ async fn tmux_split_preserves_fresh_session_composer_row_after_resize_reflow() -
     )?;
     wait_for_capture_contains(
         &ody_pane,
-        "gpt-5.4 default",
+        "k3 default",
         Duration::from_secs(/*secs*/ 15),
     )?;
     let draft = "Notice where we are here in terms of y location.";
@@ -244,7 +244,7 @@ async fn tmux_width_resize_restore_keeps_visible_content_anchored() -> Result<()
     )?;
     wait_for_capture_contains(
         &ody_pane,
-        "gpt-5.4 default",
+        "k3 default",
         Duration::from_secs(/*secs*/ 15),
     )?;
     let draft = "Notice where we are here in terms of y location.";
@@ -364,7 +364,7 @@ async fn run_repeated_resize_smoke() -> Result<()> {
     )?;
     wait_for_capture_contains(
         &ody_pane,
-        "gpt-5.4 default",
+        "k3 default",
         Duration::from_secs(/*secs*/ 15),
     )?;
     let draft = "Notice where we are here in terms of y location.";
@@ -464,7 +464,7 @@ fn ody_binary(repo_root: &Path) -> Result<PathBuf> {
 fn write_config(ody_home: &Path, repo_root: &Path) -> Result<()> {
     let repo_root_display = repo_root.display();
     let config = format!(
-        r#"model = "gpt-5.4"
+        r#"model = "k3"
 model_provider = "kimi"
 suppress_unstable_features_warning = true
 

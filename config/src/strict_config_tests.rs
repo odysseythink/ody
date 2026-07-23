@@ -9,7 +9,7 @@ use std::path::PathBuf;
 fn ignored_toml_field_errors_accept_non_file_source_names() {
     let source_name = "com.odysseythink.ody:config_toml_base64";
     let contents = r#"
-model = "gpt-5"
+model = "kimi-k2.5"
 unknown_key = true"#;
 
     let value = toml::from_str::<TomlValue>(contents).expect("valid TOML");

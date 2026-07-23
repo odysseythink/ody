@@ -778,8 +778,8 @@ mod tests {
             originator: Some("ody_cli_rs".to_string()),
             user_email: Some("test@example.com".to_string()),
             terminal_type: Some("iTerm.app/3.6.5".to_string()),
-            model: Some("gpt-5.3-ody".to_string()),
-            slug: Some("gpt-5.3-ody".to_string()),
+            model: Some("k3-ody".to_string()),
+            slug: Some("k3-ody".to_string()),
         };
         let state = state_with_metadata(metadata);
         let request = NetworkPolicyRequest::new(NetworkPolicyRequestArgs {
@@ -809,8 +809,8 @@ mod tests {
         assert_eq!(event.field("user.account_id"), Some("acct-1"));
         assert_eq!(event.field("user.email"), Some("test@example.com"));
         assert_eq!(event.field("terminal.type"), Some("iTerm.app/3.6.5"));
-        assert_eq!(event.field("model"), Some("gpt-5.3-ody"));
-        assert_eq!(event.field("slug"), Some("gpt-5.3-ody"));
+        assert_eq!(event.field("model"), Some("k3-ody"));
+        assert_eq!(event.field("slug"), Some("k3-ody"));
     }
 
     #[tokio::test(flavor = "current_thread")]

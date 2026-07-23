@@ -170,9 +170,9 @@ pub fn configure_search_capable_model(config: &mut Config) {
     let model = model_catalog
         .models
         .iter_mut()
-        .find(|model| model.slug == "gpt-5.4")
-        .expect("gpt-5.4 exists in bundled models.json");
-    config.model = Some("gpt-5.4".to_string());
+        .find(|model| model.slug == "k3")
+        .expect("k3 exists in bundled models.json");
+    config.model = Some("k3".to_string());
     model.supports_search_tool = true;
     config.model_catalog = Some(model_catalog);
 }

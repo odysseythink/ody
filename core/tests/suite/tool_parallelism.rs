@@ -77,7 +77,7 @@ async fn run_turn_and_measure(test: &TestOdy, prompt: &str) -> anyhow::Result<Du
 }
 
 async fn build_ody_with_test_tool(server: &wiremock::MockServer) -> anyhow::Result<TestOdy> {
-    let mut builder = test_ody().with_model("test-gpt-5.1-ody");
+    let mut builder = test_ody().with_model("test-kimi-for-coding");
     builder.build(server).await
 }
 
@@ -156,7 +156,7 @@ async fn shell_tools_run_in_parallel() -> anyhow::Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
-    let mut builder = test_ody().with_model("gpt-5.4");
+    let mut builder = test_ody().with_model("k3");
     let test = builder.build(&server).await?;
 
     let shell_args = json!({
@@ -355,7 +355,7 @@ async fn shell_tools_start_before_response_completed_when_stream_delayed() -> an
     ])
     .await;
 
-    let mut builder = test_ody().with_model("gpt-5.4");
+    let mut builder = test_ody().with_model("k3");
     let test = builder
         .build_with_streaming_server(&streaming_server)
         .await?;

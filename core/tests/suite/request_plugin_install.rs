@@ -88,9 +88,9 @@ fn configure_apps_without_search_tool(config: &mut Config, apps_base_url: &str) 
     let model = model_catalog
         .models
         .iter_mut()
-        .find(|model| model.slug == "gpt-5.4")
-        .expect("gpt-5.4 exists in bundled models.json");
-    config.model = Some("gpt-5.4".to_string());
+        .find(|model| model.slug == "k3")
+        .expect("k3 exists in bundled models.json");
+    config.model = Some("k3".to_string());
     config.tool_suggest.discoverables = vec![ToolSuggestDiscoverable {
         kind: ToolSuggestDiscoverableType::Connector,
         id: DISCOVERABLE_GMAIL_ID.to_string(),

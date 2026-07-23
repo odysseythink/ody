@@ -2295,7 +2295,7 @@ mod tests {
                     name: None,
                     turns: Vec::new(),
                 },
-                model: "gpt-5".to_string(),
+                model: "k3".to_string(),
                 model_provider: "kimi".to_string(),
                 service_tier: None,
                 cwd,
@@ -2344,7 +2344,7 @@ mod tests {
                         "name": null,
                         "turns": []
                     },
-                    "model": "gpt-5",
+                    "model": "k3",
                     "modelProvider": "kimi",
                     "serviceTier": null,
                     "cwd": absolute_path_string("tmp"),
@@ -3068,7 +3068,7 @@ mod tests {
                     approvals_reviewer: v2::ApprovalsReviewer::User,
                     sandbox_policy: v2::SandboxPolicy::DangerFullAccess,
                     active_permission_profile: None,
-                    model: "gpt-5.4".to_string(),
+                    model: "k3".to_string(),
                     model_provider: "kimi".to_string(),
                     service_tier: None,
                     effort: None,
@@ -3076,7 +3076,7 @@ mod tests {
                     collaboration_mode: ody_protocol::config_types::CollaborationMode {
                         mode: ody_protocol::config_types::ModeKind::Default,
                         settings: ody_protocol::config_types::Settings {
-                            model: "gpt-5.4".to_string(),
+                            model: "k3".to_string(),
                             reasoning_effort: None,
                             developer_instructions: None,
                             design_audit_level: None,

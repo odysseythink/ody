@@ -677,7 +677,7 @@ impl ChatWidget {
         });
         // Warn whenever the model exposes a high/xhigh reasoning level, since
         // those quickly consume plan rate limits. (Previously keyed off specific
-        // gpt-5 slugs; now capability-driven so it works for any provider.)
+        // k3 slugs; now capability-driven so it works for any provider.)
         let warn_for_model = warn_effort.is_some();
 
         let mut choices: Vec<ReasoningEffortConfig> = supported

@@ -1586,7 +1586,7 @@ Run ody doctor without --summary for detailed diagnostics.
             ody_version: "0.0.0".to_string(),
             checks: vec![
                 DoctorCheck::new("config.load", "config", CheckStatus::Ok, "config loaded")
-                    .detail("model: gpt-5.5")
+                    .detail("model: deepseek-chat")
                     .detail("model provider: kimi")
                     .detail("feature flags enabled: 3")
                     .detail("enabled feature flags: shell_tool, memories, goals")

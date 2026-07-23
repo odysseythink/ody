@@ -8,10 +8,10 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 
-use ody_shell_command::FsChecker;
-use ody_shell_command::RealFsChecker;
-use ody_shell_command::WindowsBashDetection;
-use ody_shell_command::detect_windows_bash;
+use crate::FsChecker;
+use crate::RealFsChecker;
+use crate::WindowsBashDetection;
+use crate::detect_windows_bash;
 
 #[derive(Default)]
 struct MockFsChecker {

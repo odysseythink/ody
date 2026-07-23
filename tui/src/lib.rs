@@ -1141,20 +1141,8 @@ pub async fn run_main(
     let log_db_layer = log_db
         .clone()
         .map(|layer| layer.with_filter(log_db::default_filter()));
-
-    // Temporary diagnostic layer: mirror status-line debug logs to stderr so
-    // they can be captured with RUST_LOG=debug without configuring log_dir.
-    let stderr_env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("error"));
-    let tui_stderr_layer = tracing_subscriber::fmt::layer()
-        .with_writer(std::io::stderr)
-        .with_ansi(false)
-        .with_target(true)
-        .with_filter(stderr_env_filter);
-
     let _ = tracing_subscriber::registry()
         .with(tui_file_layer)
-        .with(tui_stderr_layer)
         .with(feedback_layer)
         .with(feedback_metadata_layer)
         .with(log_db_layer)

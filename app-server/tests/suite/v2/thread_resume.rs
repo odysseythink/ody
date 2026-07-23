@@ -139,7 +139,7 @@ async fn thread_resume_rejects_unmaterialized_thread() -> Result<()> {
     // Start a thread.
     let start_id = mcp
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.4".to_string()),
+            model: Some("k3".to_string()),
             ..Default::default()
         })
         .await?;
@@ -185,7 +185,7 @@ async fn thread_resume_with_empty_path_uses_running_thread_id() -> Result<()> {
 
     let start_id = mcp
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.4".to_string()),
+            model: Some("k3".to_string()),
             ..Default::default()
         })
         .await?;
@@ -331,7 +331,7 @@ async fn turn_start_updates_runtime_workspace_roots_for_loaded_thread() -> Resul
 
     let start_id = mcp
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.4".to_string()),
+            model: Some("k3".to_string()),
             ..Default::default()
         })
         .await?;
@@ -410,7 +410,7 @@ async fn thread_goal_get_rejects_unmaterialized_thread() -> Result<()> {
 
     let start_id = mcp
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.2-ody".to_string()),
+            model: Some("kimi-for-coding".to_string()),
             ephemeral: Some(true),
             ..Default::default()
         })
@@ -473,7 +473,7 @@ async fn goal_first_live_thread_appears_in_state_db_thread_list() -> Result<()> 
 
     let start_id = mcp
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.2-ody".to_string()),
+            model: Some("kimi-for-coding".to_string()),
             ..Default::default()
         })
         .await?;
@@ -717,7 +717,7 @@ async fn thread_resume_keeps_paused_goal_paused() -> Result<()> {
 
     let start_id = mcp
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.2-ody".to_string()),
+            model: Some("kimi-for-coding".to_string()),
             ..Default::default()
         })
         .await?;
@@ -822,7 +822,7 @@ async fn thread_goal_set_preserves_budget_limited_same_objective() -> Result<()>
 
     let start_id = mcp
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.2-ody".to_string()),
+            model: Some("kimi-for-coding".to_string()),
             ..Default::default()
         })
         .await?;
@@ -921,7 +921,7 @@ async fn thread_goal_set_persists_resumable_stopped_statuses() -> Result<()> {
 
     let start_id = mcp
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.2-ody".to_string()),
+            model: Some("kimi-for-coding".to_string()),
             ..Default::default()
         })
         .await?;
@@ -1447,7 +1447,7 @@ async fn thread_resume_prefers_persisted_git_metadata_for_local_threads() -> Res
         &config_toml,
         format!(
             r#"
-model = "gpt-5.3-ody"
+model = "kimi-for-coding"
 approval_policy = "never"
 sandbox_mode = "read-only"
 
@@ -1885,7 +1885,7 @@ async fn thread_resume_keeps_in_flight_turn_streaming() -> Result<()> {
 
     let start_id = primary
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.4".to_string()),
+            model: Some("k3".to_string()),
             ..Default::default()
         })
         .await?;
@@ -1994,7 +1994,7 @@ async fn thread_resume_rejects_history_when_thread_is_running() -> Result<()> {
 
     let start_id = primary
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.4".to_string()),
+            model: Some("k3".to_string()),
             ..Default::default()
         })
         .await?;
@@ -2113,7 +2113,7 @@ async fn thread_resume_rejects_mismatched_path_for_running_thread_id() -> Result
 
     let start_id = primary
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.4".to_string()),
+            model: Some("k3".to_string()),
             ..Default::default()
         })
         .await?;
@@ -2282,7 +2282,7 @@ async fn thread_resume_rejoins_running_thread_even_with_override_mismatch() -> R
 
     let start_id = primary
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.4".to_string()),
+            model: Some("k3".to_string()),
             ..Default::default()
         })
         .await?;
@@ -2364,7 +2364,7 @@ async fn thread_resume_rejoins_running_thread_even_with_override_mismatch() -> R
         initial_turns_page,
         ..
     } = to_response::<ThreadResumeResponse>(resume_resp)?;
-    assert_eq!(model, "gpt-5.4");
+    assert_eq!(model, "k3");
     let initial_turns_page = initial_turns_page.expect("resume should include initial turns page");
     let resumed_running_turn = initial_turns_page
         .data
@@ -2413,7 +2413,7 @@ async fn thread_resume_can_skip_turns_when_thread_is_running() -> Result<()> {
 
     let start_id = primary
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.4".to_string()),
+            model: Some("k3".to_string()),
             ..Default::default()
         })
         .await?;
@@ -2497,7 +2497,7 @@ async fn thread_resume_replays_pending_command_execution_request_approval() -> R
 
     let start_id = primary
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.4".to_string()),
+            model: Some("k3".to_string()),
             ..Default::default()
         })
         .await?;
@@ -2636,7 +2636,7 @@ async fn thread_resume_replays_pending_file_change_request_approval() -> Result<
 
     let start_id = primary
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.4".to_string()),
+            model: Some("k3".to_string()),
             cwd: Some(workspace.to_string_lossy().into_owned()),
             ..Default::default()
         })
@@ -3028,7 +3028,7 @@ async fn start_materialized_thread_and_restart(
 
     let start_id = first_mcp
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.4".to_string()),
+            model: Some("k3".to_string()),
             ..Default::default()
         })
         .await?;
@@ -3118,7 +3118,7 @@ async fn thread_resume_accepts_personality_override() -> Result<()> {
 
     let start_id = primary
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.3-ody".to_string()),
+            model: Some("kimi-for-coding".to_string()),
             ..Default::default()
         })
         .await?;
@@ -3157,7 +3157,7 @@ async fn thread_resume_accepts_personality_override() -> Result<()> {
     let resume_id = secondary
         .send_thread_resume_request(ThreadResumeParams {
             thread_id: thread.id,
-            model: Some("gpt-5.3-ody".to_string()),
+            model: Some("kimi-for-coding".to_string()),
             personality: Some(Personality::Friendly),
             ..Default::default()
         })
@@ -3220,7 +3220,7 @@ fn create_config_toml(ody_home: &std::path::Path, server_uri: &str) -> std::io::
         config_toml,
         format!(
             r#"
-model = "gpt-5.3-ody"
+model = "kimi-for-coding"
 approval_policy = "never"
 sandbox_mode = "read-only"
 
@@ -3246,7 +3246,7 @@ fn create_config_toml_simple(ody_home: &std::path::Path, server_uri: &str) -> st
         config_toml,
         format!(
             r#"
-model = "gpt-5.3-ody"
+model = "kimi-for-coding"
 approval_policy = "never"
 sandbox_mode = "read-only"
 
@@ -3275,7 +3275,7 @@ fn create_config_toml_with_required_broken_mcp(
         config_toml,
         format!(
             r#"
-model = "gpt-5.3-ody"
+model = "kimi-for-coding"
 approval_policy = "never"
 sandbox_mode = "read-only"
 

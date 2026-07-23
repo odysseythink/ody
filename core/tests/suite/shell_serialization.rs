@@ -62,7 +62,7 @@ async fn shell_output_preserves_fixture_json_as_freeform() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
-    let mut builder = test_ody().with_model("test-gpt-5-ody");
+    let mut builder = test_ody().with_model("test-kimi-for-coding");
     let test = builder.build(&server).await?;
 
     let fixture_path = test.cwd.path().join("fixture.json");
@@ -113,7 +113,7 @@ async fn shell_output_records_duration() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
-    let mut builder = test_ody().with_model("test-gpt-5-ody");
+    let mut builder = test_ody().with_model("test-kimi-for-coding");
     let test = builder.build(&server).await?;
 
     let call_id = "shell-freeform";
@@ -272,7 +272,7 @@ async fn shell_output_is_freeform_for_nonzero_exit() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
-    let mut builder = test_ody().with_model("gpt-5.4");
+    let mut builder = test_ody().with_model("k3");
     let test = builder.build(&server).await?;
 
     let call_id = "shell-nonzero-exit";
@@ -358,7 +358,7 @@ async fn shell_command_output_is_not_truncated_under_10k_bytes() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
-    let mut builder = test_ody().with_model("gpt-5.4");
+    let mut builder = test_ody().with_model("k3");
     let test = builder.build(&server).await?;
 
     let call_id = "shell-command";
@@ -409,7 +409,7 @@ async fn shell_command_output_is_not_truncated_over_10k_bytes() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
-    let mut builder = test_ody().with_model("gpt-5.2");
+    let mut builder = test_ody().with_model("kimi-k2.5");
     let test = builder.build(&server).await?;
 
     let call_id = "shell-command";

@@ -495,7 +495,7 @@ mod tests {
         let preview_data = StatusSurfacePreviewData::from_iter([
             (
                 StatusLineItem::ModelName.preview_item(),
-                "gpt-5".to_string(),
+                "k3".to_string(),
             ),
             (
                 StatusLineItem::CurrentDir.preview_item(),
@@ -530,7 +530,7 @@ mod tests {
                     /*use_theme_colors*/ true,
                 )
             ),
-            Some("gpt-5 · /repo".to_string())
+            Some("k3 · /repo".to_string())
         );
     }
 
@@ -538,7 +538,7 @@ mod tests {
     fn preview_uses_placeholders_when_runtime_values_are_missing() {
         let preview_data = StatusSurfacePreviewData::from_iter([(
             StatusSurfacePreviewItem::Model,
-            "gpt-5".to_string(),
+            "k3".to_string(),
         )]);
         let items = [
             MultiSelectItem {
@@ -568,7 +568,7 @@ mod tests {
                     /*use_theme_colors*/ true,
                 )
             ),
-            Some("gpt-5 · feat/awesome-feature".to_string())
+            Some("k3 · feat/awesome-feature".to_string())
         );
     }
 
@@ -577,7 +577,7 @@ mod tests {
         let preview_data = StatusSurfacePreviewData::from_iter([
             (
                 StatusLineItem::ModelName.preview_item(),
-                "gpt-5".to_string(),
+                "k3".to_string(),
             ),
             (
                 StatusLineItem::ThreadTitle.preview_item(),
@@ -612,7 +612,7 @@ mod tests {
                     /*use_theme_colors*/ true,
                 )
             ),
-            Some("gpt-5 · Roadmap cleanup".to_string())
+            Some("k3 · Roadmap cleanup".to_string())
         );
     }
 
@@ -629,7 +629,7 @@ mod tests {
             StatusSurfacePreviewData::from_iter([
                 (
                     StatusLineItem::ModelName.preview_item(),
-                    "gpt-5-ody".to_string(),
+                    "k3-ody".to_string(),
                 ),
                 (
                     StatusLineItem::CurrentDir.preview_item(),

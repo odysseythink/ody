@@ -28,8 +28,8 @@ use ody_protocol::user_input::UserInput;
 use pretty_assertions::assert_eq;
 use wiremock::ResponseTemplate;
 
-const SERVER_MODEL: &str = "gpt-5.2";
-const REQUESTED_MODEL: &str = "gpt-5.3-ody";
+const SERVER_MODEL: &str = "kimi-k2.5";
+const REQUESTED_MODEL: &str = "kimi-for-coding";
 const TRUSTED_ACCESS_FOR_CYBER_VERIFICATION: &str = "trusted_access_for_cyber";
 
 const CYBER_POLICY_MESSAGE: &str =

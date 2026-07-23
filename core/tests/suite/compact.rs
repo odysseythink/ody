@@ -2121,8 +2121,8 @@ async fn pre_sampling_compact_runs_on_switch_to_smaller_context_model() {
     skip_if_no_network!();
 
     let server = MockServer::start().await;
-    let previous_model = "gpt-5.3-ody";
-    let next_model = "gpt-5.2";
+    let previous_model = "kimi-for-coding";
+    let next_model = "kimi-k2.5";
 
     let models_mock = mount_models_once(
         &server,
@@ -2222,8 +2222,8 @@ async fn pre_sampling_compact_runs_when_comp_hash_changes() {
     skip_if_no_network!();
 
     let server = MockServer::start().await;
-    let previous_model = "gpt-5.3-ody";
-    let next_model = "gpt-5.2";
+    let previous_model = "kimi-for-coding";
+    let next_model = "kimi-k2.5";
 
     let models_mock = mount_models_once(
         &server,
@@ -2308,8 +2308,8 @@ async fn auto_compaction_feature_disabled_skips_comp_hash_model_switch_compactio
     skip_if_no_network!();
 
     let server = MockServer::start().await;
-    let previous_model = "gpt-5.3-ody";
-    let next_model = "gpt-5.2";
+    let previous_model = "kimi-for-coding";
+    let next_model = "kimi-k2.5";
 
     let models_mock = mount_models_once(
         &server,
@@ -2394,9 +2394,9 @@ async fn pre_sampling_compact_skips_when_either_comp_hash_is_missing() {
     skip_if_no_network!();
 
     let server = MockServer::start().await;
-    let model_without_hash = "gpt-5.4";
-    let model_with_hash = "gpt-5.3-ody";
-    let next_model_without_hash = "gpt-5.2";
+    let model_without_hash = "k3";
+    let model_with_hash = "kimi-for-coding";
+    let next_model_without_hash = "kimi-k2.5";
 
     let models_mock = mount_models_once(
         &server,
@@ -2503,8 +2503,8 @@ async fn body_after_prefix_model_switch_budget_compacts_with_next_model() {
     skip_if_no_network!();
 
     let server = MockServer::start().await;
-    let previous_model = "gpt-5.3-ody";
-    let next_model = "gpt-5.2";
+    let previous_model = "kimi-for-coding";
+    let next_model = "kimi-k2.5";
 
     let models_mock = mount_models_once(
         &server,
@@ -2596,8 +2596,8 @@ async fn pre_sampling_compact_runs_after_resume_and_switch_to_smaller_model() {
     skip_if_no_network!();
 
     let server = MockServer::start().await;
-    let previous_model = "gpt-5.3-ody";
-    let next_model = "gpt-5.2";
+    let previous_model = "kimi-for-coding";
+    let next_model = "kimi-k2.5";
 
     let models_mock = mount_models_once(
         &server,
@@ -2715,8 +2715,8 @@ async fn pre_sampling_compact_recovers_comp_hash_after_resume() {
     skip_if_no_network!();
 
     let server = MockServer::start().await;
-    let previous_model = "gpt-5.3-ody";
-    let next_model = "gpt-5.2";
+    let previous_model = "kimi-for-coding";
+    let next_model = "kimi-k2.5";
 
     let models_mock = mount_models_once(
         &server,
@@ -2844,8 +2844,8 @@ async fn pre_sampling_compact_skips_missing_comp_hash_after_resume() {
     skip_if_no_network!();
 
     let server = MockServer::start().await;
-    let previous_model = "gpt-5.3-ody";
-    let next_model = "gpt-5.2";
+    let previous_model = "kimi-for-coding";
+    let next_model = "kimi-k2.5";
 
     let models_mock = mount_models_once(
         &server,
@@ -4423,8 +4423,8 @@ async fn snapshot_request_shape_pre_turn_compaction_strips_incoming_model_switch
     skip_if_no_network!();
 
     let server = start_mock_server().await;
-    let previous_model = "gpt-5.4";
-    let next_model = "gpt-5.3-ody";
+    let previous_model = "k3";
+    let next_model = "kimi-for-coding";
 
     let request_log = mount_sse_sequence(
         &server,

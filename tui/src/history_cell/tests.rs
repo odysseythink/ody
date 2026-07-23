@@ -647,8 +647,8 @@ async fn session_info_uses_availability_nux_tooltip_override() {
     let config = test_config().await;
     let cell = new_session_info(
         &config,
-        "gpt-5",
-        &session_configured_event("gpt-5"),
+        "kimi-k2.5",
+        &session_configured_event("kimi-k2.5"),
         /*is_first_event*/ false,
         Some("Model just became available".to_string()),
         /*show_fast_status*/ false,
@@ -668,8 +668,8 @@ async fn session_info_availability_nux_tooltip_snapshot() {
     config.cwd = test_path_buf("/tmp/project").abs();
     let cell = new_session_info(
         &config,
-        "gpt-5",
-        &session_configured_event("gpt-5"),
+        "kimi-k2.5",
+        &session_configured_event("kimi-k2.5"),
         /*is_first_event*/ false,
         Some("Model just became available".to_string()),
         /*show_fast_status*/ false,
@@ -684,8 +684,8 @@ async fn session_info_first_event_suppresses_tooltips_and_nux() {
     let config = test_config().await;
     let cell = new_session_info(
         &config,
-        "gpt-5",
-        &session_configured_event("gpt-5"),
+        "kimi-k2.5",
+        &session_configured_event("kimi-k2.5"),
         /*is_first_event*/ true,
         Some("Model just became available".to_string()),
         /*show_fast_status*/ false,
@@ -702,8 +702,8 @@ async fn session_info_hides_tooltips_when_disabled() {
     config.show_tooltips = false;
     let cell = new_session_info(
         &config,
-        "gpt-5",
-        &session_configured_event("gpt-5"),
+        "kimi-k2.5",
+        &session_configured_event("kimi-k2.5"),
         /*is_first_event*/ false,
         Some("Model just became available".to_string()),
         /*show_fast_status*/ false,
@@ -1560,7 +1560,7 @@ fn session_header_hides_fast_status_when_disabled() {
 )]
 fn session_header_indicates_yolo_mode() {
     let cell = SessionHeaderHistoryCell::new(
-        "gpt-5".to_string(),
+        "kimi-k2.5".to_string(),
         /*reasoning_effort*/ None,
         /*show_fast_status*/ false,
         test_path_buf("/tmp/project").abs().to_path_buf(),

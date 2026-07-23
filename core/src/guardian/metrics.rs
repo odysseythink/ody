@@ -257,8 +257,8 @@ mod tests {
         .expect("in-memory metrics client");
         SessionTelemetry::new(
             ThreadId::new(),
-            "gpt-5.4",
-            "gpt-5.4",
+            "k3",
+            "k3",
             /*auth_mode*/ None,
             "test_originator".to_string(),
             /*log_user_prompts*/ false,
@@ -339,7 +339,7 @@ mod tests {
             user_authorization: Some(GuardianUserAuthorization::High),
             outcome: Some(GuardianAssessmentOutcome::Allow),
             guardian_session_kind: Some(GuardianReviewSessionKind::TrunkReused),
-            guardian_model: Some("gpt-5.4 guardian".to_string()),
+            guardian_model: Some("k3 guardian".to_string()),
             guardian_reasoning_effort: Some("low".to_string()),
             had_prior_review_context: Some(true),
             reviewed_action_truncated: true,
@@ -381,7 +381,7 @@ mod tests {
                 ),
                 ("decision".to_string(), "approved".to_string()),
                 ("failure_reason".to_string(), "none".to_string()),
-                ("guardian_model".to_string(), "gpt-5.4_guardian".to_string()),
+                ("guardian_model".to_string(), "k3_guardian".to_string()),
                 ("guardian_reasoning_effort".to_string(), "low".to_string()),
                 ("had_prior_review_context".to_string(), "true".to_string()),
                 ("outcome".to_string(), "allow".to_string()),

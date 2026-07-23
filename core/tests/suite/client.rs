@@ -792,7 +792,7 @@ async fn resume_replays_legacy_js_repl_image_rollout_shapes() {
     .await;
 
     let ody_home = Arc::new(TempDir::new().unwrap());
-    let mut builder = test_ody().with_model("gpt-5.4");
+    let mut builder = test_ody().with_model("k3");
     let test = builder
         .resume(&server, ody_home, session_path.clone())
         .await
@@ -952,7 +952,7 @@ async fn resume_replays_image_tool_outputs_with_detail() {
     .await;
 
     let ody_home = Arc::new(TempDir::new().unwrap());
-    let mut builder = test_ody().with_model("gpt-5.4");
+    let mut builder = test_ody().with_model("k3");
     let test = builder
         .resume(&server, ody_home, session_path.clone())
         .await
@@ -1701,7 +1701,7 @@ async fn includes_configured_effort_in_request() -> anyhow::Result<()> {
     )
     .await;
     let TestOdy { ody, .. } = test_ody()
-        .with_model("gpt-5.4")
+        .with_model("k3")
         .with_config(|config| {
             config.model_reasoning_effort = Some(ReasoningEffort::Medium);
         })
@@ -1747,7 +1747,7 @@ async fn includes_no_effort_in_request() -> anyhow::Result<()> {
         sse(vec![ev_response_created("resp1"), ev_completed("resp1")]),
     )
     .await;
-    let TestOdy { ody, .. } = test_ody().with_model("gpt-5.4").build(&server).await?;
+    let TestOdy { ody, .. } = test_ody().with_model("k3").build(&server).await?;
 
     ody.submit(Op::UserInput {
         items: vec![UserInput::Text {
@@ -1789,7 +1789,7 @@ async fn includes_default_reasoning_effort_in_request_when_defined_by_model_info
         sse(vec![ev_response_created("resp1"), ev_completed("resp1")]),
     )
     .await;
-    let TestOdy { ody, .. } = test_ody().with_model("gpt-5.4").build(&server).await?;
+    let TestOdy { ody, .. } = test_ody().with_model("k3").build(&server).await?;
 
     ody.submit(Op::UserInput {
         items: vec![UserInput::Text {
@@ -1830,12 +1830,12 @@ async fn user_turn_collaboration_mode_overrides_model_and_effort() -> anyhow::Re
         sse(vec![ev_response_created("resp1"), ev_completed("resp1")]),
     )
     .await;
-    let TestOdy { ody, config, .. } = test_ody().with_model("gpt-5.4").build(&server).await?;
+    let TestOdy { ody, config, .. } = test_ody().with_model("k3").build(&server).await?;
 
     let collaboration_mode = CollaborationMode {
         mode: ModeKind::Default,
         settings: Settings {
-            model: "gpt-5.4".to_string(),
+            model: "k3".to_string(),
             reasoning_effort: Some(ReasoningEffort::High),
             developer_instructions: None,
             design_audit_level: None,
@@ -1868,7 +1868,7 @@ async fn user_turn_collaboration_mode_overrides_model_and_effort() -> anyhow::Re
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     let request_body = resp_mock.single_request().body_json();
-    assert_eq!(request_body["model"].as_str(), Some("gpt-5.4"));
+    assert_eq!(request_body["model"].as_str(), Some("k3"));
     assert_eq!(
         request_body
             .get("reasoning")
@@ -1945,7 +1945,7 @@ async fn responses_lite_sets_all_turns_context_and_disables_parallel_tool_calls(
     .await;
 
     let TestOdy { ody, .. } = test_ody()
-        .with_model_info_override("gpt-5.4", |model_info| {
+        .with_model_info_override("k3", |model_info| {
             model_info.use_responses_lite = true;
             model_info.supports_parallel_tool_calls = true;
         })
@@ -1995,8 +1995,8 @@ async fn user_turn_explicit_reasoning_summary_overrides_model_catalog_default() 
     let model = model_catalog
         .models
         .iter_mut()
-        .find(|model| model.slug == "gpt-5.4")
-        .expect("gpt-5.4 exists in bundled models.json");
+        .find(|model| model.slug == "k3")
+        .expect("k3 exists in bundled models.json");
     model.supports_reasoning_summaries = true;
     model.default_reasoning_summary = ReasoningSummary::Detailed;
 
@@ -2006,7 +2006,7 @@ async fn user_turn_explicit_reasoning_summary_overrides_model_catalog_default() 
         session_configured,
         ..
     } = test_ody()
-        .with_model("gpt-5.4")
+        .with_model("k3")
         .with_config(move |config| {
             config.model_catalog = Some(model_catalog);
         })
@@ -2116,13 +2116,13 @@ async fn reasoning_summary_none_overrides_model_catalog_default() -> anyhow::Res
     let model = model_catalog
         .models
         .iter_mut()
-        .find(|model| model.slug == "gpt-5.4")
-        .expect("gpt-5.4 exists in bundled models.json");
+        .find(|model| model.slug == "k3")
+        .expect("k3 exists in bundled models.json");
     model.supports_reasoning_summaries = true;
     model.default_reasoning_summary = ReasoningSummary::Detailed;
 
     let TestOdy { ody, .. } = test_ody()
-        .with_model("gpt-5.4")
+        .with_model("k3")
         .with_config(move |config| {
             config.model_reasoning_summary = Some(ReasoningSummary::None);
             config.model_catalog = Some(model_catalog);
@@ -2166,7 +2166,7 @@ async fn includes_default_verbosity_in_request() -> anyhow::Result<()> {
         sse(vec![ev_response_created("resp1"), ev_completed("resp1")]),
     )
     .await;
-    let TestOdy { ody, .. } = test_ody().with_model("gpt-5.4").build(&server).await?;
+    let TestOdy { ody, .. } = test_ody().with_model("k3").build(&server).await?;
 
     ody.submit(Op::UserInput {
         items: vec![UserInput::Text {
@@ -2254,7 +2254,7 @@ async fn configured_verbosity_is_sent() -> anyhow::Result<()> {
     )
     .await;
     let TestOdy { ody, .. } = test_ody()
-        .with_model("gpt-5.4")
+        .with_model("k3")
         .with_config(|config| {
             config.model_verbosity = Some(Verbosity::High);
         })
@@ -2598,7 +2598,7 @@ async fn context_window_error_sets_total_tokens_to_model_window() -> anyhow::Res
 
     let TestOdy { ody, .. } = test_ody()
         .with_config(|config| {
-            config.model = Some("gpt-5.4".to_string());
+            config.model = Some("k3".to_string());
             config.model_context_window = Some(272_000);
         })
         .build(&server)

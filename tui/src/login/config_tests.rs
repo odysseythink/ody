@@ -148,7 +148,7 @@ fn build_logout_provider_edits_keeps_default_model_when_not_owned_by_provider() 
     let edits = build_logout_provider_edits(
         &aliases,
         &std::collections::HashMap::new(),
-        Some("other/gpt-5"),
+        Some("other/kimi-k2.5"),
     );
     assert_eq!(edits.len(), 1);
     assert_eq!(edits[0].key_path, "providers.work-kimi");
@@ -169,7 +169,7 @@ fn build_logout_provider_edits_clears_matching_models() {
         "work-kimi/kimi-k2".to_string(),
         OdyCodeModelConfig::default(),
     );
-    models.insert("other/gpt-5".to_string(), OdyCodeModelConfig::default());
+    models.insert("other/kimi-k2.5".to_string(), OdyCodeModelConfig::default());
     let edits = build_logout_provider_edits(&aliases, &models, None);
     assert_eq!(edits.len(), 2);
     assert_eq!(edits[0].key_path, "providers.work-kimi");

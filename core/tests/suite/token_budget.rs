@@ -350,7 +350,7 @@ async fn get_context_remaining_returns_unknown_when_window_is_unavailable() -> R
     )
     .await;
     let test = test_ody()
-        .with_model_info_override("gpt-5.2", |model_info| {
+        .with_model_info_override("kimi-k2.5", |model_info| {
             model_info.context_window = None;
             model_info.max_context_window = None;
         })

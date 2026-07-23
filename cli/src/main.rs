@@ -2699,7 +2699,7 @@ mod tests {
                 "--strict-config",
                 "--dangerously-bypass-hook-trust",
                 "-m",
-                "gpt-5.1-test",
+                "kimi-k2.5",
                 "-p",
                 "work",
                 "-C",
@@ -2711,7 +2711,7 @@ mod tests {
 
         assert_eq!(target, "my-thread");
         assert_eq!(remote.remote.as_deref(), Some("unix://archive.sock"));
-        assert_eq!(interactive.model.as_deref(), Some("gpt-5.1-test"));
+        assert_eq!(interactive.model.as_deref(), Some("kimi-k2.5"));
         assert_eq!(interactive.config_profile_v2.as_deref(), Some("work"));
         assert_eq!(
             interactive.cwd.as_deref(),
@@ -2953,9 +2953,9 @@ mod tests {
     #[test]
     fn resume_model_flag_applies_when_no_root_flags() {
         let interactive =
-            finalize_resume_from_args(["ody", "resume", "-m", "gpt-5.1-test"].as_ref());
+            finalize_resume_from_args(["ody", "resume", "-m", "kimi-k2.5"].as_ref());
 
-        assert_eq!(interactive.model.as_deref(), Some("gpt-5.1-test"));
+        assert_eq!(interactive.model.as_deref(), Some("kimi-k2.5"));
         assert!(interactive.resume_picker);
         assert!(!interactive.resume_last);
         assert_eq!(interactive.resume_session_id, None);
@@ -3052,7 +3052,7 @@ mod tests {
                 "--ask-for-approval",
                 "on-request",
                 "-m",
-                "gpt-5.1-test",
+                "kimi-k2.5",
                 "-p",
                 "my-config",
                 "-C",
@@ -3064,7 +3064,7 @@ mod tests {
             .as_ref(),
         );
 
-        assert_eq!(interactive.model.as_deref(), Some("gpt-5.1-test"));
+        assert_eq!(interactive.model.as_deref(), Some("kimi-k2.5"));
         assert_eq!(interactive.config_profile_v2.as_deref(), Some("my-config"));
         assert_matches!(
             interactive.sandbox_mode,

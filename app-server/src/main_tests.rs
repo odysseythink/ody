@@ -8,7 +8,7 @@ fn app_server_accepts_cli_config_overrides() {
     let args = AppServerArgs::try_parse_from([
         "ody-app-server",
         "-c",
-        "model=\"gpt-5-ody\"",
+        "model=\"kimi-for-coding\"",
         "--config",
         "sandbox_mode=\"read-only\"",
         "--listen",
@@ -26,7 +26,7 @@ fn app_server_accepts_cli_config_overrides() {
         vec![
             (
                 "model".to_string(),
-                TomlValue::String("gpt-5-ody".to_string()),
+                TomlValue::String("kimi-for-coding".to_string()),
             ),
             (
                 "sandbox_mode".to_string(),

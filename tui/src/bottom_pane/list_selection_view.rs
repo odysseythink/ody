@@ -2376,7 +2376,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let items = vec![
             SelectionItem {
-                name: "gpt-5.1-ody".to_string(),
+                name: "k3-ody".to_string(),
                 description: Some(
                     "Optimized for Ody. Balance of reasoning quality and coding ability."
                         .to_string(),
@@ -2386,7 +2386,7 @@ mod tests {
                 ..Default::default()
             },
             SelectionItem {
-                name: "gpt-5.1-ody-mini".to_string(),
+                name: "glm-4.5".to_string(),
                 description: Some(
                     "Optimized for Ody. Cheaper, faster, but less capable.".to_string(),
                 ),
@@ -2458,7 +2458,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let items = vec![
             SelectionItem {
-                name: "gpt-5.1-ody".to_string(),
+                name: "k3-ody".to_string(),
                 description: Some(
                     "Optimized for Ody. Balance of reasoning quality and coding ability."
                         .to_string(),
@@ -2468,7 +2468,7 @@ mod tests {
                 ..Default::default()
             },
             SelectionItem {
-                name: "gpt-5.1-ody-mini".to_string(),
+                name: "glm-4.5".to_string(),
                 description: Some(
                     "Optimized for Ody. Cheaper, faster, but less capable.".to_string(),
                 ),

@@ -143,8 +143,6 @@ use ody_features::Feature;
 use ody_features::FeaturesToml;
 use ody_model_provider::create_model_provider;
 use ody_model_provider_info::ModelProviderInfo;
-use ody_models_manager::model_presets::HIDE_GPT_5_1_ODY_MAX_MIGRATION_PROMPT_CONFIG;
-use ody_models_manager::model_presets::HIDE_GPT5_1_MIGRATION_PROMPT_CONFIG;
 use ody_otel::SessionTelemetry;
 use ody_otel::TelemetryAuthMode;
 use ody_protocol::ThreadId;
@@ -185,6 +183,7 @@ use std::time::Instant;
 use tokio::select;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
+use tokio::time::timeout;
 use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::unbounded_channel;
@@ -1186,8 +1185,11 @@ See the Ody keymap documentation for supported actions and examples."
                 }
             }
         };
-        if let Err(err) = app_server.shutdown().await {
-            tracing::warn!(error = %err, "failed to shut down embedded app server");
+        if let Err(err) = timeout(Duration::from_secs(3), app_server.shutdown()).await {
+            tracing::warn!(
+                error = ?err,
+                "app-server shutdown timed out or failed; continuing exit"
+            );
         }
         let clear_pet_result = tui.clear_ambient_pet_image();
         let clear_result = tui.terminal.clear();

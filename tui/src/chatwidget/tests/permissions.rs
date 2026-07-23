@@ -422,7 +422,7 @@ async fn windows_auto_mode_prompt_requests_enabling_sandbox_feature() {
     );
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 #[tokio::test]
 async fn startup_prompts_for_windows_sandbox_when_agent_requested() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
@@ -451,7 +451,7 @@ async fn startup_prompts_for_windows_sandbox_when_agent_requested() {
     );
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 #[tokio::test]
 async fn startup_windows_sandbox_prompt_blocks_disallowed_unelevated_fallback() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
@@ -593,7 +593,7 @@ async fn windows_sandbox_required_fallback_prompt_snapshot() {
     assert_chatwidget_snapshot!("windows_sandbox_required_fallback_prompt", popup);
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
 #[tokio::test]
 async fn startup_does_not_prompt_for_windows_sandbox_when_not_requested() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
@@ -605,6 +605,24 @@ async fn startup_does_not_prompt_for_windows_sandbox_when_not_requested() {
     assert!(
         chat.bottom_pane.no_modal_or_popup_active(),
         "expected no startup sandbox NUX popup when startup trigger is false"
+    );
+}
+
+#[cfg(all(target_os = "windows", not(feature = "windows-sandbox")))]
+#[tokio::test]
+async fn startup_does_not_prompt_for_windows_sandbox_when_feature_disabled() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    chat.set_feature_enabled(Feature::WindowsSandbox, /*enabled*/ false);
+    chat.set_feature_enabled(Feature::WindowsSandboxElevated, /*enabled*/ false);
+
+    // Even with show_now=true, the NUX should not appear when the windows-sandbox
+    // backend is not compiled into this build.
+    chat.maybe_prompt_windows_sandbox_enable(/*show_now*/ true);
+
+    assert!(
+        chat.bottom_pane.no_modal_or_popup_active(),
+        "expected no startup sandbox NUX popup when windows-sandbox feature is disabled"
     );
 }
 

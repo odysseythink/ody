@@ -20,7 +20,7 @@ const BACKOFF_FACTOR: f64 = 2.0;
 /// Example:
 ///
 /// ```rust
-/// ody_core::feedback_tags!(model = "gpt-5", cached = true);
+/// ody_core::feedback_tags!(model = "k3", cached = true);
 /// let provider_id = "openai";
 /// let request_id = "req_abc123";
 /// ody_core::feedback_tags!(provider = provider_id, request_id = request_id);

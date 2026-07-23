@@ -369,7 +369,7 @@ pub fn personality_messages_from_base_instructions(base_instructions: &str) -> M
 
 fn local_personality_messages_for_slug(slug: &str) -> Option<ModelMessages> {
     match slug {
-        "gpt-5.2-ody" | "exp-ody-personality" => Some(ModelMessages {
+        "exp-ody-personality" => Some(ModelMessages {
             instructions_template: Some(format!(
                 "{DEFAULT_PERSONALITY_HEADER}\n\n{PERSONALITY_PLACEHOLDER}\n\n{BASE_INSTRUCTIONS}"
             )),

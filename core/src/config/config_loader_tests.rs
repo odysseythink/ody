@@ -360,7 +360,7 @@ command = "python3 /tmp/user-hook.py"
 #[tokio::test]
 async fn strict_config_rejects_unknown_user_config_key() {
     let tmp = tempdir().expect("tempdir");
-    let contents = r#"model = "gpt-5"
+    let contents = r#"model = "kimi-k2.5"
 unknown_key = true"#;
     let config_path = tmp.path().join(CONFIG_TOML_FILE);
     std::fs::write(&config_path, contents).expect("write config");

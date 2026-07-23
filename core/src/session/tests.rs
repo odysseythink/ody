@@ -244,8 +244,8 @@ fn test_session_telemetry_without_metadata() -> SessionTelemetry {
     .expect("in-memory metrics client");
     SessionTelemetry::new(
         ThreadId::new(),
-        "gpt-5.4",
-        "gpt-5.4",
+        "k3",
+        "k3",
         /*auth_mode*/ None,
         "test_originator".to_string(),
         /*log_user_prompts*/ false,
@@ -612,7 +612,7 @@ async fn preview_session_start_hooks(
             session_id: ThreadId::new(),
             cwd: config.cwd.clone(),
             transcript_path: None,
-            model: "gpt-5.2".to_string(),
+            model: "kimi-k2.5".to_string(),
             permission_mode: "default".to_string(),
             target: ody_hooks::StartHookTarget::SessionStart {
                 source: ody_hooks::SessionStartSource::Startup,
@@ -1222,19 +1222,19 @@ async fn get_base_instructions_no_user_content() {
     };
     let test_cases = vec![
         InstructionsTestCase {
-            slug: "gpt-5.4",
+            slug: "k3",
             expects_apply_patch_description: false,
         },
         InstructionsTestCase {
-            slug: "gpt-5.4-mini",
+            slug: "glm-4.5",
             expects_apply_patch_description: false,
         },
         InstructionsTestCase {
-            slug: "gpt-5.3-ody",
+            slug: "kimi-for-coding",
             expects_apply_patch_description: false,
         },
         InstructionsTestCase {
-            slug: "gpt-5.2",
+            slug: "kimi-k2.5",
             expects_apply_patch_description: false,
         },
     ];
@@ -1385,7 +1385,7 @@ async fn reload_user_config_layer_refreshes_hooks() -> anyhow::Result<()> {
         session_id: session.thread_id,
         cwd: session.get_config().await.cwd.clone(),
         transcript_path: None,
-        model: "gpt-5.2".to_string(),
+        model: "kimi-k2.5".to_string(),
         permission_mode: "default".to_string(),
         target: ody_hooks::StartHookTarget::SessionStart {
             source: ody_hooks::SessionStartSource::Startup,
@@ -1492,7 +1492,7 @@ async fn refresh_runtime_config_refreshes_hooks() -> anyhow::Result<()> {
         session_id: session.thread_id,
         cwd: session.get_config().await.cwd.clone(),
         transcript_path: None,
-        model: "gpt-5.2".to_string(),
+        model: "kimi-k2.5".to_string(),
         permission_mode: "default".to_string(),
         target: ody_hooks::StartHookTarget::SessionStart {
             source: ody_hooks::SessionStartSource::Startup,
@@ -1559,7 +1559,7 @@ disabled_tools = [
 
     let original = session.get_config().await;
     let mut next_config = load_latest_config_for_session(&session).await;
-    next_config.model = Some("gpt-5.4".to_string());
+    next_config.model = Some("k3".to_string());
     next_config.notify = Some(vec!["echo".to_string()]);
 
     session.refresh_runtime_config(next_config).await;
@@ -2538,10 +2538,10 @@ async fn config_change_contributor_observes_effective_config_changes() {
         .tool_suggest
         .disabled_tools
         .clone();
-    let next_model = if original_model == "gpt-5.4" {
-        "gpt-5.2"
+    let next_model = if original_model == "k3" {
+        "kimi-k2.5"
     } else {
-        "gpt-5.4"
+        "k3"
     };
     let collaboration_mode = session.collaboration_mode().await.with_updates(
         Some(next_model.to_string()),
@@ -3490,19 +3490,19 @@ async fn turn_context_with_model_updates_model_fields() {
     let (session, mut turn_context) = make_session_and_context().await;
     turn_context.reasoning_effort = Some(ReasoningEffortConfig::Minimal);
     let updated = turn_context
-        .with_model("gpt-5.4".to_string(), &session.services.models_manager)
+        .with_model("k3".to_string(), &session.services.models_manager)
         .await;
     let expected_model_info = session
         .services
         .models_manager
         .get_model_info(
-            "gpt-5.4",
+            "k3",
             &updated.config.as_ref().to_models_manager_config(),
         )
         .await;
 
-    assert_eq!(updated.config.model.as_deref(), Some("gpt-5.4"));
-    assert_eq!(updated.collaboration_mode.model(), "gpt-5.4");
+    assert_eq!(updated.config.model.as_deref(), Some("k3"));
+    assert_eq!(updated.collaboration_mode.model(), "k3");
     assert_eq!(updated.model_info, expected_model_info);
     assert_eq!(
         updated.reasoning_effort,
@@ -3685,7 +3685,7 @@ fn session_telemetry(
 }
 
 fn model_with_default_service_tier(default_service_tier: Option<&str>) -> ModelInfo {
-    let mut model_info = model_info::model_info_from_slug("gpt-5.4");
+    let mut model_info = model_info::model_info_from_slug("k3");
     model_info.service_tiers = vec![ModelServiceTier {
         id: ServiceTier::Fast.request_value().to_string(),
         name: "Fast".to_string(),
@@ -8197,10 +8197,10 @@ async fn record_context_updates_and_set_reference_context_item_reinjects_full_co
 async fn record_context_updates_and_set_reference_context_item_persists_baseline_without_emitting_diffs()
  {
     let (mut session, previous_context) = make_session_and_context().await;
-    let next_model = if previous_context.model_info.slug == "gpt-5.4" {
-        "gpt-5.2"
+    let next_model = if previous_context.model_info.slug == "k3" {
+        "kimi-k2.5"
     } else {
-        "gpt-5.4"
+        "k3"
     };
     let turn_context = previous_context
         .with_model(next_model.to_string(), &session.services.models_manager)
@@ -8316,10 +8316,10 @@ async fn build_initial_context_prepends_model_switch_message() {
 async fn record_context_updates_and_set_reference_context_item_persists_full_reinjection_to_rollout()
  {
     let (mut session, previous_context) = make_session_and_context().await;
-    let next_model = if previous_context.model_info.slug == "gpt-5.4" {
-        "gpt-5.2"
+    let next_model = if previous_context.model_info.slug == "k3" {
+        "kimi-k2.5"
     } else {
-        "gpt-5.4"
+        "k3"
     };
     let turn_context = previous_context
         .with_model(next_model.to_string(), &session.services.models_manager)

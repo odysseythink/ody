@@ -255,7 +255,7 @@ fn apply_patch_responses(
 async fn apply_patch_cli_multiple_operations_integration() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = apply_patch_harness_with(|builder| builder.with_model("gpt-5.4")).await?;
+    let harness = apply_patch_harness_with(|builder| builder.with_model("k3")).await?;
 
     // Seed workspace state
     harness.write_file("modify.txt", "line1\nline2\n").await?;
@@ -944,7 +944,7 @@ async fn apply_patch_cli_verification_failure_has_no_side_effects() -> Result<()
 async fn apply_patch_shell_command_heredoc_with_cd_updates_relative_workdir() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = apply_patch_harness_with(|builder| builder.with_model("gpt-5.4")).await?;
+    let harness = apply_patch_harness_with(|builder| builder.with_model("k3")).await?;
 
     // Prepare a file inside a subdir; update it via cd && apply_patch heredoc form.
     harness.write_file("sub/in_sub.txt", "before\n").await?;
@@ -984,7 +984,7 @@ async fn apply_patch_cli_can_use_shell_command_output_as_patch_input() -> Result
     );
 
     let harness =
-        apply_patch_harness_with(|builder| builder.with_model("gpt-5.4").with_windows_cmd_shell())
+        apply_patch_harness_with(|builder| builder.with_model("k3").with_windows_cmd_shell())
             .await?;
 
     let source_contents = "line1\nnaïve café\nline3\n";
@@ -1226,7 +1226,7 @@ async fn apply_patch_custom_tool_streaming_emits_updated_changes() -> Result<()>
 async fn apply_patch_shell_command_heredoc_with_cd_emits_turn_diff() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = apply_patch_harness_with(|builder| builder.with_model("gpt-5.4")).await?;
+    let harness = apply_patch_harness_with(|builder| builder.with_model("k3")).await?;
     let test = harness.test();
     let ody = test.ody.clone();
 
@@ -1290,7 +1290,7 @@ async fn apply_patch_turn_diff_paths_stay_repo_relative_when_session_cwd_is_nest
 
     let harness = apply_patch_harness_with(|builder| {
         builder
-            .with_model("gpt-5.4")
+            .with_model("k3")
             .with_config(|config| {
                 config.cwd = config.cwd.join("subdir");
             })
@@ -1359,7 +1359,7 @@ async fn apply_patch_turn_diff_paths_stay_repo_relative_when_session_cwd_is_nest
 async fn apply_patch_shell_command_failure_propagates_error_and_skips_diff() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
-    let harness = apply_patch_harness_with(|builder| builder.with_model("gpt-5.4")).await?;
+    let harness = apply_patch_harness_with(|builder| builder.with_model("k3")).await?;
     let test = harness.test();
     let ody = test.ody.clone();
 

@@ -769,8 +769,8 @@ mod tests {
         let notification = ServerNotification::ModelRerouted(ModelReroutedNotification {
             thread_id: "thread-1".to_string(),
             turn_id: "turn-1".to_string(),
-            from_model: "gpt-5.3-ody".to_string(),
-            to_model: "gpt-5.2".to_string(),
+            from_model: "k3-ody".to_string(),
+            to_model: "glm-4.5".to_string(),
             reason: ModelRerouteReason::HighRiskCyberActivity,
         });
 
@@ -781,8 +781,8 @@ mod tests {
                 "params": {
                     "threadId": "thread-1",
                     "turnId": "turn-1",
-                    "fromModel": "gpt-5.3-ody",
-                    "toModel": "gpt-5.2",
+                    "fromModel": "k3-ody",
+                    "toModel": "glm-4.5",
                     "reason": "highRiskCyberActivity",
                 },
             }),
@@ -1002,8 +1002,8 @@ mod tests {
                     ServerNotification::ModelRerouted(ModelReroutedNotification {
                         thread_id: "thread-1".to_string(),
                         turn_id: "turn-1".to_string(),
-                        from_model: "gpt-5.3-ody".to_string(),
-                        to_model: "gpt-5.2".to_string(),
+                        from_model: "k3-ody".to_string(),
+                        to_model: "glm-4.5".to_string(),
                         reason: ModelRerouteReason::HighRiskCyberActivity,
                     }),
                 )

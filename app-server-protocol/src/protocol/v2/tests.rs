@@ -189,7 +189,7 @@ fn thread_resume_response_round_trips_initial_turns_page() {
             name: None,
             turns: Vec::new(),
         },
-        model: "gpt-5".to_string(),
+        model: "kimi-k2.5".to_string(),
         model_provider: "kimi".to_string(),
         service_tier: None,
         cwd: absolute_path("tmp"),
@@ -3686,7 +3686,7 @@ fn thread_lifecycle_responses_default_missing_optional_fields() {
             "name": null,
             "turns": []
         },
-        "model": "gpt-5",
+        "model": "kimi-k2.5",
         "modelProvider": "kimi",
         "serviceTier": null,
         "cwd": absolute_path_string("tmp"),

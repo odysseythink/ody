@@ -64,7 +64,7 @@ async fn shell_command_tool_executes_command_and_streams_output() -> anyhow::Res
 
     let server = start_mock_server().await;
 
-    let mut builder = test_ody().with_model("test-gpt-5-ody");
+    let mut builder = test_ody().with_model("test-kimi-for-coding");
     let TestOdy {
         ody,
         cwd,

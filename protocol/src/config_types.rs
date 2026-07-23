@@ -771,7 +771,7 @@ mod tests {
         let mode = CollaborationMode {
             mode: ModeKind::Default,
             settings: Settings {
-                model: "gpt-5.2-ody".to_string(),
+                model: "k3-ody".to_string(),
                 reasoning_effort: Some(ReasoningEffort::High),
                 developer_instructions: Some("stay focused".to_string()),
                 design_audit_level: Some(DesignAuditLevel::Standard),
@@ -789,7 +789,7 @@ mod tests {
         let expected = CollaborationMode {
             mode: ModeKind::Default,
             settings: Settings {
-                model: "gpt-5.2-ody".to_string(),
+                model: "k3-ody".to_string(),
                 reasoning_effort: None,
                 developer_instructions: None,
                 design_audit_level: None,
@@ -999,7 +999,7 @@ mod tests {
         let mode = CollaborationMode {
             mode: ModeKind::Default,
             settings: Settings {
-                model: "gpt-5.2-ody".to_string(),
+                model: "k3-ody".to_string(),
                 reasoning_effort: None,
                 developer_instructions: None,
                 design_audit_level: Some(DesignAuditLevel::Basic),
@@ -1027,7 +1027,7 @@ mod tests {
         let mode = CollaborationMode {
             mode: ModeKind::Default,
             settings: Settings {
-                model: "gpt-5.2-ody".to_string(),
+                model: "k3-ody".to_string(),
                 reasoning_effort: None,
                 developer_instructions: None,
                 design_audit_level: Some(DesignAuditLevel::Standard),
@@ -1054,7 +1054,7 @@ mod tests {
         let mode = CollaborationMode {
             mode: ModeKind::Default,
             settings: Settings {
-                model: "gpt-5.2-ody".to_string(),
+                model: "k3-ody".to_string(),
                 reasoning_effort: None,
                 developer_instructions: None,
                 design_audit_level: Some(DesignAuditLevel::Deep),

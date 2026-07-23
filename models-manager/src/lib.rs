@@ -3,7 +3,6 @@ pub mod collaboration_mode_presets;
 pub(crate) mod config;
 pub mod manager;
 pub mod model_info;
-pub mod model_presets;
 pub mod test_support;
 
 pub use config::ModelsManagerConfig;

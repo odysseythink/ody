@@ -366,7 +366,7 @@ async fn exec_resume_accepts_global_flags_after_subcommand() -> anyhow::Result<(
         .arg(base_config)
         .arg("--json")
         .arg("--model")
-        .arg("gpt-5.2-ody")
+        .arg("kimi-for-coding")
         .arg("--config")
         .arg("reasoning_level=xhigh")
         .arg("--dangerously-bypass-approvals-and-sandbox")
@@ -507,7 +507,7 @@ async fn exec_resume_preserves_cli_configuration_overrides() -> anyhow::Result<(
         .arg("--sandbox")
         .arg("workspace-write")
         .arg("--model")
-        .arg("gpt-5.1")
+        .arg("kimi-k2.5")
         .arg("-C")
         .arg(&repo_root)
         .arg(&prompt)
@@ -527,7 +527,7 @@ async fn exec_resume_preserves_cli_configuration_overrides() -> anyhow::Result<(
         .arg("--sandbox")
         .arg("workspace-write")
         .arg("--model")
-        .arg("gpt-5.1-high")
+        .arg("kimi-k2.5-high")
         .arg("-C")
         .arg(&repo_root)
         .arg(&prompt2)
@@ -540,7 +540,7 @@ async fn exec_resume_preserves_cli_configuration_overrides() -> anyhow::Result<(
 
     let stderr = String::from_utf8(output.stderr)?;
     assert!(
-        stderr.contains("model: gpt-5.1-high"),
+        stderr.contains("model: kimi-k2.5-high"),
         "stderr missing model override: {stderr}"
     );
     if cfg!(target_os = "windows") {

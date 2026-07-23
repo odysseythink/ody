@@ -61,13 +61,13 @@ async fn remote_models_get_model_info_uses_longest_matching_prefix() -> Result<(
 
     let server = MockServer::start().await;
     let generic = test_remote_model_with_policy(
-        "gpt-5.3",
+        "kimi-k2.5",
         ModelVisibility::List,
         /*priority*/ 1_000,
         TruncationPolicyConfig::bytes(/*limit*/ 10_000),
     );
     let specific = test_remote_model_with_policy(
-        "gpt-5.3-ody",
+        "kimi-for-coding",
         ModelVisibility::List,
         /*priority*/ 1_000,
         TruncationPolicyConfig::bytes(/*limit*/ 10_000),
@@ -106,10 +106,10 @@ async fn remote_models_get_model_info_uses_longest_matching_prefix() -> Result<(
     manager.list_models(RefreshStrategy::OnlineIfUncached).await;
 
     let model_info = manager
-        .get_model_info("gpt-5.3-ody-test", &config.to_models_manager_config())
+        .get_model_info("kimi-for-coding-test", &config.to_models_manager_config())
         .await;
 
-    assert_eq!(model_info.slug, "gpt-5.3-ody-test");
+    assert_eq!(model_info.slug, "kimi-for-coding-test");
     assert_eq!(model_info.base_instructions, specific.base_instructions);
 
     Ok(())
@@ -124,9 +124,9 @@ async fn remote_models_config_context_window_override_clamps_to_max_context_wind
     skip_if_sandbox!(Ok(()));
 
     let server = MockServer::start().await;
-    let requested_model = "gpt-5.4-test";
+    let requested_model = "k3-test";
     let mut remote_model =
-        test_remote_model("gpt-5.4", ModelVisibility::List, /*priority*/ 1_000);
+        test_remote_model("k3", ModelVisibility::List, /*priority*/ 1_000);
     remote_model.context_window = Some(273_000);
     remote_model.max_context_window = Some(400_000);
     remote_model.effective_context_window_percent = 100;
@@ -189,9 +189,9 @@ async fn remote_models_config_override_above_max_uses_max_context_window() -> Re
     skip_if_sandbox!(Ok(()));
 
     let server = MockServer::start().await;
-    let requested_model = "gpt-5.4-test";
+    let requested_model = "k3-test";
     let mut remote_model =
-        test_remote_model("gpt-5.4", ModelVisibility::List, /*priority*/ 1_000);
+        test_remote_model("k3", ModelVisibility::List, /*priority*/ 1_000);
     remote_model.context_window = Some(273_000);
     remote_model.max_context_window = Some(400_000);
     remote_model.effective_context_window_percent = 100;
@@ -254,9 +254,9 @@ async fn remote_models_use_context_window_when_config_override_is_absent() -> Re
     skip_if_sandbox!(Ok(()));
 
     let server = MockServer::start().await;
-    let requested_model = "gpt-5.4-test";
+    let requested_model = "k3-test";
     let mut remote_model =
-        test_remote_model("gpt-5.4", ModelVisibility::List, /*priority*/ 1_000);
+        test_remote_model("k3", ModelVisibility::List, /*priority*/ 1_000);
     remote_model.context_window = Some(273_000);
     remote_model.max_context_window = Some(400_000);
     remote_model.effective_context_window_percent = 100;
@@ -315,8 +315,8 @@ async fn remote_models_long_model_slug_is_sent_with_custom_reasoning() -> Result
     skip_if_sandbox!(Ok(()));
 
     let server = MockServer::start().await;
-    let requested_model = "gpt-5.3-ody-test";
-    let prefix_model = "gpt-5.3-ody";
+    let requested_model = "kimi-for-coding-test";
+    let prefix_model = "kimi-for-coding";
     let mut remote_model = test_remote_model_with_policy(
         prefix_model,
         ModelVisibility::List,
@@ -395,7 +395,7 @@ async fn namespaced_model_slug_uses_catalog_metadata_without_fallback_warning() 
     skip_if_sandbox!(Ok(()));
 
     let server = MockServer::start().await;
-    let requested_model = "custom/gpt-5.2-ody";
+    let requested_model = "custom/kimi-for-coding";
     let response_mock = mount_sse_once(
         &server,
         sse(vec![ev_response_created("resp-1"), ev_completed("resp-1")]),
@@ -504,7 +504,7 @@ async fn remote_models_remote_model_uses_unified_exec() -> Result<()> {
     .await;
 
     let mut builder = test_ody().with_config(|config| {
-        config.model = Some("gpt-5.4".to_string());
+        config.model = Some("k3".to_string());
     });
     let TestOdy {
         ody,
@@ -621,7 +621,7 @@ async fn remote_models_truncation_policy_without_override_preserves_remote() -> 
     .await;
 
     let mut builder = test_ody().with_config(|config| {
-        config.model = Some("gpt-5.4".to_string());
+        config.model = Some("k3".to_string());
     });
     let test = builder.build(&server).await?;
 
@@ -665,7 +665,7 @@ async fn remote_models_truncation_policy_with_tool_output_override() -> Result<(
     .await;
 
     let mut builder = test_ody().with_config(|config| {
-        config.model = Some("gpt-5.4".to_string());
+        config.model = Some("k3".to_string());
         config.tool_output_token_limit = Some(50);
     });
     let test = builder.build(&server).await?;
@@ -694,7 +694,7 @@ async fn remote_models_apply_remote_base_instructions() -> Result<()> {
         .start()
         .await;
 
-    let model = "test-gpt-5-remote";
+    let model = "test-k3-remote";
 
     let remote_base = "Use the remote base instructions only.";
     let remote_model = ModelInfo {
@@ -760,7 +760,7 @@ async fn remote_models_apply_remote_base_instructions() -> Result<()> {
     .await;
 
     let mut builder = test_ody().with_config(|config| {
-        config.model = Some("gpt-5.2".to_string());
+        config.model = Some("kimi-k2.5".to_string());
     });
     let TestOdy {
         ody,
@@ -807,7 +807,7 @@ async fn remote_models_apply_remote_base_instructions() -> Result<()> {
     wait_for_event(&ody, |event| matches!(event, EventMsg::TurnComplete(_))).await;
 
     let base_model_info = models_manager
-        .get_model_info("gpt-5.2", &config.to_models_manager_config())
+        .get_model_info("kimi-k2.5", &config.to_models_manager_config())
         .await;
     let body = response_mock.single_request().body_json();
     let instructions = body["instructions"].as_str().unwrap();

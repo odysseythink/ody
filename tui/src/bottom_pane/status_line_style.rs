@@ -192,7 +192,7 @@ mod tests {
     fn status_line_segments_preserve_order_and_plain_text() {
         let line = status_line_from_segments_with_resolver(
             [
-                (StatusLineItem::ModelName, "gpt-5".to_string()),
+                (StatusLineItem::ModelName, "k3".to_string()),
                 (StatusLineItem::CurrentDir, "/repo".to_string()),
                 (StatusLineItem::GitBranch, "main".to_string()),
             ],
@@ -201,7 +201,7 @@ mod tests {
         )
         .expect("status line");
 
-        assert_eq!(line_text(&line), "gpt-5 · /repo · main");
+        assert_eq!(line_text(&line), "k3 · /repo · main");
         assert_eq!(line.spans[0].style.fg, Some(Color::Cyan));
         assert!(!line.spans[0].style.add_modifier.contains(Modifier::DIM));
         assert_eq!(line.spans[2].style.fg, Some(Color::Green));
@@ -214,7 +214,7 @@ mod tests {
     fn status_line_segments_dim_separators_and_use_theme_styles_first() {
         let line = status_line_from_segments_with_resolver(
             [
-                (StatusLineItem::ModelName, "gpt-5".to_string()),
+                (StatusLineItem::ModelName, "k3".to_string()),
                 (StatusLineItem::ContextUsed, "Context 12% used".to_string()),
             ],
             /*use_theme_colors*/ true,
@@ -236,7 +236,7 @@ mod tests {
     #[allow(clippy::disallowed_methods)]
     fn status_line_segments_soften_rgb_theme_styles_without_dimming_text() {
         let line = status_line_from_segments_with_resolver(
-            [(StatusLineItem::ModelName, "gpt-5".to_string())],
+            [(StatusLineItem::ModelName, "k3".to_string())],
             /*use_theme_colors*/ true,
             |_| Some(Style::default().fg(Color::Rgb(255, 0, 0))),
         )
@@ -250,7 +250,7 @@ mod tests {
     fn status_line_segments_can_disable_theme_colors() {
         let line = status_line_from_segments_with_resolver(
             [
-                (StatusLineItem::ModelName, "gpt-5".to_string()),
+                (StatusLineItem::ModelName, "k3".to_string()),
                 (StatusLineItem::ContextUsed, "Context 12% used".to_string()),
             ],
             /*use_theme_colors*/ false,
@@ -258,7 +258,7 @@ mod tests {
         )
         .expect("status line");
 
-        assert_eq!(line_text(&line), "gpt-5 · Context 12% used");
+        assert_eq!(line_text(&line), "k3 · Context 12% used");
         assert_eq!(line.spans[0].style.fg, None);
         assert!(line.spans[0].style.add_modifier.contains(Modifier::DIM));
         assert!(line.spans[1].style.add_modifier.contains(Modifier::DIM));

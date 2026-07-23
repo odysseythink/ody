@@ -686,46 +686,8 @@ async fn commentary_completion_restores_status_indicator_before_exec_begin() {
     assert_eq!(chat.bottom_pane.status_indicator_visible(), true);
 }
 
-#[tokio::test]
-async fn fast_status_indicator_requires_api_key_auth() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
-    set_fast_mode_test_catalog(&mut chat);
-    assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
-    chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
 
-    assert!(!chat.should_show_fast_status(chat.current_model(), chat.current_service_tier(),));
 
-    set_api_key_auth(&mut chat);
-    set_fast_mode_test_catalog(&mut chat);
-    assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
-
-    assert!(chat.should_show_fast_status(chat.current_model(), chat.current_service_tier(),));
-}
-
-#[tokio::test]
-async fn fast_status_indicator_is_hidden_for_models_without_fast_support() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.3-ody")).await;
-    set_fast_mode_test_catalog(&mut chat);
-    assert!(!get_available_model(&chat, "gpt-5.3-ody").supports_fast_mode());
-    chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
-    set_api_key_auth(&mut chat);
-    set_fast_mode_test_catalog(&mut chat);
-    assert!(!get_available_model(&chat, "gpt-5.3-ody").supports_fast_mode());
-
-    assert!(!chat.should_show_fast_status(chat.current_model(), chat.current_service_tier(),));
-}
-
-#[tokio::test]
-async fn fast_status_indicator_is_hidden_when_fast_mode_is_off() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
-    set_fast_mode_test_catalog(&mut chat);
-    assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
-    set_api_key_auth(&mut chat);
-    set_fast_mode_test_catalog(&mut chat);
-    assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
-
-    assert!(!chat.should_show_fast_status(chat.current_model(), chat.current_service_tier(),));
-}
 
 // Snapshot test: ChatWidget at very small heights (idle)
 // Ensures overall layout behaves when terminal height is extremely constrained.
@@ -1113,7 +1075,7 @@ async fn unsupported_code_mode_warning_renders_as_warning_history_cell() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     handle_warning(
         &mut chat,
-        "Code Mode is enabled in configuration, but model `gpt-5.4` does not advertise Code Mode support. This may degrade model performance. Disable `features.code_mode` and `features.code_mode_only`, or select a model whose metadata enables Code Mode.",
+        "Code Mode is enabled in configuration, but model `k3` does not advertise Code Mode support. This may degrade model performance. Disable `features.code_mode` and `features.code_mode_only`, or select a model whose metadata enables Code Mode.",
     );
 
     let cells = drain_insert_history(&mut rx);
@@ -1369,107 +1331,26 @@ async fn completed_turn_clears_visible_running_hook() {
     );
 }
 
-#[tokio::test]
-async fn status_line_fast_mode_renders_on_and_off() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    chat.config.tui_status_line = Some(vec!["fast-mode".to_string()]);
 
-    chat.refresh_status_line();
-    assert_eq!(status_line_text(&chat), Some("Fast off".to_string()));
 
-    chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
-    chat.refresh_status_line();
-    assert_eq!(status_line_text(&chat), Some("Fast on".to_string()));
-}
-
-#[tokio::test]
-async fn status_line_fast_mode_footer_snapshot() {
-    use ratatui::Terminal;
-    use ratatui::backend::TestBackend;
-
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    chat.show_welcome_banner = false;
-    chat.config.tui_status_line = Some(vec!["fast-mode".to_string()]);
-    chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
-    chat.refresh_status_line();
-
-    let width = 80;
-    let height = chat.desired_height(width);
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("create terminal");
-    terminal
-        .draw(|f| chat.render(f.area(), f.buffer_mut()))
-        .expect("draw fast-mode footer");
-    assert_chatwidget_snapshot!(
-        "status_line_fast_mode_footer",
-        normalized_backend_snapshot(terminal.backend())
-    );
-}
-
-#[tokio::test]
-async fn status_line_model_with_reasoning_includes_fast_for_fast_capable_models() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
-    set_fast_mode_test_catalog(&mut chat);
-    assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
-    chat.config.cwd = test_project_path().abs();
-    chat.config.tui_status_line = Some(vec![
-        "model-with-reasoning".to_string(),
-        "context-used".to_string(),
-        "current-dir".to_string(),
-    ]);
-    chat.config.model_context_window = Some(272_000);
-    chat.set_reasoning_effort(Some(ReasoningEffortConfig::XHigh));
-    chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
-    set_api_key_auth(&mut chat);
-    set_fast_mode_test_catalog(&mut chat);
-    assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
-    chat.refresh_status_line();
-    let test_cwd = test_path_display("/tmp/project");
-
-    assert_eq!(
-        status_line_text(&chat),
-        Some(format!("gpt-5.4 xhigh fast · Context 0% used · {test_cwd}"))
-    );
-
-    chat.set_model("gpt-5.3-ody");
-    chat.refresh_status_line();
-
-    assert_eq!(
-        status_line_text(&chat),
-        Some(format!("gpt-5.3-ody xhigh · Context 0% used · {test_cwd}"))
-    );
-}
 
 #[tokio::test]
 async fn terminal_title_model_updates_on_model_change_without_manual_refresh() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("k3")).await;
     chat.config.tui_terminal_title = Some(vec!["model".to_string()]);
     chat.refresh_terminal_title();
 
-    assert_eq!(chat.last_terminal_title, Some("gpt-5.4".to_string()));
+    assert_eq!(chat.last_terminal_title, Some("k3".to_string()));
 
-    chat.set_model("gpt-5.3-ody");
+    chat.set_model("kimi-for-coding");
 
-    assert_eq!(chat.last_terminal_title, Some("gpt-5.3-ody".to_string()));
+    assert_eq!(chat.last_terminal_title, Some("kimi-for-coding".to_string()));
 }
 
-#[tokio::test]
-async fn status_line_and_terminal_title_reasoning_render_only_effort() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
-    chat.config.tui_status_line = Some(vec!["reasoning".to_string()]);
-    chat.config.tui_terminal_title = Some(vec!["reasoning".to_string()]);
-    chat.set_reasoning_effort(Some(ReasoningEffortConfig::XHigh));
-    chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
-
-    chat.refresh_status_line();
-    chat.refresh_terminal_title();
-
-    assert_eq!(status_line_text(&chat), Some("xhigh".to_string()));
-    assert_eq!(chat.last_terminal_title, Some("xhigh".to_string()));
-}
 
 #[tokio::test]
 async fn status_line_reasoning_updates_on_mode_switch_without_manual_refresh() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.3-ody")).await;
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("kimi-for-coding")).await;
     chat.set_feature_enabled(Feature::CollaborationModes, /*enabled*/ true);
     chat.config.tui_status_line = Some(vec!["reasoning".to_string()]);
     chat.set_reasoning_effort(Some(ReasoningEffortConfig::High));
@@ -1485,14 +1366,14 @@ async fn status_line_reasoning_updates_on_mode_switch_without_manual_refresh() {
 
 #[tokio::test]
 async fn status_line_model_with_reasoning_updates_on_mode_switch_without_manual_refresh() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.3-ody")).await;
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("kimi-for-coding")).await;
     chat.set_feature_enabled(Feature::CollaborationModes, /*enabled*/ true);
     chat.config.tui_status_line = Some(vec!["model-with-reasoning".to_string()]);
     chat.set_reasoning_effort(Some(ReasoningEffortConfig::High));
 
     assert_eq!(
         status_line_text(&chat),
-        Some("gpt-5.3-ody high".to_string())
+        Some("kimi-for-coding high".to_string())
     );
 
     let plan_mask = collaboration_modes::plan_mask(chat.model_catalog.as_ref())
@@ -1501,7 +1382,7 @@ async fn status_line_model_with_reasoning_updates_on_mode_switch_without_manual_
 
     assert_eq!(
         status_line_text(&chat),
-        Some("gpt-5.3-ody medium".to_string())
+        Some("kimi-for-coding medium".to_string())
     );
 
     let default_mask = collaboration_modes::default_mask(chat.model_catalog.as_ref())
@@ -1510,7 +1391,7 @@ async fn status_line_model_with_reasoning_updates_on_mode_switch_without_manual_
 
     assert_eq!(
         status_line_text(&chat),
-        Some("gpt-5.3-ody high".to_string())
+        Some("kimi-for-coding high".to_string())
     );
 }
 
@@ -1519,7 +1400,7 @@ async fn status_line_model_with_reasoning_plan_mode_footer_snapshot() {
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.3-ody")).await;
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("kimi-for-coding")).await;
     chat.show_welcome_banner = false;
     chat.set_feature_enabled(Feature::CollaborationModes, /*enabled*/ true);
     chat.config.tui_status_line = Some(vec!["model-with-reasoning".to_string()]);
@@ -1546,7 +1427,7 @@ async fn renamed_thread_footer_title_snapshot() {
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.3-ody")).await;
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("kimi-for-coding")).await;
     chat.show_welcome_banner = false;
     chat.config.tui_status_line = Some(vec![
         "model-with-reasoning".to_string(),
@@ -1579,82 +1460,14 @@ async fn renamed_thread_footer_title_snapshot() {
     );
 }
 
-#[tokio::test]
-async fn status_line_model_with_reasoning_fast_footer_snapshot() {
-    use ratatui::Terminal;
-    use ratatui::backend::TestBackend;
 
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
-    set_fast_mode_test_catalog(&mut chat);
-    assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
-    chat.show_welcome_banner = false;
-    chat.config.cwd = test_project_path().abs();
-    chat.config.tui_status_line = Some(vec![
-        "model-with-reasoning".to_string(),
-        "context-used".to_string(),
-        "current-dir".to_string(),
-    ]);
-    chat.config.model_context_window = Some(272_000);
-    chat.set_reasoning_effort(Some(ReasoningEffortConfig::XHigh));
-    chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
-    set_api_key_auth(&mut chat);
-    set_fast_mode_test_catalog(&mut chat);
-    assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
-    chat.refresh_status_line();
-
-    let width = 80;
-    let height = chat.desired_height(width);
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("create terminal");
-    terminal
-        .draw(|f| chat.render(f.area(), f.buffer_mut()))
-        .expect("draw model-with-reasoning footer");
-    assert_chatwidget_snapshot!(
-        "status_line_model_with_reasoning_fast_footer",
-        normalized_backend_snapshot(terminal.backend())
-    );
-}
-
-#[tokio::test]
-async fn status_line_model_with_reasoning_context_remaining_footer_snapshot() {
-    use ratatui::Terminal;
-    use ratatui::backend::TestBackend;
-
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
-    set_fast_mode_test_catalog(&mut chat);
-    assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
-    chat.show_welcome_banner = false;
-    chat.config.cwd = test_project_path().abs();
-    chat.config.tui_status_line = Some(vec![
-        "model-with-reasoning".to_string(),
-        "context-remaining".to_string(),
-        "current-dir".to_string(),
-    ]);
-    chat.config.model_context_window = Some(272_000);
-    chat.set_reasoning_effort(Some(ReasoningEffortConfig::XHigh));
-    chat.set_service_tier(Some(ServiceTier::Fast.request_value().to_string()));
-    set_api_key_auth(&mut chat);
-    set_fast_mode_test_catalog(&mut chat);
-    assert!(get_available_model(&chat, "gpt-5.4").supports_fast_mode());
-    chat.refresh_status_line();
-
-    let width = 80;
-    let height = chat.desired_height(width);
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("create terminal");
-    terminal
-        .draw(|f| chat.render(f.area(), f.buffer_mut()))
-        .expect("draw model-with-reasoning footer");
-    assert_chatwidget_snapshot!(
-        "status_line_model_with_reasoning_context_remaining_footer",
-        normalized_backend_snapshot(terminal.backend())
-    );
-}
 
 #[tokio::test]
 async fn status_line_goal_active_token_budget_footer_snapshot() {
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("k3")).await;
     chat.set_feature_enabled(Feature::Goals, /*enabled*/ true);
     chat.show_welcome_banner = false;
     chat.config.tui_status_line = Some(vec!["model-name".to_string()]);
@@ -1691,7 +1504,7 @@ async fn status_line_goal_complete_elapsed_footer_snapshot() {
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("k3")).await;
     chat.set_feature_enabled(Feature::Goals, /*enabled*/ true);
     chat.show_welcome_banner = false;
     chat.config.tui_status_line = Some(vec!["model-name".to_string()]);
@@ -1727,7 +1540,7 @@ async fn status_line_goal_complete_elapsed_footer_snapshot() {
 
 #[tokio::test]
 async fn session_configured_clears_goal_status_footer() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("k3")).await;
     chat.set_feature_enabled(Feature::Goals, /*enabled*/ true);
     chat.handle_server_notification(
         ServerNotification::ThreadGoalUpdated(
@@ -1759,7 +1572,7 @@ async fn session_configured_clears_goal_status_footer() {
         forked_from_id: None,
         fork_parent_title: None,
         thread_name: None,
-        model: "gpt-5.4".to_string(),
+        model: "k3".to_string(),
         model_provider_id: "test-provider".to_string(),
         service_tier: None,
         approval_policy: AskForApproval::Never,
@@ -1783,7 +1596,7 @@ async fn session_configured_clears_goal_status_footer() {
 
 #[tokio::test]
 async fn thread_goal_update_for_other_thread_is_ignored() {
-    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("k3")).await;
     chat.set_feature_enabled(Feature::Goals, /*enabled*/ true);
     chat.thread_id = Some(ThreadId::new());
     let other_thread_id = ThreadId::new().to_string();

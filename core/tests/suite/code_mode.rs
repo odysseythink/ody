@@ -178,7 +178,7 @@ async fn run_code_mode_turn_with_config(
     code: &str,
     configure: impl FnOnce(&mut Config) + Send + 'static,
 ) -> Result<(TestOdy, ResponseMock)> {
-    run_code_mode_turn_with_model_and_config(server, prompt, code, "test-gpt-5.1-ody", configure)
+    run_code_mode_turn_with_model_and_config(server, prompt, code, "test-kimi-for-coding", configure)
         .await
 }
 
@@ -276,7 +276,7 @@ text(result);
     install_web_search_extension(&mut extension_builder);
     let mut builder = test_ody()
         .with_extensions(Arc::new(extension_builder.build()))
-        .with_model("test-gpt-5.1-ody")
+        .with_model("test-kimi-for-coding")
         .with_config(move |config| {
             config
                 .features
@@ -305,7 +305,7 @@ text(result);
     let search_body = search_request
         .body_json::<Value>()
         .expect("search request body should be JSON");
-    assert_eq!(search_body["model"], serde_json::json!("test-gpt-5.1-ody"));
+    assert_eq!(search_body["model"], serde_json::json!("test-kimi-for-coding"));
     assert_eq!(
         search_body["commands"],
         serde_json::json!({
@@ -332,7 +332,7 @@ async fn run_code_mode_turn_with_rmcp(
     prompt: &str,
     code: &str,
 ) -> Result<(TestOdy, ResponseMock)> {
-    run_code_mode_turn_with_rmcp_model(server, prompt, code, "test-gpt-5.1-ody").await
+    run_code_mode_turn_with_rmcp_model(server, prompt, code, "test-kimi-for-coding").await
 }
 
 async fn run_code_mode_turn_with_rmcp_model(
@@ -358,7 +358,7 @@ async fn run_code_mode_turn_with_rmcp_mode(
         server,
         prompt,
         code,
-        "test-gpt-5.1-ody",
+        "test-kimi-for-coding",
         code_mode_only,
         /*non_prefixed_mcp_tool_names*/ false,
     )
@@ -583,9 +583,9 @@ if (!tool) {
         let model = model_catalog
             .models
             .iter_mut()
-            .find(|model| model.slug == "gpt-5.4")
-            .expect("gpt-5.4 exists in bundled models.json");
-        config.model = Some("gpt-5.4".to_string());
+            .find(|model| model.slug == "k3")
+            .expect("k3 exists in bundled models.json");
+        config.model = Some("k3".to_string());
         model.supports_search_tool = true;
         config.model_catalog = Some(model_catalog);
     });
@@ -903,7 +903,7 @@ async fn code_mode_nested_tool_calls_can_run_in_parallel() -> Result<()> {
 
     let server = responses::start_mock_server().await;
     let mut builder = test_ody()
-        .with_model("test-gpt-5.1-ody")
+        .with_model("test-kimi-for-coding")
         .with_config(move |config| {
             let _ = config.features.enable(Feature::CodeMode);
         });
@@ -990,7 +990,7 @@ text(JSON.stringify(results));
 
 // This model uses token-based tool-output truncation, giving the downstream
 // history assertions a stable `…N tokens truncated…` marker.
-const TOKEN_POLICY_TEST_MODEL: &str = "gpt-5.4";
+const TOKEN_POLICY_TEST_MODEL: &str = "k3";
 
 // A nested `exec_command` limit applies to `result.output` inside JavaScript.
 // The outer code-mode and history budgets apply after the script calls `text`.
@@ -2758,7 +2758,7 @@ async fn code_mode_resizes_explicit_original_image() -> Result<()> {
         &server,
         "use exec to return a large original-detail image",
         &code,
-        "gpt-5.3-ody",
+        "kimi-for-coding",
         |_| {},
     )
     .await?;
@@ -2828,7 +2828,7 @@ async fn code_mode_can_use_view_image_result_with_image_helper() -> Result<()> {
 
     let server = responses::start_mock_server().await;
     let mut builder = test_ody()
-        .with_model("gpt-5.3-ody")
+        .with_model("kimi-for-coding")
         .with_config(move |config| {
             let _ = config.features.enable(Feature::CodeMode);
         });
@@ -2922,7 +2922,7 @@ image(imageItem);
         &server,
         "use exec to call the rmcp image scenario tool and emit its image output",
         code,
-        "gpt-5.3-ody",
+        "kimi-for-coding",
     )
     .await?;
 
@@ -3128,7 +3128,7 @@ text(JSON.stringify({
         &server,
         "use exec to inspect non-prefixed MCP names",
         code,
-        "test-gpt-5.1-ody",
+        "test-kimi-for-coding",
         /*code_mode_only*/ false,
         /*non_prefixed_mcp_tool_names*/ true,
     )

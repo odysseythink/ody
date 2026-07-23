@@ -10,7 +10,7 @@ fn resume_parses_prompt_after_global_flags() {
         "--last",
         "--json",
         "--model",
-        "gpt-5.2-ody",
+        "kimi-for-coding",
         "--dangerously-bypass-approvals-and-sandbox",
         "--skip-git-repo-check",
         "--ephemeral",

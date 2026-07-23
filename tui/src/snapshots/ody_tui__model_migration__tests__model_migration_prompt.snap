@@ -3,12 +3,12 @@ source: tui/src/model_migration.rs
 expression: terminal.backend()
 ---
 
-> Ody just got an upgrade. Introducing gpt-5.1-ody-max.
+> Ody just got an upgrade. Introducing k3-ody.
 
-  Upgrade to gpt-5.2-ody for the latest and greatest agentic
+  Upgrade to k3-ody for the latest and greatest agentic
   coding model.
 
-  You can continue using gpt-5.1-ody-mini if you prefer.
+  You can continue using glm-4.5 if you prefer.
 
   Choose how you'd like Ody to proceed.
 

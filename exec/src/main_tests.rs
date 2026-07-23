@@ -11,7 +11,7 @@ fn top_cli_parses_resume_prompt_after_config_flag() {
         "--last",
         "--json",
         "--model",
-        "gpt-5.2-ody",
+        "kimi-for-coding",
         "--config",
         "reasoning_level=xhigh",
         "--dangerously-bypass-approvals-and-sandbox",

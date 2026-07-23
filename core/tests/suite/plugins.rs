@@ -119,7 +119,7 @@ async fn build_analytics_plugin_test_ody(
 ) -> Result<TestOdy> {
     let mut builder = test_ody()
         .with_home(ody_home)
-        .with_model("gpt-5.2")
+        .with_model("kimi-k2.5")
         .with_config(move |config| {});
     Ok(builder
         .build(server)
@@ -328,7 +328,7 @@ async fn explicit_plugin_mentions_track_plugin_used_analytics() -> Result<()> {
         event["event_params"]["product_client_id"],
         serde_json::json!(ody_client::default_client::originator().value)
     );
-    assert_eq!(event["event_params"]["model_slug"], "gpt-5.2");
+    assert_eq!(event["event_params"]["model_slug"], "kimi-k2.5");
     assert!(event["event_params"]["thread_id"].as_str().is_some());
     assert!(event["event_params"]["turn_id"].as_str().is_some());
 

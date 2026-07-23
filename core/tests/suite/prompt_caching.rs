@@ -140,7 +140,7 @@ async fn prompt_tools_are_consistent_across_requests() -> anyhow::Result<()> {
     } = test_ody()
         .with_pre_build_hook(write_global_instructions)
         .with_config(|config| {
-            config.model = Some("gpt-5.2".to_string());
+            config.model = Some("kimi-k2.5".to_string());
             // Keep tool expectations stable when the default web_search mode changes.
             config
                 .web_search_mode
@@ -252,7 +252,7 @@ async fn gpt_5_tools_without_apply_patch_append_apply_patch_instructions() -> an
                 .features
                 .enable(Feature::CollaborationModes)
                 .expect("test config should allow feature update");
-            config.model = Some("gpt-5.2".to_string());
+            config.model = Some("kimi-k2.5".to_string());
         })
         .build(&server)
         .await?;
@@ -549,7 +549,7 @@ async fn override_before_first_turn_emits_environment_context() -> anyhow::Resul
     let collaboration_mode = CollaborationMode {
         mode: ModeKind::Default,
         settings: Settings {
-            model: "gpt-5.4".to_string(),
+            model: "k3".to_string(),
             reasoning_effort: Some(ReasoningEffort::High),
             developer_instructions: None,
             design_audit_level: None,
@@ -560,7 +560,7 @@ async fn override_before_first_turn_emits_environment_context() -> anyhow::Resul
         &ody,
         ody_protocol::protocol::ThreadSettingsOverrides {
             approval_policy: Some(AskForApproval::Never),
-            model: Some("gpt-5.4".to_string()),
+            model: Some("k3".to_string()),
             effort: Some(Some(ReasoningEffort::Low)),
             collaboration_mode: Some(collaboration_mode),
             ..Default::default()
@@ -583,7 +583,7 @@ async fn override_before_first_turn_emits_environment_context() -> anyhow::Resul
     wait_for_event(&ody, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 
     let body = req.single_request().body_json();
-    assert_eq!(body["model"].as_str(), Some("gpt-5.4"));
+    assert_eq!(body["model"].as_str(), Some("k3"));
     assert_eq!(
         body.get("reasoning")
             .and_then(|reasoning| reasoning.get("effort"))

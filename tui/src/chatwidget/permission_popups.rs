@@ -322,7 +322,7 @@ impl ChatWidget {
             })];
         }
         if approvals_reviewer == ApprovalsReviewer::User && preset.id == "auto" {
-            #[cfg(target_os = "windows")]
+            #[cfg(all(target_os = "windows", feature = "windows-sandbox"))]
             {
                 if crate::windows_sandbox::level_from_config(&self.config)
                     == WindowsSandboxLevel::Disabled

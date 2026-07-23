@@ -100,7 +100,7 @@ async fn personality_does_not_mutate_base_instructions_without_template() {
         .expect("test config should allow feature update");
     config.personality = Some(Personality::Friendly);
 
-    let model_info = ody_core::test_support::construct_model_info_offline("gpt-5.4", &config);
+    let model_info = ody_core::test_support::construct_model_info_offline("k3", &config);
     assert_eq!(
         model_info.get_model_instructions(config.personality),
         model_info.base_instructions
@@ -118,7 +118,7 @@ async fn base_instructions_override_disables_personality_template() {
     config.personality = Some(Personality::Friendly);
     config.base_instructions = Some("override instructions".to_string());
 
-    let model_info = ody_core::test_support::construct_model_info_offline("gpt-5.3-ody", &config);
+    let model_info = ody_core::test_support::construct_model_info_offline("kimi-for-coding", &config);
 
     assert_eq!(model_info.base_instructions, "override instructions");
     assert_eq!(
@@ -133,7 +133,7 @@ async fn user_turn_personality_none_does_not_add_update_message() -> anyhow::Res
 
     let server = start_mock_server().await;
     let resp_mock = mount_sse_once(&server, sse_completed("resp-1")).await;
-    let mut builder = test_ody().with_model("gpt-5.3-ody").with_config(|config| {
+    let mut builder = test_ody().with_model("kimi-for-coding").with_config(|config| {
         config
             .features
             .enable(Feature::Personality)
@@ -170,7 +170,7 @@ async fn config_personality_some_sets_instructions_template() -> anyhow::Result<
 
     let server = start_mock_server().await;
     let resp_mock = mount_sse_once(&server, sse_completed("resp-1")).await;
-    let mut builder = test_ody().with_model("gpt-5.3-ody").with_config(|config| {
+    let mut builder = test_ody().with_model("kimi-for-coding").with_config(|config| {
         config
             .features
             .enable(Feature::Personality)
@@ -215,7 +215,7 @@ async fn config_personality_none_sends_no_personality() -> anyhow::Result<()> {
 
     let server = start_mock_server().await;
     let resp_mock = mount_sse_once(&server, sse_completed("resp-1")).await;
-    let mut builder = test_ody().with_model("gpt-5.3-ody").with_config(|config| {
+    let mut builder = test_ody().with_model("kimi-for-coding").with_config(|config| {
         config
             .features
             .enable(Feature::Personality)
@@ -267,7 +267,7 @@ async fn default_personality_is_pragmatic_without_config_toml() -> anyhow::Resul
 
     let server = start_mock_server().await;
     let resp_mock = mount_sse_once(&server, sse_completed("resp-1")).await;
-    let mut builder = test_ody().with_model("gpt-5.3-ody").with_config(|config| {
+    let mut builder = test_ody().with_model("kimi-for-coding").with_config(|config| {
         config
             .features
             .enable(Feature::Personality)
@@ -451,7 +451,7 @@ async fn instructions_uses_base_if_feature_disabled() -> anyhow::Result<()> {
         .expect("test config should allow feature update");
     config.personality = Some(Personality::Friendly);
 
-    let model_info = ody_core::test_support::construct_model_info_offline("gpt-5.3-ody", &config);
+    let model_info = ody_core::test_support::construct_model_info_offline("kimi-for-coding", &config);
     assert_eq!(
         model_info.get_model_instructions(config.personality),
         model_info.base_instructions
@@ -725,7 +725,7 @@ async fn user_turn_personality_remote_model_template_includes_update_message() -
             .features
             .enable(Feature::Personality)
             .expect("test config should allow feature update");
-        config.model = Some("gpt-5.3-ody".to_string());
+        config.model = Some("kimi-for-coding".to_string());
     });
     let test = builder.build(&server).await?;
 

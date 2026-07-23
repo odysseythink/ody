@@ -1529,7 +1529,7 @@ base_url = "http://corp.example.com"
         let config: ConfigToml = toml::from_str(
             r#"
 default_model = "kimi_gyy/kimi-for-coding"
-model = "gpt-5"
+model = "k3"
 model_provider = "openai"
 "#,
         )

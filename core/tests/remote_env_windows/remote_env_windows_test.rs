@@ -113,7 +113,7 @@ async fn windows_exec_server_runs_with_native_shell_and_cwd() -> Result<()> {
             .await;
 
             let mut builder = test_ody()
-                .with_model("gpt-5.2")
+                .with_model("kimi-k2.5")
                 .with_exec_server_url(exec_server_url)
                 .with_config(|config| {
                     config.use_experimental_unified_exec_tool = true;

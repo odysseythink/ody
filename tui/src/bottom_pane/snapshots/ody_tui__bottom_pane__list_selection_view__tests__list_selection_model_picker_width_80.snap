@@ -1,14 +1,12 @@
 ---
 source: tui/src/bottom_pane/list_selection_view.rs
-assertion_line: 2474
 expression: "render_lines_with_width(&view, 80)"
 ---
                                                                                 
   Select Model and Effort                                                       
                                                                                 
-› 1. gpt-5.1-ody ← current  Optimized for Ody. Balance of reasoning quality     
-                            and coding ability.                                 
-  2. gpt-5.1-ody-mini       Optimized for Ody. Cheaper, faster, but less        
-                            capable.                                            
-  3. gpt-4.1-ody            Legacy model. Use when you need compatibility with  
-                            older automations.
+› 1. k3-ody ← current  Optimized for Ody. Balance of reasoning quality and      
+                       coding ability.                                          
+  2. glm-4.5           Optimized for Ody. Cheaper, faster, but less capable.    
+  3. gpt-4.1-ody       Legacy model. Use when you need compatibility with       
+                       older automations.

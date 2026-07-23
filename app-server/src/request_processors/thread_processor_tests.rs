@@ -754,7 +754,7 @@ mod thread_processor_behavior_tests {
             initial_turns_page: None,
         };
         let config_snapshot = ThreadConfigSnapshot {
-            model: "gpt-5".to_string(),
+            model: "kimi-k2.5".to_string(),
             model_provider_id: "kimi".to_string(),
             service_tier: Some("flex".to_string()),
             approval_policy: ody_protocol::protocol::AskForApproval::OnRequest,
@@ -771,7 +771,7 @@ mod thread_processor_behavior_tests {
             collaboration_mode: CollaborationMode {
                 mode: ModeKind::Default,
                 settings: Settings {
-                    model: "gpt-5".to_string(),
+                    model: "kimi-k2.5".to_string(),
                     reasoning_effort: None,
                     developer_instructions: None,
                     design_audit_level: None,
@@ -829,7 +829,7 @@ mod thread_processor_behavior_tests {
         let mut request_overrides = None;
         let mut typesafe_overrides = ConfigOverrides::default();
         let persisted_metadata =
-            test_thread_metadata(Some("gpt-5.1-ody-max"), Some(ReasoningEffort::High))?;
+            test_thread_metadata(Some("k3"), Some(ReasoningEffort::High))?;
 
         merge_persisted_resume_metadata(
             &mut request_overrides,
@@ -839,7 +839,7 @@ mod thread_processor_behavior_tests {
 
         assert_eq!(
             typesafe_overrides.model,
-            Some("gpt-5.1-ody-max".to_string())
+            Some("k3".to_string())
         );
         assert_eq!(
             typesafe_overrides.model_provider,
@@ -862,11 +862,11 @@ mod thread_processor_behavior_tests {
             serde_json::Value::String("low".to_string()),
         )]));
         let mut typesafe_overrides = ConfigOverrides {
-            model: Some("gpt-5.2-ody".to_string()),
+            model: Some("kimi-for-coding".to_string()),
             ..Default::default()
         };
         let persisted_metadata =
-            test_thread_metadata(Some("gpt-5.1-ody-max"), Some(ReasoningEffort::High))?;
+            test_thread_metadata(Some("k3"), Some(ReasoningEffort::High))?;
 
         merge_persisted_resume_metadata(
             &mut request_overrides,
@@ -874,7 +874,7 @@ mod thread_processor_behavior_tests {
             &persisted_metadata,
         );
 
-        assert_eq!(typesafe_overrides.model, Some("gpt-5.2-ody".to_string()));
+        assert_eq!(typesafe_overrides.model, Some("kimi-for-coding".to_string()));
         assert_eq!(typesafe_overrides.model_provider, None);
         assert_eq!(
             request_overrides,
@@ -891,11 +891,11 @@ mod thread_processor_behavior_tests {
     {
         let mut request_overrides = Some(HashMap::from([(
             "model".to_string(),
-            serde_json::Value::String("gpt-5.2-ody".to_string()),
+            serde_json::Value::String("kimi-for-coding".to_string()),
         )]));
         let mut typesafe_overrides = ConfigOverrides::default();
         let persisted_metadata =
-            test_thread_metadata(Some("gpt-5.1-ody-max"), Some(ReasoningEffort::High))?;
+            test_thread_metadata(Some("k3"), Some(ReasoningEffort::High))?;
 
         merge_persisted_resume_metadata(
             &mut request_overrides,
@@ -909,7 +909,7 @@ mod thread_processor_behavior_tests {
             request_overrides,
             Some(HashMap::from([(
                 "model".to_string(),
-                serde_json::Value::String("gpt-5.2-ody".to_string()),
+                serde_json::Value::String("kimi-for-coding".to_string()),
             )]))
         );
         Ok(())
@@ -924,7 +924,7 @@ mod thread_processor_behavior_tests {
             ..Default::default()
         };
         let persisted_metadata =
-            test_thread_metadata(Some("gpt-5.1-ody-max"), Some(ReasoningEffort::High))?;
+            test_thread_metadata(Some("k3"), Some(ReasoningEffort::High))?;
 
         merge_persisted_resume_metadata(
             &mut request_overrides,
@@ -947,7 +947,7 @@ mod thread_processor_behavior_tests {
         )]));
         let mut typesafe_overrides = ConfigOverrides::default();
         let persisted_metadata =
-            test_thread_metadata(Some("gpt-5.1-ody-max"), Some(ReasoningEffort::High))?;
+            test_thread_metadata(Some("k3"), Some(ReasoningEffort::High))?;
 
         merge_persisted_resume_metadata(
             &mut request_overrides,

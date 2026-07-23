@@ -1284,7 +1284,7 @@ async fn turn_start_accepts_collaboration_mode_override_v2() -> Result<()> {
 
     let thread_req = mcp
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.3-ody".to_string()),
+            model: Some("kimi-for-coding".to_string()),
             ..Default::default()
         })
         .await?;
@@ -1371,7 +1371,7 @@ async fn turn_start_uses_thread_feature_overrides_for_request_user_input_tool_de
 
     let thread_req = mcp
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.3-ody".to_string()),
+            model: Some("kimi-for-coding".to_string()),
             config: Some(HashMap::from([(
                 "features.default_mode_request_user_input".to_string(),
                 json!(true),
@@ -1824,7 +1824,7 @@ async fn turn_start_uses_migrated_pragmatic_personality_without_override_v2() ->
 
     let thread_req = mcp
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.3-ody".to_string()),
+            model: Some("kimi-for-coding".to_string()),
             ..Default::default()
         })
         .await?;
@@ -3092,7 +3092,7 @@ async fn turn_start_emits_spawn_agent_item_with_model_metadata_v2() -> Result<()
     const CHILD_PROMPT: &str = "child: do work";
     const PARENT_PROMPT: &str = "spawn a child and continue";
     const SPAWN_CALL_ID: &str = "spawn-call-1";
-    const REQUESTED_MODEL: &str = "gpt-5.2";
+    const REQUESTED_MODEL: &str = "kimi-k2.5";
     const REQUESTED_REASONING_EFFORT: ReasoningEffort = ReasoningEffort::Low;
 
     let server = responses::start_mock_server().await;
@@ -3152,7 +3152,7 @@ async fn turn_start_emits_spawn_agent_item_with_model_metadata_v2() -> Result<()
 
     let thread_req = mcp
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.3-ody".to_string()),
+            model: Some("kimi-for-coding".to_string()),
             ..Default::default()
         })
         .await?;
@@ -3365,7 +3365,7 @@ async fn direct_input_to_multi_agent_v2_subagent_is_rejected() -> Result<()> {
 
     let thread_req = mcp
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.3-ody".to_string()),
+            model: Some("kimi-for-coding".to_string()),
             ..Default::default()
         })
         .await?;
@@ -3463,9 +3463,9 @@ async fn turn_start_emits_spawn_agent_item_with_effective_role_model_metadata_v2
     const CHILD_PROMPT: &str = "child: do work";
     const PARENT_PROMPT: &str = "spawn a child and continue";
     const SPAWN_CALL_ID: &str = "spawn-call-1";
-    const REQUESTED_MODEL: &str = "gpt-5.2";
+    const REQUESTED_MODEL: &str = "kimi-k2.5";
     const REQUESTED_REASONING_EFFORT: ReasoningEffort = ReasoningEffort::Low;
-    const ROLE_MODEL: &str = "gpt-5.4";
+    const ROLE_MODEL: &str = "k3";
     const ROLE_REASONING_EFFORT: ReasoningEffort = ReasoningEffort::High;
 
     let server = responses::start_mock_server().await;
@@ -3543,7 +3543,7 @@ config_file = "./custom-role.toml"
 
     let thread_req = mcp
         .send_thread_start_request(ThreadStartParams {
-            model: Some("gpt-5.3-ody".to_string()),
+            model: Some("kimi-for-coding".to_string()),
             ..Default::default()
         })
         .await?;

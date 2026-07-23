@@ -678,10 +678,10 @@ mod tests {
             .with(fb.metadata_layer())
             .set_default();
 
-        tracing::info!(target: FEEDBACK_TAGS_TARGET, model = "gpt-5", cached = true, "tags");
+        tracing::info!(target: FEEDBACK_TAGS_TARGET, model = "k3", cached = true, "tags");
 
         let snap = fb.snapshot(/*session_id*/ None);
-        pretty_assertions::assert_eq!(snap.tags.get("model").map(String::as_str), Some("gpt-5"));
+        pretty_assertions::assert_eq!(snap.tags.get("model").map(String::as_str), Some("k3"));
         pretty_assertions::assert_eq!(snap.tags.get("cached").map(String::as_str), Some("true"));
     }
 
@@ -769,7 +769,7 @@ mod tests {
         tags.insert("session_source".to_string(), "wrong-source".to_string());
         tags.insert("reason".to_string(), "wrong-reason".to_string());
         tags.insert("account_id".to_string(), "actual-account".to_string());
-        tags.insert("model".to_string(), "gpt-5".to_string());
+        tags.insert("model".to_string(), "k3".to_string());
         let snapshot = FeedbackSnapshot {
             bytes: Vec::new(),
             tags,
@@ -829,6 +829,6 @@ mod tests {
             upload_tags.get("client_tag").map(String::as_str),
             Some("from-client")
         );
-        assert_eq!(upload_tags.get("model").map(String::as_str), Some("gpt-5"));
+        assert_eq!(upload_tags.get("model").map(String::as_str), Some("k3"));
     }
 }

@@ -240,7 +240,7 @@ async fn resume_switches_models_preserves_base_instructions() -> Result<()> {
 
     let server = start_mock_server().await;
     let mut builder = test_ody().with_config(|config| {
-        config.model = Some("gpt-5.2".to_string());
+        config.model = Some("kimi-k2.5".to_string());
     });
     let initial = builder.build(&server).await?;
     let ody = Arc::clone(&initial.ody);
@@ -296,7 +296,7 @@ async fn resume_switches_models_preserves_base_instructions() -> Result<()> {
     .await;
 
     let mut resume_builder = test_ody().with_config(|config| {
-        config.model = Some("gpt-5.3-ody".to_string());
+        config.model = Some("kimi-for-coding".to_string());
     });
     let resumed = resume_builder.resume(&server, home, rollout_path).await?;
     resumed
@@ -371,7 +371,7 @@ async fn resume_model_switch_is_not_duplicated_after_pre_turn_override() -> Resu
 
     let server = start_mock_server().await;
     let mut builder = test_ody().with_config(|config| {
-        config.model = Some("gpt-5.2".to_string());
+        config.model = Some("kimi-k2.5".to_string());
     });
     let initial = builder.build(&server).await?;
     let ody = Arc::clone(&initial.ody);
@@ -416,13 +416,13 @@ async fn resume_model_switch_is_not_duplicated_after_pre_turn_override() -> Resu
     .await;
 
     let mut resume_builder = test_ody().with_config(|config| {
-        config.model = Some("gpt-5.3-ody".to_string());
+        config.model = Some("kimi-for-coding".to_string());
     });
     let resumed = resume_builder.resume(&server, home, rollout_path).await?;
     core_test_support::submit_thread_settings(
         &resumed.ody,
         ody_protocol::protocol::ThreadSettingsOverrides {
-            model: Some("gpt-5.4".to_string()),
+            model: Some("k3".to_string()),
             ..Default::default()
         },
     )

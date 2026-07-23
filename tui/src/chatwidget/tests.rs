@@ -142,7 +142,6 @@ pub(super) use ody_protocol::config_types::CollaborationMode;
 pub(super) use ody_protocol::config_types::DesignAuditLevel;
 pub(super) use ody_protocol::config_types::ModeKind;
 pub(super) use ody_protocol::config_types::Personality;
-pub(super) use ody_protocol::config_types::SERVICE_TIER_DEFAULT_REQUEST_VALUE;
 pub(super) use ody_protocol::config_types::ServiceTier;
 pub(super) use ody_protocol::model_metadata::ModelInfo;
 pub(super) use ody_protocol::model_metadata::ModelPreset;

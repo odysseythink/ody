@@ -540,7 +540,7 @@ async fn ingest_rejected_turn_steer(
                 connection_id: 8,
                 request_id: RequestId::Integer(6),
                 response: Box::new(sample_thread_resume_response(
-                    "thread-2", /*ephemeral*/ false, "gpt-5",
+                    "thread-2", /*ephemeral*/ false, "kimi-k2.5",
                 )),
             },
             out,
@@ -613,7 +613,7 @@ async fn ingest_turn_prerequisites(
                     connection_id: 7,
                     request_id: RequestId::Integer(1),
                     response: Box::new(sample_thread_start_response(
-                        "thread-2", /*ephemeral*/ false, "gpt-5",
+                        "thread-2", /*ephemeral*/ false, "kimi-k2.5",
                     )),
                 },
                 out,
@@ -702,7 +702,7 @@ async fn ingest_review_prerequisites(
                 connection_id: 7,
                 request_id: RequestId::Integer(1),
                 response: Box::new(sample_thread_start_response(
-                    "thread-1", /*ephemeral*/ false, "gpt-5",
+                    "thread-1", /*ephemeral*/ false, "kimi-k2.5",
                 )),
             },
             events,
@@ -1024,7 +1024,7 @@ fn normalize_path_for_skill_id_repo_root_not_in_skill_path_uses_absolute_path() 
 #[test]
 fn app_mentioned_event_serializes_expected_shape() {
     let tracking = TrackEventsContext {
-        model_slug: "gpt-5".to_string(),
+        model_slug: "kimi-k2.5".to_string(),
         thread_id: "thread-1".to_string(),
         turn_id: "turn-1".to_string(),
     };
@@ -1053,7 +1053,7 @@ fn app_mentioned_event_serializes_expected_shape() {
                 "app_name": "Calendar",
                 "product_client_id": originator().value,
                 "invoke_type": "explicit",
-                "model_slug": "gpt-5"
+                "model_slug": "kimi-k2.5"
             }
         })
     );
@@ -1062,7 +1062,7 @@ fn app_mentioned_event_serializes_expected_shape() {
 #[test]
 fn app_used_event_serializes_expected_shape() {
     let tracking = TrackEventsContext {
-        model_slug: "gpt-5".to_string(),
+        model_slug: "kimi-k2.5".to_string(),
         thread_id: "thread-2".to_string(),
         turn_id: "turn-2".to_string(),
     };
@@ -1091,7 +1091,7 @@ fn app_used_event_serializes_expected_shape() {
                 "app_name": "Google Drive",
                 "product_client_id": originator().value,
                 "invoke_type": "implicit",
-                "model_slug": "gpt-5"
+                "model_slug": "kimi-k2.5"
             }
         })
     );
@@ -1107,7 +1107,7 @@ fn accepted_line_fingerprints_event_serializes_expected_shape() {
                 turn_id: "turn-1".to_string(),
                 thread_id: "thread-1".to_string(),
                 product_surface: Some("ody".to_string()),
-                model_slug: Some("gpt-5.1-ody".to_string()),
+                model_slug: Some("kimi-for-coding".to_string()),
                 completed_at: 1710000000,
                 repo_hash: Some("repo-hash-1".to_string()),
                 accepted_added_lines: 42,
@@ -1128,7 +1128,7 @@ fn accepted_line_fingerprints_event_serializes_expected_shape() {
                 "turn_id": "turn-1",
                 "thread_id": "thread-1",
                 "product_surface": "ody",
-                "model_slug": "gpt-5.1-ody",
+                "model_slug": "kimi-for-coding",
                 "completed_at": 1710000000,
                 "repo_hash": "repo-hash-1",
                 "accepted_added_lines": 42,
@@ -1381,12 +1381,12 @@ fn app_used_dedupe_is_keyed_by_turn_and_connector() {
     };
 
     let turn_1 = TrackEventsContext {
-        model_slug: "gpt-5".to_string(),
+        model_slug: "kimi-k2.5".to_string(),
         thread_id: "thread-1".to_string(),
         turn_id: "turn-1".to_string(),
     };
     let turn_2 = TrackEventsContext {
-        model_slug: "gpt-5".to_string(),
+        model_slug: "kimi-k2.5".to_string(),
         thread_id: "thread-1".to_string(),
         turn_id: "turn-2".to_string(),
     };
@@ -1416,7 +1416,7 @@ fn thread_initialized_event_serializes_expected_shape() {
                 runtime_os_version: "15.3.1".to_string(),
                 runtime_arch: "aarch64".to_string(),
             },
-            model: "gpt-5".to_string(),
+            model: "kimi-k2.5".to_string(),
             ephemeral: true,
             thread_source: Some(ThreadSource::Feature("automation".to_string())),
             initialization_mode: ThreadInitializationMode::New,
@@ -1449,7 +1449,7 @@ fn thread_initialized_event_serializes_expected_shape() {
                     "runtime_os_version": "15.3.1",
                     "runtime_arch": "aarch64"
                 },
-                "model": "gpt-5",
+                "model": "kimi-k2.5",
                 "ephemeral": true,
                 "thread_source": "automation",
                 "initialization_mode": "new",
@@ -1650,7 +1650,7 @@ async fn initialize_caches_client_and_thread_lifecycle_publishes_once_initialize
                 response: Box::new(sample_thread_start_response(
                     "thread-no-client",
                     /*ephemeral*/ false,
-                    "gpt-5",
+                    "kimi-k2.5",
                 )),
             },
             &mut events,
@@ -1695,7 +1695,7 @@ async fn initialize_caches_client_and_thread_lifecycle_publishes_once_initialize
                 connection_id: 7,
                 request_id: RequestId::Integer(2),
                 response: Box::new(sample_thread_resume_response(
-                    "thread-1", /*ephemeral*/ true, "gpt-5",
+                    "thread-1", /*ephemeral*/ true, "kimi-k2.5",
                 )),
             },
             &mut events,
@@ -1840,7 +1840,7 @@ async fn compaction_event_ingests_custom_fact() {
                 response: Box::new(sample_thread_resume_response_with_source(
                     "thread-1",
                     /*ephemeral*/ false,
-                    "gpt-5",
+                    "kimi-k2.5",
                     AppServerSessionSource::SubAgent(SubAgentSource::ThreadSpawn {
                         parent_thread_id,
                         depth: 1,
@@ -1969,7 +1969,7 @@ async fn guardian_review_event_ingests_custom_fact_with_optional_target_item() {
                 response: Box::new(sample_thread_start_response(
                     "thread-guardian",
                     /*ephemeral*/ false,
-                    "gpt-5",
+                    "kimi-k2.5",
                 )),
             },
             &mut events,
@@ -2497,7 +2497,7 @@ async fn item_review_summaries_do_not_cross_threads_with_reused_item_ids() {
                 connection_id: 7,
                 request_id: RequestId::Integer(2),
                 response: Box::new(sample_thread_start_response(
-                    "thread-2", /*ephemeral*/ false, "gpt-5",
+                    "thread-2", /*ephemeral*/ false, "kimi-k2.5",
                 )),
             },
             &mut events,
@@ -2552,7 +2552,7 @@ fn subagent_thread_started_review_serializes_expected_shape() {
             product_client_id: "ody-tui".to_string(),
             client_name: "ody-tui".to_string(),
             client_version: "1.0.0".to_string(),
-            model: "gpt-5".to_string(),
+            model: "kimi-k2.5".to_string(),
             ephemeral: false,
             subagent_source: SubAgentSource::Review,
             created_at: 123,
@@ -2604,7 +2604,7 @@ fn subagent_thread_started_thread_spawn_serializes_thread_lineage() {
             product_client_id: "ody-tui".to_string(),
             client_name: "ody-tui".to_string(),
             client_version: "1.0.0".to_string(),
-            model: "gpt-5".to_string(),
+            model: "kimi-k2.5".to_string(),
             ephemeral: true,
             subagent_source: SubAgentSource::ThreadSpawn {
                 parent_thread_id,
@@ -2643,7 +2643,7 @@ fn subagent_thread_started_memory_consolidation_serializes_expected_shape() {
             product_client_id: "ody-tui".to_string(),
             client_name: "ody-tui".to_string(),
             client_version: "1.0.0".to_string(),
-            model: "gpt-5".to_string(),
+            model: "kimi-k2.5".to_string(),
             ephemeral: false,
             subagent_source: SubAgentSource::MemoryConsolidation,
             created_at: 125,
@@ -2670,7 +2670,7 @@ fn subagent_thread_started_other_serializes_expected_shape() {
             product_client_id: "ody-tui".to_string(),
             client_name: "ody-tui".to_string(),
             client_version: "1.0.0".to_string(),
-            model: "gpt-5".to_string(),
+            model: "kimi-k2.5".to_string(),
             ephemeral: false,
             subagent_source: SubAgentSource::Other("guardian".to_string()),
             created_at: 126,
@@ -2696,7 +2696,7 @@ fn subagent_thread_started_other_serializes_explicit_parent_thread_id() {
             product_client_id: "ody-tui".to_string(),
             client_name: "ody-tui".to_string(),
             client_version: "1.0.0".to_string(),
-            model: "gpt-5".to_string(),
+            model: "kimi-k2.5".to_string(),
             ephemeral: false,
             subagent_source: SubAgentSource::Other("guardian".to_string()),
             created_at: 126,
@@ -2727,7 +2727,7 @@ async fn subagent_thread_started_publishes_without_initialize() {
                     product_client_id: "ody-tui".to_string(),
                     client_name: "ody-tui".to_string(),
                     client_version: "1.0.0".to_string(),
-                    model: "gpt-5".to_string(),
+                    model: "kimi-k2.5".to_string(),
                     ephemeral: false,
                     subagent_source: SubAgentSource::Review,
                     created_at: 127,
@@ -2784,7 +2784,7 @@ async fn subagent_events_use_inherited_connection_unless_turn_connection_is_expl
                 response: Box::new(sample_thread_start_response(
                     &parent_thread_id_string,
                     /*ephemeral*/ false,
-                    "gpt-5",
+                    "kimi-k2.5",
                 )),
             },
             &mut events,
@@ -2802,7 +2802,7 @@ async fn subagent_events_use_inherited_connection_unless_turn_connection_is_expl
                     product_client_id: "parent-client".to_string(),
                     client_name: "parent-client".to_string(),
                     client_version: "1.0.0".to_string(),
-                    model: "gpt-5".to_string(),
+                    model: "kimi-k2.5".to_string(),
                     ephemeral: false,
                     subagent_source: SubAgentSource::ThreadSpawn {
                         parent_thread_id,
@@ -2939,7 +2939,7 @@ async fn subagent_tool_items_inherit_parent_connection_metadata() {
                     product_client_id: "ody-tui".to_string(),
                     client_name: "ody-tui".to_string(),
                     client_version: "1.0.0".to_string(),
-                    model: "gpt-5".to_string(),
+                    model: "kimi-k2.5".to_string(),
                     ephemeral: false,
                     subagent_source: SubAgentSource::Review,
                     created_at: 128,
@@ -3009,7 +3009,7 @@ async fn subagent_tool_items_inherit_parent_connection_metadata() {
 #[test]
 fn plugin_used_event_serializes_expected_shape() {
     let tracking = TrackEventsContext {
-        model_slug: "gpt-5".to_string(),
+        model_slug: "kimi-k2.5".to_string(),
         thread_id: "thread-3".to_string(),
         turn_id: "turn-3".to_string(),
     };
@@ -3035,7 +3035,7 @@ fn plugin_used_event_serializes_expected_shape() {
                 "mcp_server_names": ["mcp-1", "mcp-2"],
                 "thread_id": "thread-3",
                 "turn_id": "turn-3",
-                "model_slug": "gpt-5"
+                "model_slug": "kimi-k2.5"
             }
         })
     );
@@ -3119,7 +3119,7 @@ fn plugin_management_event_can_use_remote_plugin_id_override() {
 #[test]
 fn hook_run_event_serializes_expected_shape() {
     let tracking = TrackEventsContext {
-        model_slug: "gpt-5".to_string(),
+        model_slug: "kimi-k2.5".to_string(),
         thread_id: "thread-3".to_string(),
         turn_id: "turn-3".to_string(),
     };
@@ -3144,7 +3144,7 @@ fn hook_run_event_serializes_expected_shape() {
             "event_params": {
                 "thread_id": "thread-3",
                 "turn_id": "turn-3",
-                "model_slug": "gpt-5",
+                "model_slug": "kimi-k2.5",
                 "hook_name": "PreToolUse",
                 "hook_source": "user",
                 "status": "completed"
@@ -3156,7 +3156,7 @@ fn hook_run_event_serializes_expected_shape() {
 #[test]
 fn hook_run_metadata_maps_sources_and_statuses() {
     let tracking = TrackEventsContext {
-        model_slug: "gpt-5".to_string(),
+        model_slug: "kimi-k2.5".to_string(),
         thread_id: "thread-1".to_string(),
         turn_id: "turn-1".to_string(),
     };
@@ -3211,7 +3211,7 @@ fn hook_run_metadata_maps_sources_and_statuses() {
 #[test]
 fn hook_run_metadata_maps_stopped_status() {
     let tracking = TrackEventsContext {
-        model_slug: "gpt-5".to_string(),
+        model_slug: "kimi-k2.5".to_string(),
         thread_id: "thread-1".to_string(),
         turn_id: "turn-1".to_string(),
     };
@@ -3241,12 +3241,12 @@ fn plugin_used_dedupe_is_keyed_by_turn_and_plugin() {
     let plugin = sample_plugin_metadata();
 
     let turn_1 = TrackEventsContext {
-        model_slug: "gpt-5".to_string(),
+        model_slug: "kimi-k2.5".to_string(),
         thread_id: "thread-1".to_string(),
         turn_id: "turn-1".to_string(),
     };
     let turn_2 = TrackEventsContext {
-        model_slug: "gpt-5".to_string(),
+        model_slug: "kimi-k2.5".to_string(),
         thread_id: "thread-1".to_string(),
         turn_id: "turn-2".to_string(),
     };
@@ -3261,7 +3261,7 @@ async fn reducer_ingests_skill_invoked_fact() {
     let mut reducer = AnalyticsReducer::default();
     let mut events = Vec::new();
     let tracking = TrackEventsContext {
-        model_slug: "gpt-5".to_string(),
+        model_slug: "kimi-k2.5".to_string(),
         thread_id: "thread-1".to_string(),
         turn_id: "turn-1".to_string(),
     };
@@ -3304,7 +3304,7 @@ async fn reducer_ingests_skill_invoked_fact() {
                 "thread_id": "thread-1",
                 "turn_id": "turn-1",
                 "invoke_type": "explicit",
-                "model_slug": "gpt-5"
+                "model_slug": "kimi-k2.5"
             }
         }])
     );
@@ -3315,7 +3315,7 @@ async fn reducer_includes_plugin_id_for_plugin_skill_invocations() {
     let mut reducer = AnalyticsReducer::default();
     let mut events = Vec::new();
     let tracking = TrackEventsContext {
-        model_slug: "gpt-5".to_string(),
+        model_slug: "kimi-k2.5".to_string(),
         thread_id: "thread-1".to_string(),
         turn_id: "turn-1".to_string(),
     };
@@ -3353,7 +3353,7 @@ async fn reducer_ingests_hook_run_fact() {
         .ingest(
             AnalyticsFact::Custom(CustomAnalyticsFact::HookRun(HookRunInput {
                 tracking: TrackEventsContext {
-                    model_slug: "gpt-5".to_string(),
+                    model_slug: "kimi-k2.5".to_string(),
                     thread_id: "thread-1".to_string(),
                     turn_id: "turn-1".to_string(),
                 },
@@ -3380,7 +3380,7 @@ async fn reducer_ingests_app_and_plugin_facts() {
     let mut reducer = AnalyticsReducer::default();
     let mut events = Vec::new();
     let tracking = TrackEventsContext {
-        model_slug: "gpt-5".to_string(),
+        model_slug: "kimi-k2.5".to_string(),
         thread_id: "thread-1".to_string(),
         turn_id: "turn-1".to_string(),
     };
@@ -3664,7 +3664,7 @@ fn turn_event_serializes_expected_shape() {
             initialization_mode: ThreadInitializationMode::New,
             subagent_source: None,
             parent_thread_id: None,
-            model: Some("gpt-5".to_string()),
+            model: Some("kimi-k2.5".to_string()),
             model_provider: "kimi".to_string(),
             sandbox_policy: Some("read_only"),
             reasoning_effort: Some("high".to_string()),
@@ -3736,7 +3736,7 @@ fn turn_event_serializes_expected_shape() {
                 "initialization_mode": "new",
                 "subagent_source": null,
                 "parent_thread_id": null,
-                "model": "gpt-5",
+                "model": "kimi-k2.5",
                 "model_provider": "kimi",
                 "sandbox_policy": "read_only",
                 "reasoning_effort": "high",
@@ -4169,7 +4169,7 @@ async fn turn_event_counts_completed_tool_items() {
             sender_thread_id: "thread-2".to_string(),
             receiver_thread_ids: vec!["thread-child".to_string()],
             prompt: Some("help".to_string()),
-            model: Some("gpt-5".to_string()),
+            model: Some("kimi-k2.5".to_string()),
             reasoning_effort: None,
             agents_states: Default::default(),
         },

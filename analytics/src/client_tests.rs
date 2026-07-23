@@ -60,7 +60,7 @@ fn sample_accepted_line_fingerprint_event(thread_id: &str) -> TrackEventRequest 
             turn_id: "turn-1".to_string(),
             thread_id: thread_id.to_string(),
             product_surface: Some("ody".to_string()),
-            model_slug: Some("gpt-5.1-ody".to_string()),
+            model_slug: Some("kimi-for-coding".to_string()),
             completed_at: 1,
             repo_hash: None,
             accepted_added_lines: 1,
@@ -83,7 +83,7 @@ fn sample_regular_track_event(thread_id: &str) -> TrackEventRequest {
             thread_id: Some(thread_id.to_string()),
             turn_id: Some("turn-1".to_string()),
             invoke_type: Some(InvocationType::Explicit),
-            model_slug: Some("gpt-5.1-ody".to_string()),
+            model_slug: Some("kimi-for-coding".to_string()),
         },
     })
 }
@@ -303,7 +303,7 @@ fn sample_thread(thread_id: &str) -> Thread {
 fn sample_thread_start_response() -> ClientResponsePayload {
     ClientResponsePayload::ThreadStart(ThreadStartResponse {
         thread: sample_thread("thread-1"),
-        model: "gpt-5".to_string(),
+        model: "kimi-k2.5".to_string(),
         model_provider: "kimi".to_string(),
         service_tier: None,
         cwd: test_path_buf("/tmp").abs(),
@@ -321,7 +321,7 @@ fn sample_thread_start_response() -> ClientResponsePayload {
 fn sample_thread_resume_response() -> ClientResponsePayload {
     ClientResponsePayload::ThreadResume(ThreadResumeResponse {
         thread: sample_thread("thread-2"),
-        model: "gpt-5".to_string(),
+        model: "kimi-k2.5".to_string(),
         model_provider: "kimi".to_string(),
         service_tier: None,
         cwd: test_path_buf("/tmp").abs(),
@@ -340,7 +340,7 @@ fn sample_thread_resume_response() -> ClientResponsePayload {
 fn sample_thread_fork_response() -> ClientResponsePayload {
     ClientResponsePayload::ThreadFork(ThreadForkResponse {
         thread: sample_thread("thread-3"),
-        model: "gpt-5".to_string(),
+        model: "kimi-k2.5".to_string(),
         model_provider: "kimi".to_string(),
         service_tier: None,
         cwd: test_path_buf("/tmp").abs(),
