@@ -15,13 +15,13 @@ use crate::login::telemetry;
 use crate::login::validation::validate_custom_alias;
 use ody_model_provider::login::LoginModelInfo;
 use ody_model_provider::login::fetch_login_models;
-use ody_model_provider_info::LoginProvider;
+use ody_model_provider_info::BuiltInApiKeyProvider;
 
 const LOGIN_PROVIDER_SELECTION_VIEW_ID: &str = "login-provider-selection";
 const LOGIN_MODEL_SELECTION_VIEW_ID: &str = "login-model-selection";
 
 impl ChatWidget {
-    pub(crate) fn start_login_flow(&mut self, provider: Option<LoginProvider>) {
+    pub(crate) fn start_login_flow(&mut self, provider: Option<BuiltInApiKeyProvider>) {
         if let Some(provider) = provider {
             telemetry::record_login_attempted(&self.session_telemetry, provider);
             self.show_login_alias_prompt(provider);
@@ -33,9 +33,9 @@ impl ChatWidget {
     fn show_login_provider_picker(&mut self) {
         let _tx = self.app_event_tx.clone();
         let items: Vec<SelectionItem> = [
-            LoginProvider::Kimi,
-            LoginProvider::Deepseek,
-            LoginProvider::Glm,
+            BuiltInApiKeyProvider::Kimi,
+            BuiltInApiKeyProvider::Deepseek,
+            BuiltInApiKeyProvider::Glm,
         ]
         .into_iter()
         .map(|provider| {
@@ -46,7 +46,7 @@ impl ChatWidget {
                 name,
                 description: Some(format!("Configure {id} login")),
                 actions: vec![Box::new(move |tx| {
-                    tx.send(AppEvent::LoginProviderSelected {
+                    tx.send(AppEvent::BuiltInApiKeyProviderSelected {
                         provider: provider_for_action,
                     });
                 })],
@@ -67,12 +67,12 @@ impl ChatWidget {
         self.request_redraw();
     }
 
-    pub(crate) fn on_login_provider_selected(&mut self, provider: LoginProvider) {
+    pub(crate) fn on_login_provider_selected(&mut self, provider: BuiltInApiKeyProvider) {
         telemetry::record_login_attempted(&self.session_telemetry, provider);
         self.show_login_alias_prompt(provider);
     }
 
-    fn show_login_alias_prompt(&mut self, provider: LoginProvider) {
+    fn show_login_alias_prompt(&mut self, provider: BuiltInApiKeyProvider) {
         let provider_name = provider.display_name().to_string();
         let tx = self.app_event_tx.clone();
         let view = CustomPromptView::new(
@@ -88,7 +88,7 @@ impl ChatWidget {
         self.request_redraw();
     }
 
-    pub(crate) fn on_login_alias_submitted(&mut self, provider: LoginProvider, alias: String) {
+    pub(crate) fn on_login_alias_submitted(&mut self, provider: BuiltInApiKeyProvider, alias: String) {
         if let Err(err) = validate_custom_alias(&alias) {
             self.add_error_message(err);
             self.show_login_alias_prompt(provider);
@@ -97,7 +97,7 @@ impl ChatWidget {
         self.show_login_api_key_prompt(provider, alias);
     }
 
-    fn show_login_api_key_prompt(&mut self, provider: LoginProvider, alias: String) {
+    fn show_login_api_key_prompt(&mut self, provider: BuiltInApiKeyProvider, alias: String) {
         let provider_name = provider.display_name().to_string();
         let tx = self.app_event_tx.clone();
         let view = CustomPromptView::new_secret(
@@ -120,7 +120,7 @@ impl ChatWidget {
 
     pub(crate) fn on_login_api_key_submitted(
         &mut self,
-        provider: LoginProvider,
+        provider: BuiltInApiKeyProvider,
         alias: String,
         api_key: String,
     ) {
@@ -134,7 +134,7 @@ impl ChatWidget {
 
     fn show_login_base_url_prompt(
         &mut self,
-        provider: LoginProvider,
+        provider: BuiltInApiKeyProvider,
         alias: String,
         api_key: String,
     ) {
@@ -163,7 +163,7 @@ impl ChatWidget {
 
     pub(crate) fn on_login_base_url_submitted(
         &mut self,
-        provider: LoginProvider,
+        provider: BuiltInApiKeyProvider,
         alias: String,
         api_key: String,
         base_url: String,
@@ -177,7 +177,7 @@ impl ChatWidget {
         let tx = self.app_event_tx.clone();
         tokio::spawn(async move {
             let extra_headers = match provider {
-                LoginProvider::Kimi => ody_model_provider_info::create_kimi_provider().http_headers,
+                BuiltInApiKeyProvider::Kimi => ody_model_provider_info::create_kimi_provider().http_headers,
                 _ => None,
             };
             let result = fetch_login_models(provider, &base_url, &api_key, extra_headers)
@@ -201,7 +201,7 @@ impl ChatWidget {
 
     pub(crate) fn on_login_models_fetched(
         &mut self,
-        provider: LoginProvider,
+        provider: BuiltInApiKeyProvider,
         alias: String,
         api_key: String,
         base_url: String,
@@ -229,7 +229,7 @@ impl ChatWidget {
                     name: model_id.clone(),
                     description: Some(display_name),
                     actions: vec![Box::new(move |tx| {
-                        tx.send(AppEvent::PersistLoginProvider {
+                        tx.send(AppEvent::PersistBuiltInApiKeyProvider {
                             provider: provider_for_action,
                             alias: alias_for_action.clone(),
                             api_key: api_key_for_action.clone(),

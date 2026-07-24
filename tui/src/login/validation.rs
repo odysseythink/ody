@@ -1,15 +1,15 @@
 //! Provider-name and alias validation for the TUI `/login` flow.
 
-use ody_model_provider_info::LoginProvider;
+use ody_model_provider_info::BuiltInApiKeyProvider;
 use std::str::FromStr;
 
 /// Validate a user-supplied provider name against the supported login providers.
-pub(crate) fn validate_login_provider_name(name: &str) -> Result<LoginProvider, String> {
+pub(crate) fn validate_login_provider_name(name: &str) -> Result<BuiltInApiKeyProvider, String> {
     let normalized = name.trim().to_ascii_lowercase();
     if normalized.is_empty() {
         return Err("Provider name is required".to_string());
     }
-    LoginProvider::from_str(&normalized).map_err(|_| {
+    BuiltInApiKeyProvider::from_str(&normalized).map_err(|_| {
         format!("Unknown provider '{name}'. Supported providers: kimi, deepseek, glm.")
     })
 }
@@ -28,9 +28,9 @@ pub(crate) fn validate_custom_alias(alias: &str) -> Result<(), String> {
         return Err("Alias must be 64 characters or fewer".to_string());
     }
     for reserved in [
-        LoginProvider::Kimi.id(),
-        LoginProvider::Deepseek.id(),
-        LoginProvider::Glm.id(),
+        BuiltInApiKeyProvider::Kimi.id(),
+        BuiltInApiKeyProvider::Deepseek.id(),
+        BuiltInApiKeyProvider::Glm.id(),
     ] {
         if trimmed.eq_ignore_ascii_case(reserved) {
             return Err(format!("'{trimmed}' is a reserved provider alias"));
@@ -59,15 +59,15 @@ mod tests {
     fn validates_known_providers() {
         assert_eq!(
             validate_login_provider_name("kimi").unwrap(),
-            LoginProvider::Kimi
+            BuiltInApiKeyProvider::Kimi
         );
         assert_eq!(
             validate_login_provider_name("DeepSeek").unwrap(),
-            LoginProvider::Deepseek
+            BuiltInApiKeyProvider::Deepseek
         );
         assert_eq!(
             validate_login_provider_name("GLM").unwrap(),
-            LoginProvider::Glm
+            BuiltInApiKeyProvider::Glm
         );
     }
 

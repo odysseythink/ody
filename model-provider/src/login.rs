@@ -10,7 +10,7 @@ use std::time::Duration;
 use http::HeaderMap;
 use http::HeaderName;
 use http::HeaderValue;
-use ody_model_provider_info::LoginProvider;
+use ody_model_provider_info::BuiltInApiKeyProvider;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -54,7 +54,7 @@ pub enum LoginModelError {
 /// `api_key` is used for `Authorization: Bearer ...`. Extra headers are merged
 /// in for providers that require identity headers (e.g. Kimi).
 pub async fn fetch_login_models(
-    _provider: LoginProvider,
+    _provider: BuiltInApiKeyProvider,
     base_url: &str,
     api_key: &str,
     extra_headers: Option<HashMap<String, String>>,

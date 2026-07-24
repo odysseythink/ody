@@ -14,7 +14,7 @@ use crate::bottom_pane::slash_commands::SlashCommandItem;
 use crate::bottom_pane::slash_commands::find_slash_command;
 use crate::goal_display::GOAL_USAGE;
 use crate::goal_files::GoalDraft;
-use ody_model_provider_info::LoginProvider;
+use ody_model_provider_info::BuiltInApiKeyProvider;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SlashCommandDispatchSource {
@@ -1266,24 +1266,24 @@ impl ChatWidget {
         false
     }
 
-    fn configured_aliases_for_provider(&self, provider: LoginProvider) -> Vec<String> {
+    fn configured_aliases_for_provider(&self, provider: BuiltInApiKeyProvider) -> Vec<String> {
         self.config
             .model_providers
             .iter()
             .filter(|(_, p)| match provider {
-                LoginProvider::Kimi => p.is_kimi(),
-                LoginProvider::Deepseek => p.is_deepseek(),
-                LoginProvider::Glm => p.is_glm(),
+                BuiltInApiKeyProvider::Kimi => p.is_kimi(),
+                BuiltInApiKeyProvider::Deepseek => p.is_deepseek(),
+                BuiltInApiKeyProvider::Glm => p.is_glm(),
             })
             .map(|(alias, _)| alias.clone())
             .collect()
     }
 
     pub(crate) fn show_logout_provider_picker(&mut self) {
-        let providers: Vec<LoginProvider> = [
-            LoginProvider::Kimi,
-            LoginProvider::Deepseek,
-            LoginProvider::Glm,
+        let providers: Vec<BuiltInApiKeyProvider> = [
+            BuiltInApiKeyProvider::Kimi,
+            BuiltInApiKeyProvider::Deepseek,
+            BuiltInApiKeyProvider::Glm,
         ]
         .into_iter()
         .collect();
@@ -1318,7 +1318,7 @@ impl ChatWidget {
         self.request_redraw();
     }
 
-    pub(crate) fn show_logout_alias_picker(&mut self, provider: LoginProvider) {
+    pub(crate) fn show_logout_alias_picker(&mut self, provider: BuiltInApiKeyProvider) {
         let aliases = self.configured_aliases_for_provider(provider);
         if aliases.is_empty() {
             self.add_info_message(

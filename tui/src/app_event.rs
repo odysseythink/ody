@@ -26,7 +26,7 @@ use ody_app_server_protocol::SkillsListResponse;
 use ody_app_server_protocol::ThreadGoalStatus;
 use ody_file_search::FileMatch;
 use ody_model_provider::login::LoginModelInfo;
-use ody_model_provider_info::LoginProvider;
+use ody_model_provider_info::BuiltInApiKeyProvider;
 use ody_protocol::ThreadId;
 use ody_protocol::model_metadata::ModelPreset;
 use ody_utils_absolute_path::AbsolutePathBuf;
@@ -221,26 +221,26 @@ pub(crate) enum AppEvent {
     Exit(ExitMode),
 
     /// Provider selected in the login flow; prompt for a custom alias.
-    LoginProviderSelected {
-        provider: LoginProvider,
+    BuiltInApiKeyProviderSelected {
+        provider: BuiltInApiKeyProvider,
     },
 
     /// Alias submitted in the login flow; prompt for an API key.
     LoginAliasSubmitted {
-        provider: LoginProvider,
+        provider: BuiltInApiKeyProvider,
         alias: String,
     },
 
     /// API key submitted in the login flow; prompt for an optional base URL.
     LoginApiKeySubmitted {
-        provider: LoginProvider,
+        provider: BuiltInApiKeyProvider,
         alias: String,
         api_key: String,
     },
 
     /// Base URL submitted; fetch the provider's /models endpoint to verify.
     LoginBaseUrlSubmitted {
-        provider: LoginProvider,
+        provider: BuiltInApiKeyProvider,
         alias: String,
         api_key: String,
         base_url: String,
@@ -248,7 +248,7 @@ pub(crate) enum AppEvent {
 
     /// Result of the asynchronous /models fetch used to verify a login.
     LoginModelsFetched {
-        provider: LoginProvider,
+        provider: BuiltInApiKeyProvider,
         alias: String,
         api_key: String,
         base_url: String,
@@ -256,8 +256,8 @@ pub(crate) enum AppEvent {
     },
 
     /// Persist a configured provider, model alias, and default model to config.
-    PersistLoginProvider {
-        provider: LoginProvider,
+    PersistBuiltInApiKeyProvider {
+        provider: BuiltInApiKeyProvider,
         alias: String,
         api_key: String,
         base_url: String,
@@ -267,19 +267,19 @@ pub(crate) enum AppEvent {
     /// Remove all persisted providers of a given provider type and any
     /// model aliases that belong to them.
     LogoutProvider {
-        provider: LoginProvider,
+        provider: BuiltInApiKeyProvider,
     },
 
     /// Remove a single persisted provider alias and any model aliases that belong
     /// to it, and clear the default model if it points to the removed provider.
     LogoutProviderAlias {
-        provider: LoginProvider,
+        provider: BuiltInApiKeyProvider,
         alias: String,
     },
 
     /// Provider selected in the logout flow; show aliases for that provider.
     LogoutProviderSelected {
-        provider: LoginProvider,
+        provider: BuiltInApiKeyProvider,
     },
 
     /// Request to exit the application due to a fatal error.

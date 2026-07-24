@@ -12,7 +12,7 @@ use crate::login::config::build_logout_provider_edits;
 use crate::login::telemetry;
 use crate::model_catalog::ModelCatalog;
 use ody_model_provider::login::LoginModelInfo;
-use ody_model_provider_info::LoginProvider;
+use ody_model_provider_info::BuiltInApiKeyProvider;
 #[cfg(target_os = "windows")]
 use ody_utils_approval_presets::ApprovalPreset;
 use std::sync::Arc;
@@ -727,7 +727,7 @@ impl App {
 
     pub(super) async fn persist_login_provider(
         &mut self,
-        provider: LoginProvider,
+        provider: BuiltInApiKeyProvider,
         alias: String,
         api_key: String,
         base_url: String,
@@ -810,7 +810,7 @@ impl App {
 
     pub(super) async fn logout_provider(
         &mut self,
-        provider: LoginProvider,
+        provider: BuiltInApiKeyProvider,
         app_server: &mut AppServerSession,
     ) {
         let aliases_to_remove: Vec<String> = self
@@ -818,9 +818,9 @@ impl App {
             .model_providers
             .iter()
             .filter(|(_, p)| match provider {
-                LoginProvider::Kimi => p.is_kimi(),
-                LoginProvider::Deepseek => p.is_deepseek(),
-                LoginProvider::Glm => p.is_glm(),
+                BuiltInApiKeyProvider::Kimi => p.is_kimi(),
+                BuiltInApiKeyProvider::Deepseek => p.is_deepseek(),
+                BuiltInApiKeyProvider::Glm => p.is_glm(),
             })
             .map(|(alias, _)| alias.clone())
             .collect();
@@ -868,7 +868,7 @@ impl App {
 
     pub(super) async fn logout_provider_alias(
         &mut self,
-        provider: LoginProvider,
+        provider: BuiltInApiKeyProvider,
         alias: String,
         app_server: &mut AppServerSession,
     ) {
@@ -878,9 +878,9 @@ impl App {
             .model_providers
             .get(&alias)
             .map(|p| match provider {
-                LoginProvider::Kimi => p.is_kimi(),
-                LoginProvider::Deepseek => p.is_deepseek(),
-                LoginProvider::Glm => p.is_glm(),
+                BuiltInApiKeyProvider::Kimi => p.is_kimi(),
+                BuiltInApiKeyProvider::Deepseek => p.is_deepseek(),
+                BuiltInApiKeyProvider::Glm => p.is_glm(),
             })
             .unwrap_or(false);
         if !is_matching_alias {

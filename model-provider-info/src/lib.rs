@@ -70,13 +70,13 @@ const GLM_ENV_KEY: &str = "GLM_API_KEY";
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 #[strum(ascii_case_insensitive)]
-pub enum LoginProvider {
+pub enum BuiltInApiKeyProvider {
     Kimi,
     Deepseek,
     Glm,
 }
 
-impl LoginProvider {
+impl BuiltInApiKeyProvider {
     /// Provider alias used in config keys (e.g. `providers.kimi`).
     pub fn id(self) -> &'static str {
         let id: &'static str = self.into();

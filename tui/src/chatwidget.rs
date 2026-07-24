@@ -132,7 +132,7 @@ use ody_git_utils::get_git_repo_root;
 use ody_git_utils::local_git_branches;
 use ody_git_utils::recent_commits;
 use ody_model_provider::login::LoginModelInfo;
-use ody_model_provider_info::LoginProvider;
+use ody_model_provider_info::BuiltInApiKeyProvider;
 use ody_otel::RuntimeMetricsSummary;
 use ody_otel::SessionTelemetry;
 use ody_plugin::PluginCapabilitySummary;
@@ -539,7 +539,7 @@ pub(crate) struct ChatWidget {
     /// The full list of models fetched during the active `/login` flow. Used to
     /// persist every available model (not just the one the user selected) when
     /// the login is confirmed.
-    last_fetched_login_models: Option<(LoginProvider, String, Vec<LoginModelInfo>)>,
+    last_fetched_login_models: Option<(BuiltInApiKeyProvider, String, Vec<LoginModelInfo>)>,
     session_telemetry: SessionTelemetry,
     session_header: SessionHeader,
     initial_user_message: Option<UserMessage>,

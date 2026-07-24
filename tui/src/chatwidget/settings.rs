@@ -3,7 +3,7 @@
 use super::*;
 use crate::app_event::AppEvent;
 use ody_model_provider::login::LoginModelInfo;
-use ody_model_provider_info::LoginProvider;
+use ody_model_provider_info::BuiltInApiKeyProvider;
 use ody_protocol::config_types::DesignAuditLevel;
 
 impl ChatWidget {
@@ -203,7 +203,7 @@ impl ChatWidget {
 
     pub(crate) fn take_last_fetched_login_models(
         &mut self,
-    ) -> Option<(LoginProvider, String, Vec<LoginModelInfo>)> {
+    ) -> Option<(BuiltInApiKeyProvider, String, Vec<LoginModelInfo>)> {
         self.last_fetched_login_models.take()
     }
 

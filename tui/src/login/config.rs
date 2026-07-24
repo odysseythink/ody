@@ -2,7 +2,7 @@
 
 use ody_app_server_protocol::ConfigEdit;
 use ody_config::config_toml::OdyCodeModelConfig;
-use ody_model_provider_info::LoginProvider;
+use ody_model_provider_info::BuiltInApiKeyProvider;
 use ody_protocol::model_metadata::ModelInfo;
 use std::collections::HashMap;
 
@@ -16,7 +16,7 @@ use ody_model_provider::login::LoginModelInfo;
 /// tables instead of inline tables.
 pub(crate) fn build_login_provider_edits(
     alias: &str,
-    provider: LoginProvider,
+    provider: BuiltInApiKeyProvider,
     api_key: &str,
     base_url: Option<&str>,
 ) -> Vec<ConfigEdit> {
@@ -43,7 +43,7 @@ pub(crate) fn build_login_provider_edits(
 /// Build config edits that persist a model alias and set it as the default model.
 pub(crate) fn build_login_model_edits(
     alias: &str,
-    provider: LoginProvider,
+    provider: BuiltInApiKeyProvider,
     model_id: &str,
     display_name: Option<&str>,
 ) -> Vec<ConfigEdit> {
@@ -59,7 +59,7 @@ pub(crate) fn build_login_model_edits(
 /// the user-selected model as the default.
 pub(crate) fn build_login_models_edits(
     alias: &str,
-    provider: LoginProvider,
+    provider: BuiltInApiKeyProvider,
     models: &[LoginModelInfo],
     selected_model_id: &str,
 ) -> Vec<ConfigEdit> {
