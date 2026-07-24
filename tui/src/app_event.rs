@@ -220,11 +220,6 @@ pub(crate) enum AppEvent {
     /// background tasks, rollout flush, or child process cleanup).
     Exit(ExitMode),
 
-    /// Start the interactive login flow for an API-key provider.
-    LoginStart {
-        provider: Option<LoginProvider>,
-    },
-
     /// Provider selected in the login flow; prompt for a custom alias.
     LoginProviderSelected {
         provider: LoginProvider,

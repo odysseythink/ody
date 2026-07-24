@@ -378,9 +378,6 @@ impl App {
                 }
                 return Ok(self.handle_exit_mode(app_server, mode).await);
             }
-            AppEvent::LoginStart { provider } => {
-                self.chat_widget.start_login_flow(provider);
-            }
             AppEvent::LoginProviderSelected { provider } => {
                 self.chat_widget.on_login_provider_selected(provider);
             }
