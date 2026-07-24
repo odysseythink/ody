@@ -21,6 +21,7 @@ use ody_tools::ToolSpec;
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
 use serde_json::json;
+use std::io::BufRead;
 
 #[derive(Deserialize)]
 struct ReadFileArgs {
@@ -97,28 +98,46 @@ impl ToolExecutor<ToolInvocation> for ReadFileHandler {
                 PathAccessMode::AbsoluteOutsideAllowed,
             )?;
 
-            let bytes = std::fs::read(abs_path.as_path()).map_err(|err| {
+            let file = std::fs::File::open(abs_path.as_path()).map_err(|err| {
                 FunctionCallError::RespondToModel(format!(
                     "unable to read `{}`: {err}",
                     abs_path.as_path().display()
                 ))
             })?;
+            let reader = std::io::BufReader::new(file);
+            let mut lines = reader.lines();
+            let mut text = String::new();
+            let mut line_count = 0usize;
+            let mut byte_capped = false;
+            let mut line_capped = false;
 
-            // Cap bytes before decoding so a huge binary blob cannot be
-            // materialized as a String just to be thrown away.
-            let byte_capped = bytes.len() > MAX_BYTES;
-            let slice = if byte_capped {
-                &bytes[..floor_char_boundary(&bytes, MAX_BYTES)]
-            } else {
-                &bytes[..]
-            };
-            let text = String::from_utf8_lossy(slice);
+            while let Some(line) = lines.next() {
+                let line = line.map_err(|err| {
+                    FunctionCallError::RespondToModel(format!(
+                        "unable to read `{}`: {err}",
+                        abs_path.as_path().display()
+                    ))
+                })?;
+                if text.len() + line.len() + 1 > MAX_BYTES {
+                    byte_capped = true;
+                    break;
+                }
+                text.push_str(&line);
+                text.push('\n');
+                line_count += 1;
+                if line_count >= MAX_LINES {
+                    if lines.next().is_some() {
+                        line_capped = true;
+                    }
+                    break;
+                }
+            }
 
-            let (mut content, line_capped) = render(&text, args.offset, args.limit)?;
+            let (mut content, render_truncated) = render(&text, args.offset, args.limit)?;
             append_jq_hint_if_json(abs_path.as_path(), &mut content);
             Ok(boxed_tool_output(ReadFileOutput {
                 content,
-                truncated: byte_capped || line_capped,
+                truncated: byte_capped || line_capped || render_truncated,
             }))
         })
     }
@@ -209,15 +228,6 @@ fn append_jq_hint_if_json(path: &std::path::Path, content: &mut String) {
              structured data instead of reading raw lines.",
         );
     }
-}
-
-/// Largest index <= `max` that is a UTF-8 character boundary.
-fn floor_char_boundary(bytes: &[u8], max: usize) -> usize {
-    let mut index = max.min(bytes.len());
-    while index > 0 && (bytes[index] & 0b1100_0000) == 0b1000_0000 {
-        index -= 1;
-    }
-    index
 }
 
 #[cfg(test)]

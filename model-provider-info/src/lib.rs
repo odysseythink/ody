@@ -475,7 +475,6 @@ impl ModelProviderInfo {
     }
 }
 
-
 /// Build an OpenAI-compatible Chat Completions provider (Kimi / DeepSeek / GLM).
 fn create_chat_provider(
     name: &str,

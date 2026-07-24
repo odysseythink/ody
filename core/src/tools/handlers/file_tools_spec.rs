@@ -30,7 +30,7 @@ pub const MAX_LINES: usize = 1000;
 /// Maximum characters retained per line; longer lines are truncated in place.
 pub const MAX_LINE_LENGTH: usize = 2000;
 /// Maximum bytes read from a file in a single call.
-pub const MAX_BYTES: usize = 100 * 1024 * 1024;
+pub const MAX_BYTES: usize = 100 * 1024;
 /// Maximum result rows returned by `grep`/`glob` before pagination kicks in.
 pub const DEFAULT_HEAD_LIMIT: usize = 250;
 
@@ -87,9 +87,9 @@ pub fn create_read_file_tool(options: FileToolOptions) -> ToolSpec {
         description: format!(
             "Read a file from the filesystem, returned as numbered lines. Prefer this over shell \
              `cat`/`sed`: it caps output at {MAX_LINES} lines, {MAX_LINE_LENGTH} characters per \
-             line, and {} MiB, so a large file cannot flood the conversation. Use `offset`/`limit` \
+             line, and {} KiB, so a large file cannot flood the conversation. Use `offset`/`limit` \
              to read only the region you care about — locate it with `grep` first. For JSON or JSONL files, prefer `jq` for filtering, counting, or paging.",
-            MAX_BYTES / 1024 / 1024
+            MAX_BYTES / 1024
         ),
         strict: false,
         defer_loading: None,
@@ -571,7 +571,7 @@ mod tests {
     #[test]
     fn read_file_states_its_caps() {
         let json = spec_json(&create_read_file_tool(FileToolOptions::default()));
-        for expected in ["1000", "2000", "100 MiB"] {
+        for expected in ["1000", "2000", "100 KiB"] {
             assert!(
                 json.contains(expected),
                 "read_file must state its {expected} cap so the model pages instead of dumping: {json}"

@@ -13,7 +13,9 @@ use std::sync::Arc;
 use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::protocol::ReviewOutputEvent;
 use ody_protocol::user_input::UserInput;
+use std::time::Instant;
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 use crate::design_review::debate::types::DebateConfig;
 use crate::design_review::debate::types::DebateRole;
@@ -100,6 +102,15 @@ impl DebateOrchestrator {
         let cancellation_token = CancellationToken::new();
         let mut transcript = DebateTranscript::default();
 
+        let plan = persona_turn_plan(cfg.rounds, cfg.append_usability_turn);
+        info!(
+            debate_rounds = cfg.rounds,
+            append_usability = cfg.append_usability_turn,
+            persona_turns = plan.len(),
+            per_turn_timeout_secs = cfg.per_turn_timeout.as_secs(),
+            "debate run start"
+        );
+
         // Persona phase.
         for PlannedTurn { role, round, lens } in
             persona_turn_plan(cfg.rounds, cfg.append_usability_turn)
@@ -126,21 +137,29 @@ impl DebateOrchestrator {
             // The v1.6 usability turn is best-effort: a failed lens must never
             // discard the good correctness debate.
             let is_usability = matches!(lens, SkepticLens::Usability);
-            let event =
-                match Self::one_call(&session_ctx, turn, &cancellation_token, prompt, model, cfg)
-                    .await
-                {
-                    Some(event) => event,
-                    // Correctness/Advocate turns degrade the whole debate; the
-                    // appended usability turn is simply skipped (non-fatal).
-                    None if is_usability => continue,
-                    None => {
-                        return Err(DesignReviewError::Degraded(format!(
-                            "{} turn produced no output",
-                            role.label()
-                        )));
-                    }
-                };
+            let event = match Self::one_call(
+                &session_ctx,
+                turn,
+                &cancellation_token,
+                prompt,
+                model,
+                role,
+                round,
+                cfg,
+            )
+            .await
+            {
+                Some(event) => event,
+                // Correctness/Advocate turns degrade the whole debate; the
+                // appended usability turn is simply skipped (non-fatal).
+                None if is_usability => continue,
+                None => {
+                    return Err(DesignReviewError::Degraded(format!(
+                        "{} turn produced no output",
+                        role.label()
+                    )));
+                }
+            };
             transcript.push(role, round, event.overall_explanation);
         }
 
@@ -161,6 +180,8 @@ impl DebateOrchestrator {
             &cancellation_token,
             judge_prompt,
             judge_model,
+            DebateRole::Judge,
+            0,
             cfg,
         )
         .await
@@ -185,12 +206,22 @@ impl DebateOrchestrator {
         cancellation_token: &CancellationToken,
         prompt: String,
         model: String,
+        role: DebateRole,
+        round: u8,
         cfg: &DebateConfig,
     ) -> Option<ReviewOutputEvent> {
         let input = vec![UserInput::Text {
             text: "Respond exactly as your role instructions above direct.".to_string(),
             text_elements: Vec::new(),
         }];
+        let start = Instant::now();
+        info!(
+            debate_role = %role.label(),
+            debate_round = round,
+            debate_model = %model,
+            per_turn_timeout_secs = cfg.per_turn_timeout.as_secs(),
+            "debate one_call start"
+        );
         let future = run_one_shot_review(
             Arc::clone(session_ctx),
             Arc::clone(turn),
@@ -201,10 +232,26 @@ impl DebateOrchestrator {
             Some(ReasoningEffort::None),
         );
         match tokio::time::timeout(cfg.per_turn_timeout, future).await {
-            Ok(event) => event,
+            Ok(event) => {
+                info!(
+                    debate_role = %role.label(),
+                    debate_round = round,
+                    elapsed_ms = start.elapsed().as_millis(),
+                    has_output = event.is_some(),
+                    "debate one_call completed"
+                );
+                event
+            }
             Err(_) => {
                 // Abort the in-flight turn; we are bailing to single-shot anyway.
                 cancellation_token.cancel();
+                info!(
+                    debate_role = %role.label(),
+                    debate_round = round,
+                    elapsed_ms = start.elapsed().as_millis(),
+                    per_turn_timeout_ms = cfg.per_turn_timeout.as_millis(),
+                    "debate one_call timeout -> degraded"
+                );
                 None
             }
         }

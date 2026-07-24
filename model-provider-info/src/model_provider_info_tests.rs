@@ -143,7 +143,6 @@ args = ["--format=text"]
     );
 }
 
-
 #[test]
 fn provider_capabilities_default_is_conservative() {
     let caps = ProviderCapabilities::default();
@@ -321,4 +320,3 @@ fn normalize_capabilities_respects_explicit_values() {
     assert!(!provider.capabilities.command_auth);
     assert!(!provider.capabilities.attestation);
 }
-

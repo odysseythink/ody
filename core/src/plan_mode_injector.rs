@@ -260,6 +260,13 @@ impl PlanModeInjector {
             ReminderKind::Full => render_design_full_reminder(),
             ReminderKind::Sparse => render_design_sparse_reminder(),
         };
+        // The design reminder templates carry the same `{{ split_threshold }}`
+        // placeholder as the plan rigor split addendum, so render it using the
+        // host-resolved value before injection.
+        let split_threshold = plan_mode_config
+            .and_then(|c| c.split_threshold)
+            .unwrap_or(8);
+        let text = render_threshold_placeholders(&text, split_threshold);
         let log = make_log(
             PlanModeLogKind::RigorReminder,
             match kind {
@@ -1011,6 +1018,10 @@ mod directive_tests {
             full.to_lowercase().contains("self-review"),
             "full design reminder must restate the adversarial self-review:\n{full}"
         );
+        assert!(
+            full.contains("## Parts"),
+            "full design reminder must restate the split manifest rule:\n{full}"
+        );
 
         let sparse = render_design_sparse_reminder();
         assert!(
@@ -1020,6 +1031,45 @@ mod directive_tests {
         assert!(
             sparse.contains("End every turn"),
             "sparse design reminder must restate turn discipline:\n{sparse}"
+        );
+        assert!(
+            sparse.contains("## Parts"),
+            "sparse design reminder must keep the split manifest rule alive:\n{sparse}"
+        );
+    }
+
+    #[test]
+    fn design_reminder_renders_split_threshold_placeholder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let thread_id = ThreadId::from_string("00000000-0000-0000-0000-000000000005").unwrap();
+        let artifact = PlanArtifact::new_design(plans_base_dir, thread_id, "2026-07-04");
+        let mut config = PlanModeConfigToml::default();
+        config.split_threshold = Some(12);
+
+        for _ in 1..=4 {
+            assert_eq!(
+                PlanModeInjector::render_design_reminder_if_due(
+                    &artifact,
+                    Some(&config),
+                    ModeKind::Design
+                ),
+                None
+            );
+        }
+        let (_, text, _) = PlanModeInjector::render_design_reminder_if_due(
+            &artifact,
+            Some(&config),
+            ModeKind::Design,
+        )
+        .expect("turn 5 should emit a full design reminder");
+        assert!(
+            !text.contains("{{"),
+            "design reminder must contain no unrendered placeholder:\n{text}"
+        );
+        assert!(
+            text.contains("12"),
+            "design reminder must render the configured split_threshold (12):\n{text}"
         );
     }
 

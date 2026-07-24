@@ -10,7 +10,7 @@ pub fn create_submit_design_tool() -> ToolSpec {
         (
             "design".to_string(),
             JsonSchema::string(Some(
-                "The design index markdown to persist. For single-file designs this is the complete design document. For split designs (## Parts table present), pass the index markdown on every call — the turn only ends once no part row is `pending`; intermediate calls return the stem directory path for part-file writes.".to_string(),
+                "The design index markdown to persist. For single-file designs this is the complete design document. For split designs (## Parts table present), pass the index markdown on every call — the turn only ends once no part row is `pending`; intermediate calls return the stem directory path for part-file writes. On `final: true` calls this field may be omitted; the host reads the persisted design from the current design artifact file.".to_string(),
             )),
         ),
         (
@@ -24,14 +24,14 @@ pub fn create_submit_design_tool() -> ToolSpec {
     ToolSpec::Function(ResponsesApiTool {
         name: SUBMIT_DESIGN_TOOL_NAME.to_string(),
         description: format!(
-            "Persist the current design in Design mode. The host derives the filename from the design's # Title and atomically writes it to {} — do not use a shell command or Write tool for the index file; use only this tool. Use `final: false` (the default) to checkpoint a partial/skeleton design each turn without exiting; use `final: true` only when the design is complete and you intend to exit. Supports single-file designs and split designs (## Parts manifest). For split designs, call this tool with the index markdown after writing each part; the tool will report pending parts and keep the session in Design mode until all parts are done. A `final: true` call then performs a completeness check (C1–C8) before finalizing.",
+            "Persist the current design in Design mode. The host derives the filename from the design's # Title and atomically writes it to {} — do not use a shell command or Write tool for the index file; use only this tool. Use `final: false` (the default) to checkpoint a partial/skeleton design each turn without exiting; use `final: true` only when the design is complete and you intend to exit. Supports single-file designs and split designs (## Parts manifest). For split designs, call this tool with the index markdown after writing each part; the tool will report pending parts and keep the session in Design mode until all parts are done. A `final: true` call may omit the design markdown and the host will read the persisted design from the artifact file before performing the completeness check (C1–C8).",
             ".ody-code/designs/"
         ),
         strict: false,
         defer_loading: None,
         parameters: JsonSchema::object(
             properties,
-            Some(vec!["design".to_string()]),
+            None,
             Some(false.into()),
         ),
         output_schema: None,
@@ -59,7 +59,10 @@ mod tests {
                     "must NOT have 'plan' field (that's submit_plan)"
                 );
                 let req = tool.parameters.required.clone().unwrap_or_default();
-                assert!(req.iter().any(|r| r == "design"), "design must be required");
+                assert!(
+                    !req.iter().any(|r| r == "design"),
+                    "design must be optional (final calls read from disk)"
+                );
                 assert!(
                     !req.iter().any(|r| r == "plan"),
                     "plan must not be required"

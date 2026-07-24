@@ -288,7 +288,9 @@ pub(crate) fn parse_usability_recommendation(text: &str) -> UsabilityRecommendat
         .or_else(|| {
             let (start, end) = (text.find('{')?, text.rfind('}')?);
             (start <= end)
-                .then(|| serde_json::from_str::<RawUsabilityRecommendation>(&text[start..=end]).ok())
+                .then(|| {
+                    serde_json::from_str::<RawUsabilityRecommendation>(&text[start..=end]).ok()
+                })
                 .flatten()
         });
     match raw {
@@ -336,7 +338,11 @@ pub(crate) fn build_judge_prompt(
 ) -> String {
     let accepted_block = format_accepted_risks_block(accepted_risks);
     let critic_block = render_critic_findings(critic_findings);
-    let contest_block = if allow_contest { JUDGE_CONTEST_SPEC } else { "" };
+    let contest_block = if allow_contest {
+        JUDGE_CONTEST_SPEC
+    } else {
+        ""
+    };
     format!(
         "{JUDGE_INTRO}{FINDINGS_OUTPUT_SPEC}{contest_block}{accepted_block}{DESIGN_DOCUMENT_MARKER}{design_markdown}\n\n{critic_block}{DEBATE_TRANSCRIPT_MARKER}{transcript}"
     )
@@ -585,16 +591,15 @@ pub(crate) fn parse_judge_output(text: &str) -> (DesignReviewOutput, Vec<Refutat
 }
 
 fn extract_refutations(text: &str) -> Vec<Refutation> {
-    let raw: Option<RawDesignReviewOutput> =
-        serde_json::from_str(text).ok().or_else(|| {
-            let start = text.find('{')?;
-            let end = text.rfind('}')?;
-            if start < end {
-                serde_json::from_str(text.get(start..=end)?).ok()
-            } else {
-                None
-            }
-        });
+    let raw: Option<RawDesignReviewOutput> = serde_json::from_str(text).ok().or_else(|| {
+        let start = text.find('{')?;
+        let end = text.rfind('}')?;
+        if start < end {
+            serde_json::from_str(text.get(start..=end)?).ok()
+        } else {
+            None
+        }
+    });
     raw.map(|r| {
         r.refuted
             .into_iter()
@@ -760,7 +765,8 @@ mod tests {
 
     #[test]
     fn judge_prompt_reuses_findings_schema_and_carries_transcript() {
-        let prompt = build_judge_prompt("# Design", &[], "[Advocate]: x\n\n[Skeptic]: y", &[], false);
+        let prompt =
+            build_judge_prompt("# Design", &[], "[Advocate]: x\n\n[Skeptic]: y", &[], false);
         // Same JSON contract as the single-shot critic → same parser applies.
         assert!(prompt.contains("Output strictly as JSON"));
         assert!(prompt.contains("\"overall_assessment\""));
@@ -853,13 +859,8 @@ mod tests {
             "Concurrent config write",
         )];
         let accepted = ["F:missing rate limiting".to_string()];
-        let skeptic = build_skeptic_prompt(
-            "# Design",
-            &critic,
-            &accepted,
-            "",
-            SkepticLens::Correctness,
-        );
+        let skeptic =
+            build_skeptic_prompt("# Design", &critic, &accepted, "", SkepticLens::Correctness);
         // Critic block present, with the R9 anchoring directive.
         assert!(skeptic.contains("--- CRITIC FINDINGS"));
         assert!(skeptic.contains("Concurrent config write"));

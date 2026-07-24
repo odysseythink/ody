@@ -14,33 +14,33 @@ use crate::design_review::orchestrator::format_review_appendix_for_submit;
 use crate::design_review::prompt::UsabilityRecommendation;
 use crate::design_review::types::DesignReviewOutput;
 use crate::design_review::types::DesignReviewRequest;
-use crate::session::session::Session;
-use crate::session::turn_context::TurnContext;
 use crate::function_tool::FunctionCallError;
 use crate::plan_artifact::PlanWriteOutcome;
 use crate::plan_mode_injector::parts_manifest::RowStatus;
 use crate::plan_mode_injector::parts_manifest::parse_parts_manifest;
 use crate::plan_mode_injector::parts_manifest::part_file_cell_problem;
 use crate::plan_mode_injector::parts_manifest::row_is_verified_done;
+use crate::session::session::Session;
+use crate::session::turn_context::TurnContext;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolPayload;
 use crate::tools::context::boxed_tool_output;
 use ody_config::config_toml::PlanModeTier;
 use ody_config::config_toml::UsabilityLensToml;
-use ody_protocol::request_user_input::RequestUserInputArgs;
-use ody_protocol::request_user_input::RequestUserInputQuestion;
-use ody_protocol::request_user_input::RequestUserInputQuestionOption;
-use std::sync::Arc;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::items::PlanItem;
 use ody_protocol::items::TurnItem;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::PlanDeltaEvent;
 use ody_protocol::protocol::WarningEvent;
+use ody_protocol::request_user_input::RequestUserInputArgs;
+use ody_protocol::request_user_input::RequestUserInputQuestion;
+use ody_protocol::request_user_input::RequestUserInputQuestionOption;
 use regex_lite::Regex;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::OnceLock;
 
 // ---------------------------------------------------------------------------
@@ -72,6 +72,13 @@ pub(crate) static DESIGN_WORDING: SubmitWording = SubmitWording {
 
 const REQUIRED_SELF_REVIEW_ITEMS: usize = 7;
 
+// Thresholds that force a split design/plan into a `## Parts` manifest.
+// A single-file index above either limit is rejected because it will be
+// truncated by the context manager's 10 KB tool-output truncation policy
+// before the model can read it back reliably.
+const MAX_SINGLE_FILE_BYTES: usize = 16 * 1024;
+const MAX_SINGLE_FILE_LINES: usize = 200;
+
 // ---------------------------------------------------------------------------
 // Private helpers (moved verbatim from submit_plan.rs)
 // ---------------------------------------------------------------------------
@@ -96,6 +103,26 @@ fn parts_manifest_cell_problems(stem_dir: &Path, markdown: &str) -> Vec<String> 
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// Rejects a single-file submission that is too large to survive the context
+/// manager's tool-output truncation policy without a `## Parts` manifest.
+fn check_single_file_split_gate(
+    markdown: &str,
+    wording: &SubmitWording,
+) -> Result<(), FunctionCallError> {
+    if parse_parts_manifest(markdown).manifest.is_some() {
+        return Ok(());
+    }
+    let bytes = markdown.len();
+    let lines = markdown.lines().count();
+    if bytes > MAX_SINGLE_FILE_BYTES || lines > MAX_SINGLE_FILE_LINES {
+        return Err(FunctionCallError::RespondToModel(format!(
+            "{} rejected: the {} is too large to keep in a single file ({} bytes, {} lines; limits are {} bytes / {} lines). Add a `## Parts` manifest and split the content into `<stem>/<part>.md` files, or call {} with a smaller index. This call was not persisted.",
+            wording.tool_name, wording.noun, bytes, lines, MAX_SINGLE_FILE_BYTES, MAX_SINGLE_FILE_LINES, wording.tool_name
+        )));
+    }
+    Ok(())
 }
 
 fn rigor_structure_gap(plan: &str) -> Option<String> {
@@ -336,7 +363,7 @@ pub(crate) async fn handle_submit_artifact(
     invocation: ToolInvocation,
     expected_mode: ModeKind,
     wording: &SubmitWording,
-    markdown: String,
+    markdown: Option<String>,
     finalize: bool,
 ) -> Result<Box<dyn crate::tools::context::ToolOutput>, FunctionCallError> {
     let ToolInvocation {
@@ -374,6 +401,34 @@ pub(crate) async fn handle_submit_artifact(
         )));
     };
 
+    // 2.5 Resolve the markdown: callers may omit it on final calls and have the
+    // host read the persisted artifact from disk instead of passing the full text
+    // through the tool argument (which is subject to the context manager's
+    // truncation policy).
+    let markdown = match markdown {
+        Some(md) => md,
+        None => {
+            if !finalize {
+                return Err(FunctionCallError::RespondToModel(format!(
+                    "{} rejected: the `design`/`plan` markdown is required on non-final calls",
+                    wording.tool_name
+                )));
+            }
+            let Some(path) = artifact.path() else {
+                return Err(FunctionCallError::RespondToModel(format!(
+                    "{} rejected: there is no persisted {} file to read from",
+                    wording.tool_name, wording.noun
+                )));
+            };
+            tokio::fs::read_to_string(path).await.map_err(|err| {
+                FunctionCallError::RespondToModel(format!(
+                    "{} failed to read persisted {} file: {err}",
+                    wording.tool_name, wording.noun
+                ))
+            })?
+        }
+    };
+
     // 3. Done-parts guard (verbatim from submit_plan.rs:160-181)
     let previously_had_done_parts = artifact
         .last_manifest_snapshot()
@@ -384,6 +439,9 @@ pub(crate) async fn handle_submit_artifact(
             wording.tool_name, wording.noun, wording.tool_name
         )));
     }
+
+    // 3.5 Split gate: reject oversized single-file submissions.
+    check_single_file_split_gate(&markdown, wording)?;
 
     // 4. Emit start event
     //
@@ -957,7 +1015,11 @@ mod tests {
         assert!(!usability_answer_to_bool(Some("Skip"), false, true));
         // unanswered / Other → follow the recommendation default
         assert!(usability_answer_to_bool(None, false, true));
-        assert!(!usability_answer_to_bool(Some("something else"), false, false));
+        assert!(!usability_answer_to_bool(
+            Some("something else"),
+            false,
+            false
+        ));
         // Chinese labels
         assert!(usability_answer_to_bool(Some("运行"), true, false));
         assert!(!usability_answer_to_bool(Some("跳过"), true, true));
@@ -1027,5 +1089,47 @@ mod tests {
             /*has_pending_parts*/ false,
             Some("gpt-review"),
         ));
+    }
+
+    #[test]
+    fn split_gate_allows_small_single_file_without_parts() {
+        let wording = &DESIGN_WORDING;
+        let small = "# Design\n\nShort.\n";
+        assert!(check_single_file_split_gate(small, wording).is_ok());
+    }
+
+    #[test]
+    fn split_gate_allows_large_file_with_parts() {
+        let wording = &DESIGN_WORDING;
+        let mut large = "# Design\n\n## Parts\n\n| # | File | Scope | Status |\n|---|---|---|---|\n".to_string();
+        for i in 0..300 {
+            large.push_str(&format!("| {} | part_{:03}.md | scope {} | pending |\n", i + 1, i, i));
+        }
+        assert!(check_single_file_split_gate(&large, wording).is_ok());
+    }
+
+    #[test]
+    fn split_gate_rejects_oversized_bytes_without_parts() {
+        let wording = &DESIGN_WORDING;
+        let mut big = "# Design\n\n".to_string();
+        while big.len() <= MAX_SINGLE_FILE_BYTES {
+            big.push_str("this is a line of text that pushes the byte count over the threshold. ");
+        }
+        let err = check_single_file_split_gate(&big, wording).unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(msg.contains("too large"));
+        assert!(msg.contains("submit_design"));
+    }
+
+    #[test]
+    fn split_gate_rejects_oversized_lines_without_parts() {
+        let wording = &DESIGN_WORDING;
+        let mut big = "# Design\n\n".to_string();
+        for _ in 0..MAX_SINGLE_FILE_LINES + 1 {
+            big.push_str("x\n");
+        }
+        let err = check_single_file_split_gate(&big, wording).unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(msg.contains("too large"));
     }
 }

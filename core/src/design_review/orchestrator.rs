@@ -38,7 +38,7 @@ use crate::tasks::SessionTaskContext;
 // below), the structured critique returns well inside this bound. Kept generous
 // but far below the old 600s so a stalled reviewer no longer blocks finalize for
 // ten minutes.
-pub(crate) const DESIGN_REVIEW_TIMEOUT: Duration = Duration::from_secs(240);
+pub(crate) const DESIGN_REVIEW_TIMEOUT: Duration = Duration::from_secs(600);
 
 /// v1.6b (D11): the standalone usability RECOMMENDATION call. One cheap one-shot
 /// classification (no tools, reasoning stream off) whose result is shown to the
@@ -54,7 +54,8 @@ pub(crate) async fn classify_usability(
         Arc::clone(session),
         Arc::clone(&turn.extension_data),
     ));
-    let prompt = crate::design_review::prompt::build_usability_recommendation_prompt(design_markdown);
+    let prompt =
+        crate::design_review::prompt::build_usability_recommendation_prompt(design_markdown);
     let input = vec![UserInput::Text {
         text: "Classify and return the JSON object.".to_string(),
         text_elements: Vec::new(),
@@ -279,7 +280,12 @@ fn apply_refutations(output: &mut DesignReviewOutput, refutations: &[Refutation]
     }
     let by_fp: std::collections::HashMap<String, &str> = refutations
         .iter()
-        .map(|r| (format!("F:{}", normalize_fingerprint(&r.title)), r.reason.as_str()))
+        .map(|r| {
+            (
+                format!("F:{}", normalize_fingerprint(&r.title)),
+                r.reason.as_str(),
+            )
+        })
         .collect();
     for f in &mut output.findings {
         if let Some(reason) = by_fp.get(&f.fingerprint()) {
@@ -462,7 +468,14 @@ mod tests {
         // Critic assessment retained unchanged (provenance is now per-finding).
         assert_eq!(merged.overall_assessment, "single");
         // Only the net-new debate finding is stamped Debate; critic findings stay Critic.
-        let by = |t: &str| merged.findings.iter().find(|f| f.title == t).unwrap().provenance;
+        let by = |t: &str| {
+            merged
+                .findings
+                .iter()
+                .find(|f| f.title == t)
+                .unwrap()
+                .provenance
+        };
         assert_eq!(by("Missing test"), FindingProvenance::Debate);
         assert_eq!(by("Concurrency gap"), FindingProvenance::Critic);
         assert_eq!(by("Auth Loss"), FindingProvenance::Critic);
@@ -486,7 +499,11 @@ mod tests {
         apply_refutations(&mut out, &refs);
         // Nothing deleted — both findings survive.
         assert_eq!(out.findings.len(), 2);
-        let bogus = out.findings.iter().find(|f| f.title == "Bogus claim").unwrap();
+        let bogus = out
+            .findings
+            .iter()
+            .find(|f| f.title == "Bogus claim")
+            .unwrap();
         // Contested: downgraded to Speculative (never escalates), tagged, annotated.
         assert_eq!(bogus.provenance, FindingProvenance::Contested);
         assert_eq!(bogus.confidence, DesignReviewConfidence::Speculative);

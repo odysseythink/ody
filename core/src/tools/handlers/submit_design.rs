@@ -17,7 +17,9 @@ use serde::Deserialize;
 #[serde(deny_unknown_fields)]
 struct SubmitDesignArgs {
     /// The design index markdown to persist and submit.
-    pub design: String,
+    /// Optional on `final: true` calls; the host reads the persisted design from
+    /// the current design artifact file.
+    pub design: Option<String>,
     /// Whether this submission finalizes the design and exits Design mode.
     /// Defaults to `false`, which checkpoints a partial/skeleton design without
     /// ending the turn. Only `true` runs the C1–C8 completeness gate and can be
@@ -109,7 +111,7 @@ mod tests {
     fn submit_design_args_deserializes_design_field() {
         let json = r#"{"design": "hello world"}"#;
         let args: SubmitDesignArgs = serde_json::from_str(json).expect("valid JSON");
-        assert_eq!(args.design, "hello world");
+        assert_eq!(args.design.as_deref(), Some("hello world"));
     }
 
     #[test]
@@ -123,13 +125,13 @@ mod tests {
     }
 
     #[test]
-    fn submit_design_args_rejects_missing_design_field() {
-        let json = r#"{}"#;
-        let err = serde_json::from_str::<SubmitDesignArgs>(json).unwrap_err();
-        assert!(
-            err.to_string().contains("design"),
-            "missing 'design' field must produce an error mentioning it: {err}"
-        );
+    fn submit_design_args_allows_missing_design_field() {
+        // `design` is optional so that a final call can have the host read the
+        // persisted artifact from disk.
+        let json = r#"{"final": true}"#;
+        let args: SubmitDesignArgs = serde_json::from_str(json).expect("valid JSON");
+        assert!(args.design.is_none(), "omitted design must be None");
+        assert!(args.is_final);
     }
 
     #[test]
