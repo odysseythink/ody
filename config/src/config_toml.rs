@@ -896,6 +896,20 @@ pub struct DesignReviewToml {
     pub debate: Option<DesignReviewDebateToml>,
 }
 
+/// Trigger for the v1.6 user/usability-lens Skeptic turn. Default `Off`. `On`
+/// always appends the (forced) usability turn; `Ask` shows a classifier-backed
+/// recommendation at review time and lets the user decide per design. (D10's
+/// self-gating `Auto` was rejected by Task 6 and replaced by `Ask`.) Additive;
+/// never affects the correctness findings.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum UsabilityLensToml {
+    #[default]
+    Off,
+    On,
+    Ask,
+}
+
 /// `[design_review.debate]` sub-table. Absent or `enable = false` ⇒ debate off
 /// (the single-shot review path is unchanged).
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]
@@ -920,6 +934,13 @@ pub struct DesignReviewDebateToml {
     /// "contested by debate"). Off ⇒ the debate only ever ADDS findings (v1.5a).
     #[serde(default)]
     pub contest_critic: bool,
+    /// v1.6 (opt-in, default `off`): append a user/usability-lens Skeptic turn so
+    /// the debate also surfaces mode-confusion / feedback / accessibility /
+    /// workflow defects — an axis the correctness-oriented critic + Skeptic miss.
+    /// `auto` = the turn self-judges whether the design is user-facing and bows out
+    /// if not; `on` = always attack; `off` = never append. Additive.
+    #[serde(default)]
+    pub usability_lens: UsabilityLensToml,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
@@ -1330,6 +1351,37 @@ mod tests {
         assert_eq!(debate.judge_model.as_deref(), Some("glm_1/glm-5.1"));
         // contest_critic omitted ⇒ defaults false (v1.5b is opt-in).
         assert!(!debate.contest_critic);
+        // usability_lens omitted ⇒ defaults Off (v1.6 is opt-in).
+        assert_eq!(debate.usability_lens, UsabilityLensToml::Off);
+    }
+
+    #[test]
+    fn design_review_debate_usability_lens_parses_on_and_ask() {
+        let on: ConfigToml = toml::from_str(
+            r#"
+                [design_review.debate]
+                enable = true
+                usability_lens = "on"
+            "#,
+        )
+        .expect("usability_lens = on should deserialize");
+        assert_eq!(
+            on.design_review.unwrap().debate.unwrap().usability_lens,
+            UsabilityLensToml::On
+        );
+
+        let ask: ConfigToml = toml::from_str(
+            r#"
+                [design_review.debate]
+                enable = true
+                usability_lens = "ask"
+            "#,
+        )
+        .expect("usability_lens = ask should deserialize");
+        assert_eq!(
+            ask.design_review.unwrap().debate.unwrap().usability_lens,
+            UsabilityLensToml::Ask
+        );
     }
 
     #[test]
@@ -1367,6 +1419,7 @@ mod tests {
         let debate = config.design_review.unwrap().debate.unwrap();
         assert!(!debate.enable);
         assert_eq!(debate.rounds, None);
+        assert_eq!(debate.usability_lens, UsabilityLensToml::Off);
     }
 
     #[test]

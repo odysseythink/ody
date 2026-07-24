@@ -40,6 +40,47 @@ use crate::tasks::SessionTaskContext;
 // ten minutes.
 pub(crate) const DESIGN_REVIEW_TIMEOUT: Duration = Duration::from_secs(240);
 
+/// v1.6b (D11): the standalone usability RECOMMENDATION call. One cheap one-shot
+/// classification (no tools, reasoning stream off) whose result is shown to the
+/// user as an advisory recommendation in `Ask` mode. On timeout/empty/unparseable
+/// it defaults to `user_facing = true` (safe — the user still confirms).
+pub(crate) async fn classify_usability(
+    session: &Arc<Session>,
+    turn: &Arc<TurnContext>,
+    model: String,
+    design_markdown: &str,
+) -> crate::design_review::prompt::UsabilityRecommendation {
+    let session_ctx = Arc::new(SessionTaskContext::new(
+        Arc::clone(session),
+        Arc::clone(&turn.extension_data),
+    ));
+    let prompt = crate::design_review::prompt::build_usability_recommendation_prompt(design_markdown);
+    let input = vec![UserInput::Text {
+        text: "Classify and return the JSON object.".to_string(),
+        text_elements: Vec::new(),
+    }];
+    let cancellation_token = CancellationToken::new();
+    let fut = crate::tasks::run_one_shot_review(
+        session_ctx,
+        Arc::clone(turn),
+        input,
+        cancellation_token.clone(),
+        prompt,
+        model,
+        Some(ReasoningEffort::None),
+    );
+    match tokio::time::timeout(DESIGN_REVIEW_TIMEOUT, fut).await {
+        Ok(Some(event)) => {
+            crate::design_review::prompt::parse_usability_recommendation(&event.overall_explanation)
+        }
+        // Timeout or empty ⇒ safe default (user_facing = true) via empty-input parse.
+        _ => {
+            cancellation_token.cancel();
+            crate::design_review::prompt::parse_usability_recommendation("")
+        }
+    }
+}
+
 pub(crate) struct DesignReviewOrchestrator;
 
 impl DesignReviewOrchestrator {
@@ -168,9 +209,13 @@ impl DesignReviewOrchestrator {
         request: &DesignReviewRequest,
         mut output: DesignReviewOutput,
     ) -> DesignReviewOutput {
-        let Some(cfg) = DebateConfig::from_config(turn.config.as_ref()) else {
+        let Some(mut cfg) = DebateConfig::from_config(turn.config.as_ref()) else {
             return output;
         };
+        // v1.6b (D11): the handler resolved the authoritative usability decision
+        // (On ⇒ true, Off ⇒ false, Ask ⇒ the user's answer). Apply it — this
+        // overrides the config-derived default and recomputes the turn budget.
+        cfg.set_append_usability_turn(request.run_usability_pass);
         // Seed the debate with the critic's findings (v1.5a): the debate targets
         // the gap and returns net-new findings. `output` is kept verbatim — the
         // borrow ends before `union_findings` consumes it below.

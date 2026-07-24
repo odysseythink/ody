@@ -1,5 +1,6 @@
 //! Prompt construction, JSON parsing, and output formatting for design review.
 
+use crate::design_review::debate::types::SkepticLens;
 use crate::design_review::types::DesignReviewConfidence;
 use crate::design_review::types::DesignReviewFinding;
 use crate::design_review::types::DesignReviewOutput;
@@ -117,6 +118,23 @@ job is to find failure modes the critic MISSED — systemic, cross-cutting gaps
 
 "#;
 
+/// v1.6 (D9): the user/usability-lens Skeptic. Same inversion + novelty discipline
+/// as the generic Skeptic, but the attack surface is the HUMAN using the feature,
+/// not correctness (which the critic + generic Skeptic already own).
+const SKEPTIC_USABILITY_INTRO: &str = r#"You are the SKEPTIC in a structured design debate, arguing from the USER / USABILITY lens ONLY.
+Correctness, concurrency, and implementation bugs are ALREADY covered by the CRITIC
+FINDINGS and the other Skeptic — do NOT raise them. Attack the design by asking:
+how does this FAIL THE HUMAN USING IT? Surface workflow friction, surprising or
+confusing states, mode confusion, poor or absent feedback and latency perception,
+unclear or unrecoverable error states, discoverability gaps, what happens when the
+user does the WRONG or unexpected thing, information the user needs that the design
+never surfaces, accessibility, and interaction edge cases (empty / huge /
+rapidly-changing / interrupted). Engage the Advocate's defense in the transcript.
+Add at least one NEW usability attack. Be concrete and design-specific — NO generic
+UX platitudes.
+
+"#;
+
 const JUDGE_INTRO: &str = r#"You are the JUDGE of a structured design debate. You did NOT participate; you
 synthesize. You are given the design, a list of CRITIC FINDINGS already reported
 by a separate reviewer, and a transcript of an Advocate defending the design and a
@@ -203,20 +221,86 @@ pub(crate) fn build_advocate_prompt(
     )
 }
 
-/// Build the Skeptic turn prompt.
+/// Build the Skeptic turn prompt. `lens` selects the correctness intro (v1.5) or
+/// the v1.6 usability intro (the appended, forced usability turn — D9/D11).
 pub(crate) fn build_skeptic_prompt(
     design_markdown: &str,
     critic_findings: &[DesignReviewFinding],
     accepted_risks: &[String],
     transcript: &str,
+    lens: SkepticLens,
 ) -> String {
+    let intro = match lens {
+        SkepticLens::Correctness => SKEPTIC_INTRO,
+        SkepticLens::Usability => SKEPTIC_USABILITY_INTRO,
+    };
     build_persona_prompt(
-        SKEPTIC_INTRO,
+        intro,
         design_markdown,
         critic_findings,
         accepted_risks,
         transcript,
     )
+}
+
+/// v1.6b (D11): system prompt for the standalone usability RECOMMENDATION — an
+/// advisory call, shown to the user, of whether this design is user-facing enough
+/// to warrant the usability review pass. Strict bar (the Task 6 lesson: incidental
+/// config edits, error messages, CLI flags, and internal traits do NOT count).
+const USABILITY_RECOMMENDATION_INTRO: &str = r#"Classify whether the DESIGN below has a MEANINGFUL user-facing surface — one whose
+PRIMARY deliverable is something a human directly operates or perceives: a rendered
+TUI/CLI surface, an interactive prompt or command flow, on-screen text, layout, or
+messaging. A design is INTERNAL (not user-facing) if it is primarily a refactor, a
+data/format migration, an internal API or trait, or type/config plumbing — EVEN IF a
+human eventually edits its config, reads an error it produces, or passes a CLI flag.
+Those incidental touchpoints do NOT make it user-facing.
+
+Output ONLY this JSON object, nothing else:
+{"recommend": "user_facing" | "internal", "reason": "<one sentence, <=25 words>"}
+
+"#;
+
+/// Build the usability recommendation prompt (v1.6b). Advisory only — the user
+/// confirms the pass; this just populates the recommendation and its reason.
+pub(crate) fn build_usability_recommendation_prompt(design_markdown: &str) -> String {
+    format!("{USABILITY_RECOMMENDATION_INTRO}{DESIGN_DOCUMENT_MARKER}{design_markdown}")
+}
+
+/// An advisory recommendation for the `Ask` usability prompt.
+pub(crate) struct UsabilityRecommendation {
+    pub user_facing: bool,
+    pub reason: String,
+}
+
+#[derive(Deserialize)]
+struct RawUsabilityRecommendation {
+    recommend: String,
+    #[serde(default)]
+    reason: String,
+}
+
+/// Parse the recommendation (fence/prose-tolerant, same brace-slice salvage as the
+/// findings parser). On ANY parse failure, default to `user_facing = true` — the
+/// safe default, since the user still confirms and a spurious prompt is cheap.
+pub(crate) fn parse_usability_recommendation(text: &str) -> UsabilityRecommendation {
+    let raw = serde_json::from_str::<RawUsabilityRecommendation>(text)
+        .ok()
+        .or_else(|| {
+            let (start, end) = (text.find('{')?, text.rfind('}')?);
+            (start <= end)
+                .then(|| serde_json::from_str::<RawUsabilityRecommendation>(&text[start..=end]).ok())
+                .flatten()
+        });
+    match raw {
+        Some(raw) => UsabilityRecommendation {
+            user_facing: !raw.recommend.trim().eq_ignore_ascii_case("internal"),
+            reason: raw.reason,
+        },
+        None => UsabilityRecommendation {
+            user_facing: true,
+            reason: String::new(),
+        },
+    }
 }
 
 fn build_persona_prompt(
@@ -740,7 +824,13 @@ mod tests {
 
     #[test]
     fn persona_prompts_carry_anti_conformity_and_novelty_and_no_json() {
-        let skeptic = build_skeptic_prompt("# Design", &[], &[], "[Advocate]: opening");
+        let skeptic = build_skeptic_prompt(
+            "# Design",
+            &[],
+            &[],
+            "[Advocate]: opening",
+            SkepticLens::Correctness,
+        );
         assert!(skeptic.contains("You are the SKEPTIC"));
         assert!(skeptic.contains("ANTI-CONFORMITY"));
         assert!(skeptic.contains("name the specific flaw"));
@@ -763,7 +853,13 @@ mod tests {
             "Concurrent config write",
         )];
         let accepted = ["F:missing rate limiting".to_string()];
-        let skeptic = build_skeptic_prompt("# Design", &critic, &accepted, "");
+        let skeptic = build_skeptic_prompt(
+            "# Design",
+            &critic,
+            &accepted,
+            "",
+            SkepticLens::Correctness,
+        );
         // Critic block present, with the R9 anchoring directive.
         assert!(skeptic.contains("--- CRITIC FINDINGS"));
         assert!(skeptic.contains("Concurrent config write"));
@@ -777,12 +873,64 @@ mod tests {
 
     #[test]
     fn empty_critic_findings_omit_the_block() {
-        let skeptic = build_skeptic_prompt("# Design", &[], &[], "");
+        let skeptic = build_skeptic_prompt("# Design", &[], &[], "", SkepticLens::Correctness);
         // No seeded block: key off the MARKER (the intro still mentions the phrase).
         assert!(!skeptic.contains("--- CRITIC FINDINGS"));
         // The floor/ceiling sentence lives in the intro, so it is still present,
         // but with no findings there is nothing to restate — harmless.
         assert!(!skeptic.contains("PREVIOUSLY ACCEPTED RISKS"));
+    }
+
+    #[test]
+    fn skeptic_prompt_correctness_uses_generic_intro() {
+        let s = build_skeptic_prompt("# Design", &[], &[], "", SkepticLens::Correctness);
+        assert!(s.contains("what would GUARANTEE it fails"));
+        assert!(!s.contains("USER / USABILITY lens"));
+    }
+
+    #[test]
+    fn skeptic_prompt_usability_uses_usability_intro() {
+        let s = build_skeptic_prompt("# Design", &[], &[], "", SkepticLens::Usability);
+        assert!(s.contains("USER / USABILITY lens"));
+        assert!(s.contains("Be concrete and design-specific"));
+        // Still carries the shared persona discipline + critic-block plumbing.
+        assert!(s.contains("ANTI-CONFORMITY"));
+        assert!(s.contains("NOVELTY"));
+        // The usability turn is forced (D11) — not the correctness intro, no JSON.
+        assert!(!s.contains("what would GUARANTEE it fails"));
+        assert!(!s.contains("Output strictly as JSON"));
+    }
+
+    #[test]
+    fn usability_recommendation_prompt_states_strict_bar() {
+        let p = build_usability_recommendation_prompt("# Design");
+        assert!(p.contains("MEANINGFUL user-facing surface"));
+        // The Task-6 lesson: incidental config/errors/CLI/traits do not count.
+        assert!(p.contains("do NOT count") || p.contains("do NOT make it user-facing"));
+        assert!(p.contains("--- DESIGN DOCUMENT ---"));
+    }
+
+    #[test]
+    fn parse_usability_recommendation_reads_both_verdicts() {
+        let uf = parse_usability_recommendation(
+            r#"{"recommend":"user_facing","reason":"renders a TUI widget"}"#,
+        );
+        assert!(uf.user_facing);
+        assert_eq!(uf.reason, "renders a TUI widget");
+
+        let int = parse_usability_recommendation(
+            r#"here you go: {"recommend":"internal","reason":"pure trait refactor"} done"#,
+        );
+        assert!(!int.user_facing);
+        assert_eq!(int.reason, "pure trait refactor");
+    }
+
+    #[test]
+    fn parse_usability_recommendation_defaults_user_facing_on_garbage() {
+        // Unparseable ⇒ safe default true (user still confirms; a spurious prompt is cheap).
+        let r = parse_usability_recommendation("the model rambled with no json");
+        assert!(r.user_facing);
+        assert!(r.reason.is_empty());
     }
 
     #[test]

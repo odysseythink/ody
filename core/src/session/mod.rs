@@ -1252,6 +1252,18 @@ impl Session {
         state.clear_design_signoff_seen();
     }
 
+    /// v1.6b: the cached `Ask`-mode usability decision for design `key`, or `None`
+    /// if undecided / a different design (resets stale state, mirroring sign-off).
+    pub(crate) async fn design_usability_decision_for(&self, key: String) -> Option<bool> {
+        let mut state = self.state.lock().await;
+        state.design_usability_decision_for(&key)
+    }
+
+    pub(crate) async fn record_design_usability_decision(&self, key: String, decision: bool) {
+        let mut state = self.state.lock().await;
+        state.record_design_usability_decision(key, decision);
+    }
+
     pub(crate) async fn auto_compact_window_snapshot(&self) -> AutoCompactWindowSnapshot {
         let state = self.state.lock().await;
         state.auto_compact_window_snapshot()

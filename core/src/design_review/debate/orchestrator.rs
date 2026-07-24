@@ -18,6 +18,7 @@ use tokio_util::sync::CancellationToken;
 use crate::design_review::debate::types::DebateConfig;
 use crate::design_review::debate::types::DebateRole;
 use crate::design_review::debate::types::DebateTranscript;
+use crate::design_review::debate::types::SkepticLens;
 use crate::design_review::prompt::Refutation;
 use crate::design_review::prompt::build_advocate_prompt;
 use crate::design_review::prompt::build_judge_prompt;
@@ -43,21 +44,39 @@ pub(crate) struct DebateOutcome {
     pub refutations: Vec<Refutation>,
 }
 
-/// Pure: the ordered `(role, round)` plan for the persona phase (Advocate on
-/// even turns, Skeptic on odd), terminating at `2 * rounds`. The Judge is a
-/// separate final turn, not part of this plan. Mirrors
-/// `conditional_logic.py::should_continue_debate` from the upstream design.
-fn persona_turn_plan(rounds: u8) -> Vec<(DebateRole, u8)> {
-    (0..2 * u16::from(rounds))
-        .map(|i| {
-            let role = if i % 2 == 0 {
+/// One planned persona turn: role, round, and (for Skeptic turns) the attack lens.
+/// Advocate turns always carry [`SkepticLens::Correctness`] (ignored).
+struct PlannedTurn {
+    role: DebateRole,
+    round: u8,
+    lens: SkepticLens,
+}
+
+/// Pure: the ordered plan for the persona phase — Advocate on even turns, Skeptic
+/// (Correctness) on odd, terminating at `2 * rounds` (mirrors
+/// `conditional_logic.py::should_continue_debate`). Then, when `append_usability` is
+/// set, one trailing forced usability-lens Skeptic turn (v1.6/D9) engaging the full
+/// transcript. The Judge is a separate final turn.
+fn persona_turn_plan(rounds: u8, append_usability: bool) -> Vec<PlannedTurn> {
+    let mut plan: Vec<PlannedTurn> = (0..2 * u16::from(rounds))
+        .map(|i| PlannedTurn {
+            role: if i % 2 == 0 {
                 DebateRole::Advocate
             } else {
                 DebateRole::Skeptic
-            };
-            (role, (i / 2) as u8)
+            },
+            round: (i / 2) as u8,
+            lens: SkepticLens::Correctness,
         })
-        .collect()
+        .collect();
+    if append_usability {
+        plan.push(PlannedTurn {
+            role: DebateRole::Skeptic,
+            round: rounds.saturating_sub(1),
+            lens: SkepticLens::Usability,
+        });
+    }
+    plan
 }
 
 impl DebateOrchestrator {
@@ -82,7 +101,9 @@ impl DebateOrchestrator {
         let mut transcript = DebateTranscript::default();
 
         // Persona phase.
-        for (role, round) in persona_turn_plan(cfg.rounds) {
+        for PlannedTurn { role, round, lens } in
+            persona_turn_plan(cfg.rounds, cfg.append_usability_turn)
+        {
             let model = cfg.model_for(role).ok_or_else(|| {
                 DesignReviewError::Degraded(format!("no model configured for {}", role.label()))
             })?;
@@ -98,14 +119,28 @@ impl DebateOrchestrator {
                     critic_findings,
                     &request.accepted_risks,
                     &transcript.render(),
+                    lens,
                 ),
                 DebateRole::Judge => unreachable!("Judge is not part of the persona plan"),
             };
-            let event = Self::one_call(&session_ctx, turn, &cancellation_token, prompt, model, cfg)
-                .await
-                .ok_or_else(|| {
-                    DesignReviewError::Degraded(format!("{} turn produced no output", role.label()))
-                })?;
+            // The v1.6 usability turn is best-effort: a failed lens must never
+            // discard the good correctness debate.
+            let is_usability = matches!(lens, SkepticLens::Usability);
+            let event =
+                match Self::one_call(&session_ctx, turn, &cancellation_token, prompt, model, cfg)
+                    .await
+                {
+                    Some(event) => event,
+                    // Correctness/Advocate turns degrade the whole debate; the
+                    // appended usability turn is simply skipped (non-fatal).
+                    None if is_usability => continue,
+                    None => {
+                        return Err(DesignReviewError::Degraded(format!(
+                            "{} turn produced no output",
+                            role.label()
+                        )));
+                    }
+                };
             transcript.push(role, round, event.overall_explanation);
         }
 
@@ -180,14 +215,19 @@ impl DebateOrchestrator {
 mod tests {
     use super::*;
 
+    /// Compact `(role, round)` view of a plan for assertions.
+    fn shape(plan: &[PlannedTurn]) -> Vec<(DebateRole, u8)> {
+        plan.iter().map(|t| (t.role, t.round)).collect()
+    }
+
     #[test]
     fn persona_plan_alternates_and_terminates_at_two_rounds() {
         assert_eq!(
-            persona_turn_plan(1),
+            shape(&persona_turn_plan(1, false)),
             vec![(DebateRole::Advocate, 0), (DebateRole::Skeptic, 0)]
         );
         assert_eq!(
-            persona_turn_plan(2),
+            shape(&persona_turn_plan(2, false)),
             vec![
                 (DebateRole::Advocate, 0),
                 (DebateRole::Skeptic, 0),
@@ -196,10 +236,36 @@ mod tests {
             ]
         );
         // rounds=3 -> 6 persona turns (+1 judge = 7 calls total).
-        assert_eq!(persona_turn_plan(3).len(), 6);
+        let plan = persona_turn_plan(3, false);
+        assert_eq!(plan.len(), 6);
         // Advocate always opens; Skeptic always closes the persona phase.
-        let plan = persona_turn_plan(3);
-        assert_eq!(plan.first().unwrap().0, DebateRole::Advocate);
-        assert_eq!(plan.last().unwrap().0, DebateRole::Skeptic);
+        assert_eq!(plan.first().unwrap().role, DebateRole::Advocate);
+        assert_eq!(plan.last().unwrap().role, DebateRole::Skeptic);
+        // No append ⇒ every turn is the correctness lens (no v1.6 turn).
+        assert!(plan.iter().all(|t| t.lens == SkepticLens::Correctness));
+    }
+
+    #[test]
+    fn persona_plan_appends_forced_usability_turn_when_true() {
+        let plan = persona_turn_plan(1, true);
+        assert_eq!(
+            shape(&plan),
+            vec![
+                (DebateRole::Advocate, 0),
+                (DebateRole::Skeptic, 0),
+                (DebateRole::Skeptic, 0),
+            ]
+        );
+        assert_eq!(plan.last().unwrap().lens, SkepticLens::Usability);
+    }
+
+    #[test]
+    fn persona_plan_usability_turn_round_is_last() {
+        // rounds=3 -> 6 correctness turns + 1 usability turn at round 2 (last).
+        let plan = persona_turn_plan(3, true);
+        assert_eq!(plan.len(), 7);
+        let last = plan.last().unwrap();
+        assert_eq!(last.round, 2);
+        assert_eq!(last.lens, SkepticLens::Usability);
     }
 }

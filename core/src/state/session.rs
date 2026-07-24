@@ -63,6 +63,12 @@ pub(crate) struct SessionState {
     /// previous one was abandoned without finalizing — the set belonged to a
     /// different design and is reset before it can leak stale suppressions.
     design_signoff_key: Option<String>,
+    /// v1.6b (D11): the user's `Ask`-mode decision (run the usability review pass?)
+    /// for the design named by `design_usability_key`. Cached so a revise round of
+    /// the same design reuses the answer instead of re-prompting. `None` = not yet
+    /// decided for this design.
+    design_usability_decision: Option<bool>,
+    design_usability_key: Option<String>,
     /// Latest `update_plan` checklist, kept outside the conversation.
     ///
     /// The tool call that carries it lives in history, which compaction
@@ -106,6 +112,8 @@ impl SessionState {
             last_design_artifact: None,
             design_signoff_seen: HashSet::new(),
             design_signoff_key: None,
+            design_usability_decision: None,
+            design_usability_key: None,
             active_plan: None,
             last_plan_done_count: None,
             turns_since_plan_write: 0,
@@ -436,10 +444,30 @@ impl SessionState {
     }
 
     /// Reset the per-design sign-off memory (the design finalized, so the next
-    /// one must start from an empty set).
+    /// one must start from an empty set). Also clears the v1.6b usability decision,
+    /// which shares the per-design lifecycle.
     pub(crate) fn clear_design_signoff_seen(&mut self) {
         self.design_signoff_seen.clear();
         self.design_signoff_key = None;
+        self.design_usability_decision = None;
+        self.design_usability_key = None;
+    }
+
+    /// The cached `Ask`-mode usability decision for the design identified by `key`,
+    /// or `None` if undecided or if `key` names a different design (in which case
+    /// the stale decision is dropped so it cannot leak across designs).
+    pub(crate) fn design_usability_decision_for(&mut self, key: &str) -> Option<bool> {
+        if self.design_usability_key.as_deref() != Some(key) {
+            self.design_usability_decision = None;
+            self.design_usability_key = Some(key.to_string());
+        }
+        self.design_usability_decision
+    }
+
+    /// Cache the user's usability decision for `key` so a revise round reuses it.
+    pub(crate) fn record_design_usability_decision(&mut self, key: String, decision: bool) {
+        self.design_usability_key = Some(key);
+        self.design_usability_decision = Some(decision);
     }
 }
 

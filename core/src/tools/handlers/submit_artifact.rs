@@ -9,9 +9,13 @@ use crate::design_review::escalation::design_title_key;
 use crate::design_review::escalation::run_escalation_gate;
 use crate::design_review::escalation::transcript_is_chinese;
 use crate::design_review::orchestrator::DesignReviewOrchestrator;
+use crate::design_review::orchestrator::classify_usability;
 use crate::design_review::orchestrator::format_review_appendix_for_submit;
+use crate::design_review::prompt::UsabilityRecommendation;
 use crate::design_review::types::DesignReviewOutput;
 use crate::design_review::types::DesignReviewRequest;
+use crate::session::session::Session;
+use crate::session::turn_context::TurnContext;
 use crate::function_tool::FunctionCallError;
 use crate::plan_artifact::PlanWriteOutcome;
 use crate::plan_mode_injector::parts_manifest::RowStatus;
@@ -23,6 +27,11 @@ use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolPayload;
 use crate::tools::context::boxed_tool_output;
 use ody_config::config_toml::PlanModeTier;
+use ody_config::config_toml::UsabilityLensToml;
+use ody_protocol::request_user_input::RequestUserInputArgs;
+use ody_protocol::request_user_input::RequestUserInputQuestion;
+use ody_protocol::request_user_input::RequestUserInputQuestionOption;
+use std::sync::Arc;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::items::PlanItem;
 use ody_protocol::items::TurnItem;
@@ -196,6 +205,131 @@ pub(crate) fn should_trigger_design_review(
         && gap.is_none()
         && !has_pending_parts
         && design_review_model.is_some()
+}
+
+/// Stable question id for the v1.6b `Ask` usability prompt.
+const USABILITY_QUESTION_ID: &str = "usability_lens";
+
+/// The Yes/No option labels for the usability prompt, localized.
+fn usability_labels(chinese: bool) -> (&'static str, &'static str) {
+    if chinese {
+        ("运行", "跳过")
+    } else {
+        ("Run it", "Skip")
+    }
+}
+
+/// Map the user's answer to a run/skip bool. An unanswered page or a free-text
+/// "Other" follows the recommendation (`rec_default`) — the same lenient posture
+/// as the sign-off gate.
+fn usability_answer_to_bool(picked: Option<&str>, chinese: bool, rec_default: bool) -> bool {
+    let (yes, no) = usability_labels(chinese);
+    match picked {
+        Some(p) if p == yes => true,
+        Some(p) if p == no => false,
+        _ => rec_default,
+    }
+}
+
+/// Build the single-question `Ask` prompt: run the usability pass? with the
+/// classifier's recommendation (and reason) surfaced in the question text.
+fn build_usability_question(chinese: bool, rec: &UsabilityRecommendation) -> RequestUserInputArgs {
+    let (yes, no) = usability_labels(chinese);
+    let recommended = if rec.user_facing { yes } else { no };
+    let reason = if rec.reason.trim().is_empty() {
+        String::new()
+    } else if chinese {
+        format!("（{}）", rec.reason.trim())
+    } else {
+        format!(" ({})", rec.reason.trim())
+    };
+    let question = if chinese {
+        format!(
+            "为该设计运行“用户/可用性”评审吗？\n\n推荐：{recommended}{reason}\n\n它会额外找出模式混淆、反馈缺失、无障碍、流程摩擦这类问题——正确性评审看不到的一面。"
+        )
+    } else {
+        format!(
+            "Run the user/usability review pass for this design?\n\nRecommended: {recommended}{reason}\n\nIt surfaces mode-confusion, missing feedback, accessibility, and workflow-friction issues a correctness review misses."
+        )
+    };
+    let (yes_desc, no_desc) = if chinese {
+        ("追加一次可用性评审回合。", "跳过，仅做常规评审。")
+    } else {
+        (
+            "Append one usability review turn.",
+            "Skip; run the normal review only.",
+        )
+    };
+    let opt = |label: &str, desc: &str| RequestUserInputQuestionOption {
+        label: label.to_string(),
+        description: desc.to_string(),
+    };
+    RequestUserInputArgs {
+        questions: vec![RequestUserInputQuestion {
+            id: USABILITY_QUESTION_ID.to_string(),
+            header: if chinese {
+                "可用性评审".to_string()
+            } else {
+                "Usability pass".to_string()
+            },
+            question,
+            is_other: false,
+            is_secret: false,
+            options: Some(vec![opt(yes, yes_desc), opt(no, no_desc)]),
+        }],
+        auto_resolution_ms: None,
+    }
+}
+
+/// v1.6b (D11): resolve whether to append the usability-lens pass. Reads
+/// `usability_lens` from config (only meaningful when debate is enabled): `Off`⇒
+/// false, `On`⇒true, `Ask`⇒ a cheap recommendation call + a one-question user
+/// prompt, cached per design so a revise round reuses the answer.
+async fn resolve_run_usability_pass(
+    session: &Arc<Session>,
+    turn: &Arc<TurnContext>,
+    call_id: String,
+    design_markdown: &str,
+    review_model: &str,
+    chinese: bool,
+) -> bool {
+    let Some(debate) = turn
+        .config
+        .design_review_debate
+        .as_ref()
+        .filter(|d| d.enable)
+    else {
+        return false;
+    };
+    match debate.usability_lens {
+        UsabilityLensToml::Off => false,
+        UsabilityLensToml::On => true,
+        UsabilityLensToml::Ask => {
+            let key = design_title_key(design_markdown);
+            if let Some(prev) = session.design_usability_decision_for(key.clone()).await {
+                return prev; // revise round: reuse the earlier answer, no re-prompt
+            }
+            let rec =
+                classify_usability(session, turn, review_model.to_string(), design_markdown).await;
+            let args = build_usability_question(chinese, &rec);
+            let decision = match session.request_user_input(turn, call_id, args).await {
+                Some(response) => {
+                    let picked = response
+                        .answers
+                        .get(USABILITY_QUESTION_ID)
+                        .and_then(|a| a.answers.first())
+                        .map(String::as_str);
+                    usability_answer_to_bool(picked, chinese, rec.user_facing)
+                }
+                // No UI / cancelled: follow the recommendation rather than blocking.
+                None => rec.user_facing,
+            };
+            session
+                .record_design_usability_decision(key, decision)
+                .await;
+            decision
+        }
+    }
 }
 
 pub(crate) async fn handle_submit_artifact(
@@ -395,12 +529,26 @@ pub(crate) async fn handle_submit_artifact(
             .design_signoff_seen_for(design_title_key(&markdown))
             .await;
         let chinese = transcript_is_chinese(turn.config.language.as_deref());
+        let review_model = effective_design_review_model
+            .clone()
+            .expect("checked above");
+        // v1.6b (D11): resolve whether to run the usability-lens pass. `Off`⇒false,
+        // `On`⇒true, `Ask`⇒ a cheap recommendation + a one-question user prompt
+        // (reused across revise rounds). Only meaningful when debate is enabled.
+        let run_usability_pass = resolve_run_usability_pass(
+            &session,
+            &turn,
+            call_id.clone(),
+            &markdown,
+            &review_model,
+            chinese,
+        )
+        .await;
         let request = DesignReviewRequest {
             design_markdown: markdown.clone(),
-            review_model: effective_design_review_model
-                .clone()
-                .expect("checked above"),
+            review_model,
             accepted_risks: seen.iter().cloned().collect(),
+            run_usability_pass,
         };
         match DesignReviewOrchestrator::review(&session, &turn, request).await {
             Ok(output) => {
@@ -800,6 +948,37 @@ mod tests {
             /*has_pending_parts*/ false,
             Some("gpt-review"),
         ));
+    }
+
+    #[test]
+    fn usability_answer_maps_yes_no_and_defaults_to_recommendation() {
+        // English
+        assert!(usability_answer_to_bool(Some("Run it"), false, false));
+        assert!(!usability_answer_to_bool(Some("Skip"), false, true));
+        // unanswered / Other → follow the recommendation default
+        assert!(usability_answer_to_bool(None, false, true));
+        assert!(!usability_answer_to_bool(Some("something else"), false, false));
+        // Chinese labels
+        assert!(usability_answer_to_bool(Some("运行"), true, false));
+        assert!(!usability_answer_to_bool(Some("跳过"), true, true));
+    }
+
+    #[test]
+    fn usability_question_surfaces_recommendation_and_reason() {
+        let rec = UsabilityRecommendation {
+            user_facing: true,
+            reason: "renders a TUI widget".to_string(),
+        };
+        let args = build_usability_question(false, &rec);
+        assert_eq!(args.questions.len(), 1);
+        let q = &args.questions[0];
+        assert_eq!(q.id, USABILITY_QUESTION_ID);
+        assert!(q.question.contains("Recommended: Run it"));
+        assert!(q.question.contains("renders a TUI widget"));
+        let opts = q.options.as_ref().unwrap();
+        assert_eq!(opts.len(), 2);
+        assert_eq!(opts[0].label, "Run it");
+        assert_eq!(opts[1].label, "Skip");
     }
 
     #[test]

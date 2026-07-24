@@ -4,6 +4,7 @@
 use std::time::Duration;
 
 use ody_config::config_toml::DesignReviewDebateToml;
+use ody_config::config_toml::UsabilityLensToml;
 
 use crate::config::Config;
 use crate::design_review::orchestrator::DESIGN_REVIEW_TIMEOUT;
@@ -27,6 +28,36 @@ impl DebateRole {
             Self::Advocate => "Advocate",
             Self::Skeptic => "Skeptic",
             Self::Judge => "Judge",
+        }
+    }
+}
+
+/// Which attack lens a Skeptic turn carries (v1.6). Advocate turns are always
+/// [`Self::Correctness`]; the appended usability turn (v1.6/D9) is [`Self::Usability`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SkepticLens {
+    Correctness,
+    Usability,
+}
+
+/// Trigger mode for the v1.6 user/usability-lens Skeptic turn. Default [`Self::Off`].
+/// `On` always appends the (forced) turn; `Ask` (v1.6b) shows a classifier-backed
+/// recommendation and lets the user decide per design. D10's self-gating `Auto` was
+/// rejected by Task 6 (never bowed out) and replaced by `Ask` (D11).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum UsabilityLensMode {
+    #[default]
+    Off,
+    On,
+    Ask,
+}
+
+impl From<UsabilityLensToml> for UsabilityLensMode {
+    fn from(toml: UsabilityLensToml) -> Self {
+        match toml {
+            UsabilityLensToml::Off => Self::Off,
+            UsabilityLensToml::On => Self::On,
+            UsabilityLensToml::Ask => Self::Ask,
         }
     }
 }
@@ -86,6 +117,11 @@ pub(crate) struct DebateConfig {
     /// retained as `Contested` (Speculative + reason), never deleted. Off ⇒ v1.5a
     /// behavior (debate only adds).
     pub contest_critic: bool,
+    /// v1.6 (opt-in, default `false`): whether to append the forced usability-lens
+    /// Skeptic turn. Resolved from `usability_lens`: `On` ⇒ true, `Off` ⇒ false.
+    /// `Ask` resolves to false here (v1.6a) and is decided interactively in the
+    /// `submit_artifact` handler (v1.6b), which overrides via the review request.
+    pub append_usability_turn: bool,
 }
 
 impl DebateConfig {
@@ -111,7 +147,13 @@ impl DebateConfig {
             return None;
         }
         let rounds = debate.rounds.unwrap_or(1).clamp(1, MAX_ROUNDS);
-        let calls = u32::from(2 * rounds + 1);
+        // On ⇒ append the forced usability turn. Off/Ask ⇒ not here (Ask is resolved
+        // interactively handler-side in v1.6b and overridden onto the request path).
+        let append_usability_turn =
+            UsabilityLensMode::from(debate.usability_lens) == UsabilityLensMode::On;
+        // Reserve a per-turn slice for the appended usability turn so the debate
+        // total still bounds ≤ the single-shot budget.
+        let calls = u32::from(2 * rounds + 1) + u32::from(append_usability_turn);
         Some(Self {
             rounds,
             advocate_model: debate.advocate_model.clone(),
@@ -121,6 +163,7 @@ impl DebateConfig {
             fallback_review_model: review_model.map(str::to_string),
             per_turn_timeout: DESIGN_REVIEW_TIMEOUT / calls,
             contest_critic: debate.contest_critic,
+            append_usability_turn,
         })
     }
 
@@ -137,6 +180,16 @@ impl DebateConfig {
             .or_else(|| self.fallback_design_review_model.clone())
             .or_else(|| self.fallback_review_model.clone())
     }
+
+    /// Override whether the usability turn is appended (v1.6b): the `submit_artifact`
+    /// handler resolves the authoritative decision (incl. the interactive `Ask`
+    /// answer) and applies it here. Recomputes `per_turn_timeout` so the debate total
+    /// still bounds ≤ the single-shot budget after the turn count changes.
+    pub(crate) fn set_append_usability_turn(&mut self, append: bool) {
+        self.append_usability_turn = append;
+        let calls = u32::from(2 * self.rounds + 1) + u32::from(append);
+        self.per_turn_timeout = DESIGN_REVIEW_TIMEOUT / calls;
+    }
 }
 
 #[cfg(test)]
@@ -152,6 +205,7 @@ mod tests {
             skeptic_model: None,
             judge_model: None,
             contest_critic: false,
+            usability_lens: UsabilityLensToml::Off,
         }
     }
 
@@ -179,6 +233,37 @@ mod tests {
         assert_eq!(one.per_turn_timeout, DESIGN_REVIEW_TIMEOUT / 3);
         let three = DebateConfig::resolve(Some(&debate(true, Some(3))), Some("m"), None).unwrap();
         assert_eq!(three.per_turn_timeout, DESIGN_REVIEW_TIMEOUT / 7);
+    }
+
+    #[test]
+    fn usability_lens_default_is_off_and_appends_nothing() {
+        assert_eq!(UsabilityLensMode::default(), UsabilityLensMode::Off);
+        let cfg = DebateConfig::resolve(Some(&debate(true, Some(1))), Some("m"), None).unwrap();
+        assert!(!cfg.append_usability_turn);
+    }
+
+    #[test]
+    fn usability_lens_on_appends_turn_ask_does_not_here() {
+        let mut d = debate(true, Some(1));
+        d.usability_lens = UsabilityLensToml::On;
+        let on = DebateConfig::resolve(Some(&d), Some("m"), None).unwrap();
+        assert!(on.append_usability_turn);
+        // Ask defers to the interactive handler (v1.6b); not appended at resolve.
+        d.usability_lens = UsabilityLensToml::Ask;
+        let ask = DebateConfig::resolve(Some(&d), Some("m"), None).unwrap();
+        assert!(!ask.append_usability_turn);
+    }
+
+    #[test]
+    fn per_turn_timeout_reserves_slice_when_appending() {
+        // Off/Ask: rounds=1 -> 3 calls -> /3 (unchanged from v1.5).
+        let off = DebateConfig::resolve(Some(&debate(true, Some(1))), Some("m"), None).unwrap();
+        assert_eq!(off.per_turn_timeout, DESIGN_REVIEW_TIMEOUT / 3);
+        // On reserves one extra turn: rounds=1 -> 4 calls -> /4.
+        let mut d = debate(true, Some(1));
+        d.usability_lens = UsabilityLensToml::On;
+        let on = DebateConfig::resolve(Some(&d), Some("m"), None).unwrap();
+        assert_eq!(on.per_turn_timeout, DESIGN_REVIEW_TIMEOUT / 4);
     }
 
     #[test]

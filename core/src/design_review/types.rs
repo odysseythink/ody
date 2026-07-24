@@ -14,6 +14,11 @@ pub(crate) struct DesignReviewRequest {
     /// the reviewer prompt so a stateless re-review stops re-raising them and the
     /// finding count can actually fall across rounds. Empty on the first pass.
     pub accepted_risks: Vec<String>,
+    /// v1.6b (D11): whether to append the usability-lens Skeptic turn to the debate.
+    /// Resolved by the `submit_artifact` handler from `usability_lens` (`On` ⇒ true,
+    /// `Off` ⇒ false, `Ask` ⇒ the user's answer to the recommendation prompt). The
+    /// authoritative value — it overrides the config-derived default in the debate.
+    pub run_usability_pass: bool,
 }
 
 /// Structured output of a design review.

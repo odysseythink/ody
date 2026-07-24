@@ -160,3 +160,25 @@ async fn plan_staleness_reminder_throttles_between_reminders() {
     }
     assert!(state.tick_plan_staleness_reminder(3).is_some());
 }
+
+#[tokio::test]
+async fn usability_decision_records_reads_and_resets_across_designs() {
+    let session_configuration = make_session_configuration_for_tests().await;
+    let mut state = SessionState::new(session_configuration);
+
+    // Undecided for a fresh design.
+    assert_eq!(state.design_usability_decision_for("design-a"), None);
+
+    // Record and read back within the same design.
+    state.record_design_usability_decision("design-a".to_string(), true);
+    assert_eq!(state.design_usability_decision_for("design-a"), Some(true));
+
+    // A different design has no inherited decision (stale state dropped).
+    assert_eq!(state.design_usability_decision_for("design-b"), None);
+
+    // Finalizing (clear) resets the cached decision.
+    state.record_design_usability_decision("design-b".to_string(), false);
+    assert_eq!(state.design_usability_decision_for("design-b"), Some(false));
+    state.clear_design_signoff_seen();
+    assert_eq!(state.design_usability_decision_for("design-b"), None);
+}
