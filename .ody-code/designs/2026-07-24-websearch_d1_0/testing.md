@@ -311,7 +311,7 @@ impl WebSearchProvider for StubProvider {
 由于无法保证 TS 环境可随时运行，推荐方案：
 - 在 `.ody-code/spikes/web_search_parity/` 中编写一次性对比脚本，作为 D1.0 验收 spike；
 - 如果无 TS 环境，则基于源码人工核对关键输出路径，并在 `known-gaps.md` 记录为 `[C:INFERRED]` 假设；
-- 批次验收时，第一批 DuckDuckGo/Bing/Serper/Tavily 必须完成 parity 对比，后续批次可抽样进行。
+- 批次验收时，第一批 DuckDuckGo/Bing/Serper/Tavily 必须完成 parity 对比；后续批次每个 provider 至少使用 fixture 做一次 parity 对比，并记录到 `known-gaps.md`。
 
 ### 记录位置
 
@@ -332,7 +332,14 @@ impl WebSearchProvider for StubProvider {
 
 ### 响应 fixture
 
-在 `ody-web-search/src/providers/fixtures/` 下为每个 provider 保存 `*_success.json` / `*_empty.json` 等 fixture。HTML 解析型 provider（DuckDuckGo、SearXNG）保存真实 HTML 片段或录制样本，并用 **insta** 或纯 assert 比对解析结果。
+在 `ody-web-search/src/providers/fixtures/` 下为每个 provider 保存：
+
+- `*_success.json` / `*_success.html`：成功响应。
+- `*_empty.json` / `*_empty.html`：无结果响应。
+- `*_error_401.json` / `*_error_429.json` / `*_error_5xx.json`：错误响应。
+- `README.md`：每个 fixture 的来源（mock 或录制）、录制时间、是否脱敏。
+
+HTML 解析型 provider（DuckDuckGo、SearXNG）保存真实 HTML 片段或录制样本，并用 **insta** 或纯 assert 比对解析结果。
 
 ### 输出快照
 
@@ -341,6 +348,12 @@ impl WebSearchProvider for StubProvider {
 ### 旧配置 fixture
 
 在 `ody-config` 测试中保留 `web_search = "hosted"` 的 fixture，验证 deprecation warning。
+
+### 录制响应与 parity
+
+- 为每个 provider 录制至少一次真实响应（使用 `web-search-live` feature），保存为 fixture；录制时确保 API key 脱敏。
+- parity 测试使用 fixture 而非每次连接真实 API；fixture 作为 TS 与 Rust 输出对比的基准输入。
+- 每月或在 provider 代码改动时重新录制并审阅 fixture 差异，以捕获 API 漂移。
 
 ---
 
@@ -417,9 +430,9 @@ cargo nextest run -p ody-core -p ody-app-server -p ody-config -p ody-web-search 
 
 | 批次 | Provider | 验收条件 |
 |---|---|---|
-| 第一批 | DuckDuckGo、Bing、Serper、Tavily | 全部 L1 通过；至少完成 1 个 provider 与 TS 的 L3 parity 对比 |
-| 第二批 | SerpApi、SearchApi、Baidu、Serply、SearXNG | 全部 L1 通过；任选 2 个做 L3 parity 对比 |
-| 第三批 | Exa、Perplexity、Moonshot | 全部 L1 通过；至少 1 个做 L3 parity 对比；Moonshot 的 OAuth 占位测试通过 |
+| 第一批 | DuckDuckGo、Bing、Serper、Tavily | 全部 L1 通过；每个 provider 完成与 TS 的 L3 parity 对比（至少 1 个 fixture） |
+| 第二批 | SerpApi、SearchApi、Baidu、Serply、SearXNG | 全部 L1 通过；每个 provider 完成 L3 parity 对比（至少 1 个 fixture） |
+| 第三批 | Exa、Perplexity、Moonshot | 全部 L1 通过；每个 provider 完成 L3 parity 对比；Moonshot 的 OAuth 占位测试通过 |
 
 ### D1.0 整体关闭条件
 

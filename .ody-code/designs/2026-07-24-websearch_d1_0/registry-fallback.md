@@ -157,21 +157,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 pub struct WebSearchProviderFactory {
-    create: Arc<
-        dyn Fn(&WebSearchProviderConfig, &ProviderFactoryDeps) -> Result<Arc<dyn WebSearchProvider>, WebSearchError>
-            + Send
-            + Sync,
-    >,
-}
-
-impl WebSearchProviderFactory {
-    pub fn create(
-        &self,
-        config: &WebSearchProviderConfig,
-        deps: &ProviderFactoryDeps,
-    ) -> Result<Arc<dyn WebSearchProvider>, WebSearchError> {
-        (self.create)(config, deps)
-    }
+    create: Box<dyn Fn(&WebSearchProviderConfig, &ProviderFactoryDeps) -> Result<Arc<dyn WebSearchProvider>, WebSearchError> + Send + Sync>,
 }
 
 pub struct WebSearchProviderRegistry {
@@ -180,24 +166,14 @@ pub struct WebSearchProviderRegistry {
 
 impl WebSearchProviderRegistry {
     pub fn new() -> Self {
-        Self {
-            factories: HashMap::new(),
-        }
+        Self { factories: HashMap::new() }
     }
 
     pub fn register<F>(&mut self, name: WebSearchProviderName, factory: F)
     where
-        F: Fn(&WebSearchProviderConfig, &ProviderFactoryDeps) -> Result<Arc<dyn WebSearchProvider>, WebSearchError>
-            + Send
-            + Sync
-            + 'static,
+        F: Fn(&WebSearchProviderConfig, &ProviderFactoryDeps) -> Result<Arc<dyn WebSearchProvider>, WebSearchError> + Send + Sync + 'static,
     {
-        self.factories.insert(
-            name,
-            WebSearchProviderFactory {
-                create: Arc::new(factory),
-            },
-        );
+        self.factories.insert(name, WebSearchProviderFactory { create: Box::new(factory) });
     }
 
     pub fn create(
@@ -205,15 +181,16 @@ impl WebSearchProviderRegistry {
         config: &WebSearchProviderConfig,
         deps: &ProviderFactoryDeps,
     ) -> Result<Arc<dyn WebSearchProvider>, WebSearchError> {
-        let factory = self
-            .factories
+        let factory = self.factories
             .get(&config.provider)
             .ok_or_else(|| WebSearchError::UnknownProvider(config.provider.to_string()))?;
-        factory.create(config, deps)
+        (factory.create)(config, deps)
     }
 
-    pub fn has(&self, name: WebSearchProviderName) -> bool {
-        self.factories.contains_key(&name)
+    pub fn names(&self) -> Vec<WebSearchProviderName> {
+        let mut names: Vec<_> = self.factories.keys().copied().collect();
+        names.sort_by_key(|n| n.to_string());
+        names
     }
 }
 ```
@@ -221,18 +198,22 @@ impl WebSearchProviderRegistry {
 ### 工厂依赖
 
 ```rust
-#[derive(Debug, Default, Clone)]
 pub struct ProviderFactoryDeps {
-    /// 可选的 HTTP client；未提供时使用 provider 内部默认 client。
+    /// 可选的共享 reqwest client。测试时注入；生产时使用 provider 内部默认 client。
     pub http_client: Option<reqwest::Client>,
-
-    /// Moonshot 搜索服务专属配置（来自 `services.moonshotSearch`）。
+    /// Moonshot 服务配置透传；Moonshot provider 自行读取。
     pub moonshot_service_config: Option<serde_json::Value>,
 }
-```
 
-- `http_client` 允许测试注入 mock client；也允许调用方统一 TLS 配置。
-- `moonshot_service_config` 用于 `moonshot` provider 需要访问 `services.moonshotSearch` 的 baseUrl/apiKey/oauth 的场景。
+impl Default for ProviderFactoryDeps {
+    fn default() -> Self {
+        Self {
+            http_client: None,
+            moonshot_service_config: None,
+        }
+    }
+}
+```
 
 ### 默认注册表
 
@@ -294,7 +275,7 @@ pub fn create_default_web_search_registry() -> WebSearchProviderRegistry {
 
 ```rust
 use std::sync::Arc;
-use tracing::debug;
+use tracing::{debug, info, warn};
 
 pub struct FallbackWebSearchProvider {
     name: &'static str,
@@ -335,7 +316,11 @@ impl WebSearchProvider for FallbackWebSearchProvider {
             }
             Err(primary_error) => {
                 let category = classify_search_error(&primary_error);
-                debug!(provider = %self.primary.name(), error_category = %category, "web_search.failure");
+                warn!(
+                    provider = %self.primary.name(),
+                    error_category = %category,
+                    "web_search.primary_failure"
+                );
 
                 let Some(secondary) = &self.secondary else {
                     return Err(primary_error);
@@ -345,15 +330,27 @@ impl WebSearchProvider for FallbackWebSearchProvider {
                     return Err(primary_error);
                 }
 
-                debug!(provider = %secondary.name(), "web_search.attempt");
+                info!(
+                    primary = %self.primary.name(),
+                    secondary = %secondary.name(),
+                    "web_search.fallback_attempt"
+                );
                 match secondary.search(query, options).await {
                     Ok(results) => {
-                        debug!(provider = %secondary.name(), result_count = results.len(), "web_search.success");
+                        info!(
+                            secondary = %secondary.name(),
+                            result_count = results.len(),
+                            "web_search.fallback_success"
+                        );
                         Ok(results)
                     }
                     Err(secondary_error) => {
                         let category = classify_search_error(&secondary_error);
-                        debug!(provider = %secondary.name(), error_category = %category, "web_search.failure");
+                        warn!(
+                            secondary = %secondary.name(),
+                            error_category = %category,
+                            "web_search.fallback_failure"
+                        );
                         Err(secondary_error)
                     }
                 }
@@ -384,13 +381,19 @@ pub fn resolve_web_search_provider(
 - `app-server` 在 `on_thread_start` 或配置变更时调用此函数。
 - 若 `services.webSearch` 不存在，则返回 `None`，不注册工具。
 
+### 可观测性 [C:INFERRED]
+
+- fallback 路径必须记录 `web_search.primary_failure` / `web_search.fallback_attempt` / `web_search.fallback_success` / `web_search.fallback_failure` 结构化日志。
+- 未来可在 `ody-metrics` 或 `tracing` metrics 层导出：primary 失败率、fallback 使用率、按 provider 错误分类计数。
+- 即使 secondary 成功，primary 错误也必须被记录，避免掩盖主 provider 故障率。
+
 ---
 
 ## 错误分类与 retryable 判定 [C:UPSTREAM]
 
-已在 `trait-crate.md` 中定义 `WebSearchError`；此处定义从任意错误转换和 retryable 判定的规则。
+已在 `trait-crate.md` 中定义 `WebSearchError` 和 `classify_search_error` / `is_retryable_search_error`；此处强调与 fallback 的集成规则。
 
-### 转换规则
+### 转换规则（与 trait-crate.md 一致）
 
 ```rust
 pub fn classify_search_error<E: std::fmt::Display>(error: E) -> WebSearchError {
@@ -425,6 +428,7 @@ pub fn is_retryable_search_error(error: &WebSearchError) -> bool {
             | WebSearchError::RateLimit(_)
             | WebSearchError::Network(_)
             | WebSearchError::Server(_)
+            | WebSearchError::Other(_)
     )
 }
 ```
@@ -432,7 +436,12 @@ pub fn is_retryable_search_error(error: &WebSearchError) -> bool {
 ### Provider 实现层建议
 
 - `reqwest::Error` 优先使用其内置方法：`is_timeout()` → `WebSearchError::Timeout`；`status()` 4xx/5xx 直接映射；`is_connect()` → `WebSearchError::Network`。
--  Provider 内部解析失败（如 JSON 缺失字段）映射为 `WebSearchError::Other`，不 retryable。
+- Provider 内部解析失败（如 JSON 缺失字段）映射为 `WebSearchError::Other`；`Other` 在 fallback 中 retryable，但工具层返回给模型时不触发自动重试。
+
+### 非英文错误与 fallback
+
+- 对于中文、日文等非英文错误信息，优先依赖 HTTP 状态码分类。例如百度返回 504 时，provider 实现应使用 `response.status()` 映射为 `Server`，而不是依赖「超时」等子串。
+- 若无法获取状态码（如 DNS 错误），则 fallback 到字符串匹配；若仍无法匹配，则归为 `Other` 并 retryable，避免误短路 fallback。
 
 ---
 
@@ -443,6 +452,7 @@ pub fn is_retryable_search_error(error: &WebSearchError) -> bool {
 2. `primary.timeout_ms` 若存在，必须在 1000..=120000 范围内；否则返回配置错误。
 3. `secondary` 若存在，与 primary 规则相同。
 4. 若 `provider` 需要 `api_key`（如 `bing`、`serpapi` 等），在创建 provider 时检查，而非 TOML 解析时；因为某些 provider 可能从环境或 OAuth 获取 key。
+5. `api_key` 在 Debug/Display 输出中必须 redact；`WebSearchProviderConfig` 的 `Debug` 实现应覆盖 `api_key` 字段显示为 `"[REDACTED]"` 或类似。
 
 ---
 
@@ -455,6 +465,9 @@ pub fn is_retryable_search_error(error: &WebSearchError) -> bool {
 | `timeout_ms` 默认值 | 25000 ms | 与 TS `DEFAULT_WEB_SEARCH_TIMEOUT_MS` 一致。 |
 | `services.moonshotSearch` 是否本次实现 | 否 | 但保留字段避免解析错误。 |
 | `api_key` 为空字符串时是否允许 | 部分 provider 允许 | DuckDuckGo 不需要 key；Bing 等需要 key 的 provider 在创建时报错。 |
+| `api_key` 是否 redact 输出 | 是 | 防止日志/panic 泄露 key。 |
+| `Other` 错误是否 retryable | 是 | 避免非英文/非标准错误系统性短路 fallback。 |
+| fallback 成功是否记录 primary 错误 | 是 | 结构化日志记录 primary 失败和 fallback 成功。 |
 
 ---
 
@@ -463,7 +476,7 @@ pub fn is_retryable_search_error(error: &WebSearchError) -> bool {
 - 注册表 `unknown provider` 报错。
 - 注册表 `create` 返回正确具体类型（通过 `name()` 断言）。
 - Fallback primary 成功时不调用 secondary。
-- Fallback primary 非 retryable 错误时不调用 secondary。
-- Fallback primary retryable 错误时调用 secondary 并返回 secondary 结果。
-- Fallback primary 和 secondary 都失败时返回 secondary 错误。
-- 配置解析：`timeout_ms` 越界报错；`provider` 大小写不敏感；未知 provider 名报错；`deny_unknown_fields` 拒绝拼写错误。
+- Fallback primary 非 retryable 错误（Authentication / InvalidOptions）时不调用 secondary。
+- Fallback primary retryable 错误（Timeout / RateLimit / Network / Server / Other）时调用 secondary 并返回 secondary 结果。
+- Fallback primary 和 secondary 都失败时返回 secondary 错误；primary 错误被记录。
+- 配置解析：`timeout_ms` 越界报错；`provider` 大小写不敏感；未知 provider 名报错；`deny_unknown_fields` 拒绝拼写错误；`api_key` 在 Debug 中 redact。

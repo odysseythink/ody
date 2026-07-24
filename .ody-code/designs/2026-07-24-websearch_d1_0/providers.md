@@ -90,7 +90,8 @@ pub fn http_error(response: &reqwest::Response, provider: &str) -> WebSearchErro
 - 字段映射：`title`/`name` → `title`；`url`/`link`/`uri` → `url`；`snippet`/`description`/`content`/`text` → `snippet`。
 - 截断：title 500，url 2048，snippet 4000。
 - 过滤：只保留 `title` 和 `url` 非空的结果。
-- 应用 `options.limit`：在规范化之后 slice。
+- 应用 `options.limit`：在规范化之后统一 clamp 到 1..=20 并 slice；provider 不各自判断 limit。
+- `include_content`：支持的 provider 将正文放入 `content`；不支持的 provider 保持 `content: None`。
 
 ---
 
@@ -113,11 +114,12 @@ pub fn http_error(response: &reqwest::Response, provider: &str) -> WebSearchErro
 
 ### 特殊说明
 
-- **DuckDuckGo**：无 API key，但 HTML 解析易失效；需要稳定的 HTML 解析单元测试和回归快照。
-- **SearXNG**：必须提供 `options.baseUrl`；无默认值。
+- **DuckDuckGo**：无 API key，但 HTML 解析易失效；需要稳定的 HTML 解析单元测试和回归快照。支持 `options.baseUrl` 用于测试和代理场景。
+- **SearXNG**：必须提供 `options.baseUrl`；无默认值；支持测试覆盖。
 - **Moonshot**：需要 `services.moonshotSearch` 或 `options.baseUrl`；OAuth 本次不实现，但接口预留 `token_provider` 字段为 `Option`。
 - **Baidu / Serper / Serply / SearchApi / SerpApi**：均需要 API key；在 `from_config` 中检查 `api_key` 非空，否则返回 `WebSearchError::Authentication`。
 - **Exa / Perplexity / Tavily**：支持更多 options；解析失败时返回 `WebSearchError::InvalidOptions`。
+- **所有需要 API key 的 provider**：`WebSearchProviderConfig` 的 `Debug` 输出必须 redact `api_key`，避免日志泄露。
 
 ---
 
@@ -127,14 +129,14 @@ pub fn http_error(response: &reqwest::Response, provider: &str) -> WebSearchErro
 crates/ody-web-search/src/
   lib.rs              # 公开 re-export
   provider.rs         # WebSearchProvider trait
-  result.rs           # WebSearchResult / WebSearchOptions
+  result.rs           # WebSearchResult / WebSearchOptions / normalize_results
   error.rs            # WebSearchError / classify / retryable
   registry.rs         # WebSearchProviderRegistry / create_default_registry
   fallback.rs         # FallbackWebSearchProvider
   config.rs           # WebSearchConfig / WebSearchProviderConfig / WebSearchProviderName
   providers/
     mod.rs            # 统一 re-export
-    http.rs           # build_url / auth_header_for_provider / http_error
+    http.rs           # build_url / auth_header_for_provider / http_error / classify_from_response
     duckduckgo.rs
     bing.rs
     serpapi.rs
@@ -147,13 +149,14 @@ crates/ody-web-search/src/
     exa.rs
     perplexity.rs
     moonshot.rs
+  providers/fixtures/ # 每个 provider 的录制响应 fixture
 ```
 
 每个 provider 文件包含：
 1. `*Options` struct（强类型或 `serde_json::Map` 解析）。
 2. `*Provider` struct + `from_config`。
 3. `#[async_trait] impl WebSearchProvider for *Provider`。
-4. `#[cfg(test)] mod tests`：mock HTTP client + 响应解析测试 + 错误分类测试。
+4. `#[cfg(test)] mod tests`：mock HTTP client + 响应解析测试 + 错误分类测试 + 响应 fixture。
 
 ---
 
@@ -172,9 +175,12 @@ crates/ody-web-search/src/
 ## 测试策略 [C:INFERRED]
 
 - 每个 provider 使用 mock `reqwest::Client`（通过 `ProviderFactoryDeps.http_client` 注入）测试成功响应。
-- 错误路径测试：401/403/429/5xx/timeout/HTML 解析失败。
-- `normalize_results` 在 provider 测试之外独立测试，但 provider 测试需覆盖字段映射。
+- 错误路径测试：401/403/429/5xx/timeout/HTML 解析失败/非英文错误。
+- `normalize_results` 在 provider 测试之外独立测试，但 provider 测试需覆盖字段映射和 limit clamp。
 - 真实网络测试：仅作为 `#[cfg(feature = "web-search-live")]` 的集成测试，默认不运行。
+- 响应 fixture：每个 provider 在 `providers/fixtures/` 保存 `*_success.json` / `*_empty.json` / `*_error.json` 等；DuckDuckGo/SearXNG 保存 HTML fixture。fixture 用于 parity 对比和回归测试。
+- 错误分类测试：使用真实 HTTP 状态码（如 504）和非英文错误文本验证分类正确。
+- `include_content` 测试：支持的 provider 验证 `content` 填充；不支持的 provider 验证 `content: None`。
 
 ---
 
@@ -187,3 +193,8 @@ crates/ody-web-search/src/
 | 是否统一使用 `reqwest` 而非 `ody_client` | 是 | 避免 `ody-web-search` 依赖 `ody-client` 形成循环依赖。 |
 | 是否支持自定义 HTTP headers | 是，通过 `options.customHeaders` | 与 TS `Moonshot` 对齐；其他 provider 可忽略。 |
 | 是否支持 `toolCallId` header | 是 | 与 TS `http.ts` 的 `X-Msh-Tool-Call-Id` 对齐；默认发送。 |
+| `include_content` 在不支持 provider 上的行为 | 返回 `content: None` | 避免未定义行为；不报错。 |
+| `limit` 策略 | 统一在 `normalize_results` 中 clamp 到 1..=20 | 保证不同 provider 行为一致。 |
+| 是否所有 provider 支持 `options.baseUrl` | 推荐支持 | 便于 mock HTTP 测试和代理场景。SearXNG 已必需；其他 provider 可选。 |
+| 是否保存响应 fixture | 是 | 用于 parity 测试和回归。 |
+| `api_key` 是否 redact | 是 | 防止日志/panic 泄露。 |

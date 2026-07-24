@@ -59,8 +59,9 @@ R1.5 ─ config/feature/CLI 中 web_search_mode
 - `ody-api/src/search.rs` 中 `SearchRequest`、`SearchResponse`、`SearchCommands`、`SearchQuery`、`SearchSettings`、`ExternalWebAccess`、`SearchContextSize`、`ApproximateLocation` 等类型。
 
 ### 检查清单
-- 全 workspace grep `SearchClient`、`SearchRequest`、`SearchCommands`、`alpha/search`、`SearchSettings` 确认无残留引用。
+- 删除前全 workspace grep `SearchClient`、`SearchRequest`、`SearchCommands`、`alpha/search`、`SearchSettings` 确认无残留引用。
 - 若某些类型仍被 analytics 或 protocol 使用，则仅删除 web search 相关字段，保留共享类型。
+- 删除在独立 commit 中执行，便于回滚。
 
 ### 更新文件
 - `ody-api/src/endpoint/mod.rs`：移除 `pub mod search;` / `pub use search::*;`。
@@ -181,10 +182,11 @@ if config_toml.deprecated_web_search.is_some() {
 
 ### 旧数据兼容
 - 若 thread history 或 session log 中已序列化旧 `WebSearchItem`：
-  - 方案：在反序列化层保留一个兼容解析层，将旧 `WebSearchItem` 降级为纯文本 `ThreadItem::Message` 或 `ThreadItem::DynamicToolCall`。
-  - 或：在加载时跳过未知 item 类型，仅记录 warning。
-- 推荐方案：保留兼容解析层一个版本，显示降级文本 `"[legacy web search result]"`，避免旧 thread 无法打开。
-- 该决策对 `core/src/context_manager/history.rs` 和 `app-server-protocol` 影响较大；需单独验证（见 `Assumptions` 第 2 条）。
+  - **必须保留兼容解析层**：在 `app-server-protocol` 和 `core/src/context_manager/history.rs` 的反序列化路径中，将旧 `WebSearchItem` 降级为纯文本 `ThreadItem::Message` 或 `ThreadItem::DynamicToolCall`。
+  - 降级显示文本为 `[legacy web search result]`，避免旧 thread 无法打开。
+  - 在加载旧数据时记录 warning，提示用户该结果为历史格式。
+- 兼容解析层至少保留一个版本（T3.1.2–T3.1.3），后续版本可彻底删除。
+- 该决策对 `core/src/context_manager/history.rs` 和 `app-server-protocol` 影响较大；需在删除前验证所有反序列化路径（见 `Assumption 2`）。
 
 ## 依赖图清理 [C:INFERRED]
 

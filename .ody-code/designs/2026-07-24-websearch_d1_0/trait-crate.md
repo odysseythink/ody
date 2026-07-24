@@ -76,6 +76,7 @@ pub struct WebSearchResult {
 - `url` 截断至 2048 字符。
 - `snippet` 截断至 4000 字符。
 - `normalize_results` 过滤掉 `title` 或 `url` 为空的条目。
+- `content` 仅由支持正文抓取的 provider 填充；不支持的 provider 返回 `None`，不报错。
 
 ### `WebSearchOptions` [C:UPSTREAM]
 
@@ -90,8 +91,8 @@ pub struct WebSearchOptions {
 }
 ```
 
-- `limit` 有效范围 1..=20；provider 实现负责 clamp 或返回 `WebSearchError::InvalidOptions`。
-- `include_content` 为 true 时，支持 fetch content 的 provider 应返回 `content`。
+- `limit` 有效范围 1..=20；在 `normalize_results` 中统一 clamp 到该范围，provider 不负责各自判断。
+- `include_content` 为 true 时，支持 fetch content 的 provider 应返回 `content`；不支持时返回 `content: None`。
 - `tool_call_id` 仅用于日志关联，不参与请求。
 
 ### `WebSearchProvider` trait [C:USER]
@@ -117,6 +118,7 @@ pub trait WebSearchProvider: Send + Sync + Debug {
 - `Debug`：便于日志和测试。
 - 返回类型显式为 `Result<Vec<WebSearchResult>, WebSearchError>`，而非 `anyhow::Result`，保证错误分类可预测。
 - `query` 为 `&str`：provider 内部负责 URL 编码。
+- 实现必须保证在 `Arc` 引用计数归零时安全 `Drop`，不依赖手动关闭资源；`reqwest::Client` 内部管理连接池，满足此要求。
 
 ### `WebSearchError` [C:UPSTREAM]
 
@@ -162,28 +164,33 @@ pub enum WebSearchError {
 
 ### 错误分类函数 [C:UPSTREAM]
 
+对齐 TS 错误分类，但增强 Rust 端健壮性：
+
+1. **Provider 实现层优先使用结构化信息**：`reqwest::Error` 的 `is_timeout()`、`is_connect()`、`status()` 等；HTTP 响应状态码 4xx/5xx 直接映射。
+2. **字符串分类仅作为 fallback**：用于非 `reqwest` 错误、自定义错误、或上游返回的非标准 HTTP 错误文本。
+3. **非英文错误**：依赖 HTTP 状态码结构化分类，避免仅依赖字符串匹配；若无法获取状态码，则 fallback 到字符串匹配，并将 `Other` 在 fallback 路径中视为可重试，避免系统性短路。
+
 ```rust
 pub fn classify_search_error<E: std::fmt::Display>(error: E) -> WebSearchError {
     let message = error.to_string();
     let lower = message.to_lowercase();
-    let name = std::any::type_name_of_val(&error); // 仅用于 rust 内部类型判断
 
-    if lower.contains("abort") || name.ends_with("AbortError") {
+    if lower.contains("abort") {
         return WebSearchError::Cancelled(message);
     }
-    if lower.contains("timed out") || lower.contains("timeout") || name.ends_with("TimeoutError") {
+    if lower.contains("timed out") || lower.contains("timeout") {
         return WebSearchError::Timeout(message);
     }
-    if lower.contains("401") || lower.contains("403") || lower.contains("unauthorized") || lower.contains("authentication") || lower.contains("auth") {
+    if lower.contains("401") || lower.contains("403") || lower.contains("unauthorized") || lower.contains("authentication") {
         return WebSearchError::Authentication(message);
     }
     if lower.contains("429") {
         return WebSearchError::RateLimit(message);
     }
-    if lower.contains("5") && lower.contains("http ") || lower.contains("server") {
+    if lower.contains("500") || lower.contains("502") || lower.contains("503") || lower.contains("504") || lower.contains("http 5") {
         return WebSearchError::Server(message);
     }
-    if lower.contains("network") || lower.contains("fetch") || lower.contains("dns") || lower.contains("connection") {
+    if lower.contains("network") || lower.contains("dns") || lower.contains("connection") || lower.contains("fetch") {
         return WebSearchError::Network(message);
     }
     WebSearchError::Other(message)
@@ -197,7 +204,9 @@ pub fn is_retryable_search_error(error: &WebSearchError) -> bool {
         WebSearchError::RateLimit(_) => true,
         WebSearchError::Network(_) => true,
         WebSearchError::Server(_) => true,
-        WebSearchError::Other(_) => false,
+        // Other 在 fallback 路径中视为可重试，防止非英文/非标准错误被系统性短路。
+        // 工具层返回给模型时仍按 Other 处理（不重试模型调用）。
+        WebSearchError::Other(_) => true,
         WebSearchError::InvalidOptions(_) => false,
         WebSearchError::UnknownProvider(_) => false,
     }
@@ -207,6 +216,13 @@ pub fn is_retryable_search_error(error: &WebSearchError) -> bool {
 注意：
 - Rust 没有 TS 的 `AbortError` / `TimeoutError` 全局类；约定通过 `error.to_string()` 中的子串或 `tokio::time::error::Elapsed` 等类型名称判断。
 - 在 `reqwest` 场景下，timeout 会被包装成 `reqwest::Error`，其 `is_timeout()` 方法应在 provider 实现层优先使用，再 fallback 到字符串分类。
+- `Other` 在 fallback 中 retryable 是一个保守策略：宁可多尝试一次 secondary，也不因为分类失败而直接放弃。但 `WebSearchTool` 返回给模型的错误文本仍为 `Search failed: ...`，不会误导模型自动重试。
+
+### 并发与资源安全 [C:INFERRED]
+
+- `WebSearchProvider` trait 要求实现为 `Send + Sync + Debug`；实现必须保证在 `Arc` 引用计数归零时安全 `Drop`，不得依赖手动关闭资源。`reqwest::Client` 内部管理连接池，满足此要求。
+- 默认 `reqwest::Client` 使用连接池复用；provider 实现不应为每个请求新建 client。
+- 若运行时观察到 429 正反馈，可在 `WebSearchTool` 或 `FallbackWebSearchProvider` 层增加 per-provider 信号量；D1.0 默认使用 `reqwest` 内置连接池限制，不强制信号量，但保留增加信号量的扩展点。
 
 ---
 
@@ -222,16 +238,19 @@ pub fn is_retryable_search_error(error: &WebSearchError) -> bool {
 
 ### 输入不变式
 - `query` 非空；`WebSearchTool` 在调用前校验。
-- `limit` 范围 1..=20；provider 实现可安全 clamp 到 20，但不允许为 0。
+- `limit` 范围 1..=20；`normalize_results` 统一 clamp，provider 实现可安全假设收到的 limit 已在此范围。
+- `include_content` 为 true 时，不支持的 provider 返回 `content: None`。
 
 ### 输出不变式
 - `search` 返回空 `Vec` 表示无结果，不是错误。
 - `title` 和 `url` 非空（经 `normalize_results` 过滤）。
 - `url` 应为绝对 URL；provider 实现负责拼接 base URL。
+- `content` 仅由支持正文抓取的 provider 填充；不支持的 provider 返回 `None`。
 
 ### 并发
 - trait 方法 `&self` 不可变引用，允许多线程并发调用同一 provider 实例。
 - 若 provider 需要可变状态（如 token 桶），应内部使用 `Mutex` / `Atomic`。
+- 实现必须支持安全 `Drop`：配置热更新时旧 `Arc<dyn WebSearchProvider>` 可能在飞行请求中继续存活，待请求结束、引用计数归零后自然释放。
 
 ---
 
@@ -242,4 +261,7 @@ pub fn is_retryable_search_error(error: &WebSearchError) -> bool {
 | 是否用 `anyhow` 替代 `WebSearchError` | 否 | 需要稳定错误分类用于 fallback 和工具输出。 |
 | 是否把 `reqwest::Client` 放进 trait 方法 | 否 | 每个 provider 内部持有 client；trait 保持最小。 |
 | 是否支持 `raw` 字段给模型 | 否 | `raw` 仅用于调试和 parity 测试，不输出给模型。 |
-| `include_content` 语义 | 与 TS 一致 | provider 若支持，返回 `content`；否则 `content` 为 `None`。 |
+| `include_content` 语义 | 不支持时返回 `None` | 避免未定义行为；与 TS 一致。 |
+| `limit` 策略 | 统一在 `normalize_results` 中 clamp | 保证不同 provider 行为一致。 |
+| `Other` 错误是否 retryable | 在 fallback 中视为 retryable | 避免非英文/非标准错误系统性短路 fallback。 |
+| 是否默认添加 per-provider 信号量 | 否，保留扩展点 | `reqwest` 连接池作为第一级抑制；必要时可添加。 |

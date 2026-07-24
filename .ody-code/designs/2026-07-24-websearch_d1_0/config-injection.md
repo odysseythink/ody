@@ -72,6 +72,9 @@ pub struct Config {
 
     /// `services.webSearch` 配置；未配置时 `None`。
     pub services_web_search: Option<ody_web_search::WebSearchConfig>,
+
+    /// `services.moonshotSearch` 透传；本次不解析为强类型。
+    pub services_moonshot_search: Option<serde_json::Value>,
 }
 ```
 
@@ -118,11 +121,17 @@ pub(crate) struct WebSearchExtensionConfig {
 impl From<&Config> for Option<WebSearchExtensionConfig> {
     fn from(config: &Config) -> Self {
         let web_search_config = config.services_web_search.as_ref()?;
-        let provider = resolve_web_search_provider(web_search_config, &ProviderFactoryDeps::default())
-            .map_err(|err| {
-                tracing::warn!(error = %err, "failed to create web search provider; WebSearch tool will not be registered");
-            })
-            .ok()?;
+        let provider = resolve_web_search_provider(
+            web_search_config,
+            &ProviderFactoryDeps {
+                http_client: None,
+                moonshot_service_config: config.services_moonshot_search.clone(),
+            },
+        )
+        .map_err(|err| {
+            tracing::warn!(error = %err, "failed to create web search provider; WebSearch tool will not be registered");
+        })
+        .ok()?;
         Some(WebSearchExtensionConfig { provider })
     }
 }
@@ -148,8 +157,15 @@ impl ConfigContributor<Config> for WebSearchExtension {
         _previous_config: &Config,
         new_config: &Config,
     ) {
-        if let Some(config) = Option::<WebSearchExtensionConfig>::from(new_config) {
-            thread_store.insert(config);
+        match Option::<WebSearchExtensionConfig>::from(new_config) {
+            Some(config) => {
+                thread_store.insert(config);
+            }
+            None => {
+                // 新配置无效或缺失时移除旧 provider，确保工具不再出现。
+                thread_store.remove::<WebSearchExtensionConfig>();
+                tracing::warn!("services.webSearch configuration removed or invalid; WebSearch tool unregistered");
+            }
         }
     }
 }
@@ -179,8 +195,9 @@ pub fn install(registry: &mut ExtensionRegistryBuilder<Config>) {
 ### 关键不变式
 
 - **无 provider 时不注册工具**：`WebSearchExtensionConfig` 仅在 `services.webSearch` 配置有效且 provider 创建成功时插入 thread store；`ToolContributor::tools` 在找不到配置时返回空 Vec。
-- **配置变更动态生效**：`on_config_changed` 重新解析；如果新配置无效则移除旧配置，工具在下一次工具规划时不再出现。
+- **配置变更动态生效**：`on_config_changed` 重新解析；如果新配置有效则替换；如果新配置无效或缺失则调用 `remove`，工具在下一次工具规划时不再出现。
 - **错误不阻塞 thread start**：provider 创建失败时记录 warning，thread 继续启动，只是没有 `WebSearch` 工具。
+- **配置热更新与飞行请求**：旧 `Arc<dyn WebSearchProvider>` 被替换后，正在执行的搜索仍持有旧 Arc；引用计数归零后自然 Drop。`WebSearchProvider` 实现必须支持安全 Drop（`reqwest::Client` 满足此要求）。
 
 ### `ProviderFactoryDeps` 默认值
 
@@ -193,7 +210,13 @@ ProviderFactoryDeps {
 }
 ```
 
-未来若需要统一 TLS/timeout client，可在此处传入 `ody_client::default_client::build_reqwest_client()`。
+未来若需要统一 TLS/timeout client，可在此处传入共享的 `reqwest::Client`。
+
+### 并发控制 [C:INFERRED]
+
+- 默认情况下每个 provider 内部持有独立的 `reqwest::Client`，其连接池作为第一级并发抑制。
+- 若观察到 429 正反馈，可在 `app-server` 注入时将共享 `reqwest::Client` 传入 `ProviderFactoryDeps.http_client`，并限制其连接池大小；或在 `WebSearchTool` 层增加 per-provider 信号量。
+- D1.0 不强制 per-provider 信号量，但保留扩展点；`reqwest` 连接池和 `limit` 参数为主要抑制手段。
 
 ---
 
@@ -219,19 +242,23 @@ ProviderFactoryDeps {
 |---|---|---|
 | 是否保留 `ext/web-search` 目录 | 是，重写内容 | 减少 workspace member 和 Cargo.toml 改动；已存在 install 调用。 |
 | provider 创建失败是否阻塞 thread start | 否 | 对齐 TS 的 host 注入语义；错误配置不应导致整个线程崩溃。 |
-| 配置变更后是否动态刷新 provider | 是 | 通过 `ConfigContributor` 实现；现有 extension 机制支持。 |
+| 配置变更后是否动态刷新 provider | 是 | 通过 `ConfigContributor` 实现；新配置无效时显式 `remove`。 |
 | `moonshot_search` 是否强类型解析 | 否 | 本次仅作为 `serde_json::Value` 透传；`moonshot` provider 自行读取。 |
 | 是否允许 `services.webSearch` 中 `secondary` 与 `primary` 同 provider | 是 | 允许但无意义；fallback 逻辑不限制。 |
+| 配置无效时是否移除旧 provider | 是 | 防止工具在失效配置下继续运行。 |
+| 是否使用共享 `reqwest::Client` | 默认否，可选 | 默认独立 client 简化实现；需要时通过 `ProviderFactoryDeps.http_client` 注入。 |
+| 是否默认 per-provider 信号量 | 否 | `reqwest` 连接池作为第一级抑制；保留扩展点。 |
 
 ---
 
 ## 测试要点 [C:INFERRED]
 
-- `cargo test -p ody-config`：新增 `services.webSearch` 解析测试；旧 `web_search` 警告测试；`timeout_ms` 越界测试；未知 provider 名测试。
+- `cargo test -p ody-config`：新增 `services.webSearch` 解析测试；旧 `web_search` 警告测试；`timeout_ms` 越界测试；未知 provider 名测试；`api_key` redact 测试。
 - `cargo test -p ody-app-server`：
   - 未配置 `services.webSearch` 时 `WebSearchTool` 不在工具列表中；
   - 配置有效时 `WebSearchTool` 出现；
   - 配置无效（如 unknown provider）时工具不出现且生成 warning；
+  - 配置从有效变为无效时，旧 provider 被移除，工具消失；
   - 配置变更后工具动态出现/消失。
 - 需要 mock `ThreadStore` 和 `ExtensionRegistry` 进行单元测试。
 
@@ -241,7 +268,7 @@ ProviderFactoryDeps {
 
 - `config/src/config_toml.rs`：新增 `ServicesConfigToml`，新增 `ConfigToml::services` 字段，删除 `web_search` 字段。
 - `core/src/config/mod.rs`：新增 `Config::services_web_search`，删除 `web_search_mode` / `web_search_config` 相关字段。
-- `ext/web-search/Cargo.toml`：依赖改为 `ody-web-search`、`ody-core`、`ody-extension-api`，移除 `ody-api`、`ody-model-provider`、`ody-protocol` 中旧类型。
+- `ext/web-search/Cargo.toml`：依赖改为 `ody-web-search`、`ody-core`、`ody-extension-api`、`ody-tools`，移除 `ody-api`、`ody-model-provider`、`ody-protocol` 中旧类型。
 - `ext/web-search/src/extension.rs`：完全重写为上述 host 注入逻辑。
 - `ext/web-search/src/tool.rs`：重写为 `WebSearchTool`（见 `tool-tui.md`）。
 - `app-server/src/extensions.rs`：保持 `ody_web_search_extension::install(&mut builder)` 调用不变。

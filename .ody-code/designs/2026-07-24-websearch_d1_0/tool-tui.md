@@ -104,13 +104,22 @@ impl ToolExecutor<ToolCall> for WebSearchTool {
 ```
 
 注意：
-- 工具名 `WebSearch`（首字母大写，与 TS 一致）。
+- 工具名 `WebSearch`（首字母大写，与 TS 一致）。旧 Rust 端可能使用 `web_search` / `webSearch` 等名称；D1.0 统一为 `WebSearch`，需同步更新系统提示/模型训练数据中的引用。不保留旧名别名，因为 TS 也未提供别名。
 - `parse_tool_input_schema` 替代旧 `parse_tool_input_schema_without_compaction`；因为新 schema 简单，无需特殊处理。
 - `description` 从 `web_search_description.md` 文件读取（新增，对齐 TS `web-search.md`）。
 
 ### 工具执行
 
 ```rust
+#[derive(Debug, Deserialize)]
+struct WebSearchInput {
+    query: String,
+    #[serde(default)]
+    limit: Option<u32>,
+    #[serde(default, rename = "include_content")]
+    include_content: Option<bool>,
+}
+
 impl WebSearchTool {
     async fn handle_call(&self, call: ToolCall) -> Result<Box<dyn ToolOutput>, FunctionCallError> {
         let args = call.function_arguments()?;
@@ -127,71 +136,58 @@ impl WebSearchTool {
             tool_call_id: Some(call.call_id.clone()),
         };
 
-        let results = self
-            .provider
-            .search(&input.query, options)
-            .await
-            .map_err(|err| FunctionCallError::Fatal(classify_search_error(&err).to_string()))?;
-
-        Ok(Box::new(WebSearchOutput::new(results)))
+        match self.provider.search(&input.query, options).await {
+            Ok(results) => Ok(Box::new(WebSearchToolOutput::new(results))),
+            Err(err) => {
+                let classified = classify_search_error(err);
+                Err(FunctionCallError::Fatal(classified.to_string()))
+            }
+        }
     }
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct WebSearchInput {
-    query: String,
-    limit: Option<u32>,
-    #[serde(rename = "include_content")]
-    include_content: Option<bool>,
 }
 ```
 
-### 输出格式化 [C:UPSTREAM]
-
-严格对齐 TS `web-search.ts:96-115`。
+### 输出格式化
 
 ```rust
-use ody_extension_api::ToolOutput;
-use ody_web_search::WebSearchResult;
-
-struct WebSearchOutput {
+pub(crate) struct WebSearchToolOutput {
     text: String,
+    result_count: usize,
 }
 
-impl WebSearchOutput {
+impl WebSearchToolOutput {
     fn new(results: Vec<WebSearchResult>) -> Self {
         if results.is_empty() {
             return Self {
                 text: "No search results found.".to_string(),
+                result_count: 0,
             };
         }
 
-        let mut lines = Vec::new();
-        let mut first = true;
-        for result in results {
-            if !first {
-                lines.push("---\n".to_string());
+        let mut text = String::new();
+        for (i, result) in results.iter().enumerate() {
+            if i > 0 {
+                text.push_str("---\n");
             }
-            first = false;
-
-            lines.push(format!("Title: {}", result.title));
-            if let Some(date) = result.date {
-                lines.push(format!("Date: {}", date));
+            text.push_str(&format!("Title: {}\n", result.title));
+            if let Some(date) = &result.date {
+                text.push_str(&format!("Date: {}\n", date));
             }
-            lines.push(format!("URL: {}", result.url));
-            lines.push(format!("Snippet: {}\n", result.snippet));
-            if let Some(content) = result.content {
-                lines.push(format!("{}\n", content));
+            text.push_str(&format!("URL: {}\n", result.url));
+            text.push_str(&format!("Snippet: {}\n", result.snippet));
+            if let Some(content) = &result.content {
+                text.push_str(&format!("Content: {}\n", content));
             }
         }
 
         Self {
-            text: lines.join("\n"),
+            result_count: results.len(),
+            text,
         }
     }
 }
 
-impl ToolOutput for WebSearchOutput {
+impl ToolOutput for WebSearchToolOutput {
     fn text(&self) -> String {
         self.text.clone()
     }
@@ -204,8 +200,8 @@ impl ToolOutput for WebSearchOutput {
 
 - 无结果时返回固定文本 `No search results found.`。
 - 结果之间用 `---\n` 分隔（TS 使用 `---\n\n`，但 Rust join 逻辑等价）。
-- `Title`/`Date`/`URL`/`Snippet` 顺序与 TS 一致。
-- `content` 若存在，追加在最后。
+- `Title`/`Date`/`URL`/`Snippet`/`Content` 顺序与 TS 一致。
+- `content` 若存在，追加在最后；不支持的 provider 返回 `content: None`，不显示 `Content:` 行。
 
 ### 错误处理 [C:UPSTREAM]
 
@@ -213,6 +209,11 @@ impl ToolOutput for WebSearchOutput {
 - `query` 为空 → `FunctionCallError::RespondToModel`。
 - provider 搜索失败 → `FunctionCallError::Fatal` + 分类前缀文本（如 `Search timed out: ...`）。
 - 分类函数使用 `classify_search_error`（见 `trait-crate.md`）。
+
+### 并发控制 [C:INFERRED]
+
+- `WebSearchTool` 默认不限制并发，依赖 `reqwest::Client` 连接池。
+- 若观察到 429 正反馈，可在 `WebSearchTool` 内增加 per-provider 信号量（如 `tokio::sync::Semaphore`）或共享 rate limiter；D1.0 保留扩展点但不默认实现。
 
 ---
 
@@ -266,6 +267,12 @@ fn web_search_chip(tool_call: &ThreadItem, result: &ToolResult) -> String {
 - 未匹配时：若输出为空或 `No search results found.` 显示 `no results`；否则显示 `web result`。
 - 在 chip 注册表中按工具名 `WebSearch` 注册。
 
+### 结构化元数据替代（未来可选） [C:INFERRED]
+
+- 当前 `ToolOutput` 仅暴露纯文本，因此 chip 必须解析文本。
+- 若未来 `ody_extension_api::ToolOutput` 支持附加元数据，应直接返回 `result_count` 和 `has_content` 等字段，chip 直接读取元数据，避免文本格式变更影响计数。
+- D1.0 保持文本解析方案，因为现有 API 不支持元数据；在 `WebSearchToolOutput` 内部保留 `result_count` 以便未来迁移。
+
 ### 活动工具状态
 
 - 新 `WebSearchTool` 作为普通工具调用，开始和结束通过通用 `DynamicToolCall` 或 `ToolCall` 事件呈现。
@@ -292,6 +299,9 @@ fn web_search_chip(tool_call: &ThreadItem, result: &ToolResult) -> String {
 | 错误是否返回 `FunctionCallError::Fatal` | 是 | 与 TS 将错误作为 `isError: true` 返回一致。 |
 | 是否保留 `WebSearch` 专用 TUI cell | 否 | 删除协议字段后无数据来源；使用通用工具输出。 |
 | chip 计数是否复刻 TS 规则 | 是 | 按数字/`-`/`*` 开头行计数；输出非列表时显示 `web result`。 |
+| 是否保留旧工具名别名 | 否 | 与 TS 一致；需同步更新系统提示。 |
+| 是否默认 per-tool 信号量 | 否 | `reqwest` 连接池作为第一级抑制；保留扩展点。 |
+| `include_content` 在不支持 provider 上的行为 | 不显示 Content 行 | 返回 `content: None`；不报错。 |
 
 ---
 
@@ -299,9 +309,10 @@ fn web_search_chip(tool_call: &ThreadItem, result: &ToolResult) -> String {
 
 - 工具 schema 正确性：通过 `ToolExecutor::spec()` 断言参数列表。
 - 输入解析：缺失 `query` 报错；`limit` 为非整数/越界报错；`include_content` 非布尔报错。
-- 输出格式化：空结果 → `No search results found.`；单结果和多结果格式正确；content 字段正确追加。
+- 输出格式化：空结果 → `No search results found.`；单结果和多结果格式正确；content 字段正确追加；不支持的 provider 不显示 Content 行。
 - 错误分类：timeout/network/auth 等映射到正确 `FunctionCallError::Fatal` 文本。
 - TUI chip：输出空 → `no results`；输出非列表 → `web result`；输出 3 个列表项 → `3 results`。
+- 工具名：系统中不存在 `web_search` / `webSearch` 注册；只有 `WebSearch`。
 
 ---
 
