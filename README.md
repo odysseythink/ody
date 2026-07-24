@@ -106,4 +106,59 @@ The end result is a design artifact that can be handed off to Plan mode as an ap
 
 This makes Ody's Design mode closer to a design-review tool than a chat wrapper: the model is held to a written, auditable, user-approved contract before it is allowed to plan or write code.
 
+## Adversarial Design Review
+
+When you finalize a design in Design mode, Ody runs an adversarial review—a multi-turn debate (v1, with opt-in enhancements) where:
+
+- A **single-shot critic** produces initial findings across correctness, assumptions, failure modes, and simpler alternatives.
+- (Optional) An **Advocate↔Skeptic debate** seeds the critic's findings and surfaces gaps the critic missed. Each turn is a structured argument, culminating in a Judge that synthesizes findings across both axes.
+- (Optional, v1.6) A **usability-lens Skeptic turn** attacks from the user-facing angle (mode confusion, workflow friction, missing feedback, accessibility) — orthogonal to correctness findings.
+
+The review is configured in `config.toml` under `[design_review]`:
+
+```toml
+[design_review]
+enable = true                           # Enable adversarial review on design finalize
+review_model = "gpt-4o"                 # Model for single-shot critic (required if enable=true)
+
+[design_review.debate]
+enable = false                          # Enable Advocate↔Skeptic↔Judge debate (opt-in)
+rounds = 1                              # Debate rounds (Advocate/Skeptic pairs); 1 = A→S→J
+# Debate model seat overrides (optional; fall back to review_model):
+advocate_model = "gpt-4o"
+skeptic_model = "gpt-4o"
+judge_model = "gpt-4o"
+contest_critic = false                 # Judge may refute critic findings → marked Contested (opt-in)
+usability_lens = "off"                 # v1.6: append usability-lens Skeptic turn (opt-in)
+```
+
+### Usability Lens Configuration (v1.6)
+
+The `usability_lens` setting controls whether to append a usability-focused Skeptic turn to the debate. Set it in `[design_review.debate]`:
+
+- **`"off"` (default)**: No usability lens. Review runs standard correctness debate only.
+- **`"on"`**: Always append a forced usability-lens turn. Cost: +1 model call per finalize. Use this if you want every design reviewed for user-facing defects (mode confusion, missing feedback, accessibility, workflow friction).
+- **`"ask"` (v1.6b)**: Show a one-question interactive prompt at finalize time. The system classifies the design as "user-facing" or "internal" and recommends whether to run the usability pass. You can accept the recommendation or override it. Your choice is cached across revise rounds so you're not re-prompted for the same design. Cost: +1 cheap classifier call + 1 usability turn (only when you say yes).
+
+#### Example configurations
+
+```toml
+# Strict review: both debate and usability lens enabled
+[design_review.debate]
+enable = true
+usability_lens = "on"
+
+# Lean review: debate only, no usability lens (correctness-focused)
+[design_review.debate]
+enable = true
+usability_lens = "off"
+
+# Smart review: debate + optional usability (user confirms per design)
+[design_review.debate]
+enable = true
+usability_lens = "ask"
+```
+
+The usability lens is most valuable for designs that have a direct user-facing surface (TUI commands, interactive flows, on-screen text/layout). It has minimal value for internal refactors, data migrations, or pure API changes, so the `"ask"` mode lets you control when it runs.
+
 
