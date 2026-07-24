@@ -1345,6 +1345,30 @@ async fn terminal_title_model_updates_on_model_change_without_manual_refresh() {
 }
 
 #[tokio::test]
+async fn status_line_model_provider_updates_after_sync_active_model_provider_config() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("kimi-for-coding")).await;
+    chat.config.tui_status_line = Some(vec!["model".to_string()]);
+    chat.config.model_provider_id = "kimi_xi".to_string();
+    chat.refresh_status_line();
+
+    assert_eq!(
+        status_line_text(&chat),
+        Some("kimi_xi/kimi-for-coding".to_string())
+    );
+
+    // Simulate the provider half of a /model selection being persisted and
+    // reloaded while the model name stays the same.
+    let mut updated_config = chat.config.clone();
+    updated_config.model_provider_id = "kimi_ranweiwei".to_string();
+    chat.sync_active_model_provider_config(&updated_config);
+
+    assert_eq!(
+        status_line_text(&chat),
+        Some("kimi_ranweiwei/kimi-for-coding".to_string())
+    );
+}
+
+#[tokio::test]
 async fn status_line_reasoning_updates_on_mode_switch_without_manual_refresh() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("kimi-for-coding")).await;
     chat.set_feature_enabled(Feature::CollaborationModes, /*enabled*/ true);

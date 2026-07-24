@@ -1885,6 +1885,7 @@ impl ChatWidget {
         self.config.model_provider_id = config.model_provider_id.clone();
         self.config.model_provider = config.model_provider.clone();
         self.config.model_context_window = config.model_context_window;
+        self.refresh_status_line();
     }
 
     pub(crate) fn token_usage(&self) -> TokenUsage {
