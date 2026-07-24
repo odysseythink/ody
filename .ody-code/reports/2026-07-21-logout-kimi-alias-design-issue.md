@@ -60,9 +60,9 @@ type = "kimi"
 pub(crate) fn validate_custom_alias(alias: &str) -> Result<(), String> {
     ...
     for reserved in [
-        LoginProvider::Kimi.id(),      // "kimi"
-        LoginProvider::Deepseek.id(),  // "deepseek"
-        LoginProvider::Glm.id(),       // "glm"
+        BuiltInApiKeyProvider::Kimi.id(),      // "kimi"
+        BuiltInApiKeyProvider::Deepseek.id(),  // "deepseek"
+        BuiltInApiKeyProvider::Glm.id(),       // "glm"
     ] {
         if trimmed.eq_ignore_ascii_case(reserved) {
             return Err(format!("'{trimmed}' is a reserved provider alias"));
@@ -87,14 +87,14 @@ assert!(validate_custom_alias("glm").is_err());
 `tui/src/chatwidget/slash_dispatch.rs:1269-1280`：
 
 ```rust
-fn configured_aliases_for_provider(&self, provider: LoginProvider) -> Vec<String> {
+fn configured_aliases_for_provider(&self, provider: BuiltInApiKeyProvider) -> Vec<String> {
     self.config
         .model_providers  // ← 合并了内置 + 用户配置的 map
         .iter()
         .filter(|(_, p)| match provider {
-            LoginProvider::Kimi => p.is_kimi(),
-            LoginProvider::Deepseek => p.is_deepseek(),
-            LoginProvider::Glm => p.is_glm(),
+            BuiltInApiKeyProvider::Kimi => p.is_kimi(),
+            BuiltInApiKeyProvider::Deepseek => p.is_deepseek(),
+            BuiltInApiKeyProvider::Glm => p.is_glm(),
         })
         .map(|(alias, _)| alias.clone())
         .collect()
@@ -358,7 +358,7 @@ let is_matching_alias = self
 **依赖**：5.2（需要 `Config.user_configured_provider_aliases`）。
 **可并行于**：无（必须等 5.2）。
 **测试要求**：
-- `configured_aliases_for_provider(LoginProvider::Kimi)` 不返回 `"kimi"`。
+- `configured_aliases_for_provider(BuiltInApiKeyProvider::Kimi)` 不返回 `"kimi"`。
 - `logout_provider_alias(Kimi, "kimi")` 返回错误或不生成编辑。
 - 删除 `kimi_ranweiwei` 后确实从配置中消失。
 
