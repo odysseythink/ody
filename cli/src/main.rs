@@ -3028,7 +3028,6 @@ mod tests {
                 "ody",
                 "resume",
                 "sid",
-                "--search",
                 "--sandbox",
                 "workspace-write",
                 "--ask-for-approval",

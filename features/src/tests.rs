@@ -437,6 +437,7 @@ fn from_sources_applies_base_profile_and_overrides() {
             features: Some(&profile_features),
             ..Default::default()
         },
+        FeatureOverrides::default(),
     );
 
     assert_eq!(features.enabled(Feature::Plugins), true);
