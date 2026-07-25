@@ -92,6 +92,13 @@ impl<T: HttpTransport> ResponsesClient<T> {
         if let Some(subagent) = subagent_header(&session_source) {
             insert_header(&mut headers, "x-odysseythink-subagent", &subagent);
         }
+        if let Some(ref client_metadata) = request.client_metadata {
+            for (key, value) in client_metadata {
+                if is_ody_internal_header(key) {
+                    insert_header(&mut headers, key, value);
+                }
+            }
+        }
 
         self.stream_encoded(body, headers, compression, turn_state)
             .await
@@ -161,4 +168,15 @@ impl<T: HttpTransport> ResponsesClient<T> {
             turn_state,
         ))
     }
+}
+
+/// Returns true for Ody-internal header keys that are carried inside
+/// `client_metadata` but should also be emitted as HTTP headers on the
+/// responses endpoint.
+fn is_ody_internal_header(key: &str) -> bool {
+    key.eq_ignore_ascii_case("x-ody-turn-metadata")
+        || key.eq_ignore_ascii_case("x-ody-window-id")
+        || key.eq_ignore_ascii_case("x-ody-parent-thread-id")
+        || key.eq_ignore_ascii_case("x-odysseythink-subagent")
+        || key.eq_ignore_ascii_case("x-ody-installation-id")
 }

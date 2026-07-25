@@ -76,8 +76,4 @@ export type { ThreadMemoryMode } from "./ThreadMemoryMode";
 export type { Tool } from "./Tool";
 export type { Verbosity } from "./Verbosity";
 export type { WebSearchAction } from "./WebSearchAction";
-export type { WebSearchContextSize } from "./WebSearchContextSize";
-export type { WebSearchLocation } from "./WebSearchLocation";
-export type { WebSearchMode } from "./WebSearchMode";
-export type { WebSearchToolConfig } from "./WebSearchToolConfig";
 export * as v2 from "./v2";

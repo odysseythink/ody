@@ -51,6 +51,17 @@ fn config_error_from_io(err: &std::io::Error) -> &ConfigError {
         .expect("expected ConfigLoadError")
 }
 
+/// Returns the base instructions string with any language directive that the
+/// current system locale would inject. Use this when asserting on
+/// `base_instructions` so tests remain independent of the runner's locale.
+fn expected_base_instructions(content: &str) -> String {
+    let suffix = ody_config::locale::detect_system_locale_code()
+        .and_then(|code| ody_config::locale::map_locale_code_to_model_language(&code))
+        .map(|lang| format!("\n\n{}", ody_config::locale::language_directive(&lang)))
+        .unwrap_or_default();
+    format!("{content}{suffix}")
+}
+
 fn cloud_config_bundle_requirement_source() -> RequirementSource {
     RequirementSource::EnterpriseManaged {
         id: "req_1".to_string(),
@@ -2578,8 +2589,8 @@ model_instructions_file = "child.txt"
         .await?;
 
     assert_eq!(
-        config.base_instructions.as_deref(),
-        Some("child instructions")
+        config.base_instructions,
+        Some(expected_base_instructions("child instructions"))
     );
 
     Ok(())
@@ -2614,8 +2625,8 @@ async fn cli_override_model_instructions_file_sets_base_instructions() -> std::i
         .await?;
 
     assert_eq!(
-        config.base_instructions.as_deref(),
-        Some("cli override instructions")
+        config.base_instructions,
+        Some(expected_base_instructions("cli override instructions"))
     );
 
     Ok(())
@@ -2638,8 +2649,8 @@ async fn inline_instructions_set_base_instructions() -> std::io::Result<()> {
         .await?;
 
     assert_eq!(
-        config.base_instructions.as_deref(),
-        Some("snapshot instructions")
+        config.base_instructions,
+        Some(expected_base_instructions("snapshot instructions"))
     );
 
     Ok(())

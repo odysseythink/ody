@@ -1163,6 +1163,14 @@
                 "null"
               ]
             },
+            "result_count": {
+              "format": "uint",
+              "minimum": 0.0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "type": {
               "enum": [
                 "search"

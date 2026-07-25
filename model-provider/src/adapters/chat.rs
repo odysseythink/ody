@@ -18,6 +18,7 @@ use ody_api::{
 };
 use ody_client::HttpTransport;
 use ody_protocol::models::ResponseItem;
+use http::{HeaderMap, HeaderName, HeaderValue};
 
 /// Adapter for the Chat Completions API.
 pub struct ChatAdapter<T: HttpTransport> {
@@ -435,10 +436,11 @@ impl<T: HttpTransport + 'static> ChatProvider for ChatAdapter<T> {
     }
 
     async fn chat(&self, request: ChatRequest) -> Result<ChatStream, ChatProviderError> {
+        let extra_headers = client_metadata_to_headers(request.client_metadata.as_ref());
         let api_request = build_api_request(request, self.vendor)?;
         let options = ChatCompletionsOptions {
             compression: Compression::None,
-            ..Default::default()
+            extra_headers,
         };
         let stream = self
             .client
@@ -461,6 +463,39 @@ impl<T: HttpTransport + 'static> ChatProvider for ChatAdapter<T> {
         );
         Ok(Box::pin(mapped.flatten()))
     }
+}
+
+/// Extract Ody-internal headers from `client_metadata` so they can be forwarded
+/// on Chat Completions transports, which do not have a `client_metadata` body
+/// field. This mirrors the filtering done by the responses endpoint in
+/// `ody_api::endpoint::responses`.
+fn client_metadata_to_headers(
+    client_metadata: Option<&std::collections::HashMap<String, String>>,
+) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    let Some(metadata) = client_metadata else {
+        return headers;
+    };
+    for (key, value) in metadata {
+        if !is_ody_internal_header(key) {
+            continue;
+        }
+        let Ok(name) = HeaderName::try_from(key.as_str()) else {
+            continue;
+        };
+        if let Ok(value) = HeaderValue::try_from(value) {
+            headers.insert(name, value);
+        }
+    }
+    headers
+}
+
+fn is_ody_internal_header(key: &str) -> bool {
+    key.eq_ignore_ascii_case("x-ody-turn-metadata")
+        || key.eq_ignore_ascii_case("x-ody-window-id")
+        || key.eq_ignore_ascii_case("x-ody-parent-thread-id")
+        || key.eq_ignore_ascii_case("x-odysseythink-subagent")
+        || key.eq_ignore_ascii_case("x-ody-installation-id")
 }
 
 #[cfg(test)]
@@ -754,5 +789,42 @@ mod tests {
                 "thinking leaked into content: {message}"
             );
         }
+    }
+
+    #[test]
+    fn client_metadata_forwards_ody_internal_headers_only() {
+        let metadata = std::collections::HashMap::from([
+            ("x-ody-turn-metadata".to_string(), "{}".to_string()),
+            ("x-ody-window-id".to_string(), "win-1".to_string()),
+            ("x-ody-parent-thread-id".to_string(), "parent-1".to_string()),
+            ("x-odysseythink-subagent".to_string(), "subagent-1".to_string()),
+            ("x-ody-installation-id".to_string(), "install-1".to_string()),
+            ("session-id".to_string(), "should-be-ignored".to_string()),
+            ("thread-id".to_string(), "should-be-ignored".to_string()),
+            ("x-unknown".to_string(), "should-be-ignored".to_string()),
+        ]);
+        let headers = client_metadata_to_headers(Some(&metadata));
+        assert_eq!(headers.len(), 5);
+        assert_eq!(
+            headers.get("x-ody-turn-metadata").and_then(|v| v.to_str().ok()),
+            Some("{}")
+        );
+        assert_eq!(
+            headers.get("x-ody-window-id").and_then(|v| v.to_str().ok()),
+            Some("win-1")
+        );
+        assert!(
+            headers.get("session-id").is_none(),
+            "session-id is not an HTTP header"
+        );
+        assert!(
+            headers.get("thread-id").is_none(),
+            "thread-id is not an HTTP header"
+        );
+    }
+
+    #[test]
+    fn client_metadata_empty_when_none() {
+        assert!(client_metadata_to_headers(None).is_empty());
     }
 }

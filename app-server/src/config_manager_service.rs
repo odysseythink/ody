@@ -17,6 +17,7 @@ use ody_config::ConfigLayerStack;
 use ody_config::ConfigLayerStackOrdering;
 use ody_config::ConfigRequirementsToml;
 use ody_config::config_toml::ConfigToml;
+use ody_config::config_toml::validate_model_providers;
 use ody_config::merge_toml_values;
 use ody_core::config::deserialize_config_toml_with_base;
 use ody_core::config::edit::ConfigEdit;
@@ -302,6 +303,13 @@ impl ConfigManager {
                     )
                 },
             )?;
+        validate_model_providers(&user_config_toml.normalized_providers())
+            .map_err(|err| {
+                ConfigManagerError::write(
+                    ConfigWriteErrorCode::ConfigValidationError,
+                    format!("Invalid configuration: {err}"),
+                )
+            })?;
         validate_feature_requirements_for_config_toml(
             &user_config_toml,
             layers.requirements().feature_requirements.as_ref(),

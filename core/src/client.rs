@@ -1488,6 +1488,7 @@ impl ModelClientSession {
             model_info,
             session_telemetry,
             effort,
+            responses_metadata,
             inference_trace,
         )
         .await
@@ -1514,6 +1515,7 @@ impl ModelClientSession {
         model_info: &ModelInfo,
         session_telemetry: &SessionTelemetry,
         effort: Option<ReasoningEffortConfig>,
+        responses_metadata: &OdyResponsesMetadata,
         inference_trace: &InferenceTraceContext,
     ) -> Result<ResponseStream> {
         let client_setup = self.client.current_client_setup().await?;
@@ -1545,6 +1547,7 @@ impl ModelClientSession {
         let mut request =
             prompt_to_chat_request(&model_info.slug, prompt, effort.clone(), &supported_efforts);
         request.prompt_cache_key = Some(self.client.prompt_cache_key());
+        request.client_metadata = Some(responses_metadata.client_metadata());
         let inference_trace_attempt = inference_trace.start_attempt();
         let stream_result = chat_provider.chat(request).await;
 

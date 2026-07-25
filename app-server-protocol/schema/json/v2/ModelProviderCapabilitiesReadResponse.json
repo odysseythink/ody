@@ -6,15 +6,11 @@
     },
     "namespaceTools": {
       "type": "boolean"
-    },
-    "webSearch": {
-      "type": "boolean"
     }
   },
   "required": [
     "imageGeneration",
-    "namespaceTools",
-    "webSearch"
+    "namespaceTools"
   ],
   "title": "ModelProviderCapabilitiesReadResponse",
   "type": "object"

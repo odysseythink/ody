@@ -24,6 +24,8 @@ use ody_features::Feature;
 use ody_model_provider::create_model_provider;
 
 use crate::config::TEST_PROVIDER_ID;
+#[cfg(test)]
+use crate::config::test_provider;
 use core_test_support::PathBufExt;
 use core_test_support::TempDirExt;
 use core_test_support::context_snapshot;
@@ -231,7 +233,11 @@ async fn guardian_test_session_turn_and_rx(
         .expect("session should be uniquely owned")
         .thread_id = fixed_guardian_parent_session_id();
     let mut config = (*turn.config).clone();
+    config.model_provider_id = TEST_PROVIDER_ID.to_string();
+    config.model_provider = test_provider();
     config.model_provider.base_url = Some(format!("{}/v1", server.uri()));
+    config.model_providers =
+        std::collections::HashMap::from([(TEST_PROVIDER_ID.to_string(), test_provider())]);
     let config = Arc::new(config);
     let models_manager = test_support::models_manager_with_provider(
         config.ody_home.to_path_buf(),
@@ -2272,7 +2278,11 @@ async fn guardian_review_surfaces_responses_api_errors_in_rejection_reason() -> 
     let (mut session, mut turn, rx) =
         crate::session::tests::make_session_and_context_with_rx().await;
     let mut config = (*turn.config).clone();
+    config.model_provider_id = TEST_PROVIDER_ID.to_string();
+    config.model_provider = test_provider();
     config.model_provider.base_url = Some(format!("{}/v1", server.uri()));
+    config.model_providers =
+        std::collections::HashMap::from([(TEST_PROVIDER_ID.to_string(), test_provider())]);
     let config = Arc::new(config);
     let models_manager = test_support::models_manager_with_provider(
         config.ody_home.to_path_buf(),

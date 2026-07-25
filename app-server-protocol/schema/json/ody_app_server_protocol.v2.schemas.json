@@ -3552,26 +3552,6 @@
             "string",
             "null"
           ]
-        },
-        "tools": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ToolsV2"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "web_search": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/WebSearchMode"
-            },
-            {
-              "type": "null"
-            }
-          ]
         }
       },
       "type": "object"
@@ -7986,15 +7966,11 @@
         },
         "namespaceTools": {
           "type": "boolean"
-        },
-        "webSearch": {
-          "type": "boolean"
         }
       },
       "required": [
         "imageGeneration",
-        "namespaceTools",
-        "webSearch"
+        "namespaceTools"
       ],
       "title": "ModelProviderCapabilitiesReadResponse",
       "type": "object"
@@ -11081,6 +11057,14 @@
             "query": {
               "type": [
                 "string",
+                "null"
+              ]
+            },
+            "result_count": {
+              "format": "uint",
+              "minimum": 0.0,
+              "type": [
+                "integer",
                 "null"
               ]
             },
@@ -14710,6 +14694,14 @@
             "query": {
               "type": "string"
             },
+            "resultCount": {
+              "format": "uint",
+              "minimum": 0.0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "type": {
               "enum": [
                 "webSearch"
@@ -16361,21 +16353,6 @@
       ],
       "type": "object"
     },
-    "ToolsV2": {
-      "properties": {
-        "web_search": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/WebSearchToolConfig"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "type": "object"
-    },
     "Turn": {
       "properties": {
         "completedAt": {
@@ -17061,6 +17038,14 @@
                 "null"
               ]
             },
+            "result_count": {
+              "format": "uint",
+              "minimum": 0.0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "type": {
               "enum": [
                 "search"
@@ -17142,92 +17127,6 @@
           "type": "object"
         }
       ]
-    },
-    "WebSearchContextSize": {
-      "description": "Deprecated: retained only for deserializing legacy history/config. Use `ody_web_search::WebSearchConfig` for new configuration.",
-      "enum": [
-        "low",
-        "medium",
-        "high"
-      ],
-      "type": "string"
-    },
-    "WebSearchLocation": {
-      "additionalProperties": false,
-      "description": "Deprecated: retained only for deserializing legacy history/config. Use `ody_web_search::WebSearchConfig` for new configuration.",
-      "properties": {
-        "city": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "country": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "region": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "timezone": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "type": "object"
-    },
-    "WebSearchMode": {
-      "description": "Deprecated: retained only for deserializing legacy history/config. Use `ody_web_search::WebSearchConfig` for new configuration.",
-      "enum": [
-        "disabled",
-        "cached",
-        "indexed",
-        "live"
-      ],
-      "type": "string"
-    },
-    "WebSearchToolConfig": {
-      "additionalProperties": false,
-      "description": "Deprecated: retained only for deserializing legacy history/config. Use `ody_web_search::WebSearchConfig` for new configuration.",
-      "properties": {
-        "allowed_domains": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "context_size": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/WebSearchContextSize"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "location": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/WebSearchLocation"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "type": "object"
     },
     "WindowsSandboxReadiness": {
       "enum": [

@@ -375,6 +375,7 @@ pub(crate) async fn test_config_for_ody_home(ody_home: &Path) -> Config {
     toml.model_providers =
         std::collections::HashMap::from([(TEST_PROVIDER_ID.to_string(), test_provider())]);
     toml.model_catalog_json = Some(model_catalog);
+    toml.language = Some("none".to_string());
     let mut config_contents = toml::to_string(&toml).expect("test config should serialize to TOML");
     config_contents.push_str("\n[features]\nfast_mode = true\n");
     std::fs::write(

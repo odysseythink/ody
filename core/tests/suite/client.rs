@@ -2479,6 +2479,7 @@ async fn azure_responses_request_includes_store_and_reasoning_ids() {
         action: Some(WebSearchAction::Search {
             query: Some("weather".into()),
             queries: None,
+            result_count: None,
         }),
         internal_chat_message_metadata_passthrough: None,
     });

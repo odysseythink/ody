@@ -666,9 +666,6 @@
             "sqlite": {
               "type": "boolean"
             },
-            "standalone_web_search": {
-              "type": "boolean"
-            },
             "steer": {
               "type": "boolean"
             },
@@ -715,15 +712,6 @@
               "type": "boolean"
             },
             "use_linux_sandbox_bwrap": {
-              "type": "boolean"
-            },
-            "web_search": {
-              "type": "boolean"
-            },
-            "web_search_cached": {
-              "type": "boolean"
-            },
-            "web_search_request": {
               "type": "boolean"
             },
             "workspace_dependencies": {
@@ -811,9 +799,6 @@
           ],
           "default": null,
           "description": "TUI settings scoped to this profile."
-        },
-        "web_search": {
-          "$ref": "#/definitions/WebSearchMode"
         },
         "windows": {
           "allOf": [
@@ -914,6 +899,63 @@
           "type": "string"
         }
       ]
+    },
+    "DesignReviewDebateToml": {
+      "additionalProperties": false,
+      "description": "`[design_review.debate]` sub-table. Absent or `enable = false` ⇒ debate off (the single-shot review path is unchanged).",
+      "properties": {
+        "advocate_model": {
+          "description": "Per-seat model overrides. Each falls back to `design_review_model`, then `review_model`, when unset. Recommended: cheap Advocate, capable adversarial Skeptic, strongest Judge (the Judge is the highest-leverage seat — it emits the findings).",
+          "type": "string"
+        },
+        "contest_critic": {
+          "default": false,
+          "description": "v1.5b (opt-in, default `false`): allow the Judge to REFUTE a weak critic finding. A refuted finding is never deleted — it is retained, downgraded to `speculative` confidence, and annotated with the Judge's reason (shown as \"contested by debate\"). Off ⇒ the debate only ever ADDS findings (v1.5a).",
+          "type": "boolean"
+        },
+        "enable": {
+          "default": false,
+          "description": "Master switch. Defaults to `false` (opt-in).",
+          "type": "boolean"
+        },
+        "judge_model": {
+          "type": "string"
+        },
+        "rounds": {
+          "description": "Advocate↔Skeptic back-and-forth rounds. Defaults to 1; clamped to `1..=3` at resolution time.",
+          "format": "uint8",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "skeptic_model": {
+          "type": "string"
+        },
+        "usability_lens": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/UsabilityLensToml"
+            }
+          ],
+          "default": "off",
+          "description": "v1.6 (opt-in, default `off`): append a user/usability-lens Skeptic turn so the debate also surfaces mode-confusion / feedback / accessibility / workflow defects — an axis the correctness-oriented critic + Skeptic miss. `auto` = the turn self-judges whether the design is user-facing and bows out if not; `on` = always attack; `off` = never append. Additive."
+        }
+      },
+      "type": "object"
+    },
+    "DesignReviewToml": {
+      "additionalProperties": false,
+      "description": "`[design_review]` table. Holds the optional `debate` sub-table.",
+      "properties": {
+        "debate": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/DesignReviewDebateToml"
+            }
+          ],
+          "description": "`[design_review.debate]` — when present and `enable = true`, the design adversarial review augments its single-shot critic with a bounded Advocate/Skeptic/Judge debate."
+        }
+      },
+      "type": "object"
     },
     "ExperimentalRequestUserInput": {
       "additionalProperties": false,
@@ -3027,6 +3069,16 @@
       },
       "type": "object"
     },
+    "ServicesConfig": {
+      "additionalProperties": false,
+      "description": "Top-level `[services]` table in `config.toml`. Currently carries only the web search provider configuration.",
+      "properties": {
+        "webSearch": {
+          "$ref": "#/definitions/WebSearchConfig"
+        }
+      },
+      "type": "object"
+    },
     "SessionPickerViewMode": {
       "description": "Preferred layout for the resume/fork session picker.",
       "enum": [
@@ -3270,14 +3322,6 @@
       "properties": {
         "experimental_request_user_input": {
           "$ref": "#/definitions/ExperimentalRequestUserInput"
-        },
-        "web_search": {
-          "allOf": [
-            {
-              "$ref": "#/definitions/WebSearchToolConfig"
-            }
-          ],
-          "default": null
         }
       },
       "type": "object"
@@ -3330,7 +3374,8 @@
               "edit_queued_message": null,
               "increase_reasoning_effort": null,
               "interrupt_turn": null,
-              "toggle_reasoning_expansion": null
+              "open_history_cell_overlay": null,
+              "toggle_history_cell_expansion": null
             },
             "composer": {
               "history_search_next": null,
@@ -3668,13 +3713,21 @@
           ],
           "description": "Interrupt the active turn."
         },
-        "toggle_reasoning_expansion": {
+        "open_history_cell_overlay": {
           "allOf": [
             {
               "$ref": "#/definitions/KeybindingsSpec"
             }
           ],
-          "description": "Expand or collapse the most recent reasoning block in the transcript."
+          "description": "Open the most recent collapsible history cell in a full-screen overlay."
+        },
+        "toggle_history_cell_expansion": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/KeybindingsSpec"
+            }
+          ],
+          "description": "Expand or collapse the most recent collapsible history cell in the transcript."
         }
       },
       "type": "object"
@@ -3988,7 +4041,8 @@
             "edit_queued_message": null,
             "increase_reasoning_effort": null,
             "interrupt_turn": null,
-            "toggle_reasoning_expansion": null
+            "open_history_cell_overlay": null,
+            "toggle_history_cell_expansion": null
           }
         },
         "composer": {
@@ -4783,6 +4837,15 @@
         }
       ]
     },
+    "UsabilityLensToml": {
+      "description": "Trigger for the v1.6 user/usability-lens Skeptic turn. Default `Off`. `On` always appends the (forced) usability turn; `Ask` shows a classifier-backed recommendation at review time and lets the user decide per design. (D10's self-gating `Auto` was rejected by Task 6 and replaced by `Ask`.) Additive; never affects the correctness findings.",
+      "enum": [
+        "off",
+        "on",
+        "ask"
+      ],
+      "type": "string"
+    },
     "Verbosity": {
       "description": "Controls output length/detail on GPT-5 models via the Responses API. Serialized with lowercase values to match the OpenAI API.",
       "enum": [
@@ -4792,58 +4855,62 @@
       ],
       "type": "string"
     },
-    "WebSearchContextSize": {
-      "enum": [
-        "low",
-        "medium",
-        "high"
-      ],
-      "type": "string"
-    },
-    "WebSearchLocation": {
+    "WebSearchConfig": {
       "additionalProperties": false,
       "properties": {
-        "city": {
-          "type": "string"
+        "primary": {
+          "$ref": "#/definitions/WebSearchProviderConfig"
         },
-        "country": {
-          "type": "string"
-        },
-        "region": {
-          "type": "string"
-        },
-        "timezone": {
-          "type": "string"
+        "secondary": {
+          "$ref": "#/definitions/WebSearchProviderConfig"
         }
       },
+      "required": [
+        "primary"
+      ],
       "type": "object"
     },
-    "WebSearchMode": {
-      "enum": [
-        "disabled",
-        "cached",
-        "indexed",
-        "live"
-      ],
-      "type": "string"
-    },
-    "WebSearchToolConfig": {
+    "WebSearchProviderConfig": {
       "additionalProperties": false,
       "properties": {
-        "allowed_domains": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+        "api_key": {
+          "type": "string"
         },
-        "context_size": {
-          "$ref": "#/definitions/WebSearchContextSize"
+        "options": {
+          "additionalProperties": true,
+          "default": {},
+          "type": "object"
         },
-        "location": {
-          "$ref": "#/definitions/WebSearchLocation"
+        "provider": {
+          "$ref": "#/definitions/WebSearchProviderName"
+        },
+        "timeout_ms": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
         }
       },
+      "required": [
+        "provider"
+      ],
       "type": "object"
+    },
+    "WebSearchProviderName": {
+      "enum": [
+        "duckduckgo",
+        "bing",
+        "serpapi",
+        "searchapi",
+        "serper",
+        "baidu",
+        "serply",
+        "searxng",
+        "tavily",
+        "exa",
+        "perplexity",
+        "moonshot"
+      ],
+      "type": "string"
     },
     "WindowsSandboxModeToml": {
       "enum": [
@@ -5021,6 +5088,14 @@
       "default": null,
       "description": "Ody-code compatible default thinking flag.",
       "type": "boolean"
+    },
+    "design_review": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/DesignReviewToml"
+        }
+      ],
+      "description": "Optional `[design_review]` table. Currently carries only the `debate` sub-table that turns the single-shot adversarial review into a bounded Advocate/Skeptic/Judge debate. The legacy flat `design_review_model` key above is intentionally kept for backwards compatibility and is NOT moved under this table."
     },
     "design_review_model": {
       "description": "Optional model override for the adversarial self-review triggered when finalizing a design in Design Mode. When unset, Design Mode falls back to `review_model` for backwards compatibility.",
@@ -5338,9 +5413,6 @@
         "sqlite": {
           "type": "boolean"
         },
-        "standalone_web_search": {
-          "type": "boolean"
-        },
         "steer": {
           "type": "boolean"
         },
@@ -5387,15 +5459,6 @@
           "type": "boolean"
         },
         "use_linux_sandbox_bwrap": {
-          "type": "boolean"
-        },
-        "web_search": {
-          "type": "boolean"
-        },
-        "web_search_cached": {
-          "type": "boolean"
-        },
-        "web_search_request": {
           "type": "boolean"
         },
         "workspace_dependencies": {
@@ -5791,6 +5854,15 @@
       "description": "Optional explicit service tier request id for new turns (for example `default`, `priority`, or `flex`; legacy `fast` also works).",
       "type": "string"
     },
+    "services": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/ServicesConfig"
+        }
+      ],
+      "default": null,
+      "description": "Services configuration. Currently contains the web search provider setup.\n\nExample: ```toml [services.webSearch] primary = { provider = \"bing\", api_key = \"...\" } secondary = { provider = \"serpapi\", api_key = \"...\" } ```"
+    },
     "shell": {
       "description": "Shell used to execute model-invoked shell commands.\n\nAccepts a shell name (`cmd`, `powershell`, `pwsh`, `bash`, `zsh`, or `sh`) or a path to a shell executable. When unset, defaults to `cmd.exe` on Windows and the user's login shell on other platforms.",
       "type": "string"
@@ -5873,14 +5945,6 @@
         }
       ],
       "description": "Collection of settings that are specific to the TUI."
-    },
-    "web_search": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/WebSearchMode"
-        }
-      ],
-      "description": "Controls the web search tool mode: disabled, cached, indexed, or live."
     },
     "windows": {
       "allOf": [

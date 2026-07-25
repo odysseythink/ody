@@ -38,6 +38,10 @@ pub struct ChatRequest {
     /// Provider-specific escape hatch for parameters not covered above.
     #[serde(default)]
     pub extra: Map<String, serde_json::Value>,
+    /// Ody client metadata (e.g. `x-ody-turn-metadata`) to forward as HTTP headers
+    /// for transports that can carry them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_metadata: Option<std::collections::HashMap<String, String>>,
 }
 
 /// A non-streaming chat completion.

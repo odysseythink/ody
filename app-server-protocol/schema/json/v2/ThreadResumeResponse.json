@@ -1741,6 +1741,14 @@
             "query": {
               "type": "string"
             },
+            "resultCount": {
+              "format": "uint",
+              "minimum": 0.0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "type": {
               "enum": [
                 "webSearch"
@@ -2313,6 +2321,14 @@
             "query": {
               "type": [
                 "string",
+                "null"
+              ]
+            },
+            "result_count": {
+              "format": "uint",
+              "minimum": 0.0,
+              "type": [
+                "integer",
                 "null"
               ]
             },

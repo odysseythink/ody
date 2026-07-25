@@ -65,6 +65,11 @@ pub fn write_mock_responses_config_toml(
     } else {
         "Mock provider for test"
     };
+    let capabilities_line = if requires_openai_auth == Some(true) {
+        "capabilities = { supports_remote_compaction = true }\n"
+    } else {
+        ""
+    };
     let provider_block = format!(
         r#"
 [model_providers.{model_provider_id}]
@@ -74,7 +79,7 @@ wire_api = "responses"
 request_max_retries = 0
 stream_max_retries = 0
 supports_websockets = false
-{requires_line}
+{requires_line}{capabilities_line}
 "#
     );
     // Phase 3: write the final config file.

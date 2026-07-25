@@ -188,6 +188,7 @@ pub fn prompt_to_chat_request(
         output_schema_strict: Some(prompt.output_schema_strict()),
         prompt_cache_key: None,
         extra: serde_json::Map::new(),
+        client_metadata: None,
     }
 }
 

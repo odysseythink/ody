@@ -4193,6 +4193,7 @@ async fn turn_event_counts_completed_tool_items() {
             id: "web-1".to_string(),
             query: "ody".to_string(),
             action: None,
+            result_count: Some(0),
         },
         ThreadItem::ImageGeneration {
             id: "image-1".to_string(),

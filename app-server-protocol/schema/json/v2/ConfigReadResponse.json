@@ -403,26 +403,6 @@
             "string",
             "null"
           ]
-        },
-        "tools": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ToolsV2"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "web_search": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/WebSearchMode"
-            },
-            {
-              "type": "null"
-            }
-          ]
         }
       },
       "type": "object"
@@ -718,21 +698,6 @@
       },
       "type": "object"
     },
-    "ToolsV2": {
-      "properties": {
-        "web_search": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/WebSearchToolConfig"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "type": "object"
-    },
     "Verbosity": {
       "description": "Controls output length/detail on GPT-5 models via the Responses API. Serialized with lowercase values to match the OpenAI API.",
       "enum": [
@@ -741,92 +706,6 @@
         "high"
       ],
       "type": "string"
-    },
-    "WebSearchContextSize": {
-      "description": "Deprecated: retained only for deserializing legacy history/config. Use `ody_web_search::WebSearchConfig` for new configuration.",
-      "enum": [
-        "low",
-        "medium",
-        "high"
-      ],
-      "type": "string"
-    },
-    "WebSearchLocation": {
-      "additionalProperties": false,
-      "description": "Deprecated: retained only for deserializing legacy history/config. Use `ody_web_search::WebSearchConfig` for new configuration.",
-      "properties": {
-        "city": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "country": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "region": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "timezone": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "type": "object"
-    },
-    "WebSearchMode": {
-      "description": "Deprecated: retained only for deserializing legacy history/config. Use `ody_web_search::WebSearchConfig` for new configuration.",
-      "enum": [
-        "disabled",
-        "cached",
-        "indexed",
-        "live"
-      ],
-      "type": "string"
-    },
-    "WebSearchToolConfig": {
-      "additionalProperties": false,
-      "description": "Deprecated: retained only for deserializing legacy history/config. Use `ody_web_search::WebSearchConfig` for new configuration.",
-      "properties": {
-        "allowed_domains": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "context_size": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/WebSearchContextSize"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "location": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/WebSearchLocation"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "type": "object"
     }
   },
   "properties": {

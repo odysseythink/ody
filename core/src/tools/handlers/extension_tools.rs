@@ -256,7 +256,9 @@ mod tests {
                 action: WebSearchAction::Search {
                     query: Some("rust trait object".to_string()),
                     queries: None,
+                    result_count: None,
                 },
+                result_count: None,
             });
             call.turn_item_emitter.emit_started(item.clone()).await;
             call.turn_item_emitter.emit_completed(item).await;
@@ -417,7 +419,9 @@ mod tests {
             action: WebSearchAction::Search {
                 query: Some("rust trait object".to_string()),
                 queries: None,
+                result_count: None,
             },
+            result_count: None,
         };
         assert_eq!(started_item, expected);
         assert_eq!(completed_item, expected);
@@ -467,6 +471,7 @@ mod tests {
                 id: "search-1".to_string(),
                 query: "contributors".to_string(),
                 action: WebSearchAction::Other,
+                result_count: None,
             }),
         )
         .await;

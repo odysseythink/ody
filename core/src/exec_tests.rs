@@ -380,6 +380,7 @@ async fn process_exec_tool_call_preserves_full_buffer_capture_policy() -> Result
     Ok(())
 }
 
+#[cfg(windows)]
 #[test]
 fn windows_restricted_token_skips_external_sandbox_policies() {
     let permission_profile = PermissionProfile::External {
@@ -389,6 +390,7 @@ fn windows_restricted_token_skips_external_sandbox_policies() {
     assert!(!permission_profile_supports_windows_restricted_token_sandbox(&permission_profile));
 }
 
+#[cfg(windows)]
 #[test]
 fn windows_restricted_token_supports_read_only_profiles() {
     let permission_profile = PermissionProfile::read_only();
@@ -396,6 +398,7 @@ fn windows_restricted_token_supports_read_only_profiles() {
     assert!(permission_profile_supports_windows_restricted_token_sandbox(&permission_profile));
 }
 
+#[cfg(windows)]
 #[test]
 fn windows_proxy_enforcement_uses_elevated_backend() {
     assert!(!windows_sandbox_uses_elevated_backend(
@@ -412,6 +415,7 @@ fn windows_proxy_enforcement_uses_elevated_backend() {
     ));
 }
 
+#[cfg(windows)]
 #[test]
 fn windows_restricted_token_rejects_network_only_restrictions() {
     let permission_profile = PermissionProfile::from_runtime_permissions(
@@ -433,6 +437,7 @@ fn windows_restricted_token_rejects_network_only_restrictions() {
         );
 }
 
+#[cfg(windows)]
 #[test]
 fn windows_restricted_token_rejects_managed_root_write_profiles() {
     let file_system_policy = FileSystemSandboxPolicy::restricted(vec![
@@ -463,6 +468,7 @@ fn windows_restricted_token_rejects_managed_root_write_profiles() {
     );
 }
 
+#[cfg(windows)]
 #[test]
 fn windows_restricted_token_allows_read_only_profiles() {
     let permission_profile = PermissionProfile::read_only();
@@ -479,6 +485,7 @@ fn windows_restricted_token_allows_read_only_profiles() {
     );
 }
 
+#[cfg(windows)]
 #[test]
 fn windows_restricted_token_allows_workspace_write_profiles() {
     let permission_profile = PermissionProfile::workspace_write_with(
@@ -500,6 +507,7 @@ fn windows_restricted_token_allows_workspace_write_profiles() {
     );
 }
 
+#[cfg(windows)]
 #[test]
 fn windows_elevated_allows_split_restricted_read_policies() {
     let temp_dir = tempfile::TempDir::new().expect("tempdir");
@@ -529,6 +537,7 @@ fn windows_elevated_allows_split_restricted_read_policies() {
     );
 }
 
+#[cfg(windows)]
 #[test]
 fn windows_restricted_token_rejects_split_only_filesystem_policies() {
     let temp_dir = tempfile::TempDir::new().expect("tempdir");
@@ -570,6 +579,7 @@ fn windows_restricted_token_rejects_split_only_filesystem_policies() {
     );
 }
 
+#[cfg(windows)]
 #[test]
 fn windows_restricted_token_rejects_root_write_read_only_carveouts() {
     let temp_dir = tempfile::TempDir::new().expect("tempdir");
@@ -609,6 +619,7 @@ fn windows_restricted_token_rejects_root_write_read_only_carveouts() {
     );
 }
 
+#[cfg(windows)]
 #[test]
 fn windows_restricted_token_supports_full_read_split_write_read_carveouts() {
     let temp_dir = tempfile::TempDir::new().expect("tempdir");
@@ -664,6 +675,7 @@ fn windows_restricted_token_supports_full_read_split_write_read_carveouts() {
     );
 }
 
+#[cfg(windows)]
 #[test]
 fn windows_restricted_token_rejects_unreadable_split_carveouts() {
     let temp_dir = tempfile::TempDir::new().expect("tempdir");
@@ -711,6 +723,7 @@ fn windows_restricted_token_rejects_unreadable_split_carveouts() {
     );
 }
 
+#[cfg(windows)]
 #[test]
 fn windows_elevated_supports_split_restricted_read_roots() {
     let temp_dir = tempfile::TempDir::new().expect("tempdir");
@@ -748,6 +761,7 @@ fn windows_elevated_supports_split_restricted_read_roots() {
     );
 }
 
+#[cfg(windows)]
 #[test]
 fn windows_elevated_supports_split_write_read_carveouts() {
     let temp_dir = tempfile::TempDir::new().expect("tempdir");
@@ -802,6 +816,7 @@ fn windows_elevated_supports_split_write_read_carveouts() {
     );
 }
 
+#[cfg(windows)]
 #[test]
 fn windows_elevated_supports_unreadable_split_carveouts() {
     let temp_dir = tempfile::TempDir::new().expect("tempdir");
@@ -861,6 +876,7 @@ fn windows_elevated_supports_unreadable_split_carveouts() {
     );
 }
 
+#[cfg(windows)]
 #[test]
 fn windows_elevated_supports_unreadable_globs() {
     let temp_dir = tempfile::TempDir::new().expect("tempdir");
@@ -914,6 +930,7 @@ fn windows_elevated_supports_unreadable_globs() {
     );
 }
 
+#[cfg(windows)]
 #[test]
 fn windows_elevated_rejects_reopened_writable_descendants() {
     let temp_dir = tempfile::TempDir::new().expect("tempdir");

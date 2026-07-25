@@ -101,7 +101,7 @@ fn build_api_request(request: ChatRequest) -> Result<ResponsesApiRequest, ChatPr
         service_tier: None,
         prompt_cache_key: request.prompt_cache_key,
         text,
-        client_metadata: None,
+        client_metadata: request.client_metadata.clone(),
     })
 }
 
