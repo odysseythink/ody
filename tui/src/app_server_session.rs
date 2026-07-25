@@ -1194,10 +1194,6 @@ fn config_request_overrides_from_config(
             .personality
             .map(|personality| personality.to_string()),
     );
-    insert(
-        "web_search",
-        Some(config.web_search_mode.value().to_string()),
-    );
     if config.bypass_hook_trust {
         overrides.insert("bypass_hook_trust".to_string(), true.into());
     }
@@ -1641,7 +1637,6 @@ mod tests {
     use ody_protocol::config_types::ReasoningSummary;
     use ody_protocol::config_types::ServiceTier;
     use ody_protocol::config_types::Verbosity;
-    use ody_protocol::config_types::WebSearchMode;
     use ody_protocol::model_metadata::ReasoningEffort;
     use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_READ_ONLY;
     use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_WORKSPACE;
@@ -1999,10 +1994,6 @@ mod tests {
         config.model_reasoning_summary = Some(ReasoningSummary::Detailed);
         config.model_verbosity = Some(Verbosity::Low);
         config.personality = Some(Personality::Pragmatic);
-        config
-            .web_search_mode
-            .set(WebSearchMode::Disabled)
-            .expect("test web search mode should be allowed");
         config.bypass_hook_trust = true;
         config.service_tier = Some(ServiceTier::Fast.request_value().to_string());
         let thread_id = ThreadId::new();

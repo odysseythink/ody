@@ -212,7 +212,6 @@ fn populate_merged_regular_fields_with_sources(
         allowed_permission_profiles,
         default_permissions,
         remote_sandbox_config: _,
-        allowed_web_search_modes,
         allow_managed_hooks_only,
         allow_appshots,
         computer_use,
@@ -240,7 +239,6 @@ fn populate_merged_regular_fields_with_sources(
         &["allowed_permission_profiles"]
     );
     set_sourced!(default_permissions, &["default_permissions"]);
-    set_sourced!(allowed_web_search_modes, &["allowed_web_search_modes"]);
     set_sourced!(allow_managed_hooks_only, &["allow_managed_hooks_only"]);
     set_sourced!(allow_appshots, &["allow_appshots"]);
     set_sourced!(computer_use, &["computer_use"]);

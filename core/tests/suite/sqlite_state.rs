@@ -21,7 +21,6 @@ use ody_core::config::Config;
 use ody_extension_api::ExtensionRegistryBuilder;
 use ody_features::Feature;
 use ody_protocol::ThreadId;
-use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::dynamic_tools::DynamicToolFunctionSpec;
 use ody_protocol::dynamic_tools::DynamicToolNamespaceSpec;
 use ody_protocol::dynamic_tools::DynamicToolNamespaceTool;
@@ -533,75 +532,6 @@ async fn web_search_marks_thread_memory_mode_polluted_when_configured() -> Resul
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn standalone_web_search_marks_thread_memory_mode_polluted_when_configured() -> Result<()> {
-    skip_if_no_network!(Ok(()));
-
-    let server = start_mock_server().await;
-    Mock::given(method("POST"))
-        .and(path("/v1/alpha/search"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "output": "Search result",
-        })))
-        .expect(1)
-        .mount(&server)
-        .await;
-    mount_sse_sequence(
-        &server,
-        vec![
-            responses::sse(vec![
-                ev_response_created("resp-1"),
-                responses::ev_function_call_with_namespace(
-                    "web-run-1",
-                    "web",
-                    "run",
-                    &json!({
-                        "search_query": [{"q": "standalone web search"}],
-                    })
-                    .to_string(),
-                ),
-                ev_completed("resp-1"),
-            ]),
-            responses::sse(vec![
-                responses::ev_assistant_message("msg-1", "done"),
-                ev_completed("resp-2"),
-            ]),
-        ],
-    )
-    .await;
-
-    let extension_builder = ExtensionRegistryBuilder::<Config>::new();
-    let mut builder = test_ody()
-        .with_extensions(Arc::new(extension_builder.build()))
-        .with_config(|config| {
-            config
-                .features
-                .enable(Feature::Sqlite)
-                .expect("test config should allow feature update");
-            config.memories.disable_on_external_context = true;
-            config
-                .web_search_mode
-                .set(WebSearchMode::Live)
-                .expect("web search mode should be accepted");
-        });
-    let test = builder.build(&server).await?;
-    let db = test.ody.state_db().expect("state db enabled");
-    let thread_id = test.session_configured.thread_id;
-
-    test.submit_turn("search the web").await?;
-
-    let mut memory_mode = None;
-    for _ in 0..100 {
-        memory_mode = db.get_thread_memory_mode(thread_id).await?;
-        if memory_mode.as_deref() == Some("polluted") {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(25)).await;
-    }
-
-    assert_eq!(memory_mode.as_deref(), Some("polluted"));
-    Ok(())
-}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn mcp_call_marks_thread_memory_mode_polluted_when_configured() -> Result<()> {

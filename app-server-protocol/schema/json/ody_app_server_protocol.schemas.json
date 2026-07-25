@@ -7584,15 +7584,6 @@
               "null"
             ]
           },
-          "allowedWebSearchModes": {
-            "items": {
-              "$ref": "#/definitions/v2/WebSearchMode"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
           "allowedWindowsSandboxImplementations": {
             "items": {
               "$ref": "#/definitions/v2/WindowsSandboxSetupMode"
@@ -16844,6 +16835,7 @@
             "type": "object"
           },
           {
+            "description": "Deprecated: retained for loading old thread history.",
             "properties": {
               "action": {
                 "anyOf": [
@@ -19193,6 +19185,7 @@
         "type": "object"
       },
       "WebSearchAction": {
+        "description": "Deprecated: retained for loading old thread history.",
         "oneOf": [
           {
             "properties": {
@@ -19294,6 +19287,7 @@
         ]
       },
       "WebSearchContextSize": {
+        "description": "Deprecated: retained only for deserializing legacy history/config. Use `ody_web_search::WebSearchConfig` for new configuration.",
         "enum": [
           "low",
           "medium",
@@ -19303,6 +19297,7 @@
       },
       "WebSearchLocation": {
         "additionalProperties": false,
+        "description": "Deprecated: retained only for deserializing legacy history/config. Use `ody_web_search::WebSearchConfig` for new configuration.",
         "properties": {
           "city": {
             "type": [
@@ -19332,6 +19327,7 @@
         "type": "object"
       },
       "WebSearchMode": {
+        "description": "Deprecated: retained only for deserializing legacy history/config. Use `ody_web_search::WebSearchConfig` for new configuration.",
         "enum": [
           "disabled",
           "cached",
@@ -19342,6 +19338,7 @@
       },
       "WebSearchToolConfig": {
         "additionalProperties": false,
+        "description": "Deprecated: retained only for deserializing legacy history/config. Use `ody_web_search::WebSearchConfig` for new configuration.",
         "properties": {
           "allowed_domains": {
             "items": {

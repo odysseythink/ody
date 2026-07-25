@@ -16,7 +16,6 @@ use ody_features::FeaturesToml;
 use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::config_types::SandboxMode;
 use ody_protocol::config_types::Verbosity;
-use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::protocol::AskForApproval;
 
@@ -69,7 +68,6 @@ pub struct ConfigProfile {
     pub include_environment_context: Option<bool>,
     pub experimental_use_unified_exec_tool: Option<bool>,
     pub tools: Option<ToolsToml>,
-    pub web_search: Option<WebSearchMode>,
     pub analytics: Option<AnalyticsConfigToml>,
     /// TUI settings scoped to this profile.
     #[serde(default)]

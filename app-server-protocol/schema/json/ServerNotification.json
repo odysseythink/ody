@@ -4195,6 +4195,7 @@
           "type": "object"
         },
         {
+          "description": "Deprecated: retained for loading old thread history.",
           "properties": {
             "action": {
               "anyOf": [
@@ -5293,6 +5294,7 @@
       "type": "object"
     },
     "WebSearchAction": {
+      "description": "Deprecated: retained for loading old thread history.",
       "oneOf": [
         {
           "properties": {

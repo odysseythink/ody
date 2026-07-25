@@ -105,8 +105,6 @@ use ody_protocol::config_types::ServiceTier;
 use ody_protocol::config_types::ShellEnvironmentPolicy;
 use ody_protocol::config_types::TrustLevel;
 use ody_protocol::config_types::Verbosity;
-use ody_protocol::config_types::WebSearchConfig;
-use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::config_types::WindowsSandboxLevel;
 use ody_protocol::model_metadata::ModelsResponse;
 use ody_protocol::model_metadata::ReasoningEffort;
@@ -2634,7 +2632,6 @@ pub struct ConfigOverrides {
     pub personality: Option<Personality>,
     pub compact_prompt: Option<String>,
     pub show_raw_agent_reasoning: Option<bool>,
-    pub tools_web_search_request: Option<bool>,
     pub ephemeral: Option<bool>,
     pub bypass_hook_trust: Option<bool>,
     /// Additional directories that should be treated as writable roots for this session.
@@ -2647,23 +2644,6 @@ pub struct ConfigOverrides {
 fn dedupe_absolute_paths(paths: &mut Vec<AbsolutePathBuf>) {
     let mut seen = HashSet::new();
     paths.retain(|path| seen.insert(path.clone()));
-}
-
-/// Resolve the web search mode from explicit config and feature flags.
-fn resolve_web_search_mode(config_toml: &ConfigToml, features: &Features) -> Option<WebSearchMode> {
-    if let Some(mode) = config_toml.web_search {
-        return Some(mode);
-    }
-    None
-}
-
-fn resolve_web_search_config(config_toml: &ConfigToml) -> Option<WebSearchConfig> {
-    config_toml
-        .tools
-        .as_ref()
-        .and_then(|tools| tools.web_search.as_ref())
-        .cloned()
-        .map(Into::into)
 }
 
 fn resolve_experimental_request_user_input_enabled(config_toml: &ConfigToml) -> bool {
@@ -2979,42 +2959,6 @@ pub fn resolve_bootstrap_auth_route_config(
         .map(|enabled| enabled.then(AuthRouteConfig::respect_system_proxy))
 }
 
-pub(crate) fn resolve_web_search_mode_for_turn(
-    web_search_mode: &Constrained<WebSearchMode>,
-    permission_profile: &PermissionProfile,
-) -> WebSearchMode {
-    let preferred = web_search_mode.value();
-
-    if matches!(permission_profile, PermissionProfile::Disabled)
-        && !matches!(preferred, WebSearchMode::Disabled | WebSearchMode::Indexed)
-    {
-        for mode in [
-            WebSearchMode::Live,
-            WebSearchMode::Cached,
-            WebSearchMode::Disabled,
-        ] {
-            if web_search_mode.can_set(&mode).is_ok() {
-                return mode;
-            }
-        }
-    } else {
-        if web_search_mode.can_set(&preferred).is_ok() {
-            return preferred;
-        }
-        for mode in [
-            WebSearchMode::Cached,
-            WebSearchMode::Live,
-            WebSearchMode::Disabled,
-        ] {
-            if web_search_mode.can_set(&mode).is_ok() {
-                return mode;
-            }
-        }
-    }
-
-    WebSearchMode::Disabled
-}
-
 fn validate_multi_agent_v2_wait_timeout(label: &str, value: i64) -> std::io::Result<()> {
     if value < HARD_MIN_MULTI_AGENT_V2_TIMEOUT_MS {
         return Err(std::io::Error::new(
@@ -3143,7 +3087,6 @@ impl Config {
             approvals_reviewer: mut constrained_approvals_reviewer,
             permission_profile: mut constrained_permission_profile,
             windows_sandbox_mode: mut constrained_windows_sandbox_mode,
-            web_search_mode: mut constrained_web_search_mode,
             allow_managed_hooks_only: _,
             allow_appshots: _,
             computer_use: _,
@@ -3187,7 +3130,6 @@ impl Config {
             personality,
             compact_prompt,
             show_raw_agent_reasoning,
-            tools_web_search_request: override_tools_web_search_request,
             ephemeral,
             bypass_hook_trust,
             additional_writable_roots,
@@ -3230,9 +3172,7 @@ impl Config {
         }
 
         let tool_suggest = resolve_tool_suggest_config(&cfg, &config_layer_stack);
-        let feature_overrides = FeatureOverrides {
-            web_search_request: override_tools_web_search_request,
-        };
+        let feature_overrides = FeatureOverrides::default();
 
         let configured_features = Features::from_sources(
             FeatureConfigSource {
@@ -3582,9 +3522,6 @@ impl Config {
             );
             approvals_reviewer = constrained_approvals_reviewer.value();
         }
-        let web_search_mode =
-            resolve_web_search_mode(&cfg, &features).unwrap_or(WebSearchMode::Cached);
-        let web_search_config = resolve_web_search_config(&cfg);
         let experimental_request_user_input_enabled =
             resolve_experimental_request_user_input_enabled(&cfg);
         let code_mode = resolve_code_mode_config(&cfg);
@@ -3956,12 +3893,6 @@ impl Config {
             active_permission_profile = None;
             profile_workspace_roots.clear();
         }
-        apply_requirement_constrained_value(
-            "web_search_mode",
-            web_search_mode,
-            &mut constrained_web_search_mode,
-            &mut startup_warnings,
-        )?;
 
         let mcp_servers = constrain_mcp_servers(cfg.mcp_servers.clone(), mcp_servers.as_ref())
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("{e}")))?;
@@ -4184,8 +4115,6 @@ impl Config {
             experimental_thread_config_endpoint: cfg.experimental_thread_config_endpoint,
             experimental_thread_store: thread_store_config(cfg.experimental_thread_store),
             forced_login_method,
-            web_search_mode: constrained_web_search_mode.value,
-            web_search_config,
             experimental_request_user_input_enabled,
             code_mode,
             use_experimental_unified_exec_tool,

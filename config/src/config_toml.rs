@@ -41,8 +41,6 @@ use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::config_types::SandboxMode;
 use ody_protocol::config_types::TrustLevel;
 use ody_protocol::config_types::Verbosity;
-use ody_protocol::config_types::WebSearchMode;
-use ody_protocol::config_types::WebSearchToolConfig;
 use ody_protocol::config_types::WindowsSandboxLevel;
 use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::models::PermissionProfile;
@@ -1012,11 +1010,6 @@ pub struct RealtimeAudioToml {
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct ToolsToml {
-    #[serde(
-        default,
-        deserialize_with = "deserialize_optional_web_search_tool_config"
-    )]
-    pub web_search: Option<WebSearchToolConfig>,
     pub experimental_request_user_input: Option<ExperimentalRequestUserInput>,
 }
 
@@ -1025,31 +1018,6 @@ pub struct ToolsToml {
 pub struct ExperimentalRequestUserInput {
     #[serde(default = "default_true")]
     pub enabled: bool,
-}
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum WebSearchToolConfigInput {
-    Enabled(bool),
-    Config(WebSearchToolConfig),
-}
-
-fn deserialize_optional_web_search_tool_config<'de, D>(
-    deserializer: D,
-) -> Result<Option<WebSearchToolConfig>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value = Option::<WebSearchToolConfigInput>::deserialize(deserializer)?;
-
-    Ok(match value {
-        None => None,
-        Some(WebSearchToolConfigInput::Enabled(enabled)) => {
-            let _ = enabled;
-            None
-        }
-        Some(WebSearchToolConfigInput::Config(config)) => Some(config),
-    })
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]

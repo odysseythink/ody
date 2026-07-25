@@ -3571,6 +3571,7 @@ mod tests {
     #[test]
     fn feature_toggles_known_features_generate_overrides() {
         let toggles = FeatureToggles {
+            enable: Vec::new(),
             disable: vec!["unified_exec".to_string()],
         };
         let overrides = toggles.to_overrides().expect("valid features");

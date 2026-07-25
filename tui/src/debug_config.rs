@@ -14,7 +14,6 @@ use ody_config::NetworkUnixSocketPermissionToml;
 use ody_config::RequirementSource;
 use ody_config::ResidencyRequirement;
 use ody_config::SandboxModeRequirement;
-use ody_config::WebSearchModeRequirement;
 use ody_config::format_config_layer_source;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::permissions::NetworkSandboxPolicy;
@@ -156,21 +155,6 @@ fn render_debug_config_lines(
             "allowed_sandbox_modes",
             value,
             requirements.permission_profile.source.as_ref(),
-        ));
-    }
-
-    if let Some(modes) = requirements_toml.allowed_web_search_modes.as_ref() {
-        let normalized = normalize_allowed_web_search_modes(modes);
-        let value = join_or_empty(
-            normalized
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>(),
-        );
-        requirement_lines.push(requirement_line(
-            "allowed_web_search_modes",
-            value,
-            requirements.web_search_mode.source.as_ref(),
         ));
     }
 
@@ -418,20 +402,6 @@ fn join_or_empty(values: Vec<String>) -> String {
     }
 }
 
-fn normalize_allowed_web_search_modes(
-    modes: &[WebSearchModeRequirement],
-) -> Vec<WebSearchModeRequirement> {
-    if modes.is_empty() {
-        return vec![WebSearchModeRequirement::Disabled];
-    }
-
-    let mut normalized = modes.to_vec();
-    if !normalized.contains(&WebSearchModeRequirement::Disabled) {
-        normalized.push(WebSearchModeRequirement::Disabled);
-    }
-    normalized
-}
-
 fn format_sandbox_mode_requirement(mode: SandboxModeRequirement) -> String {
     match mode {
         SandboxModeRequirement::ReadOnly => "read-only".to_string(),
@@ -571,10 +541,8 @@ mod tests {
     use ody_config::ResidencyRequirement;
     use ody_config::SandboxModeRequirement;
     use ody_config::Sourced;
-    use ody_config::WebSearchModeRequirement;
     use ody_config::sandbox_mode_requirement_for_permission_profile;
     use ody_protocol::config_types::ApprovalsReviewer;
-    use ody_protocol::config_types::WebSearchMode;
     use ody_protocol::models::PermissionProfile;
     use ody_utils_absolute_path::AbsolutePathBuf;
     use ratatui::text::Line;
@@ -700,10 +668,6 @@ mod tests {
                 Constrained::allow_any(Some(ResidencyRequirement::Us)),
                 Some(RequirementSource::LegacyManagedConfigTomlFromMdm),
             ),
-            web_search_mode: ConstrainedWithSource::new(
-                Constrained::allow_any(WebSearchMode::Cached),
-                Some(RequirementSource::LegacyManagedConfigTomlFromMdm),
-            ),
             allow_managed_hooks_only: Some(Sourced::new(
                 /*value*/ true,
                 RequirementSource::LegacyManagedConfigTomlFromMdm,
@@ -750,7 +714,6 @@ mod tests {
             allowed_permission_profiles: None,
             default_permissions: None,
             remote_sandbox_config: None,
-            allowed_web_search_modes: Some(vec![WebSearchModeRequirement::Cached]),
             allow_managed_hooks_only: Some(true),
             allow_appshots: Some(false),
             computer_use: None,
@@ -814,9 +777,6 @@ mod tests {
                 .as_str(),
             )
         );
-        assert!(rendered.contains(&format!(
-            "allowed_web_search_modes: cached, disabled (source: {requirements_source})"
-        )));
         assert!(rendered.contains(&format!(
             "allow_managed_hooks_only: true (source: {requirements_source})"
         )));
@@ -1093,50 +1053,6 @@ approval_policy = "never"
         assert!(rendered.contains("# managed by cloud"));
         assert!(rendered.contains("model = \"enterprise_model\""));
         assert!(rendered.contains("approval_policy = \"never\""));
-    }
-
-    #[test]
-    fn debug_config_output_normalizes_empty_web_search_mode_list() {
-        let requirements = ConfigRequirements {
-            web_search_mode: ConstrainedWithSource::new(
-                Constrained::allow_any(WebSearchMode::Disabled),
-                Some(RequirementSource::LegacyManagedConfigTomlFromMdm),
-            ),
-            ..ConfigRequirements::default()
-        };
-
-        let requirements_toml = ConfigRequirementsToml {
-            allowed_approval_policies: None,
-            allowed_approvals_reviewers: None,
-            allowed_sandbox_modes: None,
-            allowed_permission_profiles: None,
-            default_permissions: None,
-            remote_sandbox_config: None,
-            allowed_web_search_modes: Some(Vec::new()),
-            allow_managed_hooks_only: None,
-            allow_appshots: None,
-            computer_use: None,
-            windows: None,
-            guardian_policy_config: None,
-            feature_requirements: None,
-            hooks: None,
-            mcp_servers: None,
-            plugins: None,
-            apps: None,
-            rules: None,
-            enforce_residency: None,
-            network: None,
-            permissions: None,
-        };
-
-        let stack = ConfigLayerStack::new(Vec::new(), requirements, requirements_toml)
-            .expect("config layer stack");
-
-        let rendered = render_stack_to_text(&stack);
-        let requirements_source = (RequirementSource::LegacyManagedConfigTomlFromMdm).to_string();
-        assert!(rendered.contains(&format!(
-            "allowed_web_search_modes: disabled (source: {requirements_source})"
-        )));
     }
 
     #[test]

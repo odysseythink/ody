@@ -1,6 +1,5 @@
 use ody_protocol::config_types::ApprovalsReviewer;
 use ody_protocol::config_types::SandboxMode;
-use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::protocol::AskForApproval;
 use ody_utils_absolute_path::AbsolutePathBuf;
@@ -146,7 +145,6 @@ pub struct ConfigRequirements {
     pub approvals_reviewer: ConstrainedWithSource<ApprovalsReviewer>,
     pub permission_profile: ConstrainedWithSource<PermissionProfile>,
     pub windows_sandbox_mode: ConstrainedWithSource<Option<WindowsSandboxModeToml>>,
-    pub web_search_mode: ConstrainedWithSource<WebSearchMode>,
     pub allow_managed_hooks_only: Option<Sourced<bool>>,
     pub allow_appshots: Option<Sourced<bool>>,
     pub computer_use: Option<Sourced<ComputerUseRequirementsToml>>,
@@ -181,10 +179,6 @@ impl Default for ConfigRequirements {
             ),
             windows_sandbox_mode: ConstrainedWithSource::new(
                 Constrained::allow_any(/*initial_value*/ None),
-                /*source*/ None,
-            ),
-            web_search_mode: ConstrainedWithSource::new(
-                Constrained::allow_any(WebSearchMode::Cached),
                 /*source*/ None,
             ),
             allow_managed_hooks_only: None,
@@ -662,48 +656,6 @@ fn is_glob_metacharacter(ch: char) -> bool {
     matches!(ch, '*' | '?' | '[')
 }
 
-#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[serde(rename_all = "snake_case")]
-pub enum WebSearchModeRequirement {
-    Disabled,
-    Cached,
-    Indexed,
-    Live,
-}
-
-impl From<WebSearchMode> for WebSearchModeRequirement {
-    fn from(mode: WebSearchMode) -> Self {
-        match mode {
-            WebSearchMode::Disabled => WebSearchModeRequirement::Disabled,
-            WebSearchMode::Cached => WebSearchModeRequirement::Cached,
-            WebSearchMode::Indexed => WebSearchModeRequirement::Indexed,
-            WebSearchMode::Live => WebSearchModeRequirement::Live,
-        }
-    }
-}
-
-impl From<WebSearchModeRequirement> for WebSearchMode {
-    fn from(mode: WebSearchModeRequirement) -> Self {
-        match mode {
-            WebSearchModeRequirement::Disabled => WebSearchMode::Disabled,
-            WebSearchModeRequirement::Cached => WebSearchMode::Cached,
-            WebSearchModeRequirement::Indexed => WebSearchMode::Indexed,
-            WebSearchModeRequirement::Live => WebSearchMode::Live,
-        }
-    }
-}
-
-impl fmt::Display for WebSearchModeRequirement {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            WebSearchModeRequirement::Disabled => write!(f, "disabled"),
-            WebSearchModeRequirement::Cached => write!(f, "cached"),
-            WebSearchModeRequirement::Indexed => write!(f, "indexed"),
-            WebSearchModeRequirement::Live => write!(f, "live"),
-        }
-    }
-}
-
 #[derive(Deserialize, Debug, Clone, Default, PartialEq, Eq)]
 pub struct ComputerUseRequirementsToml {
     pub allow_locked_computer_use: Option<bool>,
@@ -829,7 +781,6 @@ pub struct ConfigRequirementsToml {
     pub allowed_permission_profiles: Option<BTreeMap<String, bool>>,
     pub default_permissions: Option<String>,
     pub remote_sandbox_config: Option<Vec<RemoteSandboxConfigToml>>,
-    pub allowed_web_search_modes: Option<Vec<WebSearchModeRequirement>>,
     pub allow_managed_hooks_only: Option<bool>,
     pub allow_appshots: Option<bool>,
     pub computer_use: Option<ComputerUseRequirementsToml>,
@@ -883,7 +834,6 @@ pub struct ConfigRequirementsWithSources {
     pub allowed_sandbox_modes: Option<Sourced<Vec<SandboxModeRequirement>>>,
     pub allowed_permission_profiles: Option<Sourced<BTreeMap<String, bool>>>,
     pub default_permissions: Option<Sourced<String>>,
-    pub allowed_web_search_modes: Option<Sourced<Vec<WebSearchModeRequirement>>>,
     pub allow_managed_hooks_only: Option<Sourced<bool>>,
     pub allow_appshots: Option<Sourced<bool>>,
     pub computer_use: Option<Sourced<ComputerUseRequirementsToml>>,
@@ -925,7 +875,6 @@ impl ConfigRequirementsWithSources {
             allowed_permission_profiles: _,
             default_permissions: _,
             remote_sandbox_config: _,
-            allowed_web_search_modes: _,
             allow_managed_hooks_only: _,
             allow_appshots: _,
             computer_use: _,
@@ -960,7 +909,6 @@ impl ConfigRequirementsWithSources {
                 allowed_sandbox_modes,
                 allowed_permission_profiles,
                 default_permissions,
-                allowed_web_search_modes,
                 allow_managed_hooks_only,
                 allow_appshots,
                 computer_use,
@@ -993,7 +941,6 @@ impl ConfigRequirementsWithSources {
             allowed_sandbox_modes,
             allowed_permission_profiles,
             default_permissions,
-            allowed_web_search_modes,
             allow_managed_hooks_only,
             allow_appshots,
             computer_use,
@@ -1016,7 +963,6 @@ impl ConfigRequirementsWithSources {
             allowed_permission_profiles: allowed_permission_profiles.map(|sourced| sourced.value),
             default_permissions: default_permissions.map(|sourced| sourced.value),
             remote_sandbox_config: None,
-            allowed_web_search_modes: allowed_web_search_modes.map(|sourced| sourced.value),
             allow_managed_hooks_only: allow_managed_hooks_only.map(|sourced| sourced.value),
             allow_appshots: allow_appshots.map(|sourced| sourced.value),
             computer_use: computer_use.map(|sourced| sourced.value),
@@ -1101,7 +1047,6 @@ impl ConfigRequirementsToml {
             && self.allowed_permission_profiles.is_none()
             && self.default_permissions.is_none()
             && self.remote_sandbox_config.is_none()
-            && self.allowed_web_search_modes.is_none()
             && self.allow_managed_hooks_only.is_none()
             && self.allow_appshots.is_none()
             && self
@@ -1153,7 +1098,6 @@ impl TryFrom<ConfigRequirementsWithSources> for ConfigRequirements {
             allowed_sandbox_modes,
             allowed_permission_profiles: _,
             default_permissions: _,
-            allowed_web_search_modes,
             allow_managed_hooks_only,
             allow_appshots,
             computer_use,
@@ -1317,53 +1261,6 @@ impl TryFrom<ConfigRequirementsWithSources> for ConfigRequirements {
             }
             None => None,
         };
-        let web_search_mode = match allowed_web_search_modes {
-            Some(Sourced {
-                value: modes,
-                source: requirement_source,
-            }) => {
-                let mut accepted = modes.into_iter().collect::<std::collections::BTreeSet<_>>();
-                accepted.insert(WebSearchModeRequirement::Disabled);
-                let allowed_for_error = format!(
-                    "{:?}",
-                    accepted
-                        .iter()
-                        .copied()
-                        .map(WebSearchMode::from)
-                        .collect::<Vec<_>>()
-                );
-
-                let initial_value = if accepted.contains(&WebSearchModeRequirement::Cached) {
-                    WebSearchMode::Cached
-                } else if accepted.contains(&WebSearchModeRequirement::Indexed) {
-                    WebSearchMode::Indexed
-                } else if accepted.contains(&WebSearchModeRequirement::Live) {
-                    WebSearchMode::Live
-                } else {
-                    WebSearchMode::Disabled
-                };
-                let requirement_source_for_error = requirement_source.clone();
-                let constrained = Constrained::new(initial_value, move |candidate| {
-                    if accepted.contains(&(*candidate).into()) {
-                        Ok(())
-                    } else {
-                        Err(ConstraintError::InvalidValue {
-                            field_name: "web_search_mode",
-                            candidate: format!("{candidate:?}"),
-                            allowed: allowed_for_error.clone(),
-                            requirement_source: requirement_source_for_error.clone(),
-                        })
-                    }
-                })?;
-                ConstrainedWithSource::new(constrained, Some(requirement_source))
-            }
-            None => ConstrainedWithSource::new(
-                Constrained::allow_any(WebSearchMode::Cached),
-                /*source*/ None,
-            ),
-        };
-        let feature_requirements =
-            feature_requirements.filter(|requirements| !requirements.value.is_empty());
         let managed_hooks = hooks
             .filter(|managed_hooks| managed_hooks.value.handler_count() > 0)
             .map(|sourced_hooks| {
@@ -1433,7 +1330,6 @@ impl TryFrom<ConfigRequirementsWithSources> for ConfigRequirements {
             approvals_reviewer,
             permission_profile,
             windows_sandbox_mode,
-            web_search_mode,
             allow_managed_hooks_only,
             allow_appshots,
             computer_use,
@@ -1524,7 +1420,6 @@ mod tests {
             allowed_permission_profiles,
             default_permissions,
             remote_sandbox_config: _,
-            allowed_web_search_modes,
             allow_managed_hooks_only,
             allow_appshots,
             computer_use,
@@ -1550,8 +1445,6 @@ mod tests {
             allowed_permission_profiles: allowed_permission_profiles
                 .map(|value| Sourced::new(value, RequirementSource::Unknown)),
             default_permissions: default_permissions
-                .map(|value| Sourced::new(value, RequirementSource::Unknown)),
-            allowed_web_search_modes: allowed_web_search_modes
                 .map(|value| Sourced::new(value, RequirementSource::Unknown)),
             allow_managed_hooks_only: allow_managed_hooks_only
                 .map(|value| Sourced::new(value, RequirementSource::Unknown)),
@@ -1721,10 +1614,6 @@ mod tests {
             SandboxModeRequirement::WorkspaceWrite,
             SandboxModeRequirement::DangerFullAccess,
         ];
-        let allowed_web_search_modes = vec![
-            WebSearchModeRequirement::Cached,
-            WebSearchModeRequirement::Live,
-        ];
         let feature_requirements = FeatureRequirementsToml {
             entries: BTreeMap::from([("personality".to_string(), true)]),
         };
@@ -1744,7 +1633,6 @@ mod tests {
             allowed_permission_profiles: Some(BTreeMap::from([("managed".to_string(), true)])),
             default_permissions: Some("managed".to_string()),
             remote_sandbox_config: None,
-            allowed_web_search_modes: Some(allowed_web_search_modes.clone()),
             allow_managed_hooks_only: Some(true),
             allow_appshots: Some(false),
             computer_use: Some(computer_use.clone()),
@@ -1780,10 +1668,6 @@ mod tests {
                     source.clone(),
                 )),
                 default_permissions: Some(Sourced::new("managed".to_string(), source.clone(),)),
-                allowed_web_search_modes: Some(Sourced::new(
-                    allowed_web_search_modes,
-                    enforce_source.clone(),
-                )),
                 allow_managed_hooks_only: Some(Sourced::new(
                     /*value*/ true,
                     enforce_source.clone(),
@@ -1834,7 +1718,6 @@ mod tests {
                 allowed_sandbox_modes: None,
                 allowed_permission_profiles: None,
                 default_permissions: None,
-                allowed_web_search_modes: None,
                 allow_managed_hooks_only: None,
                 allow_appshots: None,
                 computer_use: None,
@@ -1887,7 +1770,6 @@ mod tests {
                 allowed_sandbox_modes: None,
                 allowed_permission_profiles: None,
                 default_permissions: None,
-                allowed_web_search_modes: None,
                 allow_managed_hooks_only: None,
                 allow_appshots: None,
                 computer_use: None,
@@ -2416,7 +2298,6 @@ allowed_approvals_reviewers = ["user"]
                 allowed_approval_policies = ["on-request"]
                 allowed_approvals_reviewers = ["auto_review"]
                 allowed_sandbox_modes = ["read-only"]
-                allowed_web_search_modes = ["cached"]
                 enforce_residency = "us"
                 [features]
                 personality = true
@@ -2438,10 +2319,6 @@ allowed_approvals_reviewers = ["user"]
         );
         assert_eq!(
             requirements.permission_profile.source,
-            Some(source_location.clone())
-        );
-        assert_eq!(
-            requirements.web_search_mode.source,
             Some(source_location.clone())
         );
         assert_eq!(
@@ -2858,128 +2735,6 @@ allowed_approvals_reviewers = ["user"]
             })
         );
 
-        Ok(())
-    }
-
-    #[test]
-    fn deserialize_allowed_web_search_modes() -> Result<()> {
-        let toml_str = r#"
-            allowed_web_search_modes = ["cached"]
-        "#;
-        let config: ConfigRequirementsToml = from_str(toml_str)?;
-        let requirements: ConfigRequirements = with_unknown_source(config).try_into()?;
-
-        assert_eq!(requirements.web_search_mode.value(), WebSearchMode::Cached);
-        assert!(
-            requirements
-                .web_search_mode
-                .can_set(&WebSearchMode::Disabled)
-                .is_ok()
-        );
-        assert_eq!(
-            requirements.web_search_mode.can_set(&WebSearchMode::Live),
-            Err(ConstraintError::InvalidValue {
-                field_name: "web_search_mode",
-                candidate: "Live".into(),
-                allowed: "[Disabled, Cached]".into(),
-                requirement_source: RequirementSource::Unknown,
-            })
-        );
-        assert!(
-            requirements
-                .web_search_mode
-                .can_set(&WebSearchMode::Cached)
-                .is_ok()
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn allowed_web_search_modes_supports_indexed() -> Result<()> {
-        let config: ConfigRequirementsToml = from_str(
-            r#"
-                allowed_web_search_modes = ["indexed"]
-            "#,
-        )?;
-        let requirements: ConfigRequirements = with_unknown_source(config).try_into()?;
-
-        assert_eq!(requirements.web_search_mode.value(), WebSearchMode::Indexed);
-        for mode in [WebSearchMode::Disabled, WebSearchMode::Indexed] {
-            assert!(requirements.web_search_mode.can_set(&mode).is_ok());
-        }
-        for mode in [WebSearchMode::Cached, WebSearchMode::Live] {
-            assert_eq!(
-                requirements.web_search_mode.can_set(&mode),
-                Err(ConstraintError::InvalidValue {
-                    field_name: "web_search_mode",
-                    candidate: format!("{mode:?}"),
-                    allowed: "[Disabled, Indexed]".into(),
-                    requirement_source: RequirementSource::Unknown,
-                })
-            );
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn allowed_web_search_modes_allows_disabled() -> Result<()> {
-        let toml_str = r#"
-            allowed_web_search_modes = ["disabled"]
-        "#;
-        let config: ConfigRequirementsToml = from_str(toml_str)?;
-        let requirements: ConfigRequirements = with_unknown_source(config).try_into()?;
-
-        assert_eq!(
-            requirements.web_search_mode.value(),
-            WebSearchMode::Disabled
-        );
-        assert!(
-            requirements
-                .web_search_mode
-                .can_set(&WebSearchMode::Disabled)
-                .is_ok()
-        );
-        assert_eq!(
-            requirements.web_search_mode.can_set(&WebSearchMode::Cached),
-            Err(ConstraintError::InvalidValue {
-                field_name: "web_search_mode",
-                candidate: "Cached".into(),
-                allowed: "[Disabled]".into(),
-                requirement_source: RequirementSource::Unknown,
-            })
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn allowed_web_search_modes_empty_restricts_to_disabled() -> Result<()> {
-        let toml_str = r#"
-            allowed_web_search_modes = []
-        "#;
-        let config: ConfigRequirementsToml = from_str(toml_str)?;
-        let requirements: ConfigRequirements = with_unknown_source(config).try_into()?;
-
-        assert_eq!(
-            requirements.web_search_mode.value(),
-            WebSearchMode::Disabled
-        );
-        assert!(
-            requirements
-                .web_search_mode
-                .can_set(&WebSearchMode::Disabled)
-                .is_ok()
-        );
-        assert_eq!(
-            requirements.web_search_mode.can_set(&WebSearchMode::Cached),
-            Err(ConstraintError::InvalidValue {
-                field_name: "web_search_mode",
-                candidate: "Cached".into(),
-                allowed: "[Disabled]".into(),
-                requirement_source: RequirementSource::Unknown,
-            })
-        );
         Ok(())
     }
 

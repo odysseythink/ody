@@ -445,20 +445,6 @@ impl Session {
         session_configuration
             .apply_permission_profile_to_permissions(&mut per_turn_config.permissions);
         let permission_profile = session_configuration.permission_profile();
-        let resolved_web_search_mode =
-            resolve_web_search_mode_for_turn(&per_turn_config.web_search_mode, &permission_profile);
-        if let Err(err) = per_turn_config
-            .web_search_mode
-            .set(resolved_web_search_mode)
-        {
-            let fallback_value = per_turn_config.web_search_mode.value();
-            tracing::warn!(
-                error = %err,
-                ?resolved_web_search_mode,
-                ?fallback_value,
-                "resolved web_search_mode is disallowed by requirements; keeping constrained value"
-            );
-        }
         per_turn_config.features = config.features.clone();
         per_turn_config
     }

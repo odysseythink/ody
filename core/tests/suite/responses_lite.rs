@@ -10,7 +10,6 @@ use ody_core::config::Config;
 use ody_extension_api::ExtensionRegistry;
 use ody_extension_api::ExtensionRegistryBuilder;
 use ody_features::Feature;
-use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::model_metadata::InputModality;
 use ody_protocol::models::ImageDetail;
 use ody_protocol::protocol::EventMsg;
@@ -27,7 +26,6 @@ fn responses_extensions() -> Arc<ExtensionRegistry<Config>> {
 }
 
 fn configure_responses_tools(config: &mut Config) {
-    assert!(config.web_search_mode.set(WebSearchMode::Live).is_ok());
     assert!(config.features.enable(Feature::ImageGeneration).is_ok());
 }
 

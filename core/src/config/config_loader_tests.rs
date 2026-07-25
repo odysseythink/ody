@@ -32,7 +32,6 @@ use ody_config::loader::load_requirements_toml;
 use ody_config::test_support::CloudConfigBundleFixture;
 use ody_exec_server::LOCAL_FS;
 use ody_protocol::config_types::TrustLevel;
-use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_DANGER_FULL_ACCESS;
 use ody_protocol::models::BUILT_IN_PERMISSION_PROFILE_WORKSPACE;
 use ody_protocol::models::PermissionProfile;
@@ -990,7 +989,6 @@ async fn load_requirements_toml_produces_expected_constraints() -> anyhow::Resul
         &requirements_file,
         r#"
 allowed_approval_policies = ["never", "on-request"]
-allowed_web_search_modes = ["cached"]
 enforce_residency = "us"
 
 [features]
@@ -1002,20 +1000,6 @@ personality = true
     let config_requirements_toml =
         load_single_requirements_toml(&AbsolutePathBuf::try_from(requirements_file)?).await?;
 
-    assert_eq!(
-        config_requirements_toml
-            .allowed_approval_policies
-            .as_deref()
-            .cloned(),
-        Some(vec![AskForApproval::Never, AskForApproval::OnRequest])
-    );
-    assert_eq!(
-        config_requirements_toml
-            .allowed_web_search_modes
-            .as_deref()
-            .cloned(),
-        Some(vec![ody_config::WebSearchModeRequirement::Cached])
-    );
     assert_eq!(
         config_requirements_toml
             .feature_requirements
@@ -1037,25 +1021,6 @@ personality = true
         config_requirements
             .approval_policy
             .can_set(&AskForApproval::OnFailure)
-            .is_err()
-    );
-    assert_eq!(
-        config_requirements.web_search_mode.value(),
-        WebSearchMode::Cached
-    );
-    config_requirements
-        .web_search_mode
-        .can_set(&WebSearchMode::Cached)?;
-    config_requirements
-        .web_search_mode
-        .can_set(&WebSearchMode::Cached)?;
-    config_requirements
-        .web_search_mode
-        .can_set(&WebSearchMode::Disabled)?;
-    assert!(
-        config_requirements
-            .web_search_mode
-            .can_set(&WebSearchMode::Live)
             .is_err()
     );
     assert_eq!(

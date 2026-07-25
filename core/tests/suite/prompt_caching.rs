@@ -23,7 +23,6 @@ use ody_protocol::config_types::CollaborationMode;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::config_types::Settings;
-use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::models::PermissionProfile;
 use ody_protocol::permissions::NetworkSandboxPolicy;
@@ -141,11 +140,6 @@ async fn prompt_tools_are_consistent_across_requests() -> anyhow::Result<()> {
         .with_pre_build_hook(write_global_instructions)
         .with_config(|config| {
             config.model = Some("kimi-k2.5".to_string());
-            // Keep tool expectations stable when the default web_search mode changes.
-            config
-                .web_search_mode
-                .set(WebSearchMode::Cached)
-                .expect("test web_search_mode should satisfy constraints");
             config
                 .features
                 .enable(Feature::CollaborationModes)

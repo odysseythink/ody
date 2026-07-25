@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use ody_prompts::render_review_exit_interrupted;
 use ody_prompts::render_review_exit_success;
-use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::items::TurnItem;
 use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::models::ContentItem;
@@ -168,12 +167,6 @@ async fn start_review_conversation_with_overrides(
     }
     // Carry over review-only feature restrictions so the delegate cannot
     // re-enable blocked tools (web search, collab tools, view image).
-    if let Err(err) = sub_agent_config
-        .web_search_mode
-        .set(WebSearchMode::Disabled)
-    {
-        panic!("by construction Constrained<WebSearchMode> must always support Disabled: {err}");
-    }
     let _ = sub_agent_config.features.disable(Feature::SpawnCsv);
     let _ = sub_agent_config.features.disable(Feature::Collab);
     let _ = sub_agent_config.features.disable(Feature::MultiAgentV2);

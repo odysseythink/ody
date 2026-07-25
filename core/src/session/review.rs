@@ -21,7 +21,6 @@ pub(super) async fn spawn_review_thread(
     // For reviews, disable web_search and view_image regardless of global settings.
     let mut review_features = sess.features.clone();
     let _ = review_features.disable(Feature::Goals);
-    let review_web_search_mode = WebSearchMode::Disabled;
     let available_models = sess
         .services
         .models_manager
@@ -49,16 +48,6 @@ pub(super) async fn spawn_review_thread(
         .clone();
     per_turn_config = Arc::unwrap_or_clone(parent_turn_context.config.clone());
     per_turn_config.compact_prompt = parent_turn_context.config.compact_prompt.clone();
-    if let Err(err) = per_turn_config.web_search_mode.set(review_web_search_mode) {
-        let fallback_value = per_turn_config.web_search_mode.value();
-        tracing::warn!(
-            error = %err,
-            ?review_web_search_mode,
-            ?fallback_value,
-            "review web_search_mode is disallowed by requirements; keeping constrained value"
-        );
-    }
-
     let session_telemetry = parent_turn_context
         .session_telemetry
         .clone()

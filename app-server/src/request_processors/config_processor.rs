@@ -41,7 +41,6 @@ use ody_features::canonical_feature_for_key;
 use ody_features::feature_for_key;
 use ody_model_provider::create_model_provider;
 use ody_plugin::PluginId;
-use ody_protocol::config_types::WebSearchMode;
 use serde_json::json;
 use std::path::PathBuf;
 
@@ -350,16 +349,6 @@ fn map_requirements_toml_to_api(requirements: ConfigRequirementsToml) -> ConfigR
         }),
         allowed_permission_profiles: requirements.allowed_permission_profiles,
         default_permissions: requirements.default_permissions,
-        allowed_web_search_modes: requirements.allowed_web_search_modes.map(|modes| {
-            let mut normalized = modes
-                .into_iter()
-                .map(Into::into)
-                .collect::<Vec<WebSearchMode>>();
-            if !normalized.contains(&WebSearchMode::Disabled) {
-                normalized.push(WebSearchMode::Disabled);
-            }
-            normalized
-        }),
         allow_managed_hooks_only: requirements.allow_managed_hooks_only,
         allow_appshots: requirements.allow_appshots,
         computer_use: requirements

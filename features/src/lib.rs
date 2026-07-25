@@ -324,7 +324,6 @@ pub struct Features {
 
 #[derive(Debug, Clone, Default)]
 pub struct FeatureOverrides {
-    pub web_search_request: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -558,9 +557,6 @@ fn legacy_usage_notice(alias: &str, feature: Feature) -> (String, Option<String>
     }
 }
 
-fn web_search_details() -> &'static str {
-    "Set `web_search` to `\"live\"`, `\"indexed\"`, `\"cached\"`, or `\"disabled\"` at the top level (or under a profile) in config.toml if you want to override it."
-}
 
 /// Keys accepted in `[features]` tables.
 pub fn feature_for_key(key: &str) -> Option<Feature> {

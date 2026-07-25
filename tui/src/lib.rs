@@ -851,13 +851,6 @@ pub async fn run_main(
         )
     };
 
-    // Map the legacy --search flag to the canonical web_search mode.
-    if cli.web_search {
-        cli.config_overrides
-            .raw_overrides
-            .push("web_search=\"live\"".to_string());
-    }
-
     let raw_overrides = cli.config_overrides.raw_overrides.clone();
     let overrides_cli = ody_utils_cli::CliConfigOverrides { raw_overrides };
     let cli_kv_overrides = match overrides_cli.parse_overrides() {
