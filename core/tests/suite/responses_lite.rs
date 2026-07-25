@@ -16,26 +16,18 @@ use ody_protocol::models::ImageDetail;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::Op;
 use ody_protocol::user_input::UserInput;
-use ody_web_search_extension::install as install_web_search_extension;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 
 const RESPONSES_LITE_HEADER: &str = "x-odysseythink-internal-ody-responses-lite";
 
 fn responses_extensions() -> Arc<ExtensionRegistry<Config>> {
-    let mut extension_builder = ExtensionRegistryBuilder::<Config>::new();
-    install_web_search_extension(&mut extension_builder);
+    let extension_builder = ExtensionRegistryBuilder::<Config>::new();
     Arc::new(extension_builder.build())
 }
 
 fn configure_responses_tools(config: &mut Config) {
     assert!(config.web_search_mode.set(WebSearchMode::Live).is_ok());
-    assert!(
-        config
-            .features
-            .disable(Feature::StandaloneWebSearch)
-            .is_ok()
-    );
     assert!(config.features.enable(Feature::ImageGeneration).is_ok());
 }
 

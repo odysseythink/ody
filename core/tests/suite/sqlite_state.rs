@@ -37,7 +37,6 @@ use ody_protocol::protocol::SessionMetaLine;
 use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::UserMessageEvent;
 use ody_protocol::user_input::UserInput;
-use ody_web_search_extension::install as install_web_search_extension;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use std::collections::HashMap;
@@ -571,8 +570,7 @@ async fn standalone_web_search_marks_thread_memory_mode_polluted_when_configured
     )
     .await;
 
-    let mut extension_builder = ExtensionRegistryBuilder::<Config>::new();
-    install_web_search_extension(&mut extension_builder);
+    let extension_builder = ExtensionRegistryBuilder::<Config>::new();
     let mut builder = test_ody()
         .with_extensions(Arc::new(extension_builder.build()))
         .with_config(|config| {
@@ -580,10 +578,6 @@ async fn standalone_web_search_marks_thread_memory_mode_polluted_when_configured
                 .features
                 .enable(Feature::Sqlite)
                 .expect("test config should allow feature update");
-            config
-                .features
-                .enable(Feature::StandaloneWebSearch)
-                .expect("standalone web search should be enabled");
             config.memories.disable_on_external_context = true;
             config
                 .web_search_mode

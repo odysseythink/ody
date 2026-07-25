@@ -323,7 +323,6 @@ fn write_mock_model_catalog(path: &Path) -> std::io::Result<()> {
         .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "empty catalog"))?;
     model.slug = "mock-model".to_string();
     model.display_name = "mock-model".to_string();
-    model.supports_search_tool = true;
     catalog.models = vec![model];
     std::fs::write(
         path,

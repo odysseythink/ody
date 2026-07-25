@@ -509,12 +509,6 @@ async fn load_config(
     let mut cli_kv_overrides = root_config_overrides
         .parse_overrides()
         .map_err(anyhow::Error::msg)?;
-    if interactive.web_search {
-        cli_kv_overrides.push((
-            "web_search".to_string(),
-            toml::Value::String("live".to_string()),
-        ));
-    }
 
     let overrides = ConfigOverrides {
         ephemeral: Some(true),

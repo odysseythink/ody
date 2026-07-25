@@ -60,8 +60,6 @@ use crate::tools::handlers::multi_agents_v2::SendMessageHandler as SendMessageHa
 use crate::tools::handlers::multi_agents_v2::SpawnAgentHandler as SpawnAgentHandlerV2;
 use crate::tools::handlers::multi_agents_v2::WaitAgentHandler as WaitAgentHandlerV2;
 use crate::tools::handlers::view_image_spec::ViewImageToolOptions;
-use crate::tools::hosted_spec::WebSearchToolOptions;
-use crate::tools::hosted_spec::create_web_search_tool;
 use crate::tools::registry::CoreToolRuntime;
 use crate::tools::registry::ToolExposure;
 use crate::tools::registry::ToolRegistry;
@@ -71,7 +69,6 @@ use crate::tools::router::ToolRouterParams;
 use ody_features::Feature;
 use ody_mcp::ToolInfo;
 use ody_protocol::config_types::ModeKind;
-use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::dynamic_tools::DynamicToolNamespaceTool;
 use ody_protocol::dynamic_tools::DynamicToolSpec;
 use ody_protocol::model_metadata::ConfigShellToolType;
@@ -81,7 +78,6 @@ use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::SubAgentSource;
 use ody_tools::ResponsesApiNamespace;
 use ody_tools::ResponsesApiNamespaceTool;
-use ody_tools::TOOL_SEARCH_TOOL_NAME;
 use ody_tools::ToolCall as ExtensionToolCall;
 use ody_tools::ToolEnvironmentMode;
 use ody_tools::ToolExecutor;
@@ -208,7 +204,6 @@ fn build_tool_specs_and_registry(
     if !is_toolless_design_review(turn_context) {
         add_tool_sources(&context, &mut planned_tools);
         apply_direct_model_only_namespace_overrides(turn_context, &mut planned_tools);
-        append_tool_search_executor(&context, &mut planned_tools);
         prepend_code_mode_executors(&context, &mut planned_tools);
     }
     build_model_visible_specs_and_registry(turn_context, planned_tools)
@@ -310,32 +305,7 @@ fn hosted_model_tool_specs(context: &CoreToolPlanContext<'_>) -> Vec<ToolSpec> {
         return Vec::new();
     }
 
-    let mut specs = Vec::new();
-    let standalone_web_search_available = standalone_web_search_enabled(turn_context)
-        && context
-            .extension_tool_executors
-            .iter()
-            .any(|executor| executor.tool_name() == ToolName::namespaced("web", "run"));
-    // `Some(Cached/Live/Disabled)` are the options for mode when standalone search is unavailable
-    // and the provider supports hosted search. `None` prevents emitting a hosted search tool.
-    let web_search_mode = (!standalone_web_search_available
-        && turn_context.provider.capabilities().web_search)
-        .then_some(turn_context.config.web_search_mode.value());
-    let web_search_config = web_search_mode
-        .as_ref()
-        .and(turn_context.config.web_search_config.as_ref());
-    if let Some(hosted_web_search_tool) = create_web_search_tool(WebSearchToolOptions {
-        web_search_mode,
-        web_search_config,
-        web_search_tool_type: turn_context.model_info.web_search_tool_type,
-    }) {
-        specs.push(hosted_web_search_tool);
-    }
-    specs
-}
-
-pub(crate) fn search_tool_enabled(turn_context: &TurnContext) -> bool {
-    turn_context.model_info.supports_search_tool && namespace_tools_enabled(turn_context)
+    Vec::new()
 }
 
 pub(crate) fn tool_suggest_enabled(turn_context: &TurnContext) -> bool {
@@ -458,7 +428,7 @@ fn build_code_mode_executors(
     let mut code_mode_nested_tool_specs = Vec::new();
     let mut exec_prompt_tool_specs = Vec::new();
     let mut deferred_tools_available = false;
-    let deferred_tools_guidance_enabled = search_tool_enabled(turn_context);
+    let deferred_tools_guidance_enabled = false;
     for executor in executors {
         let exposure = executor.exposure();
         if exposure == ToolExposure::DirectModelOnly {
@@ -590,15 +560,6 @@ fn add_tool_sources(context: &CoreToolPlanContext<'_>, planned_tools: &mut Plann
     }
 }
 
-fn standalone_web_search_enabled(turn_context: &TurnContext) -> bool {
-    namespace_tools_enabled(turn_context)
-        && (turn_context.model_info.use_responses_lite
-            || turn_context
-                .config
-                .features
-                .get()
-                .enabled(Feature::StandaloneWebSearch))
-}
 
 #[instrument(level = "trace", skip_all)]
 fn add_shell_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut PlannedTools) {
@@ -862,7 +823,7 @@ fn add_collaboration_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mu
                     // could ever choose to delegate, so in practice it never does, and
                     // every search lands in the planning context instead.
                     ToolExposure::Direct
-                } else if search_tool_enabled(turn_context) {
+                } else if false {
                     ToolExposure::Deferred
                 } else {
                     ToolExposure::Direct
@@ -979,29 +940,6 @@ fn add_extension_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut Pl
 }
 
 #[instrument(level = "trace", skip_all)]
-fn append_tool_search_executor(
-    context: &CoreToolPlanContext<'_>,
-    planned_tools: &mut PlannedTools,
-) {
-    let turn_context = context.turn_context;
-    if !search_tool_enabled(turn_context) {
-        return;
-    }
-
-    let search_infos = planned_tools
-        .runtimes()
-        .iter()
-        .filter(|executor| executor.exposure() == ToolExposure::Deferred)
-        .filter_map(|executor| executor.search_info())
-        .collect::<Vec<_>>();
-    if search_infos.is_empty() {
-        return;
-    }
-
-    let handler: PlannedRuntime = context.tool_search_handler_cache.get_or_build(search_infos);
-    planned_tools.add_arc(handler);
-}
-
 fn prepend_code_mode_executors(
     context: &CoreToolPlanContext<'_>,
     planned_tools: &mut PlannedTools,
@@ -1030,25 +968,9 @@ fn append_extension_tool_executors(
         reserved_tool_names.insert(ToolName::plain(ody_code_mode::PUBLIC_TOOL_NAME));
         reserved_tool_names.insert(ToolName::plain(ody_code_mode::WAIT_TOOL_NAME));
     }
-    if search_tool_enabled(turn_context)
-        && planned_tools
-            .runtimes()
-            .iter()
-            .any(|executor| executor.exposure() == ToolExposure::Deferred)
-    {
-        reserved_tool_names.insert(ToolName::plain(TOOL_SEARCH_TOOL_NAME));
-    }
-
-    let standalone_web_search_enabled = standalone_web_search_enabled(turn_context);
-    let web_search_mode_on = turn_context.config.web_search_mode.value() != WebSearchMode::Disabled;
 
     for executor in executors.iter().cloned() {
         let tool_name = executor.tool_name();
-        if tool_name == ToolName::namespaced("web", "run")
-            && (!standalone_web_search_enabled || !web_search_mode_on)
-        {
-            continue;
-        }
         if !reserved_tool_names.insert(tool_name.clone()) {
             warn!("Skipping extension tool `{tool_name}`: tool already registered");
             continue;

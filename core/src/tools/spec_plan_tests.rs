@@ -5,12 +5,10 @@ use ody_features::Feature;
 use ody_mcp::ToolInfo;
 use ody_model_provider::create_model_provider;
 use ody_protocol::config_types::ModeKind;
-use ody_protocol::config_types::WebSearchMode;
 use ody_protocol::dynamic_tools::DynamicToolSpec;
 use ody_protocol::model_metadata::ConfigShellToolType;
 use ody_protocol::model_metadata::InputModality;
 use ody_protocol::model_metadata::ToolMode;
-use ody_protocol::model_metadata::WebSearchToolType;
 use ody_protocol::protocol::SessionSource;
 use ody_protocol::protocol::SubAgentSource;
 use ody_tools::DiscoverablePluginInfo;
@@ -74,8 +72,7 @@ impl ToolPlanProbe {
                 )),
                 ToolSpec::Function(_)
                 | ToolSpec::ToolSearch { .. }
-                | ToolSpec::ImageGeneration { .. }
-                | ToolSpec::WebSearch { .. } => None,
+                | ToolSpec::ImageGeneration { .. } => None,
             })
             .collect::<BTreeMap<_, _>>();
         let registered_tool_names = router.registered_tool_names_for_test();
@@ -233,15 +230,6 @@ fn update_config(turn: &mut TurnContext, update: impl FnOnce(&mut crate::config:
     let mut config = (*turn.config).clone();
     update(&mut config);
     turn.config = Arc::new(config);
-}
-
-fn set_web_search_mode(turn: &mut TurnContext, mode: WebSearchMode) {
-    update_config(turn, |config| {
-        config
-            .web_search_mode
-            .set(mode)
-            .expect("test web search mode should be accepted");
-    });
 }
 
 struct WebRunExtensionTool;
@@ -677,7 +665,6 @@ async fn mcp_and_tool_search_follow_direct_and_deferred_tool_exposure() {
 
     let missing_model_capability = probe_with(
         |turn| {
-            turn.model_info.supports_search_tool = false;
         },
         ToolPlanInputs {
             deferred_mcp_tools: searchable_mcp.deferred_mcp_tools.clone(),
@@ -689,7 +676,6 @@ async fn mcp_and_tool_search_follow_direct_and_deferred_tool_exposure() {
 
     let missing_deferred_tools = probe(|turn| {
         set_feature(turn, Feature::Collab, /*enabled*/ false);
-        turn.model_info.supports_search_tool = true;
     })
     .await;
     missing_deferred_tools.assert_visible_lacks(&["tool_search"]);
@@ -701,7 +687,6 @@ async fn mcp_and_tool_search_follow_direct_and_deferred_tool_exposure() {
 
     let enabled = probe_with(
         |turn| {
-            turn.model_info.supports_search_tool = true;
         },
         searchable_mcp,
     )
@@ -717,7 +702,6 @@ async fn mcp_and_tool_search_follow_direct_and_deferred_tool_exposure() {
 async fn deferred_extension_tools_are_discoverable_with_tool_search() {
     let plan = probe_with(
         |turn| {
-            turn.model_info.supports_search_tool = true;
         },
         ToolPlanInputs {
             extension_tool_executors: vec![Arc::new(DeferredExtensionTool)],
@@ -737,7 +721,6 @@ async fn tool_search_cache_rebuilds_when_deferred_sources_change() {
     let cache = ToolSearchHandlerCache::default();
 
     let (_session, mut first_turn) = make_session_and_context().await;
-    first_turn.model_info.supports_search_tool = true;
     let first_router = ToolRouter::from_turn_context(
         &first_turn,
         ToolRouterParams {
@@ -752,7 +735,6 @@ async fn tool_search_cache_rebuilds_when_deferred_sources_change() {
     let first_plan = ToolPlanProbe::from_router(first_router);
 
     let (_session, mut second_turn) = make_session_and_context().await;
-    second_turn.model_info.supports_search_tool = true;
     let second_router = ToolRouter::from_turn_context(
         &second_turn,
         ToolRouterParams {
@@ -874,7 +856,6 @@ async fn request_plugin_install_requires_all_discovery_features() {
 async fn request_plugin_install_stays_visible_without_tool_search() {
     let plan = probe_with(
         |turn| {
-            turn.model_info.supports_search_tool = false;
             set_features(
                 turn,
                 &[Feature::ToolSuggest, Feature::Apps, Feature::Plugins],
@@ -981,7 +962,6 @@ async fn code_mode_only_exposes_configured_dynamic_namespace_directly() {
     let plan = probe_with(
         |turn| {
             set_features(turn, &[Feature::CodeMode, Feature::CodeModeOnly]);
-            turn.model_info.supports_search_tool = true;
             update_config(turn, |config| {
                 config.code_mode.direct_only_tool_namespaces = vec!["direct_only".to_string()];
             });
@@ -1024,7 +1004,6 @@ async fn excluded_deferred_namespaces_do_not_enable_nested_tool_guidance() {
         |turn| {
             set_features(turn, &[Feature::CodeMode, Feature::CodeModeOnly]);
             set_feature(turn, Feature::Collab, /*enabled*/ false);
-            turn.model_info.supports_search_tool = true;
             update_config(turn, |config| {
                 config.code_mode.excluded_tool_namespaces = vec!["excluded".to_string()];
             });
@@ -1063,7 +1042,6 @@ async fn multi_agent_feature_selects_one_agent_tool_family() {
         // tool, which causes the V1 multi-agent tools to be deferred rather than
         // model-visible. Force search-tool support off for this assertion so the
         // test exercises the V1 visible-namespace path.
-        turn.model_info.supports_search_tool = false;
     })
     .await;
     v1.assert_visible_contains(&[MULTI_AGENT_V1_NAMESPACE]);
@@ -1200,7 +1178,6 @@ async fn tool_mode_selector_overrides_feature_flags() {
 #[tokio::test]
 async fn v1_multi_agent_tools_defer_when_tool_search_available() {
     let plan = probe(|turn| {
-        turn.model_info.supports_search_tool = true;
         set_feature(turn, Feature::Collab, /*enabled*/ true);
         set_feature(turn, Feature::MultiAgentV2, /*enabled*/ false);
     })
@@ -1323,8 +1300,6 @@ async fn code_mode_only_can_expose_namespaced_multi_agent_v2_as_normal_tools() {
             "wait",
             "request_user_input",
             "agents",
-            // Hosted Responses tools.
-            "web_search",
         ]
     );
     assert!(
@@ -1367,67 +1342,6 @@ async fn hosted_tools_follow_provider_auth_model_and_config_gates() {
     .await;
     image_generation.assert_visible_lacks(&["image_generation"]);
 
-    let live_web_search = probe(|turn| {
-        set_web_search_mode(turn, WebSearchMode::Live);
-        turn.model_info.web_search_tool_type = WebSearchToolType::TextAndImage;
-    })
-    .await;
-    assert_eq!(
-        live_web_search.visible_spec("web_search"),
-        &ToolSpec::WebSearch {
-            external_web_access: Some(true),
-            index_gated_web_access: None,
-            filters: None,
-            user_location: None,
-            search_context_size: None,
-            search_content_types: Some(vec!["text".to_string(), "image".to_string()]),
-        }
-    );
-
-    let code_mode_only = probe(|turn| {
-        set_features(turn, &[Feature::CodeModeOnly, Feature::MultiAgentV2]);
-        set_web_search_mode(turn, WebSearchMode::Live);
-        turn.model_info.input_modalities = vec![InputModality::Image];
-    })
-    .await;
-    assert_eq!(
-        code_mode_only.visible_names,
-        vec![
-            // Code-mode entrypoints.
-            ody_code_mode::PUBLIC_TOOL_NAME,
-            ody_code_mode::WAIT_TOOL_NAME,
-            "request_user_input",
-            // Multi-agent v2 tools.
-            "spawn_agent",
-            "send_message",
-            "followup_task",
-            "wait_agent",
-            "interrupt_agent",
-            "list_agents",
-            // Hosted Responses tools.
-            "web_search",
-        ]
-    );
-
-    let standalone_web_search_without_web_run = probe(|turn| {
-        set_feature(turn, Feature::StandaloneWebSearch, /*enabled*/ true);
-        set_web_search_mode(turn, WebSearchMode::Live);
-    })
-    .await;
-    standalone_web_search_without_web_run.assert_visible_contains(&["web_search"]);
-
-    let standalone_web_search = probe_with(
-        |turn| {
-            set_feature(turn, Feature::StandaloneWebSearch, /*enabled*/ true);
-            set_web_search_mode(turn, WebSearchMode::Live);
-        },
-        ToolPlanInputs {
-            extension_tool_executors: vec![Arc::new(WebRunExtensionTool)],
-            ..Default::default()
-        },
-    )
-    .await;
-    standalone_web_search.assert_visible_lacks(&["web_search"]);
 }
 
 /// The regression behind the freeform removal: a model with no `apply_patch`

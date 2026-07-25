@@ -83,7 +83,6 @@ mod capability_tests {
     use super::default_model_capabilities_for_wire_api;
     use super::resolve_model_capabilities;
     use ody_protocol::model_metadata::InputModality;
-    use ody_protocol::model_metadata::WebSearchToolType;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -120,28 +119,6 @@ mod capability_tests {
             caps.input_modalities,
             vec![InputModality::Text, InputModality::Image]
         );
-    }
-
-    #[test]
-    fn model_capabilities_clamped_by_provider_web_search() {
-        let provider_caps = ProviderCapabilities {
-            web_search: false,
-            ..Default::default()
-        };
-        let model_caps = ModelCapabilities {
-            supports_search_tool: true,
-            web_search_tool_type: WebSearchToolType::TextAndImage,
-            ..Default::default()
-        };
-        let resolved = resolve_model_capabilities(
-            &provider_caps,
-            WireApi::Chat,
-            None,
-            Some(&model_caps),
-            "test-model",
-        );
-        assert!(!resolved.supports_search_tool);
-        assert_eq!(resolved.web_search_tool_type, WebSearchToolType::Text);
     }
 
     #[test]
@@ -258,7 +235,6 @@ fn unknown_model_slug_has_conservative_fallback_capabilities() {
         vec![InputModality::Text, InputModality::Image]
     );
     assert!(model.capabilities.supports_vision);
-    assert!(!model.capabilities.supports_search_tool);
 }
 
 #[test]

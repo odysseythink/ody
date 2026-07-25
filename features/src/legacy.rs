@@ -26,10 +26,6 @@ const ALIASES: &[Alias] = &[
         feature: Feature::ExecPermissionApprovals,
     },
     Alias {
-        legacy_key: "web_search",
-        feature: Feature::WebSearchRequest,
-    },
-    Alias {
         legacy_key: "collab",
         feature: Feature::Collab,
     },

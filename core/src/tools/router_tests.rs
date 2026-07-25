@@ -433,7 +433,6 @@ fn namespace_function_names(specs: &[ToolSpec], namespace_name: &str) -> Vec<Str
             ToolSpec::Function(_)
             | ToolSpec::ToolSearch { .. }
             | ToolSpec::ImageGeneration { .. }
-            | ToolSpec::WebSearch { .. }
             | ToolSpec::Namespace(_) => None,
         })
         .unwrap_or_default()

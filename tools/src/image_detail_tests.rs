@@ -35,7 +35,6 @@ fn model_info() -> ModelInfo {
         "effective_context_window_percent": 95,
         "experimental_supported_tools": [],
         "input_modalities": ["text", "image"],
-        "supports_search_tool": false
     }))
     .expect("deserialize test model")
 }

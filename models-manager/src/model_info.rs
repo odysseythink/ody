@@ -67,8 +67,6 @@ pub fn resolve_model_capabilities(
     built_in: Option<&ModelCapabilities>,
     model_slug: &str,
 ) -> ModelCapabilities {
-    use ody_protocol::model_metadata::WebSearchToolType;
-
     let mut caps = if let Some(configured) = configured {
         tracing::debug!(model = %model_slug, "model capabilities from user config");
         configured.clone()
@@ -79,12 +77,6 @@ pub fn resolve_model_capabilities(
         tracing::debug!(model = %model_slug, wire_api = ?wire_api, "model capabilities inferred from wire_api");
         default_model_capabilities_for_wire_api(wire_api)
     };
-
-    // Provider-level web_search is an upper bound for model-level search support.
-    if !provider_caps.web_search {
-        caps.supports_search_tool = false;
-        caps.web_search_tool_type = WebSearchToolType::Text;
-    }
 
     // Context window consistency: context_window must not exceed max_context_window,
     // and if missing it inherits max_context_window.
@@ -196,7 +188,6 @@ pub fn model_info_from_slug_with_provider(
         default_reasoning_summary: ReasoningSummary::Auto,
         support_verbosity: false,
         default_verbosity: None,
-        web_search_tool_type: caps.web_search_tool_type,
         truncation_policy: caps.truncation_policy,
         supports_parallel_tool_calls: caps.supports_parallel_tool_calls,
         supports_image_detail_original: caps.supports_image_detail_original,
@@ -208,7 +199,6 @@ pub fn model_info_from_slug_with_provider(
         experimental_supported_tools: Vec::new(),
         input_modalities: caps.input_modalities.clone(),
         used_fallback_model_metadata: true, // this is the fallback model metadata
-        supports_search_tool: caps.supports_search_tool,
         use_responses_lite: false,
         auto_review_model_override: None,
         tool_mode: caps.tool_mode.clone(),
@@ -327,7 +317,6 @@ impl ConfiguredModelSpec {
         model.capabilities = caps;
         // Keep top-level fields in sync with capabilities.
         model.input_modalities = model.capabilities.input_modalities.clone();
-        model.web_search_tool_type = model.capabilities.web_search_tool_type;
         model.truncation_policy = model.capabilities.truncation_policy;
         model.shell_type = model.capabilities.shell_type;
         model.tool_mode = model.capabilities.tool_mode.clone();

@@ -256,7 +256,7 @@ fn tools_from_spec(tool: &ToolSpec) -> Vec<ToolDefinition> {
         }
         // Responses-only built-in tools have no Chat Completions equivalent;
         // omit them rather than emitting malformed definitions.
-        ToolSpec::ImageGeneration { .. } | ToolSpec::WebSearch { .. } => Vec::new(),
+        ToolSpec::ImageGeneration { .. } => Vec::new(),
     }
 }
 
@@ -612,14 +612,6 @@ mod tests {
             tools: vec![
                 ToolSpec::ImageGeneration {
                     output_format: "png".into(),
-                },
-                ToolSpec::WebSearch {
-                    external_web_access: None,
-                    index_gated_web_access: None,
-                    filters: None,
-                    user_location: None,
-                    search_context_size: None,
-                    search_content_types: None,
                 },
             ],
         };

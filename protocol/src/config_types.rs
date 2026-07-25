@@ -339,6 +339,8 @@ pub enum MultiAgentMode {
     Proactive,
 }
 
+/// Deprecated: retained only for deserializing legacy history/config.
+/// Use `ody_web_search::WebSearchConfig` for new configuration.
 #[derive(
     Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Display, JsonSchema, TS, Default,
 )]
@@ -352,6 +354,8 @@ pub enum WebSearchMode {
     Live,
 }
 
+/// Deprecated: retained only for deserializing legacy history/config.
+/// Use `ody_web_search::WebSearchConfig` for new configuration.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Display, JsonSchema, TS)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
@@ -361,6 +365,8 @@ pub enum WebSearchContextSize {
     High,
 }
 
+/// Deprecated: retained only for deserializing legacy history/config.
+/// Use `ody_web_search::WebSearchConfig` for new configuration.
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq, JsonSchema, TS)]
 #[schemars(deny_unknown_fields)]
 pub struct WebSearchLocation {
@@ -381,6 +387,8 @@ impl WebSearchLocation {
     }
 }
 
+/// Deprecated: retained only for deserializing legacy history/config.
+/// Use `ody_web_search::WebSearchConfig` for new configuration.
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq, JsonSchema, TS)]
 #[schemars(deny_unknown_fields)]
 pub struct WebSearchToolConfig {
@@ -407,12 +415,16 @@ impl WebSearchToolConfig {
     }
 }
 
+/// Deprecated: retained only for deserializing legacy history/config.
+/// Use `ody_web_search::WebSearchConfig` for new configuration.
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq, JsonSchema, TS)]
 #[schemars(deny_unknown_fields)]
 pub struct WebSearchFilters {
     pub allowed_domains: Option<Vec<String>>,
 }
 
+/// Deprecated: retained only for deserializing legacy history/config.
+/// Use `ody_web_search::WebSearchConfig` for new configuration.
 #[derive(
     Debug, Serialize, Deserialize, Clone, Copy, Default, PartialEq, Eq, Display, JsonSchema, TS,
 )]
@@ -423,6 +435,8 @@ pub enum WebSearchUserLocationType {
     Approximate,
 }
 
+/// Deprecated: retained only for deserializing legacy history/config.
+/// Use `ody_web_search::WebSearchConfig` for new configuration.
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq, JsonSchema, TS)]
 #[schemars(deny_unknown_fields)]
 pub struct WebSearchUserLocation {
@@ -434,6 +448,8 @@ pub struct WebSearchUserLocation {
     pub timezone: Option<String>,
 }
 
+/// Deprecated: retained only for deserializing legacy history/config.
+/// Use `ody_web_search::WebSearchConfig` for new configuration.
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq, JsonSchema, TS)]
 #[schemars(deny_unknown_fields)]
 pub struct WebSearchConfig {

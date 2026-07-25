@@ -95,7 +95,6 @@ fn configure_apps_without_search_tool(config: &mut Config, apps_base_url: &str) 
         kind: ToolSuggestDiscoverableType::Connector,
         id: DISCOVERABLE_GMAIL_ID.to_string(),
     }];
-    model.supports_search_tool = false;
     config.model_catalog = Some(model_catalog);
 }
 

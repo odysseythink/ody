@@ -289,10 +289,6 @@ text(result);
                 .enable(Feature::CodeMode)
                 .expect("code mode should be enabled");
             config
-                .features
-                .enable(Feature::StandaloneWebSearch)
-                .expect("standalone web search should be enabled");
-            config
                 .web_search_mode
                 .set(web_search_mode)
                 .expect("web search mode should be accepted");
@@ -595,7 +591,6 @@ if (!tool) {
             .find(|model| model.slug == "k3")
             .expect("k3 exists in bundled models.json");
         config.model = Some("k3".to_string());
-        model.supports_search_tool = true;
         config.model_catalog = Some(model_catalog);
     });
     let test = builder.build(&server).await?;

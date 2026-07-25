@@ -359,6 +359,7 @@ pub enum ThreadItem {
         agent_thread_id: String,
         agent_path: String,
     },
+    /// Deprecated: retained for loading old thread history.
     #[serde(rename_all = "camelCase")]
     #[ts(rename_all = "camelCase")]
     WebSearch {
@@ -783,6 +784,7 @@ impl TryFrom<GuardianApprovalReviewAction> for CoreGuardianAssessmentAction {
     }
 }
 
+/// Deprecated: retained for loading old thread history.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(tag = "type", rename_all = "camelCase")]
 #[ts(tag = "type", rename_all = "camelCase")]

@@ -49,9 +49,7 @@ impl ToolSearchInfo {
                 }
                 LoadableToolSpec::Namespace(namespace)
             }
-            ToolSpec::ToolSearch { .. }
-            | ToolSpec::ImageGeneration { .. }
-            | ToolSpec::WebSearch { .. } => return None,
+            ToolSpec::ToolSearch { .. } | ToolSpec::ImageGeneration { .. } => return None,
         };
 
         Some(Self {
@@ -82,9 +80,6 @@ fn default_tool_search_text(spec: &ToolSpec) -> String {
         }
         ToolSpec::ImageGeneration { .. } => {
             push_search_part(&mut parts, "image generation".to_string());
-        }
-        ToolSpec::WebSearch { .. } => {
-            push_search_part(&mut parts, "web search".to_string());
         }
     }
 

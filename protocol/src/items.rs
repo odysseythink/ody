@@ -45,6 +45,8 @@ pub enum TurnItem {
     AgentMessage(AgentMessageItem),
     Plan(PlanItem),
     Reasoning(ReasoningItem),
+    /// Deprecated: retained for loading old thread history.
+    /// New web search results are rendered as AgentMessage items.
     WebSearch(WebSearchItem),
     ImageView(ImageViewItem),
     Sleep(SleepItem),
@@ -144,6 +146,8 @@ pub struct ReasoningItem {
     pub raw_content: Vec<String>,
 }
 
+/// Deprecated: retained for loading old thread history.
+/// New web search results are rendered as AgentMessage items.
 #[derive(Debug, Clone, Deserialize, Serialize, TS, JsonSchema, PartialEq)]
 pub struct WebSearchItem {
     pub id: String,

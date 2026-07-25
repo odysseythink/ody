@@ -1775,9 +1775,7 @@ pub struct ItemStartedEvent {
 impl HasLegacyEvent for ItemStartedEvent {
     fn as_legacy_events(&self, _: bool) -> Vec<EventMsg> {
         match &self.item {
-            TurnItem::WebSearch(item) => vec![EventMsg::WebSearchBegin(WebSearchBeginEvent {
-                call_id: item.id.clone(),
-            })],
+            TurnItem::WebSearch(_) => Vec::new(),
             TurnItem::ImageView(_) => Vec::new(),
             TurnItem::ImageGeneration(item) => {
                 vec![EventMsg::ImageGenerationBegin(ImageGenerationBeginEvent {
@@ -4974,11 +4972,7 @@ mod tests {
         };
 
         let legacy_events = event.as_legacy_events(/*show_raw_agent_reasoning*/ false);
-        assert_eq!(legacy_events.len(), 1);
-        match &legacy_events[0] {
-            EventMsg::WebSearchBegin(event) => assert_eq!(event.call_id, "search-1"),
-            _ => panic!("expected WebSearchBegin event"),
-        }
+        assert_eq!(legacy_events.len(), 0);
     }
 
     #[test]

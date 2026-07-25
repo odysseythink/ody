@@ -437,16 +437,12 @@ fn from_sources_applies_base_profile_and_overrides() {
             features: Some(&profile_features),
             ..Default::default()
         },
-        FeatureOverrides {
-            web_search_request: Some(false),
-        },
     );
 
     assert_eq!(features.enabled(Feature::Plugins), true);
     assert_eq!(features.enabled(Feature::CodeModeOnly), true);
     assert_eq!(features.enabled(Feature::CodeMode), true);
     assert_eq!(features.enabled(Feature::ApplyPatchFreeform), false);
-    assert_eq!(features.enabled(Feature::WebSearchRequest), false);
 }
 
 #[test]

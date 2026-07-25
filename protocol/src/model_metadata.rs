@@ -278,16 +278,6 @@ pub enum ConfigShellToolType {
     ShellCommand,
 }
 
-#[derive(
-    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, TS, JsonSchema, Default,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum WebSearchToolType {
-    #[default]
-    Text,
-    TextAndImage,
-}
-
 /// Server-provided truncation policy metadata for a model.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, Default, PartialEq, Eq, TS, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -390,14 +380,6 @@ pub struct ModelCapabilities {
     #[serde(default)]
     pub supports_image_detail_original: bool,
 
-    /// Whether the model has a native search tool.
-    #[serde(default)]
-    pub supports_search_tool: bool,
-
-    /// Variant of web search content the model can return.
-    #[serde(default)]
-    pub web_search_tool_type: WebSearchToolType,
-
     /// Whether reasoning summaries can be surfaced.
     #[serde(default)]
     pub supports_reasoning_summaries: bool,
@@ -445,8 +427,6 @@ impl Default for ModelCapabilities {
             supports_parallel_tool_calls: false,
             supports_vision: false,
             supports_image_detail_original: false,
-            supports_search_tool: false,
-            web_search_tool_type: WebSearchToolType::default(),
             supports_reasoning_summaries: false,
             shell_type: ConfigShellToolType::default(),
             tool_mode: None,
@@ -498,8 +478,6 @@ pub struct ModelInfo {
     pub default_reasoning_summary: ReasoningSummary,
     pub support_verbosity: bool,
     pub default_verbosity: Option<Verbosity>,
-    #[serde(default)]
-    pub web_search_tool_type: WebSearchToolType,
     pub truncation_policy: TruncationPolicyConfig,
     pub supports_parallel_tool_calls: bool,
     #[serde(default)]
@@ -530,8 +508,6 @@ pub struct ModelInfo {
     #[schemars(skip)]
     #[ts(skip)]
     pub used_fallback_model_metadata: bool,
-    #[serde(default)]
-    pub supports_search_tool: bool,
     #[serde(default)]
     pub use_responses_lite: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -798,8 +774,6 @@ mod tests {
         assert!(!caps.supports_parallel_tool_calls);
         assert!(!caps.supports_vision);
         assert!(!caps.supports_image_detail_original);
-        assert!(!caps.supports_search_tool);
-        assert_eq!(caps.web_search_tool_type, WebSearchToolType::Text);
         assert!(!caps.supports_reasoning_summaries);
         assert_eq!(caps.shell_type, ConfigShellToolType::Default);
         assert_eq!(caps.tool_mode, None);
@@ -831,7 +805,6 @@ mod tests {
             "support_verbosity": false,
             "truncation_policy": {"mode": "bytes", "limit": 10000},
             "supports_parallel_tool_calls": false,
-            "web_search_tool_type": "text",
             "experimental_supported_tools": []
         }"#;
         let model: ModelInfo = serde_json::from_str(json).unwrap();
@@ -866,7 +839,6 @@ mod tests {
             default_reasoning_summary: ReasoningSummary::Auto,
             support_verbosity: false,
             default_verbosity: None,
-            web_search_tool_type: WebSearchToolType::Text,
             truncation_policy: TruncationPolicyConfig::bytes(/*limit*/ 10_000),
             supports_parallel_tool_calls: false,
             supports_image_detail_original: false,
@@ -878,7 +850,6 @@ mod tests {
             experimental_supported_tools: vec![],
             input_modalities: default_input_modalities(),
             used_fallback_model_metadata: false,
-            supports_search_tool: false,
             use_responses_lite: false,
             auto_review_model_override: None,
             tool_mode: None,
@@ -895,8 +866,6 @@ mod tests {
                 supports_parallel_tool_calls: false,
                 supports_vision: false,
                 supports_image_detail_original: false,
-                supports_search_tool: false,
-                web_search_tool_type: WebSearchToolType::Text,
                 supports_reasoning_summaries: false,
                 shell_type: ConfigShellToolType::ShellCommand,
                 tool_mode: None,
@@ -1167,8 +1136,6 @@ mod tests {
 
         assert_eq!(model.availability_nux, None);
         assert!(!model.supports_image_detail_original);
-        assert_eq!(model.web_search_tool_type, WebSearchToolType::Text);
-        assert!(!model.supports_search_tool);
         assert!(!model.use_responses_lite);
         assert_eq!(model.comp_hash, None);
         assert_eq!(model.auto_review_model_override, None);

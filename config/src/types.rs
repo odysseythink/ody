@@ -19,7 +19,6 @@ pub use ody_protocol::config_types::Personality;
 pub use ody_protocol::config_types::ServiceTier;
 use ody_protocol::config_types::ShellEnvironmentPolicy;
 use ody_protocol::config_types::ShellEnvironmentPolicyInherit;
-pub use ody_protocol::config_types::WebSearchMode;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use std::collections::BTreeMap;
 use std::collections::HashMap;

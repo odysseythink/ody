@@ -1148,12 +1148,6 @@ pub struct Config {
     /// When set, restricts the login mechanism users may use.
     pub forced_login_method: Option<ForcedLoginMethod>,
 
-    /// Explicit or feature-derived web search mode.
-    pub web_search_mode: Constrained<WebSearchMode>,
-
-    /// Additional parameters for the web search tool when it is enabled.
-    pub web_search_config: Option<WebSearchConfig>,
-
     /// Whether to register the experimental request_user_input tool.
     pub experimental_request_user_input_enabled: bool,
 
@@ -2659,12 +2653,6 @@ fn dedupe_absolute_paths(paths: &mut Vec<AbsolutePathBuf>) {
 fn resolve_web_search_mode(config_toml: &ConfigToml, features: &Features) -> Option<WebSearchMode> {
     if let Some(mode) = config_toml.web_search {
         return Some(mode);
-    }
-    if features.enabled(Feature::WebSearchCached) {
-        return Some(WebSearchMode::Cached);
-    }
-    if features.enabled(Feature::WebSearchRequest) {
-        return Some(WebSearchMode::Live);
     }
     None
 }
