@@ -414,6 +414,7 @@ fn tools_experimental_request_user_input_defaults_to_enabled() {
         cfg.tools,
         Some(ToolsToml {
             experimental_request_user_input: Some(ExperimentalRequestUserInput { enabled: true }),
+            web_search: None,
         })
     );
 }
@@ -432,6 +433,7 @@ enabled = false
         cfg.tools,
         Some(ToolsToml {
             experimental_request_user_input: Some(ExperimentalRequestUserInput { enabled: false }),
+            web_search: None,
         })
     );
 }
@@ -445,6 +447,7 @@ async fn load_config_resolves_experimental_request_user_input_enabled() -> std::
                 experimental_request_user_input: Some(ExperimentalRequestUserInput {
                     enabled: false,
                 }),
+                web_search: None,
             }),
             ..ConfigToml::default()
         },
@@ -11207,6 +11210,23 @@ async fn shell_config_result_is_stored_in_config() {
         config_with_result.shell_config_result,
         Some(shell_config_result)
     );
+}
+
+#[tokio::test]
+async fn config_carries_services_web_search() {
+    let ody_home = tempdir().unwrap().path().to_path_buf().abs();
+    let config = Config::load_config_with_layer_stack(
+        LOCAL_FS.as_ref(),
+        ConfigToml::default(),
+        ConfigOverrides::default(),
+        ody_home,
+        ConfigLayerStack::default(),
+        None,
+    )
+    .await
+    .expect("test config");
+    // Default config has no services; the field exists with the right type.
+    assert!(config.services.is_none());
 }
 
 #[tokio::test]
