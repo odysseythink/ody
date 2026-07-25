@@ -3,6 +3,8 @@ use super::*;
 use crate::config::ConfigBuilder;
 use crate::config::ConfigOverrides;
 use crate::config::test_config;
+use crate::config::test_provider;
+use crate::config::TEST_PROVIDER_ID;
 use crate::context::ContextualUserFragment;
 use crate::context::TurnAborted;
 use crate::environment_selection::ThreadEnvironments;
@@ -13,7 +15,7 @@ use crate::shell::default_user_shell;
 use crate::shell_snapshot::ShellSnapshot;
 use crate::skills::SkillRenderSideEffects;
 use crate::skills::render::SkillMetadataBudget;
-use crate::test_support::models_manager_with_provider;
+use crate::test_support::EmptyUserInstructionsProvider;
 use crate::tools::format_exec_output_str;
 use core_test_support::test_ody::local_selections;
 use ody_config::ConfigLayerStack;
@@ -30,7 +32,6 @@ use ody_config::loader::project_trust_key;
 use ody_config::types::ToolSuggestDisabledTool;
 use ody_core_skills::HostSkillsSnapshot;
 use ody_utils_absolute_path::AbsolutePathBuf;
-
 use ody_features::Feature;
 use ody_model_provider::create_model_provider;
 use ody_model_provider_info::ModelProviderInfo;
@@ -2704,9 +2705,19 @@ async fn fork_startup_context_then_first_turn_diff_snapshot() -> anyhow::Result<
     )
     .await;
 
-    let mut builder = test_ody().with_config(|config| {
+    let server_uri = server.uri();
+    let mut builder = test_ody()
+        .with_user_instructions_provider(Arc::new(EmptyUserInstructionsProvider))
+        .with_config(move |config| {
         config.permissions.approval_policy =
             ody_config::Constrained::allow_any(AskForApproval::OnRequest);
+        config.model_provider_id = TEST_PROVIDER_ID.to_string();
+        config.model_provider = test_provider();
+        config.model_provider.base_url = Some(format!("{}/v1", server_uri));
+        config.model_providers =
+            std::collections::HashMap::from([(TEST_PROVIDER_ID.to_string(), test_provider())]);
+        config.base_instructions = None;
+        config.model_language = None;
     });
     let initial = builder.build(&server).await?;
     let rollout_path = initial
@@ -3501,17 +3512,19 @@ async fn turn_context_with_model_updates_model_fields() {
     assert_eq!(updated.config.model.as_deref(), Some("k3"));
     assert_eq!(updated.collaboration_mode.model(), "k3");
     assert_eq!(updated.model_info, expected_model_info);
+    // k3's supported reasoning levels are [low, high, max] with a default of
+    // high, so Minimal is adjusted to the middle supported level (high).
     assert_eq!(
         updated.reasoning_effort,
-        Some(ReasoningEffortConfig::Medium)
+        Some(ReasoningEffortConfig::High)
     );
     assert_eq!(
         updated.collaboration_mode.reasoning_effort(),
-        Some(ReasoningEffortConfig::Medium)
+        Some(ReasoningEffortConfig::High)
     );
     assert_eq!(
         updated.config.model_reasoning_effort,
-        Some(ReasoningEffortConfig::Medium)
+        Some(ReasoningEffortConfig::High)
     );
 }
 
