@@ -119,28 +119,24 @@ The review is configured in `config.toml` under `[design_review]`:
 ```toml
 [design_review]
 enable = true                           # Enable adversarial review on design finalize
-review_model = "gpt-4o"                 # Model for single-shot critic (required if enable=true)
+review_model = "kimi/kimi-for-coding"   # Model for single-shot critic (required if enable=true)
 
 [design_review.debate]
 enable = false                          # Enable Advocate↔Skeptic↔Judge debate (opt-in)
 rounds = 1                              # Debate rounds (Advocate/Skeptic pairs); 1 = A→S→J
 # Debate model seat overrides (optional; fall back to review_model):
-advocate_model = "gpt-4o"
-skeptic_model = "gpt-4o"
-judge_model = "gpt-4o"
+advocate_model = "kimi_user/kimi-for-coding"
+skeptic_model = "deepseek_user/deepseek-v4-pro"
+judge_model = "glm_user/glm-5.1"
 contest_critic = false                 # Judge may refute critic findings → marked Contested (opt-in)
-usability_lens = "off"                 # v1.6: append usability-lens Skeptic turn (opt-in)
+# usability_lens: off (default, correctness only), on (always add user-facing turn),
+#                 ask (prompt per design, recommended for mixed work)
+usability_lens = "off"
 ```
 
-### Usability Lens Configuration (v1.6)
+`usability_lens` adds an optional user-facing Skeptic turn (mode confusion, workflow friction, missing feedback, accessibility). It is most valuable for designs with a direct user-facing surface (TUI commands, interactive flows, on-screen text/layout) and has minimal value for internal refactors, data migrations, or pure API changes, so `"ask"` lets you decide per design.
 
-The `usability_lens` setting controls whether to append a usability-focused Skeptic turn to the debate. Set it in `[design_review.debate]`:
-
-- **`"off"` (default)**: No usability lens. Review runs standard correctness debate only.
-- **`"on"`**: Always append a forced usability-lens turn. Cost: +1 model call per finalize. Use this if you want every design reviewed for user-facing defects (mode confusion, missing feedback, accessibility, workflow friction).
-- **`"ask"` (v1.6b)**: Show a one-question interactive prompt at finalize time. The system classifies the design as "user-facing" or "internal" and recommends whether to run the usability pass. You can accept the recommendation or override it. Your choice is cached across revise rounds so you're not re-prompted for the same design. Cost: +1 cheap classifier call + 1 usability turn (only when you say yes).
-
-#### Example configurations
+Example configurations:
 
 ```toml
 # Strict review: both debate and usability lens enabled
@@ -158,7 +154,3 @@ usability_lens = "off"
 enable = true
 usability_lens = "ask"
 ```
-
-The usability lens is most valuable for designs that have a direct user-facing surface (TUI commands, interactive flows, on-screen text/layout). It has minimal value for internal refactors, data migrations, or pure API changes, so the `"ask"` mode lets you control when it runs.
-
-

@@ -1,44 +1,196 @@
-# Part 3 — 12 个 Provider 实现要点与共性
+# D1.0 Part 2 — Provider Registry, Fallback, and Provider Contracts
 
-## 来源 [C:UPSTREAM]
+## 1. Provider Registry
 
-- TS: `packages/agent-core/src/tools/providers/web-search/duckduckgo.ts` — HTML 解析型 provider。
-- TS: `packages/agent-core/src/tools/providers/web-search/bing.ts` — JSON GET API 型 provider。
-- TS: `packages/agent-core/src/tools/providers/web-search/tavily.ts` — JSON POST API 型 provider。
-- TS: `packages/agent-core/src/tools/providers/web-search/exa.ts` — 支持 `includeContent` 的 provider 示例。
-- TS: `packages/agent-core/src/tools/providers/web-search/http.ts` — 通用 HTTP 工具函数：buildUrl、getJson、postJson、authHeaderForProvider、fetchWithTimeout、httpError。
-- TS: `packages/agent-core/src/tools/providers/web-search/moonshot.ts` — 依赖 `services.moonshotSearch` 配置的 provider 入口。
-- TS: `packages/agent-core/src/tools/providers/web-search/registry.ts` — 12 个 provider 名称与默认注册。
-
-## 共性抽象 [C:UPSTREAM]
-
-所有 provider 实现统一遵循以下模式：
+### 1.1 `WebSearchProviderFactory`
 
 ```rust
+pub trait WebSearchProviderFactory: Send + Sync {
+    fn name(&self) -> &str;
+
+    fn create(
+        &self,
+        config: WebSearchProviderConfig,
+        http_client: reqwest::Client,
+    ) -> Result<SharedWebSearchProvider, WebSearchError>;
+}
+```
+
+`[C:INFERRED]` 每个 provider 模块实现一个 `WebSearchProviderFactory`，由 registry 统一按名称查找。工厂接收解析后的配置和共享 `reqwest::Client`，返回 `Arc<dyn WebSearchProvider>`。
+
+### 1.2 `WebSearchProviderRegistry`
+
+```rust
+pub struct WebSearchProviderRegistry {
+    factories: HashMap<String, Box<dyn WebSearchProviderFactory>>,
+}
+
+impl WebSearchProviderRegistry {
+    pub fn new() -> Self {
+        Self { factories: HashMap::new() }
+    }
+
+    pub fn register(&mut self, factory: Box<dyn WebSearchProviderFactory>) {
+        self.factories.insert(factory.name().to_string(), factory);
+    }
+
+    pub fn create(
+        &self,
+        config: &WebSearchProviderConfig,
+        http_client: reqwest::Client,
+    ) -> Result<SharedWebSearchProvider, WebSearchError> {
+        let name = config.provider.to_string();
+        let factory = self.factories
+            .get(&name)
+            .ok_or_else(|| WebSearchError::Unexpected {
+                message: format!("unknown web search provider: {}", name),
+            })?;
+        factory.create(config.clone(), http_client)
+    }
+
+    pub fn create_default_registry() -> Self {
+        let mut registry = Self::new();
+        registry.register(Box::new(duckduckgo::DuckDuckGoFactory));
+        registry.register(Box::new(bing::BingFactory));
+        registry.register(Box::new(serpapi::SerpApiFactory));
+        registry.register(Box::new(searchapi::SearchApiFactory));
+        registry.register(Box::new(serper::SerperFactory));
+        registry.register(Box::new(baidu::BaiduFactory));
+        registry.register(Box::new(serply::SerplyFactory));
+        registry.register(Box::new(searxng::SearXngFactory));
+        registry.register(Box::new(tavily::TavilyFactory));
+        registry.register(Box::new(exa::ExaFactory));
+        registry.register(Box::new(perplexity::PerplexityFactory));
+        registry.register(Box::new(moonshot::MoonshotFactory));
+        registry
+    }
+}
+```
+
+`[C:UPSTREAM]` 注册表包含 TS 中全部 12 个 provider。默认注册表在 `ody-web-search` crate 启动时构建，app-server 无需关心具体 provider。
+
+## 2. Fallback Provider
+
+### 2.1 `FallbackWebSearchProvider`
+
+```rust
+#[derive(Debug)]
+pub struct FallbackWebSearchProvider {
+    primary: SharedWebSearchProvider,
+    secondary: Option<SharedWebSearchProvider>,
+}
+
+impl FallbackWebSearchProvider {
+    pub fn new(
+        primary: SharedWebSearchProvider,
+        secondary: Option<SharedWebSearchProvider>,
+    ) -> Self {
+        Self { primary, secondary }
+    }
+}
+
+#[async_trait::async_trait]
+impl WebSearchProvider for FallbackWebSearchProvider {
+    fn name(&self) -> &str {
+        "fallback"
+    }
+
+    async fn search(
+        &self,
+        query: &str,
+        options: &WebSearchOptions,
+    ) -> Result<Vec<WebSearchResult>, WebSearchError> {
+        match self.primary.search(query, options).await {
+            Ok(results) => Ok(results),
+            Err(primary_err) => {
+                if let Some(secondary) = &self.secondary {
+                    secondary.search(query, options).await
+                } else {
+                    Err(primary_err)
+                }
+            }
+        }
+    }
+}
+```
+
+`[C:USER]` 严格按用户决策：primary 失败时切换 secondary，不重试、不合并结果、不降级为空结果。
+
+### 2.2 Fallback 边界行为
+
+| 场景 | 行为 |
+| --- | --- |
+| primary 成功 | 返回 primary 结果，忽略 secondary |
+| primary 失败，secondary 成功 | 返回 secondary 结果 |
+| primary 失败，secondary 失败 | 返回 secondary 的错误（若存在 secondary）；否则返回 primary 的错误 |
+| secondary 未配置 | primary 失败直接向上返回错误 |
+
+## 3. Provider 实现契约
+
+### 3.1 文件布局
+
+```
+crates/ody-web-search/src/
+├── lib.rs
+├── provider.rs        # WebSearchProvider trait, WebSearchResult, WebSearchOptions
+├── error.rs           # WebSearchError + classify
+├── registry.rs        # WebSearchProviderRegistry
+├── fallback.rs        # FallbackWebSearchProvider
+├── providers/
+│   ├── mod.rs
+│   ├── duckduckgo.rs
+│   ├── bing.rs
+│   ├── serpapi.rs
+│   ├── searchapi.rs
+│   ├── serper.rs
+│   ├── baidu.rs
+│   ├── serply.rs
+│   ├── searxng.rs
+│   ├── tavily.rs
+│   ├── exa.rs
+│   ├── perplexity.rs
+│   └── moonshot.rs
+└── providers_tests/   # 每个 provider 的 mock HTTP 测试
+```
+
+### 3.2 第一批实现（D1.0 落地时）
+
+`[C:INFERRED]` 第一批优先选择有稳定 JSON API 的 provider，避免 HTML 解析/反爬不确定性影响架构验证。
+
+| Provider | 主要参考 | 认证 | 特殊依赖 |
+| --- | --- | --- | --- |
+| Bing | `packages/agent-core/src/tools/providers/web-search/bing.ts` | `api_key` / `BING_API_KEY` env | MS Cognitive Services API |
+| SerpApi | `packages/agent-core/src/tools/providers/web-search/serpapi.ts` | `api_key` / `SERPAPI_API_KEY` env | serpapi.com |
+| SearchApi | `packages/agent-core/src/tools/providers/web-search/searchapi.ts` | `api_key` / `SEARCHAPI_API_KEY` env | searchapi.io |
+| Moonshot | `packages/agent-core/src/tools/providers/web-search/moonshot.ts` + `moonshot-web-search.ts` | `api_key` / `MOONSHOT_API_KEY` env | Kimi 搜索 API |
+
+### 3.3 第二批实现
+
+| Provider | 主要参考 | 认证 | 特殊依赖 |
+| --- | --- | --- | --- |
+| DuckDuckGo | `packages/agent-core/src/tools/providers/web-search/duckduckgo.ts` | 无 | **HTML 解析，标记为 unstable provider** |
+| Serper | `packages/agent-core/src/tools/providers/web-search/serper.ts` | `api_key` / `SERPER_API_KEY` env | serper.dev |
+| Baidu | `packages/agent-core/src/tools/providers/web-search/baidu.ts` | `api_key` / `BAIDU_API_KEY` env | baidu.com |
+| Serply | `packages/agent-core/src/tools/providers/web-search/serply.ts` | `api_key` / `SERPLY_API_KEY` env | serply.io |
+| SearXNG | `packages/agent-core/src/tools/providers/web-search/searxng.ts` | 无 / 可选 | self-host，需 `base_url` |
+| Tavily | `packages/agent-core/src/tools/providers/web-search/tavily.ts` | `api_key` / `TAVILY_API_KEY` env | tavily.com |
+| Exa | `packages/agent-core/src/tools/providers/web-search/exa.ts` | `api_key` / `EXA_API_KEY` env | exa.ai |
+| Perplexity | `packages/agent-core/src/tools/providers/web-search/perplexity.ts` | `api_key` / `PERPLEXITY_API_KEY` env | perplexity.ai |
+
+### 3.4 每个 Provider 的实现模式
+
+```rust
+// src/providers/duckduckgo.rs
+use async_trait::async_trait;
+
 pub struct DuckDuckGoProvider {
-    options: DuckDuckGoOptions,
     client: reqwest::Client,
+    timeout: Duration,
 }
 
 impl DuckDuckGoProvider {
-    pub fn from_config(
-        config: &WebSearchProviderConfig,
-        deps: &ProviderFactoryDeps,
-    ) -> Result<Self, WebSearchError> {
-        let options: DuckDuckGoOptions = serde_json::from_value(
-            config.options.clone().unwrap_or_default().into(),
-        ).map_err(|e| WebSearchError::InvalidOptions(format!("duckduckgo options: {e}")))?;
-
-        let timeout_ms = config.timeout_ms.unwrap_or(DEFAULT_WEB_SEARCH_TIMEOUT_MS);
-
-        let client = deps.http_client.clone().unwrap_or_else(|| {
-            reqwest::Client::builder()
-                .timeout(Duration::from_millis(timeout_ms))
-                .build()
-                .expect("reqwest client builds")
-        });
-
-        Ok(Self { options, client })
+    pub fn new(client: reqwest::Client, timeout: Duration) -> Self {
+        Self { client, timeout }
     }
 }
 
@@ -49,152 +201,153 @@ impl WebSearchProvider for DuckDuckGoProvider {
     async fn search(
         &self,
         query: &str,
-        options: WebSearchOptions,
+        options: &WebSearchOptions,
     ) -> Result<Vec<WebSearchResult>, WebSearchError> {
-        // 1. 构建请求
-        // 2. 发送并检查 HTTP 状态
-        // 3. 解析响应
-        // 4. 调用 normalize_results
-        // 5. 应用 limit
-        Ok(vec![])
+        // 1. build request URL + query params
+        // 2. execute HTTP request with timeout
+        // 3. parse response (HTML or JSON depending on provider)
+        // 4. normalize into Vec<WebSearchResult>
+        // 5. apply limit
+    }
+}
+
+pub struct DuckDuckGoFactory;
+
+impl WebSearchProviderFactory for DuckDuckGoFactory {
+    fn name(&self) -> &str { "duckduckgo" }
+
+    fn create(
+        &self,
+        config: WebSearchProviderConfig,
+        http_client: reqwest::Client,
+    ) -> Result<SharedWebSearchProvider, WebSearchError> {
+        let timeout = config.timeout_ms.map(Duration::from_millis)
+            .unwrap_or(Duration::from_secs(10));
+        Ok(Arc::new(DuckDuckGoProvider::new(http_client, timeout)))
     }
 }
 ```
 
-### 公共辅助函数
+`[C:INFERRED]` 所有 provider 遵循相同结构：工厂负责从配置创建实例，provider 负责 HTTP 请求与结果规范化。认证信息（api_key）由工厂从配置取出并传给 provider。
 
-在 `ody-web-search/src/providers/http.rs` 中提供：
+### 3.5 `options` 透传规则与校验
+
+`WebSearchProviderConfig.options` 中的键值对透传给对应 provider 的 HTTP 请求或构造参数。例如：
+
+- `searxng`: `options["base_url"]` 必填，用于构造请求 URL。
+- `tavily`: `options["search_depth"]` 可选，取值为 `"basic"` / `"advanced"`。
+- `exa`: `options["use_autoprompt"]` 可选，取值为 boolean。
+
+`[C:INFERRED]` 每个 provider 工厂在 `create()` 时检查 `options` 白名单：
 
 ```rust
-pub fn build_url(base: &str, params: &[(&str, String)]) -> String;
-
-pub fn auth_header_for_provider(name: &str, api_key: &str) -> HeaderMap;
-
-pub fn http_error(response: &reqwest::Response, provider: &str) -> WebSearchError;
+fn validate_options(
+    config: &WebSearchProviderConfig,
+    allowed: &[&str],
+) -> Result<(), WebSearchError> {
+    for key in config.options.keys() {
+        if !allowed.contains(&key.as_str()) {
+            return Err(WebSearchError::Unexpected {
+                message: format!("unknown option '{}' for provider '{}'", key, config.provider),
+            });
+        }
+    }
+    Ok(())
+}
 ```
 
-- `build_url`：与 TS `buildUrl` 对齐，仅包含非空参数。
-- `auth_header_for_provider`：与 TS `authHeaderForProvider` 对齐，按 provider 名返回对应 header 集合。
-- `http_error`：从响应中提取前 500 字符 body 文本，构造 `WebSearchError::Server` 或 `WebSearchError::Other`。
+必填项缺失（如 `searxng` 缺少 `base_url`）也在 `create()` 时返回错误，避免运行时才发现配置错误。
 
-### 超时处理
+### 3.6 API key 读取优先级
 
-- 每个 provider 使用 `reqwest::Client::timeout(Duration::from_millis(timeout_ms))`。
-- 如果 `deps.http_client` 已提供，则直接使用该 client（测试注入或统一配置）。
-- 超时被 reqwest 抛出后，由 `classify_search_error` 映射为 `WebSearchError::Timeout`。
+`[C:INFERRED]` 为了降低明文 key 泄漏面，API key 按以下优先级读取：
 
-### 响应规范化
+1. `config.api_key`（明文 TOML 配置）。
+2. 环境变量：例如 `BING_API_KEY`、`SERPAPI_API_KEY`、`TAVILY_API_KEY` 等（provider 名称大写 + `_API_KEY`）。
+3. 若两者都缺失且 provider 需要 key，则 `create()` 返回错误，提示用户通过配置或 env var 提供。
 
-所有 provider 在解析后调用 `normalize_results`（定义见 `trait-crate.md`）：
+配置打印、日志、诊断输出必须 mask key 值（显示为 `***` 或前 4 位 + `...`）。
 
-- 字段映射：`title`/`name` → `title`；`url`/`link`/`uri` → `url`；`snippet`/`description`/`content`/`text` → `snippet`。
-- 截断：title 500，url 2048，snippet 4000。
-- 过滤：只保留 `title` 和 `url` 非空的结果。
-- 应用 `options.limit`：在规范化之后统一 clamp 到 1..=20 并 slice；provider 不各自判断 limit。
-- `include_content`：支持的 provider 将正文放入 `content`；不支持的 provider 保持 `content: None`。
+## 4. 错误分类
 
----
+### 4.1 `WebSearchError` 到模型消息的映射
 
-## 12 个 Provider 实现要点
+```rust
+impl WebSearchError {
+    /// Generic user-facing / model-facing message; does not leak internal
+    /// classification or provider details.
+    pub fn user_message(&self) -> String {
+        match self {
+            Self::Auth => "Search failed: please check your web search API key.".to_string(),
+            _ => "Search temporarily unavailable. Please retry later.".to_string(),
+        }
+    }
 
-| # | Provider | 协议/方法 | 认证方式 | 特殊参数 | 响应处理 |
-|---|---|---|---|---|---|
-| 1 | DuckDuckGo | GET `https://html.duckduckgo.com/html?q=` | 无 | `proxyUrl`（通过代理请求） | 解析 HTML，提取 `result__a` / `result__snippet`；处理 `uddg` 重定向 |
-| 2 | Bing | GET `https://api.bing.microsoft.com/v7.0/search` | `Ocp-Apim-Subscription-Key` | `market` | 取 `webPages.value` 数组 |
-| 3 | SerpApi | GET/POST `https://serpapi.com/search` | `api_key` query param | 多种 engine | 取 `organic_results` 数组 |
-| 4 | SearchApi | GET `https://www.searchapi.io/api/v1/search` | `Authorization: Bearer` | engine | 取 `organic_results` 数组 |
-| 5 | Serper | GET `https://google.serper.dev/search` | `X-API-KEY` | engine | 取 `organic` 数组 |
-| 6 | Baidu | POST `https://appbuilder.baidu.com/s/...` | `Authorization: Bearer` + `X-Appbuilder-Authorization` | 无 | 取 JSON 中的搜索结果数组 |
-| 7 | Serply | GET `https://api.serply.io/v1/search/` | `X-API-KEY` | 无 | 取 `results` 数组 |
-| 8 | SearXNG | GET `{baseUrl}/search` | 可选 | `baseUrl`（必需） | 解析 HTML 或 JSON 输出 |
-| 9 | Tavily | POST `https://api.tavily.com/search` | body `api_key` | `searchDepth`（basic/advanced） | 取 `results` 数组 |
-| 10 | Exa | POST `https://api.exa.ai/search` | `x-api-key` | `type`, `livecrawl` | 取 `results`；`includeContent` 映射为 `contents.text` |
-| 11 | Perplexity | POST `https://api.perplexity.ai/search` | `Authorization: Bearer` | 无 | 取 `results` 或类似字段 |
-| 12 | Moonshot | POST `{baseUrl}/web-search` | `Authorization: Bearer`（或 OAuth） | `baseUrl`（必需，可来自 `services.moonshotSearch`） | 取响应结果数组；OAuth 后续补齐 |
-
-### 特殊说明
-
-- **DuckDuckGo**：无 API key，但 HTML 解析易失效；需要稳定的 HTML 解析单元测试和回归快照。支持 `options.baseUrl` 用于测试和代理场景。
-- **SearXNG**：必须提供 `options.baseUrl`；无默认值；支持测试覆盖。
-- **Moonshot**：需要 `services.moonshotSearch` 或 `options.baseUrl`；OAuth 本次不实现，但接口预留 `token_provider` 字段为 `Option`。
-- **Baidu / Serper / Serply / SearchApi / SerpApi**：均需要 API key；在 `from_config` 中检查 `api_key` 非空，否则返回 `WebSearchError::Authentication`。
-- **Exa / Perplexity / Tavily**：支持更多 options；解析失败时返回 `WebSearchError::InvalidOptions`。
-- **所有需要 API key 的 provider**：`WebSearchProviderConfig` 的 `Debug` 输出必须 redact `api_key`，避免日志泄露。
-
----
-
-## 实现结构建议 [C:INFERRED]
-
-```
-crates/ody-web-search/src/
-  lib.rs              # 公开 re-export
-  provider.rs         # WebSearchProvider trait
-  result.rs           # WebSearchResult / WebSearchOptions / normalize_results
-  error.rs            # WebSearchError / classify / retryable
-  registry.rs         # WebSearchProviderRegistry / create_default_registry
-  fallback.rs         # FallbackWebSearchProvider
-  config.rs           # WebSearchConfig / WebSearchProviderConfig / WebSearchProviderName
-  providers/
-    mod.rs            # 统一 re-export
-    http.rs           # build_url / auth_header_for_provider / http_error / classify_from_response
-    duckduckgo.rs
-    bing.rs
-    serpapi.rs
-    searchapi.rs
-    serper.rs
-    baidu.rs
-    serply.rs
-    searxng.rs
-    tavily.rs
-    exa.rs
-    perplexity.rs
-    moonshot.rs
-  providers/fixtures/ # 每个 provider 的录制响应 fixture
+    /// Internal classification prefix for tracing/structured logs only.
+    pub fn log_message(&self) -> String {
+        match self {
+            Self::Network { message } => format!("Search failed (network): {}", message),
+            Self::Timeout => "Search timed out.".to_string(),
+            Self::Auth => "Search failed (authentication): check your API key.".to_string(),
+            Self::RateLimited => "Search failed (rate limited): please retry later.".to_string(),
+            Self::Provider { code, message } => format!("Search failed ({}): {}", code, message),
+            Self::Unexpected { message } => format!("Search failed: {}", message),
+        }
+    }
+}
 ```
 
-每个 provider 文件包含：
-1. `*Options` struct（强类型或 `serde_json::Map` 解析）。
-2. `*Provider` struct + `from_config`。
-3. `#[async_trait] impl WebSearchProvider for *Provider`。
-4. `#[cfg(test)] mod tests`：mock HTTP client + 响应解析测试 + 错误分类测试 + 响应 fixture。
+`[C:INFERRED]` `user_message()` 返回通用文本，避免向模型暴露 provider 内部状态（如限流、认证失败细节）；`log_message()` 保留分类前缀供 tracing/日志使用。
 
----
+### 4.2 HTTP 错误到 `WebSearchError` 的分类
 
-## 批次建议 [C:USER]
+```rust
+impl WebSearchError {
+    pub fn from_http_status(status: reqwest::StatusCode, body: &str) -> Self {
+        match status.as_u16() {
+            401 | 403 => Self::Auth,
+            429 => Self::RateLimited,
+            408 | 504 => Self::Timeout,
+            500..=599 => Self::Provider {
+                code: status.to_string(),
+                message: body.to_string(),
+            },
+            _ => Self::Network {
+                message: format!("HTTP {}: {}", status, body),
+            },
+        }
+    }
+}
+```
 
-| 批次 | Provider | 理由 |
-|---|---|---|
-| 第一批 | DuckDuckGo、Bing、Serper、Tavily | 实现最简单，覆盖无 key、MS key、JSON POST 三种模式 |
-| 第二批 | SerpApi、SearchApi、Baidu、Serply、SearXNG | 中等复杂度，需要更多 options 解析 |
-| 第三批 | Exa、Perplexity、Moonshot | 复杂 options / include_content / OAuth 预留 |
+`[C:INFERRED]` 分类规则是启发式的；各 provider 可在自己的实现中提供更精确的错误映射。
 
-每批次独立可测试、可 review；不阻塞其他批次。
+### 4.3 Provider 内部错误映射
 
----
+```rust
+// inside a provider implementation
+let response = self.client.get(&url).send().await
+    .map_err(|e| WebSearchError::from_reqwest(e))?;
 
-## 测试策略 [C:INFERRED]
+if !response.status().is_success() {
+    let status = response.status();
+    let body = response.text().await.unwrap_or_default();
+    return Err(WebSearchError::from_http_status(status, &body));
+}
+```
 
-- 每个 provider 使用 mock `reqwest::Client`（通过 `ProviderFactoryDeps.http_client` 注入）测试成功响应。
-- 错误路径测试：401/403/429/5xx/timeout/HTML 解析失败/非英文错误。
-- `normalize_results` 在 provider 测试之外独立测试，但 provider 测试需覆盖字段映射和 limit clamp。
-- 真实网络测试：仅作为 `#[cfg(feature = "web-search-live")]` 的集成测试，默认不运行。
-- 响应 fixture：每个 provider 在 `providers/fixtures/` 保存 `*_success.json` / `*_empty.json` / `*_error.json` 等；DuckDuckGo/SearXNG 保存 HTML fixture。fixture 用于 parity 对比和回归测试。
-- 错误分类测试：使用真实 HTTP 状态码（如 504）和非英文错误文本验证分类正确。
-- `include_content` 测试：支持的 provider 验证 `content` 填充；不支持的 provider 验证 `content: None`。
+`[C:INFERRED]` `from_reqwest` 处理连接超时、DNS 失败、TLS 错误等网络层异常，统一映射为 `WebSearchError::Network` 或 `WebSearchError::Timeout`（当 `is_timeout()` 为 true 时）。
 
----
+## 5. Error Handling / Degradation（Provider 侧）
 
-## 风险与决策
+| 场景 | 行为 | 模型可见 |
+| --- | --- | --- |
+| 网络超时 | `WebSearchError::Timeout` | `Search timed out.` |
+| 401/403 | `WebSearchError::Auth` | `Search failed (authentication): ...` |
+| 429 | `WebSearchError::RateLimited` | `Search failed (rate limited): ...` |
+| 5xx | `WebSearchError::Provider` | `Search failed (HTTP 503): ...` |
+| primary 失败且 secondary 成功 | fallback 返回 secondary 结果 | 正常结果 |
+| primary 失败且 secondary 失败 | 返回 secondary 错误 | 错误文本 |
+| 空结果 | 返回空 `Vec`（不视为错误） | `No search results found.`（由 WebSearchTool 格式化） |
 
-| 决策 | 选择 | 理由 |
-|---|---|---|
-| 是否所有 provider 一期实现 | 否，分三批 | 降低 review 负担，优先验证架构。 |
-| DuckDuckGo HTML 解析失效时如何处理 | 返回 `WebSearchError::Other` 并记录原始 HTML 前 1KB | 便于调试。 |
-| 是否统一使用 `reqwest` 而非 `ody_client` | 是 | 避免 `ody-web-search` 依赖 `ody-client` 形成循环依赖。 |
-| 是否支持自定义 HTTP headers | 是，通过 `options.customHeaders` | 与 TS `Moonshot` 对齐；其他 provider 可忽略。 |
-| 是否支持 `toolCallId` header | 是 | 与 TS `http.ts` 的 `X-Msh-Tool-Call-Id` 对齐；默认发送。 |
-| `include_content` 在不支持 provider 上的行为 | 返回 `content: None` | 避免未定义行为；不报错。 |
-| `limit` 策略 | 统一在 `normalize_results` 中 clamp 到 1..=20 | 保证不同 provider 行为一致。 |
-| 是否所有 provider 支持 `options.baseUrl` | 推荐支持 | 便于 mock HTTP 测试和代理场景。SearXNG 已必需；其他 provider 可选。 |
-| 是否保存响应 fixture | 是 | 用于 parity 测试和回归。 |
-| `api_key` 是否 redact | 是 | 防止日志/panic 泄露。 |
+`[C:USER]` 不降级为空结果：所有网络/认证/限流错误都向上抛给 `WebSearchTool`，由其包装为 `FunctionCallError::Fatal(user_message)`。
