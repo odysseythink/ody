@@ -26,11 +26,9 @@ use ody_app_server_protocol::TurnPlanStepStatus;
 use ody_app_server_protocol::TurnPlanUpdatedNotification;
 use ody_app_server_protocol::TurnStartedNotification;
 use ody_app_server_protocol::TurnStatus;
-use ody_app_server_protocol::WebSearchAction as ApiWebSearchAction;
 use ody_protocol::SessionId;
 use ody_protocol::ThreadId;
 use ody_protocol::models::PermissionProfile;
-use ody_protocol::models::WebSearchAction;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::SessionConfiguredEvent;
 use ody_utils_absolute_path::test_support::PathBufExt;
@@ -73,7 +71,6 @@ use ody_exec::TurnCompletedEvent;
 use ody_exec::TurnFailedEvent;
 use ody_exec::TurnStartedEvent;
 use ody_exec::Usage;
-use ody_exec::WebSearchItem;
 
 #[test]
 fn map_todo_items_preserves_text_and_completion_state() {
@@ -359,125 +356,7 @@ fn reasoning_items_emit_summary_not_raw_content() {
     );
 }
 
-#[test]
-fn web_search_completion_preserves_query_and_action() {
-    let mut processor = EventProcessorWithJsonOutput::new(/*last_message_path*/ None);
 
-    let collected = processor.collect_thread_events(ServerNotification::ItemCompleted(
-        ItemCompletedNotification {
-            item: ThreadItem::WebSearch {
-                id: "search-1".to_string(),
-                query: "rust async await".to_string(),
-                action: Some(ApiWebSearchAction::Search {
-                    query: Some("rust async await".to_string()),
-                    queries: None,
-                    result_count: None,
-                }),
-                result_count: None,
-            },
-            thread_id: "thread-1".to_string(),
-            turn_id: "turn-1".to_string(),
-            completed_at_ms: 0,
-        },
-    ));
-
-    assert_eq!(
-        collected,
-        CollectedThreadEvents {
-            events: vec![ThreadEvent::ItemCompleted(ItemCompletedEvent {
-                item: ExecThreadItem {
-                    id: "item_0".to_string(),
-                    details: ThreadItemDetails::WebSearch(WebSearchItem {
-                        id: "search-1".to_string(),
-                        query: "rust async await".to_string(),
-                        action: WebSearchAction::Search {
-                            query: Some("rust async await".to_string()),
-                            queries: None,
-                            result_count: None,
-                        },
-                        result_count: None,
-                    }),
-                },
-            })],
-            status: OdyStatus::Running,
-        }
-    );
-}
-
-#[test]
-fn web_search_start_and_completion_reuse_item_id() {
-    let mut processor = EventProcessorWithJsonOutput::new(/*last_message_path*/ None);
-
-    let started =
-        processor.collect_thread_events(ServerNotification::ItemStarted(ItemStartedNotification {
-            item: ThreadItem::WebSearch {
-                id: "search-1".to_string(),
-                query: String::new(),
-                action: None,
-                result_count: None,
-            },
-            thread_id: "thread-1".to_string(),
-            turn_id: "turn-1".to_string(),
-            started_at_ms: 0,
-        }));
-
-    let completed = processor.collect_thread_events(ServerNotification::ItemCompleted(
-        ItemCompletedNotification {
-            item: ThreadItem::WebSearch {
-                id: "search-1".to_string(),
-                query: "rust async await".to_string(),
-                action: Some(ApiWebSearchAction::Search {
-                    query: Some("rust async await".to_string()),
-                    queries: None,
-                    result_count: None,
-                }),
-                result_count: None,
-            },
-            thread_id: "thread-1".to_string(),
-            turn_id: "turn-1".to_string(),
-            completed_at_ms: 0,
-        },
-    ));
-
-    assert_eq!(
-        started,
-        CollectedThreadEvents {
-            events: vec![ThreadEvent::ItemStarted(ItemStartedEvent {
-                item: ExecThreadItem {
-                    id: "item_0".to_string(),
-                    details: ThreadItemDetails::WebSearch(WebSearchItem {
-                        id: "search-1".to_string(),
-                        query: String::new(),
-                        action: WebSearchAction::Other,
-                        result_count: None,
-                    }),
-                },
-            })],
-            status: OdyStatus::Running,
-        }
-    );
-    assert_eq!(
-        completed,
-        CollectedThreadEvents {
-            events: vec![ThreadEvent::ItemCompleted(ItemCompletedEvent {
-                item: ExecThreadItem {
-                    id: "item_0".to_string(),
-                    details: ThreadItemDetails::WebSearch(WebSearchItem {
-                        id: "search-1".to_string(),
-                        query: "rust async await".to_string(),
-                        action: WebSearchAction::Search {
-                            query: Some("rust async await".to_string()),
-                            queries: None,
-                            result_count: None,
-                        },
-                        result_count: None,
-                    }),
-                },
-            })],
-            status: OdyStatus::Running,
-        }
-    );
-}
 
 #[test]
 fn mcp_tool_call_begin_and_end_emit_item_events() {

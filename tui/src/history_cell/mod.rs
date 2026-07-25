@@ -60,7 +60,6 @@ use ody_app_server_protocol::McpServerStatus;
 use ody_app_server_protocol::McpServerStatusDetail;
 use ody_app_server_protocol::ToolRequestUserInputAnswer;
 use ody_app_server_protocol::ToolRequestUserInputQuestion;
-use ody_app_server_protocol::WebSearchAction;
 #[cfg(test)]
 use ody_config::types::McpServerTransportConfig;
 #[cfg(test)]
@@ -119,7 +118,6 @@ mod patches;
 mod plans;
 mod preview;
 mod request_user_input;
-mod search;
 mod separators;
 mod session;
 
@@ -137,7 +135,6 @@ pub(crate) use plans::render_plan_steps;
 pub(crate) use plans::*;
 pub(crate) use preview::*;
 pub(crate) use request_user_input::*;
-pub(crate) use search::*;
 pub(crate) use separators::*;
 pub(crate) use session::*;
 

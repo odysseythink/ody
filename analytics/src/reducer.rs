@@ -47,8 +47,6 @@ use crate::events::OdyTurnEventParams;
 use crate::events::OdyTurnEventRequest;
 use crate::events::OdyTurnSteerEventParams;
 use crate::events::OdyTurnSteerEventRequest;
-use crate::events::OdyWebSearchEventParams;
-use crate::events::OdyWebSearchEventRequest;
 use crate::events::ReviewResolution;
 use crate::events::ReviewStatus;
 use crate::events::ReviewSubjectKind;
@@ -61,7 +59,6 @@ use crate::events::ThreadInitializedEventParams;
 use crate::events::ToolItemFailureKind;
 use crate::events::ToolItemTerminalStatus;
 use crate::events::TrackEventRequest;
-use crate::events::WebSearchActionKind;
 use crate::events::ody_app_metadata;
 use crate::events::ody_compaction_event_params;
 use crate::events::ody_goal_event_params;
@@ -132,7 +129,6 @@ use ody_app_server_protocol::ServerResponse;
 use ody_app_server_protocol::ThreadItem;
 use ody_app_server_protocol::TurnSteerResponse;
 use ody_app_server_protocol::UserInput;
-use ody_app_server_protocol::WebSearchAction;
 use ody_client::default_client::originator;
 use ody_git_utils::collect_git_info;
 use ody_git_utils::get_git_repo_root;
@@ -394,7 +390,6 @@ impl TurnToolCounts {
             ThreadItem::CollabAgentToolCall { .. } | ThreadItem::SubAgentActivity { .. } => {
                 self.subagent_tool_call += 1;
             }
-            ThreadItem::WebSearch { .. } => self.web_search += 1,
             ThreadItem::ImageGeneration { .. } => self.image_generation += 1,
             ThreadItem::UserMessage { .. }
             | ThreadItem::HookPrompt { .. }
@@ -1767,7 +1762,6 @@ fn tracked_tool_item_id(item: &ThreadItem) -> Option<&str> {
         | ThreadItem::McpToolCall { id, .. }
         | ThreadItem::DynamicToolCall { id, .. }
         | ThreadItem::CollabAgentToolCall { id, .. }
-        | ThreadItem::WebSearch { id, .. }
         | ThreadItem::ImageGeneration { id, .. } => Some(id),
         ThreadItem::UserMessage { .. }
         | ThreadItem::HookPrompt { .. }
@@ -2052,35 +2046,7 @@ fn tool_item_event(input: ToolItemEventInput<'_>) -> Option<TrackEventRequest> {
                 },
             ))
         }
-        ThreadItem::WebSearch { id, query, action, .. } => {
-            let base = tool_item_base(
-                thread_id,
-                turn_id,
-                id.clone(),
-                "web_search".to_string(),
-                ToolItemOutcome {
-                    terminal_status: ToolItemTerminalStatus::Completed,
-                    failure_kind: None,
-                    execution_duration_ms: None,
-                },
-                ToolItemContext {
-                    started_at_ms,
-                    completed_at_ms,
-                    connection_state,
-                    thread_metadata,
-                    review_summary,
-                },
-            );
-            Some(TrackEventRequest::WebSearch(OdyWebSearchEventRequest {
-                event_type: "ody_web_search_event",
-                event_params: OdyWebSearchEventParams {
-                    base,
-                    web_search_action: action.as_ref().map(web_search_action_kind),
-                    query_present: !query.trim().is_empty(),
-                    query_count: web_search_query_count(query, action.as_ref()),
-                },
-            }))
-        }
+
         ThreadItem::ImageGeneration {
             id,
             status,
@@ -2541,27 +2507,7 @@ fn dynamic_content_counts(items: &[DynamicToolCallOutputContentItem]) -> Dynamic
     }
 }
 
-fn web_search_action_kind(action: &WebSearchAction) -> WebSearchActionKind {
-    match action {
-        WebSearchAction::Search { .. } => WebSearchActionKind::Search,
-        WebSearchAction::OpenPage { .. } => WebSearchActionKind::OpenPage,
-        WebSearchAction::FindInPage { .. } => WebSearchActionKind::FindInPage,
-        WebSearchAction::Other => WebSearchActionKind::Other,
-    }
-}
 
-fn web_search_query_count(query: &str, action: Option<&WebSearchAction>) -> Option<u64> {
-    match action {
-        Some(WebSearchAction::Search { query, queries, .. }) => queries
-            .as_ref()
-            .map(|queries| usize_to_u64(queries.len()))
-            .or_else(|| query.as_ref().map(|_| 1)),
-        Some(WebSearchAction::OpenPage { .. })
-        | Some(WebSearchAction::FindInPage { .. })
-        | Some(WebSearchAction::Other) => None,
-        None => (!query.trim().is_empty()).then_some(1),
-    }
-}
 
 fn accepted_line_event_input(
     turn_id: &str,

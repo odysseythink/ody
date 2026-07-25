@@ -21,7 +21,6 @@ use crate::protocol::v2::TurnError;
 use crate::protocol::v2::TurnItemsView;
 use crate::protocol::v2::TurnStatus;
 use crate::protocol::v2::UserInput;
-use crate::protocol::v2::WebSearchAction;
 use ody_protocol::items::parse_hook_prompt_message;
 use ody_protocol::models::MessagePhase;
 use ody_protocol::protocol::AgentReasoningEvent;
@@ -53,8 +52,6 @@ use ody_protocol::protocol::TurnCompleteEvent;
 use ody_protocol::protocol::TurnStartedEvent;
 use ody_protocol::protocol::UserMessageEvent;
 use ody_protocol::protocol::ViewImageToolCallEvent;
-use ody_protocol::protocol::WebSearchBeginEvent;
-use ody_protocol::protocol::WebSearchEndEvent;
 use std::collections::HashMap;
 use tracing::warn;
 use uuid::Uuid;
@@ -324,8 +321,6 @@ impl ThreadHistoryBuilder {
             EventMsg::AgentReasoningRawContent(payload) => {
                 self.handle_agent_reasoning_raw_content(payload)
             }
-            EventMsg::WebSearchBegin(payload) => self.handle_web_search_begin(payload),
-            EventMsg::WebSearchEnd(payload) => self.handle_web_search_end(payload),
             EventMsg::ExecCommandBegin(payload) => self.handle_exec_command_begin(payload),
             EventMsg::ExecCommandEnd(payload) => self.handle_exec_command_end(payload),
             EventMsg::GuardianAssessment(payload) => self.handle_guardian_assessment(payload),
@@ -592,7 +587,6 @@ impl ThreadHistoryBuilder {
             | ody_protocol::items::TurnItem::HookPrompt(_)
             | ody_protocol::items::TurnItem::AgentMessage(_)
             | ody_protocol::items::TurnItem::Reasoning(_)
-            | ody_protocol::items::TurnItem::WebSearch(_)
             | ody_protocol::items::TurnItem::ImageView(_)
             | ody_protocol::items::TurnItem::ImageGeneration(_)
             | ody_protocol::items::TurnItem::FileChange(_)
@@ -622,7 +616,6 @@ impl ThreadHistoryBuilder {
             | ody_protocol::items::TurnItem::HookPrompt(_)
             | ody_protocol::items::TurnItem::AgentMessage(_)
             | ody_protocol::items::TurnItem::Reasoning(_)
-            | ody_protocol::items::TurnItem::WebSearch(_)
             | ody_protocol::items::TurnItem::ImageView(_)
             | ody_protocol::items::TurnItem::ImageGeneration(_)
             | ody_protocol::items::TurnItem::FileChange(_)
@@ -631,25 +624,7 @@ impl ThreadHistoryBuilder {
         }
     }
 
-    fn handle_web_search_begin(&mut self, payload: &WebSearchBeginEvent) {
-        let item = ThreadItem::WebSearch {
-            id: payload.call_id.clone(),
-            query: String::new(),
-            action: None,
-            result_count: None,
-        };
-        self.upsert_item_in_current_turn(item);
-    }
 
-    fn handle_web_search_end(&mut self, payload: &WebSearchEndEvent) {
-        let item = ThreadItem::WebSearch {
-            id: payload.call_id.clone(),
-            query: payload.query.clone(),
-            action: Some(WebSearchAction::from(payload.action.clone())),
-            result_count: None,
-        };
-        self.upsert_item_in_current_turn(item);
-    }
 
     fn handle_exec_command_begin(&mut self, payload: &ExecCommandBeginEvent) {
         let item = build_command_execution_begin_item(payload);
@@ -1572,7 +1547,6 @@ mod tests {
     use ody_protocol::mcp::CallToolResult;
     use ody_protocol::models::ImageDetail;
     use ody_protocol::models::MessagePhase as CoreMessagePhase;
-    use ody_protocol::models::WebSearchAction as CoreWebSearchAction;
     use ody_protocol::parse_command::ParsedCommand;
     use ody_protocol::protocol::AgentMessageEvent;
     use ody_protocol::protocol::AgentReasoningEvent;
@@ -1593,9 +1567,7 @@ mod tests {
     use ody_protocol::protocol::TurnCompleteEvent;
     use ody_protocol::protocol::TurnStartedEvent;
     use ody_protocol::protocol::UserMessageEvent;
-    use ody_protocol::protocol::WebSearchBeginEvent;
-    use ody_protocol::protocol::WebSearchEndEvent;
-    use ody_utils_absolute_path::test_support::PathBufExt;
+            use ody_utils_absolute_path::test_support::PathBufExt;
     use ody_utils_absolute_path::test_support::test_path_buf;
     use pretty_assertions::assert_eq;
     use std::path::PathBuf;
@@ -2377,15 +2349,6 @@ mod tests {
                 local_images: Vec::new(),
                 ..Default::default()
             }),
-            EventMsg::WebSearchEnd(WebSearchEndEvent {
-                call_id: "search-1".into(),
-                query: "ody".into(),
-                action: CoreWebSearchAction::Search {
-                    query: Some("ody".into()),
-                    queries: None,
-                    result_count: None,
-                },
-            }),
             EventMsg::ExecCommandEnd(ExecCommandEndEvent {
                 call_id: "exec-1".into(),
                 process_id: Some("pid-1".into()),
@@ -2428,22 +2391,9 @@ mod tests {
             .collect::<Vec<_>>();
         let turns = build_turns_from_rollout_items(&items);
         assert_eq!(turns.len(), 1);
-        assert_eq!(turns[0].items.len(), 4);
+        assert_eq!(turns[0].items.len(), 3);
         assert_eq!(
             turns[0].items[1],
-            ThreadItem::WebSearch {
-                id: "search-1".into(),
-                query: "ody".into(),
-                action: Some(WebSearchAction::Search {
-                    query: Some("ody".into()),
-                    queries: None,
-                    result_count: None,
-                }),
-                result_count: None,
-            }
-        );
-        assert_eq!(
-            turns[0].items[2],
             ThreadItem::CommandExecution {
                 id: "exec-1".into(),
                 command: "echo 'hello world'".into(),
@@ -2460,7 +2410,7 @@ mod tests {
             }
         );
         assert_eq!(
-            turns[0].items[3],
+            turns[0].items[2],
             ThreadItem::McpToolCall {
                 id: "mcp-1".into(),
                 server: "docs".into(),
@@ -3833,48 +3783,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn changed_rollout_item_reports_updated_existing_item_snapshot() {
-        let mut builder = ThreadHistoryBuilder::new();
-        builder.handle_rollout_item_with_changes(&RolloutItem::EventMsg(EventMsg::WebSearchBegin(
-            WebSearchBeginEvent {
-                call_id: "search-1".into(),
-            },
-        )));
-
-        let changes = builder.handle_rollout_item_with_changes(&RolloutItem::EventMsg(
-            EventMsg::WebSearchEnd(WebSearchEndEvent {
-                call_id: "search-1".into(),
-                query: "ody".into(),
-                action: CoreWebSearchAction::Search {
-                    query: Some("ody".into()),
-                    queries: None,
-                    result_count: None,
-                },
-            }),
-        ));
-
-        assert_eq!(
-            changes,
-            ThreadHistoryChangeSet {
-                changed_items: vec![ThreadHistoryItemChange {
-                    turn_id: "rollout-0".into(),
-                    item: ThreadItem::WebSearch {
-                        id: "search-1".into(),
-                        query: "ody".into(),
-                        action: Some(WebSearchAction::Search {
-                            query: Some("ody".into()),
-                            queries: None,
-                            result_count: None,
-                        }),
-                        result_count: None,
-                    },
-                }],
-                changed_turns: Vec::new(),
-                removed_turn_ids: Vec::new(),
-            }
-        );
-    }
 
     #[test]
     fn changed_rollout_item_reports_streaming_item_mutation() {
@@ -3974,52 +3882,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn changed_rollout_items_dedupe_updated_item_snapshots() {
-        let mut builder = ThreadHistoryBuilder::new();
-        let changes = builder.handle_rollout_items_with_changes(&[
-            RolloutItem::EventMsg(EventMsg::WebSearchBegin(WebSearchBeginEvent {
-                call_id: "search-1".into(),
-            })),
-            RolloutItem::EventMsg(EventMsg::WebSearchEnd(WebSearchEndEvent {
-                call_id: "search-1".into(),
-                query: "ody".into(),
-                action: CoreWebSearchAction::Search {
-                    query: Some("ody".into()),
-                    queries: None,
-                    result_count: None,
-                },
-            })),
-        ]);
-
-        assert_eq!(
-            changes,
-            ThreadHistoryChangeSet {
-                changed_items: vec![ThreadHistoryItemChange {
-                    turn_id: "rollout-0".into(),
-                    item: ThreadItem::WebSearch {
-                        id: "search-1".into(),
-                        query: "ody".into(),
-                        action: Some(WebSearchAction::Search {
-                            query: Some("ody".into()),
-                            queries: None,
-                            result_count: None,
-                        }),
-                        result_count: None,
-                    },
-                }],
-                changed_turns: vec![ThreadHistoryTurnChange {
-                    turn_id: "rollout-0".into(),
-                    status: TurnStatus::Completed,
-                    error: None,
-                    started_at: None,
-                    completed_at: None,
-                    duration_ms: None,
-                }],
-                removed_turn_ids: Vec::new(),
-            }
-        );
-    }
 
     #[test]
     fn changed_rollout_items_dedupe_turn_metadata_snapshots() {

@@ -116,27 +116,36 @@
 
 ## 总览
 
-| # | 子任务 | 范围 | 模式 | Depends on | 可并行 |
-| --- | --- | --- | --- | --- | --- |
-| D1.0 | 设计 spec：trait 位置、注入点、配置 schema、协议字段迁移 | 设计文档 | [design] | none | — |
-| R1.1 | 删除 ext/web-search 扩展 | 整个 crate、workspace/Cargo.toml 引用 | [normal] | D1.0 | 否 |
-| R1.2 | 删除 ody-api SearchClient / alpha/search 端点 | `ody-api/src/endpoint/search.rs`、`ody-api/src/search.rs` 等 | [normal] | D1.0 | 否（与 R1.1 同层，可并行） |
-| R1.3 | 删除 core 中 hosted/standalone web search 工具路径 | `core/src/tools/hosted_spec.rs`、`core/src/tools/spec_plan.rs` 相关分支 | [normal] | D1.0 | 可并行（R1.1/R1.2 独立） |
-| R1.4 | 删除 provider/model 能力字段 | `model-provider-info`、`models-manager`、`protocol` | [normal] | D1.0 | 可并行 |
-| R1.5 | 删除 config/feature/CLI 中 web_search_mode | `config`、`features`、`cli` | [normal] | D1.0 | 可并行 |
-| I2.1 | 新增 WebSearchProvider trait 与 WebSearchResult | 决定 crate（建议 `ody-core` 或新 `ody-web-search`） | [plan] | D1.0 | 否 |
-| I2.2 | 新增 provider 注册表 + fallback + 错误分类 | 对齐 TS registry/runtime | [plan] | I2.1 | 否 |
-| I3.1-I3.12 | 逐个实现 12 个 provider | 每个 provider 独立文件 + 单元测 | [normal] | I2.2 | 可并行（provider 之间） |
-| I4.1 | 新增 `services.webSearch` 配置 schema | `ody-config` + `agent-core-shared` 风格 | [plan] | D1.0 | 可并行（与 I2.x 并行） |
-| I4.2 | 实现 app-server 中 provider 解析与注入 | `app-server/src/extensions.rs` 或新注入点 | [plan] | I2.1, I4.1 | 否 |
-| I5.1 | 实现 `WebSearchTool` 并接入工具规划 | `core/src/tools/` 或 extension | [plan] | I2.2, I4.2 | 否 |
-| I6.1 | TUI chip 渲染 | `tui/src/...` 工具结果 chip | [normal] | I5.1 | 否 |
-| T7.1 | provider 单元测试 | 每个 provider | [normal] | I3.x | 否 |
-| T7.2 | registry/fallback 测试 | 对齐 TS `fallback.test.ts`、`runtime.test.ts` | [normal] | I2.2 | 否 |
-| T7.3 | 工具执行与配置解析测试 | `core` 测试 | [normal] | I5.1, I4.1 | 否 |
-| T7.4 | TS-Rust parity 测试 | `integration-tests` 或新 parity 用例 | [plan] | I5.1, I6.1 | 否 |
+| # | 子任务 | 范围 | 模式 | Depends on | 可并行 | 状态 |
+| --- | --- | --- | --- | --- | --- | --- |
+| D1.0 | 设计 spec：trait 位置、注入点、配置 schema、协议字段迁移 | 设计文档 | [design] | none | — | ✅ 完成 |
+| R1.1 | 删除 ext/web-search 扩展 | 整个 crate、workspace/Cargo.toml 引用 | [normal] | D1.0 | 否 | ✅ 完成 |
+| R1.2 | 删除 ody-api SearchClient / alpha/search 端点 | `ody-api/src/endpoint/search.rs`、`ody-api/src/search.rs` 等 | [normal] | D1.0 | 否（与 R1.1 同层，可并行） | ✅ 完成 |
+| R1.3 | 删除 core 中 hosted/standalone web search 工具路径 | `core/src/tools/hosted_spec.rs`、`core/src/tools/spec_plan.rs` 相关分支 | [normal] | D1.0 | 可并行（R1.1/R1.2 独立） | ✅ 完成：旧协议字段 `WebSearchItem`/`WebSearchAction`/`WebSearchCall` 已彻底清理，事件映射/历史/TUI 分支已移除，schema fixtures 已重新生成 |
+| R1.4 | 删除 provider/model 能力字段 | `model-provider-info`、`models-manager`、`protocol` | [normal] | D1.0 | 可并行 | ❌ 未完成：`model-provider-info/src/lib.rs` 仍保留 `ProviderCapabilities.web_search` 及默认值 |
+| R1.5 | 删除 config/feature/CLI 中 web_search_mode | `config`、`features`、`cli` | [normal] | D1.0 | 可并行 | ✅ 基本完成：features/cli 已清理，config 已改用 `services.webSearch` 并拒绝旧 `tools.web_search`；但 `protocol/src/config_types.rs` 仍有 `WebSearchMode` 枚举，TUI 侧有 legacy kv override |
+| I2.1 | 新增 WebSearchProvider trait 与 WebSearchResult | 决定 crate（建议 `ody-core` 或新 `ody-web-search`） | [plan] | D1.0 | 否 | ✅ 完成 |
+| I2.2 | 新增 provider 注册表 + fallback + 错误分类 | 对齐 TS registry/runtime | [plan] | I2.1 | 否 | ✅ 完成 |
+| I3.1-I3.12 | 逐个实现 12 个 provider | 每个 provider 独立文件 + 单元测 | [normal] | I2.2 | 可并行（provider 之间） | ⚠️ 部分完成：4 个已实现（bing/serpapi/searchapi/moonshot），8 个为 `NotImplementedFactory` 占位 |
+| I4.1 | 新增 `services.webSearch` 配置 schema | `ody-config` + `agent-core-shared` 风格 | [plan] | D1.0 | 可并行（与 I2.x 并行） | ✅ 完成 |
+| I4.2 | 实现 app-server 中 provider 解析与注入 | `app-server/src/extensions.rs` 或新注入点 | [plan] | I2.1, I4.1 | 否 | ✅ 完成 |
+| I5.1 | 实现 `WebSearchTool` 并接入工具规划 | `core/src/tools/` 或 extension | [plan] | I2.2, I4.2 | 否 | ✅ 完成：工具名 `WebSearch`，输入 `{query, limit, include_content}`，输出格式化文本；但仍 emit `WebSearchItem` 旧 turn item |
+| I6.1 | TUI chip 渲染 | `tui/src/...` 工具结果 chip | [normal] | I5.1 | 否 | ⚠️ 部分完成：已能渲染结果计数 chip，但 TUI 仍依赖旧 `WebSearchAction`/`WebSearchItem` 专用类型 |
+| T7.1 | provider 单元测试 | 每个 provider | [normal] | I3.x | 否 | ✅ 完成（已实现的 4 个 provider 均有测试） |
+| T7.2 | registry/fallback 测试 | 对齐 TS `fallback.test.ts`、`runtime.test.ts` | [normal] | I2.2 | 否 | ✅ 完成 |
+| T7.3 | 工具执行与配置解析测试 | `core` 测试 | [normal] | I5.1, I4.1 | 否 | ✅ 完成（`ody-web-search/tool.rs` 与 `config_toml.rs` 已有测试） |
+| T7.4 | TS-Rust parity 测试 | `integration-tests` 或新 parity 用例 | [plan] | I5.1, I6.1 | 否 | ❌ 未开始 |
 
 ---
+
+## 当前状态摘要（2026-07-25）
+
+- **已完成：** D1.0、R1.1、R1.2、R1.3、R1.5（大部分）、I2.1、I2.2、I4.1、I4.2、I5.1、T7.2、T7.3。
+- **部分完成：** I3.x（仅 4/12 provider 实现）、I6.1（TUI 已移除 `WebSearchAction`/`WebSearchItem` 专用渲染并重新生成 schema，但纯文本 chip 的 N-results 计数仍需后续 I6.1 完善）。
+- **未完成：** R1.4（`model-provider-info` 仍保留 `web_search` capability）、T7.4（parity 测试未开始）。
+- **测试状态：** `cargo check --workspace` 已通过（仅既有 warning）。`ody-protocol`、`ody-tools`、`ody-web-search`、`ody-app-server-protocol`、`ody-analytics` 相关测试通过；`ody-core` 与 `ody-tui` 中部分依赖网络/API key 的集成测试在当前环境失败，与 R1.3 清理无直接关系。
+
+下一步建议：先完成 R1.4，再实现剩余 8 个 provider，最后完善 TUI 纯文本 chip 的 N-results 计数（I6.1）。
 
 ## 详细阶段
 

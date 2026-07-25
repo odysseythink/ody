@@ -1108,22 +1108,6 @@ fn unified_exec_interaction_cell_height_matches_wrapped_rendering() {
     );
 }
 
-#[test]
-fn web_search_history_cell_snapshot() {
-    let query = "example search query with several generic words to exercise wrapping".to_string();
-    let cell = new_web_search_call(
-        "call-1".to_string(),
-        query.clone(),
-        WebSearchAction::Search {
-            query: Some(query),
-            queries: None,
-            result_count: None,
-        },
-    );
-    let rendered = render_lines(&cell.display_lines(/*width*/ 64)).join("\n");
-
-    insta::assert_snapshot!(rendered);
-}
 
 #[test]
 fn standalone_unix_update_available_history_cell_snapshot() {
@@ -1143,73 +1127,9 @@ fn standalone_windows_update_available_history_cell_snapshot() {
     insta::assert_snapshot!(rendered);
 }
 
-#[test]
-fn web_search_history_cell_without_detail_snapshot() {
-    let cell = new_web_search_call("call-1".to_string(), String::new(), WebSearchAction::Other);
-    let rendered = render_lines(&cell.display_lines(/*width*/ 64)).join("\n");
 
-    insta::assert_snapshot!(rendered);
-}
 
-#[test]
-fn web_search_history_cell_wraps_with_indented_continuation() {
-    let query = "example search query with several generic words to exercise wrapping".to_string();
-    let cell = new_web_search_call(
-        "call-1".to_string(),
-        query.clone(),
-        WebSearchAction::Search {
-            query: Some(query),
-            queries: None,
-            result_count: None,
-        },
-    );
-    let rendered = render_lines(&cell.display_lines(/*width*/ 64));
 
-    assert_eq!(
-        rendered,
-        vec![
-            "• Searched the web for example search query with several generic".to_string(),
-            "  words to exercise wrapping".to_string(),
-        ]
-    );
-}
-
-#[test]
-fn web_search_history_cell_short_query_does_not_wrap() {
-    let query = "short query".to_string();
-    let cell = new_web_search_call(
-        "call-1".to_string(),
-        query.clone(),
-        WebSearchAction::Search {
-            query: Some(query),
-            queries: None,
-            result_count: None,
-        },
-    );
-    let rendered = render_lines(&cell.display_lines(/*width*/ 64));
-
-    assert_eq!(
-        rendered,
-        vec!["• Searched the web for short query".to_string()]
-    );
-}
-
-#[test]
-fn web_search_history_cell_transcript_snapshot() {
-    let query = "example search query with several generic words to exercise wrapping".to_string();
-    let cell = new_web_search_call(
-        "call-1".to_string(),
-        query.clone(),
-        WebSearchAction::Search {
-            query: Some(query),
-            queries: None,
-            result_count: None,
-        },
-    );
-    let rendered = render_lines(&cell.transcript_lines(/*width*/ 64)).join("\n");
-
-    insta::assert_snapshot!(rendered);
-}
 
 #[test]
 fn active_mcp_tool_call_snapshot() {

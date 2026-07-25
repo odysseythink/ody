@@ -4,7 +4,6 @@ use crate::models::ContentItem;
 use crate::models::ImageDetail;
 use crate::models::MessagePhase;
 use crate::models::ResponseItem;
-use crate::models::WebSearchAction;
 use crate::protocol::AgentMessageEvent;
 use crate::protocol::AgentReasoningEvent;
 use crate::protocol::AgentReasoningRawContentEvent;
@@ -20,7 +19,6 @@ use crate::protocol::PatchApplyEndEvent;
 use crate::protocol::PatchApplyStatus;
 use crate::protocol::UserMessageEvent;
 use crate::protocol::ViewImageToolCallEvent;
-use crate::protocol::WebSearchEndEvent;
 use crate::user_input::ByteRange;
 use crate::user_input::TextElement;
 use crate::user_input::UserInput;
@@ -45,9 +43,6 @@ pub enum TurnItem {
     AgentMessage(AgentMessageItem),
     Plan(PlanItem),
     Reasoning(ReasoningItem),
-    /// Deprecated: retained for loading old thread history.
-    /// New web search results are rendered as AgentMessage items.
-    WebSearch(WebSearchItem),
     ImageView(ImageViewItem),
     Sleep(SleepItem),
     ImageGeneration(ImageGenerationItem),
@@ -144,18 +139,6 @@ pub struct ReasoningItem {
     pub summary_text: Vec<String>,
     #[serde(default)]
     pub raw_content: Vec<String>,
-}
-
-/// Deprecated: retained for loading old thread history.
-/// New web search results are rendered as AgentMessage items.
-#[derive(Debug, Clone, Deserialize, Serialize, TS, JsonSchema, PartialEq)]
-pub struct WebSearchItem {
-    pub id: String,
-    pub query: String,
-    pub action: WebSearchAction,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub result_count: Option<usize>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, TS, JsonSchema, PartialEq)]
@@ -523,16 +506,6 @@ impl ReasoningItem {
     }
 }
 
-impl WebSearchItem {
-    pub fn as_legacy_event(&self) -> EventMsg {
-        EventMsg::WebSearchEnd(WebSearchEndEvent {
-            call_id: self.id.clone(),
-            query: self.query.clone(),
-            action: self.action.clone(),
-        })
-    }
-}
-
 impl ImageGenerationItem {
     pub fn as_legacy_event(&self) -> EventMsg {
         EventMsg::ImageGenerationEnd(ImageGenerationEndEvent {
@@ -617,7 +590,6 @@ impl TurnItem {
             TurnItem::AgentMessage(item) => item.id.clone(),
             TurnItem::Plan(item) => item.id.clone(),
             TurnItem::Reasoning(item) => item.id.clone(),
-            TurnItem::WebSearch(item) => item.id.clone(),
             TurnItem::ImageView(item) => item.id.clone(),
             TurnItem::Sleep(item) => item.id.clone(),
             TurnItem::ImageGeneration(item) => item.id.clone(),
@@ -633,7 +605,6 @@ impl TurnItem {
             TurnItem::HookPrompt(_) => Vec::new(),
             TurnItem::AgentMessage(item) => item.as_legacy_events(),
             TurnItem::Plan(_) => Vec::new(),
-            TurnItem::WebSearch(item) => vec![item.as_legacy_event()],
             TurnItem::ImageView(item) => {
                 vec![EventMsg::ViewImageToolCall(ViewImageToolCallEvent {
                     call_id: item.id.clone(),

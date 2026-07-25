@@ -64,7 +64,6 @@ pub(crate) fn prepare_response_items(items: &mut [ResponseItem]) {
             | ResponseItem::ToolSearchCall { .. }
             | ResponseItem::CustomToolCall { .. }
             | ResponseItem::ToolSearchOutput { .. }
-            | ResponseItem::WebSearchCall { .. }
             | ResponseItem::ImageGenerationCall { .. }
             | ResponseItem::Compaction { .. }
             | ResponseItem::CompactionTrigger { .. }

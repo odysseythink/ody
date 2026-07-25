@@ -2027,7 +2027,6 @@ mod tests {
             ("model_reasoning_summary".to_string(), string("detailed")),
             ("model_verbosity".to_string(), string("low")),
             ("personality".to_string(), string("pragmatic")),
-            ("web_search".to_string(), string("disabled")),
             ("bypass_hook_trust".to_string(), true.into()),
         ]);
         assert_eq!(start.config, Some(expected_config.clone()));

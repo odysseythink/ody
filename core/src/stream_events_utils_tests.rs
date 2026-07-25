@@ -46,39 +46,6 @@ fn assistant_output_text_with_phase(text: &str, phase: Option<MessagePhase>) -> 
     }
 }
 
-#[test]
-fn external_context_pollution_items_include_web_search_and_tool_search() {
-    let polluting_items = [
-        ResponseItem::WebSearchCall {
-            id: None,
-            status: Some("completed".to_string()),
-            action: None,
-            internal_chat_message_metadata_passthrough: None,
-        },
-        ResponseItem::ToolSearchCall {
-            id: None,
-            call_id: Some("search-1".to_string()),
-            status: None,
-            execution: "client".to_string(),
-            arguments: serde_json::json!({"query": "calendar"}),
-            internal_chat_message_metadata_passthrough: None,
-        },
-        ResponseItem::ToolSearchOutput {
-            id: None,
-            call_id: Some("search-1".to_string()),
-            status: "completed".to_string(),
-            execution: "client".to_string(),
-            tools: Vec::new(),
-            internal_chat_message_metadata_passthrough: None,
-        },
-    ];
-
-    assert!(
-        polluting_items
-            .iter()
-            .all(response_item_may_include_external_context)
-    );
-}
 
 #[test]
 fn external_context_pollution_items_exclude_local_tool_calls() {

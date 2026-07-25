@@ -1,4 +1,3 @@
-use ody_protocol::models::WebSearchAction;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
@@ -119,9 +118,6 @@ pub enum ThreadItemDetails {
     /// Represents a call to a collab tool. The item starts when the collab tool is
     /// invoked and completes when the collab tool reports success or failure.
     CollabToolCall(CollabToolCallItem),
-    /// Captures a web search request. It starts when the search is kicked off
-    /// and completes when results are returned to the agent.
-    WebSearch(WebSearchItem),
     /// Tracks the agent's running to-do list. It starts when the plan is first
     /// issued, updates as steps change state, and completes when the turn ends.
     TodoList(TodoListItem),
@@ -288,16 +284,6 @@ pub struct McpToolCallItem {
     pub result: Option<McpToolCallItemResult>,
     pub error: Option<McpToolCallItemError>,
     pub status: McpToolCallStatus,
-}
-
-/// A web search request.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
-pub struct WebSearchItem {
-    pub id: String,
-    pub query: String,
-    pub action: WebSearchAction,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub result_count: Option<usize>,
 }
 
 /// An error notification.

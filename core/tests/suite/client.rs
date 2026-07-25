@@ -61,7 +61,6 @@ use ody_protocol::models::MessagePhase;
 use ody_protocol::models::ReasoningItemContent;
 use ody_protocol::models::ReasoningItemReasoningSummary;
 use ody_protocol::models::ResponseItem;
-use ody_protocol::models::WebSearchAction;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::Op;
 use ody_protocol::protocol::RolloutItem;
@@ -2471,16 +2470,6 @@ async fn azure_responses_request_includes_store_and_reasoning_ids() {
             text: "message".into(),
         }],
         phase: None,
-        internal_chat_message_metadata_passthrough: None,
-    });
-    prompt.input.push(ResponseItem::WebSearchCall {
-        id: Some("web-search-id".into()),
-        status: Some("completed".into()),
-        action: Some(WebSearchAction::Search {
-            query: Some("weather".into()),
-            queries: None,
-            result_count: None,
-        }),
         internal_chat_message_metadata_passthrough: None,
     });
     prompt.input.push(ResponseItem::FunctionCall {

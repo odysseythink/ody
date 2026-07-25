@@ -81,9 +81,6 @@ impl EventProcessorWithHumanOutput {
                     "started".style(self.dimmed)
                 );
             }
-            ThreadItem::WebSearch { query, .. } => {
-                eprintln!("{} {}", "web search:".style(self.bold), query);
-            }
             ThreadItem::FileChange { .. } => {
                 eprintln!("{}", "apply patch".style(self.bold));
             }
@@ -191,9 +188,6 @@ impl EventProcessorWithHumanOutput {
                 if let Some(error) = error {
                     eprintln!("{}", error.message.style(self.red));
                 }
-            }
-            ThreadItem::WebSearch { query, .. } => {
-                eprintln!("{} {}", "web search:".style(self.bold), query);
             }
             ThreadItem::ContextCompaction { .. } => {
                 eprintln!("{}", "context compacted".style(self.dimmed));

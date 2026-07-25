@@ -152,18 +152,6 @@ impl ChatWidget {
                 ..
             } => self.on_mcp_tool_call_started(item),
             item @ ThreadItem::McpToolCall { .. } => self.on_mcp_tool_call_completed(item),
-            ThreadItem::WebSearch { id, query, action, result_count } => {
-                self.on_web_search_begin(id.clone());
-                let mut action = action.unwrap_or(ody_app_server_protocol::WebSearchAction::Other);
-                if let ody_app_server_protocol::WebSearchAction::Search {
-                    result_count: ref mut action_result_count,
-                    ..
-                } = action
-                {
-                    *action_result_count = action_result_count.or(result_count);
-                }
-                self.on_web_search_end(id, query, action);
-            }
             ThreadItem::ImageView { id: _, path } => {
                 self.on_view_image_tool_call(path);
             }

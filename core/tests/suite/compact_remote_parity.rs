@@ -53,7 +53,6 @@ enum Step {
     FunctionTool,
     ShellTool,
     ImageAssistant,
-    WebSearchAssistant,
 }
 
 impl Step {
@@ -64,7 +63,6 @@ impl Step {
             Step::FunctionTool => "function_tool",
             Step::ShellTool => "shell_tool",
             Step::ImageAssistant => "image_assistant",
-            Step::WebSearchAssistant => "web_search_assistant",
         }
     }
 }
@@ -92,7 +90,6 @@ const FULL_MIX: &[Step] = &[
     Step::FunctionTool,
     Step::ImageAssistant,
     Step::ShellTool,
-    Step::WebSearchAssistant,
     Step::Assistant,
 ];
 
@@ -679,18 +676,6 @@ fn response_bodies_for_step(scenario_name: &str, idx: usize, step: Step) -> Vec<
             responses::ev_assistant_message(
                 &format!("{response_id}-message"),
                 &format!("{scenario_name} image reply {idx}"),
-            ),
-            responses::ev_completed(&format!("{response_id}-response")),
-        ])],
-        Step::WebSearchAssistant => vec![responses::sse(vec![
-            responses::ev_web_search_call_done(
-                &format!("{response_id}-web-search"),
-                "completed",
-                &format!("{scenario_name} parity query"),
-            ),
-            responses::ev_assistant_message(
-                &format!("{response_id}-message"),
-                &format!("{scenario_name} web search reply {idx}"),
             ),
             responses::ev_completed(&format!("{response_id}-response")),
         ])],

@@ -241,7 +241,7 @@ async fn tools_without_handlers_do_not_support_parallel() -> anyhow::Result<()> 
     );
 
     assert!(!router.tool_supports_parallel(&ToolCall {
-        tool_name: ToolName::plain("web_search"),
+        tool_name: ToolName::plain("nonexistent_tool"),
         call_id: "call-web-search".to_string(),
         payload: ToolPayload::Function {
             arguments: "{}".to_string(),

@@ -167,13 +167,13 @@ fn request_user_input_modes_follow_default_mode_feature() {
     features.disable(Feature::DefaultModeRequestUserInput);
     assert_eq!(
         request_user_input_available_modes(&features),
-        vec![ModeKind::Plan]
+        vec![ModeKind::Plan, ModeKind::Design]
     );
 
     features.enable(Feature::DefaultModeRequestUserInput);
     assert_eq!(
         request_user_input_available_modes(&features),
-        vec![ModeKind::Default, ModeKind::Plan]
+        vec![ModeKind::Default, ModeKind::Plan, ModeKind::Design]
     );
 }
 

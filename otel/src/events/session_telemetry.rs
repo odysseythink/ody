@@ -1195,7 +1195,6 @@ impl SessionTelemetry {
             ResponseItem::ToolSearchOutput { .. } => "tool_search_output".into(),
             ResponseItem::CustomToolCall { .. } => "custom_tool_call".into(),
             ResponseItem::CustomToolCallOutput { .. } => "custom_tool_call_output".into(),
-            ResponseItem::WebSearchCall { .. } => "web_search_call".into(),
             ResponseItem::ImageGenerationCall { .. } => "image_generation_call".into(),
             ResponseItem::Compaction { .. } => "compaction".into(),
             ResponseItem::CompactionTrigger { .. } => "compaction_trigger".into(),

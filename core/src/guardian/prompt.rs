@@ -484,12 +484,6 @@ pub(crate) fn collect_guardian_transcript_entries(
                     text: input.clone(),
                 })
             }
-            ResponseItem::WebSearchCall { action, .. } => action.as_ref().and_then(|action| {
-                serialized_entry(
-                    GuardianTranscriptEntryKind::Tool("tool web_search call".to_string()),
-                    serde_json::to_string(action).ok(),
-                )
-            }),
             ResponseItem::FunctionCallOutput {
                 call_id, output, ..
             }

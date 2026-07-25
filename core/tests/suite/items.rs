@@ -12,8 +12,6 @@ use core_test_support::responses::ev_reasoning_item_added;
 use core_test_support::responses::ev_reasoning_summary_text_delta;
 use core_test_support::responses::ev_reasoning_text_delta;
 use core_test_support::responses::ev_response_created;
-use core_test_support::responses::ev_web_search_call_added_partial;
-use core_test_support::responses::ev_web_search_call_done;
 use core_test_support::responses::mount_sse_once;
 use core_test_support::responses::sse;
 use core_test_support::responses::start_mock_server;
@@ -30,7 +28,6 @@ use ody_protocol::config_types::Settings;
 use ody_protocol::items::AgentMessageContent;
 use ody_protocol::items::TurnItem;
 use ody_protocol::models::PermissionProfile;
-use ody_protocol::models::WebSearchAction;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::ItemCompletedEvent;
@@ -272,77 +269,6 @@ async fn reasoning_item_is_emitted() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn web_search_item_is_emitted() -> anyhow::Result<()> {
-    skip_if_no_network!(Ok(()));
-
-    let server = start_mock_server().await;
-
-    let TestOdy { ody, .. } = test_ody().build(&server).await?;
-
-    let web_search_added = ev_web_search_call_added_partial("web-search-1", "in_progress");
-    let web_search_done = ev_web_search_call_done("web-search-1", "completed", "weather seattle");
-
-    let first_response = sse(vec![
-        ev_response_created("resp-1"),
-        web_search_added,
-        web_search_done,
-        ev_completed("resp-1"),
-    ]);
-    mount_sse_once(&server, first_response).await;
-
-    ody.submit(Op::UserInput {
-        items: vec![UserInput::Text {
-            text: "find the weather".into(),
-            text_elements: Vec::new(),
-        }],
-        final_output_json_schema: None,
-        responsesapi_client_metadata: None,
-        additional_context: Default::default(),
-        thread_settings: Default::default(),
-    })
-    .await?;
-
-    let started = wait_for_event_match(&ody, |ev| match ev {
-        EventMsg::ItemStarted(ItemStartedEvent {
-            item: TurnItem::WebSearch(item),
-            started_at_ms,
-            ..
-        }) => Some((item.clone(), *started_at_ms)),
-        _ => None,
-    })
-    .await;
-    let begin = wait_for_event_match(&ody, |ev| match ev {
-        EventMsg::WebSearchBegin(event) => Some(event.clone()),
-        _ => None,
-    })
-    .await;
-    let completed = wait_for_event_match(&ody, |ev| match ev {
-        EventMsg::ItemCompleted(ItemCompletedEvent {
-            item: TurnItem::WebSearch(item),
-            completed_at_ms,
-            ..
-        }) => Some((item.clone(), *completed_at_ms)),
-        _ => None,
-    })
-    .await;
-
-    assert_eq!(begin.call_id, "web-search-1");
-    assert_eq!(started.0.id, begin.call_id);
-    assert!(started.1 > 0);
-    assert_eq!(completed.0.id, begin.call_id);
-    assert!(completed.1 > 0);
-    assert_eq!(
-        completed.0.action,
-        WebSearchAction::Search {
-            query: Some("weather seattle".to_string()),
-            queries: None,
-            result_count: None,
-        }
-    );
-
-    Ok(())
-}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn builtin_image_generation_call_persisted() -> anyhow::Result<()> {

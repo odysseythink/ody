@@ -3,13 +3,11 @@ use ody_protocol::items::AgentMessageItem;
 use ody_protocol::items::ReasoningItem;
 use ody_protocol::items::TurnItem;
 use ody_protocol::items::UserMessageItem;
-use ody_protocol::items::WebSearchItem;
 use ody_protocol::models::ContentItem;
 use ody_protocol::models::MessagePhase;
 use ody_protocol::models::ReasoningItemContent;
 use ody_protocol::models::ReasoningItemReasoningSummary;
 use ody_protocol::models::ResponseItem;
-use ody_protocol::models::WebSearchAction;
 use ody_protocol::models::is_image_close_tag_text;
 use ody_protocol::models::is_image_open_tag_text;
 use ody_protocol::models::is_local_image_close_tag_text;
@@ -25,7 +23,6 @@ use uuid::Uuid;
 
 use crate::context::is_contextual_user_fragment;
 use crate::context::parse_visible_hook_prompt_message;
-use crate::web_search::web_search_action_detail;
 
 const CONTEXTUAL_DEVELOPER_PREFIXES: &[&str] = &[
     "<permissions instructions>",
@@ -187,18 +184,6 @@ pub fn parse_turn_item(item: &ResponseItem) -> Option<TurnItem> {
                 id: id.clone().unwrap_or_default(),
                 summary_text,
                 raw_content,
-            }))
-        }
-        ResponseItem::WebSearchCall { id, action, .. } => {
-            let (action, query) = match action {
-                Some(action) => (action.clone(), web_search_action_detail(action)),
-                None => (WebSearchAction::Other, String::new()),
-            };
-            Some(TurnItem::WebSearch(WebSearchItem {
-                id: id.clone().unwrap_or_default(),
-                query,
-                action,
-                result_count: None,
             }))
         }
         ResponseItem::ImageGenerationCall {

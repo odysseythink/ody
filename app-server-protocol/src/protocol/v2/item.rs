@@ -359,17 +359,6 @@ pub enum ThreadItem {
         agent_thread_id: String,
         agent_path: String,
     },
-    /// Deprecated: retained for loading old thread history.
-    #[serde(rename_all = "camelCase")]
-    #[ts(rename_all = "camelCase")]
-    WebSearch {
-        id: String,
-        query: String,
-        action: Option<WebSearchAction>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        result_count: Option<usize>,
-    },
     #[serde(rename_all = "camelCase")]
     #[ts(rename_all = "camelCase")]
     ImageView { id: String, path: AbsolutePathBuf },
@@ -433,7 +422,6 @@ impl ThreadItem {
             | ThreadItem::DynamicToolCall { id, .. }
             | ThreadItem::CollabAgentToolCall { id, .. }
             | ThreadItem::SubAgentActivity { id, .. }
-            | ThreadItem::WebSearch { id, .. }
             | ThreadItem::ImageView { id, .. }
             | ThreadItem::Sleep { id, .. }
             | ThreadItem::ImageGeneration { id, .. }
@@ -787,47 +775,6 @@ impl TryFrom<GuardianApprovalReviewAction> for CoreGuardianAssessmentAction {
     }
 }
 
-/// Deprecated: retained for loading old thread history.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
-#[serde(tag = "type", rename_all = "camelCase")]
-#[ts(tag = "type", rename_all = "camelCase")]
-#[ts(export_to = "v2/")]
-pub enum WebSearchAction {
-    Search {
-        query: Option<String>,
-        queries: Option<Vec<String>>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        result_count: Option<usize>,
-    },
-    OpenPage {
-        url: Option<String>,
-    },
-    FindInPage {
-        url: Option<String>,
-        pattern: Option<String>,
-    },
-    #[serde(other)]
-    Other,
-}
-
-impl From<ody_protocol::models::WebSearchAction> for WebSearchAction {
-    fn from(value: ody_protocol::models::WebSearchAction) -> Self {
-        match value {
-            ody_protocol::models::WebSearchAction::Search { query, queries, result_count } => {
-                WebSearchAction::Search { query, queries, result_count }
-            }
-            ody_protocol::models::WebSearchAction::OpenPage { url } => {
-                WebSearchAction::OpenPage { url }
-            }
-            ody_protocol::models::WebSearchAction::FindInPage { url, pattern } => {
-                WebSearchAction::FindInPage { url, pattern }
-            }
-            ody_protocol::models::WebSearchAction::Other => WebSearchAction::Other,
-        }
-    }
-}
-
 impl From<CoreTurnItem> for ThreadItem {
     fn from(value: CoreTurnItem) -> Self {
         match value {
@@ -869,12 +816,6 @@ impl From<CoreTurnItem> for ThreadItem {
                 id: reasoning.id,
                 summary: reasoning.summary_text,
                 content: reasoning.raw_content,
-            },
-            CoreTurnItem::WebSearch(search) => ThreadItem::WebSearch {
-                id: search.id,
-                query: search.query,
-                action: Some(WebSearchAction::from(search.action)),
-                result_count: search.result_count,
             },
             CoreTurnItem::ImageView(image) => ThreadItem::ImageView {
                 id: image.id,

@@ -14,7 +14,6 @@ use ody_app_server_protocol::ThreadItem;
 use ody_app_server_protocol::ThreadTokenUsage;
 use ody_app_server_protocol::TurnStatus;
 use ody_core::config::Config;
-use ody_protocol::models::WebSearchAction;
 use ody_protocol::protocol::SessionConfiguredEvent;
 use serde_json::json;
 
@@ -53,7 +52,6 @@ use crate::exec_events::TurnCompletedEvent;
 use crate::exec_events::TurnFailedEvent;
 use crate::exec_events::TurnStartedEvent;
 use crate::exec_events::Usage;
-use crate::exec_events::WebSearchItem;
 
 pub struct EventProcessorWithJsonOutput {
     last_message_path: Option<PathBuf>,
@@ -293,26 +291,6 @@ impl EventProcessorWithJsonOutput {
                         CollabAgentToolCallStatus::Completed => CollabToolCallStatus::Completed,
                         CollabAgentToolCallStatus::Failed => CollabToolCallStatus::Failed,
                     },
-                }),
-            }),
-            ThreadItem::WebSearch {
-                id: raw_id,
-                query,
-                action,
-                result_count,
-            } => Some(ExecThreadItem {
-                id: make_id(),
-                details: ThreadItemDetails::WebSearch(WebSearchItem {
-                    id: raw_id,
-                    query,
-                    action: match action {
-                        Some(action) => serde_json::from_value(
-                            serde_json::to_value(action).unwrap_or_else(|_| json!("other")),
-                        )
-                        .unwrap_or(WebSearchAction::Other),
-                        None => WebSearchAction::Other,
-                    },
-                    result_count,
                 }),
             }),
             _ => None,

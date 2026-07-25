@@ -10,7 +10,6 @@ use ody_protocol::items::McpToolCallStatus as CoreMcpToolCallStatus;
 use ody_protocol::items::ReasoningItem;
 use ody_protocol::items::TurnItem;
 use ody_protocol::items::UserMessageItem;
-use ody_protocol::items::WebSearchItem;
 use ody_protocol::mcp::CallToolResult;
 use ody_protocol::mcp::McpServerInfo;
 use ody_protocol::memory_citation::MemoryCitation as CoreMemoryCitation;
@@ -21,7 +20,6 @@ use ody_protocol::models::FileSystemPermissions as CoreFileSystemPermissions;
 use ody_protocol::models::ImageDetail;
 use ody_protocol::models::MessagePhase;
 use ody_protocol::models::NetworkPermissions as CoreNetworkPermissions;
-use ody_protocol::models::WebSearchAction as CoreWebSearchAction;
 use ody_protocol::permissions::FileSystemAccessMode as CoreFileSystemAccessMode;
 use ody_protocol::permissions::FileSystemPath as CoreFileSystemPath;
 use ody_protocol::permissions::FileSystemSandboxEntry as CoreFileSystemSandboxEntry;
@@ -2542,31 +2540,6 @@ fn core_turn_item_into_thread_item_converts_supported_variants() {
             id: "reasoning-1".to_string(),
             summary: vec!["line one".to_string(), "line two".to_string()],
             content: vec![],
-        }
-    );
-
-    let search_item = TurnItem::WebSearch(WebSearchItem {
-        id: "search-1".to_string(),
-        query: "docs".to_string(),
-        action: CoreWebSearchAction::Search {
-            query: Some("docs".to_string()),
-            queries: None,
-            result_count: None,
-        },
-        result_count: None,
-    });
-
-    assert_eq!(
-        ThreadItem::from(search_item),
-        ThreadItem::WebSearch {
-            id: "search-1".to_string(),
-            query: "docs".to_string(),
-            action: Some(WebSearchAction::Search {
-                query: Some("docs".to_string()),
-                queries: None,
-                result_count: None,
-            }),
-            result_count: None,
         }
     );
 

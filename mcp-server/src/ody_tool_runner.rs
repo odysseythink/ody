@@ -348,8 +348,6 @@ async fn run_ody_tool_session_inner(
                     | EventMsg::PatchApplyUpdated(_)
                     | EventMsg::PatchApplyEnd(_)
                     | EventMsg::TurnDiff(_)
-                    | EventMsg::WebSearchBegin(_)
-                    | EventMsg::WebSearchEnd(_)
                     | EventMsg::PlanUpdate(_)
                     | EventMsg::TurnAborted(_)
                     | EventMsg::UserMessage(_)

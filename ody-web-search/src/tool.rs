@@ -1,5 +1,3 @@
-use ody_protocol::items::WebSearchItem;
-use ody_protocol::models::WebSearchAction;
 use ody_protocol::ToolName;
 use ody_tools::{
     FunctionCallError, JsonToolOutput, ToolCall, ToolExecutor, ToolExecutorFuture, ToolExposure,
@@ -82,8 +80,6 @@ impl ToolExecutor<ToolCall> for WebSearchTool {
 
     fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
         let provider = self.provider.clone();
-        let _session_id = self.session_id.clone();
-        let emitter = call.turn_item_emitter.clone();
         let call_id = call.call_id.clone();
         Box::pin(async move {
             let arguments = match call.payload {
@@ -103,20 +99,6 @@ impl ToolExecutor<ToolCall> for WebSearchTool {
                 tool_call_id: Some(call_id.clone()),
             };
 
-            let start_item = WebSearchItem {
-                id: call_id.clone(),
-                query: input.query.clone(),
-                action: WebSearchAction::Search {
-                    query: Some(input.query.clone()),
-                    queries: None,
-                    result_count: None,
-                },
-                result_count: None,
-            };
-            emitter
-                .emit_started(ody_tools::ExtensionTurnItem::WebSearch(start_item))
-                .await;
-
             match provider.search(&input.query, &options).await {
                 Ok(results) => {
                     let result_count = results.len();
@@ -124,34 +106,12 @@ impl ToolExecutor<ToolCall> for WebSearchTool {
                         result_count,
                         text: format_results(&results),
                     };
-                    let completed_item = WebSearchItem {
-                        id: call_id.clone(),
-                        query: input.query.clone(),
-                        action: WebSearchAction::Search {
-                            query: Some(input.query),
-                            queries: None,
-                            result_count: Some(result_count),
-                        },
-                        result_count: Some(result_count),
-                    };
-                    emitter
-                        .emit_completed(ody_tools::ExtensionTurnItem::WebSearch(completed_item))
-                        .await;
                     let value = serde_json::to_value(&output).map_err(|e| {
                         FunctionCallError::Fatal(format!("failed to serialize WebSearch output: {e}"))
                     })?;
                     Ok(Box::new(JsonToolOutput::new(value)) as Box<dyn ody_tools::ToolOutput>)
                 }
                 Err(err) => {
-                    let completed_item = WebSearchItem {
-                        id: call_id,
-                        query: input.query,
-                        action: WebSearchAction::Other,
-                        result_count: None,
-                    };
-                    emitter
-                        .emit_completed(ody_tools::ExtensionTurnItem::WebSearch(completed_item))
-                        .await;
                     Err(FunctionCallError::Fatal(err.user_message()))
                 }
             }

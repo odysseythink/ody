@@ -88,7 +88,6 @@ pub use exec_events::TurnCompletedEvent;
 pub use exec_events::TurnFailedEvent;
 pub use exec_events::TurnStartedEvent;
 pub use exec_events::Usage;
-pub use exec_events::WebSearchItem;
 use ody_client::default_client::set_default_client_residency_requirement;
 use ody_client::default_client::set_default_originator;
 use ody_config::CloudConfigBundleLoader;

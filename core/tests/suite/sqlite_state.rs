@@ -3,7 +3,6 @@ use core_test_support::responses;
 use core_test_support::responses::ev_completed;
 use core_test_support::responses::ev_function_call;
 use core_test_support::responses::ev_response_created;
-use core_test_support::responses::ev_web_search_call_done;
 use core_test_support::responses::mount_sse_once;
 use core_test_support::responses::mount_sse_sequence;
 use core_test_support::responses::start_mock_server;
@@ -490,45 +489,6 @@ async fn user_messages_persist_in_state_db() -> Result<()> {
     let metadata = metadata.expect("thread should exist in state db");
     assert!(metadata.first_user_message.is_some());
 
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn web_search_marks_thread_memory_mode_polluted_when_configured() -> Result<()> {
-    let server = start_mock_server().await;
-    mount_sse_sequence(
-        &server,
-        vec![responses::sse(vec![
-            ev_response_created("resp-1"),
-            ev_web_search_call_done("ws-1", "completed", "weather seattle"),
-            ev_completed("resp-1"),
-        ])],
-    )
-    .await;
-
-    let mut builder = test_ody().with_config(|config| {
-        config
-            .features
-            .enable(Feature::Sqlite)
-            .expect("test config should allow feature update");
-        config.memories.disable_on_external_context = true;
-    });
-    let test = builder.build(&server).await?;
-    let db = test.ody.state_db().expect("state db enabled");
-    let thread_id = test.session_configured.thread_id;
-
-    test.submit_turn("search the web").await?;
-
-    let mut memory_mode = None;
-    for _ in 0..100 {
-        memory_mode = db.get_thread_memory_mode(thread_id).await?;
-        if memory_mode.as_deref() == Some("polluted") {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(25)).await;
-    }
-
-    assert_eq!(memory_mode.as_deref(), Some("polluted"));
     Ok(())
 }
 

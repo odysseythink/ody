@@ -178,9 +178,6 @@ fn activity_summary(item: &ThreadItem) -> Option<String> {
             };
             return bounded_summary(&format!("{action} {agent_path}"));
         }
-        ThreadItem::WebSearch { query, .. } => {
-            return bounded_summary(&format!("Web search: {query}"));
-        }
         ThreadItem::ImageView { path, .. } => {
             return bounded_summary(&format!("Viewed {}", path.display()));
         }

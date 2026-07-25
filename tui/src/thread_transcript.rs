@@ -204,9 +204,6 @@ fn fallback_transcript_cell(item: &ThreadItem) -> Option<PlainHistoryCell> {
         } => {
             vec![sub_agent_activity_summary(*kind, agent_path).dim().into()]
         }
-        ThreadItem::WebSearch { query, .. } => {
-            vec![vec!["web search: ".dim(), query.clone().into()].into()]
-        }
         ThreadItem::ImageView { path, .. } => {
             vec![format!("image: {}", path.as_path().display()).dim().into()]
         }

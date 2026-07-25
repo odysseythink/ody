@@ -70,7 +70,6 @@ struct CoreTurnItemEmitter {
 
 fn extension_turn_item(item: ExtensionTurnItem) -> TurnItem {
     match item {
-        ExtensionTurnItem::WebSearch(item) => TurnItem::WebSearch(item),
         ExtensionTurnItem::ImageGeneration(mut item) => {
             item.saved_path = None;
             TurnItem::ImageGeneration(item)
@@ -161,10 +160,8 @@ mod tests {
     use ody_extension_api::ExtensionData;
     use ody_extension_api::TurnItemContributor;
     use ody_protocol::items::TurnItem;
-    use ody_protocol::items::WebSearchItem;
     use ody_protocol::models::ContentItem;
     use ody_protocol::models::ResponseItem;
-    use ody_protocol::models::WebSearchAction;
     use ody_protocol::protocol::EventMsg;
     use ody_tools::ExtensionTurnItem;
     use ody_utils_absolute_path::test_support::PathExt;
@@ -250,16 +247,15 @@ mod tests {
             &self,
             call: ody_tools::ToolCall,
         ) -> Result<Box<dyn ody_tools::ToolOutput>, ody_tools::FunctionCallError> {
-            let item = ExtensionTurnItem::WebSearch(WebSearchItem {
-                id: call.call_id.clone(),
-                query: "rust trait object".to_string(),
-                action: WebSearchAction::Search {
-                    query: Some("rust trait object".to_string()),
-                    queries: None,
-                    result_count: None,
+            let item = ExtensionTurnItem::ImageGeneration(
+                ody_protocol::items::ImageGenerationItem {
+                    id: call.call_id.clone(),
+                    status: "in_progress".to_string(),
+                    revised_prompt: None,
+                    result: String::new(),
+                    saved_path: None,
                 },
-                result_count: None,
-            });
+            );
             call.turn_item_emitter.emit_started(item.clone()).await;
             call.turn_item_emitter.emit_completed(item).await;
             *self.captured_call.lock().await = Some(call);
@@ -394,41 +390,30 @@ mod tests {
         let EventMsg::ItemStarted(started) = started.msg else {
             panic!("expected item started event");
         };
-        let TurnItem::WebSearch(started_item) = started.item else {
-            panic!("expected web search item");
+        let TurnItem::ImageGeneration(started_item) = started.item else {
+            panic!("expected image generation item");
         };
-        let begin = rx.recv().await.expect("legacy web search begin event");
-        let EventMsg::WebSearchBegin(begin) = begin.msg else {
-            panic!("expected legacy web search begin event");
-        };
+        let begin = rx.recv().await.expect("legacy image generation begin event");
+        assert!(matches!(begin.msg, EventMsg::ImageGenerationBegin(_)));
         let completed = rx.recv().await.expect("item completed event");
         let EventMsg::ItemCompleted(completed) = completed.msg else {
             panic!("expected item completed event");
         };
-        let TurnItem::WebSearch(completed_item) = completed.item else {
-            panic!("expected web search item");
+        let TurnItem::ImageGeneration(completed_item) = completed.item else {
+            panic!("expected image generation item");
         };
-        let end = rx.recv().await.expect("legacy web search end event");
-        let EventMsg::WebSearchEnd(end) = end.msg else {
-            panic!("expected legacy web search end event");
-        };
+        let end = rx.recv().await.expect("legacy image generation end event");
+        assert!(matches!(end.msg, EventMsg::ImageGenerationEnd(_)));
 
-        let expected = WebSearchItem {
+        let expected = ody_protocol::items::ImageGenerationItem {
             id: "call-extension".to_string(),
-            query: "rust trait object".to_string(),
-            action: WebSearchAction::Search {
-                query: Some("rust trait object".to_string()),
-                queries: None,
-                result_count: None,
-            },
-            result_count: None,
+            status: "in_progress".to_string(),
+            revised_prompt: None,
+            result: String::new(),
+            saved_path: None,
         };
         assert_eq!(started_item, expected);
         assert_eq!(completed_item, expected);
-        assert_eq!(begin.call_id, expected.id);
-        assert_eq!(end.call_id, expected.id);
-        assert_eq!(end.query, expected.query);
-        assert_eq!(end.action, expected.action);
     }
 
     struct ImageGenerationExtensionExecutor;
@@ -467,12 +452,15 @@ mod tests {
 
         ody_tools::TurnItemEmitter::emit_completed(
             &emitter,
-            ExtensionTurnItem::WebSearch(WebSearchItem {
-                id: "search-1".to_string(),
-                query: "contributors".to_string(),
-                action: WebSearchAction::Other,
-                result_count: None,
-            }),
+            ExtensionTurnItem::ImageGeneration(
+                ody_protocol::items::ImageGenerationItem {
+                    id: "image-1".to_string(),
+                    status: "completed".to_string(),
+                    revised_prompt: None,
+                    result: "cG5n".to_string(),
+                    saved_path: None,
+                },
+            ),
         )
         .await;
 

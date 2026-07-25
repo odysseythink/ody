@@ -464,7 +464,6 @@ fn response_item_kind(item: &ResponseItem) -> &'static str {
         ResponseItem::CustomToolCall { .. } => "custom_tool_call",
         ResponseItem::CustomToolCallOutput { .. } => "custom_tool_call_output",
         ResponseItem::ToolSearchOutput { .. } => "tool_search_output",
-        ResponseItem::WebSearchCall { .. } => "web_search_call",
         ResponseItem::ImageGenerationCall { .. } => "image_generation_call",
         ResponseItem::Compaction { .. } => "compaction",
         ResponseItem::CompactionTrigger { .. } => "compaction_trigger",

@@ -4,7 +4,6 @@ use crate::ToolPayload;
 use ody_file_system::ExecutorFileSystem;
 use ody_file_system::FileSystemSandboxContext;
 use ody_protocol::items::ImageGenerationItem;
-use ody_protocol::items::WebSearchItem;
 use ody_protocol::models::ResponseItem;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_output_truncation::TruncationPolicy;
@@ -36,7 +35,6 @@ pub type TurnItemEmissionFuture<'a> = Pin<Box<dyn Future<Output = ()> + Send + '
 /// Visible turn items that an extension may publish into the host lifecycle.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ExtensionTurnItem {
-    WebSearch(WebSearchItem),
     ImageGeneration(ImageGenerationItem),
 }
 

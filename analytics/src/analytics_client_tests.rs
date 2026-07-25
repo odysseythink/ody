@@ -4189,12 +4189,6 @@ async fn turn_event_counts_completed_tool_items() {
             agent_thread_id: "thread-child".to_string(),
             agent_path: "/root/child".to_string(),
         },
-        ThreadItem::WebSearch {
-            id: "web-1".to_string(),
-            query: "ody".to_string(),
-            action: None,
-            result_count: Some(0),
-        },
         ThreadItem::ImageGeneration {
             id: "image-1".to_string(),
             status: "completed".to_string(),
@@ -4244,7 +4238,7 @@ async fn turn_event_counts_completed_tool_items() {
         .find(|event| matches!(event, TrackEventRequest::TurnEvent(_)))
         .expect("turn event should be emitted");
     let payload = serde_json::to_value(turn_event).expect("serialize turn event");
-    assert_eq!(payload["event_params"]["total_tool_call_count"], json!(8));
+    assert_eq!(payload["event_params"]["total_tool_call_count"], json!(7));
     assert_eq!(payload["event_params"]["shell_command_count"], json!(1));
     assert_eq!(payload["event_params"]["file_change_count"], json!(1));
     assert_eq!(payload["event_params"]["mcp_tool_call_count"], json!(1));
@@ -4253,7 +4247,7 @@ async fn turn_event_counts_completed_tool_items() {
         payload["event_params"]["subagent_tool_call_count"],
         json!(2)
     );
-    assert_eq!(payload["event_params"]["web_search_count"], json!(1));
+    assert_eq!(payload["event_params"]["web_search_count"], json!(0));
     assert_eq!(payload["event_params"]["image_generation_count"], json!(1));
 }
 

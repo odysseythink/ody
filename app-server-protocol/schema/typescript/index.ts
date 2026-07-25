@@ -75,5 +75,4 @@ export type { ThreadId } from "./ThreadId";
 export type { ThreadMemoryMode } from "./ThreadMemoryMode";
 export type { Tool } from "./Tool";
 export type { Verbosity } from "./Verbosity";
-export type { WebSearchAction } from "./WebSearchAction";
 export * as v2 from "./v2";

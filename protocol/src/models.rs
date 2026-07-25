@@ -1080,28 +1080,6 @@ pub enum ResponseItem {
         #[ts(optional)]
         internal_chat_message_metadata_passthrough: Option<InternalChatMessageMetadataPassthrough>,
     },
-    // Emitted by the Responses API when the agent triggers a web search.
-    // Example payload (from SSE `response.output_item.done`):
-    // {
-    //   "id":"ws_...",
-    //   "type":"web_search_call",
-    //   "status":"completed",
-    //   "action": {"type":"search","query":"weather: San Francisco, CA"}
-    // }
-    WebSearchCall {
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        id: Option<String>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        status: Option<String>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        action: Option<WebSearchAction>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        internal_chat_message_metadata_passthrough: Option<InternalChatMessageMetadataPassthrough>,
-    },
     // Emitted by the Responses API when the agent triggers image generation.
     // Example payload:
     // {
@@ -1169,7 +1147,6 @@ impl ResponseItem {
             | Self::CustomToolCall { id, .. }
             | Self::CustomToolCallOutput { id, .. }
             | Self::ToolSearchOutput { id, .. }
-            | Self::WebSearchCall { id, .. }
             | Self::Reasoning { id, .. }
             | Self::ImageGenerationCall { id, .. }
             | Self::Compaction { id, .. }
@@ -1190,7 +1167,6 @@ impl ResponseItem {
             | Self::CustomToolCall { id, .. }
             | Self::CustomToolCallOutput { id, .. }
             | Self::ToolSearchOutput { id, .. }
-            | Self::WebSearchCall { id, .. }
             | Self::Reasoning { id, .. }
             | Self::ImageGenerationCall { id, .. }
             | Self::Compaction { id, .. }
@@ -1266,10 +1242,6 @@ impl ResponseItem {
                 internal_chat_message_metadata_passthrough: metadata,
                 ..
             }
-            | Self::WebSearchCall {
-                internal_chat_message_metadata_passthrough: metadata,
-                ..
-            }
             | Self::ImageGenerationCall {
                 internal_chat_message_metadata_passthrough: metadata,
                 ..
@@ -1327,10 +1299,6 @@ impl ResponseItem {
                 ..
             }
             | Self::ToolSearchOutput {
-                internal_chat_message_metadata_passthrough: metadata,
-                ..
-            }
-            | Self::WebSearchCall {
                 internal_chat_message_metadata_passthrough: metadata,
                 ..
             }
@@ -1653,39 +1621,6 @@ pub struct LocalShellExecAction {
     pub working_directory: Option<String>,
     pub env: Option<HashMap<String, String>>,
     pub user: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
-#[serde(tag = "type", rename_all = "snake_case")]
-#[schemars(rename = "ResponsesApiWebSearchAction")]
-pub enum WebSearchAction {
-    Search {
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        query: Option<String>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        queries: Option<Vec<String>>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        result_count: Option<usize>,
-    },
-    OpenPage {
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        url: Option<String>,
-    },
-    FindInPage {
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        url: Option<String>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        pattern: Option<String>,
-    },
-
-    #[serde(other)]
-    Other,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
@@ -3148,90 +3083,6 @@ mod tests {
         assert_eq!(item, ResponseItem::Other);
         Ok(())
     }
-
-    #[test]
-    fn roundtrips_web_search_call_actions() -> Result<()> {
-        let cases = vec![
-            (
-                r#"{
-                    "type": "web_search_call",
-                    "status": "completed",
-                    "action": {
-                        "type": "search",
-                        "query": "weather seattle",
-                        "queries": ["weather seattle", "seattle weather now"]
-                    }
-                }"#,
-                None,
-                Some(WebSearchAction::Search {
-                    query: Some("weather seattle".into()),
-                    queries: Some(vec!["weather seattle".into(), "seattle weather now".into()]),
-                    result_count: None,
-                }),
-                Some("completed".into()),
-            ),
-            (
-                r#"{
-                    "type": "web_search_call",
-                    "status": "open",
-                    "action": {
-                        "type": "open_page",
-                        "url": "https://example.com"
-                    }
-                }"#,
-                None,
-                Some(WebSearchAction::OpenPage {
-                    url: Some("https://example.com".into()),
-                }),
-                Some("open".into()),
-            ),
-            (
-                r#"{
-                    "type": "web_search_call",
-                    "status": "in_progress",
-                    "action": {
-                        "type": "find_in_page",
-                        "url": "https://example.com/docs",
-                        "pattern": "installation"
-                    }
-                }"#,
-                None,
-                Some(WebSearchAction::FindInPage {
-                    url: Some("https://example.com/docs".into()),
-                    pattern: Some("installation".into()),
-                }),
-                Some("in_progress".into()),
-            ),
-            (
-                r#"{
-                    "type": "web_search_call",
-                    "status": "in_progress",
-                    "id": "ws_partial"
-                }"#,
-                Some("ws_partial".into()),
-                None,
-                Some("in_progress".into()),
-            ),
-        ];
-
-        for (json_literal, expected_id, expected_action, expected_status) in cases {
-            let parsed: ResponseItem = serde_json::from_str(json_literal)?;
-            let expected = ResponseItem::WebSearchCall {
-                id: expected_id.clone(),
-                status: expected_status.clone(),
-                action: expected_action.clone(),
-                internal_chat_message_metadata_passthrough: None,
-            };
-            assert_eq!(parsed, expected);
-
-            let serialized = serde_json::to_value(&parsed)?;
-            let expected_serialized: serde_json::Value = serde_json::from_str(json_literal)?;
-            assert_eq!(serialized, expected_serialized);
-        }
-
-        Ok(())
-    }
-
     #[test]
     fn serializes_image_user_input_without_tags() -> Result<()> {
         let image_url = "data:image/png;base64,abc".to_string();

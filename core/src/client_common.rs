@@ -90,7 +90,6 @@ fn strip_image_details(items: &mut [ResponseItem]) {
             | ResponseItem::ToolSearchCall { .. }
             | ResponseItem::CustomToolCall { .. }
             | ResponseItem::ToolSearchOutput { .. }
-            | ResponseItem::WebSearchCall { .. }
             | ResponseItem::ImageGenerationCall { .. }
             | ResponseItem::Compaction { .. }
             | ResponseItem::CompactionTrigger { .. }

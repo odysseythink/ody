@@ -73,7 +73,6 @@ pub(crate) enum TrackEventRequest {
     McpToolCall(OdyMcpToolCallEventRequest),
     DynamicToolCall(OdyDynamicToolCallEventRequest),
     CollabAgentToolCall(OdyCollabAgentToolCallEventRequest),
-    WebSearch(OdyWebSearchEventRequest),
     ImageGeneration(OdyImageGenerationEventRequest),
     AcceptedLineFingerprints(Box<OdyAcceptedLineFingerprintsEventRequest>),
     #[allow(dead_code)]
@@ -670,16 +669,6 @@ pub(crate) struct OdyDesignReviewFailedEventParams {
     pub(crate) started_at_ms: u64,
     pub(crate) completed_at_ms: u64,
 }
-#[allow(dead_code)]
-#[derive(Clone, Copy, Debug, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum WebSearchActionKind {
-    Search,
-    OpenPage,
-    FindInPage,
-    Other,
-}
-
 #[derive(Serialize)]
 pub(crate) struct OdyCommandExecutionEventParams {
     #[serde(flatten)]
@@ -769,20 +758,6 @@ pub(crate) struct OdyCollabAgentToolCallEventRequest {
     pub(crate) event_params: OdyCollabAgentToolCallEventParams,
 }
 
-#[derive(Serialize)]
-pub(crate) struct OdyWebSearchEventParams {
-    #[serde(flatten)]
-    pub(crate) base: OdyToolItemEventBase,
-    pub(crate) web_search_action: Option<WebSearchActionKind>,
-    pub(crate) query_present: bool,
-    pub(crate) query_count: Option<u64>,
-}
-
-#[derive(Serialize)]
-pub(crate) struct OdyWebSearchEventRequest {
-    pub(crate) event_type: &'static str,
-    pub(crate) event_params: OdyWebSearchEventParams,
-}
 
 #[derive(Serialize)]
 pub(crate) struct OdyImageGenerationEventParams {

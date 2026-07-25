@@ -2784,7 +2784,6 @@ impl Session {
                 ResponseItem::CustomToolCall { .. } => "ctc",
                 ResponseItem::CustomToolCallOutput { .. } => "ctco",
                 ResponseItem::ToolSearchOutput { .. } => "tso",
-                ResponseItem::WebSearchCall { .. } => "ws",
                 ResponseItem::ImageGenerationCall { .. } => "ig",
                 ResponseItem::Compaction { .. } | ResponseItem::ContextCompaction { .. } => "cmp",
                 ResponseItem::AgentMessage { .. }

@@ -249,7 +249,6 @@ fn response_item_may_include_external_context(item: &ResponseItem) -> bool {
         item,
         ResponseItem::ToolSearchCall { .. }
             | ResponseItem::ToolSearchOutput { .. }
-            | ResponseItem::WebSearchCall { .. }
     )
 }
 
@@ -530,7 +529,6 @@ pub(crate) async fn handle_non_tool_response_item(
     match item {
         ResponseItem::Message { .. }
         | ResponseItem::Reasoning { .. }
-        | ResponseItem::WebSearchCall { .. }
         | ResponseItem::ImageGenerationCall { .. } => {
             let mut turn_item = parse_turn_item(item)?;
             finalize_turn_item(
