@@ -4966,7 +4966,9 @@ mod tests {
                 action: WebSearchAction::Search {
                     query: Some("find docs".into()),
                     queries: None,
+                    result_count: None,
                 },
+                result_count: None,
             }),
             started_at_ms: 0,
         };

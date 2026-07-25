@@ -366,6 +366,9 @@ pub enum ThreadItem {
         id: String,
         query: String,
         action: Option<WebSearchAction>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        result_count: Option<usize>,
     },
     #[serde(rename_all = "camelCase")]
     #[ts(rename_all = "camelCase")]
@@ -793,6 +796,9 @@ pub enum WebSearchAction {
     Search {
         query: Option<String>,
         queries: Option<Vec<String>>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        result_count: Option<usize>,
     },
     OpenPage {
         url: Option<String>,
@@ -808,8 +814,8 @@ pub enum WebSearchAction {
 impl From<ody_protocol::models::WebSearchAction> for WebSearchAction {
     fn from(value: ody_protocol::models::WebSearchAction) -> Self {
         match value {
-            ody_protocol::models::WebSearchAction::Search { query, queries } => {
-                WebSearchAction::Search { query, queries }
+            ody_protocol::models::WebSearchAction::Search { query, queries, result_count } => {
+                WebSearchAction::Search { query, queries, result_count }
             }
             ody_protocol::models::WebSearchAction::OpenPage { url } => {
                 WebSearchAction::OpenPage { url }
@@ -868,6 +874,7 @@ impl From<CoreTurnItem> for ThreadItem {
                 id: search.id,
                 query: search.query,
                 action: Some(WebSearchAction::from(search.action)),
+                result_count: search.result_count,
             },
             CoreTurnItem::ImageView(image) => ThreadItem::ImageView {
                 id: image.id,

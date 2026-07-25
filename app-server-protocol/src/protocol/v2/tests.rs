@@ -1647,8 +1647,6 @@ fn config_granular_approval_policy_is_marked_experimental() {
         sandbox_mode: None,
         sandbox_workspace_write: None,
         forced_login_method: None,
-        web_search: None,
-        tools: None,
         instructions: None,
         developer_instructions: None,
         compact_prompt: None,
@@ -1679,8 +1677,6 @@ fn config_approvals_reviewer_is_marked_experimental() {
         sandbox_mode: None,
         sandbox_workspace_write: None,
         forced_login_method: None,
-        web_search: None,
-        tools: None,
         instructions: None,
         developer_instructions: None,
         compact_prompt: None,
@@ -2555,7 +2551,9 @@ fn core_turn_item_into_thread_item_converts_supported_variants() {
         action: CoreWebSearchAction::Search {
             query: Some("docs".to_string()),
             queries: None,
+            result_count: None,
         },
+        result_count: None,
     });
 
     assert_eq!(
@@ -2566,7 +2564,9 @@ fn core_turn_item_into_thread_item_converts_supported_variants() {
             action: Some(WebSearchAction::Search {
                 query: Some("docs".to_string()),
                 queries: None,
+                result_count: None,
             }),
+            result_count: None,
         }
     );
 

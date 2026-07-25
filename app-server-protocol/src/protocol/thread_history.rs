@@ -636,6 +636,7 @@ impl ThreadHistoryBuilder {
             id: payload.call_id.clone(),
             query: String::new(),
             action: None,
+            result_count: None,
         };
         self.upsert_item_in_current_turn(item);
     }
@@ -645,6 +646,7 @@ impl ThreadHistoryBuilder {
             id: payload.call_id.clone(),
             query: payload.query.clone(),
             action: Some(WebSearchAction::from(payload.action.clone())),
+            result_count: None,
         };
         self.upsert_item_in_current_turn(item);
     }
@@ -2381,6 +2383,7 @@ mod tests {
                 action: CoreWebSearchAction::Search {
                     query: Some("ody".into()),
                     queries: None,
+                    result_count: None,
                 },
             }),
             EventMsg::ExecCommandEnd(ExecCommandEndEvent {
@@ -2434,7 +2437,9 @@ mod tests {
                 action: Some(WebSearchAction::Search {
                     query: Some("ody".into()),
                     queries: None,
+                    result_count: None,
                 }),
+                result_count: None,
             }
         );
         assert_eq!(
@@ -3844,6 +3849,7 @@ mod tests {
                 action: CoreWebSearchAction::Search {
                     query: Some("ody".into()),
                     queries: None,
+                    result_count: None,
                 },
             }),
         ));
@@ -3859,7 +3865,9 @@ mod tests {
                         action: Some(WebSearchAction::Search {
                             query: Some("ody".into()),
                             queries: None,
+                            result_count: None,
                         }),
+                        result_count: None,
                     },
                 }],
                 changed_turns: Vec::new(),
@@ -3979,6 +3987,7 @@ mod tests {
                 action: CoreWebSearchAction::Search {
                     query: Some("ody".into()),
                     queries: None,
+                    result_count: None,
                 },
             })),
         ]);
@@ -3994,7 +4003,9 @@ mod tests {
                         action: Some(WebSearchAction::Search {
                             query: Some("ody".into()),
                             queries: None,
+                            result_count: None,
                         }),
+                        result_count: None,
                     },
                 }],
                 changed_turns: vec![ThreadHistoryTurnChange {

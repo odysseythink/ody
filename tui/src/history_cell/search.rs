@@ -12,8 +12,8 @@ fn web_search_header(completed: bool) -> &'static str {
 
 fn web_search_action_detail(action: &WebSearchAction) -> String {
     match action {
-        WebSearchAction::Search { query, queries } => {
-            query.clone().filter(|q| !q.is_empty()).unwrap_or_else(|| {
+        WebSearchAction::Search { query, queries, result_count } => {
+            let query_text = query.clone().filter(|q| !q.is_empty()).unwrap_or_else(|| {
                 let items = queries.as_ref();
                 let first = items
                     .and_then(|queries| queries.first())
@@ -24,7 +24,21 @@ fn web_search_action_detail(action: &WebSearchAction) -> String {
                 } else {
                     first
                 }
-            })
+            });
+            if let Some(count) = result_count {
+                let count_text = match *count {
+                    0 => "no results".to_string(),
+                    1 => "1 result".to_string(),
+                    n => format!("{n} results"),
+                };
+                if query_text.is_empty() {
+                    count_text
+                } else {
+                    format!("{query_text} — {count_text}")
+                }
+            } else {
+                query_text
+            }
         }
         WebSearchAction::OpenPage { url } => url.clone().unwrap_or_default(),
         WebSearchAction::FindInPage { url, pattern } => match (pattern, url) {
@@ -143,4 +157,66 @@ pub(crate) fn new_web_search_call(
     );
     cell.complete();
     cell
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detail_includes_result_count_when_present() {
+        let action = WebSearchAction::Search {
+            query: Some("rust".to_string()),
+            queries: None,
+            result_count: Some(5),
+        };
+        assert_eq!(
+            web_search_detail(Some(&action), "fallback"),
+            "rust — 5 results"
+        );
+    }
+
+    #[test]
+    fn detail_uses_one_result_singular() {
+        let action = WebSearchAction::Search {
+            query: Some("rust".to_string()),
+            queries: None,
+            result_count: Some(1),
+        };
+        assert_eq!(
+            web_search_detail(Some(&action), "fallback"),
+            "rust — 1 result"
+        );
+    }
+
+    #[test]
+    fn detail_shows_no_results_for_zero() {
+        let action = WebSearchAction::Search {
+            query: Some("rust".to_string()),
+            queries: None,
+            result_count: Some(0),
+        };
+        assert_eq!(
+            web_search_detail(Some(&action), "fallback"),
+            "rust — no results"
+        );
+    }
+
+    #[test]
+    fn detail_falls_back_to_query_without_count() {
+        let action = WebSearchAction::Search {
+            query: Some("rust".to_string()),
+            queries: None,
+            result_count: None,
+        };
+        assert_eq!(web_search_detail(Some(&action), "fallback"), "rust");
+    }
+
+    #[test]
+    fn detail_falls_back_to_passed_query_when_action_is_other() {
+        assert_eq!(
+            web_search_detail(Some(&WebSearchAction::Other), "fallback query"),
+            "fallback query"
+        );
+    }
 }

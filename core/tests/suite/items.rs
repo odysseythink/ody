@@ -337,6 +337,7 @@ async fn web_search_item_is_emitted() -> anyhow::Result<()> {
         WebSearchAction::Search {
             query: Some("weather seattle".to_string()),
             queries: None,
+            result_count: None,
         }
     );
 
