@@ -48,6 +48,7 @@ use ody_protocol::permissions::NetworkSandboxPolicy;
 use ody_protocol::protocol::AskForApproval;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path::normalize_for_path_comparison;
+use ody_web_search::config::ServicesConfig;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -591,6 +592,17 @@ pub struct ConfigToml {
     /// Nested tools section for feature toggles
     pub tools: Option<ToolsToml>,
 
+    /// Services configuration. Currently contains the web search provider setup.
+    ///
+    /// Example:
+    /// ```toml
+    /// [services.webSearch]
+    /// primary = { provider = "bing", api_key = "..." }
+    /// secondary = { provider = "serpapi", api_key = "..." }
+    /// ```
+    #[serde(default)]
+    pub services: Option<ServicesConfig>,
+
     /// Additional discoverable tools that can be suggested for installation.
     pub tool_suggest: Option<ToolSuggestConfig>,
 
@@ -1011,6 +1023,25 @@ pub struct RealtimeAudioToml {
 #[schemars(deny_unknown_fields)]
 pub struct ToolsToml {
     pub experimental_request_user_input: Option<ExperimentalRequestUserInput>,
+
+    /// Deprecated: `tools.web_search` has moved to `[services.webSearch]`.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_reject_legacy_web_search",
+        skip_serializing
+    )]
+    #[schemars(skip)]
+    pub web_search: Option<()>,
+}
+
+fn deserialize_reject_legacy_web_search<'de, D>(deserializer: D) -> Result<Option<()>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let _ = serde::de::IgnoredAny::deserialize(deserializer)?;
+    Err(serde::de::Error::custom(
+        "`tools.web_search` is no longer supported; use `[services.webSearch]` instead",
+    ))
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
@@ -1796,5 +1827,36 @@ split_threshold = 16
     fn show_raw_agent_reasoning_explicit_false_is_preserved() {
         let cfg: ConfigToml = toml::from_str(r#"show_raw_agent_reasoning = false"#).unwrap();
         assert_eq!(cfg.show_raw_agent_reasoning, Some(false));
+    }
+
+    #[test]
+    fn services_web_search_deserializes() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[services.webSearch]
+primary = { provider = "bing", api_key = "secret" }
+secondary = { provider = "moonshot", api_key = "other" }
+"#,
+        )
+        .expect("should parse");
+        let services = config.services.expect("services present");
+        let web_search = services.web_search.expect("web_search present");
+        assert_eq!(
+            web_search.primary.provider,
+            ody_web_search::config::WebSearchProviderName::Bing
+        );
+        assert!(web_search.secondary.is_some());
+    }
+
+    #[test]
+    fn old_tools_web_search_rejected_with_migration_message() {
+        let result = toml::from_str::<ConfigToml>(
+            r#"
+[tools.web_search]
+context_size = "medium"
+"#,
+        );
+        let err = result.expect_err("should reject").to_string();
+        assert!(err.contains("[services.webSearch]"), "err: {err}");
     }
 }

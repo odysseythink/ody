@@ -27,6 +27,9 @@ use crate::outgoing_message::OutgoingMessageSender;
 use crate::thread_state::ThreadListenerCommand;
 use crate::thread_state::ThreadStateManager;
 
+#[path = "web_search_extension.rs"]
+mod web_search_extension;
+
 pub(crate) struct ThreadExtensionDependencies {
     pub(crate) event_sink: Arc<dyn ExtensionEventSink>,
     pub(crate) state_db: Option<StateDbHandle>,
@@ -91,6 +94,7 @@ where
             executor_model_tools_enabled: config.executor_model_tools_enabled,
         },
     );
+    web_search_extension::install(&mut builder);
     Arc::new(builder.build())
 }
 

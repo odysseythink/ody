@@ -6,3 +6,4 @@ pub mod http_client;
 pub mod provider;
 pub mod providers;
 pub mod registry;
+pub mod tool;

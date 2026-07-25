@@ -31,6 +31,7 @@ ody-shell-command = { workspace = true }
 ody-utils-absolute-path = { workspace = true }
 ody-utils-path = { workspace = true }
 ody-utils-path-uri = { workspace = true }
+ody-web-search = { workspace = true }
 dunce = { workspace = true }
 fs2 = { workspace = true }
 futures = { workspace = true, features = ["alloc", "std"] }

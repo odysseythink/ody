@@ -118,6 +118,7 @@ use ody_protocol::protocol::MultiAgentVersion;
 use ody_protocol::protocol::SandboxPolicy;
 pub use ody_thread_store::ExtraConfig;
 use ody_utils_absolute_path::AbsolutePathBuf;
+use ody_web_search::config::ServicesConfig;
 use ody_utils_absolute_path::AbsolutePathBufGuard;
 use ody_utils_path_uri::PathUri;
 use rmcp::model::ElicitationCapability;
@@ -1209,6 +1210,9 @@ pub struct Config {
 
     /// OTEL configuration (exporter type, endpoint, headers, etc.).
     pub otel: ody_config::types::OtelConfig,
+
+    /// Services configuration. Currently contains the web search provider setup.
+    pub services: Option<ServicesConfig>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -4191,6 +4195,7 @@ impl Config {
                 .as_ref()
                 .map(|t| t.keymap.clone())
                 .unwrap_or_default(),
+            services: cfg.services.clone(),
             otel,
         };
         Ok(config)

@@ -75,6 +75,7 @@ ody-sandboxing = { workspace = true }
 ody-state = { workspace = true }
 ody-thread-store = { workspace = true }
 ody-tools = { workspace = true }
+ody-web-search = { workspace = true }
 ody-utils-absolute-path = { workspace = true }
 ody-utils-json-to-toml = { workspace = true }
 ody-utils-path-uri = { workspace = true }

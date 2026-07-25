@@ -161,7 +161,6 @@ impl ConfigRequestProcessor {
         Ok(ModelProviderCapabilitiesReadResponse {
             namespace_tools: capabilities.namespace_tools,
             image_generation: capabilities.image_generation,
-            web_search: capabilities.web_search,
         })
     }
 

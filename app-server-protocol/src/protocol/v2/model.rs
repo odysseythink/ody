@@ -34,7 +34,6 @@ pub struct ModelProviderCapabilitiesReadParams {}
 pub struct ModelProviderCapabilitiesReadResponse {
     pub namespace_tools: bool,
     pub image_generation: bool,
-    pub web_search: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, JsonSchema, TS)]
