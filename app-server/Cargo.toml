@@ -60,7 +60,6 @@ ody-file-search = { workspace = true }
 ody-client = { workspace = true }
 
 ody-memories-extension = { workspace = true }
-ody-web-search-extension = { workspace = true }
 ody-memories-write = { workspace = true }
 ody-mcp = { workspace = true }
 ody-mcp-extension = { workspace = true }

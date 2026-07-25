@@ -6428,7 +6428,6 @@ dependencies = [
  "ody-utils-json-to-toml",
  "ody-utils-path-uri",
  "ody-utils-pty",
- "ody-web-search-extension",
  "ody-windows-sandbox",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -6943,7 +6942,6 @@ dependencies = [
  "ody-utils-stream-parser",
  "ody-utils-string",
  "ody-utils-template",
- "ody-web-search-extension",
  "ody-windows-sandbox",
  "once_cell",
  "openssl-sys",
@@ -8458,25 +8456,6 @@ name = "ody-utils-template"
 version = "0.0.0"
 dependencies = [
  "pretty_assertions",
-]
-
-[[package]]
-name = "ody-web-search-extension"
-version = "0.0.0"
-dependencies = [
- "http 1.4.2",
- "ody-api",
- "ody-client",
- "ody-core",
- "ody-extension-api",
- "ody-model-provider",
- "ody-model-provider-info",
- "ody-protocol",
- "ody-tools",
- "pretty_assertions",
- "schemars 0.8.22",
- "serde_json",
- "url",
 ]
 
 [[package]]

@@ -157,7 +157,6 @@ ody-home = { workspace = true }
 ody-otel = { workspace = true }
 ody-test-binary-support = { workspace = true }
 ody-utils-cargo-bin = { workspace = true }
-ody-web-search-extension = { workspace = true }
 core_test_support = { workspace = true }
 ctor = { workspace = true }
 insta = { workspace = true }
