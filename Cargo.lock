@@ -8459,6 +8459,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "ody-web-search"
+version = "0.0.0"
+dependencies = [
+ "async-trait",
+ "ody-protocol",
+ "ody-tools",
+ "pretty_assertions",
+ "reqwest 0.12.28",
+ "schemars 0.8.22",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "strum_macros 0.28.0",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "ts-rs",
+ "wiremock",
+]
+
+[[package]]
 name = "ody-windows-sandbox"
 version = "0.0.0"
 dependencies = [
