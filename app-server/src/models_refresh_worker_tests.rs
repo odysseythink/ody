@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use ody_models_manager::manager::ModelsEndpointClient;
 use ody_models_manager::manager::ModelsEndpointFuture;
-use ody_models_manager::manager::OpenAiModelsManager;
+use ody_models_manager::manager::OpenaiCompatibleModelsManager;
 use ody_models_manager::manager::SharedModelsManager;
 use ody_protocol::error::OdyErr;
 use ody_protocol::error::Result as CoreResult;
@@ -74,7 +74,7 @@ impl ModelsEndpointClient for TestModelsEndpoint {
 async fn refreshes_immediately_periodically_and_stops_when_dropped() {
     let ody_home = tempdir().expect("temp dir");
     let endpoint = TestModelsEndpoint::new();
-    let models_manager: SharedModelsManager = Arc::new(OpenAiModelsManager::new(
+    let models_manager: SharedModelsManager = Arc::new(OpenaiCompatibleModelsManager::new(
         ody_home.path().to_path_buf(),
         endpoint.clone(),
     ));

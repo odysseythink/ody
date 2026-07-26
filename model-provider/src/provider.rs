@@ -9,7 +9,7 @@ use ody_api::Provider;
 use ody_api::SharedAuthProvider;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::ProviderCapabilities as ModelProviderInfoCapabilities;
-use ody_models_manager::manager::OpenAiModelsManager;
+use ody_models_manager::manager::OpenaiCompatibleModelsManager;
 use ody_models_manager::manager::SharedModelsManager;
 use ody_models_manager::manager::StaticModelsManager;
 use ody_protocol::error::OdyErr;
@@ -253,7 +253,7 @@ impl ModelProvider for ConfiguredModelProvider {
             self.provider_id.clone(),
             self.info.clone(),
         ));
-        Arc::new(OpenAiModelsManager::new(ody_home, endpoint))
+        Arc::new(OpenaiCompatibleModelsManager::new(ody_home, endpoint))
     }
 }
 

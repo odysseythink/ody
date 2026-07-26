@@ -124,8 +124,8 @@ impl ModelsEndpointClient for TestModelsEndpoint {
 fn odysseythink_manager_for_tests(
     ody_home: std::path::PathBuf,
     endpoint_client: Arc<dyn ModelsEndpointClient>,
-) -> OpenAiModelsManager {
-    OpenAiModelsManager::new(ody_home, endpoint_client)
+) -> OpenaiCompatibleModelsManager {
+    OpenaiCompatibleModelsManager::new(ody_home, endpoint_client)
 }
 
 fn static_manager_for_tests(model_catalog: ModelsResponse) -> StaticModelsManager {

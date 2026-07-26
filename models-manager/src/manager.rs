@@ -186,7 +186,7 @@ pub type SharedModelsManager = Arc<dyn ModelsManager>;
 
 /// OpenAI-compatible model manager backed by bundled models, cache, and `/models`.
 #[derive(Debug)]
-pub struct OpenAiModelsManager {
+pub struct OpenaiCompatibleModelsManager {
     remote_models: RwLock<Vec<ModelInfo>>,
     etag: RwLock<Option<String>>,
     cache_manager: ModelsCacheManager,
@@ -199,7 +199,7 @@ pub struct StaticModelsManager {
     remote_models: Vec<ModelInfo>,
 }
 
-impl OpenAiModelsManager {
+impl OpenaiCompatibleModelsManager {
     /// Construct an OpenAI-compatible remote model manager.
     pub fn new(ody_home: PathBuf, endpoint_client: Arc<dyn ModelsEndpointClient>) -> Self {
         let cache_path = ody_home.join(MODEL_CACHE_FILE);
@@ -223,12 +223,12 @@ impl StaticModelsManager {
     }
 }
 
-impl ModelsManager for OpenAiModelsManager {
+impl ModelsManager for OpenaiCompatibleModelsManager {
     fn raw_model_catalog(
         &self,
         refresh_strategy: RefreshStrategy,
     ) -> ModelsManagerFuture<'_, ModelsResponse> {
-        Box::pin(OpenAiModelsManager::raw_model_catalog(
+        Box::pin(OpenaiCompatibleModelsManager::raw_model_catalog(
             self,
             refresh_strategy,
         ))
@@ -247,11 +247,11 @@ impl ModelsManager for OpenAiModelsManager {
     }
 
     fn refresh_if_new_etag(&self, etag: String) -> ModelsManagerFuture<'_, ()> {
-        Box::pin(OpenAiModelsManager::refresh_if_new_etag(self, etag))
+        Box::pin(OpenaiCompatibleModelsManager::refresh_if_new_etag(self, etag))
     }
 }
 
-impl OpenAiModelsManager {
+impl OpenaiCompatibleModelsManager {
     async fn raw_model_catalog(&self, refresh_strategy: RefreshStrategy) -> ModelsResponse {
         if let Err(err) = self.refresh_available_models(refresh_strategy).await {
             error!("failed to refresh available models: {err}");
