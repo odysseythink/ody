@@ -133,6 +133,10 @@ use ody_git_utils::local_git_branches;
 use ody_git_utils::recent_commits;
 use ody_model_provider::login::LoginModelInfo;
 use ody_model_provider_info::BuiltInApiKeyProvider;
+use ody_model_provider_info::ModelProviderInfo;
+use ody_model_provider_info::create_deepseek_provider;
+use ody_model_provider_info::create_glm_provider;
+use ody_model_provider_info::create_kimi_provider;
 use ody_otel::RuntimeMetricsSummary;
 use ody_otel::SessionTelemetry;
 use ody_plugin::PluginCapabilitySummary;
@@ -1884,6 +1888,25 @@ impl ChatWidget {
         self.config.model_provider_id = config.model_provider_id.clone();
         self.config.model_provider = config.model_provider.clone();
         self.config.model_context_window = config.model_context_window;
+        self.refresh_status_line();
+    }
+
+    /// Sync the active model provider fields from a provider id selected in the
+    /// model picker. This keeps the status bar and subsequent config reads in sync
+    /// when `/model` switches to a model hosted by a different provider.
+    pub(crate) fn sync_active_model_provider_config_from_provider_id(&mut self, provider_id: &str) {
+        self.config.model_provider_id = provider_id.to_string();
+        self.config.model_provider = self
+            .config
+            .model_providers
+            .get(provider_id)
+            .cloned()
+            .unwrap_or_else(|| match provider_id {
+                "kimi" => create_kimi_provider(),
+                "deepseek" => create_deepseek_provider(),
+                "glm" => create_glm_provider(),
+                _ => ModelProviderInfo::default(),
+            });
         self.refresh_status_line();
     }
 

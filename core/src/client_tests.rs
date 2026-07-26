@@ -77,7 +77,12 @@ fn test_model_client(session_source: SessionSource) -> ModelClient {
 }
 
 fn test_model_provider() -> SharedModelProvider {
-    test_model_client(SessionSource::Cli).state.provider.clone()
+    test_model_client(SessionSource::Cli)
+        .state
+        .provider
+        .load_full()
+        .as_ref()
+        .clone()
 }
 
 fn test_responses_metadata_for_client(

@@ -147,6 +147,7 @@ pub struct OdyThreadSettingsOverrides {
     pub active_permission_profile: Option<ActivePermissionProfile>,
     pub windows_sandbox_level: Option<WindowsSandboxLevel>,
     pub model: Option<String>,
+    pub model_provider_id: Option<String>,
     pub effort: Option<Option<ReasoningEffort>>,
     pub summary: Option<ReasoningSummary>,
     pub service_tier: Option<Option<String>>,
@@ -364,6 +365,7 @@ impl OdyThread {
             active_permission_profile,
             windows_sandbox_level,
             model,
+            model_provider_id,
             effort,
             summary,
             service_tier,
@@ -394,6 +396,7 @@ impl OdyThread {
             reasoning_summary: summary,
             service_tier,
             personality,
+            model_provider_id,
             ..Default::default()
         }
     }

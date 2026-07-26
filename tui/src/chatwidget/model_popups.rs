@@ -291,6 +291,7 @@ impl ChatWidget {
                 });
             } else {
                 tx.send(AppEvent::UpdateModel(model_for_action.clone()));
+                tx.send(AppEvent::UpdateModelProvider(provider_id_for_action.clone()));
                 tx.send(AppEvent::UpdateReasoningEffort(effort.clone()));
                 tx.send(AppEvent::PersistModelSelection {
                     provider_id: provider_id_for_action.clone(),
@@ -528,6 +529,7 @@ impl ChatWidget {
             }
 
             tx.send(AppEvent::UpdateModel(model_for_action.clone()));
+            tx.send(AppEvent::UpdateModelProvider(provider_id_for_action.clone()));
             tx.send(AppEvent::UpdateReasoningEffort(effort_for_action.clone()));
             tx.send(AppEvent::PersistModelSelection {
                 provider_id: provider_id_for_action.clone(),
@@ -613,6 +615,7 @@ impl ChatWidget {
         })];
         let all_modes_actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
             tx.send(AppEvent::UpdateModel(model.clone()));
+            tx.send(AppEvent::UpdateModelProvider(provider_id.clone()));
             tx.send(AppEvent::UpdateReasoningEffort(effort.clone()));
             tx.send(AppEvent::UpdatePlanModeReasoningEffort(effort.clone()));
             tx.send(AppEvent::PersistPlanModeReasoningEffort(effort.clone()));
@@ -773,6 +776,7 @@ impl ChatWidget {
                     });
                 } else {
                     tx.send(AppEvent::UpdateModel(model_for_action.clone()));
+                    tx.send(AppEvent::UpdateModelProvider(provider_id_for_action.clone()));
                     tx.send(AppEvent::UpdateReasoningEffort(choice_effort.clone()));
                     tx.send(AppEvent::PersistModelSelection {
                         provider_id: provider_id_for_action.clone(),

@@ -7,7 +7,7 @@ expression: popup
   Warning: OpenAI base URL is overridden to https://api.kimi.com/coding/v1. Se
   ↑↓ model · ←→ page · / thinking · Enter apply · Esc cancel · Tab/Shift+Tab p
 
-  All  DeepSeek  GLM  [Kimi]
+  All  DeepSeek  openai-responses  GLM  [Kimi]
 
 
 › kimi-k2-thinking           Thinking Kimi model for slower research passes,

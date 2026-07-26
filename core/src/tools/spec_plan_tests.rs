@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use ody_features::Feature;
 use ody_mcp::ToolInfo;
-use ody_model_provider::create_model_provider;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::dynamic_tools::DynamicToolSpec;
 use ody_protocol::model_metadata::ConfigShellToolType;
@@ -230,35 +229,6 @@ fn update_config(turn: &mut TurnContext, update: impl FnOnce(&mut crate::config:
     let mut config = (*turn.config).clone();
     update(&mut config);
     turn.config = Arc::new(config);
-}
-
-struct WebRunExtensionTool;
-
-impl ToolExecutor<ExtensionToolCall> for WebRunExtensionTool {
-    fn tool_name(&self) -> ToolName {
-        ToolName::namespaced("web", "run")
-    }
-
-    fn spec(&self) -> ToolSpec {
-        ToolSpec::Namespace(ody_tools::ResponsesApiNamespace {
-            name: "web".to_string(),
-            description: "Test web namespace.".to_string(),
-            tools: vec![ResponsesApiNamespaceTool::Function(ResponsesApiTool {
-                name: "run".to_string(),
-                description: "Test standalone web search tool.".to_string(),
-                strict: false,
-                defer_loading: None,
-                parameters: ody_tools::JsonSchema::default(),
-                output_schema: None,
-            })],
-        })
-    }
-
-    fn handle(&self, _call: ExtensionToolCall) -> ody_tools::ToolExecutorFuture<'_> {
-        Box::pin(async {
-            Ok(Box::new(ody_tools::JsonToolOutput::new(json!({}))) as Box<dyn ToolOutput>)
-        })
-    }
 }
 
 struct DeferredExtensionTool;
@@ -642,8 +612,7 @@ async fn sleep_tool_follows_feature_gate() {
 #[tokio::test]
 async fn deferred_extension_tools_are_discoverable_with_tool_search() {
     let plan = probe_with(
-        |turn| {
-        },
+        |_turn| {},
         ToolPlanInputs {
             extension_tool_executors: vec![Arc::new(DeferredExtensionTool)],
             ..ToolPlanInputs::default()
@@ -661,7 +630,7 @@ async fn deferred_extension_tools_are_discoverable_with_tool_search() {
 async fn tool_search_cache_rebuilds_when_deferred_sources_change() {
     let cache = ToolSearchHandlerCache::default();
 
-    let (_session, mut first_turn) = make_session_and_context().await;
+    let (_session, first_turn) = make_session_and_context().await;
     let first_router = ToolRouter::from_turn_context(
         &first_turn,
         ToolRouterParams {
@@ -675,7 +644,7 @@ async fn tool_search_cache_rebuilds_when_deferred_sources_change() {
     );
     let first_plan = ToolPlanProbe::from_router(first_router);
 
-    let (_session, mut second_turn) = make_session_and_context().await;
+    let (_session, second_turn) = make_session_and_context().await;
     let second_router = ToolRouter::from_turn_context(
         &second_turn,
         ToolRouterParams {

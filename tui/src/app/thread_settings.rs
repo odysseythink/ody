@@ -36,6 +36,29 @@ impl App {
         })
     }
 
+    pub(super) async fn sync_active_thread_model_provider_setting(
+        &mut self,
+        app_server: &mut AppServerSession,
+        provider_id: String,
+    ) {
+        let Some(params) = self.active_thread_model_provider_setting_update_params(provider_id) else {
+            return;
+        };
+        self.send_thread_settings_update(app_server, params).await;
+    }
+
+    pub(super) fn active_thread_model_provider_setting_update_params(
+        &self,
+        provider_id: String,
+    ) -> Option<ThreadSettingsUpdateParams> {
+        let thread_id = self.active_thread_id?;
+        Some(ThreadSettingsUpdateParams {
+            thread_id: thread_id.to_string(),
+            model_provider: Some(provider_id),
+            ..ThreadSettingsUpdateParams::default()
+        })
+    }
+
     pub(super) async fn sync_active_thread_reasoning_setting(
         &mut self,
         app_server: &mut AppServerSession,

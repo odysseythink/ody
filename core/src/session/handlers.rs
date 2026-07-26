@@ -120,6 +120,7 @@ async fn thread_settings_update(
         active_permission_profile,
         windows_sandbox_level,
         model,
+        model_provider_id,
         effort,
         summary,
         service_tier,
@@ -152,6 +153,7 @@ async fn thread_settings_update(
         reasoning_summary: summary,
         service_tier,
         personality,
+        model_provider_id,
         ..Default::default()
     }
 }

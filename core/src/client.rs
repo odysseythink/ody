@@ -121,6 +121,7 @@ use ody_model_provider::ToolCall;
 use ody_model_provider::Usage;
 use ody_model_provider::adapters::core::prompt_to_chat_request;
 use ody_model_provider::create_model_provider;
+use arc_swap::ArcSwap;
 
 #[cfg(test)]
 use ody_model_provider_info::DEFAULT_WEBSOCKET_CONNECT_TIMEOUT_MS;
@@ -181,7 +182,7 @@ fn reasoning_effort_for_request(effort: ReasoningEffortConfig) -> ReasoningEffor
 #[derive(Debug)]
 struct ModelClientState {
     thread_id: ThreadId,
-    provider: SharedModelProvider,
+    provider: ArcSwap<SharedModelProvider>,
     session_source: SessionSource,
     model_verbosity: Option<VerbosityConfig>,
     enable_request_compression: bool,
@@ -395,7 +396,7 @@ impl ModelClient {
         Self {
             state: Arc::new(ModelClientState {
                 thread_id,
-                provider: model_provider,
+                provider: ArcSwap::from(Arc::new(model_provider)),
                 session_source,
                 model_verbosity,
                 enable_request_compression,
@@ -409,6 +410,15 @@ impl ModelClient {
             }),
             prompt_cache_key_override: None,
         }
+    }
+
+    /// Update the session-scoped provider configuration.
+    ///
+    /// Used when thread settings override the provider mid-session (e.g. via the
+    /// TUI `/model` command switching to a model hosted by a different provider).
+    pub(crate) fn update_provider(&self, provider_info: ModelProviderInfo) {
+        let provider = create_model_provider(provider_info);
+        self.state.provider.store(Arc::new(provider));
     }
 
     pub(crate) fn with_prompt_cache_key_override(
@@ -574,7 +584,7 @@ impl ModelClient {
                 turn_state.as_deref(),
             )
             .await
-            .map_err(|error| self.state.provider.map_api_error(error));
+            .map_err(|error| self.state.provider.load().map_api_error(error));
         trace_attempt.record_result(result.as_deref());
         result
     }
@@ -601,7 +611,7 @@ impl ModelClient {
         let response = ApiRealtimeCallClient::new(transport, api_provider, client_setup.api_auth)
             .create_with_session_and_headers(sdp, session_config, extra_headers)
             .await
-            .map_err(|error| self.state.provider.map_api_error(error))?;
+            .map_err(|error| self.state.provider.load().map_api_error(error))?;
         Ok(RealtimeWebrtcCallStart {
             sdp: response.sdp,
             call_id: response.call_id,
@@ -656,7 +666,7 @@ impl ModelClient {
         client
             .summarize_input(&payload, self.build_subagent_headers())
             .await
-            .map_err(|error| self.state.provider.map_api_error(error))
+            .map_err(|error| self.state.provider.load().map_api_error(error))
     }
 
     fn build_subagent_headers(&self) -> ApiHeaderMap {
@@ -841,7 +851,7 @@ impl ModelClient {
     ///
     /// WebSocket use is controlled by provider capability and session-scoped fallback state.
     pub fn responses_websocket_enabled(&self) -> bool {
-        if !self.state.provider.info().supports_websockets
+        if !self.state.provider.load().info().supports_websockets
             || self.state.disable_websockets.load(Ordering::Relaxed)
         {
             return false;
@@ -855,8 +865,9 @@ impl ModelClient {
     /// This centralizes setup used by both prewarm and normal request paths so they stay in
     /// lockstep when auth/provider resolution changes.
     async fn current_client_setup(&self) -> Result<CurrentClientSetup> {
-        let api_provider = self.state.provider.api_provider().await?;
-        let api_auth = self.state.provider.api_auth().await?;
+        let provider = self.state.provider.load_full().as_ref().clone();
+        let api_provider = provider.api_provider().await?;
+        let api_auth = provider.api_auth().await?;
         Ok(CurrentClientSetup {
             auth: None::<&str>,
             api_provider,
@@ -884,7 +895,7 @@ impl ModelClient {
             auth_context,
             request_route_telemetry,
         );
-        let websocket_connect_timeout = self.state.provider.info().websocket_connect_timeout();
+        let websocket_connect_timeout = self.state.provider.load().info().websocket_connect_timeout();
         let start = Instant::now();
         let result = match tokio::time::timeout(
             websocket_connect_timeout,
@@ -1135,8 +1146,8 @@ impl ModelClientSession {
         level = "info",
         skip_all,
         fields(
-            provider = %self.client.state.provider.info().name,
-            wire_api = %self.client.state.provider.info().wire_api,
+            provider = %self.client.state.provider.load().info().name,
+            wire_api = %self.client.state.provider.load().info().wire_api,
             transport = "responses_websocket",
             api.path = "responses",
             turn.has_metadata_header = params.responses_metadata.has_turn_metadata()
@@ -1207,7 +1218,7 @@ impl ModelClientSession {
         skip_all,
         fields(
             model = %model_info.slug,
-            wire_api = %self.client.state.provider.info().wire_api,
+            wire_api = %self.client.state.provider.load().info().wire_api,
             transport = "responses_websocket",
             api.path = "responses",
             turn.has_metadata_header = responses_metadata.has_turn_metadata(),
@@ -1287,10 +1298,11 @@ impl ModelClientSession {
                         .client
                         .state
                         .provider
+                        .load()
                         .map_api_error(ApiError::Transport(unauthorized_transport));
                     return Err(err);
                 }
-                Err(err) => return Err(self.client.state.provider.map_api_error(err)),
+                Err(err) => return Err(self.client.state.provider.load().map_api_error(err)),
             }
 
             let (mut ws_request, previous_response_id_from_untraced_warmup) =
@@ -1319,7 +1331,7 @@ impl ModelClientSession {
             self.websocket_session.last_response_from_untraced_warmup = warmup;
             let websocket_connection =
                 self.websocket_session.connection.as_ref().ok_or_else(|| {
-                    self.client.state.provider.map_api_error(ApiError::Stream(
+                    self.client.state.provider.load().map_api_error(ApiError::Stream(
                         "websocket connection is unavailable".to_string(),
                     ))
                 })?;
@@ -1333,7 +1345,7 @@ impl ModelClientSession {
                 .map_err(|err| {
                     let response_debug_context =
                         extract_response_debug_context_from_api_error(&err);
-                    let err = self.client.state.provider.map_api_error(err);
+                    let err = self.client.state.provider.load().map_api_error(err);
                     inference_trace_attempt.record_failed(
                         &err,
                         response_debug_context.request_id.as_deref(),
@@ -1345,7 +1357,7 @@ impl ModelClientSession {
                 stream_result,
                 session_telemetry.clone(),
                 inference_trace_attempt,
-                Arc::clone(&self.client.state.provider),
+                self.client.state.provider.load_full().as_ref().clone(),
             );
             self.websocket_session.last_response_rx = Some(last_request_rx);
             return Ok(WebsocketStreamOutcome::Stream(stream));
@@ -1456,7 +1468,7 @@ impl ModelClientSession {
         responses_metadata: &OdyResponsesMetadata,
         inference_trace: &InferenceTraceContext,
     ) -> Result<ResponseStream> {
-        let wire_api = self.client.state.provider.info().wire_api;
+        let wire_api = self.client.state.provider.load().info().wire_api;
         // Preserve the Responses WebSocket fast path for the Responses wire API.
         // HTTP fallback and all other wire APIs route through the unified ChatProvider.
         if wire_api == WireApi::Responses && self.client.responses_websocket_enabled() {
@@ -1505,7 +1517,7 @@ impl ModelClientSession {
         skip_all,
         fields(
             model = %model_info.slug,
-            wire_api = %self.client.state.provider.info().wire_api,
+            wire_api = %self.client.state.provider.load().info().wire_api,
             transport = "chat_provider",
         )
     )]
@@ -1530,10 +1542,8 @@ impl ModelClientSession {
             RequestRouteTelemetry::for_endpoint(CHAT_COMPLETIONS_ENDPOINT),
         );
 
-        let chat_provider = self
-            .client
-            .state
-            .provider
+        let provider = self.client.state.provider.load_full().as_ref().clone();
+        let chat_provider = provider
             .chat_provider()
             .await
             .map_err(|err| {
@@ -1568,7 +1578,7 @@ impl ModelClientSession {
                     url: None,
                 });
                 inference_trace_attempt.record_failed(&err, None, /*output_items*/ &[]);
-                return Err(self.client.state.provider.map_api_error(err));
+                return Err(self.client.state.provider.load().map_api_error(err));
             }
             Err(err) => {
                 let mapped = err.to_ody_err();

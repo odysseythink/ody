@@ -19,6 +19,9 @@ use ody_protocol::protocol::ThreadSource;
 use ody_protocol::protocol::TurnEnvironmentSelection;
 use ody_protocol::protocol::TurnEnvironmentSelections;
 use ody_protocol::protocol::UserNotification;
+use ody_model_provider_info::create_deepseek_provider;
+use ody_model_provider_info::create_glm_provider;
+use ody_model_provider_info::create_kimi_provider;
 use std::sync::OnceLock;
 use tokio::sync::Semaphore;
 
@@ -230,6 +233,32 @@ impl SessionConfiguration {
         if let Some(collaboration_mode) = updates.collaboration_mode.clone() {
             next_configuration.collaboration_mode = collaboration_mode;
         }
+        if let Some(model_provider_id) = updates.model_provider_id.clone() {
+            if model_provider_id != next_configuration.original_config_do_not_use.model_provider_id {
+                let provider = next_configuration
+                    .original_config_do_not_use
+                    .model_providers
+                    .get(&model_provider_id)
+                    .cloned()
+                    .or_else(|| match model_provider_id.as_str() {
+                        "kimi" => Some(create_kimi_provider()),
+                        "deepseek" => Some(create_deepseek_provider()),
+                        "glm" => Some(create_glm_provider()),
+                        _ => None,
+                    })
+                    .ok_or_else(|| ConstraintError::InvalidValue {
+                        field_name: "model_provider_id",
+                        candidate: model_provider_id.clone(),
+                        allowed: "a configured provider id or built-in kimi/deepseek/glm".to_string(),
+                        requirement_source: ody_config::RequirementSource::Unknown,
+                    })?;
+                next_configuration.provider = provider.clone();
+                let mut config = (*next_configuration.original_config_do_not_use).clone();
+                config.model_provider_id = model_provider_id.clone();
+                config.model_provider = provider;
+                next_configuration.original_config_do_not_use = Arc::new(config);
+            }
+        }
         if let Some(summary) = updates.reasoning_summary {
             next_configuration.model_reasoning_summary = Some(summary);
         }
@@ -430,6 +459,7 @@ pub(crate) struct SessionSettingsUpdate {
     pub(crate) personality: Option<Personality>,
     pub(crate) app_server_client_name: Option<String>,
     pub(crate) app_server_client_version: Option<String>,
+    pub(crate) model_provider_id: Option<String>,
 }
 
 pub(crate) struct AppServerClientMetadata {
@@ -486,6 +516,7 @@ impl Session {
         let captured = {
             let state = self.state.lock().await;
             let previous_mode = state.session_configuration.collaboration_mode.mode;
+            let previous_provider = state.session_configuration.provider.clone();
             let next = match state.session_configuration.clone().apply(&updates) {
                 Ok(next) => next,
                 Err(err) => return Err(OdyErr::InvalidRequest(err.to_string())),
@@ -504,9 +535,9 @@ impl Session {
                 .as_ref()
                 .and_then(|plan_mode| plan_mode.enforcement)
                 .unwrap_or(PlanEnforcement::Strict);
-            (next, edge, artifact, enforcement)
+            (next, edge, artifact, enforcement, previous_provider)
         };
-        let (next, edge, artifact, enforcement) = captured;
+        let (next, edge, artifact, enforcement, previous_provider) = captured;
         let decision = if edge {
             crate::session::design_handoff::evaluate_design_exit(
                 artifact,
@@ -526,9 +557,14 @@ impl Session {
                 logs: _,
             } => Err(OdyErr::InvalidRequest(missing_report)),
             HandoffDecision::Allow { reminder, logs } => {
+                let next_provider = next.provider.clone();
                 let mut state = self.state.lock().await;
+                let provider_changed = previous_provider != next_provider;
                 state.session_configuration = next;
                 drop(state);
+                if provider_changed {
+                    self.services.model_client.update_provider(next_provider);
+                }
                 Ok(HandoffDecision::Allow { reminder, logs })
             }
         }
