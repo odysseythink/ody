@@ -205,6 +205,7 @@ fn build_tool_specs_and_registry(
         add_tool_sources(&context, &mut planned_tools);
         apply_direct_model_only_namespace_overrides(turn_context, &mut planned_tools);
         prepend_code_mode_executors(&context, &mut planned_tools);
+        add_tool_search_if_needed(&context, &mut planned_tools);
     }
     build_model_visible_specs_and_registry(turn_context, planned_tools)
 }
@@ -558,6 +559,25 @@ fn add_tool_sources(context: &CoreToolPlanContext<'_>, planned_tools: &mut Plann
     for spec in hosted_model_tool_specs(context) {
         planned_tools.add_hosted_spec(spec);
     }
+}
+
+fn add_tool_search_if_needed(
+    context: &CoreToolPlanContext<'_>,
+    planned_tools: &mut PlannedTools,
+) {
+    let search_infos: Vec<ToolSearchInfo> = planned_tools
+        .runtimes()
+        .iter()
+        .filter(|runtime| runtime.exposure() == ToolExposure::Deferred)
+        .filter_map(|runtime| runtime.search_info())
+        .collect();
+
+    if search_infos.is_empty() {
+        return;
+    }
+
+    let handler = context.tool_search_handler_cache.get_or_build(search_infos);
+    planned_tools.add_arc(handler);
 }
 
 
