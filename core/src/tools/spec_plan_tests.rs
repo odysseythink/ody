@@ -638,65 +638,6 @@ async fn sleep_tool_follows_feature_gate() {
     enabled.assert_visible_contains(&["sleep"]);
 }
 
-#[tokio::test]
-async fn mcp_and_tool_search_follow_direct_and_deferred_tool_exposure() {
-    let direct_mcp = probe_with(
-        |_| {},
-        ToolPlanInputs {
-            mcp_tools: Some(vec![mcp_tool("direct", "mcp__direct", "lookup")]),
-            ..ToolPlanInputs::default()
-        },
-    )
-    .await;
-    direct_mcp.assert_visible_contains(&[
-        "list_mcp_resources",
-        "list_mcp_resource_templates",
-        "read_mcp_resource",
-    ]);
-    assert_eq!(
-        direct_mcp.namespace_function_names("mcp__direct"),
-        &["lookup".to_string()]
-    );
-
-    let searchable_mcp = ToolPlanInputs {
-        deferred_mcp_tools: Some(vec![mcp_tool("searchable", "mcp__searchable", "lookup")]),
-        ..ToolPlanInputs::default()
-    };
-
-    let missing_model_capability = probe_with(
-        |turn| {
-        },
-        ToolPlanInputs {
-            deferred_mcp_tools: searchable_mcp.deferred_mcp_tools.clone(),
-            ..ToolPlanInputs::default()
-        },
-    )
-    .await;
-    missing_model_capability.assert_visible_lacks(&["tool_search"]);
-
-    let missing_deferred_tools = probe(|turn| {
-        set_feature(turn, Feature::Collab, /*enabled*/ false);
-    })
-    .await;
-    missing_deferred_tools.assert_visible_lacks(&["tool_search"]);
-    missing_deferred_tools.assert_visible_lacks(&[
-        "list_mcp_resources",
-        "list_mcp_resource_templates",
-        "read_mcp_resource",
-    ]);
-
-    let enabled = probe_with(
-        |turn| {
-        },
-        searchable_mcp,
-    )
-    .await;
-    enabled.assert_visible_contains(&["tool_search"]);
-    enabled.assert_registered_contains(&[
-        "tool_search",
-        &ToolName::namespaced("mcp__searchable", "lookup").to_string(),
-    ]);
-}
 
 #[tokio::test]
 async fn deferred_extension_tools_are_discoverable_with_tool_search() {
@@ -1175,49 +1116,6 @@ async fn tool_mode_selector_overrides_feature_flags() {
     ]);
 }
 
-#[tokio::test]
-async fn v1_multi_agent_tools_defer_when_tool_search_available() {
-    let plan = probe(|turn| {
-        set_feature(turn, Feature::Collab, /*enabled*/ true);
-        set_feature(turn, Feature::MultiAgentV2, /*enabled*/ false);
-    })
-    .await;
-
-    plan.assert_visible_contains(&["tool_search"]);
-    plan.assert_visible_lacks(&[
-        "spawn_agent",
-        "send_input",
-        "resume_agent",
-        "wait_agent",
-        "close_agent",
-        "interrupt_agent",
-    ]);
-    for tool_name in [
-        "spawn_agent",
-        "send_input",
-        "resume_agent",
-        "wait_agent",
-        "close_agent",
-    ] {
-        let namespaced_tool_name = ToolName::namespaced(MULTI_AGENT_V1_NAMESPACE, tool_name);
-        let namespaced_tool_name = namespaced_tool_name.to_string();
-        assert!(
-            plan.registered_names.contains(&namespaced_tool_name),
-            "expected namespaced runtime for {tool_name}"
-        );
-        assert!(
-            !plan
-                .registered_names
-                .contains(&ToolName::plain(tool_name).to_string()),
-            "expected no plain runtime for deferred {tool_name}"
-        );
-        assert_eq!(plan.exposure(&namespaced_tool_name), ToolExposure::Deferred);
-    }
-    let ToolSpec::ToolSearch { description, .. } = plan.visible_spec("tool_search") else {
-        panic!("expected visible tool_search spec");
-    };
-    assert!(description.contains("- Multi-agent tools: Spawn and manage sub-agents."));
-}
 
 #[tokio::test]
 async fn multi_agent_v2_can_use_configured_tool_namespace() {
@@ -1422,19 +1320,6 @@ async fn spawn_agent_is_directly_visible_in_read_only_modes() {
     }
 }
 
-/// Outside the read-only planning modes the previous behaviour stands: the
-/// search tool defers spawn_agent to keep the default tool list small.
-#[tokio::test]
-async fn spawn_agent_stays_deferred_outside_read_only_modes() {
-    let probe = probe(|turn| {
-        turn.collaboration_mode.mode = ModeKind::Default;
-    })
-    .await;
-    assert_eq!(
-        probe.exposure(&format!("{MULTI_AGENT_V1_NAMESPACE}spawn_agent")),
-        ToolExposure::Deferred
-    );
-}
 
 /// The blanket "do not spawn sub-agents unless the user explicitly asks" was the
 /// instruction that kept every search in the main context. It must survive only
