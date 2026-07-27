@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::test_config;
+use crate::config::{test_config, TEST_PROVIDER_ID};
 use crate::init_state_db;
 use crate::installation_id::INSTALLATION_ID_FILENAME;
 use crate::rollout::RolloutRecorder;
@@ -1017,8 +1017,12 @@ async fn new_uses_active_provider_for_model_refresh() {
     config.cwd = config.ody_home.abs();
     std::fs::create_dir_all(&config.ody_home).expect("create ody home");
     config.model_catalog = None;
-    config.model_provider.base_url = Some(server.uri());
-    config.model_provider.auth = Some(ModelProviderAuthInfo {
+    let active_provider = config
+        .model_providers
+        .get_mut(TEST_PROVIDER_ID)
+        .expect("test config should have a test provider");
+    active_provider.base_url = Some(server.uri());
+    active_provider.auth = Some(ModelProviderAuthInfo {
         command: "true".to_string(),
         args: vec![],
         timeout_ms: NonZeroU64::new(1000).unwrap(),
