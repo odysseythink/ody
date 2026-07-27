@@ -211,17 +211,21 @@ async fn start_review_conversation_with_overrides(
     // The main agent never trips either because its `model` is already resolved
     // to the bare provider model name. Resolve both together, and only when the
     // provider is known — otherwise leave the slug untouched.
-    let resolved = model.split_once('/').and_then(|(provider_id, suffix)| {
-        let info = sub_agent_config.model_providers.get(provider_id).cloned()?;
-        let wire_model = sub_agent_config
-            .configured_models
-            .get(&model)
-            .and_then(|entry| entry.model.clone())
-            .unwrap_or_else(|| suffix.to_string());
-        Some((provider_id.to_string(), info, wire_model))
-    });
-    if let Some((provider_id, info, wire_model)) = resolved {
-        sub_agent_config.model_provider_id = provider_id;
+    let model_ref = ody_model_provider_info::model_ref::ModelRef::parse(&model);
+    let resolved = sub_agent_config
+        .model_providers
+        .get(&model_ref.provider_alias)
+        .cloned()
+        .map(|info| {
+            let wire_model = sub_agent_config
+                .configured_models
+                .get(&model_ref.qualified())
+                .and_then(|entry| entry.model.clone())
+                .unwrap_or_else(|| model_ref.model_id.clone());
+            (info, wire_model)
+        });
+    if let Some((info, wire_model)) = resolved {
+        sub_agent_config.model_provider_id = model_ref.provider_alias;
         sub_agent_config.model_provider = info;
         sub_agent_config.model = Some(wire_model);
     } else {
