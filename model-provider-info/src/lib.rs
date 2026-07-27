@@ -26,6 +26,8 @@ use strum_macros::AsRefStr;
 use strum_macros::EnumString;
 use strum_macros::IntoStaticStr;
 
+pub mod model_ref;
+
 const DEFAULT_STREAM_IDLE_TIMEOUT_MS: u64 = 300_000;
 const DEFAULT_STREAM_MAX_RETRIES: u64 = 5;
 const DEFAULT_REQUEST_MAX_RETRIES: u64 = 4;
