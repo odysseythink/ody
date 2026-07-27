@@ -82,9 +82,10 @@ impl ModelRef {
 
 /// Resolve a provider's kind from its display name and base URL.
 ///
-/// This is the single source of truth for provider-kind detection. The legacy
-/// `is_kimi`/`is_deepseek`/`is_glm` methods on [`ModelProviderInfo`] delegate
-/// to this function via [`ModelProviderInfo::provider_kind`].
+/// This is the single source of truth for provider-kind detection.
+/// [`ModelProviderInfo::provider_kind`] delegates here, and external call sites
+/// should compare the returned `ProviderKind` directly instead of using legacy
+/// heuristic helpers.
 pub fn resolve_kind(info: &ModelProviderInfo) -> ProviderKind {
     let name = info.name.to_ascii_lowercase();
     let base_url = info

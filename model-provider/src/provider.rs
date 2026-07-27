@@ -9,6 +9,7 @@ use ody_api::Provider;
 use ody_api::SharedAuthProvider;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::ProviderCapabilities as ModelProviderInfoCapabilities;
+use ody_model_provider_info::ProviderKind;
 use ody_models_manager::manager::OpenaiCompatibleModelsManager;
 use ody_models_manager::manager::SharedModelsManager;
 use ody_models_manager::manager::StaticModelsManager;
@@ -259,16 +260,14 @@ impl ModelProvider for ConfiguredModelProvider {
 
 /// Resolve the provider id used by the chat adapter.
 fn provider_id_for_wire_api(info: &ModelProviderInfo) -> &'static str {
-    if info.is_kimi() {
-        "kimi"
-    } else if info.is_deepseek() {
-        "deepseek"
-    } else if info.is_glm() {
-        "glm"
-    } else if info.wire_api == ody_model_provider_info::WireApi::Responses {
-        "openai-responses"
-    } else {
-        "chat"
+    match info.provider_kind() {
+        ProviderKind::Kimi => "kimi",
+        ProviderKind::Deepseek => "deepseek",
+        ProviderKind::Glm => "glm",
+        ProviderKind::Custom if info.wire_api == ody_model_provider_info::WireApi::Responses => {
+            "openai-responses"
+        }
+        ProviderKind::Custom => "chat",
     }
 }
 

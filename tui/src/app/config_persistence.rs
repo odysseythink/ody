@@ -13,6 +13,7 @@ use crate::login::telemetry;
 use crate::model_catalog::ModelCatalog;
 use ody_model_provider::login::LoginModelInfo;
 use ody_model_provider_info::BuiltInApiKeyProvider;
+use ody_model_provider_info::ProviderKind;
 use ody_model_provider_info::model_ref::ModelRef;
 #[cfg(target_os = "windows")]
 use ody_utils_approval_presets::ApprovalPreset;
@@ -843,11 +844,7 @@ impl App {
             .config
             .model_providers
             .iter()
-            .filter(|(_, p)| match provider {
-                BuiltInApiKeyProvider::Kimi => p.is_kimi(),
-                BuiltInApiKeyProvider::Deepseek => p.is_deepseek(),
-                BuiltInApiKeyProvider::Glm => p.is_glm(),
-            })
+            .filter(|(_, p)| p.provider_kind() == provider.provider_kind())
             .map(|(alias, _)| alias.clone())
             .collect();
         let edits = build_logout_provider_edits(
@@ -903,11 +900,7 @@ impl App {
             .config
             .model_providers
             .get(&alias)
-            .map(|p| match provider {
-                BuiltInApiKeyProvider::Kimi => p.is_kimi(),
-                BuiltInApiKeyProvider::Deepseek => p.is_deepseek(),
-                BuiltInApiKeyProvider::Glm => p.is_glm(),
-            })
+            .map(|p| p.provider_kind() == provider.provider_kind())
             .unwrap_or(false);
         if !is_matching_alias {
             self.chat_widget.add_error_message(format!(

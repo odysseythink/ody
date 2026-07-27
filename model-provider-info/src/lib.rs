@@ -29,7 +29,8 @@ use strum_macros::IntoStaticStr;
 pub mod model_ref;
 pub use model_ref::resolve_provider;
 pub use model_ref::resolve_provider_info;
-use model_ref::{ProviderKind, resolve_kind};
+pub use model_ref::ProviderKind;
+use model_ref::resolve_kind;
 
 const DEFAULT_STREAM_IDLE_TIMEOUT_MS: u64 = 300_000;
 const DEFAULT_STREAM_MAX_RETRIES: u64 = 5;
@@ -113,6 +114,15 @@ impl BuiltInApiKeyProvider {
             Self::Kimi => "kimi-for-coding",
             Self::Deepseek => "deepseek-chat",
             Self::Glm => "glm-4-flash",
+        }
+    }
+
+    /// Resolved provider kind for this built-in provider.
+    pub fn provider_kind(self) -> ProviderKind {
+        match self {
+            Self::Kimi => ProviderKind::Kimi,
+            Self::Deepseek => ProviderKind::Deepseek,
+            Self::Glm => ProviderKind::Glm,
         }
     }
 }
@@ -420,18 +430,6 @@ impl ModelProviderInfo {
     /// add a serialized field, so existing config files remain unchanged.
     pub fn provider_kind(&self) -> ProviderKind {
         resolve_kind(self)
-    }
-
-    pub fn is_kimi(&self) -> bool {
-        self.provider_kind() == ProviderKind::Kimi
-    }
-
-    pub fn is_deepseek(&self) -> bool {
-        self.provider_kind() == ProviderKind::Deepseek
-    }
-
-    pub fn is_glm(&self) -> bool {
-        self.provider_kind() == ProviderKind::Glm
     }
 
     /// Whether this provider speaks the Chat Completions wire protocol.

@@ -15,6 +15,7 @@ use crate::bottom_pane::slash_commands::find_slash_command;
 use crate::goal_display::GOAL_USAGE;
 use crate::goal_files::GoalDraft;
 use ody_model_provider_info::BuiltInApiKeyProvider;
+use ody_model_provider_info::ProviderKind;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SlashCommandDispatchSource {
@@ -1270,11 +1271,7 @@ impl ChatWidget {
         self.config
             .model_providers
             .iter()
-            .filter(|(_, p)| match provider {
-                BuiltInApiKeyProvider::Kimi => p.is_kimi(),
-                BuiltInApiKeyProvider::Deepseek => p.is_deepseek(),
-                BuiltInApiKeyProvider::Glm => p.is_glm(),
-            })
+            .filter(|(_, p)| p.provider_kind() == provider.provider_kind())
             .map(|(alias, _)| alias.clone())
             .collect()
     }

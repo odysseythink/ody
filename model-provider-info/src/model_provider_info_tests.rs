@@ -168,25 +168,25 @@ fn built_in_kimi_provider_capabilities() {
 }
 
 #[test]
-fn is_kimi_matches_case_insensitive_name_alias_and_base_url() {
+fn provider_kind_detects_kimi_case_insensitive_name_alias_and_base_url() {
     // Exact canonical name.
-    assert!(create_kimi_provider().is_kimi());
+    assert_eq!(create_kimi_provider().provider_kind(), ProviderKind::Kimi);
 
     // Case-insensitive name.
     let mut lower = create_kimi_provider();
     lower.name = "kimi".to_string();
-    assert!(lower.is_kimi());
+    assert_eq!(lower.provider_kind(), ProviderKind::Kimi);
 
     // Common alias.
     let mut moonshot = create_kimi_provider();
     moonshot.name = "Moonshot".to_string();
-    assert!(moonshot.is_kimi());
+    assert_eq!(moonshot.provider_kind(), ProviderKind::Kimi);
 
     // Detected via base_url even when the name is a custom label.
     let mut custom = create_kimi_provider();
     custom.name = "My Coding Model".to_string();
     custom.base_url = Some("https://api.moonshot.ai/v1".to_string());
-    assert!(custom.is_kimi());
+    assert_eq!(custom.provider_kind(), ProviderKind::Kimi);
 
     // The coding endpoint `api.kimi.com` must be detected from the base_url
     // alone, so a provider named e.g. `kimi_gyy` still resolves to the Kimi
@@ -195,29 +195,29 @@ fn is_kimi_matches_case_insensitive_name_alias_and_base_url() {
     let mut coding = create_kimi_provider();
     coding.name = "kimi_gyy".to_string();
     coding.base_url = Some("https://api.kimi.com/coding/v1".to_string());
-    assert!(coding.is_kimi());
+    assert_eq!(coding.provider_kind(), ProviderKind::Kimi);
 
     // Unrelated provider is not misclassified.
     let mut other = create_kimi_provider();
     other.name = "OpenAI".to_string();
     other.base_url = Some("https://api.openai.com/v1".to_string());
-    assert!(!other.is_kimi());
+    assert_ne!(other.provider_kind(), ProviderKind::Kimi);
 }
 
 #[test]
 fn deepseek_and_glm_detection_is_relaxed() {
     let mut deepseek = create_deepseek_provider();
     deepseek.name = "deepseek".to_string();
-    assert!(deepseek.is_deepseek());
+    assert_eq!(deepseek.provider_kind(), ProviderKind::Deepseek);
 
     let mut glm = create_glm_provider();
     glm.name = "zhipu".to_string();
-    assert!(glm.is_glm());
+    assert_eq!(glm.provider_kind(), ProviderKind::Glm);
 
     let mut glm_url = create_glm_provider();
     glm_url.name = "Custom".to_string();
     glm_url.base_url = Some("https://open.bigmodel.cn/api/paas/v4".to_string());
-    assert!(glm_url.is_glm());
+    assert_eq!(glm_url.provider_kind(), ProviderKind::Glm);
 }
 
 #[test]
