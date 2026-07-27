@@ -27,6 +27,7 @@ use strum_macros::EnumString;
 use strum_macros::IntoStaticStr;
 
 pub mod model_ref;
+use model_ref::{ProviderKind, resolve_kind};
 
 const DEFAULT_STREAM_IDLE_TIMEOUT_MS: u64 = 300_000;
 const DEFAULT_STREAM_MAX_RETRIES: u64 = 5;
@@ -411,42 +412,24 @@ impl ModelProviderInfo {
             .unwrap_or(Duration::from_millis(DEFAULT_WEBSOCKET_CONNECT_TIMEOUT_MS))
     }
 
-    /// Matches a known third-party Chat provider by name (case-insensitive, plus
-    /// common aliases) or by a substring of its base URL. This mirrors the
-    /// dialect detection in `ody-api`'s `ChatVendor::from_provider`, so a provider
-    /// configured as `kimi`/`Moonshot`/etc. still resolves to its bundled model
-    /// catalog (and therefore a real context window) instead of falling back to
-    /// synthetic metadata.
-    fn matches_provider(&self, names: &[&str], base_url_needles: &[&str]) -> bool {
-        let name = self.name.to_ascii_lowercase();
-        if names.iter().any(|candidate| name == *candidate) {
-            return true;
-        }
-        if let Some(base_url) = self.base_url.as_deref() {
-            let base_url = base_url.to_ascii_lowercase();
-            if base_url_needles
-                .iter()
-                .any(|needle| base_url.contains(needle))
-            {
-                return true;
-            }
-        }
-        false
+    /// Resolved provider kind derived from the display name and base URL.
+    ///
+    /// This is the single entry point for provider-kind detection. It does not
+    /// add a serialized field, so existing config files remain unchanged.
+    pub fn provider_kind(&self) -> ProviderKind {
+        resolve_kind(self)
     }
 
     pub fn is_kimi(&self) -> bool {
-        // Kimi is reachable at two hosts: the public `api.moonshot.ai` and the
-        // coding endpoint `api.kimi.com`. Match both so detection does not rely
-        // solely on the display name resolving to "Kimi".
-        self.matches_provider(&["kimi", "moonshot"], &["moonshot", "kimi.com"])
+        self.provider_kind() == ProviderKind::Kimi
     }
 
     pub fn is_deepseek(&self) -> bool {
-        self.matches_provider(&["deepseek"], &["deepseek"])
+        self.provider_kind() == ProviderKind::Deepseek
     }
 
     pub fn is_glm(&self) -> bool {
-        self.matches_provider(&["glm", "zhipu", "bigmodel"], &["bigmodel"])
+        self.provider_kind() == ProviderKind::Glm
     }
 
     /// Whether this provider speaks the Chat Completions wire protocol.

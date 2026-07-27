@@ -81,15 +81,25 @@ impl ModelRef {
 
 /// Resolve a provider's kind from its display name and base URL.
 ///
-/// This currently delegates to the existing heuristic `is_kimi`/`is_deepseek`/
-/// `is_glm` methods on [`ModelProviderInfo`]. Later stages of the refactor can
-/// reverse the dependency if desired.
+/// This is the single source of truth for provider-kind detection. The legacy
+/// `is_kimi`/`is_deepseek`/`is_glm` methods on [`ModelProviderInfo`] delegate
+/// to this function via [`ModelProviderInfo::provider_kind`].
 pub fn resolve_kind(info: &ModelProviderInfo) -> ProviderKind {
-    if info.is_kimi() {
+    let name = info.name.to_ascii_lowercase();
+    let base_url = info
+        .base_url
+        .as_deref()
+        .map(|s| s.to_ascii_lowercase())
+        .unwrap_or_default();
+
+    let name_matches = |candidates: &[&str]| candidates.iter().any(|c| name == *c);
+    let url_matches = |needles: &[&str]| needles.iter().any(|n| base_url.contains(n));
+
+    if name_matches(&["kimi", "moonshot"]) || url_matches(&["moonshot", "kimi.com"]) {
         ProviderKind::Kimi
-    } else if info.is_deepseek() {
+    } else if name_matches(&["deepseek"]) || url_matches(&["deepseek"]) {
         ProviderKind::Deepseek
-    } else if info.is_glm() {
+    } else if name_matches(&["glm", "zhipu", "bigmodel"]) || url_matches(&["bigmodel"]) {
         ProviderKind::Glm
     } else {
         ProviderKind::Custom
