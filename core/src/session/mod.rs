@@ -21,6 +21,7 @@ use crate::compact;
 use crate::config::ManagedFeatures;
 use crate::config::resolve_tool_suggest_config_from_layer_stack;
 use crate::connectors;
+use crate::runtime_model_state::RuntimeModelState;
 use crate::context::ApprovedCommandPrefixSaved;
 use crate::context::AppsInstructions;
 use crate::context::AvailablePluginsInstructions;
@@ -1625,14 +1626,6 @@ impl Session {
                 .with_user_layer_from(&next_config.config_layer_stack);
             config.tool_suggest =
                 resolve_tool_suggest_config_from_layer_stack(&config.config_layer_stack);
-            // Adopt the freshly resolved provider set and model catalog so a
-            // mid-session `/login` (which adds a new provider + configured model
-            // entry) is recognized by provider-switch resolution and model
-            // listing without a restart. Without this the session keeps the
-            // startup snapshot and rejects switching to the new provider alias.
-            config.model_providers = next_config.model_providers.clone();
-            config.model_catalog = next_config.model_catalog.clone();
-            config.configured_model_catalog = next_config.configured_model_catalog.clone();
             let config = Arc::new(config);
             state.session_configuration.original_config_do_not_use = Arc::clone(&config);
             let new_config = notify_config_contributors
@@ -1659,6 +1652,26 @@ impl Session {
         ) {
             self.services.hooks.store(Arc::new(hooks));
         }
+    }
+
+    /// Apply a fully resolved runtime model-state snapshot to this session.
+    ///
+    /// Stores the new models manager and adopts the resolved provider map and
+    /// catalogs so that mid-session `/login` changes are visible to provider
+    /// switching and model listing without a restart. This centralizes the
+    /// provider/catalog propagation that previously lived as a temporary patch
+    /// inside `refresh_runtime_config`.
+    pub(crate) async fn apply_runtime_model_state(&self, state: RuntimeModelState) {
+        self.set_models_manager(state.models_manager);
+        let mut config = {
+            let state = self.state.lock().await;
+            (*state.session_configuration.original_config_do_not_use).clone()
+        };
+        config.model_providers = state.providers;
+        config.model_catalog = state.model_catalog;
+        config.configured_model_catalog = state.configured_model_catalog;
+        let mut state = self.state.lock().await;
+        state.session_configuration.original_config_do_not_use = Arc::new(config);
     }
 
     /// Atomically swap the session's models manager. Used when a config reload

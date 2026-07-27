@@ -598,6 +598,14 @@ impl OdyThread {
         self.ody.session.refresh_runtime_config(next_config).await;
     }
 
+    /// Apply a fully resolved runtime model-state snapshot to this thread's session.
+    pub async fn apply_runtime_model_state(
+        &self,
+        state: crate::runtime_model_state::RuntimeModelState,
+    ) {
+        self.ody.session.apply_runtime_model_state(state).await;
+    }
+
     /// Swap this thread's session models manager. Paired with a config reload so
     /// a mid-session `/login` takes effect without restarting the session.
     pub fn set_models_manager(

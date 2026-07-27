@@ -37,6 +37,7 @@ use ody_config::MatcherGroup as CoreMatcherGroup;
 use ody_config::ResidencyRequirement as CoreResidencyRequirement;
 use ody_config::SandboxModeRequirement as CoreSandboxModeRequirement;
 use ody_core::ThreadManager;
+use ody_core::resolve_runtime_model_state;
 use ody_features::canonical_feature_for_key;
 use ody_features::feature_for_key;
 use ody_model_provider::create_model_provider;
@@ -283,18 +284,17 @@ impl ConfigRequestProcessor {
         // mid-session `/login` (which adds a configured model catalog) is
         // reflected by `model/list` and by in-session model resolution without
         // requiring a restart. Build once and swap it into the thread manager
-        // and every live session atomically.
-        let new_models_manager = ody_core::build_models_manager(&next_config);
+        // and every live session atomically via the unified runtime model state.
+        let runtime_model_state = resolve_runtime_model_state(&next_config);
         self.thread_manager
-            .set_models_manager(new_models_manager.clone());
+            .set_models_manager(runtime_model_state.models_manager.clone());
 
         let thread_ids = self.thread_manager.list_thread_ids().await;
         for thread_id in thread_ids {
             let Ok(thread) = self.thread_manager.get_thread(thread_id).await else {
                 continue;
             };
-            thread.refresh_runtime_config(next_config.clone()).await;
-            thread.set_models_manager(new_models_manager.clone());
+            thread.apply_runtime_model_state(runtime_model_state.clone()).await;
         }
     }
 
