@@ -132,6 +132,14 @@ impl ChatWidget {
             return;
         }
 
+        if !self.config.has_active_model {
+            self.add_info_message(
+                "No model configured. Run /login to add a model.".to_string(),
+                /*hint*/ None,
+            );
+            return;
+        }
+
         let presets: Vec<ModelPreset> = match self.model_catalog.try_list_models() {
             Ok(models) => models,
             Err(_) => {

@@ -687,6 +687,7 @@ pub(super) async fn guardian_review_session_config(
     let available_models = session
         .services
         .models_manager
+        .load()
         .list_models(ody_models_manager::manager::RefreshStrategy::Offline)
         .await;
     let default_review_model_id = turn.provider.approval_review_preferred_model();

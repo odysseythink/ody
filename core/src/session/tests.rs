@@ -3501,11 +3501,12 @@ async fn turn_context_with_model_updates_model_fields() {
     let (session, mut turn_context) = make_session_and_context().await;
     turn_context.reasoning_effort = Some(ReasoningEffortConfig::Minimal);
     let updated = turn_context
-        .with_model("k3".to_string(), &session.services.models_manager)
+        .with_model("k3".to_string(), &session.services.models_manager.load())
         .await;
     let expected_model_info = session
         .services
         .models_manager
+        .load()
         .get_model_info("k3", &updated.config.as_ref().to_models_manager_config())
         .await;
 
@@ -4869,7 +4870,7 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
         show_raw_agent_reasoning: config.show_raw_agent_reasoning,
         exec_policy,
         session_telemetry: session_telemetry.clone(),
-        models_manager: Arc::clone(&models_manager),
+        models_manager: crate::thread_manager::SwappableModelsManager::new(Arc::clone(&models_manager)),
         tool_approvals: Mutex::new(ApprovalStore::default()),
         guardian_rejections: Mutex::new(std::collections::HashMap::new()),
         guardian_rejection_circuit_breaker: Mutex::new(Default::default()),
@@ -6920,7 +6921,7 @@ where
         show_raw_agent_reasoning: config.show_raw_agent_reasoning,
         exec_policy,
         session_telemetry: session_telemetry.clone(),
-        models_manager: Arc::clone(&models_manager),
+        models_manager: crate::thread_manager::SwappableModelsManager::new(Arc::clone(&models_manager)),
         tool_approvals: Mutex::new(ApprovalStore::default()),
         guardian_rejections: Mutex::new(std::collections::HashMap::new()),
         guardian_rejection_circuit_breaker: Mutex::new(Default::default()),
@@ -7122,7 +7123,7 @@ async fn record_context_updates_emits_environment_item_for_network_changes() {
     let mut current_context = previous_context
         .with_model(
             previous_context.model_info.slug.clone(),
-            &session.services.models_manager,
+            &session.services.models_manager.load(),
         )
         .await;
 
@@ -7182,7 +7183,7 @@ async fn record_context_updates_emits_environment_item_for_cwd_changes() {
     let mut current_context = previous_context
         .with_model(
             previous_context.model_info.slug.clone(),
-            &session.services.models_manager,
+            &session.services.models_manager.load(),
         )
         .await;
     let cwd = test_path_buf("/new-repo").abs();
@@ -7215,7 +7216,7 @@ async fn record_context_updates_emits_environment_item_for_time_changes() {
     let mut current_context = previous_context
         .with_model(
             previous_context.model_info.slug.clone(),
-            &session.services.models_manager,
+            &session.services.models_manager.load(),
         )
         .await;
     current_context.current_date = Some("2026-02-27".to_string());
@@ -7239,7 +7240,7 @@ async fn record_context_updates_omits_environment_item_when_disabled() {
     let mut current_context = previous_context
         .with_model(
             previous_context.model_info.slug.clone(),
-            &session.services.models_manager,
+            &session.services.models_manager.load(),
         )
         .await;
     let mut config = (*current_context.config).clone();
@@ -7289,7 +7290,7 @@ async fn build_settings_update_items_emits_realtime_start_when_session_becomes_l
     let mut current_context = previous_context
         .with_model(
             previous_context.model_info.slug.clone(),
-            &session.services.models_manager,
+            &session.services.models_manager.load(),
         )
         .await;
     current_context.realtime_active = true;
@@ -7317,7 +7318,7 @@ async fn build_settings_update_items_emits_realtime_end_when_session_stops_being
     let mut current_context = previous_context
         .with_model(
             previous_context.model_info.slug.clone(),
-            &session.services.models_manager,
+            &session.services.models_manager.load(),
         )
         .await;
     current_context.realtime_active = false;
@@ -7351,7 +7352,7 @@ async fn build_settings_update_items_uses_previous_turn_settings_for_realtime_en
     let mut current_context = previous_context
         .with_model(
             previous_context.model_info.slug.clone(),
-            &session.services.models_manager,
+            &session.services.models_manager.load(),
         )
         .await;
     current_context.realtime_active = false;
@@ -8213,7 +8214,7 @@ async fn record_context_updates_and_set_reference_context_item_persists_baseline
         "k3"
     };
     let turn_context = previous_context
-        .with_model(next_model.to_string(), &session.services.models_manager)
+        .with_model(next_model.to_string(), &session.services.models_manager.load())
         .await;
     let previous_context_item = previous_context.to_turn_context_item();
     let world_state = session.build_world_state(&previous_context).await;
@@ -8332,7 +8333,7 @@ async fn record_context_updates_and_set_reference_context_item_persists_full_rei
         "k3"
     };
     let turn_context = previous_context
-        .with_model(next_model.to_string(), &session.services.models_manager)
+        .with_model(next_model.to_string(), &session.services.models_manager.load())
         .await;
     let rollout_path = attach_thread_persistence(&mut session).await;
 

@@ -1272,7 +1272,10 @@ async fn maybe_run_previous_model_inline_compact(
     );
     let previous_model_turn_context = Arc::new(
         turn_context
-            .with_model(previous_turn_settings.model, &sess.services.models_manager)
+            .with_model(
+                previous_turn_settings.model,
+                &sess.services.models_manager.load(),
+            )
             .await,
     );
 
@@ -2595,7 +2598,11 @@ async fn try_run_sampling_request(
             }
             ResponseEvent::ModelsEtag(etag) => {
                 // Update internal state with latest models etag
-                sess.services.models_manager.refresh_if_new_etag(etag).await;
+                sess.services
+                    .models_manager
+                    .load()
+                    .refresh_if_new_etag(etag)
+                    .await;
             }
             ResponseEvent::Completed {
                 token_usage,

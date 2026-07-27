@@ -101,6 +101,28 @@ impl ChatWidget {
         history_record: UserMessageHistoryRecord,
         shell_escape_policy: ShellEscapePolicy,
     ) -> (bool, Option<AppCommand>) {
+        // Gate: with no configured model there is nothing to send to. Steer the
+        // user to `/login`, preserving their composed message. Local `!` shell
+        // commands are still allowed since they do not require a model.
+        let is_shell_escape = shell_escape_policy == ShellEscapePolicy::Allow
+            && user_message.text.trim_start().starts_with('!');
+        if !self.config.has_active_model && !is_shell_escape {
+            let UserMessage {
+                text,
+                text_elements,
+                local_images,
+                mention_bindings,
+                remote_image_urls,
+            } = user_message_for_restore(user_message, &history_record);
+            self.restore_blocked_no_model_submission(
+                text,
+                text_elements,
+                local_images,
+                mention_bindings,
+                remote_image_urls,
+            );
+            return (false, None);
+        }
         if !self.is_session_configured() {
             tracing::warn!("cannot submit user message before session is configured; queueing");
             self.input_queue
@@ -425,6 +447,31 @@ impl ChatWidget {
     /// mention bindings alongside visible text; restoring only `$name` tokens
     /// makes the draft look correct while degrading mention resolution to
     /// name-only heuristics on retry.
+    /// Restore a message that was blocked because no model is configured, warn
+    /// the user, and open the `/login` flow so they can add one.
+    pub(super) fn restore_blocked_no_model_submission(
+        &mut self,
+        text: String,
+        text_elements: Vec<TextElement>,
+        local_images: Vec<LocalImageAttachment>,
+        mention_bindings: Vec<MentionBinding>,
+        remote_image_urls: Vec<String>,
+    ) {
+        let local_image_paths = local_images.iter().map(|img| img.path.clone()).collect();
+        self.set_remote_image_urls(remote_image_urls);
+        self.bottom_pane.set_composer_text_with_mention_bindings(
+            text,
+            text_elements,
+            local_image_paths,
+            mention_bindings,
+        );
+        self.add_to_history(history_cell::new_warning_event(
+            "No model configured. Run /login to add a model before sending a message.".to_string(),
+        ));
+        self.start_login_flow(None);
+        self.request_redraw();
+    }
+
     pub(super) fn restore_blocked_image_submission(
         &mut self,
         text: String,

@@ -78,7 +78,13 @@ fn build_login_models_edits_writes_all_fetched_models_and_default() {
             display_name: "Model B".to_string(),
         },
     ];
-    let edits = build_login_models_edits("work-kimi", BuiltInApiKeyProvider::Kimi, &models, "model-a");
+    let edits = build_login_models_edits(
+        "work-kimi",
+        BuiltInApiKeyProvider::Kimi,
+        &models,
+        "model-a",
+        /*set_as_default*/ true,
+    );
 
     assert_eq!(edits.len(), 8);
     assert_eq!(edits[0].key_path, r#"models."work-kimi/model-a".provider"#);
@@ -113,7 +119,13 @@ fn build_login_models_edits_skips_display_name_when_same_as_id() {
         id: "model-a".to_string(),
         display_name: "model-a".to_string(),
     }];
-    let edits = build_login_models_edits("work-kimi", BuiltInApiKeyProvider::Kimi, &models, "model-a");
+    let edits = build_login_models_edits(
+        "work-kimi",
+        BuiltInApiKeyProvider::Kimi,
+        &models,
+        "model-a",
+        /*set_as_default*/ true,
+    );
 
     assert_eq!(edits.len(), 4);
     assert_eq!(edits[0].key_path, r#"models."work-kimi/model-a".provider"#);
@@ -121,6 +133,34 @@ fn build_login_models_edits_skips_display_name_when_same_as_id() {
     assert_eq!(edits[2].key_path, "model");
     assert_eq!(edits[2].value, serde_json::Value::Null);
     assert_eq!(edits[3].key_path, "default_model");
+}
+
+#[test]
+fn build_login_models_edits_skips_default_when_not_setting_default() {
+    use ody_model_provider::login::LoginModelInfo;
+
+    let models = vec![LoginModelInfo {
+        id: "model-a".to_string(),
+        display_name: "model-a".to_string(),
+    }];
+    let edits = build_login_models_edits(
+        "work-kimi",
+        BuiltInApiKeyProvider::Kimi,
+        &models,
+        "model-a",
+        /*set_as_default*/ false,
+    );
+
+    // Only the model alias fields are written; neither the legacy top-level
+    // `model` nor `default_model` is touched when a default already exists.
+    assert_eq!(edits.len(), 2);
+    assert_eq!(edits[0].key_path, r#"models."work-kimi/model-a".provider"#);
+    assert_eq!(edits[1].key_path, r#"models."work-kimi/model-a".model"#);
+    assert!(
+        edits
+            .iter()
+            .all(|edit| edit.key_path != "model" && edit.key_path != "default_model")
+    );
 }
 
 #[test]

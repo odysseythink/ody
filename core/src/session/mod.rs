@@ -1625,6 +1625,14 @@ impl Session {
                 .with_user_layer_from(&next_config.config_layer_stack);
             config.tool_suggest =
                 resolve_tool_suggest_config_from_layer_stack(&config.config_layer_stack);
+            // Adopt the freshly resolved provider set and model catalog so a
+            // mid-session `/login` (which adds a new provider + configured model
+            // entry) is recognized by provider-switch resolution and model
+            // listing without a restart. Without this the session keeps the
+            // startup snapshot and rejects switching to the new provider alias.
+            config.model_providers = next_config.model_providers.clone();
+            config.model_catalog = next_config.model_catalog.clone();
+            config.configured_model_catalog = next_config.configured_model_catalog.clone();
             let config = Arc::new(config);
             state.session_configuration.original_config_do_not_use = Arc::clone(&config);
             let new_config = notify_config_contributors
@@ -1651,6 +1659,13 @@ impl Session {
         ) {
             self.services.hooks.store(Arc::new(hooks));
         }
+    }
+
+    /// Atomically swap the session's models manager. Used when a config reload
+    /// (e.g. a mid-session `/login`) changes the configured model catalog so the
+    /// running session resolves models against the new manager without a restart.
+    pub(crate) fn set_models_manager(&self, models_manager: SharedModelsManager) {
+        self.services.models_manager.store(models_manager);
     }
 
     fn emit_config_changed_contributors(

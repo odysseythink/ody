@@ -29,7 +29,6 @@ use ody_extension_api::ExtensionDataInit;
 use ody_extension_api::ExtensionRegistry;
 use ody_hooks::Hooks;
 use ody_mcp::McpConnectionManager;
-use ody_models_manager::manager::SharedModelsManager;
 use ody_otel::SessionTelemetry;
 use ody_rollout::state_db::StateDbHandle;
 use ody_rollout_trace::ThreadTraceContext;
@@ -55,7 +54,11 @@ pub(crate) struct SessionServices {
     pub(crate) user_shell: Arc<crate::shell::Shell>,
     pub(crate) show_raw_agent_reasoning: bool,
     pub(crate) exec_policy: Arc<ExecPolicyManager>,
-    pub(crate) models_manager: SharedModelsManager,
+    /// The active models manager. Hot-swappable so a mid-session `/login` (or
+    /// any config reload that changes the configured model catalog) can swap in
+    /// a freshly built manager without restarting the session — readers take an
+    /// owned snapshot via `load()`.
+    pub(crate) models_manager: crate::thread_manager::SwappableModelsManager,
     pub(crate) session_telemetry: SessionTelemetry,
     pub(crate) tool_approvals: Mutex<ApprovalStore>,
     pub(crate) guardian_rejections: Mutex<HashMap<String, GuardianRejection>>,

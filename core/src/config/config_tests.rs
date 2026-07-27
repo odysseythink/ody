@@ -749,6 +749,10 @@ base_url = "https://api.kimi.com/v1"
 
     assert_eq!(config.model_provider_id, "kimi_gyy");
     assert_eq!(config.model, Some("kimi-for-coding".to_string()));
+    assert!(
+        config.has_active_model,
+        "a configured default_model should count as an active model"
+    );
     assert_eq!(
         config.model_provider.base_url,
         Some("https://api.kimi.com/v1".to_string())
@@ -756,6 +760,28 @@ base_url = "https://api.kimi.com/v1"
     assert_eq!(
         config.model_provider.experimental_bearer_token,
         Some("sk-kimi".to_string())
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn load_config_without_model_has_no_active_model() -> std::io::Result<()> {
+    // A bare binary with no config.toml (empty config, no default_model/model)
+    // must resolve to "no active model": the picker is empty, the welcome header
+    // shows no model, and sending is gated behind `/login`.
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml::default(),
+        ConfigOverrides::default(),
+        tempdir().expect("tempdir").abs(),
+    )
+    .await
+    .expect("load config");
+
+    assert_eq!(config.model, None);
+    assert!(
+        !config.has_active_model,
+        "no configured model should mean has_active_model is false"
     );
 
     Ok(())

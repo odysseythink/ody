@@ -745,12 +745,18 @@ impl App {
                 }]
             });
 
+        // Only the first configured model becomes the default: once an active
+        // model exists, adding another provider must not steal the default or
+        // change the live status bar (the user picks a new default via /model).
+        let set_as_default = !self.config.has_active_model;
+
         let mut edits = build_login_provider_edits(&alias, provider, &api_key, Some(&base_url));
         edits.extend(build_login_models_edits(
             &alias,
             provider,
             &fetched_models,
             &model_id,
+            set_as_default,
         ));
 
         let write_response = match crate::config_update::write_config_batch(
@@ -797,6 +803,23 @@ impl App {
 
         self.sync_active_thread_service_tier_to_cached_session()
             .await;
+
+        // Apply the freshly logged-in model so the welcome header, active-turn
+        // model, and the send/`/model` gate all reflect it immediately (mirrors
+        // what the model picker emits on selection). Only do this when this
+        // login established the default model; otherwise the active model must
+        // stay on whatever the user already had.
+        if set_as_default {
+            // Emit the bare model id (not `<alias>/<model>`): the configured
+            // model catalog exposes each model under its bare slug, so the
+            // picker's `is_current` check and the status line — which renders
+            // `<provider_id>/<model>` — both expect the bare model here, with
+            // the alias supplied separately as the provider id.
+            self.app_event_tx
+                .send(AppEvent::UpdateModel(model_id.clone()));
+            self.app_event_tx
+                .send(AppEvent::UpdateModelProvider(alias.clone()));
+        }
 
         telemetry::record_login_succeeded(&self.session_telemetry, provider);
         self.chat_widget.add_info_message(

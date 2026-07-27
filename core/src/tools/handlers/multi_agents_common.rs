@@ -286,15 +286,10 @@ pub(crate) async fn apply_requested_spawn_agent_model_overrides(
     }
 
     if let Some(requested_model) = requested_model {
-        let available_models = session
-            .services
-            .models_manager
-            .list_models(RefreshStrategy::Offline)
-            .await;
+        let models_manager = session.services.models_manager.load();
+        let available_models = models_manager.list_models(RefreshStrategy::Offline).await;
         let selected_model_name = find_spawn_agent_model_name(&available_models, requested_model)?;
-        let selected_model_info = session
-            .services
-            .models_manager
+        let selected_model_info = models_manager
             .get_model_info(&selected_model_name, &config.to_models_manager_config())
             .await;
 
@@ -349,6 +344,7 @@ pub(crate) async fn apply_spawn_agent_service_tier(
     let model_info = session
         .services
         .models_manager
+        .load()
         .get_model_info(model.as_str(), &config.to_models_manager_config())
         .await;
 

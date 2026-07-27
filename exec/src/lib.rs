@@ -675,6 +675,19 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
         std::process::exit(1);
     }
 
+    // Gate model-bound work on a configured model. Runs after prompt resolution
+    // so basic usage errors (e.g. empty piped stdin) still take precedence.
+    if !config.has_active_model {
+        #[allow(clippy::print_stderr)]
+        {
+            eprintln!(
+                "No model configured. Start the interactive TUI (`ody`) and run /login to add a model, \
+                 pass `--model <provider/model>`, or set `default_model` in your config.toml."
+            );
+        }
+        std::process::exit(1);
+    }
+
     let mut request_ids = RequestIdSequencer::new();
     let mut client = InProcessAppServerClient::start(in_process_start_args)
         .await

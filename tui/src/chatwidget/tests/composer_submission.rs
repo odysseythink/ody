@@ -1323,6 +1323,29 @@ async fn submit_user_message_ignores_inaccessible_app_mentions_from_bindings() {
     );
 }
 
+#[tokio::test]
+async fn submit_user_message_blocked_without_active_model() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.thread_id = Some(ThreadId::new());
+    set_api_key_auth(&mut chat);
+    // Simulate a bare binary with no configured model.
+    chat.config.has_active_model = false;
+
+    chat.submit_user_message(UserMessage {
+        text: "hello there".to_string(),
+        local_images: Vec::new(),
+        remote_image_urls: Vec::new(),
+        text_elements: Vec::new(),
+        mention_bindings: Vec::new(),
+    });
+
+    // The message must not be sent as a turn; it is held back pending `/login`.
+    assert!(
+        op_rx.try_recv().is_err(),
+        "submission with no active model should not emit an Op"
+    );
+}
+
 #[test]
 fn user_message_display_from_inputs_matches_flattened_user_message_shape() {
     let local_image = PathBuf::from("/tmp/local.png");

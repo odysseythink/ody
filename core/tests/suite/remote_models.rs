@@ -967,17 +967,16 @@ async fn remote_models_merge_replaces_overlapping_model() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn remote_models_merge_preserves_bundled_models_on_empty_response() -> Result<()> {
-    skip_if_no_network!(Ok(()));
-    skip_if_sandbox!(Ok(()));
-
-    let server = MockServer::start().await;
-    let _models_mock = mount_models_once(&server, ModelsResponse { models: Vec::new() }).await;
-
+async fn remote_models_unconfigured_provider_surfaces_no_bundled_models() -> Result<()> {
+    // A provider without command auth (no `/login`, no api/env key) must surface
+    // no models at all — not even the bundled catalog. The user has to `/login`
+    // first. This provider has `auth: None`, so `has_command_auth()` is false and
+    // the manager never fetches; the picker must stay empty rather than fall back
+    // to the bundled models.
     let ody_home = TempDir::new()?;
 
     let provider = ModelProviderInfo {
-        base_url: Some(format!("{}/v1", server.uri())),
+        base_url: Some("https://api.kimi.com/coding/v1".to_string()),
         capabilities: ProviderCapabilities::default(),
         ..create_kimi_provider()
     };
@@ -989,11 +988,13 @@ async fn remote_models_merge_preserves_bundled_models_on_empty_response() -> Res
     let available = manager.list_models(RefreshStrategy::OnlineIfUncached).await;
     let bundled_slug = bundled_model_slug();
     assert!(
-        available.iter().any(|model| model.model == bundled_slug),
-        "bundled models should remain available after empty remote response"
+        !available.iter().any(|model| model.model == bundled_slug),
+        "an unconfigured provider must not surface bundled models"
     );
-    // Keep the mock server alive until after async assertions complete.
-    drop(server);
+    assert!(
+        available.is_empty(),
+        "an unconfigured provider must surface no models at all"
+    );
 
     Ok(())
 }

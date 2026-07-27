@@ -246,7 +246,7 @@ async fn guardian_test_session_turn_and_rx(
     Arc::get_mut(&mut session)
         .expect("session should be uniquely owned")
         .services
-        .models_manager = models_manager;
+        .models_manager.store(models_manager);
     let turn_mut = Arc::get_mut(&mut turn).expect("turn should be uniquely owned");
     turn_mut.config = Arc::clone(&config);
     turn_mut.provider = create_model_provider(config.model_provider.clone());
@@ -278,7 +278,7 @@ async fn guardian_test_session_and_turn_with_base_url(
         config.ody_home.to_path_buf(),
         config.model_provider.clone(),
     );
-    session.services.models_manager = models_manager;
+    session.services.models_manager.store(models_manager);
     turn.config = Arc::clone(&config);
     turn.provider = create_model_provider(config.model_provider.clone());
     turn.user_instructions = None;
@@ -1454,7 +1454,7 @@ async fn guardian_request_model_for_auto_review(
             Arc::get_mut(&mut session)
                 .expect("session should be unique")
                 .services
-                .models_manager = Arc::new(models_manager);
+                .models_manager.store(Arc::new(models_manager));
         }
     }
     Arc::get_mut(&mut turn)
@@ -1657,7 +1657,7 @@ async fn guardian_review_request_layout_matches_model_visible_request_snapshot()
         config.ody_home.to_path_buf(),
         config.model_provider.clone(),
     );
-    session.services.models_manager = models_manager;
+    session.services.models_manager.store(models_manager);
     let memory_extension = Arc::new(GuardianMemoryContextProbe);
     let mut extensions = ody_extension_api::ExtensionRegistryBuilder::<Config>::new();
     extensions.thread_lifecycle_contributor(memory_extension.clone());
@@ -2291,7 +2291,7 @@ async fn guardian_review_surfaces_responses_api_errors_in_rejection_reason() -> 
     Arc::get_mut(&mut session)
         .expect("session should be uniquely owned")
         .services
-        .models_manager = models_manager;
+        .models_manager.store(models_manager);
     let turn_mut = Arc::get_mut(&mut turn).expect("turn should be uniquely owned");
     turn_mut.config = Arc::clone(&config);
     turn_mut.provider = create_model_provider(config.model_provider.clone());

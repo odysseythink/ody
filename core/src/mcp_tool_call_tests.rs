@@ -2418,7 +2418,7 @@ async fn guardian_mode_skips_auto_when_annotations_do_not_require_approval() {
     let config = Arc::new(config);
     let models_manager =
         models_manager_with_provider(config.ody_home.to_path_buf(), config.model_provider.clone());
-    session.services.models_manager = models_manager;
+    session.services.models_manager.store(models_manager);
     turn_context.config = Arc::clone(&config);
     turn_context.provider = create_model_provider(config.model_provider.clone());
 
@@ -2699,7 +2699,7 @@ async fn guardian_mode_mcp_denial_returns_rationale_message() {
     let config = Arc::new(config);
     let models_manager =
         models_manager_with_provider(config.ody_home.to_path_buf(), config.model_provider.clone());
-    session.services.models_manager = models_manager;
+    session.services.models_manager.store(models_manager);
     turn_context.config = Arc::clone(&config);
     turn_context.provider = create_model_provider(config.model_provider.clone());
 
@@ -2915,7 +2915,7 @@ async fn approve_mode_skips_guardian_in_every_permission_mode() {
             config.ody_home.to_path_buf(),
             config.model_provider.clone(),
         );
-        session.services.models_manager = models_manager;
+        session.services.models_manager.store(models_manager);
         turn_context.config = Arc::clone(&config);
         turn_context.provider = create_model_provider(config.model_provider.clone());
 

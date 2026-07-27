@@ -259,6 +259,11 @@ impl AppServerSession {
             .into_iter()
             .map(model_preset_from_api_model)
             .collect::<Vec<_>>();
+        // No model is a valid state: a bare binary with no config surfaces no
+        // models until the user runs `/login`. Fall back to an empty model here;
+        // downstream (`ChatWidget` construction) treats an empty/absent model as
+        // "not configured" — empty welcome header, gated sending, `/model`
+        // steering to `/login`.
         let default_model = config
             .model
             .clone()
@@ -269,8 +274,8 @@ impl AppServerSession {
                     .map(|model| model.model.clone())
             })
             .or_else(|| available_models.first().map(|model| model.model.clone()))
-            .wrap_err("model/list returned no models for TUI bootstrap")?;
-        self.default_model = Some(default_model.clone());
+            .unwrap_or_default();
+        self.default_model = (!default_model.is_empty()).then(|| default_model.clone());
         self.available_models = available_models.clone();
         Ok(AppServerBootstrap {
             duration: started_at.elapsed(),

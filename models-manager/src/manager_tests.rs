@@ -297,6 +297,40 @@ async fn refresh_available_models_keeps_merging_for_api_auth() {
 }
 
 #[tokio::test]
+async fn unconfigured_provider_surfaces_no_models() {
+    // A provider without command auth (no `/login`, no api/env key) must not
+    // surface any models: not the bundled catalog, not a stale cache, nothing.
+    let ody_home = tempdir().expect("temp dir");
+    let endpoint = TestModelsEndpoint::without_refresh(vec![vec![remote_model(
+        "unused",
+        "Unused",
+        /*priority*/ 0,
+    )]]);
+    let manager = odysseythink_manager_for_tests(ody_home.path().to_path_buf(), endpoint.clone());
+
+    // Constructed empty: no bundled preload before any successful fetch.
+    assert!(
+        manager.get_remote_models().await.is_empty(),
+        "unconfigured provider should start with no models"
+    );
+
+    manager
+        .refresh_available_models(RefreshStrategy::OnlineIfUncached)
+        .await
+        .expect("refresh is a no-op without command auth");
+
+    assert!(
+        manager.get_remote_models().await.is_empty(),
+        "refresh without command auth must not surface bundled or fetched models"
+    );
+    assert_eq!(
+        endpoint.fetch_count(),
+        0,
+        "must not attempt a fetch without command auth"
+    );
+}
+
+#[tokio::test]
 async fn refresh_available_models_uses_cache_when_fresh() {
     let remote_models = vec![remote_model("cached", "Cached", /*priority*/ 5)];
     let ody_home = tempdir().expect("temp dir");

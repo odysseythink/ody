@@ -52,16 +52,21 @@ pub(crate) fn build_login_model_edits(
         id: model_id.to_string(),
         display_name: display_name.to_string(),
     };
-    build_login_models_edits(alias, provider, &[model], model_id)
+    build_login_models_edits(alias, provider, &[model], model_id, /*set_as_default*/ true)
 }
 
-/// Build config edits that persist every model fetched during `/login` and set
-/// the user-selected model as the default.
+/// Build config edits that persist every model fetched during `/login`.
+///
+/// When `set_as_default` is true the user-selected model is written as
+/// `default_model` (and the legacy top-level `model` is cleared). Callers pass
+/// `false` when a default model already exists so that adding another provider
+/// never steals the active default — see the `/login` persistence path.
 pub(crate) fn build_login_models_edits(
     alias: &str,
     provider: BuiltInApiKeyProvider,
     models: &[LoginModelInfo],
     selected_model_id: &str,
+    set_as_default: bool,
 ) -> Vec<ConfigEdit> {
     let bundled_models = bundled_models_by_provider_slug(provider.id());
     let mut edits = Vec::new();
@@ -103,11 +108,13 @@ pub(crate) fn build_login_models_edits(
             }
         }
     }
-    edits.push(clear_config_value("model"));
-    edits.push(replace_config_value(
-        "default_model",
-        serde_json::json!(format!("{alias}/{selected_model_id}")),
-    ));
+    if set_as_default {
+        edits.push(clear_config_value("model"));
+        edits.push(replace_config_value(
+            "default_model",
+            serde_json::json!(format!("{alias}/{selected_model_id}")),
+        ));
+    }
     edits
 }
 

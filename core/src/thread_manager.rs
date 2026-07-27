@@ -205,7 +205,10 @@ pub(crate) struct ResumeThreadWithHistoryOptions {
 pub(crate) struct ThreadManagerState {
     threads: Arc<RwLock<HashMap<ThreadId, Arc<OdyThread>>>>,
     thread_created_tx: broadcast::Sender<ThreadId>,
-    models_manager: SharedModelsManager,
+    /// Active models manager for this manager's threads. Hot-swappable so a
+    /// config reload (e.g. a mid-session `/login`) can swap in a freshly built
+    /// manager and have `model/list` reflect it immediately.
+    models_manager: SwappableModelsManager,
     environment_manager: Arc<EnvironmentManager>,
     skills_service: Arc<SkillsService>,
     plugins_manager: Arc<PluginsManager>,
@@ -221,6 +224,32 @@ pub(crate) struct ThreadManagerState {
     state_db: Option<StateDbHandle>,
     // Captures submitted ops for testing purpose when test mode is enabled.
     ops_log: Option<SharedCapturedOps>,
+}
+
+/// A hot-swappable slot for the active [`SharedModelsManager`].
+///
+/// `SharedModelsManager` is `Arc<dyn ModelsManager>` — an unsized trait object
+/// that `ArcSwap` cannot store directly — so this wraps it in an `ArcSwap` of
+/// the (sized) `Arc` handle. It lets a config reload (e.g. a mid-session
+/// `/login`) atomically replace the manager while readers take an owned
+/// snapshot via [`SwappableModelsManager::load`].
+#[derive(Debug)]
+pub struct SwappableModelsManager(arc_swap::ArcSwap<SharedModelsManager>);
+
+impl SwappableModelsManager {
+    pub fn new(models_manager: SharedModelsManager) -> Self {
+        Self(arc_swap::ArcSwap::from_pointee(models_manager))
+    }
+
+    /// Returns an owned handle to the currently active manager.
+    pub fn load(&self) -> SharedModelsManager {
+        SharedModelsManager::clone(&self.0.load_full())
+    }
+
+    /// Atomically replaces the active manager.
+    pub fn store(&self, models_manager: SharedModelsManager) {
+        self.0.store(Arc::new(models_manager));
+    }
 }
 
 pub fn build_models_manager(config: &Config) -> SharedModelsManager {
@@ -288,7 +317,7 @@ impl ThreadManager {
             state: Arc::new(ThreadManagerState {
                 threads: Arc::new(RwLock::new(HashMap::new())),
                 thread_created_tx,
-                models_manager: build_models_manager(config),
+                models_manager: SwappableModelsManager::new(build_models_manager(config)),
                 environment_manager,
                 skills_service,
                 plugins_manager,
@@ -405,8 +434,9 @@ impl ThreadManager {
             state: Arc::new(ThreadManagerState {
                 threads: Arc::new(RwLock::new(HashMap::new())),
                 thread_created_tx,
-                models_manager: create_model_provider(provider)
-                    .models_manager(ody_home, model_catalog),
+                models_manager: SwappableModelsManager::new(
+                    create_model_provider(provider).models_manager(ody_home, model_catalog),
+                ),
                 environment_manager,
                 skills_service,
                 plugins_manager,
@@ -482,18 +512,26 @@ impl ThreadManager {
     }
 
     pub fn get_models_manager(&self) -> SharedModelsManager {
-        self.state.models_manager.clone()
+        self.state.models_manager.load()
+    }
+
+    /// Atomically swap the models manager driving `model/list` and collaboration
+    /// mode listings. Called after a config reload so a mid-session `/login`
+    /// surfaces the newly configured models without a restart.
+    pub fn set_models_manager(&self, models_manager: SharedModelsManager) {
+        self.state.models_manager.store(models_manager);
     }
 
     pub async fn list_models(&self, refresh_strategy: RefreshStrategy) -> Vec<ModelPreset> {
         self.state
             .models_manager
+            .load()
             .list_models(refresh_strategy)
             .await
     }
 
     pub fn list_collaboration_modes(&self) -> Vec<CollaborationModeMask> {
-        self.state.models_manager.list_collaboration_modes()
+        self.state.models_manager.load().list_collaboration_modes()
     }
 
     pub async fn list_thread_ids(&self) -> Vec<ThreadId> {
@@ -1429,7 +1467,7 @@ impl ThreadManagerState {
             config,
             user_instructions,
             installation_id: self.installation_id.clone(),
-            models_manager: Arc::clone(&self.models_manager),
+            models_manager: self.models_manager.load(),
             environment_manager: Arc::clone(&self.environment_manager),
             skills_service: Arc::clone(&self.skills_service),
             plugins_manager: Arc::clone(&self.plugins_manager),

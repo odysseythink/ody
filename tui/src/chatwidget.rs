@@ -1879,6 +1879,9 @@ impl ChatWidget {
         self.config.model_providers = config.model_providers.clone();
         self.config.configured_models = config.configured_models.clone();
         self.config.model = config.model.clone();
+        // Keep the "configured" gate in sync so a successful `/login` (which
+        // writes `default_model`) unlocks model selection and message sending.
+        self.config.has_active_model = config.has_active_model;
     }
 
     /// Sync the active model provider fields from a freshly reloaded config.

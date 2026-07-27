@@ -204,7 +204,15 @@ impl OpenaiCompatibleModelsManager {
     pub fn new(ody_home: PathBuf, endpoint_client: Arc<dyn ModelsEndpointClient>) -> Self {
         let cache_path = ody_home.join(MODEL_CACHE_FILE);
         let cache_manager = ModelsCacheManager::new(cache_path, DEFAULT_MODEL_CACHE_TTL);
-        let remote_models = load_remote_models_from_file().unwrap_or_default();
+        // Seed the bundled catalog only for an authed provider (so it still has
+        // models offline / before the first `/models` fetch). An unconfigured
+        // provider — no `/login`, no api/env key — starts empty and surfaces
+        // nothing until the user logs in.
+        let remote_models = if endpoint_client.has_command_auth() {
+            load_remote_models_from_file().unwrap_or_default()
+        } else {
+            Vec::new()
+        };
         Self {
             remote_models: RwLock::new(remote_models),
             etag: RwLock::new(None),
@@ -277,12 +285,9 @@ impl OpenaiCompatibleModelsManager {
     /// Refresh available models according to the specified strategy.
     async fn refresh_available_models(&self, refresh_strategy: RefreshStrategy) -> CoreResult<()> {
         if !self.should_refresh_models().await {
-            if matches!(
-                refresh_strategy,
-                RefreshStrategy::Offline | RefreshStrategy::OnlineIfUncached
-            ) {
-                self.try_load_cache().await;
-            }
+            // No usable command auth: this manager backs an unconfigured provider.
+            // Surface no models at all (not even a stale cache from a prior authed
+            // session) so the picker stays empty until the user runs `/login`.
             return Ok(());
         }
 
@@ -327,7 +332,13 @@ impl OpenaiCompatibleModelsManager {
         self.etag.read().await.clone()
     }
 
-    /// Replace the cached remote models and rebuild the derived presets list.
+    /// Replace the cached remote models with the bundled catalog overlaid by the
+    /// freshly fetched/cached set.
+    ///
+    /// This only runs on the authed path (a `/models` fetch requires command
+    /// auth; the cache is loaded only when auth is present). An unconfigured
+    /// provider never reaches here, so it surfaces nothing — while an authed
+    /// provider still gets the bundled catalog merged with its remote models.
     async fn apply_remote_models(&self, models: Vec<ModelInfo>) {
         let mut existing_models = load_remote_models_from_file().unwrap_or_default();
         for model in models {

@@ -693,6 +693,12 @@ pub struct Config {
     /// Optional override of model selection.
     pub model: Option<String>,
 
+    /// Whether an active model has been configured (via `/login`, a
+    /// `default_model`/`model` entry, or a CLI override). When `false`, the user
+    /// has a bare binary with no model yet: the model picker is empty, the
+    /// welcome header shows no model, and sending is gated behind `/login`.
+    pub has_active_model: bool,
+
     /// Effective service tier request id preference for new turns.
     /// `default` means the user explicitly selected standard routing.
     pub service_tier: Option<String>,
@@ -3690,6 +3696,11 @@ impl Config {
         let forced_login_method = cfg.forced_login_method;
 
         let model = model.or(default_model).or(cfg.model);
+        // A resolved model means the user has logged in (`/login` writes
+        // `default_model`), set a model in config, or passed a CLI override. With
+        // no model there is nothing to run: the UI treats this as "not yet
+        // configured" and steers the user to `/login`.
+        let has_active_model = model.is_some();
         let notices = cfg.notice.unwrap_or_default();
         let service_tier = match service_tier_override {
             Some(Some(service_tier)) => Some(service_tier),
@@ -3953,6 +3964,7 @@ impl Config {
         let otel = otel::resolve_config(cfg.otel.unwrap_or_default(), &mut startup_warnings);
         let config = Self {
             model,
+            has_active_model,
             service_tier,
             review_model,
             design_review_model,

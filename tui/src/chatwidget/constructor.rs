@@ -29,6 +29,9 @@ impl ChatWidget {
         let model = model.filter(|m| !m.trim().is_empty());
         let mut config = config;
         config.model = model.clone();
+        // Keep the "configured" signal in sync with the effective model the TUI
+        // was launched with (which may override the resolved config model).
+        config.has_active_model = model.is_some();
         let prevent_idle_sleep = config.features.enabled(Feature::PreventIdleSleep);
         let mut rng = rand::rng();
         let placeholder = PLACEHOLDERS[rng.random_range(0..PLACEHOLDERS.len())].to_string();
@@ -46,9 +49,9 @@ impl ChatWidget {
         let i18n = I18n::new(&locale_code);
 
         let model_override = model.as_deref();
-        let model_for_header = model
-            .clone()
-            .unwrap_or_else(|| DEFAULT_MODEL_DISPLAY_NAME.to_string());
+        // With no active model the welcome header shows an empty model field
+        // rather than a fabricated default — the user must `/login` first.
+        let model_for_header = model.clone().unwrap_or_default();
         let active_collaboration_mask =
             Self::initial_collaboration_mask(&config, model_catalog.as_ref(), model_override);
         let header_model = active_collaboration_mask

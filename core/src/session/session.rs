@@ -1139,7 +1139,9 @@ impl Session {
                 show_raw_agent_reasoning: config.show_raw_agent_reasoning,
                 exec_policy,
                 session_telemetry,
-                models_manager: Arc::clone(&models_manager),
+                models_manager: crate::thread_manager::SwappableModelsManager::new(Arc::clone(
+                    &models_manager,
+                )),
                 tool_approvals: Mutex::new(ApprovalStore::default()),
                 guardian_rejections: Mutex::new(HashMap::new()),
                 guardian_rejection_circuit_breaker: Mutex::new(Default::default()),

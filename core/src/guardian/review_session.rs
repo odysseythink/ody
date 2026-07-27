@@ -662,7 +662,7 @@ async fn spawn_guardian_review_session(
     };
     let ody = Box::pin(run_ody_thread_interactive(
         spawn_config,
-        parent_session.services.models_manager.clone(),
+        parent_session.services.models_manager.load(),
         Arc::clone(parent_session),
         Arc::clone(parent_turn),
         cancel_token.clone(),
@@ -712,6 +712,7 @@ async fn run_review_on_session(
         .parent_session
         .services
         .models_manager
+        .load()
         .get_model_info(
             params.model.as_str(),
             &params.spawn_config.to_models_manager_config(),

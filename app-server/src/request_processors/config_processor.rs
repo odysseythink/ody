@@ -279,12 +279,22 @@ impl ConfigRequestProcessor {
                 return;
             }
         };
+        // Rebuild the models manager from the freshly loaded config so a
+        // mid-session `/login` (which adds a configured model catalog) is
+        // reflected by `model/list` and by in-session model resolution without
+        // requiring a restart. Build once and swap it into the thread manager
+        // and every live session atomically.
+        let new_models_manager = ody_core::build_models_manager(&next_config);
+        self.thread_manager
+            .set_models_manager(new_models_manager.clone());
+
         let thread_ids = self.thread_manager.list_thread_ids().await;
         for thread_id in thread_ids {
             let Ok(thread) = self.thread_manager.get_thread(thread_id).await else {
                 continue;
             };
             thread.refresh_runtime_config(next_config.clone()).await;
+            thread.set_models_manager(new_models_manager.clone());
         }
     }
 

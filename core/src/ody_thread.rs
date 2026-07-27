@@ -598,6 +598,15 @@ impl OdyThread {
         self.ody.session.refresh_runtime_config(next_config).await;
     }
 
+    /// Swap this thread's session models manager. Paired with a config reload so
+    /// a mid-session `/login` takes effect without restarting the session.
+    pub fn set_models_manager(
+        &self,
+        models_manager: ody_models_manager::manager::SharedModelsManager,
+    ) {
+        self.ody.session.set_models_manager(models_manager);
+    }
+
     pub async fn environment_selections(&self) -> Vec<TurnEnvironmentSelection> {
         self.ody.thread_environment_selections().await
     }
