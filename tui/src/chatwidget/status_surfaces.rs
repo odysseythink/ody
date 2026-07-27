@@ -9,6 +9,7 @@ use crate::branch_summary;
 use crate::legacy_core::config::Config;
 use crate::status::format_tokens_compact;
 use ody_app_server_protocol::AskForApproval;
+use ody_model_provider_info::model_ref::ModelRef;
 use ody_protocol::config_types::ApprovalsReviewer;
 use ody_protocol::config_types::ServiceTier;
 use ody_protocol::models::PermissionProfile;
@@ -568,11 +569,11 @@ impl ChatWidget {
     /// git metadata.
     pub(super) fn status_line_value_for_item(&mut self, item: StatusLineItem) -> Option<String> {
         match item {
-            StatusLineItem::ModelName => Some(format!(
-                "{}/{}",
-                self.config.model_provider_id,
-                self.model_display_name()
-            )),
+            StatusLineItem::ModelName => {
+                let model_ref = ModelRef::parse(self.model_display_name());
+                let bare_model = model_ref.bare();
+                Some(ModelRef::from_parts(&self.config.model_provider_id, bare_model).qualified())
+            }
             StatusLineItem::ModelWithReasoning => Some(self.model_with_reasoning_display_name()),
             StatusLineItem::Reasoning => Some(self.reasoning_display_name()),
             StatusLineItem::CurrentDir => {
