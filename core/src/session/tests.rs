@@ -26,6 +26,7 @@ use ody_config::NetworkDomainPermissionToml;
 use ody_config::NetworkDomainPermissionsToml;
 use ody_config::RequirementSource;
 use ody_config::Sourced;
+use ody_config::ConstraintError;
 use ody_config::config_toml::PlanEnforcement;
 use ody_config::config_toml::PlanModeConfigToml;
 use ody_config::loader::project_trust_key;
@@ -3861,6 +3862,86 @@ async fn session_settings_legacy_fast_service_tier_update_uses_priority_request_
     assert_eq!(
         updated.service_tier,
         Some(ServiceTier::Fast.request_value().to_string())
+    );
+}
+
+#[tokio::test]
+async fn session_configuration_apply_switches_to_builtin_provider() {
+    let session_configuration = make_session_configuration_for_tests().await;
+
+    let updated = session_configuration
+        .apply(&SessionSettingsUpdate {
+            model_provider_id: Some("kimi".to_string()),
+            ..Default::default()
+        })
+        .expect("switch to built-in kimi provider should apply");
+
+    assert_eq!(updated.provider.name, "Kimi");
+    assert_eq!(
+        updated.original_config_do_not_use.model_provider_id,
+        "kimi"
+    );
+    assert_eq!(
+        updated.original_config_do_not_use.model_provider.name,
+        "Kimi"
+    );
+}
+
+#[tokio::test]
+async fn session_configuration_apply_switches_to_configured_provider_alias() {
+    let mut session_configuration = make_session_configuration_for_tests().await;
+    let mut config = (*session_configuration.original_config_do_not_use).clone();
+    let mut custom_provider = config
+        .model_providers
+        .get(TEST_PROVIDER_ID)
+        .expect("test fixture has a provider")
+        .clone();
+    custom_provider.name = "Custom Alias Provider".to_string();
+    config
+        .model_providers
+        .insert("custom-alias".to_string(), custom_provider);
+    session_configuration.original_config_do_not_use = Arc::new(config);
+
+    let updated = session_configuration
+        .apply(&SessionSettingsUpdate {
+            model_provider_id: Some("custom-alias".to_string()),
+            ..Default::default()
+        })
+        .expect("switch to configured alias provider should apply");
+
+    assert_eq!(updated.provider.name, "Custom Alias Provider");
+    assert_eq!(
+        updated.original_config_do_not_use.model_provider_id,
+        "custom-alias"
+    );
+    assert_eq!(
+        updated.original_config_do_not_use.model_provider.name,
+        "Custom Alias Provider"
+    );
+}
+
+#[tokio::test]
+async fn session_configuration_apply_rejects_unknown_provider_id() {
+    let session_configuration = make_session_configuration_for_tests().await;
+
+    let Err(err) = session_configuration
+        .apply(&SessionSettingsUpdate {
+            model_provider_id: Some("unknown-provider".to_string()),
+            ..Default::default()
+        })
+    else {
+        panic!("unknown provider id should be rejected");
+    };
+
+    assert!(
+        matches!(
+            err,
+            ConstraintError::InvalidValue {
+                field_name,
+                ..
+            } if field_name == "model_provider_id"
+        ),
+        "expected InvalidValue error for model_provider_id, got {err:?}"
     );
 }
 

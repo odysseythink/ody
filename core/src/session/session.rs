@@ -19,9 +19,7 @@ use ody_protocol::protocol::ThreadSource;
 use ody_protocol::protocol::TurnEnvironmentSelection;
 use ody_protocol::protocol::TurnEnvironmentSelections;
 use ody_protocol::protocol::UserNotification;
-use ody_model_provider_info::create_deepseek_provider;
-use ody_model_provider_info::create_glm_provider;
-use ody_model_provider_info::create_kimi_provider;
+use ody_model_provider_info::resolve_provider_info;
 use std::sync::OnceLock;
 use tokio::sync::Semaphore;
 
@@ -235,23 +233,16 @@ impl SessionConfiguration {
         }
         if let Some(model_provider_id) = updates.model_provider_id.clone() {
             if model_provider_id != next_configuration.original_config_do_not_use.model_provider_id {
-                let provider = next_configuration
-                    .original_config_do_not_use
-                    .model_providers
-                    .get(&model_provider_id)
-                    .cloned()
-                    .or_else(|| match model_provider_id.as_str() {
-                        "kimi" => Some(create_kimi_provider()),
-                        "deepseek" => Some(create_deepseek_provider()),
-                        "glm" => Some(create_glm_provider()),
-                        _ => None,
-                    })
-                    .ok_or_else(|| ConstraintError::InvalidValue {
-                        field_name: "model_provider_id",
-                        candidate: model_provider_id.clone(),
-                        allowed: "a configured provider id or built-in kimi/deepseek/glm".to_string(),
-                        requirement_source: ody_config::RequirementSource::Unknown,
-                    })?;
+                let provider = resolve_provider_info(
+                    &model_provider_id,
+                    &next_configuration.original_config_do_not_use.model_providers,
+                )
+                .ok_or_else(|| ConstraintError::InvalidValue {
+                    field_name: "model_provider_id",
+                    candidate: model_provider_id.clone(),
+                    allowed: "a configured provider id or built-in kimi/deepseek/glm".to_string(),
+                    requirement_source: ody_config::RequirementSource::Unknown,
+                })?;
                 next_configuration.provider = provider.clone();
                 let mut config = (*next_configuration.original_config_do_not_use).clone();
                 config.model_provider_id = model_provider_id.clone();

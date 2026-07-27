@@ -134,9 +134,7 @@ use ody_git_utils::recent_commits;
 use ody_model_provider::login::LoginModelInfo;
 use ody_model_provider_info::BuiltInApiKeyProvider;
 use ody_model_provider_info::ModelProviderInfo;
-use ody_model_provider_info::create_deepseek_provider;
-use ody_model_provider_info::create_glm_provider;
-use ody_model_provider_info::create_kimi_provider;
+use ody_model_provider_info::resolve_provider_info;
 use ody_otel::RuntimeMetricsSummary;
 use ody_otel::SessionTelemetry;
 use ody_plugin::PluginCapabilitySummary;
@@ -1899,17 +1897,11 @@ impl ChatWidget {
     /// when `/model` switches to a model hosted by a different provider.
     pub(crate) fn sync_active_model_provider_config_from_provider_id(&mut self, provider_id: &str) {
         self.config.model_provider_id = provider_id.to_string();
-        self.config.model_provider = self
-            .config
-            .model_providers
-            .get(provider_id)
-            .cloned()
-            .unwrap_or_else(|| match provider_id {
-                "kimi" => create_kimi_provider(),
-                "deepseek" => create_deepseek_provider(),
-                "glm" => create_glm_provider(),
-                _ => ModelProviderInfo::default(),
-            });
+        self.config.model_provider = resolve_provider_info(
+            provider_id,
+            &self.config.model_providers,
+        )
+        .unwrap_or_default();
         self.refresh_status_line();
     }
 

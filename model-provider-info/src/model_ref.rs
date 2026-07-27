@@ -6,6 +6,7 @@
 //! same parsing rules without repeating `split_once('/')` logic.
 
 use crate::ModelProviderInfo;
+use std::collections::HashMap;
 
 /// Provider kind resolved from display name and base URL.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -106,6 +107,60 @@ pub fn resolve_kind(info: &ModelProviderInfo) -> ProviderKind {
     }
 }
 
+/// Resolve a provider alias to a canonical [`ProviderRef`].
+///
+/// First searches the user-configured `providers` map (`config.model_providers`).
+/// If the alias is not present, falls back to the built-in provider names
+/// `kimi`, `deepseek`, and `glm`. Returns `None` for unknown aliases.
+pub fn resolve_provider(
+    alias: &str,
+    providers: &HashMap<String, ModelProviderInfo>,
+) -> Option<ProviderRef> {
+    if let Some(info) = providers.get(alias) {
+        return Some(ProviderRef {
+            alias: alias.to_string(),
+            kind: info.provider_kind(),
+        });
+    }
+
+    let kind = match alias.to_ascii_lowercase().as_str() {
+        "kimi" => ProviderKind::Kimi,
+        "deepseek" => ProviderKind::Deepseek,
+        "glm" => ProviderKind::Glm,
+        _ => return None,
+    };
+
+    Some(ProviderRef {
+        alias: alias.to_string(),
+        kind,
+    })
+}
+
+/// Resolve a provider alias to its full [`ModelProviderInfo`].
+///
+/// First searches the user-configured `providers` map (`config.model_providers`).
+/// If the alias is not present, falls back to the built-in provider definitions
+/// for `kimi`, `deepseek`, and `glm`. Returns `None` for unknown aliases.
+///
+/// This is the single place where the `model_providers.get(alias)` lookup and
+/// the built-in `create_*_provider()` fallback are merged, so callers no longer
+/// need to repeat the `kimi`/`deepseek`/`glm` match.
+pub fn resolve_provider_info(
+    alias: &str,
+    providers: &HashMap<String, ModelProviderInfo>,
+) -> Option<ModelProviderInfo> {
+    if let Some(info) = providers.get(alias) {
+        return Some(info.clone());
+    }
+
+    match alias.to_ascii_lowercase().as_str() {
+        "kimi" => Some(crate::create_kimi_provider()),
+        "deepseek" => Some(crate::create_deepseek_provider()),
+        "glm" => Some(crate::create_glm_provider()),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -186,5 +241,104 @@ mod tests {
         info.name = "My Custom Provider".to_string();
         info.base_url = Some("https://example.com/v1".to_string());
         assert_eq!(resolve_kind(&info), ProviderKind::Custom);
+    }
+
+    #[test]
+    fn resolve_provider_configured_alias() {
+        let info = crate::create_kimi_provider();
+        let providers = maplit::hashmap! {
+            "my-kimi".to_string() => info,
+        };
+
+        let resolved = resolve_provider("my-kimi", &providers).expect("configured alias resolves");
+        assert_eq!(resolved.alias, "my-kimi");
+        assert_eq!(resolved.kind, ProviderKind::Kimi);
+    }
+
+    #[test]
+    fn resolve_provider_configured_alias_takes_precedence_over_builtin() {
+        let mut info = crate::create_kimi_provider();
+        info.name = "My Custom Provider".to_string();
+        info.base_url = Some("https://example.com/v1".to_string());
+        let providers = maplit::hashmap! {
+            "kimi".to_string() => info,
+        };
+
+        let resolved = resolve_provider("kimi", &providers).expect("configured alias resolves");
+        assert_eq!(resolved.alias, "kimi");
+        assert_eq!(resolved.kind, ProviderKind::Custom);
+    }
+
+    #[test]
+    fn resolve_provider_builtin_names() {
+        let providers = HashMap::new();
+
+        let resolved = resolve_provider("kimi", &providers).expect("kimi builtin resolves");
+        assert_eq!(resolved.alias, "kimi");
+        assert_eq!(resolved.kind, ProviderKind::Kimi);
+
+        let resolved = resolve_provider("deepseek", &providers).expect("deepseek builtin resolves");
+        assert_eq!(resolved.alias, "deepseek");
+        assert_eq!(resolved.kind, ProviderKind::Deepseek);
+
+        let resolved = resolve_provider("glm", &providers).expect("glm builtin resolves");
+        assert_eq!(resolved.alias, "glm");
+        assert_eq!(resolved.kind, ProviderKind::Glm);
+    }
+
+    #[test]
+    fn resolve_provider_builtin_names_are_case_insensitive() {
+        let providers = HashMap::new();
+
+        assert_eq!(
+            resolve_provider("Kimi", &providers).map(|r| r.kind),
+            Some(ProviderKind::Kimi)
+        );
+        assert_eq!(
+            resolve_provider("DEEPSEEK", &providers).map(|r| r.kind),
+            Some(ProviderKind::Deepseek)
+        );
+        assert_eq!(
+            resolve_provider("Glm", &providers).map(|r| r.kind),
+            Some(ProviderKind::Glm)
+        );
+    }
+
+    #[test]
+    fn resolve_provider_unknown_alias() {
+        let providers = HashMap::new();
+        assert_eq!(resolve_provider("unknown", &providers), None);
+    }
+
+    #[test]
+    fn resolve_provider_info_configured_alias() {
+        let mut info = crate::create_kimi_provider();
+        info.name = "Alias Provider".to_string();
+        let providers = maplit::hashmap! {
+            "my-alias".to_string() => info.clone(),
+        };
+
+        let resolved = resolve_provider_info("my-alias", &providers).expect("configured alias resolves");
+        assert_eq!(resolved.name, "Alias Provider");
+    }
+
+    #[test]
+    fn resolve_provider_info_builtin_names() {
+        let providers = HashMap::new();
+
+        let resolved = resolve_provider_info("kimi", &providers).expect("kimi builtin resolves");
+        assert_eq!(resolved.name, crate::create_kimi_provider().name);
+
+        let resolved = resolve_provider_info("deepseek", &providers).expect("deepseek builtin resolves");
+        assert_eq!(resolved.name, crate::create_deepseek_provider().name);
+
+        let resolved = resolve_provider_info("glm", &providers).expect("glm builtin resolves");
+        assert_eq!(resolved.name, crate::create_glm_provider().name);
+    }
+
+    #[test]
+    fn resolve_provider_info_unknown_alias() {
+        let providers = HashMap::new();
+        assert_eq!(resolve_provider_info("unknown", &providers), None);
     }
 }
