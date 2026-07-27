@@ -13,6 +13,7 @@ use crate::login::telemetry;
 use crate::model_catalog::ModelCatalog;
 use ody_model_provider::login::LoginModelInfo;
 use ody_model_provider_info::BuiltInApiKeyProvider;
+use ody_model_provider_info::model_ref::ModelRef;
 #[cfg(target_os = "windows")]
 use ody_utils_approval_presets::ApprovalPreset;
 use std::sync::Arc;
@@ -814,11 +815,13 @@ impl App {
             // model catalog exposes each model under its bare slug, so the
             // picker's `is_current` check and the status line — which renders
             // `<provider_id>/<model>` — both expect the bare model here, with
-            // the alias supplied separately as the provider id.
+            // the alias supplied separately as the provider id. ModelRef makes
+            // the alias/model split a type-level guarantee.
+            let model_ref = ModelRef::from_parts(&alias, &model_id);
             self.app_event_tx
-                .send(AppEvent::UpdateModel(model_id.clone()));
+                .send(AppEvent::UpdateModel(model_ref.bare().to_string()));
             self.app_event_tx
-                .send(AppEvent::UpdateModelProvider(alias.clone()));
+                .send(AppEvent::UpdateModelProvider(model_ref.provider_alias.clone()));
         }
 
         telemetry::record_login_succeeded(&self.session_telemetry, provider);

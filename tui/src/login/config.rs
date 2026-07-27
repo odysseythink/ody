@@ -3,6 +3,7 @@
 use ody_app_server_protocol::ConfigEdit;
 use ody_config::config_toml::OdyCodeModelConfig;
 use ody_model_provider_info::BuiltInApiKeyProvider;
+use ody_model_provider_info::model_ref::ModelRef;
 use ody_protocol::model_metadata::ModelInfo;
 use std::collections::HashMap;
 
@@ -71,7 +72,7 @@ pub(crate) fn build_login_models_edits(
     let bundled_models = bundled_models_by_provider_slug(provider.id());
     let mut edits = Vec::new();
     for model in models {
-        let model_alias = format!("{alias}/{}", model.id);
+        let model_alias = ModelRef::from_parts(alias, &model.id).qualified();
         edits.push(replace_config_value(
             format!("models.\"{model_alias}\".provider"),
             serde_json::json!(alias),
@@ -112,7 +113,7 @@ pub(crate) fn build_login_models_edits(
         edits.push(clear_config_value("model"));
         edits.push(replace_config_value(
             "default_model",
-            serde_json::json!(format!("{alias}/{selected_model_id}")),
+            serde_json::json!(ModelRef::from_parts(alias, selected_model_id).qualified()),
         ));
     }
     edits
@@ -164,7 +165,7 @@ pub(crate) fn build_logout_provider_edits(
 
         let mut matching_models: Vec<&str> = configured_models
             .keys()
-            .filter(|key| key.starts_with(&format!("{alias}/")))
+            .filter(|key| ModelRef::parse(key).provider_alias == *alias)
             .map(|s| s.as_str())
             .collect();
         matching_models.sort();
@@ -174,13 +175,12 @@ pub(crate) fn build_logout_provider_edits(
     }
 
     if let Some(model) = default_model {
-        if let Some((alias, _)) = model.split_once('/') {
-            if aliases_to_remove
-                .iter()
-                .any(|a| a.eq_ignore_ascii_case(alias))
-            {
-                edits.push(clear_config_value("default_model"));
-            }
+        let model_ref = ModelRef::parse(model);
+        if aliases_to_remove
+            .iter()
+            .any(|a| a.eq_ignore_ascii_case(&model_ref.provider_alias))
+        {
+            edits.push(clear_config_value("default_model"));
         }
     }
 
