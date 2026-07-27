@@ -497,6 +497,15 @@ strip = false
 # Balance parallel release code generation against binary size.
 codegen-units = 4
 
+[profile.release-small]
+# Smaller, locally-distributed release binary for manual packaging.
+# Inherits release, then strips symbols and enables full LTO.
+inherits = "release"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
 [profile.profiling]
 inherits = "release"
 debug = "full"

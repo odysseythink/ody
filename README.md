@@ -75,6 +75,16 @@ cargo build --release -p ody-cli
 
 Then package the resulting `target/release/ody` binary.
 
+### Release binary size
+
+The `ody` release binary can be large because it statically links the V8 JavaScript engine when built with `--features v8`. The default `[profile.release]` intentionally keeps symbols (`strip = false`) so CI/packaging can archive sidecar symbols before stripping. For a smaller, locally-distributed binary, use the `release-small` profile:
+
+```bash
+cargo build --profile release-small -p ody-cli --features v8
+```
+
+The resulting binary will be in `target/release-small/ody`. The `release-small` profile enables full LTO, single codegen unit, strips symbols, and uses `panic = "abort"`, which usually reduces size significantly (often by 30–50%).
+
 ## Design Mode
 
 Most coding assistants treat design as a prefix to implementation—an offhand "let's think step by step." Ody treats design as a first-class collaboration phase with its own workspace, rules, and handoff contract.
