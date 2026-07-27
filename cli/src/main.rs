@@ -59,7 +59,7 @@ fn read_ody_api_key_from_env() -> Option<String> {
 }
 
 use ody_config::LoaderOverrides;
-use ody_core::build_models_manager;
+use ody_core::resolve_runtime_model_state;
 use ody_core::config::ConfigBuilder;
 use ody_core::config::ConfigOverrides;
 use ody_core::config::edit::ConfigEditsBuilder;
@@ -1709,7 +1709,7 @@ async fn run_debug_models_command(
             .cli_overrides(cli_overrides)
             .build()
             .await?;
-        let models_manager = build_models_manager(&config);
+        let models_manager = resolve_runtime_model_state(&config).models_manager;
         models_manager
             .raw_model_catalog(RefreshStrategy::OnlineIfUncached)
             .await

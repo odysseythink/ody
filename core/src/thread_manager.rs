@@ -8,6 +8,7 @@ use crate::environment_selection::TurnEnvironmentSnapshot;
 use crate::environment_selection::default_thread_environment_selections;
 use crate::mcp::McpManager;
 use crate::ody_thread::OdyThread;
+use crate::resolve_runtime_model_state;
 use crate::rollout::truncation;
 use crate::session::INITIAL_SUBMIT_ID;
 use crate::session::Ody;
@@ -317,7 +318,9 @@ impl ThreadManager {
             state: Arc::new(ThreadManagerState {
                 threads: Arc::new(RwLock::new(HashMap::new())),
                 thread_created_tx,
-                models_manager: SwappableModelsManager::new(build_models_manager(config)),
+                models_manager: SwappableModelsManager::new(
+                    resolve_runtime_model_state(config).models_manager,
+                ),
                 environment_manager,
                 skills_service,
                 plugins_manager,
