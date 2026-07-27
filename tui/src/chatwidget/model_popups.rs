@@ -4,6 +4,7 @@
 //! into another, especially while Plan mode is active.
 
 use super::*;
+use ody_model_provider_info::model_ref::ModelRef;
 use ratatui::buffer::Buffer;
 use ratatui::text::{Line, Span};
 use std::collections::HashMap;
@@ -285,7 +286,7 @@ impl ChatWidget {
             (!preset.description.is_empty()).then_some(preset.description.to_string());
         let model = preset.model.clone();
         let provider_id = self.provider_id_for_preset(&preset.provider);
-        let is_current = preset.model.as_str() == current_model;
+        let is_current = preset.model.as_str() == ModelRef::parse(current_model).bare();
         let model_for_action = model.clone();
         let provider_id_for_action = provider_id.clone();
         let preset_for_action = preset.clone();
@@ -554,7 +555,7 @@ impl ChatWidget {
     ) -> bool {
         if !self.collaboration_modes_enabled()
             || self.active_mode_kind() != ModeKind::Plan
-            || selected_model != self.current_model()
+            || selected_model != ModelRef::parse(self.current_model()).bare()
         {
             return false;
         }
@@ -563,7 +564,7 @@ impl ChatWidget {
         // 1) the active Plan-mode effective reasoning, and
         // 2) the stored global defaults that would be updated by the fallback path.
         selected_effort != self.effective_reasoning_effort()
-            || selected_model != self.current_collaboration_mode.model()
+            || selected_model != ModelRef::parse(self.current_collaboration_mode.model()).bare()
             || selected_effort != self.current_collaboration_mode.reasoning_effort()
     }
 
@@ -725,7 +726,8 @@ impl ChatWidget {
             .or(Some(default_effort));
 
         let model_slug = preset.model.to_string();
-        let is_current_model = self.current_model() == preset.model.as_str();
+        let is_current_model =
+            preset.model.as_str() == ModelRef::parse(self.current_model()).bare();
         let highlight_choice = if is_current_model {
             if in_plan_mode {
                 self.config

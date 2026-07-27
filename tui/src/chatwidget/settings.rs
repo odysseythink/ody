@@ -4,6 +4,7 @@ use super::*;
 use crate::app_event::AppEvent;
 use ody_model_provider::login::LoginModelInfo;
 use ody_model_provider_info::BuiltInApiKeyProvider;
+use ody_model_provider_info::model_ref::ModelRef;
 use ody_protocol::config_types::DesignAuditLevel;
 
 impl ChatWidget {
@@ -292,7 +293,7 @@ impl ChatWidget {
             .and_then(|models| {
                 models
                     .into_iter()
-                    .find(|preset| preset.model == model)
+                    .find(|preset| preset.model == ModelRef::parse(model).bare())
                     .map(|preset| preset.supports_personality)
             })
             .unwrap_or(false)
@@ -310,7 +311,7 @@ impl ChatWidget {
             .and_then(|models| {
                 models
                     .into_iter()
-                    .find(|preset| preset.model == model)
+                    .find(|preset| preset.model == ModelRef::parse(model).bare())
                     .map(|preset| preset.input_modalities.contains(&InputModality::Image))
             })
             .unwrap_or(true)
