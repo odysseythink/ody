@@ -83,6 +83,8 @@ use ody_mcp::McpServerRegistration;
 use ody_mcp::ResolvedMcpCatalog;
 use ody_memories_read::memory_root;
 use ody_model_provider_info::ModelProviderInfo;
+use ody_model_provider_info::model_ref::ModelRef;
+use ody_model_provider_info::model_ref::ProviderRef;
 #[cfg(test)]
 use ody_model_provider_info::ProviderCapabilities;
 #[cfg(test)]
@@ -1522,6 +1524,35 @@ impl Config {
     /// Returns the configured default Design-mode audit level, if any.
     pub fn design_audit_level(&self) -> Option<DesignAuditLevel> {
         self.plan_mode.as_ref().and_then(|pm| pm.design_audit_level)
+    }
+
+    /// Returns the active model reference parsed from the canonical model string.
+    ///
+    /// The resolved `model` field already merged CLI overrides, `default_model`,
+    /// and legacy `model` configuration. When that value is a bare model id
+    /// (no `/`), it is paired with the resolved `model_provider_id` so callers
+    /// always get a complete provider alias + model id reference.
+    pub fn active_model_ref(&self) -> Option<ModelRef> {
+        self.model.as_deref().map(|m| {
+            let parsed = ModelRef::parse(m);
+            if parsed.provider_alias.is_empty() {
+                ModelRef::from_parts(&self.model_provider_id, &parsed.model_id)
+            } else {
+                parsed
+            }
+        })
+    }
+
+    /// Returns a provider reference for the given alias if it is configured.
+    ///
+    /// Only user-configured providers are looked up; built-in type ids such as
+    /// `kimi`, `deepseek`, and `glm` are resolved on demand elsewhere and are
+    /// intentionally not present in `model_providers`.
+    pub fn provider_ref(&self, alias: &str) -> Option<ProviderRef> {
+        self.model_providers.get(alias).map(|info| ProviderRef {
+            alias: alias.to_string(),
+            kind: info.provider_kind(),
+        })
     }
 
     pub(crate) fn multi_agent_version_from_features(&self) -> MultiAgentVersion {

@@ -71,6 +71,7 @@ use ody_exec_server::LOCAL_FS;
 use ody_features::Feature;
 use ody_features::FeaturesToml;
 use ody_model_provider_info::WireApi;
+use ody_model_provider_info::model_ref::ProviderKind;
 use ody_models_manager::bundled_models_response;
 use ody_network_proxy::NetworkMode;
 use ody_protocol::config_types::SERVICE_TIER_DEFAULT_REQUEST_VALUE;
@@ -11278,4 +11279,58 @@ async fn windows_shell_auto_detection_persists_and_sets_shell() {
     } else {
         // No bash available in this environment; skip the persistence assertions.
     }
+}
+
+#[tokio::test]
+async fn active_model_ref_parses_default_model() -> std::io::Result<()> {
+    let config_toml: ConfigToml = toml::from_str(
+        r#"
+default_model = "123456/kimi-for-coding"
+
+[providers.123456]
+type = "kimi"
+api_key = "test-key"
+"#,
+    )
+    .expect("TOML should deserialize");
+    let ody_home = tempdir()?;
+    let config = Config::load_from_base_config_with_overrides(
+        config_toml,
+        ConfigOverrides::default(),
+        ody_home.abs(),
+    )
+    .await?;
+
+    let model_ref = config.active_model_ref().expect("active model should be set");
+    assert_eq!(model_ref.provider_alias, "123456");
+    assert_eq!(model_ref.model_id, "kimi-for-coding");
+    assert_eq!(model_ref.qualified(), "123456/kimi-for-coding");
+
+    let provider_ref = config.provider_ref("123456").expect("provider should be configured");
+    assert_eq!(provider_ref.alias, "123456");
+    assert_eq!(provider_ref.kind, ProviderKind::Kimi);
+
+    assert!(config.provider_ref("not-configured").is_none());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn active_model_ref_composes_bare_model_with_provider_id() -> std::io::Result<()> {
+    let config_toml: ConfigToml = toml::from_str(r#"default_model = "kimi-for-coding""#)
+        .expect("TOML should deserialize");
+    let ody_home = tempdir()?;
+    let config = Config::load_from_base_config_with_overrides(
+        config_toml,
+        ConfigOverrides::default(),
+        ody_home.abs(),
+    )
+    .await?;
+
+    let model_ref = config.active_model_ref().expect("active model should be set");
+    assert_eq!(model_ref.provider_alias, "kimi");
+    assert_eq!(model_ref.model_id, "kimi-for-coding");
+    assert_eq!(model_ref.qualified(), "kimi/kimi-for-coding");
+
+    Ok(())
 }
