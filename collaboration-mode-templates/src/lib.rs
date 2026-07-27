@@ -151,8 +151,8 @@ mod template_tests {
             "DESIGN must include the Enter Plan mode next-action option"
         );
         assert!(
-            DESIGN.contains("Compact and enter Plan mode"),
-            "DESIGN must include the Compact and enter Plan mode next-action option"
+            DESIGN.contains("Clear context and enter Plan mode"),
+            "DESIGN must include the Clear context and enter Plan mode next-action option"
         );
         assert!(
             DESIGN.contains("Stay in Design mode"),

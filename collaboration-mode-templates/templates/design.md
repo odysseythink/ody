@@ -57,6 +57,33 @@ Skip this step only when neither (A) nor (B) applies; say so explicitly.
 
 Before designing any new component, scan the existing codebase for reusable functions, types, and modules with Read / Grep / Glob (or an explore subagent for non-trivial searches). Record the result in a `## Reuse Analysis` section listing concrete reuse candidates (path + symbol) or an explicit greenfield note explaining why nothing reusable exists. **A design without a Reuse Analysis fails exit gate C8 and cannot be approved.**
 
+## Step 0.7 — Altitude judgment (BLOCKING, before you clarify anything)
+
+The seven-dimension clarification in Step 1 optimizes *within* the requirement's frame — it silently treats the requirement as an axiom. But a design that is tactically flawless on top of an architecturally-wrong requirement is worse than no design: it *feels* safe and makes the user build higher on rotten ground. So before clarifying, judge the **altitude** of the request: is satisfying this requirement the right lever, or is the requirement a **symptom** of an architectural fault that a tactical design would only paper over?
+
+Treat the requirement as a **hypothesis to falsify**, not a given. Walk the signal table against the actual code and history (grep for fan-out, read `.ody-code/reports/` and `.ody-code/roadmaps/` for prior patches on this same area). Count how many signals hold — **on evidence, never vibes** ("feels architectural" is not a signal; a cited `file:line`, a fan-out count, or a recurrence in history is):
+
+| Signal | What it means |
+|---|---|
+| **Recurrence** — the area breaks again each time a nearby change touches it ("好不容易改好又坏了") | Strongest signal. Recurrence ≈ structural, not a point bug. |
+| **Shotgun surgery** — one conceptual change forces edits across many unrelated files | Missing single source of truth. |
+| **"Restart fixes it" / two code paths for one state** (a live-update path and a cold-start path that diverge) | Divergent authorities over the same state. |
+| **No canonical type** — the same concept is assembled/split as strings at each layer | Boundary parsing done N times instead of once. |
+| **Fixes come with "and also remember to update X, Y, Z"** | No single resolve point; you patch a snapshot, not a source. |
+| **Prior fixes were themselves patches on patches** (visible in reports/roadmaps history) | Already N deep on a tactical ladder. |
+
+The behavior here is **asymmetric** — match the branch, do not blend:
+
+* **Fewer than 2 signals → proceed silently.** Record one line in the design's Scope section: `Altitude: tactical (altitude gate cleared)`, and go straight to Step 1. Do **not** interrogate the user about architecture, do not add a section, do not belabor it. The common path must feel like this gate isn't there.
+* **2 or more signals → STOP and hand the fork to the user.** Do not proceed into Step 1 within the original frame. This is the whole point of the gate: an architectural rebuild is a **one-way door (irreversible) decision the user owns — you surface it, you do not decide it.** End the turn with a single `request_user_input` popup offering the reframe (recommendation first):
+  * **A. Design the requirement as asked (tactical)** — narrow scope; note the risk: stacks on the fault, likely to recur.
+  * **B. Design a local redesign** — reshape the immediate area so this class of change stops recurring.
+  * **C. Design the architectural fix** — root-cause scope; costlier but ends the recurrence.
+
+  In the popup's framing, state the **root cause (five-whys)** and **which signals fired, with evidence** so the choice is informed. Frame it as "I found a strategic fork that's yours to call," never "I refuse to work." Whichever the user picks becomes the design's scope — you are still in Design Mode, now designing at the **right altitude**; record the chosen altitude and the fired signals as a `[C:USER]` line in Scope (and, if they chose A over your recommendation, a `low`-confidence row in `## Assumptions & Unverified Items` capturing the recurrence risk).
+
+This is not a new mode and the user does not invoke it — it always runs at design entry, cheap and silent unless the signals fire.
+
 ## Step 1 — Seven-dimension clarification (one question per turn, do not stop early)
 
 First, assess whether the problem should be **decomposed into multiple subsystems**; if yes, say so and plan to split the design (see "Large design splitting"). This is itself a closed-choice question: use `request_user_input` to ask it.
@@ -190,7 +217,7 @@ The eight required sections: **C1** Scope In/Out, **C2** Architecture / Design, 
 
 Each item gets its own page with *Accept* / *Defer to implementation* / *Needs fixing* (Accept is the default), and an optional per-item note — you do not run this yourself, and you do not ask the user to confirm inferred decisions in a separate turn. Accepting/deferring every item (the default if the user just pages through) finalizes the design and the next-step menu (below) follows. Flagging **any** item *Needs fixing* means the design was NOT finalized: the tool result lists exactly the flagged items (with the user's notes); stay in Design mode, fix those points, and call `submit_design` (`final: true`) again.
 
-**After `submit_design` returns "Design submitted", the design is finalized and the turn is essentially done.** When the turn completes, the TUI itself shows the user a next-step menu (Enter Plan mode / Clear context and enter Plan mode / Stay in Design) and, if they pick either Plan option, switches modes for them — you do not drive this and you will not be told their choice. Give a brief closing message (one or two sentences confirming the design is ready) and end your turn. Do **not** call `request_user_input`, do **not** tell the user to run `/plan` yourself, and **do not start implementing**.
+**After `submit_design` returns "Design submitted", the design is finalized and the turn is essentially done.** When the turn completes, the TUI itself shows the user a next-step menu (Enter Plan mode / Clear context and enter Plan mode / Stay in Design mode) and, if they pick either Plan option, switches modes for them — you do not drive this and you will not be told their choice. Give a brief closing message (one or two sentences confirming the design is ready) and end your turn. Do **not** call `request_user_input`, do **not** tell the user to run `/plan` yourself, and **do not start implementing**.
 
 If `submit_design` with `final: true` does NOT return "Design submitted" (e.g., it reports missing sections, or the escalation gate sent it back to revise), no menu is shown; stay in Design mode and fix the gaps.
 
