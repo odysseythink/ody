@@ -1,5 +1,6 @@
 use ody_model_provider_info::ProviderCapabilities;
 use ody_model_provider_info::WireApi;
+use ody_model_provider_info::model_ref::ModelRef;
 use ody_protocol::config_types::ReasoningSummary;
 use ody_protocol::model_metadata::InputModality;
 use ody_protocol::model_metadata::ModelCapabilities;
@@ -301,12 +302,17 @@ impl ConfiguredModelSpec {
         // the non-zero truncation budget guarantee).
         caps = resolve_model_capabilities(provider_caps, wire_api, Some(&caps), None, &self.model);
 
-        let mut model =
-            model_info_from_slug_with_provider(&self.model, provider_id, wire_api, provider_caps);
+        let model_ref = ModelRef::parse(&self.model);
+        let mut model = model_info_from_slug_with_provider(
+            model_ref.bare(),
+            provider_id,
+            wire_api,
+            provider_caps,
+        );
         model.display_name = self
             .display_name
             .clone()
-            .unwrap_or_else(|| self.model.clone());
+            .unwrap_or_else(|| model_ref.qualified());
         model.visibility = ModelVisibility::List;
         model.priority = priority;
         model.used_fallback_model_metadata = false;

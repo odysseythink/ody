@@ -2,6 +2,7 @@ use super::cache::ModelsCacheManager;
 use crate::collaboration_mode_presets::builtin_collaboration_mode_presets;
 use crate::config::ModelsManagerConfig;
 use crate::model_info;
+use ody_model_provider_info::model_ref::ModelRef;
 use ody_protocol::config_types::CollaborationModeMask;
 use ody_protocol::error::Result as CoreResult;
 use ody_protocol::model_metadata::ModelInfo;
@@ -443,20 +444,21 @@ fn find_model_by_longest_prefix(model: &str, candidates: &[ModelInfo]) -> Option
 fn find_model_by_namespaced_suffix(model: &str, candidates: &[ModelInfo]) -> Option<ModelInfo> {
     // Retry metadata lookup for a single namespaced slug like `namespace/model-name`.
     //
-    // This only strips one leading namespace segment and only when the namespace looks
-    // like a simple provider id to avoid broadly matching arbitrary aliases.
-    let (namespace, suffix) = model.split_once('/')?;
-    if suffix.contains('/') {
+    // This only considers a single leading namespace segment (parsed by ModelRef) and only when
+    // the namespace looks like a simple provider id to avoid broadly matching arbitrary aliases.
+    let model_ref = ModelRef::parse(model);
+    if model_ref.provider_alias.is_empty() {
         return None;
     }
-    if namespace.is_empty()
-        || !namespace
+    if model_ref.model_id.contains('/')
+        || !model_ref
+            .provider_alias
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
     {
         return None;
     }
-    find_model_by_longest_prefix(suffix, candidates)
+    find_model_by_longest_prefix(model_ref.bare(), candidates)
 }
 
 pub(crate) fn construct_model_info_from_candidates(
