@@ -155,12 +155,30 @@ use tracing::warn;
 /// turn strands the task.
 const MAX_TURN_CONTINUATION_RETRIES: u8 = 3;
 
+/// Maximum number of times Plan Mode will steer the model back to its required
+/// terminal actions. Plan Mode is host-enforced: a provider-level
+/// `response.completed` is not a valid end of turn unless the model submitted
+/// the plan or requested user input.
+const MAX_PLAN_TERMINAL_ACTION_RETRIES: u8 = 3;
+
 /// User-visible nudge appended when the model returns an empty completion, to
 /// coax it into either finishing with a message or issuing the tool call it
 /// omitted.
 const EMPTY_COMPLETION_NUDGE: &str = "Your previous response was empty — no message and no tool call. Continue the task: \
 either take the next concrete action (call the appropriate tool) or, if the task is \
 already complete, reply with a short summary of what you did.";
+
+const PLAN_TERMINAL_ACTION_NUDGE: &str = "You ended the response without completing the required Plan Mode action. \
+Continue the current planning task now. End this turn by calling exactly one of \
+`submit_plan` or `request_user_input`; do not stop after reasoning or a plain-text response.";
+
+fn plan_mode_requires_terminal_action(
+    mode: ModeKind,
+    has_request_user_input_call: bool,
+    needs_follow_up: bool,
+) -> bool {
+    mode == ModeKind::Plan && !has_request_user_input_call && !needs_follow_up
+}
 
 /// Detects a plain-text multiple-choice prompt that should have been delivered via
 /// `request_user_input` in Design Mode.
@@ -283,6 +301,7 @@ pub(crate) async fn run_turn(
     let mut last_agent_message: Option<String> = None;
     let mut stop_hook_active = false;
     let mut empty_completion_retries: u8 = 0;
+    let mut plan_terminal_action_retries: u8 = 0;
     // Whether the turn has produced any actionable output (an agent message or a
     // tool-call-driven follow-up) before a given sampling response. This
     // distinguishes a mid-task empty completion (worth steering with a nudge)
@@ -530,6 +549,76 @@ pub(crate) async fn run_turn(
                 }
 
                 if !needs_follow_up {
+                    // Plan Mode terminality is a host invariant, not merely a prompt
+                    // convention. A provider can report `response.completed` after
+                    // emitting only reasoning (or plain assistant text), but ending
+                    // the turn there strands an unfinished plan. Keep sampling until
+                    // the model either submits the plan or requests user input.
+                    if plan_mode_requires_terminal_action(
+                        turn_context.collaboration_mode.mode,
+                        has_request_user_input_call,
+                        needs_follow_up,
+                    ) {
+                        if plan_terminal_action_retries < MAX_PLAN_TERMINAL_ACTION_RETRIES {
+                            plan_terminal_action_retries += 1;
+                            warn!(
+                                turn_id = %turn_context.sub_id,
+                                attempt = plan_terminal_action_retries,
+                                max = MAX_PLAN_TERMINAL_ACTION_RETRIES,
+                                "plan mode response ended without a terminal action; continuing with nudge"
+                            );
+                            sess.send_event(
+                                &turn_context,
+                                EventMsg::Warning(WarningEvent {
+                                    message: format!(
+                                        "Plan Mode response ended without `submit_plan` or `request_user_input`; retrying ({plan_terminal_action_retries}/{MAX_PLAN_TERMINAL_ACTION_RETRIES})…"
+                                    ),
+                                }),
+                            )
+                            .await;
+                            let nudge = ResponseItem::Message {
+                                id: Some(uuid::Uuid::new_v4().to_string()),
+                                role: "user".to_string(),
+                                content: vec![ContentItem::InputText {
+                                    text: PLAN_TERMINAL_ACTION_NUDGE.to_string(),
+                                }],
+                                phase: None,
+                                internal_chat_message_metadata_passthrough: None,
+                            };
+                            sess.record_conversation_items(
+                                &turn_context,
+                                std::slice::from_ref(&nudge),
+                            )
+                            .await;
+                            can_drain_pending_input = false;
+                            continue;
+                        }
+
+                        let err = OdyErr::Stream(
+                            format!(
+                                "Plan Mode response ended without `submit_plan` or `request_user_input` after {MAX_PLAN_TERMINAL_ACTION_RETRIES} retries"
+                            ),
+                            None,
+                        );
+                        warn!(
+                            turn_id = %turn_context.sub_id,
+                            max = MAX_PLAN_TERMINAL_ACTION_RETRIES,
+                            "plan mode response omitted a terminal action too many times; ending turn with error"
+                        );
+                        let error = err.to_ody_protocol_error();
+                        sess.emit_turn_error_lifecycle(turn_context.as_ref(), error.clone())
+                            .await;
+                        sess.track_turn_ody_error(turn_context.as_ref(), &err);
+                        sess.send_event(
+                            &turn_context,
+                            EventMsg::Error(err.to_error_event(Some(
+                                "The model repeatedly ended Plan Mode without submitting the plan or requesting user input".to_string(),
+                            ))),
+                        )
+                        .await;
+                        break;
+                    }
+
                     last_agent_message = sampling_request_last_agent_message;
                     let stop_outcome = run_turn_stop_hooks(
                         &sess,

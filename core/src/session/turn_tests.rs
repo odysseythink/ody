@@ -37,6 +37,30 @@ fn assistant_output_text(text: &str) -> ResponseItem {
     }
 }
 
+#[test]
+fn plan_mode_completed_response_without_terminal_action_requires_follow_up() {
+    assert!(plan_mode_requires_terminal_action(
+        ModeKind::Plan,
+        /*has_request_user_input_call*/ false,
+        /*needs_follow_up*/ false,
+    ));
+    assert!(!plan_mode_requires_terminal_action(
+        ModeKind::Plan,
+        /*has_request_user_input_call*/ true,
+        /*needs_follow_up*/ false,
+    ));
+    assert!(!plan_mode_requires_terminal_action(
+        ModeKind::Plan,
+        /*has_request_user_input_call*/ false,
+        /*needs_follow_up*/ true,
+    ));
+    assert!(!plan_mode_requires_terminal_action(
+        ModeKind::Default,
+        /*has_request_user_input_call*/ false,
+        /*needs_follow_up*/ false,
+    ));
+}
+
 #[tokio::test]
 async fn plan_mode_uses_contributed_turn_item_for_last_agent_message() {
     let (mut session, turn_context) = crate::session::tests::make_session_and_context().await;
