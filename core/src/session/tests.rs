@@ -481,7 +481,6 @@ pub(crate) fn test_model_client_session() -> crate::client::ModelClientSession {
                 supports_remote_compaction: true,
                 namespace_tools: true,
                 image_generation: true,
-                web_search: true,
                 command_auth: false,
                 attestation: false,
             },

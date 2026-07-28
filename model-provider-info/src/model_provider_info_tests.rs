@@ -150,7 +150,6 @@ fn provider_capabilities_default_is_conservative() {
     assert!(!caps.supports_remote_compaction);
     assert!(!caps.namespace_tools);
     assert!(!caps.image_generation);
-    assert!(!caps.web_search);
     assert!(!caps.command_auth);
     assert!(!caps.attestation);
 }
@@ -162,7 +161,6 @@ fn built_in_kimi_provider_capabilities() {
     assert!(!provider.capabilities.supports_remote_compaction);
     assert!(!provider.capabilities.namespace_tools);
     assert!(!provider.capabilities.image_generation);
-    assert!(!provider.capabilities.web_search);
     assert!(!provider.capabilities.command_auth);
     assert!(!provider.capabilities.attestation);
 }
@@ -229,12 +227,10 @@ wire_api = "responses"
 
 [capabilities]
 supports_websockets = true
-web_search = false
 namespace_tools = true
 "#;
     let provider: ModelProviderInfo = toml::from_str(provider_toml).unwrap();
     assert!(provider.capabilities.supports_websockets);
-    assert!(!provider.capabilities.web_search);
     assert!(provider.capabilities.namespace_tools);
     assert!(!provider.capabilities.image_generation);
     assert!(provider.validate().is_ok());
@@ -247,7 +243,6 @@ fn default_provider_capabilities_for_responses() {
     assert!(caps.supports_remote_compaction);
     assert!(caps.namespace_tools);
     assert!(caps.image_generation);
-    assert!(caps.web_search);
 }
 
 #[test]
@@ -256,7 +251,6 @@ fn default_provider_capabilities_for_chat_is_conservative() {
     assert!(!caps.supports_websockets);
     assert!(!caps.namespace_tools);
     assert!(!caps.image_generation);
-    assert!(!caps.web_search);
 }
 
 #[test]
@@ -292,7 +286,6 @@ fn normalize_capabilities_fills_responses_defaults() {
     assert!(provider.capabilities.supports_remote_compaction);
     assert!(provider.capabilities.namespace_tools);
     assert!(provider.capabilities.image_generation);
-    assert!(provider.capabilities.web_search);
     assert!(!provider.capabilities.command_auth);
     assert!(!provider.capabilities.attestation);
 }
@@ -305,7 +298,6 @@ fn normalize_capabilities_respects_explicit_values() {
         wire_api: WireApi::Responses,
         capabilities: ProviderCapabilities {
             supports_websockets: false,
-            web_search: false,
             image_generation: true,
             ..ProviderCapabilities::default()
         },
@@ -313,7 +305,6 @@ fn normalize_capabilities_respects_explicit_values() {
     };
     provider.normalize_capabilities();
     assert!(!provider.capabilities.supports_websockets);
-    assert!(!provider.capabilities.web_search);
     assert!(provider.capabilities.image_generation);
     assert!(!provider.capabilities.supports_remote_compaction);
     assert!(!provider.capabilities.namespace_tools);

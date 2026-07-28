@@ -78,7 +78,6 @@ fn model_context_window_uses_model_value_without_override() {
 
 mod capability_tests {
     use super::ModelCapabilities;
-    use super::ProviderCapabilities;
     use super::WireApi;
     use super::default_model_capabilities_for_wire_api;
     use super::resolve_model_capabilities;
@@ -129,7 +128,6 @@ mod capability_tests {
             ..Default::default()
         };
         let resolved = resolve_model_capabilities(
-            &ProviderCapabilities::default(),
             WireApi::Chat,
             None,
             Some(&model_caps),
@@ -146,7 +144,6 @@ mod capability_tests {
             ..Default::default()
         };
         let resolved = resolve_model_capabilities(
-            &ProviderCapabilities::default(),
             WireApi::Chat,
             None,
             Some(&model_caps),
@@ -166,7 +163,6 @@ mod capability_tests {
             ..Default::default()
         };
         let resolved = resolve_model_capabilities(
-            &ProviderCapabilities::default(),
             WireApi::Chat,
             Some(&configured),
             Some(&built_in),
@@ -178,7 +174,6 @@ mod capability_tests {
     #[test]
     fn model_capabilities_falls_back_to_wire_api_inference() {
         let resolved = resolve_model_capabilities(
-            &ProviderCapabilities::default(),
             WireApi::AnthropicMessages,
             None,
             None,
@@ -199,7 +194,6 @@ mod capability_tests {
             ..Default::default()
         };
         let resolved = resolve_model_capabilities(
-            &ProviderCapabilities::default(),
             WireApi::Chat,
             Some(&zero),
             None,
@@ -212,7 +206,6 @@ mod capability_tests {
             ..Default::default()
         };
         let resolved = resolve_model_capabilities(
-            &ProviderCapabilities::default(),
             WireApi::Chat,
             Some(&explicit),
             None,
@@ -262,7 +255,6 @@ fn configured_model_catalog_returns_none_without_matching_provider() {
         configured_model_catalog_for_provider(
             "kimi_ranweiwei",
             WireApi::Chat,
-            &ProviderCapabilities::default(),
             &entries,
         )
         .is_none()
@@ -282,7 +274,6 @@ fn configured_model_catalog_uses_declared_metadata() {
     let catalog = configured_model_catalog_for_provider(
         "kimi_ranweiwei",
         WireApi::Chat,
-        &ProviderCapabilities::default(),
         &entries,
     )
     .expect("matching provider should produce a catalog");
@@ -317,7 +308,6 @@ fn configured_model_catalog_defaults_capabilities_from_wire_api() {
     let catalog = configured_model_catalog_for_provider(
         "kimi_ranweiwei",
         WireApi::Chat,
-        &ProviderCapabilities::default(),
         &entries,
     )
     .expect("matching provider should produce a catalog");

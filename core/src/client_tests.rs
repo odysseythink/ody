@@ -571,7 +571,6 @@ fn model_client_with_counting_attestation(
                 supports_remote_compaction: true,
                 namespace_tools: true,
                 image_generation: true,
-                web_search: true,
                 command_auth: false,
                 attestation: false,
             },

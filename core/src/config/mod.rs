@@ -352,7 +352,6 @@ pub(crate) fn test_provider() -> ModelProviderInfo {
             supports_remote_compaction: true,
             namespace_tools: true,
             image_generation: true,
-            web_search: true,
             command_auth: false,
             attestation: false,
         },
@@ -2077,7 +2076,6 @@ fn configured_model_catalog(
     configured_model_catalog_for_provider(
         model_provider_id,
         model_provider.wire_api,
-        &model_provider.capabilities,
         &entries,
     )
 }
@@ -2136,7 +2134,6 @@ fn configured_model_catalog_all_providers(
         if let Some(mut response) = configured_model_catalog_for_provider(
             provider_id,
             provider.wire_api,
-            &provider.capabilities,
             &entries,
         ) {
             all_models.append(&mut response.models);

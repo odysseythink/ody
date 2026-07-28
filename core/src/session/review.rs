@@ -19,7 +19,7 @@ pub(super) async fn spawn_review_thread(
         .load()
         .get_model_info(&model, &config.to_models_manager_config())
         .await;
-    // For reviews, disable web_search and view_image regardless of global settings.
+    // For reviews, disable Goals regardless of global settings.
     let mut review_features = sess.features.clone();
     let _ = review_features.disable(Feature::Goals);
     let available_models = sess

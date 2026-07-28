@@ -205,10 +205,6 @@ pub struct ProviderCapabilities {
     #[serde(default)]
     pub image_generation: bool,
 
-    /// Whether the provider supports server-side web search.
-    #[serde(default)]
-    pub web_search: bool,
-
     /// Whether the provider uses command-backed dynamic auth.
     #[serde(default)]
     pub command_auth: bool,
@@ -226,7 +222,6 @@ pub fn default_provider_capabilities_for_wire_api(wire_api: WireApi) -> Provider
             supports_remote_compaction: true,
             namespace_tools: true,
             image_generation: true,
-            web_search: true,
             command_auth: false,
             attestation: false,
         },
@@ -235,7 +230,6 @@ pub fn default_provider_capabilities_for_wire_api(wire_api: WireApi) -> Provider
             supports_remote_compaction: false,
             namespace_tools: false,
             image_generation: false,
-            web_search: false,
             command_auth: false,
             attestation: false,
         },
@@ -488,7 +482,6 @@ fn create_chat_provider(
             supports_remote_compaction: false,
             namespace_tools: false,
             image_generation: false,
-            web_search: false,
             command_auth: false,
             attestation: false,
         },

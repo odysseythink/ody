@@ -193,7 +193,7 @@ pub enum ChatEvent {
 /// This describes raw model abilities (streaming, tools, vision, thinking,
 /// context limits). It is distinct from `provider::ProviderCapabilities`, which
 /// describes app-visible feature flags such as `namespace_tools` or
-/// `web_search`.
+/// `image_generation`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProviderCapabilities {
     pub supports_streaming: bool,

@@ -36,7 +36,6 @@ use crate::models_endpoint::OpenAiModelsEndpoint;
 pub struct ProviderCapabilities {
     pub namespace_tools: bool,
     pub image_generation: bool,
-    pub web_search: bool,
 }
 
 impl Default for ProviderCapabilities {
@@ -44,7 +43,6 @@ impl Default for ProviderCapabilities {
         Self {
             namespace_tools: true,
             image_generation: true,
-            web_search: true,
         }
     }
 }
@@ -54,7 +52,6 @@ impl From<&ModelProviderInfoCapabilities> for ProviderCapabilities {
         Self {
             namespace_tools: capabilities.namespace_tools,
             image_generation: capabilities.image_generation,
-            web_search: capabilities.web_search,
         }
     }
 }
@@ -354,7 +351,7 @@ mod tests {
             base_url: Some("http://localhost:1234/v1".into()),
             wire_api: WireApi::Chat,
             capabilities: ModelProviderCapabilities {
-                web_search: true,
+                image_generation: true,
                 ..Default::default()
             },
             ..Default::default()
@@ -362,7 +359,7 @@ mod tests {
         let provider = create_model_provider_with_id("custom-chat", info);
         let caps = provider.capabilities();
 
-        assert!(caps.web_search);
+        assert!(caps.image_generation);
         assert!(!caps.namespace_tools);
     }
 }

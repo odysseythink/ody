@@ -636,6 +636,9 @@
             "rollout_budget": {
               "$ref": "#/definitions/FeatureToml_for_RolloutBudgetConfigToml"
             },
+            "rollout_tools": {
+              "type": "boolean"
+            },
             "runtime_metrics": {
               "type": "boolean"
             },
@@ -1650,8 +1653,7 @@
             "image_generation": false,
             "namespace_tools": false,
             "supports_remote_compaction": false,
-            "supports_websockets": false,
-            "web_search": false
+            "supports_websockets": false
           },
           "description": "Provider-level feature capabilities."
         },
@@ -2606,7 +2608,7 @@
           "type": "number"
         },
         "split_threshold": {
-          "default": 8,
+          "default": 4,
           "description": "Number of tasks that triggers splitting a large plan into multiple files. 0 disables splitting.",
           "format": "uint",
           "minimum": 0.0,
@@ -2765,11 +2767,6 @@
         "supports_websockets": {
           "default": false,
           "description": "Whether the provider can use WebSocket transport for streaming.",
-          "type": "boolean"
-        },
-        "web_search": {
-          "default": false,
-          "description": "Whether the provider supports server-side web search.",
           "type": "boolean"
         }
       },
@@ -5397,6 +5394,9 @@
         "rollout_budget": {
           "$ref": "#/definitions/FeatureToml_for_RolloutBudgetConfigToml"
         },
+        "rollout_tools": {
+          "type": "boolean"
+        },
         "runtime_metrics": {
           "type": "boolean"
         },
@@ -5767,7 +5767,7 @@
         "persist_plan_file": true,
         "reasoning_effort": null,
         "split_plan_compaction_ratio": 0.5,
-        "split_threshold": 8,
+        "split_threshold": 4,
         "tier": null
       },
       "description": "Plan mode settings."

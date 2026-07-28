@@ -230,7 +230,6 @@ supports_websockets = true
 supports_remote_compaction = true
 namespace_tools = true
 image_generation = true
-web_search = true
 "#,
                 catalog = catalog_path.to_string_lossy().replace('\\', "\\\\")
             ),

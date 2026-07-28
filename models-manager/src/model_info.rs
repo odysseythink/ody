@@ -1,4 +1,3 @@
-use ody_model_provider_info::ProviderCapabilities;
 use ody_model_provider_info::WireApi;
 use ody_model_provider_info::model_ref::ModelRef;
 use ody_protocol::config_types::ReasoningSummary;
@@ -60,9 +59,8 @@ pub fn default_model_capabilities_for_wire_api(wire_api: WireApi) -> ModelCapabi
 /// Resolve model capabilities from configured / built-in / inferred sources.
 ///
 /// Precedence: configured > built_in > wire_api inference > conservative default.
-/// Also applies provider-level upper bounds and consistency clamps.
+/// Also applies consistency clamps.
 pub fn resolve_model_capabilities(
-    provider_caps: &ProviderCapabilities,
     wire_api: WireApi,
     configured: Option<&ModelCapabilities>,
     built_in: Option<&ModelCapabilities>,
@@ -154,19 +152,17 @@ pub fn with_config_overrides(mut model: ModelInfo, config: &ModelsManagerConfig)
 /// Build a minimal fallback model descriptor for missing/unknown slugs using the
 /// given provider context.
 ///
-/// `provider_id` and `provider_caps` let the fallback respect the provider's
-/// wire API and capability matrix instead of always falling back to conservative
-/// Local defaults.
+/// `provider_id` lets the fallback respect the provider's wire API instead of
+/// always falling back to conservative Chat defaults.
 pub fn model_info_from_slug_with_provider(
     slug: &str,
     provider_id: &str,
     wire_api: WireApi,
-    provider_caps: &ProviderCapabilities,
 ) -> ModelInfo {
     warn!(
         "Unknown model {slug} for provider {provider_id} is used. This will use fallback model metadata."
     );
-    let caps = resolve_model_capabilities(provider_caps, wire_api, None, None, slug);
+    let caps = resolve_model_capabilities(wire_api, None, None, slug);
     ModelInfo {
         slug: slug.to_string(),
         display_name: slug.to_string(),
@@ -214,7 +210,7 @@ pub fn model_info_from_slug_with_provider(
 /// defaults. Prefer `model_info_from_slug_with_provider` when the active
 /// provider is known.
 pub fn model_info_from_slug(slug: &str) -> ModelInfo {
-    model_info_from_slug_with_provider(slug, slug, WireApi::Chat, &ProviderCapabilities::default())
+    model_info_from_slug_with_provider(slug, slug, WireApi::Chat)
 }
 
 /// A model declared in user config via `[models."provider/model"]` tables.
@@ -245,16 +241,13 @@ pub struct ConfiguredModelSpec {
 pub fn configured_model_catalog_for_provider(
     provider_id: &str,
     wire_api: WireApi,
-    provider_caps: &ProviderCapabilities,
     entries: &[ConfiguredModelSpec],
 ) -> Option<ModelsResponse> {
     let models: Vec<ModelInfo> = entries
         .iter()
         .filter(|entry| entry.provider == provider_id)
         .enumerate()
-        .map(|(index, entry)| {
-            entry.to_model_info(index as i32, provider_id, wire_api, provider_caps)
-        })
+        .map(|(index, entry)| entry.to_model_info(index as i32, provider_id, wire_api))
         .collect();
     if models.is_empty() {
         None
@@ -269,7 +262,6 @@ impl ConfiguredModelSpec {
         priority: i32,
         provider_id: &str,
         wire_api: WireApi,
-        provider_caps: &ProviderCapabilities,
     ) -> ModelInfo {
         let declared = |flag: &str| self.capabilities.iter().any(|cap| cap == flag);
         let caps = if self.capabilities.is_empty() {
@@ -298,16 +290,14 @@ impl ConfiguredModelSpec {
             max_output_tokens: self.max_output_size,
             ..caps
         };
-        // Apply provider-level upper bounds and consistency clamps (including
-        // the non-zero truncation budget guarantee).
-        caps = resolve_model_capabilities(provider_caps, wire_api, Some(&caps), None, &self.model);
+        // Apply consistency clamps (including the non-zero truncation budget guarantee).
+        caps = resolve_model_capabilities(wire_api, Some(&caps), None, &self.model);
 
         let model_ref = ModelRef::parse(&self.model);
         let mut model = model_info_from_slug_with_provider(
             model_ref.bare(),
             provider_id,
             wire_api,
-            provider_caps,
         );
         model.display_name = self
             .display_name

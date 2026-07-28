@@ -19,7 +19,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -33,7 +32,6 @@
       "input_modalities": [
         "text"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 1000000,
@@ -47,8 +45,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": false,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": false,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -80,7 +76,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -94,7 +89,6 @@
       "input_modalities": [
         "text"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 128000,
@@ -108,8 +102,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": false,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -150,7 +142,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -164,7 +155,6 @@
       "input_modalities": [
         "text"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 1000000,
@@ -178,8 +168,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": false,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -225,7 +213,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -239,7 +226,6 @@
       "input_modalities": [
         "text"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 1000000,
@@ -253,8 +239,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": false,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -300,7 +284,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -314,7 +297,6 @@
       "input_modalities": [
         "text"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 1000000,
@@ -328,8 +310,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": false,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -371,7 +351,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -385,7 +364,6 @@
       "input_modalities": [
         "text"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 131072,
@@ -399,8 +377,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": false,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -440,7 +416,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -454,7 +429,6 @@
       "input_modalities": [
         "text"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 131072,
@@ -468,8 +442,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": false,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -509,7 +481,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -523,7 +494,6 @@
       "input_modalities": [
         "text"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 131072,
@@ -537,8 +507,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": false,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -578,7 +546,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -593,7 +560,6 @@
         "text",
         "image"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 64000,
@@ -608,8 +574,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": true,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -649,7 +613,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -663,7 +626,6 @@
       "input_modalities": [
         "text"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 204800,
@@ -677,8 +639,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": false,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -718,7 +678,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -733,7 +692,6 @@
         "text",
         "image"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 128000,
@@ -748,8 +706,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": true,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -789,7 +745,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -803,7 +758,6 @@
       "input_modalities": [
         "text"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 204800,
@@ -817,8 +771,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": false,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -858,7 +810,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -872,7 +823,6 @@
       "input_modalities": [
         "text"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 200000,
@@ -886,8 +836,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": false,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -927,7 +875,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -941,7 +888,6 @@
       "input_modalities": [
         "text"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 200000,
@@ -955,8 +901,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": false,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -996,7 +940,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -1010,7 +953,6 @@
       "input_modalities": [
         "text"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 204800,
@@ -1024,8 +966,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": false,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -1065,7 +1005,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -1079,7 +1018,6 @@
       "input_modalities": [
         "text"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 200000,
@@ -1093,8 +1031,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": false,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -1134,7 +1070,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -1148,7 +1083,6 @@
       "input_modalities": [
         "text"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 200000,
@@ -1162,8 +1096,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": false,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -1203,7 +1135,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -1217,7 +1148,6 @@
       "input_modalities": [
         "text"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 1000000,
@@ -1231,8 +1161,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": false,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -1272,7 +1200,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -1287,7 +1214,6 @@
         "text",
         "image"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 200000,
@@ -1302,8 +1228,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": true,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -1338,7 +1262,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -1352,7 +1275,6 @@
       "input_modalities": [
         "text"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 262144,
@@ -1366,8 +1288,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": false,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -1399,7 +1319,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -1413,7 +1332,6 @@
       "input_modalities": [
         "text"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 262144,
@@ -1427,8 +1345,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": false,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -1460,7 +1376,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -1475,7 +1390,6 @@
         "text",
         "image"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 262144,
@@ -1490,8 +1404,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": true,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -1523,7 +1435,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -1538,7 +1449,6 @@
         "text",
         "image"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 262144,
@@ -1553,8 +1463,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": true,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -1586,7 +1494,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -1601,7 +1508,6 @@
         "text",
         "image"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 262144,
@@ -1616,8 +1522,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": true,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -1649,7 +1553,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -1664,7 +1567,6 @@
         "text",
         "image"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 262144,
@@ -1679,8 +1581,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": true,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -1737,7 +1637,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -1752,7 +1651,6 @@
         "text",
         "image"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 1048576,
@@ -1767,8 +1665,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": true,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": true,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -1806,7 +1702,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -1820,7 +1715,6 @@
       "input_modalities": [
         "text"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 1000000,
@@ -1834,8 +1728,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": false,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": false,
         "shell_type": "default",
         "supports_multiple_system_messages": false,
@@ -1867,7 +1759,6 @@
       "default_reasoning_summary": "auto",
       "support_verbosity": false,
       "default_verbosity": null,
-      "web_search_tool_type": "text",
       "truncation_policy": {
         "mode": "bytes",
         "limit": 10000
@@ -1881,7 +1772,6 @@
       "input_modalities": [
         "text"
       ],
-      "supports_search_tool": false,
       "use_responses_lite": false,
       "capabilities": {
         "context_window": 1000000,
@@ -1895,8 +1785,6 @@
         "supports_parallel_tool_calls": true,
         "supports_vision": false,
         "supports_image_detail_original": false,
-        "supports_search_tool": false,
-        "web_search_tool_type": "text",
         "supports_reasoning_summaries": false,
         "shell_type": "default",
         "supports_multiple_system_messages": false,

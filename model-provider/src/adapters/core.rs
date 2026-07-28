@@ -218,7 +218,7 @@ pub trait Prompt: Send + Sync {
 ///
 /// Function tools and namespace tools are expanded into their individual
 /// function definitions, preserving description and JSON schema. Responses-only
-/// built-ins such as `image_generation` and `web_search` are omitted because
+/// built-ins such as `image_generation` are omitted because they have no Chat
 /// they have no Chat Completions equivalent.
 fn tools_from_spec(tool: &ToolSpec) -> Vec<ToolDefinition> {
     match tool {

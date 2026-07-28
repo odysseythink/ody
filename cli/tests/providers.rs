@@ -28,7 +28,7 @@ fn providers_lists_builtin_providers_and_capabilities() -> Result<()> {
     }
     // capabilities 会以 Debug 形式打印，至少应出现若干 capability 字段名
     assert!(stdout.contains("supports_websockets"));
-    assert!(stdout.contains("web_search"));
+    assert!(stdout.contains("image_generation"));
     Ok(())
 }
 

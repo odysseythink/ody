@@ -122,7 +122,7 @@
 | R1.1 | 删除 ext/web-search 扩展 | 整个 crate、workspace/Cargo.toml 引用 | [normal] | D1.0 | 否 | ✅ 完成 |
 | R1.2 | 删除 ody-api SearchClient / alpha/search 端点 | `ody-api/src/endpoint/search.rs`、`ody-api/src/search.rs` 等 | [normal] | D1.0 | 否（与 R1.1 同层，可并行） | ✅ 完成 |
 | R1.3 | 删除 core 中 hosted/standalone web search 工具路径 | `core/src/tools/hosted_spec.rs`、`core/src/tools/spec_plan.rs` 相关分支 | [normal] | D1.0 | 可并行（R1.1/R1.2 独立） | ✅ 完成：旧协议字段 `WebSearchItem`/`WebSearchAction`/`WebSearchCall` 已彻底清理，事件映射/历史/TUI 分支已移除，schema fixtures 已重新生成 |
-| R1.4 | 删除 provider/model 能力字段 | `model-provider-info`、`models-manager`、`protocol` | [normal] | D1.0 | 可并行 | ❌ 未完成：`model-provider-info/src/lib.rs` 仍保留 `ProviderCapabilities.web_search` 及默认值 |
+| R1.4 | 删除 provider/model 能力字段 | `model-provider-info`、`models-manager`、`protocol` | [normal] | D1.0 | 可并行 | ✅ 完成：已删除 `ProviderCapabilities.web_search` 和 `resolve_model_capabilities` 中未使用的 provider caps 参数；清理 `models.json` 中遗留的 `supports_search_tool` / `web_search_tool_type`；更新相关测试、schema fixture 和 review 注释。 |
 | R1.5 | 删除 config/feature/CLI 中 web_search_mode | `config`、`features`、`cli` | [normal] | D1.0 | 可并行 | ✅ 基本完成：features/cli 已清理，config 已改用 `services.webSearch` 并拒绝旧 `tools.web_search`；但 `protocol/src/config_types.rs` 仍有 `WebSearchMode` 枚举，TUI 侧有 legacy kv override |
 | I2.1 | 新增 WebSearchProvider trait 与 WebSearchResult | 决定 crate（建议 `ody-core` 或新 `ody-web-search`） | [plan] | D1.0 | 否 | ✅ 完成 |
 | I2.2 | 新增 provider 注册表 + fallback + 错误分类 | 对齐 TS registry/runtime | [plan] | I2.1 | 否 | ✅ 完成 |
