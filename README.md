@@ -18,6 +18,12 @@ Ody CLI is an open-source, terminal-based coding assistant. It provides an agent
 
 In addition to the default provider, Ody ships with built-in support for Kimi, DeepSeek, and GLM (all OpenAI-compatible Chat Completions endpoints). See [docs/multi_provider.md](docs/multi_provider.md) for configuration details and provider-specific notes.
 
+## Web search
+
+Ody supports host-injected web search through a configurable `[services.webSearch]` table in `~/.ody-code/config.toml`. It supports 12 providers (including local SearXNG, DuckDuckGo, Bing, Moonshot, Tavily, and Perplexity), a primary/secondary fallback chain, and exposes a single `WebSearch` tool to the model.
+
+See [ody-web-search/README.md](ody-web-search/README.md) for the full configuration reference and examples.
+
 ## Building
 
 This repository is a Cargo workspace.
