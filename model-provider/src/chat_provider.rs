@@ -42,6 +42,9 @@ pub struct ChatRequest {
     /// for transports that can carry them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client_metadata: Option<std::collections::HashMap<String, String>>,
+    /// Service tier to request for this turn (Responses API only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service_tier: Option<String>,
 }
 
 /// A non-streaming chat completion.

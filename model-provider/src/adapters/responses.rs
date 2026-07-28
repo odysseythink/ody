@@ -98,7 +98,7 @@ fn build_api_request(request: ChatRequest) -> Result<ResponsesApiRequest, ChatPr
         store: true,
         stream: true,
         include: vec![],
-        service_tier: None,
+        service_tier: request.service_tier,
         prompt_cache_key: request.prompt_cache_key,
         text,
         client_metadata: request.client_metadata.clone(),

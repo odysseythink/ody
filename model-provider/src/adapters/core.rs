@@ -156,6 +156,7 @@ pub fn prompt_to_chat_request(
     prompt: &dyn Prompt,
     effort: Option<ody_protocol::model_metadata::ReasoningEffort>,
     supported_efforts: &[ody_protocol::model_metadata::ReasoningEffort],
+    service_tier: Option<String>,
 ) -> ChatRequest {
     let formatted = prompt.get_formatted_input_for_request(/*use_responses_lite*/ false);
     let mut messages = Vec::new();
@@ -189,6 +190,7 @@ pub fn prompt_to_chat_request(
         prompt_cache_key: None,
         extra: serde_json::Map::new(),
         client_metadata: None,
+        service_tier,
     }
 }
 
@@ -498,7 +500,7 @@ mod tests {
     #[test]
     fn prompt_to_chat_request_round_trip() {
         let prompt = sample_prompt_with_text();
-        let request = prompt_to_chat_request("test-model", &prompt, None, &[]);
+        let request = prompt_to_chat_request("test-model", &prompt, None, &[], None);
         assert_eq!(request.model, "test-model");
         assert_eq!(request.messages.len(), 1);
         assert_eq!(request.messages[0].role, Role::User);
@@ -521,7 +523,7 @@ mod tests {
             }],
             tools: Vec::new(),
         };
-        let request = prompt_to_chat_request("m", &prompt, None, &[]);
+        let request = prompt_to_chat_request("m", &prompt, None, &[], None);
         assert_eq!(request.messages.len(), 1);
         assert_eq!(request.messages[0].tool_calls.len(), 1);
         assert_eq!(request.messages[0].tool_calls[0].id, "call_1");
@@ -550,7 +552,7 @@ mod tests {
                 output_schema: None,
             })],
         };
-        let request = prompt_to_chat_request("m", &prompt, None, &[]);
+        let request = prompt_to_chat_request("m", &prompt, None, &[], None);
         assert_eq!(request.tools.len(), 1);
         assert_eq!(request.tools[0].name, "read_file");
         assert_eq!(request.tools[0].description, "Read a file from disk.");
@@ -595,7 +597,7 @@ mod tests {
                 ],
             })],
         };
-        let request = prompt_to_chat_request("m", &prompt, None, &[]);
+        let request = prompt_to_chat_request("m", &prompt, None, &[], None);
         let names: Vec<_> = request.tools.iter().map(|t| t.name.as_str()).collect();
         assert_eq!(names, vec!["read", "write"]);
     }
@@ -616,7 +618,7 @@ mod tests {
                 },
             ],
         };
-        let request = prompt_to_chat_request("m", &prompt, None, &[]);
+        let request = prompt_to_chat_request("m", &prompt, None, &[], None);
         assert!(request.tools.is_empty());
     }
 }

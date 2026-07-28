@@ -24,6 +24,7 @@ use ody_app_server_protocol::TurnStartResponse;
 use ody_app_server_protocol::UserInput as V2UserInput;
 use ody_core::test_support::all_model_presets;
 use ody_protocol::config_types::SERVICE_TIER_DEFAULT_REQUEST_VALUE;
+use ody_protocol::config_types::ServiceTier;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -440,9 +441,28 @@ async fn received_response_bodies(server: &wiremock::MockServer) -> Result<Vec<V
 fn service_tier_model_and_tier_id() -> Result<(String, String)> {
     let model = all_model_presets()
         .iter()
-        .find(|preset| preset.show_in_picker && !preset.service_tiers.is_empty())
-        .context("bundled model catalog should include a picker model with service tiers")?;
-    Ok((model.id.clone(), model.service_tiers[0].id.clone()))
+        .find(|preset| {
+            preset.show_in_picker
+                && preset
+                    .service_tiers
+                    .iter()
+                    .map(|tier| normalized_service_tier_id(&tier.id))
+                    .any(|tier_id| Some(tier_id) != preset.default_service_tier)
+        })
+        .context("bundled model catalog should include a picker model with a non-default service tier")?;
+    let tier_id = model
+        .service_tiers
+        .iter()
+        .map(|tier| normalized_service_tier_id(&tier.id))
+        .find(|tier_id| Some(tier_id.clone()) != model.default_service_tier)
+        .context("model should have a non-default service tier")?;
+    Ok((model.id.clone(), tier_id))
+}
+
+fn normalized_service_tier_id(id: &str) -> String {
+    ServiceTier::from_request_value(id)
+        .map(|tier| tier.request_value().to_string())
+        .unwrap_or_else(|| id.to_string())
 }
 
 fn create_config_toml(ody_home: &std::path::Path, server_uri: &str) -> std::io::Result<()> {

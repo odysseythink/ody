@@ -1500,6 +1500,7 @@ impl ModelClientSession {
             model_info,
             session_telemetry,
             effort,
+            service_tier,
             responses_metadata,
             inference_trace,
         )
@@ -1527,6 +1528,7 @@ impl ModelClientSession {
         model_info: &ModelInfo,
         session_telemetry: &SessionTelemetry,
         effort: Option<ReasoningEffortConfig>,
+        service_tier: Option<String>,
         responses_metadata: &OdyResponsesMetadata,
         inference_trace: &InferenceTraceContext,
     ) -> Result<ResponseStream> {
@@ -1555,9 +1557,10 @@ impl ModelClientSession {
             .map(|level| level.effort.clone())
             .collect();
         let mut request =
-            prompt_to_chat_request(&model_info.slug, prompt, effort.clone(), &supported_efforts);
+            prompt_to_chat_request(&model_info.slug, prompt, effort.clone(), &supported_efforts, None);
         request.prompt_cache_key = Some(self.client.prompt_cache_key());
         request.client_metadata = Some(responses_metadata.client_metadata());
+        request.service_tier = model_info.service_tier_for_request(service_tier);
         let inference_trace_attempt = inference_trace.start_attempt();
         let stream_result = chat_provider.chat(request).await;
 

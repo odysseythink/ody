@@ -466,7 +466,7 @@ async fn spawn_agent_service_tier_override_validates_the_effective_child_model()
         assert_eq!(
             err,
             FunctionCallError::RespondToModel(
-                "Service tier `turbo` is not supported for model `k3`. Supported service tiers: priority"
+                "Service tier `turbo` is not supported for model `k3`. Supported service tiers: standard, priority"
                     .to_string()
             )
         );
@@ -771,7 +771,7 @@ service_tier = "priority"
     assert_eq!(
         result.err(),
         Some(FunctionCallError::RespondToModel(
-            "Service tier `turbo` is not supported for model `k3`. Supported service tiers: priority"
+            "Service tier `turbo` is not supported for model `k3`. Supported service tiers: standard, priority"
                 .to_string()
         ))
     );

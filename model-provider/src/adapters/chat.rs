@@ -746,7 +746,7 @@ mod tests {
             ],
         };
         let request =
-            crate::adapters::core::prompt_to_chat_request("kimi-for-coding", &prompt, None, &[]);
+            crate::adapters::core::prompt_to_chat_request("kimi-for-coding", &prompt, None, &[], None);
         let wire = build_api_request(request, ChatVendor::Kimi)
             .expect("builds")
             .to_wire();
@@ -778,7 +778,7 @@ mod tests {
             }],
         };
         let request =
-            crate::adapters::core::prompt_to_chat_request("kimi-for-coding", &prompt, None, &[]);
+            crate::adapters::core::prompt_to_chat_request("kimi-for-coding", &prompt, None, &[], None);
         let wire = build_api_request(request, ChatVendor::Kimi)
             .expect("builds")
             .to_wire();

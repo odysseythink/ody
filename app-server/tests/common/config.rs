@@ -24,6 +24,7 @@ base_url = "{server_uri}/v1"
 wire_api = "responses"
 request_max_retries = 0
 stream_max_retries = 0
+auth = {{ command = "true", args = [] }}
 "#
         ),
     )
@@ -79,6 +80,7 @@ wire_api = "responses"
 request_max_retries = 0
 stream_max_retries = 0
 supports_websockets = false
+auth = {{ command = "true", args = [] }}
 {requires_line}{capabilities_line}
 "#
     );
