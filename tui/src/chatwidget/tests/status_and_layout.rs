@@ -1345,27 +1345,40 @@ async fn terminal_title_model_updates_on_model_change_without_manual_refresh() {
 }
 
 #[tokio::test]
-async fn status_line_model_provider_updates_after_sync_active_model_provider_config() {
+async fn model_context_window_syncs_after_config_reload() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("kimi-for-coding")).await;
-    chat.config.tui_status_line = Some(vec!["model".to_string()]);
-    chat.config.model_provider_id = "kimi_xi".to_string();
+    chat.config.tui_status_line = Some(vec!["context-window-size".to_string()]);
+    chat.config.model_context_window = Some(128_000);
     chat.refresh_status_line();
 
-    assert_eq!(
-        status_line_text(&chat),
-        Some("kimi_xi/kimi-for-coding".to_string())
-    );
+    assert_eq!(status_line_text(&chat), Some("128K window".to_string()));
 
-    // Simulate the provider half of a /model selection being persisted and
-    // reloaded while the model name stays the same.
+    // Simulate the non-provider half of a /model selection being persisted and
+    // reloaded: the context window may change, but the provider alias is left
+    // untouched so the authoritative ThreadSettingsUpdated echo can update it.
+    let mut updated_config = chat.config.clone();
+    updated_config.model_context_window = Some(256_000);
+    chat.sync_model_context_window(&updated_config);
+
+    assert_eq!(status_line_text(&chat), Some("256K window".to_string()));
+}
+
+#[tokio::test]
+async fn provider_alias_is_not_overwritten_by_config_reload() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("kimi-for-coding")).await;
+    chat.config.tui_status_line = Some(vec!["model".to_string()]);
+    chat.config.model_provider_id = "kimi".to_string();
+    chat.refresh_status_line();
+
+    assert_eq!(status_line_text(&chat), Some("kimi/kimi-for-coding".to_string()));
+
+    // A config reload must not clobber the active provider alias: E1 made the
+    // ThreadSettingsUpdated echo the single source of truth for provider alias.
     let mut updated_config = chat.config.clone();
     updated_config.model_provider_id = "kimi_ranweiwei".to_string();
-    chat.sync_active_model_provider_config(&updated_config);
+    chat.sync_model_context_window(&updated_config);
 
-    assert_eq!(
-        status_line_text(&chat),
-        Some("kimi_ranweiwei/kimi-for-coding".to_string())
-    );
+    assert_eq!(status_line_text(&chat), Some("kimi/kimi-for-coding".to_string()));
 }
 
 #[tokio::test]

@@ -1891,12 +1891,14 @@ impl ChatWidget {
         self.config.has_active_model = config.has_active_model;
     }
 
-    /// Sync the active model provider fields from a freshly reloaded config.
-    /// Used after  so the status bar reflects the newly selected provider
-    /// without forcing a login/logout-style provider list refresh.
-    pub(crate) fn sync_active_model_provider_config(&mut self, config: &Config) {
-        self.config.model_provider_id = config.model_provider_id.clone();
-        self.config.model_provider = config.model_provider.clone();
+    /// Sync the global model context window from a freshly reloaded config.
+    ///
+    /// Provider alias and metadata are intentionally *not* updated here: after
+    /// E1 the authoritative source for the active provider is the
+    /// `ThreadSettingsUpdated` server echo (see `apply_thread_settings`). Updating
+    /// the provider from the on-disk config would race that echo and could
+    /// overwrite a newer alias with a stale one.
+    pub(crate) fn sync_model_context_window(&mut self, config: &Config) {
         self.config.model_context_window = config.model_context_window;
         self.refresh_status_line();
     }
