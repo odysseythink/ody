@@ -43,11 +43,15 @@ impl WebSearchProvider for AlwaysOkProvider {
 
 fn config_for(name: &str) -> WebSearchProviderConfig {
     let provider: WebSearchProviderName = name.parse().expect("valid provider name");
+    let mut options = HashMap::new();
+    if name == "searxng" {
+        options.insert("base_url".to_string(), serde_json::Value::String("https://searxng.example/search".to_string()));
+    }
     WebSearchProviderConfig {
         provider,
         api_key: Some("test-key".to_string()),
         timeout_ms: None,
-        options: HashMap::new(),
+        options,
     }
 }
 
@@ -102,18 +106,18 @@ fn first_batch_providers_are_implemented() {
 }
 
 #[test]
-fn second_batch_providers_are_not_implemented() {
+fn second_batch_providers_are_implemented() {
     let registry = create_default_registry();
     for name in [
         "duckduckgo", "serper", "baidu", "serply", "searxng", "tavily", "exa", "perplexity",
     ] {
         let config = config_for(name);
         let result = registry.create(&config, reqwest::Client::new());
-        match result {
-            Err(WebSearchError::Unexpected { message }) => {
-                assert!(message.contains("not implemented"), "message: {message}");
-            }
-            other => panic!("expected not implemented for {name}, got {:?}", other),
-        }
+        assert!(
+            result.is_ok(),
+            "expected provider {} to be implemented, got {:?}",
+            name,
+            result
+        );
     }
 }

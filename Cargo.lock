@@ -8469,6 +8469,7 @@ dependencies = [
  "ody-protocol",
  "ody-tools",
  "pretty_assertions",
+ "regex",
  "reqwest 0.12.28",
  "schemars 0.8.22",
  "serde",
@@ -8479,6 +8480,8 @@ dependencies = [
  "tokio",
  "tracing",
  "ts-rs",
+ "url",
+ "urlencoding",
  "wiremock",
 ]
 
