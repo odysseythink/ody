@@ -280,3 +280,30 @@ async fn terminal_title_preview_uses_title_truncation_for_live_values() {
 
     assert_eq!(preview, format!("{truncated_thread} | {truncated_branch}"));
 }
+
+// Snapshot test: alias provider (numeric alias 123456) must render the status
+// line and terminal title with a single `alias/model` prefix. The model string
+// already contains the alias, so a naive `format!("{}/{}", provider, model)`
+// would produce a triple `123456/123456/kimi-for-coding` prefix; ModelRef
+// normalization prevents that.
+#[tokio::test]
+async fn status_surface_preview_alias_provider_model_single_prefix() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("123456/kimi-for-coding")).await;
+    chat.config.model_provider_id = "123456".to_string();
+
+    let snapshot = combined_preview_snapshot(
+        &mut chat,
+        &[StatusLineItem::ModelName],
+        &[TerminalTitleItem::Model],
+    );
+
+    assert!(
+        snapshot.contains("123456/kimi-for-coding"),
+        "expected single alias/model prefix, got:\n{snapshot}"
+    );
+    assert!(
+        !snapshot.contains("123456/123456/kimi-for-coding"),
+        "expected no triple prefix, got:\n{snapshot}"
+    );
+    assert_chatwidget_snapshot!("status_surface_preview_alias_provider_model_single_prefix", snapshot);
+}

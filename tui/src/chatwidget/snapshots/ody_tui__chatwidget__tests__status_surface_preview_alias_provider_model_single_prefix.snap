@@ -1,0 +1,6 @@
+---
+source: tui/src/chatwidget/tests/status_surface_previews.rs
+expression: snapshot
+---
+status line: 123456/kimi-for-coding
+terminal title: 123456/kimi-for-coding
