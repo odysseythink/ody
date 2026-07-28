@@ -34,3 +34,4 @@ urlencoding = { workspace = true }
 pretty_assertions = { workspace = true }
 wiremock = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
+toml = { workspace = true }
