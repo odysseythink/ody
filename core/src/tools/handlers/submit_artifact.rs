@@ -18,6 +18,7 @@ use crate::function_tool::FunctionCallError;
 use crate::plan_artifact::PlanWriteOutcome;
 use crate::plan_mode_injector::parts_manifest::RowStatus;
 use crate::plan_mode_injector::parts_manifest::parse_parts_manifest;
+use crate::plan_mode_injector::parts_manifest::part_budget_violations;
 use crate::plan_mode_injector::parts_manifest::part_file_cell_problem;
 use crate::plan_mode_injector::parts_manifest::row_is_verified_done;
 use crate::session::session::Session;
@@ -513,24 +514,59 @@ pub(crate) async fn handle_submit_artifact(
     };
 
     // 6. Pending parts detection
-    let has_pending_parts = match artifact.stem_dir() {
+    let max_tasks_per_part = turn
+        .config
+        .plan_mode
+        .as_ref()
+        .and_then(|cfg| cfg.max_tasks_per_part)
+        .unwrap_or(3);
+    let max_part_bytes = turn
+        .config
+        .plan_mode
+        .as_ref()
+        .and_then(|cfg| cfg.max_part_bytes)
+        .unwrap_or(12 * 1024);
+    let over_budget_parts: Vec<String> = match artifact.stem_dir() {
         Some(stem_dir) => parse_parts_manifest(&markdown)
             .manifest
-            .is_some_and(|manifest| {
+            .map(|manifest| {
                 manifest
                     .rows
                     .iter()
-                    .any(|row| !row_is_verified_done(&stem_dir, row))
-            }),
-        None => parse_parts_manifest(&markdown)
-            .manifest
-            .is_some_and(|manifest| {
-                manifest
-                    .rows
-                    .iter()
-                    .any(|row| row.status == RowStatus::Pending)
-            }),
+                    .filter_map(|row| {
+                        let violations = part_budget_violations(
+                            &stem_dir,
+                            row,
+                            max_tasks_per_part,
+                            max_part_bytes,
+                        );
+                        (!violations.is_empty())
+                            .then(|| format!("{} ({})", row.file, violations.join("; ")))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        None => Vec::new(),
     };
+    let has_pending_parts = !over_budget_parts.is_empty()
+        || match artifact.stem_dir() {
+            Some(stem_dir) => parse_parts_manifest(&markdown)
+                .manifest
+                .is_some_and(|manifest| {
+                    manifest
+                        .rows
+                        .iter()
+                        .any(|row| !row_is_verified_done(&stem_dir, row))
+                }),
+            None => parse_parts_manifest(&markdown)
+                .manifest
+                .is_some_and(|manifest| {
+                    manifest
+                        .rows
+                        .iter()
+                        .any(|row| row.status == RowStatus::Pending)
+                }),
+        };
 
     // 7. Gap detection — mode-dependent. Skipped for non-final checkpoints:
     // a checkpoint is never terminal, so the completeness/rigor gate (whose
@@ -698,6 +734,13 @@ pub(crate) async fn handle_submit_artifact(
     let mut did_submit = false;
     let message = if let Some(bad_cells) = bad_cells_message {
         bad_cells
+    } else if !over_budget_parts.is_empty() {
+        format!(
+            "{} saved, but completed part(s) exceed the configured per-part budget: {}. This is not final. Replace each oversized `done` row in the ## Parts manifest with two or more smaller `pending` rows, then call {} with the complete updated index; the next turn will write the first replacement part.",
+            wording.noun,
+            over_budget_parts.join("; "),
+            wording.tool_name,
+        )
     } else if has_pending_parts {
         match artifact.stem_dir() {
             Some(stem_dir) => format!(

@@ -65,7 +65,7 @@ For an index at `2026-07-10-design-mode.md`, the table reads:
 2. **Each subsequent turn: write ONE part file with a normal file-write tool (not `submit_plan`)**
    - Create the part file at exactly `<index-stem>/<part-name>.md`
    - The `<index-stem>` directory is date-slug-prefixed and revealed in the `submit_plan` response — never guess it.
-   - Include: part header → its tasks → its local Self-Review (7 items)
+   - Include: part header → its tasks → its local Self-Review (7 items). Keep a part to one coherent change surface and at most 3 numbered tasks; create additional manifest rows rather than combining independent subsystems in one file.
    - `submit_plan` cannot create this file — it only ever overwrites the index — so use your normal file-write tool. Writing under the plan's own `<index-stem>/` directory is allowed in Plan mode.
    - After finishing the part, call `submit_plan` again with the index's full markdown, this time with that part's row flipped from `pending` to `done`. This re-submission is what advances the tracker — a direct edit to the index's `## Parts` table alone will not be seen.
    - Do NOT write any other part file this turn

@@ -150,7 +150,7 @@ When `{{ split_threshold }}` is greater than 0 and the plan has more than `{{ sp
 1. **Write the index first.** Call `submit_plan` with an overview and a `## Parts` table (all rows `pending`) as the `plan` argument. `submit_plan` always writes to this one index file — while the table still has `pending` rows, this call only saves the index and keeps Plan mode active; it does not end the turn.
 2. **Write each part with a normal file-write tool, not `submit_plan`.** The `submit_plan` response prints the exact directory to write into — use it verbatim, never guess it — and name the file exactly as its `File` cell in the `## Parts` table. `submit_plan` cannot create separate part files; it only ever overwrites the index. Writing under the plan's own part directory is allowed in Plan mode.
 3. **After finishing a part, call `submit_plan` again** with the index's full markdown, this time with that part's row flipped to `done`. This is what advances the tracker to the next pending part — a direct edit to the index file's `## Parts` table alone will not be seen. As long as any row is still `pending`, this call keeps Plan mode active.
-4. Only write one part per turn.
+4. Only write one part per turn. Keep each part to one coherent change surface and at most 3 numbered tasks; add manifest rows rather than combining independent subsystems in one file.
 
 After all parts are `done`, do a cross-file consistency review, then call `submit_plan` one final time with the complete index (all rows `done`); that call ends Plan mode.
 

@@ -2568,6 +2568,20 @@
           "minimum": 0.0,
           "type": "integer"
         },
+        "max_part_bytes": {
+          "default": 12288,
+          "description": "Maximum UTF-8 byte size allowed in one split-plan part. 0 disables the check.",
+          "format": "uint",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "max_tasks_per_part": {
+          "default": 3,
+          "description": "Maximum numbered tasks allowed in one split-plan part. 0 disables the check.",
+          "format": "uint",
+          "minimum": 0.0,
+          "type": "integer"
+        },
         "model": {
           "description": "Optional model alias to use exclusively in Plan mode.",
           "type": "string"
@@ -5747,6 +5761,8 @@
         "design_audit_level": null,
         "enforcement": "strict",
         "full_refresh_turns": 5,
+        "max_part_bytes": 12288,
+        "max_tasks_per_part": 3,
         "model": null,
         "persist_plan_file": true,
         "reasoning_effort": null,

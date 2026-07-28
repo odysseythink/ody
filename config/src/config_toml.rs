@@ -157,7 +157,7 @@ const fn default_plan_context_isolation() -> Option<PlanContextIsolation> {
 }
 
 const fn default_split_threshold() -> Option<usize> {
-    Some(8)
+    Some(4)
 }
 
 const fn default_normal_task_compaction_ratio() -> Option<f64> {
@@ -166,6 +166,14 @@ const fn default_normal_task_compaction_ratio() -> Option<f64> {
 
 const fn default_split_plan_compaction_ratio() -> Option<f64> {
     Some(0.5)
+}
+
+const fn default_max_tasks_per_part() -> Option<usize> {
+    Some(3)
+}
+
+const fn default_max_part_bytes() -> Option<usize> {
+    Some(12 * 1024)
 }
 
 const fn default_full_refresh_turns() -> Option<usize> {
@@ -208,6 +216,12 @@ pub struct PlanModeConfigToml {
     /// triggered when a plan part boundary is crossed. 0.0 disables.
     #[serde(default = "default_split_plan_compaction_ratio")]
     pub split_plan_compaction_ratio: Option<f64>,
+    /// Maximum numbered tasks allowed in one split-plan part. 0 disables the check.
+    #[serde(default = "default_max_tasks_per_part")]
+    pub max_tasks_per_part: Option<usize>,
+    /// Maximum UTF-8 byte size allowed in one split-plan part. 0 disables the check.
+    #[serde(default = "default_max_part_bytes")]
+    pub max_part_bytes: Option<usize>,
     /// Number of plan-mode turns between full rigor-contract reinjections.
     /// 0 disables full reinjection.
     #[serde(default = "default_full_refresh_turns")]
@@ -234,6 +248,8 @@ impl Default for PlanModeConfigToml {
             reasoning_effort: None,
             split_threshold: default_split_threshold(),
             split_plan_compaction_ratio: default_split_plan_compaction_ratio(),
+            max_tasks_per_part: default_max_tasks_per_part(),
+            max_part_bytes: default_max_part_bytes(),
             full_refresh_turns: default_full_refresh_turns(),
             dedup_min_turns: default_dedup_min_turns(),
             tier: None,
@@ -1717,7 +1733,9 @@ type = "openai"
         assert_eq!(plan_mode.enforcement, Some(PlanEnforcement::Strict));
         assert_eq!(plan_mode.persist_plan_file, Some(true));
         assert_eq!(plan_mode.context_isolation, Some(PlanContextIsolation::Off));
-        assert_eq!(plan_mode.split_threshold, Some(8));
+        assert_eq!(plan_mode.split_threshold, Some(4));
+        assert_eq!(plan_mode.max_tasks_per_part, Some(3));
+        assert_eq!(plan_mode.max_part_bytes, Some(12 * 1024));
         assert!(plan_mode.model.is_none());
         assert!(plan_mode.reasoning_effort.is_none());
         assert_eq!(plan_mode.design_audit_level, None);
@@ -1785,12 +1803,21 @@ split_threshold = 16
         assert_eq!(plan_mode.model, Some("kimi-k2-thinking".to_string()));
         assert_eq!(plan_mode.reasoning_effort, Some(ReasoningEffort::High));
         assert_eq!(plan_mode.split_threshold, Some(16));
+        assert_eq!(plan_mode.max_tasks_per_part, Some(3));
+        assert_eq!(plan_mode.max_part_bytes, Some(12 * 1024));
     }
 
     #[test]
     fn default_split_plan_compaction_ratio_is_half() {
         let cfg = PlanModeConfigToml::default();
         assert_eq!(cfg.split_plan_compaction_ratio, Some(0.5));
+    }
+
+    #[test]
+    fn default_part_budgets_keep_split_parts_small() {
+        let cfg = PlanModeConfigToml::default();
+        assert_eq!(cfg.max_tasks_per_part, Some(3));
+        assert_eq!(cfg.max_part_bytes, Some(12 * 1024));
     }
 
     #[test]

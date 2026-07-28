@@ -1567,7 +1567,7 @@ async fn run_session_mode_after_turn(
         sess.set_plan_mode_last_manifest_snapshot(snapshot).await;
     }
 
-    if result.boundary_crossed {
+    if result.checkpoint_due {
         let ratio = plan_mode_config
             .and_then(|cfg| cfg.split_plan_compaction_ratio)
             .unwrap_or(0.5);

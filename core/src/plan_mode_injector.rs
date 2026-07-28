@@ -1,6 +1,7 @@
 use crate::plan_artifact::{ManifestSnapshot, PartRow, PartStatus, PlanArtifact};
 use crate::plan_mode_injector::parts_manifest::{
-    RowStatus, normalize_part_path, parse_parts_manifest, row_is_verified_done,
+    RowStatus, normalize_part_path, parse_parts_manifest, part_budget_violations,
+    row_is_verified_done,
 };
 use crate::turn_timing::now_unix_timestamp_ms;
 use ody_config::config_toml::PlanModeConfigToml;
@@ -16,8 +17,16 @@ pub(crate) mod parts_manifest;
 #[derive(Debug, Clone, PartialEq)]
 pub enum PlanModeDirective {
     None,
-    StartSplit { next_part: PartTarget },
-    ContinueSplit { next_part: PartTarget },
+    StartSplit {
+        next_part: PartTarget,
+    },
+    ContinueSplit {
+        next_part: PartTarget,
+    },
+    RefinePart {
+        part: PartTarget,
+        violations: Vec<String>,
+    },
     FinalReview,
 }
 
@@ -31,6 +40,9 @@ pub struct PartTarget {
 pub struct AfterPlanTurnResult {
     pub directive: PlanModeDirective,
     pub boundary_crossed: bool,
+    /// True when a newly-created split or a completed part leaves work to resume.
+    /// This is the safe checkpoint immediately before the next part starts.
+    pub checkpoint_due: bool,
     pub logs: Vec<PlanModeLogEvent>,
 }
 
@@ -42,7 +54,6 @@ impl PlanModeInjector {
         plan_markdown: &str,
         plan_mode_config: Option<&PlanModeConfigToml>,
     ) -> AfterPlanTurnResult {
-        let _ = plan_mode_config;
         let parse_result = parse_parts_manifest(plan_markdown);
         if let Some(warning) = parse_result.warning {
             warn!("plan_mode_injector: {}", warning);
@@ -53,6 +64,7 @@ impl PlanModeInjector {
             return AfterPlanTurnResult {
                 directive: PlanModeDirective::None,
                 boundary_crossed: false,
+                checkpoint_due: false,
                 logs: Vec::new(),
             };
         };
@@ -62,12 +74,20 @@ impl PlanModeInjector {
             return AfterPlanTurnResult {
                 directive: PlanModeDirective::None,
                 boundary_crossed: false,
+                checkpoint_due: false,
                 logs: Vec::new(),
             };
         };
 
+        let max_tasks = plan_mode_config
+            .and_then(|cfg| cfg.max_tasks_per_part)
+            .unwrap_or(3);
+        let max_bytes = plan_mode_config
+            .and_then(|cfg| cfg.max_part_bytes)
+            .unwrap_or(12 * 1024);
         let mut done_count = 0usize;
         let mut pending_rows: Vec<PartRow> = Vec::new();
+        let mut oversized_done_parts: Vec<(PartTarget, Vec<String>)> = Vec::new();
         for row in &manifest.rows {
             if normalize_part_path(&stem_dir, &row.file).is_none() {
                 warn!(
@@ -76,9 +96,19 @@ impl PlanModeInjector {
                 );
                 continue;
             }
-            if row_is_verified_done(&stem_dir, row) {
+            let violations = part_budget_violations(&stem_dir, row, max_tasks, max_bytes);
+            if row_is_verified_done(&stem_dir, row) && violations.is_empty() {
                 done_count += 1;
                 continue;
+            }
+            if row_is_verified_done(&stem_dir, row) {
+                oversized_done_parts.push((
+                    PartTarget {
+                        relative_path: row.file.clone(),
+                        scope: row.scope.clone(),
+                    },
+                    violations,
+                ));
             }
             if row.status == RowStatus::Done {
                 warn!(
@@ -108,7 +138,10 @@ impl PlanModeInjector {
                     normalize_part_path(&stem_dir, &row.file).map(|_| PartRow {
                         file_name: row.file.clone(),
                         scope: row.scope.clone(),
-                        status: if row_is_verified_done(&stem_dir, row) {
+                        status: if row_is_verified_done(&stem_dir, row)
+                            && part_budget_violations(&stem_dir, row, max_tasks, max_bytes)
+                                .is_empty()
+                        {
                             PartStatus::Done
                         } else {
                             PartStatus::Pending
@@ -137,12 +170,31 @@ impl PlanModeInjector {
                 return AfterPlanTurnResult {
                     directive: PlanModeDirective::FinalReview,
                     boundary_crossed,
+                    checkpoint_due: false,
                     logs,
                 };
             }
             return AfterPlanTurnResult {
                 directive: PlanModeDirective::None,
                 boundary_crossed,
+                checkpoint_due: false,
+                logs,
+            };
+        }
+
+        if let Some((part, violations)) = oversized_done_parts.into_iter().next() {
+            logs.push(make_log(
+                PlanModeLogKind::SplitContinued,
+                format!(
+                    "Plan part {} exceeded its budget; split it before continuing.",
+                    part.relative_path
+                ),
+                None,
+            ));
+            return AfterPlanTurnResult {
+                directive: PlanModeDirective::RefinePart { part, violations },
+                boundary_crossed,
+                checkpoint_due: false,
                 logs,
             };
         }
@@ -181,6 +233,7 @@ impl PlanModeInjector {
         AfterPlanTurnResult {
             directive,
             boundary_crossed,
+            checkpoint_due: boundary_crossed || prev_snapshot.is_none(),
             logs,
         }
     }
@@ -382,6 +435,11 @@ pub fn render_directive(
             "The next pending part is: {} (scope: {}). Write only this part in the current turn. A `done` row counts only when the part file exists on disk at exactly this path.",
             resolved_part_path(index_path, &next_part.relative_path), next_part.scope
         )),
+        (_, PlanModeDirective::RefinePart { part, violations }) => Some(format!(
+            "The completed part {} is over budget ({}). Do not mark it accepted. In this turn, resubmit the index with this row replaced by two or more smaller `pending` part rows whose scopes partition its work; retain the existing file as source material if useful. Stop after that index submission; the next turn will write the first new part.",
+            resolved_part_path(index_path, &part.relative_path),
+            violations.join("; ")
+        )),
         (_, PlanModeDirective::FinalReview) => Some(
             "All parts are marked done. Before finalizing the plan, review the parts for consistency, then call the submit_plan tool with the final plan markdown as the only action to persist it and end the turn.".to_string()
         ),
@@ -555,6 +613,10 @@ mod directive_tests {
             }
         );
         assert!(!result.boundary_crossed);
+        assert!(
+            result.checkpoint_due,
+            "the first part needs a clean context"
+        );
     }
 
     #[tokio::test]
@@ -616,6 +678,35 @@ mod directive_tests {
             }
         );
         assert!(result.boundary_crossed);
+        assert!(result.checkpoint_due);
+    }
+
+    #[tokio::test]
+    async fn oversized_done_part_requests_manifest_refinement() {
+        let (artifact, _tmp) = artifact("2026-07-04");
+        artifact.finalize_name("topic").await.unwrap();
+        let stem_dir = artifact.stem_dir().unwrap();
+        std::fs::create_dir_all(&stem_dir).unwrap();
+        std::fs::write(
+            stem_dir.join("core.md"),
+            "### Task 1\n\n### Task 2\n\n### Task 3\n\n### Task 4\n",
+        )
+        .unwrap();
+        let markdown = "## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 1 | core.md | models | done |\n";
+
+        let result = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
+        assert!(matches!(
+            result.directive,
+            PlanModeDirective::RefinePart { ref violations, .. }
+                if violations.iter().any(|v| v.contains("4 tasks"))
+        ));
+        let directive = render_directive(
+            &result.directive,
+            artifact.path().as_deref().unwrap(),
+            ModeKind::Plan,
+        )
+        .expect("refinement directive");
+        assert!(directive.contains("replaced by two or more smaller"));
     }
 
     #[tokio::test]

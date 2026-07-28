@@ -116,6 +116,57 @@ pub fn row_is_verified_done(stem_dir: &Path, row: &ManifestRow) -> bool {
         && normalize_part_path(stem_dir, &row.file).is_some_and(|path| path.exists())
 }
 
+/// Returns human-readable hard-budget violations for a persisted part. A zero
+/// limit disables its corresponding check. Missing or pending parts are not
+/// violations: the caller should continue directing the model to write them.
+pub fn part_budget_violations(
+    stem_dir: &Path,
+    row: &ManifestRow,
+    max_tasks: usize,
+    max_bytes: usize,
+) -> Vec<String> {
+    if !row_is_verified_done(stem_dir, row) {
+        return Vec::new();
+    }
+    let Some(path) = normalize_part_path(stem_dir, &row.file) else {
+        return Vec::new();
+    };
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    let mut violations = Vec::new();
+    let tasks = count_task_headings(&content);
+    if max_tasks > 0 && tasks > max_tasks {
+        violations.push(format!("{tasks} tasks exceeds the {max_tasks}-task limit"));
+    }
+    if max_bytes > 0 && content.len() > max_bytes {
+        violations.push(format!(
+            "{} bytes exceeds the {}-byte limit",
+            content.len(),
+            max_bytes
+        ));
+    }
+    violations
+}
+
+fn count_task_headings(content: &str) -> usize {
+    content
+        .lines()
+        .filter(|line| {
+            let trimmed = line.trim_start();
+            let hashes = trimmed.chars().take_while(|c| *c == '#').count();
+            if !(2..=4).contains(&hashes) {
+                return false;
+            }
+            let rest = trimmed[hashes..].trim_start();
+            let lower = rest.to_ascii_lowercase();
+            lower
+                .strip_prefix("task ")
+                .is_some_and(|suffix| suffix.chars().next().is_some_and(|c| c.is_ascii_digit()))
+        })
+        .count()
+}
+
 /// True if a `File` cell still carries template placeholder notation (`<stem>/core.md`,
 /// `<id>/api.md`) instead of a real path.
 pub fn part_file_cell_has_placeholder(file_cell: &str) -> bool {
@@ -238,6 +289,26 @@ mod tests {
         let result = parse_parts_manifest(markdown);
         let manifest = result.manifest.expect("expected manifest");
         assert_eq!(manifest.rows[0].file, "api.md");
+    }
+
+    #[test]
+    fn part_budget_flags_excess_tasks_and_bytes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let row = ManifestRow {
+            number: 1,
+            file: "core.md".to_string(),
+            scope: "core".to_string(),
+            status: RowStatus::Done,
+        };
+        std::fs::write(
+            tmp.path().join("core.md"),
+            "### Task 1\n\n### Task 2\n\n### Task 3\n\n### Task 4\n",
+        )
+        .unwrap();
+
+        let violations = part_budget_violations(tmp.path(), &row, 3, 10);
+        assert!(violations.iter().any(|v| v.contains("4 tasks")));
+        assert!(violations.iter().any(|v| v.contains("bytes")));
     }
 
     #[test]
