@@ -21,6 +21,7 @@ mod external_agent_config;
 mod fs;
 mod hooks_list;
 mod initialize;
+mod login_integration;
 mod marketplace_add;
 mod marketplace_remove;
 mod marketplace_upgrade;
