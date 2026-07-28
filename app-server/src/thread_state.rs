@@ -230,7 +230,7 @@ mod tests {
             },
             active_permission_profile: None,
             model: model.to_string(),
-            model_provider: "mock_provider".to_string(),
+            model_provider_alias: "mock_provider".to_string(),
             service_tier: None,
             effort: None,
             summary: None,

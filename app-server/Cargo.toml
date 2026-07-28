@@ -64,6 +64,7 @@ ody-memories-write = { workspace = true }
 ody-mcp = { workspace = true }
 ody-mcp-extension = { workspace = true }
 ody-model-provider = { workspace = true }
+ody-model-provider-info = { workspace = true }
 ody-models-manager = { workspace = true }
 ody-protocol = { workspace = true }
 ody-app-server-protocol = { workspace = true }
@@ -112,7 +113,6 @@ axum = { workspace = true, default-features = false, features = [
     "tokio",
 ] }
 base64 = { workspace = true }
-ody-model-provider-info = { workspace = true }
 ody-utils-cargo-bin = { workspace = true }
 core_test_support = { workspace = true }
 flate2 = { workspace = true }

@@ -6062,7 +6062,7 @@ async fn inactive_thread_settings_notification_updates_cached_collaboration_mode
                 ody_app_server_protocol::ActivePermissionProfile::read_only(),
             ),
             model: "gpt-plan".to_string(),
-            model_provider: "kimi".to_string(),
+            model_provider_alias: "kimi".to_string(),
             service_tier: None,
             effort: collaboration_mode.settings.reasoning_effort.clone(),
             summary: None,

@@ -22,6 +22,51 @@ impl ChatWidget {
         }
     }
 
+    pub(crate) fn current_provider_alias(&self) -> String {
+        self.config.model_provider_id.clone()
+    }
+
+    pub(crate) fn record_pending_provider_change(
+        &mut self,
+        previous_alias: String,
+        requested_alias: String,
+    ) {
+        tracing::debug!(
+            previous_alias = %previous_alias,
+            requested_alias = %requested_alias,
+            "recording pending provider change"
+        );
+        self.pending_provider_change = Some(PendingProviderChange {
+            previous_alias,
+            requested_alias,
+        });
+    }
+
+    pub(crate) fn clear_pending_provider_change(&mut self) {
+        if let Some(pending) = self.pending_provider_change.take() {
+            tracing::debug!(
+                requested_alias = %pending.requested_alias,
+                "clearing pending provider change"
+            );
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn pending_provider_change(&self) -> Option<&PendingProviderChange> {
+        self.pending_provider_change.as_ref()
+    }
+
+    pub(crate) fn revert_provider_alias(&mut self, previous_alias: &str) {
+        tracing::debug!(
+            previous_alias = %previous_alias,
+            current_alias = %self.config.model_provider_id,
+            "reverting provider alias after failed update"
+        );
+        self.config.model_provider_id = previous_alias.to_string();
+        self.config.model_provider = self.provider_info_for_provider_id(previous_alias);
+        self.refresh_status_line();
+    }
+
     #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     pub(crate) fn set_permission_profile_from_session_snapshot(
         &mut self,
@@ -230,17 +275,23 @@ impl ChatWidget {
         self.config.tui_theme = theme;
     }
 
-    /// Set the model in the widget's config copy and stored collaboration mode.
+    /// Set the model in the widget's config copy and active collaboration state.
+    ///
+    /// When collaboration modes are enabled and a mask is active, the mask is
+    /// updated so the current mode's visible model changes without overwriting
+    /// the stored Default-mode settings. Otherwise the stored collaboration mode
+    /// is updated directly.
     pub(crate) fn set_model(&mut self, model: &str) {
-        self.current_collaboration_mode = self.current_collaboration_mode.with_updates(
-            Some(model.to_string()),
-            /*effort*/ None,
-            /*developer_instructions*/ None,
-        );
         if self.collaboration_modes_enabled()
             && let Some(mask) = self.active_collaboration_mask.as_mut()
         {
             mask.model = Some(model.to_string());
+        } else {
+            self.current_collaboration_mode = self.current_collaboration_mode.with_updates(
+                Some(model.to_string()),
+                /*effort*/ None,
+                /*developer_instructions*/ None,
+            );
         }
         self.refresh_effective_service_tier();
         self.refresh_model_dependent_surfaces();
@@ -475,8 +526,21 @@ impl ChatWidget {
 
     fn apply_thread_settings(&mut self, mut settings: ThreadSettings) {
         let cwd_changed = self.config.cwd != settings.cwd;
+        let old_alias = self.config.model_provider_id.clone();
+        tracing::debug!(
+            thread_id = ?self.thread_id,
+            old_alias = %old_alias,
+            new_alias = %settings.model_provider_alias,
+            model = %settings.model,
+            source = "ThreadSettingsUpdated",
+            "applying thread settings"
+        );
         self.apply_thread_settings_cwd(settings.cwd.clone());
-        self.config.model_provider_id = settings.model_provider.clone();
+        self.config.model_provider_id = settings.model_provider_alias.clone();
+        self.config.model_provider =
+            self.provider_info_for_provider_id(&settings.model_provider_alias);
+        self.clear_pending_provider_change();
+        self.set_model(&settings.model);
         self.set_service_tier(settings.service_tier.clone());
         self.set_approval_policy(settings.approval_policy);
         self.set_approvals_reviewer(settings.approvals_reviewer.to_core());

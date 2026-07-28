@@ -3069,7 +3069,7 @@ mod tests {
                     sandbox_policy: v2::SandboxPolicy::DangerFullAccess,
                     active_permission_profile: None,
                     model: "k3".to_string(),
-                    model_provider: "kimi".to_string(),
+                    model_provider_alias: "kimi".to_string(),
                     service_tier: None,
                     effort: None,
                     summary: None,

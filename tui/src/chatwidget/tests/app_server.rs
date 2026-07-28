@@ -18,7 +18,7 @@ fn thread_settings_for_test(
                 ody_app_server_protocol::ActivePermissionProfile::read_only(),
             ),
             model: model.to_string(),
-            model_provider: "kimi".to_string(),
+            model_provider_alias: "kimi".to_string(),
             service_tier: Some(ServiceTier::Fast.request_value().to_string()),
             effort: Some(ReasoningEffortConfig::High),
             summary: None,

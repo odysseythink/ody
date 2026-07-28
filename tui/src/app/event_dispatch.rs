@@ -866,10 +866,23 @@ impl App {
                     .await;
             }
             AppEvent::UpdateModelProvider(provider_id) => {
+                let previous_alias = self.chat_widget.current_provider_alias();
+                tracing::debug!(
+                    previous_alias = %previous_alias,
+                    requested_alias = %provider_id,
+                    thread_id = ?self.active_thread_id,
+                    "UpdateModelProvider dispatch"
+                );
                 self.chat_widget
-                    .sync_active_model_provider_config_from_provider_id(&provider_id);
-                self.sync_active_thread_model_provider_setting(app_server, provider_id)
-                    .await;
+                    .record_pending_provider_change(previous_alias.clone(), provider_id.clone());
+                if let Err(err) = self
+                    .sync_active_thread_model_provider_setting(app_server, provider_id)
+                    .await
+                {
+                    self.chat_widget.revert_provider_alias(&previous_alias);
+                    self.chat_widget
+                        .add_error_message(format!("Failed to switch model provider: {err}"));
+                }
             }
             AppEvent::UpdatePersonality(personality) => {
                 self.on_update_personality(personality);

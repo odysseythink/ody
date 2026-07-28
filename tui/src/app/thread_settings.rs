@@ -20,7 +20,11 @@ impl App {
         let Some(params) = self.active_thread_model_setting_update_params(model) else {
             return;
         };
-        self.send_thread_settings_update(app_server, params).await;
+        if let Err(err) = self.send_thread_settings_update(app_server, params).await {
+            tracing::warn!("failed to update active thread model setting: {err}");
+            self.chat_widget
+                .add_error_message(format!("Failed to update thread settings: {err}"));
+        }
     }
 
     pub(super) fn active_thread_model_setting_update_params(
@@ -40,11 +44,11 @@ impl App {
         &mut self,
         app_server: &mut AppServerSession,
         provider_id: String,
-    ) {
+    ) -> anyhow::Result<()> {
         let Some(params) = self.active_thread_model_provider_setting_update_params(provider_id) else {
-            return;
+            return Ok(());
         };
-        self.send_thread_settings_update(app_server, params).await;
+        self.send_thread_settings_update(app_server, params).await
     }
 
     pub(super) fn active_thread_model_provider_setting_update_params(
@@ -54,7 +58,7 @@ impl App {
         let thread_id = self.active_thread_id?;
         Some(ThreadSettingsUpdateParams {
             thread_id: thread_id.to_string(),
-            model_provider: Some(provider_id),
+            model_provider_alias: Some(provider_id),
             ..ThreadSettingsUpdateParams::default()
         })
     }
@@ -67,7 +71,11 @@ impl App {
         let Some(params) = self.active_thread_reasoning_setting_update_params(effort) else {
             return;
         };
-        self.send_thread_settings_update(app_server, params).await;
+        if let Err(err) = self.send_thread_settings_update(app_server, params).await {
+            tracing::warn!("failed to update active thread reasoning setting: {err}");
+            self.chat_widget
+                .add_error_message(format!("Failed to update thread settings: {err}"));
+        }
     }
 
     pub(super) fn active_thread_reasoning_setting_update_params(
@@ -95,7 +103,11 @@ impl App {
             collaboration_mode: Some(self.chat_widget.effective_collaboration_mode()),
             ..ThreadSettingsUpdateParams::default()
         };
-        self.send_thread_settings_update(app_server, params).await;
+        if let Err(err) = self.send_thread_settings_update(app_server, params).await {
+            tracing::warn!("failed to update active thread plan mode reasoning setting: {err}");
+            self.chat_widget
+                .add_error_message(format!("Failed to update thread settings: {err}"));
+        }
     }
 
     pub(super) async fn sync_active_thread_personality_setting(
@@ -111,7 +123,11 @@ impl App {
             personality: Some(personality),
             ..ThreadSettingsUpdateParams::default()
         };
-        self.send_thread_settings_update(app_server, params).await;
+        if let Err(err) = self.send_thread_settings_update(app_server, params).await {
+            tracing::warn!("failed to update active thread personality setting: {err}");
+            self.chat_widget
+                .add_error_message(format!("Failed to update thread settings: {err}"));
+        }
     }
 
     pub(super) async fn sync_override_turn_context_settings(
@@ -154,7 +170,11 @@ impl App {
             personality: *personality,
             ..ThreadSettingsUpdateParams::default()
         };
-        self.send_thread_settings_update(app_server, params).await;
+        if let Err(err) = self.send_thread_settings_update(app_server, params).await {
+            tracing::warn!("failed to update override turn context settings: {err}");
+            self.chat_widget
+                .add_error_message(format!("Failed to update thread settings: {err}"));
+        }
     }
 
     pub(super) async fn apply_thread_settings_to_cached_session(
@@ -180,15 +200,14 @@ impl App {
         &mut self,
         app_server: &mut AppServerSession,
         params: ThreadSettingsUpdateParams,
-    ) {
+    ) -> anyhow::Result<()> {
         if !thread_settings_update_has_changes(&params) {
-            return;
+            return Ok(());
         }
-        if let Err(err) = app_server.thread_settings_update(params).await {
-            tracing::warn!("failed to update app-server thread settings from TUI: {err}");
-            self.chat_widget
-                .add_error_message(format!("Failed to update thread settings: {err}"));
-        }
+        app_server
+            .thread_settings_update(params)
+            .await
+            .map_err(|err| anyhow::anyhow!("thread/settings/update failed in TUI: {err}"))
     }
 }
 
@@ -197,7 +216,7 @@ fn apply_thread_settings_to_session(session: &mut ThreadSessionState, settings: 
         session.model = settings.model.clone();
         session.reasoning_effort = settings.effort.clone();
     }
-    session.model_provider_id = settings.model_provider.clone();
+    session.model_provider_id = settings.model_provider_alias.clone();
     session.service_tier = settings.service_tier.clone();
     session.approval_policy = settings.approval_policy;
     session.approvals_reviewer = settings.approvals_reviewer.to_core();
@@ -224,6 +243,7 @@ fn thread_settings_update_has_changes(params: &ThreadSettingsUpdateParams) -> bo
         || params.sandbox_policy.is_some()
         || params.permissions.is_some()
         || params.model.is_some()
+        || params.model_provider_alias.is_some()
         || params.service_tier.is_some()
         || params.effort.is_some()
         || params.summary.is_some()

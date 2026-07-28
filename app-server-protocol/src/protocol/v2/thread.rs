@@ -225,9 +225,9 @@ pub struct ThreadSettingsUpdateParams {
     /// Override the model for subsequent turns.
     #[ts(optional = nullable)]
     pub model: Option<String>,
-    /// Override the model provider for subsequent turns.
+    /// Override the model provider alias for subsequent turns.
     #[ts(optional = nullable)]
-    pub model_provider: Option<String>,
+    pub model_provider_alias: Option<String>,
     /// Override the service tier for subsequent turns. `null` clears the
     /// current service tier; omission leaves it unchanged.
     #[serde(
@@ -275,7 +275,7 @@ pub struct ThreadSettings {
     pub sandbox_policy: SandboxPolicy,
     pub active_permission_profile: Option<ActivePermissionProfile>,
     pub model: String,
-    pub model_provider: String,
+    pub model_provider_alias: String,
     pub service_tier: Option<String>,
     pub effort: Option<ReasoningEffort>,
     pub summary: Option<ReasoningSummary>,

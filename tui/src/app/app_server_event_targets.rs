@@ -218,7 +218,7 @@ mod tests {
             },
             active_permission_profile: None,
             model: "k3".to_string(),
-            model_provider: "kimi".to_string(),
+            model_provider_alias: "kimi".to_string(),
             service_tier: None,
             effort: Some(ReasoningEffort::High),
             summary: None,

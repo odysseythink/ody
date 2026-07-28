@@ -17686,7 +17686,7 @@
           "model": {
             "type": "string"
           },
-          "modelProvider": {
+          "modelProviderAlias": {
             "type": "string"
           },
           "personality": {
@@ -17725,7 +17725,7 @@
           "collaborationMode",
           "cwd",
           "model",
-          "modelProvider",
+          "modelProviderAlias",
           "sandboxPolicy"
         ],
         "type": "object"

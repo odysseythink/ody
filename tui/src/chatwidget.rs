@@ -502,6 +502,14 @@ pub(crate) enum ExternalEditorState {
     Active,
 }
 
+/// Tracks a pending provider alias change so the UI can roll back if the
+/// app-server rejects the update before the authoritative echo arrives.
+#[derive(Debug, Clone)]
+pub(crate) struct PendingProviderChange {
+    previous_alias: String,
+    requested_alias: String,
+}
+
 /// Maintains the per-session UI state and interaction state machines for the chat screen.
 ///
 /// `ChatWidget` owns the state derived from the protocol event stream (history cells, streaming
@@ -607,6 +615,7 @@ pub(crate) struct ChatWidget {
     /// Reasoning summaries finalized during a live turn are held here until the
     /// next assistant message stream finalizes, so they render before the message.
     pending_reasoning_cells: Vec<Box<dyn HistoryCell>>,
+    pending_provider_change: Option<PendingProviderChange>,
     status_state: StatusState,
     review: ReviewState,
     // Active hook runs render in a dedicated live cell so they can run alongside tools.
@@ -1892,17 +1901,10 @@ impl ChatWidget {
         self.refresh_status_line();
     }
 
-    /// Sync the active model provider fields from a provider id selected in the
-    /// model picker. This keeps the status bar and subsequent config reads in sync
-    /// when `/model` switches to a model hosted by a different provider.
-    pub(crate) fn sync_active_model_provider_config_from_provider_id(&mut self, provider_id: &str) {
-        self.config.model_provider_id = provider_id.to_string();
-        self.config.model_provider = resolve_provider_info(
-            provider_id,
-            &self.config.model_providers,
-        )
-        .unwrap_or_default();
-        self.refresh_status_line();
+    /// Resolve provider metadata for a provider alias using the current config.
+    /// Does not mutate local config; callers decide whether to apply the result.
+    pub(crate) fn provider_info_for_provider_id(&self, provider_id: &str) -> ModelProviderInfo {
+        resolve_provider_info(provider_id, &self.config.model_providers).unwrap_or_default()
     }
 
     pub(crate) fn token_usage(&self) -> TokenUsage {

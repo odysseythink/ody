@@ -4,6 +4,9 @@ use chrono::DateTime;
 #[cfg(test)]
 use chrono::Utc;
 use ody_protocol::config_types::MultiAgentMode;
+use ody_model_provider_info::ModelProviderInfo;
+use ody_model_provider_info::resolve_provider;
+use std::collections::HashMap;
 
 #[cfg(test)]
 pub(crate) async fn read_summary_from_rollout(
@@ -186,8 +189,27 @@ pub(crate) fn thread_response_sandbox_policy(
     sandbox_policy.into()
 }
 
+pub(crate) fn resolve_validated_provider_alias(
+    alias: String,
+    runtime_providers: &HashMap<String, ModelProviderInfo>,
+    default_alias: &str,
+) -> String {
+    if resolve_provider(&alias, runtime_providers).is_some()
+        || resolve_provider(&alias, &HashMap::new()).is_some()
+    {
+        return alias;
+    }
+    tracing::warn!(
+        alias = %alias,
+        default_alias = %default_alias,
+        "thread_settings echo contains unknown provider alias; falling back"
+    );
+    default_alias.to_string()
+}
+
 pub(crate) fn thread_settings_from_config_snapshot(
     config_snapshot: &ThreadConfigSnapshot,
+    runtime_providers: &HashMap<String, ModelProviderInfo>,
 ) -> ThreadSettings {
     ThreadSettings {
         cwd: config_snapshot.cwd().clone(),
@@ -201,7 +223,11 @@ pub(crate) fn thread_settings_from_config_snapshot(
             config_snapshot.active_permission_profile.clone(),
         ),
         model: config_snapshot.model.clone(),
-        model_provider: config_snapshot.model_provider_id.clone(),
+        model_provider_alias: resolve_validated_provider_alias(
+            config_snapshot.model_provider_id.clone(),
+            runtime_providers,
+            &config_snapshot.model_provider_id,
+        ),
         service_tier: config_snapshot.service_tier.clone(),
         effort: config_snapshot.reasoning_effort.clone(),
         summary: config_snapshot.reasoning_summary,
@@ -213,6 +239,7 @@ pub(crate) fn thread_settings_from_config_snapshot(
 
 pub(crate) fn thread_settings_from_core_snapshot(
     snapshot: ody_protocol::protocol::ThreadSettingsSnapshot,
+    runtime_providers: &HashMap<String, ModelProviderInfo>,
 ) -> ThreadSettings {
     let ody_protocol::protocol::ThreadSettingsSnapshot {
         model,
@@ -229,6 +256,11 @@ pub(crate) fn thread_settings_from_core_snapshot(
         collaboration_mode,
     } = snapshot;
     let sandbox_policy = thread_response_sandbox_policy(&permission_profile, cwd.as_path());
+    let model_provider_alias = resolve_validated_provider_alias(
+        model_provider_id.clone(),
+        runtime_providers,
+        &model_provider_id,
+    );
     ThreadSettings {
         sandbox_policy,
         cwd,
@@ -238,7 +270,7 @@ pub(crate) fn thread_settings_from_core_snapshot(
             active_permission_profile,
         ),
         model,
-        model_provider: model_provider_id,
+        model_provider_alias,
         service_tier,
         effort: reasoning_effort,
         summary: reasoning_summary,

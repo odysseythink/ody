@@ -170,6 +170,7 @@ impl ChatWidget {
             full_reasoning_buffer: String::new(),
             reasoning_stream_active: false,
             pending_reasoning_cells: Vec::new(),
+            pending_provider_change: None,
             status_state: StatusState::default(),
             review: ReviewState::default(),
             active_hook_cell: None,
