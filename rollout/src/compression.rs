@@ -3,6 +3,8 @@ use std::fs::File;
 use std::fs::Permissions;
 use std::io;
 use std::io::Read;
+use std::io::Seek;
+use std::io::SeekFrom;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -14,6 +16,9 @@ use std::time::Duration;
 use std::os::unix::fs::OpenOptionsExt;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+
+use crate::reverse_jsonl_scanner::ReverseJsonlScanner;
+use crate::reverse_jsonl_scanner::ScanOutcome;
 
 const COMPRESSED_SUFFIX: &str = ".zst";
 const MAX_NOT_FOUND_RETRIES: usize = 3;
@@ -221,6 +226,67 @@ impl RolloutLineReader {
 }
 
 type BlockingLineReader = std::io::Lines<std::io::BufReader<Box<dyn Read + Send>>>;
+
+/// Reverse rollout reader for tailing recent JSONL records from the end of a
+/// plain or compressed rollout file.
+pub struct RolloutReverseScanner {
+    scanner: Option<ReverseJsonlScanner<File>>,
+}
+
+impl RolloutReverseScanner {
+    /// Reads the next JSONL record from the end of the rollout.
+    pub async fn next_record<T>(&mut self) -> io::Result<Option<ScanOutcome<T>>>
+    where
+        T: serde::de::DeserializeOwned + Send + 'static,
+    {
+        let mut scanner = self
+            .scanner
+            .take()
+            .ok_or_else(|| io::Error::other("rollout reverse scanner is busy"))?;
+        let (outcome, scanner) = tokio::task::spawn_blocking(move || {
+            let outcome = scanner.scan_next::<T>();
+            (outcome, scanner)
+        })
+        .await
+        .map_err(io::Error::other)?;
+        self.scanner = Some(scanner);
+        outcome
+    }
+}
+
+/// Opens a reverse rollout scanner that transparently handles plain `.jsonl`
+/// and `.jsonl.zst` files.
+///
+/// Compressed files are decompressed into an anonymous temporary file so the
+/// scanner can seek from the end; the temporary file is dropped when the
+/// scanner is dropped.
+pub async fn open_rollout_reverse_scanner(path: &Path) -> io::Result<RolloutReverseScanner> {
+    let path = path::existing_rollout_path(path)
+        .await
+        .unwrap_or_else(|| path.to_path_buf());
+    let file = if path::is_compressed_rollout_path(path.as_path()) {
+        let path = path.clone();
+        tokio::task::spawn_blocking(move || -> io::Result<File> {
+            let input = File::open(path.as_path())?;
+            let mut decoder = zstd::stream::read::Decoder::new(input)?;
+            let mut temp_file = tempfile::tempfile()?;
+            io::copy(&mut decoder, &mut temp_file)?;
+            temp_file.seek(SeekFrom::Start(0))?;
+            Ok(temp_file)
+        })
+        .await
+        .map_err(io::Error::other)??
+    } else {
+        let path = path.clone();
+        tokio::task::spawn_blocking(move || -> io::Result<File> { File::open(path) })
+            .await
+            .map_err(io::Error::other)??
+    };
+    let scanner = ReverseJsonlScanner::new(file)?;
+    Ok(RolloutReverseScanner {
+        scanner: Some(scanner),
+    })
+}
 
 mod worker {
     use std::ffi::OsStr;

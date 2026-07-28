@@ -29,6 +29,10 @@ use crate::tools::handlers::ReadMcpResourceHandler;
 use crate::tools::handlers::RequestPermissionsHandler;
 use crate::tools::handlers::RequestPluginInstallHandler;
 use crate::tools::handlers::RequestUserInputHandler;
+use crate::tools::handlers::RolloutReadHandler;
+use crate::tools::handlers::RolloutSearchHandler;
+use crate::tools::handlers::RolloutTailHandler;
+use crate::tools::handlers::RolloutToolOptions;
 use crate::tools::handlers::ShellCommandHandler;
 use crate::tools::handlers::ShellCommandHandlerOptions;
 use crate::tools::handlers::SleepHandler;
@@ -550,6 +554,7 @@ fn code_mode_namespace_descriptions(
 fn add_tool_sources(context: &CoreToolPlanContext<'_>, planned_tools: &mut PlannedTools) {
     add_shell_tools(context, planned_tools);
     add_file_tools(context, planned_tools);
+    add_rollout_tools(context, planned_tools);
     add_mcp_resource_tools(context, planned_tools);
     add_core_utility_tools(context, planned_tools);
     add_collaboration_tools(context, planned_tools);
@@ -561,10 +566,7 @@ fn add_tool_sources(context: &CoreToolPlanContext<'_>, planned_tools: &mut Plann
     }
 }
 
-fn add_tool_search_if_needed(
-    context: &CoreToolPlanContext<'_>,
-    planned_tools: &mut PlannedTools,
-) {
+fn add_tool_search_if_needed(context: &CoreToolPlanContext<'_>, planned_tools: &mut PlannedTools) {
     let search_infos: Vec<ToolSearchInfo> = planned_tools
         .runtimes()
         .iter()
@@ -579,7 +581,6 @@ fn add_tool_search_if_needed(
     let handler = context.tool_search_handler_cache.get_or_build(search_infos);
     planned_tools.add_arc(handler);
 }
-
 
 #[instrument(level = "trace", skip_all)]
 fn add_shell_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut PlannedTools) {
@@ -663,6 +664,27 @@ fn add_file_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut Planned
     planned_tools.add(JqHandler::new(options));
     planned_tools.add(WriteFileHandler::new(options));
     planned_tools.add(EditFileHandler::new(options));
+}
+
+/// Registers `rollout_read` / `rollout_tail` / `rollout_search`.
+///
+/// These tools read Ody's own session files, which always live on the host, so
+/// they are gated by their own feature flag rather than by environment mode.
+#[instrument(level = "trace", skip_all)]
+fn add_rollout_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut PlannedTools) {
+    let turn_context = context.turn_context;
+    if !turn_context
+        .config
+        .features
+        .get()
+        .enabled(Feature::RolloutTools)
+    {
+        return;
+    }
+    let options = RolloutToolOptions::default();
+    planned_tools.add(RolloutReadHandler::new(options));
+    planned_tools.add(RolloutTailHandler::new(options));
+    planned_tools.add(RolloutSearchHandler::new(options));
 }
 
 #[instrument(level = "trace", skip_all)]

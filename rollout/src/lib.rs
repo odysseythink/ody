@@ -10,6 +10,7 @@ pub(crate) mod list;
 pub(crate) mod metadata;
 pub(crate) mod policy;
 pub(crate) mod recorder;
+pub(crate) mod reverse_jsonl_scanner;
 pub(crate) mod search;
 pub(crate) mod session_index;
 mod sqlite_metrics;
@@ -32,8 +33,10 @@ pub static INTERACTIVE_SESSION_SOURCES: LazyLock<Vec<SessionSource>> = LazyLock:
 });
 
 pub use compression::RolloutLineReader;
+pub use compression::RolloutReverseScanner;
 pub use compression::existing_rollout_path;
 pub use compression::open_rollout_line_reader;
+pub use compression::open_rollout_reverse_scanner;
 pub use compression::plain_rollout_path;
 pub use compression::spawn_rollout_compression_worker;
 pub use config::Config;
@@ -65,6 +68,8 @@ pub use policy::should_persist_response_item_for_memories;
 pub use recorder::RolloutRecorder;
 pub use recorder::RolloutRecorderParams;
 pub use recorder::append_rollout_item_to_path;
+pub use reverse_jsonl_scanner::ReverseJsonlScanner;
+pub use reverse_jsonl_scanner::ScanOutcome;
 pub use search::first_rollout_content_match_snippet;
 pub use search::search_rollout_matches;
 pub use search::search_rollout_paths;

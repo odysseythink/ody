@@ -136,6 +136,8 @@ pub enum Feature {
     RespectSystemProxy,
     /// Enable the structured file tools (read_file/grep/glob).
     FileTools,
+    /// Expose rollout-aware tools for reading, tailing, and searching Ody session files.
+    RolloutTools,
     /// Enable collab tools.
     Collab,
     /// Enable task-path-based multi-agent routing.
@@ -959,6 +961,12 @@ pub const FEATURES: &[FeatureSpec] = &[
         key: "file_tools",
         stage: Stage::Stable,
         default_enabled: true,
+    },
+    FeatureSpec {
+        id: Feature::RolloutTools,
+        key: "rollout_tools",
+        stage: Stage::UnderDevelopment,
+        default_enabled: false,
     },
     FeatureSpec {
         id: Feature::Collab,

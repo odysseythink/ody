@@ -22,6 +22,7 @@ use super::*;
 use crate::RolloutConfig;
 use crate::RolloutRecorder;
 use crate::RolloutRecorderParams;
+use crate::ScanOutcome;
 use crate::append_rollout_item_to_path;
 use crate::search_rollout_matches;
 
@@ -126,6 +127,84 @@ async fn search_rollout_matches_uses_logical_path_for_compressed_rollout() -> an
         matches.get(rollout_path.as_path()),
         Some(&Some("targeted search term".to_string()))
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn reverse_scanner_reads_plain_rollout_newest_first() -> anyhow::Result<()> {
+    let home = TempDir::new()?;
+    let uuid = Uuid::from_u128(20);
+    let thread_id = ThreadId::from_string(&uuid.to_string())?;
+    let rollout_path = rollout_path(home.path(), "2025-01-03T12-00-00", uuid);
+    write_rollout(&rollout_path, thread_id, "reverse scanner message")?;
+
+    let mut scanner = open_rollout_reverse_scanner(&rollout_path).await?;
+    let first = scanner.next_record::<RolloutLine>().await?;
+    let second = scanner.next_record::<RolloutLine>().await?;
+
+    assert!(
+        first.is_some_and(|outcome| matches!(
+            outcome,
+            ScanOutcome::Parsed(RolloutLine {
+                item: RolloutItem::EventMsg(_),
+                ..
+            })
+        )),
+        "first record should be the user message"
+    );
+    assert!(
+        second.is_some_and(|outcome| matches!(
+            outcome,
+            ScanOutcome::Parsed(RolloutLine {
+                item: RolloutItem::SessionMeta(_),
+                ..
+            })
+        )),
+        "second record should be the session meta"
+    );
+    assert!(scanner.next_record::<RolloutLine>().await?.is_none());
+    Ok(())
+}
+
+#[tokio::test]
+async fn reverse_scanner_reads_compressed_rollout_newest_first() -> anyhow::Result<()> {
+    let home = TempDir::new()?;
+    let uuid = Uuid::from_u128(21);
+    let thread_id = ThreadId::from_string(&uuid.to_string())?;
+    let rollout_path = rollout_path(home.path(), "2025-01-03T12-00-00", uuid);
+    write_rollout(
+        &rollout_path,
+        thread_id,
+        "compressed reverse scanner message",
+    )?;
+    compress_now(&rollout_path)?;
+    assert!(!rollout_path.exists());
+
+    let mut scanner = open_rollout_reverse_scanner(&rollout_path).await?;
+    let first = scanner.next_record::<RolloutLine>().await?;
+    let second = scanner.next_record::<RolloutLine>().await?;
+
+    assert!(
+        first.is_some_and(|outcome| matches!(
+            outcome,
+            ScanOutcome::Parsed(RolloutLine {
+                item: RolloutItem::EventMsg(_),
+                ..
+            })
+        )),
+        "first record should be the user message"
+    );
+    assert!(
+        second.is_some_and(|outcome| matches!(
+            outcome,
+            ScanOutcome::Parsed(RolloutLine {
+                item: RolloutItem::SessionMeta(_),
+                ..
+            })
+        )),
+        "second record should be the session meta"
+    );
+    assert!(scanner.next_record::<RolloutLine>().await?.is_none());
     Ok(())
 }
 
