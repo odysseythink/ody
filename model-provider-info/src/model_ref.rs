@@ -188,6 +188,34 @@ mod tests {
     }
 
     #[test]
+    fn parse_numeric_alias_qualified_roundtrip() {
+        let original = "123456/kimi-for-coding";
+        let m = ModelRef::parse(original);
+        assert_eq!(m.provider_alias, "123456");
+        assert_eq!(m.model_id, "kimi-for-coding");
+        assert_eq!(m.qualified(), original);
+    }
+
+    #[test]
+    fn parse_pure_numeric_bare_model() {
+        // A model id that happens to be digits, with no alias, must not be
+        // interpreted as a provider alias or array index.
+        let m = ModelRef::parse("999");
+        assert_eq!(m.provider_alias, "");
+        assert_eq!(m.model_id, "999");
+        assert_eq!(m.qualified(), "999");
+        assert_eq!(m.bare(), "999");
+    }
+
+    #[test]
+    fn from_parts_numeric_alias() {
+        let m = ModelRef::from_parts("123456", "kimi-for-coding");
+        assert_eq!(m.provider_alias, "123456");
+        assert_eq!(m.model_id, "kimi-for-coding");
+        assert_eq!(m.qualified(), "123456/kimi-for-coding");
+    }
+
+    #[test]
     fn parse_multi_segment_model_id() {
         // Only the first slash separates alias from model; the rest is the model id.
         let m = ModelRef::parse("a/b/c");

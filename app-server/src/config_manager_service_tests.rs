@@ -105,6 +105,47 @@ personality = true
     Ok(())
 }
 
+#[test]
+fn parse_key_path_treats_numeric_segment_as_string_key() {
+    assert_eq!(
+        parse_key_path("providers.123456.type"),
+        Ok(vec![
+            "providers".to_string(),
+            "123456".to_string(),
+            "type".to_string(),
+        ])
+    );
+}
+
+#[tokio::test]
+async fn write_value_creates_numeric_provider_alias() -> Result<()> {
+    let tmp = tempdir()?;
+    let path = tmp.path().join(CONFIG_TOML_FILE);
+    std::fs::write(&path, "")?;
+
+    let service = ConfigManager::without_managed_config_for_tests(tmp.path().to_path_buf());
+    service
+        .write_value(ConfigValueWriteParams {
+            file_path: Some(path.display().to_string()),
+            key_path: "providers.123456.type".to_string(),
+            value: serde_json::json!("kimi"),
+            merge_strategy: MergeStrategy::Replace,
+            expected_version: None,
+        })
+        .await
+        .expect("write numeric provider alias succeeds");
+
+    let contents = std::fs::read_to_string(&path)?;
+    let config: ConfigToml = toml::from_str(&contents)?;
+    let providers = config.normalized_providers();
+    let provider = providers
+        .get("123456")
+        .expect("numeric provider alias is a string table key");
+    assert_eq!(provider.name, "Kimi");
+
+    Ok(())
+}
+
 #[tokio::test]
 async fn clear_missing_nested_config_is_noop() -> Result<()> {
     let tmp = tempdir().expect("tempdir");
