@@ -800,29 +800,6 @@ pub fn ev_reasoning_text_delta(delta: &str) -> Value {
     })
 }
 
-pub fn ev_web_search_call_added_partial(id: &str, status: &str) -> Value {
-    serde_json::json!({
-        "type": "response.output_item.added",
-        "item": {
-            "type": "web_search_call",
-            "id": id,
-            "status": status
-        }
-    })
-}
-
-pub fn ev_web_search_call_done(id: &str, status: &str, query: &str) -> Value {
-    serde_json::json!({
-        "type": "response.output_item.done",
-        "item": {
-            "type": "web_search_call",
-            "id": id,
-            "status": status,
-            "action": {"type": "search", "query": query}
-        }
-    })
-}
-
 pub fn ev_image_generation_call(
     id: &str,
     status: &str,

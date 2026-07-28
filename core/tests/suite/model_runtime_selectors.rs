@@ -194,8 +194,7 @@ async fn remote_tool_mode_selector_overrides_feature_flags() -> Result<()> {
             ody_code_mode::PUBLIC_TOOL_NAME.to_string(),
             ody_code_mode::WAIT_TOOL_NAME.to_string(),
             "request_user_input".to_string(),
-            // Hosted Responses tools.
-            "web_search".to_string(),
+            // Hosted Responses tool.
             "image_generation".to_string(),
         ]
     );

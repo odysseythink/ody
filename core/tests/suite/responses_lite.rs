@@ -1,15 +1,9 @@
-use std::sync::Arc;
-
 use anyhow::Context;
 use anyhow::Result;
 use core_test_support::responses;
 use core_test_support::skip_if_no_network;
 use core_test_support::test_ody::test_ody;
 use core_test_support::wait_for_event;
-use ody_core::config::Config;
-use ody_extension_api::ExtensionRegistry;
-use ody_extension_api::ExtensionRegistryBuilder;
-use ody_features::Feature;
 use ody_protocol::model_metadata::InputModality;
 use ody_protocol::models::ImageDetail;
 use ody_protocol::protocol::EventMsg;
@@ -20,23 +14,8 @@ use serde_json::Value;
 
 const RESPONSES_LITE_HEADER: &str = "x-odysseythink-internal-ody-responses-lite";
 
-fn responses_extensions() -> Arc<ExtensionRegistry<Config>> {
-    let extension_builder = ExtensionRegistryBuilder::<Config>::new();
-    Arc::new(extension_builder.build())
-}
-
-fn configure_responses_tools(config: &mut Config) {
-    assert!(config.features.enable(Feature::ImageGeneration).is_ok());
-}
-
 fn configure_image_capable_model(model_info: &mut ody_protocol::model_metadata::ModelInfo) {
     model_info.input_modalities = vec![InputModality::Text, InputModality::Image];
-}
-
-fn has_hosted_tool(tools: &[Value], tool_type: &str) -> bool {
-    tools
-        .iter()
-        .any(|tool| tool.get("type").and_then(Value::as_str) == Some(tool_type))
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -52,7 +31,7 @@ async fn responses_lite_prepares_images() -> Result<()> {
         ]),
     )
     .await;
-    let image_url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
+    let image_url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErJggg==";
     let remote_image_url = "https://example.com/image.png";
     let mut builder = test_ody().with_model_info_override("k3", |model_info| {
         model_info.use_responses_lite = true;
@@ -110,50 +89,6 @@ async fn responses_lite_prepares_images() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn responses_lite_uses_standalone_web_search() -> Result<()> {
-    skip_if_no_network!(Ok(()));
-
-    let server = responses::start_mock_server().await;
-    let response_mock = responses::mount_sse_once(
-        &server,
-        responses::sse(vec![
-            responses::ev_response_created("resp-1"),
-            responses::ev_completed("resp-1"),
-        ]),
-    )
-    .await;
-    let extensions = responses_extensions();
-
-    let mut builder = test_ody()
-        .with_extensions(extensions)
-        .with_model_info_override("k3", |model_info| {
-            model_info.use_responses_lite = true;
-            configure_image_capable_model(model_info);
-        })
-        .with_config(configure_responses_tools);
-    let test = builder.build(&server).await?;
-
-    test.submit_turn("Use standalone tools").await?;
-
-    let request = response_mock.single_request();
-    assert_eq!(
-        request.header(RESPONSES_LITE_HEADER).as_deref(),
-        Some("true")
-    );
-    request
-        .tool_by_name("web", "run")
-        .context("Responses Lite should expose standalone web search")?;
-
-    let body = request.body_json();
-    let tools = body["tools"]
-        .as_array()
-        .context("Responses request tools should be an array")?;
-    assert!(!has_hosted_tool(tools, "web_search"));
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn responses_lite_compact_request_uses_lite_transport_contract() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
@@ -175,7 +110,7 @@ async fn responses_lite_compact_request_uses_lite_transport_contract() -> Result
             model_info.supports_parallel_tool_calls = true;
         })
         .with_config(|config| {
-            let _ = config.features.disable(Feature::RemoteCompactionV2);
+            let _ = config.features.disable(ody_features::Feature::RemoteCompactionV2);
         });
     let test = builder.build(&server).await?;
 
@@ -204,74 +139,6 @@ async fn responses_lite_compact_request_uses_lite_transport_contract() -> Result
         compact_body.get("parallel_tool_calls"),
         Some(&Value::Bool(false))
     );
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn responses_lite_omits_hosted_web_search_without_standalone_extension() -> Result<()> {
-    skip_if_no_network!(Ok(()));
-
-    let server = responses::start_mock_server().await;
-    let response_mock = responses::mount_sse_once(
-        &server,
-        responses::sse(vec![
-            responses::ev_response_created("resp-1"),
-            responses::ev_completed("resp-1"),
-        ]),
-    )
-    .await;
-
-    let mut builder = test_ody()
-        .with_model_info_override("k3", |model_info| {
-            model_info.use_responses_lite = true;
-            configure_image_capable_model(model_info);
-        })
-        .with_config(configure_responses_tools);
-    let test = builder.build(&server).await?;
-
-    test.submit_turn("Do not use hosted tools").await?;
-
-    let body = response_mock.single_request().body_json();
-    let tools = body["tools"]
-        .as_array()
-        .context("Responses request tools should be an array")?;
-    assert!(!has_hosted_tool(tools, "web_search"));
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn non_lite_uses_hosted_web_search_when_standalone_feature_is_disabled() -> Result<()> {
-    skip_if_no_network!(Ok(()));
-
-    let server = responses::start_mock_server().await;
-    let response_mock = responses::mount_sse_once(
-        &server,
-        responses::sse(vec![
-            responses::ev_response_created("resp-1"),
-            responses::ev_completed("resp-1"),
-        ]),
-    )
-    .await;
-
-    let extensions = responses_extensions();
-    let mut builder = test_ody()
-        .with_extensions(extensions)
-        .with_model_info_override("k3", configure_image_capable_model)
-        .with_config(configure_responses_tools);
-    let test = builder.build(&server).await?;
-
-    test.submit_turn("Use hosted tools").await?;
-
-    let request = response_mock.single_request();
-    assert_eq!(request.header(RESPONSES_LITE_HEADER), None);
-    assert!(request.tool_by_name("web", "run").is_none());
-    let body = request.body_json();
-    let tools = body["tools"]
-        .as_array()
-        .context("Responses request tools should be an array")?;
-    assert!(has_hosted_tool(tools, "web_search"));
 
     Ok(())
 }

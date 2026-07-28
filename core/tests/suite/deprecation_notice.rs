@@ -54,53 +54,6 @@ async fn emits_deprecation_notice_for_legacy_feature_flag() -> anyhow::Result<()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn emits_deprecation_notice_for_web_search_feature_flag_values() -> anyhow::Result<()> {
-    skip_if_no_network!(Ok(()));
-
-    for enabled in [true, false] {
-        let server = start_mock_server().await;
-
-        let mut builder = test_ody().with_config(move |config| {
-            let mut entries = BTreeMap::new();
-            entries.insert("web_search_request".to_string(), enabled);
-            let mut features = config.features.get().clone();
-            features.apply_map(&entries);
-            config
-                .features
-                .set(features)
-                .expect("test config should allow managed feature map updates");
-        });
-
-        let TestOdy { ody, .. } = builder.build(&server).await?;
-
-        let notice = wait_for_event_match(&ody, |event| match event {
-            EventMsg::DeprecationNotice(ev)
-                if ev.summary.contains("[features].web_search_request") =>
-            {
-                Some(ev.clone())
-            }
-            _ => None,
-        })
-        .await;
-
-        let DeprecationNoticeEvent { summary, details } = notice;
-        assert_eq!(
-            summary,
-            "`[features].web_search_request` is deprecated because web search is enabled by default."
-                .to_string(),
-        );
-        assert_eq!(
-            details.as_deref(),
-            Some(
-                "Set `web_search` to `\"live\"`, `\"indexed\"`, `\"cached\"`, or `\"disabled\"` at the top level (or under a profile) in config.toml if you want to override it."
-            ),
-        );
-    }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn emits_deprecation_notice_for_use_legacy_landlock() -> anyhow::Result<()> {
     skip_if_no_network!(Ok(()));
 

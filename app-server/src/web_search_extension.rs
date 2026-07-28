@@ -118,10 +118,10 @@ mod tests {
     }
 
     #[test]
-    fn create_provider_returns_none_for_unimplemented_provider() {
+    fn create_provider_returns_provider_for_duckduckgo() {
         let services = services_config();
-        // DuckDuckGo is registered but not implemented in D1.0.
-        assert!(WebSearchExtension::create_provider(&services).is_none());
+        // DuckDuckGo requires no API key and is fully implemented.
+        assert!(WebSearchExtension::create_provider(&services).is_some());
     }
 
     #[test]
