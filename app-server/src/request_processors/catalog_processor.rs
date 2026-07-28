@@ -157,7 +157,10 @@ impl CatalogRequestProcessor {
         &self,
         params: ModelListParams,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
-        Self::list_models(self.thread_manager.clone(), self.config.clone(), params)
+        // Reload the latest config so a mid-session `/login` that adds a new
+        // provider is reflected in the `/model` picker without a restart.
+        let config = self.load_latest_config(/*fallback_cwd*/ None).await?;
+        Self::list_models(self.thread_manager.clone(), Arc::new(config), params)
             .await
             .map(|response| Some(response.into()))
     }

@@ -233,18 +233,21 @@ async fn second_login_does_not_override_numeric_alias_default() -> Result<()> {
     )
     .await?;
 
-    // The active provider is still the first numeric alias, so model/list only
-    // surfaces that provider's model.  The second provider is available but not
-    // active until the user explicitly switches to it.
+    // The active provider is still the first numeric alias, but model/list
+    // surfaces models for every configured provider alias so the user can switch
+    // via `/model` without a restart.
     let models = list_models(&mut mcp).await?;
     assert_eq!(
         models.len(),
-        1,
-        "model/list should still surface only the active provider's model"
+        2,
+        "model/list should surface models for both configured providers"
     );
-    let model = models.into_iter().next().unwrap();
-    assert_eq!(model.model, "kimi-for-coding");
-    assert_eq!(model.provider, "123456");
+    let providers: Vec<&str> = models.iter().map(|m| m.provider.as_str()).collect();
+    assert!(providers.contains(&FIRST_PROVIDER_ALIAS), "first provider missing");
+    assert!(providers.contains(&SECOND_PROVIDER_ALIAS), "second provider missing");
+    let first_model = models.iter().find(|m| m.provider == FIRST_PROVIDER_ALIAS).unwrap();
+    assert_eq!(first_model.model, "kimi-for-coding");
+    assert_eq!(first_model.provider, "123456");
 
     // The default model must still be the first numeric-alias login.
     let config_toml = read_config_toml(&ody_home)?;
