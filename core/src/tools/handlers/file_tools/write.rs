@@ -5,6 +5,10 @@ use super::write_edit::resolve_write_cwd;
 use super::write_edit::resolve_write_path;
 use super::write_edit::single_file_change;
 use crate::function_tool::FunctionCallError;
+use crate::plan_mode_injector::parts_manifest::normalize_part_path;
+use crate::plan_mode_injector::parts_manifest::parse_parts_manifest;
+use crate::plan_mode_injector::parts_manifest::part_completion_violations;
+use crate::plan_mode_injector::parts_manifest::row_is_verified_done;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolOutput;
@@ -18,6 +22,7 @@ use crate::tools::handlers::file_tools_spec::create_write_file_tool;
 use crate::tools::handlers::parse_arguments;
 use crate::tools::registry::CoreToolRuntime;
 use crate::tools::registry::ToolExecutor;
+use ody_protocol::config_types::ModeKind;
 use ody_protocol::models::ResponseInputItem;
 use ody_protocol::protocol::FileChange;
 use ody_tools::ToolName;
@@ -25,6 +30,7 @@ use ody_tools::ToolSpec;
 use serde::Deserialize;
 use serde_json::Value;
 use serde_json::json;
+use std::path::Path;
 
 #[derive(Deserialize)]
 struct WriteFileArgs {
@@ -74,6 +80,118 @@ impl WriteFileHandler {
     pub fn new(options: FileToolOptions) -> Self {
         Self { options }
     }
+}
+
+fn split_part_size_violation(
+    markdown: &str,
+    stem_dir: &Path,
+    path: &Path,
+    bytes: usize,
+    max_bytes: usize,
+) -> Option<String> {
+    if max_bytes == 0 || bytes <= max_bytes {
+        return None;
+    }
+    let manifest = parse_parts_manifest(markdown).manifest?;
+    let row = manifest.rows.iter().find(|row| {
+        normalize_part_path(stem_dir, &row.file).is_some_and(|expected| expected == path)
+    })?;
+    Some(format!(
+        "write_file rejected: `{}` is a split-plan part and {} bytes exceeds its configured {}-byte limit. Resubmit the complete index with this change surface split into additional pending `## Parts` rows before writing it; do not shorten, omit, or replace concrete implementation detail, source evidence, edge cases, or behavioral tests to fit the budget. No file was changed.",
+        row.file, bytes, max_bytes
+    ))
+}
+
+fn enforce_split_part_size_budget(
+    turn: &crate::session::turn_context::TurnContext,
+    path: &Path,
+    bytes: usize,
+) -> Result<(), FunctionCallError> {
+    if !matches!(
+        turn.collaboration_mode.mode,
+        ModeKind::Plan | ModeKind::Design
+    ) {
+        return Ok(());
+    }
+    let Some(artifact) = turn.plan_artifact.as_ref() else {
+        return Ok(());
+    };
+    let (Some(stem_dir), Some(markdown)) = (artifact.stem_dir(), artifact.last_plan_text()) else {
+        return Ok(());
+    };
+    let max_bytes = turn
+        .config
+        .plan_mode
+        .as_ref()
+        .and_then(|config| config.max_part_bytes)
+        .unwrap_or(0);
+    if let Some(message) = split_part_size_violation(&markdown, &stem_dir, path, bytes, max_bytes) {
+        return Err(FunctionCallError::RespondToModel(message));
+    }
+    Ok(())
+}
+
+fn task_part_write_violation(
+    markdown: &str,
+    stem_dir: &Path,
+    path: &Path,
+    max_tasks: usize,
+    max_bytes: usize,
+) -> Option<String> {
+    let manifest = parse_parts_manifest(markdown).manifest?;
+    if !manifest.is_task_mode() {
+        return None;
+    }
+    let expected = manifest.rows.iter().find(|row| {
+        !row_is_verified_done(stem_dir, row)
+            || !part_completion_violations(stem_dir, &manifest, row, max_tasks, max_bytes)
+                .is_empty()
+    })?;
+    let expected_path = normalize_part_path(stem_dir, &expected.file)?;
+    if path == expected_path {
+        return None;
+    }
+    let attempted = manifest.rows.iter().find(|row| {
+        normalize_part_path(stem_dir, &row.file).is_some_and(|candidate| candidate == path)
+    });
+    match attempted {
+        Some(row) => Some(format!(
+            "write_file rejected: task-mode plans advance in manifest order. `{}` is the active pending task; do not write `{}` until its row is verified done.",
+            expected.id, row.id
+        )),
+        None if path.parent().is_some_and(|parent| parent == stem_dir) => Some(format!(
+            "write_file rejected: `{}` is not a manifest task part. The active pending task is `{}` at `{}`.",
+            path.display(), expected.id, expected_path.display()
+        )),
+        None => None,
+    }
+}
+
+fn enforce_task_part_order(
+    turn: &crate::session::turn_context::TurnContext,
+    path: &Path,
+) -> Result<(), FunctionCallError> {
+    if turn.collaboration_mode.mode != ModeKind::Plan {
+        return Ok(());
+    }
+    let Some(artifact) = turn.plan_artifact.as_ref() else {
+        return Ok(());
+    };
+    let (Some(stem_dir), Some(markdown)) = (artifact.stem_dir(), artifact.last_plan_text()) else {
+        return Ok(());
+    };
+    let plan_mode = turn.config.plan_mode.as_ref();
+    let max_tasks = plan_mode
+        .and_then(|config| config.max_tasks_per_part)
+        .unwrap_or(3);
+    let max_bytes = plan_mode
+        .and_then(|config| config.max_part_bytes)
+        .unwrap_or(0);
+    if let Some(message) = task_part_write_violation(&markdown, &stem_dir, path, max_tasks, max_bytes)
+    {
+        return Err(FunctionCallError::RespondToModel(message));
+    }
+    Ok(())
 }
 
 impl ToolExecutor<ToolInvocation> for WriteFileHandler {
@@ -133,6 +251,9 @@ impl ToolExecutor<ToolInvocation> for WriteFileHandler {
                 args.content
             };
 
+            enforce_task_part_order(turn.as_ref(), abs_path.as_path())?;
+            enforce_split_part_size_budget(turn.as_ref(), abs_path.as_path(), new_content.len())?;
+
             atomic_write(&abs_path, new_content.as_bytes()).await?;
 
             let change =
@@ -179,6 +300,40 @@ mod tests {
     use serde_json::json;
     use std::sync::Arc;
     use tokio::sync::Mutex;
+
+    #[test]
+    fn split_part_size_violation_blocks_only_manifest_parts_over_budget() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stem = tmp.path().join("topic");
+        std::fs::create_dir_all(&stem).unwrap();
+        let markdown = "## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 4a | topic/core.md | core | pending |\n";
+
+        let violation = split_part_size_violation(markdown, &stem, &stem.join("core.md"), 25, 24)
+            .expect("manifest part should be constrained");
+        assert!(violation.contains("Resubmit the complete index"));
+        assert!(violation.contains("do not shorten, omit, or replace"));
+        assert!(violation.contains("No file was changed"));
+        assert!(
+            split_part_size_violation(markdown, &stem, &stem.join("unrelated.md"), 25, 24,)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn task_mode_blocks_writing_a_later_task_before_the_active_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stem = tmp.path().join("topic");
+        std::fs::create_dir_all(&stem).unwrap();
+        let markdown = "## Parts\n| ID | File | Task | Scope | Depends on | Status |\n|---|---|---|---|---|---|\n| T01 | topic/first.md | First task | first | — | pending |\n| T02 | topic/second.md | Second task | second | T01 | pending |\n";
+
+        assert!(
+            task_part_write_violation(markdown, &stem, &stem.join("first.md"), 1, 0).is_none()
+        );
+        let violation = task_part_write_violation(markdown, &stem, &stem.join("second.md"), 1, 0)
+            .expect("later task must be blocked");
+        assert!(violation.contains("active pending task"), "{violation}");
+        assert!(violation.contains("`T01`"), "{violation}");
+    }
 
     async fn invocation_for_write(
         session: Arc<crate::session::session::Session>,

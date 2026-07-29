@@ -594,10 +594,15 @@ fn add_shell_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut Planne
     let allow_login_shell = turn_context.config.permissions.allow_login_shell;
     let exec_permission_approvals_enabled = features.enabled(Feature::ExecPermissionApprovals);
     let include_environment_id = matches!(environment_mode, ToolEnvironmentMode::Multiple);
+    let runtime_shell_name = turn_context
+        .environments
+        .primary()
+        .and_then(|environment| environment.shell.as_ref().map(|shell| shell.name()));
     let shell_command_options = ShellCommandHandlerOptions {
         backend_config: shell_command_backend_for_features(features),
         allow_login_shell,
         exec_permission_approvals_enabled,
+        shell_name: runtime_shell_name,
     };
 
     match shell_type_for_model_and_features(&turn_context.model_info, features) {
@@ -607,6 +612,7 @@ fn add_shell_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut Planne
                 exec_permission_approvals_enabled,
                 include_environment_id,
                 include_shell_parameter: unified_exec_should_include_shell_parameter(turn_context),
+                shell_name: runtime_shell_name,
             }));
             planned_tools.add(WriteStdinHandler);
 

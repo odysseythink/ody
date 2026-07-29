@@ -172,12 +172,27 @@ const PLAN_TERMINAL_ACTION_NUDGE: &str = "You ended the response without complet
 Continue the current planning task now. End this turn by calling exactly one of \
 `submit_plan` or `request_user_input`; do not stop after reasoning or a plain-text response.";
 
+const PLAN_PENDING_TASK_NUDGE: &str = "The current task-plan index still has pending task parts. The host has already supplied the exact next task path. Continue now: write only that pending task part with its complete task contract, then call `submit_plan` with the complete index and that row marked `done`. Do not stop with commentary or a summary while any task remains pending.";
+
 fn plan_mode_requires_terminal_action(
     mode: ModeKind,
+    has_submit_plan_call: bool,
     has_request_user_input_call: bool,
     needs_follow_up: bool,
 ) -> bool {
-    mode == ModeKind::Plan && !has_request_user_input_call && !needs_follow_up
+    mode == ModeKind::Plan
+        && !has_submit_plan_call
+        && !has_request_user_input_call
+        && !needs_follow_up
+}
+
+fn plan_mode_has_pending_task_parts(turn_context: &TurnContext) -> bool {
+    turn_context.collaboration_mode.mode == ModeKind::Plan
+        && turn_context
+            .plan_artifact
+            .as_ref()
+            .and_then(|artifact| artifact.last_manifest_snapshot())
+            .is_some_and(|snapshot| snapshot.pending_count > 0)
 }
 
 /// Detects a plain-text multiple-choice prompt that should have been delivered via
@@ -406,6 +421,7 @@ pub(crate) async fn run_turn(
                 let SamplingRequestResult {
                     needs_follow_up: model_needs_follow_up,
                     last_agent_message: sampling_request_last_agent_message,
+                    has_submit_plan_call,
                     has_request_user_input_call,
                 } = sampling_request_output;
                 if sampling_request_last_agent_message.is_some() || model_needs_follow_up {
@@ -549,6 +565,50 @@ pub(crate) async fn run_turn(
                 }
 
                 if !needs_follow_up {
+                    // A non-final submit_plan is a checkpoint, not permission to
+                    // end the turn.  Keep the same artifact alive until the host
+                    // has advanced the task manifest or the model asks the user a
+                    // real question.  This is deliberately separate from the
+                    // generic terminal-action rule below: a previous continuation
+                    // may already have called submit_plan, yet still leave tasks.
+                    if !has_request_user_input_call && plan_mode_has_pending_task_parts(&turn_context)
+                    {
+                        if plan_terminal_action_retries < MAX_PLAN_TERMINAL_ACTION_RETRIES {
+                            plan_terminal_action_retries += 1;
+                            warn!(
+                                turn_id = %turn_context.sub_id,
+                                attempt = plan_terminal_action_retries,
+                                max = MAX_PLAN_TERMINAL_ACTION_RETRIES,
+                                "plan mode response stopped while task parts remained; continuing with task nudge"
+                            );
+                            sess.send_event(
+                                &turn_context,
+                                EventMsg::Warning(WarningEvent {
+                                    message: format!(
+                                        "Plan Mode still has pending task parts; continuing automatically ({plan_terminal_action_retries}/{MAX_PLAN_TERMINAL_ACTION_RETRIES})…"
+                                    ),
+                                }),
+                            )
+                            .await;
+                            let nudge = ResponseItem::Message {
+                                id: Some(uuid::Uuid::new_v4().to_string()),
+                                role: "user".to_string(),
+                                content: vec![ContentItem::InputText {
+                                    text: PLAN_PENDING_TASK_NUDGE.to_string(),
+                                }],
+                                phase: None,
+                                internal_chat_message_metadata_passthrough: None,
+                            };
+                            sess.record_conversation_items(
+                                &turn_context,
+                                std::slice::from_ref(&nudge),
+                            )
+                            .await;
+                            can_drain_pending_input = false;
+                            continue;
+                        }
+                    }
+
                     // Plan Mode terminality is a host invariant, not merely a prompt
                     // convention. A provider can report `response.completed` after
                     // emitting only reasoning (or plain assistant text), but ending
@@ -556,6 +616,7 @@ pub(crate) async fn run_turn(
                     // the model either submits the plan or requests user input.
                     if plan_mode_requires_terminal_action(
                         turn_context.collaboration_mode.mode,
+                        has_submit_plan_call,
                         has_request_user_input_call,
                         needs_follow_up,
                     ) {
@@ -1567,16 +1628,30 @@ async fn run_session_mode_after_turn(
         sess.set_plan_mode_last_manifest_snapshot(snapshot).await;
     }
 
-    if result.checkpoint_due {
+    // A compact is useful only between verified parts, never immediately
+    // after writing the initial index. Respect the feature gate and treat a
+    // non-cancellation failure as best-effort: the verified manifest still
+    // lets the model advance safely without adding another stalled turn.
+    let mut compacted_at_task_checkpoint = false;
+    if result.checkpoint_due
+        && turn_context
+            .config
+            .features
+            .enabled(Feature::AutoCompaction)
+    {
         let ratio = plan_mode_config
             .and_then(|cfg| cfg.split_plan_compaction_ratio)
-            .unwrap_or(0.5);
+            .unwrap_or(0.75);
         if ratio > 0.0 {
             let total_tokens = sess.get_total_token_usage().await;
             if let Some(context_window) = turn_context.model_context_window() {
                 let context_usage_ratio = total_tokens as f64 / context_window as f64;
-                if context_usage_ratio >= ratio {
-                    run_auto_compact(
+                if PlanModeInjector::should_trigger_compaction(
+                    result.boundary_crossed,
+                    plan_mode_config,
+                    context_usage_ratio,
+                ) {
+                    match run_auto_compact(
                         sess,
                         turn_context,
                         client_session,
@@ -1584,13 +1659,32 @@ async fn run_session_mode_after_turn(
                         CompactionReason::PlanSplitCheckpoint,
                         CompactionPhase::MidTurn,
                     )
-                    .await?;
+                    .await
+                    {
+                        Ok(()) => compacted_at_task_checkpoint = true,
+                        Err(err @ (OdyErr::TurnAborted | OdyErr::Interrupted)) => {
+                            return Err(err);
+                        }
+                        Err(err) => {
+                            warn!(
+                                error = %err,
+                                "plan task-boundary compaction failed; continuing from persisted manifest"
+                            );
+                            sess.send_event(
+                                turn_context,
+                                EventMsg::Warning(WarningEvent {
+                                    message: "Plan task-boundary compaction failed; continuing from the persisted task manifest.".to_string(),
+                                }),
+                            )
+                            .await;
+                        }
+                    }
                 }
             }
         }
     }
 
-    if let Some(directive_text) = render_directive(
+    if let Some(mut directive_text) = render_directive(
         &result.directive,
         artifact
             .path()
@@ -1598,6 +1692,11 @@ async fn run_session_mode_after_turn(
             .unwrap_or_else(|| Path::new("plan.md")),
         mode,
     ) {
+        if compacted_at_task_checkpoint {
+            directive_text = format!(
+                "Context was compacted at a verified task boundary. Re-read the persisted index, the host-named task row, and its completed dependency task files before writing. Do not rename the index or create a replacement manifest.\n\n{directive_text}"
+            );
+        }
         let tag = if mode == ModeKind::Design {
             "design_mode_directive"
         } else {
@@ -1948,6 +2047,7 @@ pub(crate) async fn built_tools(
 struct SamplingRequestResult {
     needs_follow_up: bool,
     last_agent_message: Option<String>,
+    has_submit_plan_call: bool,
     has_request_user_input_call: bool,
 }
 
@@ -2410,6 +2510,7 @@ async fn try_run_sampling_request(
         FuturesOrdered::new();
     let mut needs_follow_up = false;
     let mut last_agent_message: Option<String> = None;
+    let mut has_submit_plan_call = false;
     let mut has_request_user_input_call = false;
     let mut active_item: Option<TurnItem> = None;
     let mut active_tool_argument_diff_consumer: Option<(
@@ -2553,12 +2654,14 @@ async fn try_run_sampling_request(
                     last_agent_message = Some(agent_message);
                 }
                 needs_follow_up |= output_result.needs_follow_up;
+                has_submit_plan_call |= output_result.is_submit_plan_call;
                 has_request_user_input_call |= output_result.is_request_user_input_call;
                 // todo: remove before stabilizing multi-agent v2
                 if preempt_for_mailbox_mail && sess.input_queue.has_pending_mailbox_items().await {
                     break Ok(SamplingRequestResult {
                         needs_follow_up: true,
                         last_agent_message,
+                        has_submit_plan_call,
                         has_request_user_input_call,
                     });
                 }
@@ -2732,6 +2835,7 @@ async fn try_run_sampling_request(
                 break Ok(SamplingRequestResult {
                     needs_follow_up,
                     last_agent_message,
+                    has_submit_plan_call,
                     has_request_user_input_call,
                 });
             }

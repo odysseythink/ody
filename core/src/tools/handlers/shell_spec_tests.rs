@@ -18,6 +18,7 @@ fn exec_command_tool_matches_expected_spec() {
     let tool = create_exec_command_tool(CommandToolOptions {
         allow_login_shell: true,
         exec_permission_approvals_enabled: false,
+        shell_name: None,
     });
 
     let description = if cfg!(windows) {
@@ -101,6 +102,7 @@ fn exec_command_tool_can_hide_shell_parameter() {
         CommandToolOptions {
             allow_login_shell: true,
             exec_permission_approvals_enabled: false,
+            shell_name: None,
         },
         /*include_environment_id*/ false,
         /*include_shell_parameter*/ false,
@@ -204,6 +206,7 @@ fn shell_command_tool_matches_expected_spec() {
     let tool = create_shell_command_tool(CommandToolOptions {
         allow_login_shell: true,
         exec_permission_approvals_enabled: false,
+        shell_name: None,
     });
 
     let description = if cfg!(windows) {
@@ -271,4 +274,20 @@ Examples of valid command strings:
             output_schema: None,
         })
     );
+}
+
+#[test]
+fn runtime_shell_overrides_windows_platform_copy() {
+    let tool = create_shell_command_tool(CommandToolOptions {
+        allow_login_shell: false,
+        exec_permission_approvals_enabled: false,
+        shell_name: Some("bash"),
+    });
+    let ToolSpec::Function(tool) = tool else {
+        panic!("expected function tool");
+    };
+
+    assert!(tool.description.contains("Runs a bash command"));
+    assert!(tool.description.contains("Use bash syntax"));
+    assert!(!tool.description.contains("Powershell command"));
 }

@@ -46,7 +46,6 @@ fn assistant_output_text_with_phase(text: &str, phase: Option<MessagePhase>) -> 
     }
 }
 
-
 #[test]
 fn external_context_pollution_items_exclude_local_tool_calls() {
     let non_polluting_items = [

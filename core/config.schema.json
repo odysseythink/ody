@@ -2580,7 +2580,7 @@
           "type": "integer"
         },
         "max_part_bytes": {
-          "default": 12288,
+          "default": 0,
           "description": "Maximum UTF-8 byte size allowed in one split-plan part. 0 disables the check.",
           "format": "uint",
           "minimum": 0.0,
@@ -2611,7 +2611,7 @@
           "description": "Reasoning effort override used by the Plan preset."
         },
         "split_plan_compaction_ratio": {
-          "default": 0.5,
+          "default": 0.75,
           "description": "Ratio of max context usage above which a synchronous compaction is triggered when a plan part boundary is crossed. 0.0 disables.",
           "format": "double",
           "type": "number"
@@ -5770,12 +5770,12 @@
         "design_audit_level": null,
         "enforcement": "strict",
         "full_refresh_turns": 5,
-        "max_part_bytes": 12288,
+        "max_part_bytes": 0,
         "max_tasks_per_part": 3,
         "model": null,
         "persist_plan_file": true,
         "reasoning_effort": null,
-        "split_plan_compaction_ratio": 0.5,
+        "split_plan_compaction_ratio": 0.75,
         "split_threshold": 4,
         "tier": null
       },

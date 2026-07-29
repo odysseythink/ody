@@ -18,8 +18,9 @@ use crate::function_tool::FunctionCallError;
 use crate::plan_artifact::PlanWriteOutcome;
 use crate::plan_mode_injector::parts_manifest::RowStatus;
 use crate::plan_mode_injector::parts_manifest::parse_parts_manifest;
-use crate::plan_mode_injector::parts_manifest::part_budget_violations;
+use crate::plan_mode_injector::parts_manifest::part_completion_violations;
 use crate::plan_mode_injector::parts_manifest::part_file_cell_problem;
+use crate::plan_mode_injector::parts_manifest::quarantine_untracked_part_files;
 use crate::plan_mode_injector::parts_manifest::row_is_verified_done;
 use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
@@ -120,7 +121,13 @@ fn check_single_file_split_gate(
     if bytes > MAX_SINGLE_FILE_BYTES || lines > MAX_SINGLE_FILE_LINES {
         return Err(FunctionCallError::RespondToModel(format!(
             "{} rejected: the {} is too large to keep in a single file ({} bytes, {} lines; limits are {} bytes / {} lines). Add a `## Parts` manifest and split the content into `<stem>/<part>.md` files, or call {} with a smaller index. This call was not persisted.",
-            wording.tool_name, wording.noun, bytes, lines, MAX_SINGLE_FILE_BYTES, MAX_SINGLE_FILE_LINES, wording.tool_name
+            wording.tool_name,
+            wording.noun,
+            bytes,
+            lines,
+            MAX_SINGLE_FILE_BYTES,
+            MAX_SINGLE_FILE_LINES,
+            wording.tool_name
         )));
     }
     Ok(())
@@ -167,10 +174,46 @@ fn rigor_structure_gap(plan: &str) -> Option<String> {
 /// "### Tasks") are NOT counted.
 fn count_task_headings(plan: &str) -> usize {
     static TASK_HEADING_RE: OnceLock<Regex> = OnceLock::new();
-    let re = TASK_HEADING_RE.get_or_init(|| Regex::new(r"(?i)^#{2,4}\s+task\s+\d").unwrap());
+    let re = TASK_HEADING_RE
+        .get_or_init(|| Regex::new(r"(?i)^#{2,4}\s+task\s+(?:t)?\d").unwrap());
     plan.lines()
         .filter(|line| re.is_match(line.trim_start()))
         .count()
+}
+
+fn rigor_task_mode_required(
+    expected_mode: ModeKind,
+    artifact: &crate::plan_artifact::PlanArtifact,
+) -> bool {
+    if expected_mode != ModeKind::Plan || artifact.plan_mode_tier() != Some(PlanModeTier::Rigor) {
+        return false;
+    }
+    // Do not reinterpret an already-persisted legacy plan in the middle of a
+    // session.  A new rigor artifact, or one that has already opted into the
+    // task manifest, is held to the one-task-per-part contract.
+    artifact
+        .last_plan_text()
+        .as_deref()
+        .and_then(|text| parse_parts_manifest(text).manifest)
+        .is_none_or(|manifest| manifest.is_task_mode())
+}
+
+fn task_mode_gap(markdown: &str) -> Option<String> {
+    let parse = parse_parts_manifest(markdown);
+    match (parse.manifest, count_task_headings(markdown)) {
+        (Some(manifest), task_count) if manifest.is_task_mode() && task_count == 0 => None,
+        (Some(manifest), task_count) if manifest.is_task_mode() => Some(format!(
+            "has {task_count} Task heading(s) in the task-manifest index. Move each executable task into its own manifest part; the index contains overview and manifest material only."
+        )),
+        (Some(_), _) => Some(
+            "Rigor task-mode plans require an `ID | File | Task | Scope | Depends on | Status` `## Parts` manifest; legacy four-column manifests are only accepted for plans created before this contract."
+                .to_string(),
+        ),
+        (None, task_count) if task_count > 1 => Some(format!(
+            "has {task_count} task headings but no task-mode `## Parts` manifest. Rigor plans with more than one task require one stable task part per task. Submit an index with `ID | File | Task | Scope | Depends on | Status` rows before writing task files."
+        )),
+        _ => None,
+    }
 }
 
 /// Returns a description of why a single-file (no `## Parts` table) plan
@@ -432,11 +475,32 @@ pub(crate) async fn handle_submit_artifact(
         }
     };
 
-    // 3. Done-parts guard (verbatim from submit_plan.rs:160-181)
+    // 3. Reject malformed manifest rows before persisting. Previously a bad row
+    // (for example `4a`) was silently omitted by the parser, so the injector
+    // advanced to a later part and left the skipped work permanently pending.
+    let manifest_parse = parse_parts_manifest(&markdown);
+    if !manifest_parse.diagnostics.is_empty() {
+        return Err(FunctionCallError::RespondToModel(format!(
+            "{} rejected: the `## Parts` manifest has invalid row(s): {}. This call was not persisted; fix every listed row before resubmitting.",
+            wording.tool_name,
+            manifest_parse.diagnostics.join("; ")
+        )));
+    }
+
+    if rigor_task_mode_required(expected_mode, artifact)
+        && let Some(gap) = task_mode_gap(&markdown)
+    {
+        return Err(FunctionCallError::RespondToModel(format!(
+            "{} rejected: {gap} This call was not persisted.",
+            wording.tool_name
+        )));
+    }
+
+    // 3.5 Done-parts guard (verbatim from submit_plan.rs:160-181)
     let previously_had_done_parts = artifact
         .last_manifest_snapshot()
         .is_some_and(|snapshot| snapshot.done_count > 0);
-    if previously_had_done_parts && parse_parts_manifest(&markdown).manifest.is_none() {
+    if previously_had_done_parts && manifest_parse.manifest.is_none() {
         return Err(FunctionCallError::RespondToModel(format!(
             "{} rejected: the previous turn's {} had a `## Parts` table with pending rows, but this submission has no `## Parts` table at all. This call was not persisted. Resubmit the full index markdown (Goal/Architecture/File Structure/etc. plus the `## Parts` table with every row's current status) — {} always writes the single index file, never an individual part's content.",
             wording.tool_name, wording.noun, wording.tool_name
@@ -506,6 +570,35 @@ pub(crate) async fn handle_submit_artifact(
             .await;
     }
 
+    // A revised manifest supersedes its unreferenced top-level part files.
+    // Keep them recoverable under `<stem>/.orphaned/` instead of silently
+    // accumulating stale parts that a later model may mistake for active work.
+    let quarantined_parts = match (
+        &outcome,
+        artifact.stem_dir(),
+        manifest_parse.manifest.as_ref(),
+    ) {
+        (PlanWriteOutcome::Written { .. }, Some(stem_dir), Some(manifest)) => {
+            match quarantine_untracked_part_files(&stem_dir, manifest) {
+                Ok(paths) => paths,
+                Err(error) => {
+                    session
+                        .send_event(
+                            turn.as_ref(),
+                            EventMsg::Warning(WarningEvent {
+                                message: format!(
+                                    "Could not quarantine unreferenced split parts: {error}"
+                                ),
+                            }),
+                        )
+                        .await;
+                    Vec::new()
+                }
+            }
+        }
+        _ => Vec::new(),
+    };
+
     // Rows whose `File` cell cannot be followed as written. Collected here because `markdown` is
     // moved into the completed event below, and reported in the response: such a row can never
     // verify, so without naming it the model would be told to keep writing parts every turn with no
@@ -516,19 +609,26 @@ pub(crate) async fn handle_submit_artifact(
     };
 
     // 6. Pending parts detection
-    let max_tasks_per_part = turn
-        .config
-        .plan_mode
+    let max_tasks_per_part = if manifest_parse
+        .manifest
         .as_ref()
-        .and_then(|cfg| cfg.max_tasks_per_part)
-        .unwrap_or(3);
+        .is_some_and(|manifest| manifest.is_task_mode())
+    {
+        1
+    } else {
+        turn.config
+            .plan_mode
+            .as_ref()
+            .and_then(|cfg| cfg.max_tasks_per_part)
+            .unwrap_or(3)
+    };
     let max_part_bytes = turn
         .config
         .plan_mode
         .as_ref()
         .and_then(|cfg| cfg.max_part_bytes)
-        .unwrap_or(12 * 1024);
-    let over_budget_parts: Vec<String> = match artifact.stem_dir() {
+        .unwrap_or(0);
+    let incomplete_done_parts: Vec<String> = match artifact.stem_dir() {
         Some(stem_dir) => parse_parts_manifest(&markdown)
             .manifest
             .map(|manifest| {
@@ -536,8 +636,9 @@ pub(crate) async fn handle_submit_artifact(
                     .rows
                     .iter()
                     .filter_map(|row| {
-                        let violations = part_budget_violations(
+                        let violations = part_completion_violations(
                             &stem_dir,
+                            &manifest,
                             row,
                             max_tasks_per_part,
                             max_part_bytes,
@@ -550,7 +651,7 @@ pub(crate) async fn handle_submit_artifact(
             .unwrap_or_default(),
         None => Vec::new(),
     };
-    let has_pending_parts = !over_budget_parts.is_empty()
+    let has_pending_parts = !incomplete_done_parts.is_empty()
         || match artifact.stem_dir() {
             Some(stem_dir) => parse_parts_manifest(&markdown)
                 .manifest
@@ -558,7 +659,17 @@ pub(crate) async fn handle_submit_artifact(
                     manifest
                         .rows
                         .iter()
-                        .any(|row| !row_is_verified_done(&stem_dir, row))
+                        .any(|row| {
+                            !row_is_verified_done(&stem_dir, row)
+                                || !part_completion_violations(
+                                    &stem_dir,
+                                    &manifest,
+                                    row,
+                                    max_tasks_per_part,
+                                    max_part_bytes,
+                                )
+                                .is_empty()
+                        })
                 }),
             None => parse_parts_manifest(&markdown)
                 .manifest
@@ -737,11 +848,11 @@ pub(crate) async fn handle_submit_artifact(
     let mut did_submit = false;
     let message = if let Some(bad_cells) = bad_cells_message {
         bad_cells
-    } else if !over_budget_parts.is_empty() {
+    } else if !incomplete_done_parts.is_empty() {
         format!(
-            "{} saved, but completed part(s) exceed the configured per-part budget: {}. This is not final. Replace each oversized `done` row in the ## Parts manifest with two or more smaller `pending` rows, then call {} with the complete updated index; the next turn will write the first replacement part.",
+            "{} saved, but completed part(s) do not satisfy their completion contract: {}. This is not final. Repair the named task parts (or split only an explicitly configured size-limited task), keep their rows pending until they verify, then call {} with the complete updated index.",
             wording.noun,
-            over_budget_parts.join("; "),
+            incomplete_done_parts.join("; "),
             wording.tool_name,
         )
     } else if has_pending_parts {
@@ -812,6 +923,16 @@ pub(crate) async fn handle_submit_artifact(
         format!("{message}\n\n{appendix}")
     } else {
         message
+    };
+    let message = if quarantined_parts.is_empty() {
+        message
+    } else {
+        let paths = quarantined_parts
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("{message}\n\nQuarantined unreferenced split part file(s): {paths}")
     };
 
     debug_assert!(
@@ -947,6 +1068,27 @@ mod tests {
             gap.contains("### Task N"),
             "error should name the expected heading format so the model can self-correct: {gap}"
         );
+    }
+
+    #[test]
+    fn task_mode_gap_requires_one_part_per_task_for_new_rigor_plans() {
+        let single_file = format!("# Plan\n\n{}", tasks_with(2));
+        let gap = task_mode_gap(&single_file).expect("two rigor tasks require task parts");
+        assert!(gap.contains("one stable task part per task"), "{gap}");
+
+        let task_manifest = "## Parts\n| ID | File | Task | Scope | Depends on | Status |\n|---|---|---|---|---|---|\n| T01 | topic/a.md | A | alpha | — | pending |\n| T02 | topic/b.md | B | beta | T01 | pending |\n";
+        assert_eq!(task_mode_gap(task_manifest), None);
+
+        let task_in_index = r#"
+## Parts
+| ID | File | Task | Scope | Depends on | Status |
+|---|---|---|---|---|---|
+| T01 | topic/first.md | First task | first | — | pending |
+
+### Task T01: First task
+"#;
+        let gap = task_mode_gap(task_in_index).expect("task headings belong in task parts");
+        assert!(gap.contains("Move each executable task"), "{gap}");
     }
 
     #[test]
@@ -1165,9 +1307,16 @@ mod tests {
     #[test]
     fn split_gate_allows_large_file_with_parts() {
         let wording = &DESIGN_WORDING;
-        let mut large = "# Design\n\n## Parts\n\n| # | File | Scope | Status |\n|---|---|---|---|\n".to_string();
+        let mut large =
+            "# Design\n\n## Parts\n\n| # | File | Scope | Status |\n|---|---|---|---|\n"
+                .to_string();
         for i in 0..300 {
-            large.push_str(&format!("| {} | part_{:03}.md | scope {} | pending |\n", i + 1, i, i));
+            large.push_str(&format!(
+                "| {} | part_{:03}.md | scope {} | pending |\n",
+                i + 1,
+                i,
+                i
+            ));
         }
         assert!(check_single_file_split_gate(&large, wording).is_ok());
     }

@@ -165,7 +165,10 @@ const fn default_normal_task_compaction_ratio() -> Option<f64> {
 }
 
 const fn default_split_plan_compaction_ratio() -> Option<f64> {
-    Some(0.5)
+    // Split parts already provide a natural recovery point. Compacting at half
+    // a context window caused repeated compact/re-read cycles for otherwise
+    // healthy plans, so reserve compaction for genuinely constrained contexts.
+    Some(0.75)
 }
 
 const fn default_max_tasks_per_part() -> Option<usize> {
@@ -173,7 +176,11 @@ const fn default_max_tasks_per_part() -> Option<usize> {
 }
 
 const fn default_max_part_bytes() -> Option<usize> {
-    Some(12 * 1024)
+    // Task-mode rigor plans are split by implementation responsibility, not
+    // by a file container. A default byte cap makes the model optimize for
+    // shortening detail instead of preserving evidence and tests. Users that
+    // need a delivery-size ceiling can explicitly set a non-zero value.
+    Some(0)
 }
 
 const fn default_full_refresh_turns() -> Option<usize> {
@@ -1756,7 +1763,7 @@ type = "openai"
         assert_eq!(plan_mode.context_isolation, Some(PlanContextIsolation::Off));
         assert_eq!(plan_mode.split_threshold, Some(4));
         assert_eq!(plan_mode.max_tasks_per_part, Some(3));
-        assert_eq!(plan_mode.max_part_bytes, Some(12 * 1024));
+        assert_eq!(plan_mode.max_part_bytes, Some(0));
         assert!(plan_mode.model.is_none());
         assert!(plan_mode.reasoning_effort.is_none());
         assert_eq!(plan_mode.design_audit_level, None);
@@ -1813,6 +1820,7 @@ context_isolation = "on"
 model = "kimi-k2-thinking"
 reasoning_effort = "high"
 split_threshold = 16
+max_part_bytes = 12288
 "#,
         )
         .expect("plan_mode config should deserialize");
@@ -1829,16 +1837,16 @@ split_threshold = 16
     }
 
     #[test]
-    fn default_split_plan_compaction_ratio_is_half() {
+    fn default_split_plan_compaction_ratio_leaves_room_for_the_next_part() {
         let cfg = PlanModeConfigToml::default();
-        assert_eq!(cfg.split_plan_compaction_ratio, Some(0.5));
+        assert_eq!(cfg.split_plan_compaction_ratio, Some(0.75));
     }
 
     #[test]
-    fn default_part_budgets_keep_split_parts_small() {
+    fn default_part_budget_preserves_complete_task_detail() {
         let cfg = PlanModeConfigToml::default();
         assert_eq!(cfg.max_tasks_per_part, Some(3));
-        assert_eq!(cfg.max_part_bytes, Some(12 * 1024));
+        assert_eq!(cfg.max_part_bytes, Some(0));
     }
 
     #[test]

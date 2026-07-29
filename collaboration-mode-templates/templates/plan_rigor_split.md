@@ -1,185 +1,86 @@
-## Rigor tier addendum: Large plan splitting & Parts manifest
+## Rigor tier addendum: task parts and the Parts manifest
 
-When {{ split_threshold }} is greater than 0, plans with more than {{ split_threshold }} tasks (or spanning multiple subsystems) must split into an index file and multiple part files; a value of 0 disables splitting. This ensures large plans remain manageable and can survive context compaction mid-generation.
+Rigor values complete, executable detail over brevity. A Rigor plan with more than one executable task must use a task manifest and one part file per task, even when the generic split threshold would otherwise allow a single file. A one-task plan may remain in one file. The generic split threshold still applies to non-Rigor plans and can require splitting for other reasons.
 
-### When to split
+Do not compress, merge away, or replace concrete implementation steps, source evidence, failure cases, or behavioral tests with a summary. There is no default byte target for a task part. If an installation explicitly configures a size limit, split only that task into separately named, explicitly limited tasks before writing it; never make the task less complete to fit.
 
-Split a plan when:
-1. The task count exceeds {{ split_threshold }} (default: 8 tasks; 0 disables splitting).
-2. The work spans multiple subsystems and some tasks are independently shippable as phases.
+### File structure
 
-If neither condition holds, keep all tasks in one file.
+A split Rigor plan consists of:
 
-### File structure for split plans
+1. **Index file** — the entry point. It contains the goal, architecture, file structure, dependency overview, risks, spec-coverage table, and the `## Parts` manifest. It contains no `### Task` sections.
+2. **Task part files** — stored in the subdirectory named after the index file's stem. If the index is `2026-07-10-search.md`, its task files live in `2026-07-10-search/`. The `submit_plan` response supplies the real directory name; use it verbatim.
 
-A split plan consists of:
+### Task manifest
 
-1. **Index file** — the entry point
-   - Title, Goal, Architecture, Tech Stack
-   - Execution note
-   - File Structure table (listing all files touched across all parts)
-   - Dependency Overview (DAG spanning all tasks across all parts)
-   - Risks & Open Questions
-   - Spec-coverage table
-   - **Parts manifest** (all rows start as `pending`)
-   - **NO task sections** (no `### Task` headers, no step lists)
+For a split Rigor plan, the index must contain this six-column table. Every row is exactly one independently executable task.
 
-2. **Part files** — in a subdirectory named after the index file's stem
-   - If the index is `2026-07-10-design-mode.md`, parts live in `2026-07-10-design-mode/`
-   - Example: `2026-07-10-design-mode/core.md`, `2026-07-10-design-mode/api.md`
-   - You never have to work that directory out: the `submit_plan` response prints it in full. Use it verbatim.
-   - Each part file contains: part header → tasks for that phase → local Self-Review
-   - **A file written next to the index (e.g., `2026-07-10-design-mode-core.md`) will be rejected by the write guard**
-
-### Parts manifest
-
-The index file must include a `## Parts` table listing all part files and their status:
-
-For an index at `2026-07-10-design-mode.md`, the table reads:
-
-```
-## Parts
-| # | File | Scope | Status |
-|---|---|---|---|
-| 1 | `2026-07-10-design-mode/core.md` | models + persistence | pending |
-| 2 | `2026-07-10-design-mode/api.md` | endpoints + wiring | pending |
-| 3 | `2026-07-10-design-mode/ui.md` | rendering | pending |
-```
-
-- **File column:** the part file's path relative to the index, **with your plan's real directory name filled in** — the `submit_plan` response prints that directory, so substitute it and never invent one. `2026-07-10-design-mode/` above is this example's directory, not yours.
-  - This cell is how a reader finds the file. Someone handed only this index — a human, or the agent that will execute the plan — must be able to open exactly what it says, with nothing left to expand and nothing to guess. `<stem>/core.md` and a bare `core.md` both fail that test: the first cannot be resolved at all, the second does not say where the file lives.
-- **Scope column:** Brief description of what this part handles
-- **Status column:** `pending` (not yet written) or `done` (written + finalized)
-
-### Writing protocol for split plans
-
-1. **Write the index first, via `submit_plan`:**
-   - Title, Goal, Architecture, Tech Stack, Execution note
-   - File Structure (all files mentioned across all parts)
-   - Dependency Overview (full DAG across all tasks)
-   - Risks & Open Questions
-   - Spec-coverage table
-   - Parts manifest (all rows `pending`)
-   - Call `submit_plan` with this markdown as the `plan` argument. `submit_plan` always writes to the index file; while any row is `pending`, this call saves the index and keeps Plan mode active — it does not end the turn, so you do not need to do anything else to "end" this step.
-
-2. **Each subsequent turn: write ONE part file with a normal file-write tool (not `submit_plan`)**
-   - Create the part file at exactly `<index-stem>/<part-name>.md`
-   - The `<index-stem>` directory is date-slug-prefixed and revealed in the `submit_plan` response — never guess it.
-   - Include: part header → its tasks → its local Self-Review (7 items). Keep a part to one coherent change surface and at most 3 numbered tasks; create additional manifest rows rather than combining independent subsystems in one file.
-   - `submit_plan` cannot create this file — it only ever overwrites the index — so use your normal file-write tool. Writing under the plan's own `<index-stem>/` directory is allowed in Plan mode.
-   - After finishing the part, call `submit_plan` again with the index's full markdown, this time with that part's row flipped from `pending` to `done`. This re-submission is what advances the tracker — a direct edit to the index's `## Parts` table alone will not be seen.
-   - Do NOT write any other part file this turn
-   - Do NOT call `submit_plan` with a plan that has zero pending rows yet — that would end Plan mode before the remaining parts are written
-   - Stop after the `submit_plan` call that flips the row
-
-3. **Turn discipline during split:**
-   - Injection will direct you to the next `pending` part
-   - If context is compacted mid-generation: re-read the index, find the first `pending` row, and write that part (never re-write a `done` part)
-   - Continue until all rows are `done`
-
-4. **After all parts are done:**
-   - Do a final cross-file consistency review (check cross-file dependencies, confirm no symbols are used before definition)
-   - Call `submit_plan` with the complete index (all rows `done`) to request approval — only this final call, once no rows are `pending`, ends Plan mode
-
-### Cross-file dependencies
-
-Tasks in different parts may depend on each other. Use this format:
-
-Reference the other part by its `File` cell — the bare file name, exactly as it appears in the Parts table, with no directory prefix:
-
-```
-**Depends on:** core.md: Task 2
-```
-
-`Depends on: core.md: Task 3` means "this task uses a symbol/artifact that Task 3 in the `core.md` part created."
-
-### Local Self-Review in each part
-
-Each part file must end with its own Self-Review section, scoped to that part. The blank form is below; the rule for filling it in is the one from the Self-review addendum — check an item off (`- [x]`) once you have verified it and say what settled it, leave it `- [ ]` if you cannot, and do not mark the part `done` while anything is unchecked.
-
-```
-## Self-review (Part 1)
-
-- [ ] 1. Spec-coverage: all spec items handled in this part are marked covered / GAP / no-op.
-- [ ] 2. Placeholder scan: no TODO/TBD/deferred placeholders.
-- [ ] 3. No phantom tasks: every task in this part produces verifiable change.
-- [ ] 4. Dependency soundness: all `Depends on:` within this part (and cross-file refs) are satisfied.
-- [ ] 5. Caller & build soundness: (if applicable) shared-signature tasks updated all callers and ended with typecheck.
-- [ ] 6. Test-the-risk: state-mutating tasks have behavioral tests.
-- [ ] 7. Type consistency: types/signatures match earlier tasks (within this part and cross-file).
-```
-
-### Cross-file final review (in index file, before the final `submit_plan` call)
-
-Once all parts are done, review:
-- Do all cross-file dependencies reference valid earlier parts/tasks?
-- Does the Spec-coverage table (in index) still map every spec item?
-- Are there any conflicts between tasks in different parts (e.g., two parts modifying the same file)?
-- Do the File Structure and Dependency Overview (in index) remain accurate?
-
-### Example: Three-part design-mode rollout
-
-**Index file:** `2026-07-10-design-mode.md`
 ```markdown
-# Design Mode Collaboration Protocol — Implementation Plan
-
-**Goal:** ...
-**Architecture:** ...
-**Tech Stack:** ...
-
-## File Structure
-| Responsibility | File |
-|---|---|
-| Protocol types | `app-server-protocol/src/protocol/v2/collaboration_mode.rs` |
-| Server list endpoint | `app-server/src/request_processors/catalog_processor.rs` |
-| Config types | `config/src/config_toml.rs` |
-| Mode instructions | `core/src/context/collaboration_mode_instructions.rs` |
-| Mode presets | `models-manager/src/collaboration_mode_presets.rs` |
-| Schema fixtures | `app-server-protocol/schema/typescript/ModeKind.ts` etc |
-
-## Dependency Overview
-```
-Part 1: Protocol-core (Protocol types + presets)
-  ├─ Task 1: Verify ModeKind::Design in enum (depends on nothing)
-  └─ Task 2: design_preset() in presets.rs (depends on Task 1)
-
-Part 2: Configuration (Config types + instructions)
-  ├─ Task 3: Extend config docs (depends on Part 1: Task 2)
-  └─ Task 4: Design split_threshold rendering (depends on Task 3)
-
-Part 3: Schema + Verification (Fixtures + tests)
-  ├─ Task 5: Regenerate fixtures (depends on Part 1: Task 1, Part 2: Task 4)
-  ├─ Task 6: app-server list endpoint assertion (depends on Part 1: Task 2)
-  └─ Task 7: Full workspace typecheck (depends on all above)
-```
-
 ## Parts
-| # | File | Scope | Status |
-|---|---|---|---|
-| 1 | `2026-07-10-design-mode/protocol-core.md` | Protocol types + presets | pending |
-| 2 | `2026-07-10-design-mode/config.md` | Config + instructions | pending |
-| 3 | `2026-07-10-design-mode/schema.md` | Schema fixtures + verification | pending |
-
-...rest of index...
+| ID | File | Task | Scope | Depends on | Status |
+|---|---|---|---|---|---|
+| T01 | `2026-07-10-search/models.md` | Add persisted search preferences | data model and migration | — | pending |
+| T02 | `2026-07-10-search/command.md` | Add preferences slash command | parser, command routing, and UI action | T01 | pending |
+| T03 | `2026-07-10-search/tests.md` | Add behavioral coverage | command and persistence tests | T01, T02 | pending |
 ```
 
-**Part file 1:** `2026-07-10-design-mode/protocol-core.md`
+- **ID** is a stable unique task ID such as `T01`. Do not renumber it when a task completes.
+- **File** is the exact, real path a reader can open from the plans directory. It must use the real `<index-stem>/name.md` directory printed by the host, not a placeholder or a bare filename.
+- **Task** is the full task title and must match the sole Task heading in that file.
+- **Scope** states the change surface without replacing the task details in the task file.
+- **Depends on** lists earlier task IDs separated by commas, or `—` when there is no dependency. A task cannot become `done` until each dependency is a verified `done` task.
+- **Status** is `pending` until its file passes the completion contract, then `done`.
+
+### Required task-part contract
+
+Each task part contains exactly one Task heading and every section below. It is a complete implementation plan for that task, not a hand-off summary.
+
 ```markdown
-# Design Mode — Protocol & Presets (Part 1)
+# <area> — <task title>
 
-**Scope:** Verify `ModeKind::Design` enum exists, add design_preset() function.
+**Manifest task:** T01
 
-### Task 1: Verify ModeKind::Design exists in protocol enum
-...
+### Task T01: Add persisted search preferences
 
-### Task 2: Add design_preset() to builtin_collaboration_mode_presets()
-...
+**Files**
+- `path/to/file.rs:42` — exact change and why.
 
-## Self-review (Part 1)
-- [ ] 1. Spec-coverage table: both spec items (enum + preset) are covered.
-...
+**Source evidence**
+- `path/to/file.rs:42` — current behavior, API, or invariant being changed.
+
+**Implementation**
+1. Concrete edit with symbols, control flow, data shape, and compatibility behavior.
+2. Concrete integration edit and every caller or serialization boundary affected.
+
+**Failure and edge cases**
+- Error path, migration/default behavior, and rollback or compatibility handling.
+
+**Tests**
+- Exact test target and behavioral assertion that proves the changed risk.
+
+## Self-review
+
+- [x] 1. Spec-coverage: evidence recorded.
+- [x] 2. Placeholder scan: no TODO/TBD/deferred plan placeholders.
+- [x] 3. No phantom task: this task produces a verifiable change.
+- [x] 4. Dependency soundness: every listed dependency is complete.
+- [x] 5. Caller and build soundness: affected callers and build checks are named.
+- [x] 6. Test-the-risk: behavioral coverage proves the changed behavior.
+- [x] 7. Type consistency: types and signatures agree with dependent tasks.
 ```
 
-**After Part 1 is done:** call `submit_plan` again with the index markdown, Part 1's row flipped to `done`, then stop.
+The source-evidence section must include at least one backticked `path:line` anchor. All seven Self-review items must be checked before the row can be marked `done`.
 
-**Next turn:** Injection directs to Part 2, which may reference Part 1's tasks.
+### Writing protocol
+
+1. Write the complete index first with all task rows `pending`, then call `submit_plan` with the full index.
+2. The host names the only pending task that may be written. Write that exact task file with a normal file-write tool; `submit_plan` only writes the index.
+3. Call `submit_plan` again with the complete index and only the verified task row changed to `done`.
+4. The host automatically continues to the next pending task. Do not stop with a plain-text progress report, do not ask for approval, and do not create or edit a later task file first.
+5. After every row is `done`, perform the cross-file consistency review and call `submit_plan` once more with the complete index. Only that final submission requests approval and ends Plan mode.
+
+If context is compacted at a task boundary, re-read the index and the current task's completed dependencies before writing. Continue from the first `pending` manifest row; never rewrite a verified `done` task.
+
+### Cross-task review
+
+Before the final submission, verify that every dependency ID exists and points to an earlier completed task, all files and symbols referenced across task parts agree, the index's spec-coverage table remains accurate, and no two task parts prescribe conflicting changes to the same behavior.
