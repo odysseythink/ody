@@ -271,11 +271,9 @@ pub struct ConfigToml {
     /// to `review_model` for backwards compatibility.
     pub design_review_model: Option<String>,
 
-    /// Optional `[design_review]` table. Currently carries only the `debate`
-    /// sub-table that turns the single-shot adversarial review into a bounded
-    /// Advocate/Skeptic/Judge debate. The legacy flat `design_review_model`
-    /// key above is intentionally kept for backwards compatibility and is NOT
-    /// moved under this table.
+    /// Optional `[design_review]` table. The legacy flat `design_review_model`
+    /// key above is kept for backwards compatibility and acts as a fallback for
+    /// `[design_review].review_model`.
     pub design_review: Option<DesignReviewToml>,
 
     /// Provider to use from the model_providers map.
@@ -909,13 +907,21 @@ pub struct AutoReviewToml {
     pub policy: Option<String>,
 }
 
-/// `[design_review]` table. Holds the optional `debate` sub-table.
+/// `[design_review]` table. Controls the adversarial review triggered when
+/// finalizing a design in Design Mode.
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct DesignReviewToml {
-    /// `[design_review.debate]` — when present and `enable = true`, the design
-    /// adversarial review augments its single-shot critic with a bounded
-    /// Advocate/Skeptic/Judge debate.
+    /// Master switch for the adversarial design review. Defaults to `false`.
+    /// When `true`, the review uses `review_model` below, falling back to the
+    /// legacy flat `design_review_model` and then to `review_model`.
+    #[serde(default)]
+    pub enable: bool,
+    /// Optional model override for the single-shot critic. Falls back to the
+    /// legacy flat `design_review_model` and then `review_model`.
+    pub review_model: Option<String>,
+    /// `[design_review.debate]` — when present and `enable = true`, augments the
+    /// single-shot critic with a bounded Advocate/Skeptic/Judge debate.
     pub debate: Option<DesignReviewDebateToml>,
 }
 
@@ -944,8 +950,8 @@ pub struct DesignReviewDebateToml {
     /// Advocate↔Skeptic back-and-forth rounds. Defaults to 1; clamped to
     /// `1..=3` at resolution time.
     pub rounds: Option<u8>,
-    /// Per-seat model overrides. Each falls back to `design_review_model`, then
-    /// `review_model`, when unset. Recommended: cheap Advocate, capable
+    /// Per-seat model overrides. Each falls back to `[design_review].review_model`,
+    /// then the legacy flat `design_review_model`, then `review_model`. Recommended: cheap Advocate, capable
     /// adversarial Skeptic, strongest Judge (the Judge is the highest-leverage
     /// seat — it emits the findings).
     pub advocate_model: Option<String>,
@@ -1418,6 +1424,21 @@ mod tests {
             .expect("legacy flat design_review_model should still deserialize");
         assert_eq!(config.design_review_model.as_deref(), Some("glm_1/glm-5.1"));
         assert!(config.design_review.is_none());
+    }
+
+    #[test]
+    fn design_review_table_enable_and_review_model_parse() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+                [design_review]
+                enable = true
+                review_model = "glm_1/glm-5.1"
+            "#,
+        )
+        .expect("design_review table should deserialize");
+        let dr = config.design_review.expect("design_review table present");
+        assert!(dr.enable);
+        assert_eq!(dr.review_model.as_deref(), Some("glm_1/glm-5.1"));
     }
 
     #[test]

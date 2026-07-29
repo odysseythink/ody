@@ -226,12 +226,14 @@ pub(crate) fn should_trigger_design_review(
     finalize: bool,
     gap: Option<&str>,
     has_pending_parts: bool,
+    design_review_enabled: bool,
     design_review_model: Option<&str>,
 ) -> bool {
     expected_mode == ModeKind::Design
         && finalize
         && gap.is_none()
         && !has_pending_parts
+        && design_review_enabled
         && design_review_model.is_some()
 }
 
@@ -611,6 +613,7 @@ pub(crate) async fn handle_submit_artifact(
         finalize,
         gap.as_deref(),
         has_pending_parts,
+        turn.config.design_review_enabled,
         effective_design_review_model.as_deref(),
     ) {
         // Risks the user already accepted/deferred in earlier rounds of THIS
@@ -1047,6 +1050,7 @@ mod tests {
             /*finalize*/ true,
             /*gap*/ None,
             /*has_pending_parts*/ false,
+            /*design_review_enabled*/ true,
             Some("gpt-review"),
         ));
     }
@@ -1094,6 +1098,7 @@ mod tests {
             /*finalize*/ false,
             /*gap*/ None,
             /*has_pending_parts*/ false,
+            /*design_review_enabled*/ true,
             Some("gpt-review"),
         ));
     }
@@ -1106,6 +1111,7 @@ mod tests {
             /*finalize*/ true,
             /*gap*/ Some("missing section"),
             /*has_pending_parts*/ false,
+            /*design_review_enabled*/ true,
             Some("gpt-review"),
         ));
     }
@@ -1118,6 +1124,7 @@ mod tests {
             /*finalize*/ true,
             /*gap*/ None,
             /*has_pending_parts*/ false,
+            /*design_review_enabled*/ true,
             None,
         ));
     }
@@ -1130,6 +1137,20 @@ mod tests {
             /*finalize*/ true,
             /*gap*/ None,
             /*has_pending_parts*/ false,
+            /*design_review_enabled*/ true,
+            Some("gpt-review"),
+        ));
+    }
+
+    #[test]
+    fn should_trigger_design_review_false_when_disabled() {
+        use ody_protocol::config_types::ModeKind;
+        assert!(!should_trigger_design_review(
+            ModeKind::Design,
+            /*finalize*/ true,
+            /*gap*/ None,
+            /*has_pending_parts*/ false,
+            /*design_review_enabled*/ false,
             Some("gpt-review"),
         ));
     }

@@ -708,9 +708,12 @@ pub struct Config {
     pub review_model: Option<String>,
 
     /// Optional model override for the adversarial self-review triggered when
-    /// finalizing a design in Design Mode. Falls back to `review_model` when
-    /// unset.
+    /// finalizing a design in Design Mode. Resolved from `[design_review].review_model`,
+    /// falling back to the legacy flat `design_review_model` and then `review_model`.
     pub design_review_model: Option<String>,
+    /// Whether the adversarial design review is enabled. Mirrors `[design_review].enable`
+    /// or is implicitly `true` when the legacy flat `design_review_model` is set.
+    pub design_review_enabled: bool,
     /// Resolved `[design_review.debate]` table (the single-shot design review is
     /// augmented with a bounded Advocate/Skeptic/Judge debate when this is
     /// `Some` with `enable = true`). `None` ⇒ debate off (default).
@@ -3862,8 +3865,13 @@ impl Config {
             .map(AbsolutePathBuf::into_path_buf);
 
         let review_model = override_review_model.or(cfg.review_model);
-        let design_review_model = override_design_review_model.or(cfg.design_review_model);
-        let design_review_debate = cfg.design_review.and_then(|dr| dr.debate);
+        let design_review_table = cfg.design_review.unwrap_or_default();
+        let design_review_model = override_design_review_model
+            .or(design_review_table.review_model)
+            .or(cfg.design_review_model);
+        let design_review_enabled = design_review_table.enable
+            || design_review_model.is_some();
+        let design_review_debate = design_review_table.debate;
         let test_review_model = override_test_review_model.or(cfg.test_review_model);
         let test_review_enabled = override_test_review_enabled.unwrap_or(cfg.test_review_enabled);
 
@@ -3996,6 +4004,7 @@ impl Config {
             service_tier,
             review_model,
             design_review_model,
+            design_review_enabled,
             test_review_model,
             test_review_enabled,
             model_context_window: cfg.model_context_window,

@@ -908,7 +908,7 @@
       "description": "`[design_review.debate]` sub-table. Absent or `enable = false` ⇒ debate off (the single-shot review path is unchanged).",
       "properties": {
         "advocate_model": {
-          "description": "Per-seat model overrides. Each falls back to `design_review_model`, then `review_model`, when unset. Recommended: cheap Advocate, capable adversarial Skeptic, strongest Judge (the Judge is the highest-leverage seat — it emits the findings).",
+          "description": "Per-seat model overrides. Each falls back to `[design_review].review_model`, then the legacy flat `design_review_model`, then `review_model`. Recommended: cheap Advocate, capable adversarial Skeptic, strongest Judge (the Judge is the highest-leverage seat — it emits the findings).",
           "type": "string"
         },
         "contest_critic": {
@@ -947,7 +947,7 @@
     },
     "DesignReviewToml": {
       "additionalProperties": false,
-      "description": "`[design_review]` table. Holds the optional `debate` sub-table.",
+      "description": "`[design_review]` table. Controls the adversarial review triggered when finalizing a design in Design Mode.",
       "properties": {
         "debate": {
           "allOf": [
@@ -955,7 +955,16 @@
               "$ref": "#/definitions/DesignReviewDebateToml"
             }
           ],
-          "description": "`[design_review.debate]` — when present and `enable = true`, the design adversarial review augments its single-shot critic with a bounded Advocate/Skeptic/Judge debate."
+          "description": "`[design_review.debate]` — when present and `enable = true`, augments the single-shot critic with a bounded Advocate/Skeptic/Judge debate."
+        },
+        "enable": {
+          "default": false,
+          "description": "Master switch for the adversarial design review. Defaults to `false`. When `true`, the review uses `review_model` below, falling back to the legacy flat `design_review_model` and then to `review_model`.",
+          "type": "boolean"
+        },
+        "review_model": {
+          "description": "Optional model override for the single-shot critic. Falls back to the legacy flat `design_review_model` and then `review_model`.",
+          "type": "string"
         }
       },
       "type": "object"
@@ -5106,7 +5115,7 @@
           "$ref": "#/definitions/DesignReviewToml"
         }
       ],
-      "description": "Optional `[design_review]` table. Currently carries only the `debate` sub-table that turns the single-shot adversarial review into a bounded Advocate/Skeptic/Judge debate. The legacy flat `design_review_model` key above is intentionally kept for backwards compatibility and is NOT moved under this table."
+      "description": "Optional `[design_review]` table. The legacy flat `design_review_model` key above is kept for backwards compatibility and acts as a fallback for `[design_review].review_model`."
     },
     "design_review_model": {
       "description": "Optional model override for the adversarial self-review triggered when finalizing a design in Design Mode. When unset, Design Mode falls back to `review_model` for backwards compatibility.",
