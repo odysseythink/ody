@@ -78,6 +78,7 @@ pub(crate) struct OnboardingScreenArgs {
 
 pub(crate) struct OnboardingResult {
     pub directory_trust_persisted: bool,
+    pub login_skipped: bool,
     pub should_exit: bool,
 }
 
@@ -407,6 +408,7 @@ pub(crate) async fn run_onboarding_app(
     }
     Ok(OnboardingResult {
         directory_trust_persisted,
+        login_skipped: false,
         should_exit: onboarding_screen.should_exit(),
     })
 }

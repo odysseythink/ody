@@ -246,6 +246,7 @@ pub(crate) enum LoginState {
         model_id: Option<String>,
         set_as_default: bool,
         persisted: bool,
+        skipped: bool,
     },
     Error {
         previous: Box<LoginState>,
@@ -318,6 +319,16 @@ impl LoginFlowWidget {
         )
     }
 
+    pub(crate) fn skipped(&self) -> bool {
+        matches!(
+            self.state,
+            LoginState::Done {
+                skipped: true,
+                ..
+            }
+        )
+    }
+
     pub(crate) async fn poll_tasks(&mut self) {
         if let Some(task) = self.fetch_task.as_mut() {
             if task.is_finished() {
@@ -354,7 +365,7 @@ impl LoginFlowWidget {
                                     "No models returned by the provider. Please check the base URL."
                                         .to_string()
                                 }
-                                _ => format!("Failed to verify API key: {err}"),
+                                _ => format!("Failed to fetch models: {err}"),
                             };
                             let previous = LoginState::EnterBaseUrl {
                                 provider: *provider,
@@ -384,7 +395,7 @@ impl LoginFlowWidget {
                             };
                             self.state = LoginState::Error {
                                 previous: Box::new(previous),
-                                message: "Model fetch task failed".to_string(),
+                                message: "Failed to fetch models: task failed".to_string(),
                             };
                         }
                     }
@@ -497,6 +508,7 @@ impl LoginFlowWidget {
             model_id: Some(model_id),
             set_as_default: self.set_as_default,
             persisted,
+            skipped: false,
         };
     }
 
@@ -883,6 +895,7 @@ impl KeyboardHandler for LoginFlowWidget {
                         model_id: None,
                         set_as_default: self.set_as_default,
                         persisted: false,
+                        skipped: true,
                     };
                 }
                 LoginState::Error { previous, .. } => {
@@ -1164,6 +1177,24 @@ mod tests {
     }
 
     #[test]
+    fn esc_at_provider_picker_skips_login() {
+        let mut widget = default_widget();
+        widget.handle_key_event(press(key(KeyCode::Esc)));
+        assert!(matches!(
+            widget.state(),
+            LoginState::Done {
+                provider: None,
+                persisted: false,
+                skipped: true,
+                ..
+            }
+        ));
+        assert_eq!(widget.get_step_state(), StepState::Complete);
+        assert!(widget.skipped());
+        assert!(!widget.persisted());
+    }
+
+    #[test]
     fn alias_validation_error_then_esc_returns() {
         let mut widget = default_widget();
         widget.handle_key_event(press(key(KeyCode::Enter)));
@@ -1341,6 +1372,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn fetch_failure_returns_to_base_url() {
+        let mut widget = LoginFlowWidget {
+            state: LoginState::FetchingModels {
+                provider: BuiltInApiKeyProvider::Kimi,
+                alias: "work-kimi".to_string(),
+                api_key: "secret".to_string(),
+                base_url: "https://api.moonshot.cn".to_string(),
+            },
+            set_as_default: true,
+            request_handle: None,
+            fetch_task: Some(tokio::spawn(async move {
+                Err(LoginModelError::RequestFailed("network error".to_string()))
+            })),
+            persist_task: None,
+        };
+        wait_for_state(&mut widget, |s| matches!(s, LoginState::Error { .. })).await;
+        assert!(matches!(widget.state(), LoginState::Error { .. }));
+        widget.handle_key_event(press(key(KeyCode::Esc)));
+        assert!(matches!(
+            widget.state(),
+            LoginState::EnterBaseUrl {
+                provider: BuiltInApiKeyProvider::Kimi,
+                ..
+            }
+        ));
+    }
+
+    #[tokio::test]
     async fn poll_tasks_persist_success_marks_done_persisted() {
         let mut widget = LoginFlowWidget {
             state: LoginState::Done {
@@ -1351,6 +1410,7 @@ mod tests {
                 model_id: Some("kimi-k2".to_string()),
                 set_as_default: true,
                 persisted: false,
+                skipped: false,
             },
             set_as_default: true,
             request_handle: None,
@@ -1394,6 +1454,7 @@ mod tests {
                 model_id: Some("kimi-k2".to_string()),
                 set_as_default: true,
                 persisted: false,
+                skipped: false,
             },
             set_as_default: true,
             request_handle: None,
@@ -1624,6 +1685,7 @@ mod tests {
                 model_id: Some("kimi-k2".to_string()),
                 set_as_default: true,
                 persisted: false,
+                skipped: false,
             },
             set_as_default: true,
             request_handle: None,
