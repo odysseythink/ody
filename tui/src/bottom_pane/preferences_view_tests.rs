@@ -10,6 +10,8 @@ use ody_config::config_toml::DesignReviewToml;
 use ody_protocol::config_types::ModeKind;
 use tokio::sync::mpsc::unbounded_channel;
 
+use crate::config_update::DesignReviewModelField;
+
 fn make_view(
     mode: ModeKind,
     state: DesignReviewEditState,
@@ -132,4 +134,57 @@ fn rounds_validation_rejects_out_of_bounds() {
     assert!(!view.apply_rounds_text("4".to_string()));
     assert!(view.apply_rounds_text("3".to_string()));
     assert_eq!(view.edit_state.rounds, Some(3));
+}
+
+#[test]
+fn pressing_enter_on_review_model_emits_picker_event() {
+    let (mut view, mut rx) = make_view(ModeKind::Design, DesignReviewEditState::default());
+    view.move_down();
+    view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    match rx.try_recv() {
+        Ok(AppEvent::OpenDesignReviewModelPicker { field, state }) => {
+            assert_eq!(field, DesignReviewModelField::Review);
+            assert_eq!(state.review_model, None);
+        }
+        other => panic!("expected OpenDesignReviewModelPicker, got {other:?}"),
+    }
+}
+
+#[test]
+fn pressing_enter_on_advocate_model_emits_picker_event() {
+    let (mut view, mut rx) = make_view(ModeKind::Design, DesignReviewEditState::default());
+    for _ in 0..4 {
+        view.move_down();
+    }
+    view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    match rx.try_recv() {
+        Ok(AppEvent::OpenDesignReviewModelPicker { field, state }) => {
+            assert_eq!(field, DesignReviewModelField::Advocate);
+            assert_eq!(state.advocate_model, None);
+        }
+        other => panic!("expected OpenDesignReviewModelPicker, got {other:?}"),
+    }
+}
+
+#[test]
+fn update_design_review_edit_state_refreshes_form() {
+    let (mut view, _rx) = make_view(ModeKind::Design, DesignReviewEditState::default());
+    let new_state = DesignReviewEditState {
+        review_model: Some("kimi/k2.5".to_string()),
+        ..Default::default()
+    };
+    let event = AppEvent::UpdateDesignReviewEditState(new_state.clone());
+    assert!(view.handle_app_event(&event));
+    assert_eq!(view.edit_state.review_model, Some("kimi/k2.5".to_string()));
+}
+
+#[test]
+fn pressing_enter_on_rounds_still_opens_text_editor() {
+    let (mut view, mut rx) = make_view(ModeKind::Design, DesignReviewEditState::default());
+    for _ in 0..3 {
+        view.move_down();
+    }
+    view.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(view.text_editor.is_some());
+    assert!(rx.try_recv().is_err());
 }

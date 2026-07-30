@@ -1697,6 +1697,14 @@ impl App {
                 self.chat_widget
                     .sync_design_review_preferences(design_review, error);
             }
+            AppEvent::OpenDesignReviewModelPicker { field, state } => {
+                self.chat_widget
+                    .open_design_review_model_picker(field, state);
+            }
+            AppEvent::UpdateDesignReviewEditState(state) => {
+                self.chat_widget
+                    .handle_app_event_for_active_view(&AppEvent::UpdateDesignReviewEditState(state));
+            }
             AppEvent::ResetMemories => {
                 self.reset_memories_with_app_server(app_server).await;
             }

@@ -36,6 +36,8 @@ use ody_utils_approval_presets::ApprovalPreset;
 use crate::app_command::AppCommand;
 use crate::app_server_session::AppServerStartedThread;
 use crate::bottom_pane::ApprovalRequest;
+use crate::config_update::DesignReviewEditState;
+use crate::config_update::DesignReviewModelField;
 use crate::bottom_pane::StatusLineItem;
 use crate::bottom_pane::TerminalTitleItem;
 use crate::chatwidget::UserMessage;
@@ -833,6 +835,15 @@ pub(crate) enum AppEvent {
         use_memories: bool,
         generate_memories: bool,
     },
+
+    /// Open the tabbed model picker for a design-review model override field.
+    OpenDesignReviewModelPicker {
+        field: DesignReviewModelField,
+        state: DesignReviewEditState,
+    },
+
+    /// Optimistically refresh the design-review preferences form before persistence completes.
+    UpdateDesignReviewEditState(DesignReviewEditState),
 
     /// Persist design-review preference edits to config.toml from the TUI preferences popup.
     PersistDesignReviewPreferences {

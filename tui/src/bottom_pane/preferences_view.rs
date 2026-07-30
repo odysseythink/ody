@@ -25,6 +25,7 @@ use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
 use crate::config_update::DesignReviewEditState;
 use crate::config_update::build_design_review_edits;
+use crate::config_update::DesignReviewModelField;
 use crate::key_hint;
 use crate::key_hint::KeyBindingListExt;
 use crate::keymap::ListKeymap;
@@ -106,6 +107,10 @@ impl PreferencesField {
             self,
             Self::ReviewModel | Self::AdvocateModel | Self::SkepticModel | Self::JudgeModel
         )
+    }
+
+    fn is_model(self) -> bool {
+        self.is_text()
     }
 
     fn is_rounds(self) -> bool {
@@ -302,26 +307,21 @@ impl PreferencesView {
         let Some(&field) = self.fields.get(selected_idx) else {
             return;
         };
-        if !field.is_text() && !field.is_rounds() {
+        if field.is_model() {
+            self.open_model_picker(field);
+            return;
+        }
+        if !field.is_rounds() {
             return;
         }
 
-        let initial = if field.is_rounds() {
-            self.edit_state
-                .rounds
-                .map(|r| r.to_string())
-                .unwrap_or_default()
-        } else {
-            self.text_field_value(field).unwrap_or_default()
-        };
+        let initial = self.edit_state
+            .rounds
+            .map(|r| r.to_string())
+            .unwrap_or_default();
 
         let title = format!("Edit {}", field.label());
-        let placeholder = if field.is_rounds() {
-            "Type 1–3 or leave empty for default"
-        } else {
-            "Type a model alias or leave empty to clear"
-        }
-        .to_string();
+        let placeholder = "Type 1–3 or leave empty for default".to_string();
 
         let result = self.text_editor_result.clone();
         let result_for_closure = result.clone();
@@ -340,16 +340,6 @@ impl PreferencesView {
         self.error_message = None;
     }
 
-    fn text_field_value(&self, field: PreferencesField) -> Option<String> {
-        match field {
-            PreferencesField::ReviewModel => self.edit_state.review_model.clone(),
-            PreferencesField::AdvocateModel => self.edit_state.advocate_model.clone(),
-            PreferencesField::SkepticModel => self.edit_state.skeptic_model.clone(),
-            PreferencesField::JudgeModel => self.edit_state.judge_model.clone(),
-            _ => None,
-        }
-    }
-
     fn apply_text_editor_result(&mut self, text: String) -> bool {
         let Some(field) = self.text_editor_field else {
             return false;
@@ -357,21 +347,7 @@ impl PreferencesView {
         if field.is_rounds() {
             return self.apply_rounds_text(text);
         }
-        self.apply_text_field(field, text)
-    }
-
-    fn apply_text_field(&mut self, field: PreferencesField, text: String) -> bool {
-        let trimmed = text.trim().to_string();
-        let value = if trimmed.is_empty() { None } else { Some(trimmed) };
-        match field {
-            PreferencesField::ReviewModel => self.edit_state.review_model = value,
-            PreferencesField::AdvocateModel => self.edit_state.advocate_model = value,
-            PreferencesField::SkepticModel => self.edit_state.skeptic_model = value,
-            PreferencesField::JudgeModel => self.edit_state.judge_model = value,
-            _ => return false,
-        }
-        self.send_persist_event();
-        true
+        false
     }
 
     fn apply_rounds_text(&mut self, text: String) -> bool {
@@ -515,18 +491,46 @@ impl BottomPaneView for PreferencesView {
     }
 
     fn handle_app_event(&mut self, event: &AppEvent) -> bool {
-        let AppEvent::SyncDesignReviewPreferences { design_review, error } = event else {
-            return false;
-        };
-        if error.is_some() {
-            self.edit_state = self.baseline_state.clone();
-            self.error_message = error.clone();
-        } else {
-            self.edit_state.apply_from_toml(design_review);
-            self.baseline_state = self.edit_state.clone();
-            self.error_message = None;
+        match event {
+            AppEvent::SyncDesignReviewPreferences { design_review, error } => {
+                if error.is_some() {
+                    self.edit_state = self.baseline_state.clone();
+                    self.error_message = error.clone();
+                } else {
+                    self.edit_state.apply_from_toml(design_review);
+                    self.baseline_state = self.edit_state.clone();
+                    self.error_message = None;
+                }
+                true
+            }
+            AppEvent::UpdateDesignReviewEditState(state) => {
+                self.edit_state = state.clone();
+                true
+            }
+            _ => false,
         }
-        true
+    }
+}
+
+fn map_preferences_field_to_model_field(field: PreferencesField) -> Option<DesignReviewModelField> {
+    match field {
+        PreferencesField::ReviewModel => Some(DesignReviewModelField::Review),
+        PreferencesField::AdvocateModel => Some(DesignReviewModelField::Advocate),
+        PreferencesField::SkepticModel => Some(DesignReviewModelField::Skeptic),
+        PreferencesField::JudgeModel => Some(DesignReviewModelField::Judge),
+        _ => None,
+    }
+}
+
+impl PreferencesView {
+    fn open_model_picker(&mut self, field: PreferencesField) {
+        let Some(model_field) = map_preferences_field_to_model_field(field) else {
+            return;
+        };
+        self.app_event_tx.send(AppEvent::OpenDesignReviewModelPicker {
+            field: model_field,
+            state: self.edit_state.clone(),
+        });
     }
 }
 

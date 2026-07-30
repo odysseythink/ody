@@ -167,7 +167,34 @@ pub(crate) struct DesignReviewEditState {
     pub(crate) usability_lens: UsabilityLensToml,
 }
 
+/// One of the four design-review model override fields surfaced in `/preferences`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DesignReviewModelField {
+    Review,
+    Advocate,
+    Skeptic,
+    Judge,
+}
+
 impl DesignReviewEditState {
+    pub(crate) fn model_field(&self, field: DesignReviewModelField) -> Option<String> {
+        match field {
+            DesignReviewModelField::Review => self.review_model.clone(),
+            DesignReviewModelField::Advocate => self.advocate_model.clone(),
+            DesignReviewModelField::Skeptic => self.skeptic_model.clone(),
+            DesignReviewModelField::Judge => self.judge_model.clone(),
+        }
+    }
+
+    pub(crate) fn set_model_field(&mut self, field: DesignReviewModelField, value: Option<String>) {
+        match field {
+            DesignReviewModelField::Review => self.review_model = value,
+            DesignReviewModelField::Advocate => self.advocate_model = value,
+            DesignReviewModelField::Skeptic => self.skeptic_model = value,
+            DesignReviewModelField::Judge => self.judge_model = value,
+        }
+    }
+
     pub(crate) fn from_config(config: &Config) -> Self {
         let mut state = Self {
             enable: config.design_review_enabled,
