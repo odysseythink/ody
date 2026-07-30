@@ -4,6 +4,10 @@
 //! orchestration module without changing their event wiring.
 
 use super::*;
+use crate::bottom_pane::PreferencesContent;
+use crate::bottom_pane::PreferencesView;
+use crate::config_update::DesignReviewEditState;
+use ody_protocol::config_types::ModeKind;
 
 impl ChatWidget {
     pub(super) fn open_theme_picker(&mut self) {
@@ -107,6 +111,23 @@ impl ChatWidget {
 
         let view = ExperimentalFeaturesView::new(
             features,
+            self.app_event_tx.clone(),
+            self.bottom_pane.list_keymap(),
+        );
+        self.bottom_pane.show_view(Box::new(view));
+    }
+
+    pub(crate) fn open_preferences_popup(&mut self) {
+        let mode = self.active_mode_kind();
+        let content = match mode {
+            ModeKind::Design => PreferencesContent::Design {
+                state: DesignReviewEditState::from_config(&self.config),
+            },
+            _ => PreferencesContent::Placeholder,
+        };
+        let view = PreferencesView::new(
+            mode,
+            content,
             self.app_event_tx.clone(),
             self.bottom_pane.list_keymap(),
         );

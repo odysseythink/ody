@@ -59,3 +59,156 @@ fn format_config_error_preserves_server_validation_message() {
          features.fast_mode=true violates managed requirements; allowed set [fast_mode=false]"
     );
 }
+
+#[test]
+fn build_design_review_edits_writes_all_nine_keys() {
+    let state = DesignReviewEditState {
+        enable: true,
+        review_model: Some("provider/model".to_string()),
+        debate_enable: true,
+        rounds: Some(2),
+        advocate_model: Some("adv".to_string()),
+        skeptic_model: Some("skp".to_string()),
+        judge_model: Some("jdg".to_string()),
+        contest_critic: true,
+        usability_lens: UsabilityLensToml::Ask,
+    };
+    let edits = build_design_review_edits(&state);
+    assert_eq!(edits.len(), 9);
+    assert_eq!(edits[0].key_path, "design_review.enable");
+    assert_eq!(edits[0].value, serde_json::json!(true));
+    assert_eq!(edits[1].key_path, "design_review.review_model");
+    assert_eq!(edits[1].value, serde_json::json!("provider/model"));
+    assert_eq!(edits[2].key_path, "design_review.debate.enable");
+    assert_eq!(edits[3].key_path, "design_review.debate.rounds");
+    assert_eq!(edits[3].value, serde_json::json!(2));
+    assert_eq!(edits[7].key_path, "design_review.debate.contest_critic");
+    assert_eq!(edits[8].key_path, "design_review.debate.usability_lens");
+    assert_eq!(edits[8].value, serde_json::json!("ask"));
+}
+
+#[test]
+fn build_design_review_edits_clears_optional_strings_and_rounds() {
+    let state = DesignReviewEditState {
+        enable: false,
+        review_model: None,
+        debate_enable: false,
+        rounds: None,
+        advocate_model: None,
+        skeptic_model: None,
+        judge_model: None,
+        contest_critic: false,
+        usability_lens: UsabilityLensToml::Off,
+    };
+    let edits = build_design_review_edits(&state);
+    assert_eq!(edits.len(), 9);
+    assert_eq!(edits[1].value, serde_json::Value::Null);
+    assert_eq!(edits[3].value, serde_json::Value::Null);
+    assert_eq!(edits[4].value, serde_json::Value::Null);
+    assert_eq!(edits[5].value, serde_json::Value::Null);
+    assert_eq!(edits[6].value, serde_json::Value::Null);
+}
+
+#[test]
+fn design_review_edit_state_apply_from_toml_round_trips() {
+    use ody_config::config_toml::DesignReviewToml;
+
+    let toml = DesignReviewToml {
+        enable: true,
+        review_model: Some("m".to_string()),
+        debate: None,
+    };
+    let mut state = DesignReviewEditState::default();
+    state.apply_from_toml(&toml);
+    assert!(state.enable);
+    assert_eq!(state.review_model, Some("m".to_string()));
+    assert!(!state.debate_enable);
+    assert_eq!(state.rounds, None);
+    assert_eq!(state.usability_lens, UsabilityLensToml::Off);
+}
+
+#[test]
+fn design_review_edit_state_apply_from_toml_resets_debate_when_absent() {
+    use ody_config::config_toml::DesignReviewToml;
+
+    let mut state = DesignReviewEditState {
+        debate_enable: true,
+        rounds: Some(3),
+        advocate_model: Some("a".to_string()),
+        skeptic_model: Some("s".to_string()),
+        judge_model: Some("j".to_string()),
+        contest_critic: true,
+        usability_lens: UsabilityLensToml::On,
+        ..Default::default()
+    };
+    state.apply_from_toml(&DesignReviewToml {
+        enable: false,
+        review_model: None,
+        debate: None,
+    });
+    assert!(!state.debate_enable);
+    assert_eq!(state.rounds, None);
+    assert_eq!(state.advocate_model, None);
+    assert_eq!(state.skeptic_model, None);
+    assert_eq!(state.judge_model, None);
+    assert!(!state.contest_critic);
+    assert_eq!(state.usability_lens, UsabilityLensToml::Off);
+}
+
+#[test]
+fn design_review_edit_state_apply_from_toml_reads_debate() {
+    use ody_config::config_toml::DesignReviewDebateToml;
+    use ody_config::config_toml::DesignReviewToml;
+
+    let toml = DesignReviewToml {
+        enable: true,
+        review_model: None,
+        debate: Some(DesignReviewDebateToml {
+            enable: true,
+            rounds: Some(1),
+            advocate_model: Some("a".to_string()),
+            skeptic_model: Some("s".to_string()),
+            judge_model: Some("j".to_string()),
+            contest_critic: true,
+            usability_lens: UsabilityLensToml::Ask,
+        }),
+    };
+    let mut state = DesignReviewEditState::default();
+    state.apply_from_toml(&toml);
+    assert!(state.debate_enable);
+    assert_eq!(state.rounds, Some(1));
+    assert_eq!(state.advocate_model, Some("a".to_string()));
+    assert_eq!(state.skeptic_model, Some("s".to_string()));
+    assert_eq!(state.judge_model, Some("j".to_string()));
+    assert!(state.contest_critic);
+    assert_eq!(state.usability_lens, UsabilityLensToml::Ask);
+}
+
+#[tokio::test]
+async fn design_review_edit_state_from_config_seeds_from_resolved_fields() {
+    use ody_config::config_toml::DesignReviewDebateToml;
+
+    let mut config = Config::load_default_with_cli_overrides_for_ody_home(
+        std::env::temp_dir(),
+        Vec::new(),
+    )
+    .await
+    .expect("config");
+    config.design_review_enabled = true;
+    config.design_review_model = Some("resolved/model".to_string());
+    config.design_review_debate = Some(DesignReviewDebateToml {
+        enable: true,
+        rounds: Some(3),
+        advocate_model: None,
+        skeptic_model: None,
+        judge_model: None,
+        contest_critic: false,
+        usability_lens: UsabilityLensToml::default(),
+    });
+
+    let state = DesignReviewEditState::from_config(&config);
+    assert!(state.enable);
+    assert_eq!(state.review_model, Some("resolved/model".to_string()));
+    assert!(state.debate_enable);
+    assert_eq!(state.rounds, Some(3));
+}

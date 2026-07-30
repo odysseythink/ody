@@ -106,6 +106,7 @@ mod footer;
 mod list_selection_view;
 mod memories_settings_view;
 mod mentions_v2;
+mod preferences_view;
 pub(crate) mod prompt_args;
 mod skill_popup;
 mod skills_toggle_view;
@@ -125,6 +126,8 @@ pub(crate) use list_selection_view::SideContentWidth;
 pub(crate) use list_selection_view::popup_content_width;
 pub(crate) use list_selection_view::side_by_side_layout_widths;
 pub(crate) use memories_settings_view::MemoriesSettingsView;
+pub(crate) use preferences_view::PreferencesContent;
+pub(crate) use preferences_view::PreferencesView;
 use slash_commands::ServiceTierCommand;
 mod feedback_view;
 mod hooks_browser_view;
@@ -550,6 +553,10 @@ impl BottomPane {
 
     fn active_view(&self) -> Option<&dyn BottomPaneView> {
         self.view_stack.last().map(std::convert::AsRef::as_ref)
+    }
+
+    pub(crate) fn active_view_id(&self) -> Option<&'static str> {
+        self.view_stack.last().and_then(|view| view.view_id())
     }
 
     pub(crate) fn push_view(&mut self, view: Box<dyn BottomPaneView>) {
@@ -1409,11 +1416,6 @@ impl BottomPane {
                 .is_some_and(|view| view.will_interrupt_turn_on_key_event(key_event))
     }
 
-    #[cfg(test)]
-    pub(crate) fn active_view_id(&self) -> Option<&'static str> {
-        self.view_stack.last().and_then(|view| view.view_id())
-    }
-
     /// Return true when the pane is in the regular composer state without any
     /// overlays or popups and not running a task. This is the safe context to
     /// use Esc-Esc for backtracking from the main view.
@@ -1437,6 +1439,17 @@ impl BottomPane {
 
     pub(crate) fn show_view(&mut self, view: Box<dyn BottomPaneView>) {
         self.push_view(view);
+    }
+
+    /// Forward an app event to the active view, if any.
+    ///
+    /// Used for async sync events such as [`AppEvent::SyncDesignReviewPreferences`]
+    /// that need to reach the currently open bottom-pane popup.
+    pub(crate) fn handle_app_event(&mut self, event: &AppEvent) -> bool {
+        if let Some(view) = self.view_stack.last_mut() {
+            return view.handle_app_event(event);
+        }
+        false
     }
 
     /// Called when the agent requests user approval.

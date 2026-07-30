@@ -2378,3 +2378,124 @@ async fn slash_writing_plan_submits_source_without_guessing_an_output_path() {
         other => panic!("expected Op::UserTurn, got {other:?}"),
     }
 }
+
+#[tokio::test]
+async fn slash_preferences_opens_design_review_preferences_popup() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.set_feature_enabled(Feature::CollaborationModes, /*enabled*/ true);
+    let mut design_mask = collaboration_modes::design_mask(chat.model_catalog.as_ref())
+        .expect("expected design collaboration mode");
+    design_mask.design_audit_level = Some(Some(DesignAuditLevel::Standard));
+    chat.set_collaboration_mask(design_mask);
+
+    chat.dispatch_command(SlashCommand::Preferences);
+
+    assert!(chat.bottom_pane.has_active_view());
+    let popup = render_bottom_popup(&chat, /*width*/ 100);
+    assert!(popup.contains("Design review preferences"));
+    assert!(popup.contains("Enable design review"));
+    assert!(popup.contains("Review model"));
+    assert!(popup.contains("Enable debate"));
+    assert!(popup.contains("Debate rounds"));
+    assert!(popup.contains("Advocate model"));
+    assert!(popup.contains("Skeptic model"));
+    assert!(popup.contains("Judge model"));
+    assert!(popup.contains("Contest critic"));
+    // The list only shows 8 rows at a time; scroll to reveal the ninth field.
+    for _ in 0..8 {
+        chat.handle_key_event(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
+    let scrolled_popup = render_bottom_popup(&chat, /*width*/ 100);
+    assert!(scrolled_popup.contains("Usability lens"));
+    // Drain the model-change notification produced by entering Design mode.
+    while let Ok(AppEvent::InsertHistoryCell(_)) = rx.try_recv() {}
+    assert_matches!(rx.try_recv(), Err(TryRecvError::Empty));
+    assert!(op_rx.try_recv().is_err(), "expected no core op to be sent");
+}
+
+#[tokio::test]
+async fn slash_preferences_is_disabled_while_task_running() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.bottom_pane.set_task_running(/*running*/ true);
+
+    chat.dispatch_command(SlashCommand::Preferences);
+
+    let event = rx.try_recv().expect("expected disabled command error");
+    match event {
+        AppEvent::InsertHistoryCell(cell) => {
+            let rendered = lines_to_single_string(&cell.display_lines(/*width*/ 80));
+            assert!(
+                rendered.contains("'/preferences' is disabled while a task is in progress."),
+                "expected /preferences task-running error, got {rendered:?}"
+            );
+        }
+        other => panic!("expected InsertHistoryCell error, got {other:?}"),
+    }
+    assert!(rx.try_recv().is_err(), "expected no follow-up events");
+}
+
+#[tokio::test]
+async fn slash_preferences_is_rejected_for_side_threads() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.set_side_conversation_active(/*active*/ true);
+
+    chat.dispatch_command(SlashCommand::Preferences);
+
+    let event = rx
+        .try_recv()
+        .expect("expected side conversation slash command error");
+    match event {
+        AppEvent::InsertHistoryCell(cell) => {
+            let rendered = lines_to_single_string(&cell.display_lines(/*width*/ 80));
+            assert!(
+                rendered.contains(
+                    "'/preferences' is unavailable in side conversations. Press Ctrl+C to return to the main thread first."
+                ),
+                "expected side conversation slash command error, got {rendered:?}"
+            );
+        }
+        other => panic!("expected InsertHistoryCell error, got {other:?}"),
+    }
+    assert!(rx.try_recv().is_err(), "expected no follow-up events");
+    assert!(op_rx.try_recv().is_err(), "expected no preferences op");
+}
+
+#[tokio::test]
+async fn slash_preferences_toggles_emit_persist_design_review_preferences_event() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.set_feature_enabled(Feature::CollaborationModes, /*enabled*/ true);
+    let mut design_mask = collaboration_modes::design_mask(chat.model_catalog.as_ref())
+        .expect("expected design collaboration mode");
+    design_mask.design_audit_level = Some(Some(DesignAuditLevel::Standard));
+    chat.set_collaboration_mask(design_mask);
+
+    chat.dispatch_command(SlashCommand::Preferences);
+    assert!(chat.bottom_pane.has_active_view());
+
+    // Toggle the first field (Enable design review) with space.
+    chat.handle_key_event(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
+
+    loop {
+        match rx.try_recv() {
+            Ok(AppEvent::PersistDesignReviewPreferences { edits }) => {
+                assert!(edits.iter().any(|e| e.key_path == "design_review.enable"));
+                break;
+            }
+            Ok(_) => continue,
+            Err(_) => panic!("expected PersistDesignReviewPreferences event"),
+        }
+    }
+}
+
+#[tokio::test]
+async fn slash_preferences_default_mode_shows_placeholder() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    chat.dispatch_command(SlashCommand::Preferences);
+
+    assert!(chat.bottom_pane.has_active_view());
+    let popup = render_bottom_popup(&chat, /*width*/ 100);
+    assert!(popup.contains("Preferences"));
+    assert!(popup.contains("Mode-specific preferences are not available for the current mode yet."));
+    assert_matches!(rx.try_recv(), Err(TryRecvError::Empty));
+}

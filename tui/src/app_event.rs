@@ -11,6 +11,7 @@
 use std::path::PathBuf;
 
 use ody_app_server_protocol::AppInfo;
+use ody_app_server_protocol::ConfigEdit;
 use ody_app_server_protocol::MarketplaceAddResponse;
 use ody_app_server_protocol::MarketplaceRemoveResponse;
 use ody_app_server_protocol::MarketplaceUpgradeResponse;
@@ -47,6 +48,8 @@ use ody_protocol::config_types::CollaborationModeMask;
 use ody_protocol::config_types::Personality;
 use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::models::ActivePermissionProfile;
+
+use ody_config::config_toml::DesignReviewToml;
 
 use crate::history_cell::HistoryCell;
 
@@ -829,6 +832,17 @@ pub(crate) enum AppEvent {
     UpdateMemorySettings {
         use_memories: bool,
         generate_memories: bool,
+    },
+
+    /// Persist design-review preference edits to config.toml from the TUI preferences popup.
+    PersistDesignReviewPreferences {
+        edits: Vec<ConfigEdit>,
+    },
+
+    /// Sync the design-review preferences popup with the server-side truth after a write.
+    SyncDesignReviewPreferences {
+        design_review: DesignReviewToml,
+        error: Option<String>,
     },
 
     /// Clear all persisted local memory artifacts via the app-server.

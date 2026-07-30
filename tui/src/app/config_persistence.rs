@@ -11,10 +11,12 @@ use crate::login::config::build_login_provider_edits;
 use crate::login::config::build_logout_provider_edits;
 use crate::login::telemetry;
 use crate::model_catalog::ModelCatalog;
+use ody_config::config_toml::DesignReviewToml;
 use ody_model_provider::login::LoginModelInfo;
 use ody_model_provider_info::BuiltInApiKeyProvider;
 use ody_model_provider_info::ProviderKind;
 use ody_model_provider_info::model_ref::ModelRef;
+use ody_app_server_protocol::ConfigEdit;
 #[cfg(target_os = "windows")]
 use ody_utils_approval_presets::ApprovalPreset;
 use std::sync::Arc;
@@ -675,6 +677,74 @@ impl App {
         true
     }
 
+    pub(super) async fn update_design_review_preferences(
+        &mut self,
+        app_server: &mut AppServerSession,
+        edits: Vec<ConfigEdit>,
+    ) {
+        use ody_config::config_toml::DesignReviewToml;
+
+        let previous_design_review = Self::design_review_toml_from_config(&self.config);
+        let write_response = match crate::config_update::write_config_batch(
+            app_server.request_handle(),
+            edits,
+        )
+        .await
+        {
+            Ok(response) => response,
+            Err(err) => {
+                let error = crate::config_update::format_config_error(&err);
+                tracing::error!(error = %error, "failed to persist design review preferences");
+                self.chat_widget
+                    .add_error_message(format!("Failed to save design review preferences: {error}"));
+                self.chat_widget.sync_design_review_preferences(
+                    previous_design_review,
+                    Some(error),
+                );
+                return;
+            }
+        };
+
+        let error_message = if write_response.status == WriteStatus::OkOverridden {
+            let message = overridden_write_message(&write_response);
+            tracing::warn!(message, "design review preferences write was overridden");
+            Some(format!(
+                "Design review preferences were saved but not applied: {message}"
+            ))
+        } else {
+            None
+        };
+
+        let Some(effective_config) = self
+            .read_effective_config_after_overridden_write(
+                app_server,
+                "Design review preferences",
+            )
+            .await
+        else {
+            self.chat_widget.sync_design_review_preferences(
+                previous_design_review,
+                Some("Saved design review preferences, but could not refresh the effective config.".to_string()),
+            );
+            return;
+        };
+
+        let design_review = effective_config
+            .config
+            .additional
+            .get("design_review")
+            .and_then(|value| serde_json::from_value::<DesignReviewToml>(value.clone()).ok())
+            .unwrap_or_default();
+
+        self.config.design_review_enabled =
+            design_review.enable || design_review.review_model.is_some();
+        self.config.design_review_model = design_review.review_model.clone();
+        self.config.design_review_debate = design_review.debate.clone();
+
+        self.chat_widget
+            .sync_design_review_preferences(design_review, error_message);
+    }
+
     pub(super) async fn update_memory_settings_with_app_server(
         &mut self,
         app_server: &mut AppServerSession,
@@ -1217,6 +1287,14 @@ impl App {
                     /*collaboration_mode*/ None,
                     /*personality*/ None,
                 )));
+        }
+    }
+
+    fn design_review_toml_from_config(config: &Config) -> DesignReviewToml {
+        DesignReviewToml {
+            enable: config.design_review_enabled,
+            review_model: config.design_review_model.clone(),
+            debate: config.design_review_debate.clone(),
         }
     }
 }

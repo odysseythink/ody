@@ -3238,3 +3238,66 @@ async fn reasoning_popup_escape_returns_to_model_popup() {
     assert!(after_escape.contains("Select a model"));
     assert!(!after_escape.contains("Select Reasoning Level"));
 }
+
+#[tokio::test]
+async fn preferences_popup_renders_design_review_fields_and_emits_persist_event() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.set_feature_enabled(Feature::CollaborationModes, /*enabled*/ true);
+    let mut design_mask = collaboration_modes::design_mask(chat.model_catalog.as_ref())
+        .expect("expected design collaboration mode");
+    design_mask.design_audit_level = Some(Some(DesignAuditLevel::Standard));
+    chat.set_collaboration_mask(design_mask);
+
+    chat.open_preferences_popup();
+
+    assert!(chat.bottom_pane.has_active_view());
+    let popup = render_bottom_popup(&chat, /*width*/ 100);
+    assert!(popup.contains("Design review preferences"));
+    assert!(popup.contains("Enable design review"));
+    assert!(popup.contains("Review model"));
+    assert!(popup.contains("Enable debate"));
+    assert!(popup.contains("Debate rounds"));
+    assert!(popup.contains("Advocate model"));
+    assert!(popup.contains("Skeptic model"));
+    assert!(popup.contains("Judge model"));
+    assert!(popup.contains("Contest critic"));
+    // The list only shows 8 rows at a time; scroll to reveal the ninth field.
+    for _ in 0..8 {
+        chat.handle_key_event(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
+    let scrolled_popup = render_bottom_popup(&chat, /*width*/ 100);
+    assert!(scrolled_popup.contains("Usability lens"));
+
+    // Toggle the selected boolean field (Enable design review) with space.
+    chat.handle_key_event(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
+
+    loop {
+        match rx.try_recv() {
+            Ok(AppEvent::PersistDesignReviewPreferences { edits }) => {
+                assert!(edits.iter().any(|e| e.key_path == "design_review.enable"));
+                break;
+            }
+            Ok(_) => continue,
+            Err(_) => panic!("expected PersistDesignReviewPreferences event"),
+        }
+    }
+}
+
+#[tokio::test]
+async fn preferences_popup_placeholder_in_plan_mode() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.set_feature_enabled(Feature::CollaborationModes, /*enabled*/ true);
+    let plan_mask = collaboration_modes::plan_mask(chat.model_catalog.as_ref())
+        .expect("expected plan collaboration mode");
+    chat.set_collaboration_mask(plan_mask);
+
+    chat.open_preferences_popup();
+
+    assert!(chat.bottom_pane.has_active_view());
+    let popup = render_bottom_popup(&chat, /*width*/ 100);
+    assert!(popup.contains("Preferences"));
+    assert!(popup.contains("Mode-specific preferences are not available for the current mode yet."));
+    // Drain the model-change notification produced by entering Plan mode.
+    while let Ok(AppEvent::InsertHistoryCell(_)) = rx.try_recv() {}
+    assert_matches!(rx.try_recv(), Err(TryRecvError::Empty));
+}

@@ -27,6 +27,7 @@ pub enum SlashCommand {
     Skills,
     Import,
     Hooks,
+    Preferences,
     Review,
     Rename,
     New,
@@ -135,6 +136,7 @@ impl SlashCommand {
             SlashCommand::Experimental => "toggle experimental features",
             SlashCommand::AutoReview => "approve one retry of a recent auto-review denial",
             SlashCommand::Memories => "configure memory use and generation",
+            SlashCommand::Preferences => "edit mode-specific preferences",
             SlashCommand::Mcp => "list configured MCP tools; use /mcp verbose for details",
             SlashCommand::Apps => "manage apps",
             SlashCommand::Plugins => "browse plugins",
@@ -203,6 +205,7 @@ impl SlashCommand {
             | SlashCommand::Experimental
             | SlashCommand::Memories
             | SlashCommand::Import
+            | SlashCommand::Preferences
             | SlashCommand::Review
             | SlashCommand::Plan
             | SlashCommand::Design
@@ -336,5 +339,20 @@ mod tests {
         );
         assert!(!SlashCommand::Login.available_during_task());
         assert!(SlashCommand::Login.supports_inline_args());
+    }
+    #[test]
+    fn preferences_command_parses_and_describes() {
+        assert_eq!(SlashCommand::Preferences.command(), "preferences");
+        assert_eq!(
+            SlashCommand::from_str("preferences"),
+            Ok(SlashCommand::Preferences)
+        );
+        assert_eq!(
+            SlashCommand::Preferences.description(),
+            "edit mode-specific preferences"
+        );
+        assert!(!SlashCommand::Preferences.available_during_task());
+        assert!(!SlashCommand::Preferences.available_in_side_conversation());
+        assert!(!SlashCommand::Preferences.supports_inline_args());
     }
 }
