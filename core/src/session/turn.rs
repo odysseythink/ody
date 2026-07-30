@@ -123,7 +123,6 @@ use ody_utils_stream_parser::AssistantTextChunk;
 use ody_utils_stream_parser::AssistantTextStreamParser;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
-use tracing::debug;
 use tracing::error;
 use tracing::field;
 use tracing::info;
@@ -355,13 +354,6 @@ pub(crate) async fn run_turn(
     let mut stop_hook_active = false;
     let mut empty_completion_retries: u8 = 0;
     let mut session_mode_terminal_action_retries: u8 = 0;
-    // Whether the turn has produced any actionable output (an agent message or a
-    // tool-call-driven follow-up) before a given sampling response. This
-    // distinguishes a mid-task empty completion (worth steering with a nudge)
-    // from a first-response empty completion, which is treated as a normal
-    // (if degenerate) end of turn so single-shot completions keep finishing
-    // cleanly.
-    let mut turn_had_activity: bool = false;
     // Although from the perspective of ody.rs, TurnDiffTracker has the lifecycle of a Task which contains
     // many turns, from the perspective of the user, it is a single turn.
     let display_roots = turn_diff_display_roots(turn_context.as_ref()).await;
@@ -463,9 +455,6 @@ pub(crate) async fn run_turn(
                     has_submit_design_call,
                     has_request_user_input_call,
                 } = sampling_request_output;
-                if sampling_request_last_agent_message.is_some() || model_needs_follow_up {
-                    turn_had_activity = true;
-                }
                 can_drain_pending_input = true;
                 let (has_pending_input, token_status, estimated_token_count) = async {
                     let has_pending_input =
@@ -819,7 +808,6 @@ pub(crate) async fn run_turn(
             }
             Err(e)
                 if e.is_empty_completion()
-                    && turn_had_activity
                     && empty_completion_retries < MAX_TURN_CONTINUATION_RETRIES =>
             {
                 empty_completion_retries += 1;
@@ -827,7 +815,7 @@ pub(crate) async fn run_turn(
                     turn_id = %turn_context.sub_id,
                     attempt = empty_completion_retries,
                     max = MAX_TURN_CONTINUATION_RETRIES,
-                    "model returned an empty completion mid-task; continuing with nudge"
+                    "model returned an empty completion; continuing with nudge"
                 );
                 // Surface the empty-completion continuation to the UI. Chat-wire
                 // providers (notably Kimi) can return several empty completions in
@@ -857,7 +845,7 @@ pub(crate) async fn run_turn(
                 can_drain_pending_input = false;
                 continue;
             }
-            Err(e) if e.is_empty_completion() && turn_had_activity => {
+            Err(e) if e.is_empty_completion() => {
                 warn!(
                     turn_id = %turn_context.sub_id,
                     max = MAX_TURN_CONTINUATION_RETRIES,
@@ -871,16 +859,6 @@ pub(crate) async fn run_turn(
                     "The model returned an empty response too many times".to_string(),
                 )));
                 sess.send_event(&turn_context, event).await;
-                break;
-            }
-            Err(e) if e.is_empty_completion() => {
-                // Empty completion with no prior turn activity: treat it as a
-                // normal (if degenerate) end of turn rather than steering, so a
-                // single-shot completion keeps finishing the turn cleanly.
-                debug!(
-                    turn_id = %turn_context.sub_id,
-                    "model returned an empty completion with no prior turn activity; ending turn"
-                );
                 break;
             }
             Err(e) => {
