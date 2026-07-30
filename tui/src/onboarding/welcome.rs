@@ -1,3 +1,4 @@
+use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use ratatui::buffer::Buffer;
@@ -29,6 +30,7 @@ pub(crate) struct WelcomeWidget {
     animation: AsciiAnimation,
     animations_enabled: bool,
     animations_suppressed: Cell<bool>,
+    done: Cell<bool>,
     layout_area: Cell<Option<Rect>>,
 }
 
@@ -38,6 +40,12 @@ impl KeyboardHandler for WelcomeWidget {
     /// The key list includes compatibility variants for terminals that report
     /// modifier bits differently.
     fn handle_key_event(&mut self, key_event: KeyEvent) {
+        if key_event.kind == KeyEventKind::Press
+            && matches!(key_event.code, KeyCode::Enter | KeyCode::Char(' '))
+        {
+            self.done.set(true);
+        }
+
         if !self.animations_enabled {
             return;
         }
@@ -63,6 +71,7 @@ impl WelcomeWidget {
             ),
             animations_enabled,
             animations_suppressed: Cell::new(false),
+            done: Cell::new(false),
             layout_area: Cell::new(None),
         }
     }
@@ -111,9 +120,10 @@ impl WidgetRef for &WelcomeWidget {
 
 impl StepStateProvider for WelcomeWidget {
     fn get_step_state(&self) -> StepState {
-        match self.is_logged_in {
-            true => StepState::Hidden,
-            false => StepState::Complete,
+        match (self.is_logged_in, self.done.get()) {
+            (true, _) => StepState::Hidden,
+            (false, true) => StepState::Complete,
+            (false, false) => StepState::InProgress,
         }
     }
 }
@@ -122,6 +132,7 @@ impl StepStateProvider for WelcomeWidget {
 mod tests {
     use super::*;
     use crossterm::event::KeyCode;
+    use crossterm::event::KeyEvent;
     use crossterm::event::KeyModifiers;
     use pretty_assertions::assert_eq;
     use ratatui::buffer::Buffer;
@@ -183,6 +194,7 @@ mod tests {
             ),
             animations_enabled: true,
             animations_suppressed: Cell::new(false),
+            done: Cell::new(false),
             layout_area: Cell::new(None),
         };
 
@@ -207,6 +219,7 @@ mod tests {
             ),
             animations_enabled: true,
             animations_suppressed: Cell::new(false),
+            done: Cell::new(false),
             layout_area: Cell::new(None),
         };
 
@@ -274,5 +287,44 @@ mod tests {
             before, after,
             "expected no variant change for a single-variant animation within one tick"
         );
+    }
+
+    #[test]
+    fn welcome_stays_in_progress_until_confirmed() {
+        let widget = WelcomeWidget::new(
+            /*is_logged_in*/ false,
+            FrameRequester::test_dummy(),
+            /*animations_enabled*/ false,
+        );
+        assert_eq!(widget.get_step_state(), StepState::InProgress);
+    }
+
+    #[test]
+    fn enter_or_space_completes_welcome() {
+        let mut widget = WelcomeWidget::new(
+            /*is_logged_in*/ false,
+            FrameRequester::test_dummy(),
+            /*animations_enabled*/ false,
+        );
+        widget.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(widget.get_step_state(), StepState::Complete);
+
+        let mut widget = WelcomeWidget::new(
+            /*is_logged_in*/ false,
+            FrameRequester::test_dummy(),
+            /*animations_enabled*/ false,
+        );
+        widget.handle_key_event(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
+        assert_eq!(widget.get_step_state(), StepState::Complete);
+    }
+
+    #[test]
+    fn welcome_is_hidden_when_logged_in() {
+        let widget = WelcomeWidget::new(
+            /*is_logged_in*/ true,
+            FrameRequester::test_dummy(),
+            /*animations_enabled*/ false,
+        );
+        assert_eq!(widget.get_step_state(), StepState::Hidden);
     }
 }
