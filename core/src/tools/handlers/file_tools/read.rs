@@ -21,7 +21,7 @@ use ody_tools::ToolSpec;
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
 use serde_json::json;
-use std::io::BufRead;
+use std::path::Path;
 
 #[derive(Deserialize)]
 struct ReadFileArgs {
@@ -98,52 +98,44 @@ impl ToolExecutor<ToolInvocation> for ReadFileHandler {
                 PathAccessMode::AbsoluteOutsideAllowed,
             )?;
 
-            let file = std::fs::File::open(abs_path.as_path()).map_err(|err| {
-                FunctionCallError::RespondToModel(format!(
-                    "unable to read `{}`: {err}",
-                    abs_path.as_path().display()
-                ))
-            })?;
-            let reader = std::io::BufReader::new(file);
-            let mut lines = reader.lines();
-            let mut text = String::new();
-            let mut line_count = 0usize;
-            let mut byte_capped = false;
-            let mut line_capped = false;
-
-            while let Some(line) = lines.next() {
-                let line = line.map_err(|err| {
-                    FunctionCallError::RespondToModel(format!(
-                        "unable to read `{}`: {err}",
-                        abs_path.as_path().display()
-                    ))
-                })?;
-                if text.len() + line.len() + 1 > MAX_BYTES {
-                    byte_capped = true;
-                    break;
-                }
-                text.push_str(&line);
-                text.push('\n');
-                line_count += 1;
-                if line_count >= MAX_LINES {
-                    if lines.next().is_some() {
-                        line_capped = true;
-                    }
-                    break;
-                }
-            }
-
-            let (mut content, render_truncated) = render(&text, args.offset, args.limit)?;
+            let (mut content, truncated) = run(abs_path.as_path(), args.offset, args.limit)?;
             append_jq_hint_if_json(abs_path.as_path(), &mut content);
             Ok(boxed_tool_output(ReadFileOutput {
                 content,
-                truncated: byte_capped || line_capped || render_truncated,
+                truncated,
             }))
         })
     }
 }
 
 impl CoreToolRuntime for ReadFileHandler {}
+
+/// Reads the file at `path`, caps it at [`MAX_BYTES`], and renders the requested
+/// line window. `offset` is 1-based; negative values count from the end.
+fn run(
+    path: &Path,
+    offset: Option<i64>,
+    limit: Option<i64>,
+) -> Result<(String, bool), FunctionCallError> {
+    let bytes = std::fs::read(path).map_err(|err| {
+        FunctionCallError::RespondToModel(format!("unable to read `{}`: {err}", path.display()))
+    })?;
+
+    // Cap bytes before decoding so a huge binary blob cannot be materialized as
+    // a String just to be thrown away. The caller may still request an offset
+    // beyond the capped window, but within the cap the offset is applied to the
+    // full text, not to a pre-truncated prefix.
+    let byte_capped = bytes.len() > MAX_BYTES;
+    let slice = if byte_capped {
+        &bytes[..floor_char_boundary(&bytes, MAX_BYTES)]
+    } else {
+        &bytes[..]
+    };
+    let text = String::from_utf8_lossy(slice);
+
+    let (content, render_truncated) = render(&text, offset, limit)?;
+    Ok((content, byte_capped || render_truncated))
+}
 
 /// Renders the requested window as `cat -n`-style numbered lines.
 ///
@@ -207,6 +199,24 @@ pub(super) fn render_for_test(
     limit: Option<i64>,
 ) -> Result<(String, bool), FunctionCallError> {
     render(text, offset, limit)
+}
+
+/// Largest index <= `max` that is a UTF-8 character boundary.
+fn floor_char_boundary(bytes: &[u8], max: usize) -> usize {
+    let mut index = max.min(bytes.len());
+    while index > 0 && (bytes[index] & 0b1100_0000) == 0b1000_0000 {
+        index -= 1;
+    }
+    index
+}
+
+#[cfg(test)]
+pub(super) fn run_for_test(
+    path: &Path,
+    offset: Option<i64>,
+    limit: Option<i64>,
+) -> Result<(String, bool), FunctionCallError> {
+    run(path, offset, limit)
 }
 
 fn truncate_line(line: &str) -> String {

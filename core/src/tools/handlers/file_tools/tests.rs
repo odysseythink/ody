@@ -95,6 +95,43 @@ fn grep_rejects_an_invalid_regex() {
 // ── read_file ─────────────────────────────────────────────────────────
 
 #[test]
+fn read_offset_past_max_lines_returns_the_requested_window() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("long.rs");
+    let text = (1..=3000)
+        .map(|n| format!("line {n}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(&path, &text).unwrap();
+
+    let (out, truncated) = read::run_for_test(&path, Some(1500), Some(50)).expect("renders");
+
+    assert!(out.contains("  1500\tline 1500"), "must start at requested offset: {out}");
+    assert!(out.contains("  1549\tline 1549"), "must include the last requested line: {out}");
+    assert!(!out.contains("line 1499"), "must not leak before the offset: {out}");
+    assert!(!out.contains("line 1550"), "must not leak past the limit: {out}");
+    assert!(truncated, "must report that more lines exist");
+}
+
+#[test]
+fn read_negative_offset_on_a_large_file_reads_from_the_actual_end() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("long.rs");
+    let text = (1..=3000)
+        .map(|n| format!("line {n}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(&path, &text).unwrap();
+
+    let (out, truncated) = read::run_for_test(&path, Some(-20), None).expect("renders");
+
+    assert!(out.contains("  2981\tline 2981"), "must start 20 lines from the actual end: {out}");
+    assert!(out.contains("  3000\tline 3000"), "must include the actual last line: {out}");
+    assert!(!out.contains("line 2980"), "must not leak past the negative offset: {out}");
+    assert!(!truncated, "negative window is exact, no unread tail");
+}
+
+#[test]
 fn read_caps_at_max_lines_and_points_at_the_next_page() {
     let text = (1..=3000)
         .map(|n| format!("line {n}"))
