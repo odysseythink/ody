@@ -26,7 +26,7 @@ use super::catalog;
 
 const PET_PACK_VERSION: &str = "v1";
 const PET_PACK_DIR: &str = "cache/tui-pets";
-const PET_CDN_BASE_URL: &str = "https://persistent.oaistatic.com/ody/pets/v1";
+const PET_CDN_BASE_URL: &str = "https://persistent.oaistatic.com/codex/pets/v1";
 const PET_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60);
 const PET_MAX_DOWNLOAD_BYTES: u64 = 4 * 1024 * 1024;
 
@@ -171,7 +171,7 @@ mod tests {
 
         assert_eq!(
             url,
-            "https://persistent.oaistatic.com/ody/pets/v1/dewey-spritesheet-v4.webp"
+            "https://persistent.oaistatic.com/codex/pets/v1/dewey-spritesheet-v4.webp"
         );
     }
 
