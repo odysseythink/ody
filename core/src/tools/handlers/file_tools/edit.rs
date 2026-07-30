@@ -141,22 +141,38 @@ impl ToolExecutor<ToolInvocation> for EditFileHandler {
                     "edit_file old_string must not be empty".to_string(),
                 ));
             }
-            if !old_content.contains(&args.old_string) {
+
+            // Normalise CRLF so that model-provided old/new strings (which are
+            // always LF) match files that happen to have CRLF line endings on disk.
+            // Preserve the original line-ending style when writing back.
+            let use_crlf = old_content.contains("\r\n");
+            let normalize = |s: &str| s.replace("\r\n", "\n");
+            let old_content_norm = normalize(&old_content);
+            let old_string_norm = normalize(&args.old_string);
+            let new_string_norm = normalize(&args.new_string);
+
+            if !old_content_norm.contains(&old_string_norm) {
                 return Err(FunctionCallError::RespondToModel(format!(
                     "edit_file could not find `old_string` in `{}`",
                     abs_path.as_path().display()
                 )));
             }
 
-            let new_content = if args.replace_all {
-                old_content.replace(&args.old_string, &args.new_string)
+            let new_content_norm = if args.replace_all {
+                old_content_norm.replace(&old_string_norm, &new_string_norm)
             } else {
-                old_content.replacen(&args.old_string, &args.new_string, 1)
+                old_content_norm.replacen(&old_string_norm, &new_string_norm, 1)
             };
             let replacements = if args.replace_all {
-                old_content.matches(&args.old_string).count()
+                old_content_norm.matches(&old_string_norm).count()
             } else {
                 1
+            };
+
+            let new_content = if use_crlf {
+                new_content_norm.replace('\n', "\r\n")
+            } else {
+                new_content_norm
             };
 
             atomic_write(&abs_path, new_content.as_bytes()).await?;
@@ -331,6 +347,31 @@ b
             matches!(result, Err(FunctionCallError::RespondToModel(ref msg)) if msg.contains("could not find")),
             "expected 'could not find' error"
         );
+    }
+
+    #[tokio::test]
+    async fn edit_file_replaces_in_crlf_file() {
+        let (session, mut turn, _rx) = make_session_and_context_with_rx().await;
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            dir.path().join("config.txt"),
+            "foo=1\r\nfoo=2\r\n",
+        )
+        .unwrap();
+        set_cwd_to_temp(&mut turn, dir.path());
+
+        let invocation = invocation_for_edit(
+            session,
+            turn,
+            "edit-call-crlf",
+            json!({ "path": "config.txt", "old_string": "foo=1\nfoo=2", "new_string": "foo=9\nfoo=2" }),
+        )
+        .await;
+        let handler = EditFileHandler::new(FileToolOptions::default());
+        handler.handle(invocation).await.expect("edit succeeds");
+
+        let content = std::fs::read_to_string(dir.path().join("config.txt")).expect("read");
+        assert_eq!(content, "foo=9\r\nfoo=2\r\n");
     }
 
     #[tokio::test]
