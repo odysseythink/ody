@@ -24,8 +24,8 @@ use ratatui::widgets::Widget;
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
 use crate::config_update::DesignReviewEditState;
-use crate::config_update::build_design_review_edits;
 use crate::config_update::DesignReviewModelField;
+use crate::config_update::build_design_review_edits;
 use crate::key_hint;
 use crate::key_hint::KeyBindingListExt;
 use crate::keymap::ListKeymap;
@@ -53,7 +53,8 @@ use super::selection_popup_common::render_rows;
 const DESIGN_TITLE: &str = "Design review preferences";
 const DESIGN_SUBTITLE: &str = "Configure the adversarial review run before finalizing a design.";
 const PLACEHOLDER_TITLE: &str = "Preferences";
-const PLACEHOLDER_BODY: &str = "Mode-specific preferences are not available for the current mode yet.";
+const PLACEHOLDER_BODY: &str =
+    "Mode-specific preferences are not available for the current mode yet.";
 const ROUNDS_ERROR: &str = "rounds must be an integer between 1 and 3";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,7 +89,9 @@ impl PreferencesField {
         match self {
             Self::Enable => "Run an adversarial review before finalizing a design.",
             Self::ReviewModel => "Model override for the single-shot critic (optional).",
-            Self::DebateEnable => "Use an Advocate/Skeptic/Judge debate instead of a single review.",
+            Self::DebateEnable => {
+                "Use an Advocate/Skeptic/Judge debate instead of a single review."
+            }
             Self::Rounds => "Advocate↔Skeptic back-and-forth rounds (1–3).",
             Self::AdvocateModel => "Model override for the Advocate seat (optional).",
             Self::SkepticModel => "Model override for the Skeptic seat (optional).",
@@ -99,7 +102,10 @@ impl PreferencesField {
     }
 
     fn is_bool(self) -> bool {
-        matches!(self, Self::Enable | Self::DebateEnable | Self::ContestCritic)
+        matches!(
+            self,
+            Self::Enable | Self::DebateEnable | Self::ContestCritic
+        )
     }
 
     fn is_text(self) -> bool {
@@ -205,7 +211,11 @@ impl PreferencesView {
             .iter()
             .enumerate()
             .map(|(idx, field)| {
-                let prefix = if selected_idx == Some(idx) { '›' } else { ' ' };
+                let prefix = if selected_idx == Some(idx) {
+                    '›'
+                } else {
+                    ' '
+                };
                 let value = self.format_field_value(*field);
                 let name = format!("{prefix} {}: {}", field.label(), value);
                 GenericDisplayRow {
@@ -227,7 +237,9 @@ impl PreferencesView {
             PreferencesField::SkepticModel => format_opt_str(&self.edit_state.skeptic_model),
             PreferencesField::JudgeModel => format_opt_str(&self.edit_state.judge_model),
             PreferencesField::ContestCritic => format_bool(self.edit_state.contest_critic),
-            PreferencesField::UsabilityLens => format_usability_lens(self.edit_state.usability_lens),
+            PreferencesField::UsabilityLens => {
+                format_usability_lens(self.edit_state.usability_lens)
+            }
         }
     }
 
@@ -315,7 +327,8 @@ impl PreferencesView {
             return;
         }
 
-        let initial = self.edit_state
+        let initial = self
+            .edit_state
             .rounds
             .map(|r| r.to_string())
             .unwrap_or_default();
@@ -392,7 +405,10 @@ impl PreferencesView {
         header.push(Line::from(DESIGN_TITLE.bold()));
         header.push(Line::from(DESIGN_SUBTITLE.dim()));
         if let Some(error) = &self.error_message {
-            header.push(Line::from(Span::styled(format!("Error: {error}"), self.error_style())));
+            header.push(Line::from(Span::styled(
+                format!("Error: {error}"),
+                self.error_style(),
+            )));
         }
         header
     }
@@ -455,7 +471,9 @@ impl BottomPaneView for PreferencesView {
                 modifiers: KeyModifiers::NONE,
                 ..
             } => self.edit_selected(),
-            _ if self.keymap.accept.is_pressed(key_event) || self.keymap.cancel.is_pressed(key_event) => {
+            _ if self.keymap.accept.is_pressed(key_event)
+                || self.keymap.cancel.is_pressed(key_event) =>
+            {
                 self.cancel();
             }
             _ => {}
@@ -492,7 +510,10 @@ impl BottomPaneView for PreferencesView {
 
     fn handle_app_event(&mut self, event: &AppEvent) -> bool {
         match event {
-            AppEvent::SyncDesignReviewPreferences { design_review, error } => {
+            AppEvent::SyncDesignReviewPreferences {
+                design_review,
+                error,
+            } => {
                 if error.is_some() {
                     self.edit_state = self.baseline_state.clone();
                     self.error_message = error.clone();
@@ -527,10 +548,11 @@ impl PreferencesView {
         let Some(model_field) = map_preferences_field_to_model_field(field) else {
             return;
         };
-        self.app_event_tx.send(AppEvent::OpenDesignReviewModelPicker {
-            field: model_field,
-            state: self.edit_state.clone(),
-        });
+        self.app_event_tx
+            .send(AppEvent::OpenDesignReviewModelPicker {
+                field: model_field,
+                state: self.edit_state.clone(),
+            });
     }
 }
 
@@ -661,7 +683,11 @@ impl PreferencesView {
 }
 
 fn format_bool(value: bool) -> String {
-    if value { "on".to_string() } else { "off".to_string() }
+    if value {
+        "on".to_string()
+    } else {
+        "off".to_string()
+    }
 }
 
 fn format_opt_str(value: &Option<String>) -> String {
@@ -669,7 +695,9 @@ fn format_opt_str(value: &Option<String>) -> String {
 }
 
 fn format_opt_rounds(value: Option<u8>) -> String {
-    value.map(|v| v.to_string()).unwrap_or_else(|| "default".to_string())
+    value
+        .map(|v| v.to_string())
+        .unwrap_or_else(|| "default".to_string())
 }
 
 fn format_usability_lens(value: UsabilityLensToml) -> String {

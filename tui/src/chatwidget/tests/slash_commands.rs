@@ -2496,6 +2496,8 @@ async fn slash_preferences_default_mode_shows_placeholder() {
     assert!(chat.bottom_pane.has_active_view());
     let popup = render_bottom_popup(&chat, /*width*/ 100);
     assert!(popup.contains("Preferences"));
-    assert!(popup.contains("Mode-specific preferences are not available for the current mode yet."));
+    assert!(
+        popup.contains("Mode-specific preferences are not available for the current mode yet.")
+    );
     assert_matches!(rx.try_recv(), Err(TryRecvError::Empty));
 }

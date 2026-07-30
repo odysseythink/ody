@@ -3,11 +3,17 @@
 use ody_model_provider_info::BuiltInApiKeyProvider;
 use ody_otel::SessionTelemetry;
 
-pub(crate) fn record_login_attempted(telemetry: &SessionTelemetry, provider: BuiltInApiKeyProvider) {
+pub(crate) fn record_login_attempted(
+    telemetry: &SessionTelemetry,
+    provider: BuiltInApiKeyProvider,
+) {
     telemetry.counter("ody.login.attempted", 1, &[("provider", provider.id())]);
 }
 
-pub(crate) fn record_login_succeeded(telemetry: &SessionTelemetry, provider: BuiltInApiKeyProvider) {
+pub(crate) fn record_login_succeeded(
+    telemetry: &SessionTelemetry,
+    provider: BuiltInApiKeyProvider,
+) {
     telemetry.counter("ody.login.succeeded", 1, &[("provider", provider.id())]);
 }
 

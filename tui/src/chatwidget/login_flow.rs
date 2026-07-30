@@ -88,7 +88,11 @@ impl ChatWidget {
         self.request_redraw();
     }
 
-    pub(crate) fn on_login_alias_submitted(&mut self, provider: BuiltInApiKeyProvider, alias: String) {
+    pub(crate) fn on_login_alias_submitted(
+        &mut self,
+        provider: BuiltInApiKeyProvider,
+        alias: String,
+    ) {
         if let Err(err) = validate_custom_alias(&alias) {
             self.add_error_message(err);
             self.show_login_alias_prompt(provider);
@@ -177,7 +181,9 @@ impl ChatWidget {
         let tx = self.app_event_tx.clone();
         tokio::spawn(async move {
             let extra_headers = match provider {
-                BuiltInApiKeyProvider::Kimi => ody_model_provider_info::create_kimi_provider().http_headers,
+                BuiltInApiKeyProvider::Kimi => {
+                    ody_model_provider_info::create_kimi_provider().http_headers
+                }
                 _ => None,
             };
             let result = fetch_login_models(provider, &base_url, &api_key, extra_headers)

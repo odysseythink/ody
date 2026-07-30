@@ -1370,7 +1370,10 @@ async fn provider_alias_is_not_overwritten_by_config_reload() {
     chat.config.model_provider_id = "kimi".to_string();
     chat.refresh_status_line();
 
-    assert_eq!(status_line_text(&chat), Some("kimi/kimi-for-coding".to_string()));
+    assert_eq!(
+        status_line_text(&chat),
+        Some("kimi/kimi-for-coding".to_string())
+    );
 
     // A config reload must not clobber the active provider alias: E1 made the
     // ThreadSettingsUpdated echo the single source of truth for provider alias.
@@ -1378,7 +1381,10 @@ async fn provider_alias_is_not_overwritten_by_config_reload() {
     updated_config.model_provider_id = "kimi_ranweiwei".to_string();
     chat.sync_model_context_window(&updated_config);
 
-    assert_eq!(status_line_text(&chat), Some("kimi/kimi-for-coding".to_string()));
+    assert_eq!(
+        status_line_text(&chat),
+        Some("kimi/kimi-for-coding".to_string())
+    );
 }
 
 #[tokio::test]

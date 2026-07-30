@@ -312,7 +312,9 @@ impl ChatWidget {
                 });
             } else {
                 tx.send(AppEvent::UpdateModel(model_for_action.clone()));
-                tx.send(AppEvent::UpdateModelProvider(provider_id_for_action.clone()));
+                tx.send(AppEvent::UpdateModelProvider(
+                    provider_id_for_action.clone(),
+                ));
                 tx.send(AppEvent::UpdateReasoningEffort(effort.clone()));
                 tx.send(AppEvent::PersistModelSelection {
                     provider_id: provider_id_for_action.clone(),
@@ -343,7 +345,10 @@ impl ChatWidget {
         };
 
         // Determine the initial thinking state from the currently selected model.
-        let current_preset = params.presets.iter().find(|p| p.model == params.current_model);
+        let current_preset = params
+            .presets
+            .iter()
+            .find(|p| p.model == params.current_model);
         let initial_thinking = current_preset
             .map(|p| Self::reasoning_effort_for_thinking(p, true))
             .flatten()
@@ -360,8 +365,7 @@ impl ChatWidget {
         let mut scope_prompts: HashMap<String, bool> = HashMap::new();
         for preset in &params.presets {
             let effort = Self::reasoning_effort_for_thinking(preset, state.thinking());
-            let should_prompt =
-                self.should_prompt_plan_mode_reasoning_scope(&preset.model, effort);
+            let should_prompt = self.should_prompt_plan_mode_reasoning_scope(&preset.model, effort);
             scope_prompts.insert(preset.model.clone(), should_prompt);
         }
 
@@ -487,9 +491,8 @@ impl ChatWidget {
         };
 
         let title = format!("Select {} model", field_label(field));
-        let hint = Line::from(
-            "↑↓ model · ←→ page · Enter apply · Esc cancel · Tab/Shift+Tab provider",
-        );
+        let hint =
+            Line::from("↑↓ model · ←→ page · Enter apply · Esc cancel · Tab/Shift+Tab provider");
         let header = Box::new(ModelPickerHeader {
             title: title.clone(),
             subtitle: "type to search".to_string(),
@@ -598,7 +601,11 @@ impl ChatWidget {
                 "{} {} {}",
                 preset.model, preset.display_name, preset.provider
             )),
-            actions: vec![build_design_review_model_action(field, Some(model_value), state)],
+            actions: vec![build_design_review_model_action(
+                field,
+                Some(model_value),
+                state,
+            )],
             dismiss_on_select: true,
             ..Default::default()
         }
@@ -658,7 +665,10 @@ impl ChatWidget {
                     .unwrap_or_else(|| "all".to_string())
             });
 
-        let initial_tab_id = if provider_groups.iter().any(|(id, _)| id == &initial_provider) {
+        let initial_tab_id = if provider_groups
+            .iter()
+            .any(|(id, _)| id == &initial_provider)
+        {
             initial_provider
         } else {
             "all".to_string()
@@ -942,7 +952,9 @@ impl ChatWidget {
                     });
                 } else {
                     tx.send(AppEvent::UpdateModel(model_for_action.clone()));
-                    tx.send(AppEvent::UpdateModelProvider(provider_id_for_action.clone()));
+                    tx.send(AppEvent::UpdateModelProvider(
+                        provider_id_for_action.clone(),
+                    ));
                     tx.send(AppEvent::UpdateReasoningEffort(choice_effort.clone()));
                     tx.send(AppEvent::PersistModelSelection {
                         provider_id: provider_id_for_action.clone(),
@@ -1043,6 +1055,8 @@ fn build_design_review_model_action(
     let edits = crate::config_update::build_design_review_edits(&state);
     Box::new(move |tx| {
         tx.send(AppEvent::UpdateDesignReviewEditState(state.clone()));
-        tx.send(AppEvent::PersistDesignReviewPreferences { edits: edits.clone() });
+        tx.send(AppEvent::PersistDesignReviewPreferences {
+            edits: edits.clone(),
+        });
     })
 }

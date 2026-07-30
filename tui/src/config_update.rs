@@ -256,24 +256,27 @@ pub(crate) fn build_design_review_edits(state: &DesignReviewEditState) -> Vec<Co
         ),
         state.advocate_model.as_ref().map_or_else(
             || clear_config_value("design_review.debate.advocate_model"),
-            |model| replace_config_value(
-                "design_review.debate.advocate_model",
-                serde_json::json!(model),
-            ),
+            |model| {
+                replace_config_value(
+                    "design_review.debate.advocate_model",
+                    serde_json::json!(model),
+                )
+            },
         ),
         state.skeptic_model.as_ref().map_or_else(
             || clear_config_value("design_review.debate.skeptic_model"),
-            |model| replace_config_value(
-                "design_review.debate.skeptic_model",
-                serde_json::json!(model),
-            ),
+            |model| {
+                replace_config_value(
+                    "design_review.debate.skeptic_model",
+                    serde_json::json!(model),
+                )
+            },
         ),
         state.judge_model.as_ref().map_or_else(
             || clear_config_value("design_review.debate.judge_model"),
-            |model| replace_config_value(
-                "design_review.debate.judge_model",
-                serde_json::json!(model),
-            ),
+            |model| {
+                replace_config_value("design_review.debate.judge_model", serde_json::json!(model))
+            },
         ),
         replace_config_value(
             "design_review.debate.contest_critic",

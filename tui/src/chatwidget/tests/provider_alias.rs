@@ -72,9 +72,7 @@ async fn apply_thread_settings_uses_echo_as_authority_for_provider_alias() {
 
     chat.handle_server_notification(
         ServerNotification::ThreadSettingsUpdated(thread_settings_with_provider(
-            "k3",
-            "deepseek",
-            thread_id,
+            "k3", "deepseek", thread_id,
         )),
         /*replay_kind*/ None,
     );
@@ -97,9 +95,7 @@ async fn apply_thread_settings_clears_pending_provider_change() {
 
     chat.handle_server_notification(
         ServerNotification::ThreadSettingsUpdated(thread_settings_with_provider(
-            "k3",
-            "deepseek",
-            thread_id,
+            "k3", "deepseek", thread_id,
         )),
         /*replay_kind*/ None,
     );
@@ -120,9 +116,7 @@ async fn race_regression_echo_overwrites_stale_pending_alias() {
 
     chat.handle_server_notification(
         ServerNotification::ThreadSettingsUpdated(thread_settings_with_provider(
-            "glm-4",
-            "glm",
-            thread_id,
+            "glm-4", "glm", thread_id,
         )),
         /*replay_kind*/ None,
     );

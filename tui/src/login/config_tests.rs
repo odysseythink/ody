@@ -12,7 +12,8 @@ use crate::login::config::{
 
 #[test]
 fn build_login_provider_edits_writes_type_and_api_key() {
-    let edits = build_login_provider_edits("work-kimi", BuiltInApiKeyProvider::Kimi, "secret-key", None);
+    let edits =
+        build_login_provider_edits("work-kimi", BuiltInApiKeyProvider::Kimi, "secret-key", None);
     assert_eq!(edits.len(), 2);
     assert_eq!(edits[0].key_path, "providers.work-kimi.type");
     assert_eq!(edits[0].value, serde_json::json!("kimi"));
@@ -36,8 +37,12 @@ fn build_login_provider_edits_includes_base_url_when_given() {
 
 #[test]
 fn build_login_model_edits_writes_model_and_default() {
-    let edits =
-        build_login_model_edits("work-kimi", BuiltInApiKeyProvider::Kimi, "kimi-k2", Some("Kimi K2"));
+    let edits = build_login_model_edits(
+        "work-kimi",
+        BuiltInApiKeyProvider::Kimi,
+        "kimi-k2",
+        Some("Kimi K2"),
+    );
     assert_eq!(edits.len(), 5);
     assert_eq!(edits[0].key_path, r#"models."work-kimi/kimi-k2".provider"#);
     assert_eq!(edits[0].value, serde_json::json!("work-kimi"));

@@ -1,6 +1,8 @@
 use super::*;
 use crate::app_event::ConnectorsSnapshot;
 use crate::chatwidget::connectors::ConnectorsCacheState;
+use crate::config_update::DesignReviewEditState;
+use crate::config_update::DesignReviewModelField;
 use ody_app_server_protocol::AppInfo;
 use ody_app_server_protocol::HookErrorInfo;
 use ody_app_server_protocol::HooksListEntry;
@@ -13,8 +15,6 @@ use ody_app_server_protocol::PluginShareDiscoverability;
 use ody_app_server_protocol::PluginSource;
 use ody_features::Stage;
 use pretty_assertions::assert_eq;
-use crate::config_update::DesignReviewEditState;
-use crate::config_update::DesignReviewModelField;
 
 #[tokio::test]
 async fn experimental_mode_plan_is_ignored_on_startup() {
@@ -3298,7 +3298,9 @@ async fn preferences_popup_placeholder_in_plan_mode() {
     assert!(chat.bottom_pane.has_active_view());
     let popup = render_bottom_popup(&chat, /*width*/ 100);
     assert!(popup.contains("Preferences"));
-    assert!(popup.contains("Mode-specific preferences are not available for the current mode yet."));
+    assert!(
+        popup.contains("Mode-specific preferences are not available for the current mode yet.")
+    );
     // Drain the model-change notification produced by entering Plan mode.
     while let Ok(AppEvent::InsertHistoryCell(_)) = rx.try_recv() {}
     assert_matches!(rx.try_recv(), Err(TryRecvError::Empty));
@@ -3326,7 +3328,11 @@ async fn design_review_model_picker_selects_model_and_persists() {
                 got_update = true;
             }
             AppEvent::PersistDesignReviewPreferences { edits } => {
-                assert!(edits.iter().any(|e| e.key_path == "design_review.review_model"));
+                assert!(
+                    edits
+                        .iter()
+                        .any(|e| e.key_path == "design_review.review_model")
+                );
                 got_persist = true;
             }
             _ => {}
@@ -3358,7 +3364,9 @@ async fn design_review_model_picker_use_default_clears_override() {
                 got_update = true;
             }
             AppEvent::PersistDesignReviewPreferences { edits } => {
-                let clear_edit = edits.iter().find(|e| e.key_path == "design_review.review_model");
+                let clear_edit = edits
+                    .iter()
+                    .find(|e| e.key_path == "design_review.review_model");
                 assert!(clear_edit.is_some_and(|e| e.value == serde_json::Value::Null));
                 got_persist = true;
             }

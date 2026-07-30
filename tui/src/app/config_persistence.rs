@@ -11,12 +11,12 @@ use crate::login::config::build_login_provider_edits;
 use crate::login::config::build_logout_provider_edits;
 use crate::login::telemetry;
 use crate::model_catalog::ModelCatalog;
+use ody_app_server_protocol::ConfigEdit;
 use ody_config::config_toml::DesignReviewToml;
 use ody_model_provider::login::LoginModelInfo;
 use ody_model_provider_info::BuiltInApiKeyProvider;
 use ody_model_provider_info::ProviderKind;
 use ody_model_provider_info::model_ref::ModelRef;
-use ody_app_server_protocol::ConfigEdit;
 #[cfg(target_os = "windows")]
 use ody_utils_approval_presets::ApprovalPreset;
 use std::sync::Arc;
@@ -695,12 +695,11 @@ impl App {
             Err(err) => {
                 let error = crate::config_update::format_config_error(&err);
                 tracing::error!(error = %error, "failed to persist design review preferences");
+                self.chat_widget.add_error_message(format!(
+                    "Failed to save design review preferences: {error}"
+                ));
                 self.chat_widget
-                    .add_error_message(format!("Failed to save design review preferences: {error}"));
-                self.chat_widget.sync_design_review_preferences(
-                    previous_design_review,
-                    Some(error),
-                );
+                    .sync_design_review_preferences(previous_design_review, Some(error));
                 return;
             }
         };
@@ -716,15 +715,15 @@ impl App {
         };
 
         let Some(effective_config) = self
-            .read_effective_config_after_overridden_write(
-                app_server,
-                "Design review preferences",
-            )
+            .read_effective_config_after_overridden_write(app_server, "Design review preferences")
             .await
         else {
             self.chat_widget.sync_design_review_preferences(
                 previous_design_review,
-                Some("Saved design review preferences, but could not refresh the effective config.".to_string()),
+                Some(
+                    "Saved design review preferences, but could not refresh the effective config."
+                        .to_string(),
+                ),
             );
             return;
         };
@@ -891,8 +890,9 @@ impl App {
             let model_ref = ModelRef::from_parts(&alias, &model_id);
             self.app_event_tx
                 .send(AppEvent::UpdateModel(model_ref.bare().to_string()));
-            self.app_event_tx
-                .send(AppEvent::UpdateModelProvider(model_ref.provider_alias.clone()));
+            self.app_event_tx.send(AppEvent::UpdateModelProvider(
+                model_ref.provider_alias.clone(),
+            ));
         }
 
         telemetry::record_login_succeeded(&self.session_telemetry, provider);

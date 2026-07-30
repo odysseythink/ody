@@ -188,12 +188,10 @@ fn design_review_edit_state_apply_from_toml_reads_debate() {
 async fn design_review_edit_state_from_config_seeds_from_resolved_fields() {
     use ody_config::config_toml::DesignReviewDebateToml;
 
-    let mut config = Config::load_default_with_cli_overrides_for_ody_home(
-        std::env::temp_dir(),
-        Vec::new(),
-    )
-    .await
-    .expect("config");
+    let mut config =
+        Config::load_default_with_cli_overrides_for_ody_home(std::env::temp_dir(), Vec::new())
+            .await
+            .expect("config");
     config.design_review_enabled = true;
     config.design_review_model = Some("resolved/model".to_string());
     config.design_review_debate = Some(DesignReviewDebateToml {

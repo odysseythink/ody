@@ -305,5 +305,8 @@ async fn status_surface_preview_alias_provider_model_single_prefix() {
         !snapshot.contains("123456/123456/kimi-for-coding"),
         "expected no triple prefix, got:\n{snapshot}"
     );
-    assert_chatwidget_snapshot!("status_surface_preview_alias_provider_model_single_prefix", snapshot);
+    assert_chatwidget_snapshot!(
+        "status_surface_preview_alias_provider_model_single_prefix",
+        snapshot
+    );
 }
