@@ -1706,4 +1706,226 @@ mod tests {
         widget.handle_key_event(press(key(KeyCode::Enter)));
         render_and_assert(&widget, "login_flow_error");
     }
+
+    #[tokio::test]
+    async fn full_keyboard_flow_reaches_fetching_models() {
+        let mut widget = default_widget();
+        // PickProvider -> EnterAlias
+        widget.handle_key_event(press(key(KeyCode::Enter)));
+        assert!(matches!(widget.state(), LoginState::EnterAlias { .. }));
+        // Type a valid alias and submit
+        for ch in "work-kimi".chars() {
+            widget.handle_key_event(press(char_key(ch)));
+        }
+        widget.handle_key_event(press(key(KeyCode::Enter)));
+        assert!(matches!(widget.state(), LoginState::EnterApiKey { .. }));
+        // Type an API key and submit
+        for ch in "sk-secret".chars() {
+            widget.handle_key_event(press(char_key(ch)));
+        }
+        widget.handle_key_event(press(key(KeyCode::Enter)));
+        assert!(matches!(widget.state(), LoginState::EnterBaseUrl { .. }));
+        // Submit default base URL -> FetchingModels
+        widget.handle_key_event(press(key(KeyCode::Enter)));
+        assert!(matches!(widget.state(), LoginState::FetchingModels { .. }));
+    }
+
+    #[test]
+    fn go_back_from_enter_alias_clears_then_returns_to_picker() {
+        let mut widget = LoginFlowWidget {
+            state: LoginState::EnterAlias {
+                provider: BuiltInApiKeyProvider::Kimi,
+                alias: LoginInput::new("partial", false),
+            },
+            set_as_default: true,
+            request_handle: None,
+            fetch_task: None,
+            persist_task: None,
+        };
+        widget.handle_key_event(press(key(KeyCode::Esc)));
+        // First Esc clears the alias text but stays in EnterAlias
+        assert!(matches!(
+            widget.state(),
+            LoginState::EnterAlias {
+                provider: BuiltInApiKeyProvider::Kimi,
+                ..
+            }
+        ));
+        if let LoginState::EnterAlias { alias, .. } = widget.state() {
+            assert!(alias.is_empty());
+        }
+        // Second Esc returns to provider picker with Kimi highlighted
+        widget.handle_key_event(press(key(KeyCode::Esc)));
+        assert!(matches!(
+            widget.state(),
+            LoginState::PickProvider { highlighted: 0 }
+        ));
+    }
+
+    #[test]
+    fn go_back_from_enter_api_key_clears_then_returns_to_alias() {
+        let mut widget = LoginFlowWidget {
+            state: LoginState::EnterApiKey {
+                provider: BuiltInApiKeyProvider::Kimi,
+                alias: "work-kimi".to_string(),
+                api_key: LoginInput::new("partial-key", true),
+            },
+            set_as_default: true,
+            request_handle: None,
+            fetch_task: None,
+            persist_task: None,
+        };
+        widget.handle_key_event(press(key(KeyCode::Esc)));
+        assert!(matches!(
+            widget.state(),
+            LoginState::EnterApiKey {
+                provider: BuiltInApiKeyProvider::Kimi,
+                ..
+            }
+        ));
+        if let LoginState::EnterApiKey { api_key, .. } = widget.state() {
+            assert!(api_key.is_empty());
+        }
+        widget.handle_key_event(press(key(KeyCode::Esc)));
+        assert!(matches!(
+            widget.state(),
+            LoginState::EnterAlias {
+                provider: BuiltInApiKeyProvider::Kimi,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn go_back_from_pick_default_model_returns_to_base_url() {
+        let models = vec![LoginModelInfo {
+            id: "kimi-k2".to_string(),
+            display_name: "Kimi K2".to_string(),
+        }];
+        let mut widget = LoginFlowWidget {
+            state: LoginState::PickDefaultModel {
+                provider: BuiltInApiKeyProvider::Kimi,
+                alias: "work-kimi".to_string(),
+                api_key: "secret".to_string(),
+                base_url: "https://api.moonshot.cn".to_string(),
+                models,
+                highlighted: 0,
+            },
+            set_as_default: true,
+            request_handle: None,
+            fetch_task: None,
+            persist_task: None,
+        };
+        widget.handle_key_event(press(key(KeyCode::Esc)));
+        assert!(matches!(
+            widget.state(),
+            LoginState::EnterBaseUrl {
+                provider: BuiltInApiKeyProvider::Kimi,
+                ..
+            }
+        ));
+        if let LoginState::EnterBaseUrl { base_url, .. } = widget.state() {
+            assert_eq!(base_url.value(), "https://api.moonshot.cn");
+        }
+    }
+
+    #[test]
+    fn alias_validation_errors_at_widget_layer() {
+        fn assert_alias_error(alias: &str, expected_message: &str) {
+            let mut widget = LoginFlowWidget {
+                state: LoginState::EnterAlias {
+                    provider: BuiltInApiKeyProvider::Kimi,
+                    alias: LoginInput::new(alias, false),
+                },
+                set_as_default: true,
+                request_handle: None,
+                fetch_task: None,
+                persist_task: None,
+            };
+            widget.handle_key_event(press(key(KeyCode::Enter)));
+            assert!(
+                matches!(widget.state(), LoginState::Error { .. }),
+                "alias '{alias}' should produce an error state"
+            );
+            if let LoginState::Error { message, .. } = widget.state() {
+                assert_eq!(message, expected_message);
+            }
+        }
+
+        assert_alias_error("", "Alias cannot be empty");
+        assert_alias_error("kimi", "'kimi' is a reserved provider alias");
+        assert_alias_error(
+            "my alias",
+            "Alias may only contain letters, numbers, hyphens, and underscores",
+        );
+        assert_alias_error("1alias", "Alias must start with a letter");
+        assert_alias_error("a".repeat(65).as_str(), "Alias must be 64 characters or fewer");
+    }
+
+    #[test]
+    fn done_state_is_complete() {
+        let widget = LoginFlowWidget {
+            state: LoginState::Done {
+                provider: Some(BuiltInApiKeyProvider::Kimi),
+                alias: Some("work-kimi".to_string()),
+                api_key: Some("secret".to_string()),
+                base_url: Some("https://api.moonshot.cn".to_string()),
+                model_id: Some("kimi-k2".to_string()),
+                set_as_default: true,
+                persisted: false,
+                skipped: false,
+            },
+            set_as_default: true,
+            request_handle: None,
+            fetch_task: None,
+            persist_task: None,
+        };
+        assert_eq!(widget.get_step_state(), StepState::Complete);
+        assert!(widget.persisted() || !widget.skipped());
+    }
+
+    #[tokio::test]
+    async fn no_models_fetch_error_shows_special_message() {
+        let mut widget = LoginFlowWidget {
+            state: LoginState::FetchingModels {
+                provider: BuiltInApiKeyProvider::Kimi,
+                alias: "work-kimi".to_string(),
+                api_key: "secret".to_string(),
+                base_url: "https://api.moonshot.cn".to_string(),
+            },
+            set_as_default: true,
+            request_handle: None,
+            fetch_task: Some(tokio::spawn(async move { Err(LoginModelError::NoModels) })),
+            persist_task: None,
+        };
+        wait_for_state(&mut widget, |s| matches!(s, LoginState::Error { .. })).await;
+        assert!(matches!(widget.state(), LoginState::Error { .. }));
+        if let LoginState::Error { message, .. } = widget.state() {
+            assert_eq!(
+                message,
+                "No models returned by the provider. Please check the base URL."
+            );
+        }
+    }
+
+    #[test]
+    fn renders_done_skipped() {
+        let widget = LoginFlowWidget {
+            state: LoginState::Done {
+                provider: None,
+                alias: None,
+                api_key: None,
+                base_url: None,
+                model_id: None,
+                set_as_default: true,
+                persisted: false,
+                skipped: true,
+            },
+            set_as_default: true,
+            request_handle: None,
+            fetch_task: None,
+            persist_task: None,
+        };
+        render_and_assert(&widget, "login_flow_done_skipped");
+    }
 }

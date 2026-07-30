@@ -35,6 +35,7 @@ use crate::legacy_core::config::Config;
 use crate::onboarding::keys;
 use crate::onboarding::trust_directory::TrustDirectorySelection;
 use crate::onboarding::trust_directory::TrustDirectoryWidget;
+use crate::onboarding::login_flow::LoginFlowWidget;
 use crate::onboarding::welcome::WelcomeWidget;
 use crate::tui::FrameRequester;
 use crate::tui::Tui;
@@ -44,6 +45,7 @@ use color_eyre::eyre::Result;
 #[allow(clippy::large_enum_variant)]
 enum Step {
     Welcome(WelcomeWidget),
+    Login(LoginFlowWidget),
     TrustDirectory(TrustDirectoryWidget),
 }
 
@@ -72,6 +74,7 @@ pub(crate) struct OnboardingScreen {
 
 pub(crate) struct OnboardingScreenArgs {
     pub show_trust_screen: bool,
+    pub show_login_screen: bool,
     pub app_server_request_handle: Option<AppServerRequestHandle>,
     pub config: Config,
 }
@@ -86,11 +89,30 @@ impl OnboardingScreen {
     pub(crate) async fn new(tui: &mut Tui, args: OnboardingScreenArgs) -> Self {
         let OnboardingScreenArgs {
             show_trust_screen,
+            show_login_screen,
             app_server_request_handle,
             config,
         } = args;
         let cwd = config.cwd.to_path_buf();
+        let request_frame = tui.frame_requester();
         let mut steps: Vec<Step> = Vec::new();
+
+        // Welcome is always present; WelcomeWidget hides itself when the user is
+        // already logged in so the flow advances directly to the next step.
+        steps.push(Step::Welcome(WelcomeWidget::new(
+            config.has_active_model,
+            request_frame.clone(),
+            true,
+        )));
+
+        if show_login_screen {
+            let mut login_widget = LoginFlowWidget::new(&config);
+            if let Some(request_handle) = app_server_request_handle.clone() {
+                login_widget = login_widget.with_request_handle(request_handle);
+            }
+            steps.push(Step::Login(login_widget));
+        }
+
         #[cfg(target_os = "windows")]
         let show_windows_create_sandbox_hint =
             crate::windows_sandbox::level_from_config(&config) == WindowsSandboxLevel::Disabled;
@@ -113,7 +135,7 @@ impl OnboardingScreen {
             }))
         }
         Self {
-            request_frame: tui.frame_requester(),
+            request_frame,
             steps,
             is_done: false,
             should_exit: false,
@@ -154,7 +176,7 @@ impl OnboardingScreen {
         // Freeze the whole onboarding screen when auth is showing copyable login
         // material so terminal selection is not interrupted by redraws.
         self.current_steps().into_iter().any(|step| match step {
-            Step::Welcome(_) | Step::TrustDirectory(_) => false,
+            Step::Welcome(_) | Step::TrustDirectory(_) | Step::Login(_) => false,
         })
     }
 
@@ -235,7 +257,7 @@ impl WidgetRef for &OnboardingScreen {
         for step in self.current_steps() {
             match step {
                 Step::Welcome(widget) => widget.set_animations_suppressed(suppress_animations),
-                Step::TrustDirectory(_) => {}
+                Step::TrustDirectory(_) | Step::Login(_) => {}
             }
         }
 
@@ -308,6 +330,7 @@ impl KeyboardHandler for Step {
         match self {
             Step::Welcome(widget) => widget.handle_key_event(key_event),
             Step::TrustDirectory(widget) => widget.handle_key_event(key_event),
+            Step::Login(widget) => widget.handle_key_event(key_event),
         }
     }
 
@@ -315,6 +338,7 @@ impl KeyboardHandler for Step {
         match self {
             Step::Welcome(_) => {}
             Step::TrustDirectory(widget) => widget.handle_paste(pasted),
+            Step::Login(widget) => widget.handle_paste(pasted),
         }
     }
 }
@@ -324,6 +348,7 @@ impl StepStateProvider for Step {
         match self {
             Step::Welcome(w) => w.get_step_state(),
             Step::TrustDirectory(w) => w.get_step_state(),
+            Step::Login(w) => w.get_step_state(),
         }
     }
 }
@@ -335,6 +360,9 @@ impl WidgetRef for Step {
                 widget.render_ref(area, buf);
             }
             Step::TrustDirectory(widget) => {
+                widget.render_ref(area, buf);
+            }
+            Step::Login(widget) => {
                 widget.render_ref(area, buf);
             }
         }
@@ -457,5 +485,78 @@ async fn persist_selected_trust(
             }
             false
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::legacy_core::config::ConfigBuilder;
+    use std::io;
+    use tempfile::TempDir;
+
+    async fn test_config() -> Config {
+        let temp_dir = TempDir::new().expect("temp dir");
+        ConfigBuilder::default()
+            .ody_home(temp_dir.path().to_path_buf())
+            .build()
+            .await
+            .expect("config should build")
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn new_builds_welcome_login_trust_steps_in_order() -> io::Result<()> {
+        let mut tui = crate::tui::test_support::make_test_tui()?;
+        let config = test_config().await;
+        let args = OnboardingScreenArgs {
+            show_login_screen: true,
+            show_trust_screen: true,
+            app_server_request_handle: None,
+            config,
+        };
+        let screen = OnboardingScreen::new(&mut tui, args).await;
+        assert_eq!(screen.steps.len(), 3);
+        assert!(matches!(screen.steps[0], Step::Welcome(_)));
+        assert!(matches!(screen.steps[1], Step::Login(_)));
+        assert!(matches!(screen.steps[2], Step::TrustDirectory(_)));
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn login_step_reports_in_progress() -> io::Result<()> {
+        let mut tui = crate::tui::test_support::make_test_tui()?;
+        let config = test_config().await;
+        let args = OnboardingScreenArgs {
+            show_login_screen: true,
+            show_trust_screen: false,
+            app_server_request_handle: None,
+            config,
+        };
+        let screen = OnboardingScreen::new(&mut tui, args).await;
+        assert_eq!(screen.steps.len(), 2);
+        assert!(matches!(screen.steps[1], Step::Login(_)));
+        assert_eq!(screen.steps[1].get_step_state(), StepState::InProgress);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn welcome_step_is_hidden_when_already_logged_in() -> io::Result<()> {
+        let mut tui = crate::tui::test_support::make_test_tui()?;
+        let mut config = test_config().await;
+        config.has_active_model = true;
+        let args = OnboardingScreenArgs {
+            show_login_screen: false,
+            show_trust_screen: false,
+            app_server_request_handle: None,
+            config,
+        };
+        let screen = OnboardingScreen::new(&mut tui, args).await;
+        assert_eq!(screen.steps.len(), 1);
+        assert!(matches!(screen.steps[0], Step::Welcome(_)));
+        assert_eq!(screen.steps[0].get_step_state(), StepState::Hidden);
+        Ok(())
     }
 }

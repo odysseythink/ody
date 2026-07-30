@@ -1264,6 +1264,7 @@ async fn run_ratatui_app(
     let config = if should_show_onboarding {
         let onboarding_result = run_onboarding_app(
             OnboardingScreenArgs {
+                show_login_screen: false,
                 show_trust_screen: should_show_trust_screen_flag,
                 app_server_request_handle: app_server
                     .as_ref()
