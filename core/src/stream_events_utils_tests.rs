@@ -14,6 +14,7 @@ use crate::tools::parallel::ToolCallRuntime;
 use crate::turn_diff_tracker::TurnDiffTracker;
 use ody_extension_api::ExtensionData;
 use ody_extension_api::TurnItemContributor;
+use ody_protocol::config_types::ModeKind;
 use ody_protocol::error::OdyErr;
 use ody_protocol::items::AgentMessageContent;
 use ody_protocol::items::TurnItem;
@@ -280,6 +281,58 @@ async fn handle_output_item_done_returns_contributed_last_agent_message() {
         output.last_agent_message.as_deref(),
         Some("contributed assistant text")
     );
+}
+
+#[tokio::test]
+async fn handle_output_item_done_marks_submit_design_calls() {
+    let (session, mut turn_context) = make_session_and_context().await;
+    turn_context.collaboration_mode.mode = ModeKind::Design;
+
+    let session = Arc::new(session);
+    let turn_context = Arc::new(turn_context);
+    let router = Arc::new(ToolRouter::from_turn_context(
+        &turn_context,
+        crate::tools::router::ToolRouterParams {
+            tool_suggest_candidates: None,
+            mcp_tools: None,
+            deferred_mcp_tools: None,
+            extension_tool_executors: Vec::new(),
+            dynamic_tools: turn_context.dynamic_tools.as_slice(),
+        },
+        &Default::default(),
+    ));
+    let tracker = Arc::new(tokio::sync::Mutex::new(TurnDiffTracker::new()));
+    let tool_runtime = ToolCallRuntime::new(
+        router,
+        Arc::clone(&session),
+        Arc::clone(&turn_context),
+        tracker,
+    );
+    let item = ResponseItem::FunctionCall {
+        id: None,
+        name: "submit_design".to_string(),
+        namespace: None,
+        arguments: r##"{"design":"# Draft","final":false}"##.to_string(),
+        call_id: "submit-design-1".to_string(),
+        internal_chat_message_metadata_passthrough: None,
+    };
+    let mut ctx = HandleOutputCtx {
+        sess: session,
+        turn_context: Arc::clone(&turn_context),
+        turn_store: Arc::new(ExtensionData::new(turn_context.sub_id.clone())),
+        tool_runtime,
+        cancellation_token: CancellationToken::new(),
+    };
+
+    let output = handle_output_item_done(&mut ctx, item, /*previously_active_item*/ None)
+        .await
+        .expect("submit_design call should be routed");
+
+    assert!(output.is_submit_design_call);
+    assert!(!output.is_submit_plan_call);
+    assert!(!output.is_request_user_input_call);
+    assert!(output.needs_follow_up);
+    assert!(output.tool_future.is_some());
 }
 
 #[tokio::test]

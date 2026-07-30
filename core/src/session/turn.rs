@@ -155,11 +155,11 @@ use tracing::warn;
 /// turn strands the task.
 const MAX_TURN_CONTINUATION_RETRIES: u8 = 3;
 
-/// Maximum number of times Plan Mode will steer the model back to its required
-/// terminal actions. Plan Mode is host-enforced: a provider-level
+/// Maximum number of times Plan or Design Mode will steer the model back to its
+/// required terminal actions. In either mode, a provider-level
 /// `response.completed` is not a valid end of turn unless the model submitted
-/// the plan or requested user input.
-const MAX_PLAN_TERMINAL_ACTION_RETRIES: u8 = 3;
+/// its artifact or requested user input.
+const MAX_SESSION_MODE_TERMINAL_ACTION_RETRIES: u8 = 3;
 
 /// User-visible nudge appended when the model returns an empty completion, to
 /// coax it into either finishing with a message or issuing the tool call it
@@ -172,16 +172,54 @@ const PLAN_TERMINAL_ACTION_NUDGE: &str = "You ended the response without complet
 Continue the current planning task now. End this turn by calling exactly one of \
 `submit_plan` or `request_user_input`; do not stop after reasoning or a plain-text response.";
 
+const DESIGN_TERMINAL_ACTION_NUDGE: &str = "You ended the response without completing the required Design Mode action. \
+Continue the current design task now. End this turn by calling exactly one of \
+`submit_design` or `request_user_input`; do not stop after reasoning or a plain-text response.";
+
 const PLAN_PENDING_TASK_NUDGE: &str = "The current task-plan index still has pending task parts. The host has already supplied the exact next task path. Continue now: write only that pending task part with its complete task contract, then call `submit_plan` with the complete index and that row marked `done`. Do not stop with commentary or a summary while any task remains pending.";
 
-fn plan_mode_requires_terminal_action(
+struct SessionModeTerminalAction {
+    mode_name: &'static str,
+    submit_tool_name: &'static str,
+    artifact_name: &'static str,
+    nudge: &'static str,
+}
+
+fn terminal_action_for_session_mode(mode: ModeKind) -> Option<SessionModeTerminalAction> {
+    match mode {
+        ModeKind::Plan => Some(SessionModeTerminalAction {
+            mode_name: "Plan",
+            submit_tool_name: "submit_plan",
+            artifact_name: "plan",
+            nudge: PLAN_TERMINAL_ACTION_NUDGE,
+        }),
+        ModeKind::Design => Some(SessionModeTerminalAction {
+            mode_name: "Design",
+            submit_tool_name: "submit_design",
+            artifact_name: "design",
+            nudge: DESIGN_TERMINAL_ACTION_NUDGE,
+        }),
+        ModeKind::Default => None,
+        _ => None,
+    }
+}
+
+fn session_mode_requires_terminal_action(
     mode: ModeKind,
     has_submit_plan_call: bool,
+    has_submit_design_call: bool,
     has_request_user_input_call: bool,
     needs_follow_up: bool,
 ) -> bool {
-    mode == ModeKind::Plan
-        && !has_submit_plan_call
+    let has_submit_artifact_call = match mode {
+        ModeKind::Plan => has_submit_plan_call,
+        ModeKind::Design => has_submit_design_call,
+        ModeKind::Default => false,
+        _ => false,
+    };
+
+    terminal_action_for_session_mode(mode).is_some()
+        && !has_submit_artifact_call
         && !has_request_user_input_call
         && !needs_follow_up
 }
@@ -316,7 +354,7 @@ pub(crate) async fn run_turn(
     let mut last_agent_message: Option<String> = None;
     let mut stop_hook_active = false;
     let mut empty_completion_retries: u8 = 0;
-    let mut plan_terminal_action_retries: u8 = 0;
+    let mut session_mode_terminal_action_retries: u8 = 0;
     // Whether the turn has produced any actionable output (an agent message or a
     // tool-call-driven follow-up) before a given sampling response. This
     // distinguishes a mid-task empty completion (worth steering with a nudge)
@@ -422,6 +460,7 @@ pub(crate) async fn run_turn(
                     needs_follow_up: model_needs_follow_up,
                     last_agent_message: sampling_request_last_agent_message,
                     has_submit_plan_call,
+                    has_submit_design_call,
                     has_request_user_input_call,
                 } = sampling_request_output;
                 if sampling_request_last_agent_message.is_some() || model_needs_follow_up {
@@ -571,21 +610,24 @@ pub(crate) async fn run_turn(
                     // real question.  This is deliberately separate from the
                     // generic terminal-action rule below: a previous continuation
                     // may already have called submit_plan, yet still leave tasks.
-                    if !has_request_user_input_call && plan_mode_has_pending_task_parts(&turn_context)
+                    if !has_request_user_input_call
+                        && plan_mode_has_pending_task_parts(&turn_context)
                     {
-                        if plan_terminal_action_retries < MAX_PLAN_TERMINAL_ACTION_RETRIES {
-                            plan_terminal_action_retries += 1;
+                        if session_mode_terminal_action_retries
+                            < MAX_SESSION_MODE_TERMINAL_ACTION_RETRIES
+                        {
+                            session_mode_terminal_action_retries += 1;
                             warn!(
                                 turn_id = %turn_context.sub_id,
-                                attempt = plan_terminal_action_retries,
-                                max = MAX_PLAN_TERMINAL_ACTION_RETRIES,
+                                attempt = session_mode_terminal_action_retries,
+                                max = MAX_SESSION_MODE_TERMINAL_ACTION_RETRIES,
                                 "plan mode response stopped while task parts remained; continuing with task nudge"
                             );
                             sess.send_event(
                                 &turn_context,
                                 EventMsg::Warning(WarningEvent {
                                     message: format!(
-                                        "Plan Mode still has pending task parts; continuing automatically ({plan_terminal_action_retries}/{MAX_PLAN_TERMINAL_ACTION_RETRIES})…"
+                                        "Plan Mode still has pending task parts; continuing automatically ({session_mode_terminal_action_retries}/{MAX_SESSION_MODE_TERMINAL_ACTION_RETRIES})…"
                                     ),
                                 }),
                             )
@@ -609,30 +651,45 @@ pub(crate) async fn run_turn(
                         }
                     }
 
-                    // Plan Mode terminality is a host invariant, not merely a prompt
-                    // convention. A provider can report `response.completed` after
-                    // emitting only reasoning (or plain assistant text), but ending
-                    // the turn there strands an unfinished plan. Keep sampling until
-                    // the model either submits the plan or requests user input.
-                    if plan_mode_requires_terminal_action(
+                    // Plan and Design terminality are host invariants, not merely
+                    // prompt conventions. A provider can report `response.completed`
+                    // after emitting only reasoning (or plain assistant text), but
+                    // ending the turn there strands an unfinished artifact. Keep
+                    // sampling until the model submits the artifact or requests user
+                    // input.
+                    if session_mode_requires_terminal_action(
                         turn_context.collaboration_mode.mode,
                         has_submit_plan_call,
+                        has_submit_design_call,
                         has_request_user_input_call,
                         needs_follow_up,
                     ) {
-                        if plan_terminal_action_retries < MAX_PLAN_TERMINAL_ACTION_RETRIES {
-                            plan_terminal_action_retries += 1;
+                        let terminal_action = terminal_action_for_session_mode(
+                            turn_context.collaboration_mode.mode,
+                        )
+                        .expect(
+                            "terminal-action enforcement only applies to Plan and Design modes",
+                        );
+                        if session_mode_terminal_action_retries
+                            < MAX_SESSION_MODE_TERMINAL_ACTION_RETRIES
+                        {
+                            session_mode_terminal_action_retries += 1;
                             warn!(
                                 turn_id = %turn_context.sub_id,
-                                attempt = plan_terminal_action_retries,
-                                max = MAX_PLAN_TERMINAL_ACTION_RETRIES,
-                                "plan mode response ended without a terminal action; continuing with nudge"
+                                mode = terminal_action.mode_name,
+                                attempt = session_mode_terminal_action_retries,
+                                max = MAX_SESSION_MODE_TERMINAL_ACTION_RETRIES,
+                                "session mode response ended without a terminal action; continuing with nudge"
                             );
                             sess.send_event(
                                 &turn_context,
                                 EventMsg::Warning(WarningEvent {
                                     message: format!(
-                                        "Plan Mode response ended without `submit_plan` or `request_user_input`; retrying ({plan_terminal_action_retries}/{MAX_PLAN_TERMINAL_ACTION_RETRIES})…"
+                                        "{} Mode response ended without `{}` or `request_user_input`; retrying ({}/{})…",
+                                        terminal_action.mode_name,
+                                        terminal_action.submit_tool_name,
+                                        session_mode_terminal_action_retries,
+                                        MAX_SESSION_MODE_TERMINAL_ACTION_RETRIES,
                                     ),
                                 }),
                             )
@@ -641,7 +698,7 @@ pub(crate) async fn run_turn(
                                 id: Some(uuid::Uuid::new_v4().to_string()),
                                 role: "user".to_string(),
                                 content: vec![ContentItem::InputText {
-                                    text: PLAN_TERMINAL_ACTION_NUDGE.to_string(),
+                                    text: terminal_action.nudge.to_string(),
                                 }],
                                 phase: None,
                                 internal_chat_message_metadata_passthrough: None,
@@ -657,14 +714,18 @@ pub(crate) async fn run_turn(
 
                         let err = OdyErr::Stream(
                             format!(
-                                "Plan Mode response ended without `submit_plan` or `request_user_input` after {MAX_PLAN_TERMINAL_ACTION_RETRIES} retries"
+                                "{} Mode response ended without `{}` or `request_user_input` after {} retries",
+                                terminal_action.mode_name,
+                                terminal_action.submit_tool_name,
+                                MAX_SESSION_MODE_TERMINAL_ACTION_RETRIES,
                             ),
                             None,
                         );
                         warn!(
                             turn_id = %turn_context.sub_id,
-                            max = MAX_PLAN_TERMINAL_ACTION_RETRIES,
-                            "plan mode response omitted a terminal action too many times; ending turn with error"
+                            mode = terminal_action.mode_name,
+                            max = MAX_SESSION_MODE_TERMINAL_ACTION_RETRIES,
+                            "session mode response omitted a terminal action too many times; ending turn with error"
                         );
                         let error = err.to_ody_protocol_error();
                         sess.emit_turn_error_lifecycle(turn_context.as_ref(), error.clone())
@@ -673,7 +734,11 @@ pub(crate) async fn run_turn(
                         sess.send_event(
                             &turn_context,
                             EventMsg::Error(err.to_error_event(Some(
-                                "The model repeatedly ended Plan Mode without submitting the plan or requesting user input".to_string(),
+                                format!(
+                                    "The model repeatedly ended {} Mode without submitting the {} or requesting user input",
+                                    terminal_action.mode_name,
+                                    terminal_action.artifact_name,
+                                ),
                             ))),
                         )
                         .await;
@@ -2048,6 +2113,7 @@ struct SamplingRequestResult {
     needs_follow_up: bool,
     last_agent_message: Option<String>,
     has_submit_plan_call: bool,
+    has_submit_design_call: bool,
     has_request_user_input_call: bool,
 }
 
@@ -2511,6 +2577,7 @@ async fn try_run_sampling_request(
     let mut needs_follow_up = false;
     let mut last_agent_message: Option<String> = None;
     let mut has_submit_plan_call = false;
+    let mut has_submit_design_call = false;
     let mut has_request_user_input_call = false;
     let mut active_item: Option<TurnItem> = None;
     let mut active_tool_argument_diff_consumer: Option<(
@@ -2655,6 +2722,7 @@ async fn try_run_sampling_request(
                 }
                 needs_follow_up |= output_result.needs_follow_up;
                 has_submit_plan_call |= output_result.is_submit_plan_call;
+                has_submit_design_call |= output_result.is_submit_design_call;
                 has_request_user_input_call |= output_result.is_request_user_input_call;
                 // todo: remove before stabilizing multi-agent v2
                 if preempt_for_mailbox_mail && sess.input_queue.has_pending_mailbox_items().await {
@@ -2662,6 +2730,7 @@ async fn try_run_sampling_request(
                         needs_follow_up: true,
                         last_agent_message,
                         has_submit_plan_call,
+                        has_submit_design_call,
                         has_request_user_input_call,
                     });
                 }
@@ -2836,6 +2905,7 @@ async fn try_run_sampling_request(
                     needs_follow_up,
                     last_agent_message,
                     has_submit_plan_call,
+                    has_submit_design_call,
                     has_request_user_input_call,
                 });
             }
