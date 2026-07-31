@@ -110,7 +110,9 @@ async fn responses_lite_compact_request_uses_lite_transport_contract() -> Result
             model_info.supports_parallel_tool_calls = true;
         })
         .with_config(|config| {
-            let _ = config.features.disable(ody_features::Feature::RemoteCompactionV2);
+            let _ = config
+                .features
+                .disable(ody_features::Feature::RemoteCompactionV2);
         });
     let test = builder.build(&server).await?;
 
