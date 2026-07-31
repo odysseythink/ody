@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::config::WebSearchProviderConfig;
 use crate::error::WebSearchError;
@@ -27,8 +27,8 @@ impl WebSearchProviderFactory for MoonshotFactory {
     ) -> Result<SharedWebSearchProvider, WebSearchError> {
         validate_options(&config, &["base_url"])?;
         let api_key = require_api_key(&config)?;
-        let base_url = take_base_url(&mut config.options)
-            .unwrap_or_else(|| DEFAULT_MOONSHOT_URL.to_string());
+        let base_url =
+            take_base_url(&mut config.options).unwrap_or_else(|| DEFAULT_MOONSHOT_URL.to_string());
         let timeout = config
             .timeout_ms
             .map(Duration::from_millis)
@@ -81,7 +81,10 @@ impl WebSearchProvider for MoonshotProvider {
             .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&body)
             .timeout(self.timeout);
-        let response = request.send().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let response = request
+            .send()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         let status = response.status();
         if !status.is_success() {
             let body = match response.text().await {
@@ -90,7 +93,10 @@ impl WebSearchProvider for MoonshotProvider {
             };
             return Err(WebSearchError::from_http_status(status, &body));
         }
-        let json: Value = response.json().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let json: Value = response
+            .json()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         parse_moonshot_response(&json, options.limit)
     }
 }
@@ -119,10 +125,7 @@ fn parse_moonshot_response(
             .get("snippet")
             .and_then(|v| v.as_str())
             .map_or_else(String::new, String::from);
-        let date = item
-            .get("date")
-            .and_then(|v| v.as_str())
-            .map(String::from);
+        let date = item.get("date").and_then(|v| v.as_str()).map(String::from);
         let content = item
             .get("content")
             .and_then(|v| v.as_str())
@@ -183,7 +186,14 @@ mod tests {
         };
         let provider = MoonshotFactory.create(config, reqwest::Client::new())?;
         let results = provider
-            .search("hello", &WebSearchOptions { limit: Some(4), include_content: None, tool_call_id: None })
+            .search(
+                "hello",
+                &WebSearchOptions {
+                    limit: Some(4),
+                    include_content: None,
+                    tool_call_id: None,
+                },
+            )
             .await?;
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].title, "M");

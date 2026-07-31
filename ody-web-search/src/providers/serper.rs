@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::config::WebSearchProviderConfig;
 use crate::error::WebSearchError;
@@ -27,8 +27,8 @@ impl WebSearchProviderFactory for SerperFactory {
     ) -> Result<SharedWebSearchProvider, WebSearchError> {
         validate_options(&config, &["base_url"])?;
         let api_key = require_api_key(&config)?;
-        let base_url = take_base_url(&mut config.options)
-            .unwrap_or_else(|| DEFAULT_SERPER_URL.to_string());
+        let base_url =
+            take_base_url(&mut config.options).unwrap_or_else(|| DEFAULT_SERPER_URL.to_string());
         let timeout = config
             .timeout_ms
             .map(Duration::from_millis)
@@ -78,7 +78,10 @@ impl WebSearchProvider for SerperProvider {
             .header("Content-Type", "application/json")
             .json(&json!({ "q": query, "num": limit }))
             .timeout(self.timeout);
-        let response = request.send().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let response = request
+            .send()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         let status = response.status();
         if !status.is_success() {
             let body = match response.text().await {
@@ -87,7 +90,10 @@ impl WebSearchProvider for SerperProvider {
             };
             return Err(WebSearchError::from_http_status(status, &body));
         }
-        let json: Value = response.json().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let json: Value = response
+            .json()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         parse_serper_response(&json, options.limit)
     }
 }
@@ -139,10 +145,7 @@ fn parse_serper_response(
             .get("snippet")
             .and_then(|v| v.as_str())
             .map_or_else(String::new, String::from);
-        let date = item
-            .get("date")
-            .and_then(|v| v.as_str())
-            .map(String::from);
+        let date = item.get("date").and_then(|v| v.as_str()).map(String::from);
         if !title.is_empty() && !url.is_empty() {
             results.push(WebSearchResult {
                 title,
@@ -169,8 +172,8 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
-    async fn parses_serper_response_with_knowledge_graph_and_organic(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    async fn parses_serper_response_with_knowledge_graph_and_organic()
+    -> Result<(), Box<dyn std::error::Error>> {
         let server = MockServer::start().await;
         let body = json!({
             "knowledgeGraph": { "title": "KG", "link": "https://kg.example", "snippet": "kg snippet" },
@@ -192,7 +195,14 @@ mod tests {
         );
         let provider = SerperFactory.create(config, reqwest::Client::new())?;
         let results = provider
-            .search("rust", &WebSearchOptions { limit: Some(3), include_content: None, tool_call_id: None })
+            .search(
+                "rust",
+                &WebSearchOptions {
+                    limit: Some(3),
+                    include_content: None,
+                    tool_call_id: None,
+                },
+            )
             .await?;
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].title, "KG");

@@ -80,7 +80,10 @@ impl WebSearchProvider for DuckDuckGoProvider {
                 .timeout(self.timeout)
         };
 
-        let response = request.send().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let response = request
+            .send()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         let status = response.status();
         if !status.is_success() {
             let body = match response.text().await {
@@ -89,7 +92,10 @@ impl WebSearchProvider for DuckDuckGoProvider {
             };
             return Err(WebSearchError::from_http_status(status, &body));
         }
-        let html = response.text().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let html = response
+            .text()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         let mut results = parse_duckduckgo_html(&html);
         if let Some(limit) = options.limit {
             let limit = limit.clamp(1, 50) as usize;
@@ -113,7 +119,9 @@ fn parse_duckduckgo_html(html: &str) -> Vec<WebSearchResult> {
     for part in parts.iter().skip(1) {
         let title = extract_tag_contents(part, "result__a");
         let href = extract_tag_attribute(part, "result__a", "href");
-        let link = href.map(extract_duckduckgo_redirect_url).unwrap_or_default();
+        let link = href
+            .map(extract_duckduckgo_redirect_url)
+            .unwrap_or_default();
         let snippet = extract_tag_contents(part, "result__snippet")
             .replace("<b>", "")
             .replace("</b>", "");
@@ -143,7 +151,10 @@ fn extract_tag_contents(html: &str, class_name: &str) -> String {
 }
 
 fn extract_tag_attribute(html: &str, class_name: &str, attribute: &str) -> Option<String> {
-    let pattern = format!("<a[^>]*class=\"{}\"[^>]*{}=\"([^\"]*)\"", class_name, attribute);
+    let pattern = format!(
+        "<a[^>]*class=\"{}\"[^>]*{}=\"([^\"]*)\"",
+        class_name, attribute
+    );
     let regex = regex::Regex::new(&pattern).ok()?;
     let capture = regex.captures(html)?.get(1)?;
     Some(capture.as_str().to_string())
@@ -209,7 +220,14 @@ mod tests {
         };
         let provider = DuckDuckGoFactory.create(config, reqwest::Client::new())?;
         let results = provider
-            .search("hello world", &WebSearchOptions { limit: Some(2), include_content: None, tool_call_id: None })
+            .search(
+                "hello world",
+                &WebSearchOptions {
+                    limit: Some(2),
+                    include_content: None,
+                    tool_call_id: None,
+                },
+            )
             .await?;
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].title, "Title A");
@@ -229,7 +247,10 @@ mod tests {
         </div>"#;
         Mock::given(method("GET"))
             .and(path("/proxy"))
-            .and(header("X-Proxy-Url", "https://html.duckduckgo.com/html?q=query"))
+            .and(header(
+                "X-Proxy-Url",
+                "https://html.duckduckgo.com/html?q=query",
+            ))
             .respond_with(ResponseTemplate::new(200).set_body_string(html))
             .mount(&proxy_server)
             .await;
@@ -245,7 +266,9 @@ mod tests {
             options,
         };
         let provider = DuckDuckGoFactory.create(config, reqwest::Client::new())?;
-        let results = provider.search("query", &WebSearchOptions::default()).await?;
+        let results = provider
+            .search("query", &WebSearchOptions::default())
+            .await?;
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].title, "Title C");
         Ok(())

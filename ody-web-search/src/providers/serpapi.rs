@@ -27,8 +27,8 @@ impl WebSearchProviderFactory for SerpApiFactory {
     ) -> Result<SharedWebSearchProvider, WebSearchError> {
         validate_options(&config, &["base_url"])?;
         let api_key = require_api_key(&config)?;
-        let base_url = take_base_url(&mut config.options)
-            .unwrap_or_else(|| DEFAULT_SERPAPI_URL.to_string());
+        let base_url =
+            take_base_url(&mut config.options).unwrap_or_else(|| DEFAULT_SERPAPI_URL.to_string());
         let timeout = config
             .timeout_ms
             .map(Duration::from_millis)
@@ -75,13 +75,12 @@ impl WebSearchProvider for SerpApiProvider {
         let request = self
             .client
             .get(&self.base_url)
-            .query(&[
-                ("q", query),
-                ("num", &count),
-                ("api_key", &self.api_key),
-            ])
+            .query(&[("q", query), ("num", &count), ("api_key", &self.api_key)])
             .timeout(self.timeout);
-        let response = request.send().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let response = request
+            .send()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         let status = response.status();
         if !status.is_success() {
             let body = match response.text().await {
@@ -90,7 +89,10 @@ impl WebSearchProvider for SerpApiProvider {
             };
             return Err(WebSearchError::from_http_status(status, &body));
         }
-        let json: Value = response.json().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let json: Value = response
+            .json()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         parse_serpapi_response(&json, options.limit)
     }
 }
@@ -119,10 +121,7 @@ fn parse_serpapi_response(
             .get("snippet")
             .and_then(|v| v.as_str())
             .map_or_else(String::new, String::from);
-        let date = item
-            .get("date")
-            .and_then(|v| v.as_str())
-            .map(String::from);
+        let date = item.get("date").and_then(|v| v.as_str()).map(String::from);
         results.push(WebSearchResult {
             title,
             url,
@@ -176,7 +175,14 @@ mod tests {
         };
         let provider = SerpApiFactory.create(config, reqwest::Client::new())?;
         let results = provider
-            .search("rust", &WebSearchOptions { limit: Some(3), include_content: None, tool_call_id: None })
+            .search(
+                "rust",
+                &WebSearchOptions {
+                    limit: Some(3),
+                    include_content: None,
+                    tool_call_id: None,
+                },
+            )
             .await?;
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].title, "T");

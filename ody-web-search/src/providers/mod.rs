@@ -14,9 +14,9 @@ pub mod moonshot;
 pub mod perplexity;
 pub mod searchapi;
 pub mod searxng;
+pub mod serpapi;
 pub mod serper;
 pub mod serply;
-pub mod serpapi;
 pub mod tavily;
 
 /// Create a registry with all 12 web search providers registered.
