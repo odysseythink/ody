@@ -320,13 +320,27 @@ impl LoginFlowWidget {
     }
 
     pub(crate) fn skipped(&self) -> bool {
-        matches!(
-            self.state,
-            LoginState::Done {
-                skipped: true,
-                ..
-            }
-        )
+        matches!(self.state, LoginState::Done { skipped: true, .. })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn done_for_test() -> Self {
+        Self {
+            state: LoginState::Done {
+                provider: None,
+                alias: None,
+                api_key: None,
+                base_url: None,
+                model_id: None,
+                set_as_default: false,
+                persisted: true,
+                skipped: false,
+            },
+            set_as_default: false,
+            request_handle: None,
+            fetch_task: None,
+            persist_task: None,
+        }
     }
 
     pub(crate) async fn poll_tasks(&mut self) {
@@ -452,6 +466,19 @@ impl LoginFlowWidget {
 
     pub(crate) fn should_suppress_animations(&self) -> bool {
         self.is_text_editing()
+    }
+
+    pub(crate) fn has_active_text_input(&self) -> bool {
+        self.active_input().map_or(false, |input| !input.is_empty())
+    }
+
+    fn active_input(&self) -> Option<&LoginInput> {
+        match &self.state {
+            LoginState::EnterAlias { alias, .. } => Some(alias),
+            LoginState::EnterApiKey { api_key, .. } => Some(api_key),
+            LoginState::EnterBaseUrl { base_url, .. } => Some(base_url),
+            _ => None,
+        }
     }
 
     fn active_input_mut(&mut self) -> Option<&mut LoginInput> {
@@ -1859,7 +1886,10 @@ mod tests {
             "Alias may only contain letters, numbers, hyphens, and underscores",
         );
         assert_alias_error("1alias", "Alias must start with a letter");
-        assert_alias_error("a".repeat(65).as_str(), "Alias must be 64 characters or fewer");
+        assert_alias_error(
+            "a".repeat(65).as_str(),
+            "Alias must be 64 characters or fewer",
+        );
     }
 
     #[test]
