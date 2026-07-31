@@ -1105,7 +1105,6 @@ mod tests {
     use ratatui::layout::Rect;
 
     use crate::test_backend::VT100Backend;
-    use crate::tui::FrameRequester;
     use ody_app_server_protocol::WriteStatus;
     use ody_utils_absolute_path::AbsolutePathBuf;
     use std::time::Duration;

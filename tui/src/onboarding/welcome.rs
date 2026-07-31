@@ -13,7 +13,7 @@ use ratatui::widgets::Wrap;
 use std::cell::Cell;
 
 use crate::ascii_animation::AsciiAnimation;
-use crate::frames::LOGO_VARIANTS;
+use crate::frames::ALL_VARIANTS;
 use crate::key_hint::KeyBindingListExt;
 use crate::onboarding::keys;
 use crate::onboarding::onboarding_screen::KeyboardHandler;
@@ -22,10 +22,8 @@ use crate::tui::FrameRequester;
 
 use super::onboarding_screen::StepState;
 
-pub(crate) const MIN_ANIMATION_HEIGHT: u16 = 13;
+pub(crate) const MIN_ANIMATION_HEIGHT: u16 = 37;
 pub(crate) const MIN_ANIMATION_WIDTH: u16 = 60;
-/// Height required for the compact Ody logo animation (10 frames + padding).
-pub(crate) const LOGO_MIN_ANIMATION_HEIGHT: u16 = 13;
 
 pub(crate) struct WelcomeWidget {
     pub is_logged_in: bool,
@@ -59,11 +57,7 @@ impl WelcomeWidget {
     ) -> Self {
         Self {
             is_logged_in,
-            animation: AsciiAnimation::with_variants(
-                request_frame,
-                LOGO_VARIANTS,
-                /*variant_idx*/ 0,
-            ),
+            animation: AsciiAnimation::new(request_frame),
             animations_enabled,
             animations_suppressed: Cell::new(false),
             layout_area: Cell::new(None),
@@ -90,7 +84,7 @@ impl WidgetRef for &WelcomeWidget {
         // Skip the animation entirely when the viewport is too small so we don't clip frames.
         let show_animation = self.animations_enabled
             && !self.animations_suppressed.get()
-            && layout_area.height >= LOGO_MIN_ANIMATION_HEIGHT
+            && layout_area.height >= MIN_ANIMATION_HEIGHT
             && layout_area.width >= MIN_ANIMATION_WIDTH;
 
         let mut lines: Vec<Line> = Vec::new();
@@ -147,37 +141,6 @@ mod tests {
     }
 
     #[test]
-    fn welcome_renders_animation_on_first_draw() {
-        let widget = WelcomeWidget::new(
-            /*is_logged_in*/ false,
-            FrameRequester::test_dummy(),
-            /*animations_enabled*/ true,
-        );
-        let area = Rect::new(0, 0, MIN_ANIMATION_WIDTH, LOGO_MIN_ANIMATION_HEIGHT);
-        let mut buf = Buffer::empty(area);
-        let frame_lines = widget.animation.current_frame().lines().count() as u16;
-        (&widget).render(area, &mut buf);
-
-        let welcome_row = row_containing(&buf, "Welcome");
-        assert_eq!(welcome_row, Some(frame_lines + 1));
-    }
-
-    #[test]
-    fn welcome_skips_animation_below_height_breakpoint() {
-        let widget = WelcomeWidget::new(
-            /*is_logged_in*/ false,
-            FrameRequester::test_dummy(),
-            /*animations_enabled*/ true,
-        );
-        let area = Rect::new(0, 0, MIN_ANIMATION_WIDTH, MIN_ANIMATION_HEIGHT - 1);
-        let mut buf = Buffer::empty(area);
-        (&widget).render(area, &mut buf);
-
-        let welcome_row = row_containing(&buf, "Welcome");
-        assert_eq!(welcome_row, Some(0));
-    }
-
-    #[test]
     fn ctrl_dot_changes_animation_variant() {
         let mut widget = WelcomeWidget {
             is_logged_in: false,
@@ -228,10 +191,8 @@ mod tests {
         );
     }
 
-    use crate::frames::FRAMES_LOGO;
-
     #[test]
-    fn welcome_renders_logo_animation() {
+    fn welcome_renders_animation_on_first_draw() {
         let widget = WelcomeWidget::new(
             /*is_logged_in*/ false,
             FrameRequester::test_dummy(),
@@ -239,45 +200,39 @@ mod tests {
         );
         let area = Rect::new(0, 0, MIN_ANIMATION_WIDTH, MIN_ANIMATION_HEIGHT);
         let mut buf = Buffer::empty(area);
+        let frame_lines = widget.animation.current_frame().lines().count() as u16;
         (&widget).render(area, &mut buf);
 
-        let has_logo_blocks = ["█", "▓", "▒"].iter().any(|&ch| {
-            (0..buf.area.height).any(|y| {
-                let row: String = (0..buf.area.width)
-                    .map(|x| buf[(x, y)].symbol().to_string())
-                    .collect();
-                row.contains(ch)
-            })
-        });
-        assert!(
-            has_logo_blocks,
-            "expected logo block characters in welcome animation"
-        );
+        let welcome_row = row_containing(&buf, "Welcome");
+        assert_eq!(welcome_row, Some(frame_lines + 1));
     }
 
     #[test]
-    fn welcome_uses_single_logo_variant() {
-        let mut widget = WelcomeWidget::new(
+    fn welcome_skips_animation_below_height_breakpoint() {
+        let widget = WelcomeWidget::new(
             /*is_logged_in*/ false,
             FrameRequester::test_dummy(),
             /*animations_enabled*/ true,
         );
-        let before = widget.animation.current_frame();
-        assert!(
-            FRAMES_LOGO.contains(&before),
-            "expected initial frame to be a logo frame"
-        );
+        let area = Rect::new(0, 0, MIN_ANIMATION_WIDTH, MIN_ANIMATION_HEIGHT - 1);
+        let mut buf = Buffer::empty(area);
+        (&widget).render(area, &mut buf);
 
-        // ctrl+. should not switch to a different variant because there is only one.
-        widget.handle_key_event(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::CONTROL));
-        let after = widget.animation.current_frame();
-        assert!(
-            FRAMES_LOGO.contains(&after),
-            "expected frame after ctrl+. to still be a logo frame"
+        let welcome_row = row_containing(&buf, "Welcome");
+        assert_eq!(welcome_row, Some(0));
+    }
+
+    #[test]
+    fn welcome_uses_full_animation_variants() {
+        let widget = WelcomeWidget::new(
+            /*is_logged_in*/ false,
+            FrameRequester::test_dummy(),
+            /*animations_enabled*/ true,
         );
-        assert_eq!(
-            before, after,
-            "expected no variant change for a single-variant animation within one tick"
+        let frame = widget.animation.current_frame();
+        assert!(
+            ALL_VARIANTS.iter().any(|variant| variant.contains(&frame)),
+            "expected initial frame to come from one of the animation variants"
         );
     }
 
