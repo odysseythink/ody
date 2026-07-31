@@ -624,8 +624,6 @@ impl ThreadHistoryBuilder {
         }
     }
 
-
-
     fn handle_exec_command_begin(&mut self, payload: &ExecCommandBeginEvent) {
         let item = build_command_execution_begin_item(payload);
         self.upsert_item_in_turn_id(&payload.turn_id, item);
@@ -1567,7 +1565,7 @@ mod tests {
     use ody_protocol::protocol::TurnCompleteEvent;
     use ody_protocol::protocol::TurnStartedEvent;
     use ody_protocol::protocol::UserMessageEvent;
-            use ody_utils_absolute_path::test_support::PathBufExt;
+    use ody_utils_absolute_path::test_support::PathBufExt;
     use ody_utils_absolute_path::test_support::test_path_buf;
     use pretty_assertions::assert_eq;
     use std::path::PathBuf;
@@ -3783,7 +3781,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn changed_rollout_item_reports_streaming_item_mutation() {
         let mut builder = ThreadHistoryBuilder::new();
@@ -3881,7 +3878,6 @@ mod tests {
             }
         );
     }
-
 
     #[test]
     fn changed_rollout_items_dedupe_turn_metadata_snapshots() {
