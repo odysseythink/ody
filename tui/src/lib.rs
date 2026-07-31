@@ -1264,14 +1264,14 @@ async fn run_ratatui_app(
     let config = if should_show_onboarding {
         let onboarding_result = run_onboarding_app(
             OnboardingScreenArgs {
-                show_login_screen: false,
+                show_login_screen: should_show_login_screen(&initial_config),
                 show_trust_screen: should_show_trust_screen_flag,
                 app_server_request_handle: app_server
                     .as_ref()
                     .map(AppServerSession::request_handle),
                 config: initial_config.clone(),
             },
-            None,
+            app_server.as_mut(),
             &mut tui,
         )
         .await?;
@@ -1800,6 +1800,14 @@ async fn load_bootstrap_config_or_exit(
 /// Determine if the user has decided whether to trust the current directory.
 fn should_show_trust_screen(config: &Config) -> bool {
     config.active_project.trust_level.is_none()
+}
+
+/// Determine if the onboarding login screen should be shown.
+///
+/// Returns true when the user has no active model and no model providers configured,
+/// meaning they need to set up a third-party API-key provider before using Ody.
+fn should_show_login_screen(config: &Config) -> bool {
+    !config.has_active_model && config.model_providers.is_empty()
 }
 
 fn should_show_onboarding(config: &Config, show_trust_screen: bool) -> bool {
