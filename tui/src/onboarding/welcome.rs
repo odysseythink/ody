@@ -22,15 +22,16 @@ use crate::tui::FrameRequester;
 
 use super::onboarding_screen::StepState;
 
-const MIN_ANIMATION_HEIGHT: u16 = 37;
-const MIN_ANIMATION_WIDTH: u16 = 60;
+pub(crate) const MIN_ANIMATION_HEIGHT: u16 = 13;
+pub(crate) const MIN_ANIMATION_WIDTH: u16 = 60;
+/// Height required for the compact Ody logo animation (10 frames + padding).
+pub(crate) const LOGO_MIN_ANIMATION_HEIGHT: u16 = 13;
 
 pub(crate) struct WelcomeWidget {
     pub is_logged_in: bool,
     animation: AsciiAnimation,
     animations_enabled: bool,
     animations_suppressed: Cell<bool>,
-    done: Cell<bool>,
     layout_area: Cell<Option<Rect>>,
 }
 
@@ -40,16 +41,10 @@ impl KeyboardHandler for WelcomeWidget {
     /// The key list includes compatibility variants for terminals that report
     /// modifier bits differently.
     fn handle_key_event(&mut self, key_event: KeyEvent) {
-        if key_event.kind == KeyEventKind::Press
-            && matches!(key_event.code, KeyCode::Enter | KeyCode::Char(' '))
+        if self.animations_enabled
+            && key_event.kind == KeyEventKind::Press
+            && keys::TOGGLE_ANIMATION.is_pressed(key_event)
         {
-            self.done.set(true);
-        }
-
-        if !self.animations_enabled {
-            return;
-        }
-        if key_event.kind == KeyEventKind::Press && keys::TOGGLE_ANIMATION.is_pressed(key_event) {
             tracing::warn!("Welcome background to press '.'");
             let _ = self.animation.pick_random_variant();
         }
@@ -71,7 +66,6 @@ impl WelcomeWidget {
             ),
             animations_enabled,
             animations_suppressed: Cell::new(false),
-            done: Cell::new(false),
             layout_area: Cell::new(None),
         }
     }
@@ -96,7 +90,7 @@ impl WidgetRef for &WelcomeWidget {
         // Skip the animation entirely when the viewport is too small so we don't clip frames.
         let show_animation = self.animations_enabled
             && !self.animations_suppressed.get()
-            && layout_area.height >= MIN_ANIMATION_HEIGHT
+            && layout_area.height >= LOGO_MIN_ANIMATION_HEIGHT
             && layout_area.width >= MIN_ANIMATION_WIDTH;
 
         let mut lines: Vec<Line> = Vec::new();
@@ -120,10 +114,10 @@ impl WidgetRef for &WelcomeWidget {
 
 impl StepStateProvider for WelcomeWidget {
     fn get_step_state(&self) -> StepState {
-        match (self.is_logged_in, self.done.get()) {
-            (true, _) => StepState::Hidden,
-            (false, true) => StepState::Complete,
-            (false, false) => StepState::InProgress,
+        if self.is_logged_in {
+            StepState::Hidden
+        } else {
+            StepState::Complete
         }
     }
 }
@@ -159,7 +153,7 @@ mod tests {
             FrameRequester::test_dummy(),
             /*animations_enabled*/ true,
         );
-        let area = Rect::new(0, 0, MIN_ANIMATION_WIDTH, MIN_ANIMATION_HEIGHT);
+        let area = Rect::new(0, 0, MIN_ANIMATION_WIDTH, LOGO_MIN_ANIMATION_HEIGHT);
         let mut buf = Buffer::empty(area);
         let frame_lines = widget.animation.current_frame().lines().count() as u16;
         (&widget).render(area, &mut buf);
@@ -194,7 +188,6 @@ mod tests {
             ),
             animations_enabled: true,
             animations_suppressed: Cell::new(false),
-            done: Cell::new(false),
             layout_area: Cell::new(None),
         };
 
@@ -219,7 +212,6 @@ mod tests {
             ),
             animations_enabled: true,
             animations_suppressed: Cell::new(false),
-            done: Cell::new(false),
             layout_area: Cell::new(None),
         };
 
@@ -290,32 +282,17 @@ mod tests {
     }
 
     #[test]
-    fn welcome_stays_in_progress_until_confirmed() {
+    fn welcome_is_complete_while_not_logged_in() {
         let widget = WelcomeWidget::new(
             /*is_logged_in*/ false,
             FrameRequester::test_dummy(),
             /*animations_enabled*/ false,
         );
-        assert_eq!(widget.get_step_state(), StepState::InProgress);
-    }
-
-    #[test]
-    fn enter_or_space_completes_welcome() {
-        let mut widget = WelcomeWidget::new(
-            /*is_logged_in*/ false,
-            FrameRequester::test_dummy(),
-            /*animations_enabled*/ false,
-        );
-        widget.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert_eq!(widget.get_step_state(), StepState::Complete);
-
-        let mut widget = WelcomeWidget::new(
-            /*is_logged_in*/ false,
-            FrameRequester::test_dummy(),
-            /*animations_enabled*/ false,
+        assert!(
+            !widget.is_logged_in,
+            "welcome should remain visible until the user is logged in"
         );
-        widget.handle_key_event(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
-        assert_eq!(widget.get_step_state(), StepState::Complete);
     }
 
     #[test]

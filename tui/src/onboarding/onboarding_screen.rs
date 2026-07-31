@@ -98,8 +98,9 @@ impl OnboardingScreen {
         let request_frame = tui.frame_requester();
         let mut steps: Vec<Step> = Vec::new();
 
-        // Welcome is always present; WelcomeWidget hides itself when the user is
-        // already logged in so the flow advances directly to the next step.
+        // Welcome is always rendered first. When the login screen is also shown, the
+        // provider picker is stacked below the welcome header so the animation, welcome
+        // text, and provider choices appear on a single screen.
         steps.push(Step::Welcome(WelcomeWidget::new(
             config.has_active_model,
             request_frame.clone(),
@@ -541,7 +542,7 @@ mod tests {
 
     #[tokio::test]
     #[serial_test::serial]
-    async fn new_builds_welcome_login_trust_steps_in_order() -> io::Result<()> {
+    async fn new_builds_welcome_login_trust_steps_when_both_enabled() -> io::Result<()> {
         let mut tui = crate::tui::test_support::make_test_tui()?;
         let config = test_config().await;
         let args = OnboardingScreenArgs {
@@ -560,7 +561,7 @@ mod tests {
 
     #[tokio::test]
     #[serial_test::serial]
-    async fn login_step_reports_in_progress() -> io::Result<()> {
+    async fn login_screen_renders_welcome_and_login() -> io::Result<()> {
         let mut tui = crate::tui::test_support::make_test_tui()?;
         let config = test_config().await;
         let args = OnboardingScreenArgs {
@@ -571,8 +572,13 @@ mod tests {
         };
         let screen = OnboardingScreen::new(&mut tui, args).await;
         assert_eq!(screen.steps.len(), 2);
+        assert!(matches!(screen.steps[0], Step::Welcome(_)));
         assert!(matches!(screen.steps[1], Step::Login(_)));
         assert_eq!(screen.steps[1].get_step_state(), StepState::InProgress);
+        let current = screen.current_steps();
+        assert_eq!(current.len(), 2);
+        assert!(matches!(current[0], Step::Welcome(_)));
+        assert!(matches!(current[1], Step::Login(_)));
         Ok(())
     }
 
@@ -616,6 +622,8 @@ mod tests {
         assert!(!screen.should_suppress_animations());
         screen.handle_key_event(key(KeyCode::Enter));
         assert!(screen.should_suppress_animations());
+        screen.steps[1] = Step::Login(LoginFlowWidget::done_for_test());
+        assert!(!screen.should_suppress_animations());
         Ok(())
     }
 
@@ -708,7 +716,7 @@ mod tests {
             config,
         };
         let mut screen = OnboardingScreen::new(&mut tui, args).await;
-        // Mark the welcome step as complete so the iterator proceeds past it.
+        // Advance login past provider picker.
         screen.handle_key_event(key(KeyCode::Enter));
         // Replace the login step with a persisted-complete state.
         screen.steps[1] = Step::Login(LoginFlowWidget::done_for_test());

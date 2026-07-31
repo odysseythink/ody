@@ -254,6 +254,12 @@ pub(crate) enum LoginState {
     },
 }
 
+impl Default for LoginState {
+    fn default() -> Self {
+        LoginState::PickProvider { highlighted: 0 }
+    }
+}
+
 /// Widget that drives the onboarding login flow.
 #[allow(dead_code)]
 pub(crate) struct LoginFlowWidget {
@@ -283,6 +289,18 @@ impl PartialEq for LoginFlowWidget {
 }
 
 impl Eq for LoginFlowWidget {}
+
+impl Default for LoginFlowWidget {
+    fn default() -> Self {
+        Self {
+            state: LoginState::PickProvider { highlighted: 0 },
+            set_as_default: false,
+            request_handle: None,
+            fetch_task: None,
+            persist_task: None,
+        }
+    }
+}
 
 #[allow(dead_code)]
 impl LoginFlowWidget {
@@ -716,20 +734,20 @@ impl LoginFlowWidget {
 
         match &self.state {
             LoginState::PickProvider { highlighted } => {
-                column.push(Line::from(vec!["> ".into(), "Select provider".bold()]));
+                column.push(Line::from(vec![
+                    "> ".into(),
+                    "Select a provider to connect".bold(),
+                ]));
                 column.push("");
-                column.push(
-                    Paragraph::new(
-                        "Choose an API-key provider to configure. Press Esc to skip this step."
-                            .to_string(),
-                    )
-                    .wrap(Wrap { trim: true }),
-                );
+                column.push(Paragraph::new(
+                    "Choose an API-key provider to configure. Press Esc to skip this step."
+                        .to_string(),
+                ));
                 column.push("");
                 for (idx, provider) in PROVIDERS.iter().enumerate() {
                     column.push(selection_option_row(
                         idx,
-                        provider.display_name().to_string(),
+                        format!("Login to {}", provider.display_name()),
                         *highlighted == idx,
                     ));
                 }
@@ -1083,9 +1101,11 @@ mod tests {
     use crossterm::event::KeyModifiers;
     use pretty_assertions::assert_eq;
     use ratatui::Terminal;
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::Rect;
 
-    use crate::legacy_core::config::Config;
     use crate::test_backend::VT100Backend;
+    use crate::tui::FrameRequester;
     use ody_app_server_protocol::WriteStatus;
     use ody_utils_absolute_path::AbsolutePathBuf;
     use std::time::Duration;
@@ -1957,5 +1977,51 @@ mod tests {
             persist_task: None,
         };
         render_and_assert(&widget, "login_flow_done_skipped");
+    }
+
+    fn buffer_content(buf: &Buffer) -> String {
+        let mut rows: Vec<String> = Vec::new();
+        for y in 0..buf.area.height {
+            let mut row = String::new();
+            for x in 0..buf.area.width {
+                row.push_str(buf[(x, y)].symbol());
+            }
+            rows.push(row);
+        }
+        rows.join("\n")
+    }
+
+    #[test]
+    fn provider_picker_renders_welcome_header() {
+        let widget = default_widget();
+        let area = Rect::new(0, 0, 80, 40);
+        let mut buf = Buffer::empty(area);
+        widget.render(area, &mut buf);
+        let content = buffer_content(&buf);
+        assert!(
+            content.contains("Select a provider to connect"),
+            "expected provider picker header, got:\n{content}"
+        );
+    }
+
+    #[test]
+    fn provider_picker_renders_login_options_for_all_providers() {
+        let widget = default_widget();
+        let area = Rect::new(0, 0, 80, 40);
+        let mut buf = Buffer::empty(area);
+        widget.render(area, &mut buf);
+        let content = buffer_content(&buf);
+        assert!(
+            content.contains("Login to Kimi"),
+            "expected Login to Kimi option, got:\n{content}"
+        );
+        assert!(
+            content.contains("Login to DeepSeek"),
+            "expected Login to DeepSeek option, got:\n{content}"
+        );
+        assert!(
+            content.contains("Login to GLM"),
+            "expected Login to GLM option, got:\n{content}"
+        );
     }
 }
