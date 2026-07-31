@@ -47,6 +47,8 @@ macro_rules! frames_for {
 pub(crate) const FRAMES_DEFAULT: [&str; 36] = frames_for!("default");
 pub(crate) const FRAMES_ODY: [&str; 36] = frames_for!("ody");
 pub(crate) const FRAMES_ODYSSEYTHINK: [&str; 36] = frames_for!("odysseythink");
+pub(crate) const FRAMES_ODY1: [&str; 36] = frames_for!("ody1");
+pub(crate) const FRAMES_ODY2: [&str; 36] = frames_for!("ody2");
 pub(crate) const FRAMES_BLOCKS: [&str; 36] = frames_for!("blocks");
 pub(crate) const FRAMES_DOTS: [&str; 36] = frames_for!("dots");
 pub(crate) const FRAMES_HASH: [&str; 36] = frames_for!("hash");
@@ -59,6 +61,8 @@ pub(crate) const ALL_VARIANTS: &[&[&str]] = &[
     &FRAMES_DEFAULT,
     &FRAMES_ODY,
     &FRAMES_ODYSSEYTHINK,
+    &FRAMES_ODY1,
+    &FRAMES_ODY2,
     &FRAMES_BLOCKS,
     &FRAMES_DOTS,
     &FRAMES_HASH,
@@ -76,7 +80,7 @@ mod tests {
 
     #[test]
     fn all_variants_have_expected_frame_count() {
-        assert_eq!(ALL_VARIANTS.len(), 10);
+        assert_eq!(ALL_VARIANTS.len(), 12);
         for (idx, variant) in ALL_VARIANTS.iter().enumerate() {
             assert_eq!(
                 variant.len(),
@@ -93,14 +97,14 @@ mod tests {
                 let lines: Vec<_> = frame.lines().collect();
                 assert_eq!(
                     lines.len(),
-                    16,
-                    "variant {v_idx} frame {f_idx} must be 16 rows"
+                    17,
+                    "variant {v_idx} frame {f_idx} must be 17 rows"
                 );
                 for (l_idx, line) in lines.iter().enumerate() {
                     let width = unicode_width::UnicodeWidthStr::width(*line);
                     assert_eq!(
-                        width, 80,
-                        "variant {v_idx} frame {f_idx} line {l_idx} must be 80 columns"
+                        width, 38,
+                        "variant {v_idx} frame {f_idx} line {l_idx} must be 38 columns"
                     );
                 }
             }
