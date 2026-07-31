@@ -59,12 +59,12 @@ fn read_ody_api_key_from_env() -> Option<String> {
 }
 
 use ody_config::LoaderOverrides;
-use ody_core::resolve_runtime_model_state;
 use ody_core::config::ConfigBuilder;
 use ody_core::config::ConfigOverrides;
 use ody_core::config::edit::ConfigEditsBuilder;
 use ody_core::config::find_ody_home;
 use ody_core::config::resolve_profile_v2_config_path;
+use ody_core::resolve_runtime_model_state;
 use ody_features::FEATURES;
 use ody_features::Stage;
 use ody_features::is_known_feature_key;
@@ -3575,12 +3575,7 @@ mod tests {
             disable: vec!["unified_exec".to_string()],
         };
         let overrides = toggles.to_overrides().expect("valid features");
-        assert_eq!(
-            overrides,
-            vec![
-                "features.unified_exec=false".to_string(),
-            ]
-        );
+        assert_eq!(overrides, vec!["features.unified_exec=false".to_string(),]);
     }
 
     #[test]

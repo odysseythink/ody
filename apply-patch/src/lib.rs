@@ -719,9 +719,20 @@ async fn derive_new_contents_from_chunks(
     let chunks: Vec<UpdateFileChunk> = chunks
         .iter()
         .map(|chunk| UpdateFileChunk {
-            change_context: chunk.change_context.as_ref().map(|ctx| strip_trailing_cr(ctx)),
-            old_lines: chunk.old_lines.iter().map(|l| strip_trailing_cr(l)).collect(),
-            new_lines: chunk.new_lines.iter().map(|l| strip_trailing_cr(l)).collect(),
+            change_context: chunk
+                .change_context
+                .as_ref()
+                .map(|ctx| strip_trailing_cr(ctx)),
+            old_lines: chunk
+                .old_lines
+                .iter()
+                .map(|l| strip_trailing_cr(l))
+                .collect(),
+            new_lines: chunk
+                .new_lines
+                .iter()
+                .map(|l| strip_trailing_cr(l))
+                .collect(),
             new_line_sources: chunk.new_line_sources.clone(),
             is_end_of_file: chunk.is_end_of_file,
         })
