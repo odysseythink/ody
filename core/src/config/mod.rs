@@ -83,8 +83,6 @@ use ody_mcp::McpServerRegistration;
 use ody_mcp::ResolvedMcpCatalog;
 use ody_memories_read::memory_root;
 use ody_model_provider_info::ModelProviderInfo;
-use ody_model_provider_info::model_ref::ModelRef;
-use ody_model_provider_info::model_ref::ProviderRef;
 #[cfg(test)]
 use ody_model_provider_info::ProviderCapabilities;
 #[cfg(test)]
@@ -92,6 +90,8 @@ use ody_model_provider_info::WireApi;
 use ody_model_provider_info::create_deepseek_provider;
 use ody_model_provider_info::create_glm_provider;
 use ody_model_provider_info::create_kimi_provider;
+use ody_model_provider_info::model_ref::ModelRef;
+use ody_model_provider_info::model_ref::ProviderRef;
 use ody_models_manager::ModelsManagerConfig;
 use ody_models_manager::model_info::ConfiguredModelSpec;
 use ody_models_manager::model_info::configured_model_catalog_for_provider;
@@ -120,9 +120,9 @@ use ody_protocol::protocol::MultiAgentVersion;
 use ody_protocol::protocol::SandboxPolicy;
 pub use ody_thread_store::ExtraConfig;
 use ody_utils_absolute_path::AbsolutePathBuf;
-use ody_web_search::config::ServicesConfig;
 use ody_utils_absolute_path::AbsolutePathBufGuard;
 use ody_utils_path_uri::PathUri;
+use ody_web_search::config::ServicesConfig;
 use rmcp::model::ElicitationCapability;
 use rmcp::model::FormElicitationCapability;
 use rmcp::model::UrlElicitationCapability;
@@ -2076,11 +2076,7 @@ fn configured_model_catalog(
             }
         })
         .collect();
-    configured_model_catalog_for_provider(
-        model_provider_id,
-        model_provider.wire_api,
-        &entries,
-    )
+    configured_model_catalog_for_provider(model_provider_id, model_provider.wire_api, &entries)
 }
 
 /// Build a model catalog from user-declared `[models."provider/model"]`
@@ -2134,11 +2130,9 @@ fn configured_model_catalog_all_providers(
                 }
             })
             .collect();
-        if let Some(mut response) = configured_model_catalog_for_provider(
-            provider_id,
-            provider.wire_api,
-            &entries,
-        ) {
+        if let Some(mut response) =
+            configured_model_catalog_for_provider(provider_id, provider.wire_api, &entries)
+        {
             all_models.append(&mut response.models);
         }
     }
