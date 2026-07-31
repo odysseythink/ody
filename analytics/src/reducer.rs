@@ -2507,8 +2507,6 @@ fn dynamic_content_counts(items: &[DynamicToolCallOutputContentItem]) -> Dynamic
     }
 }
 
-
-
 fn accepted_line_event_input(
     turn_id: &str,
     turn_state: &TurnState,
