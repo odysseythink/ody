@@ -2,9 +2,9 @@ use super::turn_context::TurnEnvironment;
 use super::*;
 use crate::config::ConfigBuilder;
 use crate::config::ConfigOverrides;
+use crate::config::TEST_PROVIDER_ID;
 use crate::config::test_config;
 use crate::config::test_provider;
-use crate::config::TEST_PROVIDER_ID;
 use crate::context::ContextualUserFragment;
 use crate::context::TurnAborted;
 use crate::environment_selection::ThreadEnvironments;
@@ -20,19 +20,18 @@ use crate::tools::format_exec_output_str;
 use core_test_support::test_ody::local_selections;
 use ody_config::ConfigLayerStack;
 use ody_config::ConfigLayerStackOrdering;
+use ody_config::ConstraintError;
 use ody_config::LoaderOverrides;
 use ody_config::NetworkConstraints;
 use ody_config::NetworkDomainPermissionToml;
 use ody_config::NetworkDomainPermissionsToml;
 use ody_config::RequirementSource;
 use ody_config::Sourced;
-use ody_config::ConstraintError;
 use ody_config::config_toml::PlanEnforcement;
 use ody_config::config_toml::PlanModeConfigToml;
 use ody_config::loader::project_trust_key;
 use ody_config::types::ToolSuggestDisabledTool;
 use ody_core_skills::HostSkillsSnapshot;
-use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_features::Feature;
 use ody_model_provider::create_model_provider;
 use ody_model_provider_info::ModelProviderInfo;
@@ -68,6 +67,7 @@ use ody_protocol::protocol::SandboxPolicy;
 use ody_protocol::protocol::TurnEnvironmentSelections;
 use ody_protocol::request_permissions::PermissionGrantScope;
 use ody_protocol::request_permissions::RequestPermissionProfile;
+use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path_uri::PathUri;
 use tracing::Span;
 
@@ -2709,16 +2709,16 @@ async fn fork_startup_context_then_first_turn_diff_snapshot() -> anyhow::Result<
     let mut builder = test_ody()
         .with_user_instructions_provider(Arc::new(EmptyUserInstructionsProvider))
         .with_config(move |config| {
-        config.permissions.approval_policy =
-            ody_config::Constrained::allow_any(AskForApproval::OnRequest);
-        config.model_provider_id = TEST_PROVIDER_ID.to_string();
-        config.model_provider = test_provider();
-        config.model_provider.base_url = Some(format!("{}/v1", server_uri));
-        config.model_providers =
-            std::collections::HashMap::from([(TEST_PROVIDER_ID.to_string(), test_provider())]);
-        config.base_instructions = None;
-        config.model_language = None;
-    });
+            config.permissions.approval_policy =
+                ody_config::Constrained::allow_any(AskForApproval::OnRequest);
+            config.model_provider_id = TEST_PROVIDER_ID.to_string();
+            config.model_provider = test_provider();
+            config.model_provider.base_url = Some(format!("{}/v1", server_uri));
+            config.model_providers =
+                std::collections::HashMap::from([(TEST_PROVIDER_ID.to_string(), test_provider())]);
+            config.base_instructions = None;
+            config.model_language = None;
+        });
     let initial = builder.build(&server).await?;
     let rollout_path = initial
         .session_configured
@@ -3515,10 +3515,7 @@ async fn turn_context_with_model_updates_model_fields() {
     assert_eq!(updated.model_info, expected_model_info);
     // k3's supported reasoning levels are [low, high, max] with a default of
     // high, so Minimal is adjusted to the middle supported level (high).
-    assert_eq!(
-        updated.reasoning_effort,
-        Some(ReasoningEffortConfig::High)
-    );
+    assert_eq!(updated.reasoning_effort, Some(ReasoningEffortConfig::High));
     assert_eq!(
         updated.collaboration_mode.reasoning_effort(),
         Some(ReasoningEffortConfig::High)
@@ -3876,10 +3873,7 @@ async fn session_configuration_apply_switches_to_builtin_provider() {
         .expect("switch to built-in kimi provider should apply");
 
     assert_eq!(updated.provider.name, "Kimi");
-    assert_eq!(
-        updated.original_config_do_not_use.model_provider_id,
-        "kimi"
-    );
+    assert_eq!(updated.original_config_do_not_use.model_provider_id, "kimi");
     assert_eq!(
         updated.original_config_do_not_use.model_provider.name,
         "Kimi"
@@ -3923,12 +3917,10 @@ async fn session_configuration_apply_switches_to_configured_provider_alias() {
 async fn session_configuration_apply_rejects_unknown_provider_id() {
     let session_configuration = make_session_configuration_for_tests().await;
 
-    let Err(err) = session_configuration
-        .apply(&SessionSettingsUpdate {
-            model_provider_id: Some("unknown-provider".to_string()),
-            ..Default::default()
-        })
-    else {
+    let Err(err) = session_configuration.apply(&SessionSettingsUpdate {
+        model_provider_id: Some("unknown-provider".to_string()),
+        ..Default::default()
+    }) else {
         panic!("unknown provider id should be rejected");
     };
 
@@ -4950,7 +4942,9 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
         show_raw_agent_reasoning: config.show_raw_agent_reasoning,
         exec_policy,
         session_telemetry: session_telemetry.clone(),
-        models_manager: crate::thread_manager::SwappableModelsManager::new(Arc::clone(&models_manager)),
+        models_manager: crate::thread_manager::SwappableModelsManager::new(Arc::clone(
+            &models_manager,
+        )),
         tool_approvals: Mutex::new(ApprovalStore::default()),
         guardian_rejections: Mutex::new(std::collections::HashMap::new()),
         guardian_rejection_circuit_breaker: Mutex::new(Default::default()),
@@ -7001,7 +6995,9 @@ where
         show_raw_agent_reasoning: config.show_raw_agent_reasoning,
         exec_policy,
         session_telemetry: session_telemetry.clone(),
-        models_manager: crate::thread_manager::SwappableModelsManager::new(Arc::clone(&models_manager)),
+        models_manager: crate::thread_manager::SwappableModelsManager::new(Arc::clone(
+            &models_manager,
+        )),
         tool_approvals: Mutex::new(ApprovalStore::default()),
         guardian_rejections: Mutex::new(std::collections::HashMap::new()),
         guardian_rejection_circuit_breaker: Mutex::new(Default::default()),
@@ -8294,7 +8290,10 @@ async fn record_context_updates_and_set_reference_context_item_persists_baseline
         "k3"
     };
     let turn_context = previous_context
-        .with_model(next_model.to_string(), &session.services.models_manager.load())
+        .with_model(
+            next_model.to_string(),
+            &session.services.models_manager.load(),
+        )
         .await;
     let previous_context_item = previous_context.to_turn_context_item();
     let world_state = session.build_world_state(&previous_context).await;
@@ -8413,7 +8412,10 @@ async fn record_context_updates_and_set_reference_context_item_persists_full_rei
         "k3"
     };
     let turn_context = previous_context
-        .with_model(next_model.to_string(), &session.services.models_manager.load())
+        .with_model(
+            next_model.to_string(),
+            &session.services.models_manager.load(),
+        )
         .await;
     let rollout_path = attach_thread_persistence(&mut session).await;
 

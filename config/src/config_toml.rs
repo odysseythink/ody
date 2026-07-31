@@ -165,7 +165,10 @@ const fn default_normal_task_compaction_ratio() -> Option<f64> {
 }
 
 const fn default_split_plan_compaction_ratio() -> Option<f64> {
-    Some(0.5)
+    // Split parts already provide a natural recovery point. Compacting at half
+    // a context window caused repeated compact/re-read cycles for otherwise
+    // healthy plans, so reserve compaction for genuinely constrained contexts.
+    Some(0.75)
 }
 
 const fn default_max_tasks_per_part() -> Option<usize> {
@@ -173,7 +176,11 @@ const fn default_max_tasks_per_part() -> Option<usize> {
 }
 
 const fn default_max_part_bytes() -> Option<usize> {
-    Some(12 * 1024)
+    // Task-mode rigor plans are split by implementation responsibility, not
+    // by a file container. A default byte cap makes the model optimize for
+    // shortening detail instead of preserving evidence and tests. Users that
+    // need a delivery-size ceiling can explicitly set a non-zero value.
+    Some(0)
 }
 
 const fn default_full_refresh_turns() -> Option<usize> {
@@ -271,11 +278,9 @@ pub struct ConfigToml {
     /// to `review_model` for backwards compatibility.
     pub design_review_model: Option<String>,
 
-    /// Optional `[design_review]` table. Currently carries only the `debate`
-    /// sub-table that turns the single-shot adversarial review into a bounded
-    /// Advocate/Skeptic/Judge debate. The legacy flat `design_review_model`
-    /// key above is intentionally kept for backwards compatibility and is NOT
-    /// moved under this table.
+    /// Optional `[design_review]` table. The legacy flat `design_review_model`
+    /// key above is kept for backwards compatibility and acts as a fallback for
+    /// `[design_review].review_model`.
     pub design_review: Option<DesignReviewToml>,
 
     /// Provider to use from the model_providers map.
@@ -909,13 +914,21 @@ pub struct AutoReviewToml {
     pub policy: Option<String>,
 }
 
-/// `[design_review]` table. Holds the optional `debate` sub-table.
+/// `[design_review]` table. Controls the adversarial review triggered when
+/// finalizing a design in Design Mode.
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct DesignReviewToml {
-    /// `[design_review.debate]` — when present and `enable = true`, the design
-    /// adversarial review augments its single-shot critic with a bounded
-    /// Advocate/Skeptic/Judge debate.
+    /// Master switch for the adversarial design review. Defaults to `false`.
+    /// When `true`, the review uses `review_model` below, falling back to the
+    /// legacy flat `design_review_model` and then to `review_model`.
+    #[serde(default)]
+    pub enable: bool,
+    /// Optional model override for the single-shot critic. Falls back to the
+    /// legacy flat `design_review_model` and then `review_model`.
+    pub review_model: Option<String>,
+    /// `[design_review.debate]` — when present and `enable = true`, augments the
+    /// single-shot critic with a bounded Advocate/Skeptic/Judge debate.
     pub debate: Option<DesignReviewDebateToml>,
 }
 
@@ -944,8 +957,8 @@ pub struct DesignReviewDebateToml {
     /// Advocate↔Skeptic back-and-forth rounds. Defaults to 1; clamped to
     /// `1..=3` at resolution time.
     pub rounds: Option<u8>,
-    /// Per-seat model overrides. Each falls back to `design_review_model`, then
-    /// `review_model`, when unset. Recommended: cheap Advocate, capable
+    /// Per-seat model overrides. Each falls back to `[design_review].review_model`,
+    /// then the legacy flat `design_review_model`, then `review_model`. Recommended: cheap Advocate, capable
     /// adversarial Skeptic, strongest Judge (the Judge is the highest-leverage
     /// seat — it emits the findings).
     pub advocate_model: Option<String>,
@@ -1421,6 +1434,21 @@ mod tests {
     }
 
     #[test]
+    fn design_review_table_enable_and_review_model_parse() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+                [design_review]
+                enable = true
+                review_model = "glm_1/glm-5.1"
+            "#,
+        )
+        .expect("design_review table should deserialize");
+        let dr = config.design_review.expect("design_review table present");
+        assert!(dr.enable);
+        assert_eq!(dr.review_model.as_deref(), Some("glm_1/glm-5.1"));
+    }
+
+    #[test]
     fn design_review_debate_defaults_when_fields_omitted() {
         let config: ConfigToml = toml::from_str(
             r#"
@@ -1735,7 +1763,7 @@ type = "openai"
         assert_eq!(plan_mode.context_isolation, Some(PlanContextIsolation::Off));
         assert_eq!(plan_mode.split_threshold, Some(4));
         assert_eq!(plan_mode.max_tasks_per_part, Some(3));
-        assert_eq!(plan_mode.max_part_bytes, Some(12 * 1024));
+        assert_eq!(plan_mode.max_part_bytes, Some(0));
         assert!(plan_mode.model.is_none());
         assert!(plan_mode.reasoning_effort.is_none());
         assert_eq!(plan_mode.design_audit_level, None);
@@ -1792,6 +1820,7 @@ context_isolation = "on"
 model = "kimi-k2-thinking"
 reasoning_effort = "high"
 split_threshold = 16
+max_part_bytes = 12288
 "#,
         )
         .expect("plan_mode config should deserialize");
@@ -1808,16 +1837,16 @@ split_threshold = 16
     }
 
     #[test]
-    fn default_split_plan_compaction_ratio_is_half() {
+    fn default_split_plan_compaction_ratio_leaves_room_for_the_next_part() {
         let cfg = PlanModeConfigToml::default();
-        assert_eq!(cfg.split_plan_compaction_ratio, Some(0.5));
+        assert_eq!(cfg.split_plan_compaction_ratio, Some(0.75));
     }
 
     #[test]
-    fn default_part_budgets_keep_split_parts_small() {
+    fn default_part_budget_preserves_complete_task_detail() {
         let cfg = PlanModeConfigToml::default();
         assert_eq!(cfg.max_tasks_per_part, Some(3));
-        assert_eq!(cfg.max_part_bytes, Some(12 * 1024));
+        assert_eq!(cfg.max_part_bytes, Some(0));
     }
 
     #[test]

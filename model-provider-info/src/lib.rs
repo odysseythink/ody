@@ -27,10 +27,10 @@ use strum_macros::EnumString;
 use strum_macros::IntoStaticStr;
 
 pub mod model_ref;
-pub use model_ref::resolve_provider;
-pub use model_ref::resolve_provider_info;
 pub use model_ref::ProviderKind;
 use model_ref::resolve_kind;
+pub use model_ref::resolve_provider;
+pub use model_ref::resolve_provider_info;
 
 const DEFAULT_STREAM_IDLE_TIMEOUT_MS: u64 = 300_000;
 const DEFAULT_STREAM_MAX_RETRIES: u64 = 5;

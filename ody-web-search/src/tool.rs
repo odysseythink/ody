@@ -68,7 +68,8 @@ impl ToolExecutor<ToolCall> for WebSearchTool {
                     }
                 },
                 "required": ["query"]
-            })).expect("WebSearch input schema is valid JSON"),
+            }))
+            .expect("WebSearch input schema is valid JSON"),
             defer_loading: None,
             output_schema: None,
         })
@@ -90,9 +91,8 @@ impl ToolExecutor<ToolCall> for WebSearchTool {
                     ));
                 }
             };
-            let input: WebSearchInput = serde_json::from_str(&arguments).map_err(|e| {
-                FunctionCallError::Fatal(format!("invalid WebSearch input: {e}"))
-            })?;
+            let input: WebSearchInput = serde_json::from_str(&arguments)
+                .map_err(|e| FunctionCallError::Fatal(format!("invalid WebSearch input: {e}")))?;
             let options = WebSearchOptions {
                 limit: input.limit,
                 include_content: input.include_content,
@@ -107,13 +107,13 @@ impl ToolExecutor<ToolCall> for WebSearchTool {
                         text: format_results(&results),
                     };
                     let value = serde_json::to_value(&output).map_err(|e| {
-                        FunctionCallError::Fatal(format!("failed to serialize WebSearch output: {e}"))
+                        FunctionCallError::Fatal(format!(
+                            "failed to serialize WebSearch output: {e}"
+                        ))
                     })?;
                     Ok(Box::new(JsonToolOutput::new(value)) as Box<dyn ody_tools::ToolOutput>)
                 }
-                Err(err) => {
-                    Err(FunctionCallError::Fatal(err.user_message()))
-                }
+                Err(err) => Err(FunctionCallError::Fatal(err.user_message())),
             }
         })
     }
@@ -220,10 +220,7 @@ mod tests {
             }
         }
         let tool = WebSearchTool::new("session-1".to_string(), Arc::new(FailingProvider));
-        let err = match tool
-            .handle(tool_call(r#"{"query":"hello"}"#))
-            .await
-        {
+        let err = match tool.handle(tool_call(r#"{"query":"hello"}"#)).await {
             Err(err) => err,
             Ok(_) => panic!("should fail"),
         };

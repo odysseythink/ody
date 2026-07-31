@@ -25,9 +25,12 @@ impl WebSearchProviderRegistry {
         http_client: reqwest::Client,
     ) -> Result<SharedWebSearchProvider, WebSearchError> {
         let name = config.provider.to_string();
-        let factory = self.factories.get(&name).ok_or_else(|| WebSearchError::Unexpected {
-            message: format!("unknown web search provider: {}", name),
-        })?;
+        let factory = self
+            .factories
+            .get(&name)
+            .ok_or_else(|| WebSearchError::Unexpected {
+                message: format!("unknown web search provider: {}", name),
+            })?;
         factory.create(config.clone(), http_client)
     }
 }
@@ -108,6 +111,10 @@ mod tests {
         registry.register(Box::new(BingFactory));
         let config = bing_config();
         let result = registry.create(&config, reqwest::Client::new());
-        assert!(result.is_ok(), "expected registered provider to be created: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "expected registered provider to be created: {:?}",
+            result
+        );
     }
 }

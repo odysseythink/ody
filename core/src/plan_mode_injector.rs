@@ -1,6 +1,6 @@
 use crate::plan_artifact::{ManifestSnapshot, PartRow, PartStatus, PlanArtifact};
 use crate::plan_mode_injector::parts_manifest::{
-    RowStatus, normalize_part_path, parse_parts_manifest, part_budget_violations,
+    ManifestRow, RowStatus, normalize_part_path, parse_parts_manifest, part_completion_violations,
     row_is_verified_done,
 };
 use crate::turn_timing::now_unix_timestamp_ms;
@@ -36,12 +36,22 @@ pub struct PartTarget {
     pub scope: String,
 }
 
+/// Preserve a task manifest's stable identity in every host directive.  The
+/// file name alone is insufficient after compaction: the model must also know
+/// which manifest row and task title it is resuming.
+fn target_scope(row: &ManifestRow) -> String {
+    match &row.task {
+        Some(task) => format!("{}: {} (scope: {})", row.id, task, row.scope),
+        None => row.scope.clone(),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct AfterPlanTurnResult {
     pub directive: PlanModeDirective,
     pub boundary_crossed: bool,
-    /// True when a newly-created split or a completed part leaves work to resume.
-    /// This is the safe checkpoint immediately before the next part starts.
+    /// True when a verified completed part leaves work to resume. This is the
+    /// safe checkpoint immediately before the next part starts.
     pub checkpoint_due: bool,
     pub logs: Vec<PlanModeLogEvent>,
 }
@@ -79,15 +89,19 @@ impl PlanModeInjector {
             };
         };
 
-        let max_tasks = plan_mode_config
-            .and_then(|cfg| cfg.max_tasks_per_part)
-            .unwrap_or(3);
+        let max_tasks = if manifest.is_task_mode() {
+            1
+        } else {
+            plan_mode_config
+                .and_then(|cfg| cfg.max_tasks_per_part)
+                .unwrap_or(3)
+        };
         let max_bytes = plan_mode_config
             .and_then(|cfg| cfg.max_part_bytes)
-            .unwrap_or(12 * 1024);
+            .unwrap_or(0);
         let mut done_count = 0usize;
         let mut pending_rows: Vec<PartRow> = Vec::new();
-        let mut oversized_done_parts: Vec<(PartTarget, Vec<String>)> = Vec::new();
+        let mut invalid_done_parts: Vec<(PartTarget, Vec<String>)> = Vec::new();
         for row in &manifest.rows {
             if normalize_part_path(&stem_dir, &row.file).is_none() {
                 warn!(
@@ -96,16 +110,17 @@ impl PlanModeInjector {
                 );
                 continue;
             }
-            let violations = part_budget_violations(&stem_dir, row, max_tasks, max_bytes);
+            let violations =
+                part_completion_violations(&stem_dir, &manifest, row, max_tasks, max_bytes);
             if row_is_verified_done(&stem_dir, row) && violations.is_empty() {
                 done_count += 1;
                 continue;
             }
             if row_is_verified_done(&stem_dir, row) {
-                oversized_done_parts.push((
+                invalid_done_parts.push((
                     PartTarget {
                         relative_path: row.file.clone(),
-                        scope: row.scope.clone(),
+                        scope: target_scope(row),
                     },
                     violations,
                 ));
@@ -139,8 +154,10 @@ impl PlanModeInjector {
                         file_name: row.file.clone(),
                         scope: row.scope.clone(),
                         status: if row_is_verified_done(&stem_dir, row)
-                            && part_budget_violations(&stem_dir, row, max_tasks, max_bytes)
-                                .is_empty()
+                            && part_completion_violations(
+                                &stem_dir, &manifest, row, max_tasks, max_bytes,
+                            )
+                            .is_empty()
                         {
                             PartStatus::Done
                         } else {
@@ -182,11 +199,11 @@ impl PlanModeInjector {
             };
         }
 
-        if let Some((part, violations)) = oversized_done_parts.into_iter().next() {
+        if let Some((part, violations)) = invalid_done_parts.into_iter().next() {
             logs.push(make_log(
                 PlanModeLogKind::SplitContinued,
                 format!(
-                    "Plan part {} exceeded its budget; split it before continuing.",
+                    "Plan part {} did not satisfy its completion contract; repair it before continuing.",
                     part.relative_path
                 ),
                 None,
@@ -202,7 +219,12 @@ impl PlanModeInjector {
         let next_part = &pending_rows[0];
         let target = PartTarget {
             relative_path: next_part.file_name.clone(),
-            scope: next_part.scope.clone(),
+            scope: manifest
+                .rows
+                .iter()
+                .find(|row| row.file == next_part.file_name)
+                .map(target_scope)
+                .unwrap_or_else(|| next_part.scope.clone()),
         };
 
         let (directive, kind, message) = if prev_snapshot.is_none() {
@@ -233,7 +255,11 @@ impl PlanModeInjector {
         AfterPlanTurnResult {
             directive,
             boundary_crossed,
-            checkpoint_due: boundary_crossed || prev_snapshot.is_none(),
+            // The initial index is not a task boundary. Compacting there adds
+            // latency before the first task and was the source of needless
+            // stop/resume cycles. Only a verified completed part can create a
+            // checkpoint for the next one.
+            checkpoint_due: boundary_crossed,
             logs,
         }
     }
@@ -248,7 +274,7 @@ impl PlanModeInjector {
         }
         let ratio = plan_mode_config
             .and_then(|cfg| cfg.split_plan_compaction_ratio)
-            .unwrap_or(0.5);
+            .unwrap_or(0.75);
         ratio > 0.0 && context_usage_ratio >= ratio
     }
 
@@ -428,15 +454,15 @@ pub fn render_directive(
             "All design parts are marked done. Before asking for final approval, run a cross-file consistency review across the index and every `<stem>/` part, then present the final design for approval.".to_string()
         ),
         (_, PlanModeDirective::StartSplit { next_part }) => Some(format!(
-            "This plan has been split into multiple parts. Focus this turn on writing only the first pending part: {} (scope: {}). Do not write other parts yet.",
+            "This plan has been split into multiple parts. Focus this turn on writing only the first pending part: {} (scope: {}). Do not write any other part. For a task manifest, write the complete task contract (Files, Source evidence with anchors, Implementation, Failure and edge cases, Tests, and seven checked Self-review items), then submit the complete index with this row marked `done`. The host automatically continues to the next pending task; do not end with a plain-text progress report.",
             resolved_part_path(index_path, &next_part.relative_path), next_part.scope
         )),
         (_, PlanModeDirective::ContinueSplit { next_part }) => Some(format!(
-            "The next pending part is: {} (scope: {}). Write only this part in the current turn. A `done` row counts only when the part file exists on disk at exactly this path.",
+            "The next pending part is: {} (scope: {}). Write only this part in the current turn. A `done` row counts only when the part file exists on disk at exactly this path and satisfies its completion contract. Then submit the complete index with this row marked `done`; the host automatically continues, so do not stop with a plain-text progress report.",
             resolved_part_path(index_path, &next_part.relative_path), next_part.scope
         )),
         (_, PlanModeDirective::RefinePart { part, violations }) => Some(format!(
-            "The completed part {} is over budget ({}). Do not mark it accepted. In this turn, resubmit the index with this row replaced by two or more smaller `pending` part rows whose scopes partition its work; retain the existing file as source material if useful. Stop after that index submission; the next turn will write the first new part.",
+            "The completed part {} does not satisfy its completion contract ({}). Do not mark it accepted. Repair that part so it contains the required concrete evidence and self-review, then resubmit the complete index. Split only when an explicitly configured size limit makes that necessary; preserve the full task detail and stable task identities. The host will continue from the resulting manifest automatically.",
             resolved_part_path(index_path, &part.relative_path),
             violations.join("; ")
         )),
@@ -490,9 +516,11 @@ You are writing a rigor-tier plan. Keep the following artifacts current:
 - Source-grounding mandate
 - Out-of-scope / false-positive discipline
 - Rename-vs-delete decision prompt
-- Large-plan splitting: keep the ## Parts manifest current; one part per turn
+- Large-plan splitting: keep the ## Parts manifest current; advance one verified task part at a time
 
 Quality bar: the plan must stay concrete enough to execute with zero follow-up — complete code in every step (not pseudocode or "similar to Task N"), exact commands with expected output, and per-task tests that assert the actual risk being changed.
+
+For a task manifest, every task part must retain its complete Files, Source evidence, Implementation, Failure and edge cases, Tests, and seven-item Self-review contract. Do not compress those details into a summary for brevity; the default configuration has no byte target.
 "#
     .to_string()
 }
@@ -614,8 +642,8 @@ mod directive_tests {
         );
         assert!(!result.boundary_crossed);
         assert!(
-            result.checkpoint_due,
-            "the first part needs a clean context"
+            !result.checkpoint_due,
+            "the initial index is not a completed-task checkpoint"
         );
     }
 
@@ -639,6 +667,43 @@ mod directive_tests {
             result.logs[0].message.contains("core.md"),
             "expected log to mention next part file, got {:?}",
             result.logs[0].message
+        );
+    }
+
+    #[tokio::test]
+    async fn alphanumeric_part_ids_are_not_skipped_when_selecting_the_next_part() {
+        let (artifact, _tmp) = artifact("2026-07-04");
+        artifact.finalize_name("topic").await.unwrap();
+        let markdown = "## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 4a | interaction-core.md | interaction core | pending |\n| 4b | interaction-tests.md | interaction tests | pending |\n| 5 | render.md | rendering | pending |\n";
+
+        let result = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
+        assert_eq!(
+            result.directive,
+            PlanModeDirective::StartSplit {
+                next_part: PartTarget {
+                    relative_path: "interaction-core.md".to_string(),
+                    scope: "interaction core".to_string(),
+                }
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn task_manifest_directive_keeps_the_stable_task_id_and_title() {
+        let (artifact, _tmp) = artifact("2026-07-04");
+        artifact.finalize_name("topic").await.unwrap();
+        let markdown = "## Parts\n| ID | File | Task | Scope | Depends on | Status |\n|---|---|---|---|---|---|\n| T01 | protocol.md | Add protocol type | protocol | — | pending |\n";
+
+        let result = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
+        let PlanModeDirective::StartSplit { next_part } = result.directive else {
+            panic!("expected task manifest to start its first part");
+        };
+        assert_eq!(next_part.relative_path, "protocol.md");
+        assert!(next_part.scope.contains("T01"), "{}", next_part.scope);
+        assert!(
+            next_part.scope.contains("Add protocol type"),
+            "{}",
+            next_part.scope
         );
     }
 
@@ -957,6 +1022,10 @@ mod directive_tests {
         assert!(
             reminder.contains("complete code in every step"),
             "sparse reminder should restate the complete-code-per-step requirement:\n{reminder}"
+        );
+        assert!(
+            reminder.contains("Do not compress those details into a summary"),
+            "sparse reminder should prohibit detail loss for the sake of brevity:\n{reminder}"
         );
     }
 

@@ -11,6 +11,7 @@
 use std::path::PathBuf;
 
 use ody_app_server_protocol::AppInfo;
+use ody_app_server_protocol::ConfigEdit;
 use ody_app_server_protocol::MarketplaceAddResponse;
 use ody_app_server_protocol::MarketplaceRemoveResponse;
 use ody_app_server_protocol::MarketplaceUpgradeResponse;
@@ -38,6 +39,8 @@ use crate::bottom_pane::ApprovalRequest;
 use crate::bottom_pane::StatusLineItem;
 use crate::bottom_pane::TerminalTitleItem;
 use crate::chatwidget::UserMessage;
+use crate::config_update::DesignReviewEditState;
+use crate::config_update::DesignReviewModelField;
 use crate::goal_files::GoalDraft;
 use ody_app_server_protocol::AskForApproval;
 use ody_config::types::ApprovalsReviewer;
@@ -47,6 +50,8 @@ use ody_protocol::config_types::CollaborationModeMask;
 use ody_protocol::config_types::Personality;
 use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::models::ActivePermissionProfile;
+
+use ody_config::config_toml::DesignReviewToml;
 
 use crate::history_cell::HistoryCell;
 
@@ -829,6 +834,26 @@ pub(crate) enum AppEvent {
     UpdateMemorySettings {
         use_memories: bool,
         generate_memories: bool,
+    },
+
+    /// Open the tabbed model picker for a design-review model override field.
+    OpenDesignReviewModelPicker {
+        field: DesignReviewModelField,
+        state: DesignReviewEditState,
+    },
+
+    /// Optimistically refresh the design-review preferences form before persistence completes.
+    UpdateDesignReviewEditState(DesignReviewEditState),
+
+    /// Persist design-review preference edits to config.toml from the TUI preferences popup.
+    PersistDesignReviewPreferences {
+        edits: Vec<ConfigEdit>,
+    },
+
+    /// Sync the design-review preferences popup with the server-side truth after a write.
+    SyncDesignReviewPreferences {
+        design_review: DesignReviewToml,
+        error: Option<String>,
     },
 
     /// Clear all persisted local memory artifacts via the app-server.

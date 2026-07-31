@@ -93,10 +93,7 @@ fn batch_write_params(edits: Vec<ConfigEdit>) -> ConfigBatchWriteParams {
     }
 }
 
-async fn send_config_batch_write(
-    mcp: &mut TestAppServer,
-    edits: Vec<ConfigEdit>,
-) -> Result<()> {
+async fn send_config_batch_write(mcp: &mut TestAppServer, edits: Vec<ConfigEdit>) -> Result<()> {
     let request_id = mcp
         .send_config_batch_write_request(batch_write_params(edits))
         .await?;
@@ -162,7 +159,12 @@ async fn first_login_with_numeric_alias_establishes_default_model() -> Result<()
     // 2. Simulate the first TUI `/login` with the numeric alias `123456`.
     send_config_batch_write(
         &mut mcp,
-        login_config_edits(FIRST_PROVIDER_ALIAS, FIRST_PROVIDER_TYPE, FIRST_MODEL_ID, true),
+        login_config_edits(
+            FIRST_PROVIDER_ALIAS,
+            FIRST_PROVIDER_TYPE,
+            FIRST_MODEL_ID,
+            true,
+        ),
     )
     .await?;
 
@@ -216,7 +218,12 @@ async fn second_login_does_not_override_numeric_alias_default() -> Result<()> {
     // First login with the numeric alias `123456`; it becomes the default.
     send_config_batch_write(
         &mut mcp,
-        login_config_edits(FIRST_PROVIDER_ALIAS, FIRST_PROVIDER_TYPE, FIRST_MODEL_ID, true),
+        login_config_edits(
+            FIRST_PROVIDER_ALIAS,
+            FIRST_PROVIDER_TYPE,
+            FIRST_MODEL_ID,
+            true,
+        ),
     )
     .await?;
 
@@ -243,9 +250,18 @@ async fn second_login_does_not_override_numeric_alias_default() -> Result<()> {
         "model/list should surface models for both configured providers"
     );
     let providers: Vec<&str> = models.iter().map(|m| m.provider.as_str()).collect();
-    assert!(providers.contains(&FIRST_PROVIDER_ALIAS), "first provider missing");
-    assert!(providers.contains(&SECOND_PROVIDER_ALIAS), "second provider missing");
-    let first_model = models.iter().find(|m| m.provider == FIRST_PROVIDER_ALIAS).unwrap();
+    assert!(
+        providers.contains(&FIRST_PROVIDER_ALIAS),
+        "first provider missing"
+    );
+    assert!(
+        providers.contains(&SECOND_PROVIDER_ALIAS),
+        "second provider missing"
+    );
+    let first_model = models
+        .iter()
+        .find(|m| m.provider == FIRST_PROVIDER_ALIAS)
+        .unwrap();
     assert_eq!(first_model.model, "kimi-for-coding");
     assert_eq!(first_model.provider, "123456");
 

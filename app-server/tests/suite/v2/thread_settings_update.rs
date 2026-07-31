@@ -449,7 +449,9 @@ fn service_tier_model_and_tier_id() -> Result<(String, String)> {
                     .map(|tier| normalized_service_tier_id(&tier.id))
                     .any(|tier_id| Some(tier_id) != preset.default_service_tier)
         })
-        .context("bundled model catalog should include a picker model with a non-default service tier")?;
+        .context(
+            "bundled model catalog should include a picker model with a non-default service tier",
+        )?;
     let tier_id = model
         .service_tiers
         .iter()

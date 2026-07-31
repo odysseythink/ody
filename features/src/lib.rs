@@ -325,8 +325,7 @@ pub struct Features {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct FeatureOverrides {
-}
+pub struct FeatureOverrides {}
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FeatureConfigSource<'a> {
@@ -335,8 +334,7 @@ pub struct FeatureConfigSource<'a> {
 }
 
 impl FeatureOverrides {
-    fn apply(self, features: &mut Features) {
-    }
+    fn apply(self, features: &mut Features) {}
 }
 
 impl Features {
@@ -558,7 +556,6 @@ fn legacy_usage_notice(alias: &str, feature: Feature) -> (String, Option<String>
         }
     }
 }
-
 
 /// Keys accepted in `[features]` tables.
 pub fn feature_for_key(key: &str) -> Option<Feature> {

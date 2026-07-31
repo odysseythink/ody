@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::config::WebSearchProviderConfig;
 use crate::error::WebSearchError;
@@ -27,8 +27,8 @@ impl WebSearchProviderFactory for TavilyFactory {
     ) -> Result<SharedWebSearchProvider, WebSearchError> {
         validate_options(&config, &["base_url", "search_depth"])?;
         let api_key = require_api_key(&config)?;
-        let base_url = take_base_url(&mut config.options)
-            .unwrap_or_else(|| DEFAULT_TAVILY_URL.to_string());
+        let base_url =
+            take_base_url(&mut config.options).unwrap_or_else(|| DEFAULT_TAVILY_URL.to_string());
         let search_depth = take_string_option(&mut config.options, "search_depth")
             .unwrap_or_else(|| "basic".to_string());
         let timeout = config
@@ -88,7 +88,10 @@ impl WebSearchProvider for TavilyProvider {
             .header("Content-Type", "application/json")
             .json(&body)
             .timeout(self.timeout);
-        let response = request.send().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let response = request
+            .send()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         let status = response.status();
         if !status.is_success() {
             let body = match response.text().await {
@@ -97,7 +100,10 @@ impl WebSearchProvider for TavilyProvider {
             };
             return Err(WebSearchError::from_http_status(status, &body));
         }
-        let json: Value = response.json().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let json: Value = response
+            .json()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         parse_tavily_response(&json, options.limit)
     }
 }
@@ -170,7 +176,10 @@ mod tests {
             "base_url".to_string(),
             Value::String(format!("{}/search", server.uri())),
         );
-        options.insert("search_depth".to_string(), Value::String("advanced".to_string()));
+        options.insert(
+            "search_depth".to_string(),
+            Value::String("advanced".to_string()),
+        );
         let config = WebSearchProviderConfig {
             provider: WebSearchProviderName::Tavily,
             api_key: Some("key".to_string()),
@@ -179,7 +188,14 @@ mod tests {
         };
         let provider = TavilyFactory.create(config, reqwest::Client::new())?;
         let results = provider
-            .search("rust", &WebSearchOptions { limit: Some(3), include_content: None, tool_call_id: None })
+            .search(
+                "rust",
+                &WebSearchOptions {
+                    limit: Some(3),
+                    include_content: None,
+                    tool_call_id: None,
+                },
+            )
             .await?;
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].title, "T");

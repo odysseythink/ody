@@ -247,15 +247,14 @@ mod tests {
             &self,
             call: ody_tools::ToolCall,
         ) -> Result<Box<dyn ody_tools::ToolOutput>, ody_tools::FunctionCallError> {
-            let item = ExtensionTurnItem::ImageGeneration(
-                ody_protocol::items::ImageGenerationItem {
+            let item =
+                ExtensionTurnItem::ImageGeneration(ody_protocol::items::ImageGenerationItem {
                     id: call.call_id.clone(),
                     status: "in_progress".to_string(),
                     revised_prompt: None,
                     result: String::new(),
                     saved_path: None,
-                },
-            );
+                });
             call.turn_item_emitter.emit_started(item.clone()).await;
             call.turn_item_emitter.emit_completed(item).await;
             *self.captured_call.lock().await = Some(call);
@@ -393,7 +392,10 @@ mod tests {
         let TurnItem::ImageGeneration(started_item) = started.item else {
             panic!("expected image generation item");
         };
-        let begin = rx.recv().await.expect("legacy image generation begin event");
+        let begin = rx
+            .recv()
+            .await
+            .expect("legacy image generation begin event");
         assert!(matches!(begin.msg, EventMsg::ImageGenerationBegin(_)));
         let completed = rx.recv().await.expect("item completed event");
         let EventMsg::ItemCompleted(completed) = completed.msg else {
@@ -452,15 +454,13 @@ mod tests {
 
         ody_tools::TurnItemEmitter::emit_completed(
             &emitter,
-            ExtensionTurnItem::ImageGeneration(
-                ody_protocol::items::ImageGenerationItem {
-                    id: "image-1".to_string(),
-                    status: "completed".to_string(),
-                    revised_prompt: None,
-                    result: "cG5n".to_string(),
-                    saved_path: None,
-                },
-            ),
+            ExtensionTurnItem::ImageGeneration(ody_protocol::items::ImageGenerationItem {
+                id: "image-1".to_string(),
+                status: "completed".to_string(),
+                revised_prompt: None,
+                result: "cG5n".to_string(),
+                saved_path: None,
+            }),
         )
         .await;
 

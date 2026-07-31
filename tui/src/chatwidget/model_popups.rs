@@ -122,6 +122,18 @@ impl Renderable for ModelPickerThinkingControl {
     }
 }
 
+/// Shared layout state computed for both the `/model` picker and the design-review
+/// override picker in `/preferences`.
+struct ModelPickerSharedParams {
+    presets: Vec<ModelPreset>,
+    provider_groups: Vec<(String, Vec<usize>)>,
+    initial_tab_id: String,
+    initial_selected_idx: Option<usize>,
+    selected_model: String,
+    current_model: String,
+    provider_id_for_preset: HashMap<String, String>,
+}
+
 impl ChatWidget {
     /// Open the tabbed model picker aligned with the upstream `/model` UX.
     pub(crate) fn open_model_popup(&mut self) {
@@ -300,7 +312,9 @@ impl ChatWidget {
                 });
             } else {
                 tx.send(AppEvent::UpdateModel(model_for_action.clone()));
-                tx.send(AppEvent::UpdateModelProvider(provider_id_for_action.clone()));
+                tx.send(AppEvent::UpdateModelProvider(
+                    provider_id_for_action.clone(),
+                ));
                 tx.send(AppEvent::UpdateReasoningEffort(effort.clone()));
                 tx.send(AppEvent::PersistModelSelection {
                     provider_id: provider_id_for_action.clone(),
@@ -326,22 +340,15 @@ impl ChatWidget {
 
     /// Build the tabbed model picker view.
     fn open_model_picker(&mut self, presets: Vec<ModelPreset>, selected_model: Option<&str>) {
-        let presets: Vec<ModelPreset> = presets.into_iter().filter(|p| p.show_in_picker).collect();
-        if presets.is_empty() {
-            self.add_info_message(
-                "No models configured. Run /login to sign in, or /provider to add a provider from a model catalog.".to_string(),
-                /*hint*/ None,
-            );
+        let Some(params) = self.build_model_picker_params(presets, selected_model) else {
             return;
-        }
-
-        let current_model = self.current_model().to_string();
-        let selected_model = selected_model
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| current_model.clone());
+        };
 
         // Determine the initial thinking state from the currently selected model.
-        let current_preset = presets.iter().find(|p| p.model == current_model);
+        let current_preset = params
+            .presets
+            .iter()
+            .find(|p| p.model == params.current_model);
         let initial_thinking = current_preset
             .map(|p| Self::reasoning_effort_for_thinking(p, true))
             .flatten()
@@ -356,24 +363,288 @@ impl ChatWidget {
 
         // Precompute plan-mode reasoning scope prompts for each preset.
         let mut scope_prompts: HashMap<String, bool> = HashMap::new();
-        for preset in &presets {
+        for preset in &params.presets {
             let effort = Self::reasoning_effort_for_thinking(preset, state.thinking());
             let should_prompt = self.should_prompt_plan_mode_reasoning_scope(&preset.model, effort);
             scope_prompts.insert(preset.model.clone(), should_prompt);
         }
 
+        let hint = Line::from(
+            "↑↓ model · ←→ page · / thinking · Enter apply · Esc cancel · Tab/Shift+Tab provider",
+        );
+        let header = Box::new(ModelPickerHeader {
+            title: "Select a model".to_string(),
+            subtitle: "type to search".to_string(),
+            warning: self.model_menu_warning_line(),
+            hint: hint.clone(),
+        });
+        let thinking_control = Box::new(ModelPickerThinkingControl {
+            state: state.clone(),
+        });
+
+        let mut tabs: Vec<SelectionTab> = Vec::new();
+        let mut all_items: Vec<SelectionItem> = Vec::new();
+        for (_, indices) in &params.provider_groups {
+            for &idx in indices {
+                let preset = &params.presets[idx];
+                let should_prompt = *scope_prompts.get(&preset.model).unwrap_or(&false);
+                all_items.push(self.build_model_picker_item(
+                    preset,
+                    &params.current_model,
+                    state.clone(),
+                    should_prompt,
+                ));
+            }
+        }
+        tabs.push(SelectionTab {
+            id: "all".to_string(),
+            label: "All".to_string(),
+            header: Box::new(ModelPickerHeader {
+                title: "Select a model".to_string(),
+                subtitle: "type to search".to_string(),
+                warning: self.model_menu_warning_line(),
+                hint: hint.clone(),
+            }),
+            items: all_items,
+        });
+        for (provider_id, indices) in &params.provider_groups {
+            if provider_id == "all" {
+                continue;
+            }
+            let items = indices
+                .iter()
+                .map(|&idx| {
+                    let preset = &params.presets[idx];
+                    let should_prompt = *scope_prompts.get(&preset.model).unwrap_or(&false);
+                    self.build_model_picker_item(
+                        preset,
+                        &params.current_model,
+                        state.clone(),
+                        should_prompt,
+                    )
+                })
+                .collect();
+            tabs.push(SelectionTab {
+                id: provider_id.clone(),
+                label: Self::provider_display_name(provider_id),
+                header: Box::new(ModelPickerHeader {
+                    title: "Select a model".to_string(),
+                    subtitle: "type to search".to_string(),
+                    warning: self.model_menu_warning_line(),
+                    hint: hint.clone(),
+                }),
+                items,
+            });
+        }
+
+        let selected_state = state.clone();
+        let custom_handler: CustomKeyHandlerCallback = Some(Box::new(move |key_event, _tx| {
+            if key_event.code == KeyCode::Char('/') && key_event.modifiers == KeyModifiers::NONE {
+                selected_state.toggle_thinking();
+                return true;
+            }
+            false
+        }));
+
+        self.bottom_pane.show_selection_view(SelectionViewParams {
+            header,
+            tabs,
+            initial_tab_id: Some(params.initial_tab_id),
+            initial_selected_idx: params.initial_selected_idx,
+            is_searchable: true,
+            custom_key_handler: custom_handler,
+            stacked_side_content: Some(thinking_control),
+            footer_hint: Some(Line::from("")),
+            ..Default::default()
+        });
+    }
+
+    /// Open the tabbed model picker for a design-review model override field.
+    /// Includes a "Use default" row at the top of every provider tab to clear the override.
+    pub(crate) fn open_design_review_model_picker(
+        &mut self,
+        field: crate::config_update::DesignReviewModelField,
+        state: crate::config_update::DesignReviewEditState,
+    ) {
+        let presets = match self.model_catalog.try_list_models() {
+            Ok(models) => models,
+            Err(_) => {
+                self.add_info_message(
+                    "Models are being updated; please try again in a moment.".to_string(),
+                    /*hint*/ None,
+                );
+                return;
+            }
+        };
+
+        let current_value = state.model_field(field);
+        let current_bare = current_value
+            .as_deref()
+            .map(ModelRef::parse)
+            .map(|m| m.bare().to_string());
+        let Some(params) = self.build_model_picker_params(presets, current_bare.as_deref()) else {
+            self.add_info_message(
+                "No models configured. Run /login to sign in, or /provider to add a provider from a model catalog.".to_string(),
+                /*hint*/ None,
+            );
+            return;
+        };
+
+        let title = format!("Select {} model", field_label(field));
+        let hint =
+            Line::from("↑↓ model · ←→ page · Enter apply · Esc cancel · Tab/Shift+Tab provider");
+        let header = Box::new(ModelPickerHeader {
+            title: title.clone(),
+            subtitle: "type to search".to_string(),
+            warning: self.model_menu_warning_line(),
+            hint: hint.clone(),
+        });
+
+        let make_use_default_item = || SelectionItem {
+            name: "Use default".to_string(),
+            description: Some("Clear this override and use the default model.".to_string()),
+            is_current: current_value.is_none(),
+            search_value: Some("default".to_string()),
+            actions: vec![build_design_review_model_action(field, None, state.clone())],
+            dismiss_on_select: true,
+            ..Default::default()
+        };
+
+        let mut tabs: Vec<SelectionTab> = Vec::new();
+        let mut all_items: Vec<SelectionItem> = vec![make_use_default_item()];
+        for (_, indices) in &params.provider_groups {
+            for &idx in indices {
+                let preset = &params.presets[idx];
+                all_items.push(self.build_design_review_model_item(
+                    preset,
+                    &params,
+                    field,
+                    state.clone(),
+                ));
+            }
+        }
+        tabs.push(SelectionTab {
+            id: "all".to_string(),
+            label: "All".to_string(),
+            header: Box::new(ModelPickerHeader {
+                title: title.clone(),
+                subtitle: "type to search".to_string(),
+                warning: self.model_menu_warning_line(),
+                hint: hint.clone(),
+            }),
+            items: all_items,
+        });
+
+        for (provider_id, indices) in &params.provider_groups {
+            if provider_id == "all" {
+                continue;
+            }
+            let mut items: Vec<SelectionItem> = vec![make_use_default_item()];
+            for &idx in indices {
+                let preset = &params.presets[idx];
+                items.push(self.build_design_review_model_item(
+                    preset,
+                    &params,
+                    field,
+                    state.clone(),
+                ));
+            }
+            tabs.push(SelectionTab {
+                id: provider_id.clone(),
+                label: Self::provider_display_name(provider_id),
+                header: Box::new(ModelPickerHeader {
+                    title: title.clone(),
+                    subtitle: "type to search".to_string(),
+                    warning: self.model_menu_warning_line(),
+                    hint: hint.clone(),
+                }),
+                items,
+            });
+        }
+
+        let initial_selected_idx = if current_value.is_none() {
+            Some(0)
+        } else {
+            params.initial_selected_idx.map(|idx| idx + 1)
+        };
+
+        self.bottom_pane.show_selection_view(SelectionViewParams {
+            header,
+            tabs,
+            initial_tab_id: Some(params.initial_tab_id),
+            initial_selected_idx,
+            is_searchable: true,
+            footer_hint: Some(Line::from("")),
+            ..Default::default()
+        });
+    }
+
+    fn build_design_review_model_item(
+        &self,
+        preset: &ModelPreset,
+        params: &ModelPickerSharedParams,
+        field: crate::config_update::DesignReviewModelField,
+        state: crate::config_update::DesignReviewEditState,
+    ) -> SelectionItem {
+        let provider_id = params
+            .provider_id_for_preset
+            .get(&preset.model)
+            .cloned()
+            .unwrap_or_else(|| preset.provider.clone());
+        let model_value = format!("{provider_id}/{}", preset.model);
+        let is_current = params.selected_model == preset.model;
+        SelectionItem {
+            name: preset.model.clone(),
+            description: Some(preset.display_name.clone()),
+            is_current,
+            search_value: Some(format!(
+                "{} {} {}",
+                preset.model, preset.display_name, preset.provider
+            )),
+            actions: vec![build_design_review_model_action(
+                field,
+                Some(model_value),
+                state,
+            )],
+            dismiss_on_select: true,
+            ..Default::default()
+        }
+    }
+
+    /// Compute shared layout state for a tabbed model picker.
+    fn build_model_picker_params(
+        &self,
+        presets: Vec<ModelPreset>,
+        selected_model: Option<&str>,
+    ) -> Option<ModelPickerSharedParams> {
+        let presets: Vec<ModelPreset> = presets.into_iter().filter(|p| p.show_in_picker).collect();
+        if presets.is_empty() {
+            return None;
+        }
+
+        let current_model = self.current_model().to_string();
+        let selected_model = selected_model
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| current_model.clone());
+
+        // Precompute provider_id for each preset so actions do not need to borrow self.
+        let provider_id_for_preset: HashMap<String, String> = presets
+            .iter()
+            .map(|p| (p.model.clone(), self.provider_id_for_preset(&p.provider)))
+            .collect();
+
         // Group presets by provider. Preserve insertion order of first appearance.
-        let mut provider_groups: Vec<(String, Vec<&ModelPreset>)> = Vec::new();
-        for preset in &presets {
+        let mut provider_groups: Vec<(String, Vec<usize>)> = Vec::new();
+        for (idx, preset) in presets.iter().enumerate() {
             let provider = if preset.provider.is_empty() {
                 "all".to_string()
             } else {
                 preset.provider.clone()
             };
             if let Some(pos) = provider_groups.iter().position(|(p, _)| p == &provider) {
-                provider_groups[pos].1.push(preset);
+                provider_groups[pos].1.push(idx);
             } else {
-                provider_groups.push((provider, vec![preset]));
+                provider_groups.push((provider, vec![idx]));
             }
         }
 
@@ -394,104 +665,26 @@ impl ChatWidget {
                     .unwrap_or_else(|| "all".to_string())
             });
 
-        // Build the shared header that is placed on every tab so it remains visible
-        // regardless of which provider tab is active.
-        let hint = Line::from(
-            "↑↓ model · ←→ page · / thinking · Enter apply · Esc cancel · Tab/Shift+Tab provider",
-        );
-        let header = Box::new(ModelPickerHeader {
-            title: "Select a model".to_string(),
-            subtitle: "type to search".to_string(),
-            warning: self.model_menu_warning_line(),
-            hint: hint.clone(),
-        });
-        let thinking_control = Box::new(ModelPickerThinkingControl {
-            state: state.clone(),
-        });
-
-        // Build the "All" tab first, then per-provider tabs.
-        let mut tabs: Vec<SelectionTab> = Vec::new();
-        let mut all_items: Vec<SelectionItem> = Vec::new();
-        for (_, group_presets) in &provider_groups {
-            for preset in group_presets {
-                let should_prompt = *scope_prompts.get(&preset.model).unwrap_or(&false);
-                all_items.push(self.build_model_picker_item(
-                    preset,
-                    &current_model,
-                    state.clone(),
-                    should_prompt,
-                ));
-            }
-        }
-        tabs.push(SelectionTab {
-            id: "all".to_string(),
-            label: "All".to_string(),
-            header: Box::new(ModelPickerHeader {
-                title: "Select a model".to_string(),
-                subtitle: "type to search".to_string(),
-                warning: self.model_menu_warning_line(),
-                hint: hint.clone(),
-            }),
-            items: all_items,
-        });
-        for (provider_id, group_presets) in &provider_groups {
-            // The "All" tab already covers the "all" provider group; avoid a duplicate tab.
-            if provider_id == "all" {
-                continue;
-            }
-            let items = group_presets
-                .iter()
-                .map(|preset| {
-                    let should_prompt = *scope_prompts.get(&preset.model).unwrap_or(&false);
-                    self.build_model_picker_item(
-                        preset,
-                        &current_model,
-                        state.clone(),
-                        should_prompt,
-                    )
-                })
-                .collect();
-            tabs.push(SelectionTab {
-                id: provider_id.clone(),
-                label: Self::provider_display_name(provider_id),
-                header: Box::new(ModelPickerHeader {
-                    title: "Select a model".to_string(),
-                    subtitle: "type to search".to_string(),
-                    warning: self.model_menu_warning_line(),
-                    hint: hint.clone(),
-                }),
-                items,
-            });
-        }
-
-        let initial_tab_id = if tabs.iter().any(|t| t.id == initial_provider) {
+        let initial_tab_id = if provider_groups
+            .iter()
+            .any(|(id, _)| id == &initial_provider)
+        {
             initial_provider
         } else {
             "all".to_string()
         };
 
-        let selected_state = state.clone();
-        let custom_handler: CustomKeyHandlerCallback = Some(Box::new(move |key_event, _tx| {
-            if key_event.code == KeyCode::Char('/') && key_event.modifiers == KeyModifiers::NONE {
-                selected_state.toggle_thinking();
-                return true;
-            }
-            false
-        }));
-
         let initial_selected_idx = presets.iter().position(|p| p.model == selected_model);
 
-        self.bottom_pane.show_selection_view(SelectionViewParams {
-            header,
-            tabs,
-            initial_tab_id: Some(initial_tab_id),
+        Some(ModelPickerSharedParams {
+            presets,
+            provider_groups,
+            initial_tab_id,
             initial_selected_idx,
-            is_searchable: true,
-            custom_key_handler: custom_handler,
-            stacked_side_content: Some(thinking_control),
-            footer_hint: Some(Line::from("")),
-            ..Default::default()
-        });
+            selected_model,
+            current_model,
+            provider_id_for_preset,
+        })
     }
 
     fn model_menu_warning_line(&self) -> Option<Line<'static>> {
@@ -519,33 +712,6 @@ impl ChatWidget {
         }
 
         Some(trimmed.to_string())
-    }
-
-    fn model_selection_actions(
-        provider_id_for_action: String,
-        model_for_action: String,
-        effort_for_action: Option<ReasoningEffortConfig>,
-        should_prompt_plan_mode_scope: bool,
-    ) -> Vec<SelectionAction> {
-        vec![Box::new(move |tx| {
-            if should_prompt_plan_mode_scope {
-                tx.send(AppEvent::OpenPlanReasoningScopePrompt {
-                    provider_id: provider_id_for_action.clone(),
-                    model: model_for_action.clone(),
-                    effort: effort_for_action.clone(),
-                });
-                return;
-            }
-
-            tx.send(AppEvent::UpdateModel(model_for_action.clone()));
-            tx.send(AppEvent::UpdateModelProvider(provider_id_for_action.clone()));
-            tx.send(AppEvent::UpdateReasoningEffort(effort_for_action.clone()));
-            tx.send(AppEvent::PersistModelSelection {
-                provider_id: provider_id_for_action.clone(),
-                model: model_for_action.clone(),
-                effort: effort_for_action.clone(),
-            });
-        })]
     }
 
     fn should_prompt_plan_mode_reasoning_scope(
@@ -786,7 +952,9 @@ impl ChatWidget {
                     });
                 } else {
                     tx.send(AppEvent::UpdateModel(model_for_action.clone()));
-                    tx.send(AppEvent::UpdateModelProvider(provider_id_for_action.clone()));
+                    tx.send(AppEvent::UpdateModelProvider(
+                        provider_id_for_action.clone(),
+                    ));
                     tx.send(AppEvent::UpdateReasoningEffort(choice_effort.clone()));
                     tx.send(AppEvent::PersistModelSelection {
                         provider_id: provider_id_for_action.clone(),
@@ -866,4 +1034,29 @@ impl ChatWidget {
             effort,
         });
     }
+}
+
+fn field_label(field: crate::config_update::DesignReviewModelField) -> &'static str {
+    use crate::config_update::DesignReviewModelField;
+    match field {
+        DesignReviewModelField::Review => "review",
+        DesignReviewModelField::Advocate => "advocate",
+        DesignReviewModelField::Skeptic => "skeptic",
+        DesignReviewModelField::Judge => "judge",
+    }
+}
+
+fn build_design_review_model_action(
+    field: crate::config_update::DesignReviewModelField,
+    value: Option<String>,
+    mut state: crate::config_update::DesignReviewEditState,
+) -> SelectionAction {
+    state.set_model_field(field, value);
+    let edits = crate::config_update::build_design_review_edits(&state);
+    Box::new(move |tx| {
+        tx.send(AppEvent::UpdateDesignReviewEditState(state.clone()));
+        tx.send(AppEvent::PersistDesignReviewPreferences {
+            edits: edits.clone(),
+        });
+    })
 }

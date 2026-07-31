@@ -13,6 +13,7 @@
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
+use crossterm::event::KeyModifiers;
 use ody_app_server_client::AppServerEvent;
 use ody_app_server_client::AppServerRequestHandle;
 use ody_app_server_protocol::ServerNotification;
@@ -33,6 +34,7 @@ use crate::config_update::write_trusted_project;
 use crate::key_hint::KeyBindingListExt;
 use crate::legacy_core::config::Config;
 use crate::onboarding::keys;
+use crate::onboarding::login_flow::LoginFlowWidget;
 use crate::onboarding::trust_directory::TrustDirectorySelection;
 use crate::onboarding::trust_directory::TrustDirectoryWidget;
 use crate::onboarding::welcome::WelcomeWidget;
@@ -44,6 +46,7 @@ use color_eyre::eyre::Result;
 #[allow(clippy::large_enum_variant)]
 enum Step {
     Welcome(WelcomeWidget),
+    Login(LoginFlowWidget),
     TrustDirectory(TrustDirectoryWidget),
 }
 
@@ -72,12 +75,14 @@ pub(crate) struct OnboardingScreen {
 
 pub(crate) struct OnboardingScreenArgs {
     pub show_trust_screen: bool,
+    pub show_login_screen: bool,
     pub app_server_request_handle: Option<AppServerRequestHandle>,
     pub config: Config,
 }
 
 pub(crate) struct OnboardingResult {
     pub directory_trust_persisted: bool,
+    pub login_skipped: bool,
     pub should_exit: bool,
 }
 
@@ -85,11 +90,31 @@ impl OnboardingScreen {
     pub(crate) async fn new(tui: &mut Tui, args: OnboardingScreenArgs) -> Self {
         let OnboardingScreenArgs {
             show_trust_screen,
+            show_login_screen,
             app_server_request_handle,
             config,
         } = args;
         let cwd = config.cwd.to_path_buf();
+        let request_frame = tui.frame_requester();
         let mut steps: Vec<Step> = Vec::new();
+
+        // Welcome is always rendered first. When the login screen is also shown, the
+        // provider picker is stacked below the welcome header so the animation, welcome
+        // text, and provider choices appear on a single screen.
+        steps.push(Step::Welcome(WelcomeWidget::new(
+            config.has_active_model,
+            request_frame.clone(),
+            true,
+        )));
+
+        if show_login_screen {
+            let mut login_widget = LoginFlowWidget::new(&config);
+            if let Some(request_handle) = app_server_request_handle.clone() {
+                login_widget = login_widget.with_request_handle(request_handle);
+            }
+            steps.push(Step::Login(login_widget));
+        }
+
         #[cfg(target_os = "windows")]
         let show_windows_create_sandbox_hint =
             crate::windows_sandbox::level_from_config(&config) == WindowsSandboxLevel::Disabled;
@@ -112,7 +137,7 @@ impl OnboardingScreen {
             }))
         }
         Self {
-            request_frame: tui.frame_requester(),
+            request_frame,
             steps,
             is_done: false,
             should_exit: false,
@@ -124,7 +149,15 @@ impl OnboardingScreen {
         for step in self.steps.iter_mut() {
             match step.get_step_state() {
                 StepState::Hidden => continue,
-                StepState::Complete => out.push(step),
+                StepState::Complete => {
+                    // Once the login step is finished (successfully or skipped), it should no
+                    // longer be part of the visible/routed current steps so the next step can
+                    // take focus.
+                    if matches!(step, Step::Login(_)) {
+                        continue;
+                    }
+                    out.push(step);
+                }
                 StepState::InProgress => {
                     out.push(step);
                     break;
@@ -139,7 +172,15 @@ impl OnboardingScreen {
         for step in self.steps.iter() {
             match step.get_step_state() {
                 StepState::Hidden => continue,
-                StepState::Complete => out.push(step),
+                StepState::Complete => {
+                    // Once the login step is finished (successfully or skipped), it should no
+                    // longer be part of the visible/routed current steps so the next step can
+                    // take focus.
+                    if matches!(step, Step::Login(_)) {
+                        continue;
+                    }
+                    out.push(step);
+                }
                 StepState::InProgress => {
                     out.push(step);
                     break;
@@ -150,10 +191,11 @@ impl OnboardingScreen {
     }
 
     fn should_suppress_animations(&self) -> bool {
-        // Freeze the whole onboarding screen when auth is showing copyable login
-        // material so terminal selection is not interrupted by redraws.
+        // Freeze the whole onboarding screen when the user is actively editing login
+        // text so terminal selection is not interrupted by redraws.
         self.current_steps().into_iter().any(|step| match step {
             Step::Welcome(_) | Step::TrustDirectory(_) => false,
+            Step::Login(widget) => widget.is_text_editing(),
         })
     }
 
@@ -179,38 +221,55 @@ impl OnboardingScreen {
 impl KeyboardHandler for OnboardingScreen {
     /// Route key events to onboarding steps while preserving text-entry safety.
     ///
-    /// In API-key entry mode, printable quit bindings are suppressed only after
-    /// the user has started typing in the API-key field. This keeps the
-    /// printable `q` quit key usable on an empty field while protecting in-progress
-    /// text entry from accidental exits. Control/alt quit chords still work as
-    /// emergency exits.
+    /// In login text-entry mode, the printable `q` quit key is treated as text
+    /// input while the active input field contains text. This keeps the quit key
+    /// usable on an empty field while protecting in-progress text entry from
+    /// accidental exits. Control/alt quit chords still work as emergency exits.
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         if !matches!(key_event.kind, KeyEventKind::Press | KeyEventKind::Repeat) {
             return;
         }
-        let should_quit = key_event.kind == KeyEventKind::Press && keys::QUIT.is_pressed(key_event);
-        if should_quit {
-            self.is_done = true;
+        let login_has_active_text_input = self.current_steps().into_iter().any(|step| {
+            if let Step::Login(widget) = step {
+                widget.has_active_text_input()
+            } else {
+                false
+            }
+        });
+        let is_plain_printable_q =
+            key_event.code == KeyCode::Char('q') && key_event.modifiers == KeyModifiers::NONE;
+        if login_has_active_text_input && is_plain_printable_q {
+            // Treat the printable `q` as text input for the active login step
+            // instead of as a top-level quit shortcut.
+            if let Some(Step::Login(widget)) = self.current_steps_mut().into_iter().last() {
+                widget.handle_paste("q".to_string());
+            }
         } else {
-            if let Some(Step::Welcome(widget)) = self
-                .steps
-                .iter_mut()
-                .find(|step| matches!(step, Step::Welcome(_)))
-            {
-                widget.handle_key_event(key_event);
-            }
-            if let Some(active_step) = self.current_steps_mut().into_iter().last() {
-                active_step.handle_key_event(key_event);
-            }
-            if self.steps.iter().any(|step| {
-                if let Step::TrustDirectory(widget) = step {
-                    widget.should_quit()
-                } else {
-                    false
-                }
-            }) {
-                self.should_exit = true;
+            let should_quit =
+                key_event.kind == KeyEventKind::Press && keys::QUIT.is_pressed(key_event);
+            if should_quit {
                 self.is_done = true;
+            } else {
+                if let Some(Step::Welcome(widget)) = self
+                    .steps
+                    .iter_mut()
+                    .find(|step| matches!(step, Step::Welcome(_)))
+                {
+                    widget.handle_key_event(key_event);
+                }
+                if let Some(active_step) = self.current_steps_mut().into_iter().last() {
+                    active_step.handle_key_event(key_event);
+                }
+                if self.steps.iter().any(|step| {
+                    if let Step::TrustDirectory(widget) = step {
+                        widget.should_quit()
+                    } else {
+                        false
+                    }
+                }) {
+                    self.should_exit = true;
+                    self.is_done = true;
+                }
             }
         }
         self.request_frame.schedule_frame();
@@ -234,7 +293,7 @@ impl WidgetRef for &OnboardingScreen {
         for step in self.current_steps() {
             match step {
                 Step::Welcome(widget) => widget.set_animations_suppressed(suppress_animations),
-                Step::TrustDirectory(_) => {}
+                Step::TrustDirectory(_) | Step::Login(_) => {}
             }
         }
 
@@ -307,6 +366,7 @@ impl KeyboardHandler for Step {
         match self {
             Step::Welcome(widget) => widget.handle_key_event(key_event),
             Step::TrustDirectory(widget) => widget.handle_key_event(key_event),
+            Step::Login(widget) => widget.handle_key_event(key_event),
         }
     }
 
@@ -314,6 +374,7 @@ impl KeyboardHandler for Step {
         match self {
             Step::Welcome(_) => {}
             Step::TrustDirectory(widget) => widget.handle_paste(pasted),
+            Step::Login(widget) => widget.handle_paste(pasted),
         }
     }
 }
@@ -323,6 +384,7 @@ impl StepStateProvider for Step {
         match self {
             Step::Welcome(w) => w.get_step_state(),
             Step::TrustDirectory(w) => w.get_step_state(),
+            Step::Login(w) => w.get_step_state(),
         }
     }
 }
@@ -334,6 +396,9 @@ impl WidgetRef for Step {
                 widget.render_ref(area, buf);
             }
             Step::TrustDirectory(widget) => {
+                widget.render_ref(area, buf);
+            }
+            Step::Login(widget) => {
                 widget.render_ref(area, buf);
             }
         }
@@ -407,6 +472,7 @@ pub(crate) async fn run_onboarding_app(
     }
     Ok(OnboardingResult {
         directory_trust_persisted,
+        login_skipped: false,
         should_exit: onboarding_screen.should_exit(),
     })
 }
@@ -455,5 +521,305 @@ async fn persist_selected_trust(
             }
             false
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::legacy_core::config::ConfigBuilder;
+    use std::io;
+    use tempfile::TempDir;
+
+    async fn test_config() -> Config {
+        let temp_dir = TempDir::new().expect("temp dir");
+        ConfigBuilder::default()
+            .ody_home(temp_dir.path().to_path_buf())
+            .build()
+            .await
+            .expect("config should build")
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn new_builds_welcome_login_trust_steps_when_both_enabled() -> io::Result<()> {
+        let mut tui = crate::tui::test_support::make_test_tui()?;
+        let config = test_config().await;
+        let args = OnboardingScreenArgs {
+            show_login_screen: true,
+            show_trust_screen: true,
+            app_server_request_handle: None,
+            config,
+        };
+        let screen = OnboardingScreen::new(&mut tui, args).await;
+        assert_eq!(screen.steps.len(), 3);
+        assert!(matches!(screen.steps[0], Step::Welcome(_)));
+        assert!(matches!(screen.steps[1], Step::Login(_)));
+        assert!(matches!(screen.steps[2], Step::TrustDirectory(_)));
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn login_screen_renders_welcome_and_login() -> io::Result<()> {
+        let mut tui = crate::tui::test_support::make_test_tui()?;
+        let config = test_config().await;
+        let args = OnboardingScreenArgs {
+            show_login_screen: true,
+            show_trust_screen: false,
+            app_server_request_handle: None,
+            config,
+        };
+        let screen = OnboardingScreen::new(&mut tui, args).await;
+        assert_eq!(screen.steps.len(), 2);
+        assert!(matches!(screen.steps[0], Step::Welcome(_)));
+        assert!(matches!(screen.steps[1], Step::Login(_)));
+        assert_eq!(screen.steps[1].get_step_state(), StepState::InProgress);
+        let current = screen.current_steps();
+        assert_eq!(current.len(), 2);
+        assert!(matches!(current[0], Step::Welcome(_)));
+        assert!(matches!(current[1], Step::Login(_)));
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn welcome_step_is_hidden_when_already_logged_in() -> io::Result<()> {
+        let mut tui = crate::tui::test_support::make_test_tui()?;
+        let mut config = test_config().await;
+        config.has_active_model = true;
+        let args = OnboardingScreenArgs {
+            show_login_screen: false,
+            show_trust_screen: false,
+            app_server_request_handle: None,
+            config,
+        };
+        let screen = OnboardingScreen::new(&mut tui, args).await;
+        assert_eq!(screen.steps.len(), 1);
+        assert!(matches!(screen.steps[0], Step::Welcome(_)));
+        assert_eq!(screen.steps[0].get_step_state(), StepState::Hidden);
+        Ok(())
+    }
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn login_step_suppresses_animations_while_editing() -> io::Result<()> {
+        let mut tui = crate::tui::test_support::make_test_tui()?;
+        let mut config = test_config().await;
+        config.has_active_model = true;
+        let args = OnboardingScreenArgs {
+            show_login_screen: true,
+            show_trust_screen: false,
+            app_server_request_handle: None,
+            config,
+        };
+        let mut screen = OnboardingScreen::new(&mut tui, args).await;
+        assert_eq!(screen.steps.len(), 2);
+        assert!(!screen.should_suppress_animations());
+        screen.handle_key_event(key(KeyCode::Enter));
+        assert!(screen.should_suppress_animations());
+        screen.steps[1] = Step::Login(LoginFlowWidget::done_for_test());
+        assert!(!screen.should_suppress_animations());
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn login_step_guards_printable_q_while_editing() -> io::Result<()> {
+        use crate::onboarding::login_flow::LoginState;
+
+        let mut tui = crate::tui::test_support::make_test_tui()?;
+        let mut config = test_config().await;
+        config.has_active_model = true;
+        let args = OnboardingScreenArgs {
+            show_login_screen: true,
+            show_trust_screen: false,
+            app_server_request_handle: None,
+            config,
+        };
+        let mut screen = OnboardingScreen::new(&mut tui, args).await;
+        screen.handle_key_event(key(KeyCode::Enter));
+        screen.handle_key_event(key(KeyCode::Char('a')));
+        screen.handle_key_event(key(KeyCode::Char('q')));
+        assert!(!screen.is_done());
+        assert!(!screen.should_exit());
+        let Step::Login(widget) = &screen.steps[1] else {
+            panic!("expected login step");
+        };
+        assert!(matches!(
+            widget.state(),
+            LoginState::EnterAlias { alias, .. } if alias.value() == "aq"
+        ));
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn esc_skips_login_and_exits_onboarding() -> io::Result<()> {
+        let mut tui = crate::tui::test_support::make_test_tui()?;
+        let mut config = test_config().await;
+        config.has_active_model = true;
+        let args = OnboardingScreenArgs {
+            show_login_screen: true,
+            show_trust_screen: false,
+            app_server_request_handle: None,
+            config,
+        };
+        let mut screen = OnboardingScreen::new(&mut tui, args).await;
+        screen.handle_key_event(key(KeyCode::Esc));
+        assert!(screen.is_done());
+        assert!(!screen.should_exit());
+        let Step::Login(widget) = &screen.steps[1] else {
+            panic!("expected login step");
+        };
+        assert!(widget.skipped());
+        assert_eq!(widget.get_step_state(), StepState::Complete);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn provider_config_builds_welcome_trust_steps_in_order() -> io::Result<()> {
+        let mut tui = crate::tui::test_support::make_test_tui()?;
+        let mut config = test_config().await;
+        config.has_active_model = true;
+        let args = OnboardingScreenArgs {
+            show_login_screen: false,
+            show_trust_screen: true,
+            app_server_request_handle: None,
+            config,
+        };
+        let screen = OnboardingScreen::new(&mut tui, args).await;
+        assert_eq!(screen.steps.len(), 2);
+        assert!(matches!(screen.steps[0], Step::Welcome(_)));
+        assert!(matches!(screen.steps[1], Step::TrustDirectory(_)));
+        assert_eq!(screen.steps[0].get_step_state(), StepState::Hidden);
+        let current = screen.current_steps();
+        assert_eq!(current.len(), 1);
+        assert!(matches!(current[0], Step::TrustDirectory(_)));
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn completed_login_step_is_dropped_from_current_steps() -> io::Result<()> {
+        let mut tui = crate::tui::test_support::make_test_tui()?;
+        let config = test_config().await;
+        let args = OnboardingScreenArgs {
+            show_login_screen: true,
+            show_trust_screen: true,
+            app_server_request_handle: None,
+            config,
+        };
+        let mut screen = OnboardingScreen::new(&mut tui, args).await;
+        // Advance login past provider picker.
+        screen.handle_key_event(key(KeyCode::Enter));
+        // Replace the login step with a persisted-complete state.
+        screen.steps[1] = Step::Login(LoginFlowWidget::done_for_test());
+        let current = screen.current_steps();
+        assert!(current.iter().all(|step| !matches!(step, Step::Login(_))));
+        assert_eq!(current.len(), 2);
+        assert!(matches!(current[0], Step::Welcome(_)));
+        assert!(matches!(current[1], Step::TrustDirectory(_)));
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn keyboard_events_routed_to_login_input() -> io::Result<()> {
+        use crate::onboarding::login_flow::LoginState;
+
+        let mut tui = crate::tui::test_support::make_test_tui()?;
+        let mut config = test_config().await;
+        config.has_active_model = true;
+        let args = OnboardingScreenArgs {
+            show_login_screen: true,
+            show_trust_screen: false,
+            app_server_request_handle: None,
+            config,
+        };
+        let mut screen = OnboardingScreen::new(&mut tui, args).await;
+        screen.handle_key_event(key(KeyCode::Enter));
+        screen.handle_key_event(key(KeyCode::Char('a')));
+        screen.handle_key_event(key(KeyCode::Char('b')));
+        let Step::Login(widget) = &screen.steps[1] else {
+            panic!("expected login step");
+        };
+        assert!(matches!(
+            widget.state(),
+            LoginState::EnterAlias { alias, .. } if alias.value() == "ab"
+        ));
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn paste_events_routed_to_login_input() -> io::Result<()> {
+        use crate::onboarding::login_flow::LoginState;
+
+        let mut tui = crate::tui::test_support::make_test_tui()?;
+        let mut config = test_config().await;
+        config.has_active_model = true;
+        let args = OnboardingScreenArgs {
+            show_login_screen: true,
+            show_trust_screen: false,
+            app_server_request_handle: None,
+            config,
+        };
+        let mut screen = OnboardingScreen::new(&mut tui, args).await;
+        screen.handle_key_event(key(KeyCode::Enter));
+        screen.handle_paste("secret-key".to_string());
+        let Step::Login(widget) = &screen.steps[1] else {
+            panic!("expected login step");
+        };
+        assert!(matches!(
+            widget.state(),
+            LoginState::EnterAlias { alias, .. } if alias.value() == "secret-key"
+        ));
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn login_completion_resumes_animations() -> io::Result<()> {
+        let mut tui = crate::tui::test_support::make_test_tui()?;
+        let mut config = test_config().await;
+        config.has_active_model = true;
+        let args = OnboardingScreenArgs {
+            show_login_screen: true,
+            show_trust_screen: false,
+            app_server_request_handle: None,
+            config,
+        };
+        let mut screen = OnboardingScreen::new(&mut tui, args).await;
+        assert!(!screen.should_suppress_animations());
+        screen.handle_key_event(key(KeyCode::Enter));
+        assert!(screen.should_suppress_animations());
+        screen.steps[1] = Step::Login(LoginFlowWidget::done_for_test());
+        assert!(!screen.should_suppress_animations());
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn trust_quit_selection_sets_should_exit() -> io::Result<()> {
+        let mut tui = crate::tui::test_support::make_test_tui()?;
+        let mut config = test_config().await;
+        config.has_active_model = true;
+        let args = OnboardingScreenArgs {
+            show_login_screen: false,
+            show_trust_screen: true,
+            app_server_request_handle: None,
+            config,
+        };
+        let mut screen = OnboardingScreen::new(&mut tui, args).await;
+        screen.handle_key_event(key(KeyCode::Char('2')));
+        assert!(screen.should_exit());
+        assert!(screen.is_done());
+        Ok(())
     }
 }

@@ -45,7 +45,10 @@ fn config_for(name: &str) -> WebSearchProviderConfig {
     let provider: WebSearchProviderName = name.parse().expect("valid provider name");
     let mut options = HashMap::new();
     if name == "searxng" {
-        options.insert("base_url".to_string(), serde_json::Value::String("https://searxng.example/search".to_string()));
+        options.insert(
+            "base_url".to_string(),
+            serde_json::Value::String("https://searxng.example/search".to_string()),
+        );
     }
     WebSearchProviderConfig {
         provider,
@@ -74,8 +77,18 @@ fn unknown_provider_returns_error() {
 fn default_registry_contains_all_twelve_providers() {
     let registry = create_default_registry();
     for name in [
-        "bing", "serpapi", "searchapi", "moonshot", "duckduckgo", "serper", "baidu", "serply",
-        "searxng", "tavily", "exa", "perplexity",
+        "bing",
+        "serpapi",
+        "searchapi",
+        "moonshot",
+        "duckduckgo",
+        "serper",
+        "baidu",
+        "serply",
+        "searxng",
+        "tavily",
+        "exa",
+        "perplexity",
     ] {
         let config = config_for(name);
         let result = registry.create(&config, reqwest::Client::new());
@@ -109,7 +122,14 @@ fn first_batch_providers_are_implemented() {
 fn second_batch_providers_are_implemented() {
     let registry = create_default_registry();
     for name in [
-        "duckduckgo", "serper", "baidu", "serply", "searxng", "tavily", "exa", "perplexity",
+        "duckduckgo",
+        "serper",
+        "baidu",
+        "serply",
+        "searxng",
+        "tavily",
+        "exa",
+        "perplexity",
     ] {
         let config = config_for(name);
         let result = registry.create(&config, reqwest::Client::new());

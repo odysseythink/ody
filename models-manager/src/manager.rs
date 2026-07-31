@@ -256,7 +256,9 @@ impl ModelsManager for OpenaiCompatibleModelsManager {
     }
 
     fn refresh_if_new_etag(&self, etag: String) -> ModelsManagerFuture<'_, ()> {
-        Box::pin(OpenaiCompatibleModelsManager::refresh_if_new_etag(self, etag))
+        Box::pin(OpenaiCompatibleModelsManager::refresh_if_new_etag(
+            self, etag,
+        ))
     }
 }
 

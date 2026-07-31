@@ -4,7 +4,6 @@ assertion_line: 430
 expression: commands
 ---
 /model - Switch LLM model
-/ide - include current selection, open files, and other context from your IDE
 /permissions - choose what Ody is allowed to do
 /keymap - remap TUI shortcuts
 /vim - toggle Vim mode for the composer
@@ -14,6 +13,7 @@ expression: commands
 /skills - use skills to improve how Ody performs specific tasks
 /import - import setup, this project, and recent chats from Claude Code
 /hooks - view and manage lifecycle hooks
+/preferences - edit mode-specific preferences
 /review - review my current changes and find issues
 /rename - rename the current thread
 /new - start a new chat during a conversation
@@ -37,7 +37,7 @@ expression: commands
 /pets - choose or hide the terminal pet
 /mcp - list configured MCP tools; use /mcp verbose for details
 /login - log in to an API-key provider
-/logout - log out of Ody
+/logout - remove a configured API-key provider alias
 /exit - exit Ody
 /feedback - send logs to maintainers
 /rollout - print the rollout file path

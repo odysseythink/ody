@@ -758,7 +758,6 @@ pub(crate) struct OdyCollabAgentToolCallEventRequest {
     pub(crate) event_params: OdyCollabAgentToolCallEventParams,
 }
 
-
 #[derive(Serialize)]
 pub(crate) struct OdyImageGenerationEventParams {
     #[serde(flatten)]

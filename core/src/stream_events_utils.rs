@@ -247,8 +247,7 @@ pub(crate) async fn record_completed_response_item_with_finalized_facts(
 fn response_item_may_include_external_context(item: &ResponseItem) -> bool {
     matches!(
         item,
-        ResponseItem::ToolSearchCall { .. }
-            | ResponseItem::ToolSearchOutput { .. }
+        ResponseItem::ToolSearchCall { .. } | ResponseItem::ToolSearchOutput { .. }
     )
 }
 
@@ -312,6 +311,8 @@ pub(crate) struct OutputItemResult {
     pub needs_follow_up: bool,
     pub tool_future: Option<InFlightFuture<'static>>,
     pub is_request_user_input_call: bool,
+    pub is_submit_plan_call: bool,
+    pub is_submit_design_call: bool,
 }
 
 pub(crate) struct HandleOutputCtx {
@@ -424,6 +425,8 @@ pub(crate) async fn handle_output_item_done(
 
             let payload_preview = call.payload.log_payload().into_owned();
             let is_request_user_input = call.tool_name == ToolName::plain("request_user_input");
+            let is_submit_plan = call.tool_name == ToolName::plain("submit_plan");
+            let is_submit_design = call.tool_name == ToolName::plain("submit_design");
             tracing::info!(
                 thread_id = %ctx.sess.thread_id,
                 "ToolCall: {} {}",
@@ -442,6 +445,8 @@ pub(crate) async fn handle_output_item_done(
             );
 
             output.is_request_user_input_call = is_request_user_input;
+            output.is_submit_plan_call = is_submit_plan;
+            output.is_submit_design_call = is_submit_design;
             output.needs_follow_up = true;
             output.tool_future = Some(tool_future);
         }

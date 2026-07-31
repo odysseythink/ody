@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::config::WebSearchProviderConfig;
 use crate::error::WebSearchError;
@@ -27,8 +27,8 @@ impl WebSearchProviderFactory for BaiduFactory {
     ) -> Result<SharedWebSearchProvider, WebSearchError> {
         validate_options(&config, &["base_url", "top_k"])?;
         let api_key = require_api_key(&config)?;
-        let base_url = take_base_url(&mut config.options)
-            .unwrap_or_else(|| DEFAULT_BAIDU_URL.to_string());
+        let base_url =
+            take_base_url(&mut config.options).unwrap_or_else(|| DEFAULT_BAIDU_URL.to_string());
         let top_k = take_top_k(&mut config.options).unwrap_or(10);
         let timeout = config
             .timeout_ms
@@ -82,11 +82,17 @@ impl WebSearchProvider for BaiduProvider {
             .client
             .post(&self.base_url)
             .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("X-Appbuilder-Authorization", format!("Bearer {}", self.api_key))
+            .header(
+                "X-Appbuilder-Authorization",
+                format!("Bearer {}", self.api_key),
+            )
             .header("Content-Type", "application/json")
             .json(&body)
             .timeout(self.timeout);
-        let response = request.send().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let response = request
+            .send()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         let status = response.status();
         if !status.is_success() {
             let body = match response.text().await {
@@ -95,7 +101,10 @@ impl WebSearchProvider for BaiduProvider {
             };
             return Err(WebSearchError::from_http_status(status, &body));
         }
-        let json: Value = response.json().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let json: Value = response
+            .json()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         parse_baidu_response(&json)
     }
 }
@@ -108,7 +117,9 @@ fn take_top_k(options: &mut std::collections::HashMap<String, Value>) -> Option<
 }
 
 fn parse_baidu_response(json: &Value) -> Result<Vec<WebSearchResult>, WebSearchError> {
-    if json.get("code").is_some() || (json.get("message").is_some() && json.get("references").is_none()) {
+    if json.get("code").is_some()
+        || (json.get("message").is_some() && json.get("references").is_none())
+    {
         let message = json
             .get("message")
             .and_then(|v| v.as_str())
@@ -118,7 +129,10 @@ fn parse_baidu_response(json: &Value) -> Result<Vec<WebSearchResult>, WebSearchE
         });
     }
     let empty = Vec::new();
-    let refs = json.get("references").and_then(|v| v.as_array()).unwrap_or(&empty);
+    let refs = json
+        .get("references")
+        .and_then(|v| v.as_array())
+        .unwrap_or(&empty);
     let mut results = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for r in refs {

@@ -432,6 +432,9 @@ impl ChatWidget {
             SlashCommand::Experimental => {
                 self.open_experimental_popup();
             }
+            SlashCommand::Preferences => {
+                self.open_preferences_popup();
+            }
             SlashCommand::AutoReview => {
                 self.open_auto_review_denials_popup();
             }
@@ -1214,6 +1217,7 @@ impl ChatWidget {
             | SlashCommand::Statusline
             | SlashCommand::Theme
             | SlashCommand::Pets => QueueDrain::Stop,
+            SlashCommand::Preferences => QueueDrain::Stop,
         }
     }
 

@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::{test_config, TEST_PROVIDER_ID};
+use crate::config::{TEST_PROVIDER_ID, test_config};
 use crate::init_state_db;
 use crate::installation_id::INSTALLATION_ID_FILENAME;
 use crate::rollout::RolloutRecorder;

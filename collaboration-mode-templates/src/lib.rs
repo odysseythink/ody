@@ -69,6 +69,20 @@ mod template_tests {
         );
     }
 
+    #[test]
+    fn split_templates_require_complete_detail_without_a_default_byte_target() {
+        for (name, body) in [("PLAN", PLAN), ("PLAN_RIGOR_SPLIT", PLAN_RIGOR_SPLIT)] {
+            assert!(
+                body.contains("Do not replace") || body.contains("Do not compress"),
+                "{name} must forbid replacing concrete plan detail with a summary"
+            );
+            assert!(
+                !body.contains("byte budget"),
+                "{name} must not encourage compacting a plan to a default byte budget"
+            );
+        }
+    }
+
     /// Every `## Parts` File cell the model can see must be openable exactly as written.
     ///
     /// The cell is the manifest's locator: an index is routinely handed to a downstream reader — a

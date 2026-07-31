@@ -45,7 +45,8 @@ impl App {
         app_server: &mut AppServerSession,
         provider_id: String,
     ) -> anyhow::Result<()> {
-        let Some(params) = self.active_thread_model_provider_setting_update_params(provider_id) else {
+        let Some(params) = self.active_thread_model_provider_setting_update_params(provider_id)
+        else {
             return Ok(());
         };
         self.send_thread_settings_update(app_server, params).await

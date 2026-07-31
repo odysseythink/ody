@@ -27,8 +27,8 @@ impl WebSearchProviderFactory for BingFactory {
     ) -> Result<SharedWebSearchProvider, WebSearchError> {
         validate_options(&config, &["base_url"])?;
         let api_key = require_api_key(&config)?;
-        let base_url = take_base_url(&mut config.options)
-            .unwrap_or_else(|| DEFAULT_BING_URL.to_string());
+        let base_url =
+            take_base_url(&mut config.options).unwrap_or_else(|| DEFAULT_BING_URL.to_string());
         let timeout = config
             .timeout_ms
             .map(Duration::from_millis)
@@ -78,7 +78,10 @@ impl WebSearchProvider for BingProvider {
             .header("Ocp-Apim-Subscription-Key", &self.api_key)
             .query(&[("q", query), ("count", &count)])
             .timeout(self.timeout);
-        let response = request.send().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let response = request
+            .send()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         let status = response.status();
         if !status.is_success() {
             let body = match response.text().await {
@@ -87,7 +90,10 @@ impl WebSearchProvider for BingProvider {
             };
             return Err(WebSearchError::from_http_status(status, &body));
         }
-        let json: Value = response.json().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let json: Value = response
+            .json()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         parse_bing_response(&json, options.limit)
     }
 }
@@ -186,7 +192,14 @@ mod tests {
         let factory = BingFactory;
         let provider = factory.create(config, reqwest::Client::new())?;
         let results = provider
-            .search("hello", &WebSearchOptions { limit: Some(5), include_content: None, tool_call_id: None })
+            .search(
+                "hello",
+                &WebSearchOptions {
+                    limit: Some(5),
+                    include_content: None,
+                    tool_call_id: None,
+                },
+            )
             .await?;
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].title, "A");

@@ -83,8 +83,6 @@ use ody_mcp::McpServerRegistration;
 use ody_mcp::ResolvedMcpCatalog;
 use ody_memories_read::memory_root;
 use ody_model_provider_info::ModelProviderInfo;
-use ody_model_provider_info::model_ref::ModelRef;
-use ody_model_provider_info::model_ref::ProviderRef;
 #[cfg(test)]
 use ody_model_provider_info::ProviderCapabilities;
 #[cfg(test)]
@@ -92,6 +90,8 @@ use ody_model_provider_info::WireApi;
 use ody_model_provider_info::create_deepseek_provider;
 use ody_model_provider_info::create_glm_provider;
 use ody_model_provider_info::create_kimi_provider;
+use ody_model_provider_info::model_ref::ModelRef;
+use ody_model_provider_info::model_ref::ProviderRef;
 use ody_models_manager::ModelsManagerConfig;
 use ody_models_manager::model_info::ConfiguredModelSpec;
 use ody_models_manager::model_info::configured_model_catalog_for_provider;
@@ -120,9 +120,9 @@ use ody_protocol::protocol::MultiAgentVersion;
 use ody_protocol::protocol::SandboxPolicy;
 pub use ody_thread_store::ExtraConfig;
 use ody_utils_absolute_path::AbsolutePathBuf;
-use ody_web_search::config::ServicesConfig;
 use ody_utils_absolute_path::AbsolutePathBufGuard;
 use ody_utils_path_uri::PathUri;
+use ody_web_search::config::ServicesConfig;
 use rmcp::model::ElicitationCapability;
 use rmcp::model::FormElicitationCapability;
 use rmcp::model::UrlElicitationCapability;
@@ -708,9 +708,12 @@ pub struct Config {
     pub review_model: Option<String>,
 
     /// Optional model override for the adversarial self-review triggered when
-    /// finalizing a design in Design Mode. Falls back to `review_model` when
-    /// unset.
+    /// finalizing a design in Design Mode. Resolved from `[design_review].review_model`,
+    /// falling back to the legacy flat `design_review_model` and then `review_model`.
     pub design_review_model: Option<String>,
+    /// Whether the adversarial design review is enabled. Mirrors `[design_review].enable`
+    /// or is implicitly `true` when the legacy flat `design_review_model` is set.
+    pub design_review_enabled: bool,
     /// Resolved `[design_review.debate]` table (the single-shot design review is
     /// augmented with a bounded Advocate/Skeptic/Judge debate when this is
     /// `Some` with `enable = true`). `None` ⇒ debate off (default).
@@ -2073,11 +2076,7 @@ fn configured_model_catalog(
             }
         })
         .collect();
-    configured_model_catalog_for_provider(
-        model_provider_id,
-        model_provider.wire_api,
-        &entries,
-    )
+    configured_model_catalog_for_provider(model_provider_id, model_provider.wire_api, &entries)
 }
 
 /// Build a model catalog from user-declared `[models."provider/model"]`
@@ -2131,11 +2130,9 @@ fn configured_model_catalog_all_providers(
                 }
             })
             .collect();
-        if let Some(mut response) = configured_model_catalog_for_provider(
-            provider_id,
-            provider.wire_api,
-            &entries,
-        ) {
+        if let Some(mut response) =
+            configured_model_catalog_for_provider(provider_id, provider.wire_api, &entries)
+        {
             all_models.append(&mut response.models);
         }
     }
@@ -3862,8 +3859,13 @@ impl Config {
             .map(AbsolutePathBuf::into_path_buf);
 
         let review_model = override_review_model.or(cfg.review_model);
-        let design_review_model = override_design_review_model.or(cfg.design_review_model);
-        let design_review_debate = cfg.design_review.and_then(|dr| dr.debate);
+        let design_review_table = cfg.design_review.unwrap_or_default();
+        let design_review_model = override_design_review_model
+            .or(design_review_table.review_model)
+            .or(cfg.design_review_model);
+        let design_review_enabled = design_review_table.enable
+            || design_review_model.is_some();
+        let design_review_debate = design_review_table.debate;
         let test_review_model = override_test_review_model.or(cfg.test_review_model);
         let test_review_enabled = override_test_review_enabled.unwrap_or(cfg.test_review_enabled);
 
@@ -3996,6 +3998,7 @@ impl Config {
             service_tier,
             review_model,
             design_review_model,
+            design_review_enabled,
             test_review_model,
             test_review_enabled,
             model_context_window: cfg.model_context_window,

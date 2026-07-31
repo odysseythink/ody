@@ -401,7 +401,6 @@ fn skills_config_roundtrip() {
     assert_eq!(roundtripped.skills, original.skills);
 }
 
-
 #[test]
 fn tools_experimental_request_user_input_defaults_to_enabled() {
     let cfg: ConfigToml = toml::from_str(
@@ -5237,7 +5236,6 @@ async fn feedback_enabled_defaults_to_true() -> std::io::Result<()> {
     Ok(())
 }
 
-
 #[tokio::test]
 async fn project_profiles_are_ignored() -> std::io::Result<()> {
     let ody_home = TempDir::new()?;
@@ -8547,7 +8545,6 @@ async fn fast_default_opt_out_notice_config_is_respected() -> std::io::Result<()
     Ok(())
 }
 
-
 #[test]
 fn test_set_project_trusted_writes_explicit_tables() -> anyhow::Result<()> {
     let project_dir = Path::new("/some/path");
@@ -9292,7 +9289,6 @@ async fn permission_profile_override_preserves_split_write_roots() -> std::io::R
     );
     Ok(())
 }
-
 
 #[tokio::test]
 async fn requirements_disallowing_default_approval_falls_back_to_required_default()
@@ -11301,12 +11297,16 @@ api_key = "test-key"
     )
     .await?;
 
-    let model_ref = config.active_model_ref().expect("active model should be set");
+    let model_ref = config
+        .active_model_ref()
+        .expect("active model should be set");
     assert_eq!(model_ref.provider_alias, "123456");
     assert_eq!(model_ref.model_id, "kimi-for-coding");
     assert_eq!(model_ref.qualified(), "123456/kimi-for-coding");
 
-    let provider_ref = config.provider_ref("123456").expect("provider should be configured");
+    let provider_ref = config
+        .provider_ref("123456")
+        .expect("provider should be configured");
     assert_eq!(provider_ref.alias, "123456");
     assert_eq!(provider_ref.kind, ProviderKind::Kimi);
 
@@ -11317,8 +11317,8 @@ api_key = "test-key"
 
 #[tokio::test]
 async fn active_model_ref_composes_bare_model_with_provider_id() -> std::io::Result<()> {
-    let config_toml: ConfigToml = toml::from_str(r#"default_model = "kimi-for-coding""#)
-        .expect("TOML should deserialize");
+    let config_toml: ConfigToml =
+        toml::from_str(r#"default_model = "kimi-for-coding""#).expect("TOML should deserialize");
     let ody_home = tempdir()?;
     let config = Config::load_from_base_config_with_overrides(
         config_toml,
@@ -11327,7 +11327,9 @@ async fn active_model_ref_composes_bare_model_with_provider_id() -> std::io::Res
     )
     .await?;
 
-    let model_ref = config.active_model_ref().expect("active model should be set");
+    let model_ref = config
+        .active_model_ref()
+        .expect("active model should be set");
     assert_eq!(model_ref.provider_alias, "kimi");
     assert_eq!(model_ref.model_id, "kimi-for-coding");
     assert_eq!(model_ref.qualified(), "kimi/kimi-for-coding");

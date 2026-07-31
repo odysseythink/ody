@@ -19,7 +19,10 @@ use serde_json::Value;
 pub(crate) struct NormalizeState {
     pub saw_text_delta: bool,
     pub saw_message_added: bool,
-    pub saw_output: bool,
+    /// Whether the response has produced an assistant-visible text fragment or
+    /// a tool call. Reasoning alone is not a valid terminal response: the turn
+    /// must continue so the model can act or answer the user.
+    pub saw_actionable_output: bool,
 }
 
 /// Normalize a single `ResponseEvent` into zero or more provider-neutral events.
@@ -44,7 +47,7 @@ pub(crate) fn normalize_response_event_with_state(
         ResponseEvent::OutputTextDelta(delta) => {
             state.saw_text_delta = true;
             if !delta.is_empty() {
-                state.saw_output = true;
+                state.saw_actionable_output = true;
             }
             Ok(vec![ChatEvent::ContentPart(ContentPart::Text(delta))])
         }
@@ -55,10 +58,6 @@ pub(crate) fn normalize_response_event_with_state(
             normalize_response_item(item)
         }
         ResponseEvent::OutputItemDone(item) => {
-            // Any delivered item (message snapshot, tool call, reasoning, ...)
-            // represents real model output, so a subsequent terminal `Completed`
-            // must not be classified as an empty completion.
-            state.saw_output = true;
             // A message-level `OutputItemDone` carries the full snapshot. If we
             // already received text for this item (either as deltas or in the
             // added event), downstream will reconstruct the final text from the
@@ -69,7 +68,15 @@ pub(crate) fn normalize_response_event_with_state(
             {
                 return Ok(vec![]);
             }
-            normalize_response_item(item)
+            let events = normalize_response_item(item)?;
+            if events.iter().any(|event| match event {
+                ChatEvent::ContentPart(ContentPart::Text(text)) => !text.is_empty(),
+                ChatEvent::ToolCall(_) => true,
+                _ => false,
+            }) {
+                state.saw_actionable_output = true;
+            }
+            Ok(events)
         }
         // Tool-call argument deltas are partial JSON fragments. The complete tool
         // call is delivered by `OutputItemDone(ResponseItem::FunctionCall)`, which
@@ -83,9 +90,8 @@ pub(crate) fn normalize_response_event_with_state(
             })))])
         }
         ResponseEvent::ReasoningContentDelta { delta, .. } => {
-            if !delta.is_empty() {
-                state.saw_output = true;
-            }
+            // Reasoning is intentionally not actionable output. A terminal
+            // response containing only reasoning must be retried.
             Ok(vec![ChatEvent::ReasoningPart(delta)])
         }
         ResponseEvent::Completed {
@@ -96,7 +102,7 @@ pub(crate) fn normalize_response_event_with_state(
         } => {
             // Detect a degenerate empty completion: the turn finished (or the
             // API did not signal an incomplete/paused turn) without producing
-            // any text, reasoning, or tool call. Chat-wire providers such as
+            // any assistant text or tool call. Chat-wire providers such as
             // Kimi occasionally do this right when the model should have acted;
             // surfacing it as a retryable error lets the request- and turn-level
             // retry loops recover instead of silently ending the turn.
@@ -104,7 +110,7 @@ pub(crate) fn normalize_response_event_with_state(
             // (more output is expected), so it is intentionally excluded. Both
             // `Some(true)` and `None` (APIs that do not populate `end_turn`)
             // are treated as terminal stops.
-            if end_turn != Some(false) && !state.saw_output {
+            if end_turn != Some(false) && !state.saw_actionable_output {
                 return Err(ChatProviderError::Provider {
                     code: "empty_completion".into(),
                     message: "assistant returned no text and no tool call".into(),
@@ -430,6 +436,40 @@ mod tests {
             &mut state,
         )
         .expect_err("empty completion with end_turn=None should error");
+        assert_eq!(
+            err,
+            ChatProviderError::Provider {
+                code: "empty_completion".into(),
+                message: "assistant returned no text and no tool call".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn reasoning_only_completion_is_empty() {
+        let mut state = NormalizeState::default();
+        normalize_response_event_with_state(
+            ResponseEvent::OutputItemDone(ResponseItem::Reasoning {
+                id: Some("reason-1".into()),
+                summary: Vec::new(),
+                content: None,
+                encrypted_content: None,
+                internal_chat_message_metadata_passthrough: None,
+            }),
+            &mut state,
+        )
+        .expect("reasoning normalizes");
+
+        let err = normalize_response_event_with_state(
+            ResponseEvent::Completed {
+                response_id: "resp_1".into(),
+                token_usage: None,
+                end_turn: Some(true),
+                finish_reason: None,
+            },
+            &mut state,
+        )
+        .expect_err("reasoning-only completion should be retried");
         assert_eq!(
             err,
             ChatProviderError::Provider {

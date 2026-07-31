@@ -11,6 +11,7 @@ use crate::chat_provider::{
 };
 use base64::Engine;
 use futures::StreamExt;
+use http::{HeaderMap, HeaderName, HeaderValue};
 use ody_api::chat::{ChatCompletionsRequest, ChatVendor};
 use ody_api::{
     ChatCompletionsClient, ChatCompletionsOptions, Compression, Provider as ApiProvider,
@@ -18,7 +19,6 @@ use ody_api::{
 };
 use ody_client::HttpTransport;
 use ody_protocol::models::ResponseItem;
-use http::{HeaderMap, HeaderName, HeaderValue};
 
 /// Adapter for the Chat Completions API.
 pub struct ChatAdapter<T: HttpTransport> {
@@ -745,8 +745,13 @@ mod tests {
                 },
             ],
         };
-        let request =
-            crate::adapters::core::prompt_to_chat_request("kimi-for-coding", &prompt, None, &[], None);
+        let request = crate::adapters::core::prompt_to_chat_request(
+            "kimi-for-coding",
+            &prompt,
+            None,
+            &[],
+            None,
+        );
         let wire = build_api_request(request, ChatVendor::Kimi)
             .expect("builds")
             .to_wire();
@@ -777,8 +782,13 @@ mod tests {
                 internal_chat_message_metadata_passthrough: None,
             }],
         };
-        let request =
-            crate::adapters::core::prompt_to_chat_request("kimi-for-coding", &prompt, None, &[], None);
+        let request = crate::adapters::core::prompt_to_chat_request(
+            "kimi-for-coding",
+            &prompt,
+            None,
+            &[],
+            None,
+        );
         let wire = build_api_request(request, ChatVendor::Kimi)
             .expect("builds")
             .to_wire();
@@ -797,7 +807,10 @@ mod tests {
             ("x-ody-turn-metadata".to_string(), "{}".to_string()),
             ("x-ody-window-id".to_string(), "win-1".to_string()),
             ("x-ody-parent-thread-id".to_string(), "parent-1".to_string()),
-            ("x-odysseythink-subagent".to_string(), "subagent-1".to_string()),
+            (
+                "x-odysseythink-subagent".to_string(),
+                "subagent-1".to_string(),
+            ),
             ("x-ody-installation-id".to_string(), "install-1".to_string()),
             ("session-id".to_string(), "should-be-ignored".to_string()),
             ("thread-id".to_string(), "should-be-ignored".to_string()),
@@ -806,7 +819,9 @@ mod tests {
         let headers = client_metadata_to_headers(Some(&metadata));
         assert_eq!(headers.len(), 5);
         assert_eq!(
-            headers.get("x-ody-turn-metadata").and_then(|v| v.to_str().ok()),
+            headers
+                .get("x-ody-turn-metadata")
+                .and_then(|v| v.to_str().ok()),
             Some("{}")
         );
         assert_eq!(

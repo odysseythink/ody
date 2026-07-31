@@ -110,6 +110,7 @@ use crate::client_common::ResponseStream;
 use crate::feedback_tags;
 use crate::responses_metadata::OdyResponsesMetadata;
 use crate::responses_metadata::subagent_header_value;
+use arc_swap::ArcSwap;
 use ody_feedback::FeedbackRequestTags;
 use ody_feedback::emit_feedback_request_tags;
 use ody_model_provider::ChatEvent;
@@ -121,7 +122,6 @@ use ody_model_provider::ToolCall;
 use ody_model_provider::Usage;
 use ody_model_provider::adapters::core::prompt_to_chat_request;
 use ody_model_provider::create_model_provider;
-use arc_swap::ArcSwap;
 
 #[cfg(test)]
 use ody_model_provider_info::DEFAULT_WEBSOCKET_CONNECT_TIMEOUT_MS;
@@ -895,7 +895,12 @@ impl ModelClient {
             auth_context,
             request_route_telemetry,
         );
-        let websocket_connect_timeout = self.state.provider.load().info().websocket_connect_timeout();
+        let websocket_connect_timeout = self
+            .state
+            .provider
+            .load()
+            .info()
+            .websocket_connect_timeout();
         let start = Instant::now();
         let result = match tokio::time::timeout(
             websocket_connect_timeout,
@@ -1331,9 +1336,13 @@ impl ModelClientSession {
             self.websocket_session.last_response_from_untraced_warmup = warmup;
             let websocket_connection =
                 self.websocket_session.connection.as_ref().ok_or_else(|| {
-                    self.client.state.provider.load().map_api_error(ApiError::Stream(
-                        "websocket connection is unavailable".to_string(),
-                    ))
+                    self.client
+                        .state
+                        .provider
+                        .load()
+                        .map_api_error(ApiError::Stream(
+                            "websocket connection is unavailable".to_string(),
+                        ))
                 })?;
             let stream_result = websocket_connection
                 .stream_request(
@@ -1545,19 +1554,21 @@ impl ModelClientSession {
         );
 
         let provider = self.client.state.provider.load_full().as_ref().clone();
-        let chat_provider = provider
-            .chat_provider()
-            .await
-            .map_err(|err| {
-                OdyErr::Stream(format!("failed to create chat provider: {err}"), None)
-            })?;
+        let chat_provider = provider.chat_provider().await.map_err(|err| {
+            OdyErr::Stream(format!("failed to create chat provider: {err}"), None)
+        })?;
         let supported_efforts: Vec<ReasoningEffortConfig> = model_info
             .supported_reasoning_levels
             .iter()
             .map(|level| level.effort.clone())
             .collect();
-        let mut request =
-            prompt_to_chat_request(&model_info.slug, prompt, effort.clone(), &supported_efforts, None);
+        let mut request = prompt_to_chat_request(
+            &model_info.slug,
+            prompt,
+            effort.clone(),
+            &supported_efforts,
+            None,
+        );
         request.prompt_cache_key = Some(self.client.prompt_cache_key());
         request.client_metadata = Some(responses_metadata.client_metadata());
         request.service_tier = model_info.service_tier_for_request(service_tier);

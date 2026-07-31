@@ -303,13 +303,12 @@ impl ConfigManager {
                     )
                 },
             )?;
-        validate_model_providers(&user_config_toml.normalized_providers())
-            .map_err(|err| {
-                ConfigManagerError::write(
-                    ConfigWriteErrorCode::ConfigValidationError,
-                    format!("Invalid configuration: {err}"),
-                )
-            })?;
+        validate_model_providers(&user_config_toml.normalized_providers()).map_err(|err| {
+            ConfigManagerError::write(
+                ConfigWriteErrorCode::ConfigValidationError,
+                format!("Invalid configuration: {err}"),
+            )
+        })?;
         validate_feature_requirements_for_config_toml(
             &user_config_toml,
             layers.requirements().feature_requirements.as_ref(),

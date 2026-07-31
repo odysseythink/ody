@@ -696,7 +696,15 @@ async fn derive_new_contents_from_chunks(
         })
     })?;
 
-    let mut original_lines: Vec<String> = original_contents.split('\n').map(String::from).collect();
+    let use_crlf = original_contents.contains("\r\n");
+    fn strip_trailing_cr(line: &str) -> String {
+        line.strip_suffix('\r').unwrap_or(line).to_string()
+    }
+
+    let mut original_lines: Vec<String> = original_contents
+        .split('\n')
+        .map(|line| strip_trailing_cr(line))
+        .collect();
 
     // Drop the trailing empty element that results from the final newline so
     // that line counts match the behaviour of standard `diff`.
@@ -705,13 +713,38 @@ async fn derive_new_contents_from_chunks(
     }
 
     let path_text = path.inferred_native_path_string();
-    let replacements = compute_replacements(&original_lines, &path_text, chunks)?;
+
+    // Patch hunks are authored with LF line endings; strip any stray CR so they
+    // match files that happen to be stored with CRLF.
+    let chunks: Vec<UpdateFileChunk> = chunks
+        .iter()
+        .map(|chunk| UpdateFileChunk {
+            change_context: chunk
+                .change_context
+                .as_ref()
+                .map(|ctx| strip_trailing_cr(ctx)),
+            old_lines: chunk
+                .old_lines
+                .iter()
+                .map(|l| strip_trailing_cr(l))
+                .collect(),
+            new_lines: chunk
+                .new_lines
+                .iter()
+                .map(|l| strip_trailing_cr(l))
+                .collect(),
+            new_line_sources: chunk.new_line_sources.clone(),
+            is_end_of_file: chunk.is_end_of_file,
+        })
+        .collect();
+
+    let replacements = compute_replacements(&original_lines, &path_text, &chunks)?;
     let new_lines = apply_replacements(original_lines, &replacements);
     let mut new_lines = new_lines;
     if !new_lines.last().is_some_and(String::is_empty) {
         new_lines.push(String::new());
     }
-    let new_contents = new_lines.join("\n");
+    let new_contents = new_lines.join(if use_crlf { "\r\n" } else { "\n" });
     Ok(AppliedPatch {
         original_contents,
         new_contents,
@@ -1115,6 +1148,35 @@ mod tests {
         assert_eq!(stderr_str, "");
         let contents = fs::read_to_string(&path).unwrap();
         assert_eq!(contents, "foo\nbaz\n");
+    }
+
+    #[tokio::test]
+    async fn test_update_file_hunk_with_crlf_file() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("update.txt");
+        fs::write(&path, "foo\r\nbar\r\n").unwrap();
+        let patch = wrap_patch(&format!(
+            r#"*** Update File: {}
+@@
+ foo
+-bar
++baz"#,
+            path.display()
+        ));
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        apply_patch(
+            &patch,
+            &PathUri::from_host_native_path(dir.path()).expect("absolute test path"),
+            &mut stdout,
+            &mut stderr,
+            LOCAL_FS.as_ref(),
+            /*sandbox*/ None,
+        )
+        .await
+        .unwrap();
+        let contents = fs::read_to_string(&path).unwrap();
+        assert_eq!(contents, "foo\r\nbaz\r\n");
     }
 
     #[tokio::test]

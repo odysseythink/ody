@@ -129,9 +129,7 @@ pub(crate) fn thread_to_transcript_cells(
 /// Build a short chip summary for a `WebSearch` dynamic tool call, matching the
 /// TS `webSearchChip` behaviour: count result list items and emit
 /// `N results`, `no results`, or `web result`.
-fn web_search_chip_summary(
-    content_items: &[DynamicToolCallOutputContentItem],
-) -> Option<String> {
+fn web_search_chip_summary(content_items: &[DynamicToolCallOutputContentItem]) -> Option<String> {
     let text = content_items.iter().find_map(|item| match item {
         DynamicToolCallOutputContentItem::InputText { text } => Some(text.as_str()),
         _ => None,
@@ -367,9 +365,7 @@ mod tests {
         assert_eq!(web_search_chip_summary(&items), None);
     }
 
-    fn web_search_thread_item(
-        content_items: Vec<DynamicToolCallOutputContentItem>,
-    ) -> ThreadItem {
+    fn web_search_thread_item(content_items: Vec<DynamicToolCallOutputContentItem>) -> ThreadItem {
         ThreadItem::DynamicToolCall {
             id: "call-1".to_string(),
             namespace: None,

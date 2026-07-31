@@ -189,7 +189,8 @@ async fn request_permissions_guardian_review_stops_when_cancelled() {
     Arc::get_mut(&mut session)
         .expect("single session ref")
         .services
-        .models_manager.store(models_manager);
+        .models_manager
+        .store(models_manager);
     turn_context_raw.config = Arc::clone(&config);
     turn_context_raw.provider = create_model_provider(config.model_provider.clone());
 

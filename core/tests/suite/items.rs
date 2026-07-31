@@ -269,7 +269,6 @@ async fn reasoning_item_is_emitted() -> anyhow::Result<()> {
     Ok(())
 }
 
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn builtin_image_generation_call_persisted() -> anyhow::Result<()> {
     skip_if_no_network!(Ok(()));

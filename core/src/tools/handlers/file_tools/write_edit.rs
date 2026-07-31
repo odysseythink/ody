@@ -36,7 +36,7 @@ pub(crate) async fn resolve_write_path(
         turn,
         environment_id,
         Some(path),
-        PathAccessMode::AbsoluteOutsideAllowed,
+        PathAccessMode::WorkspaceRelativeOnly,
     ) {
         return Ok(resolved);
     }
@@ -53,13 +53,13 @@ pub(crate) async fn resolve_write_path(
     if is_ody_managed_skill_path(&resolved, turn, &cwd) {
         Ok(resolved)
     } else {
-        // Re-run the original workspace-only resolution to produce the
+        // Re-run the workspace-only resolution to produce the
         // correct "escapes the working directory" error.
         local_search_root(
             turn,
             environment_id,
             Some(path),
-            PathAccessMode::AbsoluteOutsideAllowed,
+            PathAccessMode::WorkspaceRelativeOnly,
         )
     }
 }

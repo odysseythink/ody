@@ -24,9 +24,10 @@ impl WebSearchProviderFactory for SearXNGFactory {
         http_client: reqwest::Client,
     ) -> Result<SharedWebSearchProvider, WebSearchError> {
         validate_options(&config, &["base_url"])?;
-        let base_url = take_base_url(&mut config.options).ok_or_else(|| WebSearchError::Unexpected {
-            message: "searxng provider requires a base_url option".to_string(),
-        })?;
+        let base_url =
+            take_base_url(&mut config.options).ok_or_else(|| WebSearchError::Unexpected {
+                message: "searxng provider requires a base_url option".to_string(),
+            })?;
         let timeout = config
             .timeout_ms
             .map(Duration::from_millis)
@@ -70,7 +71,10 @@ impl WebSearchProvider for SearXNGProvider {
             .get(&self.base_url)
             .query(&[("q", query), ("format", "json")])
             .timeout(self.timeout);
-        let response = request.send().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let response = request
+            .send()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         let status = response.status();
         if !status.is_success() {
             let body = match response.text().await {
@@ -79,7 +83,10 @@ impl WebSearchProvider for SearXNGProvider {
             };
             return Err(WebSearchError::from_http_status(status, &body));
         }
-        let json: Value = response.json().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let json: Value = response
+            .json()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         parse_searxng_response(&json, options.limit)
     }
 }
@@ -167,7 +174,14 @@ mod tests {
         };
         let provider = SearXNGFactory.create(config, reqwest::Client::new())?;
         let results = provider
-            .search("rust", &WebSearchOptions { limit: Some(3), include_content: None, tool_call_id: None })
+            .search(
+                "rust",
+                &WebSearchOptions {
+                    limit: Some(3),
+                    include_content: None,
+                    tool_call_id: None,
+                },
+            )
             .await?;
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].title, "T");

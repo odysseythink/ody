@@ -20,7 +20,7 @@ pub(super) const BUILTIN_PETS: &[BuiltinPet] = &[
         id: "ody",
         display_name: "Ody",
         description: "The original Ody companion",
-        spritesheet_file: "ody-spritesheet-v4.webp",
+        spritesheet_file: "codex-spritesheet-v4.webp",
     },
     BuiltinPet {
         id: "dewey",

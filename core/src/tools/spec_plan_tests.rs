@@ -608,7 +608,6 @@ async fn sleep_tool_follows_feature_gate() {
     enabled.assert_visible_contains(&["sleep"]);
 }
 
-
 #[tokio::test]
 async fn deferred_extension_tools_are_discoverable_with_tool_search() {
     let plan = probe_with(
@@ -1085,7 +1084,6 @@ async fn tool_mode_selector_overrides_feature_flags() {
     ]);
 }
 
-
 #[tokio::test]
 async fn multi_agent_v2_can_use_configured_tool_namespace() {
     let namespaced = probe(|turn| {
@@ -1162,12 +1160,7 @@ async fn code_mode_only_can_expose_namespaced_multi_agent_v2_as_normal_tools() {
 
     assert_eq!(
         plan.visible_names,
-        vec![
-            "exec",
-            "wait",
-            "request_user_input",
-            "agents",
-        ]
+        vec!["exec", "wait", "request_user_input", "agents",]
     );
     assert!(
         !plan
@@ -1208,7 +1201,6 @@ async fn hosted_tools_follow_provider_auth_model_and_config_gates() {
     })
     .await;
     image_generation.assert_visible_lacks(&["image_generation"]);
-
 }
 
 /// The regression behind the freeform removal: a model with no `apply_patch`
@@ -1288,7 +1280,6 @@ async fn spawn_agent_is_directly_visible_in_read_only_modes() {
         );
     }
 }
-
 
 /// The blanket "do not spawn sub-agents unless the user explicitly asks" was the
 /// instruction that kept every search in the main context. It must survive only
