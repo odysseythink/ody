@@ -1,7 +1,7 @@
 use crate::plan_artifact::{ManifestSnapshot, PartRow, PartStatus, PlanArtifact};
 use crate::plan_mode_injector::parts_manifest::{
-    ManifestRow, RowStatus, normalize_part_path, parse_parts_manifest,
-    part_completion_violations, row_is_verified_done,
+    ManifestRow, RowStatus, normalize_part_path, parse_parts_manifest, part_completion_violations,
+    row_is_verified_done,
 };
 use crate::turn_timing::now_unix_timestamp_ms;
 use ody_config::config_toml::PlanModeConfigToml;
@@ -155,11 +155,7 @@ impl PlanModeInjector {
                         scope: row.scope.clone(),
                         status: if row_is_verified_done(&stem_dir, row)
                             && part_completion_violations(
-                                &stem_dir,
-                                &manifest,
-                                row,
-                                max_tasks,
-                                max_bytes,
+                                &stem_dir, &manifest, row, max_tasks, max_bytes,
                             )
                             .is_empty()
                         {

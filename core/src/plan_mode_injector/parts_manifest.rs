@@ -66,11 +66,7 @@ struct ManifestColumns {
 }
 
 fn table_cells(line: &str) -> Vec<&str> {
-    line.trim()
-        .split('|')
-        .skip(1)
-        .map(str::trim)
-        .collect()
+    line.trim().split('|').skip(1).map(str::trim).collect()
 }
 
 fn header_index(headers: &[&str], names: &[&str]) -> Option<usize> {
@@ -122,9 +118,7 @@ fn cell<'a>(cells: &'a [&'a str], index: usize) -> &'a str {
 
 fn parse_dependencies(raw: &str) -> Vec<String> {
     let trimmed = raw.trim();
-    if trimmed.is_empty()
-        || matches!(trimmed, "-" | "—")
-        || trimmed.eq_ignore_ascii_case("none")
+    if trimmed.is_empty() || matches!(trimmed, "-" | "—") || trimmed.eq_ignore_ascii_case("none")
     {
         return Vec::new();
     }
@@ -210,16 +204,16 @@ pub fn parse_parts_manifest(content: &str) -> ManifestParseResult {
         let file_raw = cell(&cells, columns.file);
         let scope = cell(&cells, columns.scope).to_string();
         if scope.is_empty() {
-            result
-                .diagnostics
-                .push(format!("Parts table row {row_number} has an empty Scope cell"));
+            result.diagnostics.push(format!(
+                "Parts table row {row_number} has an empty Scope cell"
+            ));
             continue;
         }
         let task = columns.task.map(|index| cell(&cells, index).to_string());
         if format == ManifestFormat::Task && task.as_deref().is_none_or(str::is_empty) {
-            result
-                .diagnostics
-                .push(format!("task-mode Parts table row {row_number} has an empty Task cell"));
+            result.diagnostics.push(format!(
+                "task-mode Parts table row {row_number} has an empty Task cell"
+            ));
             continue;
         }
         let depends_on = columns
@@ -282,10 +276,9 @@ pub fn parse_parts_manifest(content: &str) -> ManifestParseResult {
         for row in &rows {
             for dependency in &row.depends_on {
                 if dependency == &row.id {
-                    result.diagnostics.push(format!(
-                        "task `{}` cannot depend on itself",
-                        row.id
-                    ));
+                    result
+                        .diagnostics
+                        .push(format!("task `{}` cannot depend on itself", row.id));
                 } else if !seen_ids.contains(dependency.as_str()) {
                     result.diagnostics.push(format!(
                         "task `{}` depends on unknown task `{dependency}`",
@@ -384,7 +377,11 @@ pub fn task_part_structure_violations(stem_dir: &Path, row: &ManifestRow) -> Vec
         ("Implementation", &["implementation"]),
         (
             "Failure and edge cases",
-            &["failure and edge cases", "failure / edge cases", "edge cases"],
+            &[
+                "failure and edge cases",
+                "failure / edge cases",
+                "edge cases",
+            ],
         ),
         ("Tests", &["tests", "test plan"]),
     ] {
@@ -422,7 +419,10 @@ pub fn part_completion_violations(
 
     violations.extend(task_part_structure_violations(stem_dir, row));
     for dependency in &row.depends_on {
-        let dependency_row = manifest.rows.iter().find(|candidate| candidate.id == *dependency);
+        let dependency_row = manifest
+            .rows
+            .iter()
+            .find(|candidate| candidate.id == *dependency);
         let dependency_complete = dependency_row.is_some_and(|candidate| {
             row_is_verified_done(stem_dir, candidate)
                 && task_part_structure_violations(stem_dir, candidate).is_empty()
@@ -452,7 +452,10 @@ fn contains_task_label(content: &str, task: &str) -> bool {
     let task_lower = task.to_ascii_lowercase();
     content.lines().any(|line| {
         let trimmed = line.trim_start();
-        let hashes = trimmed.chars().take_while(|character| *character == '#').count();
+        let hashes = trimmed
+            .chars()
+            .take_while(|character| *character == '#')
+            .count();
         if !(2..=4).contains(&hashes) {
             return false;
         }
@@ -465,15 +468,10 @@ fn has_nonempty_labeled_block(content: &str, labels: &[&str]) -> bool {
     let lines = content.lines().collect::<Vec<_>>();
     for (index, line) in lines.iter().enumerate() {
         let normalized = line.trim().trim_matches('*').trim().to_ascii_lowercase();
-        let Some(label) = labels
-            .iter()
-            .find(|label| normalized.starts_with(**label))
-        else {
+        let Some(label) = labels.iter().find(|label| normalized.starts_with(**label)) else {
             continue;
         };
-        let remainder = normalized[label.len()..]
-            .trim_start_matches(':')
-            .trim();
+        let remainder = normalized[label.len()..].trim_start_matches(':').trim();
         if !remainder.is_empty() {
             return true;
         }
@@ -496,9 +494,9 @@ fn source_anchor_count(content: &str) -> usize {
         .skip(1)
         .step_by(2)
         .filter(|candidate| {
-            candidate
-                .rsplit_once(':')
-                .is_some_and(|(path, line)| !path.trim().is_empty() && line.trim().parse::<usize>().is_ok())
+            candidate.rsplit_once(':').is_some_and(|(path, line)| {
+                !path.trim().is_empty() && line.trim().parse::<usize>().is_ok()
+            })
         })
         .count()
 }
@@ -530,19 +528,17 @@ fn count_task_headings(content: &str) -> usize {
             }
             let rest = trimmed[hashes..].trim_start();
             let lower = rest.to_ascii_lowercase();
-            lower
-                .strip_prefix("task ")
-                .is_some_and(|suffix| {
-                    let suffix = suffix.trim_start();
-                    suffix.chars().next().is_some_and(|character| {
-                        character.is_ascii_digit()
-                            || (character == 't'
-                                && suffix
-                                    .chars()
-                                    .nth(1)
-                                    .is_some_and(|next| next.is_ascii_digit()))
-                    })
+            lower.strip_prefix("task ").is_some_and(|suffix| {
+                let suffix = suffix.trim_start();
+                suffix.chars().next().is_some_and(|character| {
+                    character.is_ascii_digit()
+                        || (character == 't'
+                            && suffix
+                                .chars()
+                                .nth(1)
+                                .is_some_and(|next| next.is_ascii_digit()))
                 })
+            })
         })
         .count()
 }
@@ -774,9 +770,15 @@ mod tests {
 "#;
 
         let result = parse_parts_manifest(markdown);
-        assert!(result.manifest.is_some(), "valid rows remain visible to callers");
         assert!(
-            result.diagnostics.iter().any(|item| item.contains("duplicate ID `T01`")),
+            result.manifest.is_some(),
+            "valid rows remain visible to callers"
+        );
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .any(|item| item.contains("duplicate ID `T01`")),
             "{:?}",
             result.diagnostics
         );
