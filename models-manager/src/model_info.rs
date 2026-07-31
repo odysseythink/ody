@@ -257,12 +257,7 @@ pub fn configured_model_catalog_for_provider(
 }
 
 impl ConfiguredModelSpec {
-    fn to_model_info(
-        &self,
-        priority: i32,
-        provider_id: &str,
-        wire_api: WireApi,
-    ) -> ModelInfo {
+    fn to_model_info(&self, priority: i32, provider_id: &str, wire_api: WireApi) -> ModelInfo {
         let declared = |flag: &str| self.capabilities.iter().any(|cap| cap == flag);
         let caps = if self.capabilities.is_empty() {
             // No explicit capability list: infer from the wire API like the
@@ -294,11 +289,7 @@ impl ConfiguredModelSpec {
         caps = resolve_model_capabilities(wire_api, Some(&caps), None, &self.model);
 
         let model_ref = ModelRef::parse(&self.model);
-        let mut model = model_info_from_slug_with_provider(
-            model_ref.bare(),
-            provider_id,
-            wire_api,
-        );
+        let mut model = model_info_from_slug_with_provider(model_ref.bare(), provider_id, wire_api);
         model.display_name = self
             .display_name
             .clone()

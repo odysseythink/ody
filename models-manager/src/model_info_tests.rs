@@ -127,12 +127,8 @@ mod capability_tests {
             max_context_window: Some(200_000),
             ..Default::default()
         };
-        let resolved = resolve_model_capabilities(
-            WireApi::Chat,
-            None,
-            Some(&model_caps),
-            "test-model",
-        );
+        let resolved =
+            resolve_model_capabilities(WireApi::Chat, None, Some(&model_caps), "test-model");
         assert_eq!(resolved.context_window, Some(200_000));
     }
 
@@ -143,12 +139,8 @@ mod capability_tests {
             auto_compact_token_limit: Some(95_000),
             ..Default::default()
         };
-        let resolved = resolve_model_capabilities(
-            WireApi::Chat,
-            None,
-            Some(&model_caps),
-            "test-model",
-        );
+        let resolved =
+            resolve_model_capabilities(WireApi::Chat, None, Some(&model_caps), "test-model");
         assert_eq!(resolved.auto_compact_token_limit, Some(90_000));
     }
 
@@ -173,12 +165,8 @@ mod capability_tests {
 
     #[test]
     fn model_capabilities_falls_back_to_wire_api_inference() {
-        let resolved = resolve_model_capabilities(
-            WireApi::AnthropicMessages,
-            None,
-            None,
-            "test-model",
-        );
+        let resolved =
+            resolve_model_capabilities(WireApi::AnthropicMessages, None, None, "test-model");
         assert!(resolved.supports_tools);
         assert!(resolved.supports_vision);
         assert!(resolved.supports_turn_pause);
@@ -193,24 +181,15 @@ mod capability_tests {
             truncation_policy: TruncationPolicyConfig::bytes(0),
             ..Default::default()
         };
-        let resolved = resolve_model_capabilities(
-            WireApi::Chat,
-            Some(&zero),
-            None,
-            "test-model",
-        );
+        let resolved = resolve_model_capabilities(WireApi::Chat, Some(&zero), None, "test-model");
         assert_eq!(resolved.truncation_policy, DEFAULT_TRUNCATION_POLICY);
 
         let explicit = ModelCapabilities {
             truncation_policy: TruncationPolicyConfig::tokens(1_234),
             ..Default::default()
         };
-        let resolved = resolve_model_capabilities(
-            WireApi::Chat,
-            Some(&explicit),
-            None,
-            "test-model",
-        );
+        let resolved =
+            resolve_model_capabilities(WireApi::Chat, Some(&explicit), None, "test-model");
         assert_eq!(
             resolved.truncation_policy,
             TruncationPolicyConfig::tokens(1_234)
@@ -252,12 +231,7 @@ fn configured_model_catalog_returns_none_without_matching_provider() {
         ..Default::default()
     }];
     assert!(
-        configured_model_catalog_for_provider(
-            "kimi_ranweiwei",
-            WireApi::Chat,
-            &entries,
-        )
-        .is_none()
+        configured_model_catalog_for_provider("kimi_ranweiwei", WireApi::Chat, &entries,).is_none()
     );
 }
 
@@ -271,12 +245,8 @@ fn configured_model_catalog_uses_declared_metadata() {
         capabilities: vec!["tool_use".to_string(), "image_in".to_string()],
         display_name: Some("Kimi for Coding".to_string()),
     }];
-    let catalog = configured_model_catalog_for_provider(
-        "kimi_ranweiwei",
-        WireApi::Chat,
-        &entries,
-    )
-    .expect("matching provider should produce a catalog");
+    let catalog = configured_model_catalog_for_provider("kimi_ranweiwei", WireApi::Chat, &entries)
+        .expect("matching provider should produce a catalog");
 
     assert_eq!(catalog.models.len(), 1);
     let model = &catalog.models[0];
@@ -305,12 +275,8 @@ fn configured_model_catalog_defaults_capabilities_from_wire_api() {
         max_context_size: Some(262_144),
         ..Default::default()
     }];
-    let catalog = configured_model_catalog_for_provider(
-        "kimi_ranweiwei",
-        WireApi::Chat,
-        &entries,
-    )
-    .expect("matching provider should produce a catalog");
+    let catalog = configured_model_catalog_for_provider("kimi_ranweiwei", WireApi::Chat, &entries)
+        .expect("matching provider should produce a catalog");
 
     let model = &catalog.models[0];
     assert_eq!(model.display_name, "kimi-for-coding");
