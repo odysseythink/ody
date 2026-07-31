@@ -353,11 +353,7 @@ b
     async fn edit_file_replaces_in_crlf_file() {
         let (session, mut turn, _rx) = make_session_and_context_with_rx().await;
         let dir = tempfile::tempdir().expect("tempdir");
-        std::fs::write(
-            dir.path().join("config.txt"),
-            "foo=1\r\nfoo=2\r\n",
-        )
-        .unwrap();
+        std::fs::write(dir.path().join("config.txt"), "foo=1\r\nfoo=2\r\n").unwrap();
         set_cwd_to_temp(&mut turn, dir.path());
 
         let invocation = invocation_for_edit(

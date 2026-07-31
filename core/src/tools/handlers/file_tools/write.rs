@@ -161,7 +161,9 @@ fn task_part_write_violation(
         )),
         None if path.parent().is_some_and(|parent| parent == stem_dir) => Some(format!(
             "write_file rejected: `{}` is not a manifest task part. The active pending task is `{}` at `{}`.",
-            path.display(), expected.id, expected_path.display()
+            path.display(),
+            expected.id,
+            expected_path.display()
         )),
         None => None,
     }
@@ -187,7 +189,8 @@ fn enforce_task_part_order(
     let max_bytes = plan_mode
         .and_then(|config| config.max_part_bytes)
         .unwrap_or(0);
-    if let Some(message) = task_part_write_violation(&markdown, &stem_dir, path, max_tasks, max_bytes)
+    if let Some(message) =
+        task_part_write_violation(&markdown, &stem_dir, path, max_tasks, max_bytes)
     {
         return Err(FunctionCallError::RespondToModel(message));
     }
@@ -326,9 +329,7 @@ mod tests {
         std::fs::create_dir_all(&stem).unwrap();
         let markdown = "## Parts\n| ID | File | Task | Scope | Depends on | Status |\n|---|---|---|---|---|---|\n| T01 | topic/first.md | First task | first | — | pending |\n| T02 | topic/second.md | Second task | second | T01 | pending |\n";
 
-        assert!(
-            task_part_write_violation(markdown, &stem, &stem.join("first.md"), 1, 0).is_none()
-        );
+        assert!(task_part_write_violation(markdown, &stem, &stem.join("first.md"), 1, 0).is_none());
         let violation = task_part_write_violation(markdown, &stem, &stem.join("second.md"), 1, 0)
             .expect("later task must be blocked");
         assert!(violation.contains("active pending task"), "{violation}");

@@ -100,10 +100,7 @@ impl ToolExecutor<ToolInvocation> for ReadFileHandler {
 
             let (mut content, truncated) = run(abs_path.as_path(), args.offset, args.limit)?;
             append_jq_hint_if_json(abs_path.as_path(), &mut content);
-            Ok(boxed_tool_output(ReadFileOutput {
-                content,
-                truncated,
-            }))
+            Ok(boxed_tool_output(ReadFileOutput { content, truncated }))
         })
     }
 }

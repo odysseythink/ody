@@ -29,11 +29,7 @@ pub fn create_submit_design_tool() -> ToolSpec {
         ),
         strict: false,
         defer_loading: None,
-        parameters: JsonSchema::object(
-            properties,
-            None,
-            Some(false.into()),
-        ),
+        parameters: JsonSchema::object(properties, None, Some(false.into())),
         output_schema: None,
     })
 }

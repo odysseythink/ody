@@ -174,8 +174,7 @@ fn rigor_structure_gap(plan: &str) -> Option<String> {
 /// "### Tasks") are NOT counted.
 fn count_task_headings(plan: &str) -> usize {
     static TASK_HEADING_RE: OnceLock<Regex> = OnceLock::new();
-    let re = TASK_HEADING_RE
-        .get_or_init(|| Regex::new(r"(?i)^#{2,4}\s+task\s+(?:t)?\d").unwrap());
+    let re = TASK_HEADING_RE.get_or_init(|| Regex::new(r"(?i)^#{2,4}\s+task\s+(?:t)?\d").unwrap());
     plan.lines()
         .filter(|line| re.is_match(line.trim_start()))
         .count()
@@ -656,20 +655,17 @@ pub(crate) async fn handle_submit_artifact(
             Some(stem_dir) => parse_parts_manifest(&markdown)
                 .manifest
                 .is_some_and(|manifest| {
-                    manifest
-                        .rows
-                        .iter()
-                        .any(|row| {
-                            !row_is_verified_done(&stem_dir, row)
-                                || !part_completion_violations(
-                                    &stem_dir,
-                                    &manifest,
-                                    row,
-                                    max_tasks_per_part,
-                                    max_part_bytes,
-                                )
-                                .is_empty()
-                        })
+                    manifest.rows.iter().any(|row| {
+                        !row_is_verified_done(&stem_dir, row)
+                            || !part_completion_violations(
+                                &stem_dir,
+                                &manifest,
+                                row,
+                                max_tasks_per_part,
+                                max_part_bytes,
+                            )
+                            .is_empty()
+                    })
                 }),
             None => parse_parts_manifest(&markdown)
                 .manifest
