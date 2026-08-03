@@ -101,6 +101,7 @@ members = [
     "plugin",
     "model-provider",
     "ody-web-search",
+    "ody-browser-control",
 ]
 resolver = "2"
 
@@ -240,6 +241,7 @@ base64 = "0.22.1"
 bm25 = "2.3.2"
 bytes = "1.10.1"
 chardetng = "0.1.17"
+chromiumoxide = "0.9.1"
 chrono = "0.4.43"
 clap = "4"
 clap_complete = "4"
