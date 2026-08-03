@@ -1,7 +1,9 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use chromiumoxide::layout::Point;
 use chromiumoxide::page::{Page, ScreenshotParams};
+use futures::StreamExt;
 use serde::Serialize;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -19,12 +21,14 @@ pub struct PageState {
     event_tasks: Vec<JoinHandle<()>>,
     #[allow(dead_code)]
     config: BrowserControlConfig,
+    crashed: Arc<AtomicBool>,
 }
 
 impl std::fmt::Debug for PageState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PageState")
             .field("page", &"<chromiumoxide::Page>")
+            .field("crashed", &self.crashed.load(Ordering::Relaxed))
             .finish()
     }
 }
@@ -37,12 +41,42 @@ impl PageState {
     ) -> Result<Self, BrowserControlError> {
         let event_buffer = Arc::new(Mutex::new(EventBuffer::new(&config)));
         let event_tasks = crate::event_buffer::subscribe(&page, event_buffer.clone()).await?;
+        let crashed = Arc::new(AtomicBool::new(false));
+        let mut crash_listener = page
+            .event_listener::<chromiumoxide::cdp::browser_protocol::target::EventTargetCrashed>()
+            .await
+            .map_err(|e| BrowserControlError::from_command_error("crash listener", e))?;
+        let crashed_flag = crashed.clone();
+        tokio::spawn(async move {
+            while let Some(_event) = crash_listener.next().await {
+                crashed_flag.store(true, Ordering::Relaxed);
+            }
+        });
+
         Ok(Self {
             page,
             event_buffer,
             event_tasks,
             config,
+            crashed,
         })
+    }
+
+    /// Returns true if the page has been reported as crashed by the browser.
+    pub fn is_crashed(&self) -> bool {
+        self.crashed.load(Ordering::Relaxed)
+    }
+
+    /// Close the page and stop its event listeners.
+    pub async fn close(self) -> Result<(), BrowserControlError> {
+        for task in self.event_tasks {
+            task.abort();
+        }
+        self.page
+            .close()
+            .await
+            .map(|_| ())
+            .map_err(|e| BrowserControlError::from_command_error("page.close", e))
     }
 
     /// Navigate the page to `url` and wait for the load event.
@@ -164,7 +198,7 @@ impl BrowserSession {
     /// Create a new page in this browser session and start collecting events.
     pub async fn new_page(&self) -> Result<PageState, BrowserControlError> {
         let page = self
-            .browser()
+            .browser()?
             .new_page("about:blank")
             .await
             .map_err(|e| BrowserControlError::from_command_error("new_page", e))?;

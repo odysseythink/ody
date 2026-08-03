@@ -41,6 +41,10 @@ pub enum BrowserControlError {
     #[error("session closed")]
     SessionClosed,
 
+    /// A browser concurrency permit could not be acquired within the configured timeout.
+    #[error("browser concurrency quota exceeded: {reason}")]
+    QuotaExceeded { reason: String },
+
     /// The requested operation requires an approval ticket that was rejected or not provided.
     #[error("approval required: {reason}")]
     ApprovalRequired { reason: String },
@@ -67,6 +71,7 @@ impl BrowserControlError {
                 | Self::Timeout { .. }
                 | Self::ConnectFailed { .. }
                 | Self::LaunchFailed { .. }
+                | Self::QuotaExceeded { .. }
         )
     }
 

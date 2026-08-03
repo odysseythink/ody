@@ -6720,6 +6720,7 @@ dependencies = [
  "chromiumoxide",
  "futures",
  "pretty_assertions",
+ "schemars 0.8.22",
  "serde",
  "serde_json",
  "tempfile",
