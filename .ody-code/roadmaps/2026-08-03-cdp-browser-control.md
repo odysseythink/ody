@@ -77,7 +77,7 @@
 | 3.2 | Code mode 兼容 | 通过 `ody-tools::code_mode` 通用机制嵌套 `browser__*` 工具名 | [completed] | 3.1 | — |
 | 4.1 | `services` 配置接入 | `BrowserControlConfig` 加入 `ServicesConfig` | [completed] | 0.1 | 是（与 1.x 部分并行，依赖 0.1） |
 | 4.2 | app-server extension 注册 | `browser_extension.rs` + `extensions.rs:99-100` 注册与工具过滤 | [completed] | 1.1, 3.1, 4.1 | — |
-| 4.3 | Feature flag 门控 | 工具曝光与 raw CDP 工具受 `BrowserUse*` 控制 | [normal] | 3.1, 4.2 | — |
+| 4.3 | Feature flag 门控 | 工具曝光与 raw CDP 工具受 `BrowserUse*` 控制，由 app-server extension 统一过滤 | [completed] | 3.1, 4.2 | — |
 | 5.1 | 单元测试与 mock CDP | 用本地 WebSocket echo/mock 覆盖核心路径 | [normal] | 1.4 | 是（与 3.x 同步进行） |
 | 5.2 | 集成测试（真实 Chrome） | CI 外手动/可选：启动 Chrome 跑端到端 | [normal] | 4.2 | — |
 | 5.3 | Windows 与路径兼容 | Chrome/Edge 发现、`which` fallback、临时目录 | [normal] | 1.3, 5.1 | — |
@@ -562,24 +562,34 @@ external_browser_allow_sensitive = false
 
 ---
 
-### Task 4.3: Feature flag 门控 [normal]
+### Task 4.3: Feature flag 门控 [completed]
 
 **Depends on:** 3.1, 4.2  
-**模式理由:** 已有 feature flag 定义，只需在 extension 注册和工具曝光处读取。
+**模式理由:** 已有 feature flag 定义，由 `app-server` extension 在注册和工具曝光处统一读取并过滤。
 
 **Files:**
-- Modify: `app-server/src/browser_control_extension.rs`
-- Modify: `ody-browser-control/src/tool.rs`（根据配置决定 exposure）
+  - Modify: `app-server/src/browser_extension.rs` — `browser_enabled`、`tool_visibility_flags`、`is_tool_visible` 实现 feature flag 过滤。
+  - 无需修改 `ody-browser-control` 工具 crate：工具本身保持 `ToolExposure::Direct`，由 extension 负责是否暴露。
+
+**实现说明：**
+  - `BrowserControlExtension::browser_enabled` 在 `BrowserUse`、`ComputerUse`、`BrowserUseExternal` 任一 feature 启用时创建浏览器 handle。
+  - `ToolContributor::tools` 从 `thread_store` 取出 handle，再经 `is_tool_visible` 按 flag 过滤后返回：
+    - `navigate` / `go_back` / `go_forward` / `reload` / `evaluate` / `get_dom` / `read_logs` 仅在 `BrowserUse` 启用时暴露；
+    - `click` / `type` 仅在 `ComputerUse` 启用时暴露；
+    - `screenshot` 在 `BrowserUse` 或 `ComputerUse` 任一启用时暴露；
+    - `execute_raw_cdp` 仅在 `BrowserUseFullCdpAccess` 启用且同时满足 `BrowserUse` 或 `ComputerUse` 时暴露；
+    - 所有相关 feature 关闭或无 handle 时返回空列表。
+  - 工具 crate 中各 `ToolExecutor::exposure` 固定为 `ToolExposure::Direct`，不在工具层做 feature 门控，避免 `ody-browser-control` 依赖 `ody-features`。
+  - `BrowserUseExternal` 启用且 `connect_url` 已配置时，extension 将 `BrowserControlMode` 设为 `External`；否则保持 `Local` 并输出警告。未启用 `BrowserUseExternal` 时仍使用本地 headless 启动。
 
 **实现要点:**
-- `ToolContributor::tools` 只在 `config.features.enabled(Feature::BrowserUse)` 时返回工具。
-- `browser__execute_raw_cdp` 只在 `config.features.enabled(Feature::BrowserUseFullCdpAccess)` 时加入列表。
-- `browser__click` / `browser__type` 只在 `config.features.enabled(Feature::ComputerUse)` 时加入列表（或设为 `ToolExposure::Hidden`）。
-- 若 `BrowserUseExternal` 开启，允许配置使用外部 debugger URL；否则只允许启动 headless。
+  - `tool_visibility_flags(config)` 返回 `(full_cdp_access, computer_use, browser_use)` 三元组。
+  - `is_tool_visible(handle, tool_name)` 按上述规则对每个 `browser__*` 工具做过滤。
+  - `effective_browser_config` 处理 `BrowserUseExternal` 与 `connect_url` 的联动。
 
 **验证要点:**
-- [ ] 测试：feature 关闭时 `tools()` 返回空；`FullCdpAccess` 关闭时 raw CDP 工具不存在。
-- [ ] `cargo test -p ody-app-server feature` PASS（避免破坏现有 feature 测试）。
+  - [x] `browser_extension::tests` 覆盖：所有相关 feature 关闭时返回空列表、`ComputerUse` 仅暴露 `click`/`type`/`screenshot`、`BrowserUse` 暴露导航/检查/截图子集、`BrowserUseFullCdpAccess` 控制 `execute_raw_cdp` 是否出现。
+  - [x] `cargo test -p ody-app-server browser_extension` PASS。
 
 ---
 
