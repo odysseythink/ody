@@ -98,6 +98,45 @@ console_entries=..., network_entries=..., total_bytes=...
 - 输入文本只输出长度（`text_size`）。
 - 网络日志 summary 只输出条目数和总字节数。
 
+## 安全审计结论 (Task 6.1)
+
+2026-08-04 对 `ody-browser-control` 进行安全审计，确认五项安全检查清单均已通过实现和测试验证。
+
+### 已验证清单
+
+| 检查项 | 验证位置 | 结论 |
+|---|---|---|
+| Profile 隔离 | `ody-browser-control/src/config.rs` 的 `BrowserControlConfig::sanitize_args` 与 `session.rs` 的临时 profile | `--user-data-dir` 等危险启动参数被过滤，本地模式始终使用 `tempfile::TempDir` 创建的临时 profile |
+| 审批策略 | `ody-browser-control/src/tools/mod.rs` 的 `ensure_browser_approved` 与 `approval_exemption.rs` | 敏感操作需要 guardian 审批；loopback、线程 cwd 下的 `file://` URL、短 `data:` URL 可豁免 |
+| 凭证泄露防护 | `ody-browser-control/src/url_block.rs` 与 `types.rs` | `evaluate` 在审批前静态拒绝 cookie/storage/obfuscation 模式；长表达式截断到 500 字节 |
+| Raw CDP 限制 | `ody-browser-control/src/raw_cdp_blocklist.rs` 与 `tools/mod.rs` | `execute_raw_cdp` 默认禁用黑名单方法；外部模式下完全禁用 |
+| 日志敏感信息 | `ody-browser-control/src/network_redaction.rs` 与 `event_buffer.rs` | 响应 body 清空、敏感 header 替换为 `[REDACTED]`、snapshot 只输出条目数/字节数 |
+
+### 当前默认配置
+
+默认配置下（`BrowserControlConfig::default()`）：
+
+- `mode = Local`：本地启动 Chrome，使用临时 profile。
+- `headless = true`：无头运行。
+- `sandbox = false`：默认关闭 OS 沙箱，便于测试环境；生产环境建议启用。
+- `allow_local_network = false`：默认禁止导航到私网/loopback 地址（除非显式豁免）。
+- `external_browser_allow_sensitive = false`：外部模式下默认禁用 `evaluate`/`click`/`type`。
+- `disable_extensions = true`：禁止加载浏览器扩展。
+
+### 残余风险
+
+1. **静态拒绝无法穷尽绕过：** `evaluate` 的静态检查基于模式匹配，技术上无法阻止所有间接读取 cookie 或 storage 的方式；最终依赖 guardian 审批和审计日志兜底。
+2. **URL allowlist 尚未实现：** 当前仅通过 `allow_local_network` 和审批豁免规则控制导航范围，没有企业级 URL 通配符 allowlist/blocklist。
+3. **外部 browser-use MCP 可能重复：** 若外部 MCP connector 同时暴露 browser 工具，模型可能看到两套功能重叠的工具。
+
+### 未来增强：企业级 URL allowlist
+
+建议新增 `allowed_url_patterns` / `blocked_url_patterns` 字段，支持 glob/正则匹配，在 `check_url_is_allowed` 和审批豁免层之前执行。该能力仍在本期范围之外，作为后续企业安全加固项。
+
+### 未来增强：外部 browser-use MCP 去重
+
+当内置 `ody-browser-control` 与外部 `browser-use` MCP connector 同时启用时，建议通过 feature flag 或命名空间去重策略，避免模型同时看到重复的 `browser__*` 和 `browser-use` 工具。该能力仍在本期范围之外。
+
 ### 关键事件
 
 - `browser navigate auto-approved by exemption`：豁免自动放行。

@@ -319,3 +319,24 @@ fn all_tools_exposes_expected_surface() {
     assert!(names.contains(&"execute_raw_cdp".to_string()));
     assert!(names.contains(&"read_logs".to_string()));
 }
+
+#[test]
+fn profile_isolation_sanitize_args_strips_user_data_dir() {
+    // Profile isolation checklist: user-supplied --user-data-dir must never
+    // reach the launch arguments, because the process layer always uses a
+    // temporary profile directory per session.
+    let cfg = BrowserControlConfig {
+        extra_args: vec![
+            "--window-size=1280,720".to_string(),
+            "--user-data-dir=/home/user/.config/google-chrome".to_string(),
+            "--remote-debugging-port=9222".to_string(),
+        ],
+        ..Default::default()
+    };
+    let sanitized = cfg.sanitize_args();
+    assert!(sanitized.contains(&"--window-size=1280,720".to_string()));
+    assert!(
+        !sanitized.iter().any(|a| a.starts_with("--user-data-dir")),
+        "--user-data-dir must be stripped from extra_args: {sanitized:?}"
+    );
+}

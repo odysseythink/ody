@@ -884,6 +884,11 @@ impl ToolExecutor<ToolCall> for BrowserExecuteRawCdpTool {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
             if state.config().mode == crate::config::BrowserControlMode::External {
+                tracing::info!(
+                    tool = "browser__execute_raw_cdp",
+                    reason = "external mode",
+                    "execute_raw_cdp rejected"
+                );
                 return Err(FunctionCallError::Fatal(
                     "execute_raw_cdp is disabled in external browser mode".to_string(),
                 ));

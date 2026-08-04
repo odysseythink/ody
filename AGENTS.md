@@ -51,6 +51,9 @@
 - `ody-browser-control` 提供 `browser__navigate`、`browser__evaluate`、`browser__click`、`browser__type`、
   `browser__go_back`、`browser__go_forward`、`browser__reload`、`browser__screenshot`、
   `browser__get_dom`、`browser__read_logs`、`browser__execute_raw_cdp` 等工具。
+- **默认安全姿态：** 本地模式使用临时 profile（`--user-data-dir` 等危险启动参数被 `sanitize_args` 过滤），敏感操作走 guardian 审批，`evaluate` 静态拒绝 cookie/storage 读取，网络日志脱敏后返回。
+- **关键配置字段：** `mode`（Local/External）、`headless`、`sandbox`、`allow_local_network`、`external_browser_allow_sensitive`、`disable_extensions`、`extra_args`（经 `sanitize_args` 过滤）。详细配置说明见 `docs/browser-control.md`。
+- **残余风险：** 静态拒绝无法穷尽所有 JS 绕过；企业级 URL allowlist 和外部 browser-use MCP 去重尚未实现。
 - 敏感操作（navigate/evaluate/click/type/go_back/go_forward/reload/execute_raw_cdp）默认需要 guardian 审批；
   只读操作（screenshot/get_dom/read_logs）不需要审批。
 - `navigate` 在 loopback（`localhost`/`127.0.0.1`/`::1`）、`file://` 位于 cwd 下、短 `data:` URL（<1KiB）时自动豁免审批。

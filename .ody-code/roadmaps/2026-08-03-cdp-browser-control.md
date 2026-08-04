@@ -667,20 +667,40 @@ external_browser_allow_sensitive = false
 
 ---
 
-### Task 6.1: 安全审计与文档 [design]
+### Task 6.1: 安全审计与文档 [completed]
 
 **Depends on:** 4.3, 5.3  
 **模式理由:** 浏览器控制是高风险能力，需要独立审计 gate。
 
 **审计清单:**
-- [ ] **Profile 隔离：** 确认 `--user-data-dir` 始终指向临时目录，不会读取/写入用户默认 profile。
-- [ ] **审批策略：** 导航到非 `localhost`/非线程 cwd 的 URL 时，是否走 `ody_mcp`/`core` 的 approval 流程？若复用 MCP approval，需确认 `browser__navigate` 作为内置工具如何生成 `ApprovalRequest`。
-- [ ] **凭证泄露防护：** `browser__evaluate` 禁止读取 `document.cookie`、`localStorage`、IndexedDB。技术上无法完全禁止，需通过审批+审计兜底。
-- [ ] **Raw CDP 限制：** `browser__execute_raw_cdp` 必须绑定 `BrowserUseFullCdpAccess` feature，且企业配置可关闭。
-- [ ] **日志敏感信息：** console/network 日志可能含用户数据，返回模型前是否脱敏？首期可文档化风险，后续增强。
+- [x] **Profile 隔离：** 确认 `--user-data-dir` 始终指向临时目录，不会读取/写入用户默认 profile。
+- [x] **审批策略：** 导航到非 `localhost`/非线程 cwd 的 URL 时，走 `ody_mcp`/`core` 的 approval 流程（通过 `FunctionCallError::NeedsApproval` + `GuardianApprovalRequest::BrowserAction`）。
+- [x] **凭证泄露防护：** `browser__evaluate` 在 guardian 审批前静态拒绝读取 `document.cookie`、`localStorage`、IndexedDB 等表达式；技术上无法完全禁止，通过审批+审计日志兜底。
+- [x] **Raw CDP 限制：** `browser__execute_raw_cdp` 通过 `BrowserUseFullCdpAccess` feature 暴露；外部模式下完全禁用，黑名单方法直接拒绝。
+- [x] **日志敏感信息：** console/network 日志在返回模型前经过 `redact_network_entry` 脱敏，snapshot 只输出条目数和字节数。
 
 **文档交付:**
-- `docs/browser-control.md` 或更新 `AGENTS.md`：说明功能启用方式、配置示例、安全注意事项。
+- `docs/browser-control.md` 新增 "安全审计结论 (Task 6.1)" 章节，包含已验证清单、当前默认配置、残余风险、未来增强。
+- `AGENTS.md` 扩展 `## Browser Control 工具` 安全摘要与配置指针。
+
+**Files:**
+- Modify: `ody-browser-control/src/tools/mod.rs` — 在 `execute_raw_cdp` 外部模式拒绝路径增加 `tracing::info!` 事件。
+- Modify: `ody-browser-control/tests/security_observability.rs` — 新增 `profile_isolation_sanitize_args_strips_user_data_dir` 测试断言。
+- Modify: `docs/browser-control.md` — 新增 "安全审计结论 (Task 6.1)" 章节。
+- Modify: `AGENTS.md` — 扩展 `## Browser Control 工具` 安全摘要与配置指针。
+
+**实现说明:**
+- Profile 隔离由 `BrowserControlConfig::sanitize_args` 的 denylist 与 `BrowserSession` 的 `tempfile::TempDir` 临时 profile 共同保证；集成测试显式断言 `--user-data-dir` 被从 `extra_args` 中剥离。
+- 审批策略：敏感工具通过 `ensure_browser_approved` 返回 `FunctionCallError::NeedsApproval`，由 `app-server` 映射为 `GuardianApprovalRequest::BrowserAction`；loopback、线程 cwd 下 `file://` URL、短 `data:` URL 自动豁免。
+- 凭证泄露防护：`check_js_allowed` 在审批前静态拒绝 cookie/storage/obfuscation 模式；`expression_preview` 将审批 ticket 中的长表达式截断到 500 字节。
+- Raw CDP 限制：`execute_raw_cdp` 在 `BrowserControlMode::External` 下完全禁用并记录 tracing；`raw_cdp_blocklist` 拒绝 cookie/storage/fetch 拦截相关方法。
+- 日志敏感信息：`network_redaction` 清空响应 body、替换敏感 header 为 `[REDACTED]`；`event_buffer.snapshot()` 只输出条目数和总字节数。
+- 文档更新明确了默认配置安全姿态、残余风险，以及企业级 URL allowlist 和外部 browser-use MCP 去重两项未来增强（不在本期实现）。
+
+**验证要点:**
+- [x] `cargo test -p ody-browser-control --tests` 全部通过；新增 `profile_isolation_sanitize_args_strips_user_data_dir` 测试与 `execute_raw_cdp disabled in external mode` 测试通过。
+- [x] 手动检查 `docs/browser-control.md` 新增审计结论章节与 `AGENTS.md` 扩展内容格式正确。
+- [x] 代码变更仅涉及局部 tracing 事件与测试断言，无共享签名变更。
 
 ---
 
