@@ -51,6 +51,7 @@ fn tool_call(arguments: &str) -> ToolCall {
         payload: ToolPayload::Function {
             arguments: arguments.to_string(),
         },
+        guardian_approved_action_id: None,
     }
 }
 

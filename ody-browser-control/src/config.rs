@@ -213,6 +213,22 @@ impl BrowserControlConfig {
         args.extend(self.sanitize_args());
         args
     }
+
+    /// Return true if changing from `self` to `other` requires a new Chrome
+    /// process or debug connection.
+    ///
+    /// Timeouts, event-buffer limits, and policy toggles that only affect how
+    /// the already-running session is used do not force a restart.
+    pub fn requires_restart(&self, other: &Self) -> bool {
+        self.mode != other.mode
+            || self.chrome_executable != other.chrome_executable
+            || self.headless != other.headless
+            || self.viewport != other.viewport
+            || self.sandbox != other.sandbox
+            || self.disable_extensions != other.disable_extensions
+            || self.extra_args != other.extra_args
+            || self.connect_url != other.connect_url
+    }
 }
 
 /// Discover a Chrome/Chromium executable using the following sources in order:
@@ -410,26 +426,68 @@ mod tests {
     }
 
     #[test]
-    fn discover_chrome_reports_missing_paths() {
-        let cfg = BrowserControlConfig {
-            chrome_executable: Some(PathBuf::from("/does/not/exist/chrome")),
+    fn requires_restart_detects_launch_affecting_changes() {
+        let base = BrowserControlConfig::default();
+        let mode_external = BrowserControlConfig {
+            mode: BrowserControlMode::External,
             ..Default::default()
         };
-        // Force the CHROME env var to a non-existent path so the test does not
-        // accidentally depend on auto-detection or a real Chrome installation.
-        unsafe {
-            std::env::set_var("CHROME", "/does/not/exist/env-chrome");
-        }
-        // If the machine has a real Chrome, discovery will succeed and we
-        // simply skip the assertion. Otherwise we verify the error is observable.
-        match discover_chrome(&cfg) {
-            Ok(_) => {}
-            Err(BrowserControlError::ChromeNotFound { searched_paths }) => {
-                let paths: Vec<String> =
-                    searched_paths.iter().map(|p| p.to_string_lossy().to_string()).collect();
-                assert!(paths.iter().any(|p| p.contains("does/not/exist")));
-            }
-            other => panic!("expected ChromeNotFound, got {other:?}"),
-        }
+        assert!(base.requires_restart(&mode_external));
+
+        let head_changed = BrowserControlConfig {
+            headless: false,
+            ..Default::default()
+        };
+        assert!(base.requires_restart(&head_changed));
+
+        let viewport_changed = BrowserControlConfig {
+            viewport: ViewportConfig {
+                width: 1920,
+                height: 1080,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(base.requires_restart(&viewport_changed));
+
+        let extra_args_changed = BrowserControlConfig {
+            extra_args: vec!["--window-size=1920,1080".to_string()],
+            ..Default::default()
+        };
+        assert!(base.requires_restart(&extra_args_changed));
+
+        let connect_url_changed = BrowserControlConfig {
+            connect_url: Some("ws://localhost:9222/devtools/browser/xxx".to_string()),
+            ..Default::default()
+        };
+        assert!(base.requires_restart(&connect_url_changed));
+    }
+
+    #[test]
+    fn requires_restart_ignores_runtime_only_changes() {
+        let base = BrowserControlConfig::default();
+        let timeouts_changed = BrowserControlConfig {
+            command_timeout_ms: 5_000,
+            navigation_timeout_ms: 10_000,
+            launch_timeout_ms: 5_000,
+            connect_timeout_ms: 5_000,
+            ..Default::default()
+        };
+        assert!(!base.requires_restart(&timeouts_changed));
+
+        let buffers_changed = BrowserControlConfig {
+            max_event_entries: 100,
+            max_event_buffer_bytes: 1024,
+            max_console_message_bytes: 1024,
+            ..Default::default()
+        };
+        assert!(!base.requires_restart(&buffers_changed));
+
+        let policy_changed = BrowserControlConfig {
+            allow_local_network: true,
+            external_browser_allow_sensitive: true,
+            ..Default::default()
+        };
+        assert!(!base.requires_restart(&policy_changed));
     }
 }

@@ -518,6 +518,13 @@ pub(crate) async fn handle_output_item_done(
         Err(FunctionCallError::Retryable(message)) => {
             return Err(OdyErr::Fatal(message));
         }
+        // Approval-required errors should not reach tool-call construction; treat as
+        // fatal to preserve the existing stream-level contract.
+        Err(FunctionCallError::NeedsApproval { ticket }) => {
+            return Err(OdyErr::Fatal(format!(
+                "unexpected approval-required error during tool call construction: {ticket}"
+            )));
+        }
         // A fatal error occurred; surface it back into history.
         Err(FunctionCallError::Fatal(message)) => {
             return Err(OdyErr::Fatal(message));

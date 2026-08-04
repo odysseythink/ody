@@ -256,6 +256,10 @@ pub enum GuardianReviewedAction {
         connector_name: Option<String>,
         tool_title: Option<String>,
     },
+    BrowserAction {
+        action: String,
+        details: serde_json::Value,
+    },
     RequestPermissions {},
 }
 
@@ -552,6 +556,7 @@ pub(crate) enum ReviewSubjectKind {
     McpToolCall,
     Permissions,
     NetworkAccess,
+    BrowserAction,
 }
 
 #[allow(dead_code)]

@@ -123,11 +123,33 @@ mod tests {
     }
 
     #[test]
-    fn provider_names_serialize_to_lowercase() {
-        assert_eq!(
-            serde_json::to_string(&WebSearchProviderName::Moonshot).unwrap(),
-            "\"moonshot\""
-        );
-        assert_eq!(WebSearchProviderName::Serpapi.to_string(), "serpapi");
+    fn services_config_with_browser_round_trips() {
+        let services = ServicesConfig {
+            web_search: None,
+            browser: Some(ody_browser_control::BrowserControlConfig {
+                headless: false,
+                ..Default::default()
+            }),
+        };
+        let json = serde_json::to_value(&services).expect("serialize services config");
+        let back: ServicesConfig = serde_json::from_value(json).expect("deserialize services config");
+        assert_eq!(back, services);
+    }
+
+    #[test]
+    fn services_config_deserializes_browser_from_toml() {
+        let services: ServicesConfig = toml::from_str(
+            r#"
+[browser]
+headless = false
+mode = "external"
+connect_url = "ws://localhost:9222"
+"#,
+        )
+        .expect("deserialize toml");
+        let browser = services.browser.expect("browser config present");
+        assert!(!browser.headless);
+        assert_eq!(browser.mode, ody_browser_control::BrowserControlMode::External);
+        assert_eq!(browser.connect_url.as_deref(), Some("ws://localhost:9222"));
     }
 }

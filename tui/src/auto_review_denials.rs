@@ -71,6 +71,9 @@ pub(crate) fn action_summary(action: &GuardianAssessmentAction) -> String {
             .as_deref()
             .map(|reason| format!("permission request: {reason}"))
             .unwrap_or_else(|| "permission request".to_string()),
+        GuardianAssessmentAction::BrowserAction { action, .. } => {
+            format!("browser action: {action}")
+        }
     }
 }
 

@@ -76,6 +76,9 @@ impl ChatWidget {
             GuardianAssessmentAction::RequestPermissions { reason, .. } => {
                 Some(permission_request_summary("permission request", reason))
             }
+            GuardianAssessmentAction::BrowserAction { action, .. } => {
+                Some(format!("browser action: {action}"))
+            }
         };
         let guardian_command = |action: &GuardianAssessmentAction| match action {
             GuardianAssessmentAction::Command { command, .. } => shlex::split(command)
@@ -90,7 +93,8 @@ impl ChatWidget {
             GuardianAssessmentAction::ApplyPatch { .. }
             | GuardianAssessmentAction::NetworkAccess { .. }
             | GuardianAssessmentAction::McpToolCall { .. }
-            | GuardianAssessmentAction::RequestPermissions { .. } => None,
+            | GuardianAssessmentAction::RequestPermissions { .. }
+            | GuardianAssessmentAction::BrowserAction { .. } => None,
         };
 
         if ev.status == GuardianAssessmentStatus::InProgress
@@ -199,6 +203,11 @@ impl ChatWidget {
                             permission_request_summary("ody could request permissions", reason),
                         )
                     }
+                    GuardianAssessmentAction::BrowserAction { action, .. } => {
+                        history_cell::new_guardian_timed_out_action_request(format!(
+                            "ody could run browser action {action}"
+                        ))
+                    }
                     GuardianAssessmentAction::Command { .. } => unreachable!(),
                     GuardianAssessmentAction::Execve { .. } => unreachable!(),
                 }
@@ -242,6 +251,11 @@ impl ChatWidget {
                     history_cell::new_guardian_denied_action_request(permission_request_summary(
                         "ody to request permissions",
                         reason,
+                    ))
+                }
+                GuardianAssessmentAction::BrowserAction { action, .. } => {
+                    history_cell::new_guardian_denied_action_request(format!(
+                        "ody to run browser action {action}"
                     ))
                 }
                 GuardianAssessmentAction::Command { .. } => unreachable!(),

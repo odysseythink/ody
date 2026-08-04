@@ -2,8 +2,10 @@ use std::sync::Arc;
 use std::sync::Weak;
 
 use ody_protocol::items::TurnItem;
+use ody_protocol::protocol::ReviewDecision;
 use ody_tools::ConversationHistory;
 use ody_tools::ExtensionTurnItem;
+use ody_tools::FunctionCallError;
 use ody_tools::ToolCall as ExtensionToolCall;
 use ody_tools::ToolEnvironment;
 use ody_tools::ToolName;
@@ -11,7 +13,12 @@ use ody_tools::ToolSearchInfo;
 use ody_tools::ToolSpec;
 use ody_tools::TurnItemEmissionFuture;
 use ody_tools::TurnItemEmitter;
+use serde_json::Value;
 
+use crate::guardian::GuardianApprovalRequest;
+use crate::guardian::guardian_rejection_message;
+use crate::guardian::new_guardian_review_id;
+use crate::guardian::review_approval_request;
 use crate::sandboxing::SandboxPermissions;
 use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
@@ -53,7 +60,48 @@ impl ToolExecutor<ToolInvocation> for ExtensionToolAdapter {
     }
 
     fn handle(&self, invocation: ToolInvocation) -> ody_tools::ToolExecutorFuture<'_> {
-        Box::pin(async move { self.0.handle(to_extension_call(&invocation).await).await })
+        let executor = Arc::clone(&self.0);
+        Box::pin(async move {
+            let extension_call = to_extension_call(&invocation).await;
+
+            match executor.handle(extension_call.clone()).await {
+                Ok(output) => Ok(output),
+                Err(FunctionCallError::NeedsApproval { ticket }) => {
+                    let request = browser_guardian_request(
+                        &invocation.call_id,
+                        &invocation.turn.sub_id,
+                        &ticket,
+                    )
+                    .map_err(FunctionCallError::Fatal)?;
+                    let review_id = new_guardian_review_id();
+                    let decision = review_approval_request(
+                        &invocation.session,
+                        &invocation.turn,
+                        review_id.clone(),
+                        request,
+                        None,
+                    )
+                    .await;
+                    match decision {
+                        ReviewDecision::Approved
+                        | ReviewDecision::ApprovedExecpolicyAmendment { .. } => {
+                            let mut approved_call = extension_call;
+                            approved_call.guardian_approved_action_id = Some(review_id);
+                            executor.handle(approved_call).await
+                        }
+                        _ => {
+                            let message = guardian_rejection_message(
+                                &invocation.session,
+                                &review_id,
+                            )
+                            .await;
+                            Err(FunctionCallError::RespondToModel(message))
+                        }
+                    }
+                }
+                Err(other) => Err(other),
+            }
+        })
     }
 }
 
@@ -150,7 +198,30 @@ async fn to_extension_call(invocation: &ToolInvocation) -> ExtensionToolCall {
         }),
         environments,
         payload: invocation.payload.clone(),
+        guardian_approved_action_id: None,
     }
+}
+
+fn browser_guardian_request(
+    call_id: &str,
+    turn_id: &str,
+    ticket: &Value,
+) -> Result<GuardianApprovalRequest, String> {
+    let action = ticket
+        .get("action")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "approval ticket missing 'action' field".to_string())?
+        .to_string();
+    let details = ticket
+        .get("details")
+        .cloned()
+        .unwrap_or_else(|| Value::Object(serde_json::Map::new()));
+    Ok(GuardianApprovalRequest::BrowserAction {
+        id: call_id.to_string(),
+        turn_id: turn_id.to_string(),
+        action,
+        details,
+    })
 }
 
 #[cfg(test)]
@@ -172,6 +243,8 @@ mod tests {
 
     use super::CoreTurnItemEmitter;
     use super::ExtensionToolAdapter;
+    use super::browser_guardian_request;
+    use crate::guardian::GuardianApprovalRequest;
     use crate::tools::context::ToolCallSource;
     use crate::tools::context::ToolInvocation;
     use crate::tools::context::ToolPayload;
@@ -594,6 +667,24 @@ mod tests {
         assert_eq!(
             std::fs::read(&expected_path).expect("generated artifact should be saved"),
             b"png"
+        );
+    }
+
+    #[test]
+    fn browser_guardian_request_parses_approval_ticket() {
+        let ticket = serde_json::json!({
+            "action": "navigate",
+            "details": { "url": "https://example.com" },
+        });
+        let request = browser_guardian_request("call-1", "turn-1", &ticket).expect("parses");
+        assert_eq!(
+            request,
+            GuardianApprovalRequest::BrowserAction {
+                id: "call-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                action: "navigate".to_string(),
+                details: serde_json::json!({ "url": "https://example.com" }),
+            }
         );
     }
 }

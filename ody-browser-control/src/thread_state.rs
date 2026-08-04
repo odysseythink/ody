@@ -1,4 +1,6 @@
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex as StdMutex;
 use std::time::Duration;
 
 use std::future::Future;
@@ -23,18 +25,25 @@ use crate::{event_buffer::LogsSnapshot, url_block};
 /// concurrently held tool executors. The default page is protected by an async
 /// mutex and is recreated automatically if it is reported as crashed.
 pub struct BrowserThreadState {
-    session: BrowserSession,
+    config: StdMutex<BrowserControlConfig>,
+    session: Mutex<Option<BrowserSession>>,
     default_page: Mutex<Option<PageState>>,
+    stale: AtomicBool,
 }
 
 impl std::fmt::Debug for BrowserThreadState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BrowserThreadState")
-            .field("session", &self.session)
+            .field("config", &"<BrowserControlConfig>")
+            .field(
+                "session",
+                &self.session.try_lock().map(|g| g.is_some()).unwrap_or(false),
+            )
             .field(
                 "has_default_page",
                 &self.default_page.try_lock().map(|g| g.is_some()).unwrap_or(true),
             )
+            .field("stale", &self.is_stale())
             .finish()
     }
 }
@@ -46,12 +55,14 @@ impl BrowserThreadState {
     /// lazily created on first access.
     pub async fn new(config: BrowserControlConfig) -> Result<Self, BrowserControlError> {
         let session = match config.mode {
-            BrowserControlMode::Local => BrowserSession::launch(config).await?,
-            BrowserControlMode::External => BrowserSession::connect(config).await?,
+            BrowserControlMode::Local => BrowserSession::launch(config.clone()).await?,
+            BrowserControlMode::External => BrowserSession::connect(config.clone()).await?,
         };
         Ok(Self {
-            session,
+            config: StdMutex::new(config),
+            session: Mutex::new(Some(session)),
             default_page: Mutex::new(None),
+            stale: AtomicBool::new(false),
         })
     }
 
@@ -62,24 +73,30 @@ impl BrowserThreadState {
         config: BrowserControlConfig,
     ) -> Result<Self, BrowserControlError> {
         Ok(Self {
-            session: BrowserSession::new_uninitialized_for_test(config),
+            config: StdMutex::new(config.clone()),
+            session: Mutex::new(Some(BrowserSession::new_uninitialized_for_test(
+                config,
+            ))),
             default_page: Mutex::new(None),
+            stale: AtomicBool::new(false),
         })
     }
 
-    /// Return a reference to the underlying session.
-    pub fn session(&self) -> &BrowserSession {
-        &self.session
+    /// Return the configuration associated with this state.
+    pub fn config(&self) -> BrowserControlConfig {
+        self.config.lock().unwrap().clone()
     }
 
-    /// Return the configuration associated with this state.
-    pub fn config(&self) -> &BrowserControlConfig {
-        self.session.config()
+    /// Replace the configuration used for future operations. Does not affect the
+    /// current session unless combined with [`Self::mark_stale`].
+    pub fn set_config(&self, config: BrowserControlConfig) {
+        *self.config.lock().unwrap() = config;
     }
 
     /// Create an additional page in the same session.
     pub async fn new_page(&self) -> Result<PageState, BrowserControlError> {
-        self.session.new_page().await
+        let guard = self.ensure_session().await?;
+        guard.as_ref().unwrap().new_page().await
     }
 
     /// Close the default page (if any) and then the browser session.
@@ -88,7 +105,45 @@ impl BrowserThreadState {
         if let Some(page) = guard.take() {
             let _ = page.close().await;
         }
-        self.session.close().await
+        let mut session_guard = self.session.lock().await;
+        if let Some(session) = session_guard.take() {
+            session.close().await?;
+        }
+        Ok(())
+    }
+
+    /// Mark the backing session as stale so it is recreated on the next
+    /// operation. Used by the host extension when a configuration change
+    /// requires a new Chrome process or debug connection.
+    pub fn mark_stale(&self) {
+        self.stale.store(true, Ordering::SeqCst);
+    }
+
+    /// Return true if the backing session must be recreated before the next
+    /// operation.
+    pub fn is_stale(&self) -> bool {
+        self.stale.load(Ordering::SeqCst)
+    }
+
+    /// Ensure a non-stale browser session is available and return a guard to it.
+    async fn ensure_session(
+        &self,
+    ) -> Result<tokio::sync::MutexGuard<'_, Option<BrowserSession>>, BrowserControlError> {
+        let mut guard = self.session.lock().await;
+        if self.stale.swap(false, Ordering::SeqCst) {
+            if let Some(old) = guard.take() {
+                let _ = old.close().await;
+            }
+        }
+        if guard.is_none() {
+            let config = self.config();
+            let session = match config.mode {
+                BrowserControlMode::Local => BrowserSession::launch(config).await?,
+                BrowserControlMode::External => BrowserSession::connect(config).await?,
+            };
+            *guard = Some(session);
+        }
+        Ok(guard)
     }
 
     /// Return a guard that always contains a non-crashed default page.
@@ -102,7 +157,8 @@ impl BrowserThreadState {
             }
         }
         if guard.is_none() {
-            let page = self.session.new_page().await?;
+            let session_guard = self.ensure_session().await?;
+            let page = session_guard.as_ref().unwrap().new_page().await?;
             *guard = Some(page);
         }
         Ok(guard)
@@ -386,5 +442,22 @@ mod tests {
     fn truncate_dom_value_passes_objects_through() {
         let obj = serde_json::json!({"a": 1});
         assert_eq!(truncate_dom_value(obj.clone()), obj);
+    }
+
+    #[test]
+    fn mark_stale_and_is_stale_round_trip() {
+        let state = BrowserThreadState::new_uninitialized_for_test(BrowserControlConfig::default())
+            .expect("uninitialized state");
+        assert!(!state.is_stale());
+        state.mark_stale();
+        assert!(state.is_stale());
+    }
+
+    #[test]
+    fn config_returns_owned_copy() {
+        let state = BrowserThreadState::new_uninitialized_for_test(BrowserControlConfig::default())
+            .expect("uninitialized state");
+        let cfg = state.config();
+        assert_eq!(cfg.mode, BrowserControlMode::Local);
     }
 }

@@ -43,6 +43,43 @@ fn wrap_output(
     Box::new(JsonToolOutput::new(value))
 }
 
+fn browser_action_name(tool_name: &ToolName) -> Option<&'static str> {
+    if tool_name.namespace.as_deref() != Some("browser") {
+        return None;
+    }
+    match tool_name.name.as_str() {
+        "navigate" => Some("navigate"),
+        "go_back" => Some("go_back"),
+        "go_forward" => Some("go_forward"),
+        "reload" => Some("reload"),
+        "click" => Some("click"),
+        "type" => Some("type_text"),
+        "evaluate" => Some("evaluate"),
+        "execute_raw_cdp" => Some("execute_raw_cdp"),
+        _ => None,
+    }
+}
+
+fn ensure_browser_approved(call: &ToolCall) -> Result<(), FunctionCallError> {
+    let Some(action) = browser_action_name(&call.tool_name) else {
+        return Ok(());
+    };
+    if call.guardian_approved_action_id.is_some() {
+        return Ok(());
+    }
+    let arguments = call.function_arguments().map_err(|e| {
+        FunctionCallError::Fatal(format!("failed to read browser tool arguments: {e}"))
+    })?;
+    let details = serde_json::from_str(arguments).unwrap_or_else(|_| serde_json::Value::String(arguments.to_string()));
+    let ticket = BrowserControlApprovalTicket {
+        action: action.to_string(),
+        details,
+    };
+    Err(FunctionCallError::NeedsApproval {
+        ticket: serde_json::to_value(ticket).unwrap_or_else(|_| serde_json::Value::Null),
+    })
+}
+
 fn namespaced_tool_name(name: &str) -> ToolName {
     ToolName::namespaced("browser", name)
 }
@@ -138,6 +175,7 @@ impl ToolExecutor<ToolCall> for BrowserNavigateTool {
     fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
+            ensure_browser_approved(&call)?;
             let input: BrowserNavigateInput = parse_args(&call)?;
             let result = state
                 .navigate(&input.url, input.wait_until)
@@ -190,9 +228,10 @@ impl ToolExecutor<ToolCall> for BrowserGoBackTool {
         ToolExposure::Direct
     }
 
-    fn handle(&self, _call: ToolCall) -> ToolExecutorFuture<'_> {
+    fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
+            ensure_browser_approved(&call)?;
             let result = state.go_back().await.map_err(map_error)?;
             Ok(wrap_output(
                 serde_json::to_value(result).map_err(|e| FunctionCallError::Fatal(e.to_string()))?,
@@ -241,9 +280,10 @@ impl ToolExecutor<ToolCall> for BrowserGoForwardTool {
         ToolExposure::Direct
     }
 
-    fn handle(&self, _call: ToolCall) -> ToolExecutorFuture<'_> {
+    fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
+            ensure_browser_approved(&call)?;
             let result = state.go_forward().await.map_err(map_error)?;
             Ok(wrap_output(
                 serde_json::to_value(result).map_err(|e| FunctionCallError::Fatal(e.to_string()))?,
@@ -292,9 +332,10 @@ impl ToolExecutor<ToolCall> for BrowserReloadTool {
         ToolExposure::Direct
     }
 
-    fn handle(&self, _call: ToolCall) -> ToolExecutorFuture<'_> {
+    fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
+            ensure_browser_approved(&call)?;
             let result = state.reload().await.map_err(map_error)?;
             Ok(wrap_output(
                 serde_json::to_value(result).map_err(|e| FunctionCallError::Fatal(e.to_string()))?,
@@ -424,6 +465,7 @@ impl ToolExecutor<ToolCall> for BrowserEvaluateTool {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
             check_external_sensitive(&state, "evaluate")?;
+            ensure_browser_approved(&call)?;
             let input: BrowserEvaluateInput = parse_args(&call)?;
             let result = state
                 .evaluate(&input.expression)
@@ -490,6 +532,7 @@ impl ToolExecutor<ToolCall> for BrowserClickTool {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
             check_external_sensitive(&state, "click")?;
+            ensure_browser_approved(&call)?;
             let input: BrowserClickInput = parse_args(&call)?;
             state
                 .click(Point {
@@ -559,6 +602,7 @@ impl ToolExecutor<ToolCall> for BrowserTypeTool {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
             check_external_sensitive(&state, "type")?;
+            ensure_browser_approved(&call)?;
             let input: BrowserTypeInput = parse_args(&call)?;
             state
                 .type_text(&input.selector, &input.text)
@@ -779,6 +823,7 @@ impl ToolExecutor<ToolCall> for BrowserExecuteRawCdpTool {
     fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
+            ensure_browser_approved(&call)?;
             let input: BrowserExecuteRawCdpInput = parse_args(&call)?;
             let result = state
                 .execute_raw(&input.method, input.params.clone())
@@ -818,7 +863,11 @@ mod tests {
     use super::*;
 
     use ody_protocol::models::ResponseInputItem;
-    use ody_tools::ToolPayload;
+    use ody_protocol::protocol::TruncationPolicy;
+    use ody_tools::{NoopTurnItemEmitter, ToolPayload};
+    use serde_json::Value;
+
+    use crate::BrowserControlConfig;
 
     #[test]
     fn navigate_input_schema_is_valid() {
@@ -856,5 +905,87 @@ mod tests {
         };
         assert!(text.contains("approval_ticket"));
         assert!(text.contains("navigate"));
+    }
+
+    fn make_tool_call(arguments: &str, guardian_approved_action_id: Option<String>) -> ToolCall {
+        ToolCall {
+            turn_id: "turn-1".to_string(),
+            call_id: "call-1".to_string(),
+            tool_name: ToolName::namespaced("browser", "navigate"),
+            model: "test".to_string(),
+            truncation_policy: TruncationPolicy::Bytes(1),
+            conversation_history: Default::default(),
+            turn_item_emitter: Arc::new(NoopTurnItemEmitter),
+            environments: Vec::new(),
+            payload: ToolPayload::Function {
+                arguments: arguments.to_string(),
+            },
+            guardian_approved_action_id,
+        }
+    }
+
+    #[tokio::test]
+    async fn navigate_requires_approval_without_action_id() {
+        let state = Arc::new(
+            BrowserThreadState::new_uninitialized_for_test(BrowserControlConfig::default())
+                .expect("uninitialized state"),
+        );
+        let tool = BrowserNavigateTool::new(state);
+        let call = make_tool_call(r#"{"url": "https://example.com"}"#, None);
+        let result = ToolExecutor::handle(&tool, call).await;
+        assert!(result.is_err(), "expected an error");
+        let Err(err) = result else { unreachable!() };
+        let FunctionCallError::NeedsApproval { ticket } = err else {
+            panic!("expected NeedsApproval, got {err:?}");
+        };
+        let action = ticket.get("action").and_then(Value::as_str).expect("action");
+        let details = ticket.get("details").expect("details");
+        assert_eq!(action, "navigate");
+        assert_eq!(details.get("url").and_then(Value::as_str), Some("https://example.com"));
+    }
+
+    #[tokio::test]
+    async fn navigate_skips_approval_with_action_id() {
+        let state = Arc::new(
+            BrowserThreadState::new_uninitialized_for_test(BrowserControlConfig::default())
+                .expect("uninitialized state"),
+        );
+        let tool = BrowserNavigateTool::new(state);
+        let call = make_tool_call(r#"{"url": "https://example.com"}"#, Some("review-1".to_string()));
+        let result = ToolExecutor::handle(&tool, call).await;
+        assert!(result.is_err(), "expected an error from uninitialized state");
+        let Err(err) = result else { unreachable!() };
+        assert!(
+            !matches!(err, FunctionCallError::NeedsApproval { .. }),
+            "approved call should not ask for approval: {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn read_only_screenshot_does_not_require_approval() {
+        let state = Arc::new(
+            BrowserThreadState::new_uninitialized_for_test(BrowserControlConfig::default())
+                .expect("uninitialized state"),
+        );
+        let tool = BrowserScreenshotTool::new(state);
+        let call = ToolCall {
+            turn_id: "turn-1".to_string(),
+            call_id: "call-1".to_string(),
+            tool_name: ToolName::namespaced("browser", "screenshot"),
+            model: "test".to_string(),
+            truncation_policy: TruncationPolicy::Bytes(1),
+            conversation_history: Default::default(),
+            turn_item_emitter: Arc::new(NoopTurnItemEmitter),
+            environments: Vec::new(),
+            payload: ToolPayload::Function { arguments: "{}".to_string() },
+            guardian_approved_action_id: None,
+        };
+        let result = ToolExecutor::handle(&tool, call).await;
+        assert!(result.is_err(), "expected an error from uninitialized state");
+        let Err(err) = result else { unreachable!() };
+        assert!(
+            !matches!(err, FunctionCallError::NeedsApproval { .. }),
+            "screenshot should not require approval: {err:?}"
+        );
     }
 }

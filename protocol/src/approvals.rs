@@ -163,6 +163,10 @@ pub enum GuardianAssessmentAction {
         connector_name: Option<String>,
         tool_title: Option<String>,
     },
+    BrowserAction {
+        action: String,
+        details: JsonValue,
+    },
     RequestPermissions {
         reason: Option<String>,
         permissions: RequestPermissionProfile,
