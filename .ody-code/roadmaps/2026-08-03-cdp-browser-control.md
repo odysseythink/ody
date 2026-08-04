@@ -75,7 +75,7 @@
 | 2.4 | 截图后处理 | PNG 截图 base64 编码与截断 | [completed] | 1.1 | 是（依赖类型定义） |
 | 3.1 | 工具 schema 与 `ToolExecutor` 实现 | 11 个内置工具封装与注册 | [completed] | 2.1, 2.2, 2.3, 2.4 | — |
 | 3.2 | Code mode 兼容 | 通过 `ody-tools::code_mode` 通用机制嵌套 `browser__*` 工具名 | [completed] | 3.1 | — |
-| 4.1 | `services` 配置接入 | `BrowserControlConfig` 加入 `ServicesConfig` | [normal] | 0.1 | 是（与 1.x 部分并行，依赖 0.1） |
+| 4.1 | `services` 配置接入 | `BrowserControlConfig` 加入 `ServicesConfig` | [completed] | 0.1 | 是（与 1.x 部分并行，依赖 0.1） |
 | 4.2 | app-server extension 注册 | `browser_control_extension.rs` + `extensions.rs:97` 注册 | [normal] | 1.1, 3.1, 4.1 | — |
 | 4.3 | Feature flag 门控 | 工具曝光与 raw CDP 工具受 `BrowserUse*` 控制 | [normal] | 3.1, 4.2 | — |
 | 5.1 | 单元测试与 mock CDP | 用本地 WebSocket echo/mock 覆盖核心路径 | [normal] | 1.4 | 是（与 3.x 同步进行） |
@@ -497,34 +497,38 @@ pub trait BrowserProcess: Send + Sync {
 
 ---
 
-### Task 4.1: `services` 配置接入 [normal]
+### Task 4.1: `services` 配置接入 [completed]
 
 **Depends on:** 0.1  
 **模式理由:** 配置 schema 在 0.1 已决定；本任务为机械接入。
 
 **Files:**
-- Modify: `ody-browser-control/src/config.rs`（定义 `BrowserControlConfig`）
-- Modify: `ody-web-search/src/config.rs`（将 `ServicesConfig` 从 web-search 移到公共位置，或在 web-search 中新增字段）
+  - Modify: `ody-browser-control/src/config.rs` — 定义 `BrowserControlConfig`、`ViewportConfig`、`BrowserControlMode` 与默认值/校验逻辑。
+  - Modify: `ody-web-search/src/config.rs` — `ServicesConfig` 增加 `#[serde(rename = "browser")] pub browser: Option<BrowserControlConfig>`。
+  - Modify: `config/src/config_toml.rs` — `ConfigToml.services` 保持 `Option<ServicesConfig>`，复用已有 web-search 配置入口。
 
-**关键决策：**
-- `ServicesConfig` 当前位于 `ody-web-search/src/config.rs`，并被 `config/src/config_toml.rs` 引用。新增 `browser_control` 字段时需要修改该 struct。
-- 推荐：在 `ody-web-search/src/config.rs` 的 `ServicesConfig` 中增加 `#[serde(rename = "browserControl")] pub browser_control: Option<BrowserControlConfig>`，保持 `[services]` 表格统一。
-- 或更好的长期方案：将 `ServicesConfig` 移到独立 crate（如 `ody-services-config`），但会扩大 scope；本 roadmap 采用最小修改方案。
+**实现说明：**
+  - `ServicesConfig` 保留在 `ody-web-search` crate 中，未拆分独立 crate，以最小化改动范围。
+  - TOML 键为 `[services.browser]`，字段名与 `BrowserControlConfig` 一致（如 `chrome_executable`、`headless`、`viewport`、`connect_url`、`allow_local_network`、`external_browser_allow_sensitive` 等）。
+  - `BrowserControlConfig` 提供 `Default` 默认值、危险参数过滤（`sanitize_args`）、并发配额与各类超时默认值，进程启动层直接消费该配置。
+  - 配置通过 `schemars::JsonSchema` 与 `ts_rs::TS` 导出，供前端/配置 schema 生成使用。
 
 **配置示例：**
 ```toml
-[services.browserControl]
+[services.browser]
 chrome_executable = "/usr/bin/google-chrome"
 headless = true
-default_viewport = { width = 1280, height = 720 }
-console_log_limit = 1000
-network_log_limit = 500
-enable_full_cdp_access = false
+viewport = { width = 1280, height = 720 }
+mode = "local"
+max_concurrent_browsers = 2
+connect_url = "ws://localhost:9222"
+allow_local_network = false
+external_browser_allow_sensitive = false
 ```
 
 **验证要点:**
-- [ ] `config/src/config_toml.rs` 的测试 `services_web_search_deserializes` 附近新增 `services_browser_control_deserializes`。
-- [ ] `cargo test -p ody-config` PASS。
+  - [x] `ody-web-search/src/config.rs` 已有 `services_config_deserializes_browser_from_toml` 与 `services_config_with_browser_round_trips` 测试覆盖 TOML/JSON 反序列化。
+  - [x] `cargo test -p ody-config` PASS。
 
 ---
 
