@@ -1219,7 +1219,7 @@ async fn load_project_layers(
     let mut layers = Vec::new();
     let mut startup_warnings = Vec::new();
     for dir in dirs {
-        let dot_ody_abs = dir.join(".ody");
+        let dot_ody_abs = dir.join(".ody-code");
         let dot_ody_uri = PathUri::from_abs_path(&dot_ody_abs);
         if !fs
             .get_metadata(&dot_ody_uri, /*sandbox*/ None)

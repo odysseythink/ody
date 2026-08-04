@@ -1,4 +1,5 @@
 use crate::app::app_server_requests::ResolvedAppServerRequest;
+use crate::app_event::AppEvent;
 use crate::bottom_pane::ApprovalRequest;
 use crate::bottom_pane::McpServerElicitationFormRequest;
 use crate::render::renderable::Renderable;
@@ -99,6 +100,14 @@ pub(crate) trait BottomPaneView: Renderable {
     /// Return true when state changed and the bottom pane should redraw or
     /// complete the active view.
     fn pre_draw_tick(&mut self, _now: Instant) -> bool {
+        false
+    }
+
+    /// Try to handle an app-level event while this view is active.
+    ///
+    /// Views that care about async sync events (e.g. preferences) override this.
+    /// Return `true` when the event was consumed.
+    fn handle_app_event(&mut self, _event: &AppEvent) -> bool {
         false
     }
 

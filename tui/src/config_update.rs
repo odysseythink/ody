@@ -27,6 +27,10 @@ use std::fmt::Display;
 use std::path::Path;
 use uuid::Uuid;
 
+use crate::legacy_core::config::Config;
+use ody_config::config_toml::DesignReviewToml;
+use ody_config::config_toml::UsabilityLensToml;
+
 pub(crate) fn replace_config_value(key_path: impl Into<String>, value: JsonValue) -> ConfigEdit {
     ConfigEdit {
         key_path: key_path.into(),
@@ -141,6 +145,146 @@ pub(crate) fn build_memory_settings_edits(
         replace_config_value(
             "memories.generate_memories",
             serde_json::json!(generate_memories),
+        ),
+    ]
+}
+
+/// Editable snapshot of the raw `[design_review]` config keys.
+///
+/// Populated from the *resolved* fields on [`Config`] (which already apply the legacy
+/// `design_review_model` / `review_model` fallback chain) so the form seeds with the
+/// effective values, but edits are written back to the raw `design_review` table.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct DesignReviewEditState {
+    pub(crate) enable: bool,
+    pub(crate) review_model: Option<String>,
+    pub(crate) debate_enable: bool,
+    pub(crate) rounds: Option<u8>,
+    pub(crate) advocate_model: Option<String>,
+    pub(crate) skeptic_model: Option<String>,
+    pub(crate) judge_model: Option<String>,
+    pub(crate) contest_critic: bool,
+    pub(crate) usability_lens: UsabilityLensToml,
+}
+
+/// One of the four design-review model override fields surfaced in `/preferences`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DesignReviewModelField {
+    Review,
+    Advocate,
+    Skeptic,
+    Judge,
+}
+
+impl DesignReviewEditState {
+    pub(crate) fn model_field(&self, field: DesignReviewModelField) -> Option<String> {
+        match field {
+            DesignReviewModelField::Review => self.review_model.clone(),
+            DesignReviewModelField::Advocate => self.advocate_model.clone(),
+            DesignReviewModelField::Skeptic => self.skeptic_model.clone(),
+            DesignReviewModelField::Judge => self.judge_model.clone(),
+        }
+    }
+
+    pub(crate) fn set_model_field(&mut self, field: DesignReviewModelField, value: Option<String>) {
+        match field {
+            DesignReviewModelField::Review => self.review_model = value,
+            DesignReviewModelField::Advocate => self.advocate_model = value,
+            DesignReviewModelField::Skeptic => self.skeptic_model = value,
+            DesignReviewModelField::Judge => self.judge_model = value,
+        }
+    }
+
+    pub(crate) fn from_config(config: &Config) -> Self {
+        let mut state = Self {
+            enable: config.design_review_enabled,
+            review_model: config.design_review_model.clone(),
+            ..Default::default()
+        };
+        if let Some(debate) = &config.design_review_debate {
+            state.debate_enable = debate.enable;
+            state.rounds = debate.rounds;
+            state.advocate_model = debate.advocate_model.clone();
+            state.skeptic_model = debate.skeptic_model.clone();
+            state.judge_model = debate.judge_model.clone();
+            state.contest_critic = debate.contest_critic;
+            state.usability_lens = debate.usability_lens;
+        }
+        state
+    }
+
+    pub(crate) fn apply_from_toml(&mut self, toml: &DesignReviewToml) {
+        self.enable = toml.enable;
+        self.review_model = toml.review_model.clone();
+        if let Some(debate) = &toml.debate {
+            self.debate_enable = debate.enable;
+            self.rounds = debate.rounds;
+            self.advocate_model = debate.advocate_model.clone();
+            self.skeptic_model = debate.skeptic_model.clone();
+            self.judge_model = debate.judge_model.clone();
+            self.contest_critic = debate.contest_critic;
+            self.usability_lens = debate.usability_lens;
+        } else {
+            self.debate_enable = false;
+            self.rounds = None;
+            self.advocate_model = None;
+            self.skeptic_model = None;
+            self.judge_model = None;
+            self.contest_critic = false;
+            self.usability_lens = UsabilityLensToml::default();
+        }
+    }
+}
+
+/// Build a batch of [`ConfigEdit`]s that rewrite the raw `[design_review]` table to match
+/// `state`. Every key is emitted so the on-disk table reflects the UI exactly; `None`
+/// string values are cleared rather than left stale.
+pub(crate) fn build_design_review_edits(state: &DesignReviewEditState) -> Vec<ConfigEdit> {
+    vec![
+        replace_config_value("design_review.enable", serde_json::json!(state.enable)),
+        state.review_model.as_ref().map_or_else(
+            || clear_config_value("design_review.review_model"),
+            |model| replace_config_value("design_review.review_model", serde_json::json!(model)),
+        ),
+        replace_config_value(
+            "design_review.debate.enable",
+            serde_json::json!(state.debate_enable),
+        ),
+        state.rounds.map_or_else(
+            || clear_config_value("design_review.debate.rounds"),
+            |rounds| replace_config_value("design_review.debate.rounds", serde_json::json!(rounds)),
+        ),
+        state.advocate_model.as_ref().map_or_else(
+            || clear_config_value("design_review.debate.advocate_model"),
+            |model| {
+                replace_config_value(
+                    "design_review.debate.advocate_model",
+                    serde_json::json!(model),
+                )
+            },
+        ),
+        state.skeptic_model.as_ref().map_or_else(
+            || clear_config_value("design_review.debate.skeptic_model"),
+            |model| {
+                replace_config_value(
+                    "design_review.debate.skeptic_model",
+                    serde_json::json!(model),
+                )
+            },
+        ),
+        state.judge_model.as_ref().map_or_else(
+            || clear_config_value("design_review.debate.judge_model"),
+            |model| {
+                replace_config_value("design_review.debate.judge_model", serde_json::json!(model))
+            },
+        ),
+        replace_config_value(
+            "design_review.debate.contest_critic",
+            serde_json::json!(state.contest_critic),
+        ),
+        replace_config_value(
+            "design_review.debate.usability_lens",
+            serde_json::json!(state.usability_lens),
         ),
     ]
 }

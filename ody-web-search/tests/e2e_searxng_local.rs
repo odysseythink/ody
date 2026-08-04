@@ -9,9 +9,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use ody_protocol::protocol::TruncationPolicy;
 use ody_protocol::ToolName;
-use ody_tools::{NoopTurnItemEmitter, ToolCall, ToolPayload, ToolExecutor};
+use ody_protocol::protocol::TruncationPolicy;
+use ody_tools::{NoopTurnItemEmitter, ToolCall, ToolExecutor, ToolPayload};
 use ody_web_search::{
     config::{WebSearchConfig, WebSearchProviderConfig, WebSearchProviderName},
     fallback::FallbackWebSearchProvider,
@@ -51,6 +51,7 @@ fn tool_call(arguments: &str) -> ToolCall {
         payload: ToolPayload::Function {
             arguments: arguments.to_string(),
         },
+        guardian_approved_action_id: None,
     }
 }
 
@@ -99,7 +100,9 @@ async fn web_search_tool_formats_local_searxng_output() {
     let value = output.code_mode_result(&ToolPayload::Function {
         arguments: String::new(),
     });
-    let text = value["text"].as_str().expect("text field should be a string");
+    let text = value["text"]
+        .as_str()
+        .expect("text field should be a string");
     assert!(
         text.to_lowercase().contains("rust"),
         "output should mention the query: {text}"
@@ -108,7 +111,9 @@ async fn web_search_tool_formats_local_searxng_output() {
         text.contains("http"),
         "output should contain at least one URL: {text}"
     );
-    let result_count = value["result_count"].as_u64().expect("result_count should be a number");
+    let result_count = value["result_count"]
+        .as_u64()
+        .expect("result_count should be a number");
     assert!(result_count > 0, "result_count should be greater than 0");
     println!("tool output ({result_count} results):\n{text}");
 }
@@ -120,8 +125,8 @@ async fn services_web_search_toml_config_round_trips_to_local_searxng() {
 [webSearch]
 primary = { provider = "searxng", timeout_ms = 30000, options = { base_url = "http://localhost:9999/search" } }
 "#;
-    let services: ody_web_search::config::ServicesConfig = toml::from_str(toml)
-        .expect("services config should deserialize from TOML");
+    let services: ody_web_search::config::ServicesConfig =
+        toml::from_str(toml).expect("services config should deserialize from TOML");
     let web_search_config = services
         .web_search
         .expect("web_search config should be present");

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::config::WebSearchProviderConfig;
 use crate::error::WebSearchError;
@@ -27,9 +27,10 @@ impl WebSearchProviderFactory for ExaFactory {
     ) -> Result<SharedWebSearchProvider, WebSearchError> {
         validate_options(&config, &["base_url", "type", "livecrawl"])?;
         let api_key = require_api_key(&config)?;
-        let base_url = take_base_url(&mut config.options)
-            .unwrap_or_else(|| DEFAULT_EXA_URL.to_string());
-        let type_ = take_string_option(&mut config.options, "type").unwrap_or_else(|| "auto".to_string());
+        let base_url =
+            take_base_url(&mut config.options).unwrap_or_else(|| DEFAULT_EXA_URL.to_string());
+        let type_ =
+            take_string_option(&mut config.options, "type").unwrap_or_else(|| "auto".to_string());
         let livecrawl = take_string_option(&mut config.options, "livecrawl")
             .unwrap_or_else(|| "fallback".to_string());
         let timeout = config
@@ -95,7 +96,10 @@ impl WebSearchProvider for ExaProvider {
             .header("Content-Type", "application/json")
             .json(&body)
             .timeout(self.timeout);
-        let response = request.send().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let response = request
+            .send()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         let status = response.status();
         if !status.is_success() {
             let body = match response.text().await {
@@ -104,7 +108,10 @@ impl WebSearchProvider for ExaProvider {
             };
             return Err(WebSearchError::from_http_status(status, &body));
         }
-        let json: Value = response.json().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let json: Value = response
+            .json()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         parse_exa_response(&json, options.include_content)
     }
 }
@@ -139,9 +146,7 @@ fn parse_exa_response(
             .and_then(|v| v.as_str())
             .map(String::from);
         let content = if include_content.unwrap_or(false) {
-            item.get("text")
-                .and_then(|v| v.as_str())
-                .map(String::from)
+            item.get("text").and_then(|v| v.as_str()).map(String::from)
         } else {
             None
         };

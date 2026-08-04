@@ -10,7 +10,7 @@ use crate::test_support::test_path_buf;
 use crate::token_usage::TokenUsage;
 use crate::token_usage::TokenUsageInfo;
 use chrono::Duration as ChronoDuration;
-use chrono::Local;
+
 use chrono::TimeZone;
 use chrono::Utc;
 use insta::assert_snapshot;

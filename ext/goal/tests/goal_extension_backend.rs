@@ -1347,6 +1347,7 @@ fn tool_call(tool_name: &str, call_id: &str, arguments: serde_json::Value) -> To
         conversation_history: ody_extension_api::ConversationHistory::default(),
         turn_item_emitter: Arc::new(NoopTurnItemEmitter),
         environments: Vec::new(),
+        guardian_approved_action_id: None,
         payload: ToolPayload::Function {
             arguments: arguments.to_string(),
         },

@@ -9,6 +9,9 @@ use std::collections::BTreeMap;
 pub struct CommandToolOptions {
     pub allow_login_shell: bool,
     pub exec_permission_approvals_enabled: bool,
+    /// Shell selected by the runtime for the primary environment.  This must
+    /// win over host-OS heuristics: Windows can legitimately run Git Bash.
+    pub shell_name: Option<&'static str>,
 }
 
 #[cfg(test)]
@@ -26,7 +29,7 @@ pub(crate) fn create_exec_command_tool_with_environment_id(
     let mut properties = BTreeMap::from([
         (
             "cmd".to_string(),
-            JsonSchema::string(Some("Shell command to execute.".to_string())),
+            JsonSchema::string(Some(shell_command_parameter_description(options.shell_name))),
         ),
         (
             "workdir".to_string(),
@@ -58,9 +61,7 @@ pub(crate) fn create_exec_command_tool_with_environment_id(
     if include_shell_parameter {
         properties.insert(
             "shell".to_string(),
-            JsonSchema::string(Some(
-                "Shell binary to launch. Defaults to the user's default shell.".to_string(),
-            )),
+            JsonSchema::string(Some(shell_parameter_description(options.shell_name))),
         );
     }
     if options.allow_login_shell {
@@ -87,15 +88,7 @@ pub(crate) fn create_exec_command_tool_with_environment_id(
 
     ToolSpec::Function(ResponsesApiTool {
         name: "exec_command".to_string(),
-        description: if cfg!(windows) {
-            format!(
-                "Runs a command in a PTY, returning output or a session ID for ongoing interaction.\n\n{}",
-                windows_shell_guidance()
-            )
-        } else {
-            "Runs a command in a PTY, returning output or a session ID for ongoing interaction."
-                .to_string()
-        },
+        description: exec_command_description(options.shell_name),
         strict: false,
         defer_loading: None,
         parameters: JsonSchema::object(
@@ -155,9 +148,9 @@ pub fn create_shell_command_tool(options: CommandToolOptions) -> ToolSpec {
     let mut properties = BTreeMap::from([
         (
             "command".to_string(),
-            JsonSchema::string(Some(
-                "Shell script to run in the user's default shell.".to_string(),
-            )),
+            JsonSchema::string(Some(shell_command_parameter_description(
+                options.shell_name,
+            ))),
         ),
         (
             "workdir".to_string(),
@@ -185,7 +178,11 @@ pub fn create_shell_command_tool(options: CommandToolOptions) -> ToolSpec {
         options.exec_permission_approvals_enabled,
     ));
 
-    let description = if cfg!(windows) {
+    let description = if let Some(shell_name) = options.shell_name {
+        format!(
+            "Runs a {shell_name} command and returns its output. Use {shell_name} syntax; the runtime will execute this command with {shell_name}, even when the host OS is different.\n- Always set the `workdir` param when using the shell_command function. Do not use `cd` unless absolutely necessary."
+        )
+    } else if cfg!(windows) {
         format!(
             r#"Runs a Powershell command (Windows) and returns its output.
 
@@ -219,6 +216,40 @@ Examples of valid command strings:
         ),
         output_schema: None,
     })
+}
+
+fn shell_command_parameter_description(shell_name: Option<&str>) -> String {
+    match shell_name {
+        Some(name) => format!(
+            "Command script to execute with the runtime-selected `{name}` shell. Use `{name}` syntax, not host-OS defaults."
+        ),
+        None => "Shell command to execute.".to_string(),
+    }
+}
+
+fn shell_parameter_description(shell_name: Option<&str>) -> String {
+    match shell_name {
+        Some(name) => {
+            format!("Shell binary to launch. Defaults to the runtime-selected `{name}` shell.")
+        }
+        None => "Shell binary to launch. Defaults to the user's default shell.".to_string(),
+    }
+}
+
+fn exec_command_description(shell_name: Option<&str>) -> String {
+    match shell_name {
+        Some(name) => format!(
+            "Runs a command in a PTY using the runtime-selected `{name}` shell. Use `{name}` syntax; do not infer a shell from the host OS."
+        ),
+        None if cfg!(windows) => format!(
+            "Runs a command in a PTY, returning output or a session ID for ongoing interaction.\n\n{}",
+            windows_shell_guidance()
+        ),
+        None => {
+            "Runs a command in a PTY, returning output or a session ID for ongoing interaction."
+                .to_string()
+        }
+    }
 }
 
 pub fn create_request_permissions_tool(description: String) -> ToolSpec {

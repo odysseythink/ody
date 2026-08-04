@@ -3,9 +3,9 @@ use super::*;
 use chrono::DateTime;
 #[cfg(test)]
 use chrono::Utc;
-use ody_protocol::config_types::MultiAgentMode;
 use ody_model_provider_info::ModelProviderInfo;
 use ody_model_provider_info::resolve_provider;
+use ody_protocol::config_types::MultiAgentMode;
 use std::collections::HashMap;
 
 #[cfg(test)]

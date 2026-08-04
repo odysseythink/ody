@@ -8,6 +8,7 @@ use crate::shell_snapshot::ShellSnapshot;
 use crate::skills::SkillError;
 use crate::state::ActiveTurn;
 use ody_extension_api::ExtensionDataInit;
+use ody_model_provider_info::resolve_provider_info;
 use ody_protocol::SessionId;
 use ody_protocol::config_types::SERVICE_TIER_DEFAULT_REQUEST_VALUE;
 use ody_protocol::config_types::ServiceTier;
@@ -19,7 +20,6 @@ use ody_protocol::protocol::ThreadSource;
 use ody_protocol::protocol::TurnEnvironmentSelection;
 use ody_protocol::protocol::TurnEnvironmentSelections;
 use ody_protocol::protocol::UserNotification;
-use ody_model_provider_info::resolve_provider_info;
 use std::sync::OnceLock;
 use tokio::sync::Semaphore;
 
@@ -232,10 +232,16 @@ impl SessionConfiguration {
             next_configuration.collaboration_mode = collaboration_mode;
         }
         if let Some(model_provider_id) = updates.model_provider_id.clone() {
-            if model_provider_id != next_configuration.original_config_do_not_use.model_provider_id {
+            if model_provider_id
+                != next_configuration
+                    .original_config_do_not_use
+                    .model_provider_id
+            {
                 let provider = resolve_provider_info(
                     &model_provider_id,
-                    &next_configuration.original_config_do_not_use.model_providers,
+                    &next_configuration
+                        .original_config_do_not_use
+                        .model_providers,
                 )
                 .ok_or_else(|| ConstraintError::InvalidValue {
                     field_name: "model_provider_id",

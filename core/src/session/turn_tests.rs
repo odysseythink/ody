@@ -38,24 +38,60 @@ fn assistant_output_text(text: &str) -> ResponseItem {
 }
 
 #[test]
-fn plan_mode_completed_response_without_terminal_action_requires_follow_up() {
-    assert!(plan_mode_requires_terminal_action(
+fn session_mode_completed_response_without_terminal_action_requires_follow_up() {
+    assert!(session_mode_requires_terminal_action(
         ModeKind::Plan,
+        /*has_submit_plan_call*/ false,
+        /*has_submit_design_call*/ false,
         /*has_request_user_input_call*/ false,
         /*needs_follow_up*/ false,
     ));
-    assert!(!plan_mode_requires_terminal_action(
+    assert!(!session_mode_requires_terminal_action(
         ModeKind::Plan,
+        /*has_submit_plan_call*/ false,
+        /*has_submit_design_call*/ false,
         /*has_request_user_input_call*/ true,
         /*needs_follow_up*/ false,
     ));
-    assert!(!plan_mode_requires_terminal_action(
+    assert!(!session_mode_requires_terminal_action(
         ModeKind::Plan,
+        /*has_submit_plan_call*/ true,
+        /*has_submit_design_call*/ false,
+        /*has_request_user_input_call*/ false,
+        /*needs_follow_up*/ false,
+    ));
+    assert!(!session_mode_requires_terminal_action(
+        ModeKind::Plan,
+        /*has_submit_plan_call*/ false,
+        /*has_submit_design_call*/ false,
         /*has_request_user_input_call*/ false,
         /*needs_follow_up*/ true,
     ));
-    assert!(!plan_mode_requires_terminal_action(
+    assert!(session_mode_requires_terminal_action(
+        ModeKind::Design,
+        /*has_submit_plan_call*/ false,
+        /*has_submit_design_call*/ false,
+        /*has_request_user_input_call*/ false,
+        /*needs_follow_up*/ false,
+    ));
+    assert!(!session_mode_requires_terminal_action(
+        ModeKind::Design,
+        /*has_submit_plan_call*/ false,
+        /*has_submit_design_call*/ true,
+        /*has_request_user_input_call*/ false,
+        /*needs_follow_up*/ false,
+    ));
+    assert!(!session_mode_requires_terminal_action(
+        ModeKind::Design,
+        /*has_submit_plan_call*/ false,
+        /*has_submit_design_call*/ false,
+        /*has_request_user_input_call*/ true,
+        /*needs_follow_up*/ false,
+    ));
+    assert!(!session_mode_requires_terminal_action(
         ModeKind::Default,
+        /*has_submit_plan_call*/ false,
+        /*has_submit_design_call*/ false,
         /*has_request_user_input_call*/ false,
         /*needs_follow_up*/ false,
     ));

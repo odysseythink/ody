@@ -492,7 +492,6 @@ async fn user_messages_persist_in_state_db() -> Result<()> {
     Ok(())
 }
 
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn mcp_call_marks_thread_memory_mode_polluted_when_configured() -> Result<()> {
     skip_if_no_network!(Ok(()));

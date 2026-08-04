@@ -6,12 +6,8 @@ use ody_extension_api::{
     ThreadLifecycleContributor, ThreadStartInput, ToolCall, ToolContributor,
 };
 use ody_web_search::{
-    config::ServicesConfig,
-    fallback::FallbackWebSearchProvider,
-    http_client::default_http_client,
-    provider::SharedWebSearchProvider,
-    providers::create_default_registry,
-    tool::WebSearchTool,
+    config::ServicesConfig, fallback::FallbackWebSearchProvider, http_client::default_http_client,
+    provider::SharedWebSearchProvider, providers::create_default_registry, tool::WebSearchTool,
 };
 
 #[derive(Clone)]
@@ -114,6 +110,7 @@ mod tests {
                 },
                 secondary: None,
             }),
+            browser: None,
         }
     }
 
@@ -136,6 +133,7 @@ mod tests {
                 },
                 secondary: None,
             }),
+            browser: None,
         };
         assert!(WebSearchExtension::create_provider(&services).is_some());
     }
@@ -152,10 +150,7 @@ mod tests {
     #[test]
     fn tools_returns_web_search_when_provider_present() {
         let session_store = ExtensionData::new("session");
-        let mut thread_store = ExtensionData::new_with_init(
-            "thread",
-            ExtensionDataInit::new(),
-        );
+        let thread_store = ExtensionData::new_with_init("thread", ExtensionDataInit::new());
         let provider = WebSearchExtension::create_provider(&ServicesConfig {
             web_search: Some(WebSearchConfig {
                 primary: WebSearchProviderConfig {
@@ -166,12 +161,16 @@ mod tests {
                 },
                 secondary: None,
             }),
+            browser: None,
         })
         .expect("should create provider");
         thread_store.insert(provider);
         let extension = WebSearchExtension;
         let tools = extension.tools(&session_store, &thread_store);
         assert_eq!(tools.len(), 1);
-        assert_eq!(tools[0].tool_name(), ody_tools::ToolName::plain("WebSearch"));
+        assert_eq!(
+            tools[0].tool_name(),
+            ody_tools::ToolName::plain("WebSearch")
+        );
     }
 }

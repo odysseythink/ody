@@ -501,6 +501,7 @@ async fn submit_design_final_triggers_adversarial_review_and_appends_findings() 
 
     let mut builder = test_ody().with_config(|config| {
         config.review_model = Some("review-model".to_string());
+        config.design_review_enabled = true;
     });
     let test = builder.build(&server).await?;
 
@@ -623,6 +624,7 @@ async fn submit_design_final_uses_design_review_model_over_review_model() -> any
     let mut builder = test_ody().with_config(|config| {
         config.review_model = Some("review-model".to_string());
         config.design_review_model = Some("design-review-model".to_string());
+        config.design_review_enabled = true;
     });
     let test = builder.build(&server).await?;
 
@@ -765,6 +767,7 @@ async fn submit_design_final_review_fail_open_on_unparseable_output() -> anyhow:
 
     let mut builder = test_ody().with_config(|config| {
         config.review_model = Some("review-model".to_string());
+        config.design_review_enabled = true;
     });
     let test = builder.build(&server).await?;
 

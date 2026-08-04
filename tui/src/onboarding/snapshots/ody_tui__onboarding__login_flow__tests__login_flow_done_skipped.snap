@@ -1,0 +1,8 @@
+---
+source: tui/src/onboarding/login_flow.rs
+expression: terminal.backend()
+---
+> Login complete
+
+Login skipped.
+This provider will be set as the default model source.

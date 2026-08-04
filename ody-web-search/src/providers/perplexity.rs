@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::config::WebSearchProviderConfig;
 use crate::error::WebSearchError;
@@ -30,8 +30,13 @@ impl WebSearchProviderFactory for PerplexityFactory {
         let base_url = take_base_url(&mut config.options)
             .unwrap_or_else(|| DEFAULT_PERPLEXITY_URL.to_string());
         let max_results = take_u32_option(&mut config.options, "max_results", 5, 1, 20);
-        let max_tokens_per_page =
-            take_u32_option(&mut config.options, "max_tokens_per_page", 2048, 1, u32::MAX);
+        let max_tokens_per_page = take_u32_option(
+            &mut config.options,
+            "max_tokens_per_page",
+            2048,
+            1,
+            u32::MAX,
+        );
         let timeout = config
             .timeout_ms
             .map(Duration::from_millis)
@@ -79,7 +84,10 @@ impl WebSearchProvider for PerplexityProvider {
         query: &str,
         options: &WebSearchOptions,
     ) -> Result<Vec<WebSearchResult>, WebSearchError> {
-        let limit = options.limit.map(|l| l.clamp(1, 20)).unwrap_or(self.max_results);
+        let limit = options
+            .limit
+            .map(|l| l.clamp(1, 20))
+            .unwrap_or(self.max_results);
         let body = json!({
             "query": query,
             "max_results": limit,
@@ -92,7 +100,10 @@ impl WebSearchProvider for PerplexityProvider {
             .header("Content-Type", "application/json")
             .json(&body)
             .timeout(self.timeout);
-        let response = request.send().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let response = request
+            .send()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         let status = response.status();
         if !status.is_success() {
             let body = match response.text().await {
@@ -101,7 +112,10 @@ impl WebSearchProvider for PerplexityProvider {
             };
             return Err(WebSearchError::from_http_status(status, &body));
         }
-        let json: Value = response.json().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let json: Value = response
+            .json()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         parse_perplexity_response(&json, options.limit)
     }
 }
@@ -132,10 +146,7 @@ fn parse_perplexity_response(
             .and_then(|v| v.as_str())
             .or_else(|| item.get("text").and_then(|v| v.as_str()))
             .map_or_else(String::new, String::from);
-        let date = item
-            .get("date")
-            .and_then(|v| v.as_str())
-            .map(String::from);
+        let date = item.get("date").and_then(|v| v.as_str()).map(String::from);
         if !title.is_empty() && !url.is_empty() {
             results.push(WebSearchResult {
                 title,
@@ -189,7 +200,14 @@ mod tests {
         };
         let provider = PerplexityFactory.create(config, reqwest::Client::new())?;
         let results = provider
-            .search("rust", &WebSearchOptions { limit: Some(3), include_content: None, tool_call_id: None })
+            .search(
+                "rust",
+                &WebSearchOptions {
+                    limit: Some(3),
+                    include_content: None,
+                    tool_call_id: None,
+                },
+            )
             .await?;
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].title, "T");

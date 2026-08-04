@@ -11,7 +11,6 @@ Requirements:
   - allowed_approval_policies: on-request (source: MDM managed_config.toml (legacy))
   - allowed_approvals_reviewers: auto_review (source: MDM managed_config.toml (legacy))
   - allowed_sandbox_modes: read-only (source: /etc/ody/requirements.toml)
-  - allowed_web_search_modes: cached, disabled (source: MDM managed_config.toml (legacy))
   - allow_managed_hooks_only: true (source: MDM managed_config.toml (legacy))
   - allow_appshots: false (source: MDM managed_config.toml (legacy))
   - guardian_policy_config: configured (source: MDM managed_config.toml (legacy))

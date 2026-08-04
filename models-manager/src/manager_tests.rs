@@ -302,9 +302,7 @@ async fn unconfigured_provider_surfaces_no_models() {
     // surface any models: not the bundled catalog, not a stale cache, nothing.
     let ody_home = tempdir().expect("temp dir");
     let endpoint = TestModelsEndpoint::without_refresh(vec![vec![remote_model(
-        "unused",
-        "Unused",
-        /*priority*/ 0,
+        "unused", "Unused", /*priority*/ 0,
     )]]);
     let manager = odysseythink_manager_for_tests(ody_home.path().to_path_buf(), endpoint.clone());
 

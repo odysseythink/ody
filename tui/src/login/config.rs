@@ -53,7 +53,13 @@ pub(crate) fn build_login_model_edits(
         id: model_id.to_string(),
         display_name: display_name.to_string(),
     };
-    build_login_models_edits(alias, provider, &[model], model_id, /*set_as_default*/ true)
+    build_login_models_edits(
+        alias,
+        provider,
+        &[model],
+        model_id,
+        /*set_as_default*/ true,
+    )
 }
 
 /// Build config edits that persist every model fetched during `/login`.

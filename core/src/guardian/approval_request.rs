@@ -68,6 +68,12 @@ pub(crate) enum GuardianApprovalRequest {
         tool_description: Option<String>,
         annotations: Option<GuardianMcpAnnotations>,
     },
+    BrowserAction {
+        id: String,
+        turn_id: String,
+        action: String,
+        details: Value,
+    },
     RequestPermissions {
         id: String,
         turn_id: String,
@@ -167,6 +173,13 @@ struct RequestPermissionsApprovalAction<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     reason: Option<&'a String>,
     permissions: &'a RequestPermissionProfile,
+}
+
+#[derive(Serialize)]
+struct BrowserActionApprovalAction<'a> {
+    tool: &'static str,
+    action: &'a str,
+    details: &'a Value,
 }
 
 fn serialize_guardian_action(value: impl Serialize) -> serde_json::Result<Value> {
@@ -358,6 +371,16 @@ pub(crate) fn guardian_approval_request_to_json(
             tool_description: tool_description.as_ref(),
             annotations: annotations.as_ref(),
         }),
+        GuardianApprovalRequest::BrowserAction {
+            id: _,
+            action,
+            details,
+            ..
+        } => serialize_guardian_action(BrowserActionApprovalAction {
+            tool: "browser",
+            action,
+            details,
+        }),
         GuardianApprovalRequest::RequestPermissions {
             id: _,
             turn_id,
@@ -429,6 +452,12 @@ pub(crate) fn guardian_assessment_action(
             connector_name: connector_name.clone(),
             tool_title: tool_title.clone(),
         },
+        GuardianApprovalRequest::BrowserAction { action, details, .. } => {
+            GuardianAssessmentAction::BrowserAction {
+                action: action.clone(),
+                details: details.clone(),
+            }
+        }
         GuardianApprovalRequest::RequestPermissions {
             reason,
             permissions,
@@ -494,6 +523,12 @@ pub(crate) fn guardian_reviewed_action(
             connector_name: connector_name.clone(),
             tool_title: tool_title.clone(),
         },
+        GuardianApprovalRequest::BrowserAction { action, details, .. } => {
+            GuardianReviewedAction::BrowserAction {
+                action: action.clone(),
+                details: details.clone(),
+            }
+        }
         GuardianApprovalRequest::RequestPermissions { .. } => {
             GuardianReviewedAction::RequestPermissions {}
         }
@@ -506,7 +541,8 @@ pub(crate) fn guardian_request_target_item_id(request: &GuardianApprovalRequest)
         | GuardianApprovalRequest::ExecCommand { id, .. }
         | GuardianApprovalRequest::ApplyPatch { id, .. }
         | GuardianApprovalRequest::McpToolCall { id, .. }
-        | GuardianApprovalRequest::RequestPermissions { id, .. } => Some(id),
+        | GuardianApprovalRequest::RequestPermissions { id, .. }
+        | GuardianApprovalRequest::BrowserAction { id, .. } => Some(id),
         GuardianApprovalRequest::NetworkAccess { .. } => None,
         #[cfg(unix)]
         GuardianApprovalRequest::Execve { id, .. } => Some(id),
@@ -519,7 +555,8 @@ pub(crate) fn guardian_request_turn_id<'a>(
 ) -> &'a str {
     match request {
         GuardianApprovalRequest::NetworkAccess { turn_id, .. }
-        | GuardianApprovalRequest::RequestPermissions { turn_id, .. } => turn_id,
+        | GuardianApprovalRequest::RequestPermissions { turn_id, .. }
+        | GuardianApprovalRequest::BrowserAction { turn_id, .. } => turn_id,
         GuardianApprovalRequest::Shell { .. }
         | GuardianApprovalRequest::ExecCommand { .. }
         | GuardianApprovalRequest::ApplyPatch { .. }

@@ -27,14 +27,16 @@ impl WebSearchProviderFactory for SerplyFactory {
     ) -> Result<SharedWebSearchProvider, WebSearchError> {
         validate_options(&config, &["base_url", "language", "hl", "gl", "device"])?;
         let api_key = require_api_key(&config)?;
-        let base_url = take_base_url(&mut config.options)
-            .unwrap_or_else(|| DEFAULT_SERPLY_URL.to_string());
-        let language = take_string_option(&mut config.options, "language").unwrap_or_else(|| "en".to_string());
+        let base_url =
+            take_base_url(&mut config.options).unwrap_or_else(|| DEFAULT_SERPLY_URL.to_string());
+        let language =
+            take_string_option(&mut config.options, "language").unwrap_or_else(|| "en".to_string());
         let hl = take_string_option(&mut config.options, "hl").unwrap_or_else(|| "en".to_string());
         let gl = take_string_option(&mut config.options, "gl")
             .unwrap_or_else(|| "US".to_string())
             .to_uppercase();
-        let device = take_string_option(&mut config.options, "device").unwrap_or_else(|| "desktop".to_string());
+        let device = take_string_option(&mut config.options, "device")
+            .unwrap_or_else(|| "desktop".to_string());
         let timeout = config
             .timeout_ms
             .map(Duration::from_millis)
@@ -102,7 +104,10 @@ impl WebSearchProvider for SerplyProvider {
             .header("X-API-KEY", &self.api_key)
             .header("X-User-Agent", &self.device)
             .timeout(self.timeout);
-        let response = request.send().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let response = request
+            .send()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         let status = response.status();
         if !status.is_success() {
             let body = match response.text().await {
@@ -111,7 +116,10 @@ impl WebSearchProvider for SerplyProvider {
             };
             return Err(WebSearchError::from_http_status(status, &body));
         }
-        let json: Value = response.json().await.map_err(|e| WebSearchError::from_reqwest(&e))?;
+        let json: Value = response
+            .json()
+            .await
+            .map_err(|e| WebSearchError::from_reqwest(&e))?;
         parse_serply_response(&json, options.limit)
     }
 }
@@ -148,10 +156,7 @@ fn parse_serply_response(
             .get("snippet")
             .and_then(|v| v.as_str())
             .map_or_else(String::new, String::from);
-        let date = item
-            .get("date")
-            .and_then(|v| v.as_str())
-            .map(String::from);
+        let date = item.get("date").and_then(|v| v.as_str()).map(String::from);
         if !title.is_empty() && !url.is_empty() {
             results.push(WebSearchResult {
                 title,
@@ -209,7 +214,14 @@ mod tests {
         };
         let provider = SerplyFactory.create(config, reqwest::Client::new())?;
         let results = provider
-            .search("rust", &WebSearchOptions { limit: Some(5), include_content: None, tool_call_id: None })
+            .search(
+                "rust",
+                &WebSearchOptions {
+                    limit: Some(5),
+                    include_content: None,
+                    tool_call_id: None,
+                },
+            )
             .await?;
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].title, "T");
@@ -217,12 +229,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn returns_auth_error_for_unauthorized_message(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    async fn returns_auth_error_for_unauthorized_message() -> Result<(), Box<dyn std::error::Error>>
+    {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/v1/search/"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(&json!({ "message": "Unauthorized" })))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(&json!({ "message": "Unauthorized" })),
+            )
             .mount(&server)
             .await;
 

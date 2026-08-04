@@ -119,6 +119,7 @@ use ody_app_server_protocol::UserInput;
 use ody_config::ConfigLayerStackOrdering;
 use ody_config::Constrained;
 use ody_config::ConstraintResult;
+use ody_config::config_toml::DesignReviewToml;
 use ody_config::types::ApprovalsReviewer;
 use ody_config::types::Notifications;
 use ody_config::types::WindowsSandboxModeToml;
@@ -1901,6 +1902,23 @@ impl ChatWidget {
     pub(crate) fn sync_model_context_window(&mut self, config: &Config) {
         self.config.model_context_window = config.model_context_window;
         self.refresh_status_line();
+    }
+
+    /// Forward an app event to the active bottom-pane view.
+    pub(crate) fn handle_app_event_for_active_view(&mut self, event: &AppEvent) -> bool {
+        self.bottom_pane.handle_app_event(event)
+    }
+
+    /// Sync the design-review preferences popup with the server-side truth.
+    pub(crate) fn sync_design_review_preferences(
+        &mut self,
+        design_review: DesignReviewToml,
+        error: Option<String>,
+    ) {
+        self.handle_app_event_for_active_view(&AppEvent::SyncDesignReviewPreferences {
+            design_review,
+            error,
+        });
     }
 
     /// Resolve provider metadata for a provider alias using the current config.

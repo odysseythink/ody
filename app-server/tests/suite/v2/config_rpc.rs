@@ -90,7 +90,6 @@ sandbox_mode = "workspace-write"
     Ok(())
 }
 
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn config_read_includes_apps() -> Result<()> {
     let ody_home = TempDir::new()?;

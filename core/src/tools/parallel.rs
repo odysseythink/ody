@@ -71,7 +71,11 @@ impl ToolCallRuntime {
         async move {
             match future.await {
                 Ok(response) => Ok(response.into_response()),
+                Err(FunctionCallError::Retryable(message)) => Err(OdyErr::Fatal(message)),
                 Err(FunctionCallError::Fatal(message)) => Err(OdyErr::Fatal(message)),
+                Err(FunctionCallError::NeedsApproval { ticket }) => Err(OdyErr::Fatal(format!(
+                    "approval-required error not supported in code-mode tool runtime: {ticket}"
+                ))),
                 Err(other) => Ok(Self::failure_response(error_call, other)),
             }
         }

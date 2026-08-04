@@ -377,6 +377,7 @@ async fn skills_list_truncates_catalog_descriptions_in_tool_output() -> TestResu
             conversation_history: ConversationHistory::default(),
             turn_item_emitter: Arc::new(NoopTurnItemEmitter),
             environments: Vec::new(),
+            guardian_approved_action_id: None,
             payload: payload.clone(),
         })
         .await?;
@@ -973,6 +974,7 @@ async fn hidden_in_modes_excludes_skill_from_turn_input_catalog() -> TestResult 
             conversation_history: ConversationHistory::default(),
             turn_item_emitter: Arc::new(NoopTurnItemEmitter),
             environments: Vec::new(),
+            guardian_approved_action_id: None,
             payload: payload.clone(),
         })
         .await?;
@@ -1120,6 +1122,7 @@ async fn skills_list_tool_returns_host_skills_when_host_authority_requested() ->
             conversation_history: ConversationHistory::default(),
             turn_item_emitter: Arc::new(NoopTurnItemEmitter),
             environments: Vec::new(),
+            guardian_approved_action_id: None,
             payload: payload.clone(),
         })
         .await?;
@@ -1290,6 +1293,7 @@ async fn disable_model_invocation_blocks_tool_read() -> TestResult {
             conversation_history: ConversationHistory::default(),
             turn_item_emitter: Arc::new(NoopTurnItemEmitter),
             environments: Vec::new(),
+            guardian_approved_action_id: None,
             payload: payload.clone(),
         })
         .await;

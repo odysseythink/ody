@@ -108,9 +108,17 @@ mod tests {
         assert_eq!(state.provider_alias, config.model_provider_id);
         assert_eq!(state.provider_info, config.model_provider);
         assert_eq!(state.providers, config.model_providers);
-        assert!(state.model_catalog.is_some(), "fixture loads a model catalog");
         assert!(
-            !state.models_manager.raw_model_catalog(RefreshStrategy::Offline).await.models.is_empty(),
+            state.model_catalog.is_some(),
+            "fixture loads a model catalog"
+        );
+        assert!(
+            !state
+                .models_manager
+                .raw_model_catalog(RefreshStrategy::Offline)
+                .await
+                .models
+                .is_empty(),
             "static manager should expose the configured catalog"
         );
     }
@@ -120,7 +128,9 @@ mod tests {
         let mut config = test_config().await;
         let custom_alias = "custom";
         let custom_info = create_kimi_provider();
-        config.model_providers.insert(custom_alias.to_string(), custom_info.clone());
+        config
+            .model_providers
+            .insert(custom_alias.to_string(), custom_info.clone());
         config.model = Some(format!("{custom_alias}/custom-model"));
 
         let state = resolve_runtime_model_state(&config);
@@ -158,7 +168,10 @@ mod tests {
 
         assert_eq!(
             state.active_model,
-            Some(ModelRef::from_parts(&config.model_provider_id, "bare-model-id"))
+            Some(ModelRef::from_parts(
+                &config.model_provider_id,
+                "bare-model-id"
+            ))
         );
         assert_eq!(state.provider_alias, config.model_provider_id);
         assert_eq!(state.provider_info, config.model_provider);
@@ -187,7 +200,10 @@ mod tests {
 
         let state = resolve_runtime_model_state(&config);
 
-        let catalog = state.models_manager.raw_model_catalog(RefreshStrategy::Offline).await;
+        let catalog = state
+            .models_manager
+            .raw_model_catalog(RefreshStrategy::Offline)
+            .await;
         assert!(
             !catalog.models.is_empty(),
             "static manager should return the configured catalog models"
@@ -205,7 +221,10 @@ mod tests {
         let state = resolve_runtime_model_state(&config);
 
         assert!(state.model_catalog.is_none());
-        let catalog = state.models_manager.raw_model_catalog(RefreshStrategy::Offline).await;
+        let catalog = state
+            .models_manager
+            .raw_model_catalog(RefreshStrategy::Offline)
+            .await;
         // The test provider has no auth, so the OpenAI-compatible manager starts
         // with an empty remote catalog rather than the bundled catalog.
         assert!(catalog.models.is_empty());

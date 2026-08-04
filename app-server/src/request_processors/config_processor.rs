@@ -294,7 +294,9 @@ impl ConfigRequestProcessor {
             let Ok(thread) = self.thread_manager.get_thread(thread_id).await else {
                 continue;
             };
-            thread.apply_runtime_model_state(runtime_model_state.clone()).await;
+            thread
+                .apply_runtime_model_state(runtime_model_state.clone())
+                .await;
         }
     }
 

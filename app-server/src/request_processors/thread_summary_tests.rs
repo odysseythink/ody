@@ -71,12 +71,12 @@ fn extract_conversation_summary_prefers_plain_user_messages() -> Result<()> {
 #[cfg(test)]
 mod alias_validation_tests {
     use super::*;
-    use pretty_assertions::assert_eq;
     use ody_protocol::config_types::ApprovalsReviewer;
     use ody_protocol::config_types::ModeKind;
     use ody_protocol::config_types::Settings;
     use ody_protocol::protocol::SessionSource;
     use ody_protocol::protocol::ThreadSettingsSnapshot;
+    use pretty_assertions::assert_eq;
 
     fn test_cwd() -> AbsolutePathBuf {
         AbsolutePathBuf::from_absolute_path("/tmp").unwrap()

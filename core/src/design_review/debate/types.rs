@@ -106,8 +106,8 @@ pub(crate) struct DebateConfig {
     advocate_model: Option<String>,
     skeptic_model: Option<String>,
     judge_model: Option<String>,
-    /// Fallback chain shared by every seat: `design_review_model` then
-    /// `review_model` (mirrors the single-shot path).
+    /// Fallback chain shared by every seat: `[design_review].review_model` then
+    /// the legacy flat `design_review_model` then `review_model` (mirrors the single-shot path).
     fallback_design_review_model: Option<String>,
     fallback_review_model: Option<String>,
     /// Per-turn wall-clock budget: the single-shot review's total budget sliced

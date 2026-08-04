@@ -1786,7 +1786,7 @@ fn item_review_summary_key(pending_review: &PendingReviewState) -> Option<ToolIt
             turn_id: pending_review.turn_id.clone(),
             item_id: pending_review.item_id.clone()?,
         }),
-        ReviewSubjectKind::Permissions | ReviewSubjectKind::NetworkAccess => None,
+        ReviewSubjectKind::Permissions | ReviewSubjectKind::NetworkAccess | ReviewSubjectKind::BrowserAction => None,
     }
 }
 
@@ -2303,6 +2303,11 @@ fn guardian_review_subject_metadata(
             tool_name.clone(),
             ReviewTrigger::Initial,
         ),
+        GuardianApprovalReviewAction::BrowserAction { action, .. } => (
+            ReviewSubjectKind::BrowserAction,
+            action.clone(),
+            ReviewTrigger::Initial,
+        ),
     }
 }
 
@@ -2316,7 +2321,8 @@ fn guardian_review_requested_additional_permissions(action: &GuardianApprovalRev
         }
         GuardianApprovalReviewAction::Command { .. }
         | GuardianApprovalReviewAction::Execve { .. }
-        | GuardianApprovalReviewAction::McpToolCall { .. } => false,
+        | GuardianApprovalReviewAction::McpToolCall { .. }
+        | GuardianApprovalReviewAction::BrowserAction { .. } => false,
     }
 }
 
@@ -2329,7 +2335,8 @@ fn guardian_review_requested_network_access(action: &GuardianApprovalReviewActio
         GuardianApprovalReviewAction::ApplyPatch { .. }
         | GuardianApprovalReviewAction::Command { .. }
         | GuardianApprovalReviewAction::Execve { .. }
-        | GuardianApprovalReviewAction::McpToolCall { .. } => false,
+        | GuardianApprovalReviewAction::McpToolCall { .. }
+        | GuardianApprovalReviewAction::BrowserAction { .. } => false,
     }
 }
 
@@ -2506,8 +2513,6 @@ fn dynamic_content_counts(items: &[DynamicToolCallOutputContentItem]) -> Dynamic
         image,
     }
 }
-
-
 
 fn accepted_line_event_input(
     turn_id: &str,

@@ -45,3 +45,22 @@
 - Patch marker lines (`*** Begin Patch`, `*** End Patch`, `*** Add File`, `*** Update File`, `*** Delete File`, `*** End of File`) must be written exactly — do **not** prefix them with `+` or `-`.
 - The parser detects common mistakes such as `+*** End Patch` / `-*** End Patch` / `+*** Begin Patch` and reports a clear error telling the model to remove the prefix.
 - Content lines inside hunks still use `+` / `-` / ` ` prefixes as normal unified-diff content.
+
+## Browser Control 工具
+
+- `ody-browser-control` 提供 `browser__navigate`、`browser__evaluate`、`browser__click`、`browser__type`、
+  `browser__go_back`、`browser__go_forward`、`browser__reload`、`browser__screenshot`、
+  `browser__get_dom`、`browser__read_logs`、`browser__execute_raw_cdp` 等工具。
+- **默认安全姿态：** 本地模式使用临时 profile（`--user-data-dir` 等危险启动参数被 `sanitize_args` 过滤），敏感操作走 guardian 审批，`evaluate` 静态拒绝 cookie/storage 读取，网络日志脱敏后返回。
+- **关键配置字段：** `mode`（Local/External）、`headless`、`sandbox`、`allow_local_network`、`external_browser_allow_sensitive`、`disable_extensions`、`extra_args`（经 `sanitize_args` 过滤）。详细配置说明见 `docs/browser-control.md`。
+- **残余风险：** 静态拒绝无法穷尽所有 JS 绕过；企业级 URL allowlist 和外部 browser-use MCP 去重尚未实现。
+- 敏感操作（navigate/evaluate/click/type/go_back/go_forward/reload/execute_raw_cdp）默认需要 guardian 审批；
+  只读操作（screenshot/get_dom/read_logs）不需要审批。
+- `navigate` 在 loopback（`localhost`/`127.0.0.1`/`::1`）、`file://` 位于 cwd 下、短 `data:` URL（<1KiB）时自动豁免审批。
+- `evaluate` 静态拒绝包含 `document.cookie`、storage API、`eval(`、`atob(`、`contentWindow` 等表达式；
+  长表达式在审批 ticket 中会被截断到 500 字节。
+- `execute_raw_cdp` 在外部浏览器模式下禁用；黑名单方法（cookie/storage/fetch 拦截等）直接拒绝。
+- 网络日志在返回前会脱敏敏感 header 和响应 body，snapshot 只输出条目数和字节数。
+- 全链路已加 `#[tracing::instrument]`，但日志字段只输出截断预览（URL/选择器 120 字节、表达式 200 字节）或长度/计数。
+- 修改后优先跑 `cargo test -p ody-browser-control --tests`；依赖真实 Chrome 的测试被 `#[ignore]`，仅在手动验证时运行。
+- 详细说明见 `docs/browser-control.md`。

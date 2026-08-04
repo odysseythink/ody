@@ -237,8 +237,9 @@ of `RIGOR_FRAGMENT_GRAPH` — that graph and its drift test cover the rigor chai
   index-file vs part-file structure (`<id>/` subdirectory, files-next-to-index rejected by the
   write guard), the Parts manifest table format, and the turn-by-turn writing protocol (write
   index → one part per turn → flip manifest row to `done` → final cross-file review).
-- **Uses the `{{ split_threshold }}` template variable**, rendered by
-  `render_plan_instructions` in `collaboration_mode_instructions.rs` (default `8` if unset).
+- **Uses the `{{ split_threshold }}` and `{{ max_part_bytes }}` template variables**, rendered by
+  `render_plan_instructions` in `collaboration_mode_instructions.rs` (`8` and `0` respectively
+  when unset).
 - **Depends on:** conceptually all prior fragments (a split plan still needs Coverage, Task
   Skeleton, Risks etc. — split only changes *file layout*, not content requirements). No explicit
   "above" phrase.

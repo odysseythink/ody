@@ -1108,7 +1108,6 @@ fn unified_exec_interaction_cell_height_matches_wrapped_rendering() {
     );
 }
 
-
 #[test]
 fn standalone_unix_update_available_history_cell_snapshot() {
     let cell =
@@ -1126,10 +1125,6 @@ fn standalone_windows_update_available_history_cell_snapshot() {
 
     insta::assert_snapshot!(rendered);
 }
-
-
-
-
 
 #[test]
 fn active_mcp_tool_call_snapshot() {

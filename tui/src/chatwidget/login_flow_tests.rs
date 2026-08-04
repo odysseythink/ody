@@ -116,7 +116,11 @@ async fn empty_api_key_re_prompts_and_adds_error() {
     submit_active_prompt(&mut chat);
 
     let _ = rx.try_recv();
-    chat.on_login_api_key_submitted(BuiltInApiKeyProvider::Kimi, "my-kimi".to_string(), "".to_string());
+    chat.on_login_api_key_submitted(
+        BuiltInApiKeyProvider::Kimi,
+        "my-kimi".to_string(),
+        "".to_string(),
+    );
 
     let cells = drain_insert_history(&mut rx);
     assert!(

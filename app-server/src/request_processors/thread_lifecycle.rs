@@ -238,8 +238,10 @@ pub(super) async fn ensure_listener_task_running(
             &environments,
         )
         .await;
-    let thread_settings_baseline =
-        thread_settings_from_config_snapshot(&conversation.config_snapshot().await, &config.model_providers);
+    let thread_settings_baseline = thread_settings_from_config_snapshot(
+        &conversation.config_snapshot().await,
+        &config.model_providers,
+    );
     let (mut listener_command_rx, listener_generation) = {
         let mut thread_state = thread_state.lock().await;
         if thread_state.listener_matches(&conversation) {

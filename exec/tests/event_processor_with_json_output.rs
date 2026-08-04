@@ -356,8 +356,6 @@ fn reasoning_items_emit_summary_not_raw_content() {
     );
 }
 
-
-
 #[test]
 fn mcp_tool_call_begin_and_end_emit_item_events() {
     let mut processor = EventProcessorWithJsonOutput::new(/*last_message_path*/ None);

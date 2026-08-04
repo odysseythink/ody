@@ -1,3 +1,4 @@
+use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use ratatui::buffer::Buffer;
@@ -12,7 +13,7 @@ use ratatui::widgets::Wrap;
 use std::cell::Cell;
 
 use crate::ascii_animation::AsciiAnimation;
-use crate::frames::LOGO_VARIANTS;
+use crate::frames::ALL_VARIANTS;
 use crate::key_hint::KeyBindingListExt;
 use crate::onboarding::keys;
 use crate::onboarding::onboarding_screen::KeyboardHandler;
@@ -21,8 +22,8 @@ use crate::tui::FrameRequester;
 
 use super::onboarding_screen::StepState;
 
-const MIN_ANIMATION_HEIGHT: u16 = 37;
-const MIN_ANIMATION_WIDTH: u16 = 60;
+pub(crate) const MIN_ANIMATION_HEIGHT: u16 = 37;
+pub(crate) const MIN_ANIMATION_WIDTH: u16 = 60;
 
 pub(crate) struct WelcomeWidget {
     pub is_logged_in: bool,
@@ -38,10 +39,10 @@ impl KeyboardHandler for WelcomeWidget {
     /// The key list includes compatibility variants for terminals that report
     /// modifier bits differently.
     fn handle_key_event(&mut self, key_event: KeyEvent) {
-        if !self.animations_enabled {
-            return;
-        }
-        if key_event.kind == KeyEventKind::Press && keys::TOGGLE_ANIMATION.is_pressed(key_event) {
+        if self.animations_enabled
+            && key_event.kind == KeyEventKind::Press
+            && keys::TOGGLE_ANIMATION.is_pressed(key_event)
+        {
             tracing::warn!("Welcome background to press '.'");
             let _ = self.animation.pick_random_variant();
         }
@@ -56,11 +57,7 @@ impl WelcomeWidget {
     ) -> Self {
         Self {
             is_logged_in,
-            animation: AsciiAnimation::with_variants(
-                request_frame,
-                LOGO_VARIANTS,
-                /*variant_idx*/ 0,
-            ),
+            animation: AsciiAnimation::new(request_frame),
             animations_enabled,
             animations_suppressed: Cell::new(false),
             layout_area: Cell::new(None),
@@ -111,9 +108,10 @@ impl WidgetRef for &WelcomeWidget {
 
 impl StepStateProvider for WelcomeWidget {
     fn get_step_state(&self) -> StepState {
-        match self.is_logged_in {
-            true => StepState::Hidden,
-            false => StepState::Complete,
+        if self.is_logged_in {
+            StepState::Hidden
+        } else {
+            StepState::Complete
         }
     }
 }
@@ -122,6 +120,7 @@ impl StepStateProvider for WelcomeWidget {
 mod tests {
     use super::*;
     use crossterm::event::KeyCode;
+    use crossterm::event::KeyEvent;
     use crossterm::event::KeyModifiers;
     use pretty_assertions::assert_eq;
     use ratatui::buffer::Buffer;
@@ -139,37 +138,6 @@ mod tests {
             }
             row.contains(needle)
         })
-    }
-
-    #[test]
-    fn welcome_renders_animation_on_first_draw() {
-        let widget = WelcomeWidget::new(
-            /*is_logged_in*/ false,
-            FrameRequester::test_dummy(),
-            /*animations_enabled*/ true,
-        );
-        let area = Rect::new(0, 0, MIN_ANIMATION_WIDTH, MIN_ANIMATION_HEIGHT);
-        let mut buf = Buffer::empty(area);
-        let frame_lines = widget.animation.current_frame().lines().count() as u16;
-        (&widget).render(area, &mut buf);
-
-        let welcome_row = row_containing(&buf, "Welcome");
-        assert_eq!(welcome_row, Some(frame_lines + 1));
-    }
-
-    #[test]
-    fn welcome_skips_animation_below_height_breakpoint() {
-        let widget = WelcomeWidget::new(
-            /*is_logged_in*/ false,
-            FrameRequester::test_dummy(),
-            /*animations_enabled*/ true,
-        );
-        let area = Rect::new(0, 0, MIN_ANIMATION_WIDTH, MIN_ANIMATION_HEIGHT - 1);
-        let mut buf = Buffer::empty(area);
-        (&widget).render(area, &mut buf);
-
-        let welcome_row = row_containing(&buf, "Welcome");
-        assert_eq!(welcome_row, Some(0));
     }
 
     #[test]
@@ -223,10 +191,8 @@ mod tests {
         );
     }
 
-    use crate::frames::FRAMES_LOGO;
-
     #[test]
-    fn welcome_renders_logo_animation() {
+    fn welcome_renders_animation_on_first_draw() {
         let widget = WelcomeWidget::new(
             /*is_logged_in*/ false,
             FrameRequester::test_dummy(),
@@ -234,45 +200,63 @@ mod tests {
         );
         let area = Rect::new(0, 0, MIN_ANIMATION_WIDTH, MIN_ANIMATION_HEIGHT);
         let mut buf = Buffer::empty(area);
+        let frame_lines = widget.animation.current_frame().lines().count() as u16;
         (&widget).render(area, &mut buf);
 
-        let has_logo_blocks = ["█", "▓", "▒"].iter().any(|&ch| {
-            (0..buf.area.height).any(|y| {
-                let row: String = (0..buf.area.width)
-                    .map(|x| buf[(x, y)].symbol().to_string())
-                    .collect();
-                row.contains(ch)
-            })
-        });
-        assert!(
-            has_logo_blocks,
-            "expected logo block characters in welcome animation"
-        );
+        let welcome_row = row_containing(&buf, "Welcome");
+        assert_eq!(welcome_row, Some(frame_lines + 1));
     }
 
     #[test]
-    fn welcome_uses_single_logo_variant() {
-        let mut widget = WelcomeWidget::new(
+    fn welcome_skips_animation_below_height_breakpoint() {
+        let widget = WelcomeWidget::new(
             /*is_logged_in*/ false,
             FrameRequester::test_dummy(),
             /*animations_enabled*/ true,
         );
-        let before = widget.animation.current_frame();
-        assert!(
-            FRAMES_LOGO.contains(&before),
-            "expected initial frame to be a logo frame"
-        );
+        let area = Rect::new(0, 0, MIN_ANIMATION_WIDTH, MIN_ANIMATION_HEIGHT - 1);
+        let mut buf = Buffer::empty(area);
+        (&widget).render(area, &mut buf);
 
-        // ctrl+. should not switch to a different variant because there is only one.
-        widget.handle_key_event(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::CONTROL));
-        let after = widget.animation.current_frame();
+        let welcome_row = row_containing(&buf, "Welcome");
+        assert_eq!(welcome_row, Some(0));
+    }
+
+    #[test]
+    fn welcome_uses_full_animation_variants() {
+        let widget = WelcomeWidget::new(
+            /*is_logged_in*/ false,
+            FrameRequester::test_dummy(),
+            /*animations_enabled*/ true,
+        );
+        let frame = widget.animation.current_frame();
         assert!(
-            FRAMES_LOGO.contains(&after),
-            "expected frame after ctrl+. to still be a logo frame"
+            ALL_VARIANTS.iter().any(|variant| variant.contains(&frame)),
+            "expected initial frame to come from one of the animation variants"
         );
-        assert_eq!(
-            before, after,
-            "expected no variant change for a single-variant animation within one tick"
+    }
+
+    #[test]
+    fn welcome_is_complete_while_not_logged_in() {
+        let widget = WelcomeWidget::new(
+            /*is_logged_in*/ false,
+            FrameRequester::test_dummy(),
+            /*animations_enabled*/ false,
         );
+        assert_eq!(widget.get_step_state(), StepState::Complete);
+        assert!(
+            !widget.is_logged_in,
+            "welcome should remain visible until the user is logged in"
+        );
+    }
+
+    #[test]
+    fn welcome_is_hidden_when_logged_in() {
+        let widget = WelcomeWidget::new(
+            /*is_logged_in*/ true,
+            FrameRequester::test_dummy(),
+            /*animations_enabled*/ false,
+        );
+        assert_eq!(widget.get_step_state(), StepState::Hidden);
     }
 }

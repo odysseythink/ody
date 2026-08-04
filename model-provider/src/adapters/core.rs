@@ -612,11 +612,9 @@ mod tests {
                 phase: None,
                 internal_chat_message_metadata_passthrough: None,
             }],
-            tools: vec![
-                ToolSpec::ImageGeneration {
-                    output_format: "png".into(),
-                },
-            ],
+            tools: vec![ToolSpec::ImageGeneration {
+                output_format: "png".into(),
+            }],
         };
         let request = prompt_to_chat_request("m", &prompt, None, &[], None);
         assert!(request.tools.is_empty());

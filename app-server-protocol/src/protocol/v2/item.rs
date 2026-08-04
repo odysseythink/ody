@@ -645,6 +645,12 @@ pub enum GuardianApprovalReviewAction {
     },
     #[serde(rename_all = "camelCase")]
     #[ts(rename_all = "camelCase")]
+    BrowserAction {
+        action: String,
+        details: JsonValue,
+    },
+    #[serde(rename_all = "camelCase")]
+    #[ts(rename_all = "camelCase")]
     RequestPermissions {
         reason: Option<String>,
         permissions: RequestPermissionProfile,
@@ -701,6 +707,9 @@ impl From<CoreGuardianAssessmentAction> for GuardianApprovalReviewAction {
                 connector_name,
                 tool_title,
             },
+            CoreGuardianAssessmentAction::BrowserAction { action, details } => {
+                Self::BrowserAction { action, details }
+            }
             CoreGuardianAssessmentAction::RequestPermissions {
                 reason,
                 permissions,
@@ -764,6 +773,9 @@ impl TryFrom<GuardianApprovalReviewAction> for CoreGuardianAssessmentAction {
                 connector_name,
                 tool_title,
             },
+            GuardianApprovalReviewAction::BrowserAction { action, details } => {
+                Self::BrowserAction { action, details }
+            }
             GuardianApprovalReviewAction::RequestPermissions {
                 reason,
                 permissions,

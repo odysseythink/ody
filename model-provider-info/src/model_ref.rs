@@ -347,7 +347,8 @@ mod tests {
             "my-alias".to_string() => info.clone(),
         };
 
-        let resolved = resolve_provider_info("my-alias", &providers).expect("configured alias resolves");
+        let resolved =
+            resolve_provider_info("my-alias", &providers).expect("configured alias resolves");
         assert_eq!(resolved.name, "Alias Provider");
     }
 
@@ -358,7 +359,8 @@ mod tests {
         let resolved = resolve_provider_info("kimi", &providers).expect("kimi builtin resolves");
         assert_eq!(resolved.name, crate::create_kimi_provider().name);
 
-        let resolved = resolve_provider_info("deepseek", &providers).expect("deepseek builtin resolves");
+        let resolved =
+            resolve_provider_info("deepseek", &providers).expect("deepseek builtin resolves");
         assert_eq!(resolved.name, crate::create_deepseek_provider().name);
 
         let resolved = resolve_provider_info("glm", &providers).expect("glm builtin resolves");

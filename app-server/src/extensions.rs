@@ -27,6 +27,8 @@ use crate::outgoing_message::OutgoingMessageSender;
 use crate::thread_state::ThreadListenerCommand;
 use crate::thread_state::ThreadStateManager;
 
+#[path = "browser_extension.rs"]
+mod browser_extension;
 #[path = "web_search_extension.rs"]
 mod web_search_extension;
 
@@ -95,6 +97,7 @@ where
         },
     );
     web_search_extension::install(&mut builder);
+    browser_extension::install(&mut builder);
     Arc::new(builder.build())
 }
 

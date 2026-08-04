@@ -72,11 +72,26 @@ mod tests {
 
     #[test]
     fn http_status_classifies_auth_rate_limit_and_timeout() {
-        assert_eq!(WebSearchError::from_http_status(StatusCode::UNAUTHORIZED, ""), WebSearchError::Auth);
-        assert_eq!(WebSearchError::from_http_status(StatusCode::FORBIDDEN, ""), WebSearchError::Auth);
-        assert_eq!(WebSearchError::from_http_status(StatusCode::TOO_MANY_REQUESTS, ""), WebSearchError::RateLimited);
-        assert_eq!(WebSearchError::from_http_status(StatusCode::REQUEST_TIMEOUT, ""), WebSearchError::Timeout);
-        assert_eq!(WebSearchError::from_http_status(StatusCode::GATEWAY_TIMEOUT, ""), WebSearchError::Timeout);
+        assert_eq!(
+            WebSearchError::from_http_status(StatusCode::UNAUTHORIZED, ""),
+            WebSearchError::Auth
+        );
+        assert_eq!(
+            WebSearchError::from_http_status(StatusCode::FORBIDDEN, ""),
+            WebSearchError::Auth
+        );
+        assert_eq!(
+            WebSearchError::from_http_status(StatusCode::TOO_MANY_REQUESTS, ""),
+            WebSearchError::RateLimited
+        );
+        assert_eq!(
+            WebSearchError::from_http_status(StatusCode::REQUEST_TIMEOUT, ""),
+            WebSearchError::Timeout
+        );
+        assert_eq!(
+            WebSearchError::from_http_status(StatusCode::GATEWAY_TIMEOUT, ""),
+            WebSearchError::Timeout
+        );
         assert_eq!(
             WebSearchError::from_http_status(StatusCode::INTERNAL_SERVER_ERROR, "boom"),
             WebSearchError::Provider {
@@ -97,7 +112,10 @@ mod tests {
             "Search temporarily unavailable. Please retry later."
         );
         assert_eq!(
-            WebSearchError::Network { message: "dns".to_string() }.user_message(),
+            WebSearchError::Network {
+                message: "dns".to_string()
+            }
+            .user_message(),
             "Search temporarily unavailable. Please retry later."
         );
     }

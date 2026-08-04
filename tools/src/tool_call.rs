@@ -88,6 +88,9 @@ pub struct ToolCall {
     pub turn_item_emitter: Arc<dyn TurnItemEmitter>,
     pub environments: Vec<ToolEnvironment>,
     pub payload: ToolPayload,
+    /// When a guardian review has already approved this tool call, the review id
+    /// is stored here so the tool can skip its own approval gate.
+    pub guardian_approved_action_id: Option<String>,
 }
 
 impl std::fmt::Debug for ToolCall {
@@ -102,6 +105,7 @@ impl std::fmt::Debug for ToolCall {
             .field("turn_item_emitter", &"<host turn item emitter>")
             .field("environment_count", &self.environments.len())
             .field("payload", &self.payload)
+            .field("guardian_approved_action_id", &self.guardian_approved_action_id)
             .finish()
     }
 }

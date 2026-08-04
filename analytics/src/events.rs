@@ -256,6 +256,10 @@ pub enum GuardianReviewedAction {
         connector_name: Option<String>,
         tool_title: Option<String>,
     },
+    BrowserAction {
+        action: String,
+        details: serde_json::Value,
+    },
     RequestPermissions {},
 }
 
@@ -552,6 +556,7 @@ pub(crate) enum ReviewSubjectKind {
     McpToolCall,
     Permissions,
     NetworkAccess,
+    BrowserAction,
 }
 
 #[allow(dead_code)]
@@ -757,7 +762,6 @@ pub(crate) struct OdyCollabAgentToolCallEventRequest {
     pub(crate) event_type: &'static str,
     pub(crate) event_params: OdyCollabAgentToolCallEventParams,
 }
-
 
 #[derive(Serialize)]
 pub(crate) struct OdyImageGenerationEventParams {
