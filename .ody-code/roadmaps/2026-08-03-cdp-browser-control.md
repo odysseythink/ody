@@ -76,7 +76,7 @@
 | 3.1 | 工具 schema 与 `ToolExecutor` 实现 | 11 个内置工具封装与注册 | [completed] | 2.1, 2.2, 2.3, 2.4 | — |
 | 3.2 | Code mode 兼容 | 通过 `ody-tools::code_mode` 通用机制嵌套 `browser__*` 工具名 | [completed] | 3.1 | — |
 | 4.1 | `services` 配置接入 | `BrowserControlConfig` 加入 `ServicesConfig` | [completed] | 0.1 | 是（与 1.x 部分并行，依赖 0.1） |
-| 4.2 | app-server extension 注册 | `browser_control_extension.rs` + `extensions.rs:97` 注册 | [normal] | 1.1, 3.1, 4.1 | — |
+| 4.2 | app-server extension 注册 | `browser_extension.rs` + `extensions.rs:99-100` 注册与工具过滤 | [completed] | 1.1, 3.1, 4.1 | — |
 | 4.3 | Feature flag 门控 | 工具曝光与 raw CDP 工具受 `BrowserUse*` 控制 | [normal] | 3.1, 4.2 | — |
 | 5.1 | 单元测试与 mock CDP | 用本地 WebSocket echo/mock 覆盖核心路径 | [normal] | 1.4 | 是（与 3.x 同步进行） |
 | 5.2 | 集成测试（真实 Chrome） | CI 外手动/可选：启动 Chrome 跑端到端 | [normal] | 4.2 | — |
@@ -532,25 +532,33 @@ external_browser_allow_sensitive = false
 
 ---
 
-### Task 4.2: app-server extension 注册 [normal]
+### Task 4.2: app-server extension 注册 [completed]
 
 **Depends on:** 1.1, 3.1, 4.1  
 **模式理由:** 机械仿照 `web_search_extension.rs`；有明确参考实现。
 
 **Files:**
-- Add: `app-server/src/browser_control_extension.rs`
-- Modify: `app-server/src/extensions.rs:97` 附近注册新扩展
-- Modify: `app-server/Cargo.toml` 添加 `ody-browser-control = { workspace = true }`
+  - Add: `app-server/src/browser_extension.rs` — `BrowserControlExtension` 与 `install` 函数。
+  - Modify: `app-server/src/extensions.rs:30-31` 模块声明、`extensions.rs:99-100` 注册 `browser_extension::install`。
+  - Modify: `app-server/Cargo.toml` — 添加 `ody-browser-control = { workspace = true }`。
+
+**实现说明：**
+  - `BrowserControlExtension` 实现 `ThreadLifecycleContributor`：线程启动时若 `BrowserUse` / `ComputerUse` / `BrowserUseExternal` 任一 feature 启用，读取 `config.services.browser`（缺失则使用默认配置）创建 `BrowserThreadState`，并封装成 `BrowserControlHandle` 存入 `thread_store`。
+  - `ConfigContributor` 处理配置变更：当浏览器相关 feature 被禁用时移除 handle；当浏览器配置发生需要重启的变更（如 `headless`）时调用 `state.mark_stale()`，非重启级变更（如超时）仅更新 handle。
+  - `ToolContributor` 从 `thread_store` 取出 handle，调用 `ody_browser_control::all_tools` 后按 feature flag 过滤：
+    - `execute_raw_cdp` 需要 `BrowserUseFullCdpAccess`；
+    - `click` / `type` 需要 `ComputerUse`；
+    - `navigate` / `go_back` / `go_forward` / `reload` / `evaluate` / `get_dom` / `read_logs` 需要 `BrowserUse`；
+    - `screenshot` 在 `BrowserUse` 或 `ComputerUse` 下均暴露。
+  - 无 handle 或所有相关 feature 关闭时返回空工具列表。
 
 **实现要点:**
-- 实现 `ThreadLifecycleContributor`：线程启动时，若 `services.browser_control` 配置存在，创建 `BrowserSessionHandle` 并 `thread_store.insert`。
-- 实现 `ConfigContributor`：配置变更时重建/销毁 session handle。
-- 实现 `ToolContributor`：从 `thread_store` 取 handle，返回 `BrowserControlTool` 集合。
-- 参考 `app-server/src/web_search_extension.rs:39-93` 的精确结构。
+  - 参考 `web_search_extension.rs` 的 `install` 模式注册三个 contributor。
+  - `browser_extension::install` 同时作为 app-server 内部扩展的注册入口。
 
 **验证要点:**
-- [ ] 仿照 `web_search_extension.rs` 的 tests 写三个测试：config 创建 handle、无 config 时 tools 为空、有 handle 时返回工具列表。
-- [ ] `cargo test -p ody-app-server browser_control` PASS。
+  - [x] `browser_extension::tests` 覆盖：无 handle 时 `tools` 为空、配置禁用时移除 handle、配置重启级变更标记 stale、非重启级变更不标记 stale、无 full CDP 权限时过滤 `execute_raw_cdp`、有 full CDP 权限时包含 `execute_raw_cdp`、`ComputerUse` 与 `BrowserUse` 子集过滤、所有相关 feature 关闭时返回空列表。
+  - [x] `cargo test -p ody-app-server browser_extension` PASS。
 
 ---
 
