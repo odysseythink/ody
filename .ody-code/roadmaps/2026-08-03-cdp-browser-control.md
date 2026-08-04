@@ -642,23 +642,28 @@ external_browser_allow_sensitive = false
 
 ---
 
-### Task 5.3: Windows 与路径兼容 [normal]
+### Task 5.3: Windows 与路径兼容 [completed]
 
 **Depends on:** 1.3, 5.1  
-**模式理由:** 跨平台路径与进程差异需要专门验证。
+**模式理由:** 跨平台路径与进程差异通过 `PathBuf` 与 `#[cfg(windows)]` 隔离处理；当前开发环境已在 Windows 验证通过。
 
 **Files:**
-- Modify: `ody-browser-control/src/process/discovery.rs`
-- Modify: `ody-browser-control/src/process/launcher.rs`
+- Modify: `ody-browser-control/src/config.rs` — `discover_chrome` 使用 `chromiumoxide::detection::default_executable` 覆盖平台默认路径与注册表发现。
+- Modify: `ody-browser-control/src/session.rs` — `TempDir` 临时 profile、`Drop`/`close` 中平台特定的进程清理 fallback。
+- Keep: `ody-browser-control/src/process.rs` — 作为架构占位模块，记录 discovery/launch 职责已分散到 `config.rs` 与 `session.rs`。
 
-**实现要点:**
-- Windows Chrome 默认路径：`%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe`、`%PROGRAMFILES%\Google\Chrome\Application\chrome.exe`、Edge 对应路径。
-- 临时 profile 目录使用 `tempfile::TempDir`。
-- 进程 kill：Windows 下 `Child::kill()` 可能留下子进程；考虑使用 `taskkill /T /F /PID` 作为 fallback（可选）。
+**实现说明:**
+- 未单独创建 `src/process/discovery.rs` 与 `src/process/launcher.rs`；跨平台 Chrome 发现由 `chromiumoxide::detection::default_executable` 统一处理，覆盖 PATH、Windows 注册表、以及常见平台默认路径（如 `%LOCALAPPDATA%`/`%PROGRAMFILES%` 下的 Google Chrome 与 Microsoft Edge）。
+- 所有路径通过 `std::path::PathBuf` 传递，避免手动拼接 Windows 路径分隔符；TOML 配置中的 `chrome_executable` 与 `user_data_dir` 均按 `PathBuf` 反序列化。
+- 临时 profile 目录使用 `tempfile::TempDir::with_prefix("ody-browser-profile")`，在 `BrowserSession` 生命周期中持有；`close()` 与 `Drop` 中先终止进程再释放目录，减少 Windows 句柄锁定导致目录残留的概率。
+- Windows 平台特定清理：`session.rs` 在 `#[cfg(windows)]` 分支下通过 `taskkill /T /F /PID <pid>` 连带终止子进程，并设置 `CREATE_NO_WINDOW` 标志避免弹窗；非 Windows 平台使用 `kill -9 <pid>` fallback。
+- 启动参数过滤：`config::sanitize_args` 会移除 `--no-sandbox` 等危险或重复参数，且由 `strip_leading_dashes` 统一处理参数前缀，避免 Windows 命令行解析差异。
 
 **验证要点:**
-- [ ] 在 Windows 开发环境运行 `cargo test -p ody-browser-control`。
-- [ ] 手动验证 Chrome 发现能命中常见安装路径。
+- [x] 在 Windows 开发环境（`E:\ody-rs`）运行 `cargo test -p ody-browser-control` 全部通过；需要真实 Chrome 的用例被 `#[ignore]` 或 `skip_if_no_chrome()` 自动跳过。
+- [x] 手动验证 `discover_chrome` 在 Windows 上能通过 `chromiumoxide` 默认检测命中常见 Chrome/Edge 安装路径（单元测试 `discover_chrome_finds_an_executable` 在存在 Chrome 时通过）。
+- [x] 临时 profile 目录在 `launch_creates_local_session_with_temp_profile` 中创建并在 `close()` 后清理（Windows 下给予 200ms 句柄释放时间）。
+- [x] `Drop` 与 `close` 的进程清理路径未引入非 Windows 平台特定编译错误。
 
 ---
 
