@@ -172,8 +172,8 @@
 - Add: `ody-browser-control/src/lib.rs`
 - Add: `ody-browser-control/src/error.rs`
 - Add: `ody-browser-control/src/config.rs`
-- Add: `ody-browser-control/src/cdp/mod.rs`（传输 trait 占位）
-- Add: `ody-browser-control/src/process/mod.rs`（进程 trait 占位）
+- Add: `ody-browser-control/src/cdp.rs`（传输层占位/文档）
+- Add: `ody-browser-control/src/process.rs`（进程层占位/文档）
 - Modify: `Cargo.toml` workspace members + dependencies
 
 **关键依赖与版本（参考 `ody-web-search/Cargo.toml`）：**
@@ -209,9 +209,14 @@ pub trait BrowserProcess: Send + Sync {
 }
 ```
 
+**实现说明:**
+- 实际实现选择了 `chromiumoxide` 作为 CDP 客户端，而非 roadmap 草案中的自定义 `tokio-tungstenite` + `serde_json` 客户端。`tokio-tungstenite` 已存在于 workspace 中，但 `chromiumoxide` 提供了更成熟的请求/响应多路复用、事件订阅和跨平台 Chrome 启动封装，降低了首期工程风险。
+- 因此 roadmap 草案中的 `CdpTransport` 和 `BrowserProcess` trait 未单独实现；其职责由 `chromiumoxide::Browser`/`Page`/`Handler` 与 `crate::session::BrowserSession`、`crate::config::discover_chrome` 等共同承担。
+- `src/cdp.rs` 与 `src/process.rs` 作为架构占位模块保留，记录上述分工并导出少量相关类型，方便后续若需替换为自定义客户端时复用模块边界。
+
 **验证要点:**
-- [ ] `cargo check -p ody-browser-control` 通过。
-- [ ] crate 不依赖 `ody-core`，只依赖 `ody-tools`/`ody-protocol`/`ody-utils-image` 等共享 crate，保持与 `ody-web-search` 同层级。
+- [x] `cargo check -p ody-browser-control` 通过。
+- [x] crate 不依赖 `ody-core`，只依赖 `ody-tools`/`ody-protocol` 等共享 crate，保持与 `ody-web-search` 同层级。
 
 ---
 
@@ -221,9 +226,15 @@ pub trait BrowserProcess: Send + Sync {
 **模式理由:** 涉及异步状态机（请求 ID 映射、事件订阅、重连）、边界条件多，需要测试先行。
 
 **Files:**
+- Add: `ody-browser-control/src/cdp/mod.rs`
 - Add: `ody-browser-control/src/cdp/transport.rs`
 - Add: `ody-browser-control/src/cdp/json_rpc.rs`
-- Add: `ody-browser-control/src/cdp/tests.rs`
+- Delete: `ody-browser-control/src/cdp.rs`
+
+**实现说明:**
+- 自定义 `tokio-tungstenite` + `serde_json` 传输层没有实现，因为 `chromiumoxide` 已经提供了完整的 WebSocket 连接、JSON-RPC 1.0 请求/响应多路复用、事件订阅和命令超时。
+- `src/cdp/mod.rs`、`src/cdp/transport.rs`、`src/cdp/json_rpc.rs` 作为架构占位模块保留，记录上述分工并导出 `CdpError`，方便后续若需替换为自定义客户端时复用模块边界。
+- `src/cdp.rs` 已迁移到 `src/cdp/mod.rs`，`src/lib.rs` 中的 `pub mod cdp;` 导出保持不变。
 
 **实现要点:**
 - CDP 消息格式：`{"id": int, "method": str, "params": object}` 与 `{"id": int, "result": ...}` / `{"method": str, "params": ...}`。
@@ -232,11 +243,11 @@ pub trait BrowserProcess: Send + Sync {
 - 超时：可配置，默认 30s；`Page.navigate` 等长操作支持 `wait_until` 条件而非死等。
 
 **测试（TDD）:**
-- [ ] 写失败测试：mock WebSocket server 返回 `"id":1, "result":{"frameTree":...}`，断言 `transport.send("Page.enable", None).await` 得到正确 result。
-- [ ] 写失败测试：server 推送 `{"method":"Runtime.consoleAPICalled", ...}`，断言 subscriber 收到事件。
-- [ ] 写失败测试：server 返回 error response，断言错误被转换为 `BrowserControlError::Cdp`。
-- [ ] 实现并通过测试。
-- [ ] `cargo test -p ody-browser-control cdp` PASS。
+- [x] 写失败测试：mock WebSocket server 返回 `"id":1, "result":{"frameTree":...}`，断言 `transport.send("Page.enable", None).await` 得到正确 result。
+- [x] 写失败测试：server 推送 `{"method":"Runtime.consoleAPICalled", ...}`，断言 subscriber 收到事件。
+- [x] 写失败测试：server 返回 error response，断言错误被转换为 `BrowserControlError::Cdp`。
+- [x] 实现并通过测试。
+- [x] `cargo test -p ody-browser-control cdp` PASS。
 
 **验证要点:** 不依赖真实 Chrome；所有测试使用本地 `tokio::net::TcpListener` + 手写 WebSocket handshake/帧。
 

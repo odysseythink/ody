@@ -1,9 +1,11 @@
 //! Ody browser control crate: CDP transport layer over chromiumoxide.
 
 pub mod config;
+pub mod cdp;
 pub mod error;
 pub mod event_buffer;
 pub mod page_state;
+pub mod process;
 pub mod session;
 pub mod thread_state;
 pub mod tools;
