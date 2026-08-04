@@ -68,6 +68,7 @@ impl PageState {
     }
 
     /// Close the page and stop its event listeners.
+    #[tracing::instrument(skip_all)]
     pub async fn close(self) -> Result<(), BrowserControlError> {
         for task in self.event_tasks {
             task.abort();
@@ -80,6 +81,7 @@ impl PageState {
     }
 
     /// Wait for a navigation response on the page.
+    #[tracing::instrument(skip_all)]
     pub async fn wait_for_navigation_response(
         &self,
     ) -> Result<(), BrowserControlError> {
@@ -99,12 +101,14 @@ impl PageState {
     }
 
     /// Return the current page title.
+    #[tracing::instrument(skip_all)]
     pub async fn title(&self) -> Result<Option<String>, BrowserControlError> {
         let value = self.evaluate("document.title").await?;
         Ok(value.as_str().map(|s| s.to_string()))
     }
 
     /// Navigate back in the browser history.
+    #[tracing::instrument(skip_all)]
     pub async fn go_back(&self) -> Result<(), BrowserControlError> {
         self.evaluate("history.back()").await?;
         Ok(())
@@ -117,6 +121,7 @@ impl PageState {
     }
 
     /// Reload the page.
+    #[tracing::instrument(skip_all)]
     pub async fn reload(&self) -> Result<(), BrowserControlError> {
         self.page
             .reload()
@@ -135,6 +140,7 @@ impl PageState {
     }
 
     /// Evaluate a JavaScript expression and return the serialized result.
+    #[tracing::instrument(skip_all, fields(expression_preview = %crate::types::expression_preview(js)))]
     pub async fn evaluate(&self, js: &str) -> Result<serde_json::Value, BrowserControlError> {
         let result = self
             .page
@@ -216,6 +222,7 @@ impl PageState {
     }
 
     /// Execute a raw CDP method with JSON parameters.
+    #[tracing::instrument(skip_all, fields(method, params_size = serde_json::to_string(&params).map(|s| s.len()).unwrap_or(0)))]
     pub async fn execute_raw(
         &self,
         method: &str,
@@ -234,6 +241,7 @@ impl PageState {
     }
 
     /// Read a snapshot of the buffered console and network logs.
+    #[tracing::instrument(skip_all)]
     pub async fn read_logs(&self) -> Result<LogsSnapshot, BrowserControlError> {
         let guard = self.event_buffer.lock().await;
         Ok(guard.snapshot())
@@ -242,6 +250,7 @@ impl PageState {
 
 impl BrowserSession {
     /// Create a new page in this browser session and start collecting events.
+    #[tracing::instrument(skip_all)]
     pub async fn new_page(&self) -> Result<PageState, BrowserControlError> {
         let page = self
             .browser()?

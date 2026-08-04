@@ -33,6 +33,14 @@ pub struct NetworkEntry {
     pub status_text: Option<String>,
     pub resource_type: Option<String>,
     pub timestamp: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_body: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response_body: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_headers: Option<std::collections::HashMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response_headers: Option<std::collections::HashMap<String, String>>,
     pub request_headers_size: usize,
     pub response_headers_size: usize,
     pub from_cache: Option<bool>,
@@ -84,6 +92,15 @@ impl EventBuffer {
                 BufferedEntry::Network(n) => network.push(n.clone()),
             }
         }
+        for n in &mut network {
+            crate::network_redaction::redact_network_entry(n);
+        }
+        tracing::info!(
+            console_entries = console.len(),
+            network_entries = network.len(),
+            total_bytes = self.total_bytes,
+            "event buffer snapshot"
+        );
         LogsSnapshot { console, network }
     }
 
@@ -117,6 +134,10 @@ impl EventBuffer {
 
     pub fn push_network_request(&mut self, event: &EventRequestWillBeSent) {
         let request_headers_size = estimate_headers_size(&event.request.headers);
+        let request_headers = header_map_to_strings(&event.request.headers);
+        // The request body is not reliably available on EventRequestWillBeSent in
+        // chromiumoxide; keep it None rather than guessing.
+        let request_body = None;
         self.push(BufferedEntry::Network(NetworkEntry {
             request_id: event.request_id.as_ref().to_string(),
             url: event.request.url.clone(),
@@ -125,6 +146,10 @@ impl EventBuffer {
             status_text: None,
             resource_type: event.r#type.as_ref().map(|t| format!("{:?}", t)),
             timestamp: *event.timestamp.inner(),
+            request_body,
+            response_body: None,
+            request_headers: Some(request_headers),
+            response_headers: None,
             request_headers_size,
             response_headers_size: 0,
             from_cache: None,
@@ -132,6 +157,12 @@ impl EventBuffer {
     }
 
     pub fn push_network_response(&mut self, event: &EventResponseReceived) {
+        let response_headers = header_map_to_strings(&event.response.headers);
+        let request_headers = event
+            .response
+            .request_headers
+            .as_ref()
+            .map(header_map_to_strings);
         let response_headers_size = estimate_headers_size(&event.response.headers);
         let request_headers_size = event
             .response
@@ -147,6 +178,10 @@ impl EventBuffer {
             status_text: Some(event.response.status_text.clone()),
             resource_type: Some(format!("{:?}", event.r#type)),
             timestamp: *event.timestamp.inner(),
+            request_body: None,
+            response_body: None,
+            request_headers,
+            response_headers: Some(response_headers),
             request_headers_size,
             response_headers_size,
             from_cache: event.response.from_disk_cache.or(event.response.from_service_worker),
@@ -169,6 +204,20 @@ impl EventBuffer {
 
 fn estimate_headers_size(headers: &chromiumoxide::cdp::browser_protocol::network::Headers) -> usize {
     serde_json::to_string(headers.inner()).map(|s| s.len()).unwrap_or(0)
+}
+
+fn header_map_to_strings(
+    headers: &chromiumoxide::cdp::browser_protocol::network::Headers,
+) -> std::collections::HashMap<String, String> {
+    headers
+        .inner()
+        .as_object()
+        .map(|obj| {
+            obj.iter()
+                .map(|(k, v)| (k.clone(), v.to_string()))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn estimate_entry_bytes(entry: &BufferedEntry) -> usize {

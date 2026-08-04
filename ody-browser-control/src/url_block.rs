@@ -77,19 +77,37 @@ fn is_ipv6_local(ip: Ipv6Addr) -> bool {
 /// short explanation when it is blocked.
 pub fn check_js_allowed(js: &str) -> Result<(), String> {
     let lower = js.to_lowercase();
-    let forbidden = [
-        "document.cookie",
-        "window.cookie",
-        "localstorage",
-        "sessionstorage",
-        "indexeddb",
-    ];
-    for pattern in &forbidden {
-        if lower.contains(pattern) {
-            return Err(format!(
-                "expression contains blocked reference to browser storage: '{pattern}'"
-            ));
-        }
+    if lower.contains("document.cookie") || lower.contains("document.cookies") {
+        return Err("reading document.cookie is not allowed".to_string());
+    }
+    if lower.contains("window.cookie") || lower.contains("window.cookies") {
+        return Err("reading window.cookie is not allowed".to_string());
+    }
+    if lower.contains("cookie") && lower.contains("document") {
+        return Err("expression contains blocked cookie access through document".to_string());
+    }
+    if lower.contains("localstorage")
+        || lower.contains("sessionstorage")
+        || lower.contains("indexeddb")
+    {
+        return Err("reading web storage APIs is not allowed".to_string());
+    }
+
+    // Common obfuscation / indirect access vectors used to reach sensitive APIs.
+    // These are representative, not exhaustive. Guardian approval remains the
+    // authoritative control.
+    if lower.contains("eval(")
+        || lower.contains("function(")
+        || lower.contains("new function")
+        || lower.contains("atob(")
+        || lower.contains("settimeout(")
+        || lower.contains("setinterval(")
+        || lower.contains("contentwindow")
+    {
+        return Err(
+            "expression contains obfuscation or indirect access pattern that is not allowed"
+                .to_string(),
+        );
     }
     Ok(())
 }
@@ -159,5 +177,34 @@ mod tests {
     fn allows_benign_js() {
         assert!(check_js_allowed("1 + 1").is_ok());
         assert!(check_js_allowed("document.querySelector('h1').innerText").is_ok());
+        assert!(check_js_allowed("'hello'.toUpperCase()").is_ok());
+    }
+
+    #[test]
+    fn blocks_cookie_with_document_combination() {
+        assert!(check_js_allowed("document['cookie']").is_err());
+    }
+
+    #[test]
+    fn blocks_obfuscation_patterns() {
+        assert!(check_js_allowed("eval('document.cookie')").is_err());
+        assert!(check_js_allowed("setTimeout('document.cookie', 0)").is_err());
+        assert!(check_js_allowed("iframe.contentWindow.document.cookie").is_err());
+    }
+
+    #[test]
+    fn blocks_window_cookie() {
+        assert!(check_js_allowed("window.cookie").is_err());
+    }
+
+    #[test]
+    fn blocks_atob_obfuscation() {
+        assert!(check_js_allowed("atob('ZG9jdW1lbnQuY29va2ll')").is_err());
+    }
+
+    #[test]
+    fn allows_benign_dom_methods() {
+        assert!(check_js_allowed("document.querySelectorAll('a').length").is_ok());
+        assert!(check_js_allowed("window.location.href").is_ok());
     }
 }

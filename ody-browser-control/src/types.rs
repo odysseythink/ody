@@ -166,6 +166,15 @@ pub fn truncate_base64_bytes(data: &str, max_bytes: usize) -> String {
     result
 }
 
+/// Return a short, truncated preview of a JavaScript expression for logging and
+/// approval tickets without leaking the full script body.
+///
+/// The limit is intentionally small (200 bytes) so that tracing fields and log
+/// lines stay compact even when the model passes a long snippet.
+pub fn expression_preview(js: &str) -> String {
+    truncate_string_bytes(js, 200)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -203,5 +212,18 @@ mod tests {
         assert!(LogKind::All.includes_network());
         assert!(!LogKind::Console.includes_network());
         assert!(!LogKind::Network.includes_console());
+    }
+
+    #[test]
+    fn expression_preview_passes_short_expression() {
+        assert_eq!(expression_preview("1 + 1"), "1 + 1");
+    }
+
+    #[test]
+    fn expression_preview_truncates_long_expression() {
+        let long = "a".repeat(500);
+        let preview = expression_preview(&long);
+        assert!(preview.len() < 400);
+        assert!(preview.contains("truncated"));
     }
 }

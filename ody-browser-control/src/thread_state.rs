@@ -53,6 +53,7 @@ impl BrowserThreadState {
     ///
     /// The session is created according to `config.mode`. The default page is
     /// lazily created on first access.
+    #[tracing::instrument(skip_all, fields(mode = ?config.mode))]
     pub async fn new(config: BrowserControlConfig) -> Result<Self, BrowserControlError> {
         let session = match config.mode {
             BrowserControlMode::Local => BrowserSession::launch(config.clone()).await?,
@@ -188,6 +189,7 @@ impl BrowserThreadState {
     }
 
     /// Navigate the default page to `url` and return the resulting URL/title.
+    #[tracing::instrument(skip_all, fields(url_preview = %crate::types::truncate_string_bytes(url, 120), wait_until = ?wait_until))]
     pub async fn navigate(
         &self,
         url: &str,
@@ -222,6 +224,7 @@ impl BrowserThreadState {
     }
 
     /// Navigate back in the browser history.
+    #[tracing::instrument(skip_all)]
     pub async fn go_back(&self) -> Result<NavigationResult, BrowserControlError> {
         self.with_page_retry(|page| Box::pin(async move { page.go_back().await }))
             .await?;
@@ -229,6 +232,7 @@ impl BrowserThreadState {
     }
 
     /// Navigate forward in the browser history.
+    #[tracing::instrument(skip_all)]
     pub async fn go_forward(&self) -> Result<NavigationResult, BrowserControlError> {
         self.with_page_retry(|page| Box::pin(async move { page.go_forward().await }))
             .await?;
@@ -243,6 +247,7 @@ impl BrowserThreadState {
     }
 
     /// Capture a screenshot of the default page and return a base64-encoded PNG.
+    #[tracing::instrument(skip_all, fields(full_page))]
     pub async fn screenshot(&self, full_page: bool) -> Result<ScreenshotResult, BrowserControlError> {
         let bytes = self
             .with_page_retry(|page| Box::pin(async move { page.screenshot(full_page).await }))
@@ -260,6 +265,7 @@ impl BrowserThreadState {
     }
 
     /// Evaluate `js` on the default page and return the serialized result.
+    #[tracing::instrument(skip_all, fields(expression_preview = %crate::types::expression_preview(js)))]
     pub async fn evaluate(&self, js: &str) -> Result<EvaluateResult, BrowserControlError> {
         if let Err(reason) = url_block::check_js_allowed(js) {
             return Err(BrowserControlError::NotAllowed { reason });
@@ -317,6 +323,7 @@ impl BrowserThreadState {
     }
 
     /// Read the buffered console/network logs for the default page.
+    #[tracing::instrument(skip_all, fields(kind = ?kind, level = ?level))]
     pub async fn read_logs(
         &self,
         kind: crate::types::LogKind,
@@ -339,6 +346,7 @@ impl BrowserThreadState {
     }
 
     /// Execute a raw CDP method with JSON parameters on the default page.
+    #[tracing::instrument(skip_all, fields(method, params_size = serde_json::to_string(&params).map(|s| s.len()).unwrap_or(0)))]
     pub async fn execute_raw(
         &self,
         method: &str,

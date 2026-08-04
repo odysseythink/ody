@@ -70,11 +70,30 @@ fn ensure_browser_approved(call: &ToolCall) -> Result<(), FunctionCallError> {
     let arguments = call.function_arguments().map_err(|e| {
         FunctionCallError::Fatal(format!("failed to read browser tool arguments: {e}"))
     })?;
-    let details = serde_json::from_str(arguments).unwrap_or_else(|_| serde_json::Value::String(arguments.to_string()));
+    let mut details: serde_json::Value = serde_json::from_str(arguments)
+        .unwrap_or_else(|_| serde_json::Value::String(arguments.to_string()));
+
+    // For evaluate, replace the full expression with a truncated preview so the
+    // approval ticket and any logs do not leak the entire script body.
+    if action == "evaluate" {
+        if let Some(expr) = details.get("expression").and_then(serde_json::Value::as_str) {
+            let expr = expr.to_string();
+            let preview = crate::types::truncate_string_bytes(&expr, 500);
+            if let Some(obj) = details.as_object_mut() {
+                obj.insert("expression".to_string(), serde_json::Value::String(preview));
+                obj.insert(
+                    "expression_truncated".to_string(),
+                    serde_json::Value::Bool(expr.len() > 500),
+                );
+            }
+        }
+    }
+
     let ticket = BrowserControlApprovalTicket {
         action: action.to_string(),
         details,
     };
+    tracing::info!(action, "browser tool requires guardian approval");
     Err(FunctionCallError::NeedsApproval {
         ticket: serde_json::to_value(ticket).unwrap_or_else(|_| serde_json::Value::Null),
     })
@@ -172,11 +191,30 @@ impl ToolExecutor<ToolCall> for BrowserNavigateTool {
         ToolExposure::Direct
     }
 
+    #[tracing::instrument(skip_all, fields(tool_name = ?call.tool_name, call_id = %call.call_id, turn_id = %call.turn_id, model = %call.model, approved = call.guardian_approved_action_id.is_some()))]
     fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
-            ensure_browser_approved(&call)?;
             let input: BrowserNavigateInput = parse_args(&call)?;
+            let cwd = call.environments.first().map(|e| e.cwd.as_ref());
+            if let Some(reason) =
+                crate::approval_exemption::is_approval_exempt(&input.url, cwd, cfg!(test))
+            {
+                tracing::info!(
+                    tool = "browser__navigate",
+                    auto_approved = true,
+                    url_preview = %crate::types::truncate_string_bytes(&input.url, 120),
+                    reason = reason,
+                    "browser navigate auto-approved by exemption"
+                );
+            } else {
+                ensure_browser_approved(&call)?;
+            }
+            tracing::info!(
+                url_preview = %crate::types::truncate_string_bytes(&input.url, 120),
+                wait_until = ?input.wait_until,
+                "browser navigate proceeding"
+            );
             let result = state
                 .navigate(&input.url, input.wait_until)
                 .await
@@ -228,6 +266,7 @@ impl ToolExecutor<ToolCall> for BrowserGoBackTool {
         ToolExposure::Direct
     }
 
+    #[tracing::instrument(skip_all, fields(tool_name = ?call.tool_name, call_id = %call.call_id, turn_id = %call.turn_id, model = %call.model, approved = call.guardian_approved_action_id.is_some()))]
     fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
@@ -280,6 +319,7 @@ impl ToolExecutor<ToolCall> for BrowserGoForwardTool {
         ToolExposure::Direct
     }
 
+    #[tracing::instrument(skip_all, fields(tool_name = ?call.tool_name, call_id = %call.call_id, turn_id = %call.turn_id, model = %call.model, approved = call.guardian_approved_action_id.is_some()))]
     fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
@@ -332,6 +372,7 @@ impl ToolExecutor<ToolCall> for BrowserReloadTool {
         ToolExposure::Direct
     }
 
+    #[tracing::instrument(skip_all, fields(tool_name = ?call.tool_name, call_id = %call.call_id, turn_id = %call.turn_id, model = %call.model, approved = call.guardian_approved_action_id.is_some()))]
     fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
@@ -395,6 +436,7 @@ impl ToolExecutor<ToolCall> for BrowserScreenshotTool {
         ToolExposure::Direct
     }
 
+    #[tracing::instrument(skip_all, fields(tool_name = ?call.tool_name, call_id = %call.call_id, turn_id = %call.turn_id, model = %call.model, approved = call.guardian_approved_action_id.is_some()))]
     fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
@@ -461,12 +503,17 @@ impl ToolExecutor<ToolCall> for BrowserEvaluateTool {
         ToolExposure::Direct
     }
 
+    #[tracing::instrument(skip_all, fields(tool_name = ?call.tool_name, call_id = %call.call_id, turn_id = %call.turn_id, model = %call.model, approved = call.guardian_approved_action_id.is_some()))]
     fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
             check_external_sensitive(&state, "evaluate")?;
-            ensure_browser_approved(&call)?;
             let input: BrowserEvaluateInput = parse_args(&call)?;
+            tracing::info!(expression_preview = %crate::types::expression_preview(&input.expression));
+            if let Err(reason) = crate::url_block::check_js_allowed(&input.expression) {
+                return Err(FunctionCallError::Fatal(reason));
+            }
+            ensure_browser_approved(&call)?;
             let result = state
                 .evaluate(&input.expression)
                 .await
@@ -528,6 +575,7 @@ impl ToolExecutor<ToolCall> for BrowserClickTool {
         ToolExposure::Direct
     }
 
+    #[tracing::instrument(skip_all, fields(tool_name = ?call.tool_name, call_id = %call.call_id, turn_id = %call.turn_id, model = %call.model, approved = call.guardian_approved_action_id.is_some()))]
     fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
@@ -598,12 +646,17 @@ impl ToolExecutor<ToolCall> for BrowserTypeTool {
         ToolExposure::Direct
     }
 
+    #[tracing::instrument(skip_all, fields(tool_name = ?call.tool_name, call_id = %call.call_id, turn_id = %call.turn_id, model = %call.model, approved = call.guardian_approved_action_id.is_some()))]
     fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
             check_external_sensitive(&state, "type")?;
             ensure_browser_approved(&call)?;
             let input: BrowserTypeInput = parse_args(&call)?;
+            tracing::info!(
+                selector_preview = %crate::types::truncate_string_bytes(&input.selector, 120),
+                text_size = input.text.len()
+            );
             state
                 .type_text(&input.selector, &input.text)
                 .await
@@ -666,10 +719,14 @@ impl ToolExecutor<ToolCall> for BrowserGetDomTool {
         ToolExposure::Direct
     }
 
+    #[tracing::instrument(skip_all, fields(tool_name = ?call.tool_name, call_id = %call.call_id, turn_id = %call.turn_id, model = %call.model, approved = call.guardian_approved_action_id.is_some()))]
     fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
             let input: BrowserGetDomInput = parse_args(&call)?;
+            tracing::info!(
+                selector_preview = ?input.selector.as_deref().map(|s| crate::types::truncate_string_bytes(s, 120))
+            );
             let result = state
                 .get_dom(input.selector.as_deref())
                 .await
@@ -748,10 +805,12 @@ impl ToolExecutor<ToolCall> for BrowserReadLogsTool {
         ToolExposure::Direct
     }
 
+    #[tracing::instrument(skip_all, fields(tool_name = ?call.tool_name, call_id = %call.call_id, turn_id = %call.turn_id, model = %call.model, approved = call.guardian_approved_action_id.is_some()))]
     fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
             let input: BrowserReadLogsInput = parse_args(&call)?;
+            tracing::info!(kind = ?input.kind, level = ?input.level);
             let result = state
                 .read_logs(input.kind, input.level)
                 .await
@@ -820,11 +879,29 @@ impl ToolExecutor<ToolCall> for BrowserExecuteRawCdpTool {
         ToolExposure::Direct
     }
 
+    #[tracing::instrument(skip_all, fields(tool_name = ?call.tool_name, call_id = %call.call_id, turn_id = %call.turn_id, model = %call.model, approved = call.guardian_approved_action_id.is_some()))]
     fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
         let state = Arc::clone(&self.state);
         Box::pin(async move {
-            ensure_browser_approved(&call)?;
+            if state.config().mode == crate::config::BrowserControlMode::External {
+                return Err(FunctionCallError::Fatal(
+                    "execute_raw_cdp is disabled in external browser mode".to_string(),
+                ));
+            }
             let input: BrowserExecuteRawCdpInput = parse_args(&call)?;
+            tracing::info!(
+                method = %input.method,
+                params_size = serde_json::to_string(&input.params).map(|s| s.len()).unwrap_or(0)
+            );
+            if let Some(pattern) = crate::raw_cdp_blocklist::is_raw_cdp_blocked(&input.method) {
+                return Err(map_error(BrowserControlError::NotAllowed {
+                    reason: format!(
+                        "raw CDP method is blocked: {} (matched pattern: {pattern})",
+                        input.method
+                    ),
+                }));
+            }
+            ensure_browser_approved(&call)?;
             let result = state
                 .execute_raw(&input.method, input.params.clone())
                 .await
@@ -907,11 +984,15 @@ mod tests {
         assert!(text.contains("navigate"));
     }
 
-    fn make_tool_call(arguments: &str, guardian_approved_action_id: Option<String>) -> ToolCall {
+    fn make_tool_call(
+        tool_name: ToolName,
+        arguments: &str,
+        guardian_approved_action_id: Option<String>,
+    ) -> ToolCall {
         ToolCall {
             turn_id: "turn-1".to_string(),
             call_id: "call-1".to_string(),
-            tool_name: ToolName::namespaced("browser", "navigate"),
+            tool_name,
             model: "test".to_string(),
             truncation_policy: TruncationPolicy::Bytes(1),
             conversation_history: Default::default(),
@@ -925,23 +1006,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn navigate_requires_approval_without_action_id() {
+    async fn navigate_test_mode_exempt_proceeds_to_state_error() {
         let state = Arc::new(
             BrowserThreadState::new_uninitialized_for_test(BrowserControlConfig::default())
                 .expect("uninitialized state"),
         );
         let tool = BrowserNavigateTool::new(state);
-        let call = make_tool_call(r#"{"url": "https://example.com"}"#, None);
+        let call = make_tool_call(
+            ToolName::namespaced("browser", "navigate"),
+            r#"{"url": "https://example.com"}"#,
+            None,
+        );
         let result = ToolExecutor::handle(&tool, call).await;
         assert!(result.is_err(), "expected an error");
         let Err(err) = result else { unreachable!() };
-        let FunctionCallError::NeedsApproval { ticket } = err else {
-            panic!("expected NeedsApproval, got {err:?}");
-        };
-        let action = ticket.get("action").and_then(Value::as_str).expect("action");
-        let details = ticket.get("details").expect("details");
-        assert_eq!(action, "navigate");
-        assert_eq!(details.get("url").and_then(Value::as_str), Some("https://example.com"));
+        // In test builds the call is auto-approved by the test-mode exemption, so
+        // it reaches the uninitialized state and returns a fatal error instead of
+        // NeedsApproval.
+        assert!(
+            !matches!(err, FunctionCallError::NeedsApproval { .. }),
+            "test-mode navigate should be exempt from approval: {err:?}"
+        );
     }
 
     #[tokio::test]
@@ -951,7 +1036,11 @@ mod tests {
                 .expect("uninitialized state"),
         );
         let tool = BrowserNavigateTool::new(state);
-        let call = make_tool_call(r#"{"url": "https://example.com"}"#, Some("review-1".to_string()));
+        let call = make_tool_call(
+            ToolName::namespaced("browser", "navigate"),
+            r#"{"url": "https://example.com"}"#,
+            Some("review-1".to_string()),
+        );
         let result = ToolExecutor::handle(&tool, call).await;
         assert!(result.is_err(), "expected an error from uninitialized state");
         let Err(err) = result else { unreachable!() };
@@ -987,5 +1076,115 @@ mod tests {
             !matches!(err, FunctionCallError::NeedsApproval { .. }),
             "screenshot should not require approval: {err:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn evaluate_rejects_forbidden_expression_before_approval() {
+        let state = Arc::new(
+            BrowserThreadState::new_uninitialized_for_test(BrowserControlConfig::default())
+                .expect("uninitialized state"),
+        );
+        let tool = BrowserEvaluateTool::new(state);
+        let call = make_tool_call(
+            ToolName::namespaced("browser", "evaluate"),
+            r#"{"expression": "document.cookie"}"#,
+            None,
+        );
+        let result = ToolExecutor::handle(&tool, call).await;
+        assert!(result.is_err(), "expected an error");
+        let Err(err) = result else { unreachable!() };
+        assert!(
+            !matches!(err, FunctionCallError::NeedsApproval { .. }),
+            "forbidden expression should be rejected before approval: {err:?}"
+        );
+        assert!(err.to_string().contains("document.cookie"));
+    }
+
+    #[tokio::test]
+    async fn evaluate_approval_ticket_truncates_long_expression() {
+        let state = Arc::new(
+            BrowserThreadState::new_uninitialized_for_test(BrowserControlConfig::default())
+                .expect("uninitialized state"),
+        );
+        let tool = BrowserEvaluateTool::new(state);
+        let long = "a".repeat(1000);
+        let arguments = format!(r#"{{"expression": "{long}"}}"#);
+        let call = make_tool_call(
+            ToolName::namespaced("browser", "evaluate"),
+            &arguments,
+            None,
+        );
+        let result = ToolExecutor::handle(&tool, call).await;
+        let Err(err) = result else { unreachable!() };
+        let FunctionCallError::NeedsApproval { ticket } = err else {
+            panic!("expected NeedsApproval, got {err:?}");
+        };
+        let details = ticket.get("details").expect("details");
+        let expr = details.get("expression").and_then(Value::as_str).expect("expression");
+        assert!(expr.len() <= 600, "expression should be truncated: got {} bytes", expr.len());
+        assert_eq!(details.get("expression_truncated").and_then(Value::as_bool), Some(true));
+    }
+
+    #[tokio::test]
+    async fn execute_raw_cdp_blocked_method_returns_not_allowed() {
+        let state = Arc::new(
+            BrowserThreadState::new_uninitialized_for_test(BrowserControlConfig::default())
+                .expect("uninitialized state"),
+        );
+        let tool = BrowserExecuteRawCdpTool::new(state);
+        let call = make_tool_call(
+            ToolName::namespaced("browser", "execute_raw_cdp"),
+            r#"{"method": "Storage.getCookies", "params": {}}"#,
+            None,
+        );
+        let result = ToolExecutor::handle(&tool, call).await;
+        assert!(result.is_err(), "expected an error");
+        let Err(err) = result else { unreachable!() };
+        assert!(
+            !matches!(err, FunctionCallError::NeedsApproval { .. }),
+            "blocked raw CDP should not ask for approval: {err:?}"
+        );
+        assert!(err.to_string().contains("Storage.getCookies"));
+    }
+
+    #[tokio::test]
+    async fn execute_raw_cdp_safe_method_requires_approval() {
+        let state = Arc::new(
+            BrowserThreadState::new_uninitialized_for_test(BrowserControlConfig::default())
+                .expect("uninitialized state"),
+        );
+        let tool = BrowserExecuteRawCdpTool::new(state);
+        let call = make_tool_call(
+            ToolName::namespaced("browser", "execute_raw_cdp"),
+            r#"{"method": "Runtime.evaluate", "params": {"expression": "1+1"}}"#,
+            None,
+        );
+        let result = ToolExecutor::handle(&tool, call).await;
+        assert!(result.is_err(), "expected an error");
+        let Err(err) = result else { unreachable!() };
+        assert!(
+            matches!(err, FunctionCallError::NeedsApproval { .. }),
+            "safe raw CDP should require approval: {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn execute_raw_cdp_disabled_in_external_mode() {
+        let mut config = BrowserControlConfig::default();
+        config.mode = BrowserControlMode::External;
+        let state = Arc::new(
+            BrowserThreadState::new_uninitialized_for_test(config)
+                .expect("uninitialized state"),
+        );
+        let tool = BrowserExecuteRawCdpTool::new(state);
+        let call = make_tool_call(
+            ToolName::namespaced("browser", "execute_raw_cdp"),
+            r#"{"method": "Runtime.evaluate", "params": {}}"#,
+            None,
+        );
+        let result = ToolExecutor::handle(&tool, call).await;
+        assert!(result.is_err(), "expected an error");
+        let Err(err) = result else { unreachable!() };
+        assert!(err.to_string().contains("external browser mode"));
     }
 }

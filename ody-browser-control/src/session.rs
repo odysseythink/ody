@@ -123,6 +123,7 @@ impl BrowserSession {
     }
 
     /// Connect to an existing Chrome debug endpoint.
+    #[tracing::instrument(skip_all, fields(mode = "external", url_preview = %crate::types::truncate_string_bytes(config.connect_url.as_deref().unwrap_or(""), 120)))]
     pub async fn connect(config: BrowserControlConfig) -> Result<Self, BrowserControlError> {
         if !matches!(config.mode, BrowserControlMode::External) {
             return Err(BrowserControlError::NotAllowed {
@@ -208,6 +209,7 @@ impl BrowserSession {
     }
 
     /// Close the browser, wait for the handler task, and clean up the profile.
+    #[tracing::instrument(skip_all, fields(local = self._local))]
     pub async fn close(mut self) -> Result<(), BrowserControlError> {
         let Some(mut browser) = self.browser.take() else {
             return Err(BrowserControlError::SessionClosed);

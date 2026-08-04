@@ -7,9 +7,13 @@ pub mod page_state;
 pub mod session;
 pub mod thread_state;
 pub mod tools;
+pub mod approval_exemption;
+pub mod network_redaction;
+pub mod raw_cdp_blocklist;
 pub mod types;
 pub mod url_block;
 
+pub use approval_exemption::is_approval_exempt;
 pub use config::{
     acquire_browser_permit, available_browser_permits, discover_chrome, BrowserControlConfig,
     BrowserControlMode, ViewportConfig,
