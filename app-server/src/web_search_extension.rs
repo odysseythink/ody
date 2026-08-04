@@ -110,6 +110,7 @@ mod tests {
                 },
                 secondary: None,
             }),
+            browser: None,
         }
     }
 
@@ -132,6 +133,7 @@ mod tests {
                 },
                 secondary: None,
             }),
+            browser: None,
         };
         assert!(WebSearchExtension::create_provider(&services).is_some());
     }
@@ -148,7 +150,7 @@ mod tests {
     #[test]
     fn tools_returns_web_search_when_provider_present() {
         let session_store = ExtensionData::new("session");
-        let mut thread_store = ExtensionData::new_with_init("thread", ExtensionDataInit::new());
+        let thread_store = ExtensionData::new_with_init("thread", ExtensionDataInit::new());
         let provider = WebSearchExtension::create_provider(&ServicesConfig {
             web_search: Some(WebSearchConfig {
                 primary: WebSearchProviderConfig {
@@ -159,6 +161,7 @@ mod tests {
                 },
                 secondary: None,
             }),
+            browser: None,
         })
         .expect("should create provider");
         thread_store.insert(provider);

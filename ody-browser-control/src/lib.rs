@@ -6,6 +6,9 @@ pub mod event_buffer;
 pub mod page_state;
 pub mod session;
 pub mod thread_state;
+pub mod tools;
+pub mod types;
+pub mod url_block;
 
 pub use config::{
     acquire_browser_permit, available_browser_permits, discover_chrome, BrowserControlConfig,
@@ -16,6 +19,10 @@ pub use event_buffer::{ConsoleEntry, EventBuffer, LogsSnapshot, NetworkEntry};
 pub use page_state::PageState;
 pub use session::BrowserSession;
 pub use thread_state::BrowserThreadState;
+pub use tools::all_tools;
+pub use tools::BrowserTool;
+pub use types::*;
+pub use url_block::{check_js_allowed, check_url_is_allowed};
 
 /// Approval ticket emitted by the tool layer for guardian review.
 ///

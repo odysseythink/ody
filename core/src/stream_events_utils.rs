@@ -513,6 +513,11 @@ pub(crate) async fn handle_output_item_done(
 
             output.needs_follow_up = true;
         }
+        // A retryable transient error occurred; treat it as fatal at the stream level
+        // to preserve existing handling behavior until the executor retries.
+        Err(FunctionCallError::Retryable(message)) => {
+            return Err(OdyErr::Fatal(message));
+        }
         // A fatal error occurred; surface it back into history.
         Err(FunctionCallError::Fatal(message)) => {
             return Err(OdyErr::Fatal(message));

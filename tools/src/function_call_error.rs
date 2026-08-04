@@ -7,4 +7,6 @@ pub enum FunctionCallError {
     RespondToModel(String),
     #[error("Fatal error: {0}")]
     Fatal(String),
+    #[error("Retryable error: {0}")]
+    Retryable(String),
 }

@@ -38,6 +38,7 @@ axum = { workspace = true, default-features = false, features = [
 ] }
 ody-analytics = { workspace = true }
 ody-arg0 = { workspace = true }
+ody-browser-control = { workspace = true }
 ody-config = { workspace = true }
 ody-core = { workspace = true }
 ody-core-plugins = { workspace = true }

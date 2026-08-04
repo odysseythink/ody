@@ -6480,6 +6480,7 @@ dependencies = [
  "ody-app-server-protocol",
  "ody-app-server-transport",
  "ody-arg0",
+ "ody-browser-control",
  "ody-client",
  "ody-config",
  "ody-core",
@@ -6717,8 +6718,11 @@ dependencies = [
 name = "ody-browser-control"
 version = "0.1.0-alpha.2"
 dependencies = [
+ "base64 0.22.1",
  "chromiumoxide",
  "futures",
+ "ody-protocol",
+ "ody-tools",
  "pretty_assertions",
  "schemars 0.8.22",
  "serde",
@@ -6727,6 +6731,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "ts-rs",
  "url",
 ]
 
@@ -8574,6 +8579,7 @@ name = "ody-web-search"
 version = "0.1.0-alpha.2"
 dependencies = [
  "async-trait",
+ "ody-browser-control",
  "ody-protocol",
  "ody-tools",
  "pretty_assertions",

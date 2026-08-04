@@ -8,8 +8,11 @@ use tokio::sync::Semaphore;
 use crate::error::BrowserControlError;
 
 /// Browser control mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, schemars::JsonSchema, ts_rs::TS,
+)]
 #[serde(rename_all = "snake_case")]
+#[ts(export)]
 pub enum BrowserControlMode {
     /// Launch a local Chrome process per thread with a temporary profile.
     #[default]
@@ -19,7 +22,8 @@ pub enum BrowserControlMode {
 }
 
 /// Viewport configuration passed to Chrome on launch.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, schemars::JsonSchema, ts_rs::TS)]
+#[ts(export)]
 pub struct ViewportConfig {
     /// Viewport width in CSS pixels.
     #[serde(default = "default_viewport_width")]
@@ -56,7 +60,8 @@ impl From<ViewportConfig> for chromiumoxide::handler::viewport::Viewport {
 }
 
 /// Configuration for the browser control layer.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema, ts_rs::TS)]
+#[ts(export)]
 pub struct BrowserControlConfig {
     /// Local launch or external debug connection.
     #[serde(default)]

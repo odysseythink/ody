@@ -79,6 +79,52 @@ impl PageState {
             .map_err(|e| BrowserControlError::from_command_error("page.close", e))
     }
 
+    /// Wait for a navigation response on the page.
+    pub async fn wait_for_navigation_response(
+        &self,
+    ) -> Result<(), BrowserControlError> {
+        self.page
+            .wait_for_navigation_response()
+            .await
+            .map(|_| ())
+            .map_err(|e| BrowserControlError::from_command_error("wait_for_navigation_response", e))
+    }
+
+    /// Return the current page URL.
+    pub async fn url(&self) -> Result<Option<String>, BrowserControlError> {
+        self.page
+            .url()
+            .await
+            .map_err(|e| BrowserControlError::from_command_error("page.url", e))
+    }
+
+    /// Return the current page title.
+    pub async fn title(&self) -> Result<Option<String>, BrowserControlError> {
+        let value = self.evaluate("document.title").await?;
+        Ok(value.as_str().map(|s| s.to_string()))
+    }
+
+    /// Navigate back in the browser history.
+    pub async fn go_back(&self) -> Result<(), BrowserControlError> {
+        self.evaluate("history.back()").await?;
+        Ok(())
+    }
+
+    /// Navigate forward in the browser history.
+    pub async fn go_forward(&self) -> Result<(), BrowserControlError> {
+        self.evaluate("history.forward()").await?;
+        Ok(())
+    }
+
+    /// Reload the page.
+    pub async fn reload(&self) -> Result<(), BrowserControlError> {
+        self.page
+            .reload()
+            .await
+            .map(|_| ())
+            .map_err(|e| BrowserControlError::from_command_error("page.reload", e))
+    }
+
     /// Navigate the page to `url` and wait for the load event.
     pub async fn navigate(&self, url: &str) -> Result<(), BrowserControlError> {
         self.page

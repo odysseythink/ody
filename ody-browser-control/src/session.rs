@@ -84,11 +84,11 @@ impl BrowserSession {
         let chrome_path = discover_chrome(&config)?;
 
         let mut builder = BrowserConfig::builder().chrome_executable(chrome_path);
-        builder = if config.headless {
-            builder.new_headless_mode()
-        } else {
-            builder.with_head()
-        };
+        if !config.headless {
+            builder = builder.with_head();
+        }
+        // Headless mode defaults to the chromiumoxide old headless mode, which is
+        // more stable than the new headless mode for CDP automation on Windows.
         if !config.sandbox {
             builder = builder.no_sandbox();
         }
@@ -170,6 +170,19 @@ impl BrowserSession {
             _local: false,
             config,
         })
+    }
+
+    /// Create an uninitialized session for tests that do not need a real browser.
+    #[doc(hidden)]
+    pub fn new_uninitialized_for_test(config: BrowserControlConfig) -> Self {
+        Self {
+            browser: None,
+            handler_task: None,
+            _permit: None,
+            _profile_dir: TempDir::new().expect("tempdir for test profile"),
+            _local: false,
+            config,
+        }
     }
 
     /// Expose the underlying [`Browser`] so that `page_state` can create pages.
@@ -260,9 +273,17 @@ impl BrowserSession {
 
 fn spawn_handler(mut handler: Handler) -> JoinHandle<()> {
     tokio::spawn(async move {
-        while let Some(_event) = handler.next().await {
-            // Events are handled by per-page listeners; the handler loop just
-            // needs to be polled to drive the CDP connection.
+        loop {
+            match handler.next().await {
+                Some(Ok(())) => {}
+                Some(Err(e)) => {
+                    tracing::warn!(error = %e, "browser handler event error");
+                }
+                None => {
+                    tracing::warn!("browser handler stream ended");
+                    break;
+                }
+            }
         }
     })
 }

@@ -76,18 +76,20 @@ impl fmt::Debug for WebSearchConfig {
 }
 
 /// Top-level `[services]` table in `config.toml`.
-/// Currently carries only the web search provider configuration.
 #[derive(Clone, Deserialize, Serialize, PartialEq, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct ServicesConfig {
     #[serde(rename = "webSearch")]
     pub web_search: Option<WebSearchConfig>,
+    #[serde(rename = "browser")]
+    pub browser: Option<ody_browser_control::BrowserControlConfig>,
 }
 
 impl fmt::Debug for ServicesConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ServicesConfig")
             .field("web_search", &self.web_search)
+            .field("browser", &self.browser)
             .finish()
     }
 }

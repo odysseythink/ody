@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use ody_tools::FunctionCallError;
 use thiserror::Error;
 
 /// Unified error type for the browser control layer.
@@ -84,6 +85,22 @@ impl BrowserControlError {
                 ..
             }
         )
+    }
+
+    /// Map this error to the shared [`FunctionCallError`] surface.
+    ///
+    /// Retryable transient errors become [`FunctionCallError::Retryable`].
+    /// JavaScript exceptions are surfaced back to the model as
+    /// [`FunctionCallError::RespondToModel`]. Policy and fatal errors become
+    /// [`FunctionCallError::Fatal`].
+    pub fn to_function_call_error(&self) -> FunctionCallError {
+        if self.is_retryable() {
+            FunctionCallError::Retryable(self.to_string())
+        } else if self.is_javascript_exception() {
+            FunctionCallError::RespondToModel(self.to_string())
+        } else {
+            FunctionCallError::Fatal(self.to_string())
+        }
     }
 }
 

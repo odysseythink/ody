@@ -13,6 +13,7 @@ doctest = false
 workspace = true
 
 [dependencies]
+ody-browser-control = { workspace = true }
 ody-tools = { workspace = true }
 ody-protocol = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
