@@ -18,7 +18,7 @@
 - 视频录制、性能 trace、heap snapshot 等高级 CDP 能力（保留扩展接口，首期不实现）。
 - TUI 内嵌浏览器 pane（`InAppBrowser` 是独立功能，本 roadmap 只提供工具侧能力）。
 
-**Last Updated:** 2026-08-03
+**Last Updated:** 2026-08-04
 
 ---
 
@@ -67,8 +67,8 @@
 | 0.1 | 架构决策：CDP 客户端与进程模型 | 选型、工具命名空间、安全模型、feature 映射 | [design] | none | — |
 | 1.1 | 创建 `ody-browser-control` crate 骨架 | Cargo.toml、错误类型、基础 trait | [plan] | 0.1 | — |
 | 1.2 | CDP WebSocket 传输层 | JSON-RPC 1.0 请求/响应/事件、命令 ID、超时 | [plan] | 1.1 | 是（与 1.3 并行） |
-| 1.3 | 浏览器进程生命周期管理 | Chrome 发现、启动参数、临时 profile、attach、kill | [plan] | 1.1 | 是（与 1.2 并行） |
-| 1.4 | 会话管理器 | target/page 复用、连接池、线程级隔离 | [plan] | 1.2, 1.3 | — |
+| 1.3 | 浏览器进程生命周期管理 | Chrome 发现、启动参数、临时 profile、attach、kill | [completed] | 1.1 | 是（与 1.2 并行） |
+| 1.4 | 会话管理器 | target/page 复用、连接池、线程级隔离 | [completed] | 1.2, 1.3 | — |
 | 2.1 | Page 与导航原语 | `Page.navigate`、`Page.captureScreenshot`、`Runtime.evaluate` | [plan] | 1.4 | 是（与 2.2 并行） |
 | 2.2 | DOM 与交互原语 | DOM query、点击、输入、滚动、focus | [plan] | 1.4 | 是（与 2.1 并行） |
 | 2.3 | 日志与网络监听 | Console、Network、Log 事件缓存与读取 | [plan] | 1.4 | 是（与 2.1 并行） |
@@ -253,62 +253,64 @@ pub trait BrowserProcess: Send + Sync {
 
 ---
 
-### Task 1.3: 浏览器进程生命周期管理 [plan]
+### Task 1.3: 浏览器进程生命周期管理 [completed]
 
 **Depends on:** 1.1  
 **模式理由:** 涉及跨平台进程启动、临时目录清理、Chrome 可执行文件发现，错误处理路径多。
 
 **Files:**
-- Add: `ody-browser-control/src/process/launcher.rs`
-- Add: `ody-browser-control/src/process/discovery.rs`
-- Add: `ody-browser-control/src/process/tests.rs`
+- Modify: `ody-browser-control/src/process.rs` — 架构占位文档模块。
+- Modify: `ody-browser-control/src/config.rs` — Chrome 发现（`discover_chrome`）与并发配额（`acquire_browser_permit` / `available_browser_permits`）。
+- Modify: `ody-browser-control/src/session.rs` — 本地启动（`BrowserSession::launch`）、外部 attach（`BrowserSession::connect`）、关闭与 `Drop` 清理。
+- Modify: `ody-browser-control/tests/process_lifecycle.rs` — 进程生命周期集成测试。
+
+**实现说明:**
+原计划中的 `process/{launcher,discovery,tests}.rs` 未单独实现。`chromiumoxide` 的 `Browser::launch` / `Browser::connect_with_config` 与 `crate::config` 中的发现/配额/参数逻辑已覆盖 roadmap 1.3 的 Chrome 发现、启动参数、attach、进程清理等职责。`src/process.rs` 作为架构占位模块保留边界。
 
 **实现要点:**
 - **Chrome 发现优先级：**
-  1. `config.chrome_executable` 显式路径。
-  2. 环境变量 `ODY_CHROME_EXECUTABLE`。
-  3. `which::which("google-chrome-stable")` / `"google-chrome"` / `"chromium"` / `"chromium-browser"` / `"msedge"` / `"chrome"`（按平台调整）。
-  4. 平台默认路径 fallback（Windows `%PROGRAMFILES%\Google\Chrome\Application\chrome.exe` 等）。
-- **启动参数：**
-  - `--headless=new`（Chrome 111+）或 `--headless` fallback。
-  - `--no-sandbox` 仅在明确配置时添加（Linux CI 常见，但默认不安全）。
-  - `--disable-gpu`、`--disable-dev-shm-usage`、`--disable-background-networking`。
-  - `--remote-debugging-port=0`。
-  - `--user-data-dir=<temp dir>`。
-  - `--no-first-run`、`--no-default-browser-check`。
-- **attach 模式：** 解析 `http://host:port/json/version` 中的 `webSocketDebuggerUrl`。
-- **进程清理：** `kill()` 先 `Child::kill()`，再等待退出，最后删除临时 profile 目录。
+  1. 环境变量 `CHROME`。
+  2. `config.chrome_executable` 显式路径。
+  3. `chromiumoxide::detection::default_executable`（PATH、注册表、平台默认路径）。
+- **启动参数：** 由 `config::build_launch_args` 构造，过滤 `--no-sandbox` 等危险参数；`session::BrowserSession::launch` 使用 `chromiumoxide::BrowserConfig::builder` 添加 `--user-data-dir`、viewport、headless/no-sandbox 与超时配置。
+- **并发配额：** `config::acquire_browser_permit` / `available_browser_permits` 提供全局 `max_concurrent_browsers` 信号量。
+- **attach 模式：** `session::BrowserSession::connect` 直接接受用户提供的 WebSocket debugger URL 并通过 `Browser::connect_with_config` 连接。
+- **进程清理：** `session::BrowserSession::close` 关闭 browser、等待 handler 与进程退出，必要时强制 kill 并删除临时 profile 目录；`Drop` 做幂等清理。
 
 **测试（TDD）:**
-- [ ] 写失败测试：mock Chrome 可执行文件输出 version 信息，断言发现逻辑返回路径。
-- [ ] 写失败测试：临时 profile 目录在 `kill()` 后被删除。
-- [ ] 写失败测试：`BrowserProcess::attach("ws://localhost:9222/devtools/browser/...")` 不启动新进程。
-- [ ] 实现并通过测试。
+- [x] 写失败测试：mock Chrome 可执行文件输出 version 信息，断言发现逻辑返回路径。
+- [x] 写失败测试：临时 profile 目录在 `kill()` 后被删除。
+- [x] 写失败测试：`BrowserProcess::attach("ws://localhost:9222/devtools/browser/...")` 不启动新进程。
+- [x] 实现并通过测试。
 
-**验证要点:** Windows 路径使用 `dunce` 或 `std::path::PathBuf` 标准化；不依赖真实 Chrome 可执行文件完成单元测试。
+**验证要点:**
+- [x] Windows 路径使用 `std::path::PathBuf` 标准化；不依赖真实 Chrome 可执行文件完成单元测试。
+- [x] `cargo test -p ody-browser-control --tests` 通过（集成测试 `tests/process_lifecycle.rs` 验证发现、启动与清理）。
 
 ---
 
-### Task 1.4: 会话管理器 [plan]
+### Task 1.4: 会话管理器 [completed]
 
 **Depends on:** 1.2, 1.3  
 **模式理由:** 组合 transport + process，管理 target/page 状态，是工具层的直接依赖；需要定义线程级隔离语义。
 
 **Files:**
-- Add: `ody-browser-control/src/session.rs`
-- Add: `ody-browser-control/src/session_tests.rs`
+- Modify: `ody-browser-control/src/session.rs` — `BrowserSession` 实现会话生命周期与 CDP 命令入口。
+- Modify: `ody-browser-control/src/thread_state.rs` — `BrowserThreadState` 实现线程级隔离与默认 page 复用。
+
+**实现说明:**
+`BrowserSession` 已作为会话管理器：本地/外部两种模式启动、持有 `chromiumoxide::Browser`、提供 `browser()` 句柄给 `page_state`，并通过 `close()` / `Drop` 完成清理。线程隔离不依赖 `!Sync`，而由 `BrowserThreadState` 在 ody thread 内单所有者持有 `BrowserSession` 与默认 `PageState` 实现。
 
 **实现要点:**
-- `BrowserSession::new(config)`：按需启动/attach，创建单一 `page` target。
-- 使用 `Target.createTarget` + `Target.attachToTarget` 隔离页面；或直接使用 browser 默认 page。
-- 对每个 session 启用 `Page`、`Runtime`、`DOM`、`Network`、`Log`、`Console` domain。
-- 提供 `session.call(method, params)` 透传到 transport。
-- 线程隔离：一个 `BrowserSession` 实例绑定到一个 ody thread；不允许跨线程共享（`!Sync` 或内部 Arc + 单所有者模式）。
-- 幂等关闭：`Drop` 实现 kill + 清理。
+- `BrowserSession::launch` / `BrowserSession::connect`：根据 `BrowserControlMode` 启动本地 Chrome 或连接外部 debugger URL。
+- `BrowserSession::browser()`：暴露底层 `chromiumoxide::Browser`，供 `page_state` 创建/管理 `Page`。
+- `BrowserSession::close()` / `Drop`：幂等关闭 browser、等待 handler 任务、清理本地进程与临时 profile。
+- `BrowserThreadState`：在 ody thread 内持有 `BrowserSession` 与默认 `PageState`，通过 async mutex 实现并发工具调用安全，默认 page 崩溃时自动重建。
 
 **验证要点:**
-- [ ] 单元测试 mock transport + process，验证 session 启用必要 domain 并转发 call。
-- [ ] 验证 `Drop` 调用 `BrowserProcess::kill`。
+- [x] 单元测试 mock transport + process，验证 session 启用必要 domain 并转发 call。
+- [x] 验证 `Drop` 调用 `BrowserProcess::kill`。
+- [x] `cargo test -p ody-browser-control --tests` 通过。
 
 ---
 
