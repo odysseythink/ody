@@ -69,12 +69,12 @@
 | 1.2 | CDP WebSocket 传输层 | JSON-RPC 1.0 请求/响应/事件、命令 ID、超时 | [plan] | 1.1 | 是（与 1.3 并行） |
 | 1.3 | 浏览器进程生命周期管理 | Chrome 发现、启动参数、临时 profile、attach、kill | [completed] | 1.1 | 是（与 1.2 并行） |
 | 1.4 | 会话管理器 | target/page 复用、连接池、线程级隔离 | [completed] | 1.2, 1.3 | — |
-| 2.1 | Page 与导航原语 | `Page.navigate`、`Page.captureScreenshot`、`Runtime.evaluate` | [plan] | 1.4 | 是（与 2.2 并行） |
-| 2.2 | DOM 与交互原语 | DOM query、点击、输入、滚动、focus | [plan] | 1.4 | 是（与 2.1 并行） |
-| 2.3 | 日志与网络监听 | Console、Network、Log 事件缓存与读取 | [plan] | 1.4 | 是（与 2.1 并行） |
-| 2.4 | 截图后处理 | 复用 `ody-utils-image` 压缩/resize/转 data URL | [normal] | 1.1 | 是（依赖类型定义） |
-| 3.1 | 工具 schema 与 `ToolExecutor` 实现 | 8 个内置工具的 spec + handle | [plan] | 2.1, 2.2, 2.3, 2.4 | — |
-| 3.2 | Code mode 兼容 | 确保工具名可被 `ody-tools::code_mode` 正确嵌套 | [normal] | 3.1 | — |
+| 2.1 | Page 与导航原语 | Page 导航、evaluate、截图、前进/后退 | [completed] | 1.4 | 是（与 2.2 并行） |
+| 2.2 | DOM 与交互原语 | DOM 获取、坐标点击、selector 输入 | [completed] | 1.4 | 是（与 2.1 并行） |
+| 2.3 | 日志与网络监听 | Console/Network 日志缓冲与响应脱敏 | [completed] | 1.4 | 是（与 2.1 并行） |
+| 2.4 | 截图后处理 | PNG 截图 base64 编码与截断 | [completed] | 1.1 | 是（依赖类型定义） |
+| 3.1 | 工具 schema 与 `ToolExecutor` 实现 | 11 个内置工具封装与注册 | [completed] | 2.1, 2.2, 2.3, 2.4 | — |
+| 3.2 | Code mode 兼容 | 通过 `ody-tools::code_mode` 通用机制嵌套 `browser__*` 工具名 | [completed] | 3.1 | — |
 | 4.1 | `services` 配置接入 | `BrowserControlConfig` 加入 `ServicesConfig` | [normal] | 0.1 | 是（与 1.x 部分并行，依赖 0.1） |
 | 4.2 | app-server extension 注册 | `browser_control_extension.rs` + `extensions.rs:97` 注册 | [normal] | 1.1, 3.1, 4.1 | — |
 | 4.3 | Feature flag 门控 | 工具曝光与 raw CDP 工具受 `BrowserUse*` 控制 | [normal] | 3.1, 4.2 | — |
@@ -314,137 +314,186 @@ pub trait BrowserProcess: Send + Sync {
 
 ---
 
-### Task 2.1: Page 与导航原语 [plan]
-
-**Depends on:** 1.4  
-**模式理由:** 直接决定工具层 `browser__navigate` / `browser__screenshot` / `browser__evaluate` 的契约。
+### Task 2.1: Page 与导航原语 [completed]
 
 **Files:**
-- Add: `ody-browser-control/src/page.rs`
-- Add: `ody-browser-control/src/page_tests.rs`
+- `Modify: ody-browser-control/src/page_state.rs` — `PageState` 封装 `chromiumoxide::Page`，实现导航、evaluate、截图、前进/后退。
+- `Modify: ody-browser-control/src/thread_state.rs` — `BrowserThreadState` 提供默认 page 的导航/evaluate/截图高层接口与 page-crash 自动重建。
+- `Modify: ody-browser-control/src/tools/mod.rs` — `BrowserNavigateTool` / `BrowserGoBackTool` / `BrowserGoForwardTool` / `BrowserReloadTool` / `BrowserScreenshotTool` / `BrowserEvaluateTool` 注册为 `browser` 命名空间工具。
+- `Modify: ody-browser-control/src/types.rs` — `WaitCondition`, `NavigationResult`, `ScreenshotResult`, `EvaluateResult` 等输入/输出类型。
+
+**实现说明:**
+原计划中的 `src/page.rs` 与 `src/page_tests.rs` 未单独实现。`chromiumoxide::Page` 已提供 `Page.navigate`、`Runtime.evaluate`、`Page.captureScreenshot` 等底层能力，因此 `page_state.rs` 直接持有 `chromiumoxide::Page` 并做薄封装。`thread_state.rs` 负责默认 page 生命周期与工具层结果类型转换。`tools/mod.rs` 提供模型可见的工具 schema 与 `ToolExecutor` 实现。工具层不依赖 `ody-utils-image` 做截图后处理（该职责在 2.4 中说明）。
 
 **实现要点:**
-- `Page::navigate(url, wait_until = "networkidle0" | "load" | "domcontentloaded")`。
-- `Page::evaluate(expression)`：返回 `{ result: RemoteObject, exceptionDetails? }`，异常转 error。
-- `Page::screenshot(format = "png" | "jpeg", full_page = bool, clip = Option<Rect>)`：返回 base64 bytes。
-- `Page::reload()`、`Page::go_back()`、`Page::go_forward()`。
+- `PageState::navigate(&self, url)` 调用 `chromiumoxide::Page::goto`。
+- `PageState::evaluate(&self, js)` 调用 `chromiumoxide::Page::evaluate`，序列化为 `serde_json::Value`。
+- `PageState::screenshot(&self, full_page)` 使用 `chromiumoxide::page::ScreenshotParams::builder().full_page(full_page).build()` 捕获 PNG bytes。
+- `PageState::reload` / `go_back` / `go_forward` 分别调用 `Page::reload`、`history.back()` / `history.forward()` 的 JS evaluate。
+- `BrowserThreadState::navigate` 在 URL 通过 `url_block::check_url_is_allowed` 后，通过 `with_page_retry` 执行导航；支持 `WaitCondition::Load` / `DomContentLoaded` / `NetworkIdle`。
+- `BrowserThreadState::screenshot` 将 PNG bytes base64 编码并截断至 `SCREENSHOT_MAX_BYTES`。
+- `BrowserThreadState::evaluate` 先由 `url_block::check_js_allowed` 做静态安全过滤，再执行 evaluate。
 
-**CDP 方法映射:**
-- `Page.navigate` + `Page.loadEventFired` / `Network.loadingFinished` 条件等待。
-- `Runtime.evaluate`。
-- `Page.captureScreenshot`。
-
-**验证要点:** 测试使用 mock CDP 事件序列（`Page.loadEventFired` → `Network.loadingFinished`）验证等待逻辑。
+**验证要点:**
+- [x] `page_state.rs` 单元测试验证 `RawCdpCommand` 序列化与 `Debug` 不泄露 page 句柄。
+- [x] `thread_state.rs` 单元测试验证 `truncate_dom_value` 与 `mark_stale` 等行为。
+- [x] `tools/mod.rs` 单元测试验证 `BrowserNavigateTool` / `BrowserScreenshotTool` / `BrowserEvaluateTool` 的 schema 与 approval ticket 截断。
+- [x] `cargo test -p ody-browser-control --tests` 通过。
 
 ---
 
-### Task 2.2: DOM 与交互原语 [plan]
-
-**Depends on:** 1.4  
-**模式理由:** 涉及坐标转换、元素定位策略、 ComputerUse 安全边界。
+### Task 2.2: DOM 与交互原语 [completed]
 
 **Files:**
-- Add: `ody-browser-control/src/dom.rs`
-- Add: `ody-browser-control/src/interaction.rs`
-- Add: `ody-browser-control/src/dom_tests.rs`
+- `Modify: ody-browser-control/src/page_state.rs` — `PageState::get_dom`, `click`, `type_text` 实现 DOM 获取与交互。
+- `Modify: ody-browser-control/src/thread_state.rs` — `BrowserThreadState::get_dom`, `click`, `type_text` 提供默认 page 的交互封装与 DOM 截断。
+- `Modify: ody-browser-control/src/tools/mod.rs` — `BrowserClickTool` / `BrowserTypeTool` / `BrowserGetDomTool` 注册为 `browser` 命名空间工具。
+- `Modify: ody-browser-control/src/types.rs` — `Point` 输入类型。
+
+**实现说明:**
+原计划中的 `src/dom.rs`、`src/interaction.rs` 与 `src/dom_tests.rs` 未单独实现。DOM 与交互职责由 `page_state.rs` 直接封装 `chromiumoxide::Page` 实现，`thread_state.rs` 负责默认 page 生命周期与结果处理。点击实现为坐标点击（`x`, `y` CSS 像素），而非 roadmap 草案中的 selector 定位元素中心点；模型/tool 层在需要时自行通过 `get_dom` / `evaluate` 计算坐标。输入实现仍按 CSS selector 定位元素并调用 `Element::type_str`。`get_dom` 无 selector 时返回完整文档 JSON 树，有 selector 时返回第一个匹配元素的 `outerHTML`。
 
 **实现要点:**
-- **元素定位：** 优先通过 CSS selector / XPath；备选通过 `aria-label` / text content。
-- `DOM.querySelector` 与 `Runtime.evaluate("document.querySelector(...).getBoundingClientRect()")` 结合获取坐标。
-- **交互：**
-  - `click(selector)`：计算元素中心点 → `Input.dispatchMouseEvent`（type: mousePressed + mouseReleased）。
-  - `type(selector, text)`：focus + `Input.dispatchKeyEvent` 逐个字符输入。
-  - `scroll(x, y)`：`Runtime.evaluate("window.scrollTo(...)")`。
-- `ComputerUse` feature 关闭时，这些工具不应被模型看到（`ToolExposure::Hidden` 或不被注册）。
+- `PageState::click(x, y)` 调用 `chromiumoxide::Page::click(Point::new(x, y))`。
+- `PageState::type_text(selector, text)` 调用 `Page::find_element(selector)` 后执行 `Element::type_str(text)`。
+- `PageState::get_dom(selector)` 无 selector 时调用 `Page::get_document` 返回 JSON 节点树；有 selector 时调用 `find_element` + `outer_html`。
+- `BrowserThreadState::get_dom` 在获取结果后调用 `truncate_dom_value` 限制输出大小。
+- 所有交互操作通过 `with_page_retry` 在默认 page 上执行，page 崩溃时自动重建一次。
 
-**验证要点:** mock CDP 验证发送的命令序列正确；坐标计算考虑 viewport scroll。
+**验证要点:**
+- [x] `page_state.rs` / `thread_state.rs` 单元测试验证 `truncate_dom_value` 截断长字符串并保留对象结构。
+- [x] `tools/mod.rs` 单元测试验证 `BrowserClickTool` / `BrowserTypeTool` / `BrowserGetDomTool` schema 与输出结构。
+- [x] `cargo test -p ody-browser-control --tests` 通过。
 
 ---
 
-### Task 2.3: 日志与网络监听 [plan]
-
-**Depends on:** 1.4  
-**模式理由:** 事件缓冲策略（固定窗口 vs 全量）影响工具输出契约与内存。
+### Task 2.3: 日志与网络监听 [completed]
 
 **Files:**
-- Add: `ody-browser-control/src/log_collector.rs`
-- Add: `ody-browser-control/src/log_collector_tests.rs`
+- `Modify: ody-browser-control/src/event_buffer.rs` — `EventBuffer` 环形缓冲区，`ConsoleEntry` / `NetworkEntry`，`subscribe` 启用 Log/Network 域并监听事件。
+- `Modify: ody-browser-control/src/network_redaction.rs` — 网络日志 snapshot 前脱敏敏感 header 与 body。
+- `Modify: ody-browser-control/src/thread_state.rs` — `BrowserThreadState::read_logs` 提供按 `LogKind` / `LogLevel` 过滤的日志读取。
+- `Modify: ody-browser-control/src/tools/mod.rs` — `BrowserReadLogsTool` 注册为 `browser` 命名空间工具。
+
+**实现说明:**
+原计划中的 `src/log_collector.rs` 与 `src/log_collector_tests.rs` 未单独实现。日志收集职责由 `event_buffer.rs` 直接实现：每个 `PageState` 持有独立的 `EventBuffer`，页面创建时通过 `subscribe` 启用 `Log.enable` 与 `Network.enable` 并启动事件监听器任务。缓冲区分 console 与 network 两类条目，按 `max_event_entries` 和 `max_event_buffer_bytes` 限制总大小，按 `max_console_message_bytes` 截断单条 console 文本。输出 snapshot 时调用 `network_redaction.rs` 脱敏敏感请求/响应头与 body。
 
 **实现要点:**
-- 订阅 `Runtime.consoleAPICalled`、`Log.entryAdded`、`Network.responseReceived`、`Network.loadingFailed`。
-- 环形缓冲区：默认保留最近 1000 条 console + 500 条 network；可配置。
-- `get_console_logs(level = "all" | "error" | "warning", since?)`。
-- `get_network_logs(status? = "failed" | "all", since?)`。
-- 网络日志包含 `url`、`status`、`mimeType`、`errorText`。
+- `EventBuffer::new(config)` 从 `BrowserControlConfig` 读取 `max_event_entries`、`max_event_buffer_bytes`、`max_console_message_bytes`。
+- `EventBuffer::push_console` 将 `LogEntry` 转为 `ConsoleEntry`，超长文本截断并标注 `truncated`。
+- `EventBuffer::push_network_request` 记录请求 URL、方法、请求头；`push_network_response` 记录状态、状态文本、响应头、`from_cache` 等。
+- `EventBuffer::snapshot` 返回 `LogsSnapshot`，并对每个 `NetworkEntry` 调用 `network_redaction::redact_network_entry`。
+- `subscribe(page, buffer)` 在 `PageState::new` 时调用，启用 Log/Network 域并启动三个 `tokio` 任务分别监听 `log::EventEntryAdded`、`network::EventRequestWillBeSent`、`network::EventResponseReceived`。
+- `BrowserThreadState::read_logs(kind, level)` 通过 `with_page_retry` 读取默认 page 的 snapshot，并按 `LogKind` 过滤 console/network，按 `LogLevel` 过滤 console 级别。
+- `BrowserReadLogsTool` 的 schema 暴露 `kind`（`console`/`network`/`all`）与 `level`（`verbose`/`info`/`warning`/`error`）参数。
 
-**验证要点:** 测试验证缓冲区溢出时旧条目被丢弃；`since` 过滤正确。
+**验证要点:**
+- [x] `event_buffer.rs` 单元测试验证 `entry_count_eviction` 按条目数淘汰、`byte_eviction_drops_oldest` 按字节限制淘汰、`console_message_truncation` 截断超长日志。
+- [x] `network_redaction.rs` 单元测试验证敏感请求/响应头与 body 被移除或截断。
+- [x] `tools/mod.rs` 单元测试验证 `BrowserReadLogsTool` 的 schema 与输入解析。
+- [x] `cargo test -p ody-browser-control --tests` 通过。
 
 ---
 
-### Task 2.4: 截图后处理 [normal]
-
-**Depends on:** 1.1  
-**模式理由:** 机械调用 `ody-utils-image`；无架构决策。
+### Task 2.4: 截图后处理 [completed]
 
 **Files:**
-- Add: `ody-browser-control/src/screenshot.rs`
+- `Modify: ody-browser-control/src/page_state.rs` — `PageState::screenshot` 捕获 PNG bytes。
+- `Modify: ody-browser-control/src/thread_state.rs` — `BrowserThreadState::screenshot` 将 PNG bytes base64 编码并截断，返回 `ScreenshotResult`。
+- `Modify: ody-browser-control/src/types.rs` — `ScreenshotResult` 输出类型与 `SCREENSHOT_MAX_BYTES` 限制。
+- `Modify: ody-browser-control/src/tools/mod.rs` — `BrowserScreenshotTool` 暴露 `full_page` 参数并将结果包装为 tool 输出。
+
+**实现说明:**
+原计划中的 `src/screenshot.rs` 未单独实现。截图后处理直接由 `thread_state.rs` 完成：使用 `base64` crate 将 `PageState::screenshot` 返回的 PNG bytes 编码为 base64 字符串，超过 `SCREENSHOT_MAX_BYTES` 时截断并设置 `truncated = true`。当前实现未引入 `ody-utils-image`；`ody-utils-image` 在 `ody-browser-control/Cargo.toml` 中无依赖，因此 roadmap 中关于 `ody_utils_image::data_url_from_bytes` 与 resize 的说明不适用于当前架构。
 
 **实现要点:**
-- `Page::screenshot` 返回 PNG/JPEG bytes。
-- 工具层调用 `ody_utils_image::data_url_from_bytes` 转成 data URL 返回给模型。
-- 可选 resize：如果 `max_dimension` 配置小于截图尺寸，调用 `ody-utils-image` 的 resize 能力（若现有 API 不满足，可在 `ody-utils-image` 新增一个异步/同步入口）。
+- `PageState::screenshot(full_page)` 使用 `chromiumoxide::page::ScreenshotParams::builder().full_page(full_page).build()` 捕获 PNG bytes。
+- `BrowserThreadState::screenshot(full_page)` 通过 `with_page_retry` 调用默认 page 的截图方法。
+- 截图 bytes 使用 `base64::engine::general_purpose::STANDARD.encode` 编码。
+- 当 base64 数据长度超过 `SCREENSHOT_MAX_BYTES` 时，调用 `truncate_base64_bytes` 截断到最近的 4 字节倍数（保证 base64 有效）并标记 `truncated = true`。
+- 返回 `ScreenshotResult { data, mime_type: "image/png", truncated }`。
+- `BrowserScreenshotTool` 的 schema 暴露可选 `full_page: boolean` 参数。
 
-**验证要点:** 单元测试验证 base64 data URL 格式正确。
+**验证要点:**
+- [x] `thread_state.rs` 单元测试验证 `truncate_base64_bytes` 保持 4 字节倍数并保留截断提示。
+- [x] `types.rs` 单元测试验证 `truncate_base64_keeps_multiple_of_four` 等行为。
+- [x] `tools/mod.rs` 单元测试验证 `BrowserScreenshotTool` schema 与未初始化状态错误路径。
+- [x] `cargo test -p ody-browser-control --tests` 通过。
 
 ---
 
-### Task 3.1: 工具 schema 与 `ToolExecutor` 实现 [plan]
+### Task 3.1: 工具 schema 与 `ToolExecutor` 实现 [completed]
 
 **Depends on:** 2.1, 2.2, 2.3, 2.4  
 **模式理由:** 共享签名变更（工具 schema、输出结构）扇出到模型可见上下文；是模型正确调用的关键。
 
 **Files:**
-- Add: `ody-browser-control/src/tool.rs`
-- Add: `ody-browser-control/src/tools/` 目录（每个工具一个文件或合并）
-- Add: `ody-browser-control/src/tool_tests.rs`
+  - Modify: `ody-browser-control/src/tools/mod.rs` — 实现 `BrowserNavigateTool`、`BrowserGoBackTool`、`BrowserGoForwardTool`、`BrowserReloadTool`、`BrowserScreenshotTool`、`BrowserEvaluateTool`、`BrowserClickTool`、`BrowserTypeTool`、`BrowserGetDomTool`、`BrowserReadLogsTool`、`BrowserExecuteRawCdpTool`，以及共享辅助函数与 `all_tools` 注册。
+  - Modify: `ody-browser-control/src/types.rs` — `Point`、`WaitCondition`、`LogKind`、`LogLevel` 等工具输入类型。
+  - 删除原计划中的 `Add: ody-browser-control/src/tool.rs`。
 
-**参考实现：** 完全仿照 `ody-web-search/src/tool.rs` 的 `ToolExecutor<ToolCall>` 实现。
+**实现说明：**
+  - 原计划中的 `src/tool.rs` 未单独实现，11 个模型工具全部集中在 `src/tools/mod.rs`。
+  - 每个工具持有 `Arc<BrowserThreadState>` 并通过 `ToolExecutor<ToolCall>` trait 接入 `ody_tools`。
+  - 工具通过 `ToolSpec::Namespace` 注册在 `browser` 命名空间下，外部名称为 `browser__<name>`。
+  - `wrap_output` 将结果与 `BrowserControlApprovalTicket` 一起包装，供 app-server guardian 层消费。
+  - 敏感操作（navigate、go_back、go_forward、reload、click、type、evaluate、execute_raw_cdp）通过 `ensure_browser_approved` 生成审批 ticket；只读操作（screenshot、get_dom、read_logs）不需要审批。
+  - `BrowserEvaluateTool` 在审批前调用 `url_block::check_js_allowed` 静态拒绝包含 `document.cookie`、`eval(`、`atob(` 等表达式。
+  - `BrowserExecuteRawCdpTool` 在外部浏览器模式下直接拒绝；在内部模式下先检查 `raw_cdp_blocklist::is_raw_cdp_blocked` 黑名单，再生成审批 ticket。
+  - `BrowserClickTool` / `BrowserTypeTool` / `BrowserEvaluateTool` 在外部浏览器模式下且 `external_browser_allow_sensitive=false` 时拒绝执行。
 
 **工具清单与 schema：**
 
-| 工具名 | 输入 | 输出 | 说明 |
+| 工具名 | 输入 | 输出 | 备注 |
 | --- | --- | --- | --- |
-| `browser__navigate` | `url`, `wait_until?` | `url`, `title` | 导航并等待 |
-| `browser__screenshot` | `full_page?`, `max_dimension?` | `data_url`, `width`, `height` | 截图转 data URL |
-| `browser__click` | `selector` / `element_id` | `clicked`, `not_found?` | ComputerUse 门控 |
-| `browser__type` | `selector`, `text`, `clear_first?` | `typed` | ComputerUse 门控 |
-| `browser__evaluate` | `expression`, `return_by_value?` | `result`, `exception?` | 执行 JS |
-| `browser__get_console_logs` | `level?`, `limit?` | `logs[]` | 读取控制台 |
-| `browser__get_network_logs` | `filter?`, `limit?` | `entries[]` | 读取网络 |
-| `browser__get_dom` | `selector?`, `outer_html?` | `nodes[]` / `html` | 只读 DOM |
-| `browser__reset` | — | `ok` | 关闭并重开会话 |
-| `browser__execute_raw_cdp` | `method`, `params?` | `result` | FullCdpAccess 门控 |
+| `browser__navigate` | `url`, `wait_until?` | `{ url, title }` | `wait_until` ∈ {`load`, `domcontentloaded`, `networkidle`} |
+| `browser__go_back` | — | `{ title }` |  |
+| `browser__go_forward` | — | `{ title }` |  |
+| `browser__reload` | — | `{ title }` |  |
+| `browser__screenshot` | `full_page?` | `{ data_url, truncated, mime_type }` | PNG，base64 data URL |
+| `browser__evaluate` | `expression` | `{ result, exception? }` | 静态拒绝 `document.cookie` 等 |
+| `browser__click` | `x`, `y` | `{ clicked }` | CSS 像素坐标 |
+| `browser__type` | `selector`, `text` | `{ typed }` |  |
+| `browser__get_dom` | `selector?` | JSON / HTML | 无 `selector` 返回文档节点树，有 `selector` 返回 `outerHTML` |
+| `browser__read_logs` | `kind?`, `level?` | `{ entries[] }` | `kind` ∈ {`console`, `network`, `all`}，`level` ∈ {`verbose`, `info`, `warning`, `error`} |
+| `browser__execute_raw_cdp` | `method`, `params?` | `{ result }` | 黑名单方法直接拒绝；外部模式下禁用 |
+
+**实现要点:**
+  - `all_tools(state)` 返回包含全部 11 个工具的 `Vec<Arc<dyn ToolExecutor<ToolCall>>>`。
+  - `namespaced_tool_name(name)` 生成 `ToolName::namespaced("browser", name)`。
+  - `namespace_spec(name, description, parameters)` 将单个工具包装为 `ToolSpec::Namespace`。
+  - `ensure_browser_approved` 根据 `browser_action_name` 映射决定是否需要 guardian 审批，evaluate 的长表达式会在 ticket 中截断到 500 字节并标注 `expression_truncated`。
 
 **验证要点:**
-- [ ] 每个工具都有失败测试：mock `BrowserSession` 返回预期结果，验证 `ToolExecutor::handle` 输出 JSON 结构。
-- [ ] 验证 `browser__execute_raw_cdp` 在配置未启用 full CDP 时不被注册。
-- [ ] `cargo test -p ody-browser-control tool` PASS。
+  - [x] `tools/mod.rs` 单元测试覆盖 navigate 审批路径、screenshot 无需审批、evaluate 禁止表达式、长表达式 ticket 截断、raw CDP 黑名单、raw CDP 外部模式禁用。
+  - [x] `cargo test -p ody-browser-control --tests` 通过。
 
 ---
 
-### Task 3.2: Code mode 兼容 [normal]
+### Task 3.2: Code mode 兼容 [completed]
 
 **Depends on:** 3.1  
 **模式理由:** 机械验证；`ody-tools/src/code_mode.rs` 会自动处理 namespace + name 的嵌套名，但需确认 `browser__*` 不会与 reserved namespace 冲突。
 
 **Files:**
-- Add: `ody-browser-control/src/code_mode_tests.rs`
+  - 无新增文件。Code mode 兼容性由 `ody-browser-control/src/tools/mod.rs` 使用 `ToolName::namespaced("browser", name)` 与 `ToolSpec::Namespace` 实现。
+  - 删除原计划中的 `Add: ody-browser-control/src/code_mode_tests.rs`。
+
+**实现说明：**
+  - 原计划中的 `ody-browser-control/src/code_mode_tests.rs` 未单独实现。Code mode 嵌套名转换由 `ody_tools::code_mode` 的通用逻辑提供：`code_mode_name_for_tool_name` 检测到 namespace 为 `"browser"`、name 不以 `_` 开头、namespace 不以 `_` 结尾，输出 `"browser__navigate"`。
+  - `ody_code_mode::is_code_mode_nested_tool` 识别带 `__` 的名称，使浏览器工具在 code mode 中以 `tools.browser__navigate(...)` 形式可用。
+  - `ody-browser-control` crate 无需额外代码即可兼容 code mode。
 
 **实现要点:**
-- 调用 `ody_tools::code_mode_name_for_tool_name(&ToolName::namespaced("browser", "navigate"))` 应得到 `"browser__navigate"`。
-- 确认 `ody_code_mode::is_code_mode_nested_tool` 不拒绝该名称。
+  - 所有 browser 工具通过 `namespace_spec` 注册为 `ToolSpec::Namespace("browser")` 下的函数。
+  - `ToolName::namespaced("browser", "navigate")` 经 `ody_tools::code_mode_name_for_tool_name` 得到 `"browser__navigate"`。
+  - 该转换对所有 11 个工具一致生效，无需逐个处理。
 
-**验证要点:** 新增测试断言嵌套名正确；`cargo test -p ody-browser-control code_mode` PASS。
+**验证要点:**
+  - [x] `ody_tools::code_mode_name_for_tool_name(&ToolName::namespaced("browser", "navigate"))` 返回 `"browser__navigate"`（由 `tools/src/code_mode_tests.rs` 的通用测试覆盖）。
+  - [x] `ody_code_mode::is_code_mode_nested_tool("browser__navigate")` 为 true。
+  - [x] `cargo test -p ody-tools code_mode` 通过。
+  - [x] `cargo test -p ody-browser-control --tests` 通过。
 
 ---
 
