@@ -29,8 +29,8 @@ assumes you know which fragment you're editing and why.
       elsewhere).
 - [ ] If you introduce a new `{{ variable }}` placeholder, it must be wired through
       `render_plan_instructions` in `collaboration_mode_instructions.rs` the same way
-      `split_threshold` is — a placeholder with no renderer will leak `{{ ... }}` literally into
-      the model prompt.
+      `split_threshold` and `max_part_bytes` are — a placeholder with no renderer will leak
+      `{{ ... }}` literally into the model prompt.
 - [ ] Concrete over abstract: every rule in these fragments exists to stop a real failure mode.
       If you're tightening a rule, prefer adding a worked example (see RISKS' or TASK_SKELETON's
       "Example" sections) over adding more prose.

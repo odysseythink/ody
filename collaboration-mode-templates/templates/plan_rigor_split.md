@@ -2,7 +2,9 @@
 
 Rigor values complete, executable detail over brevity. A Rigor plan with more than one executable task must use a task manifest and one part file per task, even when the generic split threshold would otherwise allow a single file. A one-task plan may remain in one file. The generic split threshold still applies to non-Rigor plans and can require splitting for other reasons.
 
-Do not compress, merge away, or replace concrete implementation steps, source evidence, failure cases, or behavioral tests with a summary. There is no default byte target for a task part. If an installation explicitly configures a size limit, split only that task into separately named, explicitly limited tasks before writing it; never make the task less complete to fit.
+Do not compress, merge away, or replace concrete implementation steps, source evidence, failure cases, or behavioral tests with a summary. The configured maximum size of each part is **`{{ max_part_bytes }}` UTF-8 bytes** (`0` disables the byte limit). Account for that exact value when creating the initial task manifest: split a large change surface into smaller, independently executable tasks before the index is accepted, never after writing a part.
+
+The first accepted `## Parts` manifest is frozen before part writing begins. Later index submissions may only advance the existing rows from `pending` to `done`; never add, remove, rename, reorder, split, merge, or change the scope/dependencies of rows. If a complete task part cannot fit the configured byte limit, stop and ask the user to raise `plan_mode.max_part_bytes` instead of changing the manifest and regenerating completed work.
 
 ### File structure
 
@@ -74,6 +76,7 @@ The source-evidence section must include at least one backticked `path:line` anc
 ### Writing protocol
 
 1. Write the complete index first with all task rows `pending`, then call `submit_plan` with the full index.
+   - Before this call, verify that every complete task-part contract can fit within `{{ max_part_bytes }}` UTF-8 bytes when the value is non-zero. This is the only point where task partitioning is allowed.
 2. The host names the only pending task that may be written. Write that exact task file with a normal file-write tool; `submit_plan` only writes the index.
 3. Call `submit_plan` again with the complete index and only the verified task row changed to `done`.
 4. The host automatically continues to the next pending task. Do not stop with a plain-text progress report, do not ask for approval, and do not create or edit a later task file first.

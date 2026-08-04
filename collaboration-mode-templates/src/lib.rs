@@ -70,7 +70,7 @@ mod template_tests {
     }
 
     #[test]
-    fn split_templates_require_complete_detail_without_a_default_byte_target() {
+    fn split_templates_require_complete_detail_and_freeze_the_initial_manifest() {
         for (name, body) in [("PLAN", PLAN), ("PLAN_RIGOR_SPLIT", PLAN_RIGOR_SPLIT)] {
             assert!(
                 body.contains("Do not replace") || body.contains("Do not compress"),
@@ -79,6 +79,14 @@ mod template_tests {
             assert!(
                 !body.contains("byte budget"),
                 "{name} must not encourage compacting a plan to a default byte budget"
+            );
+            assert!(
+                body.contains("{{ max_part_bytes }}"),
+                "{name} must expose the configured byte limit before part writing"
+            );
+            assert!(
+                body.contains("frozen"),
+                "{name} must prohibit repartitioning after the initial index"
             );
         }
     }

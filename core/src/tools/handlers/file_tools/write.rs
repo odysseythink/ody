@@ -97,7 +97,7 @@ fn split_part_size_violation(
         normalize_part_path(stem_dir, &row.file).is_some_and(|expected| expected == path)
     })?;
     Some(format!(
-        "write_file rejected: `{}` is a split-plan part and {} bytes exceeds its configured {}-byte limit. Resubmit the complete index with this change surface split into additional pending `## Parts` rows before writing it; do not shorten, omit, or replace concrete implementation detail, source evidence, edge cases, or behavioral tests to fit the budget. No file was changed.",
+        "write_file rejected: `{}` is a split-plan part and {} bytes exceeds its configured {}-byte limit. The accepted `## Parts` manifest is frozen: do not split, rename, or replace its rows after this rejection. Keep the same task and preserve its concrete implementation detail, source evidence, edge cases, and behavioral tests; if the complete part cannot fit, ask the user to raise `plan_mode.max_part_bytes`. No file was changed.",
         row.file, bytes, max_bytes
     ))
 }
@@ -313,8 +313,9 @@ mod tests {
 
         let violation = split_part_size_violation(markdown, &stem, &stem.join("core.md"), 25, 24)
             .expect("manifest part should be constrained");
-        assert!(violation.contains("Resubmit the complete index"));
-        assert!(violation.contains("do not shorten, omit, or replace"));
+        assert!(violation.contains("manifest is frozen"));
+        assert!(violation.contains("do not split, rename, or replace"));
+        assert!(violation.contains("raise `plan_mode.max_part_bytes`"));
         assert!(violation.contains("No file was changed"));
         assert!(
             split_part_size_violation(markdown, &stem, &stem.join("unrelated.md"), 25, 24,)

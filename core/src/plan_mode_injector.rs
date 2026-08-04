@@ -304,7 +304,10 @@ impl PlanModeInjector {
         let split_threshold = plan_mode_config
             .and_then(|c| c.split_threshold)
             .unwrap_or(8);
-        let text = render_threshold_placeholders(&text, split_threshold);
+        let max_part_bytes = plan_mode_config
+            .and_then(|config| config.max_part_bytes)
+            .unwrap_or(0);
+        let text = render_config_placeholders(&text, split_threshold, max_part_bytes);
         let log = make_log(
             PlanModeLogKind::RigorReminder,
             match kind {
@@ -345,7 +348,10 @@ impl PlanModeInjector {
         let split_threshold = plan_mode_config
             .and_then(|c| c.split_threshold)
             .unwrap_or(8);
-        let text = render_threshold_placeholders(&text, split_threshold);
+        let max_part_bytes = plan_mode_config
+            .and_then(|config| config.max_part_bytes)
+            .unwrap_or(0);
+        let text = render_config_placeholders(&text, split_threshold, max_part_bytes);
         let log = make_log(
             PlanModeLogKind::RigorReminder,
             match kind {
@@ -462,7 +468,7 @@ pub fn render_directive(
             resolved_part_path(index_path, &next_part.relative_path), next_part.scope
         )),
         (_, PlanModeDirective::RefinePart { part, violations }) => Some(format!(
-            "The completed part {} does not satisfy its completion contract ({}). Do not mark it accepted. Repair that part so it contains the required concrete evidence and self-review, then resubmit the complete index. Split only when an explicitly configured size limit makes that necessary; preserve the full task detail and stable task identities. The host will continue from the resulting manifest automatically.",
+            "The completed part {} does not satisfy its completion contract ({}). Do not mark it accepted. Repair that same part so it contains the required concrete evidence and self-review, then resubmit the complete index without changing the frozen manifest. If the complete part cannot fit an explicitly configured size limit, ask the user to raise `plan_mode.max_part_bytes`; do not repartition completed work. The host will continue from the stable manifest automatically.",
             resolved_part_path(index_path, &part.relative_path),
             violations.join("; ")
         )),
@@ -477,8 +483,9 @@ pub fn render_directive(
 /// PLAN_RIGOR_SPLIT. The reminder injection path (session/turn.rs) does not
 /// go through `render_plan_instructions`, so reminders must render the
 /// placeholder themselves.
-fn render_threshold_placeholders(text: &str, split_threshold: usize) -> String {
+fn render_config_placeholders(text: &str, split_threshold: usize, max_part_bytes: usize) -> String {
     text.replace("{{ split_threshold }}", &split_threshold.to_string())
+        .replace("{{ max_part_bytes }}", &max_part_bytes.to_string())
 }
 
 /// Renders the full rigor-tier plan-mode reminder.
@@ -516,11 +523,11 @@ You are writing a rigor-tier plan. Keep the following artifacts current:
 - Source-grounding mandate
 - Out-of-scope / false-positive discipline
 - Rename-vs-delete decision prompt
-- Large-plan splitting: keep the ## Parts manifest current; advance one verified task part at a time
+- Large-plan splitting: freeze the complete ## Parts manifest before writing; then advance one verified task part at a time without repartitioning
 
 Quality bar: the plan must stay concrete enough to execute with zero follow-up — complete code in every step (not pseudocode or "similar to Task N"), exact commands with expected output, and per-task tests that assert the actual risk being changed.
 
-For a task manifest, every task part must retain its complete Files, Source evidence, Implementation, Failure and edge cases, Tests, and seven-item Self-review contract. Do not compress those details into a summary for brevity; the default configuration has no byte target.
+For a task manifest, every task part must retain its complete Files, Source evidence, Implementation, Failure and edge cases, Tests, and seven-item Self-review contract. Do not compress those details into a summary. The configured part limit is {{ max_part_bytes }} UTF-8 bytes (0 disables it); account for it in the initial frozen manifest. If a complete task cannot fit, ask the user to raise `plan_mode.max_part_bytes` rather than changing the manifest.
 "#
     .to_string()
 }
@@ -575,7 +582,7 @@ mod reminder_tests {
     fn full_reminder_includes_split_contract() {
         let text = render_full_reminder();
         assert!(
-            text.contains("Large plan splitting"),
+            text.contains("task parts and the Parts manifest"),
             "full reminder missing the split addendum (PLAN_RIGOR_SPLIT)"
         );
         assert!(
@@ -598,14 +605,18 @@ mod reminder_tests {
     }
 
     #[test]
-    fn reminder_threshold_placeholders_are_rendered() {
+    fn reminder_config_placeholders_are_rendered() {
         // The reminder injection path (session/turn.rs) does not go through
         // render_plan_instructions, so the reminder text must substitute the
-        // placeholder itself before reaching the model.
-        let text = render_threshold_placeholders("Plans >{{ split_threshold }} tasks", 8);
-        assert_eq!(text, "Plans >8 tasks");
+        // placeholders itself before reaching the model.
+        let text = render_config_placeholders(
+            "Plans >{{ split_threshold }} tasks; parts <= {{ max_part_bytes }} bytes",
+            8,
+            12_288,
+        );
+        assert_eq!(text, "Plans >8 tasks; parts <= 12288 bytes");
         assert!(
-            !render_threshold_placeholders(render_full_reminder().as_str(), 8).contains("{{"),
+            !render_config_placeholders(render_full_reminder().as_str(), 8, 12_288).contains("{{"),
             "full reminder must contain no unrendered placeholder after substitution"
         );
     }
@@ -747,7 +758,7 @@ mod directive_tests {
     }
 
     #[tokio::test]
-    async fn oversized_done_part_requests_manifest_refinement() {
+    async fn oversized_done_part_keeps_the_frozen_manifest() {
         let (artifact, _tmp) = artifact("2026-07-04");
         artifact.finalize_name("topic").await.unwrap();
         let stem_dir = artifact.stem_dir().unwrap();
@@ -771,7 +782,10 @@ mod directive_tests {
             ModeKind::Plan,
         )
         .expect("refinement directive");
-        assert!(directive.contains("replaced by two or more smaller"));
+        assert!(directive.contains("Repair that same part"));
+        assert!(directive.contains("without changing the frozen manifest"));
+        assert!(directive.contains("raise `plan_mode.max_part_bytes`"));
+        assert!(!directive.contains("replaced by two or more smaller"));
     }
 
     #[tokio::test]
@@ -813,9 +827,16 @@ mod directive_tests {
             ModeKind::Plan,
         )
         .expect("directive text");
-        let expected = format!("{}", artifact.stem_dir().unwrap().join("api.md").display());
+        let expected = artifact
+            .stem_dir()
+            .unwrap()
+            .join("api.md")
+            .display()
+            .to_string()
+            .replace('\\', "/");
+        let normalized_text = text.replace('\\', "/");
         assert!(
-            text.contains(&expected),
+            normalized_text.contains(&expected),
             "directive should carry the resolved absolute part path:\n{text}"
         );
         assert!(
@@ -1131,6 +1152,31 @@ mod directive_tests {
     }
 
     #[test]
+    fn render_reminder_repeats_exact_part_budget_and_manifest_freeze() {
+        let tmp = tempfile::tempdir().unwrap();
+        let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let artifact =
+            PlanArtifact::new_temp(plans_base_dir, ody_protocol::ThreadId::new(), "2026-08-04");
+        let config = PlanModeConfigToml {
+            full_refresh_turns: Some(1),
+            dedup_min_turns: Some(0),
+            max_part_bytes: Some(12_288),
+            ..Default::default()
+        };
+
+        let (_, text, _) =
+            PlanModeInjector::render_reminder_if_due(&artifact, Some(&config), ModeKind::Plan)
+                .expect("turn 1 should emit a full reminder");
+
+        assert!(text.contains("`12288` UTF-8 bytes"), "{text}");
+        assert!(
+            text.contains("first accepted `## Parts` manifest is frozen"),
+            "{text}"
+        );
+        assert!(!text.contains("{{ max_part_bytes }}"), "{text}");
+    }
+
+    #[test]
     fn render_reminder_if_due_never_fires_for_design_mode() {
         // D4 will widen the after-turn hook's mode gate from `== Plan` to
         // `is_read_only_session_mode` (which admits Design). This function's own
@@ -1345,8 +1391,9 @@ mod directive_tests {
         let index_path =
             Path::new("/repo/.ody-code/plans/2026-07-12-mode_models_implementation_plan.md");
         let text = render_directive(&dir, index_path, ModeKind::Plan).expect("plan start");
+        let normalized_text = text.replace('\\', "/");
         assert!(
-            text.contains(
+            normalized_text.contains(
                 "/repo/.ody-code/plans/2026-07-12-mode_models_implementation_plan/config-schema.md"
             ),
             "directive must resolve the part against the real stem directory, not the model's guessed prefix: {text}"

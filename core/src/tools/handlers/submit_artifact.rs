@@ -16,7 +16,9 @@ use crate::design_review::types::DesignReviewOutput;
 use crate::design_review::types::DesignReviewRequest;
 use crate::function_tool::FunctionCallError;
 use crate::plan_artifact::PlanWriteOutcome;
+use crate::plan_mode_injector::parts_manifest::PartsManifest;
 use crate::plan_mode_injector::parts_manifest::RowStatus;
+use crate::plan_mode_injector::parts_manifest::manifest_progression_violations;
 use crate::plan_mode_injector::parts_manifest::parse_parts_manifest;
 use crate::plan_mode_injector::parts_manifest::part_completion_violations;
 use crate::plan_mode_injector::parts_manifest::part_file_cell_problem;
@@ -105,6 +107,31 @@ fn parts_manifest_cell_problems(stem_dir: &Path, markdown: &str) -> Vec<String> 
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// Returns `Some` once the previous submission established a valid manifest.
+/// An empty vector means the current manifest is a legal status-only advance;
+/// non-empty entries explain why the submission would mutate the frozen
+/// execution contract. `None` leaves an invalid initial index repairable.
+fn frozen_manifest_submission_violations(
+    stem_dir: &Path,
+    previous_markdown: &str,
+    current_manifest: Option<&PartsManifest>,
+) -> Option<Vec<String>> {
+    let previous_parse = parse_parts_manifest(previous_markdown);
+    if !previous_parse.diagnostics.is_empty()
+        || !parts_manifest_cell_problems(stem_dir, previous_markdown).is_empty()
+    {
+        return None;
+    }
+    let previous_manifest = previous_parse.manifest.as_ref()?;
+    let Some(current_manifest) = current_manifest else {
+        return Some(vec!["the manifest was removed".to_string()]);
+    };
+    Some(manifest_progression_violations(
+        previous_manifest,
+        current_manifest,
+    ))
 }
 
 /// Rejects a single-file submission that is too large to survive the context
@@ -486,6 +513,29 @@ pub(crate) async fn handle_submit_artifact(
         )));
     }
 
+    // A valid split-plan index is the execution contract. Once accepted, its
+    // row identities, files, scopes, dependencies, and order are frozen; later
+    // submissions may only advance statuses from pending to done. This keeps a
+    // completed part from being discarded and regenerated because the model
+    // decides to repartition the index after writing has started.
+    if expected_mode == ModeKind::Plan
+        && let (Some(stem_dir), Some(previous_markdown)) =
+            (artifact.stem_dir(), artifact.last_plan_text())
+    {
+        if let Some(violations) = frozen_manifest_submission_violations(
+            &stem_dir,
+            &previous_markdown,
+            manifest_parse.manifest.as_ref(),
+        ) && !violations.is_empty()
+        {
+            return Err(FunctionCallError::RespondToModel(format!(
+                "{} rejected: the accepted `## Parts` manifest is frozen before part writing begins; later submissions may only change row Status from `pending` to `done`. Illegal change(s): {}. This call was not persisted. Restore the original rows and continue the active part. If a complete part cannot fit the configured limit, ask the user to raise `plan_mode.max_part_bytes` instead of repartitioning completed work.",
+                wording.tool_name,
+                violations.join("; ")
+            )));
+        }
+    }
+
     if rigor_task_mode_required(expected_mode, artifact)
         && let Some(gap) = task_mode_gap(&markdown)
     {
@@ -846,7 +896,7 @@ pub(crate) async fn handle_submit_artifact(
         bad_cells
     } else if !incomplete_done_parts.is_empty() {
         format!(
-            "{} saved, but completed part(s) do not satisfy their completion contract: {}. This is not final. Repair the named task parts (or split only an explicitly configured size-limited task), keep their rows pending until they verify, then call {} with the complete updated index.",
+            "{} saved, but completed part(s) do not satisfy their completion contract: {}. This is not final. Repair the same named task parts without changing the frozen manifest, keep their rows pending until they verify, then call {} with the complete updated index. If a complete part cannot fit, ask the user to raise `plan_mode.max_part_bytes`.",
             wording.noun,
             incomplete_done_parts.join("; "),
             wording.tool_name,
@@ -996,6 +1046,67 @@ mod tests {
         let stem = Path::new("/plans/2026-07-16-topic");
         let plan = "# Plan\n\n## Summary\n\nNo parts here.\n";
         assert!(parts_manifest_cell_problems(stem, plan).is_empty());
+    }
+
+    #[test]
+    fn frozen_manifest_submission_allows_only_status_progression() {
+        let stem = Path::new("/plans/topic");
+        let previous = "## Parts\n| ID | File | Task | Scope | Depends on | Status |\n|---|---|---|---|---|---|\n| T01 | topic/domain.md | Add domain model | domain | none | pending |\n";
+        let current = parse_parts_manifest(
+            "## Parts\n| ID | File | Task | Scope | Depends on | Status |\n|---|---|---|---|---|---|\n| T01 | topic/domain.md | Add domain model | domain | none | done |\n",
+        );
+
+        assert_eq!(
+            frozen_manifest_submission_violations(stem, previous, current.manifest.as_ref()),
+            Some(Vec::new())
+        );
+    }
+
+    #[test]
+    fn frozen_manifest_submission_rejects_removal_and_repartition() {
+        let stem = Path::new("/plans/topic");
+        let previous = "## Parts\n| ID | File | Task | Scope | Depends on | Status |\n|---|---|---|---|---|---|\n| T01 | topic/domain.md | Add domain model | domain | none | done |\n";
+        assert_eq!(
+            frozen_manifest_submission_violations(stem, previous, None),
+            Some(vec!["the manifest was removed".to_string()])
+        );
+
+        let repartitioned = parse_parts_manifest(
+            "## Parts\n| ID | File | Task | Scope | Depends on | Status |\n|---|---|---|---|---|---|\n| T01a | topic/domain-types.md | Add domain types | types | none | pending |\n| T01b | topic/domain-tests.md | Test domain model | tests | T01a | pending |\n",
+        );
+        let violations =
+            frozen_manifest_submission_violations(stem, previous, repartitioned.manifest.as_ref())
+                .expect("the previous valid manifest should be frozen");
+        assert!(
+            violations
+                .iter()
+                .any(|violation| violation.contains("row count changed")),
+            "{violations:?}"
+        );
+        assert!(
+            violations
+                .iter()
+                .any(|violation| violation.contains("regressed from done to pending")),
+            "{violations:?}"
+        );
+    }
+
+    #[test]
+    fn invalid_initial_manifest_is_not_frozen() {
+        let stem = Path::new("/plans/topic");
+        let invalid_previous = "## Parts\n| ID | File | Task | Scope | Depends on | Status |\n|---|---|---|---|---|---|\n| T01 | ../wrong/domain.md | Add domain model | domain | none | pending |\n";
+        let corrected = parse_parts_manifest(
+            "## Parts\n| ID | File | Task | Scope | Depends on | Status |\n|---|---|---|---|---|---|\n| T01 | topic/domain.md | Add domain model | domain | none | pending |\n",
+        );
+
+        assert_eq!(
+            frozen_manifest_submission_violations(
+                stem,
+                invalid_previous,
+                corrected.manifest.as_ref()
+            ),
+            None
+        );
     }
 
     // Re-exported from submit_plan.rs's test module — same helpers, same tests.

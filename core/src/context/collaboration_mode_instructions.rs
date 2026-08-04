@@ -9,6 +9,7 @@ use ody_protocol::protocol::COLLABORATION_MODE_CLOSE_TAG;
 use ody_protocol::protocol::COLLABORATION_MODE_OPEN_TAG;
 
 const SPLIT_THRESHOLD_TEMPLATE_KEY: &str = "split_threshold";
+const MAX_PART_BYTES_TEMPLATE_KEY: &str = "max_part_bytes";
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct CollaborationModeInstructions {
@@ -60,13 +61,18 @@ impl CollaborationModeInstructions {
             this = this.with_design_audit_level(level);
         }
 
-        // Render AFTER all fragments are appended: PLAN_RIGOR_SPLIT carries its
-        // own {{ split_threshold }} placeholders, so rendering the base
-        // instructions first leaves literal placeholders in the final text.
+        // Render AFTER all fragments are appended: PLAN_RIGOR_SPLIT carries
+        // host-configured split and part-budget placeholders, so rendering the
+        // base instructions first leaves literal placeholders in the final text.
         if matches!(collaboration_mode.mode, ModeKind::Plan | ModeKind::Design)
-            && this.instructions.contains(SPLIT_THRESHOLD_TEMPLATE_KEY)
+            && (this.instructions.contains(SPLIT_THRESHOLD_TEMPLATE_KEY)
+                || this.instructions.contains(MAX_PART_BYTES_TEMPLATE_KEY))
         {
-            this.instructions = render_plan_instructions(&this.instructions, split_threshold);
+            let max_part_bytes = plan_mode_config
+                .and_then(|config| config.max_part_bytes)
+                .unwrap_or(0);
+            this.instructions =
+                render_plan_instructions(&this.instructions, split_threshold, max_part_bytes);
         }
 
         Some(this)
@@ -244,7 +250,11 @@ fn capitalize(word: &str) -> String {
     }
 }
 
-fn render_plan_instructions(instructions: &str, split_threshold: Option<usize>) -> String {
+fn render_plan_instructions(
+    instructions: &str,
+    split_threshold: Option<usize>,
+    max_part_bytes: usize,
+) -> String {
     let template = match ody_utils_template::Template::parse(instructions) {
         Ok(template) => template,
         Err(err) => {
@@ -253,15 +263,27 @@ fn render_plan_instructions(instructions: &str, split_threshold: Option<usize>) 
         }
     };
 
-    if !template
+    let has_split_threshold = template
         .placeholders()
-        .any(|name| name == SPLIT_THRESHOLD_TEMPLATE_KEY)
-    {
+        .any(|name| name == SPLIT_THRESHOLD_TEMPLATE_KEY);
+    let has_max_part_bytes = template
+        .placeholders()
+        .any(|name| name == MAX_PART_BYTES_TEMPLATE_KEY);
+    if !has_split_threshold && !has_max_part_bytes {
         return instructions.to_string();
     }
 
-    let value = split_threshold.map_or_else(|| "8".to_string(), |v| v.to_string());
-    match template.render([(SPLIT_THRESHOLD_TEMPLATE_KEY, value.as_str())]) {
+    let split_threshold_value =
+        split_threshold.map_or_else(|| "8".to_string(), |value| value.to_string());
+    let max_part_bytes_value = max_part_bytes.to_string();
+    let variables = [
+        has_split_threshold
+            .then_some((SPLIT_THRESHOLD_TEMPLATE_KEY, split_threshold_value.as_str())),
+        has_max_part_bytes.then_some((MAX_PART_BYTES_TEMPLATE_KEY, max_part_bytes_value.as_str())),
+    ]
+    .into_iter()
+    .flatten();
+    match template.render(variables) {
         Ok(rendered) => rendered,
         Err(err) => {
             tracing::warn!("plan mode instructions template render error: {err}");
@@ -360,6 +382,30 @@ mod tests {
                 .contains("Split plans larger than 8 tasks.")
         );
         assert!(!instructions.body().contains("{{ split_threshold }}"));
+    }
+
+    #[test]
+    fn renders_exact_part_budget_before_manifest_creation() {
+        let mode = plan_mode_with_instructions(
+            "Split at {{ split_threshold }} tasks; cap each part at {{ max_part_bytes }} bytes.",
+        );
+        let config = PlanModeConfigToml {
+            max_part_bytes: Some(12_288),
+            ..Default::default()
+        };
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            Some(4),
+            Some("write the implementation plan"),
+            Some(&config),
+            None,
+        )
+        .expect("should produce instructions");
+        let body = instructions.body();
+
+        assert!(body.contains("Split at 4 tasks; cap each part at 12288 bytes."));
+        assert!(body.contains("first accepted `## Parts` manifest is frozen"));
+        assert!(!body.contains("{{ max_part_bytes }}"));
     }
 
     #[test]
@@ -759,7 +805,7 @@ mod tests {
         assert!(body.contains("## Out-of-scope / false-positive discipline"));
         assert!(body.contains("## Rename-vs-delete decision prompt"));
         assert!(body.contains("## Rigor tier addendum: Minimal experiments (spikes)"));
-        assert!(body.contains("## Rigor tier addendum: Large plan splitting & Parts manifest"));
+        assert!(body.contains("## Rigor tier addendum: task parts and the Parts manifest"));
         assert!(body.contains("## Rigor tier addendum: Turn discipline (when to submit the plan)"));
     }
 

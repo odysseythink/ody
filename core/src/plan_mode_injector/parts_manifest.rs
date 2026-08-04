@@ -22,6 +22,59 @@ impl PartsManifest {
     }
 }
 
+/// Returns contract changes that are not legal after a split-plan manifest has
+/// been accepted. The manifest is the execution contract: later submissions
+/// may only advance row status from `pending` to `done`.
+pub fn manifest_progression_violations(
+    previous: &PartsManifest,
+    current: &PartsManifest,
+) -> Vec<String> {
+    let mut violations = Vec::new();
+    if previous.format != current.format {
+        violations.push("manifest format changed".to_string());
+    }
+    if previous.rows.len() != current.rows.len() {
+        violations.push(format!(
+            "row count changed from {} to {}",
+            previous.rows.len(),
+            current.rows.len()
+        ));
+    }
+
+    for (position, (before, after)) in previous.rows.iter().zip(current.rows.iter()).enumerate() {
+        let row = position + 1;
+        if before.id != after.id {
+            violations.push(format!(
+                "row {row} ID changed from `{}` to `{}`",
+                before.id, after.id
+            ));
+        }
+        if before.file != after.file {
+            violations.push(format!(
+                "task `{}` File changed from `{}` to `{}`",
+                before.id, before.file, after.file
+            ));
+        }
+        if before.task != after.task {
+            violations.push(format!("task `{}` title changed", before.id));
+        }
+        if before.scope != after.scope {
+            violations.push(format!("task `{}` Scope changed", before.id));
+        }
+        if before.depends_on != after.depends_on {
+            violations.push(format!("task `{}` dependencies changed", before.id));
+        }
+        if before.status == RowStatus::Done && after.status == RowStatus::Pending {
+            violations.push(format!(
+                "task `{}` regressed from done to pending",
+                before.id
+            ));
+        }
+    }
+
+    violations
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ManifestRow {
     /// Display identifier from the `#` column. This is deliberately opaque:
@@ -716,6 +769,113 @@ mod tests {
         let result = parse_parts_manifest(markdown);
         let manifest = result.manifest.expect("expected manifest");
         assert_eq!(manifest.rows[0].file, "api.md");
+    }
+
+    #[test]
+    fn manifest_progression_allows_only_pending_to_done() {
+        let previous = parse_parts_manifest(
+            r#"## Parts
+| ID | File | Task | Scope | Depends on | Status |
+|---|---|---|---|---|---|
+| T01 | `topic/domain.md` | Add domain model | domain | none | pending |
+| T02 | `topic/api.md` | Add API | api | T01 | pending |
+"#,
+        )
+        .manifest
+        .unwrap();
+        let current = parse_parts_manifest(
+            r#"## Parts
+| ID | File | Task | Scope | Depends on | Status |
+|---|---|---|---|---|---|
+| T01 | `topic/domain.md` | Add domain model | domain | none | done |
+| T02 | `topic/api.md` | Add API | api | T01 | pending |
+"#,
+        )
+        .manifest
+        .unwrap();
+
+        assert!(manifest_progression_violations(&previous, &current).is_empty());
+    }
+
+    #[test]
+    fn manifest_progression_rejects_repartition_after_acceptance() {
+        let previous = parse_parts_manifest(
+            r#"## Parts
+| ID | File | Task | Scope | Depends on | Status |
+|---|---|---|---|---|---|
+| T01 | `topic/domain.md` | Add domain model | domain | none | done |
+| T02 | `topic/api.md` | Add API | api | T01 | pending |
+"#,
+        )
+        .manifest
+        .unwrap();
+        let repartitioned = parse_parts_manifest(
+            r#"## Parts
+| ID | File | Task | Scope | Depends on | Status |
+|---|---|---|---|---|---|
+| T01a | `topic/domain-types.md` | Add domain types | domain types | none | pending |
+| T01b | `topic/domain-tests.md` | Test domain model | domain tests | T01a | pending |
+| T02 | `topic/api.md` | Add API | api | T01b | pending |
+"#,
+        )
+        .manifest
+        .unwrap();
+
+        let violations = manifest_progression_violations(&previous, &repartitioned);
+        assert!(
+            violations
+                .iter()
+                .any(|violation| violation.contains("row count changed")),
+            "{violations:?}"
+        );
+        assert!(
+            violations
+                .iter()
+                .any(|violation| violation.contains("regressed from done to pending")),
+            "{violations:?}"
+        );
+    }
+
+    #[test]
+    fn manifest_progression_rejects_contract_edits_and_done_regression() {
+        let previous = PartsManifest {
+            format: ManifestFormat::Task,
+            rows: vec![ManifestRow {
+                id: "T01".to_string(),
+                file: "topic/domain.md".to_string(),
+                task: Some("Add domain model".to_string()),
+                scope: "domain".to_string(),
+                depends_on: Vec::new(),
+                status: RowStatus::Done,
+            }],
+        };
+        let current = PartsManifest {
+            format: ManifestFormat::Task,
+            rows: vec![ManifestRow {
+                id: "T01".to_string(),
+                file: "topic/domain-v2.md".to_string(),
+                task: Some("Replace domain model".to_string()),
+                scope: "domain and storage".to_string(),
+                depends_on: vec!["T00".to_string()],
+                status: RowStatus::Pending,
+            }],
+        };
+
+        let violations = manifest_progression_violations(&previous, &current);
+        for expected in [
+            "File changed",
+            "title changed",
+            "Scope changed",
+            "dependencies changed",
+            "regressed from done to pending",
+        ] {
+            assert!(
+                violations
+                    .iter()
+                    .any(|violation| violation.contains(expected)),
+                "missing {expected}: {violations:?}"
+            );
+        }
     }
 
     #[test]

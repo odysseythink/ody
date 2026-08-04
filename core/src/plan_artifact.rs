@@ -375,11 +375,12 @@ impl PlanArtifact {
         match stored_path {
             Some(path) if path.exists() => {
                 let subdir = infer_subdir(&plans_base_dir, &path);
+                let last_plan_text = std::fs::read_to_string(&path).ok();
                 Self {
                     state: Mutex::new(PlanArtifactState::Finalized { final_path: path }),
                     submitted: AtomicBool::new(false),
                     last_manifest_snapshot: Mutex::new(None),
-                    last_plan_text: Mutex::new(None),
+                    last_plan_text: Mutex::new(last_plan_text),
                     plan_mode_turn_count: StdMutex::new(0),
                     last_full_turn: StdMutex::new(Some(0)),
                     last_any_turn: StdMutex::new(Some(0)),
@@ -902,6 +903,7 @@ mod tests {
             "2026-07-04",
         );
         assert!(artifact.is_plan_file_path(&existing));
+        assert_eq!(artifact.last_plan_text().as_deref(), Some("# Existing"));
     }
 
     #[tokio::test]
