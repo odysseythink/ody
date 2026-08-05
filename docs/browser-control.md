@@ -162,7 +162,7 @@ console_entries=..., network_entries=..., total_bytes=...
 ## 测试
 
 ```bash
-# 单元测试 + 当前 crate 的集成测试
+# 单元测试 + 当前 crate 的集成测试（需要真实 Chrome 的测试会自动检测并跳过）
 cargo test -p ody-browser-control --tests
 
 # 仅安全可观测性集成测试
@@ -170,7 +170,8 @@ cargo test -p ody-browser-control --test security_observability
 ```
 
 - 集成测试中 `navigate` 的 loopback 豁免不依赖 `cfg!(test)`，而是真实命中豁免规则。
-- 涉及真实 Chrome 的测试被 `#[ignore]`，仅在手动验证时运行。
+- 真实 Chrome 端到端测试已默认启用，运行前请确保本地安装了 Chrome 120+；在 CI/无 Chrome 环境中会自动跳过，不会失败或挂起。
+- 当前实现基于 `chromiumoxide 0.9.1` 并本地 patch 了其 `Message` 反序列化逻辑以兼容 Chrome 120+；支持的 Chrome 版本范围为 **Chrome 120 及以上**。
 
 ## 不在本期的范围
 

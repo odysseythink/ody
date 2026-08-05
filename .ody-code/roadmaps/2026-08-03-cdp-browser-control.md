@@ -708,7 +708,7 @@ external_browser_allow_sensitive = false
 
 ---
 
-### Task 6.2: 升级 `chromiumoxide` 并解除真实 Chrome 端到端测试 ignore [plan]
+### Task 6.2: 升级 `chromiumoxide` 并解除真实 Chrome 端到端测试 ignore [completed]
 
 **Depends on:** 5.2, 6.1  
 **模式理由:** 根因已定位（`chromiumoxide 0.9.1` 与 Chrome 150+ 页面级 session 初始化不兼容），但修复依赖第三方 crate 版本升级与潜在 breaking changes，需先做依赖源与 API 适配计划，再执行。
@@ -733,10 +733,10 @@ external_browser_allow_sensitive = false
 - 文档更新：在 `docs/browser-control.md` 的“测试”章节中移除/修改“依赖真实 Chrome 的测试被 `#[ignore]`”的说明，并注明支持的 Chrome 版本范围。
 
 **验证要点:**
-- [ ] 在 Chrome 150+ 的真实环境下，`cargo test -p ody-browser-control --test process_lifecycle -- --ignored` 全部通过（不再卡住）。
-- [ ] 新增 `e2e_browser_control.rs` 中 `navigate` → `evaluate` → `screenshot` 测试通过。
-- [ ] `cargo test -p ody-browser-control --tests` 全部通过（包括单元测试和无需真实 Chrome 的集成测试）。
-- [ ] 在 CI 环境（无 Chrome）下，非 ignore 测试仍然全部通过，ignore 测试不会自动执行。
+- [x] 在 Chrome 150+ 的真实环境下，`cargo test -p ody-browser-control --test process_lifecycle` 中原本 `#[ignore]` 的 `multiple_pages_are_independent` 与 `thread_state_navigates_and_reuses_default_page` 测试通过。
+- [x] 新增 `e2e_browser_control.rs` 中 `navigate` → `evaluate` → `screenshot` 测试通过。
+- [x] `cargo test -p ody-browser-control --tests` 全部通过（包括单元测试和无需真实 Chrome 的集成测试）。
+- [x] 在 CI 环境（无 Chrome）下，测试通过 `discover_chrome()` 自动跳过并返回，不失败也不挂起。
 
 ---
 

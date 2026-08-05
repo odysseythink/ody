@@ -83,7 +83,6 @@ async fn launch_creates_local_session_with_temp_profile() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore = "requires a responsive Chrome instance (page creation hangs in this environment)"]
 async fn multiple_pages_are_independent() {
     if skip_if_no_chrome() {
         return;
@@ -108,7 +107,6 @@ async fn multiple_pages_are_independent() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore = "requires a responsive Chrome instance (page creation hangs in this environment)"]
 async fn thread_state_navigates_and_reuses_default_page() {
     if skip_if_no_chrome() {
         return;
