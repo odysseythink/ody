@@ -82,6 +82,7 @@
 | 5.2 | 集成测试（真实 Chrome） | CI 外手动/可选：启动 Chrome 跑端到端 | [normal] | 4.2 | — |
 | 5.3 | Windows 与路径兼容 | Chrome/Edge 发现、`which` fallback、临时目录 | [normal] | 1.3, 5.1 | — |
 | 6.1 | 安全审计与文档 | 审批流、凭证隔离、权限提示文案 | [design] | 4.3, 5.3 | — |
+| 6.2 | 升级 `chromiumoxide` 并解除真实 Chrome 端到端测试 ignore | 依赖版本升级、API 适配、解除 `#[ignore]`、补 e2e 测试 | [plan] | 5.2, 6.1 | — |
 
 ---
 
@@ -116,6 +117,9 @@
  │    │
  │    ▼
  │    6.1 安全审计与文档
+   │    │
+   │    ▼
+   │    6.2 升级 chromiumoxide 与真实 Chrome e2e 测试
 ```
 
 **并行性说明：**
@@ -704,12 +708,44 @@ external_browser_allow_sensitive = false
 
 ---
 
+### Task 6.2: 升级 `chromiumoxide` 并解除真实 Chrome 端到端测试 ignore [plan]
+
+**Depends on:** 5.2, 6.1  
+**模式理由:** 根因已定位（`chromiumoxide 0.9.1` 与 Chrome 150+ 页面级 session 初始化不兼容），但修复依赖第三方 crate 版本升级与潜在 breaking changes，需先做依赖源与 API 适配计划，再执行。
+
+**前置阻塞条件：**
+当前 workspace 使用的 `tuna` cargo mirror 仅包含 `chromiumoxide 0.8.0 / 0.9.0 / 0.9.1`，没有 `0.10+` 或 `0.11.x / 0.13.x`。必须先解决依赖源问题（切换回 crates.io、同步新版到 mirror、或本地 vendor/fork）。
+
+**Files:**
+- Modify: `Cargo.toml` — 更新 workspace 级 `chromiumoxide` 版本（或改用 `[patch]` 指向本地 fork）。
+- Modify: `ody-browser-control/Cargo.toml` — 适配新版本的 feature / dependency 声明。
+- Modify: `ody-browser-control/src/session.rs` — 适配 `Browser::launch` / `Browser::connect` / `BrowserConfig` API 变化。
+- Modify: `ody-browser-control/src/page_state.rs` — 适配 `Page::goto` / `Page::navigate` / `Page::execute` 签名变化；确认 `new_page` 不再卡住。
+- Modify: `ody-browser-control/src/thread_state.rs` — 若 `BrowserThreadState` 的 session/page 生命周期 API 有变化则同步调整。
+- Modify: `ody-browser-control/tests/process_lifecycle.rs` — 移除 `multiple_pages_are_independent` 与 `thread_state_navigates_and_reuses_default_page` 的 `#[ignore]`。
+- Add: `ody-browser-control/tests/e2e_browser_control.rs` — 新增真实 Chrome 端到端测试，覆盖 `navigate` → `evaluate` → `screenshot` 完整链路。
+
+**实现说明:**
+- 目标版本：优先尝试 `chromiumoxide 0.11.x` 或 `0.13.x`（需确认其 release note 支持 Chrome 120+ / 150+）。
+- 处理 breaking changes：新版很可能改了 `BrowserConfig` builder、launch/connect 返回值、`Page` 方法签名等；需按编译错误逐项修复。
+- 如果官方新版仍无法兼容 Chrome 150，则改用 `[patch]` 本地 fork `chromiumoxide-0.9.1`，重点修复 `src/handler/target.rs` 中 `Target.attachToTarget` 与 `TargetInit` 状态机对页面 session 初始化的等待逻辑。
+- 升级/修复后，确保 `new_page` 返回的 `Page` 能正常执行 `Page.navigate` / `Runtime.evaluate` / `Page.screenshot` 等命令。
+- 文档更新：在 `docs/browser-control.md` 的“测试”章节中移除/修改“依赖真实 Chrome 的测试被 `#[ignore]`”的说明，并注明支持的 Chrome 版本范围。
+
+**验证要点:**
+- [ ] 在 Chrome 150+ 的真实环境下，`cargo test -p ody-browser-control --test process_lifecycle -- --ignored` 全部通过（不再卡住）。
+- [ ] 新增 `e2e_browser_control.rs` 中 `navigate` → `evaluate` → `screenshot` 测试通过。
+- [ ] `cargo test -p ody-browser-control --tests` 全部通过（包括单元测试和无需真实 Chrome 的集成测试）。
+- [ ] 在 CI 环境（无 Chrome）下，非 ignore 测试仍然全部通过，ignore 测试不会自动执行。
+
+---
+
 ## 风险与开放问题
 
 1. **`ServicesConfig` 归属问题：** 当前 `ServicesConfig` 位于 `ody-web-search` crate。新增 `browser_control` 字段会反向让 `ody-web-search` 依赖 `ody-browser-control`（或把 `ServicesConfig` 上提到新 crate）。推荐先按最小修改在 `ody-web-search` 中新增字段；若未来服务增多，再拆分 `ody-services-config`。
 2. **审批基础设施复用：** `ody-web-search` 没有审批需求。浏览器导航/点击需要审批时，需研究 `core/src/mcp_tool_call.rs` 的 `build_mcp_tool_approval_question` 是否能被内置工具复用，或需要新增 `AskForApproval` 路径。
 3. **与外部 Browser Use MCP 的冲突：** 代码中已有 `ODY_APPS_MCP_SERVER_NAME` 和 `browser-use` connector 的测试夹具。本内置 crate 上线后，需明确分工：内置 `ody-browser-control` 服务本地/headless 场景；外部 connector 服务用户已打开的浏览器。避免模型同时看到两套重复工具。
-4. **Chrome 版本差异：** `headless=new` 与 `headless` 行为差异、CDP 方法弃用等。实现中需做运行时 version 检测或保守参数 fallback。
+4. **Chrome 版本差异：** `headless=new` 与 `headless` 行为差异、CDP 方法弃用等。当前 `chromiumoxide 0.9.1` 与 Chrome 150+ 已出现页面级 session 初始化不兼容，见 Task 6.2。实现中需做运行时 version 检测或保守参数 fallback，并明确支持/不支持的 Chrome 版本范围。
 5. **Windows 编译：** 新增 crate 必须保持不依赖 platform-specific 代码（通过 `cfg` 隔离），否则会影响 Linux/macOS CI。
 
 ---
