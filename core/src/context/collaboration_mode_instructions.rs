@@ -827,6 +827,34 @@ mod tests {
     }
 
     #[test]
+    fn every_plan_tier_receives_the_risk_driven_verification_strategy() {
+        let mode = plan_mode_with_instructions(ody_collaboration_mode_templates::PLAN);
+        for tier in [PlanModeTier::Rigor, PlanModeTier::Concise] {
+            let config = PlanModeConfigToml {
+                tier: Some(tier),
+                ..Default::default()
+            };
+            let instructions = CollaborationModeInstructions::from_collaboration_mode(
+                &mode,
+                Some(8),
+                None,
+                Some(&config),
+                None,
+            )
+            .expect("should produce instructions");
+            let body = instructions.body();
+            assert!(
+                body.contains("## Risk-driven verification strategy (every tier)"),
+                "{tier:?} plan prompt must require risk-driven verification"
+            );
+            assert!(
+                body.contains("Stable pass condition") && body.contains("Execution owner"),
+                "{tier:?} plan prompt must make E2E acceptance executable"
+            );
+        }
+    }
+
+    #[test]
     fn split_threshold_rendered_with_rigor_fragments() {
         let mode =
             plan_mode_with_instructions("Split plans larger than {{ split_threshold }} tasks.");

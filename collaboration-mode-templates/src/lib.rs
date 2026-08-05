@@ -91,6 +91,37 @@ mod template_tests {
         }
     }
 
+    #[test]
+    fn plan_templates_require_risk_driven_verification_with_actionable_e2e_contracts() {
+        assert!(
+            PLAN.contains("## Risk-driven verification strategy (every tier)"),
+            "PLAN must require every tier to choose a verification level"
+        );
+        for requirement in [
+            "Stable pass condition",
+            "Environment and isolation",
+            "Execution owner",
+            "Logs may aid diagnosis but must not be the sole proof of success",
+            "Not applicable",
+        ] {
+            assert!(
+                PLAN.contains(requirement),
+                "PLAN verification strategy must define {requirement:?}"
+            );
+        }
+        for requirement in [
+            "### Verification level and acceptance",
+            "**Verification:**",
+            "controlled E2E or smoke verification",
+            "A log line is diagnostic evidence, never the only pass condition",
+        ] {
+            assert!(
+                PLAN_RIGOR_TASK_SKELETON.contains(requirement),
+                "PLAN_RIGOR_TASK_SKELETON must define {requirement:?}"
+            );
+        }
+    }
+
     /// Every `## Parts` File cell the model can see must be openable exactly as written.
     ///
     /// The cell is the manifest's locator: an index is routinely handed to a downstream reader — a

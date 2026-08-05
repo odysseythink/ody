@@ -22,6 +22,12 @@ Use this format:
 - `Modify:` for existing files (specify line ranges of changes, or omit ranges if changes are scattered).
 - `Test:` for test files (may be created or modified in the same task).
 
+### Verification level and acceptance
+
+For every task that changes observable behavior, add a `**Verification:**` paragraph before implementation steps. It must name the chosen level (compile/typecheck, unit, integration, contract, controlled E2E, or staging/manual smoke), the behavior it proves, and why that level is sufficient. `Not applicable` is allowed only for a task with no observable behavior change, and must state that reason.
+
+When the task needs controlled E2E or smoke verification, include the trigger, stable pass condition, isolated non-production environment/test data, cleanup or side-effect containment, and execution owner (CI, release/staging smoke, or approved manual run). Prefer an observable user/API outcome plus an exact state assertion where relevant. A log line is diagnostic evidence, never the only pass condition. Do not assume browser automation is automatically available or approval-free.
+
 ### Implementation (testable code — test-first)
 
 For business logic, data transformations, state mutations, filters, validators, and math:

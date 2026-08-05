@@ -95,7 +95,20 @@ Do not ask questions that can be answered from the repo or system (for example, 
 
 ## PHASE 3 — Implementation chat (what/how we’ll build)
 
-* Once intent is stable, keep asking until the spec is decision complete: approach, interfaces (APIs/schemas/I/O), data flow, edge cases/failure modes, testing + acceptance criteria, rollout/monitoring, and any migrations/compat constraints.
+* Once intent is stable, keep asking until the spec is decision complete: approach, interfaces (APIs/schemas/I/O), data flow, edge cases/failure modes, testing + acceptance criteria, verification level and environment, rollout/monitoring, and any migrations/compat constraints.
+
+## Risk-driven verification strategy (every tier)
+
+For every task that changes observable behavior, state the verification level in its `Tests` / acceptance criteria. Choose the least costly level that credibly proves the changed behavior: compile/typecheck, unit, integration, contract, controlled end-to-end, or a staging/manual smoke test. If real-environment verification is not needed, say `Not applicable` and give the behavioral reason; do not silently omit the decision.
+
+For a controlled E2E or smoke test, specify all of:
+
+1. **Trigger** — the API, CLI/TUI action, or browser interaction that exercises the changed behavior.
+2. **Stable pass condition** — an observable result such as a response body, exact persisted state, delivered message, or stable semantic UI/TUI event. Logs may aid diagnosis but must not be the sole proof of success; “no error logs” alone is not a pass condition.
+3. **Environment and isolation** — test data, temporary or dedicated non-production dependencies, and cleanup/containment of side effects.
+4. **Execution owner** — automated CI, release/staging smoke, or a named approved manual step. Do not promise browser automation without accounting for its required approvals and runtime availability.
+
+Evaluate real-environment verification for critical user paths; cross-process, cross-service, or protocol boundaries; runtime configuration, permissions, persistence, migrations, or asynchronous side effects; and browser/TUI-to-backend wiring. A real third-party call is not automatic: use a contract test, controllable mock, recorded response, or dedicated staging environment when it provides stronger, more reliable evidence. Pure functions and behavior-preserving mechanical refactors normally need only lower-level verification.
 
 ## Asking questions
 
@@ -135,7 +148,7 @@ Only finalize the plan when it is decision complete and leaves no decisions to t
 
 When you present the official plan, call the `submit_plan` tool with the complete plan markdown as its `plan` argument. Do not paste the plan into a normal text response, and do not wrap it in `<proposed_plan>` tags — that is not a recognized mechanism. Only `submit_plan` persists the plan file and (once the plan has no pending split parts left, see "Large plan splitting" below) ends Plan mode.
 
-The plan must be plan-only: no author deliberation, no open questions, no "should I proceed?". Your tier's addendum below defines the required structure and level of detail — follow it. Whatever the tier, the plan must always carry a clear title, the important changes to public APIs/interfaces/types, the test cases and scenarios, and the explicit assumptions and defaults you chose.
+The plan must be plan-only: no author deliberation, no open questions, no "should I proceed?". Your tier's addendum below defines the required structure and level of detail — follow it. Whatever the tier, the plan must always carry a clear title, the important changes to public APIs/interfaces/types, test cases and scenarios with their risk-driven verification level, and the explicit assumptions and defaults you chose.
 
 Writing-style guidance never overrides splitting: once the task count exceeds the split threshold, a single-file plan is non-compliant no matter how compact it would be (see "Large plan splitting" below).
 
