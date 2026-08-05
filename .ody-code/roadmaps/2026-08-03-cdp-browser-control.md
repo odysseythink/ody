@@ -812,8 +812,8 @@ external_browser_allow_sensitive = false
 | E2E-202 | `browser__evaluate` 静态拒绝 cookie 读取 | 否 | `tests/security_observability.rs::evaluate_rejects_cookie_expression_before_approval` | 表达式包含 `document.cookie`。 | 在审批门之前返回 `NotAllowed`。 |
 | E2E-203 | `browser__evaluate` 静态拒绝 storage 读取 | 否 | 工具层 + `url_block` 测试 | 表达式包含 `localStorage`、`sessionStorage`、`indexedDB`。 | 返回 `NotAllowed`。 |
 | E2E-204 | `browser__evaluate` 截断长表达式 | 否 | `tests/security_observability.rs::evaluate_approval_ticket_truncates_long_expression` | 提交超长 JS 表达式。 | 审批 ticket 中的 `expression` 被截断到 500 字节，且 `expression_truncated = true`。 |
-| E2E-205 | `browser__click` 与 `browser__type` 通过审批 | 部分 | `tests/security_observability.rs` 中 click/type 测试 | 1. 提交点击/输入请求。<br>2. 提供 `guardian_approved_action_id`。 | 操作被允许执行（真实 Chrome 下验证 DOM 变化）。 |
-| E2E-206 | `browser__get_dom` 获取完整文档或元素 | 是 | 工具层集成测试 | 1. 导航到测试页面。<br>2. `get_dom(None)` 与 `get_dom(Some("#result"))`。 | 返回非空 JSON 对象；选择器命中时返回对应 `outerHTML`。 |
+| E2E-205 | `browser__click` 与 `browser__type` 真实交互 | 是 | `tests/e2e_browser_control.rs::click_and_type_updates_dom` | 1. 在 input 中输入文本。<br>2. 点击填满 viewport 的按钮。<br>3. 验证 DOM 更新。 | 输入文本反映到 input 元素；点击触发事件并更新输出元素。 |
+| E2E-206 | `browser__get_dom` 获取完整文档或元素 | 是 | `tests/e2e_browser_control.rs::get_dom_returns_document_and_element` | 1. 导航到测试页面。<br>2. `get_dom(None)` 与 `get_dom(Some("#result"))`。 | 返回非空 JSON 对象；选择器命中时返回对应 `outerHTML`。 |
 
 ---
 
@@ -822,9 +822,9 @@ external_browser_allow_sensitive = false
 | ID | 用例名称 | 是否需要真实 Chrome | 对应测试文件/函数 | 测试步骤 | 预期结果 |
 | --- | --- | --- | --- | --- | --- |
 | E2E-301 | 视口截图 | 是 | `tests/e2e_browser_control.rs::navigate_evaluate_screenshot_full_chain` | 导航到页面后 `screenshot(false)`。 | 返回非空 PNG 字节数组，头为 `\x89PNG`。 |
-| E2E-302 | 全页截图 | 是 | 可扩展新增 `screenshot_full_page` | 导航到页面后 `screenshot(true)`。 | 返回 PNG，高度大于等于视口截图。 |
-| E2E-303 | 控制台日志收集 | 是 | `event_buffer.rs` 相关测试 | 页面执行 `console.log("ODY_TEST")`。 | `read_logs` 快照包含 `console` 类型条目，消息保留。 |
-| E2E-304 | 网络日志脱敏 | 部分 | `tests/security_observability.rs::network_redaction_checklist` | 页面请求包含 `Authorization`、`Cookie`、`Set-Cookie` 等头。 | 响应 body 被清空；敏感 header 替换为 `[REDACTED]`；快照摘要只输出条目数/字节数。 |
+| E2E-302 | 全页截图 | 是 | `tests/e2e_browser_control.rs::full_page_screenshot_is_png` | 导航到包含高 div 的页面后 `screenshot(true)`。 | 返回非空 PNG 字节数组，头为 `\x89PNG`。 |
+| E2E-303 | 控制台日志收集 | 是 | `tests/e2e_browser_control.rs::console_logs_are_collected` | 页面加载时执行 `console.log("ODY_CONSOLE")`。 | `read_logs` 快照包含 `console` 类型条目，消息保留。 |
+| E2E-304 | 网络日志脱敏 | 是 | `tests/e2e_browser_control.rs::network_logs_are_redacted` | 页面发起 fetch 请求，请求头包含 `Authorization` 与 `X-Api-Key`。 | 响应 body 被清空；敏感 header 替换为 `[REDACTED]`；非敏感 header 保留；快照摘要只输出条目数/字节数。 |
 | E2E-305 | 日志缓冲区按条目/字节淘汰 | 否 | `event_buffer.rs` 单元测试 | 注入超过 `max_event_entries` 或 `max_event_buffer_bytes` 的日志。 | 最旧条目被移除，缓冲区大小不超限。 |
 
 ---
@@ -871,6 +871,9 @@ external_browser_allow_sensitive = false
 3. **新增截图/交互测试时**：复用 `start_test_server()` 启动动态端口 HTTP 服务器，避免硬编码端口。
 4. **审批相关测试**：使用 `guardian_approved_action_id` 绕过审批门，测试操作本身；豁免规则用 `cfg!(test)` 之外的实际 exemption 路径验证。
 5. **Chrome 版本兼容性**：所有真实 Chrome 测试默认在 Chrome 120+ 上运行；若发现新版 Chrome 行为差异，优先更新 `patches/chromiumoxide_types` 或调整启动参数，而不是回退 ignore。
+6. **控制台日志监听**：底层依赖 `Runtime.consoleAPICalled` 事件；若新增日志来源，需要在 `event_buffer.rs` 的 `subscribe` 中启用对应 CDP domain 并注册 listener。
+7. **点击与输入测试**：headless Chrome 中元素可能受默认边距影响，建议测试页面将目标按钮设置为 `width:100vw;height:100vh` 或动态计算元素中心坐标，避免点击漂移。
+8. **网络 header 字符串化**：CDP 返回的 header 值是 JSON 字符串；`event_buffer.rs` 已做去引号处理，确保快照中的 header 值与原始值一致。
 
 ---
 

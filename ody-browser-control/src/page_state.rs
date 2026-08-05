@@ -182,6 +182,10 @@ impl PageState {
             .await
             .map_err(|e| BrowserControlError::from_command_error("find_element", e))?;
         element
+            .focus()
+            .await
+            .map_err(|e| BrowserControlError::from_command_error("focus", e))?;
+        element
             .type_str(text)
             .await
             .map_err(|e| BrowserControlError::from_command_error("type_text", e))?;

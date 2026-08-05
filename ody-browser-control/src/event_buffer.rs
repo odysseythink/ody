@@ -132,6 +132,40 @@ impl EventBuffer {
         }));
     }
 
+    pub fn push_console_api(&mut self, event: &chromiumoxide::cdp::js_protocol::runtime::EventConsoleApiCalled) {
+        let mut text = event
+            .args
+            .iter()
+            .map(|arg| {
+                arg.value
+                    .as_ref()
+                    .map(|v| v.as_str().map(|s| s.to_string()).unwrap_or_else(|| v.to_string()))
+                    .unwrap_or_default()
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+        if text.is_empty() {
+            text = format!("{:?}", event.r#type);
+        }
+        if text.len() > self.max_console_bytes {
+            let truncated = format!(
+                "{}... [truncated {} bytes]",
+                &text[..self.max_console_bytes.saturating_sub(32).min(text.len())],
+                text.len() - self.max_console_bytes.saturating_sub(32).min(text.len())
+            );
+            text = truncated;
+        }
+
+        self.push(BufferedEntry::Console(ConsoleEntry {
+            level: format!("{:?}", event.r#type),
+            text,
+            source: "console-api".to_string(),
+            timestamp: *event.timestamp.inner(),
+            url: None,
+            line_number: None,
+        }));
+    }
+
     pub fn push_network_request(&mut self, event: &EventRequestWillBeSent) {
         let request_headers_size = estimate_headers_size(&event.request.headers);
         let request_headers = header_map_to_strings(&event.request.headers);
@@ -214,7 +248,14 @@ fn header_map_to_strings(
         .as_object()
         .map(|obj| {
             obj.iter()
-                .map(|(k, v)| (k.clone(), v.to_string()))
+                .map(|(k, v)| {
+                    let value = if let serde_json::Value::String(s) = v {
+                        s.clone()
+                    } else {
+                        v.to_string()
+                    };
+                    (k.clone(), value)
+                })
                 .collect()
         })
         .unwrap_or_default()
@@ -236,11 +277,15 @@ pub async fn subscribe(
     page: &chromiumoxide::page::Page,
     buffer: Arc<Mutex<EventBuffer>>,
 ) -> Result<Vec<JoinHandle<()>>, BrowserControlError> {
-    use chromiumoxide::cdp::browser_protocol::{log, network};
+use chromiumoxide::cdp::browser_protocol::{log, network};
+use chromiumoxide::cdp::js_protocol::runtime;
 
     page.execute(log::EnableParams::default())
         .await
         .map_err(|e| BrowserControlError::from_command_error("Log.enable", e))?;
+    page.execute(runtime::EnableParams::default())
+        .await
+        .map_err(|e| BrowserControlError::from_command_error("Runtime.enable", e))?;
     page.execute(network::EnableParams::default())
         .await
         .map_err(|e| BrowserControlError::from_command_error("Network.enable", e))?;
@@ -256,6 +301,18 @@ pub async fn subscribe(
         while let Some(event) = console_stream.next().await {
             let mut guard = console_buffer.lock().await;
             guard.push_console(&event.entry);
+        }
+    }));
+
+    let mut console_api_stream = page
+        .event_listener::<runtime::EventConsoleApiCalled>()
+        .await
+        .map_err(|e| BrowserControlError::from_command_error("console API listener", e))?;
+    let console_api_buffer = buffer.clone();
+    tasks.push(tokio::spawn(async move {
+        while let Some(event) = console_api_stream.next().await {
+            let mut guard = console_api_buffer.lock().await;
+            guard.push_console_api(&event);
         }
     }));
 
