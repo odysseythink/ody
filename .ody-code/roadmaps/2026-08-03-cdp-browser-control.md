@@ -759,3 +759,128 @@ external_browser_allow_sensitive = false
 - [ ] 每个子任务有且仅有一个 mode tag 与一行代码 grounded 的理由。
 - [ ] 顶部 rubric 已存在，保证未来编辑一致性。
 - [ ] 本 roadmap 基于一次源码探索产出，非标题推断。
+
+---
+
+## 端到端测试用例详表（E2E Test Case Ledger）
+
+以下测试用例覆盖 `ody-browser-control` 的完整行为矩阵，既包括需要真实 Chrome/Edge 的集成测试，也包括无浏览器依赖的退化路径测试。每个用例标明**执行命令**、**是否需要真实 Chrome**、**对应源文件**以及**核心断言**，便于 CI 配置、回归定位与新增测试时参照。
+
+### 1. 执行约定
+
+| 项 | 约定 |
+| --- | --- |
+| 默认测试命令 | `cargo test -p ody-browser-control --tests` |
+| 真实 Chrome 命令 | `cargo test -p ody-browser-control --tests -- --include-ignored`（或直接在无 Chrome 机器观察 `skip_if_no_chrome()` 自动跳过） |
+| 无 Chrome 环境行为 | `discover_chrome()` 失败时测试立即返回，不 panic、不超时、不挂起 |
+| 测试辅助函数 | `test_config()`、`skip_if_no_chrome()`、`start_test_server()` 位于 `tests/process_lifecycle.rs` |
+
+---
+
+### 2. 进程与会话生命周期
+
+| ID | 用例名称 | 是否需要真实 Chrome | 对应测试文件/函数 | 测试步骤 | 预期结果 |
+| --- | --- | --- | --- | --- | --- |
+| E2E-001 | 发现 Chrome 可执行文件 | 是（机器需安装） | `tests/process_lifecycle.rs::discover_chrome_finds_an_executable` | 调用 `discover_chrome()` 获取默认浏览器路径。 | 返回的路径存在且可执行。 |
+| E2E-002 | 本地启动创建临时 profile | 是 | `tests/process_lifecycle.rs::launch_creates_local_session_with_temp_profile` | 1. `BrowserSession::launch(cfg)` 本地模式启动。<br>2. 验证 `session.is_local()` 与 profile 目录存在。<br>3. 调用 `session.close().await`。 | profile 目录存在，关闭 200ms 后目录被清理。 |
+| E2E-003 | Drop 不 panic/不挂起 | 是 | `tests/process_lifecycle.rs::drop_does_not_panic_or_hang` | 直接 `drop(session)` 而不显式调用 `close()`。 | `drop` 完成，不 panic、测试线程不挂起。 |
+| E2E-004 | 外部模式拒绝本地启动 | 否 | `tests/process_lifecycle.rs::launch_fails_for_external_mode` | `mode = External` 时调用 `BrowserSession::launch`。 | 返回 `BrowserControlError::NotAllowed`。 |
+| E2E-005 | 本地模式拒绝外部连接 | 否 | `tests/process_lifecycle.rs::connect_fails_for_local_mode` | `mode = Local` 时调用 `BrowserSession::connect`。 | 返回 `BrowserControlError::NotAllowed`。 |
+| E2E-006 | 连接缺失端点快速失败 | 否 | `tests/process_lifecycle.rs::connect_to_missing_endpoint_fails_fast` | `mode = External`，`connect_url = ws://127.0.0.1:1`。 | 返回 `ConnectFailed`，耗时 < 5s。 |
+| E2E-007 | 并发浏览器配额超时 | 否 | `tests/process_lifecycle.rs::concurrent_quota_times_out` | 1. `max_concurrent_browsers = 1` 下获取一个 permit。<br>2. 在 permit 未释放时再次获取，超时 100ms。 | 第二次返回 `QuotaExceeded`。 |
+
+---
+
+### 3. 页面与导航
+
+| ID | 用例名称 | 是否需要真实 Chrome | 对应测试文件/函数 | 测试步骤 | 预期结果 |
+| --- | --- | --- | --- | --- | --- |
+| E2E-101 | 单页面导航与评估 | 是 | `tests/e2e_browser_control.rs::navigate_evaluate_screenshot_full_chain` | 1. 启动本地测试 HTTP 服务器。<br>2. 创建新 page，导航到测试 URL。<br>3. `evaluate` 读取 `document.title` 与 DOM 元素文本。<br>4. 截图。 | 标题与文本断言通过；返回非空 PNG 图片（前 4 字节为 `0x89 0x50 0x4E 0x47`）。 |
+| E2E-102 | 多页面相互隔离 | 是 | `tests/process_lifecycle.rs::multiple_pages_are_independent` | 1. 启动测试服务器。<br>2. 同一 session 创建两个 page。<br>3. 分别导航到 `/page1` 与 `/page2`。<br>4. `evaluate("document.location.href")` 比较。 | 两个 page 的 URL 不同，证明 page 隔离。 |
+| E2E-103 | 线程状态默认 page 复用 | 是 | `tests/process_lifecycle.rs::thread_state_navigates_and_reuses_default_page` | 1. 创建 `BrowserThreadState`。<br>2. 连续两次调用 `navigate(url1, None)` 与 `navigate(url2, None)`。 | 两次导航均成功，线程状态在内部复用默认 page。 |
+| E2E-104 | 外部模式拒绝导航 | 否 | `tests/e2e_browser_control.rs::external_mode_rejects_navigate` | `mode = External` 时调用 `BrowserSession::launch`。 | 返回 `NotAllowed`。 |
+| E2E-105 | loopback URL 审批豁免 | 部分（审批流程可 mock） | `tests/security_observability.rs::navigate_loopback_is_exempt_from_approval` | 调用 `browser__navigate` 目标为 `http://127.0.0.1:...`。 | 命中审批豁免，返回的 `action_id` 标记为自动批准，无需 guardian 弹窗。 |
+| E2E-106 | 公共 URL 需要审批 | 部分 | 工具层单元/集成测试 | 调用 `browser__navigate` 目标为 `https://example.com`。 | 返回 `NeedsApproval` 与 `BrowserControlApprovalTicket`。 |
+
+---
+
+### 4. DOM、交互与脚本执行
+
+| ID | 用例名称 | 是否需要真实 Chrome | 对应测试文件/函数 | 测试步骤 | 预期结果 |
+| --- | --- | --- | --- | --- | --- |
+| E2E-201 | `browser__evaluate` 读取标题 | 是 | `tests/e2e_browser_control.rs::navigate_evaluate_screenshot_full_chain` | 导航后执行 `document.title`。 | 返回字符串与页面标题一致。 |
+| E2E-202 | `browser__evaluate` 静态拒绝 cookie 读取 | 否 | `tests/security_observability.rs::evaluate_rejects_cookie_expression_before_approval` | 表达式包含 `document.cookie`。 | 在审批门之前返回 `NotAllowed`。 |
+| E2E-203 | `browser__evaluate` 静态拒绝 storage 读取 | 否 | 工具层 + `url_block` 测试 | 表达式包含 `localStorage`、`sessionStorage`、`indexedDB`。 | 返回 `NotAllowed`。 |
+| E2E-204 | `browser__evaluate` 截断长表达式 | 否 | `tests/security_observability.rs::evaluate_approval_ticket_truncates_long_expression` | 提交超长 JS 表达式。 | 审批 ticket 中的 `expression` 被截断到 500 字节，且 `expression_truncated = true`。 |
+| E2E-205 | `browser__click` 与 `browser__type` 通过审批 | 部分 | `tests/security_observability.rs` 中 click/type 测试 | 1. 提交点击/输入请求。<br>2. 提供 `guardian_approved_action_id`。 | 操作被允许执行（真实 Chrome 下验证 DOM 变化）。 |
+| E2E-206 | `browser__get_dom` 获取完整文档或元素 | 是 | 工具层集成测试 | 1. 导航到测试页面。<br>2. `get_dom(None)` 与 `get_dom(Some("#result"))`。 | 返回非空 JSON 对象；选择器命中时返回对应 `outerHTML`。 |
+
+---
+
+### 5. 截图与日志
+
+| ID | 用例名称 | 是否需要真实 Chrome | 对应测试文件/函数 | 测试步骤 | 预期结果 |
+| --- | --- | --- | --- | --- | --- |
+| E2E-301 | 视口截图 | 是 | `tests/e2e_browser_control.rs::navigate_evaluate_screenshot_full_chain` | 导航到页面后 `screenshot(false)`。 | 返回非空 PNG 字节数组，头为 `\x89PNG`。 |
+| E2E-302 | 全页截图 | 是 | 可扩展新增 `screenshot_full_page` | 导航到页面后 `screenshot(true)`。 | 返回 PNG，高度大于等于视口截图。 |
+| E2E-303 | 控制台日志收集 | 是 | `event_buffer.rs` 相关测试 | 页面执行 `console.log("ODY_TEST")`。 | `read_logs` 快照包含 `console` 类型条目，消息保留。 |
+| E2E-304 | 网络日志脱敏 | 部分 | `tests/security_observability.rs::network_redaction_checklist` | 页面请求包含 `Authorization`、`Cookie`、`Set-Cookie` 等头。 | 响应 body 被清空；敏感 header 替换为 `[REDACTED]`；快照摘要只输出条目数/字节数。 |
+| E2E-305 | 日志缓冲区按条目/字节淘汰 | 否 | `event_buffer.rs` 单元测试 | 注入超过 `max_event_entries` 或 `max_event_buffer_bytes` 的日志。 | 最旧条目被移除，缓冲区大小不超限。 |
+
+---
+
+### 6. 安全与 Raw CDP
+
+| ID | 用例名称 | 是否需要真实 Chrome | 对应测试文件/函数 | 测试步骤 | 预期结果 |
+| --- | --- | --- | --- | --- | --- |
+| E2E-401 | Raw CDP 黑名单方法被拒绝 | 否 | `tests/security_observability.rs::raw_cdp_blocked_method_is_rejected_before_approval` | 调用 `execute_raw_cdp` 方法名为 `Storage.getCookies`。 | 审批前直接 `NotAllowed`。 |
+| E2E-402 | Raw CDP 外部模式禁用 | 否 | `tests/security_observability.rs::raw_cdp_is_disabled_in_external_mode` | `mode = External` 时调用 `execute_raw_cdp`。 | 返回 `NotAllowed`。 |
+| E2E-403 | 安全 Raw CDP 方法仍需审批 | 否 | `tests/security_observability.rs::execute_raw_cdp_safe_method_requires_approval` | 调用 `Runtime.evaluate` 并提供 `guardian_approved_action_id`。 | 审批通过后执行。 |
+| E2E-404 | 启动参数过滤危险项 | 否 | `tests/security_observability.rs::profile_isolation_sanitize_args_strips_user_data_dir` | 配置 `extra_args` 包含 `--user-data-dir=/tmp/evil`。 | 启动参数被过滤，实际 profile 仍为临时目录。 |
+| E2E-405 | 只读操作无需审批 | 否 | `tests/security_observability.rs::read_only_screenshot_does_not_require_approval` | 直接调用 `browser__screenshot`。 | 不触发 `NeedsApproval`。 |
+| E2E-406 | 危险 URL 被拦截 | 否 | `url_block` 单元测试 | 尝试导航到 `file://`、`javascript:`、私网地址。 | 返回 `NotAllowed`，除非显式豁免或启用 `allow_local_network`。 |
+
+---
+
+### 7. 并发、超时与错误恢复
+
+| ID | 用例名称 | 是否需要真实 Chrome | 对应测试文件/函数 | 测试步骤 | 预期结果 |
+| --- | --- | --- | --- | --- | --- |
+| E2E-501 | 并发配额限制 | 否 | `tests/process_lifecycle.rs::concurrent_quota_times_out` | 同一配置下同时获取两个 browser permit。 | 第二个超时返回 `QuotaExceeded`。 |
+| E2E-502 | 连接超时 | 否 | `tests/process_lifecycle.rs::connect_to_missing_endpoint_fails_fast` | 连接无效 WS 端点。 | 在 `connect_timeout_ms` 内失败。 |
+| E2E-503 | 页面崩溃后自动重建 | 部分（真实崩溃难稳定触发） | `thread_state.rs` 单元测试 | 模拟 `page crashed` 事件。 | `with_page_retry` 捕获崩溃并重建 page，工具调用重试一次。 |
+| E2E-504 | 配置运行时变更无需重启 | 否 | `config.rs` 单元测试 | 修改 `headless`、`sandbox` 等运行时字段。 | `requires_restart` 返回 `false`；修改 `chrome_executable` 返回 `true`。 |
+| E2E-505 | 浏览器 handler 错误不传播为 panic | 是 | 手动观察 `tracing` 日志 | 启动 session 后人为断开 WebSocket。 | handler 任务记录 `warn` 并退出，session 不 panic。 |
+
+---
+
+### 8. 配置与 binding 导出
+
+| ID | 用例名称 | 是否需要真实 Chrome | 对应测试文件/函数 | 测试步骤 | 预期结果 |
+| --- | --- | --- | --- | --- | --- |
+| E2E-601 | `BrowserControlConfig` JSON 序列化往返 | 否 | `tests/transport_smoke.rs::config_round_trips_through_json` | 序列化后再反序列化默认配置。 | 所有字段一致，数字类型不丢失精度。 |
+| E2E-602 | `BrowserControlMode` 与 `ViewportConfig` 导出 | 否 | `tests/transport_smoke.rs::config::export_bindings_*` | 调用 `ts-rs` 导出。 | 生成 TypeScript 类型文件且无编译错误。 |
+| E2E-603 | 默认配置配额合理 | 否 | `tests/transport_smoke.rs::default_config_has_expected_quotas` | 检查 `max_event_entries`、`max_event_buffer_bytes` 等默认值。 | 默认值与文档一致。 |
+
+---
+
+### 9. 维护与新增测试指引
+
+1. **新增真实 Chrome 测试时**：必须复用 `skip_if_no_chrome()`，并在无 Chrome 环境验证 `cargo test -p ody-browser-control --tests` 仍能通过。
+2. **新增无需 Chrome 的测试时**：优先放在 `tests/security_observability.rs` 或 `tests/transport_smoke.rs`，避免污染 `process_lifecycle.rs`。
+3. **新增截图/交互测试时**：复用 `start_test_server()` 启动动态端口 HTTP 服务器，避免硬编码端口。
+4. **审批相关测试**：使用 `guardian_approved_action_id` 绕过审批门，测试操作本身；豁免规则用 `cfg!(test)` 之外的实际 exemption 路径验证。
+5. **Chrome 版本兼容性**：所有真实 Chrome 测试默认在 Chrome 120+ 上运行；若发现新版 Chrome 行为差异，优先更新 `patches/chromiumoxide_types` 或调整启动参数，而不是回退 ignore。
+
+---
+
+### 10. 测试矩阵速查
+
+| 场景 | 无 Chrome | Chrome 120+ | 命令示例 |
+| --- | --- | --- | --- |
+| 单元测试 + 退化路径 | ✅ 通过 | ✅ 通过 | `cargo test -p ody-browser-control --tests` |
+| 真实 Chrome 生命周期 | N/A | ✅ 通过 | `cargo test -p ody-browser-control --test process_lifecycle` |
+| 真实 Chrome 全链路 | N/A | ✅ 通过 | `cargo test -p ody-browser-control --test e2e_browser_control` |
+| 被忽略测试 | N/A | ✅ 通过 | `cargo test -p ody-browser-control --tests -- --include-ignored` |
+| 安全可观测性 | ✅ 通过 | N/A | `cargo test -p ody-browser-control --test security_observability` |
+| 传输/配置 smoke | ✅ 通过 | N/A | `cargo test -p ody-browser-control --test transport_smoke` |
