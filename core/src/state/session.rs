@@ -26,6 +26,13 @@ use ody_protocol::protocol::TokenUsageInfo;
 use ody_protocol::protocol::TurnContextItem;
 use ody_utils_output_truncation::TruncationPolicy;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PhaseRoadmapState {
+    pub(crate) path: std::path::PathBuf,
+    pub(crate) active_phase: String,
+    pub(crate) phase_count: usize,
+}
+
 /// Persistent, session-scoped state previously stored directly on `Session`.
 pub(crate) struct SessionState {
     pub(crate) session_configuration: SessionConfiguration,
@@ -48,6 +55,7 @@ pub(crate) struct SessionState {
     next_turn_is_first: bool,
     plan_mode_last_manifest_snapshot: Option<ManifestSnapshot>,
     last_design_artifact: Option<Arc<PlanArtifact>>,
+    phase_roadmap: Option<PhaseRoadmapState>,
     /// Fingerprints of design-review sign-off items the user has already
     /// dispositioned as non-blocking (Accept / Defer to implementation) in an
     /// earlier revise round of the *current* design. The adversarial reviewer is
@@ -110,6 +118,7 @@ impl SessionState {
             next_turn_is_first: true,
             plan_mode_last_manifest_snapshot: None,
             last_design_artifact: None,
+            phase_roadmap: None,
             design_signoff_seen: HashSet::new(),
             design_signoff_key: None,
             design_usability_decision: None,
@@ -419,6 +428,14 @@ impl SessionState {
 
     pub(crate) fn clear_last_design_artifact(&mut self) {
         self.last_design_artifact = None;
+    }
+
+    pub(crate) fn set_phase_roadmap(&mut self, roadmap: PhaseRoadmapState) {
+        self.phase_roadmap = Some(roadmap);
+    }
+
+    pub(crate) fn phase_roadmap(&self) -> Option<PhaseRoadmapState> {
+        self.phase_roadmap.clone()
     }
 
     /// Fingerprints already dispositioned (accept/defer) for the design

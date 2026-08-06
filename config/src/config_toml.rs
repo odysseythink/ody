@@ -157,7 +157,7 @@ const fn default_plan_context_isolation() -> Option<PlanContextIsolation> {
 }
 
 const fn default_split_threshold() -> Option<usize> {
-    Some(4)
+    Some(2)
 }
 
 const fn default_normal_task_compaction_ratio() -> Option<f64> {
@@ -1761,7 +1761,7 @@ type = "openai"
         assert_eq!(plan_mode.enforcement, Some(PlanEnforcement::Strict));
         assert_eq!(plan_mode.persist_plan_file, Some(true));
         assert_eq!(plan_mode.context_isolation, Some(PlanContextIsolation::Off));
-        assert_eq!(plan_mode.split_threshold, Some(4));
+        assert_eq!(plan_mode.split_threshold, Some(2));
         assert_eq!(plan_mode.max_tasks_per_part, Some(3));
         assert_eq!(plan_mode.max_part_bytes, Some(0));
         assert!(plan_mode.model.is_none());

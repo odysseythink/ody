@@ -1229,6 +1229,16 @@ impl Session {
         state.set_last_design_artifact(artifact);
     }
 
+    pub(crate) async fn set_phase_roadmap(&self, roadmap: crate::state::PhaseRoadmapState) {
+        let mut state = self.state.lock().await;
+        state.set_phase_roadmap(roadmap);
+    }
+
+    pub(crate) async fn phase_roadmap(&self) -> Option<crate::state::PhaseRoadmapState> {
+        let state = self.state.lock().await;
+        state.phase_roadmap()
+    }
+
     /// Fingerprints already signed off (accept/defer) for the design identified
     /// by `key` (its normalized title), used by the escalation gate to suppress
     /// re-review duplicates. Resets the set if `key` names a different design than

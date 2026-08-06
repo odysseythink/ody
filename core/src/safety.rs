@@ -57,7 +57,7 @@ pub const DESIGN_MODE_REJECTION_MARKER: &str = "[design-mode-blocked]";
 
 const PLAN_MODE_WRITE_DENIED_REASON: &str = "Plan mode is read-only by default. Finish planning and switch to Default mode to apply patches. [plan-mode-blocked]";
 
-const DESIGN_MODE_WRITE_DENIED_REASON: &str = "Design mode is read-only. Persist the design index with the submit_design tool; write split parts only as .md files under the design's <stem>/ directory. For a large goal, a phase roadmap .md file directly under .ody-code/roadmaps/ is also allowed. Switch to Plan or Default mode to make other changes. [design-mode-blocked]";
+const DESIGN_MODE_WRITE_DENIED_REASON: &str = "Design mode is read-only. Persist the design index with the submit_design tool; write split parts only as .md files under the design's <stem>/ directory. For a large goal, submit the roadmap with submit_roadmap so the host can request confirmation and persist it. Switch to Plan or Default mode to make other changes. [design-mode-blocked]";
 
 /// Returns a human-readable Plan-mode patch-denial message that includes the
 /// rejected file path and the stable rejection marker.
@@ -85,8 +85,8 @@ pub(crate) const fn is_read_only_session_mode(m: ModeKind) -> bool {
 ///
 /// `plan_artifact` is the current session's `PlanArtifact`. When provided, writes to the
 /// plan file itself or to `<stem>/*.md` files under the plan file's stem directory are
-/// allowed even under `Strict` enforcement. In Design mode only, phase-roadmap Markdown
-/// files directly under `.ody-code/roadmaps/` are also allowed.
+/// allowed even under `Strict` enforcement. Phase roadmaps are persisted only by the
+/// `submit_roadmap` host tool after user confirmation.
 pub fn plan_mode_gate_for_patch(
     mode: &CollaborationMode,
     enforcement: PlanEnforcement,
@@ -113,8 +113,6 @@ pub fn plan_mode_gate_for_patch(
                     // sandbox availability.
                     artifact.is_plan_file_path(abs_path.as_path())
                         || artifact.is_spike_path(abs_path.as_path())
-                        || (mode.mode == ModeKind::Design
-                            && artifact.is_roadmap_file_path(abs_path.as_path()))
                 })
             })
             .unwrap_or(false)

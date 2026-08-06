@@ -714,7 +714,7 @@ fn design_gate_strict_allows_whitelisted_stem_subdirectory_md() {
 }
 
 #[test]
-fn design_gate_strict_allows_phase_roadmap_markdown() {
+fn design_gate_strict_rejects_direct_phase_roadmap_writes() {
     let tmp = TempDir::new().unwrap();
     let artifact = design_artifact_at(tmp.path());
     let roadmap = tmp.path().join("roadmaps").join("2026-08-06-search.md");
@@ -728,11 +728,11 @@ fn design_gate_strict_allows_phase_roadmap_markdown() {
         &action,
         Some(&artifact),
     );
-    assert_eq!(decision, PlanGateDecision::Allow);
+    assert!(matches!(decision, PlanGateDecision::Deny { .. }));
 }
 
 #[test]
-fn design_gate_strict_rejects_non_markdown_or_nested_roadmaps() {
+fn design_gate_strict_rejects_other_direct_roadmap_writes() {
     let tmp = TempDir::new().unwrap();
     let artifact = design_artifact_at(tmp.path());
     for path in [

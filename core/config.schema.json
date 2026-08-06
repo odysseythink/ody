@@ -2617,7 +2617,7 @@
           "type": "number"
         },
         "split_threshold": {
-          "default": 4,
+          "default": 2,
           "description": "Number of tasks that triggers splitting a large plan into multiple files. 0 disables splitting.",
           "format": "uint",
           "minimum": 0.0,
@@ -5776,7 +5776,7 @@
         "persist_plan_file": true,
         "reasoning_effort": null,
         "split_plan_compaction_ratio": 0.75,
-        "split_threshold": 4,
+        "split_threshold": 2,
         "tier": null
       },
       "description": "Plan mode settings."

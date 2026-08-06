@@ -18,8 +18,8 @@ Use `/design` when you need to think through architecture, contracts, data model
    - segmented presentation and user approval;
    - writing the design file to `.ody-code/designs/`;
    - adversarial self-review and a C1–C8 exit checklist.
-3. For a large goal (more independently deliverable phases than `split_threshold`), Ody first directs the model to write a phase roadmap to `.ody-code/roadmaps/`, mark only phase 1 active, and design only that phase. Later phases stay pending until separately selected.
-4. While in Design Mode the workspace is **read-only**: writes are only allowed to the current design file and its `<stem>/` split parts, plus Markdown phase roadmaps directly under `.ody-code/roadmaps/`. Any other file modifications are rejected by the same safety gate used by Plan Mode.
+3. For a large goal (more independently deliverable phases than `split_threshold`), Ody directs the model to submit a phase roadmap. The host validates it, displays a confirmation popup, and persists it to `.ody-code/roadmaps/` only after confirmation; only phase 1 is active and later phases remain pending until separately selected.
+4. While in Design Mode the workspace is **read-only**: writes are only allowed to the current design file and its `<stem>/` split parts. Phase roadmaps are written only by the confirmed host tool. Any other file modifications are rejected by the same safety gate used by Plan Mode.
 5. Leaving Design Mode for Plan Mode triggers a handoff reminder: "Design saved to `<path>` — create a concrete implementation plan based on the approved design."
 
 ## Configuration
@@ -29,7 +29,7 @@ Design Mode intentionally shares the `PlanModeConfigToml` section in `~/.ody-cod
 ```toml
 [plan_mode]
 enforcement = "Strict"        # Strict / Ask / Advisory
-split_threshold = 8
+split_threshold = 2
 split_plan_compaction_ratio = 0.5
 ```
 

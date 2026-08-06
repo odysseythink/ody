@@ -1426,14 +1426,14 @@ async fn submit_tools_registered_per_mode() {
         turn.collaboration_mode.mode = ModeKind::Design;
     })
     .await;
-    design_probe.assert_visible_contains(&["submit_design"]);
+    design_probe.assert_visible_contains(&["submit_design", "submit_roadmap"]);
     design_probe.assert_visible_lacks(&["submit_plan"]);
 
     let default_probe = probe(|turn| {
         turn.collaboration_mode.mode = ModeKind::Default;
     })
     .await;
-    default_probe.assert_visible_lacks(&["submit_plan", "submit_design"]);
+    default_probe.assert_visible_lacks(&["submit_plan", "submit_design", "submit_roadmap"]);
 }
 
 #[tokio::test]

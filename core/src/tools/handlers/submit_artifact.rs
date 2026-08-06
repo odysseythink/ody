@@ -501,6 +501,19 @@ pub(crate) async fn handle_submit_artifact(
         }
     };
 
+    if expected_mode == ModeKind::Design {
+        if let Some(roadmap) = session.phase_roadmap().await {
+            let roadmap_path = roadmap.path.to_string_lossy();
+            let active_marker = format!("Phase {}", roadmap.active_phase);
+            if !markdown.contains(roadmap_path.as_ref()) || !markdown.contains(&active_marker) {
+                return Err(FunctionCallError::RespondToModel(format!(
+                    "submit_design rejected: the confirmed {}-phase roadmap requires this design to reference `{}` and explicitly scope itself to {}.",
+                    roadmap.phase_count, roadmap_path, active_marker
+                )));
+            }
+        }
+    }
+
     // 3. Reject malformed manifest rows before persisting. Previously a bad row
     // (for example `4a`) was silently omitted by the parser, so the injector
     // advanced to a later part and left the skipped work permanently pending.

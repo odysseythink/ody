@@ -38,6 +38,7 @@ use crate::tools::handlers::ShellCommandHandlerOptions;
 use crate::tools::handlers::SleepHandler;
 use crate::tools::handlers::SubmitDesignHandler;
 use crate::tools::handlers::SubmitPlanHandler;
+use crate::tools::handlers::SubmitRoadmapHandler;
 use crate::tools::handlers::TestSyncHandler;
 use crate::tools::handlers::ToolSearchHandlerCache;
 use crate::tools::handlers::ViewImageHandler;
@@ -730,6 +731,7 @@ fn add_core_utility_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut
         }
         ModeKind::Design => {
             planned_tools.add_with_exposure(SubmitDesignHandler, ToolExposure::DirectModelOnly);
+            planned_tools.add_with_exposure(SubmitRoadmapHandler, ToolExposure::DirectModelOnly);
         }
         _ => {}
     }
