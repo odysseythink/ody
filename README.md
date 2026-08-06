@@ -95,7 +95,7 @@ The resulting binary will be in `target/release-small/ody`. The `release-small` 
 
 Most coding assistants treat design as a prefix to implementation—an offhand "let's think step by step." Ody treats design as a first-class collaboration phase with its own workspace, rules, and handoff contract.
 
-Enter `/design` to switch the session into a structured design studio. While you are in Design mode, the rest of the workspace is read-only: the model can edit only the current design document under `.ody-code/designs/` and its optional split parts. This prevents "implementation drift"—the common failure mode where an agent starts writing code before the design is actually finished.
+Enter `/design` to switch the session into a structured design studio. For a large, multi-phase goal, Design mode first creates a phase roadmap under `.ody-code/roadmaps/`, marks only phase 1 active, and then designs that phase—not the entire roadmap at once. While you are in Design mode, the rest of the workspace is read-only: the model can edit only the current design document under `.ody-code/designs/`, its optional split parts, and that narrowly scoped roadmap artifact. This prevents "implementation drift"—the common failure mode where an agent starts writing code before the design is actually finished.
 
 Every design is written against an adversarial completeness gate (C1–C8) that enforces eight required sections:
 

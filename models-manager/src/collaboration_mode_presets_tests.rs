@@ -46,9 +46,10 @@ fn design_mode_instructions_anchor_design_file_to_designs_directory() {
     assert!(design_instructions.contains(".ody-code/designs/"));
     assert!(design_instructions.contains("YYYY-MM-DD-<slug>.md"));
     assert!(
-        !design_instructions.contains(".ody-code/roadmaps/"),
-        "design instructions must not point at the roadmaps directory"
+        design_instructions.contains(".ody-code/roadmaps/"),
+        "large Design-mode goals must be decomposed into a roadmap before phase 1"
     );
+    assert!(design_instructions.contains("Step 0.8"));
     // Hard exit gates must be referenced so the model cannot skip them.
     assert!(design_instructions.contains("<HARD-GATE>"));
     assert!(design_instructions.contains("## Reuse Analysis"));

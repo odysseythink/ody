@@ -18,8 +18,9 @@ Use `/design` when you need to think through architecture, contracts, data model
    - segmented presentation and user approval;
    - writing the design file to `.ody-code/designs/`;
    - adversarial self-review and a C1–C8 exit checklist.
-3. While in Design Mode the workspace is **read-only**: writes are only allowed to the current design file and its `<stem>/` split parts.  Any other file modifications are rejected by the same safety gate used by Plan Mode.
-4. Leaving Design Mode for Plan Mode triggers a handoff reminder: "Design saved to `<path>` — create a concrete implementation plan based on the approved design."
+3. For a large goal (more independently deliverable phases than `split_threshold`), Ody first directs the model to write a phase roadmap to `.ody-code/roadmaps/`, mark only phase 1 active, and design only that phase. Later phases stay pending until separately selected.
+4. While in Design Mode the workspace is **read-only**: writes are only allowed to the current design file and its `<stem>/` split parts, plus Markdown phase roadmaps directly under `.ody-code/roadmaps/`. Any other file modifications are rejected by the same safety gate used by Plan Mode.
+5. Leaving Design Mode for Plan Mode triggers a handoff reminder: "Design saved to `<path>` — create a concrete implementation plan based on the approved design."
 
 ## Configuration
 
@@ -36,7 +37,7 @@ The same `enforcement` level controls both Plan and Design write gates, and the 
 
 ## File layout
 
-Design artifacts live under `<project>/.ody-code/designs/` with the filename convention `YYYY-MM-DD-<topic>.md`.  Large designs are split into an index file plus part files under `<design-stem>/<subsystem>.md`.
+Design artifacts live under `<project>/.ody-code/designs/` with the filename convention `YYYY-MM-DD-<topic>.md`. Large goals first get one phase roadmap at `.ody-code/roadmaps/YYYY-MM-DD-<topic>.md`; large active-phase designs are then split into an index file plus part files under `<design-stem>/<subsystem>.md`.
 
 ## Differences from the upstream ody-code Design Mode
 

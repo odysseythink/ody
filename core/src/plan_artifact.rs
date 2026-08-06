@@ -366,6 +366,19 @@ impl PlanArtifact {
         logical_normalize(target).starts_with(&spikes)
     }
 
+    /// Returns true when `target` is a Markdown phase-roadmap file directly
+    /// under `.ody-code/roadmaps/`. Design Mode permits this narrow exception
+    /// so a large goal can be decomposed before its first phase is designed.
+    pub fn is_roadmap_file_path(&self, target: &Path) -> bool {
+        target.extension().is_some_and(|ext| ext == "md")
+            && target.parent().is_some_and(|parent| {
+                ody_utils_path::paths_match_after_normalization(
+                    &self.plans_base_dir.as_path().join("roadmaps"),
+                    parent,
+                )
+            })
+    }
+
     pub fn restore_or_create(
         plans_base_dir: AbsolutePathBuf,
         thread_id: ody_protocol::ThreadId,
@@ -877,6 +890,22 @@ mod tests {
         let (artifact, _tmp) = test_artifact("2026-07-04");
         let path = artifact.path().unwrap();
         assert!(artifact.is_plan_file_path(&path));
+    }
+
+    #[tokio::test]
+    async fn roadmap_path_allows_only_direct_markdown_files() {
+        let (artifact, tmp) = test_artifact("2026-08-06");
+        assert!(
+            artifact.is_roadmap_file_path(&tmp.path().join("roadmaps").join("2026-08-06-topic.md"))
+        );
+        assert!(
+            !artifact
+                .is_roadmap_file_path(&tmp.path().join("roadmaps").join("2026-08-06-topic.txt"))
+        );
+        assert!(
+            !artifact
+                .is_roadmap_file_path(&tmp.path().join("roadmaps").join("topic").join("phase.md"))
+        );
     }
 
     #[tokio::test]

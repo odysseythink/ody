@@ -714,6 +714,51 @@ fn design_gate_strict_allows_whitelisted_stem_subdirectory_md() {
 }
 
 #[test]
+fn design_gate_strict_allows_phase_roadmap_markdown() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = design_artifact_at(tmp.path());
+    let roadmap = tmp.path().join("roadmaps").join("2026-08-06-search.md");
+    let action = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&roadmap.abs()),
+        "# Search roadmap\n".to_string(),
+    );
+    let decision = plan_mode_gate_for_patch(
+        &design_mode(),
+        PlanEnforcement::Strict,
+        &action,
+        Some(&artifact),
+    );
+    assert_eq!(decision, PlanGateDecision::Allow);
+}
+
+#[test]
+fn design_gate_strict_rejects_non_markdown_or_nested_roadmaps() {
+    let tmp = TempDir::new().unwrap();
+    let artifact = design_artifact_at(tmp.path());
+    for path in [
+        tmp.path().join("roadmaps").join("2026-08-06-search.txt"),
+        tmp.path()
+            .join("roadmaps")
+            .join("search")
+            .join("phase-1.md"),
+    ] {
+        let action = ApplyPatchAction::new_add_for_test(
+            &PathUri::from_abs_path(&path.abs()),
+            "not allowed".to_string(),
+        );
+        assert!(matches!(
+            plan_mode_gate_for_patch(
+                &design_mode(),
+                PlanEnforcement::Strict,
+                &action,
+                Some(&artifact),
+            ),
+            PlanGateDecision::Deny { .. }
+        ));
+    }
+}
+
+#[test]
 fn design_gate_ask_forces_approval_in_design_mode() {
     let tmp = TempDir::new().unwrap();
     let path = tmp.path().join("file.txt");
