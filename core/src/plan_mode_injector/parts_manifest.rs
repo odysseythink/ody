@@ -326,7 +326,7 @@ pub fn parse_parts_manifest(content: &str) -> ManifestParseResult {
         }
     }
     if format == ManifestFormat::Task {
-        for row in &rows {
+        for (row_index, row) in rows.iter().enumerate() {
             for dependency in &row.depends_on {
                 if dependency == &row.id {
                     result
@@ -336,6 +336,16 @@ pub fn parse_parts_manifest(content: &str) -> ManifestParseResult {
                     result.diagnostics.push(format!(
                         "task `{}` depends on unknown task `{dependency}`",
                         row.id
+                    ));
+                } else if let Some(dependency_index) = rows
+                    .iter()
+                    .position(|candidate| candidate.id == *dependency)
+                    && dependency_index >= row_index
+                {
+                    result.diagnostics.push(format!(
+                        "task `{}` depends on later task `{dependency}` (row {}); task manifests execute in table order, so dependencies must appear earlier",
+                        row.id,
+                        dependency_index + 1,
                     ));
                 }
             }
@@ -948,6 +958,28 @@ mod tests {
                 .iter()
                 .any(|item| item.contains("unknown task `T99`")),
             "{:?}",
+            result.diagnostics
+        );
+    }
+
+    #[test]
+    fn task_manifest_rejects_dependencies_on_later_rows() {
+        let markdown = r#"## Parts
+| ID | File | Task | Scope | Depends on | Status |
+|---|---|---|---|---|---|
+| T01 | `topic/domain.md` | Domain model | domain | — | pending |
+| T02 | `topic/pipeline.md` | Pipeline | pipeline | T03 | pending |
+| T03 | `topic/metrics.md` | Metrics | observability | T01 | pending |
+"#;
+
+        let result = parse_parts_manifest(markdown);
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic
+                    .contains("task `T02` depends on later task `T03` (row 3)")),
+            "{:#?}",
             result.diagnostics
         );
     }

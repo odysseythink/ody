@@ -134,6 +134,38 @@ fn frozen_manifest_submission_violations(
     ))
 }
 
+/// Reports task rows newly marked done that cannot yet be accepted.  Rejecting
+/// these before persistence keeps the frozen index and the completion tracker
+/// consistent: a failed checkpoint must leave the row pending.
+fn newly_completed_task_part_violations(
+    stem_dir: &Path,
+    previous_markdown: &str,
+    current: &PartsManifest,
+    max_tasks: usize,
+    max_bytes: usize,
+) -> Vec<String> {
+    let Some(previous) = parse_parts_manifest(previous_markdown).manifest else {
+        return Vec::new();
+    };
+    if !previous.is_task_mode() || !current.is_task_mode() {
+        return Vec::new();
+    }
+
+    previous
+        .rows
+        .iter()
+        .zip(&current.rows)
+        .filter(|(before, after)| {
+            before.status == RowStatus::Pending && after.status == RowStatus::Done
+        })
+        .filter_map(|(_, row)| {
+            let violations =
+                part_completion_violations(stem_dir, current, row, max_tasks, max_bytes);
+            (!violations.is_empty()).then(|| format!("{} ({})", row.file, violations.join("; ")))
+        })
+        .collect()
+}
+
 /// Rejects a single-file submission that is too large to survive the context
 /// manager's tool-output truncation policy without a `## Parts` manifest.
 fn check_single_file_split_gate(
@@ -572,6 +604,49 @@ pub(crate) async fn handle_submit_artifact(
     // 3.5 Split gate: reject oversized single-file submissions.
     check_single_file_split_gate(&markdown, wording)?;
 
+    let max_tasks_per_part = if manifest_parse
+        .manifest
+        .as_ref()
+        .is_some_and(|manifest| manifest.is_task_mode())
+    {
+        1
+    } else {
+        turn.config
+            .plan_mode
+            .as_ref()
+            .and_then(|cfg| cfg.max_tasks_per_part)
+            .unwrap_or(3)
+    };
+    let max_part_bytes = turn
+        .config
+        .plan_mode
+        .as_ref()
+        .and_then(|cfg| cfg.max_part_bytes)
+        .unwrap_or(0);
+
+    if expected_mode == ModeKind::Plan
+        && let (Some(stem_dir), Some(previous_markdown), Some(current_manifest)) = (
+            artifact.stem_dir(),
+            artifact.last_plan_text(),
+            manifest_parse.manifest.as_ref(),
+        )
+    {
+        let incomplete = newly_completed_task_part_violations(
+            &stem_dir,
+            &previous_markdown,
+            current_manifest,
+            max_tasks_per_part,
+            max_part_bytes,
+        );
+        if !incomplete.is_empty() {
+            return Err(FunctionCallError::RespondToModel(format!(
+                "{} rejected: task part(s) newly marked `done` do not satisfy their completion contract: {}. This call was not persisted; repair the named part(s) and keep their rows `pending` until they verify.",
+                wording.tool_name,
+                incomplete.join("; "),
+            )));
+        }
+    }
+
     // 4. Emit start event
     //
     // No path yet, deliberately. The artifact is still `Temporary` here — its real name is derived
@@ -671,25 +746,6 @@ pub(crate) async fn handle_submit_artifact(
     };
 
     // 6. Pending parts detection
-    let max_tasks_per_part = if manifest_parse
-        .manifest
-        .as_ref()
-        .is_some_and(|manifest| manifest.is_task_mode())
-    {
-        1
-    } else {
-        turn.config
-            .plan_mode
-            .as_ref()
-            .and_then(|cfg| cfg.max_tasks_per_part)
-            .unwrap_or(3)
-    };
-    let max_part_bytes = turn
-        .config
-        .plan_mode
-        .as_ref()
-        .and_then(|cfg| cfg.max_part_bytes)
-        .unwrap_or(0);
     let incomplete_done_parts: Vec<String> = match artifact.stem_dir() {
         Some(stem_dir) => parse_parts_manifest(&markdown)
             .manifest
@@ -1072,6 +1128,31 @@ mod tests {
         assert_eq!(
             frozen_manifest_submission_violations(stem, previous, current.manifest.as_ref()),
             Some(Vec::new())
+        );
+    }
+
+    #[test]
+    fn newly_completed_task_part_must_have_verified_dependencies() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stem = tmp.path().join("topic");
+        std::fs::create_dir_all(&stem).unwrap();
+        std::fs::write(
+            stem.join("pipeline.md"),
+            "# Task: Pipeline\n\n**Manifest task:** `T02`\n\n## Files\n\n- `pipeline.go:1`\n\n## Source evidence\n\n- `pipeline.go:1`\n\n## Implementation\n\nImplement the pipeline.\n\n## Failure and edge cases\n\nReturn the existing error.\n\n## Tests\n\nAdd a unit test.\n\n## Self-review\n\n- [x] 1\n- [x] 2\n- [x] 3\n- [x] 4\n- [x] 5\n- [x] 6\n- [x] 7\n",
+        )
+        .unwrap();
+        let previous = "## Parts\n| ID | File | Task | Scope | Depends on | Status |\n|---|---|---|---|---|---|\n| T01 | topic/domain.md | Domain | domain | — | pending |\n| T02 | topic/pipeline.md | Pipeline | pipeline | T01 | pending |\n";
+        let current = parse_parts_manifest(
+            "## Parts\n| ID | File | Task | Scope | Depends on | Status |\n|---|---|---|---|---|---|\n| T01 | topic/domain.md | Domain | domain | — | pending |\n| T02 | topic/pipeline.md | Pipeline | pipeline | T01 | done |\n",
+        )
+        .manifest
+        .unwrap();
+
+        let violations = newly_completed_task_part_violations(&stem, previous, &current, 1, 0);
+        assert_eq!(violations.len(), 1, "{violations:?}");
+        assert!(
+            violations[0].contains("dependency `T01` is not a verified completed task"),
+            "{violations:?}"
         );
     }
 
