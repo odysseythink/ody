@@ -718,7 +718,27 @@ fn footer_from_props_lines(
     // Passive footer context can come from the configurable status line, the
     // active agent label, or both combined.
     if let Some(status_line) = passive_footer_status_line(props) {
-        return vec![status_line];
+        let mut lines = vec![status_line];
+        if let Some(hint) = props.plan_mode_rejection_hint.as_ref() {
+            // A configured status line normally puts the mode indicator on the
+            // right. A rejection needs a second row, where that right-side slot
+            // is intentionally unavailable; repeat the indicator with the
+            // warning so Plan mode never appears to have been exited.
+            let mut rejection_line = left_side_line(
+                collaboration_mode_indicator,
+                LeftSideState {
+                    hint: SummaryHintKind::None,
+                    show_cycle_hint,
+                },
+                key_hints,
+            );
+            if !rejection_line.spans.is_empty() {
+                rejection_line.push_span(" · ".dim());
+            }
+            rejection_line.push_span(hint.clone().dim());
+            lines.push(rejection_line);
+        }
+        return lines;
     }
     match props.mode {
         FooterMode::QuitShortcutReminder => {
@@ -1349,11 +1369,12 @@ mod tests {
                 } else {
                     None
                 };
-                let left_mode_indicator = if status_line_active {
-                    None
-                } else {
-                    collaboration_mode_indicator
-                };
+                let left_mode_indicator =
+                    if status_line_active && props.plan_mode_rejection_hint.is_none() {
+                        None
+                    } else {
+                        collaboration_mode_indicator
+                    };
                 let available_width = area.width.saturating_sub(FOOTER_INDENT_COLS as u16) as usize;
                 let mut truncated_status_line = if status_line_active
                     && matches!(
@@ -1420,7 +1441,7 @@ mod tests {
                     props.mode,
                     FooterMode::ComposerEmpty | FooterMode::ComposerHasDraft
                 ) {
-                    if status_line_active {
+                    if status_line_active && props.plan_mode_rejection_hint.is_none() {
                         if let Some(line) = truncated_status_line.clone() {
                             render_footer_line(area, f.buffer_mut(), line);
                         }
@@ -2029,6 +2050,31 @@ mod tests {
 
         snapshot_footer_with_mode_indicator(
             "footer_plan_mode_rejection_hint",
+            /*width*/ 80,
+            &props,
+            Some(CollaborationModeIndicator::Plan),
+        );
+
+        let props = FooterProps {
+            mode: FooterMode::ComposerEmpty,
+            esc_backtrack_hint: false,
+            use_shift_enter_hint: false,
+            is_task_running: false,
+            queue_submissions: false,
+            collaboration_modes_enabled: true,
+            is_wsl: false,
+            quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
+            status_line_value: Some(Line::from("Status line content")),
+            status_line_enabled: true,
+            key_hints: FooterKeyHints::default_bindings(),
+            active_agent_label: None,
+            plan_mode_rejection_hint: Some(
+                "Action blocked while planning — switch to Default mode to apply.".to_string(),
+            ),
+        };
+
+        snapshot_footer_with_mode_indicator(
+            "footer_plan_mode_rejection_hint_with_status_line",
             /*width*/ 80,
             &props,
             Some(CollaborationModeIndicator::Plan),

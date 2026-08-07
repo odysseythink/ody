@@ -4227,11 +4227,12 @@ impl ChatComposer {
                     } else {
                         None
                     };
-                    let left_mode_indicator = if status_line_active {
-                        None
-                    } else {
-                        self.footer.collaboration_mode_indicator
-                    };
+                    let left_mode_indicator =
+                        if status_line_active && footer_props.plan_mode_rejection_hint.is_none() {
+                            None
+                        } else {
+                            self.footer.collaboration_mode_indicator
+                        };
                     let active_footer_hint_override = self.footer.hint_override.as_ref();
                     let mut left_width = if self.footer.flash_visible() {
                         self.footer
@@ -4370,7 +4371,7 @@ impl ChatComposer {
                         }
                     } else if let Some(items) = active_footer_hint_override {
                         render_footer_hint_items(hint_rect, buf, items);
-                    } else if status_line_active {
+                    } else if status_line_active && !has_rejection_hint {
                         if let Some(line) = truncated_status_line {
                             render_footer_line(hint_rect, buf, line);
                         }
