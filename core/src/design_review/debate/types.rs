@@ -205,6 +205,7 @@ mod tests {
             skeptic_model: None,
             judge_model: None,
             contest_critic: false,
+            auto_redesign_high_risk: false,
             usability_lens: UsabilityLensToml::Off,
         }
     }

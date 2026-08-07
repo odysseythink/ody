@@ -61,7 +61,7 @@ fn format_config_error_preserves_server_validation_message() {
 }
 
 #[test]
-fn build_design_review_edits_writes_all_nine_keys() {
+fn build_design_review_edits_writes_all_ten_keys() {
     let state = DesignReviewEditState {
         enable: true,
         review_model: Some("provider/model".to_string()),
@@ -71,10 +71,11 @@ fn build_design_review_edits_writes_all_nine_keys() {
         skeptic_model: Some("skp".to_string()),
         judge_model: Some("jdg".to_string()),
         contest_critic: true,
+        auto_redesign_high_risk: true,
         usability_lens: UsabilityLensToml::Ask,
     };
     let edits = build_design_review_edits(&state);
-    assert_eq!(edits.len(), 9);
+    assert_eq!(edits.len(), 10);
     assert_eq!(edits[0].key_path, "design_review.enable");
     assert_eq!(edits[0].value, serde_json::json!(true));
     assert_eq!(edits[1].key_path, "design_review.review_model");
@@ -83,8 +84,13 @@ fn build_design_review_edits_writes_all_nine_keys() {
     assert_eq!(edits[3].key_path, "design_review.debate.rounds");
     assert_eq!(edits[3].value, serde_json::json!(2));
     assert_eq!(edits[7].key_path, "design_review.debate.contest_critic");
-    assert_eq!(edits[8].key_path, "design_review.debate.usability_lens");
-    assert_eq!(edits[8].value, serde_json::json!("ask"));
+    assert_eq!(
+        edits[8].key_path,
+        "design_review.debate.auto_redesign_high_risk"
+    );
+    assert_eq!(edits[8].value, serde_json::json!(true));
+    assert_eq!(edits[9].key_path, "design_review.debate.usability_lens");
+    assert_eq!(edits[9].value, serde_json::json!("ask"));
 }
 
 #[test]
@@ -98,10 +104,11 @@ fn build_design_review_edits_clears_optional_strings_and_rounds() {
         skeptic_model: None,
         judge_model: None,
         contest_critic: false,
+        auto_redesign_high_risk: false,
         usability_lens: UsabilityLensToml::Off,
     };
     let edits = build_design_review_edits(&state);
-    assert_eq!(edits.len(), 9);
+    assert_eq!(edits.len(), 10);
     assert_eq!(edits[1].value, serde_json::Value::Null);
     assert_eq!(edits[3].value, serde_json::Value::Null);
     assert_eq!(edits[4].value, serde_json::Value::Null);
@@ -138,6 +145,7 @@ fn design_review_edit_state_apply_from_toml_resets_debate_when_absent() {
         skeptic_model: Some("s".to_string()),
         judge_model: Some("j".to_string()),
         contest_critic: true,
+        auto_redesign_high_risk: true,
         usability_lens: UsabilityLensToml::On,
         ..Default::default()
     };
@@ -152,6 +160,7 @@ fn design_review_edit_state_apply_from_toml_resets_debate_when_absent() {
     assert_eq!(state.skeptic_model, None);
     assert_eq!(state.judge_model, None);
     assert!(!state.contest_critic);
+    assert!(!state.auto_redesign_high_risk);
     assert_eq!(state.usability_lens, UsabilityLensToml::Off);
 }
 
@@ -170,6 +179,7 @@ fn design_review_edit_state_apply_from_toml_reads_debate() {
             skeptic_model: Some("s".to_string()),
             judge_model: Some("j".to_string()),
             contest_critic: true,
+            auto_redesign_high_risk: true,
             usability_lens: UsabilityLensToml::Ask,
         }),
     };
@@ -181,6 +191,7 @@ fn design_review_edit_state_apply_from_toml_reads_debate() {
     assert_eq!(state.skeptic_model, Some("s".to_string()));
     assert_eq!(state.judge_model, Some("j".to_string()));
     assert!(state.contest_critic);
+    assert!(state.auto_redesign_high_risk);
     assert_eq!(state.usability_lens, UsabilityLensToml::Ask);
 }
 
@@ -201,6 +212,7 @@ async fn design_review_edit_state_from_config_seeds_from_resolved_fields() {
         skeptic_model: None,
         judge_model: None,
         contest_critic: false,
+        auto_redesign_high_risk: true,
         usability_lens: UsabilityLensToml::default(),
     });
 
@@ -209,4 +221,5 @@ async fn design_review_edit_state_from_config_seeds_from_resolved_fields() {
     assert_eq!(state.review_model, Some("resolved/model".to_string()));
     assert!(state.debate_enable);
     assert_eq!(state.rounds, Some(3));
+    assert!(state.auto_redesign_high_risk);
 }

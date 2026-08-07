@@ -970,6 +970,12 @@ pub struct DesignReviewDebateToml {
     /// "contested by debate"). Off ⇒ the debate only ever ADDS findings (v1.5a).
     #[serde(default)]
     pub contest_critic: bool,
+    /// When `true`, a non-speculative Critical or High finding from the completed
+    /// debate automatically returns the design to Design mode for revision. Such
+    /// findings are not presented for user sign-off; Medium/Low findings retain
+    /// the normal level-driven sign-off flow. Defaults to `false`.
+    #[serde(default)]
+    pub auto_redesign_high_risk: bool,
     /// v1.6 (opt-in, default `off`): append a user/usability-lens Skeptic turn so
     /// the debate also surfaces mode-confusion / feedback / accessibility /
     /// workflow defects — an axis the correctness-oriented critic + Skeptic miss.
@@ -1364,6 +1370,7 @@ mod tests {
                 advocate_model = "kimi_ranweiwei/kimi-for-coding"
                 skeptic_model = "deepseek_1/deepseek-v4-pro"
                 judge_model = "glm_1/glm-5.1"
+                auto_redesign_high_risk = true
             "#,
         )
         .expect("design_review.debate table should deserialize");
@@ -1374,6 +1381,7 @@ mod tests {
         assert!(debate.enable);
         assert_eq!(debate.rounds, Some(2));
         assert_eq!(debate.judge_model.as_deref(), Some("glm_1/glm-5.1"));
+        assert!(debate.auto_redesign_high_risk);
         // contest_critic omitted ⇒ defaults false (v1.5b is opt-in).
         assert!(!debate.contest_critic);
         // usability_lens omitted ⇒ defaults Off (v1.6 is opt-in).

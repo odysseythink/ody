@@ -164,6 +164,7 @@ pub(crate) struct DesignReviewEditState {
     pub(crate) skeptic_model: Option<String>,
     pub(crate) judge_model: Option<String>,
     pub(crate) contest_critic: bool,
+    pub(crate) auto_redesign_high_risk: bool,
     pub(crate) usability_lens: UsabilityLensToml,
 }
 
@@ -208,6 +209,7 @@ impl DesignReviewEditState {
             state.skeptic_model = debate.skeptic_model.clone();
             state.judge_model = debate.judge_model.clone();
             state.contest_critic = debate.contest_critic;
+            state.auto_redesign_high_risk = debate.auto_redesign_high_risk;
             state.usability_lens = debate.usability_lens;
         }
         state
@@ -223,6 +225,7 @@ impl DesignReviewEditState {
             self.skeptic_model = debate.skeptic_model.clone();
             self.judge_model = debate.judge_model.clone();
             self.contest_critic = debate.contest_critic;
+            self.auto_redesign_high_risk = debate.auto_redesign_high_risk;
             self.usability_lens = debate.usability_lens;
         } else {
             self.debate_enable = false;
@@ -231,6 +234,7 @@ impl DesignReviewEditState {
             self.skeptic_model = None;
             self.judge_model = None;
             self.contest_critic = false;
+            self.auto_redesign_high_risk = false;
             self.usability_lens = UsabilityLensToml::default();
         }
     }
@@ -281,6 +285,10 @@ pub(crate) fn build_design_review_edits(state: &DesignReviewEditState) -> Vec<Co
         replace_config_value(
             "design_review.debate.contest_critic",
             serde_json::json!(state.contest_critic),
+        ),
+        replace_config_value(
+            "design_review.debate.auto_redesign_high_risk",
+            serde_json::json!(state.auto_redesign_high_risk),
         ),
         replace_config_value(
             "design_review.debate.usability_lens",

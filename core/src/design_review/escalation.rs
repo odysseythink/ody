@@ -59,6 +59,17 @@ fn escalated_findings(
     out
 }
 
+/// In debate auto-redesign mode, a confirmed Critical/High finding is a hard
+/// redesign signal rather than a choice for the user to sign off. Speculative
+/// findings deliberately remain advisory, matching the normal escalation rule.
+fn requires_automatic_redesign(finding: &DesignReviewFinding) -> bool {
+    finding.confidence != DesignReviewConfidence::Speculative
+        && matches!(
+            finding.severity,
+            DesignReviewSeverity::Critical | DesignReviewSeverity::High
+        )
+}
+
 /// Whether the transcript language is Chinese, mirroring how core derives the
 /// effective language for model instructions (explicit config value, else the
 /// system locale).
@@ -449,6 +460,27 @@ fn build_revise(chinese: bool, flagged: &[(String, String)]) -> String {
     }
 }
 
+/// Return the model to Design mode without a user prompt when debate has found
+/// a confirmed high-risk issue. The list uses the same actionable finding body
+/// as an explicit "Needs fixing" response, but makes it clear that the host
+/// made this disposition automatically.
+fn build_automatic_redesign(chinese: bool, findings: &[&DesignReviewFinding]) -> String {
+    let flagged: Vec<(String, String)> = findings
+        .iter()
+        .map(|finding| (SignoffItem::Finding(finding).body(chinese), String::new()))
+        .collect();
+    let revise = build_revise(chinese, &flagged);
+    if chinese {
+        format!(
+            "设计未最终确定：debate 识别出高风险项，已自动标记为需要重新设计，无需用户确认。\n\n{revise}"
+        )
+    } else {
+        format!(
+            "Design NOT finalized: debate found high-risk items, which were automatically marked as needing redesign without user sign-off.\n\n{revise}"
+        )
+    }
+}
+
 /// Run the level-driven sign-off gate. Presents each escalated assumption AND
 /// review finding on its own paginated page (←/→) and returns whether the design
 /// may finalize. This is the merged gate: the inferred-decision sign-off that
@@ -468,6 +500,8 @@ pub(crate) async fn run_escalation_gate(
     level: Option<DesignAuditLevel>,
     review: Option<&DesignReviewOutput>,
     design_markdown: &str,
+    auto_redesign_high_risk: bool,
+    can_prompt: bool,
 ) -> EscalationDecision {
     // Template default when the host selected no level: Basic.
     let level = level.unwrap_or(DesignAuditLevel::Basic);
@@ -478,6 +512,35 @@ pub(crate) async fn run_escalation_gate(
         Some(review) => escalated_findings(&review.findings, level),
         None => Vec::new(),
     };
+
+    // Full-auto debate mode acts before sign-off: high-risk findings never ask
+    // the user to choose between accepting and fixing a known dangerous design.
+    // Do not consult the sign-off suppression set here: an automatic redesign
+    // disposition must remain authoritative even if a prior manual round had
+    // accepted the same title.
+    if auto_redesign_high_risk {
+        let automatic: Vec<&DesignReviewFinding> = findings
+            .iter()
+            .copied()
+            .filter(|finding| requires_automatic_redesign(finding))
+            .collect();
+        if !automatic.is_empty() {
+            return EscalationDecision::Revise {
+                message: build_automatic_redesign(
+                    transcript_is_chinese(turn.config.language.as_deref()),
+                    &automatic,
+                ),
+            };
+        }
+    }
+
+    // Preserve the prior non-interactive behavior: without a UI capable of
+    // answering a sign-off popup, non-high-risk findings cannot block finalizing.
+    if !can_prompt {
+        session.clear_design_signoff_seen().await;
+        return EscalationDecision::Finalize { note: None };
+    }
+
     if assumptions.is_empty() && findings.is_empty() {
         // Design finalizes with nothing to sign off — the effort is done, so a
         // future design starts from an empty suppression set.
@@ -649,6 +712,43 @@ mod tests {
             DesignReviewConfidence::Speculative,
             DesignAuditLevel::Deep
         ));
+    }
+
+    #[test]
+    fn automatic_redesign_only_targets_confirmed_critical_and_high_findings() {
+        assert!(requires_automatic_redesign(&finding(
+            DesignReviewSeverity::Critical,
+            DesignReviewConfidence::High,
+            "critical"
+        )));
+        assert!(requires_automatic_redesign(&finding(
+            DesignReviewSeverity::High,
+            DesignReviewConfidence::Low,
+            "high"
+        )));
+        assert!(!requires_automatic_redesign(&finding(
+            DesignReviewSeverity::Medium,
+            DesignReviewConfidence::High,
+            "medium"
+        )));
+        assert!(!requires_automatic_redesign(&finding(
+            DesignReviewSeverity::High,
+            DesignReviewConfidence::Speculative,
+            "hunch"
+        )));
+    }
+
+    #[test]
+    fn automatic_redesign_message_says_no_user_confirmation_is_needed() {
+        let high = finding(
+            DesignReviewSeverity::High,
+            DesignReviewConfidence::High,
+            "missing rollback",
+        );
+        let message = build_automatic_redesign(false, &[&high]);
+        assert!(message.contains("automatically marked as needing redesign"));
+        assert!(message.contains("without user sign-off"));
+        assert!(message.contains("missing rollback"));
     }
 
     #[test]

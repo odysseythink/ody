@@ -30,10 +30,10 @@ fn make_view(
 }
 
 #[test]
-fn design_view_renders_all_nine_fields() {
+fn design_view_renders_all_ten_fields() {
     let (view, _rx) = make_view(ModeKind::Design, DesignReviewEditState::default());
     let rows = view.build_rows();
-    assert_eq!(rows.len(), 9);
+    assert_eq!(rows.len(), 10);
     assert!(rows[0].name.contains("Enable design review"));
     assert!(rows[1].name.contains("Review model"));
     assert!(rows[2].name.contains("Enable debate"));
@@ -42,7 +42,8 @@ fn design_view_renders_all_nine_fields() {
     assert!(rows[5].name.contains("Skeptic model"));
     assert!(rows[6].name.contains("Judge model"));
     assert!(rows[7].name.contains("Contest critic"));
-    assert!(rows[8].name.contains("Usability lens"));
+    assert!(rows[8].name.contains("Auto-redesign high risk"));
+    assert!(rows[9].name.contains("Usability lens"));
 }
 
 #[test]
@@ -62,7 +63,7 @@ fn toggling_enable_emits_persist_event() {
 #[test]
 fn cycling_usability_lens_emits_persist_event() {
     let (mut view, mut rx) = make_view(ModeKind::Design, DesignReviewEditState::default());
-    for _ in 0..8 {
+    for _ in 0..9 {
         view.move_down();
     }
     view.handle_key_event(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
@@ -71,6 +72,24 @@ fn cycling_usability_lens_emits_persist_event() {
             assert!(edits.iter().any(|e| {
                 e.key_path == "design_review.debate.usability_lens"
                     && e.value == serde_json::json!("on")
+            }));
+        }
+        other => panic!("expected PersistDesignReviewPreferences, got {other:?}"),
+    }
+}
+
+#[test]
+fn toggling_auto_redesign_high_risk_emits_persist_event() {
+    let (mut view, mut rx) = make_view(ModeKind::Design, DesignReviewEditState::default());
+    for _ in 0..8 {
+        view.move_down();
+    }
+    view.handle_key_event(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
+    match rx.try_recv() {
+        Ok(AppEvent::PersistDesignReviewPreferences { edits }) => {
+            assert!(edits.iter().any(|edit| {
+                edit.key_path == "design_review.debate.auto_redesign_high_risk"
+                    && edit.value == serde_json::json!(true)
             }));
         }
         other => panic!("expected PersistDesignReviewPreferences, got {other:?}"),

@@ -1,6 +1,6 @@
 //! Mode-specific preferences form for the `/preferences` slash command.
 //!
-//! In Design mode this renders a typed form for the nine `[design_review]` keys.
+//! In Design mode this renders a typed form for the ten `[design_review]` keys.
 //! Other modes show a placeholder explaining that no preferences are available yet.
 
 use std::sync::Arc;
@@ -67,6 +67,7 @@ enum PreferencesField {
     SkepticModel,
     JudgeModel,
     ContestCritic,
+    AutoRedesignHighRisk,
     UsabilityLens,
 }
 
@@ -81,6 +82,7 @@ impl PreferencesField {
             Self::SkepticModel => "Skeptic model",
             Self::JudgeModel => "Judge model",
             Self::ContestCritic => "Contest critic",
+            Self::AutoRedesignHighRisk => "Auto-redesign high risk",
             Self::UsabilityLens => "Usability lens",
         }
     }
@@ -97,6 +99,9 @@ impl PreferencesField {
             Self::SkepticModel => "Model override for the Skeptic seat (optional).",
             Self::JudgeModel => "Model override for the Judge seat (optional).",
             Self::ContestCritic => "Allow the Judge to refute weak critic findings.",
+            Self::AutoRedesignHighRisk => {
+                "Return to Design automatically for confirmed Critical/High findings."
+            }
             Self::UsabilityLens => "Append a usability-lens Skeptic turn (off/on/ask).",
         }
     }
@@ -104,7 +109,7 @@ impl PreferencesField {
     fn is_bool(self) -> bool {
         matches!(
             self,
-            Self::Enable | Self::DebateEnable | Self::ContestCritic
+            Self::Enable | Self::DebateEnable | Self::ContestCritic | Self::AutoRedesignHighRisk
         )
     }
 
@@ -169,6 +174,7 @@ impl PreferencesView {
                     PreferencesField::SkepticModel,
                     PreferencesField::JudgeModel,
                     PreferencesField::ContestCritic,
+                    PreferencesField::AutoRedesignHighRisk,
                     PreferencesField::UsabilityLens,
                 ];
                 (state.clone(), fields)
@@ -237,6 +243,9 @@ impl PreferencesView {
             PreferencesField::SkepticModel => format_opt_str(&self.edit_state.skeptic_model),
             PreferencesField::JudgeModel => format_opt_str(&self.edit_state.judge_model),
             PreferencesField::ContestCritic => format_bool(self.edit_state.contest_critic),
+            PreferencesField::AutoRedesignHighRisk => {
+                format_bool(self.edit_state.auto_redesign_high_risk)
+            }
             PreferencesField::UsabilityLens => {
                 format_usability_lens(self.edit_state.usability_lens)
             }
@@ -297,6 +306,9 @@ impl PreferencesView {
             }
             PreferencesField::ContestCritic => {
                 self.edit_state.contest_critic = !self.edit_state.contest_critic
+            }
+            PreferencesField::AutoRedesignHighRisk => {
+                self.edit_state.auto_redesign_high_risk = !self.edit_state.auto_redesign_high_risk
             }
             _ => return,
         }

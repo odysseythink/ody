@@ -145,6 +145,7 @@ advocate_model = "kimi_user/kimi-for-coding"
 skeptic_model = "deepseek_user/deepseek-v4-pro"
 judge_model = "glm_user/glm-5.1"
 contest_critic = false                 # Judge may refute critic findings → marked Contested (opt-in)
+auto_redesign_high_risk = false        # Critical/High findings return to redesign without a sign-off popup
 # usability_lens: off (default, correctness only), on (always add user-facing turn),
 #                 ask (prompt per design, recommended for mixed work)
 usability_lens = "off"
@@ -170,3 +171,5 @@ usability_lens = "off"
 enable = true
 usability_lens = "ask"
 ```
+
+Set `auto_redesign_high_risk = true` to enable the full-auto convergence path for debate: confirmed Critical or High findings are automatically marked `Needs redesign` and keep the session in Design mode; the user is not asked to approve them. Medium and Low findings still use the normal audit-level sign-off prompt, so only non-high-risk tradeoffs require confirmation.

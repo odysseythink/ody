@@ -338,6 +338,15 @@ pub(crate) fn should_trigger_design_review(
         && design_review_model.is_some()
 }
 
+/// Full-auto redesign is only active for an enabled debate. Centralizing this
+/// predicate keeps interactive and headless final submissions consistent.
+fn auto_redesign_high_risk_enabled(turn: &TurnContext) -> bool {
+    turn.config
+        .design_review_debate
+        .as_ref()
+        .is_some_and(|debate| debate.enable && debate.auto_redesign_high_risk)
+}
+
 /// Stable question id for the v1.6b `Ask` usability prompt.
 const USABILITY_QUESTION_ID: &str = "usability_lens";
 
@@ -1002,7 +1011,9 @@ pub(crate) async fn handle_submit_artifact(
                 "Plan part saved, but this is a rigor-tier plan and it is {g}. This call was persisted but is NOT treated as final — stay in Plan mode, add the missing section(s) per the rigor-tier addendum instructions, and call submit_plan again with the complete plan."
             )
         }
-    } else if expected_mode == ModeKind::Design && can_prompt {
+    } else if expected_mode == ModeKind::Design
+        && (can_prompt || auto_redesign_high_risk_enabled(turn.as_ref()))
+    {
         // Level-driven escalation gate (ported from ody-code): put the audit-
         // level-appropriate review findings in front of the user for accept /
         // defer / correct before finalizing. A correction request keeps the
@@ -1015,6 +1026,8 @@ pub(crate) async fn handle_submit_artifact(
             artifact.design_audit_level(),
             review_output.as_ref(),
             &design_markdown,
+            auto_redesign_high_risk_enabled(turn.as_ref()),
+            can_prompt,
         )
         .await
         {
