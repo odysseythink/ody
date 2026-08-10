@@ -6483,6 +6483,7 @@ dependencies = [
  "ody-config",
  "ody-core",
  "ody-core-plugins",
+ "ody-database",
  "ody-exec-server",
  "ody-extension-api",
  "ody-features",
@@ -7193,6 +7194,27 @@ dependencies = [
  "toml 0.9.12+spec-1.1.0",
  "tracing",
  "zip",
+]
+
+[[package]]
+name = "ody-database"
+version = "0.1.0-alpha.2"
+dependencies = [
+ "async-trait",
+ "ody-protocol",
+ "ody-tools",
+ "pretty_assertions",
+ "schemars 0.8.22",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "strum_macros 0.28.0",
+ "thiserror 2.0.18",
+ "tokio",
+ "toml 0.9.12+spec-1.1.0",
+ "tracing",
+ "urlencoding",
 ]
 
 [[package]]
@@ -8267,6 +8289,7 @@ dependencies = [
  "ody-connectors",
  "ody-core-plugins",
  "ody-core-skills",
+ "ody-database",
  "ody-exec-server",
  "ody-features",
  "ody-feedback",
@@ -8299,6 +8322,7 @@ dependencies = [
  "ody-utils-sandbox-summary",
  "ody-utils-sleep-inhibitor",
  "ody-utils-string",
+ "ody-web-search",
  "ody-windows-sandbox",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -8579,6 +8603,7 @@ version = "0.1.0-alpha.2"
 dependencies = [
  "async-trait",
  "ody-browser-control",
+ "ody-database",
  "ody-protocol",
  "ody-tools",
  "pretty_assertions",

@@ -223,3 +223,177 @@ async fn design_review_edit_state_from_config_seeds_from_resolved_fields() {
     assert_eq!(state.rounds, Some(3));
     assert!(state.auto_redesign_high_risk);
 }
+
+#[test]
+fn build_web_search_provider_config_edits_writes_provider_preset() {
+    use ody_web_search::config::WebSearchProviderConfig;
+    use ody_web_search::config::WebSearchProviderName;
+    use serde_json::json;
+    use std::collections::HashMap;
+
+    let config = WebSearchProviderConfig {
+        provider: WebSearchProviderName::Tavily,
+        api_key: Some("secret".to_string()),
+        timeout_ms: Some(15000),
+        options: {
+            let mut m = HashMap::new();
+            m.insert("search_depth".to_string(), json!("advanced"));
+            m
+        },
+    };
+    let edits = build_web_search_provider_config_edits(&config);
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].key_path, "services.webSearch.providers.tavily");
+    assert_eq!(
+        edits[0].value,
+        serde_json::json!({
+            "provider": "tavily",
+            "api_key": "secret",
+            "timeout_ms": 15000,
+            "options": { "search_depth": "advanced" },
+        })
+    );
+}
+
+#[test]
+fn build_web_search_provider_config_edits_clears_optional_fields() {
+    use ody_web_search::config::WebSearchProviderConfig;
+    use ody_web_search::config::WebSearchProviderName;
+
+    let config = WebSearchProviderConfig {
+        provider: WebSearchProviderName::Duckduckgo,
+        api_key: None,
+        timeout_ms: None,
+        options: std::collections::HashMap::new(),
+    };
+    let edits = build_web_search_provider_config_edits(&config);
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].key_path, "services.webSearch.providers.duckduckgo");
+    let value = edits[0].value.as_object().expect("preset object");
+    assert_eq!(value.get("provider"), Some(&serde_json::Value::String("duckduckgo".to_string())));
+    assert_eq!(value.get("api_key"), None);
+    assert_eq!(value.get("timeout_ms"), None);
+    assert_eq!(value.get("options"), None);
+    assert_eq!(value.len(), 1);
+}
+
+#[test]
+fn build_web_search_provider_switch_edit_writes_primary_provider() {
+    use ody_web_search::config::WebSearchProviderName;
+
+    let edits = build_web_search_provider_switch_edit(WebSearchProviderName::Bing);
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].key_path, "services.webSearch.primary");
+    assert_eq!(edits[0].value, serde_json::json!("bing"));
+}
+#[test]
+fn build_database_connection_edits_writes_preset_and_primary() {
+    use ody_database::config::{DatabaseConnectionConfig, DatabaseProviderName};
+    use serde_json::json;
+    use std::collections::HashMap;
+
+    let config = DatabaseConnectionConfig {
+        connection: "db_connection_1".to_string(),
+        provider: DatabaseProviderName::Postgres,
+        host: "127.0.0.1".to_string(),
+        port: 5432,
+        database: "project_a".to_string(),
+        username: "ranwei".to_string(),
+        password: Some("secret".to_string()),
+        options: {
+            let mut m = HashMap::new();
+            m.insert("sslmode".to_string(), json!("disable"));
+            m
+        },
+    };
+    let edits = build_database_connection_edits(&config, true);
+    assert_eq!(edits.len(), 2);
+    assert_eq!(
+        edits[0].key_path,
+        "services.database.connections.db_connection_1"
+    );
+    assert_eq!(edits[0].value, serde_json::to_value(&config).unwrap());
+    assert_eq!(edits[1].key_path, "services.database.primary");
+    assert_eq!(edits[1].value, serde_json::json!("db_connection_1"));
+}
+
+#[test]
+fn build_database_primary_switch_edits_writes_primary() {
+    let edits = build_database_primary_switch_edits("db_connection_2");
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].key_path, "services.database.primary");
+    assert_eq!(edits[0].value, serde_json::json!("db_connection_2"));
+}
+
+#[test]
+fn build_database_delete_edits_clears_whole_table_when_last_connection_removed() {
+    use ody_database::config::{DatabaseConfig, DatabaseConnectionConfig, DatabaseProviderName};
+    use std::collections::HashMap;
+
+    let mut connections = HashMap::new();
+    connections.insert(
+        "only".to_string(),
+        DatabaseConnectionConfig {
+            connection: "only".to_string(),
+            provider: DatabaseProviderName::Sqlite,
+            host: "/tmp/only.db".to_string(),
+            port: 0,
+            database: "".to_string(),
+            username: "".to_string(),
+            password: None,
+            options: HashMap::new(),
+        },
+    );
+    let config = DatabaseConfig {
+        primary: "only".to_string(),
+        connections,
+    };
+    let edits = build_database_delete_edits("only", Some(&config));
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].key_path, "services.database");
+    assert_eq!(edits[0].value, serde_json::Value::Null);
+}
+
+#[test]
+fn build_database_delete_edits_switches_primary_when_deleting_primary() {
+    use ody_database::config::{DatabaseConfig, DatabaseConnectionConfig, DatabaseProviderName};
+    use std::collections::HashMap;
+
+    let mut connections = HashMap::new();
+    connections.insert(
+        "a".to_string(),
+        DatabaseConnectionConfig {
+            connection: "a".to_string(),
+            provider: DatabaseProviderName::Sqlite,
+            host: "/tmp/a.db".to_string(),
+            port: 0,
+            database: "".to_string(),
+            username: "".to_string(),
+            password: None,
+            options: HashMap::new(),
+        },
+    );
+    connections.insert(
+        "b".to_string(),
+        DatabaseConnectionConfig {
+            connection: "b".to_string(),
+            provider: DatabaseProviderName::Sqlite,
+            host: "/tmp/b.db".to_string(),
+            port: 0,
+            database: "".to_string(),
+            username: "".to_string(),
+            password: None,
+            options: HashMap::new(),
+        },
+    );
+    let config = DatabaseConfig {
+        primary: "b".to_string(),
+        connections,
+    };
+    let edits = build_database_delete_edits("b", Some(&config));
+    assert_eq!(edits.len(), 2);
+    assert_eq!(edits[0].key_path, "services.database.connections.b");
+    assert_eq!(edits[0].value, serde_json::Value::Null);
+    assert_eq!(edits[1].key_path, "services.database.primary");
+    assert_eq!(edits[1].value, serde_json::json!("a"));
+}

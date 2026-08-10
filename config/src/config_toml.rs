@@ -1906,7 +1906,7 @@ secondary = { provider = "moonshot", api_key = "other" }
         let services = config.services.expect("services present");
         let web_search = services.web_search.expect("web_search present");
         assert_eq!(
-            web_search.primary.provider,
+            web_search.primary,
             ody_web_search::config::WebSearchProviderName::Bing
         );
         assert!(web_search.secondary.is_some());

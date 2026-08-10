@@ -24,7 +24,7 @@ impl WebSearchExtension {
         let registry = create_default_registry();
         let client = default_http_client();
         let primary = registry
-            .create(&web_search_config.primary, client.clone())
+            .create(&web_search_config.primary_config(), client.clone())
             .ok()?;
         let secondary = web_search_config
             .secondary
@@ -102,15 +102,12 @@ mod tests {
     fn services_config() -> ServicesConfig {
         ServicesConfig {
             web_search: Some(WebSearchConfig {
-                primary: WebSearchProviderConfig {
-                    provider: WebSearchProviderName::Duckduckgo,
-                    api_key: None,
-                    timeout_ms: None,
-                    options: HashMap::new(),
-                },
+                primary: WebSearchProviderName::Duckduckgo,
+                providers: HashMap::new(),
                 secondary: None,
             }),
             browser: None,
+            database: None,
         }
     }
 
@@ -123,17 +120,24 @@ mod tests {
 
     #[test]
     fn create_provider_returns_provider_for_implemented_provider() {
+        let mut providers = HashMap::new();
+        providers.insert(
+            WebSearchProviderName::Moonshot,
+            WebSearchProviderConfig {
+                provider: WebSearchProviderName::Moonshot,
+                api_key: Some("test-key".to_string()),
+                timeout_ms: None,
+                options: HashMap::new(),
+            },
+        );
         let services = ServicesConfig {
             web_search: Some(WebSearchConfig {
-                primary: WebSearchProviderConfig {
-                    provider: WebSearchProviderName::Moonshot,
-                    api_key: Some("test-key".to_string()),
-                    timeout_ms: None,
-                    options: HashMap::new(),
-                },
+                primary: WebSearchProviderName::Moonshot,
+                providers,
                 secondary: None,
             }),
             browser: None,
+            database: None,
         };
         assert!(WebSearchExtension::create_provider(&services).is_some());
     }
@@ -151,17 +155,24 @@ mod tests {
     fn tools_returns_web_search_when_provider_present() {
         let session_store = ExtensionData::new("session");
         let thread_store = ExtensionData::new_with_init("thread", ExtensionDataInit::new());
+        let mut providers = HashMap::new();
+        providers.insert(
+            WebSearchProviderName::Moonshot,
+            WebSearchProviderConfig {
+                provider: WebSearchProviderName::Moonshot,
+                api_key: Some("test-key".to_string()),
+                timeout_ms: None,
+                options: HashMap::new(),
+            },
+        );
         let provider = WebSearchExtension::create_provider(&ServicesConfig {
             web_search: Some(WebSearchConfig {
-                primary: WebSearchProviderConfig {
-                    provider: WebSearchProviderName::Moonshot,
-                    api_key: Some("test-key".to_string()),
-                    timeout_ms: None,
-                    options: HashMap::new(),
-                },
+                primary: WebSearchProviderName::Moonshot,
+                providers,
                 secondary: None,
             }),
             browser: None,
+            database: None,
         })
         .expect("should create provider");
         thread_store.insert(provider);

@@ -968,3 +968,99 @@ beta = "b"
 
     Ok(())
 }
+
+#[tokio::test]
+async fn batch_write_web_search_duckduckgo_provider_config() -> Result<()> {
+    let tmp = tempdir().expect("tempdir");
+    let path = tmp.path().join(CONFIG_TOML_FILE);
+    std::fs::write(&path, "")?;
+
+    let service = ConfigManager::without_managed_config_for_tests(tmp.path().to_path_buf());
+    let provider = ody_web_search::config::WebSearchProviderName::Duckduckgo;
+    service
+        .batch_write(ConfigBatchWriteParams {
+            edits: vec![
+                build_web_search_provider_switch_edit(provider),
+                build_web_search_provider_preset_edit(
+                    provider,
+                    None,
+                    None,
+                    std::collections::HashMap::new(),
+                ),
+            ],
+            file_path: Some(path.display().to_string()),
+            expected_version: None,
+            reload_user_config: false,
+        })
+        .await
+        .expect("batch write duckduckgo web search config succeeds");
+
+    let contents = std::fs::read_to_string(&path)?;
+    assert!(contents.contains("primary = \"duckduckgo\""), "contents: {contents}");
+    assert!(contents.contains("provider = \"duckduckgo\""), "contents: {contents}");
+    assert!(!contents.contains("api_key"), "contents: {contents}");
+    assert!(!contents.contains("timeout_ms"), "contents: {contents}");
+    assert!(!contents.contains("options"), "contents: {contents}");
+
+    // Verify the written TOML round-trips through the canonical config parser.
+    let parsed: ConfigToml = toml::from_str(&contents)?;
+    let web_search = parsed.services.unwrap().web_search.unwrap();
+    assert_eq!(web_search.primary, ody_web_search::config::WebSearchProviderName::Duckduckgo);
+    let preset = web_search.providers.get(&web_search.primary).expect("duckduckgo preset");
+    assert_eq!(preset.api_key, None);
+    assert_eq!(preset.timeout_ms, None);
+    assert!(preset.options.is_empty());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn web_search_legacy_primary_config_migrates_to_provider_preset() -> Result<()> {
+    let tmp = tempdir().expect("tempdir");
+    let path = tmp.path().join(CONFIG_TOML_FILE);
+    std::fs::write(
+        &path,
+        r#"
+[services.webSearch]
+primary = { provider = "bing", api_key = "legacy-key", timeout_ms = 15000 }
+"#,
+    )?;
+
+    let parsed: ConfigToml = toml::from_str(&std::fs::read_to_string(&path)?)?;
+    let web_search = parsed.services.unwrap().web_search.unwrap();
+    assert_eq!(web_search.primary, ody_web_search::config::WebSearchProviderName::Bing);
+    let preset = web_search.providers.get(&web_search.primary).expect("bing preset");
+    assert_eq!(preset.api_key.as_deref(), Some("legacy-key"));
+    assert_eq!(preset.timeout_ms, Some(15000));
+
+    Ok(())
+}
+
+fn build_web_search_provider_switch_edit(
+    provider: ody_web_search::config::WebSearchProviderName,
+) -> ody_app_server_protocol::ConfigEdit {
+    ody_app_server_protocol::ConfigEdit {
+        key_path: "services.webSearch.primary".to_string(),
+        value: serde_json::to_value(provider).unwrap(),
+        merge_strategy: MergeStrategy::Replace,
+    }
+}
+
+fn build_web_search_provider_preset_edit(
+    provider: ody_web_search::config::WebSearchProviderName,
+    api_key: Option<String>,
+    timeout_ms: Option<u64>,
+    options: std::collections::HashMap<String, serde_json::Value>,
+) -> ody_app_server_protocol::ConfigEdit {
+    let config = ody_web_search::config::WebSearchProviderConfig {
+        provider,
+        api_key,
+        timeout_ms,
+        options,
+    };
+    ody_app_server_protocol::ConfigEdit {
+        key_path: format!("services.webSearch.providers.{provider}"),
+        value: serde_json::to_value(&config).unwrap(),
+        merge_strategy: MergeStrategy::Replace,
+    }
+}

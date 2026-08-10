@@ -27,13 +27,19 @@ fn local_searxng_config() -> WebSearchConfig {
         "base_url".to_string(),
         serde_json::Value::String("http://localhost:9999/search".to_string()),
     );
-    WebSearchConfig {
-        primary: WebSearchProviderConfig {
+    let mut providers = HashMap::new();
+    providers.insert(
+        WebSearchProviderName::Searxng,
+        WebSearchProviderConfig {
             provider: WebSearchProviderName::Searxng,
             api_key: None,
             timeout_ms: Some(30000),
             options,
         },
+    );
+    WebSearchConfig {
+        primary: WebSearchProviderName::Searxng,
+        providers,
         secondary: None,
     }
 }
@@ -62,7 +68,7 @@ async fn searxng_provider_returns_results() {
     let registry = create_default_registry();
     let client = default_http_client();
     let provider = registry
-        .create(&config.primary, client)
+        .create(&config.primary_config(), client)
         .expect("should create searxng provider");
 
     let results = provider
@@ -84,7 +90,7 @@ async fn web_search_tool_formats_local_searxng_output() {
     let registry = create_default_registry();
     let client = default_http_client();
     let primary = registry
-        .create(&config.primary, client)
+        .create(&config.primary_config(), client)
         .expect("should create primary provider");
     let provider: Arc<dyn WebSearchProvider> =
         Arc::new(FallbackWebSearchProvider::new(primary, None));
@@ -130,15 +136,12 @@ primary = { provider = "searxng", timeout_ms = 30000, options = { base_url = "ht
     let web_search_config = services
         .web_search
         .expect("web_search config should be present");
-    assert_eq!(
-        web_search_config.primary.provider,
-        WebSearchProviderName::Searxng
-    );
+    assert_eq!(web_search_config.primary, WebSearchProviderName::Searxng);
 
     let registry = create_default_registry();
     let client = default_http_client();
     let provider = registry
-        .create(&web_search_config.primary, client)
+        .create(&web_search_config.primary_config(), client)
         .expect("registry should create searxng provider from config");
 
     let results = provider

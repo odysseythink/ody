@@ -385,9 +385,9 @@ hooks = false
 "#,
     )?;
     std::fs::create_dir_all(workspace.path().join(".git"))?;
-    std::fs::create_dir_all(workspace.path().join(".ody"))?;
+    std::fs::create_dir_all(workspace.path().join(".ody-code"))?;
     std::fs::write(
-        workspace.path().join(".ody/config.toml"),
+        workspace.path().join(".ody-code/config.toml"),
         r#"[features]
 hooks = true
 
@@ -421,7 +421,7 @@ timeout = 5
     )
     .await??;
     let HooksListResponse { data } = to_response(response)?;
-    let project_config_path = AbsolutePathBuf::try_from(workspace.path().join(".ody/config.toml"))?;
+    let project_config_path = AbsolutePathBuf::try_from(workspace.path().join(".ody-code/config.toml"))?;
     assert_eq!(
         data,
         vec![

@@ -849,9 +849,9 @@ enabled = true
   ]
 }"#,
     )?;
-    std::fs::create_dir_all(workspace_enabled.path().join(".ody"))?;
+    std::fs::create_dir_all(workspace_enabled.path().join(".ody-code"))?;
     std::fs::write(
-        workspace_enabled.path().join(".ody/config.toml"),
+        workspace_enabled.path().join(".ody-code/config.toml"),
         r#"[plugins."shared-plugin@ody-curated"]
 enabled = false
 "#,

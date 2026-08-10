@@ -1,8 +1,6 @@
-//! Host-injectable web search capability crate.
+//! Host-injectable database query capability crate.
 pub mod config;
 pub mod error;
-pub mod fallback;
-pub mod http_client;
 pub mod provider;
 pub mod provider_config_fields;
 pub mod providers;

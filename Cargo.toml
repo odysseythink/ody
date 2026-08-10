@@ -102,6 +102,7 @@ members = [
     "model-provider",
     "ody-web-search",
     "ody-browser-control",
+    "ody-database",
 ]
 resolver = "2"
 
@@ -195,6 +196,7 @@ ody-tools = { path = "tools" }
 ody-tui = { path = "tui" }
 ody-uds = { path = "uds" }
 ody-web-search = { path = "ody-web-search" }
+ody-database = { path = "ody-database" }
 ody-utils-absolute-path = { path = "utils/absolute-path" }
 ody-utils-approval-presets = { path = "utils/approval-presets" }
 ody-utils-cache = { path = "utils/cache" }

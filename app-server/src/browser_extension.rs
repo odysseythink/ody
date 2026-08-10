@@ -187,6 +187,7 @@ mod tests {
         ServicesConfig {
             web_search: None,
             browser: Some(ody_browser_control::BrowserControlConfig::default()),
+            database: None,
         }
     }
 
@@ -237,6 +238,7 @@ mod tests {
                 headless: false,
                 ..Default::default()
             }),
+            database: None,
         });
         BrowserControlExtension.on_config_changed(
             &ExtensionData::new("session"),
@@ -263,6 +265,7 @@ mod tests {
                 command_timeout_ms: 5_000,
                 ..Default::default()
             }),
+            database: None,
         });
         BrowserControlExtension.on_config_changed(
             &ExtensionData::new("session"),

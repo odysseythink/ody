@@ -174,7 +174,7 @@ stream_max_retries = 0
 "#
         ),
     )?;
-    let project_config_dir = workspace.path().join(".ody");
+    let project_config_dir = workspace.path().join(".ody-code");
     std::fs::create_dir_all(&project_config_dir)?;
     std::fs::write(
         project_config_dir.join("config.toml"),

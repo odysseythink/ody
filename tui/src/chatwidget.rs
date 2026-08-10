@@ -1890,6 +1890,9 @@ impl ChatWidget {
         // Keep the "configured" gate in sync so a successful `/login` (which
         // writes `default_model`) unlocks model selection and message sending.
         self.config.has_active_model = config.has_active_model;
+        // Web-search provider presets are read from the widget's config when
+        // reopening `/websearch`, so keep them in sync after saves/switches.
+        self.config.services = config.services.clone();
     }
 
     /// Sync the global model context window from a freshly reloaded config.

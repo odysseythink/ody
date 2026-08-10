@@ -72,6 +72,8 @@ ody-utils-plugins = { workspace = true }
 ody-utils-sandbox-summary = { workspace = true }
 ody-utils-sleep-inhibitor = { workspace = true }
 ody-utils-string = { workspace = true }
+ody-web-search = { workspace = true }
+ody-database = { workspace = true }
 color-eyre = { workspace = true }
 crossterm = { workspace = true, features = ["bracketed-paste", "event-stream"] }
 derive_more = { workspace = true, features = ["is_variant"] }

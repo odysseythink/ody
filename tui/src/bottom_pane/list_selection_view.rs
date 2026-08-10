@@ -146,6 +146,9 @@ pub(crate) struct SelectionItem {
     pub is_default: bool,
     pub is_disabled: bool,
     pub actions: Vec<SelectionAction>,
+    /// Actions triggered by the secondary-accept key (Tab) instead of the primary accept key.
+    /// When present, the footer hint should advertise the Tab binding.
+    pub secondary_actions: Vec<SelectionAction>,
     pub dismiss_on_select: bool,
     pub dismiss_parent_on_child_accept: bool,
     pub search_value: Option<String>,
@@ -753,6 +756,14 @@ impl ListSelectionView {
     }
 
     fn accept(&mut self) {
+        self.run_actions(false);
+    }
+
+    fn secondary_accept(&mut self) {
+        self.run_actions(true);
+    }
+
+    fn run_actions(&mut self, secondary: bool) {
         let selected_actual_idx = self
             .state
             .selected_idx
@@ -768,7 +779,12 @@ impl ListSelectionView {
             let Some(item) = self.active_items().get(actual_idx) else {
                 return;
             };
-            for act in &item.actions {
+            let actions = if secondary {
+                &item.secondary_actions
+            } else {
+                &item.actions
+            };
+            for act in actions {
                 act(&self.app_event_tx);
             }
             if item.dismiss_on_select {
@@ -782,6 +798,14 @@ impl ListSelectionView {
             }
             self.completion = Some(ViewCompletion::Cancelled);
         }
+    }
+
+    fn selected_item_has_secondary_actions(&self) -> bool {
+        self.state
+            .selected_idx
+            .and_then(|idx| self.filtered_indices.get(idx).copied())
+            .and_then(|actual_idx| self.active_items().get(actual_idx))
+            .is_some_and(|item| !item.secondary_actions.is_empty())
     }
 
     #[cfg(test)]
@@ -1000,6 +1024,11 @@ impl BottomPaneView for ListSelectionView {
             _ if self.allow_cancel && self.keymap.cancel.is_pressed(key_event) => {
                 self.on_ctrl_c();
             }
+            KeyEvent {
+                code: KeyCode::Tab,
+                modifiers: KeyModifiers::NONE,
+                ..
+            } if self.selected_item_has_secondary_actions() => self.secondary_accept(),
             _ if self.keymap.accept.is_pressed(key_event) => self.accept(),
             KeyEvent {
                 code: KeyCode::Char(c),

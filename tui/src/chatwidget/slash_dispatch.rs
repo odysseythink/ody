@@ -535,6 +535,12 @@ impl ChatWidget {
             SlashCommand::Apps => {
                 self.add_connectors_output();
             }
+            SlashCommand::WebSearch => {
+                self.open_websearch_popup();
+            }
+            SlashCommand::Database => {
+                self.open_database_connections_popup();
+            }
             SlashCommand::Plugins => {
                 self.add_plugins_output();
             }
@@ -1216,7 +1222,9 @@ impl ChatWidget {
             | SlashCommand::Title
             | SlashCommand::Statusline
             | SlashCommand::Theme
-            | SlashCommand::Pets => QueueDrain::Stop,
+            | SlashCommand::Pets
+            | SlashCommand::WebSearch
+            | SlashCommand::Database => QueueDrain::Stop,
             SlashCommand::Preferences => QueueDrain::Stop,
         }
     }

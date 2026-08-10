@@ -32,6 +32,9 @@ use ody_protocol::ThreadId;
 use ody_protocol::model_metadata::ModelPreset;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_approval_presets::ApprovalPreset;
+use ody_web_search::config::WebSearchProviderConfig;
+use ody_web_search::config::WebSearchProviderName;
+use ody_database::config::{DatabaseConnectionConfig, DatabaseProviderName};
 
 use crate::app_command::AppCommand;
 use crate::app_server_session::AppServerStartedThread;
@@ -721,7 +724,45 @@ pub(crate) enum AppEvent {
         service_tier: Option<String>,
     },
 
-    /// Open the reasoning selection popup after picking a model.
+    /// Persist a per-provider web-search preset without changing the active provider.
+    PersistWebSearchProviderConfig {
+        config: WebSearchProviderConfig,
+    },
+
+    /// Switch the active web search provider to the selected one.
+    SwitchWebSearchProvider {
+        provider: WebSearchProviderName,
+    },
+
+    /// Open the per-provider configuration form for the selected web search provider.
+    WebSearchProviderSelected {
+        provider: WebSearchProviderName,
+    },
+
+    /// Add a new database connection (open the add-connection form).
+    AddDatabaseConnection {
+        provider: DatabaseProviderName,
+    },
+
+    /// Open the form to edit an existing database connection.
+    DatabaseConnectionSelected {
+        name: String,
+    },
+
+    /// Persist a database connection configuration.
+    PersistDatabaseConnection {
+        config: DatabaseConnectionConfig,
+    },
+
+    /// Delete a database connection by name.
+    DeleteDatabaseConnection {
+        name: String,
+    },
+
+    /// Switch the active primary database connection.
+    SwitchDatabasePrimary {
+        name: String,
+    },
     OpenReasoningPopup {
         model: ModelPreset,
     },

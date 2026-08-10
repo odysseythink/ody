@@ -30,6 +30,10 @@ use uuid::Uuid;
 use crate::legacy_core::config::Config;
 use ody_config::config_toml::DesignReviewToml;
 use ody_config::config_toml::UsabilityLensToml;
+use ody_web_search::config::WebSearchProviderConfig;
+use ody_web_search::config::WebSearchProviderName;
+use ody_database::config::DatabaseConfig;
+use ody_database::config::DatabaseConnectionConfig;
 
 pub(crate) fn replace_config_value(key_path: impl Into<String>, value: JsonValue) -> ConfigEdit {
     ConfigEdit {
@@ -84,6 +88,82 @@ pub(crate) fn build_model_selection_edits(
         ),
         effort_edit,
     ]
+}
+
+pub(crate) fn build_web_search_provider_config_edits(
+    config: &WebSearchProviderConfig,
+) -> Vec<ConfigEdit> {
+    let value = serde_json::to_value(config).expect("WebSearchProviderConfig serializes to JSON");
+    let provider = config.provider;
+    vec![replace_config_value(
+        format!("services.webSearch.providers.{provider}"),
+        value,
+    )]
+}
+
+pub(crate) fn build_web_search_provider_switch_edit(
+    provider: WebSearchProviderName,
+) -> Vec<ConfigEdit> {
+    vec![replace_config_value(
+        "services.webSearch.primary",
+        serde_json::to_value(provider).expect("WebSearchProviderName serializes to JSON"),
+    )]
+}
+
+pub(crate) fn build_database_connection_edits(
+    config: &DatabaseConnectionConfig,
+    set_primary: bool,
+) -> Vec<ConfigEdit> {
+    let value = serde_json::to_value(config).expect("DatabaseConnectionConfig serializes to JSON");
+    let connection = config.connection.clone();
+    let mut edits = vec![replace_config_value(
+        format!("services.database.connections.{connection}"),
+        value,
+    )];
+    if set_primary {
+        edits.push(replace_config_value(
+            "services.database.primary",
+            serde_json::json!(connection),
+        ));
+    }
+    edits
+}
+
+pub(crate) fn build_database_primary_switch_edits(name: &str) -> Vec<ConfigEdit> {
+    vec![replace_config_value(
+        "services.database.primary",
+        serde_json::json!(name),
+    )]
+}
+
+pub(crate) fn build_database_delete_edits(
+    name: &str,
+    current_config: Option<&DatabaseConfig>,
+) -> Vec<ConfigEdit> {
+    let Some(current) = current_config else {
+        return vec![clear_config_value(format!("services.database.connections.{name}"))];
+    };
+
+    let mut remaining: Vec<&String> = current
+        .connections
+        .keys()
+        .filter(|k| *k != name)
+        .collect();
+
+    if remaining.is_empty() {
+        // No connections left; drop the whole [services.database] table.
+        return vec![clear_config_value("services.database")];
+    }
+
+    let mut edits = vec![clear_config_value(format!("services.database.connections.{name}"))];
+    if current.primary == name {
+        remaining.sort();
+        edits.push(replace_config_value(
+            "services.database.primary",
+            serde_json::json!(remaining[0].as_str()),
+        ));
+    }
+    edits
 }
 
 pub(crate) fn build_service_tier_selection_edits(service_tier: Option<&str>) -> Vec<ConfigEdit> {

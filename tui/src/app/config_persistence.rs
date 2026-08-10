@@ -1801,4 +1801,62 @@ terminal_resize_reflow_max_rows = 9000
         );
         Ok(())
     }
+
+    #[tokio::test]
+    async fn sync_provider_config_syncs_web_search_services_to_chat_widget() {
+        use ody_web_search::config::ServicesConfig;
+        use ody_web_search::config::WebSearchConfig;
+        use ody_web_search::config::WebSearchProviderConfig;
+        use ody_web_search::config::WebSearchProviderName;
+        use std::collections::HashMap;
+
+        let mut app = make_test_app().await;
+        let mut providers = HashMap::new();
+        providers.insert(
+            WebSearchProviderName::Duckduckgo,
+            WebSearchProviderConfig {
+                provider: WebSearchProviderName::Duckduckgo,
+                api_key: None,
+                timeout_ms: Some(30000),
+                options: {
+                    let mut opts = HashMap::new();
+                    opts.insert(
+                        "proxy_url".to_string(),
+                        serde_json::json!("http://127.0.0.1:12001"),
+                    );
+                    opts
+                },
+            },
+        );
+        app.config.services = Some(ServicesConfig {
+            web_search: Some(WebSearchConfig {
+                primary: WebSearchProviderName::Duckduckgo,
+                providers,
+                secondary: None,
+            }),
+            browser: None,
+            database: None,
+        });
+
+        app.chat_widget.sync_provider_config(&app.config);
+
+        let services = app
+            .chat_widget
+            .config_ref()
+            .services
+            .as_ref()
+            .expect("services synced to widget");
+        let web_search = services
+            .web_search
+            .as_ref()
+            .expect("web search config synced");
+        let duck = web_search
+            .provider_config(WebSearchProviderName::Duckduckgo)
+            .expect("duckduckgo preset synced");
+        assert_eq!(duck.timeout_ms, Some(30000));
+        assert_eq!(
+            duck.options.get("proxy_url").and_then(|v| v.as_str()),
+            Some("http://127.0.0.1:12001")
+        );
+    }
 }

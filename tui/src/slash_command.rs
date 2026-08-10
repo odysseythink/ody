@@ -58,6 +58,10 @@ pub enum SlashCommand {
     Pets,
     Mcp,
     Apps,
+    #[strum(serialize = "websearch")]
+    WebSearch,
+    #[strum(serialize = "database")]
+    Database,
     Plugins,
     Login,
     Logout,
@@ -139,6 +143,8 @@ impl SlashCommand {
             SlashCommand::Preferences => "edit mode-specific preferences",
             SlashCommand::Mcp => "list configured MCP tools; use /mcp verbose for details",
             SlashCommand::Apps => "manage apps",
+            SlashCommand::WebSearch => "configure web search provider",
+            SlashCommand::Database => "manage database connections",
             SlashCommand::Plugins => "browse plugins",
             SlashCommand::Logout => "remove a configured API-key provider alias",
             SlashCommand::Login => "log in to an API-key provider",
@@ -234,6 +240,8 @@ impl SlashCommand {
             | SlashCommand::Goal
             | SlashCommand::Mcp
             | SlashCommand::Apps
+            | SlashCommand::WebSearch
+            | SlashCommand::Database
             | SlashCommand::Plugins
             | SlashCommand::Title
             | SlashCommand::Statusline
@@ -354,5 +362,34 @@ mod tests {
         assert!(!SlashCommand::Preferences.available_during_task());
         assert!(!SlashCommand::Preferences.available_in_side_conversation());
         assert!(!SlashCommand::Preferences.supports_inline_args());
+    }
+    #[test]
+    fn websearch_command_parses_and_describes() {
+        assert_eq!(SlashCommand::WebSearch.command(), "websearch");
+        assert_eq!(
+            SlashCommand::from_str("websearch"),
+            Ok(SlashCommand::WebSearch)
+        );
+        assert_eq!(
+            SlashCommand::WebSearch.description(),
+            "configure web search provider"
+        );
+        assert!(SlashCommand::WebSearch.available_during_task());
+        assert!(!SlashCommand::WebSearch.supports_inline_args());
+    }
+
+    #[test]
+    fn database_command_parses_and_describes() {
+        assert_eq!(SlashCommand::Database.command(), "database");
+        assert_eq!(
+            SlashCommand::from_str("database"),
+            Ok(SlashCommand::Database)
+        );
+        assert_eq!(
+            SlashCommand::Database.description(),
+            "manage database connections"
+        );
+        assert!(SlashCommand::Database.available_during_task());
+        assert!(!SlashCommand::Database.supports_inline_args());
     }
 }

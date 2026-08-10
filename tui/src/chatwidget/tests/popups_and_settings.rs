@@ -3376,3 +3376,138 @@ async fn design_review_model_picker_use_default_clears_override() {
     assert!(got_update, "expected UpdateDesignReviewEditState");
     assert!(got_persist, "expected PersistDesignReviewPreferences");
 }
+
+#[tokio::test]
+async fn duckduckgo_websearch_provider_opens_config_form() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    // Drain any startup events.
+    while rx.try_recv().is_ok() {}
+
+    chat.on_websearch_provider_selected(ody_web_search::config::WebSearchProviderName::Duckduckgo);
+
+    assert!(
+        rx.try_recv().is_err(),
+        "selecting a provider should open the config form, not emit a persist event"
+    );
+
+    let popup = render_bottom_popup(&chat, /*width*/ 100);
+    assert!(
+        popup.contains("Configure duckduckgo web search"),
+        "expected provider config form header, got:\n{popup}"
+    );
+    assert!(
+        popup.contains("Timeout (ms)"),
+        "expected timeout field, got:\n{popup}"
+    );
+    assert!(
+        popup.contains("Proxy URL"),
+        "expected proxy URL field, got:\n{popup}"
+    );
+    assert!(
+        popup.contains("Save configuration"),
+        "expected save action, got:\n{popup}"
+    );
+}
+
+#[tokio::test]
+async fn bing_websearch_provider_opens_config_form() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    // Drain any startup events.
+    while rx.try_recv().is_ok() {}
+
+    chat.on_websearch_provider_selected(ody_web_search::config::WebSearchProviderName::Bing);
+
+    assert!(
+        rx.try_recv().is_err(),
+        "selecting a provider should open the config form, not emit a persist event"
+    );
+
+    let popup = render_bottom_popup(&chat, /*width*/ 100);
+    assert!(
+        popup.contains("Configure bing web search"),
+        "expected provider config form header, got:\n{popup}"
+    );
+    assert!(
+        popup.contains("API key"),
+        "expected API key field, got:\n{popup}"
+    );
+    assert!(
+        popup.contains("Timeout (ms)"),
+        "expected timeout field, got:\n{popup}"
+    );
+    assert!(
+        popup.contains("Base URL"),
+        "expected base URL field, got:\n{popup}"
+    );
+}
+
+#[tokio::test]
+async fn websearch_provider_enter_switches_provider() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    // Drain any startup events.
+    while rx.try_recv().is_ok() {}
+
+    chat.open_websearch_popup();
+
+    let popup = render_bottom_popup(&chat, /*width*/ 100);
+    assert!(
+        popup.contains("enter to switch provider"),
+        "expected popup to advertise Enter as switch, got:\n{popup}"
+    );
+    assert!(
+        popup.contains("tab to configure"),
+        "expected popup to advertise Tab as configure, got:\n{popup}"
+    );
+
+    // First item is DuckDuckGo; pressing Enter should switch to it.
+    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+
+    match rx.try_recv() {
+        Ok(AppEvent::SwitchWebSearchProvider { provider }) => {
+            assert_eq!(provider, ody_web_search::config::WebSearchProviderName::Duckduckgo);
+        }
+        other => panic!("expected SwitchWebSearchProvider, got {other:?}"),
+    }
+    assert!(rx.try_recv().is_err(), "only one event should be emitted");
+
+    // Popup should be dismissed after Enter.
+    let popup = render_bottom_popup(&chat, /*width*/ 100);
+    assert!(
+        !popup.contains("Configure Web Search"),
+        "expected popup to be dismissed, got:\n{popup}"
+    );
+}
+
+#[tokio::test]
+async fn websearch_provider_tab_opens_config_form() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    // Drain any startup events.
+    while rx.try_recv().is_ok() {}
+
+    chat.open_websearch_popup();
+
+    // First item is DuckDuckGo; pressing Tab should open its config form.
+    chat.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+    match rx.try_recv() {
+        Ok(AppEvent::WebSearchProviderSelected { provider }) => {
+            assert_eq!(provider, ody_web_search::config::WebSearchProviderName::Duckduckgo);
+        }
+        other => panic!("expected WebSearchProviderSelected, got {other:?}"),
+    }
+    assert!(rx.try_recv().is_err(), "only one event should be emitted");
+
+    // The selection popup is dismissed because the event will be handled by event dispatch.
+    // Simulate that dispatch to verify the form opens for the correct provider.
+    chat.on_websearch_provider_selected(ody_web_search::config::WebSearchProviderName::Duckduckgo);
+
+    let popup = render_bottom_popup(&chat, /*width*/ 100);
+    assert!(
+        popup.contains("Configure duckduckgo web search"),
+        "expected provider config form header, got:\n{popup}"
+    );
+}

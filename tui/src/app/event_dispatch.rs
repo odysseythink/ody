@@ -1532,6 +1532,261 @@ impl App {
                     }
                 }
             }
+            AppEvent::WebSearchProviderSelected { provider } => {
+                self.chat_widget.on_websearch_provider_selected(provider);
+            }
+            AppEvent::SwitchWebSearchProvider { provider } => {
+                let edits = crate::config_update::build_web_search_provider_switch_edit(provider);
+                match crate::config_update::write_config_batch(app_server.request_handle(), edits)
+                    .await
+                {
+                    Ok(_) => {
+                        let provider_name = provider.to_string();
+                        self.chat_widget.add_info_message(
+                            format!("Web search provider switched to {provider_name}"),
+                            /*hint*/ None,
+                        );
+                        // Update the in-memory config copy so /status reflects the change.
+                        let mut web_search = self
+                            .config
+                            .services
+                            .as_ref()
+                            .and_then(|s| s.web_search.clone())
+                            .unwrap_or_else(|| ody_web_search::config::WebSearchConfig {
+                                primary: provider,
+                                providers: std::collections::HashMap::new(),
+                                secondary: None,
+                            });
+                        web_search.primary = provider;
+                        self.config.services = Some(ody_web_search::config::ServicesConfig {
+                            web_search: Some(web_search),
+                            browser: self
+                                .config
+                                .services
+                                .as_ref()
+                                .and_then(|s| s.browser.clone()),
+                            database: self
+                                .config
+                                .services
+                                .as_ref()
+                                .and_then(|s| s.database.clone()),
+                        });
+                        self.chat_widget.sync_provider_config(&self.config);
+                    }
+                    Err(err) => {
+                        tracing::error!(error = %err, "failed to switch web search provider");
+                        self.chat_widget.add_error_message(format!(
+                            "Failed to switch web search provider: {err}"
+                        ));
+                    }
+                }
+            }
+            AppEvent::PersistWebSearchProviderConfig { config } => {
+                let edits = crate::config_update::build_web_search_provider_config_edits(&config);
+                match crate::config_update::write_config_batch(app_server.request_handle(), edits)
+                    .await
+                {
+                    Ok(_) => {
+                        let provider_name = config.provider.to_string();
+                        self.chat_widget.add_info_message(
+                            format!("Web search provider configuration saved for {provider_name}"),
+                            /*hint*/ None,
+                        );
+                        // Update the in-memory config copy so /status reflects the change.
+                        let mut web_search = self
+                            .config
+                            .services
+                            .as_ref()
+                            .and_then(|s| s.web_search.clone())
+                            .unwrap_or_else(|| ody_web_search::config::WebSearchConfig {
+                                primary: config.provider,
+                                providers: std::collections::HashMap::new(),
+                                secondary: None,
+                            });
+                        web_search.providers.insert(config.provider, config);
+                        self.config.services = Some(ody_web_search::config::ServicesConfig {
+                            web_search: Some(web_search),
+                            browser: self
+                                .config
+                                .services
+                                .as_ref()
+                                .and_then(|s| s.browser.clone()),
+                            database: self
+                                .config
+                                .services
+                                .as_ref()
+                                .and_then(|s| s.database.clone()),
+                        });
+                        self.chat_widget.sync_provider_config(&self.config);
+                    }
+                    Err(err) => {
+                        tracing::error!(error = %err, "failed to persist web search provider configuration");
+                        self.chat_widget.add_error_message(format!(
+                            "Failed to save web search provider configuration: {err}"
+                        ));
+                    }
+                }
+            }
+            AppEvent::AddDatabaseConnection { provider } => {
+                self.chat_widget.open_database_add_connection_form(provider);
+            }
+            AppEvent::DatabaseConnectionSelected { name } => {
+                self.chat_widget.open_database_connection_form_for_edit(name);
+            }
+            AppEvent::SwitchDatabasePrimary { name } => {
+                let edits = crate::config_update::build_database_primary_switch_edits(&name);
+                match crate::config_update::write_config_batch(app_server.request_handle(), edits)
+                    .await
+                {
+                    Ok(_) => {
+                        self.chat_widget.add_info_message(
+                            format!("Database primary connection set to {name}"),
+                            /*hint*/ None,
+                        );
+                        let mut database = self
+                            .config
+                            .services
+                            .as_ref()
+                            .and_then(|s| s.database.clone())
+                            .unwrap_or_else(|| ody_database::config::DatabaseConfig {
+                                primary: name.clone(),
+                                connections: std::collections::HashMap::new(),
+                            });
+                        database.primary = name;
+                        self.config.services = Some(ody_web_search::config::ServicesConfig {
+                            web_search: self
+                                .config
+                                .services
+                                .as_ref()
+                                .and_then(|s| s.web_search.clone()),
+                            browser: self
+                                .config
+                                .services
+                                .as_ref()
+                                .and_then(|s| s.browser.clone()),
+                            database: Some(database),
+                        });
+                        self.chat_widget.sync_provider_config(&self.config);
+                    }
+                    Err(err) => {
+                        tracing::error!(error = %err, "failed to switch database primary connection");
+                        self.chat_widget.add_error_message(format!(
+                            "Failed to set database primary connection: {err}"
+                        ));
+                    }
+                }
+            }
+            AppEvent::PersistDatabaseConnection { config } => {
+                let is_new = self
+                    .config
+                    .services
+                    .as_ref()
+                    .and_then(|s| s.database.as_ref())
+                    .map(|d| !d.connections.contains_key(&config.connection))
+                    .unwrap_or(true);
+                let edits = crate::config_update::build_database_connection_edits(&config, is_new);
+                match crate::config_update::write_config_batch(app_server.request_handle(), edits)
+                    .await
+                {
+                    Ok(_) => {
+                        let connection_name = config.connection.clone();
+                        self.chat_widget.add_info_message(
+                            format!("Database connection saved: {connection_name}"),
+                            /*hint*/ None,
+                        );
+                        let mut database = self
+                            .config
+                            .services
+                            .as_ref()
+                            .and_then(|s| s.database.clone())
+                            .unwrap_or_else(|| ody_database::config::DatabaseConfig {
+                                primary: connection_name.clone(),
+                                connections: std::collections::HashMap::new(),
+                            });
+                        database.connections.insert(connection_name.clone(), config);
+                        if database.primary.is_empty() {
+                            database.primary = connection_name;
+                        }
+                        self.config.services = Some(ody_web_search::config::ServicesConfig {
+                            web_search: self
+                                .config
+                                .services
+                                .as_ref()
+                                .and_then(|s| s.web_search.clone()),
+                            browser: self
+                                .config
+                                .services
+                                .as_ref()
+                                .and_then(|s| s.browser.clone()),
+                            database: Some(database),
+                        });
+                        self.chat_widget.sync_provider_config(&self.config);
+                    }
+                    Err(err) => {
+                        tracing::error!(error = %err, "failed to persist database connection");
+                        self.chat_widget.add_error_message(format!(
+                            "Failed to save database connection: {err}"
+                        ));
+                    }
+                }
+            }
+            AppEvent::DeleteDatabaseConnection { name } => {
+                let current = self
+                    .config
+                    .services
+                    .as_ref()
+                    .and_then(|s| s.database.as_ref());
+                let edits = crate::config_update::build_database_delete_edits(&name, current);
+                match crate::config_update::write_config_batch(app_server.request_handle(), edits)
+                    .await
+                {
+                    Ok(_) => {
+                        self.chat_widget.add_info_message(
+                            format!("Database connection deleted: {name}"),
+                            /*hint*/ None,
+                        );
+                        let mut database = self
+                            .config
+                            .services
+                            .as_ref()
+                            .and_then(|s| s.database.clone())
+                            .unwrap_or_else(|| ody_database::config::DatabaseConfig {
+                                primary: String::new(),
+                                connections: std::collections::HashMap::new(),
+                            });
+                        database.connections.remove(&name);
+                        if database.primary == name {
+                            let mut remaining: Vec<String> = database.connections.keys().cloned().collect();
+                            remaining.sort();
+                            database.primary = remaining.into_iter().next().unwrap_or_default();
+                        }
+                        self.config.services = Some(ody_web_search::config::ServicesConfig {
+                            web_search: self
+                                .config
+                                .services
+                                .as_ref()
+                                .and_then(|s| s.web_search.clone()),
+                            browser: self
+                                .config
+                                .services
+                                .as_ref()
+                                .and_then(|s| s.browser.clone()),
+                            database: if database.connections.is_empty() {
+                                None
+                            } else {
+                                Some(database)
+                            },
+                        });
+                        self.chat_widget.sync_provider_config(&self.config);
+                    }
+                    Err(err) => {
+                        tracing::error!(error = %err, "failed to delete database connection");
+                        self.chat_widget.add_error_message(format!(
+                            "Failed to delete database connection: {err}"
+                        ));
+                    }
+                }
+            }
             AppEvent::PersistServiceTierSelection { service_tier } => {
                 self.refresh_status_line();
                 self.config.service_tier = service_tier.clone();
