@@ -740,6 +740,8 @@ impl App {
         self.config.design_review_model = design_review.review_model.clone();
         self.config.design_review_debate = design_review.debate.clone();
 
+        self.chat_widget.sync_design_review_config(&self.config);
+
         self.chat_widget
             .sync_design_review_preferences(design_review, error_message);
     }
@@ -1377,11 +1379,61 @@ mod tests {
     use super::*;
     use crate::app::test_support::app_enabled_in_effective_config;
     use crate::app::test_support::make_test_app;
+    use crate::app_server_session::AppServerSession;
+    use crate::app_server_session::ThreadParamsMode;
+    use crate::config_update::build_design_review_edits;
+    use crate::config_update::DesignReviewEditState;
     use crate::legacy_core::config::edit::ConfigEdit;
     use crate::test_support::PathBufExt;
+    use ody_app_server_client::AppServerClient;
     use ody_protocol::models::PermissionProfile;
     use pretty_assertions::assert_eq;
     use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn update_design_review_preferences_syncs_chat_widget_config() {
+        let mut app = make_test_app().await;
+        let temp_dir = tempdir().unwrap();
+        app.config.ody_home = temp_dir.path().to_path_buf().abs();
+
+        let mut app_server = AppServerSession::new(
+            AppServerClient::InProcess(
+                crate::tests::start_test_embedded_app_server(app.config.clone())
+                    .await
+                    .unwrap(),
+            ),
+            ThreadParamsMode::Embedded,
+        );
+
+        assert!(app.config.design_review_debate.is_none());
+        assert!(app.chat_widget.config_ref().design_review_debate.is_none());
+
+        let state = DesignReviewEditState {
+            enable: true,
+            debate_enable: true,
+            auto_redesign_high_risk: true,
+            ..Default::default()
+        };
+        let edits = build_design_review_edits(&state);
+
+        app.update_design_review_preferences(&mut app_server, edits)
+            .await;
+
+        let app_debate = app
+            .config
+            .design_review_debate
+            .as_ref()
+            .expect("app config should have debate table after write");
+        assert!(app_debate.auto_redesign_high_risk);
+
+        let widget_debate = app
+            .chat_widget
+            .config_ref()
+            .design_review_debate
+            .as_ref()
+            .expect("chat widget config should be synced after write");
+        assert!(widget_debate.auto_redesign_high_risk);
+    }
 
     #[tokio::test]
     async fn update_reasoning_effort_updates_collaboration_mode() {

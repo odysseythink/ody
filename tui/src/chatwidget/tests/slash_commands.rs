@@ -2401,8 +2401,8 @@ async fn slash_preferences_opens_design_review_preferences_popup() {
     assert!(popup.contains("Skeptic model"));
     assert!(popup.contains("Judge model"));
     assert!(popup.contains("Contest critic"));
-    // The list only shows 8 rows at a time; scroll to reveal the ninth field.
-    for _ in 0..8 {
+    // The list only shows 8 rows at a time; scroll to reveal the tenth field.
+    for _ in 0..9 {
         chat.handle_key_event(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
     let scrolled_popup = render_bottom_popup(&chat, /*width*/ 100);

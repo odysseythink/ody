@@ -101,7 +101,7 @@ impl WidgetRef for &WelcomeWidget {
         ]));
 
         Paragraph::new(lines)
-            .wrap(Wrap { trim: false })
+            .wrap(Wrap { trim: true })
             .render(area, buf);
     }
 }

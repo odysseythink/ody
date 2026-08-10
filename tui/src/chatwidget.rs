@@ -1904,6 +1904,15 @@ impl ChatWidget {
         self.refresh_status_line();
     }
 
+    /// Keep the widget's view of design-review preferences in sync with the
+    /// freshly saved app config so that reopening `/preferences` reflects the
+    /// new values.
+    pub(crate) fn sync_design_review_config(&mut self, config: &Config) {
+        self.config.design_review_enabled = config.design_review_enabled;
+        self.config.design_review_model = config.design_review_model.clone();
+        self.config.design_review_debate = config.design_review_debate.clone();
+    }
+
     /// Forward an app event to the active bottom-pane view.
     pub(crate) fn handle_app_event_for_active_view(&mut self, event: &AppEvent) -> bool {
         self.bottom_pane.handle_app_event(event)
