@@ -645,10 +645,10 @@ pub enum GuardianApprovalReviewAction {
     },
     #[serde(rename_all = "camelCase")]
     #[ts(rename_all = "camelCase")]
-    BrowserAction {
-        action: String,
-        details: JsonValue,
-    },
+    BrowserAction { action: String, details: JsonValue },
+    #[serde(rename_all = "camelCase")]
+    #[ts(rename_all = "camelCase")]
+    DatabaseWrite { connection: String, query: String },
     #[serde(rename_all = "camelCase")]
     #[ts(rename_all = "camelCase")]
     RequestPermissions {
@@ -709,6 +709,9 @@ impl From<CoreGuardianAssessmentAction> for GuardianApprovalReviewAction {
             },
             CoreGuardianAssessmentAction::BrowserAction { action, details } => {
                 Self::BrowserAction { action, details }
+            }
+            CoreGuardianAssessmentAction::DatabaseWrite { connection, query } => {
+                Self::DatabaseWrite { connection, query }
             }
             CoreGuardianAssessmentAction::RequestPermissions {
                 reason,
@@ -775,6 +778,9 @@ impl TryFrom<GuardianApprovalReviewAction> for CoreGuardianAssessmentAction {
             },
             GuardianApprovalReviewAction::BrowserAction { action, details } => {
                 Self::BrowserAction { action, details }
+            }
+            GuardianApprovalReviewAction::DatabaseWrite { connection, query } => {
+                Self::DatabaseWrite { connection, query }
             }
             GuardianApprovalReviewAction::RequestPermissions {
                 reason,

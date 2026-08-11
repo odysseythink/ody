@@ -260,6 +260,7 @@ pub enum GuardianReviewedAction {
         action: String,
         details: serde_json::Value,
     },
+    DatabaseWrite {},
     RequestPermissions {},
 }
 
@@ -557,6 +558,7 @@ pub(crate) enum ReviewSubjectKind {
     Permissions,
     NetworkAccess,
     BrowserAction,
+    DatabaseWrite,
 }
 
 #[allow(dead_code)]

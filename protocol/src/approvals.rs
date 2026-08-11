@@ -167,6 +167,10 @@ pub enum GuardianAssessmentAction {
         action: String,
         details: JsonValue,
     },
+    DatabaseWrite {
+        connection: String,
+        query: String,
+    },
     RequestPermissions {
         reason: Option<String>,
         permissions: RequestPermissionProfile,

@@ -179,6 +179,7 @@ fn reviewed_action_tag(action: &GuardianReviewedAction) -> &'static str {
         GuardianReviewedAction::NetworkAccess { .. } => "network_access",
         GuardianReviewedAction::McpToolCall { .. } => "mcp_tool_call",
         GuardianReviewedAction::BrowserAction { .. } => "browser_action",
+        GuardianReviewedAction::DatabaseWrite {} => "database_write",
         GuardianReviewedAction::RequestPermissions {} => "request_permissions",
     }
 }

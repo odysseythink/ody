@@ -37,6 +37,65 @@ struct DatabaseQueryInput {
     connection: Option<String>,
 }
 
+/// Approval-ticket shape understood by the host extension adapter.
+///
+/// Database tools cannot depend on `ody-core`, so they ask the host to
+/// perform the guardian review through the generic `NeedsApproval` channel.
+#[derive(serde::Serialize)]
+struct DatabaseWriteApprovalTicket<'a> {
+    kind: &'static str,
+    connection: &'a str,
+    query: &'a str,
+}
+
+/// Return whether the query is *definitely* a simple read-only statement.
+///
+/// This intentionally has a narrow allow-list. If the syntax is unfamiliar,
+/// compound, or could cause a write/lock (for example `WITH`, `SELECT INTO`,
+/// or `SELECT ... FOR UPDATE`), it is treated as approval-worthy. Database
+/// permissions remain the final line of defence against side-effecting
+/// functions invoked from a `SELECT`.
+fn requires_write_approval(sql: &str) -> bool {
+    let sql = strip_leading_sql_comments(sql).trim();
+    let lower = sql.to_ascii_lowercase();
+    let statement = lower.trim_end_matches(';').trim_end();
+    if statement.is_empty() || statement.contains(';') {
+        return true;
+    }
+
+    if statement.starts_with("show ")
+        || statement.starts_with("describe ")
+        || statement.starts_with("desc ")
+    {
+        return false;
+    }
+
+    if !statement.starts_with("select ") {
+        return true;
+    }
+
+    // These clauses make an otherwise SELECT-shaped statement consequential.
+    [" into ", " for update", " for share", " lock in share mode"]
+        .iter()
+        .any(|needle| statement.contains(needle))
+}
+
+fn strip_leading_sql_comments(mut sql: &str) -> &str {
+    loop {
+        sql = sql.trim_start();
+        if let Some(rest) = sql.strip_prefix("--") {
+            sql = rest.find('\n').map_or("", |index| &rest[index + 1..]);
+        } else if let Some(rest) = sql.strip_prefix("/*") {
+            let Some(end) = rest.find("*/") else {
+                return "";
+            };
+            sql = &rest[end + 2..];
+        } else {
+            return sql;
+        }
+    }
+}
+
 fn format_result(result: &crate::provider::DatabaseQueryResult) -> String {
     if result.columns.is_empty() && result.rows.is_empty() {
         return "Query executed successfully. No rows returned.".to_string();
@@ -97,12 +156,23 @@ impl ToolExecutor<ToolCall> for DatabaseQueryTool {
                     ));
                 }
             };
-            let input: DatabaseQueryInput = serde_json::from_str(&arguments)
-                .map_err(|e| FunctionCallError::Fatal(format!("invalid DatabaseQuery input: {e}")))?;
+            let input: DatabaseQueryInput = serde_json::from_str(&arguments).map_err(|e| {
+                FunctionCallError::Fatal(format!("invalid DatabaseQuery input: {e}"))
+            })?;
+            let selected = input.connection.as_deref().unwrap_or(&primary);
+            if requires_write_approval(&input.query) && call.guardian_approved_action_id.is_none() {
+                return Err(FunctionCallError::NeedsApproval {
+                    ticket: serde_json::to_value(DatabaseWriteApprovalTicket {
+                        kind: "database_write",
+                        connection: selected,
+                        query: &input.query,
+                    })
+                    .expect("database write approval ticket is serializable"),
+                });
+            }
             let provider = connections
-                .get(input.connection.as_deref().unwrap_or(&primary))
+                .get(selected)
                 .ok_or_else(|| {
-                    let selected = input.connection.as_deref().unwrap_or(&primary);
                     FunctionCallError::RespondToModel(format!(
                         "Database connection '{selected}' is not configured. Omit 'connection' to use the configured default, or provide a saved connection preset name."
                     ))
@@ -141,7 +211,10 @@ mod tests {
             "stub"
         }
 
-        async fn query(&self, _sql: &str) -> Result<crate::provider::DatabaseQueryResult, DatabaseError> {
+        async fn query(
+            &self,
+            _sql: &str,
+        ) -> Result<crate::provider::DatabaseQueryResult, DatabaseError> {
             Ok(crate::provider::DatabaseQueryResult {
                 columns: vec!["id".to_string(), "name".to_string()],
                 rows: vec![vec!["1".to_string(), "Alice".to_string()]],
@@ -169,8 +242,12 @@ mod tests {
     #[tokio::test]
     async fn returns_json_output_with_columns_and_rows() {
         let mut connections = HashMap::new();
-        connections.insert("primary".to_string(), Arc::new(StubProvider) as SharedDatabaseProvider);
-        let tool = DatabaseQueryTool::new("session-1".to_string(), "primary".to_string(), connections);
+        connections.insert(
+            "primary".to_string(),
+            Arc::new(StubProvider) as SharedDatabaseProvider,
+        );
+        let tool =
+            DatabaseQueryTool::new("session-1".to_string(), "primary".to_string(), connections);
         let output = tool
             .handle(tool_call(r#"{"query":"SELECT * FROM users"}"#))
             .await
@@ -183,10 +260,64 @@ mod tests {
         assert!(value["text"].as_str().unwrap().contains("Alice"));
     }
 
+    #[test]
+    fn requires_approval_for_writes_and_ambiguous_queries() {
+        for sql in [
+            "INSERT INTO users (name) VALUES ('Alice')",
+            "WITH removed AS (DELETE FROM users RETURNING *) SELECT * FROM removed",
+            "SELECT * INTO archive FROM users",
+            "SELECT * FROM users FOR UPDATE",
+            "SELECT 1; DELETE FROM users",
+        ] {
+            assert!(requires_write_approval(sql), "expected approval for {sql}");
+        }
+    }
+
+    #[test]
+    fn does_not_require_approval_for_simple_reads() {
+        for sql in [
+            "SELECT * FROM users LIMIT 5",
+            "-- inspect users\nSELECT id FROM users",
+            "/* inspect users */ SHOW TABLES",
+            "DESCRIBE users",
+        ] {
+            assert!(
+                !requires_write_approval(sql),
+                "unexpected approval for {sql}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn write_query_requires_approval_before_provider_execution() {
+        let mut connections = HashMap::new();
+        connections.insert(
+            "primary".to_string(),
+            Arc::new(StubProvider) as SharedDatabaseProvider,
+        );
+        let tool =
+            DatabaseQueryTool::new("session-1".to_string(), "primary".to_string(), connections);
+
+        let err = match tool
+            .handle(tool_call(r#"{"query":"DELETE FROM users"}"#))
+            .await
+        {
+            Err(err) => err,
+            Ok(_) => panic!("write should require approval"),
+        };
+        let FunctionCallError::NeedsApproval { ticket } = err else {
+            panic!("expected approval request, got {err:?}");
+        };
+        assert_eq!(ticket["kind"], "database_write");
+        assert_eq!(ticket["connection"], "primary");
+        assert_eq!(ticket["query"], "DELETE FROM users");
+    }
+
     #[tokio::test]
     async fn returns_model_error_for_unknown_connection() {
         let connections = HashMap::new();
-        let tool = DatabaseQueryTool::new("session-1".to_string(), "primary".to_string(), connections);
+        let tool =
+            DatabaseQueryTool::new("session-1".to_string(), "primary".to_string(), connections);
         let err = match tool
             .handle(tool_call(r#"{"query":"SELECT 1","connection":"missing"}"#))
             .await
@@ -224,8 +355,12 @@ mod tests {
             "primary".to_string(),
             Arc::new(FailingProvider) as SharedDatabaseProvider,
         );
-        let tool = DatabaseQueryTool::new("session-1".to_string(), "primary".to_string(), connections);
-        let err = match tool.handle(tool_call(r#"{"query":"SHOW DATABASES"}"#)).await {
+        let tool =
+            DatabaseQueryTool::new("session-1".to_string(), "primary".to_string(), connections);
+        let err = match tool
+            .handle(tool_call(r#"{"query":"SHOW DATABASES"}"#))
+            .await
+        {
             Err(err) => err,
             Ok(_) => panic!("should return the query error to the model"),
         };

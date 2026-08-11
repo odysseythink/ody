@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::sync::Weak;
 
 use ody_protocol::items::TurnItem;
+use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::ReviewDecision;
 use ody_tools::ConversationHistory;
 use ody_tools::ExtensionTurnItem;
@@ -67,7 +68,17 @@ impl ToolExecutor<ToolInvocation> for ExtensionToolAdapter {
             match executor.handle(extension_call.clone()).await {
                 Ok(output) => Ok(output),
                 Err(FunctionCallError::NeedsApproval { ticket }) => {
-                    let request = browser_guardian_request(
+                    // `approval_policy = "never"` is YOLO mode. Mark the retry
+                    // approved so extension tools that enforce approval locally
+                    // can execute without opening a guardian review.
+                    if invocation.turn.approval_policy.value() == AskForApproval::Never {
+                        let mut approved_call = extension_call;
+                        approved_call.guardian_approved_action_id =
+                            Some("approval-policy-never".to_string());
+                        return executor.handle(approved_call).await;
+                    }
+
+                    let request = extension_guardian_request(
                         &invocation.call_id,
                         &invocation.turn.sub_id,
                         &ticket,
@@ -90,11 +101,8 @@ impl ToolExecutor<ToolInvocation> for ExtensionToolAdapter {
                             executor.handle(approved_call).await
                         }
                         _ => {
-                            let message = guardian_rejection_message(
-                                &invocation.session,
-                                &review_id,
-                            )
-                            .await;
+                            let message =
+                                guardian_rejection_message(&invocation.session, &review_id).await;
                             Err(FunctionCallError::RespondToModel(message))
                         }
                     }
@@ -202,11 +210,30 @@ async fn to_extension_call(invocation: &ToolInvocation) -> ExtensionToolCall {
     }
 }
 
-fn browser_guardian_request(
+fn extension_guardian_request(
     call_id: &str,
     turn_id: &str,
     ticket: &Value,
 ) -> Result<GuardianApprovalRequest, String> {
+    if ticket.get("kind").and_then(Value::as_str) == Some("database_write") {
+        let connection = ticket
+            .get("connection")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "database approval ticket missing 'connection' field".to_string())?
+            .to_string();
+        let query = ticket
+            .get("query")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "database approval ticket missing 'query' field".to_string())?
+            .to_string();
+        return Ok(GuardianApprovalRequest::DatabaseWrite {
+            id: call_id.to_string(),
+            turn_id: turn_id.to_string(),
+            connection,
+            query,
+        });
+    }
+
     let action = ticket
         .get("action")
         .and_then(Value::as_str)
@@ -243,7 +270,7 @@ mod tests {
 
     use super::CoreTurnItemEmitter;
     use super::ExtensionToolAdapter;
-    use super::browser_guardian_request;
+    use super::extension_guardian_request;
     use crate::guardian::GuardianApprovalRequest;
     use crate::tools::context::ToolCallSource;
     use crate::tools::context::ToolInvocation;
@@ -671,12 +698,12 @@ mod tests {
     }
 
     #[test]
-    fn browser_guardian_request_parses_approval_ticket() {
+    fn extension_guardian_request_parses_browser_approval_ticket() {
         let ticket = serde_json::json!({
             "action": "navigate",
             "details": { "url": "https://example.com" },
         });
-        let request = browser_guardian_request("call-1", "turn-1", &ticket).expect("parses");
+        let request = extension_guardian_request("call-1", "turn-1", &ticket).expect("parses");
         assert_eq!(
             request,
             GuardianApprovalRequest::BrowserAction {
@@ -684,6 +711,25 @@ mod tests {
                 turn_id: "turn-1".to_string(),
                 action: "navigate".to_string(),
                 details: serde_json::json!({ "url": "https://example.com" }),
+            }
+        );
+    }
+
+    #[test]
+    fn extension_guardian_request_parses_database_write_ticket() {
+        let ticket = serde_json::json!({
+            "kind": "database_write",
+            "connection": "staging",
+            "query": "DELETE FROM sessions",
+        });
+        let request = extension_guardian_request("call-1", "turn-1", &ticket).expect("parses");
+        assert_eq!(
+            request,
+            GuardianApprovalRequest::DatabaseWrite {
+                id: "call-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                connection: "staging".to_string(),
+                query: "DELETE FROM sessions".to_string(),
             }
         );
     }

@@ -74,6 +74,12 @@ pub(crate) enum GuardianApprovalRequest {
         action: String,
         details: Value,
     },
+    DatabaseWrite {
+        id: String,
+        turn_id: String,
+        connection: String,
+        query: String,
+    },
     RequestPermissions {
         id: String,
         turn_id: String,
@@ -180,6 +186,13 @@ struct BrowserActionApprovalAction<'a> {
     tool: &'static str,
     action: &'a str,
     details: &'a Value,
+}
+
+#[derive(Serialize)]
+struct DatabaseWriteApprovalAction<'a> {
+    tool: &'static str,
+    connection: &'a str,
+    query: &'a str,
 }
 
 fn serialize_guardian_action(value: impl Serialize) -> serde_json::Result<Value> {
@@ -381,6 +394,16 @@ pub(crate) fn guardian_approval_request_to_json(
             action,
             details,
         }),
+        GuardianApprovalRequest::DatabaseWrite {
+            id: _,
+            turn_id: _,
+            connection,
+            query,
+        } => serialize_guardian_action(DatabaseWriteApprovalAction {
+            tool: "database_query",
+            connection,
+            query,
+        }),
         GuardianApprovalRequest::RequestPermissions {
             id: _,
             turn_id,
@@ -452,12 +475,18 @@ pub(crate) fn guardian_assessment_action(
             connector_name: connector_name.clone(),
             tool_title: tool_title.clone(),
         },
-        GuardianApprovalRequest::BrowserAction { action, details, .. } => {
-            GuardianAssessmentAction::BrowserAction {
-                action: action.clone(),
-                details: details.clone(),
-            }
-        }
+        GuardianApprovalRequest::BrowserAction {
+            action, details, ..
+        } => GuardianAssessmentAction::BrowserAction {
+            action: action.clone(),
+            details: details.clone(),
+        },
+        GuardianApprovalRequest::DatabaseWrite {
+            connection, query, ..
+        } => GuardianAssessmentAction::DatabaseWrite {
+            connection: connection.clone(),
+            query: query.clone(),
+        },
         GuardianApprovalRequest::RequestPermissions {
             reason,
             permissions,
@@ -523,12 +552,13 @@ pub(crate) fn guardian_reviewed_action(
             connector_name: connector_name.clone(),
             tool_title: tool_title.clone(),
         },
-        GuardianApprovalRequest::BrowserAction { action, details, .. } => {
-            GuardianReviewedAction::BrowserAction {
-                action: action.clone(),
-                details: details.clone(),
-            }
-        }
+        GuardianApprovalRequest::BrowserAction {
+            action, details, ..
+        } => GuardianReviewedAction::BrowserAction {
+            action: action.clone(),
+            details: details.clone(),
+        },
+        GuardianApprovalRequest::DatabaseWrite { .. } => GuardianReviewedAction::DatabaseWrite {},
         GuardianApprovalRequest::RequestPermissions { .. } => {
             GuardianReviewedAction::RequestPermissions {}
         }
@@ -542,7 +572,8 @@ pub(crate) fn guardian_request_target_item_id(request: &GuardianApprovalRequest)
         | GuardianApprovalRequest::ApplyPatch { id, .. }
         | GuardianApprovalRequest::McpToolCall { id, .. }
         | GuardianApprovalRequest::RequestPermissions { id, .. }
-        | GuardianApprovalRequest::BrowserAction { id, .. } => Some(id),
+        | GuardianApprovalRequest::BrowserAction { id, .. }
+        | GuardianApprovalRequest::DatabaseWrite { id, .. } => Some(id),
         GuardianApprovalRequest::NetworkAccess { .. } => None,
         #[cfg(unix)]
         GuardianApprovalRequest::Execve { id, .. } => Some(id),
@@ -556,7 +587,8 @@ pub(crate) fn guardian_request_turn_id<'a>(
     match request {
         GuardianApprovalRequest::NetworkAccess { turn_id, .. }
         | GuardianApprovalRequest::RequestPermissions { turn_id, .. }
-        | GuardianApprovalRequest::BrowserAction { turn_id, .. } => turn_id,
+        | GuardianApprovalRequest::BrowserAction { turn_id, .. }
+        | GuardianApprovalRequest::DatabaseWrite { turn_id, .. } => turn_id,
         GuardianApprovalRequest::Shell { .. }
         | GuardianApprovalRequest::ExecCommand { .. }
         | GuardianApprovalRequest::ApplyPatch { .. }

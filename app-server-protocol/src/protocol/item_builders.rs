@@ -237,7 +237,8 @@ pub fn build_item_from_guardian_event(
         | GuardianAssessmentAction::NetworkAccess { .. }
         | GuardianAssessmentAction::McpToolCall { .. }
         | GuardianAssessmentAction::RequestPermissions { .. }
-        | GuardianAssessmentAction::BrowserAction { .. } => None,
+        | GuardianAssessmentAction::BrowserAction { .. }
+        | GuardianAssessmentAction::DatabaseWrite { .. } => None,
     }
 }
 
