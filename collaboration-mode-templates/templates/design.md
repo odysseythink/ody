@@ -170,6 +170,7 @@ Authoring rules:
 
 * Tag **every** decision, section, field, and interface with a source label: `[C:USER]` (confirmed by the user), `[C:INFERRED]` (your assumption — must also appear in Assumptions), `[C:DEFERRED]` (explicitly postponed), or `[C:UPSTREAM]` (taken verbatim from the source system).
 * Include a mandatory `## Assumptions & Unverified Items` table with columns: `# | Assumption | Confidence | Impact if wrong | How to verify`. The `Confidence` cell **must** be exactly one of `high` / `medium` / `low` (the host parses it to decide which rows to escalate for sign-off — a low-confidence assumption is treated as the riskiest and surfaces first). Every `[C:INFERRED]` decision must have a row here. Scale the number of rows to the audit tier from Step 0.
+* In `## C3 Data Models`, include a `### Mutation Surface` subsection whenever the design changes persistent, shared, or cross-boundary observable state. For every such state change, record the changed state; its read/observation paths (API, TUI, cache, index, event consumers, audit, and authorization as applicable); consistency and side effects (invalidation/refresh, ordering, idempotency, referential integrity, visibility); and failure handling plus a behavioral verification assertion. This is an **impact-surface analysis**, not a demand to invent CRUD APIs. If the design has no such state, write `Mutation Surface: N/A` and explain why.
 * Fidelity rubric — the design must be concrete enough to plan from:
   * explicit **Scope In / Scope Out**;
   * data-flow arrows between components;

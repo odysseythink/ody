@@ -122,6 +122,29 @@ mod template_tests {
         }
     }
 
+    #[test]
+    fn templates_require_conditional_state_change_impact_analysis() {
+        for (name, body) in [
+            ("DESIGN", DESIGN),
+            ("PLAN", PLAN),
+            ("PLAN_RIGOR_SELFREVIEW", PLAN_RIGOR_SELFREVIEW),
+        ] {
+            assert!(
+                body.contains("cross-boundary observable state"),
+                "{name} must scope state-change analysis to observable state"
+            );
+            assert!(
+                body.contains("State-change impact surface: N/A")
+                    || body.contains("Mutation Surface: N/A"),
+                "{name} must provide an explicit non-applicable path"
+            );
+        }
+        assert!(
+            PLAN.contains("A task that changes only static display text is **not** a state change"),
+            "PLAN must prevent static text changes from being misclassified as state mutations"
+        );
+    }
+
     /// Every `## Parts` File cell the model can see must be openable exactly as written.
     ///
     /// The cell is the manifest's locator: an index is routinely handed to a downstream reader — a

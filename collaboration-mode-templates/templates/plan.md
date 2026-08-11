@@ -97,6 +97,10 @@ Do not ask questions that can be answered from the repo or system (for example, 
 
 * Once intent is stable, keep asking until the spec is decision complete: approach, interfaces (APIs/schemas/I/O), data flow, edge cases/failure modes, testing + acceptance criteria, verification level and environment, rollout/monitoring, and any migrations/compat constraints.
 
+## State-change impact surface (every tier, conditional)
+
+When a plan changes persistent, shared, or cross-boundary observable state, each affected task must state: (1) the state it changes; (2) the read/observation paths that must see the change (for example API, TUI, cache, index, event consumers, audit, or authorization); (3) consistency and side effects, including invalidation/refresh, ordering, idempotency, referential integrity, and visibility where applicable; and (4) failure handling plus a behavioral assertion that proves the outcome. This is not a requirement to manufacture CRUD endpoints. A task that changes only static display text is **not** a state change: record `State-change impact surface: N/A` and say that no persistent, shared, or cross-boundary observable state changes. Use the same `N/A` form whenever no task changes such state.
+
 ## Risk-driven verification strategy (every tier)
 
 For every task that changes observable behavior, state the verification level in its `Tests` / acceptance criteria. Choose the least costly level that credibly proves the changed behavior: compile/typecheck, unit, integration, contract, controlled end-to-end, or a staging/manual smoke test. If real-environment verification is not needed, say `Not applicable` and give the behavioral reason; do not silently omit the decision.
