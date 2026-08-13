@@ -5,6 +5,15 @@
 
 use super::*;
 
+/// Throttle window for coalescing streamed assistant deltas before layout.
+///
+/// Mirrors the reference TypeScript client, which appends deltas cheaply and
+/// flushes rendering on a fixed cadence. Coalescing bounds the number of full
+/// markdown re-renders (each O(current source length)) to a constant per
+/// second instead of one per incoming delta — that is what keeps the event
+/// loop responsive under high-throughput streaming (hundreds of deltas/sec).
+const STREAM_DELTA_FLUSH_INTERVAL: Duration = Duration::from_millis(16);
+
 impl ChatWidget {
     pub(super) fn restore_reasoning_status_header(&mut self) {
         if let Some(header) = extract_first_bold(&self.reasoning_buffer) {
@@ -17,6 +26,9 @@ impl ChatWidget {
     }
 
     pub(super) fn flush_answer_stream_with_separator(&mut self) {
+        // Ensure any throttled deltas are processed before finalizing so the
+        // finalized controller sees the complete accumulated source.
+        self.flush_stream_delta_now();
         let had_stream_controller = self.stream_controller.is_some();
         let pending_reasoning_cells = std::mem::take(&mut self.pending_reasoning_cells);
         if let Some(mut controller) = self.stream_controller.take() {
@@ -98,6 +110,9 @@ impl ChatWidget {
     }
 
     pub(super) fn finalize_completed_assistant_message(&mut self, message: Option<&str>) {
+        // If the streamed deltas were still throttled, flush them so the
+        // controller holds the complete source before finalization.
+        self.flush_stream_delta_now();
         // If we have a stream_controller, the finalized message payload is redundant because the
         // visible content has already been accumulated through deltas.
         if self.stream_controller.is_none()
@@ -325,6 +340,9 @@ impl ChatWidget {
     /// Periodic tick for stream commits. In smooth mode this preserves one-line pacing, while
     /// catch-up mode drains larger batches to reduce queue lag.
     pub(crate) fn on_commit_tick(&mut self) {
+        // Flush any throttled deltas first so this tick drains the freshest
+        // queued lines, keeping display lag bounded.
+        self.maybe_flush_stream_delta();
         self.run_commit_tick();
     }
 
@@ -402,6 +420,22 @@ impl ChatWidget {
 
     #[inline]
     pub(super) fn handle_streaming_delta(&mut self, delta: String) {
+        // Coalesce deltas into a single buffered flush: appending is O(delta),
+        // while layout/render of the accumulated source only runs on the
+        // throttled flush. This keeps the event loop responsive under
+        // high-throughput streaming instead of re-rendering per delta.
+        self.stream_delta_buffer.push_str(&delta);
+        if self.stream_delta_flush_after.is_some() {
+            // A flush is already scheduled; this delta rides along with it.
+            return;
+        }
+        self.stream_delta_flush_after = Some(Instant::now() + STREAM_DELTA_FLUSH_INTERVAL);
+        // Ensure a frame is scheduled so `pre_draw_tick` performs the flush.
+        self.request_redraw();
+    }
+
+    /// Process a coalesced batch of streamed deltas through the stream controller.
+    fn process_stream_delta(&mut self, delta: String) {
         if !delta.is_empty() {
             self.record_visible_turn_activity();
         }
@@ -434,6 +468,31 @@ impl ChatWidget {
         }
         self.sync_active_stream_tail();
         self.request_redraw();
+    }
+
+    /// Flush buffered streamed deltas once the throttle deadline has elapsed.
+    ///
+    /// Called from frame-driven and commit-tick paths so the flush cadence is
+    /// bounded regardless of delta arrival rate.
+    pub(super) fn maybe_flush_stream_delta(&mut self) {
+        let Some(deadline) = self.stream_delta_flush_after else {
+            return;
+        };
+        if Instant::now() < deadline {
+            return;
+        }
+        self.flush_stream_delta_now();
+    }
+
+    /// Immediately flush buffered streamed deltas.
+    ///
+    /// Used at stream finalization and by tests; bypasses the throttle deadline.
+    pub(super) fn flush_stream_delta_now(&mut self) {
+        self.stream_delta_flush_after = None;
+        let delta = std::mem::take(&mut self.stream_delta_buffer);
+        if !delta.is_empty() {
+            self.process_stream_delta(delta);
+        }
     }
 
     pub(super) fn active_cell_is_stream_tail(&self) -> bool {

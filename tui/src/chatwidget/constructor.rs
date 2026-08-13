@@ -138,6 +138,8 @@ impl ChatWidget {
             adaptive_chunking: AdaptiveChunkingPolicy::default(),
             stream_controller: None,
             plan_stream_controller: None,
+            stream_delta_buffer: String::new(),
+            stream_delta_flush_after: None,
             clipboard_lease: None,
             copy_last_response_binding,
             running_commands: HashMap::new(),
