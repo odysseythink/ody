@@ -131,6 +131,80 @@ mod tests {
     }
 
     #[test]
+    fn viewport_growth_without_screen_resize_avoids_full_repaint() {
+        let width = 12;
+        let height = 5;
+        let backend = VT100Backend::new(width, height);
+        let mut terminal =
+            CustomTerminal::with_options_and_cursor_position(backend, Position { x: 0, y: 1 })
+                .expect("terminal");
+        terminal.set_viewport_area(Rect::new(/*x*/ 0, /*y*/ 1, width, /*height*/ 2));
+
+        // Streaming growth: chat content grows but the terminal screen is unchanged.
+        let needs_full_repaint =
+            super::Tui::update_inline_viewport_for_resize_reflow(&mut terminal, /*height*/ 3)
+                .expect("viewport update should succeed");
+        assert!(
+            !needs_full_repaint,
+            "content-height growth without a screen resize must not force a full repaint"
+        );
+        assert_eq!(terminal.viewport_area, Rect::new(0, 1, width, 3));
+
+        // Growth up to the bottom of the screen (y=1 + height=4 = screen height) stays
+        // incremental.
+        let needs_full_repaint =
+            super::Tui::update_inline_viewport_for_resize_reflow(&mut terminal, /*height*/ 4)
+                .expect("viewport update should succeed");
+        assert!(
+            !needs_full_repaint,
+            "growth up to the screen bottom stays incremental"
+        );
+        assert_eq!(terminal.viewport_area, Rect::new(0, 1, width, 4));
+    }
+
+    #[test]
+    fn viewport_shrink_still_forces_full_repaint() {
+        let width = 12;
+        let height = 5;
+        let backend = VT100Backend::new(width, height);
+        let mut terminal =
+            CustomTerminal::with_options_and_cursor_position(backend, Position { x: 0, y: 1 })
+                .expect("terminal");
+        terminal.set_viewport_area(Rect::new(/*x*/ 0, /*y*/ 1, width, /*height*/ 4));
+
+        let needs_full_repaint =
+            super::Tui::update_inline_viewport_for_resize_reflow(&mut terminal, /*height*/ 2)
+                .expect("viewport update should succeed");
+        assert!(
+            needs_full_repaint,
+            "viewport shrink must clear the rows left exposed on screen"
+        );
+        assert_eq!(terminal.viewport_area, Rect::new(0, 1, width, 2));
+    }
+
+    #[test]
+    fn terminal_width_change_still_forces_full_repaint() {
+        let backend = VT100Backend::new(/*width*/ 12, /*height*/ 5);
+        let mut terminal =
+            CustomTerminal::with_options_and_cursor_position(backend, Position { x: 0, y: 1 })
+                .expect("terminal");
+        terminal.set_viewport_area(Rect::new(/*x*/ 0, /*y*/ 1, /*width*/ 12, /*height*/ 2));
+        // Simulate a terminal resize that already landed in last_known_screen_size.
+        terminal.last_known_screen_size = ratatui::layout::Size {
+            width: 8,
+            height: 5,
+        };
+
+        let needs_full_repaint =
+            super::Tui::update_inline_viewport_for_resize_reflow(&mut terminal, /*height*/ 3)
+                .expect("viewport update should succeed");
+        assert!(
+            needs_full_repaint,
+            "a screen width change must force a full repaint"
+        );
+    }
+
+    #[test]
     fn first_viewport_change_clears_from_new_viewport_when_old_viewport_is_empty() {
         let width = 12;
         let height = 4;
@@ -812,8 +886,14 @@ impl Tui {
     /// Unlike the legacy draw path, this path does not scroll rows above the viewport when the
     /// terminal shrinks. Resize reflow owns rebuilding those rows from transcript source, so
     /// scrolling here would move the viewport once and then replay history into the wrong row.
-    fn update_inline_viewport_for_resize_reflow(
-        terminal: &mut Terminal,
+    ///
+    /// A full-screen repaint is only forced when the terminal screen itself changed (resize) or
+    /// when the viewport shrank or moved, because those cases leave stale cells on screen that the
+    /// diff buffer cannot account for. Pure content-height growth (streaming output while the
+    /// screen is unchanged) only resizes the viewport buffers — overlapping cells are preserved, so
+    /// the next frame diffs incrementally instead of repainting the whole screen.
+    fn update_inline_viewport_for_resize_reflow<B: Backend + Write>(
+        terminal: &mut CustomTerminal<B>,
         height: u16,
     ) -> Result<bool> {
         let size = terminal.size()?;
@@ -841,10 +921,28 @@ impl Tui {
         }
 
         if area != terminal.viewport_area {
-            let clear_position = Position::new(/*x*/ 0, previous_area.y.min(area.y));
-            terminal.set_viewport_area(area);
-            terminal.clear_after_position(clear_position)?;
-            needs_full_repaint = true;
+            let screen_width_changed = size.width != terminal.last_known_screen_size.width;
+            let viewport_height_shrank = area.height < previous_area.height;
+            let viewport_moved = area.y != previous_area.y;
+            let needs_screen_clear = screen_width_changed
+                || terminal_height_shrank
+                || terminal_height_grew
+                || viewport_height_shrank
+                || viewport_moved;
+            if needs_screen_clear {
+                // True screen resize, viewport shrink, or viewport move leaves stale
+                // cells on screen that the diff buffer cannot reconcile: clear the
+                // exposed region and repaint everything.
+                let clear_position = Position::new(/*x*/ 0, previous_area.y.min(area.y));
+                terminal.set_viewport_area(area);
+                terminal.clear_after_position(clear_position)?;
+                needs_full_repaint = true;
+            } else {
+                // Pure content-height growth (screen unchanged, viewport anchored):
+                // Buffer::resize preserves overlapping cells, so the next frame diffs
+                // incrementally — no clear, no full repaint.
+                terminal.set_viewport_area(area);
+            }
         }
 
         Ok(needs_full_repaint)

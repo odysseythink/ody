@@ -873,6 +873,56 @@ mod tests {
     }
 
     #[test]
+    fn buffer_resize_growth_preserves_overlapping_cells() {
+        let area = Rect::new(0, 0, 3, 2);
+        let mut buf = Buffer::empty(area);
+        buf.cell_mut((1, 0))
+            .expect("cell should exist")
+            .set_symbol("X");
+
+        buf.resize(Rect::new(0, 0, 3, 3));
+
+        assert_eq!(
+            buf.cell((1, 0)).expect("cell should exist").symbol(),
+            "X",
+            "overlapping cells must survive a height-growth resize"
+        );
+        assert_eq!(
+            buf.cell((1, 2)).expect("cell should exist").symbol(),
+            " ",
+            "the newly grown row must start empty"
+        );
+    }
+
+    #[test]
+    fn diff_after_viewport_growth_only_emits_new_cells() {
+        let previous_area = Rect::new(0, 0, 3, 2);
+        let mut previous = Buffer::empty(previous_area);
+        previous.set_string(0, 0, "abc", Style::default());
+
+        // Height growth preserves the overlapping first row in the back buffer.
+        previous.resize(Rect::new(0, 0, 3, 3));
+
+        let mut next = Buffer::empty(Rect::new(0, 0, 3, 3));
+        next.set_string(0, 0, "abc", Style::default());
+        next.set_string(0, 2, "new", Style::default());
+
+        let commands = diff_buffers(&previous, &next);
+        assert!(
+            !commands
+                .iter()
+                .any(|command| matches!(command, DrawCommand::Put { y: 0, .. })),
+            "unchanged first row must not be re-emitted after viewport growth; commands: {commands:?}"
+        );
+        assert!(
+            commands
+                .iter()
+                .any(|command| matches!(command, DrawCommand::Put { y: 2, .. })),
+            "newly grown row must be emitted; commands: {commands:?}"
+        );
+    }
+
+    #[test]
     fn diff_buffers_does_not_emit_clear_to_end_for_full_width_row() {
         let area = Rect::new(0, 0, 3, 2);
         let previous = Buffer::empty(area);
