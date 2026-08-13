@@ -101,12 +101,109 @@ pub const DEFAULT_IN_PROCESS_CHANNEL_CAPACITY: usize = CHANNEL_CAPACITY;
 type PendingClientRequestResponse = std::result::Result<Result, JSONRPCErrorError>;
 
 fn server_notification_requires_delivery(notification: &ServerNotification) -> bool {
+    // Lossless tier: transcript deltas and authoritative completion notifications
+    // must survive backpressure. Dropping streamed assistant text or the completed
+    // item can leave the consumer with permanently corrupted output, while dropping
+    // completion notifications can leave surfaces waiting forever. This mirrors the
+    // classification in `ody-app-server-client` so both event-queue layers agree.
     matches!(
         notification,
         ServerNotification::TurnCompleted(_)
             | ServerNotification::ThreadSettingsUpdated(_)
+            | ServerNotification::ItemCompleted(_)
             | ServerNotification::ExternalAgentConfigImportCompleted(_)
+            | ServerNotification::AgentMessageDelta(_)
+            | ServerNotification::PlanDelta(_)
+            | ServerNotification::ReasoningSummaryTextDelta(_)
+            | ServerNotification::ReasoningTextDelta(_)
     )
+}
+
+/// Outcome of attempting to forward one app-server notification to the consumer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ForwardNotificationResult {
+    /// The notification was delivered, skipped (best-effort), or intentionally
+    /// deferred behind a lag marker; the event stream is healthy.
+    Continue,
+    /// The consumer channel is closed; the caller should stop producing events.
+    DisableStream,
+}
+
+/// Forwards a single app-server notification to the in-process consumer,
+/// respecting the lossless/best-effort split.
+///
+/// Lossless notifications (transcript deltas, item/turn completions) block until
+/// the consumer drains capacity so visible assistant output is never corrupted.
+/// Best-effort notifications use `try_send`; when the queue is full they are
+/// counted in `skipped_events` instead of being dropped silently. A lag marker
+/// (`InProcessServerEvent::Lagged`) carrying the accumulated count is flushed
+/// before the next notification that manages to send, so the consumer can
+/// observe that events were dropped and re-synchronize if needed.
+async fn forward_server_notification(
+    event_tx: &mpsc::Sender<InProcessServerEvent>,
+    skipped_events: &mut usize,
+    notification: ServerNotification,
+) -> ForwardNotificationResult {
+    if server_notification_requires_delivery(&notification) {
+        if *skipped_events > 0 {
+            // Surface lag before the lossless event, but block so the marker itself
+            // is never dropped alongside the notification the caller is waiting on.
+            if event_tx
+                .send(InProcessServerEvent::Lagged {
+                    skipped: *skipped_events,
+                })
+                .await
+                .is_err()
+            {
+                return ForwardNotificationResult::DisableStream;
+            }
+            warn!(
+                skipped = *skipped_events,
+                "in-process consumer lagged; server notifications dropped"
+            );
+            *skipped_events = 0;
+        }
+        // Block until the consumer catches up for transcript/completion notifications.
+        if event_tx
+            .send(InProcessServerEvent::ServerNotification(notification))
+            .await
+            .is_err()
+        {
+            return ForwardNotificationResult::DisableStream;
+        }
+        return ForwardNotificationResult::Continue;
+    }
+
+    if *skipped_events > 0 {
+        match event_tx.try_send(InProcessServerEvent::Lagged {
+            skipped: *skipped_events,
+        }) {
+            Ok(()) => {
+                warn!(
+                    skipped = *skipped_events,
+                    "in-process consumer lagged; server notifications dropped"
+                );
+                *skipped_events = 0;
+            }
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                // The marker could not land; count this notification as skipped too so
+                // the aggregate is reported on a later flush instead of being lost.
+                *skipped_events = skipped_events.saturating_add(1);
+                return ForwardNotificationResult::Continue;
+            }
+            Err(mpsc::error::TrySendError::Closed(_)) => {
+                return ForwardNotificationResult::DisableStream;
+            }
+        }
+    }
+    match event_tx.try_send(InProcessServerEvent::ServerNotification(notification)) {
+        Ok(()) => ForwardNotificationResult::Continue,
+        Err(mpsc::error::TrySendError::Full(_)) => {
+            *skipped_events = skipped_events.saturating_add(1);
+            ForwardNotificationResult::Continue
+        }
+        Err(mpsc::error::TrySendError::Closed(_)) => ForwardNotificationResult::DisableStream,
+    }
 }
 
 /// Input needed to start an in-process app-server runtime.
@@ -513,6 +610,7 @@ async fn start_uninitialized(args: InProcessStartArgs) -> IoResult<InProcessClie
         let mut pending_request_responses =
             HashMap::<RequestId, oneshot::Sender<PendingClientRequestResponse>>::new();
         let mut shutdown_ack = None;
+        let mut skipped_events = 0usize;
 
         loop {
             tokio::select! {
@@ -648,25 +746,15 @@ async fn start_uninitialized(args: InProcessStartArgs) -> IoResult<InProcessClie
                             }
                         }
                         OutgoingMessage::AppServerNotification(notification) => {
-                            if server_notification_requires_delivery(&notification) {
-                                if event_tx
-                                    .send(InProcessServerEvent::ServerNotification(notification))
-                                    .await
-                                    .is_err()
-                                {
-                                    break;
-                                }
-                            } else if let Err(send_error) =
-                                event_tx.try_send(InProcessServerEvent::ServerNotification(notification))
+                            if forward_server_notification(
+                                &event_tx,
+                                &mut skipped_events,
+                                notification,
+                            )
+                            .await
+                                == ForwardNotificationResult::DisableStream
                             {
-                                match send_error {
-                                    mpsc::error::TrySendError::Full(_) => {
-                                        warn!("dropping in-process server notification (queue full)");
-                                    }
-                                    mpsc::error::TrySendError::Closed(_) => {
-                                        break;
-                                    }
-                                }
+                                break;
                             }
                         }
                     }
@@ -719,9 +807,14 @@ async fn start_uninitialized(args: InProcessStartArgs) -> IoResult<InProcessClie
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ody_app_server_protocol::AgentMessageDeltaNotification;
     use ody_app_server_protocol::ClientInfo;
     use ody_app_server_protocol::ConfigRequirementsReadResponse;
     use ody_app_server_protocol::ExternalAgentConfigImportCompletedNotification;
+    use ody_app_server_protocol::InfoMessageNotification;
+    use ody_app_server_protocol::PlanDeltaNotification;
+    use ody_app_server_protocol::ReasoningSummaryTextDeltaNotification;
+    use ody_app_server_protocol::ReasoningTextDeltaNotification;
     use ody_app_server_protocol::SessionSource as ApiSessionSource;
     use ody_app_server_protocol::ThreadStartParams;
     use ody_app_server_protocol::ThreadStartResponse;
@@ -893,5 +986,154 @@ mod tests {
                 },
             )
         ));
+    }
+
+    #[test]
+    fn guaranteed_delivery_helpers_cover_streaming_transcript_notifications() {
+        // Transcript deltas must survive backpressure: dropping them corrupts the
+        // visible assistant output. This mirrors the lossless tier classification
+        // used by `ody-app-server-client` for the second-layer event queue.
+        assert!(server_notification_requires_delivery(
+            &ServerNotification::AgentMessageDelta(AgentMessageDeltaNotification {
+                thread_id: "thread-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                item_id: "item-1".to_string(),
+                delta: "hello".to_string(),
+            })
+        ));
+        assert!(server_notification_requires_delivery(
+            &ServerNotification::PlanDelta(PlanDeltaNotification {
+                thread_id: "thread-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                item_id: "item-1".to_string(),
+                delta: "plan".to_string(),
+            })
+        ));
+        assert!(server_notification_requires_delivery(
+            &ServerNotification::ReasoningTextDelta(ReasoningTextDeltaNotification {
+                thread_id: "thread-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                item_id: "item-1".to_string(),
+                delta: "think".to_string(),
+                content_index: 0,
+            })
+        ));
+        assert!(server_notification_requires_delivery(
+            &ServerNotification::ReasoningSummaryTextDelta(
+                ReasoningSummaryTextDeltaNotification {
+                    thread_id: "thread-1".to_string(),
+                    turn_id: "turn-1".to_string(),
+                    item_id: "item-1".to_string(),
+                    delta: "summary".to_string(),
+                    summary_index: 0,
+                },
+            )
+        ));
+        // Cosmetic notifications remain best-effort.
+        assert!(!server_notification_requires_delivery(
+            &ServerNotification::InfoMessage(InfoMessageNotification {
+                message: "hello".to_string(),
+            })
+        ));
+    }
+
+    #[tokio::test]
+    async fn forward_server_notification_reports_lag_instead_of_dropping_silently() {
+        let capacity = 1;
+        let (tx, mut rx) = mpsc::channel::<InProcessServerEvent>(capacity);
+        let mut skipped = 0usize;
+
+        let best_effort = || {
+            ServerNotification::InfoMessage(InfoMessageNotification {
+                message: "probe".to_string(),
+            })
+        };
+        let lossless = || {
+            ServerNotification::AgentMessageDelta(AgentMessageDeltaNotification {
+                thread_id: "thread-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                item_id: "item-1".to_string(),
+                delta: "x".to_string(),
+            })
+        };
+
+        // First best-effort notification fills the single-slot queue (no consumer yet).
+        let result = forward_server_notification(&tx, &mut skipped, best_effort()).await;
+        assert_eq!(result, ForwardNotificationResult::Continue);
+        assert_eq!(skipped, 0);
+
+        // Subsequent best-effort notifications find the queue full: counted as skipped,
+        // and the stream stays healthy (no silent unobservable drop).
+        let result = forward_server_notification(&tx, &mut skipped, best_effort()).await;
+        assert_eq!(result, ForwardNotificationResult::Continue);
+        assert_eq!(skipped, 1);
+        let result = forward_server_notification(&tx, &mut skipped, best_effort()).await;
+        assert_eq!(result, ForwardNotificationResult::Continue);
+        assert_eq!(skipped, 2);
+
+        // Once the consumer drains the queue, the next lossless notification flushes a
+        // Lagged marker (with the accumulated skip count) before the notification itself.
+        let consumer = tokio::spawn(async move {
+            let mut events = Vec::new();
+            while let Some(event) = rx.recv().await {
+                events.push(event);
+                if events.len() == 3 {
+                    break;
+                }
+            }
+            events
+        });
+
+        let result = forward_server_notification(&tx, &mut skipped, lossless()).await;
+        assert_eq!(result, ForwardNotificationResult::Continue);
+        assert_eq!(skipped, 0, "lag marker must reset the skipped count");
+
+        let events = consumer.await.expect("consumer should collect all events");
+        assert_eq!(events.len(), 3);
+        // The earliest queued best-effort notification is consumed first; the
+        // Lagged marker is flushed before the lossless notification itself.
+        assert!(
+            matches!(
+                events[0],
+                InProcessServerEvent::ServerNotification(ServerNotification::InfoMessage(_))
+            ),
+            "expected the queued best-effort notification first, got {:?}",
+            events[0]
+        );
+        assert!(
+            matches!(events[1], InProcessServerEvent::Lagged { skipped: 2 }),
+            "expected Lagged marker with skipped=2, got {:?}",
+            events[1]
+        );
+        assert!(
+            matches!(
+                events[2],
+                InProcessServerEvent::ServerNotification(ServerNotification::AgentMessageDelta(_))
+            ),
+            "expected the lossless notification, got {:?}",
+            events[2]
+        );
+    }
+
+    #[tokio::test]
+    async fn forward_server_notification_disables_stream_when_channel_closed() {
+        let (tx, rx) = mpsc::channel::<InProcessServerEvent>(1);
+        drop(rx);
+        let mut skipped = 0usize;
+
+        let best_effort = ServerNotification::InfoMessage(InfoMessageNotification {
+            message: "probe".to_string(),
+        });
+        let result = forward_server_notification(&tx, &mut skipped, best_effort).await;
+        assert_eq!(result, ForwardNotificationResult::DisableStream);
+
+        let lossless = ServerNotification::AgentMessageDelta(AgentMessageDeltaNotification {
+            thread_id: "thread-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            item_id: "item-1".to_string(),
+            delta: "x".to_string(),
+        });
+        let result = forward_server_notification(&tx, &mut skipped, lossless).await;
+        assert_eq!(result, ForwardNotificationResult::DisableStream);
     }
 }
