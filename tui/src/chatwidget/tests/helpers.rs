@@ -606,6 +606,9 @@ pub(super) fn handle_agent_message_delta(chat: &mut ChatWidget, delta: impl Into
         ),
         /*replay_kind*/ None,
     );
+    // Production coalesces deltas and flushes on a throttled cadence; tests
+    // observe the steady-state result, so flush immediately after each delta.
+    chat.flush_stream_delta_now();
 }
 
 pub(super) fn handle_agent_reasoning_delta(chat: &mut ChatWidget, delta: impl Into<String>) {

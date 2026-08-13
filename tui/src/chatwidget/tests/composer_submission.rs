@@ -954,6 +954,7 @@ async fn visible_output_prevents_cancelled_turn_prompt_restore() {
     chat.record_cancel_edit_candidate(UserMessage::from("revise this prompt"));
     handle_turn_started(&mut chat, "turn-1");
     chat.on_agent_message_delta("visible output".to_string());
+    chat.flush_stream_delta_now();
     chat.submit_op(AppCommand::interrupt_and_restore_prompt_if_no_output());
 
     handle_turn_interrupted(&mut chat, "turn-1");

@@ -564,6 +564,10 @@ pub(crate) struct ChatWidget {
     stream_controller: Option<StreamController>,
     // Stream lifecycle controller for proposed plan output.
     plan_stream_controller: Option<PlanStreamController>,
+    /// Pending streamed assistant deltas awaiting throttled flush.
+    stream_delta_buffer: String,
+    /// Deadline for the next throttled flush of `stream_delta_buffer`.
+    stream_delta_flush_after: Option<Instant>,
     /// Holds the platform clipboard lease so copied text remains available while supported.
     clipboard_lease: Option<crate::clipboard_copy::ClipboardLease>,
     copy_last_response_binding: Vec<KeyBinding>,
@@ -1173,6 +1177,7 @@ impl ChatWidget {
     }
 
     pub(crate) fn pre_draw_tick(&mut self) {
+        self.flush_throttled_stream_delta_before_draw();
         self.update_due_hook_visibility();
         self.schedule_hook_timer_if_needed();
         self.bottom_pane.pre_draw_tick();
@@ -1189,6 +1194,21 @@ impl ChatWidget {
         {
             self.refresh_terminal_title();
         }
+    }
+
+    /// Flush throttled streamed deltas before rendering this frame.
+    ///
+    /// If a flush is still pending (the throttle window has not elapsed), re-arm
+    /// a frame at the deadline so the buffered deltas are processed without
+    /// waiting for the next unrelated draw.
+    fn flush_throttled_stream_delta_before_draw(&mut self) {
+        if let Some(deadline) = self.stream_delta_flush_after {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if !remaining.is_zero() {
+                self.frame_requester.schedule_frame_in(remaining);
+            }
+        }
+        self.maybe_flush_stream_delta();
     }
 
     fn flush_active_cell(&mut self) {

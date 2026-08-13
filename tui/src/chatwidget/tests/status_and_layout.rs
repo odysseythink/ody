@@ -453,6 +453,7 @@ async fn streaming_final_answer_keeps_task_running_state() {
 
     chat.on_task_started();
     chat.on_agent_message_delta("Final answer line\n".to_string());
+    chat.flush_stream_delta_now();
     chat.on_commit_tick();
     drain_insert_history(&mut rx);
 
@@ -589,6 +590,7 @@ async fn idle_commit_ticks_do_not_restore_status_without_commentary_completion()
     assert_eq!(chat.bottom_pane.status_indicator_visible(), true);
 
     chat.on_agent_message_delta("Final answer line\n".to_string());
+    chat.flush_stream_delta_now();
     chat.on_commit_tick();
     drain_insert_history(&mut rx);
 
@@ -609,9 +611,11 @@ async fn final_answer_completion_restores_status_indicator_for_pending_steer() {
     assert_eq!(chat.bottom_pane.status_indicator_visible(), true);
 
     chat.on_agent_message_delta("Long output line 1\n".to_string());
+    chat.flush_stream_delta_now();
     chat.on_commit_tick();
     drain_insert_history(&mut rx);
     chat.on_agent_message_delta("Long output line 2\n".to_string());
+    chat.flush_stream_delta_now();
     chat.on_commit_tick();
     drain_insert_history(&mut rx);
 
@@ -667,6 +671,7 @@ async fn commentary_completion_restores_status_indicator_before_exec_begin() {
     assert_eq!(chat.bottom_pane.status_indicator_visible(), true);
 
     chat.on_agent_message_delta("Preamble line\n".to_string());
+    chat.flush_stream_delta_now();
     chat.on_commit_tick();
     drain_insert_history(&mut rx);
 
@@ -1037,6 +1042,7 @@ async fn stream_error_restores_hidden_status_indicator() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.on_task_started();
     chat.on_agent_message_delta("Preamble line\n".to_string());
+    chat.flush_stream_delta_now();
     chat.on_commit_tick();
     drain_insert_history(&mut rx);
     assert!(!chat.bottom_pane.status_indicator_visible());

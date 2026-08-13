@@ -1052,3 +1052,55 @@ async fn live_app_server_thread_closed_requests_immediate_exit() {
 
     assert_matches!(rx.try_recv(), Ok(AppEvent::Exit(ExitMode::Immediate)));
 }
+
+#[tokio::test]
+async fn streamed_agent_deltas_are_coalesced_until_throttled_flush() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.thread_id = Some(ThreadId::new());
+    chat.on_task_started();
+
+    // High-frequency deltas coalesce: each arrival only appends to the buffer
+    // and schedules a single flush, so layout/render runs once per window
+    // instead of once per delta.
+    chat.on_agent_message_delta("line one\n".to_string());
+    chat.on_agent_message_delta("line two\n".to_string());
+    chat.on_agent_message_delta("line three\n".to_string());
+
+    assert_eq!(
+        chat.stream_delta_buffer, "line one\nline two\nline three\n",
+        "all deltas should accumulate in the buffer without per-delta processing"
+    );
+    assert!(
+        chat.stream_delta_flush_after.is_some(),
+        "a single throttled flush should be scheduled"
+    );
+
+    // The buffered deltas are processed together on flush.
+    chat.flush_stream_delta_now();
+    assert!(chat.stream_delta_buffer.is_empty());
+    assert!(chat.stream_delta_flush_after.is_none());
+    assert!(
+        chat.stream_controller.as_ref().is_some_and(|c| c.queued_lines() > 0),
+        "the coalesced source should have produced queued lines after flush"
+    );
+
+    // Draining via commit ticks renders the full coalesced content.
+    for _ in 0..16 {
+        chat.on_commit_tick();
+        if chat.stream_controllers_idle() {
+            break;
+        }
+    }
+    let cells = drain_insert_history(&mut rx);
+    let rendered_all: String = cells
+        .iter()
+        .map(|cell| lines_to_single_string(cell))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        rendered_all.contains("line one")
+            && rendered_all.contains("line two")
+            && rendered_all.contains("line three"),
+        "expected the coalesced lines to be rendered, got {rendered_all:?}"
+    );
+}
