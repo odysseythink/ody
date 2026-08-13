@@ -158,7 +158,7 @@ impl StatusHistoryCell {
         session_id: &Option<ThreadId>,
         thread_name: Option<String>,
         forked_from: Option<ThreadId>,
-        now: DateTime<Local>,
+        _now: DateTime<Local>,
         model_name: &str,
         collaboration_mode: Option<&str>,
         reasoning_effort_override: Option<Option<ReasoningEffort>>,

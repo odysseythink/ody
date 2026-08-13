@@ -1240,7 +1240,7 @@ impl Session {
     }
 
     /// Fingerprints already signed off (accept/defer) for the design identified
-    /// by `key` (its normalized title), used by the escalation gate to suppress
+    /// by its stable artifact `key`, used by the escalation gate to suppress
     /// re-review duplicates. Resets the set if `key` names a different design than
     /// the one it was accumulated for.
     pub(crate) async fn design_signoff_seen_for(

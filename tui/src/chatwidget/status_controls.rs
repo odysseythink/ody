@@ -266,7 +266,7 @@ impl ChatWidget {
     }
 
     pub(super) fn status_surface_preview_data(&mut self) -> StatusSurfacePreviewData {
-        let mut preview_data = StatusSurfacePreviewData::from_iter(
+        let preview_data = StatusSurfacePreviewData::from_iter(
             StatusSurfacePreviewItem::iter().filter_map(|item| {
                 self.status_surface_preview_value_for_item(item)
                     .map(|value| (item, value))

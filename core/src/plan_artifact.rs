@@ -2,6 +2,7 @@ use ody_config::config_toml::PlanModeTier;
 use ody_protocol::config_types::DesignAuditLevel;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_path::write_atomically;
+use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Mutex as StdMutex;
@@ -18,6 +19,7 @@ use tokio::sync::Mutex;
 pub struct PlanArtifact {
     state: Mutex<PlanArtifactState>,
     submitted: AtomicBool,
+    auto_redesign_used: AtomicBool,
     last_manifest_snapshot: Mutex<Option<ManifestSnapshot>>,
     last_plan_text: Mutex<Option<String>>,
     /// Last event-driven split directive injected into model context. The key
@@ -124,6 +126,7 @@ impl PlanArtifact {
         Self {
             state: Mutex::new(PlanArtifactState::Temporary { temp_path }),
             submitted: AtomicBool::new(false),
+            auto_redesign_used: AtomicBool::new(false),
             last_manifest_snapshot: Mutex::new(None),
             last_plan_text: Mutex::new(None),
             last_plan_directive_key: StdMutex::new(None),
@@ -143,12 +146,155 @@ impl PlanArtifact {
     /// the next `take_submitted` check.
     pub fn mark_submitted(&self) {
         self.submitted.store(true, Ordering::Release);
+        self.clear_design_review_state();
     }
 
     /// Take the submitted flag. Returns true exactly once after
     /// `mark_submitted` was called, resetting it to false.
     pub fn take_submitted(&self) -> bool {
         self.submitted.swap(false, Ordering::AcqRel)
+    }
+
+    /// Stable review identity for the unfinished design across title edits,
+    /// per-turn artifacts, and session restoration in the same workspace.
+    pub fn design_review_key(&self) -> Option<String> {
+        (self.subdir == "designs").then(|| {
+            format!(
+                "design:{}:{}",
+                self.thread_id,
+                self.plans_base_dir.as_path().display()
+            )
+        })
+    }
+
+    /// Consume the current unfinished design's sole automatic high-risk redesign pass.
+    ///
+    /// Designs also create a thread-scoped marker next to the designs directory
+    /// so a new `PlanArtifact` on a later turn or restored session cannot re-arm
+    /// the pass. Marker creation uses
+    /// `create_new` to make concurrent attempts atomic. Any I/O error fails
+    /// closed and sends the design to user sign-off instead of auto-rewriting.
+    pub fn take_auto_redesign_pass(&self) -> bool {
+        if self.auto_redesign_used.swap(true, Ordering::AcqRel) {
+            return false;
+        }
+        let Some(marker) = self.auto_redesign_marker_path() else {
+            return true;
+        };
+        let Some(parent) = marker.parent() else {
+            return false;
+        };
+        if std::fs::create_dir_all(parent).is_err() {
+            return false;
+        }
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(marker)
+        {
+            Ok(_) => true,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => false,
+            Err(_) => false,
+        }
+    }
+
+    fn auto_redesign_marker_path(&self) -> Option<PathBuf> {
+        self.design_review_state_path("auto-redesign-used")
+    }
+
+    fn signoff_seen_path(&self) -> Option<PathBuf> {
+        self.design_review_state_path("signoff-seen")
+    }
+
+    fn usability_decision_path(&self) -> Option<PathBuf> {
+        self.design_review_state_path("usability-decision")
+    }
+
+    fn design_review_state_path(&self, suffix: &str) -> Option<PathBuf> {
+        if self.subdir != "designs" {
+            return None;
+        }
+        Some(
+            self.plans_base_dir
+                .as_path()
+                .join("designs")
+                .join(".review-state")
+                .join(format!("{}.{suffix}", self.thread_id)),
+        )
+    }
+
+    pub fn persisted_design_signoff_seen(&self) -> HashSet<String> {
+        self.signoff_seen_path()
+            .and_then(|path| std::fs::read_to_string(path).ok())
+            .map(|content| {
+                content
+                    .lines()
+                    .map(str::trim)
+                    .filter(|line| !line.is_empty())
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn record_persisted_design_signoff_seen(
+        &self,
+        fingerprints: impl IntoIterator<Item = String>,
+    ) {
+        let Some(path) = self.signoff_seen_path() else {
+            return;
+        };
+        let mut seen = self.persisted_design_signoff_seen();
+        seen.extend(fingerprints);
+        let mut entries = seen.into_iter().collect::<Vec<_>>();
+        entries.sort_unstable();
+        let content = entries.join("\n") + "\n";
+        if let Some(parent) = path.parent()
+            && std::fs::create_dir_all(parent).is_ok()
+        {
+            let _ = write_atomically(&path, &content);
+        }
+    }
+
+    pub fn persisted_design_usability_decision(&self) -> Option<bool> {
+        match std::fs::read_to_string(self.usability_decision_path()?)
+            .ok()?
+            .trim()
+        {
+            "true" => Some(true),
+            "false" => Some(false),
+            _ => None,
+        }
+    }
+
+    pub fn record_persisted_design_usability_decision(&self, decision: bool) {
+        let Some(path) = self.usability_decision_path() else {
+            return;
+        };
+        if let Some(parent) = path.parent()
+            && std::fs::create_dir_all(parent).is_ok()
+        {
+            let _ = write_atomically(&path, if decision { "true\n" } else { "false\n" });
+        }
+    }
+
+    /// End the current design-review lifecycle. Cleanup is best-effort: stale
+    /// state fails closed (extra sign-off) rather than re-arming auto redesign.
+    pub fn clear_design_review_state(&self) {
+        for path in [
+            self.auto_redesign_marker_path(),
+            self.signoff_seen_path(),
+            self.usability_decision_path(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            match std::fs::remove_file(path) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(_) => {}
+            }
+        }
     }
 
     pub fn new_temp(
@@ -402,6 +548,7 @@ impl PlanArtifact {
                 Self {
                     state: Mutex::new(PlanArtifactState::Finalized { final_path: path }),
                     submitted: AtomicBool::new(false),
+                    auto_redesign_used: AtomicBool::new(false),
                     last_manifest_snapshot: Mutex::new(None),
                     last_plan_text: Mutex::new(last_plan_text),
                     last_plan_directive_key: StdMutex::new(None),
@@ -657,6 +804,74 @@ mod tests {
         assert!(artifact.is_plan_file_path(&existing));
         let path = artifact.path().unwrap();
         assert!(path.starts_with(tmp.path().join("designs")));
+    }
+
+    #[tokio::test]
+    async fn automatic_redesign_pass_survives_new_turn_artifacts_and_restore() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let thread_id =
+            ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-000000000003").unwrap();
+        let artifact = PlanArtifact::new_design(base.clone(), thread_id.clone(), "2026-08-12");
+
+        let first = artifact
+            .write_plan("# Original title\n", /*persist*/ true)
+            .await;
+        let path = match first {
+            PlanWriteOutcome::Written { path } => path,
+            other => panic!("expected persisted design, got {other:?}"),
+        };
+        assert!(artifact.take_auto_redesign_pass());
+
+        artifact
+            .write_plan("# Completely different title\n", /*persist*/ true)
+            .await;
+        assert!(!artifact.take_auto_redesign_pass());
+
+        let next_turn = PlanArtifact::new_design(base.clone(), thread_id.clone(), "2026-08-12");
+        assert!(!next_turn.take_auto_redesign_pass());
+
+        let restored = PlanArtifact::restore_or_create(base, thread_id, Some(path), "2026-08-12");
+        assert!(!restored.take_auto_redesign_pass());
+    }
+
+    #[tokio::test]
+    async fn submitting_design_clears_automatic_redesign_budget_for_next_design() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let thread_id =
+            ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-000000000004").unwrap();
+        let first = PlanArtifact::new_design(base.clone(), thread_id.clone(), "2026-08-12");
+        assert!(first.take_auto_redesign_pass());
+        first.mark_submitted();
+
+        let next = PlanArtifact::new_design(base, thread_id, "2026-08-12");
+        assert!(next.take_auto_redesign_pass());
+    }
+
+    #[test]
+    fn persisted_signoff_seen_survives_new_artifact_and_clears_with_lifecycle() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let thread_id =
+            ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-000000000005").unwrap();
+        let first = PlanArtifact::new_design(base.clone(), thread_id.clone(), "2026-08-12");
+        first.record_persisted_design_signoff_seen([
+            "risk-b".to_string(),
+            "risk-a".to_string(),
+            "risk-a".to_string(),
+        ]);
+        first.record_persisted_design_usability_decision(true);
+
+        let next = PlanArtifact::new_design(base, thread_id, "2026-08-12");
+        assert_eq!(
+            next.persisted_design_signoff_seen(),
+            HashSet::from(["risk-a".to_string(), "risk-b".to_string()])
+        );
+        assert_eq!(next.persisted_design_usability_decision(), Some(true));
+        next.clear_design_review_state();
+        assert!(next.persisted_design_signoff_seen().is_empty());
+        assert_eq!(next.persisted_design_usability_decision(), None);
     }
 
     #[test]

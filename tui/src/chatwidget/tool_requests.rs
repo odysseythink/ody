@@ -79,6 +79,9 @@ impl ChatWidget {
             GuardianAssessmentAction::BrowserAction { action, .. } => {
                 Some(format!("browser action: {action}"))
             }
+            GuardianAssessmentAction::DatabaseWrite { connection, .. } => {
+                Some(format!("database write on {connection}"))
+            }
         };
         let guardian_command = |action: &GuardianAssessmentAction| match action {
             GuardianAssessmentAction::Command { command, .. } => shlex::split(command)
@@ -94,7 +97,8 @@ impl ChatWidget {
             | GuardianAssessmentAction::NetworkAccess { .. }
             | GuardianAssessmentAction::McpToolCall { .. }
             | GuardianAssessmentAction::RequestPermissions { .. }
-            | GuardianAssessmentAction::BrowserAction { .. } => None,
+            | GuardianAssessmentAction::BrowserAction { .. }
+            | GuardianAssessmentAction::DatabaseWrite { .. } => None,
         };
 
         if ev.status == GuardianAssessmentStatus::InProgress
@@ -208,6 +212,11 @@ impl ChatWidget {
                             "ody could run browser action {action}"
                         ))
                     }
+                    GuardianAssessmentAction::DatabaseWrite { connection, .. } => {
+                        history_cell::new_guardian_timed_out_action_request(format!(
+                            "ody could run database write on {connection}"
+                        ))
+                    }
                     GuardianAssessmentAction::Command { .. } => unreachable!(),
                     GuardianAssessmentAction::Execve { .. } => unreachable!(),
                 }
@@ -256,6 +265,11 @@ impl ChatWidget {
                 GuardianAssessmentAction::BrowserAction { action, .. } => {
                     history_cell::new_guardian_denied_action_request(format!(
                         "ody to run browser action {action}"
+                    ))
+                }
+                GuardianAssessmentAction::DatabaseWrite { connection, .. } => {
+                    history_cell::new_guardian_denied_action_request(format!(
+                        "ody to run database write on {connection}"
                     ))
                 }
                 GuardianAssessmentAction::Command { .. } => unreachable!(),

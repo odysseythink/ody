@@ -12,6 +12,7 @@ use crate::design_review::types::DesignReviewFinding;
 use crate::design_review::types::DesignReviewOutput;
 use crate::design_review::types::DesignReviewSeverity;
 use crate::design_review::types::normalize_fingerprint;
+use crate::plan_artifact::PlanArtifact;
 use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
 use ody_protocol::config_types::DesignAuditLevel;
@@ -59,9 +60,9 @@ fn escalated_findings(
     out
 }
 
-/// In debate auto-redesign mode, a confirmed Critical/High finding is a hard
-/// redesign signal rather than a choice for the user to sign off. Speculative
-/// findings deliberately remain advisory, matching the normal escalation rule.
+/// In debate auto-redesign mode, a confirmed Critical/High finding may consume
+/// the design's single automatic redesign pass. Speculative findings deliberately
+/// remain advisory, matching the normal escalation rule.
 fn requires_automatic_redesign(finding: &DesignReviewFinding) -> bool {
     finding.confidence != DesignReviewConfidence::Speculative
         && matches!(
@@ -222,6 +223,95 @@ pub(crate) enum EscalationDecision {
 /// matches the order items are queued (findings most-severe-first, then
 /// assumptions). Aggregation maps each answer back to its item by this id.
 const QUESTION_ID_PREFIX: &str = "design_review_signoff_";
+const REDESIGN_LIMIT_QUESTION_ID: &str = "design_review_redesign_limit";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RedesignLimitChoice {
+    Rescope,
+    Revise,
+    SignOff,
+}
+
+fn redesign_limit_labels(chinese: bool) -> (&'static str, &'static str, &'static str) {
+    if chinese {
+        ("重新划定范围", "保持范围并修正", "逐项签核风险")
+    } else {
+        (
+            "Re-scope design",
+            "Keep scope and revise",
+            "Review risks individually",
+        )
+    }
+}
+
+fn build_redesign_limit_question(
+    chinese: bool,
+    findings: &[&DesignReviewFinding],
+) -> RequestUserInputArgs {
+    let (rescope, revise, sign_off) = redesign_limit_labels(chinese);
+    let summary = findings
+        .iter()
+        .take(5)
+        .map(|finding| format!("- [{}] {}", finding.severity, finding.title))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let question = if chinese {
+        format!(
+            "本设计已经使用过一次自动重设计，但仍有高风险项。请选择下一步；系统不会继续自动重写。\n\n{summary}"
+        )
+    } else {
+        format!(
+            "This design already used its automatic redesign pass, but high-risk items remain. Choose the next step; the host will not rewrite it automatically again.\n\n{summary}"
+        )
+    };
+    let descriptions = if chinese {
+        [
+            "缩小或调整当前设计边界，再按新范围修订。",
+            "保留当前范围，要求模型解决列出的高风险项。",
+            "进入逐项签核，可接受、延期或要求修正每项风险。",
+        ]
+    } else {
+        [
+            "Narrow or adjust the design boundary, then revise to that scope.",
+            "Keep the current scope and resolve the listed high-risk items.",
+            "Sign off each risk individually as accept, defer, or needs fixing.",
+        ]
+    };
+    RequestUserInputArgs {
+        questions: vec![RequestUserInputQuestion {
+            id: REDESIGN_LIMIT_QUESTION_ID.to_string(),
+            header: if chinese {
+                "重设计上限".to_string()
+            } else {
+                "Redesign cap".to_string()
+            },
+            question,
+            is_other: false,
+            is_secret: false,
+            options: Some(
+                [rescope, revise, sign_off]
+                    .into_iter()
+                    .zip(descriptions)
+                    .map(|(label, description)| RequestUserInputQuestionOption {
+                        label: label.to_string(),
+                        description: description.to_string(),
+                    })
+                    .collect(),
+            ),
+        }],
+        auto_resolution_ms: None,
+    }
+}
+
+fn redesign_limit_choice(picked: Option<&str>, chinese: bool) -> RedesignLimitChoice {
+    let (rescope, revise, sign_off) = redesign_limit_labels(chinese);
+    match picked {
+        Some(label) if label == revise => RedesignLimitChoice::Revise,
+        Some(label) if label == sign_off => RedesignLimitChoice::SignOff,
+        Some(label) if label == rescope => RedesignLimitChoice::Rescope,
+        _ => RedesignLimitChoice::Rescope,
+    }
+}
 
 /// One escalated item shown on its own sign-off page. Modelling findings and
 /// assumptions uniformly lets the gate queue them as a single ordered list of
@@ -406,21 +496,6 @@ fn build_signoff_questions(
     }
 }
 
-/// Identity of a design across revise rounds: its normalized `# ` title. A
-/// revise keeps the same title, so the sign-off memory carries over; a brand-new
-/// design has a different title, so the memory resets and cannot leak stale
-/// suppressions from a design that was abandoned without finalizing. Falls back
-/// to the empty string when the design has no heading (the completeness gate
-/// mandates one, so this is only a defensive default).
-pub(crate) fn design_title_key(markdown: &str) -> String {
-    markdown
-        .lines()
-        .map(str::trim)
-        .find_map(|line| line.strip_prefix("# "))
-        .map(normalize_fingerprint)
-        .unwrap_or_default()
-}
-
 fn truncate(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
         return s.to_string();
@@ -472,11 +547,11 @@ fn build_automatic_redesign(chinese: bool, findings: &[&DesignReviewFinding]) ->
     let revise = build_revise(chinese, &flagged);
     if chinese {
         format!(
-            "设计未最终确定：debate 识别出高风险项，已自动标记为需要重新设计，无需用户确认。\n\n{revise}"
+            "设计未最终确定：debate 识别出高风险项，已使用本设计唯一一次自动重设计机会，无需用户确认。若下次仍有高风险项，将请求用户决定范围或接受/延期风险。\n\n{revise}"
         )
     } else {
         format!(
-            "Design NOT finalized: debate found high-risk items, which were automatically marked as needing redesign without user sign-off.\n\n{revise}"
+            "Design NOT finalized: debate found high-risk items and used this design's one automatic redesign pass. If high-risk items remain next time, the user will decide the scope or accept/defer the risk.\n\n{revise}"
         )
     }
 }
@@ -499,6 +574,8 @@ pub(crate) async fn run_escalation_gate(
     call_id: String,
     level: Option<DesignAuditLevel>,
     review: Option<&DesignReviewOutput>,
+    artifact: &PlanArtifact,
+    design_key: &str,
     design_markdown: &str,
     auto_redesign_high_risk: bool,
     can_prompt: bool,
@@ -513,11 +590,9 @@ pub(crate) async fn run_escalation_gate(
         None => Vec::new(),
     };
 
-    // Full-auto debate mode acts before sign-off: high-risk findings never ask
-    // the user to choose between accepting and fixing a known dangerous design.
-    // Do not consult the sign-off suppression set here: an automatic redesign
-    // disposition must remain authoritative even if a prior manual round had
-    // accepted the same title.
+    // Full-auto debate mode gets exactly one automatic redesign pass per design.
+    // A later high-risk finding must be surfaced to the user instead of trapping
+    // the model in an unbounded revise/re-review loop.
     if auto_redesign_high_risk {
         let automatic: Vec<&DesignReviewFinding> = findings
             .iter()
@@ -525,12 +600,64 @@ pub(crate) async fn run_escalation_gate(
             .filter(|finding| requires_automatic_redesign(finding))
             .collect();
         if !automatic.is_empty() {
-            return EscalationDecision::Revise {
-                message: build_automatic_redesign(
-                    transcript_is_chinese(turn.config.language.as_deref()),
-                    &automatic,
-                ),
+            if artifact.take_auto_redesign_pass() {
+                return EscalationDecision::Revise {
+                    message: build_automatic_redesign(
+                        transcript_is_chinese(turn.config.language.as_deref()),
+                        &automatic,
+                    ),
+                };
+            }
+            if !can_prompt {
+                let message = if transcript_is_chinese(turn.config.language.as_deref()) {
+                    "设计未最终确定：自动重设计次数已用完，仍有高风险项；当前环境无法请求用户签核。请在可交互会话中重新提交，或关闭自动重设计。".to_string()
+                } else {
+                    "Design NOT finalized: the automatic redesign pass is exhausted and high-risk items remain, but this environment cannot request user sign-off. Re-submit interactively or disable automatic redesign.".to_string()
+                };
+                return EscalationDecision::Revise { message };
+            }
+            let chinese = transcript_is_chinese(turn.config.language.as_deref());
+            let args = build_redesign_limit_question(chinese, &automatic);
+            let Some(response) = session
+                .request_user_input(turn, call_id.clone(), args)
+                .await
+            else {
+                let message = if chinese {
+                    "设计未最终确定：自动重设计次数已用完，但未收到用户的范围决策。留在 Design 模式。".to_string()
+                } else {
+                    "Design NOT finalized: the automatic redesign pass is exhausted, but no user scope decision was received. Staying in Design mode.".to_string()
+                };
+                return EscalationDecision::Revise { message };
             };
+            let picked = response
+                .answers
+                .get(REDESIGN_LIMIT_QUESTION_ID)
+                .and_then(|answer| answer.answers.first())
+                .map(String::as_str);
+            let choice = redesign_limit_choice(picked, chinese);
+            match choice {
+                RedesignLimitChoice::SignOff => {}
+                RedesignLimitChoice::Rescope | RedesignLimitChoice::Revise => {
+                    let flagged = automatic
+                        .iter()
+                        .map(|finding| (SignoffItem::Finding(finding).body(chinese), String::new()))
+                        .collect::<Vec<_>>();
+                    let action = if matches!(choice, RedesignLimitChoice::Rescope) {
+                        if chinese {
+                            "用户选择重新划定范围。先收窄或调整设计边界，再处理以下风险。\n\n"
+                        } else {
+                            "The user chose to re-scope the design. Narrow or adjust its boundary before addressing these risks.\n\n"
+                        }
+                    } else if chinese {
+                        "用户选择保持当前范围并修正以下风险。\n\n"
+                    } else {
+                        "The user chose to keep the current scope and revise these risks.\n\n"
+                    };
+                    return EscalationDecision::Revise {
+                        message: format!("{action}{}", build_revise(chinese, &flagged)),
+                    };
+                }
+            }
         }
     }
 
@@ -555,9 +682,10 @@ pub(crate) async fn run_escalation_gate(
     // round, and re-confirming an already-accepted risk is what made the count
     // feel like it never fell. Only the delta (new findings + items still flagged
     // for fixing) is put in front of the user.
-    let seen = session
-        .design_signoff_seen_for(design_title_key(design_markdown))
+    let mut seen = session
+        .design_signoff_seen_for(design_key.to_string())
         .await;
+    seen.extend(artifact.persisted_design_signoff_seen());
     let items: Vec<SignoffItem<'_>> = all_items
         .iter()
         .copied()
@@ -616,6 +744,7 @@ pub(crate) async fn run_escalation_gate(
     }
 
     if !newly_seen.is_empty() {
+        artifact.record_persisted_design_signoff_seen(newly_seen.clone());
         session.record_design_signoff_seen(newly_seen).await;
     }
 
@@ -739,15 +868,15 @@ mod tests {
     }
 
     #[test]
-    fn automatic_redesign_message_says_no_user_confirmation_is_needed() {
+    fn automatic_redesign_message_explains_the_one_pass_budget() {
         let high = finding(
             DesignReviewSeverity::High,
             DesignReviewConfidence::High,
             "missing rollback",
         );
         let message = build_automatic_redesign(false, &[&high]);
-        assert!(message.contains("automatically marked as needing redesign"));
-        assert!(message.contains("without user sign-off"));
+        assert!(message.contains("one automatic redesign pass"));
+        assert!(message.contains("user will decide"));
         assert!(message.contains("missing rollback"));
     }
 
@@ -911,21 +1040,22 @@ mod tests {
     }
 
     #[test]
-    fn design_title_key_identifies_a_design_across_rounds() {
-        // Same title (any case / spacing) → same key, so a revise round keeps the
-        // sign-off memory; a different title → different key, so it resets.
-        let r1 = "# Add   OAuth Login\n\nbody v1\n";
-        let r2 = "#   add oauth login\n\nbody v2 (revised)\n";
-        let other = "# Refactor cache layer\n";
-        assert_eq!(design_title_key(r1), design_title_key(r2));
-        assert_ne!(design_title_key(r1), design_title_key(other));
-        // A `##` subheading is not mistaken for the title.
-        assert_eq!(
-            design_title_key("## Overview\n# Real Title\n"),
-            "real title"
+    fn redesign_limit_prompt_offers_scope_revision_and_signoff() {
+        let high = finding(
+            DesignReviewSeverity::High,
+            DesignReviewConfidence::High,
+            "missing rollback",
         );
-        // No heading → empty fallback, still stable.
-        assert_eq!(design_title_key("no heading here\n"), "");
+        let prompt = build_redesign_limit_question(false, &[&high]);
+        let options = prompt.questions[0].options.as_ref().unwrap();
+        assert_eq!(options.len(), 3);
+        assert_eq!(options[0].label, "Re-scope design");
+        assert_eq!(options[2].label, "Review risks individually");
+        assert!(prompt.questions[0].question.contains("missing rollback"));
+        assert_eq!(
+            redesign_limit_choice(Some("Keep scope and revise"), false),
+            RedesignLimitChoice::Revise
+        );
     }
 
     #[test]

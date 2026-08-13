@@ -351,3 +351,17 @@ async fn design_checkpoint_does_not_arm_next_step_menu_but_finalize_does() {
         "finalized design must open the post-design next-step menu"
     );
 }
+
+#[tokio::test]
+async fn design_plan_delta_is_visible_before_review_completion() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.active_collaboration_mask = collaboration_modes::design_mask(chat.model_catalog.as_ref());
+
+    chat.on_plan_delta("# Design awaiting review\n".to_string());
+
+    assert!(chat.transcript.plan_item_active);
+    assert_eq!(
+        chat.transcript.plan_delta_buffer,
+        "# Design awaiting review\n"
+    );
+}

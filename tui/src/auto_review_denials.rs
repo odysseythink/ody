@@ -74,6 +74,9 @@ pub(crate) fn action_summary(action: &GuardianAssessmentAction) -> String {
         GuardianAssessmentAction::BrowserAction { action, .. } => {
             format!("browser action: {action}")
         }
+        GuardianAssessmentAction::DatabaseWrite { connection, .. } => {
+            format!("database write on {connection}")
+        }
     }
 }
 

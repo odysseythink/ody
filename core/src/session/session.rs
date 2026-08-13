@@ -537,7 +537,7 @@ impl Session {
         let (next, edge, artifact, enforcement, previous_provider) = captured;
         let decision = if edge {
             crate::session::design_handoff::evaluate_design_exit(
-                artifact,
+                artifact.clone(),
                 next.collaboration_mode.mode,
                 enforcement,
             )
@@ -556,6 +556,12 @@ impl Session {
             HandoffDecision::Allow { reminder, logs } => {
                 let next_provider = next.provider.clone();
                 let mut state = self.state.lock().await;
+                if edge {
+                    if let Some(artifact) = artifact {
+                        artifact.clear_design_review_state();
+                    }
+                    state.clear_design_signoff_seen();
+                }
                 let provider_changed = previous_provider != next_provider;
                 state.session_configuration = next;
                 drop(state);

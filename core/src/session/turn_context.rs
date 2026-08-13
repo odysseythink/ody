@@ -630,7 +630,8 @@ impl Session {
 
             // ---- phase 2: async gate (no lock held) ----
             let decision = if edge {
-                evaluate_design_exit(artifact, next.collaboration_mode.mode, enforcement).await
+                evaluate_design_exit(artifact.clone(), next.collaboration_mode.mode, enforcement)
+                    .await
             } else {
                 HandoffDecision::Allow {
                     reminder: None,
@@ -662,6 +663,12 @@ impl Session {
                 }
                 HandoffDecision::Allow { reminder, logs } => {
                     let mut state = self.state.lock().await;
+                    if edge {
+                        if let Some(artifact) = artifact {
+                            artifact.clear_design_review_state();
+                        }
+                        state.clear_design_signoff_seen();
+                    }
                     let previous_permission_profile =
                         state.session_configuration.permission_profile();
                     let next_permission_profile = next.permission_profile();

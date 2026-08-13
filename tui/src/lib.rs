@@ -1811,7 +1811,7 @@ fn should_show_login_screen(config: &Config) -> bool {
     !config.has_active_model && config.model_providers.is_empty()
 }
 
-fn should_show_onboarding(config: &Config, show_trust_screen: bool) -> bool {
+fn should_show_onboarding(_config: &Config, show_trust_screen: bool) -> bool {
     if show_trust_screen {
         return true;
     }

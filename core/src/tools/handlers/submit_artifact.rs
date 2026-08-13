@@ -5,7 +5,6 @@
 
 use crate::design_completeness::design_completeness_report;
 use crate::design_review::escalation::EscalationDecision;
-use crate::design_review::escalation::design_title_key;
 use crate::design_review::escalation::run_escalation_gate;
 use crate::design_review::escalation::transcript_is_chinese;
 use crate::design_review::orchestrator::DesignReviewOrchestrator;
@@ -15,6 +14,7 @@ use crate::design_review::prompt::UsabilityRecommendation;
 use crate::design_review::types::DesignReviewOutput;
 use crate::design_review::types::DesignReviewRequest;
 use crate::function_tool::FunctionCallError;
+use crate::plan_artifact::PlanArtifact;
 use crate::plan_artifact::PlanWriteOutcome;
 use crate::plan_mode_injector::parts_manifest::PartsManifest;
 use crate::plan_mode_injector::parts_manifest::RowStatus;
@@ -429,6 +429,8 @@ async fn resolve_run_usability_pass(
     session: &Arc<Session>,
     turn: &Arc<TurnContext>,
     call_id: String,
+    artifact: &PlanArtifact,
+    design_key: &str,
     design_markdown: &str,
     review_model: &str,
     chinese: bool,
@@ -445,9 +447,13 @@ async fn resolve_run_usability_pass(
         UsabilityLensToml::Off => false,
         UsabilityLensToml::On => true,
         UsabilityLensToml::Ask => {
-            let key = design_title_key(design_markdown);
+            let key = design_key.to_string();
             if let Some(prev) = session.design_usability_decision_for(key.clone()).await {
                 return prev; // revise round: reuse the earlier answer, no re-prompt
+            }
+            if let Some(prev) = artifact.persisted_design_usability_decision() {
+                session.record_design_usability_decision(key, prev).await;
+                return prev; // restored session: reuse the persisted answer
             }
             let rec =
                 classify_usability(session, turn, review_model.to_string(), design_markdown).await;
@@ -467,6 +473,7 @@ async fn resolve_run_usability_pass(
             session
                 .record_design_usability_decision(key, decision)
                 .await;
+            artifact.record_persisted_design_usability_decision(decision);
             decision
         }
     }
@@ -705,6 +712,15 @@ pub(crate) async fn handle_submit_artifact(
         PlanWriteOutcome::InlineOnly | PlanWriteOutcome::Failed { .. } => None,
     };
 
+    // Review state follows the thread's current unfinished design, not its
+    // editable Markdown title or per-turn artifact path. The key is cleared on
+    // successful submission, which starts the next design with fresh state.
+    let design_key = if expected_mode == ModeKind::Design {
+        artifact.design_review_key()
+    } else {
+        None
+    };
+
     if let PlanWriteOutcome::Failed { error } = &outcome {
         session
             .send_event(
@@ -857,9 +873,14 @@ pub(crate) async fn handle_submit_artifact(
         // findings read as progress rather than fresh problems. Calling this here
         // sets the per-design key; the escalation gate below reads the same key and
         // set idempotently.
-        let seen = session
-            .design_signoff_seen_for(design_title_key(&markdown))
+        let mut seen = session
+            .design_signoff_seen_for(
+                design_key
+                    .clone()
+                    .expect("design review only runs for Design mode"),
+            )
             .await;
+        seen.extend(artifact.persisted_design_signoff_seen());
         let chinese = transcript_is_chinese(turn.config.language.as_deref());
         let review_model = effective_design_review_model
             .clone()
@@ -871,6 +892,10 @@ pub(crate) async fn handle_submit_artifact(
             &session,
             &turn,
             call_id.clone(),
+            artifact,
+            design_key
+                .as_deref()
+                .expect("design review only runs for Design mode"),
             &markdown,
             &review_model,
             chinese,
@@ -905,40 +930,12 @@ pub(crate) async fn handle_submit_artifact(
     // `## Assumptions & Unverified Items` table out of it.
     let design_markdown = markdown.clone();
 
-    // Whether this call will reach the terminal `mark_submitted()` branch.
-    //
-    // Design content is rendered by the client only on this completed event (in
-    // Design mode `PlanDelta` is dropped — see `on_plan_delta`), and the design
-    // must be visible *before* the interactive escalation gate below prompts the
-    // user, so the completed event has to stay here, ahead of the gate — it
-    // cannot be deferred until `did_submit` is finally known. So `finalized` is
-    // computed from what is knowable now: every non-terminal outcome
-    // (checkpoint, pending parts, a completeness gap, or an unfollowable `File`
-    // cell) is decided by this point. The one residual case where this can read
-    // `true` while the artifact does not finalize is an escalation-gate
-    // "revise" — but a revise returns the tool result to the model and the turn
-    // continues, so no `TurnComplete` (and thus no next-step menu) fires until a
-    // later real finalize. `finalized` is what gates that menu: a checkpoint
-    // (`final: false`) also reaches `TurnComplete` because the model ends its
-    // turn to ask a clarifying question, so keying the menu off the mere
-    // presence of a plan item wrongly popped it mid-design.
-    let will_finalize =
-        finalize && gap.is_none() && !has_pending_parts && bad_part_cells.is_empty();
+    // Whether an interactive frontend can answer request_user_input this turn.
+    // Same flag that decides whether the tool is wired up at all.
+    let can_prompt =
+        expected_mode == ModeKind::Design && turn.config.experimental_request_user_input_enabled;
 
-    // 8. Emit completed event
-    session
-        .emit_turn_item_completed(
-            turn.as_ref(),
-            TurnItem::Plan(PlanItem {
-                id: item_id,
-                text: markdown,
-                plan_file_path: persisted_path,
-                finalized: will_finalize,
-            }),
-        )
-        .await;
-
-    // 9. Build response message
+    // 8. Build response message
     //
     // A row whose `File` cell is still a placeholder can never verify, so without naming those rows
     // the model would be told "keep writing parts" every turn with no clue why the parts it already
@@ -959,13 +956,6 @@ pub(crate) async fn handle_submit_artifact(
             wording.tool_name
         )
     });
-
-    // Whether an interactive frontend can answer request_user_input this turn.
-    // Same flag that decides whether the request_user_input tool is wired up at
-    // all (spec_plan.rs); without it (headless / exec / tests) driving a prompt
-    // would block the turn forever. Pinned to Design.
-    let can_prompt =
-        expected_mode == ModeKind::Design && turn.config.experimental_request_user_input_enabled;
 
     // Whether this call reached the terminal `mark_submitted()` branch. Drives
     // the host-managed post-design next-step menu below.
@@ -1025,6 +1015,10 @@ pub(crate) async fn handle_submit_artifact(
             call_id.clone(),
             artifact.design_audit_level(),
             review_output.as_ref(),
+            artifact,
+            design_key
+                .as_deref()
+                .expect("Design escalation requires an artifact identity"),
             &design_markdown,
             auto_redesign_high_risk_enabled(turn.as_ref()),
             can_prompt,
@@ -1047,6 +1041,26 @@ pub(crate) async fn handle_submit_artifact(
         format!("{} submitted", wording.noun)
     };
 
+    if did_submit {
+        // Centralized lifecycle reset also covers review-disabled finalization.
+        session.clear_design_signoff_seen().await;
+    }
+
+    // 9. Complete the item exactly once, after every veto-capable gate has
+    // decided. PlanDelta already made the content visible before an interactive
+    // review prompt; this event now carries the authoritative terminal state.
+    session
+        .emit_turn_item_completed(
+            turn.as_ref(),
+            TurnItem::Plan(PlanItem {
+                id: item_id,
+                text: markdown,
+                plan_file_path: persisted_path,
+                finalized: did_submit,
+            }),
+        )
+        .await;
+
     let message = if let Some(appendix) = review_appendix {
         format!("{message}\n\n{appendix}")
     } else {
@@ -1062,11 +1076,6 @@ pub(crate) async fn handle_submit_artifact(
             .join(", ");
         format!("{message}\n\nQuarantined unreferenced split part file(s): {paths}")
     };
-
-    debug_assert!(
-        !will_finalize || did_submit || (expected_mode == ModeKind::Design && can_prompt),
-        "will_finalize may only diverge from did_submit on the interactive escalation-gate path"
-    );
 
     // The post-design next-step menu (Enter Plan / Stay) lives in the TUI, not
     // here: collaboration mode is owned by the client, so only the TUI can act

@@ -40,7 +40,7 @@ fn experimental_tooltips() -> Vec<&'static str> {
 }
 
 /// Pick a random tooltip to show to the user when starting Ody.
-pub(crate) fn get_tooltip(fast_mode_enabled: bool) -> Option<String> {
+pub(crate) fn get_tooltip(_fast_mode_enabled: bool) -> Option<String> {
     let mut rng = rand::rng();
 
     // Leave small chance for a random tooltip to be shown.

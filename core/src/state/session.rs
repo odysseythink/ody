@@ -66,10 +66,10 @@ pub(crate) struct SessionState {
     /// the delta (new findings + items still flagged for fixing). Cleared when a
     /// design finalizes, so the next design starts fresh.
     design_signoff_seen: HashSet<String>,
-    /// Identity (normalized title) of the design `design_signoff_seen` was
-    /// accumulated for. If the next design carries a different title — the
-    /// previous one was abandoned without finalizing — the set belonged to a
-    /// different design and is reset before it can leak stale suppressions.
+    /// Stable artifact identity of the design `design_signoff_seen` was
+    /// accumulated for. If the next design carries a different identity, the
+    /// previous one was abandoned without finalizing, so the set is reset before
+    /// it can leak stale suppressions.
     design_signoff_key: Option<String>,
     /// v1.6b (D11): the user's `Ask`-mode decision (run the usability review pass?)
     /// for the design named by `design_usability_key`. Cached so a revise round of
@@ -439,8 +439,8 @@ impl SessionState {
     }
 
     /// Fingerprints already dispositioned (accept/defer) for the design
-    /// identified by `key` (its normalized title). If `key` differs from the
-    /// design the set was accumulated for, the set belonged to a different design
+    /// identified by its stable artifact `key`. If `key` differs from the design
+    /// the set was accumulated for, the set belonged to a different design
     /// that never finalized — it is reset first so the new design cannot inherit
     /// stale suppressions.
     pub(crate) fn design_signoff_seen_for(&mut self, key: &str) -> HashSet<String> {

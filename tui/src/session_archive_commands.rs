@@ -321,7 +321,7 @@ async fn start_app_server_for_archive_command(
     )
     .await
     .wrap_err("failed to load config.toml")?;
-    let config_toml = &bootstrap_config.config_toml;
+    let _config_toml = &bootstrap_config.config_toml;
     let cloud_config_bundle = CloudConfigBundleLoader::default();
 
     let model = cli.model.clone();

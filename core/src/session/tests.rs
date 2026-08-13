@@ -10393,6 +10393,61 @@ async fn design_to_plan_complete_injects_handoff() {
 }
 
 #[tokio::test]
+async fn allowed_design_exit_clears_persisted_review_state() {
+    let (session, _tc, _rx) = make_session_and_context_with_rx().await;
+    enter_design(&session).await;
+    seed_design_artifact(&session, COMPLETE_DESIGN).await;
+    let artifact = {
+        let state = session.state.lock().await;
+        state.last_design_artifact().unwrap()
+    };
+    assert!(artifact.take_auto_redesign_pass());
+    artifact.record_persisted_design_signoff_seen(["accepted-risk".to_string()]);
+    artifact.record_persisted_design_usability_decision(true);
+
+    let model = session.collaboration_mode().await.settings.model;
+    switch_to(&session, plan_mode(&model))
+        .await
+        .expect("complete design exit");
+
+    let next = PlanArtifact::new_design(
+        AbsolutePathBuf::from_absolute_path(
+            artifact.path().unwrap().parent().unwrap().parent().unwrap(),
+        )
+        .unwrap(),
+        session.thread_id(),
+        "2026-07-11",
+    );
+    assert!(next.take_auto_redesign_pass());
+    assert!(next.persisted_design_signoff_seen().is_empty());
+    assert_eq!(next.persisted_design_usability_decision(), None);
+}
+
+#[tokio::test]
+async fn vetoed_design_exit_preserves_persisted_review_state() {
+    let (session, _tc, _rx) = make_session_and_context_with_rx().await;
+    enter_design(&session).await;
+    seed_design_artifact(&session, INCOMPLETE_DESIGN).await;
+    let artifact = {
+        let state = session.state.lock().await;
+        state.last_design_artifact().unwrap()
+    };
+    assert!(artifact.take_auto_redesign_pass());
+    artifact.record_persisted_design_signoff_seen(["accepted-risk".to_string()]);
+    artifact.record_persisted_design_usability_decision(true);
+
+    let model = session.collaboration_mode().await.settings.model;
+    assert!(switch_to(&session, plan_mode(&model)).await.is_err());
+    assert!(!artifact.take_auto_redesign_pass());
+    assert!(
+        artifact
+            .persisted_design_signoff_seen()
+            .contains("accepted-risk")
+    );
+    assert_eq!(artifact.persisted_design_usability_decision(), Some(true));
+}
+
+#[tokio::test]
 async fn design_to_plan_incomplete_strict_vetoes() {
     let (session, _tc, rx) = make_session_and_context_with_rx().await;
     enter_design(&session).await;
