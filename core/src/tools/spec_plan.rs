@@ -41,6 +41,7 @@ use crate::tools::handlers::SubmitPlanHandler;
 use crate::tools::handlers::SubmitRoadmapHandler;
 use crate::tools::handlers::TestSyncHandler;
 use crate::tools::handlers::ToolSearchHandlerCache;
+use crate::tools::handlers::ValidatePlanPartHandler;
 use crate::tools::handlers::ViewImageHandler;
 use crate::tools::handlers::WriteFileHandler;
 use crate::tools::handlers::WriteStdinHandler;
@@ -722,12 +723,13 @@ fn add_core_utility_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut
         planned_tools.add(PlanHandler);
     }
 
-    // submit_plan and submit_design are the explicit terminal actions for Plan
-    // and Design mode respectively; exposing either outside its mode would let
-    // non-relevant turns end themselves via a tool.
+    // Submission tools and the Plan-only part preflight are mode-specific;
+    // exposing them elsewhere would let a turn mutate or validate the wrong
+    // artifact.
     match turn_context.collaboration_mode.mode {
         ModeKind::Plan => {
             planned_tools.add_with_exposure(SubmitPlanHandler, ToolExposure::DirectModelOnly);
+            planned_tools.add_with_exposure(ValidatePlanPartHandler, ToolExposure::DirectModelOnly);
         }
         ModeKind::Design => {
             planned_tools.add_with_exposure(SubmitDesignHandler, ToolExposure::DirectModelOnly);

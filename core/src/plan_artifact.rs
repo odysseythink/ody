@@ -20,6 +20,10 @@ pub struct PlanArtifact {
     submitted: AtomicBool,
     last_manifest_snapshot: Mutex<Option<ManifestSnapshot>>,
     last_plan_text: Mutex<Option<String>>,
+    /// Last event-driven split directive injected into model context. The key
+    /// suppresses repeated instructions while the persisted plan state is
+    /// unchanged.
+    last_plan_directive_key: StdMutex<Option<String>>,
     /// 1-based count of plan-mode after-turn calls for this artifact.
     plan_mode_turn_count: StdMutex<usize>,
     /// Turn at which the last full reminder was injected; `Some(0)` means "before turn 1".
@@ -122,6 +126,7 @@ impl PlanArtifact {
             submitted: AtomicBool::new(false),
             last_manifest_snapshot: Mutex::new(None),
             last_plan_text: Mutex::new(None),
+            last_plan_directive_key: StdMutex::new(None),
             plan_mode_turn_count: StdMutex::new(0),
             last_full_turn: StdMutex::new(Some(0)),
             last_any_turn: StdMutex::new(Some(0)),
@@ -246,6 +251,24 @@ impl PlanArtifact {
         if let Ok(mut guard) = self.last_manifest_snapshot.try_lock() {
             *guard = None;
         }
+        *self
+            .last_plan_directive_key
+            .lock()
+            .expect("last_plan_directive_key poisoned") = None;
+    }
+
+    /// Returns true once for each distinct split-plan state transition.
+    pub fn claim_plan_directive(&self, key: impl Into<String>) -> bool {
+        let key = key.into();
+        let mut guard = self
+            .last_plan_directive_key
+            .lock()
+            .expect("last_plan_directive_key poisoned");
+        if guard.as_deref() == Some(key.as_str()) {
+            return false;
+        }
+        *guard = Some(key);
+        true
     }
 
     /// Returns the next 1-based plan-mode turn number and advances the counter.
@@ -381,6 +404,7 @@ impl PlanArtifact {
                     submitted: AtomicBool::new(false),
                     last_manifest_snapshot: Mutex::new(None),
                     last_plan_text: Mutex::new(last_plan_text),
+                    last_plan_directive_key: StdMutex::new(None),
                     plan_mode_turn_count: StdMutex::new(0),
                     last_full_turn: StdMutex::new(Some(0)),
                     last_any_turn: StdMutex::new(Some(0)),

@@ -1,4 +1,6 @@
 use crate::function_tool::FunctionCallError;
+use crate::plan_mode_injector::parts_manifest::RowStatus;
+use crate::plan_mode_injector::parts_manifest::update_task_status;
 use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolPayload;
 use crate::tools::handlers::parse_arguments;
@@ -47,10 +49,49 @@ impl SubmitPlanHandler {
         };
 
         let args: SubmitPlanArgs = parse_arguments(&arguments)?;
+        let plan = match (args.plan, args.task_id, args.status) {
+            (plan, None, None) => plan,
+            (None, Some(task_id), Some(status)) => {
+                let status = match status.as_str() {
+                    "done" => RowStatus::Done,
+                    other => {
+                        return Err(FunctionCallError::RespondToModel(format!(
+                            "submit_plan rejected: unsupported task status `{other}`; use `done`"
+                        )));
+                    }
+                };
+                let artifact = invocation.turn.plan_artifact.as_ref().ok_or_else(|| {
+                    FunctionCallError::RespondToModel(
+                        "submit_plan rejected: no active plan artifact".to_string(),
+                    )
+                })?;
+                let persisted = artifact.last_plan_text().ok_or_else(|| {
+                    FunctionCallError::RespondToModel(
+                        "submit_plan rejected: submit the complete index once before using task_id/status updates".to_string(),
+                    )
+                })?;
+                Some(
+                    update_task_status(&persisted, &task_id, status).map_err(|error| {
+                        FunctionCallError::RespondToModel(format!("submit_plan rejected: {error}"))
+                    })?,
+                )
+            }
+            (Some(_), Some(_), _) | (Some(_), _, Some(_)) => {
+                return Err(FunctionCallError::RespondToModel(
+                    "submit_plan rejected: send either complete `plan` markdown or a `task_id`/`status` update, not both".to_string(),
+                ));
+            }
+            (_, Some(_), None) | (_, None, Some(_)) => {
+                return Err(FunctionCallError::RespondToModel(
+                    "submit_plan rejected: `task_id` and `status` must be provided together"
+                        .to_string(),
+                ));
+            }
+        };
         // Plan mode has no checkpoint/final split: every submit_plan is a
         // finalize-intent call (its own split-parts / rigor gates decide
         // terminality), so always request finalization here.
-        handle_submit_artifact(invocation, ModeKind::Plan, &PLAN_WORDING, args.plan, true).await
+        handle_submit_artifact(invocation, ModeKind::Plan, &PLAN_WORDING, plan, true).await
     }
 }
 

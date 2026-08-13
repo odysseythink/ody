@@ -175,7 +175,7 @@ const DESIGN_TERMINAL_ACTION_NUDGE: &str = "You ended the response without compl
 Continue the current design task now. End this turn by calling exactly one of \
 `submit_design` or `request_user_input`; do not stop after reasoning or a plain-text response.";
 
-const PLAN_PENDING_TASK_NUDGE: &str = "The current task-plan index still has pending task parts. The host has already supplied the exact next task path. Continue now: write only that pending task part with its complete task contract, then call `submit_plan` with the complete index and that row marked `done`. Do not stop with commentary or a summary while any task remains pending.";
+const PLAN_PENDING_TASK_NUDGE: &str = "The current task-plan index still has pending task parts. The host has already supplied the exact next task path. Continue now: write only that pending task part with its complete task contract, call `validate_plan_part` for its task ID, then call `submit_plan` with only `task_id` and `status: \"done\"`. Do not regenerate the frozen index or stop with commentary while any task remains pending.";
 
 struct SessionModeTerminalAction {
     mode_name: &'static str,
@@ -1757,9 +1757,25 @@ async fn run_session_mode_after_turn(
     // re-injects the rigor-tier contract, the Design path re-injects the Design
     // operating rules (pop-up-for-choices, turn discipline, adversarial
     // self-review) that would otherwise decay after the single entry injection.
-    let reminder = PlanModeInjector::render_reminder_if_due(artifact, plan_mode_config, mode)
+    // Split plans already receive event-driven directives at the initial
+    // manifest, verified part boundaries, first validation failure, and final
+    // review. Periodic full/sparse reminders during every model sampling only
+    // duplicate that contract and inflate context, so retain cadence reminders
+    // solely for unsplit long-form plans/designs.
+    let should_remind = PlanModeInjector::should_inject_periodic_reminder(plan_markdown);
+    let reminder = should_remind
+        .then(|| PlanModeInjector::render_reminder_if_due(artifact, plan_mode_config, mode))
+        .flatten()
         .or_else(|| {
-            PlanModeInjector::render_design_reminder_if_due(artifact, plan_mode_config, mode)
+            should_remind
+                .then(|| {
+                    PlanModeInjector::render_design_reminder_if_due(
+                        artifact,
+                        plan_mode_config,
+                        mode,
+                    )
+                })
+                .flatten()
         });
     if let Some((reminder_kind, reminder_text, reminder_logs)) = reminder {
         let source = InternalContextSource::from_static(match (mode, reminder_kind) {

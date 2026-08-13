@@ -454,7 +454,8 @@ pub fn task_part_structure_violations(stem_dir: &Path, row: &ManifestRow) -> Vec
     }
     if source_anchor_count(&content) == 0 {
         violations.push(
-            "Source evidence must include at least one backticked `path:line` anchor".to_string(),
+            "Source evidence must include at least one backticked `path:line` or `path:start-end` anchor"
+                .to_string(),
         );
     }
     let completed_review_items = completed_self_review_items(&content);
@@ -476,7 +477,18 @@ pub fn part_completion_violations(
     max_bytes: usize,
 ) -> Vec<String> {
     let mut violations = part_budget_violations(stem_dir, row, max_tasks, max_bytes);
-    if !manifest.is_task_mode() || !row_is_verified_done(stem_dir, row) {
+    if !manifest.is_task_mode() {
+        return violations;
+    }
+    if row.status == RowStatus::Done && !row_is_verified_done(stem_dir, row) {
+        violations.push(if normalize_part_path(stem_dir, &row.file).is_some() {
+            "part file does not exist".to_string()
+        } else {
+            "part path cannot be resolved from the frozen File cell".to_string()
+        });
+        return violations;
+    }
+    if !row_is_verified_done(stem_dir, row) {
         return violations;
     }
 
@@ -558,10 +570,124 @@ fn source_anchor_count(content: &str) -> usize {
         .step_by(2)
         .filter(|candidate| {
             candidate.rsplit_once(':').is_some_and(|(path, line)| {
-                !path.trim().is_empty() && line.trim().parse::<usize>().is_ok()
+                let mut bounds = line.trim().split('-');
+                let start = bounds.next().and_then(|value| value.parse::<usize>().ok());
+                let end = bounds.next().map(str::trim);
+                let valid_end = end.is_none_or(|value| value.parse::<usize>().is_ok());
+                !path.trim().is_empty() && start.is_some() && valid_end && bounds.next().is_none()
             })
         })
         .count()
+}
+
+/// Validates a task part before the caller advances its frozen manifest row.
+/// The persisted index remains untouched: only an in-memory clone is marked
+/// done so the exact same completion and dependency checks used by
+/// `submit_plan` run locally first.
+pub fn task_part_preflight_violations(
+    stem_dir: &Path,
+    manifest: &PartsManifest,
+    task_id: &str,
+    max_tasks: usize,
+    max_bytes: usize,
+) -> Option<Vec<String>> {
+    if !manifest.is_task_mode() {
+        return None;
+    }
+    let mut candidate = manifest.clone();
+    let row = candidate.rows.iter_mut().find(|row| row.id == task_id)?;
+    row.status = RowStatus::Done;
+    let row = candidate.rows.iter().find(|row| row.id == task_id)?;
+    Some(part_completion_violations(
+        stem_dir, &candidate, row, max_tasks, max_bytes,
+    ))
+}
+
+/// Advances one task status without regenerating the accepted index. This is
+/// deliberately a surgical cell edit: titles, scopes, dependency text,
+/// spacing, row order, and all non-manifest sections remain byte-for-byte
+/// identical to the server-persisted plan.
+pub fn update_task_status(
+    markdown: &str,
+    task_id: &str,
+    status: RowStatus,
+) -> Result<String, String> {
+    let parsed = parse_parts_manifest(markdown);
+    if !parsed.diagnostics.is_empty() {
+        return Err(format!(
+            "the persisted `## Parts` manifest is invalid: {}",
+            parsed.diagnostics.join("; ")
+        ));
+    }
+    let manifest = parsed
+        .manifest
+        .ok_or_else(|| "the persisted plan has no `## Parts` manifest".to_string())?;
+    if !manifest.is_task_mode() {
+        return Err("status-only updates require a task-mode `## Parts` manifest".to_string());
+    }
+    if !manifest.rows.iter().any(|row| row.id == task_id) {
+        return Err(format!("the frozen manifest has no task `{task_id}`"));
+    }
+
+    let replacement = match status {
+        RowStatus::Pending => "pending",
+        RowStatus::Done => "done",
+    };
+    let mut output = String::with_capacity(markdown.len());
+    let mut in_parts = false;
+    let mut columns = None;
+    let mut in_rows = false;
+    let mut updated = false;
+
+    for chunk in markdown.split_inclusive('\n') {
+        let (line, newline) = chunk
+            .strip_suffix('\n')
+            .map_or((chunk, ""), |line| (line, "\n"));
+        let trimmed = line.trim();
+        if trimmed == "## Parts" {
+            in_parts = true;
+        } else if in_parts && trimmed.starts_with("## ") {
+            in_parts = false;
+        }
+
+        if in_parts && columns.is_none() && trimmed.starts_with('|') {
+            let headers = table_cells(line);
+            columns = manifest_columns(&headers).ok().map(|(_, columns)| columns);
+            output.push_str(line);
+            output.push_str(newline);
+            continue;
+        }
+
+        if in_parts && columns.is_some() && trimmed.starts_with('|') {
+            if !in_rows {
+                in_rows = trimmed.contains("---");
+            } else if let Some(columns) = columns {
+                let cells = table_cells(line);
+                if strip_backticks(cell(&cells, columns.id)) == task_id {
+                    let mut segments = line.split('|').map(str::to_string).collect::<Vec<_>>();
+                    let segment_index = columns.status + 1;
+                    if let Some(segment) = segments.get_mut(segment_index) {
+                        let leading_len = segment.len() - segment.trim_start().len();
+                        let trailing_len = segment.len() - segment.trim_end().len();
+                        let leading = &segment[..leading_len];
+                        let trailing = &segment[segment.len() - trailing_len..];
+                        *segment = format!("{leading}{replacement}{trailing}");
+                        output.push_str(&segments.join("|"));
+                        output.push_str(newline);
+                        updated = true;
+                        continue;
+                    }
+                }
+            }
+        }
+
+        output.push_str(line);
+        output.push_str(newline);
+    }
+
+    updated
+        .then_some(output)
+        .ok_or_else(|| format!("could not update task `{task_id}` in the frozen manifest"))
 }
 
 fn completed_self_review_items(content: &str) -> usize {
@@ -1052,6 +1178,77 @@ mod tests {
 
         let violations = part_completion_violations(&stem, &manifest, &manifest.rows[1], 1, 0);
         assert!(violations.is_empty(), "{violations:?}");
+    }
+
+    #[test]
+    fn task_part_source_evidence_accepts_line_ranges() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stem = tmp.path().join("topic");
+        std::fs::create_dir_all(&stem).unwrap();
+        let content = complete_task_part("T01", "Protocol types")
+            .replace("`core/src/example.rs:42`", "`core/src/example.rs:42-57`");
+        std::fs::write(stem.join("protocol.md"), content).unwrap();
+        let manifest = parse_parts_manifest(
+            "## Parts\n| ID | File | Task | Scope | Depends on | Status |\n|---|---|---|---|---|---|\n| T01 | `topic/protocol.md` | Protocol types | protocol | — | done |\n",
+        )
+        .manifest
+        .unwrap();
+
+        let violations = part_completion_violations(&stem, &manifest, &manifest.rows[0], 1, 0);
+        assert!(violations.is_empty(), "{violations:?}");
+    }
+
+    #[test]
+    fn preflight_validates_a_pending_task_with_the_done_contract() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stem = tmp.path().join("topic");
+        std::fs::create_dir_all(&stem).unwrap();
+        std::fs::write(
+            stem.join("protocol.md"),
+            complete_task_part("T01", "Protocol types"),
+        )
+        .unwrap();
+        let manifest = parse_parts_manifest(
+            "## Parts\n| ID | File | Task | Scope | Depends on | Status |\n|---|---|---|---|---|---|\n| T01 | `topic/protocol.md` | Protocol types | protocol | — | pending |\n",
+        )
+        .manifest
+        .unwrap();
+
+        let violations =
+            task_part_preflight_violations(&stem, &manifest, "T01", 1, 0).expect("known task");
+        assert!(violations.is_empty(), "{violations:?}");
+    }
+
+    #[test]
+    fn preflight_rejects_a_missing_part_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stem = tmp.path().join("topic");
+        std::fs::create_dir_all(&stem).unwrap();
+        let manifest = parse_parts_manifest(
+            "## Parts\n| ID | File | Task | Scope | Depends on | Status |\n|---|---|---|---|---|---|\n| T01 | `topic/protocol.md` | Protocol types | protocol | — | pending |\n",
+        )
+        .manifest
+        .unwrap();
+
+        let violations =
+            task_part_preflight_violations(&stem, &manifest, "T01", 1, 0).expect("known task");
+        assert_eq!(violations, vec!["part file does not exist"]);
+    }
+
+    #[test]
+    fn status_update_preserves_the_frozen_manifest_text() {
+        let markdown = "# Plan\n\n## Parts\n| ID | File | Task | Scope | Depends on | Status |\n|---|---|---|---|---|---|\n| T01 | `topic/protocol.md` | Protocol types | exact  scope | — | pending |\n| T02 | `topic/api.md` | API | api | T01 | pending |\n\n## Risks\n\nKeep this byte-for-byte.\n";
+
+        let updated = update_task_status(markdown, "T01", RowStatus::Done).unwrap();
+
+        assert_eq!(
+            updated,
+            markdown.replacen(
+                "| T01 | `topic/protocol.md` | Protocol types | exact  scope | — | pending |",
+                "| T01 | `topic/protocol.md` | Protocol types | exact  scope | — | done |",
+                1
+            )
+        );
     }
 
     #[test]

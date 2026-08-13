@@ -43,6 +43,8 @@ pub(crate) mod test_sync_spec;
 mod tool_search;
 pub(crate) mod tool_search_spec;
 pub(crate) mod unified_exec;
+mod validate_plan_part;
+pub(crate) mod validate_plan_part_spec;
 mod view_image;
 pub(crate) mod view_image_spec;
 
@@ -100,6 +102,7 @@ pub(crate) use tool_search::ToolSearchHandlerCache;
 pub use unified_exec::ExecCommandHandler;
 pub(crate) use unified_exec::ExecCommandHandlerOptions;
 pub use unified_exec::WriteStdinHandler;
+pub use validate_plan_part::ValidatePlanPartHandler;
 pub use view_image::ViewImageHandler;
 
 pub(crate) fn parse_arguments<T>(arguments: &str) -> Result<T, FunctionCallError>

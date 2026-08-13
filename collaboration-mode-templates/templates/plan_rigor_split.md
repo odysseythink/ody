@@ -4,7 +4,7 @@ Rigor values complete, executable detail over brevity. A Rigor plan with more th
 
 Do not compress, merge away, or replace concrete implementation steps, source evidence, failure cases, or behavioral tests with a summary. The configured maximum size of each part is **`{{ max_part_bytes }}` UTF-8 bytes** (`0` disables the byte limit). Account for that exact value when creating the initial task manifest: split a large change surface into smaller, independently executable tasks before the index is accepted, never after writing a part.
 
-The first accepted `## Parts` manifest is frozen before part writing begins. Later index submissions may only advance the existing rows from `pending` to `done`; never add, remove, rename, reorder, split, merge, or change the scope/dependencies of rows. If a complete task part cannot fit the configured byte limit, stop and ask the user to raise `plan_mode.max_part_bytes` instead of changing the manifest and regenerating completed work.
+The first accepted `## Parts` manifest is frozen before part writing begins. Later, the host may only advance an existing row from `pending` to `done` in response to a status-only checkpoint; never add, remove, rename, reorder, split, merge, or change the scope/dependencies of rows. If a complete task part cannot fit the configured byte limit, stop and ask the user to raise `plan_mode.max_part_bytes` instead of changing the manifest and regenerating completed work.
 
 ### File structure
 
@@ -71,16 +71,16 @@ Each task part contains exactly one Task heading and every section below. It is 
 - [x] 7. Type consistency: types and signatures agree with dependent tasks.
 ```
 
-The source-evidence section must include at least one backticked `path:line` anchor. All seven Self-review items must be checked before the row can be marked `done`.
+The source-evidence section must include at least one backticked `path:line` or `path:start-end` anchor. All seven Self-review items must be checked before the row can be marked `done`.
 
 ### Writing protocol
 
 1. Write the complete index first with all task rows `pending`, then call `submit_plan` with the full index.
    - Before this call, verify that every complete task-part contract can fit within `{{ max_part_bytes }}` UTF-8 bytes when the value is non-zero. This is the only point where task partitioning is allowed.
 2. The host names the only pending task that may be written. Write that exact task file with a normal file-write tool; `submit_plan` only writes the index.
-3. Call `submit_plan` again with the complete index and only the verified task row changed to `done`.
+3. Call `validate_plan_part` for that task ID. After it passes, call `submit_plan` with only `task_id` and `status: "done"`; the host preserves the frozen index and changes the status cell itself.
 4. The host automatically continues to the next pending task. Do not stop with a plain-text progress report, do not ask for approval, and do not create or edit a later task file first.
-5. After every row is `done`, perform the cross-file consistency review and call `submit_plan` once more with the complete index. Only that final submission requests approval and ends Plan mode.
+5. After every row is `done`, perform the cross-file consistency review and call `submit_plan` once more with no fields. The host reads its persisted index; only that final submission requests approval and ends Plan mode.
 
 If context is compacted at a task boundary, re-read the index and the current task's completed dependencies before writing. Continue from the first `pending` manifest row; never rewrite a verified `done` task.
 

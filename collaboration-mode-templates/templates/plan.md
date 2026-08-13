@@ -150,7 +150,7 @@ Use the `request_user_input` tool only for decisions that materially change the 
 
 Only finalize the plan when it is decision complete and leaves no decisions to the implementer.
 
-When you present the official plan, call the `submit_plan` tool with the complete plan markdown as its `plan` argument. Do not paste the plan into a normal text response, and do not wrap it in `<proposed_plan>` tags — that is not a recognized mechanism. Only `submit_plan` persists the plan file and (once the plan has no pending split parts left, see "Large plan splitting" below) ends Plan mode.
+When you first present the official plan, call the `submit_plan` tool with the complete plan markdown as its `plan` argument. For later frozen-manifest progress, use the status-only form described below; for final split-plan submission, omit all fields. Do not paste the plan into a normal text response, and do not wrap it in `<proposed_plan>` tags — that is not a recognized mechanism. Only `submit_plan` persists the plan file and (once the plan has no pending split parts left, see "Large plan splitting" below) ends Plan mode.
 
 The plan must be plan-only: no author deliberation, no open questions, no "should I proceed?". Your tier's addendum below defines the required structure and level of detail — follow it. Whatever the tier, the plan must always carry a clear title, the important changes to public APIs/interfaces/types, test cases and scenarios with their risk-driven verification level, and the explicit assumptions and defaults you chose.
 
@@ -158,7 +158,7 @@ Writing-style guidance never overrides splitting: once the task count exceeds th
 
 Do not ask "should I proceed?" in the final output. The user can easily switch out of Plan mode and request implementation once you have called `submit_plan`. Alternatively, they can decide to stay in Plan mode and continue refining the plan.
 
-Only call `submit_plan` once per turn, and only when you are presenting a complete spec (or, for split plans, one complete index/part — see below).
+Only call `submit_plan` once per turn: with a complete initial spec, a validated split task's status-only checkpoint, or the final no-field split submission described below.
 
 ## Large plan splitting
 
@@ -168,12 +168,12 @@ When `{{ split_threshold }}` is greater than 0 and the plan has more than `{{ sp
    - The configured per-part size limit is **`{{ max_part_bytes }}` UTF-8 bytes** (`0` disables it). Choose the complete partition up front so every part can fit before submitting the initial index.
    - Once the initial manifest is accepted, its rows, order, files, scopes, and dependencies are frozen. Later submissions may only change an existing row from `pending` to `done`; never repartition after writing a part. If a complete part cannot fit, ask the user to raise `plan_mode.max_part_bytes`.
 2. **Write each part with a normal file-write tool, not `submit_plan`.** The `submit_plan` response prints the exact directory to write into — use it verbatim, never guess it — and name the file exactly as its `File` cell in the `## Parts` table. `submit_plan` cannot create separate part files; it only ever overwrites the index. Writing under the plan's own part directory is allowed in Plan mode.
-3. **After finishing a part, call `submit_plan` again** with the index's full markdown, this time with that part's row flipped to `done`. This is what advances the tracker to the next pending part — a direct edit to the index file's `## Parts` table alone will not be seen. As long as any row is still `pending`, this call keeps Plan mode active.
-4. Write only the pending part named by the host, then submit the complete index with that row marked `done`. Keep each part to one coherent change surface; the rigor addendum can require the stricter one-task-per-part format.
+3. **After finishing a part, call `validate_plan_part` with its task ID.** Repair the same part until validation passes, then call `submit_plan` with only that `task_id` and `status: "done"`. The host advances only the status cell in its persisted frozen index, so do not regenerate, rewrite, or resend the full manifest. As long as any row is still `pending`, this keeps Plan mode active.
+4. Write only the pending part named by the host, validate it locally, then advance it with the status-only `submit_plan` form. Keep each part to one coherent change surface; the rigor addendum can require the stricter one-task-per-part format.
    - Preserve concrete implementation steps, source evidence, failure/edge cases, and behavioral tests. Do not replace them with summaries or pseudocode for the sake of brevity.
    - The host automatically continues to the next pending part after the incremental `submit_plan`; do not end the response with a plain-text progress report.
 
-After all parts are `done`, do a cross-file consistency review, then call `submit_plan` one final time with the complete index (all rows `done`); that call ends Plan mode.
+After all parts are `done`, do a cross-file consistency review, then call `submit_plan` once with no fields; the host reads its persisted all-done index and ends Plan mode.
 
 Example `## Parts` table:
 
@@ -186,10 +186,10 @@ Example `## Parts` table:
 
 Each `File` cell is the part's path relative to the index, with your plan's real directory filled in (`2026-07-10-search-redesign/` is this example's). `submit_plan` prints that directory — substitute it, never leave a `<placeholder>` and never drop the directory. Whoever reads this index next may have nothing but its text; the cell has to be openable as written.
 
-If the user stays in Plan mode and asks for revisions after a prior `submit_plan` call, any new `submit_plan` call must include a complete replacement plan, not a delta. If the user indicates that the prior plan is not acceptable but does not provide enough information to produce a complete replacement, address the concern and continue planning without calling `submit_plan`. If the follow-up neither requires changes nor calls the plan into question (e.g. clarifying question), answer it, then call `submit_plan` again with the prior plan unchanged.
+If the user explicitly asks to revise a non-frozen plan after a prior `submit_plan` call, a replacement `plan` must still be complete. A frozen split manifest is immutable; a material contract revision requires an explicit new planning lifecycle, while normal progress validates the part and sends only `task_id`/`status`. If the follow-up neither requires changes nor calls the plan into question, answer it, then call `submit_plan` with no fields so the host reads its persisted plan.
 
 ## Plan file location
 
 Persist plan output to the project's `.ody-code/plans/` directory. Use the filename format `YYYY-MM-DD-<topic>.md` (for example `2026-07-10-search-redesign.md`). Do NOT place plan files under `.ody-code/roadmaps/` or any other location.
 
-Persistence is automatic: calling `submit_plan` with the plan markdown saves it to the assigned plan file for you; you do not need shell commands or a write tool for a non-split plan. `submit_plan` only ends Plan mode when the markdown you pass has no pending rows left in its `## Parts` table (or has no `## Parts` table at all) — calling it for an index that still has `pending` rows saves the index and keeps Plan mode active so you can keep writing the remaining parts (see "Large plan splitting" above for how part files themselves get written).
+Persistence is automatic: the initial `submit_plan` markdown is saved to the assigned plan file; you do not need shell commands or a write tool for a non-split plan. For split task plans, later status-only calls update the host's persisted index. `submit_plan` ends Plan mode only when the persisted plan has no pending rows (or has no `## Parts` table) — pending rows keep Plan mode active so you can write the remaining parts.

@@ -1409,17 +1409,16 @@ fn apply_patch_registration_only_needs_an_environment() {
     ));
 }
 
-/// submit_plan and submit_design are the explicit terminal actions of their
-/// modes: each must be model-visible (DirectModelOnly) only in its own mode
-/// and absent everywhere else, so a turn can never end itself via the wrong
-/// mode's tool.
+/// submit_plan/validate_plan_part and submit_design are mode-specific actions:
+/// each must be model-visible (DirectModelOnly) only in its own mode and absent
+/// everywhere else, so a turn can never mutate or validate the wrong artifact.
 #[tokio::test]
 async fn submit_tools_registered_per_mode() {
     let plan_probe = probe(|turn| {
         turn.collaboration_mode.mode = ModeKind::Plan;
     })
     .await;
-    plan_probe.assert_visible_contains(&["submit_plan"]);
+    plan_probe.assert_visible_contains(&["submit_plan", "validate_plan_part"]);
     plan_probe.assert_visible_lacks(&["submit_design"]);
 
     let design_probe = probe(|turn| {
@@ -1427,13 +1426,18 @@ async fn submit_tools_registered_per_mode() {
     })
     .await;
     design_probe.assert_visible_contains(&["submit_design", "submit_roadmap"]);
-    design_probe.assert_visible_lacks(&["submit_plan"]);
+    design_probe.assert_visible_lacks(&["submit_plan", "validate_plan_part"]);
 
     let default_probe = probe(|turn| {
         turn.collaboration_mode.mode = ModeKind::Default;
     })
     .await;
-    default_probe.assert_visible_lacks(&["submit_plan", "submit_design", "submit_roadmap"]);
+    default_probe.assert_visible_lacks(&[
+        "submit_plan",
+        "validate_plan_part",
+        "submit_design",
+        "submit_roadmap",
+    ]);
 }
 
 #[tokio::test]

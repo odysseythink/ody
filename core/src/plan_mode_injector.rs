@@ -179,13 +179,19 @@ impl PlanModeInjector {
 
         if pending_rows.is_empty() {
             if done_count > 0 {
-                logs.push(make_log(
-                    PlanModeLogKind::FinalReview,
-                    "All plan parts are complete. Ready for final review.".to_string(),
-                    None,
-                ));
+                let directive = artifact
+                    .claim_plan_directive("final-review")
+                    .then_some(PlanModeDirective::FinalReview)
+                    .unwrap_or(PlanModeDirective::None);
+                if directive != PlanModeDirective::None {
+                    logs.push(make_log(
+                        PlanModeLogKind::FinalReview,
+                        "All plan parts are complete. Ready for final review.".to_string(),
+                        None,
+                    ));
+                }
                 return AfterPlanTurnResult {
-                    directive: PlanModeDirective::FinalReview,
+                    directive,
                     boundary_crossed,
                     checkpoint_due: false,
                     logs,
@@ -200,6 +206,15 @@ impl PlanModeInjector {
         }
 
         if let Some((part, violations)) = invalid_done_parts.into_iter().next() {
+            let directive_key = format!("refine:{}:{}", part.relative_path, violations.join("|"));
+            if !artifact.claim_plan_directive(directive_key) {
+                return AfterPlanTurnResult {
+                    directive: PlanModeDirective::None,
+                    boundary_crossed,
+                    checkpoint_due: false,
+                    logs,
+                };
+            }
             logs.push(make_log(
                 PlanModeLogKind::SplitContinued,
                 format!(
@@ -227,6 +242,29 @@ impl PlanModeInjector {
                 .unwrap_or_else(|| next_part.scope.clone()),
         };
 
+        // No verified boundary and no newly surfaced invalid-done part means
+        // the host has already named this pending work. Repeating the same
+        // ContinueSplit directive after every model sampling only bloats the
+        // context; submit/validate tool responses carry any actionable error.
+        if prev_snapshot.is_some() && !boundary_crossed {
+            return AfterPlanTurnResult {
+                directive: PlanModeDirective::None,
+                boundary_crossed,
+                checkpoint_due: false,
+                logs,
+            };
+        }
+
+        let directive_key = format!("next:{}", next_part.file_name);
+        if !artifact.claim_plan_directive(directive_key) {
+            return AfterPlanTurnResult {
+                directive: PlanModeDirective::None,
+                boundary_crossed,
+                checkpoint_due: boundary_crossed,
+                logs,
+            };
+        }
+
         let (directive, kind, message) = if prev_snapshot.is_none() {
             (
                 PlanModeDirective::StartSplit { next_part: target },
@@ -237,10 +275,6 @@ impl PlanModeInjector {
                 ),
             )
         } else {
-            // Nudge on every turn that makes no verified progress, not just on
-            // boundary crossings — a model that wrote the index and then
-            // stalled must be pushed back to the next pending part until the
-            // file lands on disk. (pending_rows is known non-empty here.)
             (
                 PlanModeDirective::ContinueSplit { next_part: target },
                 PlanModeLogKind::SplitContinued,
@@ -276,6 +310,13 @@ impl PlanModeInjector {
             .and_then(|cfg| cfg.split_plan_compaction_ratio)
             .unwrap_or(0.75);
         ratio > 0.0 && context_usage_ratio >= ratio
+    }
+
+    /// Periodic reminders are a fallback for unsplit long-form planning. A
+    /// split manifest has its own event-driven directives and must not receive
+    /// duplicate cadence reminders after every model sampling.
+    pub fn should_inject_periodic_reminder(plan_markdown: &str) -> bool {
+        parse_parts_manifest(plan_markdown).manifest.is_none()
     }
 
     /// Advances the per-plan turn counter, selects a rigor reminder if one is due,
@@ -460,20 +501,20 @@ pub fn render_directive(
             "All design parts are marked done. Before asking for final approval, run a cross-file consistency review across the index and every `<stem>/` part, then present the final design for approval.".to_string()
         ),
         (_, PlanModeDirective::StartSplit { next_part }) => Some(format!(
-            "This plan has been split into multiple parts. Focus this turn on writing only the first pending part: {} (scope: {}). Do not write any other part. For a task manifest, write the complete task contract (Files, Source evidence with anchors, Implementation, Failure and edge cases, Tests, and seven checked Self-review items), then submit the complete index with this row marked `done`. The host automatically continues to the next pending task; do not end with a plain-text progress report.",
+            "This plan has been split into multiple parts. Focus this turn on writing only the first pending part: {} (scope: {}). Do not write any other part. For a task manifest, write the complete task contract (Files, Source evidence with `path:line` or `path:start-end` anchors, Implementation, Failure and edge cases, Tests, and seven checked Self-review items), call `validate_plan_part` for that task ID, then call `submit_plan` with only `task_id` and `status: \"done\"`. The host preserves the frozen index and automatically continues; do not regenerate the manifest or end with a plain-text progress report.",
             resolved_part_path(index_path, &next_part.relative_path), next_part.scope
         )),
         (_, PlanModeDirective::ContinueSplit { next_part }) => Some(format!(
-            "The next pending part is: {} (scope: {}). Write only this part in the current turn. A `done` row counts only when the part file exists on disk at exactly this path and satisfies its completion contract. Then submit the complete index with this row marked `done`; the host automatically continues, so do not stop with a plain-text progress report.",
+            "The next pending part is: {} (scope: {}). Write only this part in the current turn. A `done` row counts only when the part file exists on disk at exactly this path and satisfies its completion contract. Call `validate_plan_part` for the task ID, then call `submit_plan` with only `task_id` and `status: \"done\"`; the host updates its persisted frozen index and automatically continues, so do not resend the manifest or stop with a plain-text progress report.",
             resolved_part_path(index_path, &next_part.relative_path), next_part.scope
         )),
         (_, PlanModeDirective::RefinePart { part, violations }) => Some(format!(
-            "The completed part {} does not satisfy its completion contract ({}). Do not mark it accepted. Repair that same part so it contains the required concrete evidence and self-review, then resubmit the complete index without changing the frozen manifest. If the complete part cannot fit an explicitly configured size limit, ask the user to raise `plan_mode.max_part_bytes`; do not repartition completed work. The host will continue from the stable manifest automatically.",
+            "The completed part {} does not satisfy its completion contract ({}). Do not mark it accepted. Repair that same part so it contains the required concrete evidence and self-review, then call `validate_plan_part` again. After validation passes, call `submit_plan` with only its `task_id` and `status: \"done\"`, without changing the frozen manifest. Do not resend it. If the complete part cannot fit an explicitly configured size limit, ask the user to raise `plan_mode.max_part_bytes`; do not repartition completed work.",
             resolved_part_path(index_path, &part.relative_path),
             violations.join("; ")
         )),
         (_, PlanModeDirective::FinalReview) => Some(
-            "All parts are marked done. Before finalizing the plan, review the parts for consistency, then call the submit_plan tool with the final plan markdown as the only action to persist it and end the turn.".to_string()
+            "All parts are marked done. Before finalizing the plan, review the persisted index and parts for consistency, then call `submit_plan` with no fields as the only action; the host reads the plan it preserved and ends the turn.".to_string()
         ),
         (_, PlanModeDirective::None) => None,
     }
@@ -789,7 +830,7 @@ mod directive_tests {
     }
 
     #[tokio::test]
-    async fn stalled_turns_keep_nudging_continue_split() {
+    async fn stalled_turns_do_not_repeat_continue_split_directives() {
         let (artifact, _tmp) = artifact("2026-07-04");
         artifact.finalize_name("topic").await.unwrap();
         let markdown = "## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 1 | core.md | models | pending |\n| 2 | api.md | endpoints | pending |\n";
@@ -799,18 +840,13 @@ mod directive_tests {
             first.directive,
             PlanModeDirective::StartSplit { .. }
         ));
-        // Turn 2: no part verified done, nothing changed → nudge instead of None.
+        // Turn 2: no part verified done and nothing changed, so no duplicate
+        // directive is injected into the model context.
         let second = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
-        assert!(matches!(
-            second.directive,
-            PlanModeDirective::ContinueSplit { .. }
-        ));
-        // Turn 3: still stalled → keep nudging.
+        assert_eq!(second.directive, PlanModeDirective::None);
+        // Turn 3: still stalled remains silent.
         let third = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
-        assert!(matches!(
-            third.directive,
-            PlanModeDirective::ContinueSplit { .. }
-        ));
+        assert_eq!(third.directive, PlanModeDirective::None);
     }
 
     #[tokio::test]
@@ -882,7 +918,7 @@ mod directive_tests {
     /// as real completion — the row should stay pending so the model is
     /// redirected back to it instead of ending Plan mode with a missing part.
     #[tokio::test]
-    async fn done_row_with_missing_file_is_treated_as_pending() {
+    async fn done_row_with_missing_file_is_treated_as_pending_without_duplicate_directive() {
         let (artifact, _tmp) = artifact("2026-07-04");
         artifact.finalize_name("topic").await.unwrap();
         let prev = ManifestSnapshot {
@@ -905,17 +941,7 @@ mod directive_tests {
         // Note: neither core.md nor api.md is ever written to disk here.
         let markdown = "## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 1 | core.md | models | done |\n| 2 | api.md | endpoints | done |\n";
         let result = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
-        assert_eq!(
-            result.directive,
-            PlanModeDirective::ContinueSplit {
-                next_part: PartTarget {
-                    relative_path: "core.md".to_string(),
-                    scope: "models".to_string(),
-                }
-            },
-            "a done row without a file on disk must not trigger FinalReview; \
-             the model is nudged back to the first unverified part instead"
-        );
+        assert_eq!(result.directive, PlanModeDirective::None);
         assert!(
             !result.boundary_crossed,
             "no row is actually verified done, so no boundary was crossed"
@@ -923,7 +949,7 @@ mod directive_tests {
     }
 
     #[tokio::test]
-    async fn nudges_continue_split_when_nothing_changed() {
+    async fn does_not_repeat_continue_split_when_nothing_changed() {
         let (artifact, _tmp) = artifact("2026-07-04");
         artifact.finalize_name("topic").await.unwrap();
         let prev = ManifestSnapshot {
@@ -948,15 +974,7 @@ mod directive_tests {
         // model back to it rather than staying silent.
         let markdown = "## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 1 | core.md | models | done |\n| 2 | api.md | endpoints | pending |\n";
         let result = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
-        assert_eq!(
-            result.directive,
-            PlanModeDirective::ContinueSplit {
-                next_part: PartTarget {
-                    relative_path: "core.md".to_string(),
-                    scope: "models".to_string(),
-                }
-            }
-        );
+        assert_eq!(result.directive, PlanModeDirective::None);
         assert!(!result.boundary_crossed);
     }
 
@@ -1149,6 +1167,30 @@ mod directive_tests {
             text.contains("## Plan-mode rigor reminder"),
             "sparse reminder should carry the sparse heading:\n{text}"
         );
+    }
+
+    #[test]
+    fn split_plans_use_event_driven_directives_instead_of_periodic_reminders() {
+        let split = "## Parts\n| ID | File | Task | Scope | Depends on | Status |\n|---|---|---|---|---|---|\n| T01 | topic.md | Topic | topic | — | pending |\n";
+        assert!(!PlanModeInjector::should_inject_periodic_reminder(split));
+        assert!(PlanModeInjector::should_inject_periodic_reminder(
+            "# Small unsplit plan"
+        ));
+    }
+
+    #[tokio::test]
+    async fn final_review_directive_is_emitted_once() {
+        let (artifact, _tmp) = artifact("2026-07-04");
+        artifact.finalize_name("topic").await.unwrap();
+        let stem_dir = artifact.stem_dir().unwrap();
+        std::fs::create_dir_all(&stem_dir).unwrap();
+        std::fs::write(stem_dir.join("core.md"), "# Core\n").unwrap();
+        let markdown = "## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 1 | core.md | models | done |\n";
+
+        let first = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
+        assert_eq!(first.directive, PlanModeDirective::FinalReview);
+        let second = PlanModeInjector::after_plan_turn(&artifact, markdown, None);
+        assert_eq!(second.directive, PlanModeDirective::None);
     }
 
     #[test]

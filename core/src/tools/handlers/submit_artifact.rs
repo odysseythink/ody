@@ -583,7 +583,7 @@ pub(crate) async fn handle_submit_artifact(
         ) && !violations.is_empty()
         {
             return Err(FunctionCallError::RespondToModel(format!(
-                "{} rejected: the accepted `## Parts` manifest is frozen before part writing begins; later submissions may only change row Status from `pending` to `done`. Illegal change(s): {}. This call was not persisted. Restore the original rows and continue the active part. If a complete part cannot fit the configured limit, ask the user to raise `plan_mode.max_part_bytes` instead of repartitioning completed work.",
+                "{} rejected: the accepted `## Parts` manifest is frozen before part writing begins; later submissions may only change row Status from `pending` to `done`. Illegal change(s): {}. This call was not persisted. Restore the original rows, continue the active part, then use the `task_id`/`status` form after `validate_plan_part` passes. If a complete part cannot fit the configured limit, ask the user to raise `plan_mode.max_part_bytes` instead of repartitioning completed work.",
                 wording.tool_name,
                 violations.join("; ")
             )));
@@ -605,7 +605,7 @@ pub(crate) async fn handle_submit_artifact(
         .is_some_and(|snapshot| snapshot.done_count > 0);
     if previously_had_done_parts && manifest_parse.manifest.is_none() {
         return Err(FunctionCallError::RespondToModel(format!(
-            "{} rejected: the previous turn's {} had a `## Parts` table with pending rows, but this submission has no `## Parts` table at all. This call was not persisted. Resubmit the full index markdown (Goal/Architecture/File Structure/etc. plus the `## Parts` table with every row's current status) — {} always writes the single index file, never an individual part's content.",
+            "{} rejected: the previous turn's {} had a frozen `## Parts` table with completed work, but this submission removes it. This call was not persisted. Do not resend or regenerate the index: validate the active part, then use the `task_id`/`status` form; after all rows are done, call {} with no fields.",
             wording.tool_name, wording.noun, wording.tool_name
         )));
     }
@@ -974,7 +974,7 @@ pub(crate) async fn handle_submit_artifact(
         bad_cells
     } else if !incomplete_done_parts.is_empty() {
         format!(
-            "{} saved, but completed part(s) do not satisfy their completion contract: {}. This is not final. Repair the same named task parts without changing the frozen manifest, keep their rows pending until they verify, then call {} with the complete updated index. If a complete part cannot fit, ask the user to raise `plan_mode.max_part_bytes`.",
+            "{} saved, but completed part(s) do not satisfy their completion contract: {}. This is not final. Repair the same named task parts without changing or resending the frozen manifest, then call `validate_plan_part` for the task. After validation passes, use {} with only `task_id` and `status: done`; if all rows are already done, call it with no fields. If a complete part cannot fit, ask the user to raise `plan_mode.max_part_bytes`.",
             wording.noun,
             incomplete_done_parts.join("; "),
             wording.tool_name,
