@@ -17,6 +17,20 @@
             "image"
           ],
           "type": "string"
+        },
+        {
+          "description": "Audio attachments included in user turns or tool results.",
+          "enum": [
+            "audio"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Video attachments included in user turns or tool results.",
+          "enum": [
+            "video"
+          ],
+          "type": "string"
         }
       ]
     },

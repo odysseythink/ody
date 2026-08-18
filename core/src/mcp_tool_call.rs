@@ -605,10 +605,7 @@ async fn execute_mcp_tool_call(
         .await
         .map_err(|e| format!("tool call error: {e:?}"))?;
     let result = sanitize_mcp_tool_result_for_model(
-        turn_context
-            .model_info
-            .input_modalities
-            .contains(&InputModality::Image),
+        &turn_context.model_info.capabilities.input_modalities,
         Ok(result),
     )?;
     Ok(maybe_request_ody_apps_auth_elicitation(
@@ -810,10 +807,13 @@ async fn maybe_mark_thread_memory_mode_polluted(
 }
 
 fn sanitize_mcp_tool_result_for_model(
-    supports_image_input: bool,
+    input_modalities: &[InputModality],
     result: Result<CallToolResult, String>,
 ) -> Result<CallToolResult, String> {
-    if supports_image_input {
+    let supports_image = input_modalities.contains(&InputModality::Image);
+    let supports_audio = input_modalities.contains(&InputModality::Audio);
+    let supports_video = input_modalities.contains(&InputModality::Video);
+    if supports_image && supports_audio && supports_video {
         return result;
     }
 
@@ -822,12 +822,24 @@ fn sanitize_mcp_tool_result_for_model(
             .content
             .iter()
             .map(|block| {
-                if let Some(content_type) = block.get("type").and_then(serde_json::Value::as_str)
-                    && content_type == "image"
-                {
+                let content_type = block.get("type").and_then(serde_json::Value::as_str);
+                let resource_mime = (content_type == Some("resource"))
+                    .then(|| block.get("resource"))
+                    .flatten()
+                    .and_then(|resource| resource.get("mimeType").or_else(|| resource.get("mime_type")))
+                    .and_then(serde_json::Value::as_str);
+                let unsupported_kind = match content_type {
+                    Some("image") if !supports_image => Some("image"),
+                    Some("audio") if !supports_audio => Some("audio"),
+                    Some("resource") if resource_mime.is_some_and(|mime| mime.starts_with("image/")) && !supports_image => Some("image"),
+                    Some("resource") if resource_mime.is_some_and(|mime| mime.starts_with("audio/")) && !supports_audio => Some("audio"),
+                    Some("resource") if resource_mime.is_some_and(|mime| mime.starts_with("video/")) && !supports_video => Some("video"),
+                    _ => None,
+                };
+                if let Some(kind) = unsupported_kind {
                     return serde_json::json!({
                         "type": "text",
-                        "text": "<image content omitted because you do not support image input>",
+                        "text": format!("<{kind} content omitted because you do not support {kind} input>"),
                     });
                 }
 

@@ -9,7 +9,6 @@ use crate::chat_provider::{
     ChatProvider, ChatProviderError, ChatRequest, ChatStream, ProviderCapabilities, ProviderId,
     ThinkingEffort, clamp_thinking_effort,
 };
-use base64::Engine;
 use futures::StreamExt;
 use ody_api::{
     Compression, Provider as ApiProvider, Reasoning, ResponsesApiRequest, ResponsesClient,
@@ -189,16 +188,18 @@ fn message_to_response_items(
     for part in message.content {
         match part {
             ContentPart::Text(text) => content.push(ContentItem::InputText { text }),
-            ContentPart::Image { mime, bytes } => {
-                // Preserve images as base64 data URLs so the Responses API can
-                // consume them. The mime type was recovered when normalizing the
-                // original ResponseItem; re-encode as a base64 data URL.
-                let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+            ContentPart::Image { url } => {
                 content.push(ContentItem::InputImage {
-                    image_url: format!("data:{mime};base64,{b64}"),
+                    image_url: url,
                     detail: None,
                 });
             }
+            ContentPart::Audio { url } => {
+                if let Some(file) = responses_input_file_from_audio_url(&url) {
+                    content.push(file);
+                }
+            }
+            ContentPart::Video { .. } => {}
             ContentPart::Reasoning(text) => content.push(ContentItem::InputText { text }),
             ContentPart::ToolResult {
                 tool_call_id,
@@ -268,13 +269,27 @@ fn tool_message_output(content: &[crate::chat_provider::ContentPart]) -> Functio
             crate::chat_provider::ContentPart::Text(text) => {
                 items.push(FunctionCallOutputContentItem::InputText { text: text.clone() });
             }
-            crate::chat_provider::ContentPart::Image { mime, bytes } => {
-                let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+            crate::chat_provider::ContentPart::Image { url } => {
                 items.push(FunctionCallOutputContentItem::InputImage {
-                    image_url: format!("data:{mime};base64,{b64}"),
+                    image_url: url.clone(),
                     detail: None,
                 });
             }
+            crate::chat_provider::ContentPart::Audio { url } => {
+                if let Some(ContentItem::InputFile {
+                    file_data,
+                    file_url,
+                    filename,
+                }) = responses_input_file_from_audio_url(url)
+                {
+                    items.push(FunctionCallOutputContentItem::InputFile {
+                        file_data,
+                        file_url,
+                        filename,
+                    });
+                }
+            }
+            crate::chat_provider::ContentPart::Video { .. } => {}
             crate::chat_provider::ContentPart::Reasoning(text) => {
                 items.push(FunctionCallOutputContentItem::InputText { text: text.clone() });
             }
@@ -288,6 +303,36 @@ fn tool_message_output(content: &[crate::chat_provider::ContentPart]) -> Functio
     } else {
         FunctionCallOutputPayload::from_content_items(items)
     }
+}
+
+fn responses_input_file_from_audio_url(audio_url: &str) -> Option<ContentItem> {
+    if let Some(rest) = audio_url.strip_prefix("data:audio/") {
+        let (metadata, file_data) = rest.split_once(',')?;
+        let (subtype, encoding) = metadata.split_once(';')?;
+        if !encoding.eq_ignore_ascii_case("base64") {
+            return None;
+        }
+        let extension = match subtype.to_ascii_lowercase().as_str() {
+            "mp3" | "mpeg" => "mp3",
+            "wav" => "wav",
+            _ => return None,
+        };
+        return Some(ContentItem::InputFile {
+            file_data: Some(file_data.to_string()),
+            file_url: None,
+            filename: Some(format!("inline.{extension}")),
+        });
+    }
+
+    if audio_url.starts_with("http://") || audio_url.starts_with("https://") {
+        return Some(ContentItem::InputFile {
+            file_data: None,
+            file_url: Some(audio_url.to_string()),
+            filename: None,
+        });
+    }
+
+    None
 }
 
 fn build_tools(
@@ -455,6 +500,67 @@ mod tests {
         assert_eq!(api_request.instructions, "You are helpful");
         assert_eq!(api_request.input.len(), 1);
         assert_eq!(api_request.tools.len(), 1);
+    }
+
+    #[test]
+    fn responses_maps_supported_audio_to_input_file_and_drops_video() {
+        let request = ChatRequest {
+            model: "gpt-audio".into(),
+            messages: vec![Message {
+                role: Role::User,
+                content: vec![
+                    ContentPart::Audio {
+                        url: "data:audio/wav;base64,V0FW".into(),
+                    },
+                    ContentPart::Video {
+                        url: "https://example.com/video.mp4".into(),
+                    },
+                ],
+                tool_calls: vec![],
+                tool_call_id: None,
+            }],
+            ..Default::default()
+        };
+
+        let wire =
+            serde_json::to_value(build_api_request(request).expect("builds")).expect("serializes");
+        assert_eq!(
+            wire["input"][0]["content"],
+            serde_json::json!([{
+                "type": "input_file",
+                "file_data": "V0FW",
+                "filename": "inline.wav",
+            }])
+        );
+        assert!(!wire.to_string().contains("video.mp4"));
+    }
+
+    #[test]
+    fn responses_maps_audio_tool_results_to_input_file() {
+        let output = tool_message_output(&[ContentPart::Audio {
+            url: "https://example.com/speech.mp3".into(),
+        }]);
+        let wire = serde_json::to_value(output).expect("serializes");
+
+        assert_eq!(
+            wire,
+            serde_json::json!([{
+                "type": "input_file",
+                "file_url": "https://example.com/speech.mp3",
+            }])
+        );
+    }
+
+    #[test]
+    fn responses_rejects_unrepresentable_audio_urls() {
+        assert_eq!(
+            responses_input_file_from_audio_url("file:///tmp/audio.wav"),
+            None
+        );
+        assert_eq!(
+            responses_input_file_from_audio_url("data:audio/ogg;base64,T0dH"),
+            None
+        );
     }
 
     #[test]

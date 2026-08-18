@@ -41,6 +41,9 @@ pub fn formatted_truncate_text_content_items_with_policy(
         .filter_map(|item| match item {
             FunctionCallOutputContentItem::InputText { text } => Some(text.as_str()),
             FunctionCallOutputContentItem::InputImage { .. }
+            | FunctionCallOutputContentItem::InputAudio { .. }
+            | FunctionCallOutputContentItem::InputVideo { .. }
+            | FunctionCallOutputContentItem::InputFile { .. }
             | FunctionCallOutputContentItem::EncryptedContent { .. } => None,
         })
         .collect::<Vec<_>>();
@@ -74,6 +77,25 @@ pub fn formatted_truncate_text_content_items_with_policy(
                 detail: *detail,
             })
         }
+        FunctionCallOutputContentItem::InputAudio { audio_url } => {
+            Some(FunctionCallOutputContentItem::InputAudio {
+                audio_url: audio_url.clone(),
+            })
+        }
+        FunctionCallOutputContentItem::InputVideo { video_url } => {
+            Some(FunctionCallOutputContentItem::InputVideo {
+                video_url: video_url.clone(),
+            })
+        }
+        FunctionCallOutputContentItem::InputFile {
+            file_data,
+            file_url,
+            filename,
+        } => Some(FunctionCallOutputContentItem::InputFile {
+            file_data: file_data.clone(),
+            file_url: file_url.clone(),
+            filename: filename.clone(),
+        }),
         FunctionCallOutputContentItem::EncryptedContent { encrypted_content } => {
             Some(FunctionCallOutputContentItem::EncryptedContent {
                 encrypted_content: encrypted_content.clone(),
@@ -135,6 +157,27 @@ pub fn truncate_function_output_items_with_policy(
                 out.push(FunctionCallOutputContentItem::InputImage {
                     image_url: image_url.clone(),
                     detail: *detail,
+                });
+            }
+            FunctionCallOutputContentItem::InputAudio { audio_url } => {
+                out.push(FunctionCallOutputContentItem::InputAudio {
+                    audio_url: audio_url.clone(),
+                });
+            }
+            FunctionCallOutputContentItem::InputVideo { video_url } => {
+                out.push(FunctionCallOutputContentItem::InputVideo {
+                    video_url: video_url.clone(),
+                });
+            }
+            FunctionCallOutputContentItem::InputFile {
+                file_data,
+                file_url,
+                filename,
+            } => {
+                out.push(FunctionCallOutputContentItem::InputFile {
+                    file_data: file_data.clone(),
+                    file_url: file_url.clone(),
+                    filename: filename.clone(),
                 });
             }
             FunctionCallOutputContentItem::EncryptedContent { encrypted_content } => {

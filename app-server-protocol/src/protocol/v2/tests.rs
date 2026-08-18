@@ -2424,6 +2424,12 @@ fn core_turn_item_into_thread_item_converts_supported_variants() {
                 image_url: "https://example.com/image.png".to_string(),
                 detail: Some(ImageDetail::Original),
             },
+            CoreUserInput::Audio {
+                audio_url: "https://example.com/audio.wav".to_string(),
+            },
+            CoreUserInput::Video {
+                video_url: "https://example.com/video.mp4".to_string(),
+            },
             CoreUserInput::LocalImage {
                 path: PathBuf::from("local/image.png"),
                 detail: Some(ImageDetail::Original),
@@ -2452,6 +2458,12 @@ fn core_turn_item_into_thread_item_converts_supported_variants() {
                 UserInput::Image {
                     url: "https://example.com/image.png".to_string(),
                     detail: Some(ImageDetail::Original),
+                },
+                UserInput::Audio {
+                    url: "https://example.com/audio.wav".to_string(),
+                },
+                UserInput::Video {
+                    url: "https://example.com/video.mp4".to_string(),
                 },
                 UserInput::LocalImage {
                     path: PathBuf::from("local/image.png"),
@@ -2718,6 +2730,26 @@ fn user_input_into_core_preserves_image_detail() {
         CoreUserInput::Image {
             image_url: "https://example.com/image.png".to_string(),
             detail: Some(ImageDetail::Original),
+        }
+    );
+
+    assert_eq!(
+        UserInput::Audio {
+            url: "https://example.com/audio.wav".to_string(),
+        }
+        .into_core(),
+        CoreUserInput::Audio {
+            audio_url: "https://example.com/audio.wav".to_string(),
+        }
+    );
+
+    assert_eq!(
+        UserInput::Video {
+            url: "https://example.com/video.mp4".to_string(),
+        }
+        .into_core(),
+        CoreUserInput::Video {
+            video_url: "https://example.com/video.mp4".to_string(),
         }
     );
 

@@ -571,6 +571,89 @@ fn for_prompt_strips_images_when_model_does_not_support_images() {
 }
 
 #[test]
+fn for_prompt_filters_each_media_type_from_model_capabilities() {
+    let history = create_history_with_items(vec![
+        ResponseItem::Message {
+            id: None,
+            role: "user".to_string(),
+            content: vec![
+                ContentItem::InputImage {
+                    image_url: "data:image/png;base64,SU1BR0U=".to_string(),
+                    detail: Some(DEFAULT_IMAGE_DETAIL),
+                },
+                ContentItem::InputAudio {
+                    audio_url: "data:audio/wav;base64,QVVESU8=".to_string(),
+                },
+                ContentItem::InputVideo {
+                    video_url: "https://example.com/video.mp4".to_string(),
+                },
+            ],
+            phase: None,
+            internal_chat_message_metadata_passthrough: None,
+        },
+        ResponseItem::FunctionCall {
+            id: None,
+            name: "media_tool".to_string(),
+            namespace: None,
+            arguments: "{}".to_string(),
+            call_id: "call-media".to_string(),
+            internal_chat_message_metadata_passthrough: None,
+        },
+        ResponseItem::FunctionCallOutput {
+            id: None,
+            call_id: "call-media".to_string(),
+            output: FunctionCallOutputPayload::from_content_items(vec![
+                FunctionCallOutputContentItem::InputAudio {
+                    audio_url: "data:audio/wav;base64,QVVESU8=".to_string(),
+                },
+                FunctionCallOutputContentItem::InputVideo {
+                    video_url: "https://example.com/video.mp4".to_string(),
+                },
+            ]),
+            internal_chat_message_metadata_passthrough: None,
+        },
+    ]);
+
+    let filtered = history.for_prompt(&[InputModality::Text, InputModality::Video]);
+    let ResponseItem::Message { content, .. } = &filtered[0] else {
+        panic!("expected message");
+    };
+    assert_eq!(
+        content,
+        &vec![
+            ContentItem::InputText {
+                text: "image content omitted because you do not support image input".to_string(),
+            },
+            ContentItem::InputText {
+                text: "audio content omitted because you do not support audio input".to_string(),
+            },
+            ContentItem::InputVideo {
+                video_url: "https://example.com/video.mp4".to_string(),
+            },
+        ]
+    );
+
+    let ResponseItem::FunctionCallOutput { output, .. } = &filtered[2] else {
+        panic!("expected function output");
+    };
+    assert_eq!(
+        output.content_items(),
+        Some(
+            [
+                FunctionCallOutputContentItem::InputText {
+                    text: "audio content omitted because you do not support audio input"
+                        .to_string(),
+                },
+                FunctionCallOutputContentItem::InputVideo {
+                    video_url: "https://example.com/video.mp4".to_string(),
+                },
+            ]
+            .as_slice()
+        )
+    );
+}
+
+#[test]
 fn for_prompt_preserves_image_generation_calls_when_images_are_supported() {
     let history = create_history_with_items(vec![
         ResponseItem::ImageGenerationCall {
@@ -2185,6 +2268,7 @@ fn repro_history_to_chat_messages_emits_logs() {
 
     let request = ChatCompletionsRequest {
         model: "test-model".to_string(),
+        input_modalities: vec![InputModality::Text, InputModality::Image],
         instructions: "be helpful".to_string(),
         input: items,
         tools: Vec::new(),

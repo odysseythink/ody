@@ -237,7 +237,7 @@ async fn run_compact_task_inner_impl(
         // Clone is required because of the loop
         let turn_input = history
             .clone()
-            .for_prompt(&turn_context.model_info.input_modalities);
+            .for_prompt(&turn_context.model_info.capabilities.input_modalities);
         let turn_input_len = turn_input.len();
         let prompt = Prompt {
             input: turn_input,
@@ -465,7 +465,10 @@ pub fn content_items_to_text(content: &[ContentItem]) -> Option<String> {
                     pieces.push(text.as_str());
                 }
             }
-            ContentItem::InputImage { .. } => {}
+            ContentItem::InputImage { .. }
+            | ContentItem::InputAudio { .. }
+            | ContentItem::InputVideo { .. }
+            | ContentItem::InputFile { .. } => {}
         }
     }
     if pieces.is_empty() {

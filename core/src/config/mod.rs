@@ -85,6 +85,7 @@ use ody_memories_read::memory_root;
 use ody_model_provider_info::ModelProviderInfo;
 #[cfg(test)]
 use ody_model_provider_info::ProviderCapabilities;
+use ody_model_provider_info::ProviderKind;
 #[cfg(test)]
 use ody_model_provider_info::WireApi;
 use ody_model_provider_info::create_deepseek_provider;
@@ -93,8 +94,9 @@ use ody_model_provider_info::create_kimi_provider;
 use ody_model_provider_info::model_ref::ModelRef;
 use ody_model_provider_info::model_ref::ProviderRef;
 use ody_models_manager::ModelsManagerConfig;
+use ody_models_manager::bundled_models_response;
 use ody_models_manager::model_info::ConfiguredModelSpec;
-use ody_models_manager::model_info::configured_model_catalog_for_provider;
+use ody_models_manager::model_info::configured_model_catalog_for_provider_with_base;
 use ody_protocol::config_types::AltScreenMode;
 use ody_protocol::config_types::AutoCompactTokenLimitScope;
 use ody_protocol::config_types::DesignAuditLevel;
@@ -2048,6 +2050,7 @@ fn configured_model_catalog(
     models: &HashMap<String, OdyCodeModelConfig>,
     model_provider_id: &str,
     model_provider: &ModelProviderInfo,
+    explicit_catalog: Option<&ModelsResponse>,
 ) -> Option<ModelsResponse> {
     if models.is_empty() || !model_provider.is_chat_completions() {
         return None;
@@ -2076,7 +2079,25 @@ fn configured_model_catalog(
             }
         })
         .collect();
-    configured_model_catalog_for_provider(model_provider_id, model_provider.wire_api, &entries)
+    let bundled_catalog = explicit_catalog
+        .is_none()
+        .then(|| bundled_models_response().ok())
+        .flatten();
+    let base_models = explicit_catalog
+        .map(|catalog| catalog.models.as_slice())
+        .or_else(|| {
+            bundled_catalog
+                .as_ref()
+                .map(|catalog| catalog.models.as_slice())
+        })
+        .unwrap_or_default();
+    configured_model_catalog_for_provider_with_base(
+        model_provider_id,
+        model_provider.wire_api,
+        &entries,
+        base_models,
+        canonical_catalog_provider(model_provider.provider_kind()),
+    )
 }
 
 /// Build a model catalog from user-declared `[models."provider/model"]`
@@ -2089,11 +2110,24 @@ fn configured_model_catalog(
 fn configured_model_catalog_all_providers(
     models: &HashMap<String, OdyCodeModelConfig>,
     model_providers: &HashMap<String, ModelProviderInfo>,
+    explicit_catalog: Option<&ModelsResponse>,
 ) -> Option<ModelsResponse> {
     if models.is_empty() {
         return None;
     }
 
+    let bundled_catalog = explicit_catalog
+        .is_none()
+        .then(|| bundled_models_response().ok())
+        .flatten();
+    let base_models = explicit_catalog
+        .map(|catalog| catalog.models.as_slice())
+        .or_else(|| {
+            bundled_catalog
+                .as_ref()
+                .map(|catalog| catalog.models.as_slice())
+        })
+        .unwrap_or_default();
     let mut all_models = Vec::new();
     for (provider_id, provider) in model_providers {
         if !provider.is_chat_completions() {
@@ -2130,9 +2164,13 @@ fn configured_model_catalog_all_providers(
                 }
             })
             .collect();
-        if let Some(mut response) =
-            configured_model_catalog_for_provider(provider_id, provider.wire_api, &entries)
-        {
+        if let Some(mut response) = configured_model_catalog_for_provider_with_base(
+            provider_id,
+            provider.wire_api,
+            &entries,
+            base_models,
+            canonical_catalog_provider(provider.provider_kind()),
+        ) {
             all_models.append(&mut response.models);
         }
     }
@@ -2141,6 +2179,15 @@ fn configured_model_catalog_all_providers(
         None
     } else {
         Some(ModelsResponse { models: all_models })
+    }
+}
+
+fn canonical_catalog_provider(kind: ProviderKind) -> Option<&'static str> {
+    match kind {
+        ProviderKind::Kimi => Some("kimi"),
+        ProviderKind::Deepseek => Some("deepseek"),
+        ProviderKind::Glm => Some("glm"),
+        ProviderKind::Custom => None,
     }
 }
 
@@ -3599,8 +3646,13 @@ impl Config {
             })?;
 
         // Computed early: `cfg` is partially moved by later field extractions.
-        let configured_catalog =
-            configured_model_catalog(&configured_models, &model_provider_id, &model_provider);
+        let explicit_model_catalog = load_model_catalog(cfg.model_catalog_json.clone())?;
+        let configured_catalog = configured_model_catalog(
+            &configured_models,
+            &model_provider_id,
+            &model_provider,
+            explicit_model_catalog.as_ref(),
+        );
 
         let shell_environment_policy = cfg.shell_environment_policy.into();
         let allow_login_shell = cfg.allow_login_shell.unwrap_or(true);
@@ -3870,10 +3922,12 @@ impl Config {
         let test_review_enabled = override_test_review_enabled.unwrap_or(cfg.test_review_enabled);
 
         let check_for_update_on_startup = cfg.check_for_update_on_startup.unwrap_or(true);
-        let model_catalog =
-            load_model_catalog(cfg.model_catalog_json.clone())?.or(configured_catalog);
-        let configured_model_catalog =
-            configured_model_catalog_all_providers(&configured_models, &model_providers);
+        let model_catalog = configured_catalog.or(explicit_model_catalog.clone());
+        let configured_model_catalog = configured_model_catalog_all_providers(
+            &configured_models,
+            &model_providers,
+            explicit_model_catalog.as_ref(),
+        );
 
        let log_dir = cfg
             .log_dir

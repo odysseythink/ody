@@ -11158,7 +11158,7 @@ capabilities = ["tool_use", "image_in"]
 
     let providers = cfg.convert_ody_code_providers();
     let provider = providers.get("kimi_gyy").expect("provider should exist");
-    let catalog = configured_model_catalog(&cfg.models, "kimi_gyy", provider)
+    let catalog = configured_model_catalog(&cfg.models, "kimi_gyy", provider, None)
         .expect("models table should produce a catalog");
 
     let model = catalog
@@ -11167,7 +11167,12 @@ capabilities = ["tool_use", "image_in"]
         .find(|model| model.slug == "kimi-for-coding")
         .expect("configured model should be in the catalog");
     assert!(!model.used_fallback_model_metadata);
+    assert!(
+        model.description.is_some(),
+        "configured model should retain bundled catalog metadata"
+    );
     assert_eq!(model.context_window, Some(262_144));
+    assert!(model.capabilities.max_output_tokens.is_some());
     assert!(model.truncation_policy.limit > 0);
     assert!(model.capabilities.supports_tools);
     assert!(model.capabilities.supports_vision);
@@ -11189,7 +11194,7 @@ max_context_size = 272000
         wire_api: WireApi::Responses,
         ..Default::default()
     };
-    assert!(configured_model_catalog(&cfg.models, "openai", &provider).is_none());
+    assert!(configured_model_catalog(&cfg.models, "openai", &provider, None).is_none());
 }
 
 #[tokio::test]

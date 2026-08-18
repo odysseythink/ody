@@ -418,7 +418,7 @@ pub(crate) async fn run_turn(
                 let items = sess
                     .clone_history()
                     .await
-                    .for_prompt(&turn_context.model_info.input_modalities);
+                    .for_prompt(&turn_context.model_info.capabilities.input_modalities);
                 tracing::info!(
                     item_count = items.len(),
                     "run_turn sampling_request_input prepared"
@@ -1915,7 +1915,7 @@ async fn run_sampling_request(
         } else {
             sess.clone_history()
                 .await
-                .for_prompt(&turn_context.model_info.input_modalities)
+                .for_prompt(&turn_context.model_info.capabilities.input_modalities)
         };
         let prompt = build_prompt(
             prompt_input,

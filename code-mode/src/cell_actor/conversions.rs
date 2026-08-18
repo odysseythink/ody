@@ -54,5 +54,11 @@ pub(super) fn output_item(item: FunctionCallOutputContentItem) -> CellOutputItem
                 ImageDetail::Original => CellImageDetail::Original,
             }),
         },
+        FunctionCallOutputContentItem::InputAudio { audio_url } => {
+            CellOutputItem::Audio { audio_url }
+        }
+        FunctionCallOutputContentItem::InputVideo { video_url } => {
+            CellOutputItem::Video { video_url }
+        }
     }
 }

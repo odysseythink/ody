@@ -154,6 +154,10 @@ pub enum InputModality {
     Text,
     /// Image attachments included in user turns.
     Image,
+    /// Audio attachments included in user turns or tool results.
+    Audio,
+    /// Video attachments included in user turns or tool results.
+    Video,
 }
 
 /// Backward-compatible default when `input_modalities` is omitted on the wire.

@@ -9,7 +9,11 @@
 pub mod kimi_schema;
 pub mod vendor;
 
+use ody_protocol::model_metadata::InputModality;
 use ody_protocol::models::ContentItem;
+use ody_protocol::models::FunctionCallOutputBody;
+use ody_protocol::models::FunctionCallOutputContentItem;
+use ody_protocol::models::FunctionCallOutputPayload;
 use ody_protocol::models::ReasoningItemContent;
 use ody_protocol::models::ResponseItem;
 use serde_json::Map;
@@ -25,6 +29,8 @@ pub use vendor::ChatVendor;
 #[derive(Debug, Clone)]
 pub struct ChatCompletionsRequest {
     pub model: String,
+    /// Input modalities accepted by the selected model.
+    pub input_modalities: Vec<InputModality>,
     /// System prompt / base instructions.
     pub instructions: String,
     /// Conversation history in the internal item model.
@@ -74,7 +80,7 @@ impl ChatCompletionsRequest {
                 continue;
             }
             let before_len = messages.len();
-            append_item_messages(item, &mut messages, self.vendor);
+            append_item_messages(item, &mut messages, self.vendor, &self.input_modalities);
             if let Some(reasoning) = pending_reasoning.take() {
                 // Only an assistant message can carry it. Anything else (a user
                 // turn, a tool result) means the reasoning has no carrier and is
@@ -276,13 +282,18 @@ fn reasoning_text(content: Option<&[ReasoningItemContent]>) -> Option<String> {
     (!text.is_empty()).then_some(text)
 }
 
-fn append_item_messages(item: &ResponseItem, messages: &mut Vec<Value>, vendor: ChatVendor) {
+fn append_item_messages(
+    item: &ResponseItem,
+    messages: &mut Vec<Value>,
+    vendor: ChatVendor,
+    input_modalities: &[InputModality],
+) {
     match item {
         ResponseItem::Message { role, content, .. } => {
             let role = normalize_role(role);
             messages.push(json!({
                 "role": role,
-                "content": content_to_value(content),
+                "content": content_to_value(content, input_modalities),
             }));
         }
         ResponseItem::FunctionCall {
@@ -331,7 +342,7 @@ fn append_item_messages(item: &ResponseItem, messages: &mut Vec<Value>, vendor: 
             messages.push(json!({
                 "role": "tool",
                 "tool_call_id": vendor.sanitize_tool_call_id(call_id),
-                "content": output.to_string(),
+                "content": tool_output_to_value(output, vendor, input_modalities),
             }));
         }
         ResponseItem::CustomToolCallOutput {
@@ -340,7 +351,7 @@ fn append_item_messages(item: &ResponseItem, messages: &mut Vec<Value>, vendor: 
             messages.push(json!({
                 "role": "tool",
                 "tool_call_id": vendor.sanitize_tool_call_id(call_id),
-                "content": output.to_string(),
+                "content": tool_output_to_value(output, vendor, input_modalities),
             }));
         }
         // Reasoning is handled by the caller (replayed as `reasoning_content`
@@ -356,6 +367,67 @@ fn append_item_messages(item: &ResponseItem, messages: &mut Vec<Value>, vendor: 
     }
 }
 
+fn tool_output_to_value(
+    output: &FunctionCallOutputPayload,
+    vendor: ChatVendor,
+    input_modalities: &[InputModality],
+) -> Value {
+    let supports_images = input_modalities.contains(&InputModality::Image);
+    let supports_audio = input_modalities.contains(&InputModality::Audio);
+    let supports_video = input_modalities.contains(&InputModality::Video);
+    if vendor.accepts_multimodal_tool_results()
+        && (supports_images || supports_audio || supports_video)
+        && let FunctionCallOutputBody::ContentItems(items) = &output.body
+    {
+        let parts = items
+            .iter()
+            .filter_map(|item| match item {
+                FunctionCallOutputContentItem::InputText { text } => {
+                    Some(json!({ "type": "text", "text": text }))
+                }
+                FunctionCallOutputContentItem::InputImage { image_url, .. } if supports_images => {
+                    Some(json!({
+                        "type": "image_url",
+                        "image_url": { "url": image_url },
+                    }))
+                }
+                FunctionCallOutputContentItem::InputImage { .. } => Some(json!({
+                    "type": "text",
+                    "text": unsupported_media_placeholder(InputModality::Image),
+                })),
+                FunctionCallOutputContentItem::InputAudio { audio_url } if supports_audio => {
+                    Some(json!({
+                        "type": "audio_url",
+                        "audio_url": { "url": audio_url },
+                    }))
+                }
+                FunctionCallOutputContentItem::InputAudio { .. } => Some(json!({
+                    "type": "text",
+                    "text": unsupported_media_placeholder(InputModality::Audio),
+                })),
+                FunctionCallOutputContentItem::InputVideo { video_url } if supports_video => {
+                    Some(json!({
+                        "type": "video_url",
+                        "video_url": { "url": video_url },
+                    }))
+                }
+                FunctionCallOutputContentItem::InputVideo { .. } => Some(json!({
+                    "type": "text",
+                    "text": unsupported_media_placeholder(InputModality::Video),
+                })),
+                FunctionCallOutputContentItem::InputFile { .. } => None,
+                FunctionCallOutputContentItem::EncryptedContent { .. } => None,
+            })
+            .collect::<Vec<_>>();
+        return Value::Array(parts);
+    }
+
+    Value::String(output.body.to_text().unwrap_or_else(|| {
+        "<media content omitted because this chat wire does not support media tool results>"
+            .to_string()
+    }))
+}
+
 /// Map internal roles onto chat roles. Chat Completions has no `developer`
 /// role, so fold it into `system`.
 fn normalize_role(role: &str) -> &str {
@@ -365,21 +437,41 @@ fn normalize_role(role: &str) -> &str {
     }
 }
 
-/// Render message content. When all parts are plain text we emit a string;
-/// when an image is present we emit the structured content-parts array.
-fn content_to_value(content: &[ContentItem]) -> Value {
-    let has_image = content
-        .iter()
-        .any(|c| matches!(c, ContentItem::InputImage { .. }));
+fn unsupported_media_placeholder(modality: InputModality) -> String {
+    format!("{modality} content omitted because you do not support {modality} input")
+}
 
-    if !has_image {
+/// Render message content, retaining only media modalities declared by the
+/// selected model. Plain-text-only content stays a string; supported media
+/// switches the message to the structured content-parts form.
+fn content_to_value(content: &[ContentItem], input_modalities: &[InputModality]) -> Value {
+    let supports_images = input_modalities.contains(&InputModality::Image);
+    let supports_audio = input_modalities.contains(&InputModality::Audio);
+    let supports_video = input_modalities.contains(&InputModality::Video);
+    let has_supported_media = content.iter().any(|content| match content {
+        ContentItem::InputImage { .. } => supports_images,
+        ContentItem::InputAudio { .. } => supports_audio,
+        ContentItem::InputVideo { .. } => supports_video,
+        _ => false,
+    });
+
+    if !has_supported_media {
         let mut text = String::new();
         for item in content {
             match item {
                 ContentItem::InputText { text: t } | ContentItem::OutputText { text: t } => {
                     text.push_str(t);
                 }
-                ContentItem::InputImage { .. } => {}
+                ContentItem::InputImage { .. } => {
+                    text.push_str(&unsupported_media_placeholder(InputModality::Image));
+                }
+                ContentItem::InputAudio { .. } => {
+                    text.push_str(&unsupported_media_placeholder(InputModality::Audio));
+                }
+                ContentItem::InputVideo { .. } => {
+                    text.push_str(&unsupported_media_placeholder(InputModality::Video));
+                }
+                ContentItem::InputFile { .. } => {}
             }
         }
         return Value::String(text);
@@ -391,12 +483,37 @@ fn content_to_value(content: &[ContentItem]) -> Value {
             ContentItem::InputText { text } | ContentItem::OutputText { text } => {
                 parts.push(json!({ "type": "text", "text": text }));
             }
-            ContentItem::InputImage { image_url, .. } => {
+            ContentItem::InputImage { image_url, .. } if supports_images => {
                 parts.push(json!({
                     "type": "image_url",
                     "image_url": { "url": image_url },
                 }));
             }
+            ContentItem::InputImage { .. } => parts.push(json!({
+                "type": "text",
+                "text": unsupported_media_placeholder(InputModality::Image),
+            })),
+            ContentItem::InputAudio { audio_url } if supports_audio => {
+                parts.push(json!({
+                    "type": "audio_url",
+                    "audio_url": { "url": audio_url },
+                }));
+            }
+            ContentItem::InputAudio { .. } => parts.push(json!({
+                "type": "text",
+                "text": unsupported_media_placeholder(InputModality::Audio),
+            })),
+            ContentItem::InputVideo { video_url } if supports_video => {
+                parts.push(json!({
+                    "type": "video_url",
+                    "video_url": { "url": video_url },
+                }));
+            }
+            ContentItem::InputVideo { .. } => parts.push(json!({
+                "type": "text",
+                "text": unsupported_media_placeholder(InputModality::Video),
+            })),
+            ContentItem::InputFile { .. } => {}
         }
     }
     Value::Array(parts)

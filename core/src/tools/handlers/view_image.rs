@@ -90,6 +90,7 @@ impl ViewImageHandler {
         if !invocation
             .turn
             .model_info
+            .capabilities
             .input_modalities
             .contains(&InputModality::Image)
         {

@@ -226,7 +226,7 @@ async fn run_remote_compact_task_inner_impl(
     }
 
     let trace_input_history = history.raw_items().to_vec();
-    let prompt_input = history.for_prompt(&turn_context.model_info.input_modalities);
+    let prompt_input = history.for_prompt(&turn_context.model_info.capabilities.input_modalities);
     let tool_router = built_tools(
         sess.as_ref(),
         turn_context.as_ref(),
@@ -512,7 +512,10 @@ fn message_text_token_count(item: &ResponseItem) -> usize {
             ContentItem::InputText { text } | ContentItem::OutputText { text } => {
                 approx_token_count(text)
             }
-            ContentItem::InputImage { .. } => 0,
+            ContentItem::InputImage { .. }
+            | ContentItem::InputAudio { .. }
+            | ContentItem::InputVideo { .. }
+            | ContentItem::InputFile { .. } => 0,
         })
         .sum()
 }
@@ -552,7 +555,10 @@ fn truncate_message_text_to_token_budget(
                     truncated_content.push(content_item);
                 }
             }
-            ContentItem::InputImage { .. } => truncated_content.push(content_item),
+            ContentItem::InputImage { .. }
+            | ContentItem::InputAudio { .. }
+            | ContentItem::InputVideo { .. }
+            | ContentItem::InputFile { .. } => truncated_content.push(content_item),
         }
     }
 

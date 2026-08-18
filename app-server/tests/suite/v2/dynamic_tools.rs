@@ -693,6 +693,12 @@ async fn dynamic_tool_call_round_trip_sends_content_items_to_model() -> Result<(
                     detail: Some(DEFAULT_IMAGE_DETAIL),
                 }
             }
+            DynamicToolCallOutputContentItem::InputAudio { audio_url } => {
+                FunctionCallOutputContentItem::InputAudio { audio_url }
+            }
+            DynamicToolCallOutputContentItem::InputVideo { video_url } => {
+                FunctionCallOutputContentItem::InputVideo { video_url }
+            }
         })
         .collect::<Vec<FunctionCallOutputContentItem>>();
     let response = DynamicToolCallResponse {

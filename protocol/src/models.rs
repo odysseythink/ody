@@ -851,6 +851,24 @@ pub enum ContentItem {
         #[ts(optional)]
         detail: Option<ImageDetail>,
     },
+    InputAudio {
+        audio_url: String,
+    },
+    InputVideo {
+        video_url: String,
+    },
+    /// Responses API wire representation for file-backed inputs.
+    InputFile {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        file_data: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        file_url: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        filename: Option<String>,
+    },
     OutputText {
         text: String,
     },
@@ -1664,6 +1682,12 @@ impl ResponseInputItem {
                             detail: Some(detail),
                         }]
                     }
+                    UserInput::Audio { audio_url } => {
+                        vec![ContentItem::InputAudio { audio_url }]
+                    }
+                    UserInput::Video { video_url } => {
+                        vec![ContentItem::InputVideo { video_url }]
+                    }
                     UserInput::LocalImage { path, detail, .. } => {
                         image_index += 1;
                         let detail = detail.unwrap_or(DEFAULT_IMAGE_DETAIL);
@@ -1744,6 +1768,24 @@ pub enum FunctionCallOutputContentItem {
         #[ts(optional)]
         detail: Option<ImageDetail>,
     },
+    InputAudio {
+        audio_url: String,
+    },
+    InputVideo {
+        video_url: String,
+    },
+    /// Responses API wire representation for file-backed tool results.
+    InputFile {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        file_data: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        file_url: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        filename: Option<String>,
+    },
     EncryptedContent {
         encrypted_content: String,
     },
@@ -1754,7 +1796,7 @@ pub enum FunctionCallOutputContentItem {
 ///
 /// This conversion is intentionally lossy:
 /// - only `input_text` items are included
-/// - image items are ignored
+/// - media items are ignored
 ///
 /// We use this helper where callers still need a string representation (for
 /// example telemetry previews or legacy string-only output paths) while keeping
@@ -1771,6 +1813,9 @@ pub fn function_call_output_content_items_to_text(
             }
             FunctionCallOutputContentItem::InputText { .. }
             | FunctionCallOutputContentItem::InputImage { .. }
+            | FunctionCallOutputContentItem::InputAudio { .. }
+            | FunctionCallOutputContentItem::InputVideo { .. }
+            | FunctionCallOutputContentItem::InputFile { .. }
             | FunctionCallOutputContentItem::EncryptedContent { .. } => None,
         })
         .collect::<Vec<_>>();
@@ -1795,6 +1840,12 @@ impl From<crate::dynamic_tools::DynamicToolCallOutputContentItem>
                     image_url,
                     detail: Some(DEFAULT_IMAGE_DETAIL),
                 }
+            }
+            crate::dynamic_tools::DynamicToolCallOutputContentItem::InputAudio { audio_url } => {
+                Self::InputAudio { audio_url }
+            }
+            crate::dynamic_tools::DynamicToolCallOutputContentItem::InputVideo { video_url } => {
+                Self::InputVideo { video_url }
             }
         }
     }
@@ -1988,6 +2039,15 @@ fn convert_mcp_content_to_items(
     const ODY_IMAGE_DETAIL_META_KEY: &str = "ody/imageDetail";
 
     #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct McpResourceContent {
+        uri: String,
+        #[serde(alias = "mime_type")]
+        mime_type: Option<String>,
+        blob: Option<String>,
+    }
+
+    #[derive(serde::Deserialize)]
     #[serde(tag = "type")]
     enum McpContent {
         #[serde(rename = "text")]
@@ -2000,11 +2060,19 @@ fn convert_mcp_content_to_items(
             #[serde(rename = "_meta", default)]
             meta: Option<serde_json::Value>,
         },
+        #[serde(rename = "audio")]
+        Audio {
+            data: String,
+            #[serde(rename = "mimeType", alias = "mime_type")]
+            mime_type: Option<String>,
+        },
+        #[serde(rename = "resource")]
+        Resource { resource: McpResourceContent },
         #[serde(other)]
         Unknown,
     }
 
-    let mut saw_image = false;
+    let mut saw_media = false;
     let mut items = Vec::with_capacity(contents.len());
 
     for content in contents {
@@ -2015,7 +2083,7 @@ fn convert_mcp_content_to_items(
                 mime_type,
                 meta,
             }) => {
-                saw_image = true;
+                saw_media = true;
                 let image_url = if data.starts_with("data:") {
                     data
                 } else {
@@ -2039,6 +2107,45 @@ fn convert_mcp_content_to_items(
                         .or(Some(DEFAULT_IMAGE_DETAIL)),
                 }
             }
+            Ok(McpContent::Audio { data, mime_type }) => {
+                saw_media = true;
+                let audio_url = if data.starts_with("data:") {
+                    data
+                } else {
+                    let mime_type = mime_type.unwrap_or_else(|| "audio/mpeg".into());
+                    format!("data:{mime_type};base64,{data}")
+                };
+                FunctionCallOutputContentItem::InputAudio { audio_url }
+            }
+            Ok(McpContent::Resource { resource }) => {
+                let mime_type = resource.mime_type.unwrap_or_default();
+                let media_url = resource.blob.map_or(resource.uri, |blob| {
+                    if blob.starts_with("data:") {
+                        blob
+                    } else {
+                        format!("data:{mime_type};base64,{blob}")
+                    }
+                });
+                if mime_type.starts_with("image/") {
+                    saw_media = true;
+                    FunctionCallOutputContentItem::InputImage {
+                        image_url: media_url,
+                        detail: Some(DEFAULT_IMAGE_DETAIL),
+                    }
+                } else if mime_type.starts_with("audio/") {
+                    saw_media = true;
+                    FunctionCallOutputContentItem::InputAudio {
+                        audio_url: media_url,
+                    }
+                } else if mime_type.starts_with("video/") {
+                    saw_media = true;
+                    FunctionCallOutputContentItem::InputVideo {
+                        video_url: media_url,
+                    }
+                } else {
+                    FunctionCallOutputContentItem::InputText { text: media_url }
+                }
+            }
             Ok(McpContent::Unknown) | Err(_) => FunctionCallOutputContentItem::InputText {
                 text: serde_json::to_string(content).unwrap_or_else(|_| "<content>".to_string()),
             },
@@ -2046,7 +2153,7 @@ fn convert_mcp_content_to_items(
         items.push(item);
     }
 
-    if saw_image { Some(items) } else { None }
+    if saw_media { Some(items) } else { None }
 }
 
 // Implement Display so callers can treat the payload like a plain string when logging or doing
@@ -2583,7 +2690,39 @@ mod tests {
     }
 
     #[test]
-    fn convert_mcp_content_to_items_returns_none_without_images() {
+    fn convert_mcp_content_to_items_converts_audio_and_video_resources() {
+        let contents = vec![
+            serde_json::json!({
+                "type": "audio",
+                "data": "QVVESU8=",
+                "mimeType": "audio/wav",
+            }),
+            serde_json::json!({
+                "type": "resource",
+                "resource": {
+                    "uri": "memory://clip.mp4",
+                    "mimeType": "video/mp4",
+                    "blob": "VklERU8=",
+                },
+            }),
+        ];
+
+        let items = convert_mcp_content_to_items(&contents).expect("expected media items");
+        assert_eq!(
+            items,
+            vec![
+                FunctionCallOutputContentItem::InputAudio {
+                    audio_url: "data:audio/wav;base64,QVVESU8=".to_string(),
+                },
+                FunctionCallOutputContentItem::InputVideo {
+                    video_url: "data:video/mp4;base64,VklERU8=".to_string(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn convert_mcp_content_to_items_returns_none_without_media() {
         let contents = vec![serde_json::json!({
             "type": "text",
             "text": "hello",
@@ -3129,6 +3268,33 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn audio_and_video_user_input_become_media_content_items() {
+        let item = ResponseInputItem::from(vec![
+            UserInput::Audio {
+                audio_url: "data:audio/wav;base64,QVVESU8=".to_string(),
+            },
+            UserInput::Video {
+                video_url: "https://example.com/clip.mp4".to_string(),
+            },
+        ]);
+
+        let ResponseInputItem::Message { content, .. } = item else {
+            panic!("expected message response");
+        };
+        assert_eq!(
+            content,
+            vec![
+                ContentItem::InputAudio {
+                    audio_url: "data:audio/wav;base64,QVVESU8=".to_string(),
+                },
+                ContentItem::InputVideo {
+                    video_url: "https://example.com/clip.mp4".to_string(),
+                },
+            ]
+        );
     }
 
     #[test]

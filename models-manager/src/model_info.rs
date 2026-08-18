@@ -243,11 +243,33 @@ pub fn configured_model_catalog_for_provider(
     wire_api: WireApi,
     entries: &[ConfiguredModelSpec],
 ) -> Option<ModelsResponse> {
+    configured_model_catalog_for_provider_with_base(provider_id, wire_api, entries, &[], None)
+}
+
+/// Build a configured catalog while retaining richer metadata from a base
+/// catalog. Matching is scoped to the canonical provider family so a custom
+/// model that happens to share a slug with a bundled model does not inherit
+/// unrelated metadata.
+pub fn configured_model_catalog_for_provider_with_base(
+    provider_id: &str,
+    wire_api: WireApi,
+    entries: &[ConfiguredModelSpec],
+    base_models: &[ModelInfo],
+    base_provider: Option<&str>,
+) -> Option<ModelsResponse> {
     let models: Vec<ModelInfo> = entries
         .iter()
         .filter(|entry| entry.provider == provider_id)
         .enumerate()
-        .map(|(index, entry)| entry.to_model_info(index as i32, provider_id, wire_api))
+        .map(|(index, entry)| {
+            let model_ref = ModelRef::parse(&entry.model);
+            let base = base_models.iter().find(|model| {
+                model.slug == model_ref.bare()
+                    && (model.provider == provider_id
+                        || base_provider.is_some_and(|provider| model.provider == provider))
+            });
+            entry.to_model_info(index as i32, provider_id, wire_api, base)
+        })
         .collect();
     if models.is_empty() {
         None
@@ -257,39 +279,102 @@ pub fn configured_model_catalog_for_provider(
 }
 
 impl ConfiguredModelSpec {
-    fn to_model_info(&self, priority: i32, provider_id: &str, wire_api: WireApi) -> ModelInfo {
-        let declared = |flag: &str| self.capabilities.iter().any(|cap| cap == flag);
+    fn to_model_info(
+        &self,
+        priority: i32,
+        provider_id: &str,
+        wire_api: WireApi,
+        base: Option<&ModelInfo>,
+    ) -> ModelInfo {
+        const KNOWN_CAPABILITIES: &[&str] = &[
+            "tool_use",
+            "thinking",
+            "always_thinking",
+            "image_in",
+            "audio_in",
+            "video_in",
+        ];
+        let declared = |flag: &str| {
+            self.capabilities
+                .iter()
+                .any(|cap| cap.trim().eq_ignore_ascii_case(flag))
+        };
+        for capability in &self.capabilities {
+            let capability = capability.trim();
+            if !KNOWN_CAPABILITIES
+                .iter()
+                .any(|known| capability.eq_ignore_ascii_case(known))
+            {
+                warn!(
+                    model = %self.model,
+                    capability,
+                    "ignoring unknown configured model capability"
+                );
+            }
+        }
+        let supports_thinking = declared("thinking") || declared("always_thinking");
         let caps = if self.capabilities.is_empty() {
-            // No explicit capability list: infer from the wire API like the
-            // built-in catalogs do.
-            default_model_capabilities_for_wire_api(wire_api)
+            base.map(|model| model.capabilities.clone())
+                .unwrap_or_else(|| default_model_capabilities_for_wire_api(wire_api))
         } else {
-            let vision = declared("image_in") || declared("video_in");
+            let mut input_modalities = vec![InputModality::Text];
+            if declared("image_in") {
+                input_modalities.push(InputModality::Image);
+            }
+            if declared("audio_in") {
+                input_modalities.push(InputModality::Audio);
+            }
+            if declared("video_in") {
+                input_modalities.push(InputModality::Video);
+            }
+            let base_caps = base
+                .map(|model| model.capabilities.clone())
+                .unwrap_or_default();
             ModelCapabilities {
                 supports_tools: declared("tool_use"),
                 supports_parallel_tool_calls: declared("tool_use"),
-                supports_thinking: declared("thinking"),
-                supports_reasoning_summaries: declared("thinking"),
-                supports_vision: vision,
-                input_modalities: if vision {
-                    vec![InputModality::Text, InputModality::Image]
+                supports_thinking,
+                supports_reasoning_summaries: supports_thinking,
+                supports_vision: declared("image_in"),
+                input_modalities,
+                thinking_effort: if supports_thinking {
+                    base_caps.thinking_effort
                 } else {
-                    vec![InputModality::Text]
+                    Vec::new()
                 },
+                supports_image_detail_original: declared("image_in")
+                    && base_caps.supports_image_detail_original,
+                supports_multiple_system_messages: base_caps.supports_multiple_system_messages,
+                supports_turn_pause: base_caps.supports_turn_pause,
+                shell_type: base_caps.shell_type,
+                tool_mode: base_caps.tool_mode,
+                truncation_policy: base_caps.truncation_policy,
+                auto_compact_token_limit: base_caps.auto_compact_token_limit,
+                effective_context_window_percent: base_caps.effective_context_window_percent,
                 ..Default::default()
             }
         };
         let mut caps = ModelCapabilities {
-            context_window: self.max_context_size,
-            max_context_window: self.max_context_size,
-            max_output_tokens: self.max_output_size,
+            context_window: self
+                .max_context_size
+                .or_else(|| base.and_then(|model| model.capabilities.context_window)),
+            max_context_window: self
+                .max_context_size
+                .or_else(|| base.and_then(|model| model.capabilities.max_context_window)),
+            max_output_tokens: self
+                .max_output_size
+                .or_else(|| base.and_then(|model| model.capabilities.max_output_tokens)),
             ..caps
         };
         // Apply consistency clamps (including the non-zero truncation budget guarantee).
         caps = resolve_model_capabilities(wire_api, Some(&caps), None, &self.model);
 
         let model_ref = ModelRef::parse(&self.model);
-        let mut model = model_info_from_slug_with_provider(model_ref.bare(), provider_id, wire_api);
+        let mut model = base.cloned().unwrap_or_else(|| {
+            model_info_from_slug_with_provider(model_ref.bare(), provider_id, wire_api)
+        });
+        model.slug = model_ref.bare().to_string();
+        model.provider = provider_id.to_string();
         model.display_name = self
             .display_name
             .clone()
@@ -301,6 +386,18 @@ impl ConfiguredModelSpec {
         model.max_context_window = caps.max_context_window;
         model.supports_reasoning_summaries = caps.supports_reasoning_summaries;
         model.supports_parallel_tool_calls = caps.supports_parallel_tool_calls;
+        model.supported_reasoning_levels = if caps.supports_thinking {
+            model
+                .supported_reasoning_levels
+                .into_iter()
+                .filter(|level| caps.thinking_effort.contains(&level.effort))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        if !caps.supports_thinking {
+            model.default_reasoning_level = None;
+        }
         model.capabilities = caps;
         // Keep top-level fields in sync with capabilities.
         model.input_modalities = model.capabilities.input_modalities.clone();

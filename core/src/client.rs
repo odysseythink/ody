@@ -1557,18 +1557,28 @@ impl ModelClientSession {
         let chat_provider = provider.chat_provider().await.map_err(|err| {
             OdyErr::Stream(format!("failed to create chat provider: {err}"), None)
         })?;
-        let supported_efforts: Vec<ReasoningEffortConfig> = model_info
-            .supported_reasoning_levels
-            .iter()
-            .map(|level| level.effort.clone())
-            .collect();
+        let supported_efforts: Vec<ReasoningEffortConfig> =
+            if model_info.capabilities.thinking_effort.is_empty() {
+                model_info
+                    .supported_reasoning_levels
+                    .iter()
+                    .map(|level| level.effort.clone())
+                    .collect()
+            } else {
+                model_info.capabilities.thinking_effort.clone()
+            };
         let mut request = prompt_to_chat_request(
             &model_info.slug,
             prompt,
             effort.clone(),
             &supported_efforts,
+            &model_info.capabilities.input_modalities,
             None,
         );
+        request.max_tokens = model_info
+            .capabilities
+            .max_output_tokens
+            .and_then(|tokens| u32::try_from(tokens).ok());
         request.prompt_cache_key = Some(self.client.prompt_cache_key());
         request.client_metadata = Some(responses_metadata.client_metadata());
         request.service_tier = model_info.service_tier_for_request(service_tier);

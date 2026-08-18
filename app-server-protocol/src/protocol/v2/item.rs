@@ -1477,6 +1477,10 @@ pub enum DynamicToolCallOutputContentItem {
     InputText { text: String },
     #[serde(rename_all = "camelCase")]
     InputImage { image_url: String },
+    #[serde(rename_all = "camelCase")]
+    InputAudio { audio_url: String },
+    #[serde(rename_all = "camelCase")]
+    InputVideo { video_url: String },
 }
 
 impl From<DynamicToolCallOutputContentItem>
@@ -1487,6 +1491,12 @@ impl From<DynamicToolCallOutputContentItem>
             DynamicToolCallOutputContentItem::InputText { text } => Self::InputText { text },
             DynamicToolCallOutputContentItem::InputImage { image_url } => {
                 Self::InputImage { image_url }
+            }
+            DynamicToolCallOutputContentItem::InputAudio { audio_url } => {
+                Self::InputAudio { audio_url }
+            }
+            DynamicToolCallOutputContentItem::InputVideo { video_url } => {
+                Self::InputVideo { video_url }
             }
         }
     }

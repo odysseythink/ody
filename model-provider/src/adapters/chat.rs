@@ -9,7 +9,6 @@ use crate::chat_provider::{
     ChatProvider, ChatProviderError, ChatRequest, ChatStream, ProviderCapabilities, ProviderId,
     ThinkingEffort, clamp_thinking_effort,
 };
-use base64::Engine;
 use futures::StreamExt;
 use http::{HeaderMap, HeaderName, HeaderValue};
 use ody_api::chat::{ChatCompletionsRequest, ChatVendor};
@@ -138,6 +137,7 @@ fn build_api_request(
 
     Ok(ChatCompletionsRequest {
         model: request.model,
+        input_modalities: request.input_modalities,
         instructions,
         input,
         tools,
@@ -194,23 +194,52 @@ fn content_to_text(content: &[crate::chat_provider::ContentPart]) -> String {
 
 fn message_to_response_items(message: crate::chat_provider::Message) -> Vec<ResponseItem> {
     use crate::chat_provider::{ContentPart, Role};
+    use ody_protocol::models::{FunctionCallOutputContentItem, FunctionCallOutputPayload};
 
     // Tool messages → FunctionCallOutput
     if message.role == Role::Tool {
         if let Some(call_id) = message.tool_call_id {
-            let text = message
-                .content
-                .iter()
-                .filter_map(|p| match p {
-                    ContentPart::Text(t) => Some(t.as_str()),
-                    _ => None,
-                })
-                .collect::<Vec<_>>()
-                .join("");
+            let mut items = Vec::new();
+            let mut has_media = false;
+            for part in message.content {
+                match part {
+                    ContentPart::Text(text) => {
+                        items.push(FunctionCallOutputContentItem::InputText { text });
+                    }
+                    ContentPart::Image { url } => {
+                        has_media = true;
+                        items.push(FunctionCallOutputContentItem::InputImage {
+                            image_url: url,
+                            detail: None,
+                        });
+                    }
+                    ContentPart::Audio { url } => {
+                        has_media = true;
+                        items.push(FunctionCallOutputContentItem::InputAudio { audio_url: url });
+                    }
+                    ContentPart::Video { url } => {
+                        has_media = true;
+                        items.push(FunctionCallOutputContentItem::InputVideo { video_url: url });
+                    }
+                    ContentPart::Reasoning(_) | ContentPart::ToolResult { .. } => {}
+                }
+            }
+            let output = if has_media {
+                FunctionCallOutputPayload::from_content_items(items)
+            } else {
+                let text = items
+                    .into_iter()
+                    .filter_map(|item| match item {
+                        FunctionCallOutputContentItem::InputText { text } => Some(text),
+                        _ => None,
+                    })
+                    .collect::<String>();
+                FunctionCallOutputPayload::from_text(text)
+            };
             return vec![ResponseItem::FunctionCallOutput {
                 id: None,
                 call_id,
-                output: ody_protocol::models::FunctionCallOutputPayload::from_text(text),
+                output,
                 internal_chat_message_metadata_passthrough: None,
             }];
         }
@@ -237,12 +266,17 @@ fn message_to_response_items(message: crate::chat_provider::Message) -> Vec<Resp
             ContentPart::Text(text) => {
                 content.push(ody_protocol::models::ContentItem::InputText { text })
             }
-            ContentPart::Image { mime, bytes } => {
-                let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+            ContentPart::Image { url } => {
                 content.push(ody_protocol::models::ContentItem::InputImage {
-                    image_url: format!("data:{mime};base64,{b64}"),
+                    image_url: url,
                     detail: None,
                 });
+            }
+            ContentPart::Audio { url } => {
+                content.push(ody_protocol::models::ContentItem::InputAudio { audio_url: url });
+            }
+            ContentPart::Video { url } => {
+                content.push(ody_protocol::models::ContentItem::InputVideo { video_url: url });
             }
             // Reasoning is not message content: flattening it into text would
             // replay the model's private thinking as if it were spoken. Keep it
@@ -502,7 +536,10 @@ fn is_ody_internal_header(key: &str) -> bool {
 mod tests {
     use super::*;
     use crate::chat_provider::{ChatEvent, ContentPart, Message, Role, ToolCall};
-    use ody_protocol::models::ReasoningItemContent;
+    use ody_protocol::model_metadata::InputModality;
+    use ody_protocol::models::{
+        FunctionCallOutputContentItem, FunctionCallOutputPayload, ReasoningItemContent,
+    };
 
     struct BridgePrompt {
         input: Vec<ResponseItem>,
@@ -750,6 +787,7 @@ mod tests {
             &prompt,
             None,
             &[],
+            &[],
             None,
         );
         let wire = build_api_request(request, ChatVendor::Kimi)
@@ -765,6 +803,68 @@ mod tests {
         assert!(
             assistant.get("tool_calls").is_some(),
             "reasoning must ride on the assistant message, not a bare one: {assistant}"
+        );
+    }
+
+    #[test]
+    fn media_output_survives_the_prompt_to_wire_bridge_for_kimi() {
+        let prompt = BridgePrompt {
+            input: vec![ResponseItem::FunctionCallOutput {
+                id: None,
+                call_id: "call_image".into(),
+                output: FunctionCallOutputPayload::from_content_items(vec![
+                    FunctionCallOutputContentItem::InputText {
+                        text: "screenshot".into(),
+                    },
+                    FunctionCallOutputContentItem::InputImage {
+                        image_url: "data:image/png;base64,AAAA".into(),
+                        detail: None,
+                    },
+                    FunctionCallOutputContentItem::InputAudio {
+                        audio_url: "data:audio/wav;base64,QVVESU8=".into(),
+                    },
+                    FunctionCallOutputContentItem::InputVideo {
+                        video_url: "https://example.com/video.mp4".into(),
+                    },
+                ]),
+                internal_chat_message_metadata_passthrough: None,
+            }],
+        };
+        let request = crate::adapters::core::prompt_to_chat_request(
+            "kimi-for-coding",
+            &prompt,
+            None,
+            &[],
+            &[
+                InputModality::Text,
+                InputModality::Image,
+                InputModality::Audio,
+                InputModality::Video,
+            ],
+            None,
+        );
+        let wire = build_api_request(request, ChatVendor::Kimi)
+            .expect("builds")
+            .to_wire();
+
+        let tool_message = wire["messages"]
+            .as_array()
+            .expect("messages")
+            .iter()
+            .find(|message| message["role"] == "tool")
+            .expect("tool message");
+        let content = tool_message["content"]
+            .as_array()
+            .expect("structured tool content");
+        assert_eq!(content[0]["text"], "screenshot");
+        assert_eq!(content[1]["image_url"]["url"], "data:image/png;base64,AAAA");
+        assert_eq!(
+            content[2]["audio_url"]["url"],
+            "data:audio/wav;base64,QVVESU8="
+        );
+        assert_eq!(
+            content[3]["video_url"]["url"],
+            "https://example.com/video.mp4"
         );
     }
 
@@ -786,6 +886,7 @@ mod tests {
             "kimi-for-coding",
             &prompt,
             None,
+            &[],
             &[],
             None,
         );

@@ -360,6 +360,12 @@ fn output_item(item: runtime::OutputItem) -> FunctionCallOutputContentItem {
                 }),
             }
         }
+        runtime::OutputItem::Audio { audio_url } => {
+            FunctionCallOutputContentItem::InputAudio { audio_url }
+        }
+        runtime::OutputItem::Video { video_url } => {
+            FunctionCallOutputContentItem::InputVideo { video_url }
+        }
     }
 }
 

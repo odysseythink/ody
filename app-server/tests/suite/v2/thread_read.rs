@@ -1318,6 +1318,8 @@ fn turn_user_texts(turns: &[ody_app_server_protocol::Turn]) -> Vec<&str> {
             ThreadItem::UserMessage { content, .. } => match content.first()? {
                 UserInput::Text { text, .. } => Some(text.as_str()),
                 UserInput::Image { .. }
+                | UserInput::Audio { .. }
+                | UserInput::Video { .. }
                 | UserInput::LocalImage { .. }
                 | UserInput::Skill { .. }
                 | UserInput::Mention { .. } => None,

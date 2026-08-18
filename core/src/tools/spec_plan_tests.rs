@@ -576,6 +576,44 @@ async fn environment_count_controls_environment_backed_tools() {
 }
 
 #[tokio::test]
+async fn model_without_tool_use_gets_no_tools() {
+    let plan = probe(|turn| {
+        turn.model_info.capabilities.supports_tools = false;
+        turn.model_info.supports_parallel_tool_calls = false;
+    })
+    .await;
+
+    assert!(
+        plan.visible_names.is_empty(),
+        "model without tool_use saw tools: {:?}",
+        plan.visible_names
+    );
+    assert!(
+        plan.registered_names.is_empty(),
+        "model without tool_use registered tools: {:?}",
+        plan.registered_names
+    );
+}
+
+#[tokio::test]
+async fn view_image_follows_model_input_modalities() {
+    let text_only = probe(|turn| {
+        turn.model_info.capabilities.input_modalities = vec![InputModality::Text];
+    })
+    .await;
+    text_only.assert_visible_lacks(&["view_image"]);
+    text_only.assert_registered_lacks(&["view_image"]);
+
+    let image_input = probe(|turn| {
+        turn.model_info.capabilities.input_modalities =
+            vec![InputModality::Text, InputModality::Image];
+    })
+    .await;
+    image_input.assert_visible_contains(&["view_image"]);
+    image_input.assert_registered_contains(&["view_image"]);
+}
+
+#[tokio::test]
 async fn host_context_gates_agent_job_tools() {
     let normal_agent_job = probe(|turn| {
         set_feature(turn, Feature::SpawnCsv, /*enabled*/ true);

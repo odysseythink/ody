@@ -13,6 +13,9 @@ pub type ProviderId = &'static str;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ChatRequest {
     pub model: String,
+    /// Input modalities accepted by the selected model.
+    #[serde(default)]
+    pub input_modalities: Vec<ody_protocol::model_metadata::InputModality>,
     pub messages: Vec<Message>,
     pub tools: Vec<ToolDefinition>,
     pub thinking_effort: ThinkingEffort,
@@ -82,8 +85,13 @@ pub enum Role {
 pub enum ContentPart {
     Text(String),
     Image {
-        mime: String,
-        bytes: Vec<u8>,
+        url: String,
+    },
+    Audio {
+        url: String,
+    },
+    Video {
+        url: String,
     },
     Reasoning(String),
     ToolResult {

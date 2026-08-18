@@ -207,7 +207,7 @@ fn build_tool_specs_and_registry(
     // submit_design / apply_patch / update_plan / read_file / grep / exec and loop
     // for several turns, tripling latency and edging into the review timeout. Skip
     // every tool source and hand it an empty registry.
-    if !is_toolless_design_review(turn_context) {
+    if model_supports_tools(turn_context) && !is_toolless_design_review(turn_context) {
         add_tool_sources(&context, &mut planned_tools);
         apply_direct_model_only_namespace_overrides(turn_context, &mut planned_tools);
         prepend_code_mode_executors(&context, &mut planned_tools);
@@ -324,6 +324,11 @@ pub(crate) fn tool_suggest_enabled(turn_context: &TurnContext) -> bool {
 
 fn namespace_tools_enabled(turn_context: &TurnContext) -> bool {
     turn_context.provider.capabilities().namespace_tools
+}
+
+fn model_supports_tools(turn_context: &TurnContext) -> bool {
+    turn_context.model_info.capabilities.supports_tools
+        || turn_context.model_info.supports_parallel_tool_calls
 }
 
 /// The adversarial design-review sub-agent (tagged with
@@ -799,7 +804,13 @@ fn add_core_utility_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut
         planned_tools.add(ReviewTestsHandler);
     }
 
-    if environment_mode.has_environment() {
+    if environment_mode.has_environment()
+        && turn_context
+            .model_info
+            .capabilities
+            .input_modalities
+            .contains(&ody_protocol::model_metadata::InputModality::Image)
+    {
         let include_environment_id = matches!(environment_mode, ToolEnvironmentMode::Multiple);
         planned_tools.add(ViewImageHandler::new(ViewImageToolOptions {
             can_request_original_image_detail: can_request_original_image_detail(

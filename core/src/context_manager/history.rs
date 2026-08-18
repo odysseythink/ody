@@ -129,8 +129,7 @@ impl ContextManager {
 
     /// Returns the history prepared for sending to the model. This applies a proper
     /// normalization and drops un-suited items. When `input_modalities` does not
-    /// include `InputModality::Image`, images are stripped from messages and tool
-    /// outputs.
+    /// include a media item's modality, that item is replaced with a text placeholder.
     pub(crate) fn for_prompt(mut self, input_modalities: &[InputModality]) -> Vec<ResponseItem> {
         let before_len = self.items.len();
         tracing::info!(before_len, "history::for_prompt normalizing history");
@@ -357,7 +356,7 @@ impl ContextManager {
     /// This function enforces a couple of invariants on the in-memory history:
     /// 1. every call (function/custom) has a corresponding output entry
     /// 2. every output has a corresponding call entry
-    /// 3. when images are unsupported, image content is stripped from messages and tool outputs
+    /// 3. unsupported media is stripped from messages and tool outputs
     fn normalize_history(&mut self, input_modalities: &[InputModality]) {
         let before_len = self.items.len();
         tracing::info!(before_len, "history::normalize_history start");
@@ -377,11 +376,10 @@ impl ContextManager {
             "history::normalize_history after remove_orphan_outputs"
         );
 
-        // strip images when model does not support them
-        normalize::strip_images_when_unsupported(input_modalities, &mut self.items);
+        normalize::strip_unsupported_media(input_modalities, &mut self.items);
         tracing::info!(
             final_len = self.items.len(),
-            "history::normalize_history after strip_images"
+            "history::normalize_history after strip_unsupported_media"
         );
     }
 

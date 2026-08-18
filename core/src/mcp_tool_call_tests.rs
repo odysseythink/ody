@@ -918,7 +918,7 @@ fn sanitize_mcp_tool_result_for_model_rewrites_image_content() {
         meta: None,
     });
 
-    let got = sanitize_mcp_tool_result_for_model(/*supports_image_input*/ false, result)
+    let got = sanitize_mcp_tool_result_for_model(&[InputModality::Text], result)
         .expect("sanitized result");
 
     assert_eq!(
@@ -950,12 +950,49 @@ fn sanitize_mcp_tool_result_for_model_preserves_image_when_supported() {
     };
 
     let got = sanitize_mcp_tool_result_for_model(
-        /*supports_image_input*/ true,
+        &[InputModality::Text, InputModality::Image],
         Ok(original.clone()),
     )
     .expect("unsanitized result");
 
     assert_eq!(got, original);
+}
+
+#[test]
+fn sanitize_mcp_tool_result_for_model_filters_media_independently() {
+    let result = Ok(CallToolResult {
+        content: vec![
+            serde_json::json!({
+                "type": "audio",
+                "data": "QVVESU8=",
+                "mimeType": "audio/wav",
+            }),
+            serde_json::json!({
+                "type": "resource",
+                "resource": {
+                    "uri": "memory://clip.mp4",
+                    "mimeType": "video/mp4",
+                    "blob": "VklERU8=",
+                },
+            }),
+        ],
+        structured_content: None,
+        is_error: Some(false),
+        meta: None,
+    });
+
+    let got =
+        sanitize_mcp_tool_result_for_model(&[InputModality::Text, InputModality::Audio], result)
+            .expect("sanitized result");
+
+    assert_eq!(got.content[0]["type"], "audio");
+    assert_eq!(
+        got.content[1],
+        serde_json::json!({
+            "type": "text",
+            "text": "<video content omitted because you do not support video input>",
+        })
+    );
 }
 
 #[test]

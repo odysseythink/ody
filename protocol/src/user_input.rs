@@ -30,6 +30,12 @@ pub enum UserInput {
         detail: Option<ImageDetail>,
     },
 
+    /// Pre-encoded or remotely addressable audio input.
+    Audio { audio_url: String },
+
+    /// Pre-encoded, remotely addressable, or provider-uploaded video input.
+    Video { video_url: String },
+
     /// Local image path provided by the user.  This will be converted to an
     /// `Image` variant (base64 data URL) during request serialization.
     LocalImage {

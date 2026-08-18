@@ -137,6 +137,46 @@
         },
         {
           "properties": {
+            "type": {
+              "enum": [
+                "audio"
+              ],
+              "title": "AudioUserInputType",
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "url"
+          ],
+          "title": "AudioUserInput",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "enum": [
+                "video"
+              ],
+              "title": "VideoUserInputType",
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "url"
+          ],
+          "title": "VideoUserInput",
+          "type": "object"
+        },
+        {
+          "properties": {
             "detail": {
               "anyOf": [
                 {

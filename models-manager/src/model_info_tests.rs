@@ -284,3 +284,134 @@ fn configured_model_catalog_defaults_capabilities_from_wire_api() {
     assert!(model.capabilities.supports_vision);
     assert_eq!(model.context_window, Some(262_144));
 }
+
+#[test]
+fn configured_model_catalog_overlays_bundled_metadata() {
+    use ody_protocol::model_metadata::ReasoningEffort;
+    use ody_protocol::model_metadata::ReasoningEffortPreset;
+
+    let max = ReasoningEffort::Custom("max".to_string());
+    let mut base = model_info_from_slug_with_provider("deepseek-v4-pro", "deepseek", WireApi::Chat);
+    base.provider = "deepseek".to_string();
+    base.base_instructions = "provider-specific instructions".to_string();
+    base.supported_reasoning_levels = vec![
+        ReasoningEffortPreset {
+            effort: ReasoningEffort::Medium,
+            description: "Standard reasoning".to_string(),
+        },
+        ReasoningEffortPreset {
+            effort: max.clone(),
+            description: "Deep reasoning".to_string(),
+        },
+    ];
+    base.capabilities.thinking_effort = vec![ReasoningEffort::Medium, max.clone()];
+    base.capabilities.max_output_tokens = Some(128_000);
+
+    let entries = vec![ConfiguredModelSpec {
+        provider: "deepseek_1".to_string(),
+        model: "deepseek-v4-pro".to_string(),
+        max_context_size: Some(1_000_000),
+        max_output_size: Some(384_000),
+        capabilities: vec!["tool_use".to_string(), "thinking".to_string()],
+        display_name: None,
+    }];
+
+    let catalog = configured_model_catalog_for_provider_with_base(
+        "deepseek_1",
+        WireApi::Chat,
+        &entries,
+        &[base],
+        Some("deepseek"),
+    )
+    .expect("configured catalog");
+    let model = &catalog.models[0];
+
+    assert_eq!(model.provider, "deepseek_1");
+    assert_eq!(model.base_instructions, "provider-specific instructions");
+    assert_eq!(model.context_window, Some(1_000_000));
+    assert_eq!(model.capabilities.max_output_tokens, Some(384_000));
+    assert_eq!(
+        model.capabilities.thinking_effort,
+        vec![ReasoningEffort::Medium, max]
+    );
+    assert_eq!(model.supported_reasoning_levels.len(), 2);
+}
+
+#[test]
+fn configured_model_catalog_overlays_exact_custom_provider_metadata() {
+    let mut base =
+        model_info_from_slug_with_provider("custom-model", "custom-provider", WireApi::Chat);
+    base.provider = "custom-provider".to_string();
+    base.base_instructions = "custom instructions".to_string();
+
+    let entries = vec![ConfiguredModelSpec {
+        provider: "custom-provider".to_string(),
+        model: "custom-model".to_string(),
+        capabilities: vec!["tool_use".to_string()],
+        ..Default::default()
+    }];
+    let catalog = configured_model_catalog_for_provider_with_base(
+        "custom-provider",
+        WireApi::Chat,
+        &entries,
+        &[base],
+        None,
+    )
+    .expect("configured catalog");
+
+    assert_eq!(catalog.models[0].base_instructions, "custom instructions");
+}
+
+#[test]
+fn configured_media_capabilities_are_distinct_modalities() {
+    let entries = vec![ConfiguredModelSpec {
+        provider: "media".to_string(),
+        model: "omni".to_string(),
+        capabilities: vec![
+            "tool_use".to_string(),
+            "audio_in".to_string(),
+            "video_in".to_string(),
+        ],
+        ..Default::default()
+    }];
+
+    let catalog = configured_model_catalog_for_provider("media", WireApi::Chat, &entries)
+        .expect("configured catalog");
+    let capabilities = &catalog.models[0].capabilities;
+
+    assert_eq!(
+        capabilities.input_modalities,
+        vec![
+            InputModality::Text,
+            InputModality::Audio,
+            InputModality::Video,
+        ]
+    );
+    assert!(!capabilities.supports_vision);
+}
+
+#[test]
+fn configured_capabilities_are_normalized_and_support_always_thinking() {
+    let entries = vec![ConfiguredModelSpec {
+        provider: "custom".to_string(),
+        model: "thinking-model".to_string(),
+        capabilities: vec![
+            " TOOL_USE ".to_string(),
+            "Always_Thinking".to_string(),
+            "IMAGE_IN".to_string(),
+        ],
+        ..Default::default()
+    }];
+
+    let catalog = configured_model_catalog_for_provider("custom", WireApi::Chat, &entries)
+        .expect("configured catalog");
+    let capabilities = &catalog.models[0].capabilities;
+
+    assert!(capabilities.supports_tools);
+    assert!(capabilities.supports_thinking);
+    assert!(capabilities.supports_vision);
+    assert_eq!(
+        capabilities.input_modalities,
+        vec![InputModality::Text, InputModality::Image]
+    );
+}

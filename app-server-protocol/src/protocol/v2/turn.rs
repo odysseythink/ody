@@ -299,6 +299,12 @@ pub enum UserInput {
         detail: Option<ImageDetail>,
         url: String,
     },
+    Audio {
+        url: String,
+    },
+    Video {
+        url: String,
+    },
     LocalImage {
         #[serde(default)]
         #[ts(optional)]
@@ -329,6 +335,8 @@ impl UserInput {
                 image_url: url,
                 detail,
             },
+            UserInput::Audio { url } => CoreUserInput::Audio { audio_url: url },
+            UserInput::Video { url } => CoreUserInput::Video { video_url: url },
             UserInput::LocalImage { path, detail } => CoreUserInput::LocalImage { path, detail },
             UserInput::Skill { name, path } => CoreUserInput::Skill { name, path },
             UserInput::Mention { name, path } => CoreUserInput::Mention { name, path },
@@ -350,6 +358,8 @@ impl From<CoreUserInput> for UserInput {
                 url: image_url,
                 detail,
             },
+            CoreUserInput::Audio { audio_url } => UserInput::Audio { url: audio_url },
+            CoreUserInput::Video { video_url } => UserInput::Video { url: video_url },
             CoreUserInput::LocalImage { path, detail } => UserInput::LocalImage { path, detail },
             CoreUserInput::Skill { name, path } => UserInput::Skill { name, path },
             CoreUserInput::Mention { name, path } => UserInput::Mention { name, path },
@@ -363,6 +373,8 @@ impl UserInput {
         match self {
             UserInput::Text { text, .. } => text.chars().count(),
             UserInput::Image { .. }
+            | UserInput::Audio { .. }
+            | UserInput::Video { .. }
             | UserInput::LocalImage { .. }
             | UserInput::Skill { .. }
             | UserInput::Mention { .. } => 0,

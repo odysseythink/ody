@@ -148,7 +148,10 @@ fn has_subagent_notification(history_items: &[ResponseItem]) -> bool {
             ContentItem::InputText { text } | ContentItem::OutputText { text } => {
                 SubagentNotification::matches_text(text)
             }
-            ContentItem::InputImage { .. } => false,
+            ContentItem::InputImage { .. }
+            | ContentItem::InputAudio { .. }
+            | ContentItem::InputVideo { .. }
+            | ContentItem::InputFile { .. } => false,
         })
     })
 }
@@ -163,7 +166,10 @@ fn history_contains_text(history_items: &[ResponseItem], needle: &str) -> bool {
             ContentItem::InputText { text } | ContentItem::OutputText { text } => {
                 text.contains(needle)
             }
-            ContentItem::InputImage { .. } => false,
+            ContentItem::InputImage { .. }
+            | ContentItem::InputAudio { .. }
+            | ContentItem::InputVideo { .. }
+            | ContentItem::InputFile { .. } => false,
         })
     })
 }
@@ -186,7 +192,11 @@ fn history_contains_assistant_inter_agent_communication(
                     .as_ref()
                     == Some(expected)
             }
-            ContentItem::InputText { .. } | ContentItem::InputImage { .. } => false,
+            ContentItem::InputText { .. }
+            | ContentItem::InputImage { .. }
+            | ContentItem::InputAudio { .. }
+            | ContentItem::InputVideo { .. }
+            | ContentItem::InputFile { .. } => false,
         })
     })
 }

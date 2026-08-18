@@ -7890,6 +7890,81 @@
           },
           {
             "properties": {
+              "audio_url": {
+                "type": "string"
+              },
+              "type": {
+                "enum": [
+                  "input_audio"
+                ],
+                "title": "InputAudioContentItemType",
+                "type": "string"
+              }
+            },
+            "required": [
+              "audio_url",
+              "type"
+            ],
+            "title": "InputAudioContentItem",
+            "type": "object"
+          },
+          {
+            "properties": {
+              "type": {
+                "enum": [
+                  "input_video"
+                ],
+                "title": "InputVideoContentItemType",
+                "type": "string"
+              },
+              "video_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "video_url"
+            ],
+            "title": "InputVideoContentItem",
+            "type": "object"
+          },
+          {
+            "description": "Responses API wire representation for file-backed inputs.",
+            "properties": {
+              "file_data": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "file_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "filename": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "type": {
+                "enum": [
+                  "input_file"
+                ],
+                "title": "InputFileContentItemType",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "title": "InputFileContentItem",
+            "type": "object"
+          },
+          {
+            "properties": {
               "text": {
                 "type": "string"
               },
@@ -8023,6 +8098,46 @@
               "type"
             ],
             "title": "InputImageDynamicToolCallOutputContentItem",
+            "type": "object"
+          },
+          {
+            "properties": {
+              "audioUrl": {
+                "type": "string"
+              },
+              "type": {
+                "enum": [
+                  "inputAudio"
+                ],
+                "title": "InputAudioDynamicToolCallOutputContentItemType",
+                "type": "string"
+              }
+            },
+            "required": [
+              "audioUrl",
+              "type"
+            ],
+            "title": "InputAudioDynamicToolCallOutputContentItem",
+            "type": "object"
+          },
+          {
+            "properties": {
+              "type": {
+                "enum": [
+                  "inputVideo"
+                ],
+                "title": "InputVideoDynamicToolCallOutputContentItemType",
+                "type": "string"
+              },
+              "videoUrl": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "videoUrl"
+            ],
+            "title": "InputVideoDynamicToolCallOutputContentItem",
             "type": "object"
           }
         ]
@@ -9409,6 +9524,81 @@
           },
           {
             "properties": {
+              "audio_url": {
+                "type": "string"
+              },
+              "type": {
+                "enum": [
+                  "input_audio"
+                ],
+                "title": "InputAudioFunctionCallOutputContentItemType",
+                "type": "string"
+              }
+            },
+            "required": [
+              "audio_url",
+              "type"
+            ],
+            "title": "InputAudioFunctionCallOutputContentItem",
+            "type": "object"
+          },
+          {
+            "properties": {
+              "type": {
+                "enum": [
+                  "input_video"
+                ],
+                "title": "InputVideoFunctionCallOutputContentItemType",
+                "type": "string"
+              },
+              "video_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "video_url"
+            ],
+            "title": "InputVideoFunctionCallOutputContentItem",
+            "type": "object"
+          },
+          {
+            "description": "Responses API wire representation for file-backed tool results.",
+            "properties": {
+              "file_data": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "file_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "filename": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "type": {
+                "enum": [
+                  "input_file"
+                ],
+                "title": "InputFileFunctionCallOutputContentItemType",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "title": "InputFileFunctionCallOutputContentItem",
+            "type": "object"
+          },
+          {
+            "properties": {
               "encrypted_content": {
                 "type": "string"
               },
@@ -9656,6 +9846,52 @@
               "type"
             ],
             "title": "McpToolCallGuardianApprovalReviewAction",
+            "type": "object"
+          },
+          {
+            "properties": {
+              "action": {
+                "type": "string"
+              },
+              "details": true,
+              "type": {
+                "enum": [
+                  "browserAction"
+                ],
+                "title": "BrowserActionGuardianApprovalReviewActionType",
+                "type": "string"
+              }
+            },
+            "required": [
+              "action",
+              "details",
+              "type"
+            ],
+            "title": "BrowserActionGuardianApprovalReviewAction",
+            "type": "object"
+          },
+          {
+            "properties": {
+              "connection": {
+                "type": "string"
+              },
+              "query": {
+                "type": "string"
+              },
+              "type": {
+                "enum": [
+                  "databaseWrite"
+                ],
+                "title": "DatabaseWriteGuardianApprovalReviewActionType",
+                "type": "string"
+              }
+            },
+            "required": [
+              "connection",
+              "query",
+              "type"
+            ],
+            "title": "DatabaseWriteGuardianApprovalReviewAction",
             "type": "object"
           },
           {
@@ -10184,6 +10420,20 @@
             "description": "Image attachments included in user turns.",
             "enum": [
               "image"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "Audio attachments included in user turns or tool results.",
+            "enum": [
+              "audio"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "Video attachments included in user turns or tool results.",
+            "enum": [
+              "video"
             ],
             "type": "string"
           }
@@ -18848,6 +19098,46 @@
               "url"
             ],
             "title": "ImageUserInput",
+            "type": "object"
+          },
+          {
+            "properties": {
+              "type": {
+                "enum": [
+                  "audio"
+                ],
+                "title": "AudioUserInputType",
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "url"
+            ],
+            "title": "AudioUserInput",
+            "type": "object"
+          },
+          {
+            "properties": {
+              "type": {
+                "enum": [
+                  "video"
+                ],
+                "title": "VideoUserInputType",
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "url"
+            ],
+            "title": "VideoUserInput",
             "type": "object"
           },
           {

@@ -5,8 +5,6 @@
 //! stream path remain on `ResponseEvent` while adapters speak `ChatEvent`.
 //! As `core` is refactored to consume `ChatEvent` directly, this module shrinks.
 
-use base64::Engine;
-
 use crate::chat_provider::{
     ChatEvent, ChatRequest, ContentPart, FinishReason, Message, Role, ToolCall, ToolDefinition,
     Usage,
@@ -156,6 +154,7 @@ pub fn prompt_to_chat_request(
     prompt: &dyn Prompt,
     effort: Option<ody_protocol::model_metadata::ReasoningEffort>,
     supported_efforts: &[ody_protocol::model_metadata::ReasoningEffort],
+    input_modalities: &[ody_protocol::model_metadata::InputModality],
     service_tier: Option<String>,
 ) -> ChatRequest {
     let formatted = prompt.get_formatted_input_for_request(/*use_responses_lite*/ false);
@@ -177,6 +176,7 @@ pub fn prompt_to_chat_request(
 
     ChatRequest {
         model: model.to_string(),
+        input_modalities: input_modalities.to_vec(),
         messages,
         tools,
         thinking_effort: map_effort(effort.as_ref()),
@@ -377,16 +377,10 @@ fn content_item_to_part(item: ContentItem) -> Option<ContentPart> {
     match item {
         ContentItem::InputText { text } => Some(ContentPart::Text(text)),
         ContentItem::OutputText { text } => Some(ContentPart::Text(text)),
-        ContentItem::InputImage { image_url, .. } => Some(ContentPart::Image {
-            mime: image_url
-                .split_once(':')
-                .and_then(|(_, rest)| rest.split_once(';').map(|(mime, _)| mime.to_string()))
-                .unwrap_or_else(|| "image/png".to_string()),
-            bytes: image_url
-                .split_once("base64,")
-                .and_then(|(_, b64)| base64::engine::general_purpose::STANDARD.decode(b64).ok())
-                .unwrap_or_default(),
-        }),
+        ContentItem::InputImage { image_url, .. } => Some(ContentPart::Image { url: image_url }),
+        ContentItem::InputAudio { audio_url } => Some(ContentPart::Audio { url: audio_url }),
+        ContentItem::InputVideo { video_url } => Some(ContentPart::Video { url: video_url }),
+        ContentItem::InputFile { .. } => None,
     }
 }
 
@@ -394,15 +388,15 @@ fn function_call_output_item_to_part(item: &FunctionCallOutputContentItem) -> Op
     match item {
         FunctionCallOutputContentItem::InputText { text } => Some(ContentPart::Text(text.clone())),
         FunctionCallOutputContentItem::InputImage { image_url, .. } => Some(ContentPart::Image {
-            mime: image_url
-                .split_once(':')
-                .and_then(|(_, rest)| rest.split_once(';').map(|(mime, _)| mime.to_string()))
-                .unwrap_or_else(|| "image/png".to_string()),
-            bytes: image_url
-                .split_once("base64,")
-                .and_then(|(_, b64)| base64::engine::general_purpose::STANDARD.decode(b64).ok())
-                .unwrap_or_default(),
+            url: image_url.clone(),
         }),
+        FunctionCallOutputContentItem::InputAudio { audio_url } => Some(ContentPart::Audio {
+            url: audio_url.clone(),
+        }),
+        FunctionCallOutputContentItem::InputVideo { video_url } => Some(ContentPart::Video {
+            url: video_url.clone(),
+        }),
+        FunctionCallOutputContentItem::InputFile { .. } => None,
         FunctionCallOutputContentItem::EncryptedContent { .. } => None,
     }
 }
@@ -500,7 +494,7 @@ mod tests {
     #[test]
     fn prompt_to_chat_request_round_trip() {
         let prompt = sample_prompt_with_text();
-        let request = prompt_to_chat_request("test-model", &prompt, None, &[], None);
+        let request = prompt_to_chat_request("test-model", &prompt, None, &[], &[], None);
         assert_eq!(request.model, "test-model");
         assert_eq!(request.messages.len(), 1);
         assert_eq!(request.messages[0].role, Role::User);
@@ -523,7 +517,7 @@ mod tests {
             }],
             tools: Vec::new(),
         };
-        let request = prompt_to_chat_request("m", &prompt, None, &[], None);
+        let request = prompt_to_chat_request("m", &prompt, None, &[], &[], None);
         assert_eq!(request.messages.len(), 1);
         assert_eq!(request.messages[0].tool_calls.len(), 1);
         assert_eq!(request.messages[0].tool_calls[0].id, "call_1");
@@ -552,7 +546,7 @@ mod tests {
                 output_schema: None,
             })],
         };
-        let request = prompt_to_chat_request("m", &prompt, None, &[], None);
+        let request = prompt_to_chat_request("m", &prompt, None, &[], &[], None);
         assert_eq!(request.tools.len(), 1);
         assert_eq!(request.tools[0].name, "read_file");
         assert_eq!(request.tools[0].description, "Read a file from disk.");
@@ -597,7 +591,7 @@ mod tests {
                 ],
             })],
         };
-        let request = prompt_to_chat_request("m", &prompt, None, &[], None);
+        let request = prompt_to_chat_request("m", &prompt, None, &[], &[], None);
         let names: Vec<_> = request.tools.iter().map(|t| t.name.as_str()).collect();
         assert_eq!(names, vec!["read", "write"]);
     }
@@ -616,7 +610,7 @@ mod tests {
                 output_format: "png".into(),
             }],
         };
-        let request = prompt_to_chat_request("m", &prompt, None, &[], None);
+        let request = prompt_to_chat_request("m", &prompt, None, &[], &[], None);
         assert!(request.tools.is_empty());
     }
 }

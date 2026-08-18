@@ -73,6 +73,13 @@ impl ChatVendor {
         !matches!(self, ChatVendor::Glm)
     }
 
+    /// Whether this Chat dialect accepts structured media parts in `tool`
+    /// messages. This is a wire-format property; the selected model must also
+    /// advertise the corresponding input modality.
+    pub fn accepts_multimodal_tool_results(self) -> bool {
+        matches!(self, ChatVendor::Kimi)
+    }
+
     /// The request field name for the output-token cap. GLM uses the legacy
     /// `max_tokens`; the others prefer `max_completion_tokens`.
     pub fn max_tokens_field(self) -> &'static str {

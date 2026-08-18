@@ -1,5 +1,6 @@
 use super::*;
 use ody_protocol::models::ContentItem;
+use ody_protocol::models::FunctionCallOutputContentItem;
 use ody_protocol::models::FunctionCallOutputPayload;
 use ody_protocol::models::ReasoningItemContent;
 use ody_protocol::models::ResponseItem;
@@ -21,6 +22,7 @@ fn user_message(text: &str) -> ResponseItem {
 fn base_request(vendor: ChatVendor) -> ChatCompletionsRequest {
     ChatCompletionsRequest {
         model: "test-model".to_string(),
+        input_modalities: vec![ody_protocol::model_metadata::InputModality::Text],
         instructions: "be helpful".to_string(),
         input: vec![user_message("hello")],
         tools: Vec::new(),
@@ -90,6 +92,181 @@ fn function_call_and_output_become_tool_messages() {
     assert_eq!(messages[2]["role"], "tool");
     assert_eq!(messages[2]["tool_call_id"], "call_1");
     assert_eq!(messages[2]["content"], "result");
+}
+
+#[test]
+fn kimi_preserves_supported_media_parts_in_tool_messages() {
+    let mut request = base_request(ChatVendor::Kimi);
+    request.input_modalities = vec![
+        ody_protocol::model_metadata::InputModality::Text,
+        ody_protocol::model_metadata::InputModality::Image,
+        ody_protocol::model_metadata::InputModality::Audio,
+        ody_protocol::model_metadata::InputModality::Video,
+    ];
+    request.input = vec![ResponseItem::FunctionCallOutput {
+        id: None,
+        call_id: "call_image".to_string(),
+        output: FunctionCallOutputPayload::from_content_items(vec![
+            FunctionCallOutputContentItem::InputText {
+                text: "screenshot".to_string(),
+            },
+            FunctionCallOutputContentItem::InputImage {
+                image_url: "data:image/png;base64,AAAA".to_string(),
+                detail: None,
+            },
+            FunctionCallOutputContentItem::InputAudio {
+                audio_url: "data:audio/wav;base64,QVVESU8=".to_string(),
+            },
+            FunctionCallOutputContentItem::InputVideo {
+                video_url: "https://example.com/video.mp4".to_string(),
+            },
+        ]),
+        internal_chat_message_metadata_passthrough: None,
+    }];
+
+    let body = request.to_wire();
+    let content = body["messages"][1]["content"]
+        .as_array()
+        .expect("Kimi tool content should stay structured");
+    assert_eq!(content[0], json!({ "type": "text", "text": "screenshot" }));
+    assert_eq!(content[1]["type"], "image_url");
+    assert_eq!(content[1]["image_url"]["url"], "data:image/png;base64,AAAA");
+    assert_eq!(content[2]["type"], "audio_url");
+    assert_eq!(
+        content[2]["audio_url"]["url"],
+        "data:audio/wav;base64,QVVESU8="
+    );
+    assert_eq!(content[3]["type"], "video_url");
+    assert_eq!(
+        content[3]["video_url"]["url"],
+        "https://example.com/video.mp4"
+    );
+}
+
+#[test]
+fn kimi_preserves_media_parts_in_user_messages() {
+    let mut request = base_request(ChatVendor::Kimi);
+    request.input_modalities = vec![
+        ody_protocol::model_metadata::InputModality::Text,
+        ody_protocol::model_metadata::InputModality::Audio,
+        ody_protocol::model_metadata::InputModality::Video,
+    ];
+    request.input = vec![ResponseItem::Message {
+        id: None,
+        role: "user".to_string(),
+        content: vec![
+            ContentItem::InputText {
+                text: "inspect".to_string(),
+            },
+            ContentItem::InputAudio {
+                audio_url: "data:audio/wav;base64,QVVESU8=".to_string(),
+            },
+            ContentItem::InputVideo {
+                video_url: "https://example.com/video.mp4".to_string(),
+            },
+        ],
+        phase: None,
+        internal_chat_message_metadata_passthrough: None,
+    }];
+
+    let body = request.to_wire();
+    let content = body["messages"][1]["content"]
+        .as_array()
+        .expect("Kimi user content should stay structured");
+    assert_eq!(content[0], json!({ "type": "text", "text": "inspect" }));
+    assert_eq!(content[1]["type"], "audio_url");
+    assert_eq!(content[2]["type"], "video_url");
+}
+
+#[test]
+fn chat_wire_filters_user_media_from_model_capabilities() {
+    let mut request = base_request(ChatVendor::Kimi);
+    request.input_modalities = vec![
+        ody_protocol::model_metadata::InputModality::Text,
+        ody_protocol::model_metadata::InputModality::Image,
+    ];
+    request.input = vec![ResponseItem::Message {
+        id: None,
+        role: "user".to_string(),
+        content: vec![
+            ContentItem::InputImage {
+                image_url: "data:image/png;base64,SU1BR0U=".to_string(),
+                detail: None,
+            },
+            ContentItem::InputAudio {
+                audio_url: "data:audio/wav;base64,QVVESU8=".to_string(),
+            },
+            ContentItem::InputVideo {
+                video_url: "https://example.com/video.mp4".to_string(),
+            },
+        ],
+        phase: None,
+        internal_chat_message_metadata_passthrough: None,
+    }];
+
+    let body = request.to_wire();
+    let content = body["messages"][1]["content"]
+        .as_array()
+        .expect("supported image keeps structured content");
+    assert_eq!(content[0]["type"], "image_url");
+    assert_eq!(content[1]["type"], "text");
+    assert_eq!(content[2]["type"], "text");
+    assert!(!body.to_string().contains("QVVESU8="));
+    assert!(!body.to_string().contains("video.mp4"));
+}
+
+#[test]
+fn generic_chat_flattens_multimodal_tool_messages_to_text() {
+    let mut request = base_request(ChatVendor::Generic);
+    request.input_modalities = vec![
+        ody_protocol::model_metadata::InputModality::Text,
+        ody_protocol::model_metadata::InputModality::Image,
+    ];
+    request.input = vec![ResponseItem::FunctionCallOutput {
+        id: None,
+        call_id: "call_image".to_string(),
+        output: FunctionCallOutputPayload::from_content_items(vec![
+            FunctionCallOutputContentItem::InputText {
+                text: "screenshot".to_string(),
+            },
+            FunctionCallOutputContentItem::InputImage {
+                image_url: "data:image/png;base64,AAAA".to_string(),
+                detail: None,
+            },
+        ]),
+        internal_chat_message_metadata_passthrough: None,
+    }];
+
+    let body = request.to_wire();
+    assert_eq!(body["messages"][1]["content"], "screenshot");
+    assert!(!body.to_string().contains("AAAA"));
+}
+
+#[test]
+fn glm_does_not_send_structured_media_in_tool_messages() {
+    let mut request = base_request(ChatVendor::Glm);
+    request.input_modalities = vec![
+        ody_protocol::model_metadata::InputModality::Text,
+        ody_protocol::model_metadata::InputModality::Image,
+    ];
+    request.input = vec![ResponseItem::FunctionCallOutput {
+        id: None,
+        call_id: "call_image".to_string(),
+        output: FunctionCallOutputPayload::from_content_items(vec![
+            FunctionCallOutputContentItem::InputText {
+                text: "screenshot".to_string(),
+            },
+            FunctionCallOutputContentItem::InputImage {
+                image_url: "data:image/png;base64,AAAA".to_string(),
+                detail: None,
+            },
+        ]),
+        internal_chat_message_metadata_passthrough: None,
+    }];
+
+    let body = request.to_wire();
+    assert_eq!(body["messages"][1]["content"], "screenshot");
+    assert!(!body.to_string().contains("AAAA"));
 }
 
 #[test]

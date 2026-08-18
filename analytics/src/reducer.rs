@@ -2515,6 +2515,8 @@ fn dynamic_content_counts(items: &[DynamicToolCallOutputContentItem]) -> Dynamic
         match item {
             DynamicToolCallOutputContentItem::InputText { .. } => text += 1,
             DynamicToolCallOutputContentItem::InputImage { .. } => image += 1,
+            DynamicToolCallOutputContentItem::InputAudio { .. }
+            | DynamicToolCallOutputContentItem::InputVideo { .. } => {}
         }
     }
     DynamicContentCounts {

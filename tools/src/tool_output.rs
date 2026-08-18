@@ -202,6 +202,21 @@ fn response_input_to_code_mode_result(response: ResponseInputItem) -> JsonValue 
                             detail: detail.or(Some(DEFAULT_IMAGE_DETAIL)),
                         }
                     }
+                    ody_protocol::models::ContentItem::InputAudio { audio_url } => {
+                        FunctionCallOutputContentItem::InputAudio { audio_url }
+                    }
+                    ody_protocol::models::ContentItem::InputVideo { video_url } => {
+                        FunctionCallOutputContentItem::InputVideo { video_url }
+                    }
+                    ody_protocol::models::ContentItem::InputFile {
+                        file_data,
+                        file_url,
+                        filename,
+                    } => FunctionCallOutputContentItem::InputFile {
+                        file_data,
+                        file_url,
+                        filename,
+                    },
                 })
                 .collect::<Vec<_>>(),
         ),
@@ -233,8 +248,21 @@ fn content_items_to_code_mode_result(items: &[FunctionCallOutputContentItem]) ->
                 {
                     Some(image_url.clone())
                 }
+                FunctionCallOutputContentItem::InputAudio { audio_url }
+                    if !audio_url.trim().is_empty() =>
+                {
+                    Some(audio_url.clone())
+                }
+                FunctionCallOutputContentItem::InputVideo { video_url }
+                    if !video_url.trim().is_empty() =>
+                {
+                    Some(video_url.clone())
+                }
                 FunctionCallOutputContentItem::InputText { .. }
                 | FunctionCallOutputContentItem::InputImage { .. }
+                | FunctionCallOutputContentItem::InputAudio { .. }
+                | FunctionCallOutputContentItem::InputVideo { .. }
+                | FunctionCallOutputContentItem::InputFile { .. }
                 | FunctionCallOutputContentItem::EncryptedContent { .. } => None,
             })
             .collect::<Vec<_>>()

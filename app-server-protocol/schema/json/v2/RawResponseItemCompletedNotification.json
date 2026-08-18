@@ -99,6 +99,81 @@
         },
         {
           "properties": {
+            "audio_url": {
+              "type": "string"
+            },
+            "type": {
+              "enum": [
+                "input_audio"
+              ],
+              "title": "InputAudioContentItemType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "audio_url",
+            "type"
+          ],
+          "title": "InputAudioContentItem",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "enum": [
+                "input_video"
+              ],
+              "title": "InputVideoContentItemType",
+              "type": "string"
+            },
+            "video_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "video_url"
+          ],
+          "title": "InputVideoContentItem",
+          "type": "object"
+        },
+        {
+          "description": "Responses API wire representation for file-backed inputs.",
+          "properties": {
+            "file_data": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "file_url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "filename": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "enum": [
+                "input_file"
+              ],
+              "title": "InputFileContentItemType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "InputFileContentItem",
+          "type": "object"
+        },
+        {
+          "properties": {
             "text": {
               "type": "string"
             },
@@ -183,6 +258,81 @@
             "type"
           ],
           "title": "InputImageFunctionCallOutputContentItem",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "audio_url": {
+              "type": "string"
+            },
+            "type": {
+              "enum": [
+                "input_audio"
+              ],
+              "title": "InputAudioFunctionCallOutputContentItemType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "audio_url",
+            "type"
+          ],
+          "title": "InputAudioFunctionCallOutputContentItem",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "enum": [
+                "input_video"
+              ],
+              "title": "InputVideoFunctionCallOutputContentItemType",
+              "type": "string"
+            },
+            "video_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "video_url"
+          ],
+          "title": "InputVideoFunctionCallOutputContentItem",
+          "type": "object"
+        },
+        {
+          "description": "Responses API wire representation for file-backed tool results.",
+          "properties": {
+            "file_data": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "file_url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "filename": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "enum": [
+                "input_file"
+              ],
+              "title": "InputFileFunctionCallOutputContentItemType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "InputFileFunctionCallOutputContentItem",
           "type": "object"
         },
         {

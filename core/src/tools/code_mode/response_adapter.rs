@@ -40,6 +40,12 @@ impl IntoProtocol<FunctionCallOutputContentItem> for ody_code_mode::FunctionCall
                         .or(Some(DEFAULT_IMAGE_DETAIL)),
                 }
             }
+            ody_code_mode::FunctionCallOutputContentItem::InputAudio { audio_url } => {
+                FunctionCallOutputContentItem::InputAudio { audio_url }
+            }
+            ody_code_mode::FunctionCallOutputContentItem::InputVideo { video_url } => {
+                FunctionCallOutputContentItem::InputVideo { video_url }
+            }
         }
     }
 }

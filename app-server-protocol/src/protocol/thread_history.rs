@@ -1449,6 +1449,12 @@ fn convert_dynamic_tool_content_items(
             ody_protocol::dynamic_tools::DynamicToolCallOutputContentItem::InputImage {
                 image_url,
             } => DynamicToolCallOutputContentItem::InputImage { image_url },
+            ody_protocol::dynamic_tools::DynamicToolCallOutputContentItem::InputAudio {
+                audio_url,
+            } => DynamicToolCallOutputContentItem::InputAudio { audio_url },
+            ody_protocol::dynamic_tools::DynamicToolCallOutputContentItem::InputVideo {
+                video_url,
+            } => DynamicToolCallOutputContentItem::InputVideo { video_url },
         })
         .collect()
 }

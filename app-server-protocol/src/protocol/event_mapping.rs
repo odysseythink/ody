@@ -60,6 +60,12 @@ pub fn item_event_to_server_notification(
                             CoreDynamicToolCallOutputContentItem::InputImage { image_url } => {
                                 DynamicToolCallOutputContentItem::InputImage { image_url }
                             }
+                            CoreDynamicToolCallOutputContentItem::InputAudio { audio_url } => {
+                                DynamicToolCallOutputContentItem::InputAudio { audio_url }
+                            }
+                            CoreDynamicToolCallOutputContentItem::InputVideo { video_url } => {
+                                DynamicToolCallOutputContentItem::InputVideo { video_url }
+                            }
                         })
                         .collect(),
                 ),

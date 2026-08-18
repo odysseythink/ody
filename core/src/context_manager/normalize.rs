@@ -10,6 +10,10 @@ use tracing::info;
 
 const IMAGE_CONTENT_OMITTED_PLACEHOLDER: &str =
     "image content omitted because you do not support image input";
+const AUDIO_CONTENT_OMITTED_PLACEHOLDER: &str =
+    "audio content omitted because you do not support audio input";
+const VIDEO_CONTENT_OMITTED_PLACEHOLDER: &str =
+    "video content omitted because you do not support video input";
 
 pub(crate) fn ensure_call_outputs_present(items: &mut Vec<ResponseItem>) {
     let mut function_output_ids = HashSet::new();
@@ -299,14 +303,15 @@ where
     }
 }
 
-/// Strip image content from messages and tool outputs when the model does not support images.
-/// When `input_modalities` contains `InputModality::Image`, no stripping is performed.
-pub(crate) fn strip_images_when_unsupported(
+/// Replace media content the selected model cannot consume with text placeholders.
+pub(crate) fn strip_unsupported_media(
     input_modalities: &[InputModality],
     items: &mut [ResponseItem],
 ) {
     let supports_images = input_modalities.contains(&InputModality::Image);
-    if supports_images {
+    let supports_audio = input_modalities.contains(&InputModality::Audio);
+    let supports_video = input_modalities.contains(&InputModality::Video);
+    if supports_images && supports_audio && supports_video {
         return;
     }
 
@@ -317,9 +322,31 @@ pub(crate) fn strip_images_when_unsupported(
                 for content_item in content.iter() {
                     match content_item {
                         ContentItem::InputImage { .. } => {
-                            normalized_content.push(ContentItem::InputText {
-                                text: IMAGE_CONTENT_OMITTED_PLACEHOLDER.to_string(),
-                            });
+                            if supports_images {
+                                normalized_content.push(content_item.clone());
+                            } else {
+                                normalized_content.push(ContentItem::InputText {
+                                    text: IMAGE_CONTENT_OMITTED_PLACEHOLDER.to_string(),
+                                });
+                            }
+                        }
+                        ContentItem::InputAudio { .. } => {
+                            if supports_audio {
+                                normalized_content.push(content_item.clone());
+                            } else {
+                                normalized_content.push(ContentItem::InputText {
+                                    text: AUDIO_CONTENT_OMITTED_PLACEHOLDER.to_string(),
+                                });
+                            }
+                        }
+                        ContentItem::InputVideo { .. } => {
+                            if supports_video {
+                                normalized_content.push(content_item.clone());
+                            } else {
+                                normalized_content.push(ContentItem::InputText {
+                                    text: VIDEO_CONTENT_OMITTED_PLACEHOLDER.to_string(),
+                                });
+                            }
                         }
                         _ => normalized_content.push(content_item.clone()),
                     }
@@ -333,11 +360,37 @@ pub(crate) fn strip_images_when_unsupported(
                     for content_item in content_items.iter() {
                         match content_item {
                             FunctionCallOutputContentItem::InputImage { .. } => {
-                                normalized_content_items.push(
-                                    FunctionCallOutputContentItem::InputText {
-                                        text: IMAGE_CONTENT_OMITTED_PLACEHOLDER.to_string(),
-                                    },
-                                );
+                                if supports_images {
+                                    normalized_content_items.push(content_item.clone());
+                                } else {
+                                    normalized_content_items.push(
+                                        FunctionCallOutputContentItem::InputText {
+                                            text: IMAGE_CONTENT_OMITTED_PLACEHOLDER.to_string(),
+                                        },
+                                    );
+                                }
+                            }
+                            FunctionCallOutputContentItem::InputAudio { .. } => {
+                                if supports_audio {
+                                    normalized_content_items.push(content_item.clone());
+                                } else {
+                                    normalized_content_items.push(
+                                        FunctionCallOutputContentItem::InputText {
+                                            text: AUDIO_CONTENT_OMITTED_PLACEHOLDER.to_string(),
+                                        },
+                                    );
+                                }
+                            }
+                            FunctionCallOutputContentItem::InputVideo { .. } => {
+                                if supports_video {
+                                    normalized_content_items.push(content_item.clone());
+                                } else {
+                                    normalized_content_items.push(
+                                        FunctionCallOutputContentItem::InputText {
+                                            text: VIDEO_CONTENT_OMITTED_PLACEHOLDER.to_string(),
+                                        },
+                                    );
+                                }
                             }
                             _ => normalized_content_items.push(content_item.clone()),
                         }
@@ -346,7 +399,9 @@ pub(crate) fn strip_images_when_unsupported(
                 }
             }
             ResponseItem::ImageGenerationCall { result, .. } => {
-                result.clear();
+                if !supports_images {
+                    result.clear();
+                }
             }
             _ => {}
         }

@@ -185,6 +185,15 @@ fn normalize_response_item(item: ResponseItem) -> Result<Vec<ChatEvent>, ChatPro
                     ContentItem::InputImage { .. } => Err(ChatProviderError::Unsupported {
                         capability: "image content type".into(),
                     }),
+                    ContentItem::InputAudio { .. } => Err(ChatProviderError::Unsupported {
+                        capability: "audio content type".into(),
+                    }),
+                    ContentItem::InputVideo { .. } => Err(ChatProviderError::Unsupported {
+                        capability: "video content type".into(),
+                    }),
+                    ContentItem::InputFile { .. } => Err(ChatProviderError::Unsupported {
+                        capability: "file content type".into(),
+                    }),
                 })
                 .collect::<Result<Vec<_>, _>>()?
                 .join("");
