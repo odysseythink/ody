@@ -1334,6 +1334,8 @@ impl ChatWidget {
                     }
                     UserInput::Text { .. }
                     | UserInput::Image { .. }
+                    | UserInput::Audio { .. }
+                    | UserInput::Video { .. }
                     | UserInput::LocalImage { .. } => None,
                 })
                 .collect();

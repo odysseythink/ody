@@ -537,6 +537,15 @@ pub(super) struct PendingSteerCompareKey {
     pub(super) image_count: usize,
 }
 
+fn append_media_attachment_labels(message: &mut String, labels: &[&str]) {
+    for label in labels {
+        if !message.is_empty() && !message.ends_with('\n') {
+            message.push('\n');
+        }
+        message.push_str(label);
+    }
+}
+
 impl ChatWidget {
     pub(super) fn user_message_display_from_parts(
         message: String,
@@ -564,14 +573,18 @@ impl ChatWidget {
     ) -> PendingSteerCompareKey {
         let mut message = String::new();
         let mut image_count = 0;
+        let mut media_labels = Vec::new();
 
         for item in items {
             match item {
                 UserInput::Text { text, .. } => message.push_str(text),
                 UserInput::Image { .. } | UserInput::LocalImage { .. } => image_count += 1,
+                UserInput::Audio { .. } => media_labels.push("[Audio attachment]"),
+                UserInput::Video { .. } => media_labels.push("[Video attachment]"),
                 UserInput::Skill { .. } | UserInput::Mention { .. } => {}
             }
         }
+        append_media_attachment_labels(&mut message, &media_labels);
 
         PendingSteerCompareKey {
             message,
@@ -584,6 +597,7 @@ impl ChatWidget {
         let mut remote_image_urls = Vec::new();
         let mut local_images = Vec::new();
         let mut text_elements = Vec::new();
+        let mut media_labels = Vec::new();
 
         for item in items {
             match item {
@@ -608,9 +622,12 @@ impl ChatWidget {
                 ),
                 UserInput::Image { url, .. } => remote_image_urls.push(url.clone()),
                 UserInput::LocalImage { path, .. } => local_images.push(path.clone()),
+                UserInput::Audio { .. } => media_labels.push("[Audio attachment]"),
+                UserInput::Video { .. } => media_labels.push("[Video attachment]"),
                 UserInput::Skill { .. } | UserInput::Mention { .. } => {}
             }
         }
+        append_media_attachment_labels(&mut message, &media_labels);
 
         Self::user_message_display_from_parts(
             message,

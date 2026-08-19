@@ -1363,6 +1363,12 @@ fn user_message_display_from_inputs_matches_flattened_user_message_shape() {
             path: local_image.clone(),
             detail: None,
         },
+        UserInput::Audio {
+            url: "data:audio/wav;base64,QVVESU8=".to_string(),
+        },
+        UserInput::Video {
+            url: "https://example.com/video.mp4".to_string(),
+        },
         UserInput::Skill {
             name: "demo".to_string(),
             path: PathBuf::from("/tmp/skill/SKILL.md"),
@@ -1380,7 +1386,7 @@ fn user_message_display_from_inputs_matches_flattened_user_message_shape() {
     assert_eq!(
         rendered,
         ChatWidget::user_message_display_from_parts(
-            "hello world".to_string(),
+            "hello world\n[Audio attachment]\n[Video attachment]".to_string(),
             vec![
                 TextElement::new((0..5).into(), Some("hello".to_string())),
                 TextElement::new((6..11).into(), Some("planet".to_string())),
