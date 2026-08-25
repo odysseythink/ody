@@ -6,6 +6,7 @@ mod fsmonitor;
 mod info;
 mod operations;
 mod platform;
+pub mod signals;
 
 pub use apply::ApplyGitRequest;
 pub use apply::ApplyGitResult;
@@ -43,3 +44,11 @@ pub use info::recent_commits;
 pub use info::resolve_root_git_project_for_trust;
 pub use ody_protocol::protocol::GitSha;
 pub use platform::create_symlink;
+
+#[cfg(test)]
+#[path = "signals_tests.rs"]
+mod signals_tests;
+
+#[cfg(test)]
+#[path = "signals_integration_tests.rs"]
+mod signals_integration_tests;

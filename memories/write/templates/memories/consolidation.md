@@ -305,6 +305,13 @@ Schema rules (strict):
   - When in doubt, preserve boundaries (separate tasks/blocks) rather than over-cluster.
 - C) Provenance and metadata
   - Every `## Task <n>` section must include `### rollout_summary_files` and `### keywords`.
+  - Evidence stamps travel: keep the `[verified]` / `[user-stated]` / `[inferred]` prefix on
+    every consolidated preference and reusable-knowledge bullet. Do not strip stamps during
+    consolidation — they are how future agents tell settled facts from guesses.
+  - When merging several sources into one bullet, the merged bullet keeps the weakest stamp
+    among its sources (an `[inferred]` source plus a `[verified]` source merges as
+    `[inferred]`-backed unless the verified source alone supports the whole claim); never
+    upgrade a stamp without new direct evidence in the rollouts being consolidated.
   - If a block contains `## User preferences`, the bullets there should be traceable to one or
     more tasks in the same block and should use task refs like `[Task 1]` when helpful.
   - Treat task-level `Preference signals:` from Phase 1 as the main source for consolidated

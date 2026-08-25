@@ -208,3 +208,8 @@ pub fn approx_tokens_from_byte_count_i64(bytes: i64) -> i64 {
 
 #[cfg(test)]
 mod truncate_tests;
+
+pub mod distill;
+
+#[cfg(test)]
+mod distill_tests;

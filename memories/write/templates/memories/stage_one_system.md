@@ -420,11 +420,11 @@ task_group: <project/workflow topic>
 task_outcome: <success|partial|fail|uncertain>
 
 Preference signals:
-- when <situation>, the user said / asked / corrected: "<short quote or near-verbatim request>" -> <what that suggests for similar future runs>
+- [user-stated] when <situation>, the user said / asked / corrected: "<short quote or near-verbatim request>" -> <what that suggests for similar future runs>
 - <split distinct defaults into separate bullets; do not collapse multiple concrete requests into one umbrella summary>
 
 Reusable knowledge:
-- <validated repo fact, procedural shortcut, or durable takeaway>
+- [verified] <validated repo fact, procedural shortcut, or durable takeaway>
 
 Failures and how to do differently:
 - <what failed, what pivot worked, and how to avoid repeating it>
@@ -499,6 +499,22 @@ distinctive phrasing. When a future task is very similar, expect the agent to us
 summary for full detail.
 
 Evidence and attribution rules (strict):
+
+Evidence stamps (required on durable bullets):
+
+- Prefix every `Preference signals:` and `Reusable knowledge:` bullet in `raw_memory` with
+  exactly one evidence stamp:
+  - `[verified]` — confirmed by tool output, tests, or environment feedback in this rollout.
+  - `[user-stated]` — explicitly said, asked, or corrected by the user (keep the
+    near-verbatim quote after the stamp).
+  - `[inferred]` — inferred from user behavior or assistant reasoning; never phrase the
+    rest of the bullet as settled fact.
+- When in doubt between two stamps, choose the weaker one (`[inferred]` < `[user-stated]` <
+  `[verified]` in strength).
+- These stamps are load-bearing for Phase 2: they travel with the bullet into MEMORY.md so
+  future agents can tell settled facts from guesses.
+- `Failures and how to do differently:` bullets do not need a stamp; their failure framing
+  already carries the epistemic status.
 
 - The top-level raw-memory `cwd` should be the single best primary working directory for that
   raw memory.

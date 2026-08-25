@@ -394,7 +394,10 @@ pub async fn git_diff_to_remote(cwd: &Path) -> Option<GitDiffToRemote> {
 }
 
 /// Run a git command with a timeout to prevent blocking on large repositories
-async fn run_git_command_with_timeout(args: &[&str], cwd: &Path) -> Option<std::process::Output> {
+pub(crate) async fn run_git_command_with_timeout(
+    args: &[&str],
+    cwd: &Path,
+) -> Option<std::process::Output> {
     // These callers only inspect repository metadata. Worktree workflows probe
     // once and pass their override directly to the lower-level runner.
     run_git_command_with_timeout_from(

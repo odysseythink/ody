@@ -26,7 +26,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use super::exec_output_distill::assemble_distilled_response;
+use super::exec_output_distill::spill_distill_source;
 use super::format_exec_output_str;
+use super::maybe_distill_exec_output;
 
 #[derive(Clone, Copy)]
 pub(crate) struct ToolEventCtx<'a> {
@@ -378,6 +381,47 @@ impl ToolEmitter {
         super::format_exec_output_for_model(output, ctx.turn.model_info.truncation_policy.into())
     }
 
+    /// Command line for distillation, when this emitter wraps a shell command.
+    fn distillable_command_line(&self) -> Option<String> {
+        match self {
+            Self::Shell { command, .. } | Self::UnifiedExec { command, .. } => {
+                Some(command.join(" "))
+            }
+            Self::ApplyPatch { .. } => None,
+        }
+    }
+
+    /// Formats exec output for the model, trying command-aware distillation
+    /// before plain truncation. When distillation engages, the untouched
+    /// pre-distillation content is spilled to a temp file and the model gets a
+    /// pointer to it, so no information is lost.
+    async fn format_model_output_maybe_distilled(
+        &self,
+        output: &ExecToolCallOutput,
+        ctx: ToolEventCtx<'_>,
+    ) -> String {
+        let policy = ctx.turn.model_info.truncation_policy.into();
+        if let Some(command_line) = self.distillable_command_line()
+            && let Some(distilled) = maybe_distill_exec_output(&command_line, output, policy)
+        {
+            let spill_path = spill_distill_source(
+                std::env::temp_dir().as_path(),
+                ctx.session.thread_id(),
+                ctx.call_id,
+                &distilled.raw_content,
+            )
+            .await;
+            let original_token_count = ody_utils_string::approx_token_count(&distilled.raw_content);
+            return assemble_distilled_response(
+                &distilled.text,
+                spill_path.as_deref(),
+                original_token_count,
+                output,
+            );
+        }
+        self.format_exec_output_for_model(output, ctx)
+    }
+
     pub async fn finish(
         &self,
         ctx: ToolEventCtx<'_>,
@@ -386,7 +430,7 @@ impl ToolEmitter {
     ) -> Result<String, FunctionCallError> {
         let (event, result) = match out {
             Ok(output) => {
-                let content = self.format_exec_output_for_model(&output, ctx);
+                let content = self.format_model_output_maybe_distilled(&output, ctx).await;
                 let exit_code = output.exit_code;
                 let event = ToolEventStage::Success {
                     output,

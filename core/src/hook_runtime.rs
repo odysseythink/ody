@@ -5,6 +5,8 @@ use std::time::Duration;
 use ody_analytics::CompactionTrigger;
 use ody_analytics::HookRunFact;
 use ody_analytics::build_track_events_context;
+use ody_git_utils::signals::collect_git_signals;
+use ody_git_utils::signals::render_signals_briefing;
 use ody_hooks::PermissionRequestDecision;
 use ody_hooks::PermissionRequestOutcome;
 use ody_hooks::PermissionRequestRequest;
@@ -124,6 +126,7 @@ pub(crate) async fn run_pending_session_start_hooks(
                 source: session_start_source,
             },
         };
+        let is_session_start = matches!(target, StartHookTarget::SessionStart { .. });
         let request = ody_hooks::SessionStartRequest {
             session_id: sess.session_id().into(),
             #[allow(deprecated)]
@@ -147,9 +150,31 @@ pub(crate) async fn run_pending_session_start_hooks(
         {
             return true;
         }
+        if is_session_start {
+            maybe_record_git_activity_briefing(sess, turn_context).await;
+        }
     }
 
     false
+}
+
+/// Injects a compact git-activity briefing (hot files, bug-fix magnets,
+/// co-change pairs) once per session start. Best-effort: skipped silently
+/// outside a git repo, on git failure, or when the scan exceeds the timeout.
+// ody: 2s 超时 + git-utils 内 2000 commit 上限是唯一延迟保护;超大数据集下
+// 简报可能缺席。升级触发条件:session start 延迟投诉 → 改后台异步注入或按 HEAD 缓存。
+async fn maybe_record_git_activity_briefing(sess: &Arc<Session>, turn_context: &Arc<TurnContext>) {
+    #[allow(deprecated)]
+    let cwd = turn_context.cwd.clone();
+    let collect = collect_git_signals(cwd.as_path(), 90);
+    let Ok(Some(signals)) = tokio::time::timeout(Duration::from_secs(2), collect).await else {
+        return;
+    };
+    let briefing = render_signals_briefing(&signals);
+    if briefing.is_empty() {
+        return;
+    }
+    record_additional_contexts(sess, turn_context, vec![briefing]).await;
 }
 
 /// Runs matching `PreToolUse` hooks before a tool executes.

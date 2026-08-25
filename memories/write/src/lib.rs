@@ -129,3 +129,7 @@ pub fn raw_memories_file(root: &Path) -> PathBuf {
 pub async fn ensure_layout(root: &Path) -> std::io::Result<()> {
     tokio::fs::create_dir_all(rollout_summaries_dir(root)).await
 }
+
+#[cfg(test)]
+#[path = "templates_contract_tests.rs"]
+mod templates_contract_tests;
