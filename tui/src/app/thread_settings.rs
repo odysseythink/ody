@@ -87,7 +87,11 @@ impl App {
         Some(ThreadSettingsUpdateParams {
             thread_id: thread_id.to_string(),
             effort,
-            collaboration_mode: Some(self.chat_widget.current_collaboration_mode().clone()),
+            // The session applies a `Some(collaboration_mode)` verbatim, so this
+            // must be the effective mode: after a `/model` switch the model lives
+            // in the active mask, and the stored base mode still holds the stale
+            // pre-switch model.
+            collaboration_mode: Some(self.chat_widget.effective_collaboration_mode()),
             ..ThreadSettingsUpdateParams::default()
         })
     }

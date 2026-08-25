@@ -6005,7 +6005,42 @@ async fn thread_setting_update_params_sync_model_and_default_reasoning() {
     let collaboration_mode = params
         .collaboration_mode
         .expect("collaboration mode should sync with reasoning");
-    assert_eq!(collaboration_mode.mode, ModeKind::Default);
+    // The session applies a `Some(collaboration_mode)` verbatim, so it must
+    // carry the effective mode: the active Plan mask (with its model and
+    // reasoning override), not the stored Default base. A generic reasoning
+    // update must not switch the session out of Plan mode or revert the
+    // effective model.
+    assert_eq!(collaboration_mode.mode, ModeKind::Plan);
+    assert_eq!(collaboration_mode.settings.model, "gpt-plan");
+    assert_eq!(
+        collaboration_mode.settings.reasoning_effort,
+        Some(ReasoningEffortConfig::Medium)
+    );
+}
+
+#[tokio::test]
+async fn reasoning_setting_update_params_keep_model_switched_via_model_command() {
+    let mut app = make_test_app().await;
+    let thread_id = ThreadId::new();
+    app.active_thread_id = Some(thread_id);
+
+    // Simulate `/model` switching the Default-mode model: with an active
+    // collaboration mask, `set_model` updates only the mask, leaving the
+    // stored base collaboration mode's model untouched.
+    app.chat_widget.set_model("k3");
+    app.on_update_reasoning_effort(Some(ReasoningEffortConfig::High));
+
+    let params = app
+        .active_thread_reasoning_setting_update_params(Some(ReasoningEffortConfig::High))
+        .expect("active thread should produce update params");
+
+    // Core applies a `Some(collaboration_mode)` verbatim and ignores the
+    // separate model/effort fields, so a stale base-mode model here would
+    // revert the just-switched model once the server echo is applied.
+    let collaboration_mode = params
+        .collaboration_mode
+        .expect("collaboration mode should sync with reasoning");
+    assert_eq!(collaboration_mode.settings.model, "k3");
     assert_eq!(
         collaboration_mode.settings.reasoning_effort,
         Some(ReasoningEffortConfig::High)
