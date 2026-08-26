@@ -11179,6 +11179,40 @@ capabilities = ["tool_use", "image_in"]
 }
 
 #[test]
+fn configured_model_catalog_inherits_bundled_k3_256k_metadata() {
+    let cfg: ConfigToml = toml::from_str(
+        r#"
+[providers.kimi_ranweiwei]
+type = "kimi"
+api_key = "sk-test"
+
+[models."kimi_ranweiwei/k3-256k"]
+provider = "kimi_ranweiwei"
+model = "k3-256k"
+"#,
+    )
+    .expect("config should deserialize");
+
+    let providers = cfg.convert_ody_code_providers();
+    let provider = providers
+        .get("kimi_ranweiwei")
+        .expect("provider should exist");
+    let catalog = configured_model_catalog(&cfg.models, "kimi_ranweiwei", provider, None)
+        .expect("models table should produce a catalog");
+    let model = catalog
+        .models
+        .iter()
+        .find(|model| model.slug == "k3-256k")
+        .expect("configured model should be in the catalog");
+
+    assert_eq!(model.provider, "kimi_ranweiwei");
+    assert_eq!(model.context_window, Some(262_144));
+    assert_eq!(model.max_context_window, Some(262_144));
+    assert_eq!(model.capabilities.context_window, Some(262_144));
+    assert_eq!(model.capabilities.max_context_window, Some(262_144));
+}
+
+#[test]
 fn configured_model_catalog_skips_non_chat_providers() {
     let cfg: ConfigToml = toml::from_str(
         r#"

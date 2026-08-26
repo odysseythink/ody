@@ -586,6 +586,7 @@ fn bundled_models_include_supported_chat_vendors() {
     for expected in [
         "kimi-k2.5",
         "k3",
+        "k3-256k",
         "deepseek-chat",
         "deepseek-v4-pro",
         "deepseek-v4-flash",
@@ -598,4 +599,20 @@ fn bundled_models_include_supported_chat_vendors() {
             "bundled models.json missing {expected}"
         );
     }
+}
+
+#[test]
+fn bundled_k3_256k_has_256k_context() {
+    let response = crate::bundled_models_response().expect("bundled models.json should parse");
+    let model = response
+        .models
+        .iter()
+        .find(|model| model.slug == "k3-256k")
+        .expect("bundled models.json should contain k3-256k");
+
+    assert_eq!(model.provider, "kimi");
+    assert_eq!(model.context_window, Some(262_144));
+    assert_eq!(model.max_context_window, Some(262_144));
+    assert_eq!(model.capabilities.context_window, Some(262_144));
+    assert_eq!(model.capabilities.max_context_window, Some(262_144));
 }
