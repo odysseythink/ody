@@ -89,6 +89,43 @@ A reproduction is only as trustworthy as its inputs, so **prefer real data over 
 
 Feed the result back as evidence: **conclusion + the data that shows it + the boundary of what it proves.** Then discard the experiment's code — it carries every shortcut you took for speed and must not be lifted into the fix.
 
+## The Equivalence Trap
+
+When a bug or proposed change involves a new architecture, replacement component,
+reference implementation, or a claim that two systems are "basically the same",
+do not infer behavioral equivalence from shared names or similar diagrams.
+
+Before accepting either "same" or "different", define the comparison dimension and
+check the same concrete input through both paths:
+
+- **Semantic structure:** Do they expose similar entities, fields, or relationships?
+- **Binding time:** Which decisions happen at configuration, build, deploy, or request time?
+- **Runtime path:** What control flow, data flow, and intermediate artifacts are produced?
+- **Novel input:** What happens when the request was not predefined or previously observed?
+- **Validation and failure:** Where are invalid combinations rejected, and how do they fail?
+- **Observable behavior:** Are outputs, side effects, performance, and auditability equivalent?
+
+Shared vocabulary proves only structural overlap. It does not prove that decisions are
+made at the same time or that the reachable behavior is the same.
+
+For a material equivalence claim, require all of the following:
+
+1. Scope the claim: "equivalent with respect to X", not "logically identical".
+2. Look for a counterexample in each direction: what can A do that B cannot, and vice versa?
+3. Define what evidence would falsify the claim.
+4. Run a behavior-level trace or minimal experiment when the answer affects architecture or costly work.
+
+Do not explain a mismatch by guessing who used AI, who failed to understand, or what
+someone intended. Those are hypotheses about people, not evidence about the system.
+Describe the observable ambiguity, missing decision, or differing runtime behavior instead.
+
+### Alignment circuit breaker
+
+If your human partner corrects the same interpretation twice, or the discussion keeps
+producing new architecture summaries without an agreed execution trace, **STOP synthesizing**.
+Restate the disputed claim as an observable comparison, walk one representative input
+through both paths, and confirm the distinction before producing another long analysis or fix.
+
 
 ## When to Use
 
@@ -258,6 +295,8 @@ You MUST complete each phase before proceeding to the next.
    - What's different between working and broken?
    - List every difference, however small
    - Don't assume "that can't matter"
+   - If they look equivalent, apply **The Equivalence Trap**: compare binding time,
+     runtime artifacts, novel-input behavior, validation, and failure modes
 
 4. **Understand Dependencies**
    - What other components does this need?
@@ -356,6 +395,10 @@ If you catch yourself thinking:
 - "Pattern says X but I'll adapt it differently"
 - "Here are the main problems: [lists fixes without investigation]"
 - Proposing solutions before tracing data flow
+- "They use the same concepts, so they are equivalent"
+- "The existing system already does this" without tracing the same input through both paths
+- Explaining disagreement through unverified claims about another person's intent or understanding
+- Writing another synthesis after the same interpretation has already been corrected twice
 - **"One more fix attempt" (when already tried 2+)**
 - **Each fix reveals new problem in different place**
 
