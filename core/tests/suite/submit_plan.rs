@@ -27,6 +27,12 @@ use ody_protocol::protocol::Op;
 use ody_protocol::user_input::UserInput;
 use serde_json::json;
 
+const LOCAL_EVIDENCE: &str = "\n## External Evidence\nStatus: Not required\nReason: This test plan exercises repository-local behavior fully defined by checked-in code and test fixtures.\n";
+
+fn with_local_evidence(markdown: &str) -> String {
+    format!("{markdown}{LOCAL_EVIDENCE}")
+}
+
 fn call_output(req: &ResponsesRequest, call_id: &str) -> (String, Option<bool>) {
     let raw = req.function_call_output(call_id);
     assert_eq!(
@@ -55,7 +61,7 @@ async fn submit_plan_round_trip() -> anyhow::Result<()> {
     } = builder.build(&server).await?;
 
     let call_id = "submit-plan-call";
-    let plan_markdown = "# Test Plan\n- Step 1\n- Step 2\n";
+    let plan_markdown = with_local_evidence("# Test Plan\n- Step 1\n- Step 2\n");
     let args = json!({"plan": plan_markdown}).to_string();
 
     // First response: the model calls submit_plan. There should be no second
@@ -151,7 +157,7 @@ async fn submit_plan_terminal_does_not_trigger_second_sampling() -> anyhow::Resu
     } = builder.build(&server).await?;
 
     let call_id = "submit-plan-terminal";
-    let plan_markdown = "# Terminal Test\n- only one response\n";
+    let plan_markdown = with_local_evidence("# Terminal Test\n- only one response\n");
     let args = json!({"plan": plan_markdown}).to_string();
 
     let first_response = sse(vec![
@@ -250,7 +256,9 @@ async fn submit_plan_split_pending_part_does_not_end_turn() -> anyhow::Result<()
     // Second call: the same manifest with the part now marked done. This is the
     // real terminal submission.
     let final_call_id = "submit-plan-final";
-    let final_markdown = "# Split Plan\n\n## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 1 | part1.md | scope one | done |\n";
+    let final_markdown = with_local_evidence(
+        "# Split Plan\n\n## Parts\n| # | File | Scope | Status |\n|---|---|---|---|\n| 1 | part1.md | scope one | done |\n",
+    );
     let final_args = json!({"plan": final_markdown}).to_string();
     let second_response = sse(vec![
         ev_response_created("resp-2"),
@@ -368,8 +376,9 @@ async fn submit_plan_allows_dropping_parts_table_when_nothing_done_yet() -> anyh
     // Since no part was ever verified done, this must be accepted as the
     // terminal submission rather than rejected as a "dropped index" fragment.
     let single_file_call_id = "submit-plan-single-file";
-    let single_file_markdown =
-        "# Single File Plan\n\n**Goal:** everything in one document.\n\n- [ ] Task 1\n";
+    let single_file_markdown = with_local_evidence(
+        "# Single File Plan\n\n**Goal:** everything in one document.\n\n- [ ] Task 1\n",
+    );
     let single_file_args = json!({"plan": single_file_markdown}).to_string();
     let second_response = sse(vec![
         ev_response_created("resp-2"),

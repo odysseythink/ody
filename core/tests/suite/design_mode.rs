@@ -311,7 +311,10 @@ async fn design_to_plan_handoff_injects_reminder() -> Result<()> {
         "## User Approval\n",
         "user final approval captured before handoff.\n\n",
         "## Reuse Analysis\n",
-        "component reuse survey of existing components follows.\n",
+        "component reuse survey of existing components follows.\n\n",
+        "## External Evidence\n",
+        "Status: Not required\n",
+        "Reason: This handoff test is repository-local and fully defined by checked-in code and test fixtures.\n",
     );
     std::fs::write(&design_path, complete_design)?;
 
@@ -454,7 +457,10 @@ fn complete_design_markdown() -> String {
         "## User Approval\n",
         "user final approval captured before handoff.\n\n",
         "## Reuse Analysis\n",
-        "component reuse survey of existing components follows.",
+        "component reuse survey of existing components follows.\n\n",
+        "## External Evidence\n",
+        "Status: Not required\n",
+        "Reason: This review test is repository-local and fully defined by checked-in code and test fixtures.",
     )
     .to_string()
 }

@@ -1,12 +1,13 @@
 //! Pure Design→Plan handoff evaluator (D6).
 //!
 //! On any edge leaving Design mode, [`evaluate_design_exit`] runs the C1–C8
-//! completeness gate (from `design_completeness`) against the cached artifact
+//! completeness gate and the external-evidence declaration gate against the cached artifact
 //! and decides whether the switch is allowed. It owns no session state and
 //! performs no locking — the only async step is a single `tokio::fs::read_to_string`
 //! so callers can release the session lock before awaiting it.
 
 use crate::design_completeness::design_completeness_report;
+use crate::external_grounding::external_evidence_report;
 use crate::plan_artifact::PlanArtifact;
 use crate::turn_timing::now_unix_timestamp_ms;
 use ody_config::config_toml::PlanEnforcement;
@@ -47,7 +48,15 @@ pub(crate) async fn evaluate_design_exit(
     enforcement: PlanEnforcement,
 ) -> HandoffDecision {
     let content = read_artifact_content(artifact.as_ref()).await;
-    let report = design_completeness_report(&content);
+    let report = match (
+        design_completeness_report(&content),
+        external_evidence_report(&content),
+    ) {
+        (Some(design), Some(evidence)) => Some(format!("{design}\n\n{evidence}")),
+        (Some(design), None) => Some(design),
+        (None, Some(evidence)) => Some(evidence),
+        (None, None) => None,
+    };
     let complete = report.is_none();
 
     let mut logs = Vec::new();

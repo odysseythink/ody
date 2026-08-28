@@ -49,7 +49,7 @@ If no level was injected (e.g., auto permission mode with no config), default to
 
 (A) If the task is to **port, adapt, mirror, or re-implement an existing system**, first read the upstream source and enumerate the **complete feature inventory** before designing anything. Tag every item taken verbatim from upstream with `[C:UPSTREAM]`. Do not design from memory of the system.
 
-(B) If the task is a **new, standalone tool/capability** with no in-repo precedent, run 1–2 targeted web searches for prior art and capture the findings in a `## Prior Art` section (what exists, what to borrow, what to deliberately differ from).
+(B) If the task is a **new, standalone tool/capability** with no in-repo precedent, follow the shared External grounding contract: search for prior art, read the original sources, and capture the findings in a `## Prior Art` section (what exists, what to borrow, what to deliberately differ from).
 
 Skip this step only when neither (A) nor (B) applies; say so explicitly.
 

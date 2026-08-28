@@ -61,6 +61,10 @@ impl CollaborationModeInstructions {
             this = this.with_design_audit_level(level);
         }
 
+        // External evidence is a cross-mode concern. Keep it in one shared fragment so Default,
+        // Plan, and Design cannot silently drift into different research standards.
+        this = this.with_external_grounding();
+
         // Render AFTER all fragments are appended: PLAN_RIGOR_SPLIT carries
         // host-configured split and part-budget placeholders, so rendering the
         // base instructions first leaves literal placeholders in the final text.
@@ -102,6 +106,13 @@ impl CollaborationModeInstructions {
     /// single fragment per tier keeps the base template tier-neutral.
     fn with_concise_contract(self) -> Self {
         let fragment = ody_collaboration_mode_templates::PLAN_CONCISE;
+        Self {
+            instructions: format!("{}\n\n{}", self.instructions, fragment),
+        }
+    }
+
+    fn with_external_grounding(self) -> Self {
+        let fragment = ody_collaboration_mode_templates::EXTERNAL_GROUNDING;
         Self {
             instructions: format!("{}\n\n{}", self.instructions, fragment),
         }
@@ -534,7 +545,7 @@ mod tests {
     }
 
     #[test]
-    fn leaves_non_plan_instructions_unrendered() {
+    fn leaves_non_plan_placeholders_unrendered_and_adds_external_grounding() {
         let mode = CollaborationMode {
             mode: ModeKind::Default,
             settings: Settings {
@@ -553,7 +564,36 @@ mod tests {
         )
         .expect("should produce instructions");
         // Default mode should not attempt to render the plan placeholder.
-        assert_eq!(instructions.body(), "Hello {{ split_threshold }}");
+        assert!(
+            instructions
+                .body()
+                .starts_with("Hello {{ split_threshold }}")
+        );
+        assert!(instructions.body().contains("## External grounding"));
+    }
+
+    #[test]
+    fn every_collaboration_mode_receives_the_shared_external_grounding_contract() {
+        for mode_kind in [ModeKind::Default, ModeKind::Plan, ModeKind::Design] {
+            let mode = CollaborationMode {
+                mode: mode_kind,
+                settings: Settings {
+                    model: "test-model".to_string(),
+                    reasoning_effort: None,
+                    developer_instructions: Some("Base instructions.".to_string()),
+                    design_audit_level: None,
+                },
+            };
+            let body = CollaborationModeInstructions::from_collaboration_mode(
+                &mode, None, None, None, None,
+            )
+            .expect("instructions")
+            .body();
+            assert!(
+                body.contains("## External grounding (all collaboration modes)"),
+                "{mode_kind:?} must receive the shared research contract"
+            );
+        }
     }
 
     #[test]

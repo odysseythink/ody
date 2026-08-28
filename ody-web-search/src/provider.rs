@@ -27,6 +27,8 @@ pub struct WebSearchOptions {
 pub struct WebSearchToolOutput {
     pub result_count: usize,
     pub text: String,
+    pub provider: String,
+    pub results: Vec<WebSearchResult>,
 }
 
 #[async_trait::async_trait]

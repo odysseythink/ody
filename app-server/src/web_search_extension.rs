@@ -6,8 +6,13 @@ use ody_extension_api::{
     ThreadLifecycleContributor, ThreadStartInput, ToolCall, ToolContributor,
 };
 use ody_web_search::{
-    config::ServicesConfig, fallback::FallbackWebSearchProvider, http_client::default_http_client,
-    provider::SharedWebSearchProvider, providers::create_default_registry, tool::WebSearchTool,
+    config::ServicesConfig,
+    fallback::FallbackWebSearchProvider,
+    fetch::WebFetchTool,
+    http_client::{default_http_client, web_fetch_http_client},
+    provider::SharedWebSearchProvider,
+    providers::create_default_registry,
+    tool::WebSearchTool,
 };
 
 #[derive(Clone)]
@@ -78,10 +83,16 @@ impl ToolContributor for WebSearchExtension {
         let Some(handle) = thread_store.get::<StoredProvider>() else {
             return Vec::new();
         };
-        vec![Arc::new(WebSearchTool::new(
-            session_store.level_id().to_string(),
-            handle.0.clone(),
-        ))]
+        let mut tools: Vec<Arc<dyn ody_extension_api::ToolExecutor<ToolCall>>> = vec![Arc::new(
+            WebSearchTool::new(session_store.level_id().to_string(), handle.0.clone()),
+        )];
+        match web_fetch_http_client() {
+            Ok(client) => tools.push(Arc::new(WebFetchTool::new(client))),
+            Err(error) => {
+                tracing::warn!("WebFetch unavailable: failed to build HTTP client: {error}")
+            }
+        }
+        tools
     }
 }
 
@@ -152,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn tools_returns_web_search_when_provider_present() {
+    fn tools_returns_search_and_original_source_reader_when_provider_present() {
         let session_store = ExtensionData::new("session");
         let thread_store = ExtensionData::new_with_init("thread", ExtensionDataInit::new());
         let mut providers = HashMap::new();
@@ -178,10 +189,12 @@ mod tests {
         thread_store.insert(provider);
         let extension = WebSearchExtension;
         let tools = extension.tools(&session_store, &thread_store);
-        assert_eq!(tools.len(), 1);
-        assert_eq!(
-            tools[0].tool_name(),
-            ody_tools::ToolName::plain("WebSearch")
-        );
+        assert_eq!(tools.len(), 2);
+        let names = tools
+            .iter()
+            .map(|tool| tool.tool_name())
+            .collect::<Vec<_>>();
+        assert!(names.contains(&ody_tools::ToolName::plain("WebSearch")));
+        assert!(names.contains(&ody_tools::ToolName::plain("WebFetch")));
     }
 }

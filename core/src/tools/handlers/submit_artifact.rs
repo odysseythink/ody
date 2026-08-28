@@ -13,6 +13,7 @@ use crate::design_review::orchestrator::format_review_appendix_for_submit;
 use crate::design_review::prompt::UsabilityRecommendation;
 use crate::design_review::types::DesignReviewOutput;
 use crate::design_review::types::DesignReviewRequest;
+use crate::external_grounding::external_evidence_report;
 use crate::function_tool::FunctionCallError;
 use crate::plan_artifact::PlanArtifact;
 use crate::plan_artifact::PlanWriteOutcome;
@@ -319,7 +320,8 @@ fn split_threshold_gap(plan: &str, split_threshold: usize) -> Option<String> {
 /// 6. Pending-parts detection — returns non-terminal message with `stem_dir`
 ///    path when manifest has pending rows.
 /// 7. Terminal candidate — for Plan: `split_threshold_gap` then
-///    `rigor_structure_gap`; for Design: `design_completeness_report`.
+///    `rigor_structure_gap`; for Design: `design_completeness_report`; for both: the shared
+///    external-evidence declaration gate.
 /// 8. Terminal — calls `artifact.mark_submitted()` and returns the submitted
 ///    message.
 pub(crate) fn should_trigger_design_review(
@@ -826,29 +828,38 @@ pub(crate) async fn handle_submit_artifact(
     // sole effect is to gate finalization) does not apply.
     let gap: Option<String> = if !finalize || has_pending_parts {
         None
-    } else if expected_mode == ModeKind::Design {
-        // Design: C1–C8 completeness (replaces plan-specific split/rigor checks)
-        design_completeness_report(&markdown)
     } else {
-        // Plan: existing split-threshold + rigor logic (verbatim)
-        if parse_parts_manifest(&markdown).manifest.is_none() {
-            let split_threshold = turn
-                .config
-                .plan_mode
-                .as_ref()
-                .and_then(|pm| pm.split_threshold)
-                .unwrap_or(8);
-            split_threshold_gap(&markdown, split_threshold).or_else(|| {
-                if artifact.plan_mode_tier() == Some(PlanModeTier::Rigor) {
-                    rigor_structure_gap(&markdown)
-                } else {
-                    None
-                }
-            })
-        } else if artifact.plan_mode_tier() == Some(PlanModeTier::Rigor) {
-            rigor_structure_gap(&markdown)
+        let mode_gap = if expected_mode == ModeKind::Design {
+            // Design: C1–C8 completeness (replaces plan-specific split/rigor checks)
+            design_completeness_report(&markdown)
         } else {
-            None
+            // Plan: existing split-threshold + rigor logic (verbatim)
+            if parse_parts_manifest(&markdown).manifest.is_none() {
+                let split_threshold = turn
+                    .config
+                    .plan_mode
+                    .as_ref()
+                    .and_then(|pm| pm.split_threshold)
+                    .unwrap_or(8);
+                split_threshold_gap(&markdown, split_threshold).or_else(|| {
+                    if artifact.plan_mode_tier() == Some(PlanModeTier::Rigor) {
+                        rigor_structure_gap(&markdown)
+                    } else {
+                        None
+                    }
+                })
+            } else if artifact.plan_mode_tier() == Some(PlanModeTier::Rigor) {
+                rigor_structure_gap(&markdown)
+            } else {
+                None
+            }
+        };
+        let evidence_gap = external_evidence_report(&markdown);
+        match (mode_gap, evidence_gap) {
+            (Some(mode), Some(evidence)) => Some(format!("{mode}\n\n{evidence}")),
+            (Some(mode), None) => Some(mode),
+            (None, Some(evidence)) => Some(evidence),
+            (None, None) => None,
         }
     };
 

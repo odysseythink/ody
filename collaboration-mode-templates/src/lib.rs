@@ -3,6 +3,7 @@ pub const DESIGN: &str = include_str!("../templates/design.md");
 pub const DESIGN_FULL_REMINDER: &str = include_str!("../templates/design_full_reminder.md");
 pub const DESIGN_SPARSE_REMINDER: &str = include_str!("../templates/design_sparse_reminder.md");
 pub const DEFAULT: &str = include_str!("../templates/default.md");
+pub const EXTERNAL_GROUNDING: &str = include_str!("../templates/external_grounding.md");
 pub const EXECUTE: &str = include_str!("../templates/execute.md");
 pub const PAIR_PROGRAMMING: &str = include_str!("../templates/pair_programming.md");
 pub const PLAN_CONCISE: &str = include_str!("../templates/plan_concise.md");
@@ -23,6 +24,22 @@ pub const PLAN_RIGOR_TURN_DISCIPLINE: &str =
 #[cfg(test)]
 mod template_tests {
     use super::*;
+
+    #[test]
+    fn external_grounding_requires_search_then_original_sources() {
+        for requirement in [
+            "classify external research as **Required** or **Not required**",
+            "Search-result snippets are discovery hints, not evidence",
+            "at least two distinct external URLs",
+            "at least one primary source",
+            "## External Evidence",
+        ] {
+            assert!(
+                EXTERNAL_GROUNDING.contains(requirement),
+                "shared external-grounding contract must contain {requirement:?}"
+            );
+        }
+    }
 
     /// The templates may only name tools ody actually registers. The
     /// inherited-from-ody-code wording named `Read/Grep/Glob`, which ody did

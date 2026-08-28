@@ -20,7 +20,7 @@ In addition to the default provider, Ody ships with built-in support for Kimi, D
 
 ## Web search
 
-Ody supports host-injected web search through a configurable `[services.webSearch]` table in `~/.ody-code/config.toml`. It supports 12 providers (including local SearXNG, DuckDuckGo, Bing, Moonshot, Tavily, and Perplexity), a primary/secondary fallback chain, and exposes a single `WebSearch` tool to the model.
+Ody supports host-injected web research through a configurable `[services.webSearch]` table in `~/.ody-code/config.toml`. It supports 12 providers (including local SearXNG, DuckDuckGo, Bing, Moonshot, Tavily, and Perplexity), a primary/secondary fallback chain, and exposes `WebSearch` for discovery plus the guarded `WebFetch` reader for original-source evidence.
 
 See [ody-web-search/README.md](ody-web-search/README.md) for the full configuration reference and examples.
 

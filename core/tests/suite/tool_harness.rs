@@ -342,7 +342,7 @@ async fn submit_plan_tool_persists_and_ends_turn() -> anyhow::Result<()> {
     } = builder.build(&server).await?;
 
     let call_id = "submit-plan-tool-call";
-    let plan_markdown = "# Tool Harness Plan\n- Step A\n- Step B\n";
+    let plan_markdown = "# Tool Harness Plan\n- Step A\n- Step B\n\n## External Evidence\nStatus: Not required\nReason: This harness test is repository-local and fully defined by checked-in code and test fixtures.\n";
     let args = json!({"plan": plan_markdown}).to_string();
 
     let first_response = sse(vec![

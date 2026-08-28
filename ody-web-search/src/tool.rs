@@ -8,14 +8,14 @@ use serde_json::json;
 use crate::provider::{SharedWebSearchProvider, WebSearchOptions, WebSearchToolOutput};
 
 pub struct WebSearchTool {
-    session_id: String,
+    _session_id: String,
     provider: SharedWebSearchProvider,
 }
 
 impl WebSearchTool {
     pub fn new(session_id: String, provider: SharedWebSearchProvider) -> Self {
         Self {
-            session_id,
+            _session_id: session_id,
             provider,
         }
     }
@@ -36,7 +36,16 @@ fn format_results(results: &[crate::provider::WebSearchResult]) -> String {
     }
     results
         .iter()
-        .map(|r| format!("{}\n{}\n{}", r.title, r.url, r.snippet))
+        .map(|r| {
+            let mut fields = vec![r.title.clone(), r.url.clone(), r.snippet.clone()];
+            if let Some(date) = r.date.as_deref().filter(|date| !date.is_empty()) {
+                fields.push(format!("Date: {date}"));
+            }
+            if let Some(content) = r.content.as_deref().filter(|content| !content.is_empty()) {
+                fields.push(format!("Content: {content}"));
+            }
+            fields.join("\n")
+        })
         .collect::<Vec<_>>()
         .join("\n\n")
 }
@@ -49,7 +58,7 @@ impl ToolExecutor<ToolCall> for WebSearchTool {
     fn spec(&self) -> ToolSpec {
         ToolSpec::Function(ody_tools::ResponsesApiTool {
             name: "WebSearch".to_string(),
-            description: "Search the web for up-to-date information.".to_string(),
+            description: "Discover up-to-date web sources. Results include structured metadata, but search snippets are not primary evidence; use WebFetch or another reader to inspect original pages before making source-backed claims.".to_string(),
             strict: true,
             parameters: parse_tool_input_schema(&json!({
                 "type": "object",
@@ -98,6 +107,7 @@ impl ToolExecutor<ToolCall> for WebSearchTool {
                 include_content: input.include_content,
                 tool_call_id: Some(call_id.clone()),
             };
+            let provider_name = provider.name().to_string();
 
             match provider.search(&input.query, &options).await {
                 Ok(results) => {
@@ -105,6 +115,8 @@ impl ToolExecutor<ToolCall> for WebSearchTool {
                     let output = WebSearchToolOutput {
                         result_count,
                         text: format_results(&results),
+                        provider: provider_name,
+                        results,
                     };
                     let value = serde_json::to_value(&output).map_err(|e| {
                         FunctionCallError::Fatal(format!(
@@ -150,8 +162,8 @@ mod tests {
             title: "Example".to_string(),
             url: "https://example.com".to_string(),
             snippet: "An example snippet.".to_string(),
-            date: None,
-            content: None,
+            date: Some("2026-08-28".to_string()),
+            content: Some("Original result content.".to_string()),
         }
     }
 
@@ -173,7 +185,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn returns_json_output_with_result_count_and_text() {
+    async fn returns_structured_json_output_without_discarding_provider_fields() {
         let tool = WebSearchTool::new(
             "session-1".to_string(),
             Arc::new(StubProvider(vec![sample_result()])),
@@ -186,7 +198,11 @@ mod tests {
             arguments: String::new(),
         });
         assert_eq!(value["result_count"], 1);
+        assert_eq!(value["provider"], "stub");
+        assert_eq!(value["results"][0]["date"], "2026-08-28");
+        assert_eq!(value["results"][0]["content"], "Original result content.");
         assert!(value["text"].as_str().unwrap().contains("Example"));
+        assert!(value["text"].as_str().unwrap().contains("Date: 2026-08-28"));
     }
 
     #[tokio::test]
@@ -200,6 +216,7 @@ mod tests {
             arguments: String::new(),
         });
         assert_eq!(value["result_count"], 0);
+        assert_eq!(value["results"], serde_json::json!([]));
         assert_eq!(value["text"].as_str().unwrap(), "No search results found.");
     }
 

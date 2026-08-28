@@ -23,12 +23,12 @@ schemars = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 async-trait = { workspace = true }
-reqwest = { workspace = true }
+reqwest = { workspace = true, features = ["stream"] }
 regex = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 ts-rs = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["net"] }
 url = { workspace = true }
 urlencoding = { workspace = true }
 

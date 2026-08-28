@@ -62,7 +62,10 @@ fn complete_design_markdown() -> String {
         "## User Approval\n",
         "user final approval captured before handoff.\n\n",
         "## Reuse Analysis\n",
-        "component reuse survey of existing components follows.\n",
+        "component reuse survey of existing components follows.\n\n",
+        "## External Evidence\n",
+        "Status: Not required\n",
+        "Reason: This test design exercises repository-local behavior fully defined by checked-in code and test fixtures.\n",
     )
     .to_string()
 }

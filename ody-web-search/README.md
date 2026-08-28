@@ -1,8 +1,8 @@
 # `ody-web-search`
 
-Web search provider registry, fallback chain, and `WebSearch` tool implementation for Ody.
+Web search provider registry, fallback chain, and the `WebSearch` + `WebFetch` evidence toolchain for Ody.
 
-Web search is no longer gated by provider/model capabilities or feature flags. Instead, you opt in by adding a `[services.webSearch]` table to your `~/.ody-code/config.toml`. Ody creates the configured provider(s) at thread start and registers the `WebSearch` tool only when a provider is available.
+Web research is no longer gated by provider/model capabilities or feature flags. Instead, you opt in by adding a `[services.webSearch]` table to your `~/.ody-code/config.toml`. Ody creates the configured provider(s) at thread start and registers the evidence tools only when a provider is available.
 
 ## Supported providers
 
@@ -117,8 +117,9 @@ secondary = { provider = "duckduckgo" }
 1. On thread start, `app-server/src/web_search_extension.rs` reads `config.services.webSearch`.
 2. It creates the configured providers via `WebSearchProviderRegistry` and wraps them in `FallbackWebSearchProvider`.
 3. The provider handle is stored in thread-level extension data.
-4. The `WebSearch` tool is exposed to the model only when a provider exists for the current thread.
-5. When the model calls `WebSearch`, the tool invokes `provider.search(query, {limit, includeContent})` and returns formatted text (`Title`, `URL`, `Snippet`).
+4. `WebSearch` and `WebFetch` are exposed to the model only when a provider exists for the current thread.
+5. `WebSearch` invokes `provider.search(query, {limit, includeContent})` and returns both backward-compatible formatted text and structured results (`title`, `url`, `snippet`, `date`, and optional provider content). Search results are for discovery, not original-source evidence.
+6. `WebFetch` reads the selected original page. It requires guardian approval (unless the active approval policy is `never`), accepts public HTTP(S) destinations only, validates every redirect and DNS destination, rejects credentials and binary content, and caps the body at 1 MiB. HTML is reduced to readable text.
 
 ## Running tests
 
