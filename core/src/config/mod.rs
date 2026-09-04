@@ -3218,6 +3218,8 @@ impl Config {
             additional_writable_roots,
             workspace_roots: workspace_roots_override,
         } = overrides;
+        let has_explicit_model_override = model.is_some();
+        let has_explicit_model_provider_override = model_provider.is_some();
         let bypass_hook_trust = bypass_hook_trust.unwrap_or_default();
 
         if bypass_hook_trust {
@@ -3630,20 +3632,42 @@ impl Config {
         // IDs are resolved on demand below so that menus such as /logout do not
         // present built-in providers as if they were user accounts.
         let model_providers = configured_model_providers;
-        let model_provider_id = model_provider
+        let requested_model_provider_id = model_provider
             .or(default_provider)
             .or(cfg.model_provider)
             .unwrap_or_else(|| "kimi".to_string());
-        let model_provider = model_providers
-            .get(&model_provider_id)
+        let requested_model_provider = model_providers
+            .get(&requested_model_provider_id)
             .cloned()
-            .or_else(|| built_in_provider_by_id(&model_provider_id))
-            .ok_or_else(|| {
-                std::io::Error::new(
+            .or_else(|| built_in_provider_by_id(&requested_model_provider_id));
+        let (model_provider_id, model_provider, ignore_persisted_model_selection) =
+            if let Some(model_provider) = requested_model_provider {
+                (requested_model_provider_id, model_provider, false)
+            } else if has_explicit_model_provider_override || has_explicit_model_override {
+                return Err(std::io::Error::new(
                     std::io::ErrorKind::NotFound,
-                    format!("Model provider `{model_provider_id}` not found"),
-                )
-            })?;
+                    format!("Model provider `{requested_model_provider_id}` not found"),
+                ));
+            } else {
+                // A provider can disappear through `/logout` or a manual config
+                // edit while `default_model`/legacy selectors still reference
+                // it. Do not make that persisted inconsistency brick the TUI:
+                // start unconfigured and let the user choose or log in again.
+                // Explicit CLI/harness overrides still fail above so typos are
+                // never silently ignored.
+                startup_warnings.push(format!(
+                    "Configured model provider `{requested_model_provider_id}` was not found; \
+                     its model selection was ignored. Use /login or /model to select an available model."
+                ));
+                let fallback_provider_id = "kimi".to_string();
+                let fallback_provider = built_in_provider_by_id(&fallback_provider_id).ok_or_else(|| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        "Built-in fallback model provider `kimi` not found",
+                    )
+                })?;
+                (fallback_provider_id, fallback_provider, true)
+            };
 
         // Computed early: `cfg` is partially moved by later field extractions.
         let explicit_model_catalog = load_model_catalog(cfg.model_catalog_json.clone())?;
@@ -3772,7 +3796,11 @@ impl Config {
 
         let forced_login_method = cfg.forced_login_method;
 
-        let model = model.or(default_model).or(cfg.model);
+        let model = if ignore_persisted_model_selection {
+            None
+        } else {
+            model.or(default_model).or(cfg.model)
+        };
         // A resolved model means the user has logged in (`/login` writes
         // `default_model`), set a model in config, or passed a CLI override. With
         // no model there is nothing to run: the UI treats this as "not yet

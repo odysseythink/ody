@@ -153,11 +153,15 @@ fn capability_flags_from_model(model: &ModelInfo) -> Vec<String> {
 }
 
 /// Build config edits that remove a provider and any model aliases that belong
-/// to it, and clear the default model if it points to the removed provider.
+/// to it, and clear model-selection fields when the active provider is removed.
+///
+/// `Config::model` contains only the resolved bare model slug, so it cannot be
+/// used to determine which provider owns the persisted `default_model`. The
+/// resolved provider id is the authoritative ownership signal here.
 pub(crate) fn build_logout_provider_edits(
     aliases_to_remove: &[String],
     configured_models: &HashMap<String, OdyCodeModelConfig>,
-    default_model: Option<&str>,
+    active_provider_id: Option<&str>,
 ) -> Vec<ConfigEdit> {
     use crate::config_update::clear_config_value;
 
@@ -166,6 +170,24 @@ pub(crate) fn build_logout_provider_edits(
     }
 
     let mut edits = Vec::new();
+    let removes_active_provider = active_provider_id.is_some_and(|active_provider_id| {
+        aliases_to_remove
+            .iter()
+            .any(|alias| alias.eq_ignore_ascii_case(active_provider_id))
+    });
+
+    if removes_active_provider {
+        // Clear both canonical and legacy selectors. Some users have configs
+        // migrated across formats, and leaving any one of these behind can
+        // make the next startup resolve the provider that is about to vanish.
+        // Put these edits first so the batch never conceptually introduces a
+        // dangling selection before removing the provider itself.
+        edits.push(clear_config_value("default_model"));
+        edits.push(clear_config_value("default_provider"));
+        edits.push(clear_config_value("model"));
+        edits.push(clear_config_value("model_provider"));
+    }
+
     for alias in aliases_to_remove {
         edits.push(clear_config_value(format!("providers.{alias}")));
 
@@ -177,16 +199,6 @@ pub(crate) fn build_logout_provider_edits(
         matching_models.sort();
         for model_key in matching_models {
             edits.push(clear_config_value(format!("models.\"{model_key}\"")));
-        }
-    }
-
-    if let Some(model) = default_model {
-        let model_ref = ModelRef::parse(model);
-        if aliases_to_remove
-            .iter()
-            .any(|a| a.eq_ignore_ascii_case(&model_ref.provider_alias))
-        {
-            edits.push(clear_config_value("default_model"));
         }
     }
 

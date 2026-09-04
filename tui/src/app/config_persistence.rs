@@ -922,7 +922,7 @@ impl App {
         let edits = build_logout_provider_edits(
             &aliases_to_remove,
             &self.config.configured_models,
-            self.config.model.as_deref(),
+            Some(self.config.model_provider_id.as_str()),
         );
         if edits.is_empty() {
             self.chat_widget
@@ -985,7 +985,7 @@ impl App {
         let edits = build_logout_provider_edits(
             &[alias.clone()],
             &self.config.configured_models,
-            self.config.model.as_deref(),
+            Some(self.config.model_provider_id.as_str()),
         );
         if edits.is_empty() {
             self.chat_widget

@@ -766,6 +766,61 @@ base_url = "https://api.kimi.com/v1"
 }
 
 #[tokio::test]
+async fn load_config_recovers_from_dangling_persisted_model_provider() -> std::io::Result<()> {
+    let cfg = toml::from_str::<ConfigToml>(
+        r#"
+default_model = "dp_1/deepseek-v4-flash"
+
+[models."dp_1/deepseek-v4-flash"]
+provider = "dp_1"
+model = "deepseek-v4-flash"
+"#,
+    )
+    .expect("dangling provider config should deserialize");
+
+    let config = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides::default(),
+        tempdir().expect("tempdir").abs(),
+    )
+    .await
+    .expect("a stale persisted provider must not prevent startup");
+
+    assert_eq!(config.model_provider_id, "kimi");
+    assert_eq!(config.model, None);
+    assert!(!config.has_active_model);
+    assert!(config.startup_warnings.iter().any(|warning| {
+        warning.contains("Configured model provider `dp_1` was not found")
+            && warning.contains("/login or /model")
+    }));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn load_config_rejects_missing_explicit_model_provider_override() {
+    let cfg = toml::from_str::<ConfigToml>(r#"default_model = "kimi/kimi-for-coding""#)
+        .expect("config should deserialize");
+
+    let error = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides {
+            model_provider: Some("missing-cli-provider".to_string()),
+            ..ConfigOverrides::default()
+        },
+        tempdir().expect("tempdir").abs(),
+    )
+    .await
+    .expect_err("an explicit missing provider should still be rejected");
+
+    assert!(
+        error
+            .to_string()
+            .contains("Model provider `missing-cli-provider` not found")
+    );
+}
+
+#[tokio::test]
 async fn load_config_without_model_has_no_active_model() -> std::io::Result<()> {
     // A bare binary with no config.toml (empty config, no default_model/model)
     // must resolve to "no active model": the picker is empty, the welcome header

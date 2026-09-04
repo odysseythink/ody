@@ -184,21 +184,22 @@ fn build_logout_provider_edits_clears_default_model_when_owned_by_provider() {
     let edits = build_logout_provider_edits(
         &aliases,
         &std::collections::HashMap::new(),
-        Some("work-kimi/kimi-k2"),
+        Some("work-kimi"),
     );
-    assert_eq!(edits.len(), 2);
-    assert_eq!(edits[1].key_path, "default_model");
-    assert_eq!(edits[1].value, serde_json::Value::Null);
+    assert_eq!(edits.len(), 5);
+    assert_eq!(edits[0].key_path, "default_model");
+    assert_eq!(edits[1].key_path, "default_provider");
+    assert_eq!(edits[2].key_path, "model");
+    assert_eq!(edits[3].key_path, "model_provider");
+    assert_eq!(edits[4].key_path, "providers.work-kimi");
+    assert!(edits.iter().all(|edit| edit.value.is_null()));
 }
 
 #[test]
 fn build_logout_provider_edits_keeps_default_model_when_not_owned_by_provider() {
     let aliases = vec!["work-kimi".to_string()];
-    let edits = build_logout_provider_edits(
-        &aliases,
-        &std::collections::HashMap::new(),
-        Some("other/kimi-k2.5"),
-    );
+    let edits =
+        build_logout_provider_edits(&aliases, &std::collections::HashMap::new(), Some("other"));
     assert_eq!(edits.len(), 1);
     assert_eq!(edits[0].key_path, "providers.work-kimi");
 }
@@ -234,11 +235,24 @@ fn build_logout_provider_edits_clears_default_model_and_matching_models() {
         "work-kimi/kimi-k2".to_string(),
         OdyCodeModelConfig::default(),
     );
-    let edits = build_logout_provider_edits(&aliases, &models, Some("work-kimi/kimi-k2"));
-    assert_eq!(edits.len(), 3);
-    assert_eq!(edits[0].key_path, "providers.work-kimi");
-    assert_eq!(edits[1].key_path, r#"models."work-kimi/kimi-k2""#);
-    assert_eq!(edits[2].key_path, "default_model");
+    let edits = build_logout_provider_edits(&aliases, &models, Some("work-kimi"));
+    assert_eq!(edits.len(), 6);
+    assert_eq!(edits[0].key_path, "default_model");
+    assert_eq!(edits[1].key_path, "default_provider");
+    assert_eq!(edits[2].key_path, "model");
+    assert_eq!(edits[3].key_path, "model_provider");
+    assert_eq!(edits[4].key_path, "providers.work-kimi");
+    assert_eq!(edits[5].key_path, r#"models."work-kimi/kimi-k2""#);
+}
+
+#[test]
+fn build_logout_provider_edits_matches_active_provider_case_insensitively() {
+    let aliases = vec!["DP_1".to_string()];
+    let edits =
+        build_logout_provider_edits(&aliases, &std::collections::HashMap::new(), Some("dp_1"));
+
+    assert!(edits.iter().any(|edit| edit.key_path == "default_model"));
+    assert!(edits.iter().any(|edit| edit.key_path == "model_provider"));
 }
 
 #[test]
