@@ -8,6 +8,8 @@ pub const EXECUTE: &str = include_str!("../templates/execute.md");
 pub const PAIR_PROGRAMMING: &str = include_str!("../templates/pair_programming.md");
 pub const PLAN_CONCISE: &str = include_str!("../templates/plan_concise.md");
 pub const PRODUCT: &str = include_str!("../templates/product.md");
+pub const PRODUCT_FULL_REMINDER: &str = include_str!("../templates/product_full_reminder.md");
+pub const PRODUCT_SPARSE_REMINDER: &str = include_str!("../templates/product_sparse_reminder.md");
 pub const PLAN_RIGOR_WORKFLOW: &str = include_str!("../templates/plan_rigor_workflow.md");
 pub const PLAN_RIGOR_COVERAGE: &str = include_str!("../templates/plan_rigor_coverage.md");
 pub const PLAN_RIGOR_TASK_SKELETON: &str = include_str!("../templates/plan_rigor_task_skeleton.md");
@@ -293,6 +295,45 @@ mod template_tests {
                 "PRODUCT must contain {requirement:?}"
             );
         }
+    }
+
+    /// Periodic reminders for product mode: the full reminder re-injects the
+    /// complete operating contract (turn discipline, evidence grading, hard
+    /// gate, priority vocabulary) on the full cadence; the sparse reminder
+    /// keeps the load-bearing rules alive between full reinjections. Both
+    /// must never drift from the pinned contract in `product.md`.
+    #[test]
+    fn product_reminders_restate_the_load_bearing_rules() {
+        for requirement in [
+            // Mode identity — the model must never confuse this with a
+            // plan/design reminder.
+            "Product Mode",
+            // Turn discipline: one question at a time via pop-ups.
+            "request_user_input",
+            "ONE question at a time",
+            // Evidence grading and confidence tagging.
+            "[V:STATED]",
+            "[C:INFERRED]",
+            // The book's four-level priority vocabulary.
+            "must-do",
+            "wont-do",
+        ] {
+            assert!(
+                PRODUCT_FULL_REMINDER.contains(requirement),
+                "PRODUCT_FULL_REMINDER must contain {requirement:?}"
+            );
+            assert!(
+                PRODUCT_SPARSE_REMINDER.contains(requirement),
+                "PRODUCT_SPARSE_REMINDER must contain {requirement:?}"
+            );
+        }
+        // The full reminder alone carries the hard gate (no code) — the rule
+        // the whole mode exists to enforce.
+        assert!(
+            PRODUCT_FULL_REMINDER.contains("no code"),
+            "PRODUCT_FULL_REMINDER must restate the no-code hard gate:\n{}",
+            PRODUCT_FULL_REMINDER
+        );
     }
 
     fn understand_step_of(body: &str) -> String {

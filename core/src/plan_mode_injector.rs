@@ -403,6 +403,40 @@ impl PlanModeInjector {
         );
         Some((kind, text, vec![log]))
     }
+
+    /// Product-mode counterpart to [`Self::render_reminder_if_due`].
+    ///
+    /// Product Mode's contract is injected once at entry and then never
+    /// reinforced, so over a long requirements session the operating rules —
+    /// above all "ONE question at a time via `request_user_input`", the
+    /// `[V:*]` evidence grading, the four-level priority vocabulary, and the
+    /// no-code hard gate — get buried and the model drifts to plain-text
+    /// questions and implementation-shaped "requirements". This re-injects a
+    /// full or condensed Product reminder on the same cadence the Plan/Design
+    /// paths use.
+    pub fn render_product_reminder_if_due(
+        artifact: &PlanArtifact,
+        plan_mode_config: Option<&PlanModeConfigToml>,
+        mode: ModeKind,
+    ) -> Option<(ReminderKind, String, Vec<PlanModeLogEvent>)> {
+        if mode != ModeKind::Product {
+            return None;
+        }
+        let (kind, current_turn) = advance_and_select_reminder(artifact, plan_mode_config)?;
+        let text = match kind {
+            ReminderKind::Full => render_product_full_reminder(),
+            ReminderKind::Sparse => render_product_sparse_reminder(),
+        };
+        let log = make_log(
+            PlanModeLogKind::RigorReminder,
+            match kind {
+                ReminderKind::Full => "Injecting full product reminder.".to_string(),
+                ReminderKind::Sparse => "Injecting sparse product reminder.".to_string(),
+            },
+            Some(format!("turn={}", current_turn)),
+        );
+        Some((kind, text, vec![log]))
+    }
 }
 
 /// Advances the per-artifact turn counter, selects whether a full/sparse
@@ -450,6 +484,17 @@ pub fn render_design_full_reminder() -> String {
 /// reinjections to keep the operating rules alive without full repetition).
 pub fn render_design_sparse_reminder() -> String {
     ody_collaboration_mode_templates::DESIGN_SPARSE_REMINDER.to_string()
+}
+
+/// Renders the full Product-mode reminder (re-injected on the full cadence).
+pub fn render_product_full_reminder() -> String {
+    ody_collaboration_mode_templates::PRODUCT_FULL_REMINDER.to_string()
+}
+
+/// Renders the condensed Product-mode reminder (re-injected between full
+/// reinjections to keep the operating rules alive without full repetition).
+pub fn render_product_sparse_reminder() -> String {
+    ody_collaboration_mode_templates::PRODUCT_SPARSE_REMINDER.to_string()
 }
 
 fn make_log(kind: PlanModeLogKind, message: String, detail: Option<String>) -> PlanModeLogEvent {
@@ -1397,6 +1442,126 @@ mod directive_tests {
                 "Plan mode must never receive a Design reminder"
             );
         }
+    }
+
+    #[test]
+    fn render_product_reminder_if_due_follows_full_sparse_cadence() {
+        let tmp = tempfile::tempdir().unwrap();
+        let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let thread_id = ThreadId::from_string("00000000-0000-0000-0000-000000000006").unwrap();
+        let artifact = PlanArtifact::new_product(plans_base_dir, thread_id, "2026-09-07");
+        let config = PlanModeConfigToml::default();
+
+        // Turns 1-4: the entry contract is still fresh; nothing is due.
+        for _ in 1..=4 {
+            assert_eq!(
+                PlanModeInjector::render_product_reminder_if_due(
+                    &artifact,
+                    Some(&config),
+                    ModeKind::Product
+                ),
+                None,
+                "no product reminder before turn 5"
+            );
+        }
+
+        // Turn 5: full product reminder.
+        let (kind, text, _logs) = PlanModeInjector::render_product_reminder_if_due(
+            &artifact,
+            Some(&config),
+            ModeKind::Product,
+        )
+        .expect("turn 5 should emit a full product reminder");
+        assert_eq!(kind, ReminderKind::Full);
+        assert!(
+            text.contains("Product Mode") && text.contains("request_user_input"),
+            "full product reminder should carry the mode identity and turn discipline:\n{text}"
+        );
+
+        // Turn 6: deduplicated after full at turn 5.
+        assert_eq!(
+            PlanModeInjector::render_product_reminder_if_due(
+                &artifact,
+                Some(&config),
+                ModeKind::Product
+            ),
+            None,
+            "turn 6 should be deduplicated"
+        );
+
+        // Turn 7: sparse product reminder.
+        let (kind, _text, _logs) = PlanModeInjector::render_product_reminder_if_due(
+            &artifact,
+            Some(&config),
+            ModeKind::Product,
+        )
+        .expect("turn 7 should emit a sparse product reminder");
+        assert_eq!(kind, ReminderKind::Sparse);
+    }
+
+    #[test]
+    fn render_product_reminder_if_due_never_fires_for_plan_or_design_mode() {
+        // The product reminder text must never leak into a Plan or Design
+        // session, so the function self-guards to Product regardless of how
+        // the call site is gated — same independent-guard contract the Plan
+        // and Design reminder paths already pin.
+        let tmp = tempfile::tempdir().unwrap();
+        let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let thread_id = ThreadId::from_string("00000000-0000-0000-0000-000000000007").unwrap();
+        let artifact = PlanArtifact::new_product(plans_base_dir, thread_id, "2026-09-07");
+        let config = PlanModeConfigToml::default();
+
+        for _ in 1..=7 {
+            assert_eq!(
+                PlanModeInjector::render_product_reminder_if_due(
+                    &artifact,
+                    Some(&config),
+                    ModeKind::Plan
+                ),
+                None,
+                "Plan mode must never receive a product reminder"
+            );
+            assert_eq!(
+                PlanModeInjector::render_product_reminder_if_due(
+                    &artifact,
+                    Some(&config),
+                    ModeKind::Design
+                ),
+                None,
+                "Design mode must never receive a product reminder"
+            );
+        }
+    }
+
+    #[test]
+    fn product_reminders_restate_the_load_bearing_rules() {
+        let full = render_product_full_reminder();
+        assert!(
+            full.contains("request_user_input"),
+            "full product reminder must restate the pop-up rule:\n{full}"
+        );
+        assert!(
+            full.contains("ONE question at a time"),
+            "full product reminder must restate one-question-per-turn:\n{full}"
+        );
+        assert!(
+            full.contains("no code"),
+            "full product reminder must restate the no-code hard gate:\n{full}"
+        );
+        assert!(
+            full.contains("[V:STATED]"),
+            "full product reminder must restate evidence grading:\n{full}"
+        );
+
+        let sparse = render_product_sparse_reminder();
+        assert!(
+            sparse.contains("request_user_input"),
+            "sparse product reminder must keep the pop-up rule alive:\n{sparse}"
+        );
+        assert!(
+            sparse.contains("must-do"),
+            "sparse product reminder must keep the priority vocabulary alive:\n{sparse}"
+        );
     }
 
     #[test]

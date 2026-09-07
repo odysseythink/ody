@@ -880,6 +880,7 @@ impl Session {
         let mode = turn_context.collaboration_mode.mode;
         if mode == ody_protocol::config_types::ModeKind::Plan
             || mode == ody_protocol::config_types::ModeKind::Design
+            || mode == ody_protocol::config_types::ModeKind::Product
         {
             // Artifacts are stored in the current project directory so they are
             // easy to find and version-control alongside the project.
@@ -893,6 +894,9 @@ impl Session {
                 }
                 ody_protocol::config_types::ModeKind::Design => {
                     PlanArtifact::new_design(base_dir, self.thread_id(), date)
+                }
+                ody_protocol::config_types::ModeKind::Product => {
+                    PlanArtifact::new_product(base_dir, self.thread_id(), date)
                 }
                 _ => unreachable!("guarded by the surrounding if"),
             };

@@ -426,6 +426,63 @@ fn plan_artifact_at(path: &std::path::Path) -> crate::plan_artifact::PlanArtifac
     crate::plan_artifact::PlanArtifact::new_temp(plans_base_dir, thread_id, "2026-07-04")
 }
 
+#[test]
+fn product_mode_is_a_read_only_session_mode() {
+    // Product mode enforces the same no-code hard gate as Plan/Design: its
+    // after-turn cadence reminders, patch gate, and exec gate all key off
+    // this predicate.
+    assert!(is_read_only_session_mode(ModeKind::Product));
+    assert!(is_read_only_session_mode(ModeKind::Plan));
+    assert!(is_read_only_session_mode(ModeKind::Design));
+    assert!(!is_read_only_session_mode(ModeKind::Default));
+}
+
+#[test]
+fn product_gate_strict_allows_writing_only_the_product_artifact() {
+    // The requirements document under `.ody-code/products/` is the one
+    // writable surface in product mode; repo code stays denied under Strict.
+    let tmp = TempDir::new().unwrap();
+    let base = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+    let thread_id =
+        ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
+    let artifact = crate::plan_artifact::PlanArtifact::new_product(base, thread_id, "2026-09-07");
+
+    let enforcement = PlanEnforcement::Strict;
+    let mode = CollaborationMode {
+        mode: ModeKind::Product,
+        settings: Settings {
+            model: "test".to_string(),
+            reasoning_effort: None,
+            developer_instructions: None,
+            design_audit_level: None,
+        },
+    };
+
+    let product_file = artifact.path().unwrap();
+    let write_product = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&product_file.abs()),
+        "# Requirements\n".to_string(),
+    );
+    assert_eq!(
+        plan_mode_gate_for_patch(&mode, enforcement, &write_product, Some(&artifact)),
+        PlanGateDecision::Allow,
+        "the product artifact itself must stay writable in product mode"
+    );
+
+    let src_file = tmp.path().join("src").join("lib.rs");
+    let write_src = ApplyPatchAction::new_add_for_test(
+        &PathUri::from_abs_path(&src_file.abs()),
+        "fn main() {}\n".to_string(),
+    );
+    assert!(
+        matches!(
+            plan_mode_gate_for_patch(&mode, enforcement, &write_src, Some(&artifact)),
+            PlanGateDecision::Deny { .. }
+        ),
+        "repo code must stay denied in product mode under Strict"
+    );
+}
+
 fn design_mode() -> CollaborationMode {
     CollaborationMode {
         mode: ModeKind::Design,

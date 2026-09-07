@@ -116,6 +116,20 @@ impl PlanArtifact {
         Self::with_subdir(plans_base_dir, "designs", thread_id, date)
     }
 
+    /// Product-mode artifact rooted under `<base>/products/`.
+    ///
+    /// Product mode has no split-manifest/submit flow — the artifact exists so
+    /// the read-only-mode after-turn hook (cadence reminders) and the patch
+    /// gate (the `.ody-code/products/` document is the one writable surface)
+    /// have the same artifact seam Plan and Design already use.
+    pub fn new_product(
+        plans_base_dir: AbsolutePathBuf,
+        thread_id: ody_protocol::ThreadId,
+        date: &str,
+    ) -> Self {
+        Self::with_subdir(plans_base_dir, "products", thread_id, date)
+    }
+
     fn with_subdir(
         plans_base_dir: AbsolutePathBuf,
         subdir: &'static str,
@@ -772,6 +786,33 @@ mod tests {
         assert!(artifact.is_plan_file_path(&final_path));
         let stem_dir = final_path.with_extension("");
         assert!(artifact.is_plan_file_path(&stem_dir.join("core.md")));
+    }
+
+    #[tokio::test]
+    async fn new_product_allocates_under_products() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let thread_id =
+            ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-000000000008").unwrap();
+        let artifact = PlanArtifact::new_product(base, thread_id, "2026-09-07");
+
+        let temp_path = artifact.path().unwrap();
+        assert!(temp_path.starts_with(tmp.path().join("products")));
+
+        artifact.finalize_name("export_flow").await.unwrap();
+        let final_path = artifact.path().unwrap();
+        assert!(final_path.starts_with(tmp.path().join("products")));
+        assert!(
+            final_path
+                .to_string_lossy()
+                .ends_with("2026-09-07-export_flow.md")
+        );
+
+        // The artifact's own file (and its would-be split parts) must be
+        // writable under the read-only-mode patch gate.
+        assert!(artifact.is_plan_file_path(&final_path));
+        let stem_dir = final_path.with_extension("");
+        assert!(artifact.is_plan_file_path(&stem_dir.join("stakeholders.md")));
     }
 
     #[test]

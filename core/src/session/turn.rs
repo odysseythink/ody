@@ -1756,12 +1756,14 @@ async fn run_session_mode_after_turn(
     // self-guards on mode, so at most one fires per turn: the Plan path
     // re-injects the rigor-tier contract, the Design path re-injects the Design
     // operating rules (pop-up-for-choices, turn discipline, adversarial
-    // self-review) that would otherwise decay after the single entry injection.
-    // Split plans already receive event-driven directives at the initial
-    // manifest, verified part boundaries, first validation failure, and final
-    // review. Periodic full/sparse reminders during every model sampling only
-    // duplicate that contract and inflate context, so retain cadence reminders
-    // solely for unsplit long-form plans/designs.
+    // self-review), and the Product path re-injects the requirements
+    // discipline (one-question-popups, evidence grading, priority vocabulary,
+    // no-code hard gate) — all of which would otherwise decay after the single
+    // entry injection. Split plans already receive event-driven directives at
+    // the initial manifest, verified part boundaries, first validation failure,
+    // and final review. Periodic full/sparse reminders during every model
+    // sampling only duplicate that contract and inflate context, so retain
+    // cadence reminders solely for unsplit long-form plans/designs.
     let should_remind = PlanModeInjector::should_inject_periodic_reminder(plan_markdown);
     let reminder = should_remind
         .then(|| PlanModeInjector::render_reminder_if_due(artifact, plan_mode_config, mode))
@@ -1776,11 +1778,24 @@ async fn run_session_mode_after_turn(
                     )
                 })
                 .flatten()
+        })
+        .or_else(|| {
+            should_remind
+                .then(|| {
+                    PlanModeInjector::render_product_reminder_if_due(
+                        artifact,
+                        plan_mode_config,
+                        mode,
+                    )
+                })
+                .flatten()
         });
     if let Some((reminder_kind, reminder_text, reminder_logs)) = reminder {
         let source = InternalContextSource::from_static(match (mode, reminder_kind) {
             (ModeKind::Design, ReminderKind::Full) => "design_mode_full_reminder",
             (ModeKind::Design, ReminderKind::Sparse) => "design_mode_sparse_reminder",
+            (ModeKind::Product, ReminderKind::Full) => "product_mode_full_reminder",
+            (ModeKind::Product, ReminderKind::Sparse) => "product_mode_sparse_reminder",
             (_, ReminderKind::Full) => "plan_mode_full_reminder",
             (_, ReminderKind::Sparse) => "plan_mode_sparse_reminder",
         });
@@ -3060,15 +3075,19 @@ async fn try_run_sampling_request(
             // design text exists yet. That is exactly the phase where the model
             // drifts to plain-text questions instead of `request_user_input`
             // pop-ups, so a reminder gated on "a design has been written" would
-            // miss it. Plan keeps its existing gate (reminders start only once a
-            // plan exists); passing an empty string to the hook is safe — it
-            // parses no manifest, emits no directive, and stores nothing.
+            // miss it. Product has the same shape: P0 triage and the P1
+            // clarification dialogue happen before any document text exists,
+            // and that is exactly where the model drifts to plain-text
+            // questions instead of pop-ups. Plan keeps its existing gate
+            // (reminders start only once a plan exists); passing an empty
+            // string to the hook is safe — it parses no manifest, emits no
+            // directive, and stores nothing.
             let plan_markdown = match (
                 turn_context.collaboration_mode.mode,
                 artifact.last_plan_text(),
             ) {
                 (_, Some(text)) => Some(text),
-                (ModeKind::Design, None) => Some(String::new()),
+                (ModeKind::Design | ModeKind::Product, None) => Some(String::new()),
                 (_, None) => None,
             };
             if let Some(plan_markdown) = plan_markdown {

@@ -59,6 +59,8 @@ const PLAN_MODE_WRITE_DENIED_REASON: &str = "Plan mode is read-only by default. 
 
 const DESIGN_MODE_WRITE_DENIED_REASON: &str = "Design mode is read-only. Persist the design index with the submit_design tool; write split parts only as .md files under the design's <stem>/ directory. For a large goal, submit the roadmap with submit_roadmap so the host can request confirmation and persist it. Switch to Plan or Default mode to make other changes. [design-mode-blocked]";
 
+const PRODUCT_MODE_WRITE_DENIED_REASON: &str = "Product mode produces requirements, not code. Record the requirement in the .ody-code/products/ document instead; switch to Default mode to apply patches. [product-mode-blocked]";
+
 /// Returns a human-readable Plan-mode patch-denial message that includes the
 /// rejected file path and the stable rejection marker.
 pub fn plan_mode_write_denied_message(path: &std::path::Path) -> String {
@@ -76,8 +78,12 @@ pub fn design_mode_write_denied_message(path: &std::path::Path) -> String {
 
 /// Returns true for session modes that are read-only by default and must be
 /// gated against patch writes and potentially-mutating exec commands.
+///
+/// Product mode joins Plan/Design here: its no-code hard gate is enforced by
+/// the same patch/exec gates, with the `.ody-code/products/` document as the
+/// single writable surface (see `PlanArtifact::new_product`).
 pub(crate) const fn is_read_only_session_mode(m: ModeKind) -> bool {
-    matches!(m, ModeKind::Plan | ModeKind::Design)
+    matches!(m, ModeKind::Plan | ModeKind::Design | ModeKind::Product)
 }
 
 /// Plan-mode front gate for `apply_patch`. Runs before `assess_patch_safety` so that
@@ -124,6 +130,7 @@ pub fn plan_mode_gate_for_patch(
 
     let denied_reason = match mode.mode {
         ModeKind::Design => DESIGN_MODE_WRITE_DENIED_REASON,
+        ModeKind::Product => PRODUCT_MODE_WRITE_DENIED_REASON,
         _ => PLAN_MODE_WRITE_DENIED_REASON,
     };
 
@@ -143,8 +150,11 @@ const PLAN_MODE_EXEC_ASK_REASON: &str =
     "This command may modify files while in Plan mode. Please confirm before running.";
 
 const DESIGN_MODE_EXEC_DENIED_REASON: &str = "Design mode is read-only. This command may modify files; finish designing and switch to Plan or Default mode to run it. [design-mode-blocked] If you were trying to save your design: use the file-write tool instead of a shell command — writes to the assigned design file path are allowed even in Design mode.";
+const PRODUCT_MODE_EXEC_DENIED_REASON: &str = "Product mode is read-only. This command may modify files; finish the requirements document and switch to Default mode to run it. [product-mode-blocked] If you were trying to save the requirements: use the file-write tool instead of a shell command — writes to the .ody-code/products/ document are allowed even in Product mode.";
 const DESIGN_MODE_EXEC_ASK_REASON: &str =
     "This command may modify files while in Design mode. Please confirm before running.";
+const PRODUCT_MODE_EXEC_ASK_REASON: &str =
+    "This command may modify files while in Product mode. Please confirm before running.";
 
 /// Denial reason when a spike (minimal-experiment) command runs from inside the
 /// `.ody-code/spikes/` directory but no OS sandbox is available (e.g. Windows
@@ -167,6 +177,12 @@ fn spike_no_sandbox_denied_message(mode: ModeKind, command: &str) -> String {
 /// rejected command and the stable rejection marker.
 pub fn plan_mode_exec_denied_message(command: &str) -> String {
     format!("{PLAN_MODE_EXEC_DENIED_REASON} (command: {command})")
+}
+
+/// Returns a human-readable Product-mode exec-denial message that includes the
+/// rejected command and the stable rejection marker.
+pub fn product_mode_exec_denied_message(command: &str) -> String {
+    format!("{PRODUCT_MODE_EXEC_DENIED_REASON} (command: {command})")
 }
 
 /// Returns a human-readable Design-mode exec-denial message that includes the
@@ -214,6 +230,10 @@ pub fn plan_mode_gate_for_exec(
         ModeKind::Design => (
             design_mode_exec_denied_message(&command_for_display),
             DESIGN_MODE_EXEC_ASK_REASON.to_string(),
+        ),
+        ModeKind::Product => (
+            product_mode_exec_denied_message(&command_for_display),
+            PRODUCT_MODE_EXEC_ASK_REASON.to_string(),
         ),
         _ => (
             plan_mode_exec_denied_message(&command_for_display),
