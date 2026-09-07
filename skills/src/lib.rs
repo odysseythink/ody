@@ -211,4 +211,49 @@ mod tests {
             "system skills should be discovered"
         );
     }
+
+    #[tokio::test]
+    async fn idea_skills_are_hidden_in_product_mode() {
+        // Product mode's P0/P1 workflow already covers direction evaluation
+        // (Path A) and idea screening; letting the funnel skills fire inside
+        // Product mode would double-gate the user and break the one-question
+        // rhythm. Their frontmatter must therefore name `product` in
+        // hiddenInModes and the loader must actually honor it.
+        let temp_dir = tempfile::tempdir().unwrap();
+        let ody_home = ody_utils_absolute_path::AbsolutePathBuf::try_from(temp_dir.path())
+            .expect("absolute temp dir");
+        install_system_skills(&ody_home).expect("install system skills");
+
+        let system_root = system_cache_root_dir(&ody_home);
+        let outcome = ody_core_skills::loader::load_skills_from_roots(
+            [ody_core_skills::loader::SkillRoot {
+                path: system_root,
+                scope: SkillScope::System,
+                file_system: Arc::new(LocalFileSystem::unsandboxed()),
+                plugin_id: None,
+                plugin_namespace: None,
+                plugin_root: None,
+            }],
+            /*plugin_skill_snapshots*/ None,
+        )
+        .await;
+
+        assert!(outcome.errors.is_empty(), "errors: {:?}", outcome.errors);
+        for name in ["idea-evaluator", "idea-generator"] {
+            let skill = outcome
+                .skills
+                .iter()
+                .find(|s| s.name == name)
+                .unwrap_or_else(|| panic!("{name} should be installed and loadable"));
+            assert!(
+                skill.hidden_in_modes.contains(&ody_protocol::config_types::ModeKind::Product),
+                "{name} must be hidden in Product mode; got {:?}",
+                skill.hidden_in_modes
+            );
+            assert!(
+                skill.is_model_invocable(ody_protocol::config_types::ModeKind::Default),
+                "{name} must stay invocable in Default mode"
+            );
+        }
+    }
 }

@@ -2236,6 +2236,106 @@ async fn parse_skill_file_extracts_all_new_fields() {
 }
 
 #[tokio::test]
+async fn hidden_in_modes_accepts_camelcase_frontmatter_key() {
+    // Skill frontmatters in the wild follow the ody-code convention of
+    // camelCase keys (`hiddenInModes`); the loader must honor them, not
+    // silently drop the filter as an unknown field.
+    let dir = TempDir::new().unwrap();
+    let skill_path = dir
+        .path()
+        .join(".agents")
+        .join("skills")
+        .join("critique")
+        .join("SKILL.md");
+    fs::create_dir_all(skill_path.parent().unwrap()).unwrap();
+    fs::write(
+        &skill_path,
+        "---\nname: critique\ndescription: Critique a direction.\ntype: inline\nhiddenInModes:\n  - plan\n  - product\n---\n# Critique\n",
+    )
+    .unwrap();
+
+    let fs: Arc<dyn ExecutorFileSystem> = Arc::clone(&LOCAL_FS);
+    let roots = skill_roots_from_layer_stack(
+        fs,
+        &ConfigLayerStack::default(),
+        &AbsolutePathBuf::try_from(dir.path()).unwrap(),
+        /*home_dir*/ None,
+    )
+    .await;
+    let outcome = load_skills_from_roots(roots, None).await;
+
+    let skill = outcome
+        .skills
+        .iter()
+        .find(|s| s.name == "critique")
+        .expect("skill should be loaded");
+    assert!(
+        skill.hidden_in_modes.contains(&ModeKind::Plan),
+        "camelCase hiddenInModes must parse; got {:?}",
+        skill.hidden_in_modes
+    );
+    assert!(
+        skill.hidden_in_modes.contains(&ModeKind::Product),
+        "camelCase hiddenInModes must parse; got {:?}",
+        skill.hidden_in_modes
+    );
+    assert!(
+        skill.is_model_invocable(ModeKind::Default),
+        "skill without a Default entry stays invocable in Default mode"
+    );
+    assert!(
+        !skill.is_model_invocable(ModeKind::Product),
+        "a product entry must hide the skill in Product mode"
+    );
+}
+
+#[tokio::test]
+async fn hidden_in_modes_skips_unsupported_modes_without_dropping_the_skill() {
+    // Frontmatters copied from the ody-code ecosystem may name modes that
+    // ody-rs does not have (e.g. game-design). An unparseable entry must
+    // downgrade to a warning and keep the skill loadable with the valid
+    // entries intact — never fail the whole skill over one stale mode name.
+    let dir = TempDir::new().unwrap();
+    let skill_path = dir
+        .path()
+        .join(".agents")
+        .join("skills")
+        .join("legacy")
+        .join("SKILL.md");
+    fs::create_dir_all(skill_path.parent().unwrap()).unwrap();
+    fs::write(
+        &skill_path,
+        "---\nname: legacy\ndescription: Legacy skill.\ntype: inline\nhiddenInModes:\n  - plan\n  - game-design\n---\n# Legacy\n",
+    )
+    .unwrap();
+
+    let fs: Arc<dyn ExecutorFileSystem> = Arc::clone(&LOCAL_FS);
+    let roots = skill_roots_from_layer_stack(
+        fs,
+        &ConfigLayerStack::default(),
+        &AbsolutePathBuf::try_from(dir.path()).unwrap(),
+        /*home_dir*/ None,
+    )
+    .await;
+    let outcome = load_skills_from_roots(roots, None).await;
+
+    let skill = outcome
+        .skills
+        .iter()
+        .find(|s| s.name == "legacy")
+        .expect("an unsupported hidden mode must not drop the skill");
+    assert!(
+        skill.hidden_in_modes.contains(&ModeKind::Plan),
+        "valid entries must survive; got {:?}",
+        skill.hidden_in_modes
+    );
+    assert!(
+        !skill.hidden_in_modes.iter().any(|m| *m == ModeKind::Default),
+        "unsupported entries must be skipped, not guessed"
+    );
+}
+
+#[tokio::test]
 async fn parse_skill_file_defaults_to_inline() {
     let dir = TempDir::new().unwrap();
     let path = dir

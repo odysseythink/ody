@@ -635,6 +635,10 @@ pub enum AltScreenMode {
 pub enum ModeKind {
     Plan,
     Design,
+    // ody-code's office-hours mode was renamed to product; accept the legacy
+    // name (both spellings) so skill frontmatters written against it keep
+    // parsing, e.g. in hiddenInModes filters.
+    #[serde(alias = "office-hours", alias = "office_hours")]
     Product,
     #[default]
     #[serde(
@@ -826,6 +830,19 @@ mod tests {
             let json = format!("\"{alias}\"");
             let mode: ModeKind = serde_json::from_str(&json).expect("deserialize mode");
             assert_eq!(ModeKind::Default, mode);
+        }
+    }
+
+    #[test]
+    fn mode_kind_product_deserializes_legacy_office_hours_alias() {
+        // ody-code renamed its office-hours mode to product. Skill
+        // frontmatters written against the old name (installed by older
+        // versions or copied from the ody-code ecosystem) must keep parsing
+        // so the hiddenInModes filter keeps its intended effect.
+        for alias in ["office-hours", "office_hours"] {
+            let json = format!("\"{alias}\"");
+            let mode: ModeKind = serde_json::from_str(&json).expect("deserialize mode");
+            assert_eq!(ModeKind::Product, mode);
         }
     }
 

@@ -15,8 +15,7 @@ description: >
 hiddenInModes:
   - plan
   - design
-  - office-hours
-  - game-design
+  - product
 ---
 
 # SKILL: Idea Generator (想法发生器) v1
