@@ -670,3 +670,47 @@ Chat、Work、Canvas 共享同一会话身份、文件、记忆和权限语义�
 - `apps/web/next.config.ts`：对 daemon 的 API、Artifact 和 Frame 代理；
 - `apps/web/src/runtime/srcdoc.ts`：iframe bridge、元素身份、inspect/comment、CSS override 和 snapshot；
 - `apps/web/src/providers/daemon.ts`：Web UI 与 daemon 的耦合边界。
+
+
+---
+
+## 17. odyBox-base Runtime 接入现状核对（2026-09-07 代码级复核）
+
+> 复核对象：`D:\workspace\go_work\odyBox-base`，commit `8b80c388`（chatbox 融合 Electron 版，即正文 S1–S4 审计所描述的产品）。
+> 注意：`E:\odyBox` 是另一代 design-product daemon 仓库，有自己的 P4/P5 路线，与本节无关。
+> 本节所有结论均以源码 `文件:行号` 为准，不依赖审计文档转述。
+
+### 17.1 已就位
+
+| 能力 | 证据 |
+|---|---|
+| 生成 TS 类型 + 协议 client | `src/shared/generated/ody-runtime/`（84 个根类型 + 533 个 v2 类型）；`src/renderer/services/ody-runtime/` 共 7 个模块约 1400 行（agent-runtime-client、catalog-client、config-client、visual-workspace-client、web-search-sync、transport、work-generation） |
+| IPC 能力边界 | `src/main/ody-runtime-policy.ts:6-41` renderer→Runtime 显式方法白名单（thread/turn、skills、plugin、mcpServerStatus、model/list 等）；`:49-58` server request 白名单（审批、requestUserInput、elicitation），无 catch-all 隧道 |
+| Work Mode 走 Runtime | `work-generation.ts:434`：thread start/resume、steer、interrupt、流事件持久化为消息；`:337-343` Skills 按 `enabledSkillNames` 经 catalog-client 注入；`:404-417` MCP elicitation 有处理分支 |
+| 审批弹窗 | 命令/文件/权限审批走 NiceModal confirm（`work-generation.ts:353-399`），命令与文件审批已有原生弹窗与 legacy/新协议双格式应答 |
+| 供应商映射与显式报错 | `resolveRuntimeModelSelection`（`work-generation.ts:227-255`）：ChatboxAI / Azure / Bedrock 显式抛错、不静默回退；deepseek / anthropic / google-genai / kimi / glm / openai(_responses) 别名齐全；未知类型落 openai chat completions |
+| mid-turn 错误不静默降级 | `work-generation.ts:203-212`：Runtime 回合出错写入消息 error 并置 finishReason='error'，不回退 legacy 重跑 |
+
+### 17.2 缺口（逐项映射 S4 剩余清单）
+
+| S4 项 | 缺口 | 证据 |
+|---|---|---|
+| 第 1 项 真实验收 | 自动测试通过，但真实模型 + 真实工具回合未验：多轮上下文、审批、MCP elicitation、Stop、重启恢复、崩溃恢复、多窗口隔离 | — |
+| 第 8 项 发行闭环 | 二进制未随应用分发：解析只认两个环境变量 `ODYBOX_ODY_APP_SERVER_COMMAND`（直启 `--listen stdio://`）与 `ODYBOX_ODY_RUNTIME_COMMAND`（`app-server --stdio`），无打包资源路径查找（`ody-runtime-policy.ts:95-105`）；`electron-builder.yml:92-96` extraResources 仅 assets + duckdb-extensions；initialize 无协议版本兼容检查（`ody-runtime-visual.ts:90` 只有 clientInfo）；无健康检查/诊断页 | 同上 |
+| （崩溃恢复） | 子进程 exit/error 直接 `stop()`：kill + reject 全部 pending，无自动重启与重连（`ody-runtime-visual.ts:121-122, 253-270`） | 同上 |
+| 第 4 项 原生交互 UI | `requestUserInput` 仍用 `window.prompt`（`work-generation.ts:345-348`），取消即抛错；无单选/多选/密码字段、无权限范围（单次/Turn/Session）选择、无审批等待与超时提示 | 同上 |
+| 第 3 项 统一管理界面 | runtime 的 skills/plugin/mcp 方法仅被 `catalog-client.ts` 引用，无任何设置 UI 消费：Skills 安装/启停、Plugin 安装配置、MCP 添加/OAuth/启停仍操作旧系统，存在"界面一份、Runtime 一份"双事实来源 | 同上 |
+| 第 5 项 状态映射 | work-generation 对 plan 状态、token usage、context compaction、guardian、browser 操作、子 Agent 树、hook 执行零映射（grep 无命中）；白名单虽含 `thread/compact/start`、`thread/rollback` 但 UI 无消费 | 同上 |
+| 第 6 项 兼容回退 | `shouldUseOdyAgentRuntime`（`work-generation.ts:27-31`）：`VITE_ODYBOX_AGENT_RUNTIME=legacy` 或 Runtime 未配置时静默走旧 Work loop；旧 workflow runner、旧工具构建、旧审批实现仍在代码库中 | 同上 |
+| 第 7 项 删除旧实现 | 未开始（顺序正确，依赖第 1 项稳定窗口） | — |
+| 第 2 项 供应商适配 | odyBox 侧已符合（不支持的供应商明确报错，不回落 ChatboxAI）；剩余 Azure/Bedrock/企业 endpoint 适配属 ody 侧工作 | `work-generation.ts:231-236` |
+
+### 17.3 复核结论
+
+执行顺序维持正文 S4 节判断不变：**真实验收（第 1 项）→ 发行闭环（第 8 项，最先开工的工程项）→ 原生交互 UI（第 4 项）→ 统一管理界面（第 3 项）→ 消除回退与删旧（第 6、7 项殿后）**。
+
+相对 S4 审计文档，本次复核新增三处更精确的结论：
+
+1. **二进制解析支持两种形态**：`ODYBOX_ODY_APP_SERVER_COMMAND`（app-server 可执行文件直启）与 `ODYBOX_ODY_RUNTIME_COMMAND`（ody 主二进制 + `app-server` 子命令），发行闭环需同时覆盖两者或收敛为一种。
+2. **静默回退的边界比审计描述更窄**：仅发生在回合开始前的路径选择阶段（`shouldUseOdyAgentRuntime`）；一旦进入 Runtime 回合，错误显式 surfaced，不回退 legacy 重跑。
+3. **崩溃恢复是发行闭环的子项而非独立项**：进程退出即 reject 全部 pending 请求，用户看到的是回合报错而非自动恢复；随第 8 项一并解决（自动重启 + 重连 + 状态提示）。
