@@ -635,6 +635,7 @@ pub enum AltScreenMode {
 pub enum ModeKind {
     Plan,
     Design,
+    Product,
     #[default]
     #[serde(
         alias = "code",
@@ -655,14 +656,19 @@ pub enum ModeKind {
     Execute,
 }
 
-pub const TUI_VISIBLE_COLLABORATION_MODES: [ModeKind; 3] =
-    [ModeKind::Default, ModeKind::Plan, ModeKind::Design];
+pub const TUI_VISIBLE_COLLABORATION_MODES: [ModeKind; 4] = [
+    ModeKind::Default,
+    ModeKind::Plan,
+    ModeKind::Design,
+    ModeKind::Product,
+];
 
 impl ModeKind {
     pub const fn display_name(self) -> &'static str {
         match self {
             Self::Plan => "Plan",
             Self::Design => "Design",
+            Self::Product => "Product",
             Self::Default => "Default",
             Self::PairProgramming => "Pair Programming",
             Self::Execute => "Execute",
@@ -670,11 +676,11 @@ impl ModeKind {
     }
 
     pub const fn is_tui_visible(self) -> bool {
-        matches!(self, Self::Plan | Self::Default | Self::Design)
+        matches!(self, Self::Plan | Self::Default | Self::Design | Self::Product)
     }
 
     pub const fn allows_request_user_input(self) -> bool {
-        matches!(self, Self::Plan | Self::Design)
+        matches!(self, Self::Plan | Self::Design | Self::Product)
     }
 }
 
@@ -834,7 +840,25 @@ mod tests {
         );
         let mode: ModeKind = serde_json::from_str("\"design\"").expect("deserialize mode");
         assert_eq!(ModeKind::Design, mode);
-        assert_eq!(TUI_VISIBLE_COLLABORATION_MODES.len(), 3);
+    }
+
+    #[test]
+    fn mode_kind_product_is_first_class_visible_mode() {
+        assert_eq!(ModeKind::Product.display_name(), "Product");
+        assert!(ModeKind::Product.is_tui_visible());
+        // Product mode runs the requirements-analysis workflow, which asks
+        // ONE load-bearing question at a time via request_user_input.
+        assert!(ModeKind::Product.allows_request_user_input());
+        assert_eq!(
+            serde_json::to_string(&ModeKind::Product).expect("serialize mode"),
+            "\"product\""
+        );
+        let mode: ModeKind = serde_json::from_str("\"product\"").expect("deserialize mode");
+        assert_eq!(ModeKind::Product, mode);
+        assert!(
+            TUI_VISIBLE_COLLABORATION_MODES.contains(&ModeKind::Product),
+            "product mode must be selectable from the TUI mode picker"
+        );
     }
 
     #[test]
@@ -882,7 +906,12 @@ mod tests {
 
     #[test]
     fn tui_visible_collaboration_modes_match_mode_kind_visibility() {
-        let expected = [ModeKind::Default, ModeKind::Plan, ModeKind::Design];
+        let expected = [
+            ModeKind::Default,
+            ModeKind::Plan,
+            ModeKind::Design,
+            ModeKind::Product,
+        ];
         assert_eq!(expected, TUI_VISIBLE_COLLABORATION_MODES);
 
         for mode in TUI_VISIBLE_COLLABORATION_MODES {

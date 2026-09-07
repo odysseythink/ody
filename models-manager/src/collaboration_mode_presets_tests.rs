@@ -2,6 +2,25 @@ use super::*;
 use pretty_assertions::assert_eq;
 
 #[test]
+fn builtin_presets_include_product_mode() {
+    let presets = builtin_collaboration_mode_presets();
+    let product = presets
+        .iter()
+        .find(|mask| mask.mode == Some(ModeKind::Product))
+        .expect("builtin presets must include the product mode");
+    assert_eq!(product.name, ModeKind::Product.display_name());
+    assert_eq!(product.model, None);
+    assert_eq!(product.reasoning_effort, Some(Some(ReasoningEffort::Medium)));
+    let instructions = product
+        .developer_instructions
+        .as_ref()
+        .expect("product preset should include instructions")
+        .as_ref()
+        .expect("product instructions should be set");
+    assert!(instructions.contains(".ody-code/products/"));
+}
+
+#[test]
 fn preset_names_use_mode_display_names() {
     assert_eq!(plan_preset().name, ModeKind::Plan.display_name());
     assert_eq!(default_preset().name, ModeKind::Default.display_name());
@@ -83,7 +102,7 @@ fn design_mode_instructions_mandate_popup_for_closed_choice_questions() {
 }
 
 #[test]
-fn builtin_presets_include_design_between_plan_and_default() {
+fn builtin_presets_include_design_and_product_between_plan_and_default() {
     let presets = builtin_collaboration_mode_presets();
     let modes: Vec<Option<ModeKind>> = presets.into_iter().map(|preset| preset.mode).collect();
     assert_eq!(
@@ -91,6 +110,7 @@ fn builtin_presets_include_design_between_plan_and_default() {
         vec![
             Some(ModeKind::Plan),
             Some(ModeKind::Design),
+            Some(ModeKind::Product),
             Some(ModeKind::Default),
         ]
     );

@@ -7,6 +7,7 @@ pub const EXTERNAL_GROUNDING: &str = include_str!("../templates/external_groundi
 pub const EXECUTE: &str = include_str!("../templates/execute.md");
 pub const PAIR_PROGRAMMING: &str = include_str!("../templates/pair_programming.md");
 pub const PLAN_CONCISE: &str = include_str!("../templates/plan_concise.md");
+pub const PRODUCT: &str = include_str!("../templates/product.md");
 pub const PLAN_RIGOR_WORKFLOW: &str = include_str!("../templates/plan_rigor_workflow.md");
 pub const PLAN_RIGOR_COVERAGE: &str = include_str!("../templates/plan_rigor_coverage.md");
 pub const PLAN_RIGOR_TASK_SKELETON: &str = include_str!("../templates/plan_rigor_task_skeleton.md");
@@ -251,6 +252,47 @@ mod template_tests {
             DESIGN.contains("Stay in Design mode"),
             "DESIGN must include the Stay in Design mode next-action option"
         );
+    }
+
+    /// The product-mode P0 triage contract: one entry point, three internal
+    /// paths (direction undecided / direction settled / change-request), so the
+    /// complexity of the requirements-analysis workflow lives inside the mode's
+    /// routing instead of in the user's choice of which mode to enter.
+    #[test]
+    fn product_template_pins_p0_triage_contract() {
+        for requirement in [
+            // P0 定轨: exactly three paths, anchored to the book's two entry
+            // templates (new-system vs change/optimization).
+            "Path A",
+            "Path B",
+            "Path C",
+            "change/optimization",
+            // Turn discipline inherited from the ody-code product mode.
+            "ONE question at a time",
+            "`request_user_input`",
+            // Confidence and evidence tagging.
+            "[C:USER]",
+            "[C:INFERRED]",
+            "[V:TRANSACTED]",
+            "[V:OBSERVED]",
+            "[V:STATED]",
+            // The book's four-level priority vocabulary.
+            "must-do",
+            "should-do",
+            "could-do",
+            "wont-do",
+            // Three-tier hard gate: requirement models allowed, implementation
+            // details forbidden.
+            "no code",
+            "mermaid",
+            // Artifact location.
+            ".ody-code/products/",
+        ] {
+            assert!(
+                PRODUCT.contains(requirement),
+                "PRODUCT must contain {requirement:?}"
+            );
+        }
     }
 
     fn understand_step_of(body: &str) -> String {
