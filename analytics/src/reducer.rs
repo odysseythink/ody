@@ -2713,6 +2713,7 @@ fn collaboration_mode_mode(mode: ModeKind) -> &'static str {
     match mode {
         ModeKind::Plan => "plan",
         ModeKind::Design => "design",
+        ModeKind::Product => "product",
         ModeKind::Default | ModeKind::PairProgramming | ModeKind::Execute => "default",
     }
 }
