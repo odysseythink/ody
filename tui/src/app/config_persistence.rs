@@ -1833,6 +1833,7 @@ terminal_resize_reflow_max_rows = 9000
                 primary: WebSearchProviderName::Duckduckgo,
                 providers,
                 secondary: None,
+                enabled: None,
             }),
             browser: None,
             database: None,

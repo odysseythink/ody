@@ -26,6 +26,9 @@ type StoredProvider = WebSearchProviderHandle;
 impl WebSearchExtension {
     fn create_provider(services: &ServicesConfig) -> Option<StoredProvider> {
         let web_search_config = services.web_search.as_ref()?;
+        if !web_search_config.is_enabled() {
+            return None;
+        }
         let registry = create_default_registry();
         let client = default_http_client();
         let primary = registry
@@ -67,6 +70,10 @@ impl ConfigContributor<Config> for WebSearchExtension {
         if let Some(services) = new_config.services.as_ref() {
             if let Some(provider) = Self::create_provider(services) {
                 thread_store.insert(provider);
+            } else {
+                // Disabled or unconfigurable search must drop any previously
+                // registered provider so tools() stops exposing it.
+                let _: Option<Arc<StoredProvider>> = thread_store.remove();
             }
         } else {
             let _: Option<Arc<StoredProvider>> = thread_store.remove();
@@ -106,6 +113,7 @@ pub fn install(registry: &mut ExtensionRegistryBuilder<Config>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ody_core::config::ConfigBuilder;
     use ody_extension_api::ExtensionDataInit;
     use ody_web_search::config::{WebSearchConfig, WebSearchProviderConfig, WebSearchProviderName};
     use std::collections::HashMap;
@@ -116,6 +124,7 @@ mod tests {
                 primary: WebSearchProviderName::Duckduckgo,
                 providers: HashMap::new(),
                 secondary: None,
+                enabled: None,
             }),
             browser: None,
             database: None,
@@ -146,6 +155,7 @@ mod tests {
                 primary: WebSearchProviderName::Moonshot,
                 providers,
                 secondary: None,
+                enabled: None,
             }),
             browser: None,
             database: None,
@@ -181,6 +191,7 @@ mod tests {
                 primary: WebSearchProviderName::Moonshot,
                 providers,
                 secondary: None,
+                enabled: None,
             }),
             browser: None,
             database: None,
@@ -196,5 +207,71 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(names.contains(&ody_tools::ToolName::plain("WebSearch")));
         assert!(names.contains(&ody_tools::ToolName::plain("WebFetch")));
+    }
+    #[test]
+    fn create_provider_returns_none_when_disabled() {
+        let services = ServicesConfig {
+            web_search: Some(WebSearchConfig {
+                primary: WebSearchProviderName::Duckduckgo,
+                providers: HashMap::new(),
+                secondary: None,
+                enabled: Some(false),
+            }),
+            browser: None,
+            database: None,
+        };
+        assert!(WebSearchExtension::create_provider(&services).is_none());
+    }
+
+    #[tokio::test]
+    async fn config_change_to_disabled_removes_provider() {
+        let thread_store = ExtensionData::new("thread");
+        let provider = WebSearchExtension::create_provider(&services_config()).expect("provider");
+        thread_store.insert(provider);
+
+        let previous_config = config_with_web_search(Some(true)).await;
+        let new_config = config_with_web_search(Some(false)).await;
+        WebSearchExtension.on_config_changed(
+            &ExtensionData::new("session"),
+            &thread_store,
+            &previous_config,
+            &new_config,
+        );
+        assert!(thread_store.get::<StoredProvider>().is_none());
+    }
+
+    #[tokio::test]
+    async fn config_change_keeps_provider_when_enabled() {
+        let thread_store = ExtensionData::new("thread");
+        let provider = WebSearchExtension::create_provider(&services_config()).expect("provider");
+        thread_store.insert(provider);
+
+        let previous_config = config_with_web_search(None).await;
+        let new_config = config_with_web_search(Some(true)).await;
+        WebSearchExtension.on_config_changed(
+            &ExtensionData::new("session"),
+            &thread_store,
+            &previous_config,
+            &new_config,
+        );
+        assert!(
+            thread_store.get::<StoredProvider>().is_some(),
+            "enabled config must keep the registered provider"
+        );
+    }
+
+    async fn config_with_web_search(enabled: Option<bool>) -> Config {
+        let mut config = ConfigBuilder::default().build().await.expect("test config");
+        config.services = Some(ServicesConfig {
+            web_search: Some(WebSearchConfig {
+                primary: WebSearchProviderName::Duckduckgo,
+                providers: HashMap::new(),
+                secondary: None,
+                enabled,
+            }),
+            browser: None,
+            database: None,
+        });
+        config
     }
 }

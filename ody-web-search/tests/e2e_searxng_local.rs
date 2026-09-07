@@ -41,6 +41,7 @@ fn local_searxng_config() -> WebSearchConfig {
         primary: WebSearchProviderName::Searxng,
         providers,
         secondary: None,
+        enabled: None,
     }
 }
 

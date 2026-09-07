@@ -231,6 +231,10 @@ impl ChatWidget {
         match provider {
             WebSearchProviderName::Duckduckgo => "Free, no API key required",
             WebSearchProviderName::Bing => "Microsoft Bing Web Search API",
+            WebSearchProviderName::BingHtml => "Free Bing HTML scraping (no API key)",
+            WebSearchProviderName::BingNews => "Free Bing News HTML scraping (no API key)",
+            WebSearchProviderName::Bocha => "BoCha AI search (bocha.cn)",
+            WebSearchProviderName::Querit => "Querit AI search (querit.ai)",
             WebSearchProviderName::Serpapi => "SerpApi Google search results",
             WebSearchProviderName::Searchapi => "SearchAPI.io Google search results",
             WebSearchProviderName::Serper => "Serper.dev Google search results",
