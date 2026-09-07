@@ -24,6 +24,7 @@ mod thread;
 mod thread_data;
 mod turn;
 mod windows_sandbox;
+mod visual_workspace;
 
 pub use apps::*;
 pub use attestation::*;
@@ -50,6 +51,7 @@ pub use thread::*;
 pub use thread_data::*;
 pub use turn::*;
 pub use windows_sandbox::*;
+pub use visual_workspace::*;
 
 #[cfg(test)]
 mod tests;

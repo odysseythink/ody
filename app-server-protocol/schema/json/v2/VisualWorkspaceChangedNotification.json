@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "artifactId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "kind": {
+      "type": "string"
+    },
+    "projectId": {
+      "type": "string"
+    },
+    "updatedAtMs": {
+      "format": "int64",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "kind",
+    "projectId",
+    "updatedAtMs"
+  ],
+  "title": "VisualWorkspaceChangedNotification",
+  "type": "object"
+}

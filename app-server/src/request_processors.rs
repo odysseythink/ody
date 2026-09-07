@@ -429,6 +429,7 @@ mod search;
 mod thread_processor;
 mod token_usage_replay;
 mod turn_processor;
+mod visual_workspace_processor;
 mod windows_sandbox_processor;
 
 pub(crate) use apps_processor::AppsRequestProcessor;
@@ -448,6 +449,7 @@ pub(crate) use search::SearchRequestProcessor;
 pub(crate) use thread_goal_processor::ThreadGoalRequestProcessor;
 pub(crate) use thread_processor::ThreadRequestProcessor;
 pub(crate) use turn_processor::TurnRequestProcessor;
+pub(crate) use visual_workspace_processor::VisualWorkspaceRequestProcessor;
 pub(crate) use windows_sandbox_processor::WindowsSandboxRequestProcessor;
 
 use crate::error_code::internal_error;

@@ -5169,6 +5169,26 @@
           ],
           "title": "WindowsSandbox/setupCompletedNotification",
           "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "enum": [
+                "visualWorkspace/changed"
+              ],
+              "title": "VisualWorkspace/changedNotificationMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/VisualWorkspaceChangedNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "title": "VisualWorkspace/changedNotification",
+          "type": "object"
         }
       ],
       "title": "ServerNotification"
@@ -19229,6 +19249,269 @@
           "high"
         ],
         "type": "string"
+      },
+      "VisualArtifact": {
+        "properties": {
+          "createdAtMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "html": {
+            "description": "Complete standalone source. The runtime applies deterministic patches to this value.",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lineageId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parentArtifactId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "patchSet": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/VisualPatchSet"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "uint32",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "revisionReason": {
+            "$ref": "#/definitions/v2/VisualRevisionReason"
+          },
+          "updatedAtMs": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "createdAtMs",
+          "html",
+          "id",
+          "lineageId",
+          "name",
+          "projectId",
+          "revision",
+          "revisionReason",
+          "updatedAtMs"
+        ],
+        "type": "object"
+      },
+      "VisualPatchOperation": {
+        "oneOf": [
+          {
+            "properties": {
+              "declarations": {
+                "items": {
+                  "$ref": "#/definitions/v2/VisualStyleDeclaration"
+                },
+                "type": "array"
+              },
+              "element_id": {
+                "type": "string"
+              },
+              "type": {
+                "enum": [
+                  "setStyle"
+                ],
+                "title": "SetStyleVisualPatchOperationType",
+                "type": "string"
+              }
+            },
+            "required": [
+              "declarations",
+              "element_id",
+              "type"
+            ],
+            "title": "SetStyleVisualPatchOperation",
+            "type": "object"
+          }
+        ]
+      },
+      "VisualPatchSet": {
+        "properties": {
+          "baseArtifactId": {
+            "type": "string"
+          },
+          "createdAtMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/definitions/v2/VisualPatchOperation"
+            },
+            "type": "array"
+          },
+          "resultArtifactId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "baseArtifactId",
+          "createdAtMs",
+          "id",
+          "operations",
+          "resultArtifactId"
+        ],
+        "type": "object"
+      },
+      "VisualProject": {
+        "properties": {
+          "createdAtMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "format": "uint32",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "updatedAtMs": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "createdAtMs",
+          "id",
+          "name",
+          "schemaVersion",
+          "updatedAtMs"
+        ],
+        "type": "object"
+      },
+      "VisualRevisionReason": {
+        "enum": [
+          "generate",
+          "iterate",
+          "restore",
+          "instrument",
+          "stylePatch"
+        ],
+        "type": "string"
+      },
+      "VisualSnapshot": {
+        "properties": {
+          "artifactId": {
+            "type": "string"
+          },
+          "createdAtMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "dataBase64": {
+            "description": "PNG bytes encoded by the capture-capable client/browser.",
+            "type": "string"
+          },
+          "height": {
+            "format": "uint32",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "viewport": {
+            "$ref": "#/definitions/v2/VisualViewport"
+          },
+          "width": {
+            "format": "uint32",
+            "minimum": 0.0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "artifactId",
+          "createdAtMs",
+          "dataBase64",
+          "height",
+          "id",
+          "projectId",
+          "viewport",
+          "width"
+        ],
+        "type": "object"
+      },
+      "VisualStyleDeclaration": {
+        "properties": {
+          "property": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "property",
+          "value"
+        ],
+        "type": "object"
+      },
+      "VisualViewport": {
+        "enum": [
+          "desktop",
+          "tablet",
+          "mobile"
+        ],
+        "type": "string"
+      },
+      "VisualWorkspaceChangedNotification": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "artifactId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "updatedAtMs": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "projectId",
+          "updatedAtMs"
+        ],
+        "title": "VisualWorkspaceChangedNotification",
+        "type": "object"
       },
       "WarningNotification": {
         "$schema": "http://json-schema.org/draft-07/schema#",

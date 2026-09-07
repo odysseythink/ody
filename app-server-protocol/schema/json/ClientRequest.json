@@ -4634,6 +4634,101 @@
         }
       ]
     },
+    "VisualPatchOperation": {
+      "oneOf": [
+        {
+          "properties": {
+            "declarations": {
+              "items": {
+                "$ref": "#/definitions/VisualStyleDeclaration"
+              },
+              "type": "array"
+            },
+            "element_id": {
+              "type": "string"
+            },
+            "type": {
+              "enum": [
+                "setStyle"
+              ],
+              "title": "SetStyleVisualPatchOperationType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "declarations",
+            "element_id",
+            "type"
+          ],
+          "title": "SetStyleVisualPatchOperation",
+          "type": "object"
+        }
+      ]
+    },
+    "VisualPatchSet": {
+      "properties": {
+        "baseArtifactId": {
+          "type": "string"
+        },
+        "createdAtMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "operations": {
+          "items": {
+            "$ref": "#/definitions/VisualPatchOperation"
+          },
+          "type": "array"
+        },
+        "resultArtifactId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "baseArtifactId",
+        "createdAtMs",
+        "id",
+        "operations",
+        "resultArtifactId"
+      ],
+      "type": "object"
+    },
+    "VisualRevisionReason": {
+      "enum": [
+        "generate",
+        "iterate",
+        "restore",
+        "instrument",
+        "stylePatch"
+      ],
+      "type": "string"
+    },
+    "VisualStyleDeclaration": {
+      "properties": {
+        "property": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "property",
+        "value"
+      ],
+      "type": "object"
+    },
+    "VisualViewport": {
+      "enum": [
+        "desktop",
+        "tablet",
+        "mobile"
+      ],
+      "type": "string"
+    },
     "WindowsSandboxSetupMode": {
       "enum": [
         "elevated",

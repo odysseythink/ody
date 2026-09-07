@@ -5365,6 +5365,32 @@
         }
       ]
     },
+    "VisualWorkspaceChangedNotification": {
+      "properties": {
+        "artifactId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "updatedAtMs": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "projectId",
+        "updatedAtMs"
+      ],
+      "type": "object"
+    },
     "WarningNotification": {
       "properties": {
         "message": {
@@ -6766,6 +6792,26 @@
         "params"
       ],
       "title": "WindowsSandbox/setupCompletedNotification",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "visualWorkspace/changed"
+          ],
+          "title": "VisualWorkspace/changedNotificationMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/VisualWorkspaceChangedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "title": "VisualWorkspace/changedNotification",
       "type": "object"
     }
   ],

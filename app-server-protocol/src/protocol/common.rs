@@ -743,6 +743,48 @@ client_request_definitions! {
         serialization: fs_watch_id(params.watch_id),
         response: v2::FsUnwatchResponse,
     },
+    #[experimental("visualWorkspace/v1")]
+    VisualProjectUpsert => "visualWorkspace/project/upsert" {
+        params: v2::VisualProjectUpsertParams,
+        serialization: global("visual-workspace"),
+        response: v2::VisualProjectUpsertResponse,
+    },
+    #[experimental("visualWorkspace/v1")]
+    VisualProjectList => "visualWorkspace/project/list" {
+        params: v2::VisualProjectListParams,
+        serialization: global_shared_read("visual-workspace"),
+        response: v2::VisualProjectListResponse,
+    },
+    #[experimental("visualWorkspace/v1")]
+    VisualArtifactCreate => "visualWorkspace/artifact/create" {
+        params: v2::VisualArtifactCreateParams,
+        serialization: global("visual-workspace"),
+        response: v2::VisualArtifactCreateResponse,
+    },
+    #[experimental("visualWorkspace/v1")]
+    VisualArtifactList => "visualWorkspace/artifact/list" {
+        params: v2::VisualArtifactListParams,
+        serialization: global_shared_read("visual-workspace"),
+        response: v2::VisualArtifactListResponse,
+    },
+    #[experimental("visualWorkspace/v1")]
+    VisualPatchApply => "visualWorkspace/patch/apply" {
+        params: v2::VisualPatchApplyParams,
+        serialization: global("visual-workspace"),
+        response: v2::VisualPatchApplyResponse,
+    },
+    #[experimental("visualWorkspace/v1")]
+    VisualSnapshotCreate => "visualWorkspace/snapshot/create" {
+        params: v2::VisualSnapshotCreateParams,
+        serialization: global("visual-workspace"),
+        response: v2::VisualSnapshotCreateResponse,
+    },
+    #[experimental("visualWorkspace/v1")]
+    VisualPreviewOpen => "visualWorkspace/preview/open" {
+        params: v2::VisualPreviewOpenParams,
+        serialization: global_shared_read("visual-workspace"),
+        response: v2::VisualPreviewOpenResponse,
+    },
     SkillsConfigWrite => "skills/config/write" {
         params: v2::SkillsConfigWriteParams,
         serialization: global("config"),
@@ -1542,6 +1584,8 @@ server_notification_definitions! {
     /// Notifies the user of world-writable directories on Windows, which cannot be protected by the sandbox.
     WindowsWorldWritableWarning => "windows/worldWritableWarning" (v2::WindowsWorldWritableWarningNotification),
     WindowsSandboxSetupCompleted => "windowsSandbox/setupCompleted" (v2::WindowsSandboxSetupCompletedNotification),
+    #[experimental("visualWorkspace/v1")]
+    VisualWorkspaceChanged => "visualWorkspace/changed" (v2::VisualWorkspaceChangedNotification),
 
 }
 

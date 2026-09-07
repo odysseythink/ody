@@ -36,6 +36,7 @@ use crate::request_processors::SearchRequestProcessor;
 use crate::request_processors::ThreadGoalRequestProcessor;
 use crate::request_processors::ThreadRequestProcessor;
 use crate::request_processors::TurnRequestProcessor;
+use crate::request_processors::VisualWorkspaceRequestProcessor;
 use crate::request_processors::WindowsSandboxRequestProcessor;
 use crate::request_serialization::QueuedInitializedRequest;
 use crate::request_serialization::RequestSerializationQueueKey;
@@ -118,6 +119,7 @@ pub(crate) struct MessageProcessor {
     thread_processor: ThreadRequestProcessor,
     turn_processor: TurnRequestProcessor,
     windows_sandbox_processor: WindowsSandboxRequestProcessor,
+    visual_workspace_processor: VisualWorkspaceRequestProcessor,
     request_serialization_queues: RequestSerializationQueues,
 }
 
@@ -423,6 +425,10 @@ impl MessageProcessor {
             Arc::clone(&config),
             config_manager,
         );
+        let visual_workspace_processor = VisualWorkspaceRequestProcessor::new(
+            config.ody_home.to_path_buf(),
+            Arc::clone(&outgoing),
+        );
 
         Self {
             outgoing,
@@ -446,6 +452,7 @@ impl MessageProcessor {
             thread_processor,
             turn_processor,
             windows_sandbox_processor,
+            visual_workspace_processor,
             request_serialization_queues: RequestSerializationQueues::default(),
         }
     }
@@ -894,6 +901,41 @@ impl MessageProcessor {
             ClientRequest::FsUnwatch { params, .. } => self
                 .fs_processor
                 .unwatch(connection_id, params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::VisualProjectUpsert { params, .. } => self
+                .visual_workspace_processor
+                .project_upsert(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::VisualProjectList { params, .. } => self
+                .visual_workspace_processor
+                .project_list(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::VisualArtifactCreate { params, .. } => self
+                .visual_workspace_processor
+                .artifact_create(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::VisualArtifactList { params, .. } => self
+                .visual_workspace_processor
+                .artifact_list(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::VisualPatchApply { params, .. } => self
+                .visual_workspace_processor
+                .patch_apply(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::VisualSnapshotCreate { params, .. } => self
+                .visual_workspace_processor
+                .snapshot_create(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::VisualPreviewOpen { params, .. } => self
+                .visual_workspace_processor
+                .preview_open(params)
                 .await
                 .map(|response| Some(response.into())),
             ClientRequest::ModelProviderCapabilitiesRead { params: _, .. } => self
