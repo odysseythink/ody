@@ -73,6 +73,7 @@ use ody_memories_write::clear_memory_roots_contents;
 use ody_models_manager::bundled_models_response;
 use ody_models_manager::manager::RefreshStrategy;
 use ody_protocol::protocol::AskForApproval;
+use ody_protocol::protocol::SessionSource;
 use ody_protocol::user_input::UserInput;
 use ody_terminal_detection::TerminalName;
 
@@ -476,6 +477,15 @@ struct AppServerCommand {
     /// Use stdio as the transport (equivalent to `--listen stdio://`).
     #[arg(long = "stdio", conflicts_with = "listen")]
     stdio: bool,
+
+    /// Session source used to derive product restrictions and metadata.
+    #[arg(
+        long = "session-source",
+        value_name = "SOURCE",
+        default_value = "vscode",
+        value_parser = SessionSource::from_startup_arg
+    )]
+    session_source: SessionSource,
 
     /// Controls whether analytics are enabled by default.
     ///
@@ -995,6 +1005,7 @@ async fn cli_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                 strict_config: app_server_strict_config,
                 listen,
                 stdio,
+                session_source,
                 analytics_default_enabled,
                 auth,
             } = app_server_cli;
@@ -1021,7 +1032,7 @@ async fn cli_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                         strict_config,
                         analytics_default_enabled,
                         transport,
-                        ody_protocol::protocol::SessionSource::VSCode,
+                        session_source,
                         auth,
                         runtime_options,
                     )

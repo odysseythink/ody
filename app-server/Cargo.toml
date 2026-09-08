@@ -107,6 +107,8 @@ uuid = { workspace = true, features = ["serde", "v7"] }
 
 [target.'cfg(windows)'.dependencies]
 
+reqwest = { workspace = true, features = ["rustls-tls"] }
+
 [dev-dependencies]
 app_test_support = { workspace = true }
 axum = { workspace = true, default-features = false, features = [

@@ -33,6 +33,7 @@ use crate::request_processors::McpRequestProcessor;
 use crate::request_processors::PluginRequestProcessor;
 use crate::request_processors::ProcessExecRequestProcessor;
 use crate::request_processors::SearchRequestProcessor;
+use crate::request_processors::SkillsMarketplaceRequestProcessor;
 use crate::request_processors::ThreadGoalRequestProcessor;
 use crate::request_processors::ThreadRequestProcessor;
 use crate::request_processors::TurnRequestProcessor;
@@ -112,6 +113,7 @@ pub(crate) struct MessageProcessor {
     git_processor: GitRequestProcessor,
     initialize_processor: InitializeRequestProcessor,
     marketplace_processor: MarketplaceRequestProcessor,
+    skills_marketplace_processor: SkillsMarketplaceRequestProcessor,
     mcp_processor: McpRequestProcessor,
     plugin_processor: PluginRequestProcessor,
     search_processor: SearchRequestProcessor,
@@ -348,6 +350,11 @@ impl MessageProcessor {
             config_manager.clone(),
             Arc::clone(&thread_manager),
         );
+        let skills_marketplace_processor = SkillsMarketplaceRequestProcessor::new(
+            Arc::clone(&config),
+            Arc::clone(&thread_manager),
+            outgoing.clone(),
+        );
         let mcp_processor = McpRequestProcessor::new(
             Arc::clone(&thread_manager),
             outgoing.clone(),
@@ -445,6 +452,7 @@ impl MessageProcessor {
             git_processor,
             initialize_processor,
             marketplace_processor,
+            skills_marketplace_processor,
             mcp_processor,
             plugin_processor,
             search_processor,
@@ -1100,6 +1108,12 @@ impl MessageProcessor {
             }
             ClientRequest::SkillsExtraRootsSet { params, .. } => {
                 self.catalog_processor.skills_extra_roots_set(params).await
+            }
+            ClientRequest::SkillsMarketplaceSearch { params, .. } => {
+                self.skills_marketplace_processor.search(params).await
+            }
+            ClientRequest::SkillsMarketplaceInstall { params, .. } => {
+                self.skills_marketplace_processor.install(params).await
             }
             ClientRequest::HooksList { params, .. } => {
                 self.catalog_processor.hooks_list(params).await

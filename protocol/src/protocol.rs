@@ -3568,12 +3568,15 @@ pub enum Product {
     Ody,
     #[serde(alias = "ATLAS")]
     Atlas,
+    #[serde(alias = "ODYBOX")]
+    OdyBox,
 }
 impl Product {
     pub fn to_app_platform(self) -> &'static str {
         match self {
             Self::Ody => "ody",
             Self::Atlas => "atlas",
+            Self::OdyBox => "odybox",
         }
     }
 
@@ -3582,6 +3585,7 @@ impl Product {
         match normalized.as_str() {
             "ody" => Some(Self::Ody),
             "atlas" => Some(Self::Atlas),
+            "odybox" => Some(Self::OdyBox),
             _ => None,
         }
     }
