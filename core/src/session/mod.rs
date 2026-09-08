@@ -1240,6 +1240,19 @@ impl Session {
         state.set_plan_mode_reminder_turns(turns);
     }
 
+    /// Product mode: the requirements document this session has anchored to.
+    /// Sticky across turns so a per-turn rescan's mtime heuristic cannot flip
+    /// the artifact to another document mid-session. Session-scoped.
+    pub(crate) async fn product_document_anchor(&self) -> Option<std::path::PathBuf> {
+        let state = self.state.lock().await;
+        state.product_document_anchor()
+    }
+
+    pub(crate) async fn set_product_document_anchor(&self, path: std::path::PathBuf) {
+        let mut state = self.state.lock().await;
+        state.set_product_document_anchor(path);
+    }
+
     pub(crate) async fn set_last_design_artifact(&self, artifact: Arc<PlanArtifact>) {
         let mut state = self.state.lock().await;
         state.set_last_design_artifact(artifact);

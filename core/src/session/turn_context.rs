@@ -896,7 +896,26 @@ impl Session {
                     PlanArtifact::new_design(base_dir, self.thread_id(), date)
                 }
                 ody_protocol::config_types::ModeKind::Product => {
-                    PlanArtifact::restore_product(base_dir, self.thread_id(), date)
+                    // Prefer the session's sticky document anchor: once this
+                    // session adopted a requirements document, later turns
+                    // keep anchoring to it even if another document becomes
+                    // newer on disk. Only fall back to the mtime-based scan
+                    // when there is no anchor or the anchored file is gone.
+                    let artifact = match self.product_document_anchor().await {
+                        Some(anchor) if anchor.exists() => PlanArtifact::restore_or_create(
+                            base_dir,
+                            self.thread_id(),
+                            Some(anchor),
+                            date,
+                        ),
+                        _ => PlanArtifact::restore_product(base_dir, self.thread_id(), date),
+                    };
+                    if let Some(path) = artifact.path()
+                        && path.exists()
+                    {
+                        self.set_product_document_anchor(path).await;
+                    }
+                    artifact
                 }
                 _ => unreachable!("guarded by the surrounding if"),
             };
