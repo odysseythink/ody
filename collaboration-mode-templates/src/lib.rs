@@ -382,6 +382,65 @@ mod template_tests {
         }
     }
 
+    /// The P2–P7 detailed-requirements phases, each carrying the book's named
+    /// artifact templates (徐峰《有效需求分析》第2版 ch.7–21) with fields
+    /// transcribed from the book's 任务产物 sections. These pins keep the
+    /// template headings findable by name — an engineer should be able to
+    /// locate 业务流程描述模板 / 质量场景分析模板 etc. verbatim in the document.
+    #[test]
+    fn product_template_pins_p2_p7_artifact_templates() {
+        for requirement in [
+            // Phase structure
+            "### P2 — System decomposition",
+            "### P3 — Functional requirements",
+            "### P4 — Management support",
+            "### P5 — Data requirements",
+            "### P6 — Quality requirements",
+            "### P7 — Rules and constraints",
+            // P2 decomposition & interfaces (ch.7-8)
+            "业务子系统描述模板",
+            "服务接口说明",
+            "业务接口分析模板",
+            "接口交互数据包说明",
+            // P3 functional (ch.9-13)
+            "业务流程列表模板",
+            "主/变/支/管",
+            "业务流程描述模板",
+            "分工/协作/活动/分支/产物关系/审批/规则/异常",
+            "业务流程内业务场景描述模板",
+            "业务场景分析模板",
+            "任务变体 (扩展事件流)",
+            "关键例外",
+            "遍历步骤分析困难导出功能",
+            // P4 management (ch.14-16)
+            "管控点列表与分析模板",
+            "业务报表描述模板",
+            "维护需求描述模板",
+            // P5 data (ch.17-18)
+            "领域类图片段模板",
+            "过程数据",
+            "业务数据描述模板",
+            "数据窗口分析",
+            // P6 quality (ch.19)
+            "关键质量需求列表模板",
+            "质量场景分析模板",
+            "策略及风险",
+            // P7 rules & constraints (ch.20-21)
+            "按作用域归类",
+            "按类型二次归类",
+            "限制 (拒绝)",
+            "产生 (启发, 计算)",
+            "投影 (推导, 触发, 时序)",
+            "项目约束描述模板",
+            "设计约束描述模板",
+        ] {
+            assert!(
+                PRODUCT.contains(requirement),
+                "PRODUCT P2+ section must contain {requirement:?}"
+            );
+        }
+    }
+
     fn understand_step_of(body: &str) -> String {
         body.lines()
             .find(|line| line.starts_with("1. **Understand**"))
