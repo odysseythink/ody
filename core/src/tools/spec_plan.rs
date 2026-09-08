@@ -38,6 +38,7 @@ use crate::tools::handlers::ShellCommandHandlerOptions;
 use crate::tools::handlers::SleepHandler;
 use crate::tools::handlers::SubmitDesignHandler;
 use crate::tools::handlers::SubmitPlanHandler;
+use crate::tools::handlers::SubmitProductHandler;
 use crate::tools::handlers::SubmitRoadmapHandler;
 use crate::tools::handlers::TestSyncHandler;
 use crate::tools::handlers::ToolSearchHandlerCache;
@@ -739,6 +740,13 @@ fn add_core_utility_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut
         ModeKind::Design => {
             planned_tools.add_with_exposure(SubmitDesignHandler, ToolExposure::DirectModelOnly);
             planned_tools.add_with_exposure(SubmitRoadmapHandler, ToolExposure::DirectModelOnly);
+        }
+        ModeKind::Product => {
+            // Product's terminal tool: finalizes the on-disk requirements
+            // document so the client can offer the handoff menu. Mode-gated
+            // like submit_plan/submit_design — exposing it elsewhere would let
+            // a turn finalize the wrong artifact.
+            planned_tools.add_with_exposure(SubmitProductHandler, ToolExposure::DirectModelOnly);
         }
         _ => {}
     }

@@ -96,5 +96,7 @@ For a single change request on an existing product, run the daily-requirements l
 
 ## Ending the mode
 
-- The mode ends when the artifact document is complete and the user confirms handoff via `request_user_input` (continue to Design Mode, continue to Plan Mode, or stay and refine).
+1. When the document is complete, ask the user via `request_user_input` exactly ONE question: hand off now (Enter Plan Mode / Enter Design Mode) or stay and refine.
+2. If the user chose to hand off, call `submit_product` (no arguments). The host finalizes the persisted document and the client shows the handoff menu that performs the actual mode switch — do NOT ask the user to switch modes manually, and do not try to switch modes yourself.
+3. Only call `submit_product` after that explicit user confirmation; if the document is still incomplete, keep working instead.
 - If the user is impatient: acknowledge, ask at most 1–2 more load-bearing questions, then write the document with remaining unknowns as `[C:INFERRED]` in Open Questions.

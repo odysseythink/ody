@@ -182,6 +182,7 @@ impl ChatWidget {
         if !from_replay && !self.has_queued_follow_up_messages() && !had_pending_steers {
             self.maybe_prompt_plan_implementation();
             self.maybe_prompt_design_next_step();
+            self.maybe_prompt_product_next_step();
         }
         // Keep this flag for replayed completion events so a subsequent live TurnComplete can
         // still show the prompt once after thread switch replay.
@@ -253,6 +254,38 @@ impl ChatWidget {
             return;
         }
         self.open_design_next_step_prompt();
+    }
+
+    /// After `submit_product` finalizes the requirements document in Product
+    /// mode, offer the handoff next step. Mirrors
+    /// [`Self::maybe_prompt_design_next_step`]: gated on the same
+    /// `saw_finalized_plan_item_this_turn` flag, which only a *finalized*
+    /// completed plan item (`submit_product` sets `finalized: true`) arms.
+    pub(super) fn maybe_prompt_product_next_step(&mut self) {
+        if !self.collaboration_modes_enabled() {
+            return;
+        }
+        if self.has_queued_follow_up_messages() {
+            return;
+        }
+        if self.active_mode_kind() != ModeKind::Product {
+            return;
+        }
+        if !self.transcript.saw_finalized_plan_item_this_turn {
+            return;
+        }
+        if !self.bottom_pane.no_modal_or_popup_active() {
+            return;
+        }
+        let plan_mask = crate::collaboration_modes::plan_mask(self.model_catalog.as_ref());
+        let design_mask = crate::collaboration_modes::design_mask(self.model_catalog.as_ref());
+        let requirements_file_path = self.transcript.latest_proposed_plan_file_path.clone();
+        self.bottom_pane
+            .show_selection_view(product_next_step::selection_view_params(
+                plan_mask,
+                design_mask,
+                requirements_file_path.as_deref(),
+            ));
     }
 
     pub(super) fn open_design_next_step_prompt(&mut self) {

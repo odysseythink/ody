@@ -361,6 +361,27 @@ mod template_tests {
         }
     }
 
+    /// The mode-ending contract: the model confirms handoff with the user via
+    /// `request_user_input`, then calls `submit_product` (no arguments) so the
+    /// host can finalize the document and the client can show the handoff
+    /// menu. Without this pin the model asks the user to switch modes
+    /// manually — the auto-exit mechanism never fires.
+    #[test]
+    fn product_template_ends_with_submit_product_handoff() {
+        for requirement in [
+            "submit_product",
+            "request_user_input",
+            "ONE question",
+            "Enter Plan Mode",
+            "Enter Design Mode",
+        ] {
+            assert!(
+                PRODUCT.contains(requirement),
+                "PRODUCT ending must contain {requirement:?}"
+            );
+        }
+    }
+
     fn understand_step_of(body: &str) -> String {
         body.lines()
             .find(|line| line.starts_with("1. **Understand**"))
