@@ -12,6 +12,8 @@ pub use runtime::McpRuntimeContext;
 pub use runtime::SandboxState;
 pub use tools::ToolInfo;
 
+pub use builtin::BUILTIN_MCP_SERVERS;
+pub use builtin::BuiltinMcpServer;
 pub use catalog::McpCatalogBuilder;
 pub use catalog::McpPluginAttribution;
 pub use catalog::McpServerConflict;
@@ -69,6 +71,7 @@ pub use mcp::qualified_mcp_tool_name_prefix;
 pub use tools::declared_file_input_param_names;
 
 pub(crate) mod auth_elicitation;
+pub mod builtin;
 mod catalog;
 pub(crate) mod connection_manager;
 pub(crate) mod elicitation;

@@ -50,6 +50,7 @@ members = [
     "linux-sandbox",
     "ody-mcp",
     "mcp-server",
+    "mcp-server/builtins",
     "memories/read",
     "memories/write",
     "model-provider-info",
@@ -276,6 +277,7 @@ encoding_rs = "0.8.35"
 env_logger = "0.11.9"
 eventsource-stream = "0.2.3"
 flate2 = "1.1.8"
+fast_html2md = { version = "0.0.48", features = ["rewriter"] }
 futures = { version = "0.3", default-features = false }
 gethostname = "1.1.0"
 gix = { version = "0.81.0", default-features = false, features = ["sha1"] }

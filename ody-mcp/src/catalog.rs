@@ -32,6 +32,9 @@ impl McpPluginAttribution {
 /// The component that declared an MCP server registration.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum McpServerSource {
+    /// A built-in MCP server shipped with Ody. Lowest precedence: any plugin
+    /// or config registration with the same name overrides it.
+    Builtin,
     /// A plugin discovered through the process-wide legacy plugin manager.
     Plugin(McpPluginAttribution),
     /// A plugin explicitly selected for this thread through a capability root.
@@ -48,13 +51,15 @@ pub enum McpServerSource {
 impl McpServerSource {
     fn disabled_registration_is_name_veto(&self) -> bool {
         // A selected package's policy applies to its registration, not to a higher runtime source
-        // that happens to use the same logical server name.
-        !matches!(self, Self::SelectedPlugin(_))
+        // that happens to use the same logical server name. Built-in servers are likewise
+        // governed by config (`disabled_builtin_mcp_servers`), not by the legacy name veto.
+        !matches!(self, Self::SelectedPlugin(_) | Self::Builtin)
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum RegistrationPrecedence {
+    Builtin,
     Plugin(Reverse<usize>),
     SelectedPlugin(Reverse<usize>),
     Config,
@@ -65,11 +70,12 @@ enum RegistrationPrecedence {
 impl RegistrationPrecedence {
     fn tier(self) -> u8 {
         match self {
-            Self::Plugin(_) => 0,
-            Self::SelectedPlugin(_) => 1,
-            Self::Config => 2,
-            Self::Compatibility => 3,
-            Self::Extension(_) => 4,
+            Self::Builtin => 0,
+            Self::Plugin(_) => 1,
+            Self::SelectedPlugin(_) => 2,
+            Self::Config => 3,
+            Self::Compatibility => 4,
+            Self::Extension(_) => 5,
         }
     }
 }
@@ -84,6 +90,15 @@ pub struct McpServerRegistration {
 }
 
 impl McpServerRegistration {
+    pub fn from_builtin(name: String, config: McpServerConfig) -> Self {
+        Self::new(
+            name,
+            McpServerSource::Builtin,
+            config,
+            RegistrationPrecedence::Builtin,
+        )
+    }
+
     pub fn from_config(name: String, config: McpServerConfig) -> Self {
         Self::new(
             name,
@@ -382,7 +397,8 @@ impl ResolvedMcpCatalog {
                 }
                 McpServerSource::Config
                 | McpServerSource::Compatibility { .. }
-                | McpServerSource::Extension { .. } => None,
+                | McpServerSource::Extension { .. }
+                | McpServerSource::Builtin => None,
             })
             .collect()
     }

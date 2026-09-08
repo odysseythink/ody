@@ -422,6 +422,13 @@ pub struct ConfigToml {
     #[schemars(schema_with = "crate::schema::mcp_servers_schema")]
     pub mcp_servers: HashMap<String, McpServerConfig>,
 
+    /// Names of built-in MCP servers the user has disabled. Built-in servers
+    /// (see `ody_mcp::builtin`) are enabled by default; listing a name here
+    /// keeps it out of the resolved MCP catalog unless a config `mcp_servers`
+    /// entry with the same name overrides it.
+    #[serde(default)]
+    pub disabled_builtin_mcp_servers: Option<Vec<String>>,
+
     /// Preferred backend for storing MCP OAuth credentials.
     /// keyring: Use an OS-specific keyring service.
     ///          https://github.com/odysseythink/ody/blob/main/ody/rmcp-client/src/oauth.rs#L2
