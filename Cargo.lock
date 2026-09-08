@@ -7685,6 +7685,7 @@ dependencies = [
  "futures",
  "ody-api",
  "ody-async-utils",
+ "ody-builtin-mcp",
  "ody-config",
  "ody-exec-server",
  "ody-model-provider",

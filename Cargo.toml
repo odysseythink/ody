@@ -132,6 +132,7 @@ ody-apply-patch = { path = "apply-patch" }
 ody-arg0 = { path = "arg0" }
 ody-async-utils = { path = "async-utils" }
 ody-browser-control = { path = "ody-browser-control" }
+ody-builtin-mcp = { path = "mcp-server/builtins" }
 ody-cli = { path = "cli" }
 ody-client = { path = "ody-client" }
 ody-collaboration-mode-templates = { path = "collaboration-mode-templates" }

@@ -18,6 +18,12 @@ doctest = false
 workspace = true
 
 [features]
+# Bundles the builtin MCP servers (fetch, sequentialthinking, arxiv,
+# context7) into the ody binary and serves them in-process over tokio duplex
+# streams, so distribution only needs the single `ody` executable and not the
+# separate `ody-builtin-mcp` helper binary. Off by default; release /
+# packaging builds should enable this.
+bundled-builtin-mcp = ["ody-mcp/bundled-builtin-mcp"]
 # Debug-only `ody debug app-server send-message-v2` subcommand. Off by
 # default: pulls in ody-app-server-test-client (~2.6MB of .text), which is
 # only useful for manually exercising the app-server protocol during

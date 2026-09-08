@@ -617,6 +617,24 @@ async fn make_rmcp_client(
             env_vars,
             cwd,
         } => {
+            #[cfg(feature = "bundled-builtin-mcp")]
+            if let Some(factory) =
+                crate::builtin_in_process::in_process_factory_for_stdio_command(
+                    &command,
+                    &args,
+                    env.as_ref(),
+                    &env_vars,
+                    cwd.as_ref().map(|cwd| cwd.as_str()),
+                    is_local_environment,
+                )
+            {
+                // Bundled single-binary distribution: serve the builtin MCP
+                // server in-process instead of spawning `ody-builtin-mcp`.
+                return RmcpClient::new_in_process_client(factory)
+                    .await
+                    .map_err(|err| StartupOutcomeError::from(anyhow!(err)));
+            }
+
             let command_os: OsString = command.into();
             let args_os: Vec<OsString> = args.into_iter().map(Into::into).collect();
             let env_os = env.map(|env| {

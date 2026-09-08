@@ -11,6 +11,11 @@
 //! so a config `mcp_servers` entry with the same name (or a plugin
 //! contribution) always overrides them. Users can turn individual built-in
 //! servers off via the `disabled_builtin_mcp_servers` config key.
+//!
+//! When the `bundled-builtin-mcp` feature is enabled, stdio launches of the
+//! helper binary are intercepted and the servers run in-process instead (see
+//! `builtin_in_process`), so the distributed binary needs no separate
+//! `ody-builtin-mcp` executable.
 
 use ody_config::McpServerConfig;
 use ody_config::McpServerTransportConfig;

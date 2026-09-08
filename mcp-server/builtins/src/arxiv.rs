@@ -17,7 +17,10 @@ use rmcp::model::*;
 use rmcp::tool;
 use rmcp::tool_handler;
 use rmcp::tool_router;
-use rmcp::{ErrorData as McpError, ServerHandler, ServiceExt, transport::stdio};
+use rmcp::{
+    ErrorData as McpError, RoleServer, ServerHandler, ServiceExt,
+    transport::IntoTransport, transport::stdio,
+};
 use serde::Deserialize;
 use serde_json::json;
 
@@ -400,6 +403,19 @@ impl ServerHandler for ArxivServer {
 
 /// Serve the arXiv MCP server over stdio.
 pub async fn run() -> anyhow::Result<()> {
+    serve(stdio()).await
+}
+
+/// Serve the arXiv MCP server over an arbitrary rmcp transport.
+///
+/// Used both for stdio (see [`run`]) and for in-process duplex streams when
+/// the server is bundled into the ody binary instead of running as the
+/// `ody-builtin-mcp` child process.
+pub async fn serve<T, E, A>(transport: T) -> anyhow::Result<()>
+where
+    T: IntoTransport<RoleServer, E, A>,
+    E: std::error::Error + Send + Sync + 'static,
+{
     let server = ArxivServer {
         tool_router: ArxivServer::tool_router(),
         client: reqwest::Client::builder()
@@ -407,7 +423,7 @@ pub async fn run() -> anyhow::Result<()> {
             .build()?,
         storage: storage_path(),
     };
-    let server = server.serve(stdio()).await.inspect_err(|e| {
+    let server = server.serve(transport).await.inspect_err(|e| {
         tracing::error!("serving error: {:?}", e);
     })?;
     server.waiting().await?;

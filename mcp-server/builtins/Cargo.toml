@@ -27,6 +27,7 @@ rmcp = { workspace = true, features = [
     "macros",
     "schemars",
     "server",
+    "transport-async-rw",
     "transport-io",
 ] }
 schemars = "1.2"
@@ -40,3 +41,15 @@ tokio = { workspace = true, features = [
 ] }
 tracing = { workspace = true }
 url = { workspace = true }
+
+[dev-dependencies]
+# The `client` feature is only needed for the in-process duplex transport
+# tests in lib.rs (the production binary only serves servers).
+rmcp = { workspace = true, features = [
+    "client",
+    "macros",
+    "schemars",
+    "server",
+    "transport-async-rw",
+    "transport-io",
+] }

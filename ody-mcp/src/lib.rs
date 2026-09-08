@@ -14,6 +14,8 @@ pub use tools::ToolInfo;
 
 pub use builtin::BUILTIN_MCP_SERVERS;
 pub use builtin::BuiltinMcpServer;
+#[cfg(feature = "bundled-builtin-mcp")]
+mod builtin_in_process;
 pub use catalog::McpCatalogBuilder;
 pub use catalog::McpPluginAttribution;
 pub use catalog::McpServerConflict;

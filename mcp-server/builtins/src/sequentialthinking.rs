@@ -15,7 +15,10 @@ use rmcp::model::*;
 use rmcp::tool;
 use rmcp::tool_handler;
 use rmcp::tool_router;
-use rmcp::{ErrorData as McpError, ServerHandler, ServiceExt, transport::stdio};
+use rmcp::{
+    ErrorData as McpError, RoleServer, ServerHandler, ServiceExt,
+    transport::IntoTransport, transport::stdio,
+};
 use serde::Deserialize;
 use serde::Deserializer;
 use serde_json::json;
@@ -185,11 +188,24 @@ impl ServerHandler for SequentialThinkingServer {
 
 /// Serve the sequential thinking MCP server over stdio.
 pub async fn run() -> anyhow::Result<()> {
+    serve(stdio()).await
+}
+
+/// Serve the sequential thinking MCP server over an arbitrary rmcp transport.
+///
+/// Used both for stdio (see [`run`]) and for in-process duplex streams when
+/// the server is bundled into the ody binary instead of running as the
+/// `ody-builtin-mcp` child process.
+pub async fn serve<T, E, A>(transport: T) -> anyhow::Result<()>
+where
+    T: IntoTransport<RoleServer, E, A>,
+    E: std::error::Error + Send + Sync + 'static,
+{
     let server = SequentialThinkingServer {
         tool_router: SequentialThinkingServer::tool_router(),
         state: Default::default(),
     };
-    let server = server.serve(stdio()).await.inspect_err(|e| {
+    let server = server.serve(transport).await.inspect_err(|e| {
         tracing::error!("serving error: {:?}", e);
     })?;
     server.waiting().await?;
