@@ -1,9 +1,10 @@
 ---
 source: tui/src/chatwidget/tests/status_and_layout.rs
+assertion_line: 1464
 expression: normalized_backend_snapshot(terminal.backend())
 ---
 "                                                                                "
 "                                                                                "
 "› Ask Ody to do anything                                                        "
 "                                                                                "
-"  kimi-for-coding medium                       【 Plan  (shift+tab to cycle)】  " Hidden by multi-width symbols: [(48, " "), (77, " ")]
+"  kimi-for-coding medium                    【 📝 Plan  (shift+tab to cycle)】  " Hidden by multi-width symbols: [(45, " "), (48, " "), (77, " ")]

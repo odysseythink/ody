@@ -1,5 +1,6 @@
 ---
 source: tui/src/bottom_pane/footer.rs
+assertion_line: 1555
 expression: terminal.backend()
 ---
-"  ? for shortcuts · 【 Plan 】                                                                       100% context left  " Hidden by multi-width symbols: [(21, " "), (29, " ")]
+"  ? for shortcuts · 【 📝 Plan 】                                                                    100% context left  " Hidden by multi-width symbols: [(21, " "), (24, " "), (32, " ")]

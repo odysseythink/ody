@@ -1,6 +1,7 @@
 ---
 source: tui/src/bottom_pane/footer.rs
+assertion_line: 1555
 expression: terminal.backend()
 ---
-"  ? for shortcuts · 【 Plan  (shift+tab to cycle)】                             " Hidden by multi-width symbols: [(21, " "), (50, " ")]
+"  ? for shortcuts · 【 📝 Plan  (shift+tab to cycle)】                          " Hidden by multi-width symbols: [(21, " "), (24, " "), (53, " ")]
 "  Action blocked while planning — switch to Default mode to apply.              "

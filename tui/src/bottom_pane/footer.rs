@@ -151,13 +151,13 @@ impl CollaborationModeIndicator {
             String::new()
         };
         match self {
-            CollaborationModeIndicator::Plan => format!("【 Plan {suffix}】"),
-            CollaborationModeIndicator::Design => format!("【 Design {suffix}】"),
-            CollaborationModeIndicator::Product => format!("【 Product {suffix}】"),
+            CollaborationModeIndicator::Plan => format!("【 📝 Plan {suffix}】"),
+            CollaborationModeIndicator::Design => format!("【 ✏️ Design {suffix}】"),
+            CollaborationModeIndicator::Product => format!("【 🏢 Product {suffix}】"),
             CollaborationModeIndicator::PairProgramming => {
-                format!("Pair Programming mode{suffix}")
+                format!("👥 Pair Programming mode{suffix}")
             }
-            CollaborationModeIndicator::Execute => format!("Execute mode{suffix}"),
+            CollaborationModeIndicator::Execute => format!("▶️ Execute mode{suffix}"),
         }
     }
 
