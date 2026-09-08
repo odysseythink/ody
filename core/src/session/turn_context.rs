@@ -896,12 +896,15 @@ impl Session {
                     PlanArtifact::new_design(base_dir, self.thread_id(), date)
                 }
                 ody_protocol::config_types::ModeKind::Product => {
-                    PlanArtifact::new_product(base_dir, self.thread_id(), date)
+                    PlanArtifact::restore_product(base_dir, self.thread_id(), date)
                 }
                 _ => unreachable!("guarded by the surrounding if"),
             };
             if let Some(snapshot) = self.plan_mode_last_manifest_snapshot().await {
                 artifact.set_last_manifest_snapshot(snapshot);
+            }
+            if let Some(turns) = self.plan_mode_reminder_turns().await {
+                artifact.restore_reminder_turns(turns);
             }
             let artifact_arc = Arc::new(artifact);
             if mode == ody_protocol::config_types::ModeKind::Design {

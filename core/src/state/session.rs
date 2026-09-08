@@ -2,6 +2,7 @@
 
 use crate::plan_artifact::ManifestSnapshot;
 use crate::plan_artifact::PlanArtifact;
+use crate::plan_artifact::ReminderTurns;
 use ody_protocol::models::AdditionalPermissionProfile;
 use ody_protocol::models::ResponseItem;
 use ody_protocol::plan_tool::PlanItemArg;
@@ -54,6 +55,11 @@ pub(crate) struct SessionState {
     granted_permissions_by_environment_id: HashMap<String, AdditionalPermissionProfile>,
     next_turn_is_first: bool,
     plan_mode_last_manifest_snapshot: Option<ManifestSnapshot>,
+    /// Reminder cadence counters `(turn_count, last_full_turn, last_any_turn)`
+    /// from the last read-only-mode turn's artifact. The per-turn
+    /// `PlanArtifact` is recreated every turn, so without this the full/sparse
+    /// reminder cadence would reset to turn 1 each turn and never fire.
+    plan_mode_reminder_turns: Option<ReminderTurns>,
     last_design_artifact: Option<Arc<PlanArtifact>>,
     phase_roadmap: Option<PhaseRoadmapState>,
     /// Fingerprints of design-review sign-off items the user has already
@@ -117,6 +123,7 @@ impl SessionState {
             granted_permissions_by_environment_id: HashMap::new(),
             next_turn_is_first: true,
             plan_mode_last_manifest_snapshot: None,
+            plan_mode_reminder_turns: None,
             last_design_artifact: None,
             phase_roadmap: None,
             design_signoff_seen: HashSet::new(),
@@ -412,6 +419,14 @@ impl SessionState {
 
     pub(crate) fn plan_mode_last_manifest_snapshot(&self) -> Option<ManifestSnapshot> {
         self.plan_mode_last_manifest_snapshot.clone()
+    }
+
+    pub(crate) fn plan_mode_reminder_turns(&self) -> Option<ReminderTurns> {
+        self.plan_mode_reminder_turns
+    }
+
+    pub(crate) fn set_plan_mode_reminder_turns(&mut self, turns: ReminderTurns) {
+        self.plan_mode_reminder_turns = Some(turns);
     }
 
     pub(crate) fn set_plan_mode_last_manifest_snapshot(&mut self, snapshot: ManifestSnapshot) {

@@ -61,6 +61,10 @@ impl CollaborationModeInstructions {
             this = this.with_design_audit_level(level);
         }
 
+        if collaboration_mode.mode == ModeKind::Product {
+            this = this.with_product_reentry(plan_artifact);
+        }
+
         // External evidence is a cross-mode concern. Keep it in one shared fragment so Default,
         // Plan, and Design cannot silently drift into different research standards.
         this = this.with_external_grounding();
@@ -106,6 +110,34 @@ impl CollaborationModeInstructions {
     /// single fragment per tier keeps the base template tier-neutral.
     fn with_concise_contract(self) -> Self {
         let fragment = ody_collaboration_mode_templates::PLAN_CONCISE;
+        Self {
+            instructions: format!("{}\n\n{}", self.instructions, fragment),
+        }
+    }
+
+    /// When product mode enters with an existing requirements document on
+    /// disk (continued session, re-entering the mode after leaving it, or
+    /// cross-day work), tell the model to continue that document instead of
+    /// restarting P0 triage. The discriminator is the artifact itself: a fresh
+    /// product artifact points at a `tmp-<thread>-<date>.md` scratch path that
+    /// does not exist yet, while a restored/continuing artifact's path exists
+    /// and carries the document text.
+    fn with_product_reentry(self, plan_artifact: Option<&PlanArtifact>) -> Self {
+        let Some(artifact) = plan_artifact else {
+            return self;
+        };
+        let Some(path) = artifact.path() else {
+            return self;
+        };
+        let has_document = path.exists()
+            && artifact
+                .last_plan_text()
+                .is_some_and(|text| !text.trim().is_empty());
+        if !has_document {
+            return self;
+        }
+        let fragment = ody_collaboration_mode_templates::PRODUCT_REENTRY
+            .replace("{{ product_path }}", &path.display().to_string());
         Self {
             instructions: format!("{}\n\n{}", self.instructions, fragment),
         }
@@ -1337,6 +1369,92 @@ mod tests {
         assert!(
             body.contains("Assumption: audit tier = Basic (auto mode)"),
             "body should record the auto-mode assumption:\n{body}"
+        );
+    }
+
+    fn product_mode_with_instructions(instructions: &str) -> CollaborationMode {
+        CollaborationMode {
+            mode: ModeKind::Product,
+            settings: Settings {
+                model: "test-model".to_string(),
+                reasoning_effort: None,
+                developer_instructions: Some(instructions.to_string()),
+                design_audit_level: None,
+            },
+        }
+    }
+
+    #[test]
+    fn product_mode_with_existing_document_appends_reentry_fragment() {
+        use ody_protocol::ThreadId;
+        use ody_utils_absolute_path::AbsolutePathBuf;
+
+        let mode = product_mode_with_instructions("Run the requirements workflow.");
+        let tmp = tempfile::tempdir().unwrap();
+        let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let thread_id = ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
+        std::fs::create_dir_all(tmp.path().join("products")).unwrap();
+        let doc = tmp.path().join("products").join("2026-09-08-topic.md");
+        std::fs::write(&doc, "# Requirements\n\n## Open Questions\n").unwrap();
+        let artifact = crate::plan_artifact::PlanArtifact::restore_product(
+            plans_base_dir,
+            thread_id,
+            "2026-09-08",
+        );
+
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            None,
+            None,
+            None,
+            Some(&artifact),
+        )
+        .expect("should produce instructions");
+        let body = instructions.body();
+        assert!(
+            body.contains("Continuing an existing requirements document"),
+            "re-entering product mode with a document on disk must append the reentry fragment:\n{body}"
+        );
+        assert!(
+            body.contains(&doc.display().to_string()),
+            "reentry fragment must name the document to continue:\n{body}"
+        );
+        assert!(
+            body.contains("Do NOT restart P0 triage"),
+            "reentry fragment must forbid restarting triage:\n{body}"
+        );
+        assert!(
+            !body.contains("{{ product_path }}"),
+            "reentry fragment must have its path placeholder interpolated:\n{body}"
+        );
+    }
+
+    #[test]
+    fn product_mode_without_document_omits_reentry_fragment() {
+        use ody_protocol::ThreadId;
+        use ody_utils_absolute_path::AbsolutePathBuf;
+
+        let mode = product_mode_with_instructions("Run the requirements workflow.");
+        let tmp = tempfile::tempdir().unwrap();
+        let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let thread_id = ThreadId::from_string("00000000-0000-0000-0000-000000000001").unwrap();
+        // Fresh artifact: its tmp path does not exist on disk yet, so there is
+        // nothing to continue — the P0 triage contract applies as written.
+        let artifact =
+            crate::plan_artifact::PlanArtifact::new_product(plans_base_dir, thread_id, "2026-09-08");
+
+        let instructions = CollaborationModeInstructions::from_collaboration_mode(
+            &mode,
+            None,
+            None,
+            None,
+            Some(&artifact),
+        )
+        .expect("should produce instructions");
+        let body = instructions.body();
+        assert!(
+            !body.contains("Continuing an existing requirements document"),
+            "fresh product sessions must not get the reentry fragment:\n{body}"
         );
     }
 }

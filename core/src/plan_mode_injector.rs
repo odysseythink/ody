@@ -1499,6 +1499,49 @@ mod directive_tests {
         assert_eq!(kind, ReminderKind::Sparse);
     }
 
+    /// Production wiring creates a BRAND-NEW `PlanArtifact` every turn
+    /// (`Session::new_turn_context_from_configuration`), so cadence state must
+    /// be carried across artifacts via `reminder_turns` /
+    /// `restore_reminder_turns` (persisted on `SessionState` between turns).
+    /// Without the carry-over every turn looks like turn 1 and no reminder
+    /// ever fires — this test simulates that exact per-turn wiring.
+    #[test]
+    fn product_cadence_survives_per_turn_artifact_recreation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let plans_base_dir = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let thread_id = ThreadId::from_string("00000000-0000-0000-0000-000000000006").unwrap();
+        let config = PlanModeConfigToml::default();
+
+        let mut carried: Option<(usize, Option<usize>, Option<usize>)> = None;
+        for turn in 1..=7usize {
+            let artifact =
+                PlanArtifact::new_product(plans_base_dir.clone(), thread_id.clone(), "2026-09-08");
+            if let Some(turns) = carried {
+                artifact.restore_reminder_turns(turns);
+            }
+            let reminder = PlanModeInjector::render_product_reminder_if_due(
+                &artifact,
+                Some(&config),
+                ModeKind::Product,
+            );
+            carried = Some(artifact.reminder_turns());
+            match turn {
+                1..=4 => assert_eq!(reminder, None, "no reminder before turn 5"),
+                5 => assert_eq!(
+                    reminder.map(|(kind, _, _)| kind),
+                    Some(ReminderKind::Full),
+                    "turn 5 should emit the full reminder even though each turn used a fresh artifact"
+                ),
+                6 => assert_eq!(reminder, None, "turn 6 deduplicated"),
+                7 => assert_eq!(
+                    reminder.map(|(kind, _, _)| kind),
+                    Some(ReminderKind::Sparse)
+                ),
+                _ => unreachable!(),
+            }
+        }
+    }
+
     #[test]
     fn render_product_reminder_if_due_never_fires_for_plan_or_design_mode() {
         // The product reminder text must never leak into a Plan or Design

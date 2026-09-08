@@ -10,6 +10,11 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use tokio::sync::Mutex;
 
+/// Reminder cadence counters carried across per-turn artifacts:
+/// `(turn_count, last_full_turn, last_any_turn)`. See
+/// [`PlanArtifact::reminder_turns`] for why the carry-over exists.
+pub(crate) type ReminderTurns = (usize, Option<usize>, Option<usize>);
+
 /// Session-level plan/design file artifact. Lives in Plan or Design mode.
 ///
 /// `plans_base_dir` is the directory that contains the `plans/` or `designs/`
@@ -128,6 +133,68 @@ impl PlanArtifact {
         date: &str,
     ) -> Self {
         Self::with_subdir(plans_base_dir, "products", thread_id, date)
+    }
+
+    /// Product-mode entry point with continuation: adopt the thread's existing
+    /// requirements document when one exists, else start a fresh tmp artifact.
+    ///
+    /// Selection rules, in priority order:
+    /// 1. This thread's own scratch file (`tmp-<thread_id>-<date>.md`), latest
+    ///    by date — the deterministic continuation target across days.
+    /// 2. Otherwise the most recently modified top-level `.md` that is NOT a
+    ///    `tmp-<other_thread>-*.md` scratch file (tmp filenames embed the
+    ///    owning thread id, so other threads' scratch is never adopted). This
+    ///    covers the common shape the product template produces:
+    ///    `<date>-<topic>.md` written by `write_file`.
+    ///
+    /// A hit is restored via [`Self::restore_or_create`]: the artifact is
+    /// `Finalized` at the existing path with its text loaded, so the read-only
+    /// patch gate's whitelist anchors to the real document and the injector
+    /// sees the document body. On a miss this is exactly [`Self::new_product`].
+    pub fn restore_product(
+        plans_base_dir: AbsolutePathBuf,
+        thread_id: ody_protocol::ThreadId,
+        date: &str,
+    ) -> Self {
+        let products_dir = plans_base_dir.as_path().join("products");
+        let own_tmp_prefix = format!("tmp-{thread_id}-");
+        let mut own_tmp: Vec<PathBuf> = Vec::new();
+        let mut dated_docs: Vec<(PathBuf, Option<std::time::SystemTime>)> = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&products_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_file()
+                    || path.extension().and_then(|ext| ext.to_str()) != Some("md")
+                {
+                    continue;
+                }
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if name.starts_with("tmp-") {
+                    // tmp files embed the owning thread id after the prefix;
+                    // only this thread's scratch is a continuation candidate.
+                    if name.starts_with(&own_tmp_prefix) {
+                        own_tmp.push(path);
+                    }
+                    continue;
+                }
+                let modified = entry
+                    .metadata()
+                    .ok()
+                    .and_then(|metadata| metadata.modified().ok());
+                dated_docs.push((path, modified));
+            }
+        }
+        // tmp-<thread_id>-<YYYY-MM-DD>.md sorts lexicographically by date.
+        own_tmp.sort();
+        let continuation = own_tmp.pop().or_else(|| {
+            // Latest mtime first; entries without an mtime sort last.
+            dated_docs.sort_by(|a, b| b.1.cmp(&a.1));
+            dated_docs.into_iter().next().map(|(path, _)| path)
+        });
+        match continuation {
+            Some(path) => Self::restore_or_create(plans_base_dir, thread_id, Some(path), date),
+            None => Self::new_product(plans_base_dir, thread_id, date),
+        }
     }
 
     fn with_subdir(
@@ -441,6 +508,51 @@ impl PlanArtifact {
         *guard
     }
 
+    /// Snapshot of the reminder cadence counters: `(turn_count, last_full_turn,
+    /// last_any_turn)`.
+    ///
+    /// Every user turn builds a BRAND-NEW `PlanArtifact`
+    /// (`Session::new_turn_context_from_configuration`), so cadence state kept
+    /// only on the artifact would reset to turn 1 each turn and the full/sparse
+    /// reminder schedule would never fire. The session persists this tuple via
+    /// `Session::set_plan_mode_reminder_turns` after each read-only-mode turn
+    /// and restores it onto the next turn's artifact with
+    /// [`Self::restore_reminder_turns`] — the same carry-over pattern as
+    /// `plan_mode_last_manifest_snapshot`.
+    pub fn reminder_turns(&self) -> ReminderTurns {
+        (
+            *self
+                .plan_mode_turn_count
+                .lock()
+                .expect("plan_mode_turn_count poisoned"),
+            *self
+                .last_full_turn
+                .lock()
+                .expect("last_full_turn poisoned"),
+            *self
+                .last_any_turn
+                .lock()
+                .expect("last_any_turn poisoned"),
+        )
+    }
+
+    /// Restore cadence counters carried over from the previous turn's artifact
+    /// (see [`Self::reminder_turns`]).
+    pub fn restore_reminder_turns(&self, turns: ReminderTurns) {
+        *self
+            .plan_mode_turn_count
+            .lock()
+            .expect("plan_mode_turn_count poisoned") = turns.0;
+        *self
+            .last_full_turn
+            .lock()
+            .expect("last_full_turn poisoned") = turns.1;
+        *self
+            .last_any_turn
+            .lock()
+            .expect("last_any_turn poisoned") = turns.2;
+    }
+
     /// Returns `(last_full_turn, last_any_turn)` for reminder-cadence selection.
     pub fn last_reminder_turns(&self) -> (Option<usize>, Option<usize>) {
         let full = *self.last_full_turn.lock().expect("last_full_turn poisoned");
@@ -615,6 +727,8 @@ fn infer_subdir(plans_base_dir: &AbsolutePathBuf, path: &Path) -> &'static str {
     let base = plans_base_dir.as_path();
     if path.starts_with(base.join("designs")) {
         "designs"
+    } else if path.starts_with(base.join("products")) {
+        "products"
     } else {
         "plans"
     }
@@ -829,6 +943,114 @@ mod tests {
         let base = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
         let plan_path = tmp.path().join("plans").join("2026-07-04-auth.md");
         assert_eq!(infer_subdir(&base, &plan_path), "plans");
+    }
+
+    #[test]
+    fn infer_subdir_products() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let product_path = tmp.path().join("products").join("2026-09-08-topic.md");
+        assert_eq!(infer_subdir(&base, &product_path), "products");
+    }
+
+    fn product_test_base() -> (tempfile::TempDir, AbsolutePathBuf, ody_protocol::ThreadId) {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = AbsolutePathBuf::from_absolute_path(tmp.path()).unwrap();
+        let thread_id =
+            ody_protocol::ThreadId::from_string("00000000-0000-0000-0000-000000000009").unwrap();
+        (tmp, base, thread_id)
+    }
+
+    #[test]
+    fn restore_product_prefers_own_thread_tmp_across_dates() {
+        let (tmp, base, thread_id) = product_test_base();
+        let products = tmp.path().join("products");
+        std::fs::create_dir_all(&products).unwrap();
+        let older = products.join("tmp-00000000-0000-0000-0000-000000000009-2026-09-07.md");
+        let newer = products.join("tmp-00000000-0000-0000-0000-000000000009-2026-09-08.md");
+        std::fs::write(&older, "# day one").unwrap();
+        std::fs::write(&newer, "# day two").unwrap();
+
+        let artifact = PlanArtifact::restore_product(base, thread_id, "2026-09-08");
+        assert_eq!(artifact.path().as_deref(), Some(newer.as_path()));
+        assert_eq!(artifact.last_plan_text().as_deref(), Some("# day two"));
+        assert!(artifact.is_plan_file_path(&newer));
+    }
+
+    #[test]
+    fn restore_product_falls_back_to_latest_modified_non_tmp_doc() {
+        let (tmp, base, thread_id) = product_test_base();
+        let products = tmp.path().join("products");
+        std::fs::create_dir_all(&products).unwrap();
+        let stale = products.join("2026-09-05-old-topic.md");
+        let fresh = products.join("2026-09-08-current-topic.md");
+        std::fs::write(&stale, "# stale").unwrap();
+        std::fs::write(&fresh, "# fresh requirements").unwrap();
+        // Make the *content* ordering unambiguous even if the filesystem gives
+        // both files the same mtime granularity.
+        let older_mtime = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+        std::fs::File::options()
+            .write(true)
+            .open(&stale)
+            .unwrap()
+            .set_modified(older_mtime)
+            .unwrap();
+
+        let artifact = PlanArtifact::restore_product(base, thread_id, "2026-09-08");
+        assert_eq!(artifact.path().as_deref(), Some(fresh.as_path()));
+        assert_eq!(
+            artifact.last_plan_text().as_deref(),
+            Some("# fresh requirements")
+        );
+        assert!(artifact.is_plan_file_path(&fresh));
+    }
+
+    #[test]
+    fn restore_product_never_adopts_other_threads_tmp_files() {
+        let (tmp, base, thread_id) = product_test_base();
+        let products = tmp.path().join("products");
+        std::fs::create_dir_all(&products).unwrap();
+        // Another thread's scratch file, modified just now (would win any
+        // mtime race), plus this thread's real document.
+        let other_tmp = products.join("tmp-00000000-0000-0000-0000-00000000ffff-2026-09-08.md");
+        let own_doc = products.join("2026-09-08-own-topic.md");
+        std::fs::write(&other_tmp, "# other thread scratch").unwrap();
+        std::fs::write(&own_doc, "# own requirements").unwrap();
+
+        let artifact = PlanArtifact::restore_product(base, thread_id, "2026-09-08");
+        assert_eq!(artifact.path().as_deref(), Some(own_doc.as_path()));
+        assert!(!artifact.is_plan_file_path(&other_tmp));
+    }
+
+    #[test]
+    fn restore_product_empty_dir_returns_fresh_tmp_artifact() {
+        let (tmp, base, thread_id) = product_test_base();
+        let artifact = PlanArtifact::restore_product(base, thread_id, "2026-09-08");
+        let path = artifact.path().unwrap();
+        assert!(path.starts_with(tmp.path().join("products")));
+        assert!(
+            path.to_string_lossy()
+                .contains("tmp-00000000-0000-0000-0000-000000000009-2026-09-08.md")
+        );
+        assert_eq!(artifact.last_plan_text(), None);
+    }
+
+    #[test]
+    fn reminder_turns_roundtrip_across_artifacts() {
+        let (artifact, _tmp) = test_artifact("2026-09-08");
+        assert_eq!(artifact.reminder_turns(), (0, Some(0), Some(0)));
+
+        artifact.next_plan_mode_turn();
+        artifact.record_reminder_injected(/*full*/ true, 1);
+        let carried = artifact.reminder_turns();
+        assert_eq!(carried, (1, Some(1), Some(1)));
+
+        // The next turn builds a brand-new artifact (production behavior) and
+        // restores the carried cadence state onto it.
+        let (next_turn, _tmp2) = test_artifact("2026-09-08");
+        next_turn.restore_reminder_turns(carried);
+        assert_eq!(next_turn.reminder_turns(), (1, Some(1), Some(1)));
+        assert_eq!(next_turn.next_plan_mode_turn(), 2);
     }
 
     #[tokio::test]

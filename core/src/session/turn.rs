@@ -1671,6 +1671,12 @@ async fn run_session_mode_after_turn(
         sess.set_plan_mode_last_manifest_snapshot(snapshot).await;
     }
 
+    // The artifact (and its cadence counters) is recreated on every turn;
+    // carry the counters through session state so the full/sparse reminder
+    // schedule survives — same pattern as the manifest snapshot above.
+    sess.set_plan_mode_reminder_turns(artifact.reminder_turns())
+        .await;
+
     // A compact is useful only between verified parts, never immediately
     // after writing the initial index. Respect the feature gate and treat a
     // non-cancellation failure as best-effort: the verified manifest still

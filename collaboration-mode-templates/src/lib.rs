@@ -9,6 +9,7 @@ pub const PAIR_PROGRAMMING: &str = include_str!("../templates/pair_programming.m
 pub const PLAN_CONCISE: &str = include_str!("../templates/plan_concise.md");
 pub const PRODUCT: &str = include_str!("../templates/product.md");
 pub const PRODUCT_FULL_REMINDER: &str = include_str!("../templates/product_full_reminder.md");
+pub const PRODUCT_REENTRY: &str = include_str!("../templates/product_reentry.md");
 pub const PRODUCT_SPARSE_REMINDER: &str = include_str!("../templates/product_sparse_reminder.md");
 pub const PLAN_RIGOR_WORKFLOW: &str = include_str!("../templates/plan_rigor_workflow.md");
 pub const PLAN_RIGOR_COVERAGE: &str = include_str!("../templates/plan_rigor_coverage.md");
@@ -334,6 +335,30 @@ mod template_tests {
             "PRODUCT_FULL_REMINDER must restate the no-code hard gate:\n{}",
             PRODUCT_FULL_REMINDER
         );
+    }
+
+    /// Re-entry contract for product mode: when a requirements document
+    /// already exists on disk (continued session, re-entering the mode, or
+    /// cross-day work), the model must continue that document instead of
+    /// restarting P0 triage. The host interpolates `{{ product_path }}` with
+    /// the restored artifact path before appending this fragment.
+    #[test]
+    fn product_reentry_pins_the_continue_dont_restart_contract() {
+        for requirement in [
+            "{{ product_path }}",
+            "Do NOT restart P0 triage",
+            "request_user_input",
+            "ONE question at a time",
+            "## Open Questions",
+            "[V:TRANSACTED|OBSERVED|STATED]",
+            "must-do",
+            "no code",
+        ] {
+            assert!(
+                PRODUCT_REENTRY.contains(requirement),
+                "PRODUCT_REENTRY must contain {requirement:?}"
+            );
+        }
     }
 
     fn understand_step_of(body: &str) -> String {
