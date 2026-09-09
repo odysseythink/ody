@@ -1,6 +1,6 @@
 ---
 name: systematic-debugging
-description: Use when encountering any bug, test failure, or unexpected behavior, before proposing fixes
+description: ALWAYS invoke this skill when encountering any bug, test failure, or unexpected behavior, before proposing fixes — e.g. "it's broken", "tests are failing", "something is off". Finds the root cause first; no fix until the cause is proven.
 namespace: core
 ---
 

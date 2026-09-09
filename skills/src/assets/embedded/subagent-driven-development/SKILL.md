@@ -1,6 +1,6 @@
 ---
 name: subagent-driven-development
-description: Use when executing implementation plans with independent tasks in the current session
+description: ALWAYS invoke this skill when executing an implementation plan with independent tasks in the current session — e.g. "execute this plan here" or "use subagents for this plan". Dispatches a fresh subagent per task with two-stage review (spec compliance, then code quality). For separate-session execution use executing-plans instead.
 namespace: core
 ---
 
@@ -8,7 +8,7 @@ namespace: core
 
 Execute plan by dispatching fresh subagent per task, with two-stage review after each: spec compliance review first, then code quality review.
 
-**Why subagents:** You delegate tasks to specialized agents with isolated context. By precisely crafting their instructions and context, you ensure they stay focused and succeed at their task. They should never inherit your session's context or history — you construct exactly what they need. This also preserves your own context for coordination work.
+**Why subagents:** You delegate tasks to specialized agents with isolated context. By precisely crafting their instructions and context, you ensure they stay focused and succeed at their task. They should never inherit your session's context or history — you construct exactly what they need. This also preserves your own context for coordination work. The same isolation protects review: a subagent that receives the implementer's rationale anchors on it and reviews the work too gently.
 
 **Core principle:** Fresh subagent per task + two-stage review (spec then quality) = high quality, fast iteration
 
@@ -121,6 +121,8 @@ Implementer subagents report one of four statuses. Handle each appropriately:
 **Never** ignore an escalation or force the same model to retry without changes. If the implementer said it's stuck, something needs to change.
 
 ## Prompt Templates
+
+Reviewer briefs contain the spec and the code only — never the implementer's rationale or self-review conclusions. A reviewer that has seen the reasoning behind the work defends it instead of attacking it.
 
 ### Implementer Prompt
 

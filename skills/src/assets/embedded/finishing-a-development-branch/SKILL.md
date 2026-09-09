@@ -1,6 +1,6 @@
 ---
 name: finishing-a-development-branch
-description: Use when implementation is complete, all tests pass, and you need to decide how to integrate the work - guides completion of development work by presenting structured options for merge, PR, or cleanup
+description: ALWAYS invoke this skill when implementation is complete, all tests pass, and you need to decide how to integrate the work — merge, open a PR, or clean up the branch. Presents structured options and executes the user's choice, e.g. when the user asks "what now", "merge or PR", or "close out this branch".
 namespace: core
 ---
 
