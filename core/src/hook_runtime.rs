@@ -367,6 +367,7 @@ pub(crate) async fn run_turn_stop_hooks(
         SessionSource::SubAgent(_) => return StopOutcome::default(),
         _ => (StopHookTarget::Stop, sess.hook_transcript_path().await),
     };
+    let is_root_stop = matches!(target, StopHookTarget::Stop);
     let request = ody_hooks::StopRequest {
         session_id: sess.session_id().into(),
         turn_id: turn_context.sub_id.clone(),
@@ -384,6 +385,12 @@ pub(crate) async fn run_turn_stop_hooks(
 
     let mut outcome = hooks.run_stop(request).await;
     emit_hook_completed_events(sess, turn_context, std::mem::take(&mut outcome.hook_events)).await;
+    // Native session-report gate: only for root turns (not SubagentStop), and
+    // only when no user-configured stop hook already blocked.
+    if is_root_stop {
+        crate::session_report_gate::apply_session_report_gate(sess, turn_context, &mut outcome)
+            .await;
+    }
     outcome
 }
 
