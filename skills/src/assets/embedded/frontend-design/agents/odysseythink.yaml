@@ -1,2 +1,4 @@
 policy:
-  products: [odybox]
+  products:
+    - ody
+    - odybox

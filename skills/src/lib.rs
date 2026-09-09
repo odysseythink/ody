@@ -1,3 +1,5 @@
+pub mod remote_sync;
+
 use include_dir::Dir;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use std::collections::hash_map::DefaultHasher;
@@ -13,6 +15,24 @@ const SYSTEM_SKILLS_DIR_NAME: &str = ".system";
 const SKILLS_DIR_NAME: &str = "skills";
 const SYSTEM_SKILLS_MARKER_FILENAME: &str = ".ody-system-skills.marker";
 const SYSTEM_SKILLS_MARKER_SALT: &str = "v1";
+
+pub use remote_sync::remote_builtin_cache_root_dir;
+
+/// Names of the skills bundled in the embedded system-skills set.
+/// Remote builtin-skill sync skips these so a backend cannot shadow or
+/// duplicate embedded content.
+pub fn embedded_system_skill_names() -> Vec<String> {
+    SYSTEM_SKILLS_DIR
+        .dirs()
+        .map(|dir| {
+            dir.path()
+                .file_name()
+                .expect("embedded skill dir has a name")
+                .to_string_lossy()
+                .to_string()
+        })
+        .collect()
+}
 
 /// Returns the on-disk cache location for embedded system skills from an absolute ODY_HOME.
 pub fn system_cache_root_dir(ody_home: &AbsolutePathBuf) -> AbsolutePathBuf {
@@ -210,6 +230,100 @@ mod tests {
             !outcome.skills.is_empty(),
             "system skills should be discovered"
         );
+    }
+
+    #[tokio::test]
+    async fn embedded_system_skills_respect_product_restrictions() {
+        // Product separation contract (odyBox decision 3B): ody-only builtin
+        // skills must be invisible when the runtime restricts to Product::OdyBox
+        // and vice versa. Untagged skills (empty products) stay visible under
+        // every restriction, so each embedded skill must be tagged explicitly.
+        let temp_dir = tempfile::tempdir().unwrap();
+        let ody_home = ody_utils_absolute_path::AbsolutePathBuf::try_from(temp_dir.path())
+            .expect("absolute temp dir");
+        install_system_skills(&ody_home).expect("install system skills");
+
+        let system_root = system_cache_root_dir(&ody_home);
+        let load = |system_root: ody_utils_absolute_path::AbsolutePathBuf| {
+            async move {
+                ody_core_skills::loader::load_skills_from_roots(
+                    [ody_core_skills::loader::SkillRoot {
+                        path: system_root,
+                        scope: SkillScope::System,
+                        file_system: Arc::new(LocalFileSystem::unsandboxed()),
+                        plugin_id: None,
+                        plugin_namespace: None,
+                        plugin_root: None,
+                    }],
+                    /*plugin_skill_snapshots*/ None,
+                )
+                .await
+            }
+        };
+
+        let ody_only = [
+            "debt-ledger",
+            "dispatching-parallel-agents",
+            "executing-plans",
+            "finishing-a-development-branch",
+            "idea-evaluator",
+            "idea-generator",
+            "roadmap-architect",
+            "subagent-driven-development",
+            "systematic-debugging",
+            "test-driven-development",
+            "using-git-worktrees",
+            "verification-before-completion",
+            "plugin-creator",
+            "simplicity-first",
+            "skill-creator",
+            "skill-installer",
+        ];
+        let odybox_only = ["vibedrop"];
+        let shared = ["data-analysis", "frontend-design", "legal-contract"];
+
+        let outcome = load(system_root).await;
+        assert!(outcome.errors.is_empty(), "errors: {:?}", outcome.errors);
+
+        let ody_filtered = ody_core_skills::filter_skill_load_outcome_for_product(
+            outcome.clone(),
+            Some(ody_protocol::protocol::Product::Ody),
+        );
+        let odybox_filtered = ody_core_skills::filter_skill_load_outcome_for_product(
+            outcome,
+            Some(ody_protocol::protocol::Product::OdyBox),
+        );
+
+        for name in ody_only {
+            assert!(
+                ody_filtered.skills.iter().any(|skill| skill.name == name),
+                "ody-only {name} must be visible under Product::Ody"
+            );
+            assert!(
+                !odybox_filtered.skills.iter().any(|skill| skill.name == name),
+                "ody-only {name} must be hidden under Product::OdyBox"
+            );
+        }
+        for name in odybox_only {
+            assert!(
+                odybox_filtered.skills.iter().any(|skill| skill.name == name),
+                "odybox-only {name} must be visible under Product::OdyBox"
+            );
+            assert!(
+                !ody_filtered.skills.iter().any(|skill| skill.name == name),
+                "odybox-only {name} must be hidden under Product::Ody"
+            );
+        }
+        for name in shared {
+            assert!(
+                ody_filtered.skills.iter().any(|skill| skill.name == name),
+                "shared {name} must be visible under Product::Ody"
+            );
+            assert!(
+                odybox_filtered.skills.iter().any(|skill| skill.name == name),
+                "shared {name} must be visible under Product::OdyBox"
+            );
+        }
     }
 
     #[tokio::test]
