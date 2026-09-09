@@ -101,6 +101,9 @@ To distribute a single `ody` binary without the helper, build with the `bundled-
 # Single-binary release build (no ody-builtin-mcp needed at runtime)
 cargo build --release -p ody-cli --features bundled-builtin-mcp
 
+# The app-server binary supports the same feature for single-binary distribution
+cargo build --release -p ody-app-server --features bundled-builtin-mcp
+
 # Combined with other release features
 cargo build --release -p ody-cli --features v8,bundled-builtin-mcp
 ```

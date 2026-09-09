@@ -21,6 +21,12 @@ doctest = false
 workspace = true
 
 [features]
+# Bundles the builtin MCP servers (fetch, sequentialthinking, arxiv,
+# context7) into the app-server binary and serves them in-process over tokio
+# duplex streams, so distribution only needs the single `ody-app-server`
+# executable and not the separate `ody-builtin-mcp` helper binary. Off by
+# default; release / packaging builds should enable this.
+bundled-builtin-mcp = ["ody-mcp/bundled-builtin-mcp"]
 # Enables the Windows restricted-token/elevated sandbox backend. Off by default
 # so local dev builds skip compiling/linking the Windows sandbox crate; release
 # / packaging builds for Windows must pass `--features windows-sandbox` for

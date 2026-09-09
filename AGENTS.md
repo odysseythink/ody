@@ -25,7 +25,7 @@
 ## Builtin MCP bundling feature gate
 
 - The builtin MCP servers (`fetch`, `sequentialthinking`, `arxiv`, `context7`) normally run as the separate `ody-builtin-mcp` stdio helper binary. The `bundled-builtin-mcp` Cargo feature **(off by default)** instead serves them in-process over tokio duplex streams via the existing `ody_rmcp_client::InProcessTransportFactory` plumbing, so a release build can distribute a single `ody` binary with no helper executable on `PATH`.
-- Forwarding: `ody-mcp/bundled-builtin-mcp` (pulls in the `ody-builtin-mcp` lib as an optional dependency) ← `ody-cli/bundled-builtin-mcp`. Release/packaging builds enable it with `cargo build -p ody-cli --release --features bundled-builtin-mcp`.
+- Forwarding: `ody-mcp/bundled-builtin-mcp` (pulls in the `ody-builtin-mcp` lib as an optional dependency) ← `ody-cli/bundled-builtin-mcp` and `ody-app-server/bundled-builtin-mcp`. Release/packaging builds enable it with `cargo build -p ody-cli --release --features bundled-builtin-mcp` (same flag for `-p ody-app-server`).
 - Only the exact default builtin launch shape is intercepted (`ody-builtin-mcp <name>`, local environment, no custom env/cwd); user overrides fall through to the normal stdio child-process path. The interception lives in `ody-mcp/src/builtin_in_process.rs` + `rmcp_client.rs::make_rmcp_client`; the serve entry point is `ody_builtin_mcp::serve_builtin`.
 - Feature-gated tests: `cargo nextest run -p ody-mcp --features bundled-builtin-mcp` (includes the in-process factory handshake test); `cargo nextest run -p ody-builtin-mcp` covers the duplex-stream serving of all four servers.
 
