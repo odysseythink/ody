@@ -331,6 +331,18 @@ fn skill_roots_from_layer_stack_inner(
                     plugin_namespace: None,
                     plugin_root: None,
                 });
+
+                // Remote-synced builtin skills (e.g. odyBox's backend-delivered
+                // skills) cache under `$ODY_HOME/skills/.builtin`, a sibling of
+                // `.system` with the same visibility semantics.
+                roots.push(SkillRoot {
+                    path: ody_skills::remote_builtin_cache_root_dir(&config_folder),
+                    scope: SkillScope::System,
+                    file_system: Arc::clone(&LOCAL_FS),
+                    plugin_id: None,
+                    plugin_namespace: None,
+                    plugin_root: None,
+                });
             }
             ConfigLayerSource::System { .. } => {
                 // The system config layer lives under `/etc/ody/` on Unix, so treat

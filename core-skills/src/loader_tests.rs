@@ -204,6 +204,10 @@ async fn skill_roots_from_layer_stack_maps_user_to_user_and_system_cache_and_sys
                 SkillScope::System,
                 user_folder.join("skills").join(".system")
             ),
+            (
+                SkillScope::System,
+                user_folder.join("skills").join(".builtin")
+            ),
             (SkillScope::Admin, system_folder.join("skills")),
         ]
     );
@@ -273,6 +277,10 @@ async fn skill_roots_from_layer_stack_includes_disabled_project_layers() -> anyh
             (
                 SkillScope::System,
                 user_folder.join("skills").join(".system")
+            ),
+            (
+                SkillScope::System,
+                user_folder.join("skills").join(".builtin")
             ),
         ]
     );
@@ -2189,7 +2197,11 @@ async fn skill_roots_include_admin_with_lowest_priority() {
     .into_iter()
     .map(|root| root.scope)
     .collect();
-    let mut expected = vec![SkillScope::User, SkillScope::System];
+    let mut expected = vec![
+        SkillScope::User,
+        SkillScope::System,
+        SkillScope::System,
+    ];
     if home_dir().is_some() {
         expected.insert(1, SkillScope::User);
     }
