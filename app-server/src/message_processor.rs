@@ -414,6 +414,16 @@ impl MessageProcessor {
                     &config.plugins_config_input(),
                     Some(on_effective_plugins_changed),
                 );
+            // odyBox sessions mirror chatbox's builtin skills from the remote
+            // backend; tags on the synced snapshots keep them odyBox-only.
+            if thread_manager.session_source().restriction_product()
+                == Some(ody_protocol::protocol::Product::OdyBox)
+            {
+                crate::remote_skills_fetcher::spawn_builtin_skills_sync(
+                    config.ody_home.clone(),
+                    thread_manager.skills_service(),
+                );
+            }
         }
         let config_processor = ConfigRequestProcessor::new(
             outgoing.clone(),

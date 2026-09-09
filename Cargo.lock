@@ -6604,6 +6604,7 @@ dependencies = [
  "ody-rollout",
  "ody-sandboxing",
  "ody-shell-command",
+ "ody-skills",
  "ody-skills-extension",
  "ody-state",
  "ody-thread-store",
@@ -8246,9 +8247,13 @@ dependencies = [
  "ody-exec-server",
  "ody-protocol",
  "ody-utils-absolute-path",
+ "serde",
+ "serde_json",
+ "serde_yaml",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

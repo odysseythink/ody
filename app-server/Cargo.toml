@@ -60,6 +60,7 @@ ody-hooks = { workspace = true }
 ody-otel = { workspace = true }
 ody-plugin = { workspace = true }
 ody-shell-command = { workspace = true }
+ody-skills = { workspace = true }
 ody-skills-extension = { workspace = true }
 ody-utils-cli = { workspace = true }
 ody-utils-pty = { workspace = true }
