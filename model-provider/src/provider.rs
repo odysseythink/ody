@@ -209,10 +209,46 @@ impl ModelProvider for ConfiguredModelProvider {
                     ResponsesAdapter::new(transport, api_provider, auth)
                         .with_provider_id(provider_id_for_wire_api(&self.info)),
                 ),
+                ody_model_provider_info::WireApi::AnthropicMessages => {
+                    let transport =
+                        ody_api::ReqwestTransport::new(ody_client::default_client::build_reqwest_client());
+                    if let Some(aws) = &self.info.aws {
+                        validate_bedrock_aws_config(aws)?;
+                        // Bedrock authenticates with SigV4 request signing,
+                        // including for the Anthropic invoke operations;
+                        // wrap the transport so every request is signed.
+                        let signing_transport =
+                            crate::sigv4_transport::SigV4Transport::new(transport, aws);
+                        Box::new(
+                            crate::adapters::anthropic::AnthropicAdapter::new(
+                                signing_transport,
+                                api_provider,
+                                auth,
+                                true,
+                            )
+                            .with_provider_id(provider_id_for_wire_api(&self.info)),
+                        )
+                    } else {
+                        Box::new(
+                            crate::adapters::anthropic::AnthropicAdapter::new(
+                                transport,
+                                api_provider,
+                                auth,
+                                false,
+                            )
+                            .with_provider_id(provider_id_for_wire_api(&self.info)),
+                        )
+                    }
+                }
                 ody_model_provider_info::WireApi::Chat => {
                     let vendor = ody_api::chat::ChatVendor::from_provider(
                         &self.info.name,
                         self.info.base_url.as_deref(),
+                        self.info
+                            .query_params
+                            .as_ref()
+                            .and_then(|params| params.get("api-version"))
+                            .map(String::as_str),
                     );
                     if let Some(aws) = &self.info.aws {
                         validate_bedrock_aws_config(aws)?;
