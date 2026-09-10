@@ -790,8 +790,22 @@ impl ConfigToml {
                 let wire_api = match provider.r#type.as_str() {
                     "openai" | "openai_responses" => WireApi::Responses,
                     // Azure OpenAI exposes the Responses API at
-                    // `{endpoint}/openai/responses?api-version=...`.
-                    "azure" => WireApi::Responses,
+                    // `{endpoint}/openai/responses?api-version=...` on the v1
+                    // compatibility surface. Dated api-versions (e.g.
+                    // "2025-03-01") only speak deployment-based chat URLs,
+                    // so they ride the Chat Completions wire instead (mirrors
+                    // odyBox azure.ts: useDeploymentBasedUrls = apiVersion !== "v1").
+                    "azure" => {
+                        let dated_api_version = provider
+                            .query_params
+                            .get("api-version")
+                            .is_some_and(|v| !v.eq_ignore_ascii_case("v1"));
+                        if dated_api_version {
+                            WireApi::Chat
+                        } else {
+                            WireApi::Responses
+                        }
+                    }
                     // AWS Bedrock exposes an OpenAI-compatible Chat
                     // Completions surface; requests are SigV4-signed.
                     "bedrock" => WireApi::Chat,
@@ -811,19 +825,31 @@ impl ConfigToml {
                 } else if is_bedrock {
                     // Bedrock requests are SigV4-signed; never attach a Bearer token.
                     None
+                } else if provider.r#type == "anthropic" && provider.aws.is_none() {
+                    // The Anthropic Messages API authenticates with an
+                    // x-api-key header, not Authorization: Bearer.
+                    if let Some(api_key) = &provider.api_key {
+                        http_headers.insert("x-api-key".to_string(), api_key.clone());
+                    }
+                    None
                 } else {
                     provider.api_key.clone()
                 };
-                let base_url = if is_bedrock && provider.base_url.is_none() {
+                // Anthropic-protocol Bedrock providers (Claude via the
+                // invoke operations) use the bare Bedrock runtime host;
+                // OpenAI-compatible Bedrock keeps the /openai/v1 surface.
+                let is_anthropic_bedrock =
+                    provider.r#type == "anthropic" && provider.aws.is_some();
+                let base_url = if provider.base_url.is_none() && (is_bedrock || is_anthropic_bedrock)
+                {
                     let region = provider
                         .aws
                         .as_ref()
                         .map(|aws| aws.region.as_str())
                         .filter(|region| !region.is_empty())
                         .unwrap_or("us-east-1");
-                    Some(format!(
-                        "https://bedrock-runtime.{region}.amazonaws.com/openai/v1"
-                    ))
+                    let path = if is_anthropic_bedrock { "" } else { "/openai/v1" };
+                    Some(format!("https://bedrock-runtime.{region}.amazonaws.com{path}"))
                 } else {
                     provider.base_url.clone()
                 };
@@ -1861,6 +1887,53 @@ base_url = "https://example.openai.azure.com/openai"
     }
 
     #[test]
+    fn convert_ody_code_azure_dated_api_version_uses_chat_wire_for_deployment_urls() {
+        // Azure dated api-versions (e.g. "2025-03-01") speak deployment-based
+        // URLs ({endpoint}/openai/deployments/{model}/chat/completions), not
+        // the v1-compatible surface. Mirror odyBox's azure.ts rule
+        // (useDeploymentBasedUrls = apiVersion !== "v1").
+        let config: ConfigToml = toml::from_str(
+            r#"
+[providers.azure_openai]
+type = "azure"
+api_key = "azure-secret"
+base_url = "https://example.openai.azure.com/openai"
+query_params = { api-version = "2025-03-01" }
+"#,
+        )
+        .expect("config should deserialize");
+        let converted = config.convert_ody_code_providers();
+        let provider = converted.get("azure_openai").expect("provider");
+
+        assert_eq!(provider.wire_api, WireApi::Chat);
+        assert_eq!(
+            provider
+                .http_headers
+                .as_ref()
+                .and_then(|headers| headers.get("api-key")),
+            Some(&"azure-secret".to_string())
+        );
+    }
+
+    #[test]
+    fn convert_ody_code_azure_v1_api_version_keeps_responses_wire_api() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[providers.azure_openai]
+type = "azure"
+api_key = "azure-secret"
+base_url = "https://example.openai.azure.com/openai"
+query_params = { api-version = "v1" }
+"#,
+        )
+        .expect("config should deserialize");
+        let converted = config.convert_ody_code_providers();
+        let provider = converted.get("azure_openai").expect("provider");
+
+        assert_eq!(provider.wire_api, WireApi::Responses);
+    }
+
+    #[test]
     fn convert_ody_code_azure_merges_custom_headers_with_api_key_header() {
         let config: ConfigToml = toml::from_str(
             r#"
@@ -1902,6 +1975,63 @@ query_params = { api-version = "2025-03-01" }
             Some(&"2025-03-01".to_string())
         );
     }
+
+    #[test]
+    fn convert_ody_code_anthropic_type_uses_x_api_key_header() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[providers.claude]
+type = "anthropic"
+api_key = "sk-ant-example"
+"#,
+        )
+        .expect("config should deserialize");
+        let converted = config.convert_ody_code_providers();
+        let provider = converted.get("claude").expect("provider");
+
+        assert_eq!(provider.wire_api, WireApi::AnthropicMessages);
+        assert_eq!(provider.experimental_bearer_token, None);
+        assert_eq!(
+            provider
+                .http_headers
+                .as_ref()
+                .and_then(|headers| headers.get("x-api-key")),
+            Some(&"sk-ant-example".to_string())
+        );
+    }
+
+    #[test]
+    fn convert_ody_code_anthropic_bedrock_uses_sigv4_and_bare_runtime_host() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[providers.claude_bedrock]
+type = "anthropic"
+
+[providers.claude_bedrock.aws]
+access_key_id = "ak"
+secret_access_key = "sk"
+region = "eu-central-1"
+"#,
+        )
+        .expect("config should deserialize");
+        let converted = config.convert_ody_code_providers();
+        let provider = converted.get("claude_bedrock").expect("provider");
+
+        assert_eq!(provider.wire_api, WireApi::AnthropicMessages);
+        assert_eq!(provider.experimental_bearer_token, None);
+        assert!(
+            provider
+                .http_headers
+                .as_ref()
+                .map_or(true, |headers| !headers.contains_key("x-api-key"))
+        );
+        assert_eq!(
+            provider.base_url.as_deref(),
+            Some("https://bedrock-runtime.eu-central-1.amazonaws.com")
+        );
+        assert!(provider.aws.is_some());
+    }
+
 
     #[test]
     fn convert_ody_code_bedrock_type_uses_chat_wire_api_and_sigv4_fields() {
