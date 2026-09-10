@@ -1126,7 +1126,8 @@ async fn send_provider_auth_request(server: &MockServer, auth: ModelProviderAuth
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
         capabilities: ProviderCapabilities::default(),
-    };
+            aws: None,
+        };
 
     let ody_home = TempDir::new().unwrap();
     let mut config = load_default_config_for_test(&ody_home).await;
@@ -2413,7 +2414,8 @@ async fn azure_responses_request_includes_store_and_reasoning_ids() {
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
         capabilities: ProviderCapabilities::default(),
-    };
+            aws: None,
+        };
 
     let ody_home = TempDir::new().unwrap();
     let mut config = load_default_config_for_test(&ody_home).await;
@@ -2787,7 +2789,8 @@ async fn azure_overrides_assign_properties_used_for_responses_url() {
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
         capabilities: ProviderCapabilities::default(),
-    };
+            aws: None,
+        };
 
     // Init session
     let mut builder = test_ody().with_config(move |config| {
@@ -2872,7 +2875,8 @@ async fn env_var_overrides_loaded_auth() {
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
         capabilities: ProviderCapabilities::default(),
-    };
+            aws: None,
+        };
 
     // Init session
     let mut builder = test_ody().with_config(move |config| {

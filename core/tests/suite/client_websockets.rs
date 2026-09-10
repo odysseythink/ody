@@ -1917,6 +1917,7 @@ fn websocket_provider_with_connect_timeout(
         websocket_connect_timeout_ms,
         supports_websockets: true,
         capabilities: ProviderCapabilities::default(),
+        aws: None,
     }
 }
 

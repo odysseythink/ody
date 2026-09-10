@@ -357,6 +357,7 @@ pub(crate) fn test_provider() -> ModelProviderInfo {
             command_auth: false,
             attestation: false,
         },
+        aws: None,
     }
 }
 

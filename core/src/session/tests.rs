@@ -484,6 +484,7 @@ pub(crate) fn test_model_client_session() -> crate::client::ModelClientSession {
                 command_auth: false,
                 attestation: false,
             },
+            aws: None,
         },
         ody_protocol::protocol::SessionSource::Exec,
         /*model_verbosity*/ None,

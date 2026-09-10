@@ -727,6 +727,12 @@ pub struct OdyCodeProviderConfig {
     pub env: HashMap<String, String>,
     #[serde(default)]
     pub custom_headers: HashMap<String, String>,
+    /// Extra query parameters appended to every request URL (e.g. Azure's
+    /// `api-version`).
+    #[serde(default)]
+    pub query_params: HashMap<String, String>,
+    /// AWS credentials and region for SigV4 request signing (AWS Bedrock).
+    pub aws: Option<OdyCodeAwsConfig>,
 }
 
 /// Ody-code compatible OAuth reference.
@@ -735,6 +741,16 @@ pub struct OdyCodeProviderConfig {
 pub struct OdyCodeOAuthRef {
     pub storage: String,
     pub key: String,
+}
+
+/// AWS credentials and region for SigV4 request signing (AWS Bedrock).
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct OdyCodeAwsConfig {
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub session_token: Option<String>,
+    pub region: String,
 }
 
 /// Ody-code compatible model configuration.
@@ -769,23 +785,70 @@ impl ConfigToml {
             .iter()
             .map(|(id, provider)| {
                 let display_name = provider_display_name(&provider.r#type);
+                let is_azure = provider.r#type == "azure";
+                let is_bedrock = provider.r#type == "bedrock";
                 let wire_api = match provider.r#type.as_str() {
                     "openai" | "openai_responses" => WireApi::Responses,
+                    // Azure OpenAI exposes the Responses API at
+                    // `{endpoint}/openai/responses?api-version=...`.
+                    "azure" => WireApi::Responses,
+                    // AWS Bedrock exposes an OpenAI-compatible Chat
+                    // Completions surface; requests are SigV4-signed.
+                    "bedrock" => WireApi::Chat,
                     "anthropic" => WireApi::AnthropicMessages,
                     "google-genai" | "vertexai" => WireApi::GoogleGenAI,
                     "kimi" | "deepseek" | "glm" => WireApi::Chat,
                     _ => WireApi::Chat,
                 };
+                let mut http_headers = provider.custom_headers.clone();
+                let bearer_token = if is_azure {
+                    // Azure OpenAI authenticates with an `api-key` header rather
+                    // than `Authorization: Bearer`.
+                    if let Some(api_key) = &provider.api_key {
+                        http_headers.insert("api-key".to_string(), api_key.clone());
+                    }
+                    None
+                } else if is_bedrock {
+                    // Bedrock requests are SigV4-signed; never attach a Bearer token.
+                    None
+                } else {
+                    provider.api_key.clone()
+                };
+                let base_url = if is_bedrock && provider.base_url.is_none() {
+                    let region = provider
+                        .aws
+                        .as_ref()
+                        .map(|aws| aws.region.as_str())
+                        .filter(|region| !region.is_empty())
+                        .unwrap_or("us-east-1");
+                    Some(format!(
+                        "https://bedrock-runtime.{region}.amazonaws.com/openai/v1"
+                    ))
+                } else {
+                    provider.base_url.clone()
+                };
+                let aws = provider.aws.as_ref().map(|aws| {
+                    ody_model_provider_info::ModelProviderAwsConfig {
+                        access_key_id: aws.access_key_id.clone(),
+                        secret_access_key: aws.secret_access_key.clone(),
+                        session_token: aws.session_token.clone(),
+                        region: aws.region.clone(),
+                    }
+                });
                 let mut info = ModelProviderInfo {
                     name: display_name,
-                    base_url: provider.base_url.clone(),
+                    base_url,
                     env_key: None,
                     env_key_instructions: None,
-                    experimental_bearer_token: provider.api_key.clone(),
+                    experimental_bearer_token: bearer_token,
                     auth: None,
                     wire_api,
-                    query_params: None,
-                    http_headers: Some(provider.custom_headers.clone()),
+                    query_params: if provider.query_params.is_empty() {
+                        None
+                    } else {
+                        Some(provider.query_params.clone())
+                    },
+                    http_headers: Some(http_headers),
                     env_http_headers: None,
                     request_max_retries: None,
                     stream_max_retries: None,
@@ -793,6 +856,7 @@ impl ConfigToml {
                     websocket_connect_timeout_ms: None,
                     supports_websockets: false,
                     capabilities: ProviderCapabilities::default(),
+                    aws,
                 };
                 if info.http_headers.as_ref().map_or(true, |h| h.is_empty()) {
                     info.http_headers = None;
@@ -863,6 +927,8 @@ fn provider_display_name(provider_type: &str) -> String {
         "deepseek" => "DeepSeek".to_string(),
         "glm" => "GLM".to_string(),
         "openai" | "openai_responses" => "OpenAI".to_string(),
+        "azure" => "Azure".to_string(),
+        "bedrock" => "AWS Bedrock".to_string(),
         other => {
             let mut chars = other.chars();
             match chars.next() {
@@ -1765,6 +1831,129 @@ type = "openai"
         let provider = converted.get("openai_custom").expect("provider");
         assert_eq!(provider.wire_api, WireApi::Responses);
         assert!(provider.capabilities.supports_websockets);
+    }
+
+    #[test]
+    fn convert_ody_code_azure_type_uses_api_key_header_and_responses_wire_api() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[providers.azure_openai]
+type = "azure"
+api_key = "azure-secret"
+base_url = "https://example.openai.azure.com/openai"
+"#,
+        )
+        .expect("config should deserialize");
+        let converted = config.convert_ody_code_providers();
+        let provider = converted.get("azure_openai").expect("provider");
+
+        assert_eq!(provider.name, "Azure");
+        assert_eq!(provider.wire_api, WireApi::Responses);
+        // Azure OpenAI authenticates with an `api-key` header, not a Bearer token.
+        assert_eq!(provider.experimental_bearer_token, None);
+        assert_eq!(
+            provider
+                .http_headers
+                .as_ref()
+                .and_then(|headers| headers.get("api-key")),
+            Some(&"azure-secret".to_string())
+        );
+    }
+
+    #[test]
+    fn convert_ody_code_azure_merges_custom_headers_with_api_key_header() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[providers.azure_openai]
+type = "azure"
+api_key = "azure-secret"
+custom_headers = { "x-tenant" = "t1" }
+"#,
+        )
+        .expect("config should deserialize");
+        let converted = config.convert_ody_code_providers();
+        let provider = converted.get("azure_openai").expect("provider");
+        let headers = provider.http_headers.as_ref().expect("headers present");
+
+        assert_eq!(headers.get("api-key"), Some(&"azure-secret".to_string()));
+        assert_eq!(headers.get("x-tenant"), Some(&"t1".to_string()));
+    }
+
+    #[test]
+    fn convert_ody_code_providers_passes_query_params_through() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[providers.azure_openai]
+type = "azure"
+api_key = "azure-secret"
+base_url = "https://example.openai.azure.com/openai"
+query_params = { api-version = "2025-03-01" }
+"#,
+        )
+        .expect("config should deserialize");
+        let converted = config.convert_ody_code_providers();
+        let provider = converted.get("azure_openai").expect("provider");
+
+        assert_eq!(
+            provider
+                .query_params
+                .as_ref()
+                .and_then(|params| params.get("api-version")),
+            Some(&"2025-03-01".to_string())
+        );
+    }
+
+    #[test]
+    fn convert_ody_code_bedrock_type_uses_chat_wire_api_and_sigv4_fields() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[providers.bedrock_1]
+type = "bedrock"
+api_key = "ignored-key"
+
+[providers.bedrock_1.aws]
+access_key_id = "AKIAEXAMPLE"
+secret_access_key = "secret-example"
+session_token = "session-example"
+region = "us-west-2"
+"#,
+        )
+        .expect("config should deserialize");
+        let converted = config.convert_ody_code_providers();
+        let provider = converted.get("bedrock_1").expect("provider");
+
+        assert_eq!(provider.name, "AWS Bedrock");
+        assert_eq!(provider.wire_api, WireApi::Chat);
+        // Bedrock signs requests with SigV4; a Bearer token must not be sent.
+        assert_eq!(provider.experimental_bearer_token, None);
+        let aws = provider.aws.as_ref().expect("aws config present");
+        assert_eq!(aws.access_key_id, "AKIAEXAMPLE");
+        assert_eq!(aws.secret_access_key, "secret-example");
+        assert_eq!(aws.session_token.as_deref(), Some("session-example"));
+        assert_eq!(aws.region, "us-west-2");
+    }
+
+    #[test]
+    fn convert_ody_code_bedrock_builds_default_runtime_url_with_region() {
+        let config: ConfigToml = toml::from_str(
+            r#"
+[providers.bedrock_1]
+type = "bedrock"
+
+[providers.bedrock_1.aws]
+access_key_id = "AKIAEXAMPLE"
+secret_access_key = "secret-example"
+region = "eu-central-1"
+"#,
+        )
+        .expect("config should deserialize");
+        let converted = config.convert_ody_code_providers();
+        let provider = converted.get("bedrock_1").expect("provider");
+
+        assert_eq!(
+            provider.base_url.as_deref(),
+            Some("https://bedrock-runtime.eu-central-1.amazonaws.com/openai/v1")
+        );
     }
 
     #[test]

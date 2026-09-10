@@ -64,7 +64,8 @@ async fn retries_on_early_close() {
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
         capabilities: ProviderCapabilities::default(),
-    };
+            aws: None,
+        };
 
     let TestOdy { ody, .. } = test_ody()
         .with_config(move |config| {

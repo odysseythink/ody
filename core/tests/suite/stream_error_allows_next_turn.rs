@@ -81,7 +81,8 @@ async fn continue_after_stream_error() {
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
         capabilities: ProviderCapabilities::default(),
-    };
+            aws: None,
+        };
 
     let TestOdy { ody, .. } = test_ody()
         .with_config(move |config| {

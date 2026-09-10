@@ -17,6 +17,7 @@ use super::ThreadConfigLoader;
 use super::ThreadConfigLoaderFuture;
 use super::ThreadConfigSource;
 use super::UserThreadConfig;
+use crate::config_toml::OdyCodeAwsConfig;
 use crate::config_toml::OdyCodeOAuthRef;
 use crate::config_toml::OdyCodeProviderConfig;
 use proto::thread_config_loader_client::ThreadConfigLoaderClient;
@@ -180,7 +181,18 @@ fn ody_code_provider_from_proto(
         oauth: provider.oauth.map(ody_code_oauth_ref_from_proto),
         env: provider.env,
         custom_headers: provider.custom_headers,
+        query_params: provider.query_params,
+        aws: provider.aws.map(ody_code_aws_from_proto),
     })
+}
+
+fn ody_code_aws_from_proto(aws: proto::OdyCodeAwsConfig) -> OdyCodeAwsConfig {
+    OdyCodeAwsConfig {
+        access_key_id: aws.access_key_id,
+        secret_access_key: aws.secret_access_key,
+        session_token: aws.session_token,
+        region: aws.region,
+    }
 }
 
 fn ody_code_oauth_ref_from_proto(oauth: proto::OdyCodeOAuthRef) -> OdyCodeOAuthRef {
@@ -232,6 +244,7 @@ fn model_provider_from_proto(
         websocket_connect_timeout_ms: provider.websocket_connect_timeout_ms,
         supports_websockets: provider.supports_websockets,
         capabilities: ProviderCapabilities::default(),
+        aws: None,
     };
     Ok((id, info))
 }
@@ -266,6 +279,18 @@ fn ody_code_provider_to_proto(provider: OdyCodeProviderConfig) -> proto::OdyCode
         oauth: provider.oauth.map(ody_code_oauth_ref_to_proto),
         env: provider.env,
         custom_headers: provider.custom_headers,
+        query_params: provider.query_params,
+        aws: provider.aws.map(ody_code_aws_to_proto),
+    }
+}
+
+#[cfg(test)]
+fn ody_code_aws_to_proto(aws: OdyCodeAwsConfig) -> proto::OdyCodeAwsConfig {
+    proto::OdyCodeAwsConfig {
+        access_key_id: aws.access_key_id,
+        secret_access_key: aws.secret_access_key,
+        session_token: aws.session_token,
+        region: aws.region,
     }
 }
 
@@ -293,6 +318,7 @@ fn model_provider_to_proto(
         query_params,
         http_headers,
         env_http_headers,
+        aws: _,
         request_max_retries,
         stream_max_retries,
         stream_idle_timeout_ms,
@@ -528,6 +554,13 @@ mod tests {
                     }),
                     env: HashMap::from([("FOO".to_string(), "bar".to_string())]),
                     custom_headers: HashMap::from([("X-Test".to_string(), "enabled".to_string())]),
+                    query_params: HashMap::from([("api-version".to_string(), "2025-03-01".to_string())]),
+                    aws: Some(OdyCodeAwsConfig {
+                        access_key_id: "AKIAEXAMPLE".to_string(),
+                        secret_access_key: "secret".to_string(),
+                        session_token: Some("token".to_string()),
+                        region: "us-east-1".to_string(),
+                    }),
                 },
             )]),
             features: BTreeMap::from([("plugins".to_string(), false)]),
@@ -653,6 +686,7 @@ mod tests {
             websocket_connect_timeout_ms: Some(10_000),
             supports_websockets: true,
             capabilities: ProviderCapabilities::default(),
+            aws: None,
         }
     }
 

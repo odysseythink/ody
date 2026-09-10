@@ -149,6 +149,22 @@ pub struct OdyCodeProviderConfig {
     #[prost(map = "string, string", tag = "7")]
     pub custom_headers:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    #[prost(map = "string, string", tag = "8")]
+    pub query_params:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    #[prost(message, optional, tag = "9")]
+    pub aws: ::core::option::Option<OdyCodeAwsConfig>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct OdyCodeAwsConfig {
+    #[prost(string, tag = "1")]
+    pub access_key_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub secret_access_key: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "3")]
+    pub session_token: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, tag = "4")]
+    pub region: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct OdyCodeOAuthRef {

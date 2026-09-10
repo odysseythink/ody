@@ -35,6 +35,7 @@ env_http_headers = { "X-Example-Env-Header" = "EXAMPLE_ENV_VAR" }
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
         capabilities: ProviderCapabilities::default(),
+        aws: None,
     };
 
     let provider: ModelProviderInfo = toml::from_str(azure_provider_toml).unwrap();
@@ -86,6 +87,7 @@ fn test_supports_remote_compaction_for_azure_name() {
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
         capabilities: ProviderCapabilities::default(),
+        aws: None,
     };
 
     assert!(provider.supports_remote_compaction());
@@ -110,6 +112,7 @@ fn test_supports_remote_compaction_for_non_odysseythink_non_azure_provider() {
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
         capabilities: ProviderCapabilities::default(),
+        aws: None,
     };
 
     assert!(!provider.supports_remote_compaction());

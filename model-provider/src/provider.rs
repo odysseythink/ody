@@ -214,10 +214,22 @@ impl ModelProvider for ConfiguredModelProvider {
                         &self.info.name,
                         self.info.base_url.as_deref(),
                     );
-                    Box::new(
-                        ChatAdapter::new(transport, api_provider, auth, vendor)
-                            .with_provider_id(provider_id_for_wire_api(&self.info)),
-                    )
+                    if let Some(aws) = &self.info.aws {
+                        validate_bedrock_aws_config(aws)?;
+                        // Bedrock authenticates with SigV4 request signing; wrap
+                        // the transport so every request is signed.
+                        let signing_transport =
+                            crate::sigv4_transport::SigV4Transport::new(transport, aws);
+                        Box::new(
+                            ChatAdapter::new(signing_transport, api_provider, auth, vendor)
+                                .with_provider_id(provider_id_for_wire_api(&self.info)),
+                        )
+                    } else {
+                        Box::new(
+                            ChatAdapter::new(transport, api_provider, auth, vendor)
+                                .with_provider_id(provider_id_for_wire_api(&self.info)),
+                        )
+                    }
                 }
                 _ => {
                     return Err(OdyErr::InvalidRequest(format!(
@@ -253,6 +265,29 @@ impl ModelProvider for ConfiguredModelProvider {
         ));
         Arc::new(OpenaiCompatibleModelsManager::new(ody_home, endpoint))
     }
+}
+
+/// Bedrock requires explicit credentials; fail fast with a clear message
+/// instead of sending unsigned requests that would be rejected with a 403.
+fn validate_bedrock_aws_config(
+    aws: &ody_model_provider_info::ModelProviderAwsConfig,
+) -> ody_protocol::error::Result<()> {
+    if aws.access_key_id.trim().is_empty() {
+        return Err(OdyErr::InvalidRequest(
+            "AWS Bedrock provider requires an AWS access key id".to_string(),
+        ));
+    }
+    if aws.secret_access_key.trim().is_empty() {
+        return Err(OdyErr::InvalidRequest(
+            "AWS Bedrock provider requires an AWS secret access key".to_string(),
+        ));
+    }
+    if aws.region.trim().is_empty() {
+        return Err(OdyErr::InvalidRequest(
+            "AWS Bedrock provider requires an AWS region".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 /// Resolve the provider id used by the chat adapter.
@@ -295,6 +330,7 @@ mod tests {
             websocket_connect_timeout_ms: None,
             supports_websockets: false,
             capabilities: ModelProviderCapabilities::default(),
+            aws: None,
         }
     }
 
@@ -341,6 +377,56 @@ mod tests {
                 .get(http::header::AUTHORIZATION)
                 .and_then(|value| value.to_str().ok()),
             Some("Bearer provider-token")
+        );
+    }
+
+    #[tokio::test]
+    async fn bedrock_provider_with_aws_config_builds_chat_adapter() {
+        let info = ModelProviderInfo {
+            name: "AWS Bedrock".into(),
+            base_url: Some("https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1".into()),
+            wire_api: WireApi::Chat,
+            aws: Some(ody_model_provider_info::ModelProviderAwsConfig {
+                access_key_id: "AKIAEXAMPLE".into(),
+                secret_access_key: "secret".into(),
+                session_token: None,
+                region: "us-east-1".into(),
+            }),
+            ..Default::default()
+        };
+        let provider = create_model_provider(info);
+
+        provider
+            .chat_provider()
+            .await
+            .expect("bedrock provider with aws config should build a chat adapter");
+    }
+
+    #[tokio::test]
+    async fn bedrock_provider_without_credentials_fails_with_clear_error() {
+        let info = ModelProviderInfo {
+            name: "AWS Bedrock".into(),
+            base_url: Some("https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1".into()),
+            wire_api: WireApi::Chat,
+            aws: Some(ody_model_provider_info::ModelProviderAwsConfig {
+                access_key_id: String::new(),
+                secret_access_key: String::new(),
+                session_token: None,
+                region: String::new(),
+            }),
+            ..Default::default()
+        };
+        let provider = create_model_provider(info);
+
+        let result = provider.chat_provider().await;
+        let err = match result {
+            Ok(_) => panic!("empty aws credentials must not build a chat adapter"),
+            Err(err) => err,
+        };
+        let message = format!("{err:?}");
+        assert!(
+            message.contains("access key"),
+            "error should mention the missing credential: {message}"
         );
     }
 

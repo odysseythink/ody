@@ -79,6 +79,15 @@ message OdyCodeProviderConfig {
   optional OdyCodeOAuthRef oauth = 5;
   map<string, string> env = 6;
   map<string, string> custom_headers = 7;
+  map<string, string> query_params = 8;
+  optional OdyCodeAwsConfig aws = 9;
+}
+
+message OdyCodeAwsConfig {
+  string access_key_id = 1;
+  string secret_access_key = 2;
+  optional string session_token = 3;
+  string region = 4;
 }
 
 message OdyCodeOAuthRef {
