@@ -2,7 +2,7 @@
 type: inline
 name: idea-generator
 description: >
-  Systematically generate startup idea candidates using 7 proven recipes adapted for the user's
+  Systematically generate startup idea candidates using 8 proven recipes adapted for the user's
   specific context (skills, industry exposure, connections, assets). Use this skill whenever the user
   is stuck in "don't know what to build" mode, says "I need ideas", "what should I work on",
   "help me brainstorm directions", "I'm not finding anything", or has been in open exploration for
@@ -249,11 +249,67 @@ quality_signal: >
 output: List of [incumbent + their weak point + underserved segment + what "good enough" alternative looks like]
 ```
 
+### Recipe 8: 10-Lens Product Audit (十维产品审视)
+
+```yaml
+method: >
+  Pick a concrete product, tool, or workflow area you know deeply (your own
+  product, a tool you use daily, a client's system). Force yourself through
+  each of the 10 lenses below and write down what you find. Each lens answers
+  "where is the value leak?" — the output is a list of specific problems,
+  each of which can become an idea candidate via other recipes.
+
+when_to_use: >
+  When you have deep familiarity with a specific product/area but no clear
+  direction. Also the best recipe for re-mining an existing product for
+  expansion opportunities.
+
+lenses:
+  - speed:        "What takes too long?" (e.g., instant search, predictive loading)
+  - automation:   "What's repetitive?" (e.g., auto-scheduling, smart defaults)
+  - intelligence: "What could be smarter?" (e.g., recommendations, anomaly detection)
+  - integration:  "What else do users use alongside this?" (e.g., calendar sync, export)
+  - collaboration:"How do users work together here?" (e.g., sharing, comments, real-time)
+  - personalization: "How is every user different?" (e.g., custom views, preferences)
+  - visibility:   "What's hidden that shouldn't be?" (e.g., dashboards, progress tracking)
+  - confidence:   "What creates anxiety?" (e.g., confirmations, undo, previews)
+  - delight:      "What could spark joy?" (e.g., polish, celebrations that don't feel gamified)
+  - access:       "Who can't use this yet?" (e.g., mobile, offline, accessibility)
+
+rules:
+  - BE SPECIFIC — "better UX" is not a finding. "One-click rescheduling
+    from notification" is.
+  - SMALL CAN BE HUGE — don't dismiss simple findings. Sometimes one button
+    changes everything. A tiny lens hit can anchor a whole product.
+  - CITE EVIDENCE — reference what you actually saw in the product or heard
+    from users, not imagination.
+
+output: List of [lens + specific problem found + who has it + current workaround]
+```
+
+---
+
+## Unstick Playbook (卡壳急救)
+
+当任何 recipe 跑不动、产出为空或感觉"想不出来了"时，按顺序试：
+
+1. **换 lens / 换 recipe** — 卡住通常不是没想法，而是当前视角已耗尽。跳到另一个 lens 或另一个 recipe。
+2. **Ask yourself the unstick questions**:
+   - "什么会让用户主动跟朋友说这个产品？"
+   - "用户每天做的那件有点烦的事是什么？"
+   - "如果我们团队扩大 10 倍会做什么？缩小到 1/10 呢？"
+   - "竞品要做出什么才能打败我们？"
+   - "高级用户现在手动在做什么、我们可以做成原生功能的事？"
+   - "我们手里有但用户看不到的数据/洞察是什么？"
+   - "哪个功能听起来很疯但也许能成？"
+3. **回到 Recipe 6** — 跟 5 个真实用户聊。想不出来时，答案几乎总在外部而不在脑内。
+4. **接受间隔** — 如果今天真的挖不出来，停手。每轮生成建议间隔 2 周，中间需要新的信息输入。
+
 ---
 
 ## Post-Generation: Candidate Assembly
 
-After running relevant recipes (not all 7 are needed every time — pick 3-4 most relevant based on the context inventory), assemble candidates.
+After running relevant recipes (not all 8 are needed every time — pick 3-4 most relevant based on the context inventory), assemble candidates.
 
 ### Deduplication & Clustering
 
@@ -313,7 +369,8 @@ keep_if:
 
 ## Usage Notes
 
-- **不需要每次跑全部7个recipe**。根据上下文盘点结果，选3-4个最有燃料的recipe跑。
+- **不需要每次跑全部8个recipe**。根据上下文盘点结果，选3-4个最有燃料的recipe跑。
+- **已有具体产品/工具时优先跑 Recipe 8**（十维审视）；完全没方向时从 Recipe 1/3/6 起步。
 - **Recipe 4（行业内部）和 Recipe 6（跟人聊）产出质量通常最高**，因为它们基于真实信息而非推测。
 - **Recipe 2 和 Recipe 5 的SISP风险最高**，每个产出都要过SISP检测。
 - **Schlep指数高的想法不是坏想法**——恰恰相反，它们往往竞争更少。标注它是为了让你正视它，而不是过滤它。
