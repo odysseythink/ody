@@ -18,11 +18,20 @@ pub enum ChatVendor {
     Kimi,
     DeepSeek,
     Glm,
+    /// Azure OpenAI with a dated api-version, which speaks deployment-based
+    /// URLs (`{endpoint}/openai/deployments/{model}/chat/completions`) instead
+    /// of the v1-compatible surface. The request body stays generic OpenAI.
+    AzureDeployment,
 }
 
 impl ChatVendor {
     /// Resolve the dialect for a provider, based on its id/name and base URL.
-    pub fn from_provider(provider: &str, base_url: Option<&str>) -> Self {
+    ///
+    /// `api_version` is the provider `api-version` query parameter value
+    /// (Azure). Azure providers with a dated api-version use deployment-based
+    /// chat URLs, so they resolve to [`ChatVendor::AzureDeployment`]; the v1
+    /// compatibility surface (or an absent api-version) stays [`ChatVendor::Generic`].
+    pub fn from_provider(provider: &str, base_url: Option<&str>, api_version: Option<&str>) -> Self {
         match provider.to_ascii_lowercase().as_str() {
             "kimi" | "moonshot" => return ChatVendor::Kimi,
             "deepseek" => return ChatVendor::DeepSeek,
@@ -39,6 +48,12 @@ impl ChatVendor {
             if base_url.contains("bigmodel") {
                 return ChatVendor::Glm;
             }
+            if base_url.contains(".openai.azure.com") {
+                return azure_vendor(api_version);
+            }
+        }
+        if provider.eq_ignore_ascii_case("azure") {
+            return azure_vendor(api_version);
         }
         ChatVendor::Generic
     }
@@ -48,7 +63,7 @@ impl ChatVendor {
     pub fn supports_reasoning_content(self) -> bool {
         matches!(
             self,
-            ChatVendor::Kimi | ChatVendor::DeepSeek | ChatVendor::Glm | ChatVendor::Generic
+            ChatVendor::Kimi | ChatVendor::DeepSeek | ChatVendor::Glm | ChatVendor::Generic | ChatVendor::AzureDeployment
         )
     }
 
@@ -150,6 +165,18 @@ impl ChatVendor {
                 serde_json::json!({ "type": thinking_type }),
             );
         }
+    }
+}
+
+/// Azure routes to deployment URLs for dated api-versions (anything but
+/// case-insensitive `"v1"` / empty) and to the generic v1-compatible surface
+/// otherwise. Mirrors odyBox azure.ts (`useDeploymentBasedUrls`).
+fn azure_vendor(api_version: Option<&str>) -> ChatVendor {
+    match api_version {
+        Some(v) if !v.is_empty() && !v.eq_ignore_ascii_case("v1") => {
+            ChatVendor::AzureDeployment
+        }
+        _ => ChatVendor::Generic,
     }
 }
 
