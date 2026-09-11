@@ -37,6 +37,8 @@ pub struct SkillMetadata {
     pub policy: Option<SkillPolicy>,
     /// Path to the SKILLS.md file that declares this skill.
     pub path_to_skills_md: AbsolutePathBuf,
+    /// Absolute path to the `flow.yaml` artifact; only set for Flow-type skills.
+    pub flow_artifact: Option<AbsolutePathBuf>,
     pub scope: SkillScope,
     pub plugin_id: Option<String>,
     // Fields that control how the skill is discovered, triggered, and presented at runtime.
@@ -58,6 +60,7 @@ impl Default for SkillMetadata {
             dependencies: None,
             policy: None,
             path_to_skills_md: AbsolutePathBuf::try_from("/").unwrap(),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: None,
             skill_type: SkillType::default(),

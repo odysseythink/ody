@@ -744,6 +744,12 @@ async fn parse_skill_file(
     let mermaid = extract_fenced_block(&contents, "mermaid");
     let d2 = extract_fenced_block(&contents, "d2");
 
+    let flow_artifact = if matches!(skill_type, SkillType::Flow) {
+        Some(load_flow_artifact(fs, &resolved_path).await?)
+    } else {
+        None
+    };
+
     Ok(SkillMetadata {
         name,
         description,
@@ -752,6 +758,7 @@ async fn parse_skill_file(
         dependencies,
         policy,
         path_to_skills_md: resolved_path,
+        flow_artifact,
         scope,
         plugin_id: plugin_id.map(str::to_string),
         skill_type,
@@ -761,6 +768,37 @@ async fn parse_skill_file(
         mermaid,
         d2,
     })
+}
+
+const FLOW_ARTIFACT_FILENAME: &str = "flow.yaml";
+
+/// Flow skills must carry a valid `flow.yaml` next to their SKILL.md.
+/// The artifact is validated eagerly at load time; the runtime re-reads
+/// it from the recorded path when the flow is triggered.
+async fn load_flow_artifact(
+    fs: &dyn ExecutorFileSystem,
+    skills_md_path: &AbsolutePathBuf,
+) -> Result<AbsolutePathBuf, SkillParseError> {
+    let Some(skill_dir) = skills_md_path.parent() else {
+        return Err(SkillParseError::InvalidField {
+            field: "flow",
+            reason: format!(
+                "cannot resolve skill directory for {}",
+                skills_md_path.display()
+            ),
+        });
+    };
+    let artifact_path = skill_dir.join(FLOW_ARTIFACT_FILENAME);
+    let path_uri = PathUri::from_abs_path(&artifact_path);
+    let contents = fs
+        .read_file_text(&path_uri, /*sandbox*/ None)
+        .await
+        .map_err(|_| SkillParseError::MissingField(FLOW_ARTIFACT_FILENAME))?;
+    crate::flow::parse_flow_plan(&contents).map_err(|err| SkillParseError::InvalidField {
+        field: "flow",
+        reason: err.to_string(),
+    })?;
+    Ok(artifact_path)
 }
 
 fn default_skill_name(path: &AbsolutePathBuf) -> String {

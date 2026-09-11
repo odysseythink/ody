@@ -333,6 +333,7 @@ async fn loads_skills_from_home_agents_dir_for_user_scope() -> anyhow::Result<()
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: None,
             ..Default::default()
@@ -473,6 +474,7 @@ async fn loads_skill_dependencies_metadata_from_yaml() {
             }),
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: None,
             ..Default::default()
@@ -646,6 +648,7 @@ interface:
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(skill_path.as_path()),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: None,
             ..Default::default()
@@ -800,6 +803,7 @@ async fn accepts_icon_paths_under_assets_dir() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: None,
             ..Default::default()
@@ -842,6 +846,7 @@ async fn ignores_invalid_brand_color() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: None,
             ..Default::default()
@@ -897,6 +902,7 @@ async fn ignores_default_prompt_over_max_length() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: None,
             ..Default::default()
@@ -940,6 +946,7 @@ async fn drops_interface_when_icons_are_invalid() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: None,
             ..Default::default()
@@ -1006,6 +1013,7 @@ interface:
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: Some("twilio-developer-kit@test".to_string()),
             ..Default::default()
@@ -1060,6 +1068,7 @@ interface:
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: Some("twilio-developer-kit@test".to_string()),
             ..Default::default()
@@ -1106,6 +1115,7 @@ async fn loads_skills_via_symlinked_subdir_for_user_scope() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&shared_skill_path),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: None,
             ..Default::default()
@@ -1167,6 +1177,7 @@ async fn does_not_loop_on_symlink_cycle_for_user_scope() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: None,
             ..Default::default()
@@ -1213,6 +1224,7 @@ async fn loads_skills_via_symlinked_subdir_for_admin_scope() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&shared_skill_path),
+            flow_artifact: None,
             scope: SkillScope::Admin,
             plugin_id: None,
             ..Default::default()
@@ -1254,6 +1266,7 @@ async fn loads_skills_via_symlinked_subdir_for_repo_scope() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&linked_skill_path),
+            flow_artifact: None,
             scope: SkillScope::Repo,
             plugin_id: None,
             ..Default::default()
@@ -1339,6 +1352,7 @@ async fn respects_max_scan_depth_for_user_scope() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&within_depth_path),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: None,
             ..Default::default()
@@ -1368,6 +1382,7 @@ async fn loads_valid_skill() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: None,
             ..Default::default()
@@ -1402,6 +1417,7 @@ async fn falls_back_to_directory_name_when_skill_name_is_missing() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: None,
             ..Default::default()
@@ -1453,6 +1469,7 @@ async fn namespaces_plugin_skills_using_provided_namespace() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: Some("sample@test".to_string()),
             ..Default::default()
@@ -1503,6 +1520,7 @@ async fn plugin_skill_name_length_limit_allows_max_qualified_name() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: Some("sample@test".to_string()),
             ..Default::default()
@@ -1573,6 +1591,7 @@ async fn loads_short_description_from_metadata() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: None,
             ..Default::default()
@@ -1606,6 +1625,7 @@ async fn loads_unquoted_description_containing_colon_space() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: None,
             ..Default::default()
@@ -1639,6 +1659,7 @@ async fn loads_unquoted_short_description_containing_colon_space_and_apostrophe(
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: None,
             ..Default::default()
@@ -1672,6 +1693,7 @@ async fn loads_unrecognized_frontmatter_fields_that_need_quotes() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: None,
             ..Default::default()
@@ -1705,6 +1727,7 @@ async fn preserves_block_scalar_body_while_repairing_other_fields() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::User,
             plugin_id: None,
             ..Default::default()
@@ -1823,6 +1846,7 @@ async fn loads_skills_from_repo_root() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::Repo,
             plugin_id: None,
             ..Default::default()
@@ -1860,6 +1884,7 @@ async fn loads_skills_from_agents_dir_without_ody_dir() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::Repo,
             plugin_id: None,
             ..Default::default()
@@ -1915,6 +1940,7 @@ async fn loads_skills_from_all_ody_dirs_under_project_root() {
                 dependencies: None,
                 policy: None,
                 path_to_skills_md: normalized(&nested_skill_path),
+                flow_artifact: None,
                 scope: SkillScope::Repo,
                 plugin_id: None,
                 ..Default::default()
@@ -1927,6 +1953,7 @@ async fn loads_skills_from_all_ody_dirs_under_project_root() {
                 dependencies: None,
                 policy: None,
                 path_to_skills_md: normalized(&root_skill_path),
+                flow_artifact: None,
                 scope: SkillScope::Repo,
                 plugin_id: None,
                 ..Default::default()
@@ -1968,6 +1995,7 @@ async fn loads_skills_from_ody_dir_when_not_git_repo() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::Repo,
             plugin_id: None,
             ..Default::default()
@@ -2019,6 +2047,7 @@ async fn deduplicates_by_path_preferring_first_root() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::Repo,
             plugin_id: None,
             ..Default::default()
@@ -2062,6 +2091,7 @@ async fn keeps_duplicate_names_from_repo_and_user() {
                 dependencies: None,
                 policy: None,
                 path_to_skills_md: normalized(&repo_skill_path),
+                flow_artifact: None,
                 scope: SkillScope::Repo,
                 plugin_id: None,
                 ..Default::default()
@@ -2074,6 +2104,7 @@ async fn keeps_duplicate_names_from_repo_and_user() {
                 dependencies: None,
                 policy: None,
                 path_to_skills_md: normalized(&user_skill_path),
+                flow_artifact: None,
                 scope: SkillScope::User,
                 plugin_id: None,
                 ..Default::default()
@@ -2138,6 +2169,7 @@ async fn keeps_duplicate_names_from_nested_ody_dirs() {
                 dependencies: None,
                 policy: None,
                 path_to_skills_md: first_path,
+                flow_artifact: None,
                 scope: SkillScope::Repo,
                 plugin_id: None,
                 ..Default::default()
@@ -2150,6 +2182,7 @@ async fn keeps_duplicate_names_from_nested_ody_dirs() {
                 dependencies: None,
                 policy: None,
                 path_to_skills_md: second_path,
+                flow_artifact: None,
                 scope: SkillScope::Repo,
                 plugin_id: None,
                 ..Default::default()
@@ -2223,6 +2256,7 @@ async fn loads_skills_when_cwd_is_file_in_repo() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::Repo,
             plugin_id: None,
             ..Default::default()
@@ -2283,6 +2317,7 @@ async fn loads_skills_from_system_cache_when_present() {
             dependencies: None,
             policy: None,
             path_to_skills_md: normalized(&skill_path),
+            flow_artifact: None,
             scope: SkillScope::System,
             plugin_id: None,
             ..Default::default()
@@ -2420,6 +2455,141 @@ async fn parse_skill_file_rejects_unsupported_type() {
             .iter()
             .any(|e| e.message.contains("unsupported skill type"))
     );
+}
+
+#[tokio::test]
+async fn flow_skill_loads_flow_artifact() {
+    let dir = TempDir::new().unwrap();
+    let skill_dir = dir
+        .path()
+        .join(".agents")
+        .join("skills")
+        .join("game-create");
+    fs::create_dir_all(&skill_dir).unwrap();
+    fs::write(
+        skill_dir.join("SKILL.md"),
+        "---\nname: game-create\ndescription: Create a game.\ntype: flow\n---\n# Game Create\n",
+    )
+    .unwrap();
+    fs::write(
+        skill_dir.join("flow.yaml"),
+        "phases:\n  - id: design\n    steps:\n      - agent: Generate a GDD.\n        output: gdd\n",
+    )
+    .unwrap();
+
+    let fs: Arc<dyn ExecutorFileSystem> = Arc::clone(&LOCAL_FS);
+    let roots = skill_roots_from_layer_stack(
+        fs,
+        &ConfigLayerStack::default(),
+        &AbsolutePathBuf::try_from(dir.path()).unwrap(),
+        None,
+    )
+    .await;
+    let outcome = load_skills_from_roots(roots, None).await;
+
+    let skill = outcome
+        .skills
+        .iter()
+        .find(|s| s.name == "game-create")
+        .expect("flow skill should be loaded");
+    assert!(matches!(skill.skill_type, SkillType::Flow));
+    let artifact = skill.flow_artifact.as_ref().expect("flow artifact path");
+    assert_eq!(
+        artifact.as_path(),
+        dunce::canonicalize(skill_dir.join("flow.yaml"))
+            .unwrap()
+            .as_path()
+    );
+    assert!(outcome.errors.is_empty());
+}
+
+#[tokio::test]
+async fn flow_skill_without_flow_yaml_reports_error() {
+    let dir = TempDir::new().unwrap();
+    let skill_dir = dir.path().join(".agents").join("skills").join("no-flow");
+    fs::create_dir_all(&skill_dir).unwrap();
+    fs::write(
+        skill_dir.join("SKILL.md"),
+        "---\nname: no-flow\ndescription: Flow without artifact.\ntype: flow\n---\n# No Flow\n",
+    )
+    .unwrap();
+
+    let fs: Arc<dyn ExecutorFileSystem> = Arc::clone(&LOCAL_FS);
+    let roots = skill_roots_from_layer_stack(
+        fs,
+        &ConfigLayerStack::default(),
+        &AbsolutePathBuf::try_from(dir.path()).unwrap(),
+        None,
+    )
+    .await;
+    let outcome = load_skills_from_roots(roots, None).await;
+
+    assert!(outcome.skills.iter().all(|s| s.name != "no-flow"));
+    assert!(
+        outcome
+            .errors
+            .iter()
+            .any(|e| e.message.contains("flow.yaml"))
+    );
+}
+
+#[tokio::test]
+async fn flow_skill_with_invalid_flow_yaml_reports_error() {
+    let dir = TempDir::new().unwrap();
+    let skill_dir = dir.path().join(".agents").join("skills").join("bad-flow");
+    fs::create_dir_all(&skill_dir).unwrap();
+    fs::write(
+        skill_dir.join("SKILL.md"),
+        "---\nname: bad-flow\ndescription: Flow with bad artifact.\ntype: flow\n---\n# Bad Flow\n",
+    )
+    .unwrap();
+    fs::write(skill_dir.join("flow.yaml"), "phases: not-a-list\n").unwrap();
+
+    let fs: Arc<dyn ExecutorFileSystem> = Arc::clone(&LOCAL_FS);
+    let roots = skill_roots_from_layer_stack(
+        fs,
+        &ConfigLayerStack::default(),
+        &AbsolutePathBuf::try_from(dir.path()).unwrap(),
+        None,
+    )
+    .await;
+    let outcome = load_skills_from_roots(roots, None).await;
+
+    assert!(outcome.skills.iter().all(|s| s.name != "bad-flow"));
+    assert!(!outcome.errors.is_empty());
+}
+
+#[tokio::test]
+async fn inline_skill_has_no_flow_artifact() {
+    let dir = TempDir::new().unwrap();
+    let path = dir
+        .path()
+        .join(".agents")
+        .join("skills")
+        .join("plain-inline")
+        .join("SKILL.md");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(
+        &path,
+        "---\nname: plain-inline\ndescription: Plain inline skill.\n---\n# Plain\n",
+    )
+    .unwrap();
+
+    let fs: Arc<dyn ExecutorFileSystem> = Arc::clone(&LOCAL_FS);
+    let roots = skill_roots_from_layer_stack(
+        fs,
+        &ConfigLayerStack::default(),
+        &AbsolutePathBuf::try_from(dir.path()).unwrap(),
+        None,
+    )
+    .await;
+    let outcome = load_skills_from_roots(roots, None).await;
+    let skill = outcome
+        .skills
+        .iter()
+        .find(|s| s.name == "plain-inline")
+        .unwrap();
+    assert!(skill.flow_artifact.is_none());
 }
 
 #[tokio::test]
