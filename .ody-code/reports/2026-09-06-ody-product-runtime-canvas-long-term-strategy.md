@@ -332,7 +332,7 @@ OpenDesign 使用 Apache-2.0，但每次移植仍需保留许可证与 NOTICE、
 
 **退出条件：** 至少一条完整视觉生成链路默认通过 Ody Runtime；协议错误、恢复能力和性能达到现有链路标准。
 
-### 阶段 S4：统一 Agent Runtime（6–12 个月）— Work 默认候选完成，进入退出观察期
+### 阶段 S4：统一 Agent Runtime（6–12 个月）— ✅ 2026-09-11 关闭（8 项全清，见 17.2）
 
 **完成记录：** [S4 Agent Runtime 网关审计](./2026-09-06-s4-agent-runtime-gateway-completion-audit.md)。配置发行 Runtime 后，odyBox Work 回合自动通过类型化 Ody thread/turn 执行，支持流、工具卡片、审批、停止与跨启动恢复；普通 Chat 仍使用会话 provider。旧 Work 实现待真实稳定窗口后删除。
 
@@ -349,7 +349,7 @@ OpenDesign 使用 Apache-2.0，但每次移植仍需保留许可证与 NOTICE、
 
 每一项都执行：适配 → 双路测试 → 小流量默认 → 全量默认 → 稳定窗口 → 删除旧实现。
 
-**退出条件：** odyBox 不再拥有第二套 Agent loop、工具权限和 Skills 注入事实来源；残留代码仅限 UI adapter 与设备集成。当前不满足该产品退出条件。
+**退出条件：** odyBox 不再拥有第二套 Agent loop、工具权限和 Skills 注入事实来源；残留代码仅限 UI adapter 与设备集成。**2026-09-11 裁定：已满足**——Work 唯一 Runtime 路径（静默回退已删，`6e306eb6`）、审批/elicitation/requestUserInput 全走 Runtime 白名单、Skills 注入以 runtime `enabled` 为事实来源；legacy workflow/agent 死分支已物理删除（约 1.3 万行）；Chat 保留会话 provider 是正文既定产品设计（337 行），不构成第二套 Agent loop。
 
 
  距离“S4 真正完成、ody 与 odyBox 只共享一套 Agent Runtime”，还剩以下工作，按优先级排序：
@@ -690,7 +690,7 @@ Chat、Work、Canvas 共享同一会话身份、文件、记忆和权限语义�
 | 审批弹窗 | 命令/文件/权限审批走 NiceModal confirm（`work-generation.ts:353-399`），命令与文件审批已有原生弹窗与 legacy/新协议双格式应答 |
 | 供应商映射与显式报错 | `resolveRuntimeModelSelection`（`work-generation.ts:227-255`）：ChatboxAI / Azure / Bedrock 显式抛错、不静默回退；deepseek / anthropic / google-genai / kimi / glm / openai(_responses) 别名齐全；未知类型落 openai chat completions |
 | mid-turn 错误不静默降级 | `work-generation.ts:203-212`：Runtime 回合出错写入消息 error 并置 finishReason='error'，不回退 legacy 重跑 |
-| 第 1 项 真实验收 | 2026-09-09 人工验收通过：真实模型 + 真实工具回合（多轮上下文、审批、MCP elicitation、Stop、重启恢复、崩溃恢复、多窗口隔离），覆盖 17.2 原列全部验收点 |
+| 第 1 项 真实验收 | 2026-09-09 人工验收通过：真实模型 + 真实工具回合（多轮上下文、审批、MCP elicitation、Stop、重启恢复、崩溃恢复、多窗口隔离），覆盖 17.2 原列全部验收点。**S4 关闭裁定**：09-09 后 work-generation 主路径 8 个 commit 均为增强/修复型（供应商适配、状态映射、消静默回退），逐一带测试；Azure/Bedrock/OAuth 真实密钥首验不可得，记为关闭后观察项，不作关闭阻塞 |
 | 第 8 项 发行闭环 | 二进制随应用分发已实现：`electron-builder.yml` extraResources 将 staging 的 `ody-app-server.exe` 打入 `resources/ody-runtime/`（c22aa8c1）；`ody-runtime-policy.ts` `resolveOdyRuntimeLaunch` 增加 bundled 路径 fallback、env 覆盖优先（dev/高级用户仍可覆盖）；`ody-runtime-visual.ts` 从 `process.resourcesPath` 探测内嵌可执行文件；spawn 统一走 `resolveOdyRuntimeLaunch` 修复安装版半激活（8f5abe31） |
 | 第 8 项-a 协议版本协商 | `src/main/ody-runtime-policy.ts`：`MIN_SUPPORTED_ODY_RUNTIME_VERSION='0.1.0-alpha.2'`、`parseOdyRuntimeUserAgentVersion`/`compareOdyRuntimeVersions`（含 prerelease 语义）/`isOdyRuntimeUserAgentCompatible`；`ody-runtime-visual.ts` ensureInitialized 校验 initialize 响应 userAgent，不兼容即 fail fast、缓存 `incompatibilityError` 并暴露 `serverInfo`；21 个 policy 测试 |
 | 第 8 项-b 健康检查/诊断页 | main `getDiagnostics()`（configured/serverInfo/incompatibilityError）+ IPC `ody-runtime:diagnostics`；renderer `src/renderer/routes/settings/runtime-diagnostics.tsx` 注册进 Settings 路由树与侧边栏（仅 desktop 显示）；4 个组件测试 |
@@ -699,14 +699,24 @@ Chat、Work、Canvas 共享同一会话身份、文件、记忆和权限语义�
 
 ### 17.2 缺口（逐项映射 S4 剩余清单）
 
-> 状态更新（2026-09-09）：第 1 项真实验收、第 8 项全部子项（发行闭环、a 协议版本协商、b 健康检查/诊断页、c 崩溃恢复）、第 4 项原生交互 UI 均已完成，证据见 17.1。下表仅剩第 5、6、7、2 项；第 3 项经复核 Skills/MCP 已覆盖、Plugin 无 UI 属产品决策项（见 17.3）。
+> 状态更新（2026-09-11 最终）：**S4 关闭。** 第 1–8 项全部关闭：第 1 项真实验收 09-09 通过（全点位）；第 2、3、5、6、7、8 项 09-10/09-11 逐批关闭（见下）。关闭前终验：`src/main` 762 测试（16 失败全部为 copy-ripgrep/duckdb-xlsx/xlsx-metadata/sandbox-manager/store-node-migration/skills-discovery 等既有无关失败）、renderer services+hooks 182/182、components/chat 111（仅 Message.artifact 2 个 HEAD 既有失败）、settings 路由 13/13、tsc/biome 干净。
+>
+> - **第 6、7 项**（09-10，`6e306eb6`/`4689bfde`/`11e2e46d`/`8b933da4`/`eb5f503f`）：静默 legacy 回退删除，Work 不可用时显式报错指向诊断页；workflow 引擎、agent 死分支、孤儿 toolsets/旧审批包物理删除（合计约 1.3 万行）。残留仅 Chat 作用域工具与审批，属允许保留边界。
+> - **第 5 项**（09-11）：① 后台终端全链路——main 白名单新增 `thread/backgroundTerminals/list|terminate|clean`、`background-terminals.ts` 服务模块、InputBox `BackgroundTerminals` 面板（仅 Work 会话，5s 轮询，terminate/clean 控件）；② browser 截图渲染——dynamicToolCall contentItems 拆分为 `{output, images}`，缩略图内嵌渲染（仅允许 `data:image/` 防远程 URL 泄露）、点击进图片查看器；③ 重试入口经核实已由既有 `MessageErrTips → regenerateInNewFork → runtime gate` 链路覆盖，无需改动。ody 侧 `backgroundTerminals`/`compact/start`/`rollback`/`extraRoots/set` 协议实现经 E:\ody-rs 源码核实存在且有测试。
+> - **第 2 项**（09-11）：逐项复核 odyBox 侧已无非缺口——Qwen Portal/MiniMax OAuth 走通用路径即正确（新增 3 个回归测试钉死 chat wire + base_url 行为）；自定义 Header 透传机制已通（odyBox 设置本无 LLM 供应商自定义 Header 字段）；企业 endpoint（apiHost→base_url）补特征测试；**代理确认为非缺口**（桌面端 useProxy 本就对 Chat 是空操作、双方都走系统代理，`ody:` 标记已改写为对齐结论）。**ody runtime 侧专项核实（E:\ody-rs）**：Azure/Bedrock/Anthropic 适配为 09-10/09-11 四个专门 commit（`4f7123a1`/`7f6998b2`/`26ea19a8`/`745cd6be`），`convert_ody_code_providers` 覆盖 odyBox 发出的全部 provider type，生产调用链 `normalized_providers()`（core/src/config/mod.rs:3647）实测存在非死代码；ody-config 236/236、ody-model-provider 80/80、ody-api 176/176、ody-app-server 225/225 全部实跑通过。**唯一遗留**：Azure/Bedrock/OAuth 真实密钥链路首验不可得，搁置至第 1 项真实验收（不阻塞代码侧关闭）。
+> - **第 8 项**（09-11，`f355cb0b`）：① 打包校验和——stage 脚本生成 `manifest.json`（sha256），`ody-runtime-bundle.ts` 在 spawn 前校验，不匹配 fail fast（manifest 缺失则跳过兼容旧安装）；② macOS/Linux——`bundledRuntimeBinaryName` 跨平台（win32→.exe）、stage 平台感知 + chmod 0o755、electron-builder filter 补 `ody-app-server`/`manifest.json`。新增 `ody-runtime-bundle` 模块及 6 测试。
+> - **第 3 项**（09-11，`68222294`）：Plugin 管理 UI 落地——main 白名单新增 `plugin/install`/`plugin/uninstall`（渲染层只给市场名/插件名，落地在 runtime $ODY_HOME/plugins）；新增 `services/ody-runtime/plugins.ts`（list/split/install/uninstall，`splitPlugins` 纯函数过滤 NOT_AVAILABLE 与 DISABLED_BY_ADMIN）；设置页新增 `/settings/plugins`（Installed 列表 uninstall + Available 列表 install，复用 runtime 可用性门控，无 enable/disable 因协议暂无该 RPC）；i18n en 补 9 键。protocol 层无 enable/disable 方法的结论与 17.3 产品决策一致。
+>
+> 状态更新（2026-09-09）：第 1 项真实验收、第 8 项全部子项（发行闭环、a 协议版本协商、b 健康检查/诊断页、c 崩溃恢复）、第 4 项原生交互 UI 均已完成，证据见 17.1。第 3 项经复核 Skills/MCP 已覆盖、Plugin 无 UI 属产品决策项（见 17.3）。
 
 | S4 项 | 缺口 | 证据 |
 |---|---|---|
-| 第 5 项 状态映射 | work-generation 对 plan 状态、token usage、context compaction、guardian、browser 操作、子 Agent 树、hook 执行零映射（grep 无命中）；白名单虽含 `thread/compact/start`、`thread/rollback` 但 UI 无消费 | 同上 |
-| 第 6 项 兼容回退 | `shouldUseOdyAgentRuntime`（`work-generation.ts:27-31`）：`VITE_ODYBOX_AGENT_RUNTIME=legacy` 或 Runtime 未配置时静默走旧 Work loop；旧 workflow runner、旧工具构建、旧审批实现仍在代码库中 | 同上 |
-| 第 7 项 删除旧实现 | 未开始（顺序正确，依赖第 1 项稳定窗口） | — |
-| 第 2 项 供应商适配 | odyBox 侧已符合（不支持的供应商明确报错，不回落 ChatboxAI）；剩余 Azure/Bedrock/企业 endpoint 适配属 ody 侧工作 | `work-generation.ts:231-236` |
+| ~~第 5 项 状态映射~~ | ✅ 已关闭（09-11）：plan/tokenUsage/compaction/guardian/hook/子 Agent/命令直播输出/14 种 ThreadItem 映射完成（`6c35b3aa`/`4448f802`）；后台终端 UI、截图渲染补齐；重试入口既有链路覆盖 | 见上方状态更新 |
+| ~~第 6 项 兼容回退~~ | ✅ 已关闭（09-10）：`shouldUseOdyAgentRuntime`/`VITE_ODYBOX_AGENT_RUNTIME` 已删，`resolveWorkRuntimeGate` 显式报错 | `6e306eb6` |
+| ~~第 7 项 删除旧实现~~ | ✅ 已关闭（09-10）：workflow 引擎/agent 死分支/旧审批物理删除，约 1.3 万行 | `4689bfde` 等 4 commit |
+| ~~第 2 项 供应商适配~~ | ✅ 已关闭（09-11，odyBox + ody 双侧代码闭环）；真实密钥链路首验搁置至第 1 项 | 见上方状态更新 |
+| ~~第 8 项 发行闭环余量~~ | ✅ 已关闭（09-11）：校验和校验 + macOS/Linux 打包支持 | `f355cb0b` |
+| ~~第 3 项 Plugin 管理 UI~~ | ✅ 已关闭（09-11）：`/settings/plugins` 页 install/uninstall 走 runtime 白名单 | `68222294` |
 
 ### 17.3 复核结论
 

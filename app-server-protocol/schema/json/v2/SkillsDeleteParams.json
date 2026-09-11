@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "name": {
+      "description": "Name of the installed skill to remove (the directory name under `$ODY_HOME/skills`).",
+      "type": "string"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "title": "SkillsDeleteParams",
+  "type": "object"
+}

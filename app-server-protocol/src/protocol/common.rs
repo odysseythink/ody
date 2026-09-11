@@ -800,6 +800,16 @@ client_request_definitions! {
         serialization: global("config"),
         response: v2::SkillsMarketplaceInstallResponse,
     },
+    SkillsDelete => "skills/delete" {
+        params: v2::SkillsDeleteParams,
+        serialization: global("config"),
+        response: v2::SkillsDeleteResponse,
+    },
+    SkillsUpgrade => "skills/upgrade" {
+        params: v2::SkillsUpgradeParams,
+        serialization: global("config"),
+        response: v2::SkillsUpgradeResponse,
+    },
     PluginInstall => "plugin/install" {
         params: v2::PluginInstallParams,
         serialization: global("config"),

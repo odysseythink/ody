@@ -4036,3 +4036,45 @@ fn realtime_append_text_defaults_role_to_user() {
         }
     );
 }
+
+#[test]
+fn skills_delete_params_serialization_uses_name() {
+    assert_eq!(
+        serde_json::to_value(SkillsDeleteParams {
+            name: "my-skill".to_string(),
+        })
+        .unwrap(),
+        json!({
+            "name": "my-skill",
+        }),
+    );
+}
+
+#[test]
+fn skills_upgrade_params_serialization_uses_name_and_optional_source() {
+    assert_eq!(
+        serde_json::to_value(SkillsUpgradeParams {
+            name: "my-skill".to_string(),
+            source: None,
+            path: None,
+        })
+        .unwrap(),
+        json!({
+            "name": "my-skill",
+        }),
+    );
+
+    assert_eq!(
+        serde_json::to_value(SkillsUpgradeParams {
+            name: "my-skill".to_string(),
+            source: Some("https://github.com/owner/repo".to_string()),
+            path: Some("skills/my-skill".to_string()),
+        })
+        .unwrap(),
+        json!({
+            "name": "my-skill",
+            "source": "https://github.com/owner/repo",
+            "path": "skills/my-skill",
+        }),
+    );
+}

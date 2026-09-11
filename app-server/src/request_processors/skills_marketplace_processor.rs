@@ -4,8 +4,12 @@ use ody_app_server_protocol::SkillsChangedNotification;
 use ody_app_server_protocol::SkillsMarketplaceEntry;
 use ody_app_server_protocol::SkillsMarketplaceInstallParams;
 use ody_app_server_protocol::SkillsMarketplaceInstallResponse;
+use ody_app_server_protocol::SkillsDeleteParams;
+use ody_app_server_protocol::SkillsDeleteResponse;
 use ody_app_server_protocol::SkillsMarketplaceSearchParams;
 use ody_app_server_protocol::SkillsMarketplaceSearchResponse;
+use ody_app_server_protocol::SkillsUpgradeParams;
+use ody_app_server_protocol::SkillsUpgradeResponse;
 use ody_core::config::Config;
 use std::process::Command;
 use std::time::Duration;
@@ -14,10 +18,12 @@ const SKILLS_SEARCH_API_URL: &str = "https://skills.sh/api/search";
 const SEARCH_TIMEOUT: Duration = Duration::from_secs(15);
 const MAX_SKILL_NAME_LEN: usize = 64;
 
-/// Backs the `skills/marketplace/search` and `skills/marketplace/install`
-/// requests. Search proxies the public skills.sh catalog; install copies a
-/// skill from a GitHub repository into `$ODY_HOME/skills/<name>` so the
-/// regular skill discovery picks it up on the next (cache-free) scan.
+/// Backs the `skills/marketplace/search`, `skills/marketplace/install`,
+/// `skills/delete`, and `skills/upgrade` requests. Search proxies the public
+/// skills.sh catalog; install copies a skill from a GitHub repository into
+/// `$ODY_HOME/skills/<name>` so the regular skill discovery picks it up on
+/// the next (cache-free) scan. Delete removes an installed skill directory;
+/// upgrade re-pulls it from its recorded (or supplied) GitHub source.
 pub(crate) struct SkillsMarketplaceRequestProcessor {
     config: Arc<Config>,
     thread_manager: Arc<ThreadManager>,
@@ -100,6 +106,48 @@ impl SkillsMarketplaceRequestProcessor {
 
         Ok(Some(SkillsMarketplaceInstallResponse { name, path }.into()))
     }
+
+    pub(crate) async fn delete(
+        &self,
+        params: SkillsDeleteParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let skills_root = self.config.ody_home.join("skills");
+        tokio::task::spawn_blocking(move || delete_skill_dir(&skills_root, &params.name))
+            .await
+            .map_err(|err| internal_error(format!("skill delete task failed: {err}")))?
+            .map_err(invalid_request)?;
+        self.thread_manager.skills_service().clear_cache();
+        self.outgoing
+            .send_server_notification(ServerNotification::SkillsChanged(
+                SkillsChangedNotification {},
+            ))
+            .await;
+        Ok(Some(SkillsDeleteResponse {}.into()))
+    }
+
+    pub(crate) async fn upgrade(
+        &self,
+        params: SkillsUpgradeParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let skills_root = self.config.ody_home.join("skills");
+        let outcome = tokio::task::spawn_blocking({
+            let skills_root = skills_root.clone();
+            let name = params.name.clone();
+            let source = params.source.clone();
+            let path = params.path.clone();
+            move || upgrade_skill_from_github(&skills_root, &name, source, path)
+        })
+        .await
+        .map_err(|err| internal_error(format!("skill upgrade task failed: {err}")))?;
+        let (name, path) = outcome.map_err(invalid_request)?;
+        self.thread_manager.skills_service().clear_cache();
+        self.outgoing
+            .send_server_notification(ServerNotification::SkillsChanged(
+                SkillsChangedNotification {},
+            ))
+            .await;
+        Ok(Some(SkillsUpgradeResponse { name, path }.into()))
+    }
 }
 
 fn skills_marketplace_entry_from_json(value: serde_json::Value) -> Option<SkillsMarketplaceEntry> {
@@ -180,11 +228,163 @@ fn install_skill_from_github(
         .and_then(|skill_dir| copy_skill_dir(&skill_dir, &target));
     let _ = std::fs::remove_dir_all(&temp);
     install_result?;
+    // Record the origin so `skills/upgrade` can re-pull without the caller
+    // remembering the URL; matches odyBox's legacy source.json shape.
+    write_skill_source(&target, &repo_slug_from_url(&repo_url)?, path)?;
 
     let path = AbsolutePathBuf::from_absolute_path(&target)
         .map_err(|err| format!("failed to resolve installed skill path: {err}"))?;
     Ok((name, path))
 }
+
+/// Re-pulls an installed skill from GitHub and replaces its directory. The
+/// replacement is staged to a temp directory first so a failed clone or copy
+/// leaves the existing skill untouched.
+fn upgrade_skill_from_github(
+    skills_root: &std::path::Path,
+    name: &str,
+    source: Option<String>,
+    path: Option<String>,
+) -> Result<(String, AbsolutePathBuf), String> {
+    validate_skill_name(name)?;
+    std::fs::create_dir_all(skills_root)
+        .map_err(|err| format!("failed to create skills directory: {err}"))?;
+    let target = skills_root.join(name);
+    if !target.is_dir() {
+        return Err(format!("skill '{name}' is not installed"));
+    }
+    let source = resolve_upgrade_source(source, &target)?;
+    let repo_url = normalize_github_url(&source)?;
+    let repo_slug = repo_slug_from_url(&repo_url)?;
+
+    let temp = skills_root.join(format!(".upgrade-tmp-{}-{name}", std::process::id()));
+    let staged = skills_root.join(format!(".upgrade-staged-{}-{name}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&temp);
+    let _ = std::fs::remove_dir_all(&staged);
+    let clone = Command::new("git")
+        .args(["clone", "--depth", "1", &repo_url])
+        .arg(&temp)
+        .output()
+        .map_err(|err| format!("failed to run git: {err}"));
+    let output = match clone {
+        Ok(output) if output.status.success() => output,
+        Ok(output) => {
+            let _ = std::fs::remove_dir_all(&temp);
+            return Err(format!(
+                "git clone failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            ));
+        }
+        Err(message) => {
+            let _ = std::fs::remove_dir_all(&temp);
+            return Err(message);
+        }
+    };
+    drop(output);
+
+    let staged_result = locate_skill_dir(&temp, name, path.as_deref())
+        .and_then(|skill_dir| copy_skill_dir(&skill_dir, &staged));
+    let _ = std::fs::remove_dir_all(&temp);
+    staged_result?;
+
+    // Same-filesystem rename cannot fail once staging succeeded; the old
+    // directory is only removed after the replacement is complete on disk.
+    std::fs::remove_dir_all(&target).map_err(|err| format!("failed to remove old skill: {err}"))?;
+    std::fs::rename(&staged, &target).map_err(|err| format!("failed to swap in new skill: {err}"))?;
+    write_skill_source(&target, &repo_slug, path.as_deref())?;
+
+    let path = AbsolutePathBuf::from_absolute_path(&target)
+        .map_err(|err| format!("failed to resolve installed skill path: {err}"))?;
+    Ok((name.to_string(), path))
+}
+
+/// Removes an installed skill directory. Names are validated (`..`, `/`, and
+/// `\` rejected) and the target must be a real directory inside the skills
+/// root, so the write surface is exactly `$ODY_HOME/skills/<name>`.
+fn delete_skill_dir(skills_root: &std::path::Path, name: &str) -> Result<(), String> {
+    validate_skill_name(name)?;
+    let root = skills_root
+        .canonicalize()
+        .map_err(|err| format!("failed to resolve skills directory: {err}"))?;
+    let target = root.join(name);
+    if !target.is_dir() {
+        return Err(format!("skill '{name}' is not installed"));
+    }
+    let canonical = target
+        .canonicalize()
+        .map_err(|err| format!("failed to resolve skill directory: {err}"))?;
+    if !canonical.starts_with(&root) {
+        return Err(format!("invalid skill name: {name}"));
+    }
+    std::fs::remove_dir_all(&canonical).map_err(|err| format!("failed to delete skill: {err}"))
+}
+
+#[derive(serde::Deserialize)]
+struct SkillSourceJson {
+    repo: Option<String>,
+}
+
+fn write_skill_source(
+    skill_dir: &std::path::Path,
+    repo: &str,
+    skill_path: Option<&str>,
+) -> Result<(), String> {
+    let mut value = serde_json::json!({
+        "type": "github",
+        "repo": repo,
+        "installedAt": chrono::Utc::now().to_rfc3339(),
+    });
+    if let Some(skill_path) = skill_path.map(str::trim).filter(|value| !value.is_empty()) {
+        value["skillPath"] = serde_json::json!(skill_path);
+    }
+    let body = serde_json::to_string_pretty(&value).map_err(|err| format!("invalid source: {err}"))?;
+    std::fs::write(skill_dir.join("source.json"), body)
+        .map_err(|err| format!("failed to record skill source: {err}"))
+}
+
+/// Reads the GitHub source recorded by `write_skill_source` (or odyBox's
+/// legacy installer, whose format we mirror) back into a cloneable URL.
+fn read_upgrade_source(skill_dir: &std::path::Path) -> Result<String, String> {
+    let body = std::fs::read_to_string(skill_dir.join("source.json"))
+        .map_err(|err| format!("no source recorded for this skill ({err})"))?;
+    let source: SkillSourceJson =
+        serde_json::from_str(&body).map_err(|err| format!("invalid source.json: {err}"))?;
+    let repo = source
+        .repo
+        .filter(|repo| !repo.trim().is_empty())
+        .ok_or_else(|| "no source recorded for this skill".to_string())?;
+    if repo.starts_with("http://") || repo.starts_with("https://") {
+        Ok(repo)
+    } else {
+        Ok(format!("https://github.com/{repo}"))
+    }
+}
+
+/// Params win over the recorded source so a moved repository can be adopted.
+fn resolve_upgrade_source(
+    source: Option<String>,
+    skill_dir: &std::path::Path,
+) -> Result<String, String> {
+    if let Some(source) = source
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+    {
+        return Ok(source);
+    }
+    read_upgrade_source(skill_dir)
+}
+
+/// `https://github.com/owner/repo(.git)` -> `owner/repo`.
+fn repo_slug_from_url(repo_url: &str) -> Result<String, String> {
+    let path = repo_url
+        .strip_prefix("https://github.com/")
+        .ok_or_else(|| format!("unsupported skill source: {repo_url}"))?;
+    Ok(path.strip_suffix(".git").unwrap_or(path).to_string())
+}
+
+#[cfg(test)]
+#[path = "skills_marketplace_processor_tests.rs"]
+mod skills_marketplace_processor_tests;
 
 /// Accepts `https://github.com/owner/repo` (with optional trailing slash and
 /// `.git`) and returns an https clone URL. Other hosts are rejected to keep

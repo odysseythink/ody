@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "name": {
+      "description": "Name of the installed skill to upgrade (the directory name under `$ODY_HOME/skills`).",
+      "type": "string"
+    },
+    "path": {
+      "description": "Optional path inside the repository that holds the SKILL.md.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source": {
+      "description": "GitHub source URL. Falls back to the `source.json` recorded at install time when omitted; the request fails when neither is available.",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "title": "SkillsUpgradeParams",
+  "type": "object"
+}

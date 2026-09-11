@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "SkillsMarketplaceEntry": {
+      "properties": {
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "installs": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "skillId": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "installs",
+        "name",
+        "skillId",
+        "source"
+      ],
+      "type": "object"
+    }
+  },
+  "properties": {
+    "skills": {
+      "items": {
+        "$ref": "#/definitions/SkillsMarketplaceEntry"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "skills"
+  ],
+  "title": "SkillsMarketplaceSearchResponse",
+  "type": "object"
+}

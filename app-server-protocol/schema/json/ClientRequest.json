@@ -3316,6 +3316,18 @@
       ],
       "type": "object"
     },
+    "SkillsDeleteParams": {
+      "properties": {
+        "name": {
+          "description": "Name of the installed skill to remove (the directory name under `$ODY_HOME/skills`).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
     "SkillsExtraRootsSetParams": {
       "properties": {
         "extraRoots": {
@@ -3344,6 +3356,77 @@
           "type": "boolean"
         }
       },
+      "type": "object"
+    },
+    "SkillsMarketplaceInstallParams": {
+      "properties": {
+        "name": {
+          "description": "Optional expected skill name; falls back to the repo directory name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "description": "Optional path inside the repository that holds the SKILL.md.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "description": "GitHub source URL of the skill repository.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "type": "object"
+    },
+    "SkillsMarketplaceSearchParams": {
+      "properties": {
+        "limit": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "query": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "SkillsUpgradeParams": {
+      "properties": {
+        "name": {
+          "description": "Name of the installed skill to upgrade (the directory name under `$ODY_HOME/skills`).",
+          "type": "string"
+        },
+        "path": {
+          "description": "Optional path inside the repository that holds the SKILL.md.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "description": "GitHub source URL. Falls back to the `source.json` recorded at install time when omitted; the request fails when neither is available.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ],
       "type": "object"
     },
     "SortDirection": {
@@ -5889,6 +5972,102 @@
         "params"
       ],
       "title": "Skills/config/writeRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "skills/marketplace/search"
+          ],
+          "title": "Skills/marketplace/searchRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/SkillsMarketplaceSearchParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Skills/marketplace/searchRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "skills/marketplace/install"
+          ],
+          "title": "Skills/marketplace/installRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/SkillsMarketplaceInstallParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Skills/marketplace/installRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "skills/delete"
+          ],
+          "title": "Skills/deleteRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/SkillsDeleteParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Skills/deleteRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "skills/upgrade"
+          ],
+          "title": "Skills/upgradeRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/SkillsUpgradeParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Skills/upgradeRequest",
       "type": "object"
     },
     {

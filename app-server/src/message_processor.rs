@@ -1125,6 +1125,12 @@ impl MessageProcessor {
             ClientRequest::SkillsMarketplaceInstall { params, .. } => {
                 self.skills_marketplace_processor.install(params).await
             }
+            ClientRequest::SkillsDelete { params, .. } => {
+                self.skills_marketplace_processor.delete(params).await
+            }
+            ClientRequest::SkillsUpgrade { params, .. } => {
+                self.skills_marketplace_processor.upgrade(params).await
+            }
             ClientRequest::HooksList { params, .. } => {
                 self.catalog_processor.hooks_list(params).await
             }

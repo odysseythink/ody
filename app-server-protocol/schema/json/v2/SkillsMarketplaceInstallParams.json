@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "name": {
+      "description": "Optional expected skill name; falls back to the repo directory name.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "path": {
+      "description": "Optional path inside the repository that holds the SKILL.md.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source": {
+      "description": "GitHub source URL of the skill repository.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source"
+  ],
+  "title": "SkillsMarketplaceInstallParams",
+  "type": "object"
+}
