@@ -256,6 +256,7 @@ fn protocol_skill_to_core(skill: &ProtocolSkillMetadata) -> Option<SkillMetadata
                     .collect(),
             }),
         policy: None,
+        flow_artifact: None,
         path_to_skills_md: skill.path.clone(),
         scope,
         plugin_id: None,
