@@ -55,6 +55,10 @@ use ody_core_skills::FlowPlan;
 
 pub(crate) mod interp;
 
+mod runtime;
+
+pub(crate) use runtime::YamlFlowRuntime;
+
 #[cfg(test)]
 #[path = "flow_tests.rs"]
 mod flow_tests;
@@ -161,7 +165,19 @@ pub(crate) trait FlowAgentHost: Send + Sync {
     /// Run one agent with the fully rendered prompt and return its final
     /// result text. Structured results should be returned as JSON text —
     /// the kernel stores parsed JSON when possible, else the raw string.
-    async fn run_agent(&self, prompt: String) -> Result<String, FlowHostError>;
+    ///
+    /// The returned future must be cancellation-safe: the kernel drops
+    /// in-flight sibling futures when a batch short-circuits, and dropping
+    /// must abort the underlying agent (the M1.2 spawn mapping guarantees
+    /// this by aborting its JoinSet on drop).
+    ///
+    /// The future is declared `Send` so batched futures can move across
+    /// worker threads (implementations may write plain `async fn`, which
+    /// satisfies this signature when its captures are `Send`).
+    fn run_agent(
+        &self,
+        prompt: String,
+    ) -> impl std::future::Future<Output = Result<String, FlowHostError>> + Send;
 }
 
 /// Unified interface for Flow runtime implementations (`flow.yaml` today;
