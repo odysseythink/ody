@@ -3638,6 +3638,13 @@ pub struct SkillInterface {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS, PartialEq, Eq)]
 pub struct SkillDependencies {
     pub tools: Vec<SkillToolDependency>,
+    pub skills: Vec<SkillDependency>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillDependency {
+    pub name: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS, PartialEq, Eq)]

@@ -1,4 +1,5 @@
 use crate::model::SkillDependencies;
+use crate::model::SkillDependency;
 use crate::model::SkillError;
 use crate::model::SkillInterface;
 use crate::model::SkillLoadOutcome;
@@ -93,6 +94,8 @@ struct Interface {
 struct Dependencies {
     #[serde(default)]
     tools: Vec<DependencyTool>,
+    #[serde(default)]
+    skills: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -130,6 +133,7 @@ const MAX_DEPENDENCY_VALUE_LEN: usize = MAX_DESCRIPTION_LEN;
 const MAX_DEPENDENCY_DESCRIPTION_LEN: usize = MAX_DESCRIPTION_LEN;
 const MAX_DEPENDENCY_COMMAND_LEN: usize = MAX_DESCRIPTION_LEN;
 const MAX_DEPENDENCY_URL_LEN: usize = MAX_DESCRIPTION_LEN;
+const MAX_DEPENDENCY_SKILL_COUNT: usize = 32;
 // Traversal depth from the skills root.
 const MAX_SCAN_DEPTH: usize = 6;
 const MAX_SKILLS_DIRS_PER_ROOT: usize = 2000;
@@ -909,10 +913,22 @@ fn resolve_dependencies(dependencies: Option<Dependencies>) -> Option<SkillDepen
         .into_iter()
         .filter_map(resolve_dependency_tool)
         .collect();
-    if tools.is_empty() {
+    let mut skills: Vec<SkillDependency> = Vec::new();
+    for raw_name in dependencies.skills {
+        if skills.len() >= MAX_DEPENDENCY_SKILL_COUNT {
+            tracing::warn!(
+                "dependencies.skills truncated after {MAX_DEPENDENCY_SKILL_COUNT} entries"
+            );
+            break;
+        }
+        if let Some(name) = resolve_str(Some(raw_name), MAX_NAME_LEN, "dependencies.skills") {
+            skills.push(SkillDependency { name });
+        }
+    }
+    if tools.is_empty() && skills.is_empty() {
         None
     } else {
-        Some(SkillDependencies { tools })
+        Some(SkillDependencies { tools, skills })
     }
 }
 

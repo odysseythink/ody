@@ -7,6 +7,12 @@
     },
     "SkillDependencies": {
       "properties": {
+        "skills": {
+          "items": {
+            "$ref": "#/definitions/SkillDependency"
+          },
+          "type": "array"
+        },
         "tools": {
           "items": {
             "$ref": "#/definitions/SkillToolDependency"
@@ -15,7 +21,19 @@
         }
       },
       "required": [
+        "skills",
         "tools"
+      ],
+      "type": "object"
+    },
+    "SkillDependency": {
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
       ],
       "type": "object"
     },

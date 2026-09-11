@@ -121,6 +121,13 @@ pub struct SkillInterface {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SkillDependencies {
     pub tools: Vec<SkillToolDependency>,
+    pub skills: Vec<SkillDependency>,
+}
+
+/// Declared dependency on another skill from the same load.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkillDependency {
+    pub name: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

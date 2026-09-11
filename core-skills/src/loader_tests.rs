@@ -469,12 +469,129 @@ async fn loads_skill_dependencies_metadata_from_yaml() {
                         url: None,
                     },
                 ],
+                skills: vec![],
             }),
             policy: None,
             path_to_skills_md: normalized(&skill_path),
             scope: SkillScope::User,
             plugin_id: None,
             ..Default::default()
+        }]
+    );
+}
+
+#[tokio::test]
+async fn loads_skill_skill_dependencies_from_yaml() {
+    let ody_home = tempfile::tempdir().expect("tempdir");
+    let consumer_path = write_skill(&ody_home, "consumer", "consumer-skill", "depends on others");
+    let consumer_dir = consumer_path.parent().expect("skill dir");
+    write_skill(&ody_home, "provider", "provider-skill", "dependency target");
+
+    write_skill_metadata_at(
+        consumer_dir,
+        r#"
+{
+  "dependencies": {
+    "skills": ["provider-skill", "plugin:namespaced-skill"]
+  }
+}
+"#,
+    );
+
+    let cfg = make_config(&ody_home).await;
+    let outcome = load_skills_for_test(&cfg).await;
+
+    assert!(
+        outcome.errors.is_empty(),
+        "unexpected errors: {:?}",
+        outcome.errors
+    );
+    let consumer = outcome
+        .skills
+        .iter()
+        .find(|skill| skill.name == "consumer-skill")
+        .expect("consumer skill loaded");
+    assert_eq!(
+        consumer.dependencies,
+        Some(SkillDependencies {
+            tools: vec![],
+            skills: vec![
+                SkillDependency {
+                    name: "provider-skill".to_string(),
+                },
+                SkillDependency {
+                    name: "plugin:namespaced-skill".to_string(),
+                },
+            ],
+        })
+    );
+}
+
+#[tokio::test]
+async fn skill_dependency_list_truncates_beyond_max_count() {
+    let ody_home = tempfile::tempdir().expect("tempdir");
+    let skill_path = write_skill(&ody_home, "demo", "dep-skill", "too many deps");
+    let skill_dir = skill_path.parent().expect("skill dir");
+
+    let entries = (0..40)
+        .map(|index| format!("\"dep-{index}\""))
+        .collect::<Vec<_>>()
+        .join(", ");
+    write_skill_metadata_at(
+        skill_dir,
+        &format!("{{\n  \"dependencies\": {{\n    \"skills\": [{entries}]\n  }}\n}}"),
+    );
+
+    let cfg = make_config(&ody_home).await;
+    let outcome = load_skills_for_test(&cfg).await;
+
+    assert!(
+        outcome.errors.is_empty(),
+        "unexpected errors: {:?}",
+        outcome.errors
+    );
+    let skill = outcome
+        .skills
+        .iter()
+        .find(|skill| skill.name == "dep-skill")
+        .expect("skill loaded");
+    let dependencies = skill.dependencies.as_ref().expect("dependencies parsed");
+    assert_eq!(dependencies.skills.len(), MAX_DEPENDENCY_SKILL_COUNT);
+}
+
+#[tokio::test]
+async fn empty_skill_dependency_entries_are_dropped() {
+    let ody_home = tempfile::tempdir().expect("tempdir");
+    let skill_path = write_skill(&ody_home, "demo", "dep-skill", "empty dep entries");
+    let skill_dir = skill_path.parent().expect("skill dir");
+
+    write_skill_metadata_at(
+        skill_dir,
+        r#"
+{
+  "dependencies": {
+    "skills": ["", "   ", "real-dep"]
+  }
+}
+"#,
+    );
+
+    let cfg = make_config(&ody_home).await;
+    let outcome = load_skills_for_test(&cfg).await;
+
+    let skill = outcome
+        .skills
+        .iter()
+        .find(|skill| skill.name == "dep-skill")
+        .expect("skill loaded");
+    assert_eq!(
+        skill
+            .dependencies
+            .as_ref()
+            .expect("dependencies parsed")
+            .skills,
+        vec![SkillDependency {
+            name: "real-dep".to_string(),
         }]
     );
 }

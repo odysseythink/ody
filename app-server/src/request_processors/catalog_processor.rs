@@ -53,6 +53,13 @@ fn skills_to_info(
                                 url: tool.url,
                             })
                             .collect(),
+                        skills: dependencies
+                            .skills
+                            .into_iter()
+                            .map(|skill| ody_app_server_protocol::SkillDependency {
+                                name: skill.name,
+                            })
+                            .collect(),
                     }
                 }),
                 path: skill.path_to_skills_md.clone(),
