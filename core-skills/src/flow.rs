@@ -12,6 +12,13 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FlowPlan {
+    /// Informational metadata mirroring SKILL.md frontmatter for readability of the
+    /// artifact alone; the loader never reads these — authoritative name/description
+    /// always live in the skill's SKILL.md.
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
     pub phases: Vec<FlowPhase>,
 }
 

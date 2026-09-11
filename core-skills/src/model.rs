@@ -20,7 +20,9 @@ pub enum SkillType {
     /// Can be invoked by user slash or the model Skill tool.
     #[default]
     Inline,
-    /// Multi-step workflow skill. Schema-only in T3.1.0.
+    /// Multi-step workflow skill. Carries a `flow.yaml` artifact next to SKILL.md that is
+    /// eagerly parsed and validated at load time; executed by the host-side Flow runtime
+    /// (`core/src/flow/`, M1.1+).
     Flow,
     /// Auto-injected when its triggers match user text.
     Knowledge,

@@ -73,3 +73,23 @@ fn rejects_step_with_unknown_field() {
         .is_err()
     );
 }
+
+
+#[test]
+fn accepts_optional_top_level_name_and_description() {
+    let plan = parse_flow_plan(
+        "name: game-create\ndescription: 从概念到可运行原型\nphases:\n  - id: x\n    steps:\n      - agent: do it\n",
+    )
+    .expect("top-level name/description should be accepted as informational fields");
+    assert_eq!(plan.name.as_deref(), Some("game-create"));
+    assert_eq!(plan.description.as_deref(), Some("从概念到可运行原型"));
+    assert_eq!(plan.phases.len(), 1);
+}
+
+#[test]
+fn rejects_unknown_top_level_field() {
+    assert!(
+        parse_flow_plan("name: x\nbogus: y\nphases:\n  - id: x\n    steps:\n      - agent: do it\n")
+            .is_err()
+    );
+}
