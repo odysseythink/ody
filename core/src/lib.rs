@@ -92,6 +92,7 @@ pub(crate) mod mentions {
 mod sandbox_tags;
 pub mod sandboxing;
 mod session_prefix;
+mod session_report_gate;
 mod session_startup_prewarm;
 pub mod skills;
 pub(crate) use skills::SkillInjections;

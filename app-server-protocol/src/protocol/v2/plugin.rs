@@ -781,6 +781,57 @@ pub struct SkillsConfigWriteResponse {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
+pub struct SkillsMarketplaceSearchParams {
+    pub query: String,
+    #[ts(optional = nullable)]
+    pub limit: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct SkillsMarketplaceEntry {
+    pub id: String,
+    pub skill_id: String,
+    pub name: String,
+    pub installs: u64,
+    pub source: String,
+    #[ts(optional = nullable)]
+    pub description: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct SkillsMarketplaceSearchResponse {
+    pub skills: Vec<SkillsMarketplaceEntry>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct SkillsMarketplaceInstallParams {
+    /// GitHub source URL of the skill repository.
+    pub source: String,
+    /// Optional expected skill name; falls back to the repo directory name.
+    #[ts(optional = nullable)]
+    pub name: Option<String>,
+    /// Optional path inside the repository that holds the SKILL.md.
+    #[ts(optional = nullable)]
+    pub path: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct SkillsMarketplaceInstallResponse {
+    pub name: String,
+    pub path: AbsolutePathBuf,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
 pub struct PluginInstallParams {
     #[ts(optional = nullable)]
     pub marketplace_path: Option<AbsolutePathBuf>,

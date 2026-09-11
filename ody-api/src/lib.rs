@@ -1,5 +1,8 @@
 pub(crate) mod api_bridge;
 pub(crate) mod auth;
+pub(crate) mod eventstream;
+
+pub mod anthropic;
 pub mod chat;
 pub(crate) mod common;
 pub(crate) mod endpoint;
@@ -44,6 +47,8 @@ pub use crate::common::WS_REQUEST_HEADER_TRACEPARENT_CLIENT_METADATA_KEY;
 pub use crate::common::WS_REQUEST_HEADER_TRACESTATE_CLIENT_METADATA_KEY;
 pub use crate::common::create_text_param_for_request;
 pub use crate::common::response_create_client_metadata;
+pub use crate::endpoint::AnthropicMessagesClient;
+pub use crate::endpoint::AnthropicOptions;
 pub use crate::endpoint::ChatCompletionsClient;
 pub use crate::endpoint::ChatCompletionsOptions;
 pub use crate::endpoint::CompactClient;

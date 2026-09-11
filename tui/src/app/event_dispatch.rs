@@ -1556,6 +1556,7 @@ impl App {
                                 primary: provider,
                                 providers: std::collections::HashMap::new(),
                                 secondary: None,
+                                enabled: None,
                             });
                         web_search.primary = provider;
                         self.config.services = Some(ody_web_search::config::ServicesConfig {
@@ -1602,6 +1603,7 @@ impl App {
                                 primary: config.provider,
                                 providers: std::collections::HashMap::new(),
                                 secondary: None,
+                                enabled: None,
                             });
                         web_search.providers.insert(config.provider, config);
                         self.config.services = Some(ody_web_search::config::ServicesConfig {

@@ -1,6 +1,7 @@
 use ody_collaboration_mode_templates::DEFAULT as COLLABORATION_MODE_DEFAULT;
 use ody_collaboration_mode_templates::DESIGN as COLLABORATION_MODE_DESIGN;
 use ody_collaboration_mode_templates::PLAN as COLLABORATION_MODE_PLAN;
+use ody_collaboration_mode_templates::PRODUCT as COLLABORATION_MODE_PRODUCT;
 use ody_protocol::config_types::CollaborationModeMask;
 use ody_protocol::config_types::ModeKind;
 use ody_protocol::config_types::TUI_VISIBLE_COLLABORATION_MODES;
@@ -15,7 +16,18 @@ static COLLABORATION_MODE_DEFAULT_TEMPLATE: LazyLock<Template> = LazyLock::new(|
 });
 
 pub fn builtin_collaboration_mode_presets() -> Vec<CollaborationModeMask> {
-    vec![plan_preset(), design_preset(), default_preset()]
+    vec![plan_preset(), design_preset(), product_preset(), default_preset()]
+}
+
+fn product_preset() -> CollaborationModeMask {
+    CollaborationModeMask {
+        name: ModeKind::Product.display_name().to_string(),
+        mode: Some(ModeKind::Product),
+        model: None,
+        reasoning_effort: Some(Some(ReasoningEffort::Medium)),
+        developer_instructions: Some(Some(COLLABORATION_MODE_PRODUCT.to_string())),
+        design_audit_level: None,
+    }
 }
 
 fn plan_preset() -> CollaborationModeMask {

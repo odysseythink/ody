@@ -1,6 +1,6 @@
 ---
 name: dispatching-parallel-agents
-description: Use when facing 2+ independent tasks that can be worked on without shared state or sequential dependencies
+description: ALWAYS invoke this skill when facing 2+ independent tasks that can be worked on without shared state or sequential dependencies — e.g. the user asks to "run these in parallel", "dispatch agents", or "can these be done at the same time". Screens the tasks for true independence and dispatches each with a self-contained brief.
 namespace: core
 ---
 

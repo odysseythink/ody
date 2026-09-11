@@ -91,6 +91,25 @@ cargo build --profile release-small -p ody-cli --features v8
 
 The resulting binary will be in `target/release-small/ody`. The `release-small` profile enables full LTO, single codegen unit, strips symbols, and uses `panic = "abort"`, which usually reduces size significantly (often by 30–50%).
 
+### Builtin MCP servers (single-binary distribution)
+
+By default, the four builtin MCP servers (`fetch`, `sequentialthinking`, `arxiv`, `context7`) run as a separate helper binary, `ody-builtin-mcp`, which ody spawns as a stdio child process. The helper must be on `PATH` — on Windows it is also searched next to the `ody` executable, so a full `cargo build` places both binaries in the same `target/` directory.
+
+To distribute a single `ody` binary without the helper, build with the `bundled-builtin-mcp` feature. The builtin servers are then served in-process over tokio duplex streams instead of being spawned:
+
+```bash
+# Single-binary release build (no ody-builtin-mcp needed at runtime)
+cargo build --release -p ody-cli --features bundled-builtin-mcp
+
+# The app-server binary supports the same feature for single-binary distribution
+cargo build --release -p ody-app-server --features bundled-builtin-mcp
+
+# Combined with other release features
+cargo build --release -p ody-cli --features v8,bundled-builtin-mcp
+```
+
+The feature is off by default so local dev builds stay lean. It only affects the four builtin servers in their default configuration; user-configured MCP servers are unchanged. See `mcp-server/builtins/README.md` for details.
+
 ## Design Mode
 
 Most coding assistants treat design as a prefix to implementation—an offhand "let's think step by step." Ody treats design as a first-class collaboration phase with its own workspace, rules, and handoff contract.

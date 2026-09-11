@@ -8,10 +8,14 @@ use crate::registry::WebSearchProviderRegistry;
 
 pub mod baidu;
 pub mod bing;
+pub mod bing_html;
+pub mod bing_news;
+pub mod bocha;
 pub mod duckduckgo;
 pub mod exa;
 pub mod moonshot;
 pub mod perplexity;
+pub mod querit;
 pub mod searchapi;
 pub mod searxng;
 pub mod serpapi;
@@ -23,6 +27,9 @@ pub mod tavily;
 pub fn create_default_registry() -> WebSearchProviderRegistry {
     let mut registry = WebSearchProviderRegistry::new();
     registry.register(Box::new(bing::BingFactory));
+    registry.register(Box::new(bing_html::BingHtmlFactory));
+    registry.register(Box::new(bing_news::BingNewsFactory));
+    registry.register(Box::new(bocha::BochaFactory));
     registry.register(Box::new(duckduckgo::DuckDuckGoFactory));
     registry.register(Box::new(serpapi::SerpApiFactory));
     registry.register(Box::new(searchapi::SearchApiFactory));
@@ -34,6 +41,7 @@ pub fn create_default_registry() -> WebSearchProviderRegistry {
     registry.register(Box::new(tavily::TavilyFactory));
     registry.register(Box::new(exa::ExaFactory));
     registry.register(Box::new(perplexity::PerplexityFactory));
+    registry.register(Box::new(querit::QueritFactory));
     registry
 }
 
@@ -111,6 +119,10 @@ mod tests {
         let registry = create_default_registry();
         for name in [
             "bing",
+            "bing-html",
+            "bing-news",
+            "bocha",
+            "querit",
             "duckduckgo",
             "serpapi",
             "searchapi",

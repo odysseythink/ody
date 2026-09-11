@@ -58,7 +58,9 @@ impl ToolExecutor<ToolCall> for WebSearchTool {
     fn spec(&self) -> ToolSpec {
         ToolSpec::Function(ody_tools::ResponsesApiTool {
             name: "WebSearch".to_string(),
-            description: "Discover up-to-date web sources. Results include structured metadata, but search snippets are not primary evidence; use WebFetch or another reader to inspect original pages before making source-backed claims.".to_string(),
+            description: "Discover up-to-date web sources. Results include structured metadata, but search snippets are not primary evidence; use WebFetch or another reader to inspect original pages before making source-backed claims.
+
+Query construction: use concrete topical keywords. Do NOT prepend ISO dates (e.g. \"2026-08-31\") to the query — date-prefixed queries return degraded, unrelated results on many search engines. Express time frames with natural words inside the query (\"latest\", \"this week\", \"today\") and rely on the returned result dates for filtering. For news requests, search specific subjects (company, product, field, event) instead of generic phrases like \"top news\".".to_string(),
             strict: true,
             parameters: parse_tool_input_schema(&json!({
                 "type": "object",
@@ -182,6 +184,30 @@ mod tests {
             },
             guardian_approved_action_id: None,
         }
+    }
+
+
+    #[test]
+    fn description_guides_against_iso_date_prefixes_and_generic_news_queries() {
+        let tool = WebSearchTool::new("session-1".to_string(), Arc::new(StubProvider(vec![])));
+        let description = match tool.spec() {
+            ToolSpec::Function(spec) => spec.description,
+            _ => panic!("WebSearch must be a function tool"),
+        };
+        // Regression guard: date-prefixed queries ("2026-08-31 news") made Bing
+        // return degraded unrelated SERPs (all results about HK public holidays).
+        assert!(
+            description.contains("Do NOT prepend ISO dates"),
+            "description must warn against ISO date prefixes, got: {description}"
+        );
+        assert!(
+            description.contains("natural words"),
+            "description must suggest natural time words, got: {description}"
+        );
+        assert!(
+            description.contains("specific subjects"),
+            "description must steer news queries to specific subjects, got: {description}"
+        );
     }
 
     #[tokio::test]

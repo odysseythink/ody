@@ -15,8 +15,7 @@ description: >
 hiddenInModes:
   - plan
   - design
-  - office-hours
-  - game-design
+  - product
 ---
 
 # SKILL: Idea Evaluator (想法质检) v1

@@ -196,6 +196,99 @@ async fn design_turn_constructs_artifact_under_designs_dir() {
     );
 }
 
+/// Regression for the multi-document product directory: once a session has
+/// adopted a requirements document, later turns must KEEP anchoring to it even
+/// when another document becomes newer on disk (e.g. the model edited an older
+/// document after the newest one was adopted). Without the anchor,
+/// `restore_product`'s mtime heuristic flips the artifact to the other
+/// document and the read-only patch gate starts rejecting edits to the
+/// document the session is actually continuing.
+#[tokio::test]
+async fn product_document_anchor_survives_mtime_changes_between_turns() {
+    let (sess, _tc, _rx) = crate::session::tests::make_session_and_context_with_rx().await;
+    let mut collaboration_mode = sess.collaboration_mode().await;
+    collaboration_mode.mode = ModeKind::Product;
+    {
+        let mut state = sess.state.lock().await;
+        state.session_configuration.collaboration_mode = collaboration_mode;
+    }
+
+    // First product turn: no documents yet, so the artifact is a fresh tmp
+    // path. Its parent directory IS the products dir later turns will scan.
+    let first = sess.new_default_turn().await;
+    let first_artifact = first
+        .plan_artifact
+        .as_ref()
+        .expect("product turn should construct an artifact");
+    let products = first_artifact
+        .path()
+        .expect("fresh product artifact should have a tmp path")
+        .parent()
+        .expect("tmp path should live under products/")
+        .to_path_buf();
+
+    // The test harness's cwd is the real repo, so the products dir is shared.
+    // Start from an empty one: any pre-existing document would be adopted (and
+    // anchored) at the first turn and the assertions below would see that
+    // document instead of the seeded ones. Start-of-test cleanup also makes
+    // reruns hermetic when a previous run panicked before its own cleanup.
+    let _ = std::fs::remove_dir_all(&products);
+
+    // Seed two documents; B is deterministically the newest and should be
+    // adopted. (Equal mtimes would make the scan's tie order depend on
+    // read_dir order — pin A older so the assertion cannot flake.)
+    std::fs::create_dir_all(&products).unwrap();
+    let doc_a = products.join("2026-09-08-topic-a.md");
+    let doc_b = products.join("2026-09-08-topic-b.md");
+    std::fs::write(&doc_a, "# Topic A").unwrap();
+    std::fs::write(&doc_b, "# Topic B").unwrap();
+    let older = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    std::fs::File::options()
+        .write(true)
+        .open(&doc_a)
+        .unwrap()
+        .set_modified(older)
+        .unwrap();
+
+    let second = sess.new_default_turn().await;
+    let artifact_path = second
+        .plan_artifact
+        .as_ref()
+        .and_then(|artifact| artifact.path())
+        .expect("second product turn should anchor a document");
+    assert_eq!(
+        artifact_path, doc_b,
+        "the newest document should be adopted first"
+    );
+
+    // The model now edits the OLDER document (A) instead, making A the newest
+    // on disk while the session is anchored to B.
+    std::fs::write(&doc_a, "# Topic A, continued").unwrap();
+    let older = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    std::fs::File::options()
+        .write(true)
+        .open(&doc_b)
+        .unwrap()
+        .set_modified(older)
+        .unwrap();
+
+    let third = sess.new_default_turn().await;
+    let artifact_path = third
+        .plan_artifact
+        .as_ref()
+        .and_then(|artifact| artifact.path())
+        .expect("third product turn should keep an anchor");
+    assert_eq!(
+        artifact_path, doc_b,
+        "the session anchor must keep the artifact on the adopted document; \
+         the mtime heuristic alone would flip it to {doc_a:?}"
+    );
+
+    // Best-effort cleanup of the seeded documents (the shared cwd is the real
+    // repo; leave no debris behind).
+    let _ = std::fs::remove_dir_all(&products);
+}
+
 #[tokio::test]
 async fn design_after_turn_injects_design_split_directive() {
     let (sess, tc, rx) = crate::session::tests::make_session_and_context_with_rx().await;

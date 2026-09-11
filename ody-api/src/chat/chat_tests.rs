@@ -474,20 +474,61 @@ fn assistant_content_followed_by_function_calls_merges() {
 #[test]
 fn vendor_resolution_from_base_url() {
     assert_eq!(
-        ChatVendor::from_provider("Kimi", Some("https://api.moonshot.ai/v1")),
+        ChatVendor::from_provider("Kimi", Some("https://api.moonshot.ai/v1"), None),
         ChatVendor::Kimi
     );
     assert_eq!(
-        ChatVendor::from_provider("custom", Some("https://api.kimi.com/coding/v1")),
+        ChatVendor::from_provider("custom", Some("https://api.kimi.com/coding/v1"), None),
         ChatVendor::Kimi
     );
     assert_eq!(
-        ChatVendor::from_provider("custom", Some("https://api.deepseek.com/v1")),
+        ChatVendor::from_provider("custom", Some("https://api.deepseek.com/v1"), None),
         ChatVendor::DeepSeek
     );
-    assert_eq!(ChatVendor::from_provider("GLM", None), ChatVendor::Glm);
+    assert_eq!(ChatVendor::from_provider("GLM", None, None), ChatVendor::Glm);
     assert_eq!(
-        ChatVendor::from_provider("whatever", None),
+        ChatVendor::from_provider("whatever", None, None),
+        ChatVendor::Generic
+    );
+}
+
+#[test]
+fn vendor_resolution_azure_deployment_from_api_version() {
+    // Azure dated api-versions use deployment-based chat URLs.
+    assert_eq!(
+        ChatVendor::from_provider(
+            "azure",
+            Some("https://example.openai.azure.com/openai"),
+            Some("2025-03-01")
+        ),
+        ChatVendor::AzureDeployment
+    );
+    assert_eq!(
+        ChatVendor::from_provider("azure", None, Some("2024-02-15-preview")),
+        ChatVendor::AzureDeployment
+    );
+    // v1 / absent api-version keeps the generic v1-compatible surface.
+    assert_eq!(
+        ChatVendor::from_provider("azure", None, Some("v1")),
+        ChatVendor::Generic
+    );
+    assert_eq!(ChatVendor::from_provider("azure", None, None), ChatVendor::Generic);
+    // Azure endpoint host is recognized even with a custom provider name.
+    assert_eq!(
+        ChatVendor::from_provider(
+            "custom",
+            Some("https://example.openai.azure.com/openai"),
+            Some("2025-03-01")
+        ),
+        ChatVendor::AzureDeployment
+    );
+    // A non-Azure provider carrying an api-version query param is untouched.
+    assert_eq!(
+        ChatVendor::from_provider(
+            "custom",
+            Some("https://gateway.example.com/v1"),
+            Some("2025-03-01")
+        ),
         ChatVendor::Generic
     );
 }

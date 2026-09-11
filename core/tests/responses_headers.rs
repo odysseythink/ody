@@ -85,7 +85,8 @@ async fn responses_stream_includes_subagent_header_on_review() {
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
         capabilities: ProviderCapabilities::default(),
-    };
+            aws: None,
+        };
 
     let ody_home = TempDir::new().expect("failed to create TempDir");
     let mut config = load_default_config_for_test(&ody_home).await;
@@ -212,7 +213,8 @@ async fn responses_stream_includes_subagent_header_on_other() {
         websocket_connect_timeout_ms: None,
         supports_websockets: false,
         capabilities: ProviderCapabilities::default(),
-    };
+            aws: None,
+        };
 
     let ody_home = TempDir::new().expect("failed to create TempDir");
     let mut config = load_default_config_for_test(&ody_home).await;

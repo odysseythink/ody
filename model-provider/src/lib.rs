@@ -7,6 +7,7 @@ mod models_endpoint;
 mod provider;
 
 pub mod login;
+pub mod sigv4_transport;
 
 pub mod adapters;
 

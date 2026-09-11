@@ -90,7 +90,10 @@ fn capabilities_from_vendor(vendor: ChatVendor) -> ProviderCapabilities {
             max_output_tokens: Some(8_192),
             thinking_effort: vec![],
         },
-        ChatVendor::Generic => ProviderCapabilities {
+        // Azure deployment URLs speak the same generic OpenAI dialect;
+        // capabilities mirror Generic (o-series deployments advertise their
+        // own levels via the model catalog, same as other chat providers).
+        ChatVendor::Generic | ChatVendor::AzureDeployment => ProviderCapabilities {
             supports_streaming: true,
             supports_tools: true,
             supports_thinking: false,
@@ -158,7 +161,7 @@ fn build_api_request(
 /// discrete reasoning levels), so gating is model-driven rather than keyed off
 /// the vendor. An empty `supported` list therefore sends no `reasoning_effort`.
 /// GLM is additionally stripped downstream by `ChatVendor::emits_reasoning_effort`.
-fn reasoning_effort_for_request(
+pub(crate) fn reasoning_effort_for_request(
     thinking_effort: ThinkingEffort,
     supported: &[ThinkingEffort],
 ) -> Result<Option<String>, ChatProviderError> {
@@ -181,7 +184,7 @@ fn reasoning_effort_for_request(
     Ok(Some(value.to_string()))
 }
 
-fn content_to_text(content: &[crate::chat_provider::ContentPart]) -> String {
+pub(crate) fn content_to_text(content: &[crate::chat_provider::ContentPart]) -> String {
     content
         .iter()
         .filter_map(|part| match part {
@@ -192,7 +195,7 @@ fn content_to_text(content: &[crate::chat_provider::ContentPart]) -> String {
         .join("")
 }
 
-fn message_to_response_items(message: crate::chat_provider::Message) -> Vec<ResponseItem> {
+pub(crate) fn message_to_response_items(message: crate::chat_provider::Message) -> Vec<ResponseItem> {
     use crate::chat_provider::{ContentPart, Role};
     use ody_protocol::models::{FunctionCallOutputContentItem, FunctionCallOutputPayload};
 
@@ -364,7 +367,7 @@ fn message_to_response_items(message: crate::chat_provider::Message) -> Vec<Resp
     items
 }
 
-fn tool_definition_to_value(
+pub(crate) fn tool_definition_to_value(
     def: crate::chat_provider::ToolDefinition,
 ) -> Result<serde_json::Value, ChatProviderError> {
     // Emit the Responses-API flat tool shape that `ody_api::chat::convert_tools`
@@ -503,7 +506,7 @@ impl<T: HttpTransport + 'static> ChatProvider for ChatAdapter<T> {
 /// on Chat Completions transports, which do not have a `client_metadata` body
 /// field. This mirrors the filtering done by the responses endpoint in
 /// `ody_api::endpoint::responses`.
-fn client_metadata_to_headers(
+pub(crate) fn client_metadata_to_headers(
     client_metadata: Option<&std::collections::HashMap<String, String>>,
 ) -> HeaderMap {
     let mut headers = HeaderMap::new();

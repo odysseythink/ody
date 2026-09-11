@@ -7,6 +7,10 @@ pub const EXTERNAL_GROUNDING: &str = include_str!("../templates/external_groundi
 pub const EXECUTE: &str = include_str!("../templates/execute.md");
 pub const PAIR_PROGRAMMING: &str = include_str!("../templates/pair_programming.md");
 pub const PLAN_CONCISE: &str = include_str!("../templates/plan_concise.md");
+pub const PRODUCT: &str = include_str!("../templates/product.md");
+pub const PRODUCT_FULL_REMINDER: &str = include_str!("../templates/product_full_reminder.md");
+pub const PRODUCT_REENTRY: &str = include_str!("../templates/product_reentry.md");
+pub const PRODUCT_SPARSE_REMINDER: &str = include_str!("../templates/product_sparse_reminder.md");
 pub const PLAN_RIGOR_WORKFLOW: &str = include_str!("../templates/plan_rigor_workflow.md");
 pub const PLAN_RIGOR_COVERAGE: &str = include_str!("../templates/plan_rigor_coverage.md");
 pub const PLAN_RIGOR_TASK_SKELETON: &str = include_str!("../templates/plan_rigor_task_skeleton.md");
@@ -251,6 +255,190 @@ mod template_tests {
             DESIGN.contains("Stay in Design mode"),
             "DESIGN must include the Stay in Design mode next-action option"
         );
+    }
+
+    /// The product-mode P0 triage contract: one entry point, three internal
+    /// paths (direction undecided / direction settled / change-request), so the
+    /// complexity of the requirements-analysis workflow lives inside the mode's
+    /// routing instead of in the user's choice of which mode to enter.
+    #[test]
+    fn product_template_pins_p0_triage_contract() {
+        for requirement in [
+            // P0 定轨: exactly three paths, anchored to the book's two entry
+            // templates (new-system vs change/optimization).
+            "Path A",
+            "Path B",
+            "Path C",
+            "change/optimization",
+            // Turn discipline inherited from the ody-code product mode.
+            "ONE question at a time",
+            "`request_user_input`",
+            // Confidence and evidence tagging.
+            "[C:USER]",
+            "[C:INFERRED]",
+            "[V:TRANSACTED]",
+            "[V:OBSERVED]",
+            "[V:STATED]",
+            // The book's four-level priority vocabulary.
+            "must-do",
+            "should-do",
+            "could-do",
+            "wont-do",
+            // Three-tier hard gate: requirement models allowed, implementation
+            // details forbidden.
+            "no code",
+            "mermaid",
+            // Artifact location.
+            ".ody-code/products/",
+        ] {
+            assert!(
+                PRODUCT.contains(requirement),
+                "PRODUCT must contain {requirement:?}"
+            );
+        }
+    }
+
+    /// Periodic reminders for product mode: the full reminder re-injects the
+    /// complete operating contract (turn discipline, evidence grading, hard
+    /// gate, priority vocabulary) on the full cadence; the sparse reminder
+    /// keeps the load-bearing rules alive between full reinjections. Both
+    /// must never drift from the pinned contract in `product.md`.
+    #[test]
+    fn product_reminders_restate_the_load_bearing_rules() {
+        for requirement in [
+            // Mode identity — the model must never confuse this with a
+            // plan/design reminder.
+            "Product Mode",
+            // Turn discipline: one question at a time via pop-ups.
+            "request_user_input",
+            "ONE question at a time",
+            // Evidence grading and confidence tagging.
+            "[V:STATED]",
+            "[C:INFERRED]",
+            // The book's four-level priority vocabulary.
+            "must-do",
+            "wont-do",
+        ] {
+            assert!(
+                PRODUCT_FULL_REMINDER.contains(requirement),
+                "PRODUCT_FULL_REMINDER must contain {requirement:?}"
+            );
+            assert!(
+                PRODUCT_SPARSE_REMINDER.contains(requirement),
+                "PRODUCT_SPARSE_REMINDER must contain {requirement:?}"
+            );
+        }
+        // The full reminder alone carries the hard gate (no code) — the rule
+        // the whole mode exists to enforce.
+        assert!(
+            PRODUCT_FULL_REMINDER.contains("no code"),
+            "PRODUCT_FULL_REMINDER must restate the no-code hard gate:\n{}",
+            PRODUCT_FULL_REMINDER
+        );
+    }
+
+    /// Re-entry contract for product mode: when a requirements document
+    /// already exists on disk (continued session, re-entering the mode, or
+    /// cross-day work), the model must continue that document instead of
+    /// restarting P0 triage. The host interpolates `{{ product_path }}` with
+    /// the restored artifact path before appending this fragment.
+    #[test]
+    fn product_reentry_pins_the_continue_dont_restart_contract() {
+        for requirement in [
+            "{{ product_path }}",
+            "Do NOT restart P0 triage",
+            "request_user_input",
+            "ONE question at a time",
+            "## Open Questions",
+            "[V:TRANSACTED|OBSERVED|STATED]",
+            "must-do",
+            "no code",
+        ] {
+            assert!(
+                PRODUCT_REENTRY.contains(requirement),
+                "PRODUCT_REENTRY must contain {requirement:?}"
+            );
+        }
+    }
+
+    /// The mode-ending contract: the model confirms handoff with the user via
+    /// `request_user_input`, then calls `submit_product` (no arguments) so the
+    /// host can finalize the document and the client can show the handoff
+    /// menu. Without this pin the model asks the user to switch modes
+    /// manually — the auto-exit mechanism never fires.
+    #[test]
+    fn product_template_ends_with_submit_product_handoff() {
+        for requirement in [
+            "submit_product",
+            "request_user_input",
+            "ONE question",
+            "Enter Plan Mode",
+            "Enter Design Mode",
+        ] {
+            assert!(
+                PRODUCT.contains(requirement),
+                "PRODUCT ending must contain {requirement:?}"
+            );
+        }
+    }
+
+    /// The P2–P7 detailed-requirements phases, each carrying the book's named
+    /// artifact templates (徐峰《有效需求分析》第2版 ch.7–21) with fields
+    /// transcribed from the book's 任务产物 sections. These pins keep the
+    /// template headings findable by name — an engineer should be able to
+    /// locate 业务流程描述模板 / 质量场景分析模板 etc. verbatim in the document.
+    #[test]
+    fn product_template_pins_p2_p7_artifact_templates() {
+        for requirement in [
+            // Phase structure
+            "### P2 — System decomposition",
+            "### P3 — Functional requirements",
+            "### P4 — Management support",
+            "### P5 — Data requirements",
+            "### P6 — Quality requirements",
+            "### P7 — Rules and constraints",
+            // P2 decomposition & interfaces (ch.7-8)
+            "业务子系统描述模板",
+            "服务接口说明",
+            "业务接口分析模板",
+            "接口交互数据包说明",
+            // P3 functional (ch.9-13)
+            "业务流程列表模板",
+            "主/变/支/管",
+            "业务流程描述模板",
+            "分工/协作/活动/分支/产物关系/审批/规则/异常",
+            "业务流程内业务场景描述模板",
+            "业务场景分析模板",
+            "任务变体 (扩展事件流)",
+            "关键例外",
+            "遍历步骤分析困难导出功能",
+            // P4 management (ch.14-16)
+            "管控点列表与分析模板",
+            "业务报表描述模板",
+            "维护需求描述模板",
+            // P5 data (ch.17-18)
+            "领域类图片段模板",
+            "过程数据",
+            "业务数据描述模板",
+            "数据窗口分析",
+            // P6 quality (ch.19)
+            "关键质量需求列表模板",
+            "质量场景分析模板",
+            "策略及风险",
+            // P7 rules & constraints (ch.20-21)
+            "按作用域归类",
+            "按类型二次归类",
+            "限制 (拒绝)",
+            "产生 (启发, 计算)",
+            "投影 (推导, 触发, 时序)",
+            "项目约束描述模板",
+            "设计约束描述模板",
+        ] {
+            assert!(
+                PRODUCT.contains(requirement),
+                "PRODUCT P2+ section must contain {requirement:?}"
+            );
+        }
     }
 
     fn understand_step_of(body: &str) -> String {

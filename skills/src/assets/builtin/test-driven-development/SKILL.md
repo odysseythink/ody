@@ -1,6 +1,6 @@
 ---
 name: test-driven-development
-description: Use when implementing any feature or bugfix, before writing implementation code
+description: ALWAYS invoke this skill when implementing any feature or bugfix, before writing implementation code — whenever new behavior or a fix is about to be written. Writes the failing test first, then the implementation that makes it pass.
 namespace: core
 ---
 

@@ -26,6 +26,14 @@ use ts_rs::TS;
 pub enum WebSearchProviderName {
     Duckduckgo,
     Bing,
+    #[serde(rename = "bing-html")]
+    #[strum(serialize = "bing-html")]
+    BingHtml,
+    #[serde(rename = "bing-news")]
+    #[strum(serialize = "bing-news")]
+    BingNews,
+    Bocha,
+    Querit,
     Serpapi,
     Searchapi,
     Serper,
@@ -74,9 +82,20 @@ pub struct WebSearchConfig {
     /// Optional fallback provider used when the primary fails.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub secondary: Option<WebSearchProviderConfig>,
+    /// Explicit on/off switch. Absent means enabled (backwards compatible).
+    /// A per-thread config override can set this to `false` to prevent the
+    /// runtime from registering web search tools for that thread.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
 }
 
 impl WebSearchConfig {
+    /// Whether web search tools should be registered. Defaults to enabled;
+    /// only an explicit `enabled = false` disables them.
+    pub fn is_enabled(&self) -> bool {
+        self.enabled != Some(false)
+    }
+
     /// Resolve the full configuration for the currently active primary provider.
     pub fn primary_config(&self) -> WebSearchProviderConfig {
         self.providers.get(&self.primary).cloned().unwrap_or_else(|| WebSearchProviderConfig {
@@ -102,11 +121,15 @@ enum WebSearchConfigRepr {
         providers: HashMap<WebSearchProviderName, WebSearchProviderConfig>,
         #[serde(default)]
         secondary: Option<WebSearchProviderConfig>,
+        #[serde(default)]
+        enabled: Option<bool>,
     },
     Legacy {
         primary: WebSearchProviderConfig,
         #[serde(default)]
         secondary: Option<WebSearchProviderConfig>,
+        #[serde(default)]
+        enabled: Option<bool>,
     },
 }
 
@@ -120,12 +143,18 @@ impl<'de> Deserialize<'de> for WebSearchConfig {
                 primary,
                 providers,
                 secondary,
+                enabled,
             } => Ok(WebSearchConfig {
                 primary,
                 providers,
                 secondary,
+                enabled,
             }),
-            WebSearchConfigRepr::Legacy { primary, secondary } => {
+            WebSearchConfigRepr::Legacy {
+                primary,
+                secondary,
+                enabled,
+            } => {
                 let provider = primary.provider;
                 let mut providers = HashMap::new();
                 providers.insert(provider, primary);
@@ -133,6 +162,7 @@ impl<'de> Deserialize<'de> for WebSearchConfig {
                     primary: provider,
                     providers,
                     secondary,
+                    enabled,
                 })
             }
         }
@@ -145,6 +175,7 @@ impl fmt::Debug for WebSearchConfig {
             .field("primary", &self.primary)
             .field("providers", &format!("{} entries", self.providers.len()))
             .field("secondary", &self.secondary)
+            .field("enabled", &self.enabled)
             .finish()
     }
 }
@@ -287,5 +318,71 @@ sslmode = "disable"
         assert_eq!(conn.provider, ody_database::config::DatabaseProviderName::Postgres);
         assert_eq!(conn.port, 5432);
         assert_eq!(conn.password.as_deref(), Some("secret"));
+    }
+}
+
+#[cfg(test)]
+mod enabled_tests {
+    use super::*;
+
+    #[test]
+    fn web_search_enabled_defaults_to_enabled() {
+        let config: WebSearchConfig = toml::from_str(r#"primary = "duckduckgo""#)
+            .expect("deserialize new format");
+        assert_eq!(config.enabled, None);
+        assert!(config.is_enabled());
+    }
+
+    #[test]
+    fn web_search_enabled_false_deserializes() {
+        let config: WebSearchConfig = toml::from_str(
+            r#"
+primary = "duckduckgo"
+enabled = false
+"#,
+        )
+        .expect("deserialize with enabled=false");
+        assert_eq!(config.enabled, Some(false));
+        assert!(!config.is_enabled());
+    }
+
+    #[test]
+    fn web_search_enabled_true_deserializes() {
+        let config: WebSearchConfig = toml::from_str(
+            r#"
+primary = "duckduckgo"
+enabled = true
+"#,
+        )
+        .expect("deserialize with enabled=true");
+        assert_eq!(config.enabled, Some(true));
+        assert!(config.is_enabled());
+    }
+
+    #[test]
+    fn legacy_repr_supports_enabled() {
+        let config: WebSearchConfig = serde_json::from_str(
+            r#"{
+                "enabled": false,
+                "primary": { "provider": "bing", "api_key": "k" }
+            }"#,
+        )
+        .expect("deserialize legacy repr with enabled");
+        assert!(!config.is_enabled());
+    }
+
+    #[test]
+    fn services_config_deserializes_websearch_enabled_from_toml() {
+        let services: ServicesConfig = toml::from_str(
+            r#"
+[webSearch]
+primary = "duckduckgo"
+enabled = false
+"#,
+        )
+        .expect("deserialize services toml");
+        let web_search = services.web_search.expect("webSearch config present");
+        assert_eq!(web_search.enabled, Some(false));
+        assert!(!web_search.is_enabled());
     }
 }

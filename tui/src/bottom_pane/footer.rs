@@ -93,6 +93,7 @@ pub(crate) struct FooterProps {
 pub(crate) enum CollaborationModeIndicator {
     Plan,
     Design,
+    Product,
     #[allow(dead_code)] // Hidden by current mode filtering; kept for future UI re-enablement.
     PairProgramming,
     #[allow(dead_code)] // Hidden by current mode filtering; kept for future UI re-enablement.
@@ -150,12 +151,13 @@ impl CollaborationModeIndicator {
             String::new()
         };
         match self {
-            CollaborationModeIndicator::Plan => format!("【 Plan {suffix}】"),
-            CollaborationModeIndicator::Design => format!("【 Design {suffix}】"),
+            CollaborationModeIndicator::Plan => format!("【 📝 Plan {suffix}】"),
+            CollaborationModeIndicator::Design => format!("【 ✏️ Design {suffix}】"),
+            CollaborationModeIndicator::Product => format!("【 🏢 Product {suffix}】"),
             CollaborationModeIndicator::PairProgramming => {
-                format!("Pair Programming mode{suffix}")
+                format!("👥 Pair Programming mode{suffix}")
             }
-            CollaborationModeIndicator::Execute => format!("Execute mode{suffix}"),
+            CollaborationModeIndicator::Execute => format!("▶️ Execute mode{suffix}"),
         }
     }
 
@@ -164,6 +166,7 @@ impl CollaborationModeIndicator {
         match self {
             CollaborationModeIndicator::Plan => Span::from(label).magenta(),
             CollaborationModeIndicator::Design => Span::from(label).cyan(),
+            CollaborationModeIndicator::Product => Span::from(label).yellow(),
             CollaborationModeIndicator::PairProgramming => Span::from(label).cyan(),
             CollaborationModeIndicator::Execute => Span::from(label).dim(),
         }

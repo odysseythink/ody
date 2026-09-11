@@ -1,6 +1,6 @@
 ---
 name: verification-before-completion
-description: Use when about to claim work is complete, fixed, or passing, before committing or creating PRs - requires running verification commands and confirming output before making any success claims; evidence before assertions always
+description: ALWAYS invoke this skill when about to claim work is complete, fixed, or passing — before committing, opening PRs, or telling the user anything is done — and when the user asks "are we done", "is it fixed", or "ready to merge". Runs the verification commands and confirms their output first; evidence before assertions always.
 namespace: core
 ---
 

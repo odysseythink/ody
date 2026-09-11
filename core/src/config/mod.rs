@@ -357,6 +357,7 @@ pub(crate) fn test_provider() -> ModelProviderInfo {
             command_auth: false,
             attestation: false,
         },
+        aws: None,
     }
 }
 
@@ -962,6 +963,10 @@ pub struct Config {
 
     /// Definition for MCP servers that Ody can reach out to for tool calls.
     pub mcp_servers: Constrained<HashMap<String, McpServerConfig>>,
+
+    /// Names of built-in MCP servers disabled by the user. Built-in servers
+    /// not listed here are registered into the MCP catalog by default.
+    pub disabled_builtin_mcp_servers: Vec<String>,
 
     /// Preferred store for MCP OAuth credentials.
     /// keyring: Use an OS-specific keyring service.
@@ -1713,6 +1718,25 @@ impl Config {
             catalog.register(McpServerRegistration::from_config(
                 name.clone(),
                 server.clone(),
+            ));
+        }
+        let configured_names: std::collections::BTreeSet<&String> =
+            self.mcp_servers.get().keys().collect();
+        let disabled_builtin_names: std::collections::BTreeSet<&String> =
+            self.disabled_builtin_mcp_servers.iter().collect();
+        for builtin in ody_mcp::BUILTIN_MCP_SERVERS {
+            if configured_names.contains(&builtin.name.to_string()) {
+                // A config or plugin registration with the same name wins by
+                // precedence; skip the built-in declaration entirely.
+                continue;
+            }
+            let mut config = builtin.to_mcp_server_config();
+            if disabled_builtin_names.contains(&builtin.name.to_string()) {
+                config.enabled = false;
+            }
+            catalog.register(McpServerRegistration::from_builtin(
+                builtin.name.to_string(),
+                config,
             ));
         }
 
@@ -4138,6 +4162,7 @@ impl Config {
                 env!("CARGO_PKG_VERSION"),
             ),
             mcp_servers,
+            disabled_builtin_mcp_servers: cfg.disabled_builtin_mcp_servers.clone().unwrap_or_default(),
             // The config.toml omits "_mode" because it's a config file. However, "_mode"
             // is important in code to differentiate the mode from the store implementation.
             mcp_oauth_credentials_store_mode: resolve_mcp_oauth_credentials_store_mode(

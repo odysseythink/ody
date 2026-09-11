@@ -1,0 +1,3 @@
+## Continuing an existing requirements document
+
+A requirements document already exists at `{{ product_path }}`. Do NOT restart P0 triage and do not create a new document. Read that file first, then continue from where it stopped: reopen its `## Open Questions` with the user ONE question at a time via `request_user_input`, keep grading evidence `[V:TRANSACTED|OBSERVED|STATED]` and tagging confidence `[C:USER|INFERRED]`, keep the four-level priority vocabulary (must-do/should-do/could-do/wont-do), and update that same file — or the part files under its `<stem>/` directory when it is split. Everything else stays read-only: no code.

@@ -790,6 +790,16 @@ client_request_definitions! {
         serialization: global("config"),
         response: v2::SkillsConfigWriteResponse,
     },
+    SkillsMarketplaceSearch => "skills/marketplace/search" {
+        params: v2::SkillsMarketplaceSearchParams,
+        serialization: None,
+        response: v2::SkillsMarketplaceSearchResponse,
+    },
+    SkillsMarketplaceInstall => "skills/marketplace/install" {
+        params: v2::SkillsMarketplaceInstallParams,
+        serialization: global("config"),
+        response: v2::SkillsMarketplaceInstallResponse,
+    },
     PluginInstall => "plugin/install" {
         params: v2::PluginInstallParams,
         serialization: global("config"),

@@ -1224,6 +1224,35 @@ impl Session {
         state.set_plan_mode_last_manifest_snapshot(snapshot);
     }
 
+    /// Cadence counters carried from the previous read-only-mode turn's
+    /// artifact; restored onto the freshly-created per-turn artifact so the
+    /// full/sparse reminder schedule survives the per-turn recreation.
+    pub(crate) async fn plan_mode_reminder_turns(&self) -> Option<crate::plan_artifact::ReminderTurns> {
+        let state = self.state.lock().await;
+        state.plan_mode_reminder_turns()
+    }
+
+    pub(crate) async fn set_plan_mode_reminder_turns(
+        &self,
+        turns: crate::plan_artifact::ReminderTurns,
+    ) {
+        let mut state = self.state.lock().await;
+        state.set_plan_mode_reminder_turns(turns);
+    }
+
+    /// Product mode: the requirements document this session has anchored to.
+    /// Sticky across turns so a per-turn rescan's mtime heuristic cannot flip
+    /// the artifact to another document mid-session. Session-scoped.
+    pub(crate) async fn product_document_anchor(&self) -> Option<std::path::PathBuf> {
+        let state = self.state.lock().await;
+        state.product_document_anchor()
+    }
+
+    pub(crate) async fn set_product_document_anchor(&self, path: std::path::PathBuf) {
+        let mut state = self.state.lock().await;
+        state.set_product_document_anchor(path);
+    }
+
     pub(crate) async fn set_last_design_artifact(&self, artifact: Arc<PlanArtifact>) {
         let mut state = self.state.lock().await;
         state.set_last_design_artifact(artifact);

@@ -238,6 +238,9 @@ pub enum Feature {
     RemoteCompactionV2,
     /// Enable workspace dependency support.
     WorkspaceDependencies,
+    /// Block a turn from stopping while unreported work has landed in the
+    /// working repositories, and ask the model for a wrap-up report first.
+    SessionReportGate,
 
     // Removed
     /// Removed compatibility flag retained as a no-op so old configs can
@@ -970,6 +973,12 @@ pub const FEATURES: &[FeatureSpec] = &[
         key: "multi_agent",
         stage: Stage::Stable,
         default_enabled: true,
+    },
+    FeatureSpec {
+        id: Feature::SessionReportGate,
+        key: "session_report_gate",
+        stage: Stage::UnderDevelopment,
+        default_enabled: false,
     },
     FeatureSpec {
         id: Feature::MultiAgentV2,

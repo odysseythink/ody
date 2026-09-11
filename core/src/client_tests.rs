@@ -574,6 +574,7 @@ fn model_client_with_counting_attestation(
                 command_auth: false,
                 attestation: false,
             },
+            aws: None,
         }
     } else {
         create_kimi_provider()

@@ -370,6 +370,7 @@ use self::plugins::PluginListFetchState;
 use self::plugins::PluginsCacheState;
 mod design_next_step;
 mod plan_implementation;
+mod product_next_step;
 use self::plan_implementation::PLAN_IMPLEMENTATION_TITLE;
 mod model_popups;
 mod notifications;

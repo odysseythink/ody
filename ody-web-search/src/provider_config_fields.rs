@@ -133,6 +133,36 @@ pub fn provider_config_fields(name: WebSearchProviderName) -> Vec<ProviderConfig
             ProviderConfigField::timeout_ms(),
             ProviderConfigField::base_url(),
         ],
+        WebSearchProviderName::Bocha => vec![
+            ProviderConfigField::api_key(),
+            ProviderConfigField::timeout_ms(),
+            ProviderConfigField::base_url(),
+        ],
+        WebSearchProviderName::Querit => vec![
+            ProviderConfigField::api_key(),
+            ProviderConfigField::timeout_ms(),
+            ProviderConfigField::base_url(),
+            ProviderConfigField::u32(
+                "max_results",
+                "Max Results",
+                "Maximum number of results to return (1-50).",
+                1,
+                50,
+            ),
+            ProviderConfigField::string(
+                "time_range",
+                "Time Range",
+                "Recency filter: none/d1/w1/m1/y1.",
+            ),
+        ],
+        WebSearchProviderName::BingHtml | WebSearchProviderName::BingNews => vec![
+            ProviderConfigField::timeout_ms(),
+            ProviderConfigField::string(
+                "proxy_url",
+                "Proxy URL",
+                "Optional HTTP proxy that forwards Bing HTML requests.",
+            ),
+        ],
         WebSearchProviderName::Serpapi => vec![
             ProviderConfigField::api_key(),
             ProviderConfigField::timeout_ms(),

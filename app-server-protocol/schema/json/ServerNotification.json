@@ -2406,6 +2406,7 @@
       "enum": [
         "plan",
         "design",
+        "product",
         "default"
       ],
       "type": "string"

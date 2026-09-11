@@ -11430,3 +11430,109 @@ async fn active_model_ref_composes_bare_model_with_provider_id() -> std::io::Res
 
     Ok(())
 }
+
+#[tokio::test]
+async fn to_mcp_config_registers_builtin_servers_by_default() -> std::io::Result<()> {
+    let ody_home = TempDir::new()?;
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml::default(),
+        ConfigOverrides {
+            cwd: Some(ody_home.path().to_path_buf()),
+            ..Default::default()
+        },
+        ody_home.abs(),
+    )
+    .await?;
+    let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
+    let mcp_config = config.to_mcp_config(&plugins_manager).await;
+
+    for builtin in ody_mcp::BUILTIN_MCP_SERVERS {
+        let server = mcp_config
+            .mcp_server_catalog
+            .server(builtin.name)
+            .unwrap_or_else(|| panic!("built-in server {} must be registered", builtin.name));
+        assert!(
+            matches!(server.source(), ody_mcp::McpServerSource::Builtin),
+            "built-in server {} must keep its Builtin source",
+            builtin.name
+        );
+        assert!(server.config().enabled, "{} must be enabled by default", builtin.name);
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn to_mcp_config_honors_disabled_builtin_mcp_servers() -> std::io::Result<()> {
+    let ody_home = TempDir::new()?;
+    let cfg = toml::from_str::<ConfigToml>(
+        r#"
+disabled_builtin_mcp_servers = ["fetch", "arxiv"]
+"#,
+    )
+    .expect("TOML should deserialize");
+    let config = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides {
+            cwd: Some(ody_home.path().to_path_buf()),
+            ..Default::default()
+        },
+        ody_home.abs(),
+    )
+    .await?;
+    let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
+    let mcp_config = config.to_mcp_config(&plugins_manager).await;
+
+    for name in ["fetch", "arxiv"] {
+        let server = mcp_config
+            .mcp_server_catalog
+            .server(name)
+            .unwrap_or_else(|| panic!("disabled built-in server {name} must stay registered"));
+        assert!(!server.config().enabled, "{name} must be disabled");
+    }
+    let context7 = mcp_config
+        .mcp_server_catalog
+        .server("context7")
+        .expect("context7 must remain enabled");
+    assert!(context7.config().enabled);
+    Ok(())
+}
+
+#[tokio::test]
+async fn to_mcp_config_config_server_overrides_builtin_server() -> std::io::Result<()> {
+    let ody_home = TempDir::new()?;
+    let cfg = toml::from_str::<ConfigToml>(
+        r#"
+disabled_builtin_mcp_servers = ["fetch"]
+
+[mcp_servers.fetch]
+url = "https://fetch.example/mcp"
+"#,
+    )
+    .expect("TOML should deserialize");
+    let config = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides {
+            cwd: Some(ody_home.path().to_path_buf()),
+            ..Default::default()
+        },
+        ody_home.abs(),
+    )
+    .await?;
+    let plugins_manager = PluginsManager::new(ody_home.path().to_path_buf());
+    let mcp_config = config.to_mcp_config(&plugins_manager).await;
+
+    let server = mcp_config
+        .mcp_server_catalog
+        .server("fetch")
+        .expect("config-defined fetch must be registered");
+    assert!(
+        matches!(server.source(), ody_mcp::McpServerSource::Config),
+        "config mcp_servers entry must override the built-in server"
+    );
+    let ody_config::McpServerTransportConfig::StreamableHttp { url, .. } = &server.config().transport
+    else {
+        panic!("fetch must use streamable-http transport");
+    };
+    assert_eq!(url, "https://fetch.example/mcp");
+    Ok(())
+}

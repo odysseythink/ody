@@ -1,5 +1,6 @@
 ---
 source: tui/src/bottom_pane/chat_composer.rs
+assertion_line: 4661
 expression: terminal.backend()
 ---
 "                              "
@@ -10,4 +11,4 @@ expression: terminal.backend()
 "                              "
 "                              "
 "                              "
-"  tab to queue · 【 Plan 】   " Hidden by multi-width symbols: [(18, " "), (26, " ")]
+"  tab to queue · 【 📝 Plan 】" Hidden by multi-width symbols: [(18, " "), (21, " "), (29, " ")]

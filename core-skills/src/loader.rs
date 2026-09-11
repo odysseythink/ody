@@ -51,7 +51,9 @@ struct SkillFrontmatter {
     skill_type: Option<String>,
     #[serde(default)]
     triggers: Option<Vec<String>>,
-    #[serde(default)]
+    // Skills in the wild follow the ody-code frontmatter convention of
+    // camelCase keys; accept both spellings.
+    #[serde(default, alias = "hiddenInModes")]
     hidden_in_modes: Option<Vec<String>>,
     #[serde(default)]
     disable_model_invocation: Option<bool>,
@@ -327,6 +329,18 @@ fn skill_roots_from_layer_stack_inner(
                 // special case (not a config layer).
                 roots.push(SkillRoot {
                     path: system_cache_root_dir(&config_folder),
+                    scope: SkillScope::System,
+                    file_system: Arc::clone(&LOCAL_FS),
+                    plugin_id: None,
+                    plugin_namespace: None,
+                    plugin_root: None,
+                });
+
+                // Remote-synced builtin skills (e.g. odyBox's backend-delivered
+                // skills) cache under `$ODY_HOME/skills/.builtin`, a sibling of
+                // `.system` with the same visibility semantics.
+                roots.push(SkillRoot {
+                    path: ody_skills::remote_builtin_cache_root_dir(&config_folder),
                     scope: SkillScope::System,
                     file_system: Arc::clone(&LOCAL_FS),
                     plugin_id: None,
@@ -733,12 +747,17 @@ async fn parse_skill_file(
         );
         skill_type = SkillType::Inline;
     }
-    let hidden_in_modes = parsed
-        .hidden_in_modes
-        .unwrap_or_default()
-        .iter()
-        .map(|raw| parse_hidden_mode(raw))
-        .collect::<Result<Vec<_>, _>>()?;
+    // Unsupported mode names downgrade to a warning and are skipped: a
+    // frontmatter copied from the ody-code ecosystem (e.g. naming game-design)
+    // must never drop the whole skill — the valid entries still carry the
+    // author's intent.
+    let mut hidden_in_modes = Vec::new();
+    for raw in parsed.hidden_in_modes.unwrap_or_default() {
+        match parse_hidden_mode(&raw) {
+            Ok(mode) => hidden_in_modes.push(mode),
+            Err(err) => tracing::warn!("skill '{name}': skipping {err}"),
+        }
+    }
     let disable_model_invocation = parsed.disable_model_invocation.unwrap_or(false);
 
     let mermaid = extract_fenced_block(&contents, "mermaid");

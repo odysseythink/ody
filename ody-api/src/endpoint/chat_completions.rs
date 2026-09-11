@@ -1,5 +1,5 @@
 use crate::auth::SharedAuthProvider;
-use crate::chat::ChatCompletionsRequest;
+use crate::chat::{ChatCompletionsRequest, ChatVendor};
 use crate::common::ResponseStream;
 use crate::endpoint::session::EndpointSession;
 use crate::error::ApiError;
@@ -47,9 +47,7 @@ impl<T: HttpTransport> ChatCompletionsClient<T> {
         }
     }
 
-    fn path() -> &'static str {
-        "chat/completions"
-    }
+
 
     #[instrument(
         name = "chat_completions.stream_request",
@@ -77,11 +75,12 @@ impl<T: HttpTransport> ChatCompletionsClient<T> {
             Compression::Zstd => RequestCompression::Zstd,
         };
 
+        let path = path_for_vendor(request.vendor, &request.model);
         let stream_response = self
             .session
             .stream_encoded_json_with(
                 Method::POST,
-                Self::path(),
+                &path,
                 options.extra_headers,
                 Some(body),
                 |req| {
@@ -100,6 +99,16 @@ impl<T: HttpTransport> ChatCompletionsClient<T> {
             self.sse_telemetry.clone(),
             vendor,
         ))
+    }
+}
+
+/// Request path for the chat completions endpoint. Azure deployment
+/// dialects embed the model as the deployment name; everyone else uses the
+/// fixed `chat/completions` path.
+fn path_for_vendor(vendor: ChatVendor, model: &str) -> String {
+    match vendor {
+        ChatVendor::AzureDeployment => format!("deployments/{model}/chat/completions"),
+        _ => "chat/completions".to_string(),
     }
 }
 
@@ -130,4 +139,25 @@ fn log_outgoing_identity_headers_once(headers: &HeaderMap) {
             "chat completions outgoing provider headers (logged once)"
         );
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chat::ChatVendor;
+
+    #[test]
+    fn azure_deployment_path_embeds_model() {
+        assert_eq!(
+            path_for_vendor(ChatVendor::AzureDeployment, "gpt-4o"),
+            "deployments/gpt-4o/chat/completions"
+        );
+    }
+
+    #[test]
+    fn generic_vendors_keep_fixed_path() {
+        for vendor in [ChatVendor::Generic, ChatVendor::Kimi, ChatVendor::DeepSeek, ChatVendor::Glm] {
+            assert_eq!(path_for_vendor(vendor, "any-model"), "chat/completions");
+        }
+    }
 }

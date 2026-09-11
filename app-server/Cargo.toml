@@ -21,6 +21,12 @@ doctest = false
 workspace = true
 
 [features]
+# Bundles the builtin MCP servers (fetch, sequentialthinking, arxiv,
+# context7) into the app-server binary and serves them in-process over tokio
+# duplex streams, so distribution only needs the single `ody-app-server`
+# executable and not the separate `ody-builtin-mcp` helper binary. Off by
+# default; release / packaging builds should enable this.
+bundled-builtin-mcp = ["ody-mcp/bundled-builtin-mcp"]
 # Enables the Windows restricted-token/elevated sandbox backend. Off by default
 # so local dev builds skip compiling/linking the Windows sandbox crate; release
 # / packaging builds for Windows must pass `--features windows-sandbox` for
@@ -54,6 +60,7 @@ ody-hooks = { workspace = true }
 ody-otel = { workspace = true }
 ody-plugin = { workspace = true }
 ody-shell-command = { workspace = true }
+ody-skills = { workspace = true }
 ody-skills-extension = { workspace = true }
 ody-utils-cli = { workspace = true }
 ody-utils-pty = { workspace = true }
@@ -106,6 +113,8 @@ tracing-subscriber = { workspace = true, features = ["env-filter", "fmt", "json"
 uuid = { workspace = true, features = ["serde", "v7"] }
 
 [target.'cfg(windows)'.dependencies]
+
+reqwest = { workspace = true, features = ["rustls-tls"] }
 
 [dev-dependencies]
 app_test_support = { workspace = true }

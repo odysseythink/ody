@@ -1,6 +1,6 @@
 ---
 name: executing-plans
-description: Use when you have a written implementation plan to execute in a separate session with review checkpoints
+description: ALWAYS invoke this skill when you have a written implementation plan to execute in a separate session with review checkpoints — e.g. "execute this plan", "run the plan in a new session", or a plan file is handed off for another session to carry out. Not for same-session execution; that is subagent-driven-development.
 namespace: core
 ---
 

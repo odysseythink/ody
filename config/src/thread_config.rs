@@ -403,6 +403,7 @@ mod tests {
             websocket_connect_timeout_ms: None,
             supports_websockets: true,
             capabilities: ProviderCapabilities::default(),
+            aws: None,
         }
     }
 

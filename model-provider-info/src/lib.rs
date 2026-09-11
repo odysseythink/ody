@@ -286,6 +286,20 @@ pub struct ModelProviderInfo {
     /// Provider-level feature capabilities.
     #[serde(default)]
     pub capabilities: ProviderCapabilities,
+    /// AWS credentials and region used to SigV4-sign requests (Bedrock).
+    /// When set, the runtime signs every request instead of attaching a
+    /// Bearer token.
+    pub aws: Option<ModelProviderAwsConfig>,
+}
+
+/// AWS credentials and region for SigV4 request signing (AWS Bedrock).
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct ModelProviderAwsConfig {
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub session_token: Option<String>,
+    pub region: String,
 }
 
 impl ModelProviderInfo {
@@ -485,6 +499,7 @@ fn create_chat_provider(
             command_auth: false,
             attestation: false,
         },
+        aws: None,
     }
 }
 
