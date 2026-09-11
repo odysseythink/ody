@@ -48,6 +48,7 @@ pub mod exec;
 pub mod exec_env;
 mod exec_policy;
 mod external_grounding;
+pub(crate) mod flow;
 #[cfg(test)]
 mod git_info_tests;
 mod guardian;
