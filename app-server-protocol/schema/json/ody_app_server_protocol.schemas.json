@@ -15255,6 +15255,12 @@
       },
       "SkillDependencies": {
         "properties": {
+          "skills": {
+            "items": {
+              "$ref": "#/definitions/v2/SkillDependency"
+            },
+            "type": "array"
+          },
           "tools": {
             "items": {
               "$ref": "#/definitions/v2/SkillToolDependency"
@@ -15263,7 +15269,19 @@
           }
         },
         "required": [
+          "skills",
           "tools"
+        ],
+        "type": "object"
+      },
+      "SkillDependency": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
         ],
         "type": "object"
       },

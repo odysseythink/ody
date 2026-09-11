@@ -4,6 +4,7 @@ use super::HookHandlerType;
 use super::HookSource;
 use super::HookTrustStatus;
 use ody_protocol::protocol::SkillDependencies as CoreSkillDependencies;
+use ody_protocol::protocol::SkillDependency as CoreSkillDependency;
 use ody_protocol::protocol::SkillInterface as CoreSkillInterface;
 use ody_protocol::protocol::SkillMetadata as CoreSkillMetadata;
 use ody_protocol::protocol::SkillScope as CoreSkillScope;
@@ -492,6 +493,14 @@ pub struct SkillInterface {
 #[ts(export_to = "v2/")]
 pub struct SkillDependencies {
     pub tools: Vec<SkillToolDependency>,
+    pub skills: Vec<SkillDependency>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct SkillDependency {
+    pub name: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
@@ -925,7 +934,18 @@ impl From<CoreSkillDependencies> for SkillDependencies {
                 .into_iter()
                 .map(SkillToolDependency::from)
                 .collect(),
+            skills: value
+                .skills
+                .into_iter()
+                .map(SkillDependency::from)
+                .collect(),
         }
+    }
+}
+
+impl From<CoreSkillDependency> for SkillDependency {
+    fn from(value: CoreSkillDependency) -> Self {
+        Self { name: value.name }
     }
 }
 

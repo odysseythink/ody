@@ -1,4 +1,5 @@
 pub mod config_rules;
+pub mod flow;
 pub mod injection;
 pub(crate) mod invocation_utils;
 pub mod loader;
@@ -10,6 +11,10 @@ pub mod service;
 mod skill_instructions;
 pub mod system;
 
+pub use flow::FlowParseError;
+pub use flow::FlowPlan;
+pub use flow::FlowStep;
+pub use flow::parse_flow_plan;
 pub(crate) use invocation_utils::build_implicit_skill_path_indexes;
 pub use invocation_utils::detect_implicit_skill_invocation_for_command;
 pub use mention_counts::build_skill_name_counts;

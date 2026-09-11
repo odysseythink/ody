@@ -292,8 +292,10 @@ where
             let mut injected_host_skill_prompts = InjectedHostSkillPrompts::default();
             let mut injected_entries: Vec<&SkillCatalogEntry> = Vec::new();
 
-            // Explicitly selected skills are always injected.
-            for entry in &selected_entries {
+            // Explicitly selected skills, plus any skills pulled in through
+            // declared dependencies, are always injected.
+            for selected in &selected_entries {
+                let entry = &selected.entry;
                 match self
                     .read_main_prompt(entry, host_snapshot.clone(), session_store, &thread_state)
                     .await
@@ -309,6 +311,12 @@ where
                             self.emit_warning(&input.turn_id, warning.clone());
                             warnings.push(warning);
                         }
+                        let contents = match &selected.dependency_of {
+                            Some(dependent) => format!(
+                                "(injected as a dependency of '{dependent}')\n\n{contents}"
+                            ),
+                            None => contents,
+                        };
                         let fragment = SkillInstructions {
                             name: truncate_utf8_to_bytes(&entry.name, MAX_SKILL_NAME_BYTES).0,
                             path: truncate_utf8_to_bytes(

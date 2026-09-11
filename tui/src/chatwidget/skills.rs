@@ -15,6 +15,7 @@ use ody_app_server_protocol::SkillMetadata as ProtocolSkillMetadata;
 use ody_app_server_protocol::SkillsListEntry;
 use ody_app_server_protocol::SkillsListResponse;
 use ody_core_skills::model::SkillDependencies;
+use ody_core_skills::model::SkillDependency;
 use ody_core_skills::model::SkillInterface;
 use ody_core_skills::model::SkillMetadata;
 use ody_core_skills::model::SkillToolDependency;
@@ -246,8 +247,16 @@ fn protocol_skill_to_core(skill: &ProtocolSkillMetadata) -> Option<SkillMetadata
                         url: tool.url,
                     })
                     .collect(),
+                skills: dependencies
+                    .skills
+                    .into_iter()
+                    .map(|skill| SkillDependency {
+                        name: skill.name,
+                    })
+                    .collect(),
             }),
         policy: None,
+        flow_artifact: None,
         path_to_skills_md: skill.path.clone(),
         scope,
         plugin_id: None,

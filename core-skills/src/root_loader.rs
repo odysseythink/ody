@@ -11,6 +11,7 @@ use crate::loader::SkillRoot;
 use crate::loader::SkillRootSnapshot;
 use crate::loader::load_skill_root;
 use crate::model::SkillFileSystemsByPath;
+use crate::model::SkillMetadata;
 
 /// Parsed plugin skill-root snapshots produced by one plugin load.
 ///
@@ -154,5 +155,158 @@ fn merge_skill_root_snapshots(snapshots: Vec<SkillRootSnapshot>) -> SkillLoadOut
             .then_with(|| a.path_to_skills_md.cmp(&b.path_to_skills_md))
     });
 
+    for issue in validate_skill_dependencies(&outcome.skills) {
+        match issue.kind {
+            SkillDependencyIssueKind::Missing => tracing::warn!(
+                "skill '{}' declares missing dependency '{}'",
+                issue.skill,
+                issue.dependency
+            ),
+            SkillDependencyIssueKind::Ambiguous => tracing::warn!(
+                "skill '{}' declares ambiguous dependency '{}'",
+                issue.skill,
+                issue.dependency
+            ),
+            SkillDependencyIssueKind::Cycle => tracing::warn!(
+                "cyclic skill dependency involving '{}': {}",
+                issue.skill,
+                issue.dependency
+            ),
+        }
+    }
+
     outcome
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SkillDependencyIssueKind {
+    Missing,
+    Ambiguous,
+    Cycle,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SkillDependencyIssue {
+    pub kind: SkillDependencyIssueKind,
+    /// Qualified name of the skill whose declaration has the issue.
+    pub skill: String,
+    /// Declared dependency name, or the cycle path ("a -> b -> a") for cycles.
+    pub dependency: String,
+}
+
+/// Resolves declared skill dependencies against the loaded catalog and reports
+/// missing, ambiguous, and cyclic declarations. Warning-only: nothing here
+/// rejects or reorders skills.
+pub(crate) fn validate_skill_dependencies(skills: &[SkillMetadata]) -> Vec<SkillDependencyIssue> {
+    let mut full_name_index = HashMap::new();
+    let mut base_name_indexes: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (index, skill) in skills.iter().enumerate() {
+        full_name_index.entry(skill.name.as_str()).or_insert(index);
+        base_name_indexes
+            .entry(skill.name.rsplit(':').next().unwrap_or(skill.name.as_str()))
+            .or_default()
+            .push(index);
+    }
+
+    let mut issues = Vec::new();
+    let mut edges: Vec<Vec<usize>> = vec![Vec::new(); skills.len()];
+    for (index, skill) in skills.iter().enumerate() {
+        let Some(dependencies) = skill.dependencies.as_ref() else {
+            continue;
+        };
+        for dependency in &dependencies.skills {
+            let resolved = if let Some(index) = full_name_index.get(dependency.name.as_str()) {
+                Ok(*index)
+            } else {
+                match base_name_indexes.get(dependency.name.as_str()) {
+                    Some(indexes) if indexes.len() == 1 => Ok(indexes[0]),
+                    Some(_) => Err(SkillDependencyIssueKind::Ambiguous),
+                    None => Err(SkillDependencyIssueKind::Missing),
+                }
+            };
+            match resolved {
+                Ok(target) => edges[index].push(target),
+                Err(kind) => issues.push(SkillDependencyIssue {
+                    kind,
+                    skill: skill.name.clone(),
+                    dependency: dependency.name.clone(),
+                }),
+            }
+        }
+    }
+
+    let mut color = vec![CycleColor::White; skills.len()];
+    let mut path = Vec::new();
+    let mut reported = HashSet::new();
+    for index in 0..skills.len() {
+        if color[index] == CycleColor::White {
+            find_dependency_cycles(
+                index,
+                &edges,
+                skills,
+                &mut color,
+                &mut path,
+                &mut reported,
+                &mut issues,
+            );
+        }
+    }
+
+    issues
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CycleColor {
+    White,
+    Gray,
+    Black,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn find_dependency_cycles(
+    node: usize,
+    edges: &[Vec<usize>],
+    skills: &[SkillMetadata],
+    color: &mut [CycleColor],
+    path: &mut Vec<usize>,
+    reported: &mut HashSet<(usize, usize)>,
+    issues: &mut Vec<SkillDependencyIssue>,
+) {
+    color[node] = CycleColor::Gray;
+    path.push(node);
+    for &next in &edges[node] {
+        if reported.contains(&(node, next)) {
+            continue;
+        }
+        match color[next] {
+            CycleColor::White => {
+                find_dependency_cycles(next, edges, skills, color, path, reported, issues)
+            }
+            CycleColor::Gray => {
+                reported.insert((node, next));
+                let cycle_start = path
+                    .iter()
+                    .position(|&member| member == next)
+                    .unwrap_or(node);
+                let cycle_path = path[cycle_start..]
+                    .iter()
+                    .map(|&member| skills[member].name.as_str())
+                    .chain(std::iter::once(skills[next].name.as_str()))
+                    .collect::<Vec<_>>()
+                    .join(" -> ");
+                issues.push(SkillDependencyIssue {
+                    kind: SkillDependencyIssueKind::Cycle,
+                    skill: skills[cycle_start].name.clone(),
+                    dependency: cycle_path,
+                });
+            }
+            CycleColor::Black => {}
+        }
+    }
+    path.pop();
+    color[node] = CycleColor::Black;
+}
+
+#[cfg(test)]
+#[path = "root_loader_tests.rs"]
+mod tests;

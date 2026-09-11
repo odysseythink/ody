@@ -11,6 +11,8 @@ use ody_core_skills::SkillLoadOutcome;
 use ody_core_skills::SkillMetadata;
 use ody_core_skills::SkillType;
 use ody_core_skills::injection::InjectedHostSkillPrompts;
+use ody_core_skills::model::SkillDependencies;
+use ody_core_skills::model::SkillDependency;
 use ody_exec_server::EnvironmentManager;
 use ody_extension_api::ConversationHistory;
 use ody_extension_api::ExtensionData;
@@ -105,6 +107,7 @@ async fn installed_extension_uses_host_service_snapshot() -> TestResult {
         interface: None,
         dependencies: None,
         policy: None,
+        flow_artifact: None,
         path_to_skills_md: skill_path,
         scope: SkillScope::User,
         plugin_id: None,
@@ -774,6 +777,7 @@ async fn host_provider_maps_new_metadata_fields() {
         interface: None,
         dependencies: None,
         policy: None,
+        flow_artifact: None,
         path_to_skills_md: skill_path.clone(),
         scope: SkillScope::User,
         plugin_id: None,
@@ -1072,6 +1076,7 @@ async fn skills_list_tool_returns_host_skills_when_host_authority_requested() ->
         interface: None,
         dependencies: None,
         policy: None,
+        flow_artifact: None,
         path_to_skills_md: AbsolutePathBuf::try_from("/tmp/demo/SKILL.md")?,
         scope: SkillScope::User,
         plugin_id: None,
@@ -1448,4 +1453,202 @@ async fn skill_activated_event_is_emitted_for_explicit_selection() -> TestResult
         }
     }
     panic!("expected SkillActivated event");
+}
+
+/// Runs one turn with the given catalog and returns the rendered text of every
+/// emitted fragment, in emission order.
+async fn contribute_text_with_catalog(entries: Vec<SkillCatalogEntry>, text: &str) -> Vec<String> {
+    let mut builder = ExtensionRegistryBuilder::new();
+    let provider = Arc::new(StaticSkillProvider {
+        catalog: SkillCatalog {
+            entries,
+            warnings: Vec::new(),
+        },
+        read_requests: Arc::new(Mutex::new(Vec::new())),
+        list_calls: None,
+        fail_first_list: false,
+    });
+    let providers = SkillProviders::new().with_host_provider(provider);
+    install_with_providers(&mut builder, providers, skills_extension_config);
+    let registry = builder.build();
+
+    let session_store = ExtensionData::new("session");
+    let thread_store = ExtensionData::new("thread");
+    let session_source = SessionSource::Cli;
+    let config = default_config();
+    registry.thread_lifecycle_contributors()[0]
+        .on_thread_start(ThreadStartInput {
+            config: &config,
+            session_source: &session_source,
+            persistent_thread_state_available: true,
+            environments: &[],
+            session_store: &session_store,
+            thread_store: &thread_store,
+        })
+        .await;
+    registry.turn_lifecycle_contributors()[0]
+        .on_turn_start(TurnStartInput {
+            turn_id: "turn-1",
+            collaboration_mode: &CollaborationMode {
+                mode: ModeKind::Default,
+                settings: Settings {
+                    model: "test".to_string(),
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                    design_audit_level: None,
+                },
+            },
+            token_usage_at_turn_start: &TokenUsage::default(),
+            session_store: &session_store,
+            thread_store: &thread_store,
+            turn_store: &ExtensionData::new("turn-1"),
+        })
+        .await;
+
+    let fragments = registry.turn_input_contributors()[0]
+        .contribute(
+            TurnInputContext {
+                turn_id: "turn-1".to_string(),
+                user_input: vec![UserInput::Text {
+                    text: text.to_string(),
+                    text_elements: Vec::new(),
+                }],
+                environments: Vec::new(),
+            },
+            &session_store,
+            &thread_store,
+            &ExtensionData::new("turn-1"),
+        )
+        .await;
+    fragments.iter().map(|fragment| fragment.render()).collect()
+}
+
+fn skill_deps(names: &[&str]) -> Option<SkillDependencies> {
+    Some(SkillDependencies {
+        tools: vec![],
+        skills: names
+            .iter()
+            .map(|name| SkillDependency {
+                name: name.to_string(),
+            })
+            .collect(),
+    })
+}
+
+fn position_of(rendered: &[String], needle: &str) -> usize {
+    let flat = rendered.join("\n");
+    flat.find(needle)
+        .unwrap_or_else(|| panic!("{needle} not found in: {flat}"))
+}
+
+#[tokio::test]
+async fn explicit_selection_injects_transitive_dependencies_in_order() -> TestResult {
+    let rendered = contribute_text_with_catalog(
+        vec![
+            test_entry(
+                SkillSourceKind::Host,
+                "host",
+                "host/consumer",
+                "consumer/SKILL.md",
+            )
+            .with_dependencies(skill_deps(&["provider"])),
+            test_entry(
+                SkillSourceKind::Host,
+                "host",
+                "host/provider",
+                "provider/SKILL.md",
+            )
+            .with_dependencies(skill_deps(&["base"])),
+            test_entry(SkillSourceKind::Host, "host", "host/base", "base/SKILL.md"),
+        ],
+        "$consumer please",
+    )
+    .await;
+
+    let base = position_of(&rendered, "<name>base</name>");
+    let provider = position_of(&rendered, "<name>provider</name>");
+    let consumer = position_of(&rendered, "<name>consumer</name>");
+    assert!(
+        base < provider && provider < consumer,
+        "expected dependency-before-dependent order, got base={base} provider={provider} consumer={consumer}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn explicitly_selected_dependency_appears_once_before_dependent() -> TestResult {
+    let rendered = contribute_text_with_catalog(
+        vec![
+            test_entry(
+                SkillSourceKind::Host,
+                "host",
+                "host/consumer",
+                "consumer/SKILL.md",
+            )
+            .with_dependencies(skill_deps(&["provider"])),
+            test_entry(
+                SkillSourceKind::Host,
+                "host",
+                "host/provider",
+                "provider/SKILL.md",
+            ),
+        ],
+        "$consumer and also $provider",
+    )
+    .await;
+
+    let flat = rendered.join("\n");
+    assert_eq!(
+        flat.matches("<name>provider</name>").count(),
+        1,
+        "provider should be injected exactly once: {flat}"
+    );
+    let provider = position_of(&rendered, "<name>provider</name>");
+    let consumer = position_of(&rendered, "<name>consumer</name>");
+    assert!(provider < consumer);
+    Ok(())
+}
+
+#[tokio::test]
+async fn cyclic_skill_dependencies_are_injected_in_stable_order() -> TestResult {
+    let rendered = contribute_text_with_catalog(
+        vec![
+            test_entry(SkillSourceKind::Host, "host", "host/a", "a/SKILL.md")
+                .with_dependencies(skill_deps(&["b"])),
+            test_entry(SkillSourceKind::Host, "host", "host/b", "b/SKILL.md")
+                .with_dependencies(skill_deps(&["a"])),
+        ],
+        "$a please",
+    )
+    .await;
+
+    // Both skills are injected; the cycle must not hang or drop either one.
+    position_of(&rendered, "<name>a</name>");
+    position_of(&rendered, "<name>b</name>");
+    Ok(())
+}
+
+#[tokio::test]
+async fn dependency_injected_skills_carry_dependency_annotation() -> TestResult {
+    let rendered = contribute_text_with_catalog(
+        vec![
+            test_entry(SkillSourceKind::Host, "host", "host/consumer", "consumer/SKILL.md")
+                .with_dependencies(skill_deps(&["provider"])),
+            test_entry(SkillSourceKind::Host, "host", "host/provider", "provider/SKILL.md"),
+        ],
+        "$consumer please",
+    )
+    .await;
+
+    let flat = rendered.join("\n");
+    assert!(
+        flat.contains("(injected as a dependency of 'consumer')"),
+        "dependency annotation missing: {flat}"
+    );
+    assert_eq!(
+        flat.matches("injected as a dependency").count(),
+        1,
+        "only the dependency-brought skill should carry the annotation: {flat}"
+    );
+    Ok(())
 }

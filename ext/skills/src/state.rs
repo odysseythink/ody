@@ -18,6 +18,7 @@ use crate::catalog::SkillPackageId;
 use crate::catalog::SkillProviderError;
 use crate::catalog::SkillProviderResult;
 use crate::catalog::SkillReadResult;
+use crate::selection::SelectedSkill;
 use crate::catalog::SkillResourceId;
 use crate::catalog::SkillSourceKind;
 use crate::provider::SkillReadRequest;
@@ -227,7 +228,7 @@ impl OrchestratorResourceCache {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct SkillsTurnState {
     pub(crate) catalog: SkillCatalog,
-    pub(crate) selected_entries: Vec<SkillCatalogEntry>,
+    pub(crate) selected_entries: Vec<SelectedSkill>,
     pub(crate) knowledge_entries: Vec<SkillCatalogEntry>,
     pub(crate) warnings: Vec<String>,
     pub(crate) main_prompts_injected: bool,

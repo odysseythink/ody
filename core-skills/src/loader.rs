@@ -1,4 +1,5 @@
 use crate::model::SkillDependencies;
+use crate::model::SkillDependency;
 use crate::model::SkillError;
 use crate::model::SkillInterface;
 use crate::model::SkillLoadOutcome;
@@ -95,6 +96,8 @@ struct Interface {
 struct Dependencies {
     #[serde(default)]
     tools: Vec<DependencyTool>,
+    #[serde(default)]
+    skills: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -132,6 +135,7 @@ const MAX_DEPENDENCY_VALUE_LEN: usize = MAX_DESCRIPTION_LEN;
 const MAX_DEPENDENCY_DESCRIPTION_LEN: usize = MAX_DESCRIPTION_LEN;
 const MAX_DEPENDENCY_COMMAND_LEN: usize = MAX_DESCRIPTION_LEN;
 const MAX_DEPENDENCY_URL_LEN: usize = MAX_DESCRIPTION_LEN;
+const MAX_DEPENDENCY_SKILL_COUNT: usize = 32;
 // Traversal depth from the skills root.
 const MAX_SCAN_DEPTH: usize = 6;
 const MAX_SKILLS_DIRS_PER_ROOT: usize = 2000;
@@ -759,6 +763,12 @@ async fn parse_skill_file(
     let mermaid = extract_fenced_block(&contents, "mermaid");
     let d2 = extract_fenced_block(&contents, "d2");
 
+    let flow_artifact = if matches!(skill_type, SkillType::Flow) {
+        Some(load_flow_artifact(fs, &resolved_path).await?)
+    } else {
+        None
+    };
+
     Ok(SkillMetadata {
         name,
         description,
@@ -767,6 +777,7 @@ async fn parse_skill_file(
         dependencies,
         policy,
         path_to_skills_md: resolved_path,
+        flow_artifact,
         scope,
         plugin_id: plugin_id.map(str::to_string),
         skill_type,
@@ -776,6 +787,37 @@ async fn parse_skill_file(
         mermaid,
         d2,
     })
+}
+
+const FLOW_ARTIFACT_FILENAME: &str = "flow.yaml";
+
+/// Flow skills must carry a valid `flow.yaml` next to their SKILL.md.
+/// The artifact is validated eagerly at load time; the runtime re-reads
+/// it from the recorded path when the flow is triggered.
+async fn load_flow_artifact(
+    fs: &dyn ExecutorFileSystem,
+    skills_md_path: &AbsolutePathBuf,
+) -> Result<AbsolutePathBuf, SkillParseError> {
+    let Some(skill_dir) = skills_md_path.parent() else {
+        return Err(SkillParseError::InvalidField {
+            field: "flow",
+            reason: format!(
+                "cannot resolve skill directory for {}",
+                skills_md_path.display()
+            ),
+        });
+    };
+    let artifact_path = skill_dir.join(FLOW_ARTIFACT_FILENAME);
+    let path_uri = PathUri::from_abs_path(&artifact_path);
+    let contents = fs
+        .read_file_text(&path_uri, /*sandbox*/ None)
+        .await
+        .map_err(|_| SkillParseError::MissingField(FLOW_ARTIFACT_FILENAME))?;
+    crate::flow::parse_flow_plan(&contents).map_err(|err| SkillParseError::InvalidField {
+        field: "flow",
+        reason: err.to_string(),
+    })?;
+    Ok(artifact_path)
 }
 
 fn default_skill_name(path: &AbsolutePathBuf) -> String {
@@ -928,10 +970,22 @@ fn resolve_dependencies(dependencies: Option<Dependencies>) -> Option<SkillDepen
         .into_iter()
         .filter_map(resolve_dependency_tool)
         .collect();
-    if tools.is_empty() {
+    let mut skills: Vec<SkillDependency> = Vec::new();
+    for raw_name in dependencies.skills {
+        if skills.len() >= MAX_DEPENDENCY_SKILL_COUNT {
+            tracing::warn!(
+                "dependencies.skills truncated after {MAX_DEPENDENCY_SKILL_COUNT} entries"
+            );
+            break;
+        }
+        if let Some(name) = resolve_str(Some(raw_name), MAX_NAME_LEN, "dependencies.skills") {
+            skills.push(SkillDependency { name });
+        }
+    }
+    if tools.is_empty() && skills.is_empty() {
         None
     } else {
-        Some(SkillDependencies { tools })
+        Some(SkillDependencies { tools, skills })
     }
 }
 
