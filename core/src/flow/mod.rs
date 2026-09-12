@@ -64,6 +64,8 @@ mod schema;
 #[cfg(feature = "flow-starlark")]
 mod star;
 mod trigger;
+#[cfg(feature = "flow-v8")]
+mod v8;
 
 pub(crate) use checkpoint::CheckpointStore;
 pub(crate) use checkpoint::plan_fingerprint;
@@ -73,6 +75,8 @@ pub(crate) use runner::SessionFlowRunner;
 pub(crate) use host::SessionFlowAgentHost;
 #[cfg(feature = "flow-starlark")]
 pub(crate) use star::StarlarkFlowRuntime;
+#[cfg(feature = "flow-v8")]
+pub(crate) use v8::V8FlowRuntime;
 pub(crate) use trigger::flow_args_from_input;
 pub(crate) use trigger::partition_flow_skills;
 pub(crate) use trigger::run_flow_skills_in_turn;

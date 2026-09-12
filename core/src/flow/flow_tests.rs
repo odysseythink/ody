@@ -2364,6 +2364,8 @@ async fn flow_interrupt_releases_subagent_slot_for_immediate_resume() {
 
 #[cfg(feature = "flow-starlark")]
 use super::StarlarkFlowRuntime;
+#[cfg(feature = "flow-v8")]
+use super::V8FlowRuntime;
 use super::select_flow_runtime;
 
 #[test]
@@ -2567,6 +2569,56 @@ result = agent('step two using ' + first)
             .await
             .unwrap();
         assert!(outcome.outputs.is_empty());
+    }
+}
+
+#[cfg(feature = "flow-v8")]
+mod js {
+    use super::*;
+
+    fn js_validate(runtime: &V8FlowRuntime, source: &str) -> FlowPlanSource {
+        runtime.validate(source).expect("fixture script should validate")
+    }
+
+    #[test]
+    fn js_runtime_reports_supported_artifact_and_validates() {
+        assert_eq!(V8FlowRuntime.supported_artifact(), "workflow.js");
+        assert!(V8FlowRuntime.validate("var result = 1;\n").is_ok());
+        assert!(matches!(
+            V8FlowRuntime.validate("export const x = ;\n"),
+            Err(FlowError::Parse { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn js_sequential_agents_and_args_interpolation() {
+        let host = MockHost::default();
+        let source = r#"
+const first = await agent("write about " + args.topic);
+var result = await agent("summarize " + first);
+"#;
+        let plan = js_validate(&V8FlowRuntime, source);
+        let outcome = V8FlowRuntime
+            .run(
+                plan,
+                FlowContext {
+                    args: serde_json::json!({"topic": "otters"}).as_object().unwrap().clone(),
+                },
+                &host,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            outcome.outputs["result"],
+            json!("done: summarize done: write about otters")
+        );
+        assert_eq!(
+            *host.prompts.lock().unwrap(),
+            vec![
+                "write about otters".to_string(),
+                "summarize done: write about otters".to_string()
+            ]
+        );
     }
 }
 

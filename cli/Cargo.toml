@@ -33,6 +33,10 @@ debug-app-server-client = ["dep:ody-app-server-test-client"]
 # builds skip compiling/linking V8; release/packaging builds must pass
 # `--features v8` for code mode to work at runtime.
 v8 = ["ody-core/v8"]
+# The V8-backed `workflow.js` Flow runtime (implies `ody-core/v8`, so it
+# also compiles/links V8). Off by default; release/packaging builds that
+# ship workflow.js flows pass `--features flow-v8`.
+flow-v8 = ["ody-core/flow-v8"]
 # Enables the Windows restricted-token/elevated sandbox backend. Off by default
 # so local dev builds skip compiling/linking the Windows sandbox crate; release
 # / packaging builds for Windows must pass `--features windows-sandbox` for
