@@ -27,8 +27,8 @@ phases:
     assert_eq!(plan.phases[0].steps.len(), 1);
     assert!(matches!(
         &plan.phases[0].steps[0],
-        FlowStep::Agent { agent, output }
-            if agent == "Generate a GDD." && output.as_deref() == Some("gdd")
+        FlowStep::Agent { agent, output, schema }
+            if agent == "Generate a GDD." && output.as_deref() == Some("gdd") && schema.is_none()
     ));
     assert_eq!(plan.phases[1].steps.len(), 2);
     assert!(matches!(
@@ -91,5 +91,52 @@ fn rejects_unknown_top_level_field() {
     assert!(
         parse_flow_plan("name: x\nbogus: y\nphases:\n  - id: x\n    steps:\n      - agent: do it\n")
             .is_err()
+    );
+}
+
+#[test]
+fn parses_agent_step_with_schema() {
+    // M2.4: an agent step may carry an optional JSON-schema subset used by
+    // the runtime for reply validation and retry.
+    let plan = parse_flow_plan(
+        r#"
+phases:
+  - id: design
+    steps:
+      - agent: Generate a GDD.
+        output: gdd
+        schema:
+          type: object
+          required: [mechanics]
+          properties:
+            mechanics:
+              type: array
+              items:
+                type: object
+                required: [name]
+                properties:
+                  name: { type: string }
+"#,
+    )
+    .expect("agent step with schema should parse");
+    let FlowStep::Agent { schema, .. } = &plan.phases[0].steps[0] else {
+        panic!("expected an agent step");
+    };
+    let schema = schema.as_ref().expect("schema should be present");
+    assert_eq!(schema["type"], serde_json::json!("object"));
+    assert_eq!(
+        schema["properties"]["mechanics"]["items"]["required"][0],
+        serde_json::json!("name")
+    );
+}
+
+#[test]
+fn rejects_agent_step_with_malformed_schema_shape() {
+    // `schema` must be a JSON object; scalar shapes are rejected at parse.
+    assert!(
+        parse_flow_plan(
+            "phases:\n  - id: x\n    steps:\n      - agent: do it\n        schema: not-an-object\n"
+        )
+        .is_err()
     );
 }

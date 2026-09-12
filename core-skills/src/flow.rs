@@ -35,10 +35,17 @@ pub struct FlowPhase {
 pub enum FlowStep {
     /// Run one agent with the given prompt; optionally bind its result to
     /// `output` for use by later steps via `${{ name }}` interpolation.
+    ///
+    /// An optional `schema` (a JSON-schema subset) constrains the reply
+    /// (M2.4): the runtime injects the schema requirements into the prompt
+    /// tail, parses the reply as JSON, validates it, and retries up to 3
+    /// attempts before failing the step.
     Agent {
         agent: String,
         #[serde(default)]
         output: Option<String>,
+        #[serde(default)]
+        schema: Option<serde_json::Map<String, serde_json::Value>>,
     },
     /// Fan out one agent per item produced by the `pipeline` expression.
     Pipeline {

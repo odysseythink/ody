@@ -48,7 +48,7 @@ impl FlowPlanSummary {
 
 fn step_summary(step: &FlowStep) -> StepSummary {
     match step {
-        FlowStep::Agent { agent, output } => {
+        FlowStep::Agent { agent, output, schema: _ } => {
             StepSummary::Agent { preview: preview(agent), output: output.clone() }
         }
         FlowStep::Pipeline { pipeline, each, output } => StepSummary::Pipeline {

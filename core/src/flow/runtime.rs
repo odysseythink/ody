@@ -16,6 +16,7 @@ use super::FLOW_BATCH_LIMIT;
 use super::FlowAgentHost;
 use super::FlowContext;
 use super::FlowError;
+use super::FlowHostError;
 use super::FlowOutcome;
 use super::FlowProgress;
 use super::FlowRuntime;
@@ -143,9 +144,16 @@ fn run_step<'a, H: FlowAgentHost>(
 ) -> BoxFuture<'a, Result<Value, FlowError>> {
     Box::pin(async move {
         match step {
-        FlowStep::Agent { agent, output } => {
-            let prompt = render_template(agent, &TemplateContext { bindings, item: None }, label)?;
-            let value = run_one_agent(host, prompt, label).await?;
+        FlowStep::Agent { agent, output, schema } => {
+            let rendered = render_template(agent, &TemplateContext { bindings, item: None }, label)?;
+            // M2.4: a schema-constrained agent gets its JSON requirements
+            // injected at the prompt tail; the schema participates in the
+            // checkpoint key through the rendered prompt.
+            let prompt = match schema {
+                Some(schema) => append_schema_instruction(rendered, schema),
+                None => rendered,
+            };
+            let value = run_one_agent(host, prompt, label, schema.as_ref()).await?;
             if let Some(name) = output {
                 bind_output(bindings, name, value.clone(), label)?;
             }
@@ -277,7 +285,7 @@ async fn run_agent_batch<H: FlowAgentHost>(
         Vec::with_capacity(prompts.len());
     for (index, prompt) in prompts.into_iter().enumerate() {
         pending.push(Box::pin(async move {
-            let value = run_one_agent(host, prompt, label).await?;
+            let value = run_one_agent(host, prompt, label, None).await?;
             Ok((index, value))
         }));
     }
@@ -294,23 +302,81 @@ async fn run_agent_batch<H: FlowAgentHost>(
         .collect())
 }
 
+/// Maximum attempts for schema-constrained agents (M2.4): the initial try
+/// plus retries after parse/validation failures.
+const SCHEMA_MAX_ATTEMPTS: usize = 3;
+
 async fn run_one_agent<H: FlowAgentHost>(
     host: &H,
     prompt: String,
     label: &str,
+    schema: Option<&serde_json::Map<String, Value>>,
 ) -> Result<Value, FlowError> {
     if let Some(cached) = host.checkpoint_read(&prompt).await {
         return Ok(parse_agent_output(&cached));
     }
-    let raw = host
-        .run_agent(prompt.clone())
-        .await
-        .map_err(|source| FlowError::Agent {
-            step: label.to_string(),
-            source,
-        })?;
-    host.checkpoint_write(&prompt, &raw).await;
-    Ok(parse_agent_output(&raw))
+    // Without a schema the loop runs exactly once and behaves like the
+    // pre-M2.4 path. With a schema, each validation failure feeds its
+    // reason back into the retry prompt.
+    let mut last_reason: Option<String> = None;
+    for _attempt in 1..=SCHEMA_MAX_ATTEMPTS {
+        let attempt_prompt = match &last_reason {
+            Some(reason) => format!(
+                "{prompt}\n\nYour previous reply failed validation: {reason}\nReply again with corrected JSON only."
+            ),
+            None => prompt.clone(),
+        };
+        let raw = host
+            .run_agent(attempt_prompt)
+            .await
+            .map_err(|source| FlowError::Agent {
+                step: label.to_string(),
+                source,
+            })?;
+        match validate_agent_output(&raw, schema) {
+            Ok(value) => {
+                host.checkpoint_write(&prompt, &raw).await;
+                return Ok(value);
+            }
+            Err(reason) => last_reason = Some(reason),
+        }
+    }
+    Err(FlowError::Agent {
+        step: label.to_string(),
+        source: FlowHostError(format!(
+            "schema validation failed after {SCHEMA_MAX_ATTEMPTS} attempts: {}",
+            last_reason.expect("a reason is recorded after each failed attempt")
+        )),
+    })
+}
+
+/// Schema-constrained replies must be valid JSON satisfying the schema
+/// subset; unconstrained replies keep the historical parse-or-string
+/// behavior.
+fn validate_agent_output(
+    raw: &str,
+    schema: Option<&serde_json::Map<String, Value>>,
+) -> Result<Value, String> {
+    let Some(schema) = schema else {
+        return Ok(parse_agent_output(raw));
+    };
+    let value: Value = serde_json::from_str(raw.trim())
+        .map_err(|err| format!("reply is not valid JSON: {err}"))?;
+    super::schema::validate_against_schema(&value, schema)?;
+    Ok(value)
+}
+
+/// Render the JSON-schema requirements appended to a schema-constrained
+/// agent's prompt.
+fn append_schema_instruction(
+    rendered: String,
+    schema: &serde_json::Map<String, Value>,
+) -> String {
+    let schema_text = serde_json::to_string_pretty(&Value::Object(schema.clone()))
+        .unwrap_or_else(|_| "<unprintable schema>".to_string());
+    format!(
+        "{rendered}\n\nReply with JSON only (no prose, no markdown fences) matching this schema:\n{schema_text}"
+    )
 }
 
 /// Agent results are stored as parsed JSON when possible, else as the raw string.

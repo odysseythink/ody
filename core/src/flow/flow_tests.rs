@@ -1618,3 +1618,234 @@ async fn flow_runner_reports_inactive_turn_after_turn_drop() {
     };
     assert_eq!(reported, turn_id);
 }
+
+
+// ---- M2.4 schema validation + retry tests ----
+
+const GDD_SCHEMA_YAML: &str = r#"
+phases:
+  - id: design
+    steps:
+      - agent: Generate a GDD.
+        output: gdd
+        schema:
+          type: object
+          required: [mechanics]
+          properties:
+            mechanics:
+              type: array
+              items:
+                type: object
+                required: [name]
+                properties:
+                  name: { type: string }
+"#;
+
+const VALID_GDD: &str = r#"{"mechanics":[{"name":"jump"}]}"#;
+
+#[tokio::test]
+async fn schema_agent_accepts_valid_json_and_injects_schema_in_prompt() {
+    let host = MockHost::with(vec![Ok(VALID_GDD.to_string())]);
+    let plan = validate(&YamlFlowRuntime, GDD_SCHEMA_YAML);
+    let outcome = YamlFlowRuntime
+        .run(
+            plan,
+            FlowContext {
+                args: serde_json::Map::from_iter([("theme".to_string(), json!("space"))]),
+            },
+            &host,
+        )
+        .await
+        .expect("valid JSON should pass validation");
+
+    assert_eq!(outcome.outputs["gdd"], json!({"mechanics": [{"name": "jump"}]}));
+    let prompts = host.prompts.lock().unwrap();
+    assert_eq!(prompts.len(), 1, "one spawn expected");
+    // The schema requirements are injected at the prompt tail.
+    assert!(prompts[0].starts_with("Generate a GDD."), "missing template render: {}", prompts[0]);
+    assert!(prompts[0].contains("Reply with JSON only"), "missing schema instruction: {}", prompts[0]);
+    assert!(prompts[0].contains("\"mechanics\""), "missing schema body: {}", prompts[0]);
+}
+
+#[tokio::test]
+async fn schema_agent_retries_bad_json_with_failure_feedback() {
+    let host = MockHost::with(vec![
+        Ok("not json at all".to_string()),
+        Ok(VALID_GDD.to_string()),
+    ]);
+    let plan = validate(&YamlFlowRuntime, GDD_SCHEMA_YAML);
+    let outcome = YamlFlowRuntime
+        .run(plan, FlowContext::default(), &host)
+        .await
+        .expect("retry after bad JSON should succeed");
+
+    assert_eq!(outcome.outputs["gdd"], json!({"mechanics": [{"name": "jump"}]}));
+    let prompts = host.prompts.lock().unwrap();
+    assert_eq!(prompts.len(), 2, "bad JSON then retry");
+    assert!(
+        prompts[1].contains("failed validation"),
+        "retry prompt should carry the failure reason: {}",
+        prompts[1]
+    );
+    assert!(
+        prompts[1].contains("not valid JSON"),
+        "retry prompt should name the parse failure: {}",
+        prompts[1]
+    );
+}
+
+#[tokio::test]
+async fn schema_agent_retries_schema_mismatch_up_to_three_attempts() {
+    // Two schema mismatches (valid JSON, wrong shape) then a valid reply:
+    // three spawns total, success on the last.
+    let bad_shape = r#"{"mechanics":[{"title":"jump"}]}"#;
+    let host = MockHost::with(vec![
+        Ok(bad_shape.to_string()),
+        Ok(bad_shape.to_string()),
+        Ok(VALID_GDD.to_string()),
+    ]);
+    let plan = validate(&YamlFlowRuntime, GDD_SCHEMA_YAML);
+    let outcome = YamlFlowRuntime
+        .run(plan, FlowContext::default(), &host)
+        .await
+        .expect("third attempt should succeed");
+
+    assert_eq!(outcome.outputs["gdd"]["mechanics"][0]["name"], "jump");
+    assert_eq!(host.prompts.lock().unwrap().len(), 3);
+}
+
+#[tokio::test]
+async fn schema_agent_fails_after_three_failed_attempts() {
+    let bad_shape = r#"{"mechanics":[{"title":"jump"}]}"#;
+    let host = MockHost::with(vec![
+        Ok(bad_shape.to_string()),
+        Ok(bad_shape.to_string()),
+        Ok(bad_shape.to_string()),
+        Ok(VALID_GDD.to_string()),
+    ]);
+    let plan = validate(&YamlFlowRuntime, GDD_SCHEMA_YAML);
+    let err = YamlFlowRuntime
+        .run(plan, FlowContext::default(), &host)
+        .await
+        .expect_err("three failed attempts must short-circuit");
+
+    let FlowError::Agent { step, source } = err else {
+        panic!("expected an agent failure, got {err:?}");
+    };
+    assert_eq!(step, "phase 'design' step 1 (agent)");
+    assert!(
+        source.0.contains("schema validation failed after 3 attempts"),
+        "unexpected source: {source}"
+    );
+    assert!(
+        source.0.contains("missing required property 'name'"),
+        "failure should name the schema mismatch: {source}"
+    );
+    // The fourth scripted response must never be consumed.
+    assert_eq!(host.prompts.lock().unwrap().len(), 3, "no fourth spawn");
+}
+
+#[tokio::test]
+async fn schema_agent_records_checkpoint_under_original_prompt_key() {
+    let host = MemCheckpointHost {
+        inner: MockHost::with(vec![Ok("not json".to_string()), Ok(VALID_GDD.to_string())]),
+        ..Default::default()
+    };
+    let plan = validate(&YamlFlowRuntime, GDD_SCHEMA_YAML);
+    let outcome = YamlFlowRuntime
+        .run(plan, FlowContext::default(), &host)
+        .await
+        .expect("retry should succeed");
+
+    assert_eq!(outcome.outputs["gdd"]["mechanics"][0]["name"], "jump");
+    // Retry feedback prompts are spawns; the checkpoint key is the
+    // original (schema-injected) prompt, so a resume replays the validated
+    // result without re-running the agent.
+    let cache = host.cache.lock().unwrap();
+    assert_eq!(cache.len(), 1, "exactly one checkpoint entry");
+    let (key, value) = cache.iter().next().expect("one entry");
+    assert!(key.contains("Reply with JSON only"), "key should be the schema-injected prompt");
+    assert_eq!(value, VALID_GDD);
+    drop(cache);
+    assert_eq!(host.inner.prompts.lock().unwrap().len(), 2, "initial try plus one retry");
+}
+
+#[tokio::test]
+async fn schema_agent_replays_validated_result_from_checkpoint() {
+    // A recorded entry replays directly: resume never re-spawns the agent
+    // nor re-runs validation (the checkpoint memoizes a validated result).
+    let first = MemCheckpointHost {
+        inner: MockHost::with(vec![Ok("not json".to_string()), Ok(VALID_GDD.to_string())]),
+        ..Default::default()
+    };
+    let plan = validate(&YamlFlowRuntime, GDD_SCHEMA_YAML);
+    let first_outcome = YamlFlowRuntime
+        .run(plan.clone(), FlowContext::default(), &first)
+        .await
+        .expect("first run should succeed after retry");
+    assert_eq!(first_outcome.outputs["gdd"]["mechanics"][0]["name"], "jump");
+
+    // Second run over a shared cache with a poisoned host: any spawn fails,
+    // so success proves the replay path.
+    let poisoned = MemCheckpointHost {
+        inner: MockHost::with(vec![Err("must not spawn".to_string())]),
+        cache: first.cache.clone(),
+    };
+    let outcome = YamlFlowRuntime
+        .run(plan, FlowContext::default(), &poisoned)
+        .await
+        .expect("checkpoint replay should succeed");
+
+    assert_eq!(outcome.outputs["gdd"]["mechanics"][0]["name"], "jump");
+    assert!(
+        poisoned.inner.prompts.lock().unwrap().is_empty(),
+        "cached agent must not re-spawn"
+    );
+}
+
+#[tokio::test]
+async fn schema_agent_host_failure_short_circuits_without_retry() {
+    // A host failure is not a validation failure: no retries.
+    let host = MockHost::with(vec![Err("subagent crashed".to_string())]);
+    let plan = validate(&YamlFlowRuntime, GDD_SCHEMA_YAML);
+    let err = YamlFlowRuntime
+        .run(plan, FlowContext::default(), &host)
+        .await
+        .expect_err("host failure must short-circuit");
+
+    assert!(
+        matches!(err, FlowError::Agent { ref source, .. } if source.0 == "subagent crashed"),
+        "unexpected error: {err:?}"
+    );
+    assert_eq!(host.prompts.lock().unwrap().len(), 1, "no retry on host failure");
+}
+
+#[tokio::test]
+async fn unconstrained_agent_keeps_parse_or_string_behavior() {
+    // Regression: agents without a schema keep the historical behavior of
+    // parsing JSON when possible and falling back to the raw string.
+    let host = MockHost::with(vec![Ok("plain text result".to_string())]);
+    let plan = validate(
+        &YamlFlowRuntime,
+        "phases:\n  - id: p\n    steps:\n      - agent: Do ${{ args.text }}\n        output: r\n",
+    );
+    let outcome = YamlFlowRuntime
+        .run(
+            plan,
+            FlowContext {
+                args: serde_json::Map::from_iter([("text".to_string(), json!("it"))]),
+            },
+            &host,
+        )
+        .await
+        .expect("unconstrained agent should succeed");
+
+    assert_eq!(outcome.outputs["r"], json!("plain text result"));
+    let prompts = host.prompts.lock().unwrap();
+    assert_eq!(prompts.len(), 1);
+    assert!(
+        !prompts[0].contains("Reply with JSON only"),
+        "no schema injection without a schema: {}",
+        prompts[0]
+    );
+}

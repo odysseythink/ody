@@ -60,6 +60,7 @@ mod host;
 mod plan_summary;
 mod runner;
 mod runtime;
+mod schema;
 mod trigger;
 
 pub(crate) use checkpoint::CheckpointStore;
