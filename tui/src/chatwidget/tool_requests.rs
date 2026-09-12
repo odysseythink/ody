@@ -82,6 +82,9 @@ impl ChatWidget {
             GuardianAssessmentAction::DatabaseWrite { connection, .. } => {
                 Some(format!("database write on {connection}"))
             }
+            GuardianAssessmentAction::FlowRun { flow_name } => {
+                Some(format!("flow run '{flow_name}'"))
+            }
         };
         let guardian_command = |action: &GuardianAssessmentAction| match action {
             GuardianAssessmentAction::Command { command, .. } => shlex::split(command)
@@ -98,7 +101,8 @@ impl ChatWidget {
             | GuardianAssessmentAction::McpToolCall { .. }
             | GuardianAssessmentAction::RequestPermissions { .. }
             | GuardianAssessmentAction::BrowserAction { .. }
-            | GuardianAssessmentAction::DatabaseWrite { .. } => None,
+            | GuardianAssessmentAction::DatabaseWrite { .. }
+            | GuardianAssessmentAction::FlowRun { .. } => None,
         };
 
         if ev.status == GuardianAssessmentStatus::InProgress
@@ -217,6 +221,11 @@ impl ChatWidget {
                             "ody could run database write on {connection}"
                         ))
                     }
+                    GuardianAssessmentAction::FlowRun { flow_name } => {
+                        history_cell::new_guardian_timed_out_action_request(format!(
+                            "ody could run flow '{flow_name}'"
+                        ))
+                    }
                     GuardianAssessmentAction::Command { .. } => unreachable!(),
                     GuardianAssessmentAction::Execve { .. } => unreachable!(),
                 }
@@ -270,6 +279,11 @@ impl ChatWidget {
                 GuardianAssessmentAction::DatabaseWrite { connection, .. } => {
                     history_cell::new_guardian_denied_action_request(format!(
                         "ody to run database write on {connection}"
+                    ))
+                }
+                GuardianAssessmentAction::FlowRun { flow_name } => {
+                    history_cell::new_guardian_denied_action_request(format!(
+                        "ody to run flow '{flow_name}'"
                     ))
                 }
                 GuardianAssessmentAction::Command { .. } => unreachable!(),

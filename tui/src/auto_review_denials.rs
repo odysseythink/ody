@@ -77,6 +77,9 @@ pub(crate) fn action_summary(action: &GuardianAssessmentAction) -> String {
         GuardianAssessmentAction::DatabaseWrite { connection, .. } => {
             format!("database write on {connection}")
         }
+        GuardianAssessmentAction::FlowRun { flow_name } => {
+            format!("flow run '{flow_name}'")
+        }
     }
 }
 
