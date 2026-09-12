@@ -2379,6 +2379,11 @@ fn select_flow_runtime_picks_yaml_and_rejects_unknown_artifacts() {
         select_flow_runtime("flow.star").expect("starlark runtime"),
         super::AnyFlowRuntime::Starlark(_)
     ));
+    #[cfg(feature = "flow-v8")]
+    assert!(matches!(
+        select_flow_runtime("workflow.js").expect("v8 runtime"),
+        super::AnyFlowRuntime::V8(_)
+    ));
     assert!(matches!(
         select_flow_runtime("flow.toml"),
         Err(FlowError::Parse { .. })
@@ -2620,15 +2625,123 @@ var result = await agent("summarize " + first);
             ]
         );
     }
+
+    #[tokio::test]
+    async fn js_agent_failure_fails_the_run() {
+        let host = MockHost::with(vec![Err("boom".to_string())]);
+        let source = r#"var result = await agent("explode");"#;
+        let plan = js_validate(&V8FlowRuntime, source);
+        let err = V8FlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .expect_err("agent failure must fail the run");
+        assert!(err.to_string().contains("boom"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn js_pipeline_binds_results_in_item_order() {
+        let host = SlowFirstHost;
+        let source = r#"var result = await pipeline(["1", "2", "3"], (i) => "item " + i);"#;
+        let plan = js_validate(&V8FlowRuntime, source);
+        let outcome = V8FlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .unwrap();
+        // SlowFirstHost completes later items sooner; order must hold.
+        assert_eq!(outcome.outputs["result"], json!(["r1", "r2", "r3"]));
+    }
+
+    #[tokio::test]
+    async fn js_parallel_and_phase_reports_progress() {
+        let host = RecordingHost::default();
+        let source = r#"
+phase("verify");
+var result = await parallel([() => "Review", () => "Test"]);
+"#;
+        let plan = js_validate(&V8FlowRuntime, source);
+        let outcome = V8FlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .unwrap();
+        assert_eq!(outcome.outputs["result"], json!(["done: Review", "done: Test"]));
+        assert_eq!(
+            *host.progress.lock().unwrap(),
+            vec![FlowProgress::Log { message: "verify".to_string() }]
+        );
+    }
+
+    /// M2.1 checkpoint/replay must apply to the v8 carrier too: a cached
+    /// prompt skips the spawn; completed calls are recorded.
+    #[tokio::test]
+    async fn js_checkpoint_replay_skips_completed_agents() {
+        let store = Arc::new(Mutex::new(std::collections::HashMap::new()));
+        let host = CheckpointMockHost { store: Arc::clone(&store), prompts: Mutex::new(Vec::new()) };
+        let source = r#"
+const first = await agent("step one");
+var result = await agent("step two using " + first);
+"#;
+        // Run 1: both agents run, both recorded.
+        let plan = js_validate(&V8FlowRuntime, source);
+        let outcome = V8FlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .unwrap();
+        assert_eq!(outcome.outputs["result"], json!("done:step two using done:step one"));
+        assert_eq!(store.lock().unwrap().len(), 2);
+
+        // Run 2 (same source): every prompt hits the cache, zero spawns.
+        let plan = js_validate(&V8FlowRuntime, source);
+        let outcome = V8FlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .unwrap();
+        assert_eq!(outcome.outputs["result"], json!("done:step two using done:step one"));
+        assert_eq!(
+            *host.prompts.lock().unwrap(),
+            vec!["step one".to_string(), "step two using done:step one".to_string()]
+        );
+    }
+
+    #[tokio::test]
+    async fn js_pipeline_enforces_batch_limit() {
+        let host = MockHost::default();
+        let many: Vec<String> =
+            (0..super::super::FLOW_BATCH_LIMIT + 1).map(|i| i.to_string()).collect();
+        let source = format!(
+            r#"var result = await pipeline({many_json}, (i) => "item " + i);"#,
+            many_json = serde_json::to_string(&many).unwrap()
+        );
+        let plan = js_validate(&V8FlowRuntime, &source);
+        let err = V8FlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .expect_err("batch over the cap must fail");
+        assert!(
+            err.to_string().contains("batch of 4097 exceeds the limit of 4096"),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn js_unset_result_yields_empty_outputs() {
+        let host = MockHost::default();
+        let source = r#"await agent("side effect only");"#;
+        let plan = js_validate(&V8FlowRuntime, source);
+        let outcome = V8FlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .unwrap();
+        assert!(outcome.outputs.is_empty());
+    }
 }
 
-#[cfg(feature = "flow-starlark")]
+#[cfg(any(feature = "flow-starlark", feature = "flow-v8"))]
 struct CheckpointMockHost {
     store: Arc<Mutex<std::collections::HashMap<String, String>>>,
     prompts: Mutex<Vec<String>>,
 }
 
-#[cfg(feature = "flow-starlark")]
+#[cfg(any(feature = "flow-starlark", feature = "flow-v8"))]
 impl FlowAgentHost for CheckpointMockHost {
     async fn run_agent(&self, prompt: String) -> Result<String, FlowHostError> {
         self.prompts.lock().unwrap().push(prompt.clone());
@@ -2712,6 +2825,70 @@ result = {"gdd": gdd, "impls": impls, "checks": checks}
     assert_eq!(yaml_prompts, star_prompts);
     assert_eq!(
         star_outcome.outputs["result"],
+        serde_json::Value::Object(yaml_outcome.outputs.clone())
+    );
+}
+
+/// M3 conformance (parent report §7 drift guard), v8 arm: the same logical
+/// plan written in `workflow.js` must produce the same prompt multiset and
+/// the same `result` as the yaml and starlark carriers (see
+/// `conformance_yaml_and_starlark_agree_on_calls_and_outputs`). Gated on
+/// both script features so the default and `--features flow-v8` CI matrix
+/// entries both compile and run it.
+#[cfg(all(feature = "flow-starlark", feature = "flow-v8"))]
+#[tokio::test]
+async fn conformance_v8_matches_yaml_and_starlark_calls_and_outputs() {
+    #[derive(Default)]
+    struct ConformanceHost {
+        prompts: Mutex<Vec<String>>,
+    }
+
+    impl FlowAgentHost for ConformanceHost {
+        async fn run_agent(&self, prompt: String) -> Result<String, FlowHostError> {
+            self.prompts.lock().unwrap().push(prompt.clone());
+            if prompt == "Generate for otters" {
+                Ok("{\"items\": [\"a\", \"b\"]}".to_string())
+            } else {
+                Ok(format!("done: {prompt}"))
+            }
+        }
+    }
+
+    let yaml_source = "phases:\n  - id: design\n    steps:\n      - agent: Generate for ${{ args.topic }}\n        output: gdd\n  - id: impl\n    steps:\n      - pipeline: ${{ gdd.items }}\n        each: Implement ${item}\n        output: impls\n  - id: verify\n    steps:\n      - parallel:\n          - agent: Review\n          - agent: Test\n        output: checks\n";
+    // `var result`, not const/let: the engine mirrors the module-scope
+    // binding onto globalThis via an appended tail (see
+    // code-mode/src/runtime/workflow.rs).
+    let js_source = r#"
+phase("design");
+const gdd = JSON.parse(await agent("Generate for " + args.topic));
+phase("impl");
+const impls = await pipeline(gdd.items, (item) => "Implement " + item);
+phase("verify");
+const checks = await parallel([() => "Review", () => "Test"]);
+var result = { gdd, impls, checks };
+"#;
+
+    let yaml_host = ConformanceHost::default();
+    let plan = YamlFlowRuntime.validate(yaml_source).expect("yaml validates");
+    let yaml_outcome = YamlFlowRuntime
+        .run(plan, FlowContext { args: serde_json::json!({"topic": "otters"}).as_object().unwrap().clone() }, &yaml_host)
+        .await
+        .expect("yaml run succeeds");
+
+    let js_host = ConformanceHost::default();
+    let plan = V8FlowRuntime.validate(js_source).expect("js validates");
+    let js_outcome = V8FlowRuntime
+        .run(plan, FlowContext { args: serde_json::json!({"topic": "otters"}).as_object().unwrap().clone() }, &js_host)
+        .await
+        .expect("js run succeeds");
+
+    let mut yaml_prompts = yaml_host.prompts.lock().unwrap().clone();
+    let mut js_prompts = js_host.prompts.lock().unwrap().clone();
+    yaml_prompts.sort();
+    js_prompts.sort();
+    assert_eq!(yaml_prompts, js_prompts);
+    assert_eq!(
+        js_outcome.outputs["result"],
         serde_json::Value::Object(yaml_outcome.outputs.clone())
     );
 }
