@@ -333,6 +333,7 @@ export type { SkillMetadata } from "./SkillMetadata";
 export type { SkillScope } from "./SkillScope";
 export type { SkillSummary } from "./SkillSummary";
 export type { SkillToolDependency } from "./SkillToolDependency";
+export type { SkillType } from "./SkillType";
 export type { SkillsChangedNotification } from "./SkillsChangedNotification";
 export type { SkillsConfigWriteParams } from "./SkillsConfigWriteParams";
 export type { SkillsConfigWriteResponse } from "./SkillsConfigWriteResponse";

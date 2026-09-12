@@ -1000,3 +1000,193 @@ async fn run_flow_skills_in_turn_emits_progress_events_on_the_turn_stream() {
     assert_eq!(ends[0].completed_steps, 1);
     assert_eq!(ends[0].total_steps, 1);
 }
+
+
+// ---- M1.5 end-to-end fan-out test (mirrors the bundled game-create sample) ----
+
+/// Poll for a freshly spawned child of `parent` not yet in `driven`. Unlike
+/// `pending_child_thread_id` (first child wins), this skips threads that were
+/// already driven so fan-out batches can be drained one child at a time.
+async fn next_pending_child_thread_id(
+    manager: &ThreadManager,
+    parent: ThreadId,
+    driven: &std::collections::HashSet<ThreadId>,
+) -> Option<ThreadId> {
+    manager
+        .captured_ops()
+        .into_iter()
+        .map(|(thread_id, _)| thread_id)
+        .find(|thread_id| *thread_id != parent && !driven.contains(thread_id))
+}
+
+
+#[tokio::test]
+async fn parallel_children_inherit_snapshot_without_rebinding_it() {
+    // Regression (found by M1.5 e2e): a parallel group that runs after other
+    // steps inherits the parent bindings via its snapshot; merging a child's
+    // full binding map back would re-bind inherited names (e.g. `gdd`) and
+    // fail with "already bound". Only bindings the child itself added may
+    // merge.
+    let host = MockHost::with(vec![
+        Ok("{\"mechanics\": [\"a\"]}".to_string()),
+        Ok("done: one".to_string()),
+        Ok("done: two".to_string()),
+    ]);
+    let plan = validate(
+        &YamlFlowRuntime,
+        "phases:\n  - id: p\n    steps:\n      - agent: Gen\n        output: gdd\n      - parallel:\n          - agent: Uses ${{ gdd.mechanics }}\n          - agent: Plain\n        output: both\n",
+    );
+    let outcome = YamlFlowRuntime.run(plan, FlowContext::default(), &host).await.unwrap();
+    assert_eq!(outcome.outputs["gdd"], json!({"mechanics": ["a"]}));
+    assert_eq!(outcome.outputs["both"], json!(["done: one", "done: two"]));
+}
+
+#[tokio::test]
+async fn flow_fanout_end_to_end_spawns_progresses_and_records_outputs() {
+    // Same phase shape as the bundled game-create sample (M1.5): one design
+    // agent, a pipeline fan-out over the GDD mechanics, then a parallel
+    // verify group. Drives five real child threads through the session host.
+    let dir = tempfile::tempdir().expect("create flow dir");
+    let flow_yaml = dir.path().join("flow.yaml");
+    std::fs::write(
+        &flow_yaml,
+        r#"phases:
+  - id: design
+    steps:
+      - agent: 根据主题「${{ args.text }}」生成 GDD，JSON 输出 mechanics 与 constraints
+        output: gdd
+  - id: implement
+    steps:
+      - pipeline: ${{ gdd.mechanics }}
+        each: 实现机制 ${item.name}，遵循 ${{ gdd.constraints }}
+        output: implementations
+  - id: verify
+    steps:
+      - parallel:
+          - agent: 审查 ${{ implementations }} 的边界情况
+          - agent: 运行测试并修复失败
+        output: review
+"#,
+    )
+    .expect("write flow.yaml");
+    let skill = flow_skill_on_disk("game-create", &flow_yaml);
+
+    let (mut session, turn, rx) =
+        make_session_and_context_and_config_and_rx(Vec::new(), |config| {
+            config.agent_max_depth = 4;
+        })
+        .await;
+    let manager = flow_test_thread_manager();
+    Arc::get_mut(&mut session)
+        .expect("unique session arc")
+        .services
+        .agent_control = manager.agent_control();
+    let session = Arc::new(session);
+    // The harness returns a uniquely-owned Arc, so in-place mutation is safe.
+    let mut turn = turn;
+    install_skills(Arc::get_mut(&mut turn).expect("unique turn arc"), vec![skill.clone()]);
+    let turn = Arc::new(turn);
+    let turn = Arc::new(turn);
+
+    let run = tokio::spawn({
+        let session = session.clone();
+        let turn = turn.clone();
+        async move {
+            run_flow_skills_in_turn(
+                &session,
+                &turn,
+                std::slice::from_ref(&skill),
+                flow_args_from_input(&[user_text_input("太空跳跃")]),
+            )
+            .await
+        }
+    });
+
+    // Five agents spawn in plan order: 1 design, 2 pipeline items, 2 parallel
+    // verify agents. The first reply is the GDD JSON the pipeline fans out
+    // over; the remaining replies are plain completion messages.
+    let scripts = [
+        r#"{"mechanics":[{"name":"跳跃"},{"name":"二段跳"}],"constraints":"60fps 像素风"}"#,
+        "impl 跳跃 done",
+        "impl 二段跳 done",
+        "边界审查通过",
+        "测试全绿",
+    ];
+    let mut driven = std::collections::HashSet::new();
+    for script in scripts {
+        // Generous timeout: five spawn→wait chains under nextest load can
+        // exceed the 5s budget the single-agent tests use; success paths
+        // complete in milliseconds.
+        let thread_id = timeout(Duration::from_secs(30), async {
+            loop {
+                if let Some(thread_id) =
+                    next_pending_child_thread_id(&manager, session.thread_id, &driven).await
+                {
+                    return thread_id;
+                }
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("flow fan-out should spawn the next sub-agent");
+        assert!(driven.insert(thread_id), "each child should be driven once");
+        drive_child_to_completion(&manager, thread_id, script).await;
+    }
+
+    let items = run.await.expect("flow run task should finish");
+    assert_eq!(items.len(), 1, "one result item per flow skill");
+    let text = response_item_text(&items[0]);
+    assert!(text.contains("Flow 'game-create' completed."), "missing outcome: {text}");
+    // Every phase output is recorded back into the conversation: the parsed
+    // GDD, both pipeline results (in item order), and both review results.
+    assert!(text.contains("constraints"), "missing gdd output: {text}");
+    let jump = text.find("impl 跳跃 done").expect("missing pipeline output: {text}");
+    let double_jump = text.find("impl 二段跳 done").expect("missing pipeline output: {text}");
+    assert!(jump < double_jump, "pipeline outputs should keep item order: {text}");
+    assert!(text.contains("边界审查通过"), "missing review output: {text}");
+    assert!(text.contains("测试全绿"), "missing review output: {text}");
+
+    // Drain the unbounded event stream: progress runs begin → step → end per
+    // phase under one shared call_id, and every spawn carries the
+    // fully-interpolated prompt (args/GDD bindings for fan-out steps).
+    let mut progress = Vec::new();
+    let mut spawn_prompts = Vec::new();
+    while let Ok(event) = rx.try_recv() {
+        match event.msg {
+            EventMsg::FlowPhaseBegin(ev) => {
+                assert_eq!(ev.flow_name, "game-create");
+                progress.push(format!("begin:{}:{}", ev.phase_id, ev.total_steps));
+            }
+            EventMsg::FlowStepCompleted(ev) => {
+                progress.push(format!("step:{}:{}/{}", ev.phase_id, ev.step_index, ev.total_steps));
+            }
+            EventMsg::FlowPhaseEnd(ev) => {
+                progress.push(format!("end:{}:{}/{}", ev.phase_id, ev.completed_steps, ev.total_steps));
+            }
+            EventMsg::CollabAgentSpawnBegin(ev) => spawn_prompts.push(ev.prompt),
+            _ => {}
+        }
+    }
+    assert_eq!(
+        progress,
+        vec![
+            "begin:design:1",
+            "step:design:1/1",
+            "end:design:1/1",
+            "begin:implement:1",
+            "step:implement:1/1",
+            "end:implement:1/1",
+            "begin:verify:1",
+            "step:verify:1/1",
+            "end:verify:1/1",
+        ]
+    );
+    assert_eq!(spawn_prompts.len(), 5, "five fan-out agents should spawn: {spawn_prompts:?}");
+    assert!(spawn_prompts[0].contains("太空跳跃"), "args binding missing: {}", spawn_prompts[0]);
+    assert!(spawn_prompts[1].contains("实现机制 跳跃，"), "pipeline item missing: {}", spawn_prompts[1]);
+    assert!(!spawn_prompts[1].contains("二段跳"), "pipeline items must not leak: {}", spawn_prompts[1]);
+    assert!(spawn_prompts[1].contains("60fps 像素风"), "gdd binding missing: {}", spawn_prompts[1]);
+    assert!(spawn_prompts[2].contains("实现机制 二段跳，"), "pipeline item missing: {}", spawn_prompts[2]);
+    assert!(spawn_prompts[3].contains("impl 跳跃 done"), "implementations binding missing: {}", spawn_prompts[3]);
+    assert!(spawn_prompts[4].contains("运行测试"), "verify prompt missing: {}", spawn_prompts[4]);
+}

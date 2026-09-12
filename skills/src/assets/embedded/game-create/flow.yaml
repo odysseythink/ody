@@ -1,0 +1,18 @@
+name: game-create
+description: 从概念到可运行原型的多步骤游戏创作流程
+phases:
+  - id: design
+    steps:
+      - agent: 根据主题「${{ args.text }}」生成一份游戏设计文档（GDD），以 JSON 输出，包含 mechanics（机制清单，每项含 name）与 constraints（约束）。
+        output: gdd
+  - id: implement
+    steps:
+      - pipeline: ${{ gdd.mechanics }}
+        each: 实现机制 ${item.name}，遵循 ${gdd.constraints}
+        output: implementations
+  - id: verify
+    steps:
+      - parallel:
+          - agent: 审查 ${{ implementations }} 的边界情况
+          - agent: 运行测试并修复失败
+        output: review

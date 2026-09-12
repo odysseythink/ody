@@ -233,6 +233,56 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn embedded_flow_sample_loads_as_flow_skill() {
+        // M1.5: the bundled game-create sample is the reference `type: flow`
+        // skill; the loader must classify it as Flow, validate flow.yaml
+        // eagerly, and record the artifact path for the runtime re-read.
+        let temp_dir = tempfile::tempdir().unwrap();
+        let ody_home = ody_utils_absolute_path::AbsolutePathBuf::try_from(temp_dir.path())
+            .expect("absolute temp dir");
+        install_system_skills(&ody_home).expect("install system skills");
+
+        let system_root = system_cache_root_dir(&ody_home);
+        let outcome = ody_core_skills::loader::load_skills_from_roots(
+            [ody_core_skills::loader::SkillRoot {
+                path: system_root,
+                scope: SkillScope::System,
+                file_system: Arc::new(LocalFileSystem::unsandboxed()),
+                plugin_id: None,
+                plugin_namespace: None,
+                plugin_root: None,
+            }],
+            /*plugin_skill_snapshots*/ None,
+        )
+        .await;
+
+        assert!(outcome.errors.is_empty(), "errors: {:?}", outcome.errors);
+        let skill = outcome
+            .skills
+            .iter()
+            .find(|skill| skill.name == "game-create")
+            .expect("game-create should be discovered");
+        assert!(
+            matches!(skill.skill_type, ody_core_skills::model::SkillType::Flow),
+            "game-create should load as a flow skill, got {:?}",
+            skill.skill_type
+        );
+        let artifact = skill
+            .flow_artifact
+            .as_ref()
+            .expect("flow skill should record its flow.yaml");
+        assert!(artifact.as_path().ends_with("flow.yaml"));
+        let plan = ody_core_skills::flow::parse_flow_plan(
+            &std::fs::read_to_string(artifact.as_path()).expect("flow.yaml should be readable"),
+        )
+        .expect("flow.yaml should parse");
+        assert_eq!(plan.phases.len(), 3);
+        assert_eq!(plan.phases[0].id, "design");
+        assert_eq!(plan.phases[1].id, "implement");
+        assert_eq!(plan.phases[2].id, "verify");
+    }
+
+    #[tokio::test]
     async fn embedded_system_skills_respect_product_restrictions() {
         // Product separation contract (odyBox decision 3B): ody-only builtin
         // skills must be invisible when the runtime restricts to Product::OdyBox
@@ -263,6 +313,7 @@ mod tests {
 
         let ody_only = [
             "debt-ledger",
+            "game-create",
             "dispatching-parallel-agents",
             "executing-plans",
             "finishing-a-development-branch",

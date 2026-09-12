@@ -144,6 +144,15 @@
             "string",
             "null"
           ]
+        },
+        "skillType": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/SkillType"
+            }
+          ],
+          "default": "inline",
+          "description": "Skill carrier type from SKILL.md frontmatter (`type:`). Flow skills (`flow`) are executed by the host-side Flow runtime instead of being injected; the TUI uses this to offer them as `/slash` commands."
         }
       },
       "required": [
@@ -202,6 +211,16 @@
         "value"
       ],
       "type": "object"
+    },
+    "SkillType": {
+      "description": "Mirror of `ody_core_skills::model::SkillType` for the wire protocol. Serialized as the SKILL.md frontmatter `type:` value.",
+      "enum": [
+        "prompt",
+        "inline",
+        "flow",
+        "knowledge"
+      ],
+      "type": "string"
     },
     "SkillsListEntry": {
       "properties": {

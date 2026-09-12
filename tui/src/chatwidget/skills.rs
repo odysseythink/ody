@@ -12,6 +12,7 @@ use crate::skills_helpers::skill_description;
 use crate::skills_helpers::skill_display_name;
 use ody_app_server_protocol::AppInfo;
 use ody_app_server_protocol::SkillMetadata as ProtocolSkillMetadata;
+use ody_app_server_protocol::SkillType as ProtocolSkillType;
 use ody_app_server_protocol::SkillsListEntry;
 use ody_app_server_protocol::SkillsListResponse;
 use ody_core_skills::model::SkillDependencies;
@@ -260,7 +261,12 @@ fn protocol_skill_to_core(skill: &ProtocolSkillMetadata) -> Option<SkillMetadata
         path_to_skills_md: skill.path.clone(),
         scope,
         plugin_id: None,
-        skill_type: ody_core_skills::SkillType::default(),
+        skill_type: match skill.skill_type {
+            ProtocolSkillType::Prompt => ody_core_skills::SkillType::Prompt,
+            ProtocolSkillType::Inline => ody_core_skills::SkillType::Inline,
+            ProtocolSkillType::Flow => ody_core_skills::SkillType::Flow,
+            ProtocolSkillType::Knowledge => ody_core_skills::SkillType::Knowledge,
+        },
         triggers: Vec::new(),
         hidden_in_modes: Vec::new(),
         disable_model_invocation: false,
@@ -528,6 +534,45 @@ fn app_id_from_path(path: &str) -> Option<&str> {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+
+    fn protocol_skill(skill_type: ProtocolSkillType) -> ProtocolSkillMetadata {
+        ProtocolSkillMetadata {
+            name: "game-create".to_string(),
+            description: "flow sample".to_string(),
+            short_description: None,
+            interface: None,
+            dependencies: None,
+            path: ody_utils_absolute_path::AbsolutePathBuf::try_from(
+                std::path::PathBuf::from("/tmp/skills/game-create/SKILL.md"),
+            )
+            .expect("absolute path"),
+            scope: ody_app_server_protocol::SkillScope::System,
+            enabled: true,
+            skill_type,
+        }
+    }
+
+    #[test]
+    fn protocol_skill_to_core_preserves_flow_skill_type() {
+        // M1.5 walkthrough regression: the skills/list → composer chain used
+        // to hard-code `SkillType::default()`, hiding flow skills from the
+        // slash completion. The wire skill_type must survive the round trip.
+        let core = protocol_skill_to_core(&protocol_skill(ProtocolSkillType::Flow))
+            .expect("flow skill should convert");
+        assert_eq!(core.name, "game-create");
+        assert_eq!(core.skill_type, ody_core_skills::SkillType::Flow);
+
+        let cases = [
+            (ProtocolSkillType::Prompt, ody_core_skills::SkillType::Prompt),
+            (ProtocolSkillType::Inline, ody_core_skills::SkillType::Inline),
+            (ProtocolSkillType::Knowledge, ody_core_skills::SkillType::Knowledge),
+        ];
+        for (protocol_type, core_type) in cases {
+            let core = protocol_skill_to_core(&protocol_skill(protocol_type))
+                .expect("skill should convert");
+            assert_eq!(core.skill_type, core_type);
+        }
+    }
 
     fn app(id: &str, name: &str) -> AppInfo {
         AppInfo {

@@ -65,6 +65,20 @@ fn skills_to_info(
                 path: skill.path_to_skills_md.clone(),
                 scope: skill.scope.into(),
                 enabled,
+                skill_type: match skill.skill_type {
+                    ody_core::skills::model::SkillType::Prompt => {
+                        ody_app_server_protocol::SkillType::Prompt
+                    }
+                    ody_core::skills::model::SkillType::Inline => {
+                        ody_app_server_protocol::SkillType::Inline
+                    }
+                    ody_core::skills::model::SkillType::Flow => {
+                        ody_app_server_protocol::SkillType::Flow
+                    }
+                    ody_core::skills::model::SkillType::Knowledge => {
+                        ody_app_server_protocol::SkillType::Knowledge
+                    }
+                },
             }
         })
         .collect()
@@ -699,5 +713,30 @@ impl CatalogRequestProcessor {
                 }
             })
             .map_err(|err| internal_error(format!("failed to update skill settings: {err}")))
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn skills_to_info_carries_flow_skill_type() {
+        // M1.5 walkthrough regression: skills/list dropped `skill_type`, so
+        // the TUI never offered flow skills as slash commands.
+        let mut skill = ody_core::skills::SkillMetadata::default();
+        skill.name = "game-create".to_string();
+        skill.skill_type = ody_core::skills::model::SkillType::Flow;
+
+        let info = skills_to_info(&[skill], &HashSet::new());
+        assert_eq!(info.len(), 1);
+        assert_eq!(info[0].skill_type, ody_app_server_protocol::SkillType::Flow);
+        assert!(info[0].enabled);
+
+        let mut inline = ody_core::skills::SkillMetadata::default();
+        inline.skill_type = ody_core::skills::model::SkillType::Inline;
+        let info = skills_to_info(&[inline], &HashSet::new());
+        assert_eq!(info[0].skill_type, ody_app_server_protocol::SkillType::Inline);
     }
 }

@@ -215,8 +215,12 @@ fn run_step<'a, H: FlowAgentHost>(
                 let (value, child_bindings) =
                     slot.expect("parallel child results are complete once all futures resolve");
                 for (name, bound) in child_bindings {
-                    if name == "args" {
-                        continue; // part of the snapshot, not a child output
+                    // Merge only bindings the child added on top of the
+                    // pre-group snapshot; inherited names (including `args`
+                    // and earlier step outputs like `gdd`) are not child
+                    // outputs and must not be re-bound into the parent.
+                    if snapshot.contains_key(&name) {
+                        continue;
                     }
                     bind_output(
                         bindings,

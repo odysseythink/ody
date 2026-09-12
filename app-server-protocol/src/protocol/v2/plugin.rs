@@ -449,6 +449,20 @@ pub enum SkillScope {
     Admin,
 }
 
+/// Mirror of `ody_core_skills::model::SkillType` for the wire protocol.
+/// Serialized as the SKILL.md frontmatter `type:` value.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+#[ts(export_to = "v2/")]
+pub enum SkillType {
+    Prompt,
+    #[default]
+    Inline,
+    Flow,
+    Knowledge,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
@@ -468,6 +482,11 @@ pub struct SkillMetadata {
     pub path: AbsolutePathBuf,
     pub scope: SkillScope,
     pub enabled: bool,
+    /// Skill carrier type from SKILL.md frontmatter (`type:`). Flow skills
+    /// (`flow`) are executed by the host-side Flow runtime instead of being
+    /// injected; the TUI uses this to offer them as `/slash` commands.
+    #[serde(default)]
+    pub skill_type: SkillType,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
@@ -909,6 +928,8 @@ impl From<CoreSkillMetadata> for SkillMetadata {
             path: value.path,
             scope: value.scope.into(),
             enabled: true,
+            // The ody_protocol mirror carries no skill-type information.
+            skill_type: SkillType::default(),
         }
     }
 }
