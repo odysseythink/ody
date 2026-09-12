@@ -99,6 +99,54 @@ spike 中踩平的 API 坑（0.14.2）：`starlark::Error` 不实现 `std::error
   默认构建下 `cargo nextest run -p ody-core -E 'test(flow::)'`（降级报错测试）；
   `cargo test -p ody-code-mode --features v8`。
 
+**实施记录（2026-09-13）**
+
+- 决策 7 全量落地，无收窄（R1 兜底未触发）：
+  - `code-mode/src/runtime/workflow.rs`（新，~620 行含测试）：一次性确定性
+    workflow 引擎。v8 eval 独立 OS 线程（每 run 一个 isolate）；
+    `agent()` 回调创建 `PromiseResolver`、std channel 发请求，async driver
+    `FuturesUnordered` 并发跑宿主 agent 并回送响应，eval 线程逐响应
+    `perform_microtask_checkpoint` 直至顶层 promise settle——TLA 原生支持
+    （复用 `module_loader::evaluate_main_module`）。取消安全双路径：
+    driver drop → response channel 断开（泵阻塞脚本）+
+    `WorkflowRunGuard::drop → terminate_execution`（CPU-bound 脚本）。
+  - **对用户决策 B（偏差记录）**：`pipeline`/`parallel` 以注入的 JS prelude
+    shim 提供（内部 `Promise.all` + batch limit 硬检查，先渲染全部 prompt
+    再 fan-out），而非 Rust 原生回调——保证三载体 host-function 语义与
+    cap 一致，代价 ~10 行 prelude。
+  - **确定性**：删除全局 `Date`（覆盖 `Date.now`/任意 arity 的 `new Date`），
+    `Math.random` 替换为抛错函数（`Math` 其余保留）。
+  - 公共 API：`WorkflowHost`（RPITIT）、`WorkflowRunConfig{args, batch_limit}`、
+    `run_workflow_script`、`check_workflow_syntax`（trigger 期语法校验）、
+    `WorkflowRunGuard`。
+  - `core/src/flow/v8.rs`：`V8FlowRuntime` + `FlowWorkflowHost` adapter
+    （checkpoint read→miss→run→write 在 adapter 内，镜像 star.rs；
+    progress → `FlowProgress::Log`）。
+  - **对用户决策 A**：`ody-cli` 新增独立 `flow-v8 = ["ody-core/flow-v8"]`，
+    现有 `v8` feature 语义不变；发布构建需显式 `--features flow-v8`。
+  - `code-mode/src/runtime/globals.rs`：`delete_global`/`set_global`/
+    `helper_function` 放宽 `pub(super)` 供 workflow.rs 复用（纯可见性，
+    无行为变化）；`futures` 为 code-mode 新增 optional 依赖（仅 v8
+    feature 拉入）。
+- 测试：code-mode 自含 9（smoke/TLA/args、pipeline 序绑定、parallel+进度、
+  Date/Math.random 禁令、agent 失败传播、batch cap、unset result、语法
+  检查、abort 回收+隔离性）；core js 段 8 + conformance v8 臂 1 +
+  dispatch 臂 1。
+- 验收：flow 套件默认与 `--features flow-v8` 双构建全绿（83/83、91/91）；
+  `ody-code-mode` 双构建全绿（56+4）；`ody-core-skills` 143/143；
+  `cargo check --workspace --all-targets` 与
+  `cargo check -p ody-cli --features flow-v8 --all-targets` 0 错误。
+- 踩坑记录新增：① **模块顶层 `var` 也不挂 `globalThis`**（R3 的实际形态比
+  计划预判更宽：模块作用域下 `var`/`let`/`const` 全部是 module-scoped），
+  引擎改为追加同模块 tail `globalThis.result = typeof result === "undefined"
+  ? undefined : result` 镜像结果绑定——`var`/`let`/`const`/`globalThis`
+  四种写法全部可用，unset 契约不变；② **泵循环必须先查 promise 状态再阻塞
+  `recv()`**：零 agent 调用的纯拒绝路径（batch-limit prelude 的
+  `Promise.reject`）在 evaluate 期 microtask checkpoint 就已 settle 模块
+  promise，若先阻塞收响应则永久挂起；③ `CheckpointMockHost` 等 fixture 的
+  cfg 从单 feature 放宽 `any(...)` 时需同一次 apply_patch 完成（edit_file
+  多 hunk 坑再现）。
+
 ### M3.3 [normal] 审批摘要泛化 + 文档收尾
 
 - 内容：决策 8；`docs/` 或 AGENTS.md 的 flow 载体说明更新；父报告 M3 行打勾；
