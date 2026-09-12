@@ -238,7 +238,8 @@ pub fn build_item_from_guardian_event(
         | GuardianAssessmentAction::McpToolCall { .. }
         | GuardianAssessmentAction::RequestPermissions { .. }
         | GuardianAssessmentAction::BrowserAction { .. }
-        | GuardianAssessmentAction::DatabaseWrite { .. } => None,
+        | GuardianAssessmentAction::DatabaseWrite { .. }
+        | GuardianAssessmentAction::FlowRun { .. } => None,
     }
 }
 

@@ -175,6 +175,11 @@ pub enum GuardianAssessmentAction {
         reason: Option<String>,
         permissions: RequestPermissionProfile,
     },
+    /// One-shot approval before executing a Flow skill run (M2.2): the
+    /// guardian reviews the plan summary (phases/steps/prompt previews).
+    FlowRun {
+        flow_name: String,
+    },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]

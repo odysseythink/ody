@@ -262,6 +262,9 @@ pub enum GuardianReviewedAction {
     },
     DatabaseWrite {},
     RequestPermissions {},
+    FlowRun {
+        flow_name: String,
+    },
 }
 
 #[derive(Clone, Serialize)]
@@ -559,6 +562,7 @@ pub(crate) enum ReviewSubjectKind {
     NetworkAccess,
     BrowserAction,
     DatabaseWrite,
+    FlowRun,
 }
 
 #[allow(dead_code)]

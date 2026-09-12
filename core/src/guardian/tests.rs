@@ -3164,3 +3164,23 @@ async fn guardian_review_session_config_uses_default_guardian_policy_without_req
         Some(guardian_policy_prompt())
     );
 }
+
+#[test]
+fn guardian_request_turn_id_prefers_flow_run_owner_turn() {
+    let flow_run = GuardianApprovalRequest::FlowRun {
+        id: "flow-1".to_string(),
+        turn_id: "owner-turn".to_string(),
+        flow_name: "game-create".to_string(),
+        summary: crate::flow::FlowPlanSummary::new(
+            "game-create",
+            &ody_core_skills::parse_flow_plan("phases:\n  - id: p\n    steps:\n      - agent: Go\n")
+                .unwrap(),
+        ),
+    };
+
+    assert_eq!(
+        guardian_request_turn_id(&flow_run, "fallback-turn"),
+        "owner-turn"
+    );
+    assert_eq!(guardian_request_target_item_id(&flow_run), None);
+}

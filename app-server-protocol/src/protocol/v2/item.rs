@@ -674,6 +674,9 @@ pub enum GuardianApprovalReviewAction {
         reason: Option<String>,
         permissions: RequestPermissionProfile,
     },
+    #[serde(rename_all = "camelCase")]
+    #[ts(rename_all = "camelCase")]
+    FlowRun { flow_name: String },
 }
 
 impl From<CoreGuardianAssessmentAction> for GuardianApprovalReviewAction {
@@ -739,6 +742,7 @@ impl From<CoreGuardianAssessmentAction> for GuardianApprovalReviewAction {
                 reason,
                 permissions: permissions.into(),
             },
+            CoreGuardianAssessmentAction::FlowRun { flow_name } => Self::FlowRun { flow_name },
         }
     }
 }
@@ -808,6 +812,7 @@ impl TryFrom<GuardianApprovalReviewAction> for CoreGuardianAssessmentAction {
                 reason,
                 permissions: permissions.try_into()?,
             },
+            GuardianApprovalReviewAction::FlowRun { flow_name } => Self::FlowRun { flow_name },
         })
     }
 }

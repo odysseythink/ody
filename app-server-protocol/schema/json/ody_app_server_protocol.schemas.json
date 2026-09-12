@@ -10035,6 +10035,26 @@
             ],
             "title": "RequestPermissionsGuardianApprovalReviewAction",
             "type": "object"
+          },
+          {
+            "properties": {
+              "flowName": {
+                "type": "string"
+              },
+              "type": {
+                "enum": [
+                  "flowRun"
+                ],
+                "title": "FlowRunGuardianApprovalReviewActionType",
+                "type": "string"
+              }
+            },
+            "required": [
+              "flowName",
+              "type"
+            ],
+            "title": "FlowRunGuardianApprovalReviewAction",
+            "type": "object"
           }
         ]
       },

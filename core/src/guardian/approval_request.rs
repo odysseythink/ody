@@ -86,6 +86,13 @@ pub(crate) enum GuardianApprovalRequest {
         reason: Option<String>,
         permissions: RequestPermissionProfile,
     },
+    /// One-shot approval before executing a Flow skill run (M2.2).
+    FlowRun {
+        id: String,
+        turn_id: String,
+        flow_name: String,
+        summary: crate::flow::FlowPlanSummary,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -193,6 +200,13 @@ struct DatabaseWriteApprovalAction<'a> {
     tool: &'static str,
     connection: &'a str,
     query: &'a str,
+}
+
+#[derive(Serialize)]
+struct FlowRunApprovalAction<'a> {
+    tool: &'static str,
+    flow_name: &'a str,
+    summary: &'a crate::flow::FlowPlanSummary,
 }
 
 fn serialize_guardian_action(value: impl Serialize) -> serde_json::Result<Value> {
@@ -415,6 +429,16 @@ pub(crate) fn guardian_approval_request_to_json(
             reason: reason.as_ref(),
             permissions,
         }),
+        GuardianApprovalRequest::FlowRun {
+            id: _,
+            turn_id: _,
+            flow_name,
+            summary,
+        } => serialize_guardian_action(FlowRunApprovalAction {
+            tool: "flow_run",
+            flow_name,
+            summary,
+        }),
     }
 }
 
@@ -495,6 +519,9 @@ pub(crate) fn guardian_assessment_action(
             reason: reason.clone(),
             permissions: permissions.clone(),
         },
+        GuardianApprovalRequest::FlowRun { flow_name, .. } => GuardianAssessmentAction::FlowRun {
+            flow_name: flow_name.clone(),
+        },
     }
 }
 
@@ -562,6 +589,9 @@ pub(crate) fn guardian_reviewed_action(
         GuardianApprovalRequest::RequestPermissions { .. } => {
             GuardianReviewedAction::RequestPermissions {}
         }
+        GuardianApprovalRequest::FlowRun { flow_name, .. } => GuardianReviewedAction::FlowRun {
+            flow_name: flow_name.clone(),
+        },
     }
 }
 
@@ -575,6 +605,8 @@ pub(crate) fn guardian_request_target_item_id(request: &GuardianApprovalRequest)
         | GuardianApprovalRequest::BrowserAction { id, .. }
         | GuardianApprovalRequest::DatabaseWrite { id, .. } => Some(id),
         GuardianApprovalRequest::NetworkAccess { .. } => None,
+        // The FlowRun `id` is a generated review id, not a conversation item id.
+        GuardianApprovalRequest::FlowRun { .. } => None,
         #[cfg(unix)]
         GuardianApprovalRequest::Execve { id, .. } => Some(id),
     }
@@ -588,7 +620,8 @@ pub(crate) fn guardian_request_turn_id<'a>(
         GuardianApprovalRequest::NetworkAccess { turn_id, .. }
         | GuardianApprovalRequest::RequestPermissions { turn_id, .. }
         | GuardianApprovalRequest::BrowserAction { turn_id, .. }
-        | GuardianApprovalRequest::DatabaseWrite { turn_id, .. } => turn_id,
+        | GuardianApprovalRequest::DatabaseWrite { turn_id, .. }
+        | GuardianApprovalRequest::FlowRun { turn_id, .. } => turn_id,
         GuardianApprovalRequest::Shell { .. }
         | GuardianApprovalRequest::ExecCommand { .. }
         | GuardianApprovalRequest::ApplyPatch { .. }

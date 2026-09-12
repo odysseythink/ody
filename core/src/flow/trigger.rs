@@ -10,7 +10,9 @@ use ody_core_skills::SkillMetadata;
 use ody_core_skills::SkillType;
 use ody_exec_server::LOCAL_FS;
 use ody_protocol::models::ResponseItem;
+use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::EventMsg;
+use ody_protocol::protocol::ReviewDecision;
 use ody_protocol::protocol::WarningEvent;
 use ody_protocol::user_input::UserInput;
 use ody_utils_path_uri::PathUri;
@@ -18,11 +20,15 @@ use ody_utils_path_uri::PathUri;
 use crate::TurnContext;
 use crate::context::ContextualUserFragment;
 use crate::context::FlowResultMessage;
+use crate::guardian::GuardianApprovalRequest;
+use crate::guardian::new_guardian_review_id;
+use crate::guardian::review_approval_request;
 use crate::session::session::Session;
 
 use super::FlowContext;
 use super::FlowError;
 use super::FlowOutcome;
+use super::FlowPlanSummary;
 use super::FlowRuntime;
 use super::SessionFlowAgentHost;
 use super::YamlFlowRuntime;
@@ -79,8 +85,49 @@ pub(crate) async fn read_flow_source(
         })
 }
 
-/// Read, validate, and execute one flow skill with checkpointing (M2.1).
-/// Approval gating (M2.2) slots in between validate and run.
+/// M2.2: one-shot guardian approval before a flow run. `approval_policy =
+/// "never"` bypasses the review (YOLO), mirroring extension_tools.rs:70-77.
+/// Denied / TimedOut / Abort and policy amendments all fail the run with
+/// [`FlowError::Denied`], recorded as a flow_result failure item by the
+/// caller.
+async fn ensure_flow_run_approved(
+    sess: &Arc<Session>,
+    turn_context: &Arc<TurnContext>,
+    flow_name: &str,
+    plan: &ody_core_skills::FlowPlan,
+) -> Result<(), FlowError> {
+    if turn_context.approval_policy.value() == AskForApproval::Never {
+        return Ok(());
+    }
+    let review_id = new_guardian_review_id();
+    let decision = review_approval_request(
+        sess,
+        turn_context,
+        review_id.clone(),
+        GuardianApprovalRequest::FlowRun {
+            id: review_id,
+            turn_id: turn_context.sub_id.clone(),
+            flow_name: flow_name.to_string(),
+            summary: FlowPlanSummary::new(flow_name, plan),
+        },
+        /*retry_reason*/ None,
+    )
+    .await;
+    match decision {
+        ReviewDecision::Approved
+        | ReviewDecision::ApprovedExecpolicyAmendment { .. }
+        | ReviewDecision::ApprovedForSession => Ok(()),
+        ReviewDecision::Denied
+        | ReviewDecision::TimedOut
+        | ReviewDecision::Abort
+        | ReviewDecision::NetworkPolicyAmendment { .. } => Err(FlowError::Denied {
+            reason: format!("flow '{flow_name}' not approved by guardian ({decision:?})"),
+        }),
+    }
+}
+
+/// Read, validate, and execute one flow skill with checkpointing (M2.1) and
+/// run-before guardian approval (M2.2).
 pub(crate) async fn run_one_flow_skill(
     sess: &Arc<Session>,
     turn_context: &Arc<TurnContext>,
@@ -91,6 +138,7 @@ pub(crate) async fn run_one_flow_skill(
     let source = read_flow_source(&turn_context.turn_skills.snapshot, skill).await?;
     let runtime = YamlFlowRuntime::new();
     let plan = runtime.validate(&source)?;
+    ensure_flow_run_approved(sess, turn_context, &name, &plan).await?;
     let fingerprint = crate::flow::plan_fingerprint(&source);
     let ody_home = sess.ody_home().await;
     let host = SessionFlowAgentHost::new(Arc::clone(sess), Arc::clone(turn_context), name.clone())

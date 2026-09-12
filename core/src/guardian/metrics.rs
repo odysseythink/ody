@@ -181,6 +181,7 @@ fn reviewed_action_tag(action: &GuardianReviewedAction) -> &'static str {
         GuardianReviewedAction::BrowserAction { .. } => "browser_action",
         GuardianReviewedAction::DatabaseWrite {} => "database_write",
         GuardianReviewedAction::RequestPermissions {} => "request_permissions",
+        GuardianReviewedAction::FlowRun { .. } => "flow_run",
     }
 }
 

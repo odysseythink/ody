@@ -1791,7 +1791,8 @@ fn item_review_summary_key(pending_review: &PendingReviewState) -> Option<ToolIt
         ReviewSubjectKind::Permissions
         | ReviewSubjectKind::NetworkAccess
         | ReviewSubjectKind::BrowserAction
-        | ReviewSubjectKind::DatabaseWrite => None,
+        | ReviewSubjectKind::DatabaseWrite
+        | ReviewSubjectKind::FlowRun => None,
     }
 }
 
@@ -2318,6 +2319,11 @@ fn guardian_review_subject_metadata(
             connection.clone(),
             ReviewTrigger::Initial,
         ),
+        GuardianApprovalReviewAction::FlowRun { flow_name, .. } => (
+            ReviewSubjectKind::FlowRun,
+            flow_name.clone(),
+            ReviewTrigger::Initial,
+        ),
     }
 }
 
@@ -2333,7 +2339,8 @@ fn guardian_review_requested_additional_permissions(action: &GuardianApprovalRev
         | GuardianApprovalReviewAction::Execve { .. }
         | GuardianApprovalReviewAction::McpToolCall { .. }
         | GuardianApprovalReviewAction::BrowserAction { .. }
-        | GuardianApprovalReviewAction::DatabaseWrite { .. } => false,
+        | GuardianApprovalReviewAction::DatabaseWrite { .. }
+        | GuardianApprovalReviewAction::FlowRun { .. } => false,
     }
 }
 
@@ -2348,7 +2355,8 @@ fn guardian_review_requested_network_access(action: &GuardianApprovalReviewActio
         | GuardianApprovalReviewAction::Execve { .. }
         | GuardianApprovalReviewAction::McpToolCall { .. }
         | GuardianApprovalReviewAction::BrowserAction { .. }
-        | GuardianApprovalReviewAction::DatabaseWrite { .. } => false,
+        | GuardianApprovalReviewAction::DatabaseWrite { .. }
+        | GuardianApprovalReviewAction::FlowRun { .. } => false,
     }
 }
 

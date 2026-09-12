@@ -57,11 +57,13 @@ pub(crate) mod interp;
 
 mod checkpoint;
 mod host;
+mod plan_summary;
 mod runtime;
 mod trigger;
 
 pub(crate) use checkpoint::CheckpointStore;
 pub(crate) use checkpoint::plan_fingerprint;
+pub(crate) use plan_summary::FlowPlanSummary;
 
 pub(crate) use host::SessionFlowAgentHost;
 pub(crate) use runtime::YamlFlowRuntime;
@@ -114,6 +116,9 @@ pub(crate) enum FlowError {
     ReservedBinding { name: String, step: String },
     /// The host agent failed; the plan short-circuits.
     Agent { step: String, source: FlowHostError },
+    /// The run was denied, timed out, or aborted by the pre-run guardian
+    /// approval (M2.2).
+    Denied { reason: String },
 }
 
 impl fmt::Display for FlowError {
@@ -146,6 +151,9 @@ impl fmt::Display for FlowError {
             }
             FlowError::Agent { step, source } => {
                 write!(f, "flow step '{step}': agent failed: {source}")
+            }
+            FlowError::Denied { reason } => {
+                write!(f, "flow run denied: {reason}")
             }
         }
     }

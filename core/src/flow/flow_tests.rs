@@ -734,12 +734,22 @@ async fn run_flow_skills_in_turn_executes_flow_and_records_result_item() {
     .expect("write flow.yaml");
     let skill = flow_skill_on_disk("demo-flow", &flow_yaml);
 
-    let (mut session, turn) = make_session_and_context().await;
+    let (mut session, turn, _rx) =
+        make_session_and_context_and_config_and_rx(Vec::new(), |config| {
+            // M2.2: bypass the pre-run guardian approval (approval_policy =
+            // Never); this test targets result-item recording, not the gate.
+            config.permissions.approval_policy =
+                ody_config::Constrained::allow_any(AskForApproval::Never);
+        })
+        .await;
     let manager = flow_test_thread_manager();
-    session.services.agent_control = manager.agent_control();
+    Arc::get_mut(&mut session)
+        .expect("unique session arc")
+        .services
+        .agent_control = manager.agent_control();
     let session = Arc::new(session);
     let mut turn = turn;
-    install_skills(&mut turn, vec![skill.clone()]);
+    install_skills(Arc::get_mut(&mut turn).expect("unique turn arc"), vec![skill.clone()]);
     let turn = Arc::new(turn);
 
     let run = tokio::spawn({
@@ -787,7 +797,14 @@ async fn run_flow_skills_in_turn_records_failure_item_and_warning_event() {
     let skill = flow_skill_on_disk("broken-flow", &flow_yaml);
 
     let (mut session, turn, rx) =
-        make_session_and_context_and_config_and_rx(Vec::new(), |_| {}).await;
+        make_session_and_context_and_config_and_rx(Vec::new(), |config| {
+            // M2.2: the pre-run guardian approval is bypassed with
+            // approval_policy = Never; this test targets execution failure,
+            // not the approval gate.
+            config.permissions.approval_policy =
+                ody_config::Constrained::allow_any(AskForApproval::Never);
+        })
+        .await;
     let manager = flow_test_thread_manager();
     Arc::get_mut(&mut session)
         .expect("unique session arc")
@@ -941,7 +958,13 @@ async fn run_flow_skills_in_turn_emits_progress_events_on_the_turn_stream() {
     let skill = flow_skill_on_disk("progress-flow", &flow_yaml);
 
     let (mut session, mut turn, mut rx) =
-        make_session_and_context_and_config_and_rx(Vec::new(), |_| {}).await;
+        make_session_and_context_and_config_and_rx(Vec::new(), |config| {
+            // M2.2: bypass the pre-run guardian approval (approval_policy =
+            // Never); this test targets progress events, not the gate.
+            config.permissions.approval_policy =
+                ody_config::Constrained::allow_any(AskForApproval::Never);
+        })
+        .await;
     let manager = flow_test_thread_manager();
     Arc::get_mut(&mut session)
         .expect("unique session arc")
@@ -1073,6 +1096,10 @@ async fn flow_fanout_end_to_end_spawns_progresses_and_records_outputs() {
 
     let (mut session, turn, rx) =
         make_session_and_context_and_config_and_rx(Vec::new(), |config| {
+            // M2.2: bypass the pre-run guardian approval (approval_policy =
+            // Never); this test targets fan-out execution, not the gate.
+            config.permissions.approval_policy =
+                ody_config::Constrained::allow_any(AskForApproval::Never);
             config.agent_max_depth = 4;
         })
         .await;
@@ -1341,4 +1368,82 @@ async fn checkpoint_store_roundtrip_hit_and_discard() {
     let after = CheckpointStore::open(&home, "game-create", &fp).await;
     assert_eq!(after.lookup("prompt A").await, None);
     assert!(!dir.path().join("flow-checkpoints").join(format!("game-create-{fp}.json")).exists());
+}
+
+
+// ---- M2.2 run-before guardian approval tests ----
+
+use ody_protocol::protocol::AskForApproval;
+
+#[tokio::test]
+async fn flow_run_with_never_approval_policy_skips_guardian_review() {
+    // M2.2: with approval_policy = Never the pre-run guardian review is
+    // bypassed (YOLO, mirroring extension_tools.rs:70-77): the flow spawns
+    // its agent without any GuardianAssessment events on the stream.
+    let dir = tempfile::tempdir().expect("create flow dir");
+    let flow_yaml = dir.path().join("flow.yaml");
+    std::fs::write(
+        &flow_yaml,
+        "phases:\n  - id: p\n    steps:\n      - agent: Do ${{ args.text }}\n        output: r\n",
+    )
+    .expect("write flow.yaml");
+    let skill = flow_skill_on_disk("approval-bypass-flow", &flow_yaml);
+
+    let (mut session, turn, rx) =
+        make_session_and_context_and_config_and_rx(Vec::new(), |config| {
+            config.permissions.approval_policy =
+                ody_config::Constrained::allow_any(AskForApproval::Never);
+            config.agent_max_depth = 4;
+        })
+        .await;
+    let manager = flow_test_thread_manager();
+    Arc::get_mut(&mut session)
+        .expect("unique session arc")
+        .services
+        .agent_control = manager.agent_control();
+    let session = Arc::new(session);
+    let mut turn = turn;
+    install_skills(Arc::get_mut(&mut turn).expect("unique turn arc"), vec![skill.clone()]);
+    let turn = Arc::new(turn);
+
+    let run = tokio::spawn({
+        let session = session.clone();
+        let turn = turn.clone();
+        async move {
+            run_flow_skills_in_turn(
+                &session,
+                &turn,
+                std::slice::from_ref(&skill),
+                flow_args_from_input(&[user_text_input("hi")]),
+            )
+            .await
+        }
+    });
+
+    let mut driven = std::collections::HashSet::new();
+    let thread_id = timeout(Duration::from_secs(30), async {
+        loop {
+            if let Some(thread_id) =
+                next_pending_child_thread_id(&manager, session.thread_id, &driven).await
+            {
+                return thread_id;
+            }
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("flow should spawn its agent without approval");
+    drive_child_to_completion(&manager, thread_id, "done");
+    driven.insert(thread_id);
+    let items = run.await.expect("flow run task should finish");
+    assert_eq!(items.len(), 1);
+
+    // The gate's observable effect: no guardian assessment events at all.
+    let mut assessments = 0;
+    while let Ok(event) = rx.try_recv() {
+        if matches!(event.msg, EventMsg::GuardianAssessment(_)) {
+            assessments += 1;
+        }
+    }
+    assert_eq!(assessments, 0, "policy=never must skip the guardian review");
 }
