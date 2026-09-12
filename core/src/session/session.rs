@@ -1109,6 +1109,13 @@ impl Session {
             session_extension_data.insert(McpResourceClient::new(Arc::clone(
                 &mcp_connection_manager,
             )));
+            // M2.3: host-side flow executor for the extension `skills.flow__run`
+            // tool. Extensions pull it back out of the session store; the
+            // concrete handle also lives on `SessionServices` for per-turn
+            // routing registration.
+            let flow_runner = Arc::new(crate::flow::SessionFlowRunner::new());
+            let flow_runner_dyn: Arc<dyn ody_extension_api::FlowRunner> = flow_runner.clone();
+            session_extension_data.insert(flow_runner_dyn);
             for contributor in extensions.thread_lifecycle_contributors() {
                 contributor.on_thread_start(ody_extension_api::ThreadStartInput {
                     config: config.as_ref(),
@@ -1156,6 +1163,7 @@ impl Session {
                 // TODO(jif): extract session to share between sub-agents
                 session_extension_data,
                 thread_extension_data,
+                flow_runner,
                 mcp_thread_init,
                 supports_form_elicitation: std::sync::atomic::AtomicBool::new(
                     supports_form_elicitation,
@@ -1216,6 +1224,9 @@ impl Session {
                 let mut guard = network_policy_decider_session.write().await;
                 *guard = Arc::downgrade(&sess);
             }
+            sess.services
+                .flow_runner
+                .init_session(Arc::downgrade(&sess));
             // Dispatch the SessionConfiguredEvent first and then report any errors.
             // If resuming, include converted initial messages in the payload so UIs can render them immediately.
             let initial_messages = initial_history.get_event_msgs();

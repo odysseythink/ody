@@ -4,6 +4,7 @@ use ody_extension_api::ToolExecutor;
 use ody_extension_api::ToolExecutorFuture;
 use ody_extension_api::ToolName;
 use ody_extension_api::ToolSpec;
+use ody_core_skills::SkillType;
 use ody_protocol::config_types::ModeKind;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -76,10 +77,14 @@ impl ToolExecutor<ToolCall> for ReadTool {
                     && entry.authority == authority
                     && entry.id.0 == args.package
                     && entry.is_model_invocable(mode)
+                    // M2.3: flow skills execute through skills.flow__run, never
+                    // through a raw resource read (keeps the plan-summary
+                    // approval gate the single entry point).
+                    && !matches!(entry.skill_type, SkillType::Flow)
             });
             if !package_is_available {
                 return Err(FunctionCallError::RespondToModel(
-                    "skill package is not available from the requested authority".to_string(),
+                    "skill package is not available from the requested authority (flow skills must be run with skills.flow__run)".to_string(),
                 ));
             }
 

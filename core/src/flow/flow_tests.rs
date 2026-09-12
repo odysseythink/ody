@@ -1447,3 +1447,174 @@ async fn flow_run_with_never_approval_policy_skips_guardian_review() {
     }
     assert_eq!(assessments, 0, "policy=never must skip the guardian review");
 }
+
+
+// ---- M2.3 flow__run host runner tests ----
+
+use super::SessionFlowRunner;
+use crate::session::session::Session;
+use ody_extension_api::FlowRunError;
+use ody_extension_api::FlowRunner;
+
+#[tokio::test]
+async fn flow_turn_router_purges_dead_turns_on_registration() {
+    // Note: the session harness hardcodes every turn's sub_id to "turn_id",
+    // so this test registers explicit distinct keys instead.
+    let router = super::runner::FlowTurnRouter::default();
+    let (_session, turn) = make_session_and_context().await;
+    let turn = Arc::new(turn);
+
+    router.register("live".to_string(), &turn);
+    assert!(router.lookup("live").is_some());
+    assert!(router.lookup("never-registered").is_none());
+
+    let (_session2, turn2) = make_session_and_context().await;
+    let turn2 = Arc::new(turn2);
+    router.register("dying".to_string(), &turn2);
+    assert_eq!(router.live_entry_count(), 2);
+
+    // Dropping the turn fails lookups immediately (weak upgrade), but the
+    // dead entry lingers in the map until the next registration purges it.
+    drop(turn2);
+    assert!(
+        router.lookup("dying").is_none(),
+        "dead weak entries must fail lookup"
+    );
+    assert_eq!(
+        router.live_entry_count(),
+        1,
+        "dead entries linger until a registration purges them"
+    );
+    assert_eq!(router.total_entry_count(), 2, "map keeps the dead entry");
+
+    router.register("live-again".to_string(), &turn);
+    assert_eq!(
+        router.total_entry_count(),
+        2,
+        "registration purges dead entries (live + live-again only)"
+    );
+    assert_eq!(router.live_entry_count(), 2);
+    assert!(router.lookup("live").is_some());
+    assert!(router.lookup("live-again").is_some());
+    assert!(router.lookup("dying").is_none());
+}
+
+/// Wire a real session + turn (with a flow skill on disk) to a
+/// `SessionFlowRunner`, mirroring production: `init_session` after the
+/// session Arc exists, `register_turn` for the built turn.
+async fn wired_flow_runner(
+    flow_name: &str,
+) -> (
+    Arc<Session>,
+    Arc<TurnContext>,
+    SkillMetadata,
+    ThreadManager,
+    tempfile::TempDir,
+) {
+    let dir = tempfile::tempdir().expect("create flow dir");
+    let flow_yaml = dir.path().join("flow.yaml");
+    std::fs::write(
+        &flow_yaml,
+        "phases:\n  - id: p\n    steps:\n      - agent: Do ${{ args.text }}\n        output: r\n",
+    )
+    .expect("write flow.yaml");
+    let skill = flow_skill_on_disk(flow_name, &flow_yaml);
+
+    let (mut session, turn, _rx) =
+        make_session_and_context_and_config_and_rx(Vec::new(), |config| {
+            config.permissions.approval_policy =
+                ody_config::Constrained::allow_any(AskForApproval::Never);
+            config.agent_max_depth = 4;
+        })
+        .await;
+    let manager = flow_test_thread_manager();
+    Arc::get_mut(&mut session)
+        .expect("unique session arc")
+        .services
+        .agent_control = manager.agent_control();
+    session
+        .services
+        .flow_runner
+        .init_session(Arc::downgrade(&session));
+    let mut turn = turn;
+    install_skills(Arc::get_mut(&mut turn).expect("unique turn arc"), vec![skill.clone()]);
+    session.services.flow_runner.register_turn(&turn);
+    (session, turn, skill, manager, dir)
+}
+
+#[tokio::test]
+async fn flow_runner_executes_model_invoked_flow_end_to_end() {
+    let (session, turn, skill, manager, _dir) = wired_flow_runner("model-invoked-flow").await;
+
+    let run = tokio::spawn({
+        let session = session.clone();
+        async move {
+            // Drive the run through the public extension trait, exactly as
+            // the `skills.flow__run` tool does.
+            let runner: Arc<dyn FlowRunner> = session.services.flow_runner.clone();
+            runner
+                .run_flow(
+                    &turn.sub_id,
+                    &skill.name,
+                    serde_json::Map::from_iter([("text".to_string(), json!("hello flow"))]),
+                )
+                .await
+        }
+    });
+
+    let thread_id = timeout(Duration::from_secs(30), async {
+        loop {
+            if let Some(thread_id) =
+                next_pending_child_thread_id(&manager, session.thread_id, &Default::default())
+                    .await
+            {
+                return thread_id;
+            }
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("model-invoked flow should spawn its agent");
+    drive_child_to_completion(&manager, thread_id, "flow result text").await;
+
+    let output = run.await.expect("runner task should finish").expect("flow run should succeed");
+    // The child reply is plain text (not JSON), so the step output is the
+    // final message verbatim.
+    assert_eq!(output.outputs["r"], json!("flow result text"));
+}
+
+#[tokio::test]
+async fn flow_runner_returns_not_found_for_unknown_or_non_flow_skill() {
+    let (session, turn, _skill, _manager, _dir) = wired_flow_runner("known-flow").await;
+    let runner: Arc<dyn FlowRunner> = session.services.flow_runner.clone();
+
+    let err = runner
+        .run_flow(&turn.sub_id, "no-such-flow", Default::default())
+        .await
+        .expect_err("unknown flow names must not run");
+    assert!(
+        matches!(err, FlowRunError::NotFound { ref name } if name == "no-such-flow"),
+        "unexpected error: {err:?}"
+    );
+}
+
+#[tokio::test]
+async fn flow_runner_reports_inactive_turn_after_turn_drop() {
+    let (session, turn, skill, _manager, _dir) = wired_flow_runner("dropped-turn-flow").await;
+    let runner: Arc<dyn FlowRunner> = session.services.flow_runner.clone();
+    let turn_id = turn.sub_id.clone();
+    drop(turn);
+
+    let err = runner
+        .run_flow(&turn_id, &skill.name, Default::default())
+        .await
+        .expect_err("dropped turns must not be routable");
+    assert!(
+        matches!(err, FlowRunError::InactiveTurn { .. }),
+        "unexpected error: {err:?}"
+    );
+    let FlowRunError::InactiveTurn { turn_id: reported } = err else {
+        unreachable!("matched above");
+    };
+    assert_eq!(reported, turn_id);
+}

@@ -95,5 +95,25 @@ fn catalog_filters_by_mode_and_type() {
     let knowledge = test_entry("knowledge", SkillType::Knowledge);
     let flow = test_entry("flow", SkillType::Flow);
     assert!(!knowledge.is_model_invocable(ModeKind::Default));
-    assert!(!flow.is_model_invocable(ModeKind::Default));
+    assert!(flow.is_model_invocable(ModeKind::Default));
+}
+
+#[test]
+fn flow_visibility_dimensions_are_independent() {
+    // M2.3: prompt visibility and model invocability are separate dimensions.
+    // Flow entries stay out of the prompt catalog (slash-only trigger) while
+    // becoming invocable through the dedicated skills.flow__run tool.
+    let flow = test_entry("flow", SkillType::Flow);
+    assert!(!flow.prompt_visible);
+    assert!(!flow.is_visible_in_mode(ModeKind::Default));
+    assert!(flow.is_model_invocable(ModeKind::Default));
+
+    // disable_model_invocation turns the model dimension off independently.
+    let opted_out = test_entry("opted-out", SkillType::Flow).with_disable_model_invocation(true);
+    assert!(!opted_out.is_model_invocable(ModeKind::Default));
+
+    // hidden_in_modes still applies to the model dimension.
+    let hidden = test_entry("hidden", SkillType::Flow).with_hidden_in_modes(vec![ModeKind::Plan]);
+    assert!(!hidden.is_model_invocable(ModeKind::Plan));
+    assert!(hidden.is_model_invocable(ModeKind::Default));
 }

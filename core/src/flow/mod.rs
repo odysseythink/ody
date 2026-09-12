@@ -58,18 +58,21 @@ pub(crate) mod interp;
 mod checkpoint;
 mod host;
 mod plan_summary;
+mod runner;
 mod runtime;
 mod trigger;
 
 pub(crate) use checkpoint::CheckpointStore;
 pub(crate) use checkpoint::plan_fingerprint;
 pub(crate) use plan_summary::FlowPlanSummary;
+pub(crate) use runner::SessionFlowRunner;
 
 pub(crate) use host::SessionFlowAgentHost;
 pub(crate) use runtime::YamlFlowRuntime;
 pub(crate) use trigger::flow_args_from_input;
 pub(crate) use trigger::partition_flow_skills;
 pub(crate) use trigger::run_flow_skills_in_turn;
+pub(crate) use trigger::run_one_flow_skill;
 
 #[cfg(test)]
 #[path = "flow_tests.rs"]

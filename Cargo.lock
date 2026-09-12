@@ -7634,6 +7634,8 @@ dependencies = [
  "ody-tools",
  "ody-utils-absolute-path",
  "pretty_assertions",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 

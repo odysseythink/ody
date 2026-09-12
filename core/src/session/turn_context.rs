@@ -941,6 +941,10 @@ impl Session {
             turn_context.final_output_json_schema = final_schema;
         }
         let turn_context = Arc::new(turn_context);
+        // M2.3: register the fresh turn with the flow runner so the
+        // extension `skills.flow__run` tool can route model invocations back
+        // to this turn's context (weakly held; purged when the turn drops).
+        self.services.flow_runner.register_turn(&turn_context);
         if turn_context
             .environments
             .single_local_environment_cwd()

@@ -1652,3 +1652,332 @@ async fn dependency_injected_skills_carry_dependency_annotation() -> TestResult 
     );
     Ok(())
 }
+
+
+// ---- M2.3 flow__run tool + catalog visibility split tests ----
+
+use ody_extension_api::FlowRunError;
+use ody_extension_api::FlowRunFuture;
+use ody_extension_api::FlowRunOutput;
+use ody_extension_api::FlowRunner;
+
+/// Records invocations and replays a canned result, standing in for the
+/// host-side `SessionFlowRunner` (core) without a session.
+#[derive(Clone)]
+struct MockFlowRunner {
+    calls: Arc<Mutex<Vec<(String, String, serde_json::Map<String, serde_json::Value>)>>>,
+    result: Result<FlowRunOutput, FlowRunError>,
+}
+
+impl MockFlowRunner {
+    fn ok(outputs: serde_json::Map<String, serde_json::Value>) -> Self {
+        Self {
+            calls: Arc::new(Mutex::new(Vec::new())),
+            result: Ok(FlowRunOutput { outputs }),
+        }
+    }
+
+    fn err(err: FlowRunError) -> Self {
+        Self {
+            calls: Arc::new(Mutex::new(Vec::new())),
+            result: Err(err),
+        }
+    }
+}
+
+impl FlowRunner for MockFlowRunner {
+    fn run_flow<'a>(
+        &'a self,
+        turn_id: &'a str,
+        name: &'a str,
+        args: serde_json::Map<String, serde_json::Value>,
+    ) -> FlowRunFuture<'a> {
+        let calls = Arc::clone(&self.calls);
+        let result = self.result.clone();
+        Box::pin(async move {
+            calls
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push((turn_id.to_string(), name.to_string(), args));
+            result
+        })
+    }
+}
+
+fn flow_skill_metadata(name: &str) -> SkillMetadata {
+    SkillMetadata {
+        name: name.to_string(),
+        description: format!("{name} flow."),
+        short_description: None,
+        interface: None,
+        dependencies: None,
+        policy: None,
+        flow_artifact: None,
+        path_to_skills_md: AbsolutePathBuf::try_from(format!("/tmp/{name}/SKILL.md"))
+            .expect("absolute skill path"),
+        scope: SkillScope::User,
+        plugin_id: None,
+        skill_type: SkillType::Flow,
+        triggers: Vec::new(),
+        hidden_in_modes: Vec::new(),
+        disable_model_invocation: false,
+        mermaid: None,
+        d2: None,
+    }
+}
+
+struct InstalledTools {
+    tools: Vec<Arc<dyn ody_extension_api::ToolExecutor<ToolCall>>>,
+}
+
+/// Install the extension against a host snapshot holding `skills`, optionally
+/// seeding the session store with a host `FlowRunner`, then return the
+/// registered tools. Tools capture the runner at registration time, so the
+/// runner must be inserted before this call.
+async fn install_with_host_skills(
+    skills: Vec<SkillMetadata>,
+    flow_runner: Option<Arc<dyn FlowRunner>>,
+) -> InstalledTools {
+    let mut outcome = SkillLoadOutcome::default();
+    outcome.skills = skills;
+    let snapshot = Arc::new(HostSkillsSnapshot::new(Arc::new(outcome)));
+    let mut builder = ExtensionRegistryBuilder::new();
+    install(&mut builder, skills_extension_config);
+    let registry = builder.build();
+
+    let session_store = ExtensionData::new("session");
+    session_store.insert((*snapshot).clone());
+    if let Some(runner) = flow_runner {
+        session_store.insert::<Arc<dyn FlowRunner>>(runner);
+    }
+    let thread_store = ExtensionData::new("thread");
+    registry.thread_lifecycle_contributors()[0]
+        .on_thread_start(ThreadStartInput {
+            config: &default_config(),
+            session_source: &SessionSource::Cli,
+            persistent_thread_state_available: true,
+            environments: &[],
+            session_store: &session_store,
+            thread_store: &thread_store,
+        })
+        .await;
+
+    let tools = registry
+        .tool_contributors()[0]
+        .tools(&session_store, &thread_store);
+    InstalledTools { tools }
+}
+
+fn find_tool<'a>(
+    tools: &'a [Arc<dyn ody_extension_api::ToolExecutor<ToolCall>>],
+    name: &str,
+) -> Result<&'a Arc<dyn ody_extension_api::ToolExecutor<ToolCall>>, Box<dyn std::error::Error>> {
+    tools
+        .iter()
+        .find(|tool| tool.tool_name().name == name)
+        .ok_or_else(|| format!("skills.{name} tool should be registered").into())
+}
+
+fn function_payload(arguments: serde_json::Value) -> ToolPayload {
+    ToolPayload::Function {
+        arguments: arguments.to_string(),
+    }
+}
+
+fn tool_call(
+    tool: &Arc<dyn ody_extension_api::ToolExecutor<ToolCall>>,
+    payload: &ToolPayload,
+) -> ToolCall {
+    ToolCall {
+        turn_id: "turn-1".to_string(),
+        call_id: "call-1".to_string(),
+        tool_name: tool.tool_name(),
+        model: "gpt-test".to_string(),
+        truncation_policy: TruncationPolicy::Bytes(1_024),
+        conversation_history: ConversationHistory::default(),
+        turn_item_emitter: Arc::new(NoopTurnItemEmitter),
+        environments: Vec::new(),
+        guardian_approved_action_id: None,
+        payload: payload.clone(),
+    }
+}
+
+#[tokio::test]
+async fn skills_list_exposes_flow_skills_for_model_invocation() -> TestResult {
+    let installed = install_with_host_skills(vec![flow_skill_metadata("game-create")], None).await;
+    let list_tool = find_tool(&installed.tools, "list")?;
+
+    let payload = function_payload(serde_json::json!({"authority": {"kind": "host"}}));
+    let output = list_tool.handle(tool_call(list_tool, &payload)).await?;
+    let response = output
+        .post_tool_use_response("call-1", &payload)
+        .ok_or("skills.list should expose structured output")?;
+    let names: Vec<&str> = response["skills"]
+        .as_array()
+        .ok_or("skills should be an array")?
+        .iter()
+        .filter_map(|skill| skill["name"].as_str())
+        .collect();
+    assert_eq!(vec!["game-create"], names);
+    Ok(())
+}
+
+#[tokio::test]
+async fn skills_read_rejects_flow_skills() -> TestResult {
+    let read_requests = Arc::new(Mutex::new(Vec::new()));
+    let provider = Arc::new(StaticSkillProvider {
+        catalog: SkillCatalog {
+            entries: vec![test_entry(
+                SkillSourceKind::Host,
+                "host",
+                "host/game-create",
+                "game-create/SKILL.md",
+            )
+            .with_skill_type(SkillType::Flow)],
+            warnings: Vec::new(),
+        },
+        read_requests: Arc::clone(&read_requests),
+        list_calls: None,
+        fail_first_list: false,
+    });
+    let providers = SkillProviders::new().with_host_provider(provider);
+    let mut builder = ExtensionRegistryBuilder::new();
+    install_with_providers(&mut builder, providers, skills_extension_config);
+    let registry = builder.build();
+
+    let session_store = ExtensionData::new("session");
+    let thread_store = ExtensionData::new("thread");
+    registry.thread_lifecycle_contributors()[0]
+        .on_thread_start(ThreadStartInput {
+            config: &default_config(),
+            session_source: &SessionSource::Cli,
+            persistent_thread_state_available: true,
+            environments: &[],
+            session_store: &session_store,
+            thread_store: &thread_store,
+        })
+        .await;
+
+    let tools = registry.tool_contributors()[0].tools(&session_store, &thread_store);
+    let read_tool = find_tool(&tools, "read")?;
+    let payload = function_payload(serde_json::json!({
+        "authority": {"kind": "host"},
+        "package": "host/game-create",
+        "resource": "game-create/SKILL.md",
+    }));
+    let result = read_tool.handle(tool_call(read_tool, &payload)).await;
+    let err = match result {
+        Err(err) => err,
+        Ok(_) => return Err("skills.read must reject flow skills".into()),
+    };
+    assert!(
+        err.to_string().contains("skills.flow__run"),
+        "rejection should point at the flow__run entry point: {err}"
+    );
+    assert!(
+        read_requests
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_empty(),
+        "no read request should reach the provider"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn skills_flow_run_executes_through_host_runner() -> TestResult {
+    let runner = MockFlowRunner::ok(serde_json::Map::from_iter([(
+        "gdd".to_string(),
+        serde_json::json!({"mechanics": ["jump"]}),
+    )]));
+    let installed = install_with_host_skills(
+        vec![flow_skill_metadata("game-create")],
+        Some(Arc::new(runner.clone())),
+    )
+    .await;
+    let run_tool = find_tool(&installed.tools, "flow__run")?;
+
+    let payload = function_payload(
+        serde_json::json!({"name": "game-create", "args": {"text": "太空跳跃"}}),
+    );
+    let output = run_tool.handle(tool_call(run_tool, &payload)).await?;
+    let response = output
+        .post_tool_use_response("call-1", &payload)
+        .ok_or("skills.flow__run should expose structured output")?;
+    assert_eq!(response["outputs"]["gdd"]["mechanics"][0], "jump");
+
+    let calls = runner
+        .calls
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    assert_eq!(calls.len(), 1, "runner should be invoked exactly once");
+    let (turn_id, name, args) = &calls[0];
+    assert_eq!(turn_id, "turn-1");
+    assert_eq!(name, "game-create");
+    assert_eq!(args["text"], "太空跳跃");
+    Ok(())
+}
+
+#[tokio::test]
+async fn skills_flow_run_rejects_unknown_or_non_flow_names() -> TestResult {
+    let installed = install_with_host_skills(vec![flow_skill_metadata("game-create")], None).await;
+    let run_tool = find_tool(&installed.tools, "flow__run")?;
+
+    let payload = function_payload(serde_json::json!({"name": "no-such-flow"}));
+    let unknown = run_tool.handle(tool_call(run_tool, &payload)).await;
+    assert!(
+        unknown.is_err(),
+        "unknown flow names must be rejected before reaching the runner"
+    );
+
+    let payload = function_payload(serde_json::json!({"name": "inline-skill"}));
+    let inline = run_tool.handle(tool_call(run_tool, &payload)).await;
+    assert!(
+        inline.is_err(),
+        "non-flow skills must be rejected even if listed elsewhere"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn skills_flow_run_rejects_when_host_runner_is_absent() -> TestResult {
+    let installed = install_with_host_skills(vec![flow_skill_metadata("game-create")], None).await;
+    let run_tool = find_tool(&installed.tools, "flow__run")?;
+
+    let payload = function_payload(serde_json::json!({"name": "game-create"}));
+    let result = run_tool.handle(tool_call(run_tool, &payload)).await;
+    let err = match result {
+        Err(err) => err,
+        Ok(_) => return Err("missing host runner must fail cleanly".into()),
+    };
+    assert!(
+        err.to_string().contains("not available"),
+        "unexpected error: {err}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn skills_flow_run_surfaces_runner_failure_reason() -> TestResult {
+    let runner = MockFlowRunner::err(FlowRunError::Failed {
+        reason: "guardian denied the flow run".to_string(),
+    });
+    let installed = install_with_host_skills(
+        vec![flow_skill_metadata("game-create")],
+        Some(Arc::new(runner)),
+    )
+    .await;
+    let run_tool = find_tool(&installed.tools, "flow__run")?;
+
+    let payload = function_payload(serde_json::json!({"name": "game-create"}));
+    let result = run_tool.handle(tool_call(run_tool, &payload)).await;
+    let err = match result {
+        Err(err) => err,
+        Ok(_) => return Err("runner failure should surface to the model".into()),
+    };
+    assert!(
+        err.to_string().contains("guardian denied"),
+        "denial reason should be preserved: {err}"
+    );
+    Ok(())
+}

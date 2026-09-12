@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use ody_core_skills::HostSkillsSnapshot;
+use ody_extension_api::FlowRunner;
 use ody_extension_api::FunctionCallError;
 use ody_extension_api::JsonToolOutput;
 use ody_extension_api::ResponsesApiTool;
@@ -29,11 +30,13 @@ use crate::state::SkillsThreadState;
 
 mod list;
 mod read;
+mod run;
 mod schema;
 
 const SKILLS_NAMESPACE: &str = "skills";
 const MAX_HANDLE_BYTES: usize = 2_048;
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn skill_tools(
     providers: SkillProviders,
     mcp_resources: Option<Arc<McpResourceClient>>,
@@ -42,6 +45,7 @@ pub(crate) fn skill_tools(
     host_enabled: bool,
     executor_enabled: bool,
     orchestrator_enabled: bool,
+    flow_runner: Option<Arc<dyn FlowRunner>>,
 ) -> Vec<Arc<dyn ToolExecutor<ToolCall>>> {
     let context = SkillToolContext {
         providers,
@@ -51,12 +55,16 @@ pub(crate) fn skill_tools(
         host_enabled,
         executor_enabled,
         orchestrator_enabled,
+        flow_runner,
     };
     vec![
         Arc::new(list::ListTool {
             context: context.clone(),
         }),
-        Arc::new(read::ReadTool { context }),
+        Arc::new(read::ReadTool {
+            context: context.clone(),
+        }),
+        Arc::new(run::RunTool { context }),
     ]
 }
 
@@ -69,6 +77,7 @@ struct SkillToolContext {
     host_enabled: bool,
     executor_enabled: bool,
     orchestrator_enabled: bool,
+    flow_runner: Option<Arc<dyn FlowRunner>>,
 }
 
 impl SkillToolContext {

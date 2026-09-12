@@ -11,6 +11,7 @@ use ody_extension_api::ExtensionData;
 use ody_extension_api::ExtensionEventSink;
 use ody_extension_api::ExtensionFuture;
 use ody_extension_api::ExtensionRegistryBuilder;
+use ody_extension_api::FlowRunner;
 use ody_extension_api::PromptFragment;
 use ody_extension_api::ThreadLifecycleContributor;
 use ody_extension_api::ThreadStartInput;
@@ -213,6 +214,11 @@ where
             has_host,
             has_executor,
             has_orchestrator,
+            // `ExtensionData::get` wraps values in an outer `Arc`; unwrap the
+            // host-provided `Arc<dyn FlowRunner>` back out.
+            session_store
+                .get::<Arc<dyn FlowRunner>>()
+                .map(|runner| Arc::clone(runner.as_ref())),
         )
     }
 }

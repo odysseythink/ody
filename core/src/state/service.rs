@@ -70,6 +70,10 @@ pub(crate) struct SessionServices {
     pub(crate) extensions: Arc<ExtensionRegistry<crate::config::Config>>,
     pub(crate) session_extension_data: ExtensionData,
     pub(crate) thread_extension_data: ExtensionData,
+    /// Host-side executor behind the extension `skills.flow__run` tool
+    /// (M2.3); also injected into `session_extension_data` as
+    /// `Arc<dyn FlowRunner>`.
+    pub(crate) flow_runner: Arc<crate::flow::SessionFlowRunner>,
     pub(crate) supports_form_elicitation: AtomicBool,
     pub(crate) mcp_thread_init: ExtensionDataInit,
     pub(crate) agent_control: AgentControl,
