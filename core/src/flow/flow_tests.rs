@@ -1190,3 +1190,155 @@ async fn flow_fanout_end_to_end_spawns_progresses_and_records_outputs() {
     assert!(spawn_prompts[3].contains("impl 跳跃 done"), "implementations binding missing: {}", spawn_prompts[3]);
     assert!(spawn_prompts[4].contains("运行测试"), "verify prompt missing: {}", spawn_prompts[4]);
 }
+
+
+// ---- M2.1 checkpoint/replay tests ----
+
+use super::checkpoint::plan_fingerprint;
+use super::checkpoint::prompt_key;
+use super::checkpoint::CheckpointStore;
+
+/// Wraps MockHost with an in-memory checkpoint map so kernel tests can
+/// assert hit/record behavior without touching the filesystem. The cache is
+/// shared across clones: a re-run host replays entries recorded by the
+/// previous (failed) run, mirroring the on-disk `CheckpointStore`.
+#[derive(Default)]
+struct MemCheckpointHost {
+    inner: MockHost,
+    cache: Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
+}
+
+impl FlowAgentHost for MemCheckpointHost {
+    async fn run_agent(&self, prompt: String) -> Result<String, FlowHostError> {
+        self.inner.run_agent(prompt).await
+    }
+
+    fn checkpoint_read(
+        &self,
+        prompt: &str,
+    ) -> impl std::future::Future<Output = Option<String>> + Send {
+        let cached = self.cache.lock().unwrap().get(prompt).cloned();
+        async move { cached }
+    }
+
+    fn checkpoint_write(
+        &self,
+        prompt: &str,
+        output: &str,
+    ) -> impl std::future::Future<Output = ()> + Send {
+        // Test impl mutates eagerly (the real impl awaits the store lock).
+        self.cache
+            .lock()
+            .unwrap()
+            .insert(prompt.to_string(), output.to_string());
+        async {}
+    }
+}
+
+#[test]
+fn checkpoint_fingerprint_is_stable_and_source_sensitive() {
+    let src = "phases:\n  - id: x\n    steps: []\n";
+    let fp = plan_fingerprint(src);
+    assert_eq!(fp, plan_fingerprint(src));
+    assert_ne!(fp, plan_fingerprint("phases:\n  - id: y\n    steps: []\n"));
+    assert_eq!(fp.len(), 16);
+    assert_ne!(prompt_key("One"), prompt_key("Two"));
+}
+
+#[tokio::test]
+async fn checkpoint_hit_skips_agent_and_replays_output() {
+    let host = MemCheckpointHost::default();
+    host.cache.lock().unwrap().insert("Generate".to_string(), "{\"cached\":true}".to_string());
+    let plan = validate(
+        &YamlFlowRuntime,
+        "phases:\n  - id: design\n    steps:\n      - agent: Generate\n        output: gdd\n      - agent: Use ${{ gdd }}\n",
+    );
+    let outcome = YamlFlowRuntime.run(plan, FlowContext::default(), &host).await.unwrap();
+    // Cached value replays as parsed JSON and feeds later interpolation.
+    assert_eq!(outcome.outputs["gdd"], json!({"cached": true}));
+    // Only the second step spawned an agent.
+    assert_eq!(
+        *host.inner.prompts.lock().unwrap(),
+        vec!["Use {\"cached\":true}".to_string()]
+    );
+}
+
+#[tokio::test]
+async fn failed_run_records_entries_and_rerun_resumes_without_respawn() {
+    let plan = validate(
+        &YamlFlowRuntime,
+        "phases:\n  - id: p\n    steps:\n      - agent: One\n        output: a\n      - agent: Two\n        output: b\n      - agent: Three\n",
+    );
+    // First run: One/Two succeed, Three fails → their entries are retained.
+    let failing = MemCheckpointHost {
+        inner: MockHost::with(vec![Ok("1".into()), Ok("2".into()), Err("boom".into())]),
+        ..Default::default()
+    };
+    let err = YamlFlowRuntime
+        .run(plan.clone(), FlowContext::default(), &failing)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, FlowError::Agent { .. }));
+    assert_eq!(failing.inner.prompts.lock().unwrap().len(), 3);
+
+    // Second run with a succeeding host sharing the recorded cache: One/Two
+    // hit the cache; only Three spawns.
+    let succeeding = MemCheckpointHost {
+        inner: MockHost::default(),
+        cache: failing.cache.clone(),
+    };
+    let outcome = YamlFlowRuntime
+        .run(plan, FlowContext::default(), &succeeding)
+        .await
+        .unwrap();
+    assert_eq!(outcome.outputs["a"], json!(1));
+    assert_eq!(outcome.outputs["b"], json!(2));
+    assert_eq!(*succeeding.inner.prompts.lock().unwrap(), vec!["Three".to_string()]);
+}
+
+#[tokio::test]
+async fn checkpoint_keys_follow_rendered_prompt_not_step_position() {
+    let plan = validate(
+        &YamlFlowRuntime,
+        "phases:\n  - id: p\n    steps:\n      - agent: Do ${{ args.task }}\n        output: r\n",
+    );
+    let args_alpha = serde_json::Map::from_iter([("task".to_string(), json!("alpha"))]);
+    let first = MemCheckpointHost::default();
+    YamlFlowRuntime
+        .run(plan.clone(), FlowContext { args: args_alpha }, &first)
+        .await
+        .unwrap();
+    // Same plan, different args → different rendered prompt → no cache hit.
+    let second = MemCheckpointHost::default();
+    let args_beta = serde_json::Map::from_iter([("task".to_string(), json!("beta"))]);
+    let outcome = YamlFlowRuntime
+        .run(plan, FlowContext { args: args_beta }, &second)
+        .await
+        .unwrap();
+    assert_eq!(*second.inner.prompts.lock().unwrap(), vec!["Do beta".to_string()]);
+    assert_eq!(outcome.outputs["r"], json!("done: Do beta"));
+}
+
+#[tokio::test]
+async fn checkpoint_store_roundtrip_hit_and_discard() {
+    let dir = tempfile::tempdir().expect("temp ody_home");
+    let home = ody_utils_absolute_path::AbsolutePathBuf::try_from(dir.path().to_path_buf())
+        .expect("absolute path");
+    let fp = plan_fingerprint("phases:\n  - id: x\n    steps: []\n");
+    let store = CheckpointStore::open(&home, "game-create", &fp).await;
+    assert_eq!(store.lookup("prompt A").await, None);
+    store.record("prompt A", "out A").await;
+    assert_eq!(store.lookup("prompt A").await, Some("out A".to_string()));
+    // Reopen (simulates re-trigger): entries persist across store instances.
+    let reopened = CheckpointStore::open(&home, "game-create", &fp).await;
+    assert_eq!(reopened.lookup("prompt A").await, Some("out A".to_string()));
+    // Fingerprint mismatch starts clean (changed plan ⇒ full re-run).
+    let other_fp = plan_fingerprint("phases:\n  - id: y\n    steps: []\n");
+    let other = CheckpointStore::open(&home, "game-create", &other_fp).await;
+    assert_eq!(other.lookup("prompt A").await, None);
+    // Discard removes the run file; a fresh store sees nothing.
+    reopened.discard().await;
+    let after = CheckpointStore::open(&home, "game-create", &fp).await;
+    assert_eq!(after.lookup("prompt A").await, None);
+    assert!(!dir.path().join("flow-checkpoints").join(format!("game-create-{fp}.json")).exists());
+}

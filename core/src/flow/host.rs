@@ -59,6 +59,8 @@ pub(crate) struct SessionFlowAgentHost {
     /// reporting (M1.4 uses `run_call_id` as the progress event call id).
     flow_name: String,
     run_call_id: String,
+    /// Disk checkpoint store for this run (M2.1); `None` means no caching.
+    checkpoint_store: Option<Arc<crate::flow::CheckpointStore>>,
 }
 
 impl SessionFlowAgentHost {
@@ -73,6 +75,23 @@ impl SessionFlowAgentHost {
             turn,
             flow_name: flow_name.into(),
             run_call_id: format!("flow-run-{run_id}"),
+            checkpoint_store: None,
+        }
+    }
+
+    /// Attach a checkpoint store for this run (M2.1). Call before executing.
+    pub(crate) fn with_checkpoint_store(
+        mut self,
+        store: crate::flow::CheckpointStore,
+    ) -> Self {
+        self.checkpoint_store = Some(Arc::new(store));
+        self
+    }
+
+    /// Delete the run's checkpoint file after a fully successful run.
+    pub(crate) async fn discard_checkpoint(&self) {
+        if let Some(store) = &self.checkpoint_store {
+            store.discard().await;
         }
     }
 
@@ -266,6 +285,35 @@ impl FlowAgentHost for SessionFlowAgentHost {
                 }
             };
             session.send_event(&turn, event).await;
+        }
+    }
+
+    fn checkpoint_read(
+        &self,
+        prompt: &str,
+    ) -> impl std::future::Future<Output = Option<String>> + Send {
+        let store = self.checkpoint_store.clone();
+        let prompt = prompt.to_string();
+        async move {
+            match store {
+                Some(store) => store.lookup(&prompt).await,
+                None => None,
+            }
+        }
+    }
+
+    fn checkpoint_write(
+        &self,
+        prompt: &str,
+        output: &str,
+    ) -> impl std::future::Future<Output = ()> + Send {
+        let store = self.checkpoint_store.clone();
+        let prompt = prompt.to_string();
+        let output = output.to_string();
+        async move {
+            if let Some(store) = store {
+                store.record(&prompt, &output).await;
+            }
         }
     }
 }

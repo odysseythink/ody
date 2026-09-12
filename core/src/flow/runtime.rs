@@ -299,10 +299,17 @@ async fn run_one_agent<H: FlowAgentHost>(
     prompt: String,
     label: &str,
 ) -> Result<Value, FlowError> {
-    let raw = host.run_agent(prompt).await.map_err(|source| FlowError::Agent {
-        step: label.to_string(),
-        source,
-    })?;
+    if let Some(cached) = host.checkpoint_read(&prompt).await {
+        return Ok(parse_agent_output(&cached));
+    }
+    let raw = host
+        .run_agent(prompt.clone())
+        .await
+        .map_err(|source| FlowError::Agent {
+            step: label.to_string(),
+            source,
+        })?;
+    host.checkpoint_write(&prompt, &raw).await;
     Ok(parse_agent_output(&raw))
 }
 

@@ -20,7 +20,6 @@ use crate::context::ContextualUserFragment;
 use crate::context::FlowResultMessage;
 use crate::session::session::Session;
 
-use super::FlowAgentHost;
 use super::FlowContext;
 use super::FlowError;
 use super::FlowOutcome;
@@ -80,16 +79,29 @@ pub(crate) async fn read_flow_source(
         })
 }
 
-/// Validate source and execute it against an injected host. Generic over
-/// [`FlowAgentHost`] so tests can drive it with a mock (no real spawn).
-pub(crate) async fn run_flow_skill<H: FlowAgentHost>(
-    source: &str,
-    ctx: FlowContext,
-    host: &H,
+/// Read, validate, and execute one flow skill with checkpointing (M2.1).
+/// Approval gating (M2.2) slots in between validate and run.
+pub(crate) async fn run_one_flow_skill(
+    sess: &Arc<Session>,
+    turn_context: &Arc<TurnContext>,
+    skill: &SkillMetadata,
+    args: &serde_json::Map<String, serde_json::Value>,
 ) -> Result<FlowOutcome, FlowError> {
+    let name = skill.name.clone();
+    let source = read_flow_source(&turn_context.turn_skills.snapshot, skill).await?;
     let runtime = YamlFlowRuntime::new();
-    let plan = runtime.validate(source)?;
-    runtime.run(plan, ctx, host).await
+    let plan = runtime.validate(&source)?;
+    let fingerprint = crate::flow::plan_fingerprint(&source);
+    let ody_home = sess.ody_home().await;
+    let host = SessionFlowAgentHost::new(Arc::clone(sess), Arc::clone(turn_context), name.clone())
+        .with_checkpoint_store(
+            crate::flow::CheckpointStore::open(&ody_home, &name, &fingerprint).await,
+        );
+    let result = runtime.run(plan, FlowContext { args: args.clone() }, &host).await;
+    if result.is_ok() {
+        host.discard_checkpoint().await;
+    }
+    result
 }
 
 /// Execute every mentioned flow skill serially in mention order (A6) and
@@ -105,13 +117,7 @@ pub(crate) async fn run_flow_skills_in_turn(
     let mut items = Vec::with_capacity(skills.len());
     for skill in skills {
         let name = skill.name.clone();
-        let result = match read_flow_source(&turn_context.turn_skills.snapshot, skill).await {
-            Ok(source) => {
-                let host = SessionFlowAgentHost::new(Arc::clone(sess), Arc::clone(turn_context), name.clone());
-                run_flow_skill(&source, FlowContext { args: args.clone() }, &host).await
-            }
-            Err(err) => Err(err),
-        };
+        let result = run_one_flow_skill(sess, turn_context, skill, &args).await;
         turn_context.session_telemetry.counter(
             "ody.flow.run",
             /*inc*/ 1,

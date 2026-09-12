@@ -55,9 +55,13 @@ use ody_core_skills::FlowPlan;
 
 pub(crate) mod interp;
 
+mod checkpoint;
 mod host;
 mod runtime;
 mod trigger;
+
+pub(crate) use checkpoint::CheckpointStore;
+pub(crate) use checkpoint::plan_fingerprint;
 
 pub(crate) use host::SessionFlowAgentHost;
 pub(crate) use runtime::YamlFlowRuntime;
@@ -208,6 +212,26 @@ pub(crate) trait FlowAgentHost: Send + Sync {
     fn report_progress(
         &self,
         _progress: FlowProgress,
+    ) -> impl std::future::Future<Output = ()> + Send {
+        async {}
+    }
+
+    /// Look up a previously recorded result for the exact rendered prompt
+    /// (M2.1 checkpoint/replay). Provided default: no cache.
+    fn checkpoint_read(
+        &self,
+        _prompt: &str,
+    ) -> impl std::future::Future<Output = Option<String>> + Send {
+        async { None }
+    }
+
+    /// Record a completed agent result for future replay. Provided default:
+    /// no-op. Implementations write through eagerly so an aborted run keeps
+    /// every agent that finished before the abort.
+    fn checkpoint_write(
+        &self,
+        _prompt: &str,
+        _output: &str,
     ) -> impl std::future::Future<Output = ()> + Send {
         async {}
     }

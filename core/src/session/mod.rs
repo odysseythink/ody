@@ -1103,7 +1103,6 @@ impl Session {
         }
     }
 
-    #[cfg(test)]
     pub(crate) async fn ody_home(&self) -> AbsolutePathBuf {
         let state = self.state.lock().await;
         state.session_configuration.ody_home().clone()
