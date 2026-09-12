@@ -1,6 +1,21 @@
 use super::*;
 
 impl AgentControl {
+    /// Remove a finished sub-agent and free its spawn slot without waiting for
+    /// its loop to process a shutdown op. The flow host uses this on the
+    /// completion path so the next step can spawn immediately instead of
+    /// paying a shutdown round-trip on the flow's critical path (D1); the
+    /// sub-agent's own loop already persisted its rollout before reporting the
+    /// final status.
+    pub(crate) async fn release_finished_agent(&self, agent_id: ThreadId) {
+        let Ok(state) = self.upgrade() else {
+            return;
+        };
+        let _ = state.remove_thread(&agent_id).await;
+        self.forget_v2_residency(agent_id);
+        self.state.release_spawned_thread(agent_id);
+    }
+
     /// Submit a shutdown request for a live agent without marking it explicitly closed in
     /// persisted spawn-edge state.
     pub(crate) async fn shutdown_live_agent(&self, agent_id: ThreadId) -> OdyResult<String> {

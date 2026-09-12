@@ -116,9 +116,10 @@ M2.5 [normal] e2e + 手动走查（依赖 M2.1–M2.4）
 2. **成功路径 ✅**：run 1 三步全部完成，checkpoint 成功路径正确丢弃（目录空），最终答案正确。
 3. **中断-保留 ✅**：step A 完成后 Esc 中断 → `Conversation interrupted` → checkpoint 文件保留（1 条 step A 结果）。
 4. **resume 生效 ✅**：重触发后 step A 零 spawn 复用（checkpoint 中 step A 的值未被覆盖），直接续跑 step B。
-5. **走查发现的真实缺陷（记录，不在 M2.5 修）**：
-   - **D1**：被 Esc 中断的子代理线程槽位释放滞后，紧接的 resume run spawn step B 撞 `agent thread limit reached` → flow 失败（checkpoint 保留，容错正确，但用户体验差）。建议后续 M：interrupt 时同步等待子代理清理，或 resume 前回收 interrupted 槽位。
-   - **D2**：被中断的 step B 子代理滞后完成，其结果迟到写入了 checkpoint（entries 出现 step B 键），与 resume 重新 spawn 的 step B 形成覆盖竞争。建议后续 M：中断后迟到的 agent 完成通知不再写 checkpoint（或写前校验 flow run 代际）。
+5. **走查发现的缺陷 —— 事后调查结论与修复（同日完成）**：
+   - **D1（真实缺陷，已修复）**：根因是 flow 的 `SessionFlowAgentHost` 在子代理到达 final status 后**从不释放 V1 AgentRegistry 槽位**——`reserve_spawn_slot` 是计数唯一增加点，而 `release_spawned_thread` 仅被 `shutdown_live_agent`/`close_agent`/`InternalAgentDied` 调用；flow host 的 `run_agent` = spawn + wait final + return，从不 shutdown（multi_agents 路径靠模型显式调 close_agent 工具释放，flow 是自动执行器没有这一步）。默认上限 `DEFAULT_AGENT_MAX_THREADS = Some(6)`，走查日志确认 `flow sub-agent spawn failed: agent thread limit reached` 发生在 run 5 的 step 2 spawn。修复：`AgentControl` 新增 `release_finished_agent(agent_id)`（轻量释放：remove_thread + forget_v2_residency + release_spawned_thread，无 shutdown 往返）；flow host 两条路径均调用——`run_agent` 在 wait_agent 返回 final 后同步释放，`AbortOnDrop` 的清理任务先 `interrupt_agent` 再 `release_finished_agent`。教训：清理任务原来用重型 `shutdown_live_agent`，其 `wait_until_terminated` 与流程时序竞争是早前某测试 ~4% flaky 的根源；轻量化后 145+ 轮 0 失败。
+   - **D2（误判，非缺陷）**：走查中观察到的 checkpoint 第二条（`b74a37…→"Radiant"`）不是"中断后迟到写"。日志证实 thread `01a095cc-49f5` 是 run 5 自己 spawn 的 step A 子代理——run 5 的 prompt 因 **PTY 走查输入框内容累积污染**（"the morning sun/walkflow the morning sun/…"）与 checkpoint 键不匹配 → 缓存未命中 → 正常重跑写入。中断的 flow future 被 drop 后没有任何代码路径会调 `checkpoint_write`，不存在覆盖竞争。（PTY 输入污染本身记为 TUI 走查遗留观察，不在本里程碑范围。）
+   - 回归测试（`core/src/flow/flow_tests.rs`）：`flow_serial_steps_release_subagent_slots_after_completion`（max_threads=2 + 3 步串行 flow 成功——泄漏则第 3 步撞墙）；`flow_interrupt_releases_subagent_slot_for_immediate_resume`（max_threads=1，run1 abort 后 run2 立即重触发成功）。
 6. resume 提示 UI：M2.1 未加显式 "resuming from checkpoint" 提示，resume 在 UI 上表现为"审批后直接开始后续步骤"（静默恢复）。如需显性提示，记入后续 M。
 
-结论：M2.1–M2.5 全部落地，e2e 自动化 + 真实 TUI 走查通过；D1/D2 为走查新发现，建议排入后续里程碑。
+结论：M2.1–M2.5 全部落地，e2e 自动化 + 真实 TUI 走查通过；走查发现的 D1 已修复（含 2 个回归测试），D2 经日志取证为误判（PTY prompt 污染导致的正常重跑，非迟到写竞争）。

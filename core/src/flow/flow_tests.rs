@@ -2171,3 +2171,190 @@ async fn flow_run_model_tool_end_to_end_with_guardian_approval() {
         "guardian assessment lifecycle missing: {assessment_statuses:?}"
     );
 }
+
+
+// ---- D1 regressions: flow sub-agent spawn slots must be released ----
+
+#[tokio::test]
+async fn flow_serial_steps_release_subagent_slots_after_completion() {
+    // D1 (completion path): the V1 AgentRegistry only frees a spawn slot on
+    // shutdown/close. The flow host must release each sub-agent after its
+    // final status; with max_threads = 2 a 3-step serial flow can only
+    // succeed if every completed step frees its slot.
+    let yaml = "phases:\n  - id: p\n    steps:\n      - agent: Step one on ${{ args.text }}\n        output: s1\n      - agent: Step two on ${{ s1 }}\n        output: s2\n      - agent: Step three on ${{ s2 }}\n        output: s3\n";
+    let dir = tempfile::tempdir().expect("create flow dir");
+    let flow_yaml = dir.path().join("flow.yaml");
+    std::fs::write(&flow_yaml, yaml).expect("write flow.yaml");
+    let skill = flow_skill_on_disk("slot-release-flow", &flow_yaml);
+
+    let (mut session, turn, rx) =
+        make_session_and_context_and_config_and_rx(Vec::new(), |config| {
+            config.permissions.approval_policy =
+                ody_config::Constrained::allow_any(AskForApproval::Never);
+            config.agent_max_depth = 4;
+            config.agent_max_threads = Some(2);
+        })
+        .await;
+    let manager = flow_test_thread_manager();
+    Arc::get_mut(&mut session)
+        .expect("unique session arc")
+        .services
+        .agent_control = manager.agent_control();
+    let session = Arc::new(session);
+    let mut turn = turn;
+    install_skills(Arc::get_mut(&mut turn).expect("unique turn arc"), vec![skill.clone()]);
+    let turn = Arc::new(turn);
+    let args = || flow_args_from_input(&[user_text_input("demo")]);
+    let mut ignored = Vec::new();
+    let mut driven = std::collections::HashSet::new();
+
+    let run = tokio::spawn({
+        let session = session.clone();
+        let turn = turn.clone();
+        let skill = skill.clone();
+        async move { run_one_flow_skill(&session, &turn, &skill, &args()).await }
+    });
+    for (what, result) in [("step 1", "result 1"), ("step 2", "result 2"), ("step 3", "result 3")] {
+        let prompt = next_spawn_prompt(&rx, what, &mut ignored).await;
+        assert!(prompt.starts_with("Step"), "unexpected prompt: {prompt}");
+        let thread_id = timeout(Duration::from_secs(30), async {
+            loop {
+                if let Some(thread_id) =
+                    next_pending_child_thread_id(&manager, session.thread_id, &driven).await
+                {
+                    return thread_id;
+                }
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| panic!("{what} thread should register"));
+        drive_child_to_completion(&manager, thread_id, result).await;
+        driven.insert(thread_id);
+    }
+
+    let outcome = run
+        .await
+        .expect("run task should finish")
+        .expect("3-step flow should succeed with max_threads = 2 once slots are released");
+    assert_eq!(outcome.outputs["s3"], json!("result 3"));
+}
+
+#[tokio::test]
+async fn flow_interrupt_releases_subagent_slot_for_immediate_resume() {
+    // D1 (interrupt path): after the run is aborted mid-step, the interrupted
+    // sub-agent's slot must be released so an immediate re-trigger can spawn
+    // again. max_threads = 1 leaves zero headroom for a leaked slot.
+    let yaml = "phases:\n  - id: p\n    steps:\n      - agent: Step A on ${{ args.text }}\n        output: a\n      - agent: Step B uses ${{ a }}\n        output: b\n";
+    let dir = tempfile::tempdir().expect("create flow dir");
+    let flow_yaml = dir.path().join("flow.yaml");
+    std::fs::write(&flow_yaml, yaml).expect("write flow.yaml");
+    let skill = flow_skill_on_disk("slot-interrupt-flow", &flow_yaml);
+
+    let (mut session, turn, rx) =
+        make_session_and_context_and_config_and_rx(Vec::new(), |config| {
+            config.permissions.approval_policy =
+                ody_config::Constrained::allow_any(AskForApproval::Never);
+            config.agent_max_depth = 4;
+            config.agent_max_threads = Some(1);
+        })
+        .await;
+    let manager = flow_test_thread_manager();
+    Arc::get_mut(&mut session)
+        .expect("unique session arc")
+        .services
+        .agent_control = manager.agent_control();
+    let session = Arc::new(session);
+    let mut turn = turn;
+    install_skills(Arc::get_mut(&mut turn).expect("unique turn arc"), vec![skill.clone()]);
+    let turn = Arc::new(turn);
+    let args = || flow_args_from_input(&[user_text_input("demo")]);
+    let mut ignored = Vec::new();
+
+    // Run 1: spawn step A, then abort while it is still in flight.
+    let run1 = tokio::spawn({
+        let session = session.clone();
+        let turn = turn.clone();
+        let skill = skill.clone();
+        async move { run_one_flow_skill(&session, &turn, &skill, &args()).await }
+    });
+    let _prompt_a = next_spawn_prompt(&rx, "step A", &mut ignored).await;
+    let thread_a = timeout(Duration::from_secs(30), async {
+        loop {
+            if let Some(thread_id) =
+                next_pending_child_thread_id(&manager, session.thread_id, &Default::default()).await
+            {
+                return thread_id;
+            }
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("step A thread should register");
+    run1.abort();
+    let join = run1.await.expect_err("aborted run should not complete");
+    assert!(join.is_cancelled(), "run should be cancelled, not panicked: {join:?}");
+
+    // The abort cleanup (interrupt + shutdown) runs on the session runtime;
+    // wait until the child thread is actually removed from the manager.
+    timeout(Duration::from_secs(30), async {
+        loop {
+            if manager.get_thread(thread_a).await.is_err() {
+                return;
+            }
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("interrupted sub-agent should be shut down and removed");
+
+    // Run 2 (immediate re-trigger): the released slot must allow this spawn.
+    let run2 = tokio::spawn({
+        let session = session.clone();
+        let turn = turn.clone();
+        async move { run_one_flow_skill(&session, &turn, &skill, &args()).await }
+    });
+    let prompt_a2 = next_spawn_prompt(&rx, "step A on the re-trigger", &mut ignored).await;
+    assert!(
+        prompt_a2.contains("Step A on demo"),
+        "re-trigger must spawn step A once the slot is released: {prompt_a2}"
+    );
+    // captured_ops() is the full spawn history: exclude run 1's already
+    // removed thread so we pick up the re-trigger's child.
+    let retrigger_driven = std::collections::HashSet::from([thread_a]);
+    let thread_a2 = timeout(Duration::from_secs(30), async {
+        loop {
+            if let Some(thread_id) =
+                next_pending_child_thread_id(&manager, session.thread_id, &retrigger_driven).await
+            {
+                return thread_id;
+            }
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("step A thread should register on the re-trigger");
+    drive_child_to_completion(&manager, thread_a2, "result A").await;
+    let prompt_b = next_spawn_prompt(&rx, "step B", &mut ignored).await;
+    assert!(prompt_b.contains("Step B uses result A"), "unexpected prompt: {prompt_b}");
+    let mut driven = std::collections::HashSet::from([thread_a, thread_a2]);
+    let thread_b = timeout(Duration::from_secs(30), async {
+        loop {
+            if let Some(thread_id) =
+                next_pending_child_thread_id(&manager, session.thread_id, &driven).await
+            {
+                return thread_id;
+            }
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("step B thread should register");
+    drive_child_to_completion(&manager, thread_b, "result B").await;
+
+    let outcome = run2
+        .await
+        .expect("re-trigger task should finish")
+        .expect("re-trigger should succeed once the interrupted slot is released");
+    assert_eq!(outcome.outputs["b"], json!("result B"));
+}

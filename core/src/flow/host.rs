@@ -238,7 +238,19 @@ impl FlowAgentHost for SessionFlowAgentHost {
     async fn run_agent(&self, prompt: String) -> Result<String, FlowHostError> {
         let thread_id = self.spawn_agent(prompt).await?;
         let _guard = AbortOnDrop::new(&self.session, thread_id);
-        self.wait_agent(thread_id).await
+        let result = self.wait_agent(thread_id).await;
+        // Release the sub-agent's spawn slot once it reached a final status.
+        // V1 AgentRegistry slots are only freed by shutdown/close; without
+        // this every flow sub-agent would leak a slot until the session ends
+        // and a long flow would eventually hit `agent_max_threads` (D1).
+        // The lightweight release (no shutdown round-trip) keeps the flow's
+        // critical path free of a wait on the child loop's termination.
+        self.session
+            .services
+            .agent_control
+            .release_finished_agent(thread_id)
+            .await;
+        result
     }
 
     fn report_progress(
@@ -362,10 +374,19 @@ impl Drop for AbortOnDrop {
         let agent_control = self.agent_control.clone();
         let thread_id = self.thread_id;
         self.runtime.spawn(async move {
-            if is_final(&agent_control.get_status(thread_id).await) {
-                return;
+            // Release the spawn slot on every path (D1): even when the
+            // sub-agent already reached a final status, V1 registry slots are
+            // only freed by shutdown/close — returning early here would leak
+            // the slot and starve an immediate re-trigger (resume) of
+            // `agent_max_threads` capacity.
+            if !is_final(&agent_control.get_status(thread_id).await) {
+                let _ = agent_control.interrupt_agent(thread_id).await;
             }
-            let _ = agent_control.interrupt_agent(thread_id).await;
+            // Lightweight release (no shutdown round-trip): the interrupted
+            // sub-agent's loop is shutting down anyway, and waiting on its
+            // termination here would delay the slot release that an
+            // immediate re-trigger (resume) depends on (D1).
+            agent_control.release_finished_agent(thread_id).await;
         });
     }
 }
