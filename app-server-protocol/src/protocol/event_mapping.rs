@@ -477,6 +477,56 @@ pub fn item_event_to_server_notification(
                 completed_at_ms: exec_command_end_event.completed_at_ms,
             })
         }
+        EventMsg::FlowPhaseBegin(event) => {
+            let item = ThreadItem::FlowPhase {
+                id: format!("{}:{}", event.call_id, event.phase_id),
+                flow_name: Some(event.flow_name),
+                phase_id: event.phase_id,
+                total_steps: event.total_steps,
+                completed_steps: 0,
+                finished: false,
+            };
+            ServerNotification::ItemStarted(ItemStartedNotification {
+                thread_id,
+                turn_id,
+                item,
+                started_at_ms: event.started_at_ms,
+            })
+        }
+        EventMsg::FlowStepCompleted(event) => {
+            // Same id as the phase begin item: clients update the step count
+            // on the existing phase row instead of starting a new one (A9).
+            let item = ThreadItem::FlowPhase {
+                id: format!("{}:{}", event.call_id, event.phase_id),
+                flow_name: Some(event.flow_name),
+                phase_id: event.phase_id,
+                total_steps: event.total_steps,
+                completed_steps: event.step_index,
+                finished: false,
+            };
+            ServerNotification::ItemCompleted(ItemCompletedNotification {
+                thread_id,
+                turn_id,
+                item,
+                completed_at_ms: event.completed_at_ms,
+            })
+        }
+        EventMsg::FlowPhaseEnd(event) => {
+            let item = ThreadItem::FlowPhase {
+                id: format!("{}:{}", event.call_id, event.phase_id),
+                flow_name: Some(event.flow_name),
+                phase_id: event.phase_id,
+                total_steps: event.total_steps,
+                completed_steps: event.completed_steps,
+                finished: true,
+            };
+            ServerNotification::ItemCompleted(ItemCompletedNotification {
+                thread_id,
+                turn_id,
+                item,
+                completed_at_ms: event.completed_at_ms,
+            })
+        }
         _ => unreachable!("unsupported item event"),
     }
 }
@@ -628,6 +678,102 @@ mod tests {
                 delta: "hello".to_string(),
             },
         );
+    }
+
+    #[test]
+    fn flow_progress_events_map_to_flow_phase_items() {
+        let begin = item_event_to_server_notification(
+            EventMsg::FlowPhaseBegin(ody_protocol::protocol::FlowPhaseBeginEvent {
+                call_id: "flow-run-0".to_string(),
+                flow_name: "make-game".to_string(),
+                phase_id: "design".to_string(),
+                total_steps: 2,
+                started_at_ms: 10,
+            }),
+            "thread-1",
+            "turn-1",
+        );
+        match begin {
+            ServerNotification::ItemStarted(payload) => {
+                assert_eq!(payload.thread_id, "thread-1");
+                assert_eq!(payload.turn_id, "turn-1");
+                assert_eq!(payload.started_at_ms, 10);
+                assert_eq!(
+                    payload.item,
+                    ThreadItem::FlowPhase {
+                        id: "flow-run-0:design".to_string(),
+                        flow_name: Some("make-game".to_string()),
+                        phase_id: "design".to_string(),
+                        total_steps: 2,
+                        completed_steps: 0,
+                        finished: false,
+                    }
+                );
+            }
+            other => panic!("expected ItemStarted notification, got {other:?}"),
+        }
+
+        // A step completion updates the same id's count without finishing.
+        let step = item_event_to_server_notification(
+            EventMsg::FlowStepCompleted(ody_protocol::protocol::FlowStepCompletedEvent {
+                call_id: "flow-run-0".to_string(),
+                flow_name: "make-game".to_string(),
+                phase_id: "design".to_string(),
+                step_index: 1,
+                total_steps: 2,
+                completed_at_ms: 20,
+            }),
+            "thread-1",
+            "turn-1",
+        );
+        match step {
+            ServerNotification::ItemCompleted(payload) => {
+                assert_eq!(payload.completed_at_ms, 20);
+                assert_eq!(
+                    payload.item,
+                    ThreadItem::FlowPhase {
+                        id: "flow-run-0:design".to_string(),
+                        flow_name: Some("make-game".to_string()),
+                        phase_id: "design".to_string(),
+                        total_steps: 2,
+                        completed_steps: 1,
+                        finished: false,
+                    }
+                );
+            }
+            other => panic!("expected ItemCompleted notification, got {other:?}"),
+        }
+
+        // The phase end carries the final count and `finished`.
+        let end = item_event_to_server_notification(
+            EventMsg::FlowPhaseEnd(ody_protocol::protocol::FlowPhaseEndEvent {
+                call_id: "flow-run-0".to_string(),
+                flow_name: "make-game".to_string(),
+                phase_id: "design".to_string(),
+                completed_steps: 1,
+                total_steps: 2,
+                completed_at_ms: 30,
+            }),
+            "thread-1",
+            "turn-1",
+        );
+        match end {
+            ServerNotification::ItemCompleted(payload) => {
+                assert_eq!(payload.completed_at_ms, 30);
+                assert_eq!(
+                    payload.item,
+                    ThreadItem::FlowPhase {
+                        id: "flow-run-0:design".to_string(),
+                        flow_name: Some("make-game".to_string()),
+                        phase_id: "design".to_string(),
+                        total_steps: 2,
+                        completed_steps: 1,
+                        finished: true,
+                    }
+                );
+            }
+            other => panic!("expected ItemCompleted notification, got {other:?}"),
+        }
     }
 
     #[test]

@@ -1729,6 +1729,53 @@
           ],
           "title": "ContextCompactionThreadItem",
           "type": "object"
+        },
+        {
+          "description": "Flow skill progress (M1.4): lifecycle of one phase of a flow run. `ItemStarted` carries the phase begin (completedSteps = 0); step completions and the phase end arrive as `ItemCompleted` with the same id and an updated `completedSteps` count. `finished` is true only on the phase-end notification so clients can tell the terminal row apart from intermediate step-count updates.",
+          "properties": {
+            "completedSteps": {
+              "format": "uint32",
+              "minimum": 0.0,
+              "type": "integer"
+            },
+            "finished": {
+              "type": "boolean"
+            },
+            "flowName": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "phaseId": {
+              "type": "string"
+            },
+            "totalSteps": {
+              "format": "uint32",
+              "minimum": 0.0,
+              "type": "integer"
+            },
+            "type": {
+              "enum": [
+                "flowPhase"
+              ],
+              "title": "FlowPhaseThreadItemType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "completedSteps",
+            "finished",
+            "id",
+            "phaseId",
+            "totalSteps",
+            "type"
+          ],
+          "title": "FlowPhaseThreadItem",
+          "type": "object"
         }
       ]
     },

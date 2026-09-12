@@ -1071,8 +1071,17 @@ impl ChatWidget {
         }
 
         let service_tier_commands = self.current_model_service_tier_commands();
-        let Some(command) =
-            find_slash_command(name, self.builtin_command_flags(), &service_tier_commands)
+        let skills = self
+            .bottom_pane
+            .skills()
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        let Some(command) = find_slash_command(
+            name,
+            self.builtin_command_flags(),
+            &service_tier_commands,
+            skills,
+        )
         else {
             self.add_info_message(
                 format!(
@@ -1093,6 +1102,20 @@ impl ChatWidget {
                     self.handle_service_tier_command_dispatch(command);
                     QueueDrain::Continue
                 }
+                SlashCommandItem::Skill(command) => {
+                    self.submit_user_message(UserMessage {
+                        text: String::new(),
+                        local_images: Vec::new(),
+                        remote_image_urls: Vec::new(),
+                        text_elements: Vec::new(),
+                        mention_bindings: vec![MentionBinding {
+                            sigil: '$',
+                            mention: command.name,
+                            path: format!("skill://{}", command.path.display()),
+                        }],
+                    });
+                    QueueDrain::Stop
+                }
             };
         }
 
@@ -1106,15 +1129,32 @@ impl ChatWidget {
             });
             return QueueDrain::Stop;
         }
-        let SlashCommandItem::Builtin(cmd) = command else {
-            self.submit_user_message(UserMessage {
-                text,
-                local_images,
-                remote_image_urls,
-                text_elements,
-                mention_bindings,
-            });
-            return QueueDrain::Stop;
+        let cmd = match command {
+            SlashCommandItem::Builtin(cmd) => cmd,
+            SlashCommandItem::Skill(command) => {
+                self.submit_user_message(UserMessage {
+                    text,
+                    local_images,
+                    remote_image_urls,
+                    text_elements,
+                    mention_bindings: vec![MentionBinding {
+                        sigil: '$',
+                        mention: command.name,
+                        path: format!("skill://{}", command.path.display()),
+                    }],
+                });
+                return QueueDrain::Stop;
+            }
+            SlashCommandItem::ServiceTier(_) => {
+                self.submit_user_message(UserMessage {
+                    text,
+                    local_images,
+                    remote_image_urls,
+                    text_elements,
+                    mention_bindings,
+                });
+                return QueueDrain::Stop;
+            }
         };
 
         let trimmed_start = rest.trim_start();

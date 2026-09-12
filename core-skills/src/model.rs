@@ -186,7 +186,9 @@ impl SkillLoadOutcome {
             .map(|skill| (skill, self.is_skill_enabled(skill)))
     }
 
-    pub(crate) fn file_system_for_skill(
+    /// Filesystem that discovered `skill` (used to read skill artifacts
+    /// such as `flow.yaml` through the same environment that loaded them).
+    pub fn file_system_for_skill(
         &self,
         skill: &SkillMetadata,
     ) -> Option<Arc<dyn ExecutorFileSystem>> {

@@ -21,6 +21,9 @@ use crate::context::ContextualUserFragment;
 use crate::context::InternalContextSource;
 use crate::context::InternalModelContextFragment;
 use crate::feedback_tags;
+use crate::flow::flow_args_from_input;
+use crate::flow::partition_flow_skills;
+use crate::flow::run_flow_skills_in_turn;
 use crate::hook_runtime::inspect_pending_input;
 use crate::hook_runtime::record_additional_contexts;
 use crate::hook_runtime::record_pending_input;
@@ -322,7 +325,7 @@ pub(crate) async fn run_turn(
     }
 
     let Some((injection_items, explicitly_enabled_connectors)) =
-        build_skills_and_plugins(&sess, turn_context.as_ref(), &input, &cancellation_token).await
+        build_skills_and_plugins(&sess, &turn_context, &input, &cancellation_token).await
     else {
         return Ok(None);
     };
@@ -929,7 +932,7 @@ async fn run_hooks_and_record_inputs(
 #[instrument(level = "trace", skip_all)]
 async fn build_skills_and_plugins(
     sess: &Arc<Session>,
-    turn_context: &TurnContext,
+    turn_context: &Arc<TurnContext>,
     input: &[TurnInput],
     cancellation_token: &CancellationToken,
 ) -> Option<(Vec<ResponseItem>, HashSet<String>)> {
@@ -1015,6 +1018,23 @@ async fn build_skills_and_plugins(
     )
     .await;
 
+    // M1.3: explicitly mentioned Flow skills execute in-turn through the
+    // Flow runtime (blocking) instead of producing SkillInstructions
+    // injections; their results are recorded as flow_result conversation
+    // items below.
+    let (flow_skills, mentioned_skills) = partition_flow_skills(mentioned_skills);
+    let flow_result_items = if flow_skills.is_empty() {
+        Vec::new()
+    } else {
+        run_flow_skills_in_turn(
+            sess,
+            turn_context,
+            &flow_skills,
+            flow_args_from_input(&user_input),
+        )
+        .await
+    };
+
     let injected_host_skill_prompts = turn_context
         .extension_data
         .get::<InjectedHostSkillPrompts>();
@@ -1087,6 +1107,9 @@ async fn build_skills_and_plugins(
             .collect(),
         None => skill_items,
     };
+    // Flow results precede the remaining skill instructions so the model
+    // sees the execution outcome before the referenced guidance.
+    injection_items.splice(0..0, flow_result_items);
     injection_items.extend(plugin_items);
     injection_items.extend(extension_injection_items);
     Some((injection_items, explicitly_enabled_connectors))
@@ -2349,7 +2372,10 @@ pub(super) fn realtime_text_for_event(msg: &EventMsg) -> Option<(String, Option<
         | EventMsg::SubAgentActivity(_)
         | EventMsg::SkillLoaded(_)
         | EventMsg::SkillActivated(_)
-        | EventMsg::SkillLoadError(_) => None,
+        | EventMsg::SkillLoadError(_)
+        | EventMsg::FlowPhaseBegin(_)
+        | EventMsg::FlowStepCompleted(_)
+        | EventMsg::FlowPhaseEnd(_) => None,
     }
 }
 

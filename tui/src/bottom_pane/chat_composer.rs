@@ -194,6 +194,7 @@ use super::skill_popup::MentionItem;
 use super::skill_popup::SkillPopup;
 use super::slash_commands::BuiltinCommandFlags;
 use super::slash_commands::ServiceTierCommand;
+use super::slash_commands::SkillSlashCommand;
 use super::slash_commands::SlashCommandItem;
 use crate::bottom_pane::paste_burst::FlushResult;
 use crate::key_hint::KeyBindingListExt;
@@ -295,6 +296,10 @@ pub enum InputResult {
     /// command-history entry still represents the original command invocation that should be
     /// committed only if dispatch accepts it.
     CommandWithArgs(SlashCommand, String, Vec<TextElement>),
+    /// A Flow skill slash command with its trimmed inline args (empty when
+    /// triggered bare). Dispatched as a `UserInput::Skill` mention plus the
+    /// args text so the core executes the flow in-turn (M1.3).
+    SkillCommand(SkillSlashCommand, String),
     None,
 }
 
@@ -434,6 +439,7 @@ impl ChatComposer {
             self.draft.is_bash_mode,
             self.builtin_command_flags(),
             &self.service_tier_commands,
+            self.skills.as_deref().unwrap_or(&[]),
         )
     }
 
@@ -2756,6 +2762,7 @@ impl ChatComposer {
                 | InputResult::Command(_)
                 | InputResult::ServiceTierCommand(_)
                 | InputResult::CommandWithArgs(_, _, _)
+                | InputResult::SkillCommand(_, _)
         ) {
             self.draft.textarea.enter_vim_normal_mode();
         }
@@ -2917,6 +2924,7 @@ impl ChatComposer {
         Some(match command {
             SlashCommandItem::Builtin(cmd) => InputResult::Command(cmd),
             SlashCommandItem::ServiceTier(command) => InputResult::ServiceTierCommand(command),
+            SlashCommandItem::Skill(command) => InputResult::SkillCommand(command, String::new()),
         })
     }
 
@@ -2941,8 +2949,15 @@ impl ChatComposer {
         );
         let trimmed_rest = inline_command.rest.trim();
         args_elements = Self::trim_text_elements(inline_command.rest, trimmed_rest, args_elements);
-        let SlashCommandItem::Builtin(cmd) = command else {
-            return None;
+        let cmd = match command {
+            SlashCommandItem::Builtin(cmd) => cmd,
+            SlashCommandItem::Skill(command) => {
+                return Some(InputResult::SkillCommand(
+                    command,
+                    trimmed_rest.to_string(),
+                ));
+            }
+            SlashCommandItem::ServiceTier(_) => return None,
         };
         Some(InputResult::CommandWithArgs(
             cmd,
@@ -7835,6 +7850,119 @@ mod tests {
         );
     }
 
+    fn flow_skill(name: &str) -> ody_core_skills::model::SkillMetadata {
+        SkillMetadata {
+            name: name.to_string(),
+            description: format!("Flow skill {name}"),
+            flow_artifact: Some(test_path_buf("/tmp/skill/flow.yaml").abs()),
+            path_to_skills_md: test_path_buf("/tmp/skill/SKILL.md").abs(),
+            skill_type: ody_core_skills::model::SkillType::Flow,
+            scope: crate::test_support::skill_scope_user(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn flow_skill_appears_in_slash_completion() {
+        use super::super::command_popup::CommandItem;
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let sender = AppEventSender::new(tx);
+        let mut composer = ChatComposer::new(
+            /*has_input_focus*/ true,
+            sender,
+            /*enhanced_keys_supported*/ false,
+            "Ask Ody to do anything".to_string(),
+            /*disable_paste_burst*/ false,
+        );
+        composer.set_skill_mentions(Some(vec![flow_skill("game-forge")]));
+        type_chars_humanlike(&mut composer, &['/', 'g', 'a', 'm', 'e']);
+
+        match &composer.popups.active {
+            ActivePopup::Command(popup) => match popup.selected_item() {
+                Some(CommandItem::Skill(command)) => {
+                    assert_eq!(command.name, "game-forge");
+                    assert_eq!(command.path, std::path::PathBuf::from("/tmp/skill/SKILL.md"));
+                }
+                other => panic!("expected flow skill selection, got {other:?}"),
+            },
+            _ => panic!("slash popup not active after typing '/game'"),
+        }
+    }
+
+    #[test]
+    fn flow_skill_slash_dispatches_skill_command_with_args() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let sender = AppEventSender::new(tx);
+        let mut composer = ChatComposer::new(
+            /*has_input_focus*/ true,
+            sender,
+            /*enhanced_keys_supported*/ false,
+            "Ask Ody to do anything".to_string(),
+            /*disable_paste_burst*/ false,
+        );
+        composer.set_skill_mentions(Some(vec![flow_skill("game-forge")]));
+        type_chars_humanlike(
+            &mut composer,
+            &"/game-forge make a deck-building game".chars().collect::<Vec<_>>(),
+        );
+
+        let (result, _needs_redraw) =
+            composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        let InputResult::SkillCommand(command, args) = result else {
+            panic!("expected SkillCommand dispatch, got {result:?}");
+        };
+        assert_eq!(command.name, "game-forge");
+        assert_eq!(args, "make a deck-building game");
+    }
+
+    #[test]
+    fn flow_skill_slash_bare_dispatches_empty_args() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let sender = AppEventSender::new(tx);
+        let mut composer = ChatComposer::new(
+            /*has_input_focus*/ true,
+            sender,
+            /*enhanced_keys_supported*/ false,
+            "Ask Ody to do anything".to_string(),
+            /*disable_paste_burst*/ false,
+        );
+        composer.set_skill_mentions(Some(vec![flow_skill("game-forge")]));
+        type_chars_humanlike(&mut composer, &"/game-forge".chars().collect::<Vec<_>>());
+
+        let (result, _needs_redraw) =
+            composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        let InputResult::SkillCommand(command, args) = result else {
+            panic!("expected SkillCommand dispatch, got {result:?}");
+        };
+        assert_eq!(command.name, "game-forge");
+        assert_eq!(args, "");
+    }
+
+    #[test]
+    fn builtin_wins_over_flow_skill_name_conflict() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let sender = AppEventSender::new(tx);
+        let mut composer = ChatComposer::new(
+            /*has_input_focus*/ true,
+            sender,
+            /*enhanced_keys_supported*/ false,
+            "Ask Ody to do anything".to_string(),
+            /*disable_paste_burst*/ false,
+        );
+        // A flow skill named like a built-in must not shadow it (A5).
+        composer.set_skill_mentions(Some(vec![flow_skill("diff")]));
+        type_chars_humanlike(&mut composer, &"/diff".chars().collect::<Vec<_>>());
+
+        let (result, _needs_redraw) =
+            composer.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(
+            matches!(result, InputResult::Command(SlashCommand::Diff)),
+            "built-in should win the name conflict, got {result:?}"
+        );
+    }
+
     #[test]
     fn slash_popup_model_first_for_mo_ui() {
         use ratatui::Terminal;
@@ -7887,6 +8015,9 @@ mod tests {
                 }
                 Some(CommandItem::ServiceTier(command)) => {
                     panic!("expected model command, got service tier {command:?}")
+                }
+                Some(CommandItem::Skill(command)) => {
+                    panic!("expected model command, got skill {command:?}")
                 }
                 None => panic!("no selected command for '/mo'"),
             },
@@ -7970,6 +8101,9 @@ mod tests {
                 Some(CommandItem::ServiceTier(command)) => {
                     panic!("expected resume command, got service tier {command:?}")
                 }
+                Some(CommandItem::Skill(command)) => {
+                    panic!("expected resume command, got skill {command:?}")
+                }
                 None => panic!("no selected command for '/res'"),
             },
             _ => panic!("slash popup not active after typing '/res'"),
@@ -8023,6 +8157,9 @@ mod tests {
                 }
                 Some(CommandItem::ServiceTier(command)) => {
                     panic!("expected pets command, got service tier {command:?}")
+                }
+                Some(CommandItem::Skill(command)) => {
+                    panic!("expected pets command, got skill {command:?}")
                 }
                 None => panic!("no selected command for '/pet'"),
             },
@@ -8078,6 +8215,9 @@ mod tests {
                 Some(CommandItem::ServiceTier(command)) => {
                     panic!("expected btw command, got service tier {command:?}")
                 }
+                Some(CommandItem::Skill(command)) => {
+                    panic!("expected btw command, got skill {command:?}")
+                }
                 None => panic!("no selected command for '/bt'"),
             },
             _ => panic!("slash popup not active after typing '/bt'"),
@@ -8131,6 +8271,9 @@ mod tests {
                 }
                 Some(CommandItem::ServiceTier(command)) => {
                     panic!("expected side command, got service tier {command:?}")
+                }
+                Some(CommandItem::Skill(command)) => {
+                    panic!("expected side command, got skill {command:?}")
                 }
                 None => panic!("no selected command for '/si'"),
             },
@@ -8229,6 +8372,9 @@ mod tests {
             }
             InputResult::ServiceTierCommand(command) => {
                 panic!("expected init command, got service tier {command:?}")
+            }
+            InputResult::SkillCommand(command, _) => {
+                panic!("expected init command, got skill {command:?}")
             }
             InputResult::Submitted { text, .. } => {
                 panic!("expected command dispatch, but composer submitted literal text: {text}")
@@ -8737,6 +8883,9 @@ mod tests {
             InputResult::ServiceTierCommand(command) => {
                 panic!("expected diff command, got service tier {command:?}")
             }
+            InputResult::SkillCommand(command, _) => {
+                panic!("expected diff command, got skill {command:?}")
+            }
             InputResult::Submitted { text, .. } => {
                 panic!("expected command dispatch after Tab completion, got literal submit: {text}")
             }
@@ -8933,6 +9082,9 @@ mod tests {
             }
             InputResult::ServiceTierCommand(command) => {
                 panic!("expected mention command, got service tier {command:?}")
+            }
+            InputResult::SkillCommand(command, _) => {
+                panic!("expected mention command, got skill {command:?}")
             }
             InputResult::Submitted { text, .. } => {
                 panic!("expected command dispatch, but composer submitted literal text: {text}")

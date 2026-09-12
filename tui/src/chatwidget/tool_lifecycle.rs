@@ -112,6 +112,15 @@ impl ChatWidget {
         }
     }
 
+    pub(super) fn on_flow_phase_item(&mut self, item: ThreadItem) {
+        self.record_visible_turn_activity();
+        // Intermediate step bumps render nothing (the count updates in the
+        // agent status feed); only begin/end rows become history cells.
+        if let Some(cell) = multi_agents::flow_phase_history_cell(&item) {
+            self.on_collab_event(cell);
+        }
+    }
+
     pub(crate) fn handle_file_change_completed_now(&mut self, item: ThreadItem) {
         let ThreadItem::FileChange { status, .. } = item else {
             return;

@@ -406,7 +406,10 @@ pub(crate) fn tool_runtime_trace_event(event: &EventMsg) -> Option<ToolRuntimeTr
         | EventMsg::CollabResumeEnd(_)
         | EventMsg::SkillLoaded(_)
         | EventMsg::SkillActivated(_)
-        | EventMsg::SkillLoadError(_) => None,
+        | EventMsg::SkillLoadError(_)
+        | EventMsg::FlowPhaseBegin(_)
+        | EventMsg::FlowStepCompleted(_)
+        | EventMsg::FlowPhaseEnd(_) => None,
     }
 }
 
@@ -490,7 +493,10 @@ pub(crate) fn wrapped_protocol_event_type(event: &EventMsg) -> Option<&'static s
         | EventMsg::SubAgentActivity(_)
         | EventMsg::SkillLoaded(_)
         | EventMsg::SkillActivated(_)
-        | EventMsg::SkillLoadError(_) => None,
+        | EventMsg::SkillLoadError(_)
+        | EventMsg::FlowPhaseBegin(_)
+        | EventMsg::FlowStepCompleted(_)
+        | EventMsg::FlowPhaseEnd(_) => None,
     }
 }
 

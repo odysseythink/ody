@@ -11,8 +11,10 @@ use super::selection_popup_common::measure_rows_height_with_col_width_mode;
 use super::selection_popup_common::render_rows_with_col_width_mode;
 use super::slash_commands::BuiltinCommandFlags;
 use super::slash_commands::ServiceTierCommand;
+use super::slash_commands::SkillSlashCommand;
 use super::slash_commands::SlashCommandItem;
 use super::slash_commands::commands_for_input;
+use ody_core_skills::model::SkillMetadata;
 use crate::render::Insets;
 use crate::render::RectExt;
 use crate::slash_command::SlashCommand;
@@ -31,6 +33,7 @@ const COMMAND_COLUMN_WIDTH: ColumnWidthConfig = ColumnWidthConfig::new(
 pub(crate) enum CommandItem {
     Builtin(SlashCommand),
     ServiceTier(ServiceTierCommand),
+    Skill(SkillSlashCommand),
 }
 
 pub(crate) struct CommandPopup {
@@ -72,15 +75,17 @@ impl CommandPopup {
     pub(crate) fn new(
         flags: CommandPopupFlags,
         service_tier_commands: Vec<ServiceTierCommand>,
+        skills: &[SkillMetadata],
     ) -> Self {
         // Keep built-in availability in sync with the composer.
-        let commands = commands_for_input(flags.into(), &service_tier_commands)
+        let commands = commands_for_input(flags.into(), &service_tier_commands, skills)
             .into_iter()
             .filter_map(|command| match command {
                 SlashCommandItem::Builtin(cmd) => (!cmd.command().starts_with("debug")
                     && cmd != SlashCommand::Apps)
                     .then_some(CommandItem::Builtin(cmd)),
                 SlashCommandItem::ServiceTier(command) => Some(CommandItem::ServiceTier(command)),
+                SlashCommandItem::Skill(command) => Some(CommandItem::Skill(command)),
             })
             .collect();
         Self {
@@ -250,6 +255,7 @@ impl CommandItem {
         match self {
             Self::Builtin(cmd) => cmd.command(),
             Self::ServiceTier(command) => &command.name,
+            Self::Skill(command) => &command.name,
         }
     }
 
@@ -257,6 +263,7 @@ impl CommandItem {
         match self {
             Self::Builtin(cmd) => cmd.description(),
             Self::ServiceTier(command) => &command.description,
+            Self::Skill(command) => &command.description,
         }
     }
 }
@@ -285,7 +292,7 @@ mod tests {
 
     #[test]
     fn filter_includes_init_when_typing_prefix() {
-        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new());
+        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new(), &[]);
         // Simulate the composer line starting with '/in' so the popup filters
         // matching commands by prefix.
         popup.on_composer_text_change("/in".to_string());
@@ -296,6 +303,7 @@ mod tests {
         let has_init = matches.iter().any(|item| match item {
             CommandItem::Builtin(cmd) => cmd.command() == "init",
             CommandItem::ServiceTier(_) => false,
+            CommandItem::Skill(_) => false,
         });
         assert!(
             has_init,
@@ -305,7 +313,7 @@ mod tests {
 
     #[test]
     fn selecting_init_by_exact_match() {
-        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new());
+        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new(), &[]);
         popup.on_composer_text_change("/init".to_string());
 
         // When an exact match exists, the selected command should be that
@@ -316,19 +324,25 @@ mod tests {
             Some(CommandItem::ServiceTier(command)) => {
                 panic!("expected init command, got service tier {command:?}")
             }
+            Some(CommandItem::Skill(command)) => {
+                panic!("expected init command, got skill {command:?}")
+            }
             None => panic!("expected a selected command for exact match"),
         }
     }
 
     #[test]
     fn model_is_first_suggestion_for_mo() {
-        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new());
+        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new(), &[]);
         popup.on_composer_text_change("/mo".to_string());
         let matches = popup.filtered_items();
         match matches.first() {
             Some(CommandItem::Builtin(cmd)) => assert_eq!(cmd.command(), "model"),
             Some(CommandItem::ServiceTier(command)) => {
                 panic!("expected model command, got service tier {command:?}")
+            }
+            Some(CommandItem::Skill(command)) => {
+                panic!("expected model command, got skill {command:?}")
             }
             None => panic!("expected at least one match for '/mo'"),
         }
@@ -346,6 +360,7 @@ mod tests {
                 name: "fast".to_string(),
                 description: "Fastest inference with increased plan usage".to_string(),
             }],
+            &[],
         );
         popup.on_composer_text_change("/fa".to_string());
 
@@ -369,7 +384,7 @@ mod tests {
 
     #[test]
     fn filtered_commands_keep_presentation_order_for_prefix() {
-        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new());
+        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new(), &[]);
         popup.on_composer_text_change("/m".to_string());
 
         let cmds: Vec<String> = popup
@@ -378,6 +393,7 @@ mod tests {
             .map(|item| match item {
                 CommandItem::Builtin(cmd) => cmd.command().to_string(),
                 CommandItem::ServiceTier(command) => command.name,
+                CommandItem::Skill(command) => command.name,
             })
             .collect();
         assert_eq!(
@@ -394,7 +410,7 @@ mod tests {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     #[test]
     fn app_command_popup_snapshot() {
-        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new());
+        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new(), &[]);
         popup.on_composer_text_change("/app".to_string());
 
         let width = 72;
@@ -413,7 +429,7 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn default_command_popup_items_snapshot() {
-        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new());
+        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new(), &[]);
         popup.on_composer_text_change("/".to_string());
 
         let commands = popup
@@ -432,7 +448,7 @@ mod tests {
 
     #[test]
     fn prefix_filter_limits_matches_for_ac() {
-        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new());
+        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new(), &[]);
         popup.on_composer_text_change("/ac".to_string());
 
         let cmds: Vec<String> = popup
@@ -441,6 +457,7 @@ mod tests {
             .map(|item| match item {
                 CommandItem::Builtin(cmd) => cmd.command().to_string(),
                 CommandItem::ServiceTier(command) => command.name,
+                CommandItem::Skill(command) => command.name,
             })
             .collect();
         assert!(
@@ -451,7 +468,7 @@ mod tests {
 
     #[test]
     fn changing_filter_resets_selection_after_scrolling() {
-        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new());
+        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new(), &[]);
         popup.on_composer_text_change("/".to_string());
 
         for _ in 0..MAX_POPUP_ROWS {
@@ -483,7 +500,7 @@ mod tests {
 
     #[test]
     fn quit_hidden_in_empty_filter_but_shown_for_prefix() {
-        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new());
+        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new(), &[]);
         popup.on_composer_text_change("/".to_string());
         let items = popup.filtered_items();
         assert!(!items.contains(&CommandItem::Builtin(SlashCommand::Quit)));
@@ -495,7 +512,7 @@ mod tests {
 
     #[test]
     fn btw_hidden_in_empty_filter_but_shown_for_prefix() {
-        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new());
+        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new(), &[]);
         popup.on_composer_text_change("/".to_string());
         let items = popup.filtered_items();
         assert!(!items.contains(&CommandItem::Builtin(SlashCommand::Btw)));
@@ -507,7 +524,7 @@ mod tests {
 
     #[test]
     fn plan_command_hidden_when_collaboration_modes_disabled() {
-        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new());
+        let mut popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new(), &[]);
         popup.on_composer_text_change("/".to_string());
 
         let cmds: Vec<String> = popup
@@ -516,6 +533,7 @@ mod tests {
             .map(|item| match item {
                 CommandItem::Builtin(cmd) => cmd.command().to_string(),
                 CommandItem::ServiceTier(command) => command.name,
+                CommandItem::Skill(command) => command.name,
             })
             .collect();
         assert!(
@@ -539,6 +557,7 @@ mod tests {
                 plan_mode_active: false,
             },
             Vec::new(),
+            &[],
         );
         popup.on_composer_text_change("/plan".to_string());
 
@@ -566,6 +585,7 @@ mod tests {
                 plan_mode_active: false,
             },
             Vec::new(),
+            &[],
         );
         popup.on_composer_text_change("/pers".to_string());
 
@@ -575,6 +595,7 @@ mod tests {
             .map(|item| match item {
                 CommandItem::Builtin(cmd) => cmd.command().to_string(),
                 CommandItem::ServiceTier(command) => command.name,
+                CommandItem::Skill(command) => command.name,
             })
             .collect();
         assert!(
@@ -598,6 +619,7 @@ mod tests {
                 plan_mode_active: false,
             },
             Vec::new(),
+            &[],
         );
         popup.on_composer_text_change("/personality".to_string());
 
@@ -612,13 +634,14 @@ mod tests {
 
     #[test]
     fn debug_commands_are_hidden_from_popup() {
-        let popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new());
+        let popup = CommandPopup::new(CommandPopupFlags::default(), Vec::new(), &[]);
         let cmds: Vec<String> = popup
             .filtered_items()
             .into_iter()
             .map(|item| match item {
                 CommandItem::Builtin(cmd) => cmd.command().to_string(),
                 CommandItem::ServiceTier(command) => command.name,
+                CommandItem::Skill(command) => command.name,
             })
             .collect();
 
@@ -642,6 +665,7 @@ mod tests {
                 plan_mode_active: true,
             },
             Vec::new(),
+            &[],
         );
         popup.on_composer_text_change("/writ".to_string());
         let cmds: Vec<String> = popup
@@ -650,6 +674,7 @@ mod tests {
             .map(|item| match item {
                 CommandItem::Builtin(cmd) => cmd.command().to_string(),
                 CommandItem::ServiceTier(command) => command.name,
+                CommandItem::Skill(command) => command.name,
             })
             .collect();
         assert!(
@@ -673,6 +698,7 @@ mod tests {
                 plan_mode_active: false,
             },
             Vec::new(),
+            &[],
         );
         popup.on_composer_text_change("/writ".to_string());
         let cmds: Vec<String> = popup
@@ -681,6 +707,7 @@ mod tests {
             .map(|item| match item {
                 CommandItem::Builtin(cmd) => cmd.command().to_string(),
                 CommandItem::ServiceTier(command) => command.name,
+                CommandItem::Skill(command) => command.name,
             })
             .collect();
         assert!(

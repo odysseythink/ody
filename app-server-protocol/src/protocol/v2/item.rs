@@ -389,6 +389,24 @@ pub enum ThreadItem {
     #[serde(rename_all = "camelCase")]
     #[ts(rename_all = "camelCase")]
     ContextCompaction { id: String },
+    /// Flow skill progress (M1.4): lifecycle of one phase of a flow run.
+    /// `ItemStarted` carries the phase begin (completedSteps = 0); step
+    /// completions and the phase end arrive as `ItemCompleted` with the same
+    /// id and an updated `completedSteps` count. `finished` is true only on
+    /// the phase-end notification so clients can tell the terminal row apart
+    /// from intermediate step-count updates.
+    #[serde(rename_all = "camelCase")]
+    #[ts(rename_all = "camelCase")]
+    FlowPhase {
+        id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        flow_name: Option<String>,
+        phase_id: String,
+        total_steps: u32,
+        completed_steps: u32,
+        finished: bool,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
@@ -427,7 +445,8 @@ impl ThreadItem {
             | ThreadItem::ImageGeneration { id, .. }
             | ThreadItem::EnteredReviewMode { id, .. }
             | ThreadItem::ExitedReviewMode { id, .. }
-            | ThreadItem::ContextCompaction { id, .. } => id,
+            | ThreadItem::ContextCompaction { id, .. }
+            | ThreadItem::FlowPhase { id, .. } => id,
         }
     }
 }

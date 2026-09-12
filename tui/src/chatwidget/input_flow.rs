@@ -62,6 +62,30 @@ impl ChatWidget {
             InputResult::CommandWithArgs(cmd, args, text_elements) => {
                 self.handle_slash_command_with_args_dispatch(cmd, args, text_elements);
             }
+            InputResult::SkillCommand(command, args) => {
+                let user_message = UserMessage {
+                    text: args,
+                    local_images: Vec::new(),
+                    remote_image_urls: Vec::new(),
+                    text_elements: Vec::new(),
+                    mention_bindings: vec![MentionBinding {
+                        sigil: '$',
+                        mention: command.name.clone(),
+                        path: format!("skill://{}", command.path.display()),
+                    }],
+                };
+                let should_submit_now = self.is_session_configured()
+                    && !self.is_plan_streaming_in_tui()
+                    && !self.input_queue.suppress_queue_autosend;
+                if should_submit_now {
+                    self.reasoning_buffer.clear();
+                    self.full_reasoning_buffer.clear();
+                    self.set_status_header(String::from("Working"));
+                    self.submit_user_message(user_message);
+                } else {
+                    self.queue_user_message(user_message);
+                }
+            }
             InputResult::None => {}
         }
         if had_modal_or_popup && self.bottom_pane.no_modal_or_popup_active() {

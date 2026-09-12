@@ -1435,6 +1435,15 @@ pub enum EventMsg {
     SkillLoaded(SkillLoadedEvent),
     SkillActivated(SkillActivatedEvent),
     SkillLoadError(SkillLoadErrorEvent),
+
+    /// Flow skill progress: a phase started.
+    FlowPhaseBegin(FlowPhaseBeginEvent),
+    /// Flow skill progress: one top-level step of a phase completed.
+    FlowStepCompleted(FlowStepCompletedEvent),
+    /// Flow skill progress: a phase ended (on failure `completed_steps` is
+    /// lower than `total_steps`; there is no separate status field — the
+    /// flow result item recorded by the turn carries the failure detail).
+    FlowPhaseEnd(FlowPhaseEndEvent),
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS, EnumIter)]
@@ -1592,6 +1601,24 @@ pub struct RealtimeConversationClosedEvent {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema, TS)]
 pub struct RealtimeConversationSdpEvent {
     pub sdp: String,
+}
+
+impl From<FlowPhaseBeginEvent> for EventMsg {
+    fn from(event: FlowPhaseBeginEvent) -> Self {
+        EventMsg::FlowPhaseBegin(event)
+    }
+}
+
+impl From<FlowStepCompletedEvent> for EventMsg {
+    fn from(event: FlowStepCompletedEvent) -> Self {
+        EventMsg::FlowStepCompleted(event)
+    }
+}
+
+impl From<FlowPhaseEndEvent> for EventMsg {
+    fn from(event: FlowPhaseEndEvent) -> Self {
+        EventMsg::FlowPhaseEnd(event)
+    }
 }
 
 impl From<CollabAgentSpawnBeginEvent> for EventMsg {
@@ -4125,6 +4152,59 @@ pub struct SubAgentActivityEvent {
     /// Canonical v2 path of the affected sub-agent.
     pub agent_path: AgentPath,
     pub kind: SubAgentActivityKind,
+}
+
+/// Flow skill progress (M1.4): a phase of a flow run started. All progress
+/// events of one run share the same `call_id` (the flow run call id).
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+pub struct FlowPhaseBeginEvent {
+    /// Identifier of the flow run; shared by all its progress events.
+    pub call_id: String,
+    /// Name of the flow skill being executed.
+    pub flow_name: String,
+    /// Phase id from the flow plan.
+    pub phase_id: String,
+    /// Number of top-level steps in the phase.
+    pub total_steps: u32,
+    #[serde(default)]
+    pub started_at_ms: i64,
+}
+
+/// Flow skill progress: one top-level step of a phase completed. Step
+/// indices are 1-based within the phase.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+pub struct FlowStepCompletedEvent {
+    /// Identifier of the flow run; shared by all its progress events.
+    pub call_id: String,
+    /// Name of the flow skill being executed.
+    pub flow_name: String,
+    /// Phase id from the flow plan.
+    pub phase_id: String,
+    /// 1-based index of the completed step within the phase.
+    pub step_index: u32,
+    /// Number of top-level steps in the phase.
+    pub total_steps: u32,
+    #[serde(default)]
+    pub completed_at_ms: i64,
+}
+
+/// Flow skill progress: a phase ended. On failure `completed_steps` is lower
+/// than `total_steps`; there is no separate status field (the flow result
+/// item recorded by the turn carries the failure detail).
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+pub struct FlowPhaseEndEvent {
+    /// Identifier of the flow run; shared by all its progress events.
+    pub call_id: String,
+    /// Name of the flow skill being executed.
+    pub flow_name: String,
+    /// Phase id from the flow plan.
+    pub phase_id: String,
+    /// Steps that completed before the phase ended.
+    pub completed_steps: u32,
+    /// Number of top-level steps in the phase.
+    pub total_steps: u32,
+    #[serde(default)]
+    pub completed_at_ms: i64,
 }
 
 /// A structured planning log event emitted during Plan/Design mode.

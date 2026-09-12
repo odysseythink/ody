@@ -55,9 +55,15 @@ use ody_core_skills::FlowPlan;
 
 pub(crate) mod interp;
 
+mod host;
 mod runtime;
+mod trigger;
 
+pub(crate) use host::SessionFlowAgentHost;
 pub(crate) use runtime::YamlFlowRuntime;
+pub(crate) use trigger::flow_args_from_input;
+pub(crate) use trigger::partition_flow_skills;
+pub(crate) use trigger::run_flow_skills_in_turn;
 
 #[cfg(test)]
 #[path = "flow_tests.rs"]
@@ -158,6 +164,21 @@ pub(crate) struct FlowOutcome {
     pub(crate) outputs: serde_json::Map<String, serde_json::Value>,
 }
 
+/// Kernel-side progress signal (M1.4): emitted at phase begin/end and on
+/// every completed top-level step. Hosts surface these to the user via
+/// [`FlowAgentHost::report_progress`]; the yaml surface has no `log()` step
+/// (reserved for M3 script runtimes), so phase/step events carry the whole
+/// observable progress of a run.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum FlowProgress {
+    /// A phase started; `total_steps` is its top-level step count.
+    PhaseBegin { phase_id: String, total_steps: u32 },
+    /// Step `step_index` (1-based) of `phase_id` completed.
+    StepCompleted { phase_id: String, step_index: u32, total_steps: u32 },
+    /// A phase ended; on failure `completed_steps` < `total_steps`.
+    PhaseEnd { phase_id: String, completed_steps: u32, total_steps: u32 },
+}
+
 /// Injected host capability that actually runs one agent. M1.1 tests mock
 /// this; M1.2 maps it to `crate::agent::control` spawn + wait (reusing
 /// `exceeds_thread_spawn_depth_limit` per the M1 report).
@@ -178,6 +199,18 @@ pub(crate) trait FlowAgentHost: Send + Sync {
         &self,
         prompt: String,
     ) -> impl std::future::Future<Output = Result<String, FlowHostError>> + Send;
+
+    /// Report [`FlowProgress`] for the run this host is executing. Provided
+    /// with a no-op default so existing implementations (M1.1 mocks) keep
+    /// compiling; M1.2's session host overrides it to emit protocol events.
+    /// Declared as RPITIT (like `run_agent`) so overrides keep the `Send`
+    /// guarantee required by batched execution.
+    fn report_progress(
+        &self,
+        _progress: FlowProgress,
+    ) -> impl std::future::Future<Output = ()> + Send {
+        async {}
+    }
 }
 
 /// Unified interface for Flow runtime implementations (`flow.yaml` today;

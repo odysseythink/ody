@@ -3,8 +3,11 @@
 //! The same sandbox- and feature-gating rules are used by both the composer
 //! and the command popup. Centralizing them here keeps those call sites small
 //! and ensures they stay in sync.
+use std::path::PathBuf;
 use std::str::FromStr;
 
+use ody_core_skills::model::SkillMetadata;
+use ody_core_skills::model::SkillType;
 use ody_utils_fuzzy_match::fuzzy_match;
 
 use crate::slash_command::SlashCommand;
@@ -17,10 +20,23 @@ pub(crate) struct ServiceTierCommand {
     pub(crate) description: String,
 }
 
+/// A Flow-type skill exposed as a slash command (M1.3). Triggering it runs
+/// the flow in-turn through the host-side Flow runtime instead of injecting
+/// SKILL.md instructions.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SkillSlashCommand {
+    pub(crate) name: String,
+    /// Absolute path to the skill's SKILL.md, used to build the
+    /// `UserInput::Skill` mention submitted for the turn.
+    pub(crate) path: PathBuf,
+    pub(crate) description: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum SlashCommandItem {
     Builtin(SlashCommand),
     ServiceTier(ServiceTierCommand),
+    Skill(SkillSlashCommand),
 }
 
 impl SlashCommandItem {
@@ -28,6 +44,7 @@ impl SlashCommandItem {
         match self {
             Self::Builtin(cmd) => cmd.command(),
             Self::ServiceTier(command) => &command.name,
+            Self::Skill(command) => &command.name,
         }
     }
 
@@ -35,6 +52,8 @@ impl SlashCommandItem {
         match self {
             Self::Builtin(cmd) => cmd.supports_inline_args(),
             Self::ServiceTier(_) => false,
+            // Flow args (`${{ args.* }}`) are supplied as inline text.
+            Self::Skill(_) => true,
         }
     }
 
@@ -42,6 +61,7 @@ impl SlashCommandItem {
         match self {
             Self::Builtin(cmd) => cmd.available_in_side_conversation(),
             Self::ServiceTier(_) => false,
+            Self::Skill(_) => false,
         }
     }
 
@@ -49,8 +69,22 @@ impl SlashCommandItem {
         match self {
             Self::Builtin(cmd) => cmd.available_during_task(),
             Self::ServiceTier(_) => true,
+            Self::Skill(_) => true,
         }
     }
+}
+
+/// Flow-type skills become slash commands named after the skill.
+pub(crate) fn flow_skill_commands(skills: &[SkillMetadata]) -> Vec<SkillSlashCommand> {
+    skills
+        .iter()
+        .filter(|skill| skill.skill_type == SkillType::Flow)
+        .map(|skill| SkillSlashCommand {
+            name: skill.name.clone(),
+            path: skill.path_to_skills_md.to_path_buf(),
+            description: skill.description.clone(),
+        })
+        .collect()
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -87,6 +121,7 @@ pub(crate) fn builtins_for_input(flags: BuiltinCommandFlags) -> Vec<(&'static st
 pub(crate) fn commands_for_input(
     flags: BuiltinCommandFlags,
     service_tier_commands: &[ServiceTierCommand],
+    skills: &[SkillMetadata],
 ) -> Vec<SlashCommandItem> {
     let mut commands = Vec::new();
     let tiers_enabled = flags.service_tier_commands_enabled;
@@ -101,6 +136,11 @@ pub(crate) fn commands_for_input(
             );
         }
     }
+    commands.extend(
+        flow_skill_commands(skills)
+            .into_iter()
+            .map(SlashCommandItem::Skill),
+    );
     commands
         .into_iter()
         .filter(|cmd| !flags.side_conversation_active || cmd.available_in_side_conversation())
@@ -131,29 +171,40 @@ pub(crate) fn find_slash_command(
     name: &str,
     flags: BuiltinCommandFlags,
     service_tier_commands: &[ServiceTierCommand],
+    skills: &[SkillMetadata],
 ) -> Option<SlashCommandItem> {
+    // Built-ins win name conflicts (A5): a flow skill that shares a name with
+    // a built-in is still reachable through its `$mention`.
     if let Some(cmd) = find_builtin_command(name, flags) {
         return Some(SlashCommandItem::Builtin(cmd));
     }
 
     let tiers_enabled = flags.service_tier_commands_enabled;
-    tiers_enabled
-        .then(|| {
-            service_tier_commands
-                .iter()
-                .find(|command| command.name == name)
-                .cloned()
-                .map(SlashCommandItem::ServiceTier)
-        })
-        .flatten()
+    if let Some(command) = tiers_enabled.then(|| {
+        service_tier_commands
+            .iter()
+            .find(|command| command.name == name)
+            .cloned()
+            .map(SlashCommandItem::ServiceTier)
+    })
+    .flatten()
+    {
+        return Some(command);
+    }
+
+    flow_skill_commands(skills)
+        .into_iter()
+        .find(|command| command.name == name)
+        .map(SlashCommandItem::Skill)
 }
 
 pub(crate) fn has_slash_command_prefix(
     name: &str,
     flags: BuiltinCommandFlags,
     service_tier_commands: &[ServiceTierCommand],
+    skills: &[SkillMetadata],
 ) -> bool {
-    commands_for_input(flags, service_tier_commands)
+    commands_for_input(flags, service_tier_commands, skills)
         .into_iter()
         .any(|command| fuzzy_match(command.command(), name).is_some())
 }
@@ -247,7 +298,7 @@ mod tests {
             description: "fastest inference".to_string(),
         }];
 
-        assert_eq!(find_slash_command("fast", flags, &commands), None);
+        assert_eq!(find_slash_command("fast", flags, &commands, &[]), None);
     }
 
     #[test]
@@ -265,7 +316,7 @@ mod tests {
             },
         ];
 
-        let items = commands_for_input(all_enabled_flags(), &commands);
+        let items = commands_for_input(all_enabled_flags(), &commands, &[]);
         let model_idx = items
             .iter()
             .position(|item| matches!(item, SlashCommandItem::Builtin(SlashCommand::Model)))
@@ -339,7 +390,7 @@ mod tests {
         };
 
         assert_eq!(
-            find_slash_command("fast", flags, from_ref(&command)),
+            find_slash_command("fast", flags, from_ref(&command), &[]),
             Some(SlashCommandItem::ServiceTier(command))
         );
     }

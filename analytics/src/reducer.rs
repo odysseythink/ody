@@ -398,6 +398,7 @@ impl TurnToolCounts {
             | ThreadItem::Reasoning { .. }
             | ThreadItem::ImageView { .. }
             | ThreadItem::Sleep { .. }
+            | ThreadItem::FlowPhase { .. }
             | ThreadItem::EnteredReviewMode { .. }
             | ThreadItem::ExitedReviewMode { .. }
             | ThreadItem::ContextCompaction { .. } => return,
@@ -1773,7 +1774,8 @@ fn tracked_tool_item_id(item: &ThreadItem) -> Option<&str> {
         | ThreadItem::Sleep { .. }
         | ThreadItem::EnteredReviewMode { .. }
         | ThreadItem::ExitedReviewMode { .. }
-        | ThreadItem::ContextCompaction { .. } => None,
+        | ThreadItem::ContextCompaction { .. }
+        | ThreadItem::FlowPhase { .. } => None,
     }
 }
 

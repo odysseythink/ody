@@ -284,6 +284,29 @@ fn fallback_transcript_cell(item: &ThreadItem) -> Option<PlainHistoryCell> {
         ThreadItem::ContextCompaction { .. } => {
             vec!["context compacted".dim().into()]
         }
+        ThreadItem::FlowPhase {
+            flow_name,
+            phase_id,
+            total_steps,
+            completed_steps,
+            finished,
+            ..
+        } => {
+            if *completed_steps != 0 && !finished {
+                // Intermediate step bumps update the count in the agent
+                // status feed; the transcript records begin/end rows only.
+                return None;
+            }
+            let flow = flow_name.as_deref().unwrap_or("flow");
+            let text = if *finished {
+                format!(
+                    "flow '{flow}' · phase '{phase_id}' completed · {completed_steps}/{total_steps} steps"
+                )
+            } else {
+                format!("flow '{flow}' · phase '{phase_id}' started · {total_steps} steps")
+            };
+            vec![text.dim().into()]
+        }
         ThreadItem::UserMessage { .. }
         | ThreadItem::AgentMessage { .. }
         | ThreadItem::Plan { .. }
@@ -376,6 +399,50 @@ mod tests {
             success: Some(true),
             duration_ms: Some(123),
         }
+    }
+
+    #[test]
+    fn fallback_transcript_cell_renders_flow_phase_begin_and_end() {
+        let begin = ThreadItem::FlowPhase {
+            id: "flow-run-0:design".to_string(),
+            flow_name: Some("make-game".to_string()),
+            phase_id: "design".to_string(),
+            total_steps: 3,
+            completed_steps: 0,
+            finished: false,
+        };
+        let cell = fallback_transcript_cell(&begin).expect("begin should render");
+        let lines = cell.display_lines(120);
+        assert_eq!(
+            lines[0].to_string(),
+            "flow 'make-game' · phase 'design' started · 3 steps"
+        );
+
+        // Intermediate step bumps update the status feed, not the transcript.
+        let bump = ThreadItem::FlowPhase {
+            id: "flow-run-0:design".to_string(),
+            flow_name: Some("make-game".to_string()),
+            phase_id: "design".to_string(),
+            total_steps: 3,
+            completed_steps: 1,
+            finished: false,
+        };
+        assert!(fallback_transcript_cell(&bump).is_none());
+
+        let end = ThreadItem::FlowPhase {
+            id: "flow-run-0:design".to_string(),
+            flow_name: Some("make-game".to_string()),
+            phase_id: "design".to_string(),
+            total_steps: 3,
+            completed_steps: 2,
+            finished: true,
+        };
+        let cell = fallback_transcript_cell(&end).expect("end should render");
+        let lines = cell.display_lines(120);
+        assert_eq!(
+            lines[0].to_string(),
+            "flow 'make-game' · phase 'design' completed · 2/3 steps"
+        );
     }
 
     #[test]

@@ -160,6 +160,9 @@ pub fn should_persist_event_msg(ev: &EventMsg) -> bool {
         | EventMsg::CollabResumeBegin(_)
         | EventMsg::SkillLoaded(_)
         | EventMsg::SkillActivated(_)
-        | EventMsg::SkillLoadError(_) => false,
+        | EventMsg::SkillLoadError(_)
+        | EventMsg::FlowPhaseBegin(_)
+        | EventMsg::FlowStepCompleted(_)
+        | EventMsg::FlowPhaseEnd(_) => false,
     }
 }

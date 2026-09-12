@@ -17,6 +17,7 @@ use super::FlowAgentHost;
 use super::FlowContext;
 use super::FlowError;
 use super::FlowOutcome;
+use super::FlowProgress;
 use super::FlowRuntime;
 use super::interp::TemplateContext;
 use super::interp::render_template;
@@ -61,24 +62,61 @@ pub(crate) async fn execute_plan<H: FlowAgentHost>(
     let mut bindings = serde_json::Map::new();
     bindings.insert("args".to_string(), Value::Object(ctx.args));
     for phase in &plan.phases {
-        run_steps(&phase.steps, &mut bindings, host, &format!("phase '{}'", phase.id)).await?;
+        let total_steps = phase.steps.len() as u32;
+        host.report_progress(FlowProgress::PhaseBegin {
+            phase_id: phase.id.clone(),
+            total_steps,
+        })
+        .await;
+        let mut completed_steps = 0u32;
+        let phase_result = run_steps(
+            &phase.steps,
+            &mut bindings,
+            host,
+            &format!("phase '{}'", phase.id),
+            &phase.id,
+            &mut completed_steps,
+        )
+        .await;
+        // PhaseEnd is reported on the failure path too (completed_steps <
+        // total_steps signals the failure; A9 in the M1 execution plan).
+        host.report_progress(FlowProgress::PhaseEnd {
+            phase_id: phase.id.clone(),
+            completed_steps,
+            total_steps,
+        })
+        .await;
+        phase_result?;
     }
     bindings.remove("args");
     Ok(FlowOutcome { outputs: bindings })
 }
 
 /// Run steps sequentially, binding each `output` into `bindings`. Returns
-/// every step's primary result, aligned with `steps`.
+/// every step's primary result, aligned with `steps`. `completed_steps`
+/// counts top-level steps finished so far and feeds the PhaseEnd event even
+/// when a step fails; step completion progress is reported here (nested
+/// parallel children are not counted — only top-level phase steps are).
 async fn run_steps<H: FlowAgentHost>(
     steps: &[FlowStep],
     bindings: &mut serde_json::Map<String, Value>,
     host: &H,
     scope: &str,
+    phase_id: &str,
+    completed_steps: &mut u32,
 ) -> Result<Vec<Value>, FlowError> {
+    let total_steps = steps.len() as u32;
     let mut results = Vec::with_capacity(steps.len());
     for (index, step) in steps.iter().enumerate() {
         let label = format!("{scope} step {} ({})", index + 1, step_kind(step));
         results.push(run_step(step, bindings, host, &label).await?);
+        *completed_steps += 1;
+        host.report_progress(FlowProgress::StepCompleted {
+            phase_id: phase_id.to_string(),
+            step_index: *completed_steps,
+            total_steps,
+        })
+        .await;
     }
     Ok(results)
 }

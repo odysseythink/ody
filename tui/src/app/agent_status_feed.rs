@@ -178,6 +178,16 @@ fn activity_summary(item: &ThreadItem) -> Option<String> {
             };
             return bounded_summary(&format!("{action} {agent_path}"));
         }
+        ThreadItem::FlowPhase {
+            phase_id,
+            completed_steps,
+            total_steps,
+            ..
+        } => {
+            return bounded_summary(&format!(
+                "Flow phase '{phase_id}' · {completed_steps}/{total_steps} steps"
+            ));
+        }
         ThreadItem::ImageView { path, .. } => {
             return bounded_summary(&format!("Viewed {}", path.display()));
         }

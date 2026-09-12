@@ -308,6 +308,36 @@ pub(crate) fn sub_agent_activity_history_cell(item: &ThreadItem) -> Option<Plain
     ))
 }
 
+/// History cell for a flow phase lifecycle row (M1.4). Only the phase begin
+/// and the phase end render as transcript rows; intermediate step-count
+/// bumps (`finished == false`, `completedSteps > 0`) update the count in the
+/// agent status feed instead of appending one row per step.
+pub(crate) fn flow_phase_history_cell(item: &ThreadItem) -> Option<PlainHistoryCell> {
+    let ThreadItem::FlowPhase {
+        flow_name,
+        phase_id,
+        total_steps,
+        completed_steps,
+        finished,
+        ..
+    } = item
+    else {
+        return None;
+    };
+    if *completed_steps != 0 && !finished {
+        return None;
+    }
+    let flow = flow_name.as_deref().unwrap_or("flow");
+    let text = if *finished {
+        format!(
+            "Flow '{flow}' · phase '{phase_id}' completed · {completed_steps}/{total_steps} steps"
+        )
+    } else {
+        format!("Flow '{flow}' · phase '{phase_id}' started · {total_steps} steps")
+    };
+    Some(collab_event(title_text(text), Vec::new()))
+}
+
 pub(crate) fn sub_agent_activity_summary(kind: SubAgentActivityKind, agent_path: &str) -> String {
     match kind {
         SubAgentActivityKind::Started => format!("Started `{agent_path}`"),
