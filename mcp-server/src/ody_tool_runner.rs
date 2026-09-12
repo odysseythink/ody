@@ -394,6 +394,7 @@ async fn run_ody_tool_session_inner(
                     | EventMsg::FlowPhaseBegin(_)
                     | EventMsg::FlowStepCompleted(_)
                     | EventMsg::FlowPhaseEnd(_)
+                    | EventMsg::FlowLog(_)
                     | EventMsg::PlanModeLog(_) => {
                         // For now, we do not do anything extra for these
                         // events. Note that

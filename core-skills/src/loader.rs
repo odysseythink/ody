@@ -789,11 +789,14 @@ async fn parse_skill_file(
     })
 }
 
-const FLOW_ARTIFACT_FILENAME: &str = "flow.yaml";
+/// Flow skill carriers (M3): a flow skill carries exactly one of these next
+/// to its SKILL.md. `flow.yaml` is eagerly validated at load time; script
+/// carriers are syntax-checked by their runtime when the flow is triggered
+/// (keeping the heavy Starlark/V8 parsers out of the loader).
+const FLOW_ARTIFACT_FILENAMES: [&str; 3] = ["flow.yaml", "flow.star", "workflow.js"];
 
-/// Flow skills must carry a valid `flow.yaml` next to their SKILL.md.
-/// The artifact is validated eagerly at load time; the runtime re-reads
-/// it from the recorded path when the flow is triggered.
+/// Discover and (for yaml) validate the flow artifact of a flow skill. The
+/// runtime re-reads the artifact from the recorded path when triggered.
 async fn load_flow_artifact(
     fs: &dyn ExecutorFileSystem,
     skills_md_path: &AbsolutePathBuf,
@@ -807,17 +810,40 @@ async fn load_flow_artifact(
             ),
         });
     };
-    let artifact_path = skill_dir.join(FLOW_ARTIFACT_FILENAME);
-    let path_uri = PathUri::from_abs_path(&artifact_path);
-    let contents = fs
-        .read_file_text(&path_uri, /*sandbox*/ None)
-        .await
-        .map_err(|_| SkillParseError::MissingField(FLOW_ARTIFACT_FILENAME))?;
-    crate::flow::parse_flow_plan(&contents).map_err(|err| SkillParseError::InvalidField {
-        field: "flow",
-        reason: err.to_string(),
-    })?;
-    Ok(artifact_path)
+    // Probe by reading: the filesystem trait has no `exists`, and a failed
+    // read is the cheapest existence check available.
+    let mut found: Vec<(String, AbsolutePathBuf)> = Vec::new();
+    for filename in FLOW_ARTIFACT_FILENAMES {
+        let candidate = skill_dir.join(filename);
+        let path_uri = PathUri::from_abs_path(&candidate);
+        if let Ok(contents) = fs.read_file_text(&path_uri, /*sandbox*/ None).await {
+            found.push((contents, candidate));
+        }
+    }
+    match found.len() {
+        0 => Err(SkillParseError::MissingField(FLOW_ARTIFACT_FILENAMES[0])),
+        1 => {
+            let (contents, artifact_path) = found.pop().expect("exactly one artifact");
+            if artifact_path.file_name().and_then(|name| name.to_str()) == Some("flow.yaml") {
+                crate::flow::parse_flow_plan(&contents).map_err(|err| {
+                    SkillParseError::InvalidField { field: "flow", reason: err.to_string() }
+                })?;
+            }
+            Ok(artifact_path)
+        }
+        _ => Err(SkillParseError::InvalidField {
+            field: "flow",
+            reason: format!(
+                "multiple flow artifacts found ({}); a flow skill carries exactly one of {}",
+                found
+                    .iter()
+                    .filter_map(|(_, path)| path.file_name().and_then(|name| name.to_str()))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                FLOW_ARTIFACT_FILENAMES.join(", "),
+            ),
+        }),
+    }
 }
 
 fn default_skill_name(path: &AbsolutePathBuf) -> String {

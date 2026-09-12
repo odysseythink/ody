@@ -20,6 +20,7 @@ use ody_protocol::protocol::CollabAgentSpawnBeginEvent;
 use ody_protocol::protocol::CollabAgentSpawnEndEvent;
 use ody_protocol::protocol::EventMsg;
 use ody_protocol::protocol::FlowPhaseBeginEvent;
+use ody_protocol::protocol::FlowLogEvent;
 use ody_protocol::protocol::FlowPhaseEndEvent;
 use ody_protocol::protocol::FlowStepCompletedEvent;
 use ody_protocol::protocol::Op;
@@ -295,6 +296,13 @@ impl FlowAgentHost for SessionFlowAgentHost {
                     }
                     .into()
                 }
+                FlowProgress::Log { message } => FlowLogEvent {
+                    call_id,
+                    flow_name,
+                    message,
+                    occurred_at_ms: now_unix_timestamp_ms(),
+                }
+                .into(),
             };
             session.send_event(&turn, event).await;
         }

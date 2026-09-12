@@ -1444,6 +1444,9 @@ pub enum EventMsg {
     /// lower than `total_steps`; there is no separate status field — the
     /// flow result item recorded by the turn carries the failure detail).
     FlowPhaseEnd(FlowPhaseEndEvent),
+    /// Flow skill progress (M3): a free-form progress line from a script
+    /// carrier (`flow.star` / `workflow.js`).
+    FlowLog(FlowLogEvent),
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS, EnumIter)]
@@ -1618,6 +1621,12 @@ impl From<FlowStepCompletedEvent> for EventMsg {
 impl From<FlowPhaseEndEvent> for EventMsg {
     fn from(event: FlowPhaseEndEvent) -> Self {
         EventMsg::FlowPhaseEnd(event)
+    }
+}
+
+impl From<FlowLogEvent> for EventMsg {
+    fn from(event: FlowLogEvent) -> Self {
+        EventMsg::FlowLog(event)
     }
 }
 
@@ -4205,6 +4214,22 @@ pub struct FlowPhaseEndEvent {
     pub total_steps: u32,
     #[serde(default)]
     pub completed_at_ms: i64,
+}
+
+/// Flow skill progress (M3): a free-form progress line emitted by script
+/// carriers (`flow.star` `phase()`/`log()`, `workflow.js` in M3.2). Script
+/// runtimes have no structured phases/steps, so their progress surfaces
+/// through this event instead of the phase/step trio.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+pub struct FlowLogEvent {
+    /// Identifier of the flow run; shared by all its progress events.
+    pub call_id: String,
+    /// Name of the flow skill being executed.
+    pub flow_name: String,
+    /// Free-form progress message from the script.
+    pub message: String,
+    #[serde(default)]
+    pub occurred_at_ms: i64,
 }
 
 /// A structured planning log event emitted during Plan/Design mode.

@@ -28,10 +28,11 @@ use crate::session::session::Session;
 use super::FlowContext;
 use super::FlowError;
 use super::FlowOutcome;
+use super::FlowPlanSource;
 use super::FlowPlanSummary;
 use super::FlowRuntime;
 use super::SessionFlowAgentHost;
-use super::YamlFlowRuntime;
+use super::select_flow_runtime;
 
 /// Split explicitly mentioned skills into `(flow, injectable)`, preserving
 /// mention order within both lists. Only non-flow skills continue down the
@@ -94,7 +95,7 @@ async fn ensure_flow_run_approved(
     sess: &Arc<Session>,
     turn_context: &Arc<TurnContext>,
     flow_name: &str,
-    plan: &ody_core_skills::FlowPlan,
+    plan: &FlowPlanSource,
 ) -> Result<(), FlowError> {
     if turn_context.approval_policy.value() == AskForApproval::Never {
         return Ok(());
@@ -108,7 +109,7 @@ async fn ensure_flow_run_approved(
             id: review_id,
             turn_id: turn_context.sub_id.clone(),
             flow_name: flow_name.to_string(),
-            summary: FlowPlanSummary::new(flow_name, plan),
+            summary: FlowPlanSummary::for_plan(flow_name, plan),
         },
         /*retry_reason*/ None,
     )
@@ -127,7 +128,9 @@ async fn ensure_flow_run_approved(
 }
 
 /// Read, validate, and execute one flow skill with checkpointing (M2.1) and
-/// run-before guardian approval (M2.2).
+/// run-before guardian approval (M2.2). The runtime is selected by the
+/// artifact's carrier extension (M3: `flow.yaml` / `flow.star` /
+/// `workflow.js`); carriers compiled out fail here with a clear error.
 pub(crate) async fn run_one_flow_skill(
     sess: &Arc<Session>,
     turn_context: &Arc<TurnContext>,
@@ -136,7 +139,14 @@ pub(crate) async fn run_one_flow_skill(
 ) -> Result<FlowOutcome, FlowError> {
     let name = skill.name.clone();
     let source = read_flow_source(&turn_context.turn_skills.snapshot, skill).await?;
-    let runtime = YamlFlowRuntime::new();
+    let artifact = skill
+        .flow_artifact
+        .as_ref()
+        .and_then(|path| path.file_name())
+        .and_then(|name| name.to_str())
+        .unwrap_or("flow.yaml")
+        .to_string();
+    let runtime = select_flow_runtime(&artifact)?;
     let plan = runtime.validate(&source)?;
     ensure_flow_run_approved(sess, turn_context, &name, &plan).await?;
     let fingerprint = crate::flow::plan_fingerprint(&source);

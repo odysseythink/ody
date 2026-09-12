@@ -409,7 +409,8 @@ pub(crate) fn tool_runtime_trace_event(event: &EventMsg) -> Option<ToolRuntimeTr
         | EventMsg::SkillLoadError(_)
         | EventMsg::FlowPhaseBegin(_)
         | EventMsg::FlowStepCompleted(_)
-        | EventMsg::FlowPhaseEnd(_) => None,
+        | EventMsg::FlowPhaseEnd(_)
+        | EventMsg::FlowLog(_) => None,
     }
 }
 
@@ -496,7 +497,8 @@ pub(crate) fn wrapped_protocol_event_type(event: &EventMsg) -> Option<&'static s
         | EventMsg::SkillLoadError(_)
         | EventMsg::FlowPhaseBegin(_)
         | EventMsg::FlowStepCompleted(_)
-        | EventMsg::FlowPhaseEnd(_) => None,
+        | EventMsg::FlowPhaseEnd(_)
+        | EventMsg::FlowLog(_) => None,
     }
 }
 

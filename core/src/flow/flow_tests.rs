@@ -205,7 +205,7 @@ impl FlowAgentHost for CancelProbeHost {
     }
 }
 
-fn validate(runtime: &YamlFlowRuntime, source: &str) -> ody_core_skills::FlowPlan {
+fn validate(runtime: &YamlFlowRuntime, source: &str) -> FlowPlanSource {
     runtime.validate(source).expect("fixture plan should validate")
 }
 
@@ -2357,4 +2357,309 @@ async fn flow_interrupt_releases_subagent_slot_for_immediate_resume() {
         .expect("re-trigger task should finish")
         .expect("re-trigger should succeed once the interrupted slot is released");
     assert_eq!(outcome.outputs["b"], json!("result B"));
+}
+
+
+// ---- M3.1: carrier dispatch + Starlark runtime + conformance ----
+
+#[cfg(feature = "flow-starlark")]
+use super::StarlarkFlowRuntime;
+use super::select_flow_runtime;
+
+#[test]
+fn select_flow_runtime_picks_yaml_and_rejects_unknown_artifacts() {
+    assert!(matches!(
+        select_flow_runtime("flow.yaml").expect("yaml runtime"),
+        super::AnyFlowRuntime::Yaml(_)
+    ));
+    #[cfg(feature = "flow-starlark")]
+    assert!(matches!(
+        select_flow_runtime("flow.star").expect("starlark runtime"),
+        super::AnyFlowRuntime::Starlark(_)
+    ));
+    assert!(matches!(
+        select_flow_runtime("flow.toml"),
+        Err(FlowError::Parse { .. })
+    ));
+}
+
+/// Locked M3 decision 2: without the `flow-v8` feature, a `workflow.js`
+/// carrier fails at trigger time with a clear "compiled without" error.
+#[cfg(not(feature = "flow-v8"))]
+#[test]
+fn workflow_js_without_flow_v8_feature_reports_compiled_without_error() {
+    match select_flow_runtime("workflow.js") {
+        Err(FlowError::Parse { reason }) => {
+            assert!(reason.contains("compiled without the `flow-v8` Cargo feature"), "{reason}");
+        }
+        other => panic!("expected compiled-without error, got {other:?}"),
+    }
+}
+
+#[cfg(feature = "flow-starlark")]
+mod starlark {
+    use super::*;
+
+    fn star_validate(runtime: &StarlarkFlowRuntime, source: &str) -> FlowPlanSource {
+        runtime.validate(source).expect("fixture script should validate")
+    }
+
+    #[test]
+    fn starlark_runtime_reports_supported_artifact() {
+        assert_eq!(StarlarkFlowRuntime.supported_artifact(), "flow.star");
+        assert!(StarlarkFlowRuntime.validate("result = 1\n").is_ok());
+        assert!(matches!(
+            StarlarkFlowRuntime.validate("def broken(:\n"),
+            Err(FlowError::Parse { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn starlark_sequential_agents_and_args_interpolation() {
+        let host = MockHost::default();
+        let source = r#"
+def main_work():
+    first = agent(f"write about {args['topic']}")
+    return agent("summarize " + first)
+
+result = main_work()
+"#;
+        let plan = star_validate(&StarlarkFlowRuntime, source);
+        let outcome = StarlarkFlowRuntime
+            .run(plan, FlowContext { args: serde_json::json!({"topic": "otters"}).as_object().unwrap().clone() }, &host)
+            .await
+            .unwrap();
+        assert_eq!(
+            outcome.outputs["result"],
+            json!("done: summarize done: write about otters")
+        );
+        assert_eq!(
+            *host.prompts.lock().unwrap(),
+            vec!["write about otters".to_string(), "summarize done: write about otters".to_string()]
+        );
+    }
+
+    #[tokio::test]
+    async fn starlark_agent_json_replies_parse_via_json_decode() {
+        let host = MockHost::with(vec![Ok("{\"items\": [\"a\", \"b\"]}".to_string())]);
+        let source = "result = json.decode(agent('list items'))\n";
+        let plan = star_validate(&StarlarkFlowRuntime, source);
+        let outcome = StarlarkFlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .unwrap();
+        assert_eq!(outcome.outputs["result"], json!({"items": ["a", "b"]}));
+    }
+
+    #[tokio::test]
+    async fn starlark_pipeline_binds_results_in_item_order() {
+        let host = SlowFirstHost;
+        let source = r#"
+def handle(item):
+    return "item " + item
+
+result = pipeline(["1", "2", "3"], handle)
+"#;
+        let plan = star_validate(&StarlarkFlowRuntime, source);
+        let outcome = StarlarkFlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .unwrap();
+        // SlowFirstHost completes later items sooner; order must hold.
+        assert_eq!(outcome.outputs["result"], json!(["r1", "r2", "r3"]));
+    }
+
+    #[tokio::test]
+    async fn starlark_parallel_fans_out_and_log_reports_progress() {
+        let host = MockHost::default();
+        let source = r#"
+def review():
+    return "Review"
+
+def test():
+    return "Test"
+
+phase("verify")
+result = parallel([review, test])
+"#;
+        let plan = star_validate(&StarlarkFlowRuntime, source);
+        let outcome = StarlarkFlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .unwrap();
+        assert_eq!(outcome.outputs["result"], json!(["done: Review", "done: Test"]));
+    }
+
+    #[tokio::test]
+    async fn starlark_agent_failure_fails_the_run() {
+        let host = MockHost::with(vec![Err("boom".to_string())]);
+        let source = "result = agent('explode')\n";
+        let plan = star_validate(&StarlarkFlowRuntime, source);
+        let err = StarlarkFlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .expect_err("agent failure must fail the run");
+        assert!(err.to_string().contains("boom"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn starlark_pipeline_enforces_batch_limit() {
+        let host = MockHost::default();
+        let many: Vec<String> = (0..super::super::FLOW_BATCH_LIMIT + 1).map(|i| i.to_string()).collect();
+        let many_json = serde_json::to_string(&many).unwrap();
+        let source = format!(
+            r#"
+def handle(item):
+    return "item " + str(item)
+
+result = pipeline(json.decode('{many_json}'), handle)
+"#
+        );
+        let plan = star_validate(&StarlarkFlowRuntime, &source);
+        let err = StarlarkFlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .expect_err("batch over the cap must fail");
+        // The limit surfaces through the eval thread as an Agent error whose
+        // message carries the LimitExceeded display text.
+        assert!(err.to_string().contains("batch of 4097 exceeds the limit of 4096"), "{err}");
+    }
+
+    /// M2.1 checkpoint/replay must apply to script carriers too: a cached
+    /// prompt skips the spawn, and completed calls are recorded.
+    #[tokio::test]
+    async fn starlark_checkpoint_replay_skips_completed_agents() {
+        let store = Arc::new(Mutex::new(std::collections::HashMap::new()));
+        let host = CheckpointMockHost { store: Arc::clone(&store), prompts: Mutex::new(Vec::new()) };
+        let source = r#"
+first = agent('step one')
+result = agent('step two using ' + first)
+"#;
+        // Run 1: both agents run, both recorded.
+        let plan = star_validate(&StarlarkFlowRuntime, source);
+        let outcome = StarlarkFlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .unwrap();
+        assert_eq!(outcome.outputs["result"], json!("done:step two using done:step one"));
+        assert_eq!(store.lock().unwrap().len(), 2);
+
+        // Run 2 (same source): every prompt hits the cache, zero spawns.
+        let plan = star_validate(&StarlarkFlowRuntime, source);
+        let outcome = StarlarkFlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .unwrap();
+        assert_eq!(outcome.outputs["result"], json!("done:step two using done:step one"));
+        assert_eq!(
+            *host.prompts.lock().unwrap(),
+            vec!["step one".to_string(), "step two using done:step one".to_string()]
+        );
+    }
+
+    #[tokio::test]
+    async fn starlark_unset_result_yields_empty_outputs() {
+        let host = MockHost::default();
+        let source = "agent('side effect only')\n";
+        let plan = star_validate(&StarlarkFlowRuntime, source);
+        let outcome = StarlarkFlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .unwrap();
+        assert!(outcome.outputs.is_empty());
+    }
+}
+
+#[cfg(feature = "flow-starlark")]
+struct CheckpointMockHost {
+    store: Arc<Mutex<std::collections::HashMap<String, String>>>,
+    prompts: Mutex<Vec<String>>,
+}
+
+#[cfg(feature = "flow-starlark")]
+impl FlowAgentHost for CheckpointMockHost {
+    async fn run_agent(&self, prompt: String) -> Result<String, FlowHostError> {
+        self.prompts.lock().unwrap().push(prompt.clone());
+        Ok(format!("done:{prompt}"))
+    }
+
+    async fn checkpoint_read(&self, prompt: &str) -> Option<String> {
+        self.store.lock().unwrap().get(prompt).cloned()
+    }
+
+    async fn checkpoint_write(&self, prompt: &str, output: &str) {
+        self.store.lock().unwrap().insert(prompt.to_string(), output.to_string());
+    }
+}
+
+/// M3 conformance (parent report §7 drift guard): one logical plan written
+/// in every compiled carrier must produce the same agent calls and the
+/// same outputs. Concurrent batch spawn order is not part of the contract
+/// (the yaml kernel and the starlark bridge both schedule freely), so the
+/// comparison is on the sorted prompt multiset plus the sequential prefix.
+#[cfg(feature = "flow-starlark")]
+#[tokio::test]
+async fn conformance_yaml_and_starlark_agree_on_calls_and_outputs() {
+    /// Deterministic host: structured reply for the first call, plain
+    /// `done: <prompt>` echoes otherwise; records prompts.
+    #[derive(Default)]
+    struct ConformanceHost {
+        prompts: Mutex<Vec<String>>,
+    }
+
+    impl FlowAgentHost for ConformanceHost {
+        async fn run_agent(&self, prompt: String) -> Result<String, FlowHostError> {
+            self.prompts.lock().unwrap().push(prompt.clone());
+            if prompt == "Generate for otters" {
+                Ok("{\"items\": [\"a\", \"b\"]}".to_string())
+            } else {
+                Ok(format!("done: {prompt}"))
+            }
+        }
+    }
+
+    let yaml_source = "phases:\n  - id: design\n    steps:\n      - agent: Generate for ${{ args.topic }}\n        output: gdd\n  - id: impl\n    steps:\n      - pipeline: ${{ gdd.items }}\n        each: Implement ${item}\n        output: impls\n  - id: verify\n    steps:\n      - parallel:\n          - agent: Review\n          - agent: Test\n        output: checks\n";
+    let star_source = r#"
+def handle(item):
+    return "Implement " + item
+
+def review_task():
+    return "Review"
+
+def test_task():
+    return "Test"
+
+phase("design")
+gdd = json.decode(agent("Generate for " + args["topic"]))
+phase("impl")
+impls = pipeline(gdd["items"], handle)
+phase("verify")
+checks = parallel([review_task, test_task])
+result = {"gdd": gdd, "impls": impls, "checks": checks}
+"#;
+    let args = serde_json::json!({"topic": "otters"}).as_object().unwrap().clone();
+
+    let yaml_host = ConformanceHost::default();
+    let plan = YamlFlowRuntime.validate(yaml_source).expect("yaml validates");
+    let yaml_outcome = YamlFlowRuntime
+        .run(plan, FlowContext { args: args.clone() }, &yaml_host)
+        .await
+        .expect("yaml run succeeds");
+
+    let star_host = ConformanceHost::default();
+    let plan = StarlarkFlowRuntime.validate(star_source).expect("starlark validates");
+    let star_outcome = StarlarkFlowRuntime
+        .run(plan, FlowContext { args }, &star_host)
+        .await
+        .expect("starlark run succeeds");
+
+    let mut yaml_prompts = yaml_host.prompts.lock().unwrap().clone();
+    let mut star_prompts = star_host.prompts.lock().unwrap().clone();
+    yaml_prompts.sort();
+    star_prompts.sort();
+    assert_eq!(yaml_prompts, star_prompts);
+    assert_eq!(
+        star_outcome.outputs["result"],
+        serde_json::Value::Object(yaml_outcome.outputs.clone())
+    );
 }

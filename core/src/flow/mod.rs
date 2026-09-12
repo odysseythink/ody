@@ -61,6 +61,8 @@ mod plan_summary;
 mod runner;
 mod runtime;
 mod schema;
+#[cfg(feature = "flow-starlark")]
+mod star;
 mod trigger;
 
 pub(crate) use checkpoint::CheckpointStore;
@@ -69,7 +71,8 @@ pub(crate) use plan_summary::FlowPlanSummary;
 pub(crate) use runner::SessionFlowRunner;
 
 pub(crate) use host::SessionFlowAgentHost;
-pub(crate) use runtime::YamlFlowRuntime;
+#[cfg(feature = "flow-starlark")]
+pub(crate) use star::StarlarkFlowRuntime;
 pub(crate) use trigger::flow_args_from_input;
 pub(crate) use trigger::partition_flow_skills;
 pub(crate) use trigger::run_flow_skills_in_turn;
@@ -193,6 +196,10 @@ pub(crate) enum FlowProgress {
     StepCompleted { phase_id: String, step_index: u32, total_steps: u32 },
     /// A phase ended; on failure `completed_steps` < `total_steps`.
     PhaseEnd { phase_id: String, completed_steps: u32, total_steps: u32 },
+    /// Free-form progress line from a script runtime (M3: `flow.star`
+    /// `phase()`/`log()`; `workflow.js` in M3.2). Script carriers have no
+    /// structured phases/steps, so their progress surfaces as log lines.
+    Log { message: String },
 }
 
 /// Injected host capability that actually runs one agent. M1.1 tests mock
@@ -249,6 +256,34 @@ pub(crate) trait FlowAgentHost: Send + Sync {
     }
 }
 
+/// A validated Flow plan: the executable form of one carrier's source.
+/// Script carriers (`flow.star`, `workflow.js`) validate syntax up front
+/// but re-parse at run time — for them the source text IS the plan.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum FlowPlanSource {
+    /// `flow.yaml`: the declarative AST parsed by `ody-core-skills`.
+    Yaml(FlowPlan),
+    /// `flow.star`: syntax-checked Starlark source (M3.1).
+    #[cfg(feature = "flow-starlark")]
+    Starlark(String),
+    /// `workflow.js`: syntax-checked JS source (M3.2, `flow-v8` feature).
+    #[cfg(feature = "flow-v8")]
+    V8(String),
+}
+
+impl FlowPlanSource {
+    /// Carrier artifact name for this plan.
+    pub(crate) fn artifact(&self) -> &'static str {
+        match self {
+            FlowPlanSource::Yaml(_) => "flow.yaml",
+            #[cfg(feature = "flow-starlark")]
+            FlowPlanSource::Starlark(_) => "flow.star",
+            #[cfg(feature = "flow-v8")]
+            FlowPlanSource::V8(_) => "workflow.js",
+        }
+    }
+}
+
 /// Unified interface for Flow runtime implementations (`flow.yaml` today;
 /// Starlark / V8 in M3). Host-function semantics documented on this module
 /// are the single source of truth all implementations must match.
@@ -256,23 +291,114 @@ pub(crate) trait FlowAgentHost: Send + Sync {
 /// Intentionally not object-safe (generic `run`): M3 dispatches over an
 /// enum of compiled runtimes instead of `dyn`, matching the compile-time
 /// feature selection in the parent report §2.3.
-///
-/// NOTE(M3): `validate` currently returns the yaml AST
-/// ([`FlowPlan`]); when `flow.star` / `workflow.js` land, the plan type
-/// generalizes (associated type or enum) and this signature follows.
 pub(crate) trait FlowRuntime: Send + Sync {
     /// Artifact filename this runtime executes (`flow.yaml`).
     fn supported_artifact(&self) -> &'static str;
 
     /// Parse and statically validate source before it enters the runtime.
-    fn validate(&self, source: &str) -> Result<FlowPlan, FlowError>;
+    fn validate(&self, source: &str) -> Result<FlowPlanSource, FlowError>;
 
     /// Execute a previously validated plan to completion (in-turn
     /// blocking per the locked M1 architecture decision).
     async fn run<H: FlowAgentHost>(
         &self,
-        plan: FlowPlan,
+        plan: FlowPlanSource,
         ctx: FlowContext,
         host: &H,
     ) -> Result<FlowOutcome, FlowError>;
+}
+
+/// Compile-time-assembled set of runtimes (parent report §2.3). Exactly
+/// which variants exist depends on the `flow-starlark` / `flow-v8`
+/// features; `select_flow_runtime` reports a clear error when the
+/// requested carrier was compiled out.
+#[derive(Debug)]
+pub(crate) enum AnyFlowRuntime {
+    Yaml(runtime::YamlFlowRuntime),
+    #[cfg(feature = "flow-starlark")]
+    Starlark(StarlarkFlowRuntime),
+    #[cfg(feature = "flow-v8")]
+    V8(crate::flow::v8::V8FlowRuntime),
+}
+
+impl FlowRuntime for AnyFlowRuntime {
+    fn supported_artifact(&self) -> &'static str {
+        match self {
+            AnyFlowRuntime::Yaml(runtime) => runtime.supported_artifact(),
+            #[cfg(feature = "flow-starlark")]
+            AnyFlowRuntime::Starlark(runtime) => runtime.supported_artifact(),
+            #[cfg(feature = "flow-v8")]
+            AnyFlowRuntime::V8(runtime) => runtime.supported_artifact(),
+        }
+    }
+
+    fn validate(&self, source: &str) -> Result<FlowPlanSource, FlowError> {
+        match self {
+            AnyFlowRuntime::Yaml(runtime) => runtime.validate(source),
+            #[cfg(feature = "flow-starlark")]
+            AnyFlowRuntime::Starlark(runtime) => runtime.validate(source),
+            #[cfg(feature = "flow-v8")]
+            AnyFlowRuntime::V8(runtime) => runtime.validate(source),
+        }
+    }
+
+    async fn run<H: FlowAgentHost>(
+        &self,
+        plan: FlowPlanSource,
+        ctx: FlowContext,
+        host: &H,
+    ) -> Result<FlowOutcome, FlowError> {
+        match self {
+            AnyFlowRuntime::Yaml(runtime) => runtime.run(plan, ctx, host).await,
+            #[cfg(feature = "flow-starlark")]
+            AnyFlowRuntime::Starlark(runtime) => runtime.run(plan, ctx, host).await,
+            #[cfg(feature = "flow-v8")]
+            AnyFlowRuntime::V8(runtime) => runtime.run(plan, ctx, host).await,
+        }
+    }
+}
+
+/// Pick the runtime for a flow artifact by its file name. Unknown names
+/// and carriers compiled out (per the locked M3 decision: fail at trigger
+/// time, not load time) return a clear [`FlowError::Parse`].
+pub(crate) fn select_flow_runtime(artifact_name: &str) -> Result<AnyFlowRuntime, FlowError> {
+    match artifact_name {
+        "flow.yaml" => Ok(AnyFlowRuntime::Yaml(runtime::YamlFlowRuntime::new())),
+        "flow.star" => select_starlark_runtime(),
+        "workflow.js" => select_v8_runtime(),
+        other => Err(FlowError::Parse {
+            reason: format!(
+                "unsupported flow artifact '{other}' (expected flow.yaml, flow.star, or workflow.js)"
+            ),
+        }),
+    }
+}
+
+#[cfg(feature = "flow-starlark")]
+fn select_starlark_runtime() -> Result<AnyFlowRuntime, FlowError> {
+    Ok(AnyFlowRuntime::Starlark(StarlarkFlowRuntime::new()))
+}
+
+#[cfg(not(feature = "flow-starlark"))]
+fn select_starlark_runtime() -> Result<AnyFlowRuntime, FlowError> {
+    Err(compiled_without("flow-starlark", "flow.star"))
+}
+
+#[cfg(feature = "flow-v8")]
+fn select_v8_runtime() -> Result<AnyFlowRuntime, FlowError> {
+    Ok(AnyFlowRuntime::V8(crate::flow::v8::V8FlowRuntime::new()))
+}
+
+#[cfg(not(feature = "flow-v8"))]
+fn select_v8_runtime() -> Result<AnyFlowRuntime, FlowError> {
+    Err(compiled_without("flow-v8", "workflow.js"))
+}
+
+#[cfg(not(all(feature = "flow-starlark", feature = "flow-v8")))]
+fn compiled_without(feature: &str, carrier: &str) -> FlowError {
+    FlowError::Parse {
+        reason: format!(
+            "the '{carrier}' flow carrier is not available in this build (compiled without the `{feature}` Cargo feature)"
+        ),
+    }
 }

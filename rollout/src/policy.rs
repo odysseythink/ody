@@ -163,6 +163,7 @@ pub fn should_persist_event_msg(ev: &EventMsg) -> bool {
         | EventMsg::SkillLoadError(_)
         | EventMsg::FlowPhaseBegin(_)
         | EventMsg::FlowStepCompleted(_)
-        | EventMsg::FlowPhaseEnd(_) => false,
+        | EventMsg::FlowPhaseEnd(_)
+        | EventMsg::FlowLog(_) => false,
     }
 }

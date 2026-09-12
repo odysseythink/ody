@@ -16,6 +16,15 @@ path = "src/bin/config_schema.rs"
 workspace = true
 
 [features]
+default = ["flow-starlark"]
+# The Starlark (`flow.star`) Flow runtime (M3). On by default: pure-Rust, no
+# native linking. Off removes the starlark dependency entirely.
+flow-starlark = ["dep:starlark"]
+# The V8 (`workflow.js`) Flow runtime (M3). Off by default so local dev
+# builds skip compiling/linking V8; implies `v8`. Without it, triggering a
+# `workflow.js` flow fails with a clear "compiled without the `flow-v8`
+# feature" error at run time (the skill still loads).
+flow-v8 = ["v8"]
 # Forwards to `ody-code-mode/v8`: enables the real V8-backed code-mode
 # runtime (off by default so local dev builds skip compiling/linking V8).
 # Code-mode-executing tests are gated behind this feature.
@@ -120,6 +129,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha1 = { workspace = true }
 sha2 = { workspace = true }
+starlark = { workspace = true, optional = true }
 shlex = { workspace = true }
 similar = { workspace = true }
 tempfile = { workspace = true }

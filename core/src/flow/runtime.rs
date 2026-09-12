@@ -18,6 +18,7 @@ use super::FlowContext;
 use super::FlowError;
 use super::FlowHostError;
 use super::FlowOutcome;
+use super::FlowPlanSource;
 use super::FlowProgress;
 use super::FlowRuntime;
 use super::interp::TemplateContext;
@@ -39,17 +40,23 @@ impl FlowRuntime for YamlFlowRuntime {
         "flow.yaml"
     }
 
-    fn validate(&self, source: &str) -> Result<FlowPlan, FlowError> {
+    fn validate(&self, source: &str) -> Result<FlowPlanSource, FlowError> {
         ody_core_skills::parse_flow_plan(source)
+            .map(FlowPlanSource::Yaml)
             .map_err(|err| FlowError::Parse { reason: err.to_string() })
     }
 
     async fn run<H: FlowAgentHost>(
         &self,
-        plan: FlowPlan,
+        plan: FlowPlanSource,
         ctx: FlowContext,
         host: &H,
     ) -> Result<FlowOutcome, FlowError> {
+        let FlowPlanSource::Yaml(plan) = plan else {
+            return Err(FlowError::Parse {
+                reason: "yaml runtime received a non-yaml plan".to_string(),
+            });
+        };
         execute_plan(plan, ctx, host).await
     }
 }

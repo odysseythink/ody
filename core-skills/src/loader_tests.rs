@@ -2672,6 +2672,118 @@ async fn flow_skill_with_invalid_flow_yaml_reports_error() {
 }
 
 #[tokio::test]
+async fn flow_skill_loads_starlark_artifact() {
+    let dir = TempDir::new().unwrap();
+    let skill_dir = dir
+        .path()
+        .join(".agents")
+        .join("skills")
+        .join("star-flow");
+    fs::create_dir_all(&skill_dir).unwrap();
+    fs::write(
+        skill_dir.join("SKILL.md"),
+        "---\nname: star-flow\ndescription: Starlark flow.\ntype: flow\n---\n# Star Flow\n",
+    )
+    .unwrap();
+    // M3: script carriers are discovered without eager syntax validation
+    // (their runtime validates at trigger time), so even unusual contents
+    // load fine here.
+    fs::write(skill_dir.join("flow.star"), "result = agent('hi')\n").unwrap();
+
+    let fs: Arc<dyn ExecutorFileSystem> = Arc::clone(&LOCAL_FS);
+    let roots = skill_roots_from_layer_stack(
+        fs,
+        &ConfigLayerStack::default(),
+        &AbsolutePathBuf::try_from(dir.path()).unwrap(),
+        None,
+    )
+    .await;
+    let outcome = load_skills_from_roots(roots, None).await;
+
+    let skill = outcome
+        .skills
+        .iter()
+        .find(|s| s.name == "star-flow")
+        .expect("starlark flow skill should be loaded");
+    assert!(matches!(skill.skill_type, SkillType::Flow));
+    let artifact = skill.flow_artifact.as_ref().expect("flow artifact path");
+    assert!(artifact.as_path().ends_with("flow.star"));
+    assert!(outcome.errors.is_empty());
+}
+
+#[tokio::test]
+async fn flow_skill_loads_workflow_js_artifact() {
+    let dir = TempDir::new().unwrap();
+    let skill_dir = dir.path().join(".agents").join("skills").join("js-flow");
+    fs::create_dir_all(&skill_dir).unwrap();
+    fs::write(
+        skill_dir.join("SKILL.md"),
+        "---\nname: js-flow\ndescription: JS flow.\ntype: flow\n---\n# JS Flow\n",
+    )
+    .unwrap();
+    fs::write(
+        skill_dir.join("workflow.js"),
+        "export const meta = {}\nresult = await agent('hi')\n",
+    )
+    .unwrap();
+
+    let fs: Arc<dyn ExecutorFileSystem> = Arc::clone(&LOCAL_FS);
+    let roots = skill_roots_from_layer_stack(
+        fs,
+        &ConfigLayerStack::default(),
+        &AbsolutePathBuf::try_from(dir.path()).unwrap(),
+        None,
+    )
+    .await;
+    let outcome = load_skills_from_roots(roots, None).await;
+
+    let skill = outcome
+        .skills
+        .iter()
+        .find(|s| s.name == "js-flow")
+        .expect("workflow.js flow skill should be loaded");
+    let artifact = skill.flow_artifact.as_ref().expect("flow artifact path");
+    assert!(artifact.as_path().ends_with("workflow.js"));
+    assert!(outcome.errors.is_empty());
+}
+
+#[tokio::test]
+async fn flow_skill_with_multiple_flow_artifacts_reports_error() {
+    let dir = TempDir::new().unwrap();
+    let skill_dir = dir.path().join(".agents").join("skills").join("multi-flow");
+    fs::create_dir_all(&skill_dir).unwrap();
+    fs::write(
+        skill_dir.join("SKILL.md"),
+        "---\nname: multi-flow\ndescription: Flow with two artifacts.\ntype: flow\n---\n# Multi\n",
+    )
+    .unwrap();
+    fs::write(
+        skill_dir.join("flow.yaml"),
+        "phases:\n  - id: design\n    steps:\n      - agent: Generate\n",
+    )
+    .unwrap();
+    fs::write(skill_dir.join("flow.star"), "result = agent('hi')\n").unwrap();
+
+    let fs: Arc<dyn ExecutorFileSystem> = Arc::clone(&LOCAL_FS);
+    let roots = skill_roots_from_layer_stack(
+        fs,
+        &ConfigLayerStack::default(),
+        &AbsolutePathBuf::try_from(dir.path()).unwrap(),
+        None,
+    )
+    .await;
+    let outcome = load_skills_from_roots(roots, None).await;
+
+    assert!(outcome.skills.iter().all(|s| s.name != "multi-flow"));
+    assert!(
+        outcome
+            .errors
+            .iter()
+            .any(|e| e.message.contains("multiple flow artifacts"))
+    );
+}
+
+#[tokio::test]
 async fn inline_skill_has_no_flow_artifact() {
     let dir = TempDir::new().unwrap();
     let path = dir

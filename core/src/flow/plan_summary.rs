@@ -7,13 +7,22 @@ use ody_core_skills::FlowPlan;
 use ody_core_skills::FlowStep;
 use serde::Serialize;
 
+use super::FlowPlanSource;
+
 /// Preview length cap per template, in characters.
 const PROMPT_PREVIEW_CHARS: usize = 200;
+/// Script-carrier source preview cap, in lines (M3).
+const SOURCE_PREVIEW_LINES: usize = 40;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct FlowPlanSummary {
     pub(crate) flow_name: String,
+    /// Carrier artifact (`flow.yaml` / `flow.star` / `workflow.js`).
+    pub(crate) carrier: &'static str,
+    /// Structured phase/step projection; empty for script carriers.
     pub(crate) phases: Vec<PhaseSummary>,
+    /// Head of the script source for script carriers; `None` for yaml.
+    pub(crate) source_preview: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -34,6 +43,7 @@ impl FlowPlanSummary {
     pub(crate) fn new(flow_name: impl Into<String>, plan: &FlowPlan) -> Self {
         Self {
             flow_name: flow_name.into(),
+            carrier: "flow.yaml",
             phases: plan
                 .phases
                 .iter()
@@ -42,6 +52,40 @@ impl FlowPlanSummary {
                     steps: phase.steps.iter().map(step_summary).collect(),
                 })
                 .collect(),
+            source_preview: None,
+        }
+    }
+
+    /// Project any validated plan for the run-before approval: structured
+    /// phases for yaml, a bounded source preview for script carriers (M3).
+    pub(crate) fn for_plan(flow_name: impl Into<String>, plan: &FlowPlanSource) -> Self {
+        match plan {
+            FlowPlanSource::Yaml(plan) => Self::new(flow_name, plan),
+            #[cfg(feature = "flow-starlark")]
+            FlowPlanSource::Starlark(source) => {
+                Self::for_script(flow_name, "flow.star", source)
+            }
+            #[cfg(feature = "flow-v8")]
+            FlowPlanSource::V8(source) => Self::for_script(flow_name, "workflow.js", source),
+        }
+    }
+
+    fn for_script(
+        flow_name: impl Into<String>,
+        carrier: &'static str,
+        source: &str,
+    ) -> Self {
+        let head: Vec<&str> = source.lines().take(SOURCE_PREVIEW_LINES).collect();
+        let preview = if head.len() < source.lines().count() {
+            format!("{}\n…", head.join("\n"))
+        } else {
+            head.join("\n")
+        };
+        Self {
+            flow_name: flow_name.into(),
+            carrier,
+            phases: Vec::new(),
+            source_preview: Some(preview),
         }
     }
 }

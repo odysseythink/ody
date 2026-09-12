@@ -2376,6 +2376,7 @@ pub(super) fn realtime_text_for_event(msg: &EventMsg) -> Option<(String, Option<
         | EventMsg::FlowPhaseBegin(_)
         | EventMsg::FlowStepCompleted(_)
         | EventMsg::FlowPhaseEnd(_) => None,
+        EventMsg::FlowLog(event) => Some((event.message.clone(), None)),
     }
 }
 
