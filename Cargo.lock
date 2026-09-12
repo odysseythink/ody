@@ -7129,6 +7129,7 @@ name = "ody-code-mode"
 version = "0.1.0-alpha.2"
 dependencies = [
  "deno_core_icudata",
+ "futures",
  "ody-code-mode-protocol",
  "ody-protocol",
  "pretty_assertions",

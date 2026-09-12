@@ -4,6 +4,8 @@ mod module_loader;
 mod timers;
 mod value;
 
+pub(crate) mod workflow;
+
 use std::collections::HashMap;
 use std::sync::OnceLock;
 use std::sync::mpsc as std_mpsc;

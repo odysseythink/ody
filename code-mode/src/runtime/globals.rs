@@ -98,7 +98,7 @@ fn build_all_tools_value<'s>(
     Ok(array.into())
 }
 
-fn helper_function<'s, F>(
+pub(super) fn helper_function<'s, F>(
     scope: &mut v8::PinScope<'s, '_>,
     name: &str,
     callback: F,
@@ -130,7 +130,7 @@ fn tool_function<'s>(
         .ok_or_else(|| "failed to create tool function".to_string())
 }
 
-fn set_global<'s>(
+pub(super) fn set_global<'s>(
     scope: &mut v8::PinScope<'s, '_>,
     global: v8::Local<'s, v8::Object>,
     name: &str,
@@ -145,7 +145,7 @@ fn set_global<'s>(
     }
 }
 
-fn delete_global<'s>(
+pub(super) fn delete_global<'s>(
     scope: &mut v8::PinScope<'s, '_>,
     global: v8::Local<'s, v8::Object>,
     name: &str,
