@@ -1849,3 +1849,325 @@ async fn unconstrained_agent_keeps_parse_or_string_behavior() {
         prompts[0]
     );
 }
+
+
+// ---- M2.5 end-to-end tests ----
+
+use core_test_support::responses::ev_assistant_message;
+use core_test_support::responses::ev_completed;
+use core_test_support::responses::ev_response_created;
+use core_test_support::responses::mount_sse_once;
+use core_test_support::responses::sse;
+use core_test_support::responses::start_mock_server;
+use ody_features::Feature;
+use ody_model_provider::create_model_provider;
+use ody_protocol::config_types::ApprovalsReviewer;
+use ody_protocol::protocol::Event;
+use ody_protocol::protocol::GuardianAssessmentStatus;
+
+/// Pull the next `CollabAgentSpawnBegin` event off the stream and return its
+/// prompt, asserting the flow progressed in the expected order. Guardian
+/// assessment events seen along the way are collected into `assessments` so
+/// callers can assert on the approval lifecycle.
+async fn next_spawn_prompt(
+    rx: &async_channel::Receiver<Event>,
+    what: &str,
+    assessments: &mut Vec<GuardianAssessmentStatus>,
+) -> String {
+    timeout(Duration::from_secs(30), async {
+        loop {
+            let event = rx.recv().await.expect("event stream should stay open");
+            match event.msg {
+                EventMsg::CollabAgentSpawnBegin(ev) => return ev.prompt,
+                EventMsg::GuardianAssessment(ev) => assessments.push(ev.status),
+                _ => {}
+            }
+        }
+    })
+    .await
+    .unwrap_or_else(|_| panic!("flow should spawn {what} within the timeout"))
+}
+
+#[tokio::test]
+async fn flow_resume_e2e_replays_completed_agents_and_continues_after_interrupt() {
+    // Full "interrupt → re-trigger resume" chain against the on-disk
+    // CheckpointStore: run 1 completes step A and is interrupted while step
+    // B is in flight; run 2 replays A without a spawn and continues at B.
+    let yaml = "phases:\n  - id: p\n    steps:\n      - agent: Step A on ${{ args.text }}\n        output: a\n      - agent: Step B uses ${{ a }}\n        output: b\n      - agent: Step C uses ${{ b }}\n        output: c\n";
+    let dir = tempfile::tempdir().expect("create flow dir");
+    let flow_yaml = dir.path().join("flow.yaml");
+    std::fs::write(&flow_yaml, yaml).expect("write flow.yaml");
+    let skill = flow_skill_on_disk("resume-e2e-flow", &flow_yaml);
+
+    let (mut session, turn, rx) =
+        make_session_and_context_and_config_and_rx(Vec::new(), |config| {
+            config.permissions.approval_policy =
+                ody_config::Constrained::allow_any(AskForApproval::Never);
+            config.agent_max_depth = 4;
+        })
+        .await;
+    let manager = flow_test_thread_manager();
+    Arc::get_mut(&mut session)
+        .expect("unique session arc")
+        .services
+        .agent_control = manager.agent_control();
+    let session = Arc::new(session);
+    let mut turn = turn;
+    install_skills(Arc::get_mut(&mut turn).expect("unique turn arc"), vec![skill.clone()]);
+    let turn = Arc::new(turn);
+    let args = || flow_args_from_input(&[user_text_input("demo")]);
+    let mut ignored_assessments = Vec::new();
+
+    // --- Run 1: drive step A, then interrupt while step B is in flight. ---
+    let run1 = tokio::spawn({
+        let session = session.clone();
+        let turn = turn.clone();
+        let skill = skill.clone();
+        async move { run_one_flow_skill(&session, &turn, &skill, &args()).await }
+    });
+    let prompt_a = next_spawn_prompt(&rx, "step A", &mut ignored_assessments).await;
+    assert!(prompt_a.contains("Step A on demo"), "unexpected prompt: {prompt_a}");
+    let thread_a = timeout(Duration::from_secs(30), async {
+        loop {
+            if let Some(thread_id) =
+                next_pending_child_thread_id(&manager, session.thread_id, &Default::default())
+                    .await
+            {
+                return thread_id;
+            }
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("step A thread should register");
+    drive_child_to_completion(&manager, thread_a, "result A").await;
+
+    let prompt_b = next_spawn_prompt(&rx, "step B", &mut ignored_assessments).await;
+    assert!(prompt_b.contains("Step B uses result A"), "unexpected prompt: {prompt_b}");
+    // Interrupt the run: dropping the task drops the in-flight `run_agent`
+    // future, whose AbortOnDrop guard interrupts the spawned child.
+    run1.abort();
+    let join = run1.await.expect_err("aborted run should not complete");
+    assert!(join.is_cancelled(), "run should be cancelled, not panicked: {join:?}");
+
+    // The interrupted run retained its checkpoint file with step A's entry.
+    let ody_home = session.get_config().await.ody_home.clone();
+    let fingerprint = plan_fingerprint(yaml);
+    let checkpoint_file = ody_home
+        .as_path()
+        .join("flow-checkpoints")
+        .join(format!("resume-e2e-flow-{fingerprint}.json"));
+    let saved = std::fs::read_to_string(&checkpoint_file)
+        .expect("interrupted run must retain the checkpoint file");
+    // Checkpoint keys are SHA-256 hashes of the interpolated prompts, so
+    // assert on the parsed entry values instead of raw prompt text.
+    let parsed: serde_json::Value =
+        serde_json::from_str(&saved).expect("checkpoint file should be valid JSON");
+    let entries = parsed["entries"].as_object().expect("entries object");
+    assert_eq!(entries.len(), 1, "only step A completed before the interrupt: {saved}");
+    assert_eq!(
+        entries.values().next().expect("one entry"),
+        &json!("result A"),
+        "checkpoint should hold step A's result: {saved}"
+    );
+
+    // --- Run 2 (re-trigger): A replays from the checkpoint, B and C run. ---
+    let run2 = tokio::spawn({
+        let session = session.clone();
+        let turn = turn.clone();
+        async move { run_one_flow_skill(&session, &turn, &skill, &args()).await }
+    });
+    let prompt_b2 = next_spawn_prompt(&rx, "step B on the resume run", &mut ignored_assessments).await;
+    assert!(
+        prompt_b2.contains("Step B uses result A"),
+        "resume run must continue at step B, not re-run A: {prompt_b2}"
+    );
+    let mut driven = std::collections::HashSet::from([thread_a]);
+    let thread_b2 = timeout(Duration::from_secs(30), async {
+        loop {
+            if let Some(thread_id) =
+                next_pending_child_thread_id(&manager, session.thread_id, &driven).await
+            {
+                return thread_id;
+            }
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("step B thread should register on the resume run");
+    drive_child_to_completion(&manager, thread_b2, "result B").await;
+    driven.insert(thread_b2);
+
+    let prompt_c = next_spawn_prompt(&rx, "step C", &mut ignored_assessments).await;
+    assert!(prompt_c.contains("Step C uses result B"), "unexpected prompt: {prompt_c}");
+    let thread_c = timeout(Duration::from_secs(30), async {
+        loop {
+            if let Some(thread_id) =
+                next_pending_child_thread_id(&manager, session.thread_id, &driven).await
+            {
+                return thread_id;
+            }
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("step C thread should register on the resume run");
+    drive_child_to_completion(&manager, thread_c, "result C").await;
+
+    let outcome = run2
+        .await
+        .expect("resume run task should finish")
+        .expect("resume run should succeed");
+    assert_eq!(outcome.outputs["a"], json!("result A"));
+    assert_eq!(outcome.outputs["b"], json!("result B"));
+    assert_eq!(outcome.outputs["c"], json!("result C"));
+
+    // Success discards the checkpoint file; the conversation only ever saw
+    // one spawn per step on this turn (A once, B twice across both runs).
+    assert!(!checkpoint_file.exists(), "successful run must discard its checkpoint");
+}
+
+#[tokio::test]
+async fn flow_run_model_tool_end_to_end_with_guardian_approval() {
+    // M2.5: the model-tool path end to end — the extension `skills.flow__run`
+    // tool forwards to this runner, the pre-run guardian review (M2.2) asks
+    // the auto reviewer (wiremock), approval unblocks execution, and the
+    // flow result returns as tool output.
+    let server = start_mock_server().await;
+    let guardian_request_log = mount_sse_once(
+        &server,
+        sse(vec![
+            ev_response_created("resp-guardian"),
+            ev_assistant_message(
+                "msg-guardian",
+                &serde_json::json!({
+                    "risk_level": "low",
+                    "user_authorization": "high",
+                    "outcome": "allow",
+                    "rationale": "The flow plan summary shows read-only design work.",
+                })
+                .to_string(),
+            ),
+            ev_completed("resp-guardian"),
+        ]),
+    )
+    .await;
+
+    let dir = tempfile::tempdir().expect("create flow dir");
+    let flow_yaml = dir.path().join("flow.yaml");
+    std::fs::write(
+        &flow_yaml,
+        "phases:\n  - id: p\n    steps:\n      - agent: Summarize ${{ args.text }}\n        output: r\n",
+    )
+    .expect("write flow.yaml");
+    let skill = flow_skill_on_disk("approved-model-flow", &flow_yaml);
+
+    // Use the default test harness (test provider, no env API key) instead of
+    // the kimi-forcing flow harness: the guardian review session makes a real
+    // model call against the wiremock reviewer.
+    let (mut session, mut turn, rx) =
+        crate::session::tests::make_session_and_context_with_rx().await;
+    *session.active_turn.lock().await = Some(crate::state::ActiveTurn::default());
+    let manager = flow_test_thread_manager();
+    Arc::get_mut(&mut session)
+        .expect("unique session arc")
+        .services
+        .agent_control = manager.agent_control();
+    let mut config = (*turn.config).clone();
+    config
+        .features
+        .enable(Feature::GuardianApproval)
+        .expect("test setup should allow enabling guardian approvals");
+    config.approvals_reviewer = ApprovalsReviewer::AutoReview;
+    // The flow harness forces the kimi provider (env-key auth); swap in the
+    // shared test provider so the guardian review session can call wiremock
+    // without KIMI_API_KEY (mirrors guardian_test_session_turn_and_rx).
+    config.model_provider_id = crate::config::TEST_PROVIDER_ID.to_string();
+    config.model_provider = crate::config::test_provider();
+    config.model_providers =
+        std::collections::HashMap::from([(crate::config::TEST_PROVIDER_ID.to_string(), crate::config::test_provider())]);
+    config.model_provider.base_url = Some(format!("{}/v1", server.uri()));
+    config.agent_max_depth = 4;
+    let config = Arc::new(config);
+    let models_manager = crate::test_support::models_manager_with_provider(
+        config.ody_home.to_path_buf(),
+        config.model_provider.clone(),
+    );
+    Arc::get_mut(&mut session)
+        .expect("unique session arc")
+        .services
+        .models_manager
+        .store(models_manager);
+    let turn_mut = Arc::get_mut(&mut turn).expect("unique turn arc");
+    turn_mut
+        .approval_policy
+        .set(AskForApproval::OnRequest)
+        .expect("test setup should allow updating approval policy");
+    turn_mut.user_instructions = None;
+    turn_mut.config = Arc::clone(&config);
+    turn_mut.provider = create_model_provider(config.model_provider.clone());
+    let session = Arc::new(session);
+    session
+        .services
+        .flow_runner
+        .init_session(Arc::downgrade(&session));
+    install_skills(Arc::get_mut(&mut turn).expect("unique turn arc"), vec![skill.clone()]);
+    session.services.flow_runner.register_turn(&turn);
+
+    let run = tokio::spawn({
+        let session = session.clone();
+        let turn = turn.clone();
+        async move {
+            let runner: Arc<dyn FlowRunner> = session.services.flow_runner.clone();
+            runner
+                .run_flow(
+                    &turn.sub_id,
+                    &skill.name,
+                    serde_json::Map::from_iter([("text".to_string(), json!("the repo"))]),
+                )
+                .await
+        }
+    });
+
+    // The guardian review runs against the wiremock reviewer and approves;
+    // execution then spawns the flow's agent.
+    let mut assessment_statuses = Vec::new();
+    let prompt = next_spawn_prompt(&rx, "the approved flow's agent", &mut assessment_statuses).await;
+    assert!(prompt.contains("Summarize the repo"), "unexpected prompt: {prompt}");
+    let mut driven = std::collections::HashSet::new();
+    let thread_id = timeout(Duration::from_secs(30), async {
+        loop {
+            if let Some(thread_id) =
+                next_pending_child_thread_id(&manager, session.thread_id, &driven).await
+            {
+                return thread_id;
+            }
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("approved flow should spawn its agent");
+    drive_child_to_completion(&manager, thread_id, "approved summary").await;
+
+    let output = run
+        .await
+        .expect("runner task should finish")
+        .expect("approved flow run should succeed");
+    assert_eq!(output.outputs["r"], json!("approved summary"));
+
+    // The auto reviewer was actually consulted for this flow run.
+    let request = guardian_request_log.single_request();
+    let request_text = request.body_json().to_string();
+    assert!(
+        request_text.contains("approved-model-flow"),
+        "guardian request should identify the flow: {request_text}"
+    );
+
+    // The approval lifecycle is visible on the turn event stream (collected
+    // while waiting for the spawn above).
+    assert_eq!(
+        assessment_statuses,
+        vec![GuardianAssessmentStatus::InProgress, GuardianAssessmentStatus::Approved],
+        "guardian assessment lifecycle missing: {assessment_statuses:?}"
+    );
+}
