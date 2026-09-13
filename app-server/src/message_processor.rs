@@ -1045,6 +1045,16 @@ impl MessageProcessor {
                 .validate(params)
                 .await
                 .map(|response| Some(response.into())),
+            // Typed shim (E2 T02): variants are registered and experimental-gated
+            // above; the real processor dispatch lands in E2 T03, which replaces
+            // this arm wholesale.
+            ClientRequest::WorkspaceServiceStart { .. }
+            | ClientRequest::WorkspaceServiceStop { .. }
+            | ClientRequest::WorkspaceServiceList { .. }
+            | ClientRequest::WorkspaceServiceLogs { .. }
+            | ClientRequest::WorkspacePreviewCheck { .. } => Err(invalid_request(
+                "workspace/service handler is not wired in this build",
+            )),
             ClientRequest::ModelProviderCapabilitiesRead { params: _, .. } => self
                 .config_processor
                 .model_provider_capabilities_read()

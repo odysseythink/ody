@@ -26,6 +26,7 @@ mod turn;
 mod visual_workspace;
 mod windows_sandbox;
 mod workspace;
+mod workspace_service;
 mod workspace_source;
 
 pub use apps::*;
@@ -55,6 +56,7 @@ pub use turn::*;
 pub use visual_workspace::*;
 pub use windows_sandbox::*;
 pub use workspace::*;
+pub use workspace_service::*;
 pub use workspace_source::*;
 
 #[cfg(test)]

@@ -20512,6 +20512,170 @@
         ],
         "type": "object"
       },
+      "WorkspaceServiceHealth": {
+        "properties": {
+          "checkedAtMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "statusCode": {
+            "format": "uint16",
+            "minimum": 0.0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "checkedAtMs",
+          "ok"
+        ],
+        "type": "object"
+      },
+      "WorkspaceServiceRef": {
+        "properties": {
+          "command": {
+            "description": "Fully resolved command line actually spawned (`<pm> run <script> -- ...`).",
+            "type": "string"
+          },
+          "createdAtMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "error": {
+            "description": "Diagnosable terminal reason (startup failure, restart normalization).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "exitCode": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "health": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/WorkspaceServiceHealth"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Last on-demand health probe result (`list` only; never mutates status)."
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pid": {
+            "format": "uint32",
+            "minimum": 0.0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "port": {
+            "format": "uint16",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "rootIndex": {
+            "description": "Index into the bound project's `roots`; cwd of the dev server.",
+            "format": "uint32",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "script": {
+            "description": "package.json script name chosen by the client from the E0 scan.",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/definitions/v2/WorkspaceServiceStatus"
+          },
+          "updatedAtMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "url": {
+            "description": "Loopback URL of the managed dev server.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "command",
+          "createdAtMs",
+          "id",
+          "name",
+          "port",
+          "projectId",
+          "rootIndex",
+          "script",
+          "status",
+          "updatedAtMs",
+          "url"
+        ],
+        "type": "object"
+      },
+      "WorkspaceServiceStatus": {
+        "description": "Lifecycle status of a managed dev server. Terminal: Failed, Exited, Stopped. Runtime restart normalizes lingering Starting/Ready to Stopped.",
+        "oneOf": [
+          {
+            "description": "Spawned; readiness probe in flight.",
+            "enum": [
+              "starting"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "Readiness probe succeeded; HTTP server answering on `url`.",
+            "enum": [
+              "ready"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "Spawn error, readiness timeout (process group killed), or non-zero exit. `error`/`exitCode` carry the diagnosable reason.",
+            "enum": [
+              "failed"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "Process exited with code zero while managed.",
+            "enum": [
+              "exited"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "Stopped by user or normalized after a Runtime restart.",
+            "enum": [
+              "stopped"
+            ],
+            "type": "string"
+          }
+        ]
+      },
       "WorkspaceSourceArtifact": {
         "properties": {
           "framework": {

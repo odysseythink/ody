@@ -875,6 +875,36 @@ client_request_definitions! {
         serialization: global("workspace-source"),
         response: v2::WorkspaceSourceValidateResponse,
     },
+    #[experimental("workspace/service/v1")]
+    WorkspaceServiceStart => "workspace/service/start" {
+        params: v2::WorkspaceServiceStartParams,
+        serialization: global("workspace-service"),
+        response: v2::WorkspaceServiceStartResponse,
+    },
+    #[experimental("workspace/service/v1")]
+    WorkspaceServiceStop => "workspace/service/stop" {
+        params: v2::WorkspaceServiceStopParams,
+        serialization: global("workspace-service"),
+        response: v2::WorkspaceServiceStopResponse,
+    },
+    #[experimental("workspace/service/v1")]
+    WorkspaceServiceList => "workspace/service/list" {
+        params: v2::WorkspaceServiceListParams,
+        serialization: global_shared_read("workspace-service"),
+        response: v2::WorkspaceServiceListResponse,
+    },
+    #[experimental("workspace/service/v1")]
+    WorkspaceServiceLogs => "workspace/service/logs" {
+        params: v2::WorkspaceServiceLogsParams,
+        serialization: global_shared_read("workspace-service"),
+        response: v2::WorkspaceServiceLogsResponse,
+    },
+    #[experimental("workspace/preview/v1")]
+    WorkspacePreviewCheck => "workspace/preview/check" {
+        params: v2::WorkspacePreviewCheckParams,
+        serialization: global_shared_read("workspace-service"),
+        response: v2::WorkspacePreviewCheckResponse,
+    },
     SkillsConfigWrite => "skills/config/write" {
         params: v2::SkillsConfigWriteParams,
         serialization: global("config"),
