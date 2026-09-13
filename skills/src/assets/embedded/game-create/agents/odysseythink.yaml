@@ -1,3 +1,6 @@
+dependencies:
+  skills:
+    - motion-design
 policy:
   products:
     - ody

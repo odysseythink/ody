@@ -18,6 +18,7 @@ the inventory.
 | `motion-design/references/motion-vocabulary.md` | `skills/animation-vocabulary` (glossary quoted near-verbatim) |
 | `motion-design/references/motion-audit.md` | `skills/improve-animations` (AUDIT.md), `skills/review-animations` (STANDARDS.md), `skills/emil-design-eng` (deduplicated) |
 | `motion-design/references/interaction-principles.md` | `skills/apple-design` (motion/gesture sections; materials, typography, and general design foundations omitted) |
+| `game-create/references/motion-presets.md` | values from the same five skills, adapted for game-feel presets (`tech-selection.md` is original content, no third-party text) |
 
 ### Sync policy
 

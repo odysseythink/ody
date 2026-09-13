@@ -276,10 +276,61 @@ mod tests {
             &std::fs::read_to_string(artifact.as_path()).expect("flow.yaml should be readable"),
         )
         .expect("flow.yaml should parse");
-        assert_eq!(plan.phases.len(), 3);
-        assert_eq!(plan.phases[0].id, "design");
-        assert_eq!(plan.phases[1].id, "implement");
-        assert_eq!(plan.phases[2].id, "verify");
+        assert_eq!(plan.phases.len(), 5);
+        assert_eq!(plan.phases[0].id, "concept");
+        assert_eq!(plan.phases[1].id, "gdd");
+        assert_eq!(plan.phases[2].id, "tech-select");
+        assert_eq!(plan.phases[3].id, "implement");
+        assert_eq!(plan.phases[4].id, "playtest");
+    }
+
+    #[tokio::test]
+    async fn game_create_declares_motion_design_dependency() {
+        // P2 (2026-09-13): game-create declares motion-design in
+        // agents/odysseythink.yaml (the SkillMetadataFile), so the extension
+        // selection path auto-pulls it in via expand_selected_with_dependencies.
+        // This test locks the wiring: both skills load, and the declared
+        // dependency resolves by base name.
+        let temp_dir = tempfile::tempdir().unwrap();
+        let ody_home = ody_utils_absolute_path::AbsolutePathBuf::try_from(temp_dir.path())
+            .expect("absolute temp dir");
+        install_system_skills(&ody_home).expect("install system skills");
+
+        let system_root = system_cache_root_dir(&ody_home);
+        let outcome = ody_core_skills::loader::load_skills_from_roots(
+            [ody_core_skills::loader::SkillRoot {
+                path: system_root,
+                scope: SkillScope::System,
+                file_system: Arc::new(LocalFileSystem::unsandboxed()),
+                plugin_id: None,
+                plugin_namespace: None,
+                plugin_root: None,
+            }],
+            /*plugin_skill_snapshots*/ None,
+        )
+        .await;
+
+        assert!(outcome.errors.is_empty(), "errors: {:?}", outcome.errors);
+        let game_create = outcome
+            .skills
+            .iter()
+            .find(|skill| skill.name == "game-create")
+            .expect("game-create should be discovered");
+        let motion_design = outcome
+            .skills
+            .iter()
+            .find(|skill| skill.name == "motion-design")
+            .expect("motion-design should be discovered");
+        let declared = game_create
+            .dependencies
+            .as_ref()
+            .and_then(|dependencies| dependencies.skills.first())
+            .expect("game-create should declare a skill dependency");
+        assert_eq!(declared.name, "motion-design");
+        assert_ne!(
+            game_create.path_to_skills_md, motion_design.path_to_skills_md,
+            "dependency must resolve to a different skill"
+        );
     }
 
     #[tokio::test]
