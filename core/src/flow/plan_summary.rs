@@ -162,4 +162,56 @@ mod tests {
             other => panic!("expected agent summary, got {other:?}"),
         }
     }
+
+    #[test]
+    fn script_summary_previews_first_forty_lines() {
+        let source: String =
+            (1..=45).map(|i| format!("line {i}")).collect::<Vec<_>>().join("\n");
+        let summary = FlowPlanSummary::for_script("demo", "workflow.js", &source);
+        assert_eq!(summary.flow_name, "demo");
+        assert_eq!(summary.carrier, "workflow.js");
+        assert!(summary.phases.is_empty());
+        let preview = summary.source_preview.expect("script source preview");
+        let lines: Vec<&str> = preview.lines().collect();
+        assert_eq!(lines.len(), 41); // 40 head lines + ellipsis marker
+        assert_eq!(lines[0], "line 1");
+        assert_eq!(lines[39], "line 40");
+        assert_eq!(lines[40], "…");
+    }
+
+    #[test]
+    fn short_script_summary_omits_ellipsis() {
+        let source = "phase('x')\nresult = 1\n";
+        let summary = FlowPlanSummary::for_script("demo", "flow.star", source);
+        assert_eq!(
+            summary.source_preview.as_deref(),
+            Some("phase('x')\nresult = 1")
+        );
+    }
+
+    /// Decision 8: `for_plan` dispatches per carrier; the starlark arm is
+    /// the default-build anchor for the script-carrier summary path used
+    /// by the run-before guardian approval.
+    #[cfg(feature = "flow-starlark")]
+    #[test]
+    fn for_plan_marks_starlark_carrier() {
+        let plan = FlowPlanSource::Starlark("phase('x')\n".to_string());
+        let summary = FlowPlanSummary::for_plan("demo", &plan);
+        assert_eq!(summary.carrier, "flow.star");
+        assert!(summary.phases.is_empty());
+        assert_eq!(summary.source_preview.as_deref(), Some("phase('x')"));
+    }
+
+    /// V8 arm of the decision-8 dispatch (M3.3 anchor): a validated
+    /// `workflow.js` plan projects to a script summary, never structured
+    /// phases.
+    #[cfg(feature = "flow-v8")]
+    #[test]
+    fn for_plan_marks_v8_carrier() {
+        let plan = FlowPlanSource::V8("var result = 1;\n".to_string());
+        let summary = FlowPlanSummary::for_plan("demo", &plan);
+        assert_eq!(summary.carrier, "workflow.js");
+        assert!(summary.phases.is_empty());
+        assert_eq!(summary.source_preview.as_deref(), Some("var result = 1;"));
+    }
 }
