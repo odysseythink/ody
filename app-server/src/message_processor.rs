@@ -993,11 +993,18 @@ impl MessageProcessor {
                 .list(params)
                 .await
                 .map(|response| Some(response.into())),
-            ClientRequest::WorkspaceProjectClose { params, .. } => self
-                .workspace_project_processor
-                .close(params)
-                .await
-                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceProjectClose { params, .. } => {
+                let project_id = params.project_id.clone();
+                let response = self.workspace_project_processor.close(params).await?;
+                let cleaned = self
+                    .workspace_service_processor
+                    .stop_all_for_project(&project_id)
+                    .await;
+                if cleaned > 0 {
+                    tracing::info!(project = %project_id, cleaned, "stopped services on project close");
+                }
+                Ok(Some(response.into()))
+            }
             ClientRequest::WorkspaceProjectScan { params, .. } => self
                 .workspace_project_processor
                 .scan(params)
@@ -1073,10 +1080,11 @@ impl MessageProcessor {
                 .logs(params)
                 .await
                 .map(|response| Some(response.into())),
-            // Typed shim (E2 T04): preview/check dispatch lands in T04.
-            ClientRequest::WorkspacePreviewCheck { .. } => Err(invalid_request(
-                "workspace/preview/check handler is not wired in this build",
-            )),
+            ClientRequest::WorkspacePreviewCheck { params, .. } => self
+                .workspace_service_processor
+                .check(params)
+                .await
+                .map(|response| Some(response.into())),
             ClientRequest::ModelProviderCapabilitiesRead { params: _, .. } => self
                 .config_processor
                 .model_provider_capabilities_read()

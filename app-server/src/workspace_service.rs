@@ -276,6 +276,49 @@ pub(crate) fn kill_process_group(pid: u32) -> Result<(), String> {
     }
 }
 
+/// Preview HTTP check deadline bounds.
+pub(crate) const PREVIEW_CHECK_DEFAULT_TIMEOUT_MS: i64 = 10_000;
+pub(crate) const PREVIEW_CHECK_MIN_TIMEOUT_MS: i64 = 1_000;
+pub(crate) const PREVIEW_CHECK_MAX_TIMEOUT_MS: i64 = 30_000;
+
+pub(crate) fn clamp_preview_timeout(timeout_ms: Option<i64>) -> i64 {
+    timeout_ms
+        .unwrap_or(PREVIEW_CHECK_DEFAULT_TIMEOUT_MS)
+        .clamp(PREVIEW_CHECK_MIN_TIMEOUT_MS, PREVIEW_CHECK_MAX_TIMEOUT_MS)
+}
+
+/// `url?` may override the service URL but must stay http(s); the default
+/// is the service record's loopback URL (strategy 8.3: loopback only, and
+/// no file:// or scheme smuggling into a fetcher).
+pub(crate) fn validate_check_url(
+    override_url: Option<String>,
+    service_url: &str,
+) -> Result<String, String> {
+    let url = override_url.unwrap_or_else(|| service_url.to_owned());
+    if url.contains('\\') {
+        return Err(format!("url {url:?} is not allowed for preview check: backslash"));
+    }
+    let parsed = reqwest::Url::parse(&url).map_err(|err| format!("invalid url {url:?}: {err}"))?;
+    match parsed.scheme() {
+        "http" | "https" => Ok(url),
+        scheme => Err(format!(
+            "url scheme {scheme:?} is not allowed for preview check; use http(s)"
+        )),
+    }
+}
+
+/// `<title>` extraction from HTML bodies; None for non-HTML or malformed
+/// input. Intentionally regex-free: one case-insensitive scan.
+pub(crate) fn extract_title(html: &str) -> Option<String> {
+    let lower = html.to_lowercase();
+    let open = lower.find("<title>")?;
+    let rest = &lower[open + "<title>".len()..];
+    let close = rest.find("</title>")?;
+    let raw = &html[open + "<title>".len()..open + "<title>".len() + close];
+    let title = raw.trim();
+    (!title.is_empty()).then(|| title.to_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -348,5 +391,70 @@ mod tests {
         ring.push("中文字".as_bytes());
         let tail = ring.tail_string(4);
         assert!(tail.len() <= 4 + 3); // lossy replacement may add bytes, never panics
+    }
+
+    #[test]
+    fn clamp_preview_timeout_applies_defaults_and_bounds() {
+        assert_eq!(clamp_preview_timeout(None), PREVIEW_CHECK_DEFAULT_TIMEOUT_MS);
+        assert_eq!(clamp_preview_timeout(Some(5_000)), 5_000);
+        assert_eq!(clamp_preview_timeout(Some(0)), PREVIEW_CHECK_MIN_TIMEOUT_MS);
+        assert_eq!(clamp_preview_timeout(Some(999_999)), PREVIEW_CHECK_MAX_TIMEOUT_MS);
+    }
+
+    #[test]
+    fn validate_check_url_allows_http_https_and_rejects_other_schemes() {
+        // Default comes from the service record (loopback by construction).
+        assert_eq!(
+            validate_check_url(None, "http://127.0.0.1:5173/").expect("default url"),
+            "http://127.0.0.1:5173/"
+        );
+        assert_eq!(
+            validate_check_url(
+                Some("https://127.0.0.1:5173/about".to_owned()),
+                "http://127.0.0.1:5173/"
+            )
+            .expect("https override"),
+            "https://127.0.0.1:5173/about"
+        );
+        for bad in [
+            "file:///etc/passwd",
+            "ftp://127.0.0.1/x",
+            "javascript:alert(1)",
+            "http://127.0.0.1:5173/\\@evil",
+        ] {
+            assert!(
+                validate_check_url(Some(bad.to_owned()), "http://127.0.0.1:5173/").is_err(),
+                "{bad} must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn extract_title_handles_common_html_shapes() {
+        assert_eq!(
+            extract_title("<html><head><title>Hello &amp; Hi</title></head></html>"),
+            Some("Hello &amp; Hi".to_owned())
+        );
+        assert_eq!(
+            extract_title("<TITLE>Upper</TITLE><body>x</body>"),
+            Some("Upper".to_owned())
+        );
+        assert_eq!(
+            extract_title("<html><head>\n  <title>\n  Spaced\n</title>\n</head></html>")
+                .as_deref(),
+            Some("Spaced")
+        );
+        assert_eq!(extract_title("<html><body>no head title</body></html>"), None);
+        assert_eq!(extract_title(""), None);
+        assert_eq!(extract_title("<title>unclosed"), None); // malformed: no closing tag
+    }
+
+    #[test]
+    fn content_fingerprint_matches_sha256_known_vector() {
+        // "abc" sha256, FIPS 180-4 known answer — proves the hex helper wiring.
+        assert_eq!(
+            crate::workspace_changeset::sha256_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
     }
 }

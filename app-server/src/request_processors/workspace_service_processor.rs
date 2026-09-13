@@ -10,6 +10,8 @@ use std::sync::atomic::Ordering;
 use ody_app_server_protocol::JSONRPCErrorError;
 use ody_app_server_protocol::WORKSPACE_SERVICE_PROTOCOL_VERSION;
 use ody_app_server_protocol::WorkspaceServiceHealth;
+use ody_app_server_protocol::WorkspacePreviewCheckParams;
+use ody_app_server_protocol::WorkspacePreviewCheckResponse;
 use ody_app_server_protocol::WorkspaceServiceListParams;
 use ody_app_server_protocol::WorkspaceServiceListResponse;
 use ody_app_server_protocol::WorkspaceServiceLogsParams;
@@ -459,6 +461,143 @@ impl WorkspaceServiceRequestProcessor {
             stdout_tail: entry.stdout_ring.lock().expect("ring lock").tail_string(tail_bytes),
             stderr_tail: entry.stderr_ring.lock().expect("ring lock").tail_string(tail_bytes),
         })
+    }
+
+    pub(crate) async fn check(
+        &self,
+        params: WorkspacePreviewCheckParams,
+    ) -> Result<WorkspacePreviewCheckResponse, JSONRPCErrorError> {
+        let service = self.service_record(&params.service_id)?;
+        if service.status != WorkspaceServiceStatus::Ready {
+            return Err(invalid_params(format!(
+                "service {} is not ready (status: {:?}); start it and wait for readiness first",
+                params.service_id, service.status
+            )));
+        }
+        let url = crate::workspace_service::validate_check_url(params.url, &service.url)
+            .map_err(invalid_params)?;
+        let timeout_ms = crate::workspace_service::clamp_preview_timeout(params.timeout_ms);
+        let checked_at_ms = now_ms();
+        let client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::limited(5))
+            .build()
+            .map_err(|err| internal_error(err.to_string()))?;
+
+        let outcome = tokio::time::timeout(
+            std::time::Duration::from_millis(timeout_ms as u64),
+            client.get(&url).send(),
+        )
+        .await;
+
+        let base = WorkspacePreviewCheckResponse {
+            service_id: params.service_id.clone(),
+            url: url.clone(),
+            reachable: false,
+            http_status: None,
+            content_bytes: 0,
+            content_sha256: crate::workspace_changeset::sha256_hex(b""),
+            title: None,
+            error: None,
+            checked_at_ms,
+        };
+
+        match outcome {
+            Ok(Ok(response)) => {
+                let http_status = response.status().as_u16();
+                let headers = response.headers().clone();
+                let bytes = response
+                    .bytes()
+                    .await
+                    .map_err(|err| internal_error(err.to_string()))?;
+                let body = String::from_utf8_lossy(&bytes);
+                let is_html = headers
+                    .get(reqwest::header::CONTENT_TYPE)
+                    .and_then(|value| value.to_str().ok())
+                    .map_or(true, |value| value.contains("html")); // missing CT: best-effort
+                Ok(WorkspacePreviewCheckResponse {
+                    reachable: true,
+                    http_status: Some(http_status),
+                    content_bytes: bytes.len() as u64,
+                    content_sha256: crate::workspace_changeset::sha256_hex(&bytes),
+                    title: if is_html {
+                        crate::workspace_service::extract_title(&body)
+                    } else {
+                        None
+                    },
+                    error: None,
+                    ..base
+                })
+            }
+            Ok(Err(err)) => Ok(WorkspacePreviewCheckResponse {
+                error: Some(err.to_string()),
+                ..base
+            }),
+            Err(_) => Ok(WorkspacePreviewCheckResponse {
+                error: Some(format!("request timed out after {timeout_ms} ms")),
+                ..base
+            }),
+        }
+    }
+
+    /// `workspace/project/close` hook: stop every non-terminal service of
+    /// the project, then drop all its service records. Kill failures never
+    /// block close (strategy: binding removal wins); they are logged.
+    pub(crate) async fn stop_all_for_project(&self, project_id: &str) -> usize {
+        let candidates: Vec<String> = {
+            let store = self.store.lock().expect("store lock");
+            store
+                .services
+                .values()
+                .filter(|service| {
+                    service.project_id == project_id && !is_terminal(service.status)
+                })
+                .map(|service| service.id.clone())
+                .collect()
+        };
+        for service_id in &candidates {
+            let entry = {
+                let runtime = self.runtime.lock().expect("runtime lock");
+                runtime.get(service_id).map(|entry| {
+                    (
+                        entry.pgid,
+                        entry.stop_requested.clone(),
+                        entry.terminal_notify.clone(),
+                    )
+                })
+            };
+            if let Some((pgid, stop_requested, terminal_notify)) = entry {
+                stop_requested.store(true, Ordering::SeqCst);
+                if let Err(err) = crate::workspace_service::kill_process_group(pgid) {
+                    tracing::warn!(service = %service_id, error = %err, "close cleanup kill failed");
+                }
+                let _ = tokio::time::timeout(
+                    std::time::Duration::from_secs(5),
+                    terminal_notify.notified(),
+                )
+                .await;
+                self.runtime
+                    .lock()
+                    .expect("runtime lock")
+                    .remove(service_id);
+            }
+            // Terminal entries have no live process; normalize the record.
+            let mut store = self.store.lock().expect("store lock");
+            if let Some(record) = store.services.get_mut(service_id) {
+                if !is_terminal(record.status) {
+                    record.status = WorkspaceServiceStatus::Stopped;
+                    record.error = Some("stopped during project close".to_owned());
+                    record.updated_at_ms = now_ms();
+                }
+            }
+        }
+        if !candidates.is_empty() {
+            let mut store = self.store.lock().expect("store lock");
+            store
+                .services
+                .retain(|_, service| service.project_id != project_id);
+            let _ = store.persist();
+        }
+        candidates.len()
     }
 
     // --- internals ---
