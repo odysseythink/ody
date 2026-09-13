@@ -12,4 +12,8 @@ stdoutTail: string,
 /**
  * Trailing stderr bytes, capped at 64 KiB.
  */
-stderrTail: string, startedAtMs: number, durationMs: number, };
+stderrTail: string,
+/**
+ * Root the check ran in; None = primary root.
+ */
+rootIndex?: number, startedAtMs: number, durationMs: number, };

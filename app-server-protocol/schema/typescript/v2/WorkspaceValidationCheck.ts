@@ -8,4 +8,8 @@ export type WorkspaceValidationCheck = { kind: WorkspaceValidationKind,
  * Script name from the root's package.json (E0 scan `scripts`).
  * The runtime does not guess script mappings (narrow protocol).
  */
-script: string, };
+script: string,
+/**
+ * Root to run the check in; None = primary root (E1 behavior).
+ */
+rootIndex?: number, };

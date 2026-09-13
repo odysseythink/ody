@@ -76,6 +76,7 @@ async fn run_check(
     let base = WorkspaceValidationRun {
         kind: check.kind,
         script: check.script.clone(),
+        root_index: None,
         status: WorkspaceValidationStatus::SpawnError,
         exit_code: None,
         stdout_tail: String::new(),
@@ -97,8 +98,7 @@ async fn run_check(
         .current_dir(root)
         .kill_on_drop(true)
         .output();
-    let output = match tokio::time::timeout(Duration::from_millis(timeout_ms as u64), child).await
-    {
+    let output = match tokio::time::timeout(Duration::from_millis(timeout_ms as u64), child).await {
         Ok(output) => output,
         Err(_) => {
             // Timeout: the future drop kills the child via kill_on_drop.

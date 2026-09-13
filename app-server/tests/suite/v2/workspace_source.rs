@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::Result;
-use app_test_support::to_response;
 use app_test_support::TestAppServer;
+use app_test_support::to_response;
 use ody_app_server_protocol::ClientInfo;
 use ody_app_server_protocol::InitializeCapabilities;
 use ody_app_server_protocol::JSONRPCMessage;
@@ -23,12 +23,12 @@ use ody_app_server_protocol::WorkspaceFileChange;
 use ody_app_server_protocol::WorkspaceFileChangeKind;
 use ody_app_server_protocol::WorkspaceProjectBindParams;
 use ody_app_server_protocol::WorkspaceProjectRef;
+use ody_app_server_protocol::WorkspaceSourceDiffParams;
+use ody_app_server_protocol::WorkspaceSourceDiffResponse;
 use ody_app_server_protocol::WorkspaceSourceIndexParams;
 use ody_app_server_protocol::WorkspaceSourceIndexResponse;
 use ody_app_server_protocol::WorkspaceSourceQueryKind;
 use ody_app_server_protocol::WorkspaceSourceResolveParams;
-use ody_app_server_protocol::WorkspaceSourceDiffParams;
-use ody_app_server_protocol::WorkspaceSourceDiffResponse;
 use ody_app_server_protocol::WorkspaceSourceResolveResponse;
 use ody_app_server_protocol::WorkspaceSourceValidateParams;
 use ody_app_server_protocol::WorkspaceSourceValidateResponse;
@@ -215,7 +215,11 @@ async fn index_returns_artifacts_and_refs_with_symbol_range_and_hash() -> Result
     let index = response.index;
     assert!(!index.truncated, "errors: {:?}", index.errors);
     assert_eq!(index.artifacts.len(), 4);
-    assert_eq!(index.artifacts.len(), index.refs.len(), "1:1 parallel vectors");
+    assert_eq!(
+        index.artifacts.len(),
+        index.refs.len(),
+        "1:1 parallel vectors"
+    );
 
     let home = index
         .artifacts
@@ -539,12 +543,16 @@ async fn changeset_create_apply_restore_roundtrip() -> Result<()> {
         .await?;
     let changeset = read_changeset(&mut mcp, create_id).await?;
     assert_eq!(changeset.status, WorkspaceChangeSetStatus::Pending);
-    assert!(changeset
-        .unified_diff
-        .contains("-  return <main>home</main>;"));
-    assert!(changeset
-        .unified_diff
-        .contains("+  return <main>updated</main>;"));
+    assert!(
+        changeset
+            .unified_diff
+            .contains("-  return <main>home</main>;")
+    );
+    assert!(
+        changeset
+            .unified_diff
+            .contains("+  return <main>updated</main>;")
+    );
 
     // Idempotent create retry returns the same changeset.
     let retry_id = mcp
@@ -615,7 +623,10 @@ async fn apply_rejects_stale_base_hash_without_writing() -> Result<()> {
                 path: "src/pages/HomePage.tsx".to_owned(),
                 kind: WorkspaceFileChangeKind::Update,
                 base_hash: Some(base_hash),
-                content: Some("export default function HomePage() {\n  return <main>new</main>;\n}\n".to_owned()),
+                content: Some(
+                    "export default function HomePage() {\n  return <main>new</main>;\n}\n"
+                        .to_owned(),
+                ),
             }],
             idempotency_key: "stale-1".to_owned(),
         })
@@ -672,7 +683,11 @@ async fn create_verifies_base_hash_and_rejects_mismatch() -> Result<()> {
         .await?;
     let message = read_changeset_error(&mut mcp, create_id).await?;
     assert!(message.contains("baseHash mismatch"), "{message}");
-    assert_eq!(before, snapshot_tree(fixture.path())?, "create must not write");
+    assert_eq!(
+        before,
+        snapshot_tree(fixture.path())?,
+        "create must not write"
+    );
     Ok(())
 }
 
@@ -762,7 +777,10 @@ async fn reject_blocks_apply_and_double_apply_fails() -> Result<()> {
             path: "src/pages/HomePage.tsx".to_owned(),
             kind: WorkspaceFileChangeKind::Update,
             base_hash: Some(base_hash.clone()),
-            content: Some("export default function HomePage() {\n  return <main>rejected</main>;\n}\n".to_owned()),
+            content: Some(
+                "export default function HomePage() {\n  return <main>rejected</main>;\n}\n"
+                    .to_owned(),
+            ),
         }],
         idempotency_key: key.to_owned(),
     };
@@ -838,7 +856,10 @@ async fn restore_rejects_external_modification_after_apply() -> Result<()> {
                 path: "src/pages/HomePage.tsx".to_owned(),
                 kind: WorkspaceFileChangeKind::Update,
                 base_hash: Some(base_hash),
-                content: Some("export default function HomePage() {\n  return <main>applied</main>;\n}\n".to_owned()),
+                content: Some(
+                    "export default function HomePage() {\n  return <main>applied</main>;\n}\n"
+                        .to_owned(),
+                ),
             }],
             idempotency_key: "restore-guard-1".to_owned(),
         })
@@ -1023,7 +1044,10 @@ async fn apply_records_head_checkpoint_for_git_repo_without_new_commits() -> Res
                 path: "src/pages/HomePage.tsx".to_owned(),
                 kind: WorkspaceFileChangeKind::Update,
                 base_hash: Some(base_hash),
-                content: Some("export default function HomePage() {\n  return <main>git</main>;\n}\n".to_owned()),
+                content: Some(
+                    "export default function HomePage() {\n  return <main>git</main>;\n}\n"
+                        .to_owned(),
+                ),
             }],
             idempotency_key: "git-checkpoint-1".to_owned(),
         })
@@ -1089,7 +1113,10 @@ async fn changeset_never_writes_outside_root() -> Result<()> {
                 path: "src/pages/HomePage.tsx".to_owned(),
                 kind: WorkspaceFileChangeKind::Update,
                 base_hash: Some(base_hash),
-                content: Some("export default function HomePage() {\n  return <main>in</main>;\n}\n".to_owned()),
+                content: Some(
+                    "export default function HomePage() {\n  return <main>in</main>;\n}\n"
+                        .to_owned(),
+                ),
             }],
             idempotency_key: "inside-only-1".to_owned(),
         })
@@ -1101,7 +1128,11 @@ async fn changeset_never_writes_outside_root() -> Result<()> {
         })
         .await?;
     let _ = read_changeset(&mut mcp, apply_id).await?;
-    assert_eq!(sibling_before, snapshot_tree(sibling.path())?, "sibling untouched after apply");
+    assert_eq!(
+        sibling_before,
+        snapshot_tree(sibling.path())?,
+        "sibling untouched after apply"
+    );
 
     let restore_id = mcp
         .send_workspace_source_changeset_restore_request(WorkspaceChangeSetRestoreParams {
@@ -1109,8 +1140,16 @@ async fn changeset_never_writes_outside_root() -> Result<()> {
         })
         .await?;
     let _ = read_changeset(&mut mcp, restore_id).await?;
-    assert_eq!(root_before, snapshot_tree(fixture.path())?, "root back to base after restore");
-    assert_eq!(sibling_before, snapshot_tree(sibling.path())?, "sibling untouched after restore");
+    assert_eq!(
+        root_before,
+        snapshot_tree(fixture.path())?,
+        "root back to base after restore"
+    );
+    assert_eq!(
+        sibling_before,
+        snapshot_tree(sibling.path())?,
+        "sibling untouched after restore"
+    );
     Ok(())
 }
 
@@ -1140,7 +1179,9 @@ async fn changeset_list_scopes_to_project_and_orders_newest_first() -> Result<()
                     path: "src/pages/HomePage.tsx".to_owned(),
                     kind: WorkspaceFileChangeKind::Update,
                     base_hash: Some(base_hash.clone()),
-                    content: Some(format!("export default function HomePage() {{\n  return <main>{i}</main>;\n}}\n")),
+                    content: Some(format!(
+                        "export default function HomePage() {{\n  return <main>{i}</main>;\n}}\n"
+                    )),
                 }],
                 idempotency_key: (*key).to_owned(),
             })
@@ -1270,10 +1311,12 @@ async fn validate_runs_project_scripts_and_reports_structured_results() -> Resul
                 WorkspaceValidationCheck {
                     kind: WorkspaceValidationKind::Build,
                     script: "build".to_owned(),
+                    root_index: None,
                 },
                 WorkspaceValidationCheck {
                     kind: WorkspaceValidationKind::Test,
                     script: "test".to_owned(),
+                    root_index: None,
                 },
             ],
             timeout_ms: None,
@@ -1281,8 +1324,14 @@ async fn validate_runs_project_scripts_and_reports_structured_results() -> Resul
         .await?;
     let response = read_validate(&mut mcp, validate_id).await?;
     assert_eq!(response.report.runs.len(), 2);
-    assert_eq!(response.report.overall, WorkspaceValidationOverall::Succeeded);
-    assert_eq!(response.report.runs[0].status, WorkspaceValidationStatus::Succeeded);
+    assert_eq!(
+        response.report.overall,
+        WorkspaceValidationOverall::Succeeded
+    );
+    assert_eq!(
+        response.report.runs[0].status,
+        WorkspaceValidationStatus::Succeeded
+    );
     assert_eq!(response.report.runs[0].exit_code, Some(0));
     assert!(response.report.runs[1].stdout_tail.contains("tests ok"));
     assert!(response.report.runs[0].duration_ms >= 0);
@@ -1311,10 +1360,12 @@ async fn validate_reports_failed_exit_code_and_stderr_tail() -> Result<()> {
                 WorkspaceValidationCheck {
                     kind: WorkspaceValidationKind::Typecheck,
                     script: "typecheck".to_owned(),
+                    root_index: None,
                 },
                 WorkspaceValidationCheck {
                     kind: WorkspaceValidationKind::Format,
                     script: "lint".to_owned(),
+                    root_index: None,
                 },
             ],
             timeout_ms: None,
@@ -1322,9 +1373,15 @@ async fn validate_reports_failed_exit_code_and_stderr_tail() -> Result<()> {
         .await?;
     let response = read_validate(&mut mcp, validate_id).await?;
     assert_eq!(response.report.overall, WorkspaceValidationOverall::Failed);
-    assert_eq!(response.report.runs[0].status, WorkspaceValidationStatus::Failed);
+    assert_eq!(
+        response.report.runs[0].status,
+        WorkspaceValidationStatus::Failed
+    );
     assert_eq!(response.report.runs[0].exit_code, Some(3));
-    assert_eq!(response.report.runs[1].status, WorkspaceValidationStatus::Succeeded);
+    assert_eq!(
+        response.report.runs[1].status,
+        WorkspaceValidationStatus::Succeeded
+    );
     Ok(())
 }
 
@@ -1347,12 +1404,16 @@ async fn validate_times_out_long_running_script() -> Result<()> {
             checks: vec![WorkspaceValidationCheck {
                 kind: WorkspaceValidationKind::Build,
                 script: "slow".to_owned(),
+                root_index: None,
             }],
             timeout_ms: Some(1_000), // clamped minimum
         })
         .await?;
     let response = read_validate(&mut mcp, validate_id).await?;
-    assert_eq!(response.report.runs[0].status, WorkspaceValidationStatus::TimedOut);
+    assert_eq!(
+        response.report.runs[0].status,
+        WorkspaceValidationStatus::TimedOut
+    );
     // The timed-out process must not outlive the request (strategy 8.2).
     // kill_on_drop kills it; nothing to poll for a node child, so assert
     // the structured status only.
@@ -1374,13 +1435,21 @@ async fn validate_spawn_error_when_no_package_json() -> Result<()> {
             checks: vec![WorkspaceValidationCheck {
                 kind: WorkspaceValidationKind::Build,
                 script: "build".to_owned(),
+                root_index: None,
             }],
             timeout_ms: None,
         })
         .await?;
     let response = read_validate(&mut mcp, validate_id).await?;
-    assert_eq!(response.report.runs[0].status, WorkspaceValidationStatus::SpawnError);
-    assert!(response.report.runs[0].stderr_tail.contains("no package.json"));
+    assert_eq!(
+        response.report.runs[0].status,
+        WorkspaceValidationStatus::SpawnError
+    );
+    assert!(
+        response.report.runs[0]
+            .stderr_tail
+            .contains("no package.json")
+    );
     // 不依赖 node——本用例无 node_available 门控。
     Ok(())
 }
@@ -1404,12 +1473,16 @@ async fn validate_unknown_script_fails_with_diagnosable_stderr() -> Result<()> {
             checks: vec![WorkspaceValidationCheck {
                 kind: WorkspaceValidationKind::Build,
                 script: "nosuchscript".to_owned(),
+                root_index: None,
             }],
             timeout_ms: None,
         })
         .await?;
     let response = read_validate(&mut mcp, validate_id).await?;
-    assert_eq!(response.report.runs[0].status, WorkspaceValidationStatus::Failed);
+    assert_eq!(
+        response.report.runs[0].status,
+        WorkspaceValidationStatus::Failed
+    );
     assert_ne!(response.report.runs[0].exit_code, Some(0));
     assert!(!response.report.runs[0].stderr_tail.is_empty());
     Ok(())
@@ -1431,6 +1504,7 @@ async fn validate_rejects_unknown_project_and_mismatched_changeset() -> Result<(
             checks: vec![WorkspaceValidationCheck {
                 kind: WorkspaceValidationKind::Build,
                 script: "build".to_owned(),
+                root_index: None,
             }],
             timeout_ms: None,
         })
@@ -1474,6 +1548,7 @@ async fn validate_rejects_unknown_project_and_mismatched_changeset() -> Result<(
             checks: vec![WorkspaceValidationCheck {
                 kind: WorkspaceValidationKind::Build,
                 script: "build".to_owned(),
+                root_index: None,
             }],
             timeout_ms: None,
         })
@@ -1558,7 +1633,10 @@ async fn assert_file_hash_via_index(
     expected_file_hash: &str,
 ) -> Result<()> {
     let actual = file_hash_via_index(mcp, project_id, file_path).await?;
-    assert_eq!(actual, expected_file_hash, "{file_path} content changed unexpectedly");
+    assert_eq!(
+        actual, expected_file_hash,
+        "{file_path} content changed unexpectedly"
+    );
     Ok(())
 }
 
@@ -1569,13 +1647,17 @@ async fn e1_archetype_react_vite_modify_page_refactor_component_add_page() -> Re
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
     init_experimental(&mut mcp).await?;
     let bind_id = mcp
-        .send_workspace_project_bind_request(bind_params("e1-react", vec![fixture.path().to_path_buf()]))
+        .send_workspace_project_bind_request(bind_params(
+            "e1-react",
+            vec![fixture.path().to_path_buf()],
+        ))
         .await?;
     read_project(&mut mcp, bind_id).await?;
 
     // Baseline hashes from the index (file_hash = whole-file sha256).
     let home_base = file_hash_via_index(&mut mcp, "e1-react", "src/pages/HomePage.tsx").await?;
-    let button_base = file_hash_via_index(&mut mcp, "e1-react", "src/components/Button.tsx").await?;
+    let button_base =
+        file_hash_via_index(&mut mcp, "e1-react", "src/components/Button.tsx").await?;
 
     // 操作 1: 修改页面.
     let new_home = "export default function HomePage() {\n  return <main>home v2</main>;\n}\n";
@@ -1599,13 +1681,23 @@ async fn e1_archetype_react_vite_modify_page_refactor_component_add_page() -> Re
             changeset_id: cs1.id.clone(),
         })
         .await?;
-    assert_eq!(read_changeset(&mut mcp, apply1).await?.status, WorkspaceChangeSetStatus::Applied);
-    assert_eq!(fs::read_to_string(fixture.path().join("src/pages/HomePage.tsx"))?, new_home);
+    assert_eq!(
+        read_changeset(&mut mcp, apply1).await?.status,
+        WorkspaceChangeSetStatus::Applied
+    );
+    assert_eq!(
+        fs::read_to_string(fixture.path().join("src/pages/HomePage.tsx"))?,
+        new_home
+    );
 
     // 操作 2: 重构组件（加 prop 并改内部实现）.
     let new_button = "export function Button({ label }: { label: string }) {\n  return <button>{label}</button>;\n}\nexport default Button;\n";
-    let button_base_now = file_hash_via_index(&mut mcp, "e1-react", "src/components/Button.tsx").await?;
-    assert_eq!(button_base_now, button_base, "op1 must not touch Button.tsx");
+    let button_base_now =
+        file_hash_via_index(&mut mcp, "e1-react", "src/components/Button.tsx").await?;
+    assert_eq!(
+        button_base_now, button_base,
+        "op1 must not touch Button.tsx"
+    );
     let create2 = mcp
         .send_workspace_source_changeset_create_request(WorkspaceChangeSetCreateParams {
             project_id: "e1-react".to_owned(),
@@ -1626,7 +1718,10 @@ async fn e1_archetype_react_vite_modify_page_refactor_component_add_page() -> Re
             changeset_id: cs2.id.clone(),
         })
         .await?;
-    assert_eq!(read_changeset(&mut mcp, apply2).await?.status, WorkspaceChangeSetStatus::Applied);
+    assert_eq!(
+        read_changeset(&mut mcp, apply2).await?.status,
+        WorkspaceChangeSetStatus::Applied
+    );
     // 重构后 symbol 仍可解析（导出结构未被破坏）.
     let resolve = mcp
         .send_workspace_source_resolve_request(WorkspaceSourceResolveParams {
@@ -1636,9 +1731,17 @@ async fn e1_archetype_react_vite_modify_page_refactor_component_add_page() -> Re
             limit: None,
         })
         .await?;
-    let message = timeout(DEFAULT_TIMEOUT, mcp.read_stream_until_response_message(RequestId::Integer(resolve))).await??;
+    let message = timeout(
+        DEFAULT_TIMEOUT,
+        mcp.read_stream_until_response_message(RequestId::Integer(resolve)),
+    )
+    .await??;
     let resolved: WorkspaceSourceResolveResponse = to_response(message)?;
-    assert_eq!(resolved.matches.len(), 1, "Button still resolvable after refactor");
+    assert_eq!(
+        resolved.matches.len(),
+        1,
+        "Button still resolvable after refactor"
+    );
 
     // 操作 3: 增加页面（Vite 约定目录新增页面文件）.
     let create3 = mcp
@@ -1650,7 +1753,10 @@ async fn e1_archetype_react_vite_modify_page_refactor_component_add_page() -> Re
                 path: "src/pages/ContactPage.tsx".to_owned(),
                 kind: WorkspaceFileChangeKind::Add,
                 base_hash: None,
-                content: Some("export default function ContactPage() {\n  return <main>contact</main>;\n}\n".to_owned()),
+                content: Some(
+                    "export default function ContactPage() {\n  return <main>contact</main>;\n}\n"
+                        .to_owned(),
+                ),
             }],
             idempotency_key: "e1-react-op3".to_owned(),
         })
@@ -1661,14 +1767,31 @@ async fn e1_archetype_react_vite_modify_page_refactor_component_add_page() -> Re
             changeset_id: cs3.id.clone(),
         })
         .await?;
-    assert_eq!(read_changeset(&mut mcp, apply3).await?.status, WorkspaceChangeSetStatus::Applied);
+    assert_eq!(
+        read_changeset(&mut mcp, apply3).await?.status,
+        WorkspaceChangeSetStatus::Applied
+    );
     let index_id = mcp
-        .send_workspace_source_index_request(WorkspaceSourceIndexParams { project_id: "e1-react".to_owned() })
+        .send_workspace_source_index_request(WorkspaceSourceIndexParams {
+            project_id: "e1-react".to_owned(),
+        })
         .await?;
-    let message = timeout(DEFAULT_TIMEOUT, mcp.read_stream_until_response_message(RequestId::Integer(index_id))).await??;
+    let message = timeout(
+        DEFAULT_TIMEOUT,
+        mcp.read_stream_until_response_message(RequestId::Integer(index_id)),
+    )
+    .await??;
     let indexed: WorkspaceSourceIndexResponse = to_response(message)?;
-    let contact = indexed.index.artifacts.iter().find(|a| a.name == "ContactPage").expect("ContactPage indexed after add");
-    assert_eq!(contact.kind, ody_app_server_protocol::WorkspaceSourceKind::Page);
+    let contact = indexed
+        .index
+        .artifacts
+        .iter()
+        .find(|a| a.name == "ContactPage")
+        .expect("ContactPage indexed after add");
+    assert_eq!(
+        contact.kind,
+        ody_app_server_protocol::WorkspaceSourceKind::Page
+    );
 
     // 原工程验证（node 门控：脚本为 node 内置能力，无需 npm install）.
     if node_available() {
@@ -1677,36 +1800,76 @@ async fn e1_archetype_react_vite_modify_page_refactor_component_add_page() -> Re
                 project_id: "e1-react".to_owned(),
                 changeset_id: Some(cs1.id.clone()),
                 checks: vec![
-                    WorkspaceValidationCheck { kind: WorkspaceValidationKind::Build, script: "build".to_owned() },
-                    WorkspaceValidationCheck { kind: WorkspaceValidationKind::Test, script: "test".to_owned() },
+                    WorkspaceValidationCheck {
+                        kind: WorkspaceValidationKind::Build,
+                        script: "build".to_owned(),
+                        root_index: None,
+                    },
+                    WorkspaceValidationCheck {
+                        kind: WorkspaceValidationKind::Test,
+                        script: "test".to_owned(),
+                        root_index: None,
+                    },
                 ],
                 timeout_ms: None,
             })
             .await?;
         let report = read_validate(&mut mcp, validate_id).await?;
-        assert_eq!(report.report.overall, WorkspaceValidationOverall::Succeeded, "all three ops pass project validation");
+        assert_eq!(
+            report.report.overall,
+            WorkspaceValidationOverall::Succeeded,
+            "all three ops pass project validation"
+        );
     }
 
     // diff: 三个 changeset 的 unified diff 均可审查.
     let diff_id = mcp
-        .send_workspace_source_diff_request(WorkspaceSourceDiffParams { project_id: "e1-react".to_owned() })
+        .send_workspace_source_diff_request(WorkspaceSourceDiffParams {
+            project_id: "e1-react".to_owned(),
+        })
         .await?;
-    let message = timeout(DEFAULT_TIMEOUT, mcp.read_stream_until_response_message(RequestId::Integer(diff_id))).await??;
+    let message = timeout(
+        DEFAULT_TIMEOUT,
+        mcp.read_stream_until_response_message(RequestId::Integer(diff_id)),
+    )
+    .await??;
     let diff: WorkspaceSourceDiffResponse = to_response(message)?;
     assert_eq!(diff.changesets.len(), 3);
-    assert!(diff.changesets.iter().all(|entry| !entry.unified_diff.is_empty()));
-    assert!(diff.changesets.iter().any(|entry| entry.unified_diff.contains("new file mode")));
+    assert!(
+        diff.changesets
+            .iter()
+            .all(|entry| !entry.unified_diff.is_empty())
+    );
+    assert!(
+        diff.changesets
+            .iter()
+            .any(|entry| entry.unified_diff.contains("new file mode"))
+    );
 
     // 用户恢复：全部 restore 后文件回到 base hash.
     for cs in [cs1, cs2, cs3] {
         let restore_id = mcp
-            .send_workspace_source_changeset_restore_request(WorkspaceChangeSetRestoreParams { changeset_id: cs.id })
+            .send_workspace_source_changeset_restore_request(WorkspaceChangeSetRestoreParams {
+                changeset_id: cs.id,
+            })
             .await?;
-        assert_eq!(read_changeset(&mut mcp, restore_id).await?.status, WorkspaceChangeSetStatus::Restored);
+        assert_eq!(
+            read_changeset(&mut mcp, restore_id).await?.status,
+            WorkspaceChangeSetStatus::Restored
+        );
     }
     assert_file_hash_via_index(&mut mcp, "e1-react", "src/pages/HomePage.tsx", &home_base).await?;
-    assert_file_hash_via_index(&mut mcp, "e1-react", "src/components/Button.tsx", &button_base).await?;
-    assert!(!fixture.path().join("src/pages/ContactPage.tsx").exists(), "restored add removes the new file");
+    assert_file_hash_via_index(
+        &mut mcp,
+        "e1-react",
+        "src/components/Button.tsx",
+        &button_base,
+    )
+    .await?;
+    assert!(
+        !fixture.path().join("src/pages/ContactPage.tsx").exists(),
+        "restored add removes the new file"
+    );
     Ok(())
 }
 
@@ -1718,7 +1881,10 @@ async fn e1_archetype_next_app_router_add_route() -> Result<()> {
     init_experimental(&mut mcp).await?;
 
     let bind_id = mcp
-        .send_workspace_project_bind_request(bind_params("e1-next", vec![fixture.path().to_path_buf()]))
+        .send_workspace_project_bind_request(bind_params(
+            "e1-next",
+            vec![fixture.path().to_path_buf()],
+        ))
         .await?;
     read_project(&mut mcp, bind_id).await?;
 
@@ -1731,7 +1897,11 @@ async fn e1_archetype_next_app_router_add_route() -> Result<()> {
             limit: None,
         })
         .await?;
-    let message = timeout(DEFAULT_TIMEOUT, mcp.read_stream_until_response_message(RequestId::Integer(resolve_blog))).await??;
+    let message = timeout(
+        DEFAULT_TIMEOUT,
+        mcp.read_stream_until_response_message(RequestId::Integer(resolve_blog)),
+    )
+    .await??;
     let resolved: WorkspaceSourceResolveResponse = to_response(message)?;
     assert_eq!(resolved.matches.len(), 1, "baseline /blog route resolves");
 
@@ -1745,16 +1915,24 @@ async fn e1_archetype_next_app_router_add_route() -> Result<()> {
                 path: "app/about/page.tsx".to_owned(),
                 kind: WorkspaceFileChangeKind::Add,
                 base_hash: None,
-                content: Some("export default function AboutPage() {\n  return <main>about</main>;\n}\n".to_owned()),
+                content: Some(
+                    "export default function AboutPage() {\n  return <main>about</main>;\n}\n"
+                        .to_owned(),
+                ),
             }],
             idempotency_key: "e1-next-route".to_owned(),
         })
         .await?;
     let cs = read_changeset(&mut mcp, create).await?;
     let apply = mcp
-        .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams { changeset_id: cs.id.clone() })
+        .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
+            changeset_id: cs.id.clone(),
+        })
         .await?;
-    assert_eq!(read_changeset(&mut mcp, apply).await?.status, WorkspaceChangeSetStatus::Applied);
+    assert_eq!(
+        read_changeset(&mut mcp, apply).await?.status,
+        WorkspaceChangeSetStatus::Applied
+    );
     assert!(fixture.path().join("app/about/page.tsx").is_file());
 
     // 重新索引后 /about 作为 Route 可解析（E0 消歧规则：小写 stem page.tsx → Route）.
@@ -1766,10 +1944,21 @@ async fn e1_archetype_next_app_router_add_route() -> Result<()> {
             limit: None,
         })
         .await?;
-    let message = timeout(DEFAULT_TIMEOUT, mcp.read_stream_until_response_message(RequestId::Integer(resolve_about))).await??;
+    let message = timeout(
+        DEFAULT_TIMEOUT,
+        mcp.read_stream_until_response_message(RequestId::Integer(resolve_about)),
+    )
+    .await??;
     let resolved: WorkspaceSourceResolveResponse = to_response(message)?;
-    assert_eq!(resolved.matches.len(), 1, "new /about route resolves after apply");
-    assert_eq!(resolved.matches[0].artifact.kind, ody_app_server_protocol::WorkspaceSourceKind::Route);
+    assert_eq!(
+        resolved.matches.len(),
+        1,
+        "new /about route resolves after apply"
+    );
+    assert_eq!(
+        resolved.matches[0].artifact.kind,
+        ody_app_server_protocol::WorkspaceSourceKind::Route
+    );
     Ok(())
 }
 
@@ -1780,12 +1969,16 @@ async fn e1_archetype_vue_refactor_component_and_restore() -> Result<()> {
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
     init_experimental(&mut mcp).await?;
     let bind_id = mcp
-        .send_workspace_project_bind_request(bind_params("e1-vue", vec![fixture.path().to_path_buf()]))
+        .send_workspace_project_bind_request(bind_params(
+            "e1-vue",
+            vec![fixture.path().to_path_buf()],
+        ))
         .await?;
     read_project(&mut mcp, bind_id).await?;
 
     // Vue SFC：file-level ref（symbol = 文件名 stem，range = None）.
-    let hello_base = file_hash_via_index(&mut mcp, "e1-vue", "src/components/HelloWorld.vue").await?;
+    let hello_base =
+        file_hash_via_index(&mut mcp, "e1-vue", "src/components/HelloWorld.vue").await?;
     let resolve = mcp
         .send_workspace_source_resolve_request(WorkspaceSourceResolveParams {
             project_id: "e1-vue".to_owned(),
@@ -1794,10 +1987,17 @@ async fn e1_archetype_vue_refactor_component_and_restore() -> Result<()> {
             limit: None,
         })
         .await?;
-    let message = timeout(DEFAULT_TIMEOUT, mcp.read_stream_until_response_message(RequestId::Integer(resolve))).await??;
+    let message = timeout(
+        DEFAULT_TIMEOUT,
+        mcp.read_stream_until_response_message(RequestId::Integer(resolve)),
+    )
+    .await??;
     let resolved: WorkspaceSourceResolveResponse = to_response(message)?;
     assert_eq!(resolved.matches.len(), 1);
-    assert!(resolved.matches[0].source_ref.range.is_none(), "SFC stays file-level");
+    assert!(
+        resolved.matches[0].source_ref.range.is_none(),
+        "SFC stays file-level"
+    );
 
     // 重构：template 加 class、script 加 props.
     let new_hello = "<template><p class=\"greeting\">hello</p></template>\n<script>\nexport default defineComponent({ name: 'HelloWorld', props: { label: String } });\n</script>\n";
@@ -1817,10 +2017,18 @@ async fn e1_archetype_vue_refactor_component_and_restore() -> Result<()> {
         .await?;
     let cs = read_changeset(&mut mcp, create).await?;
     let apply = mcp
-        .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams { changeset_id: cs.id.clone() })
+        .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
+            changeset_id: cs.id.clone(),
+        })
         .await?;
-    assert_eq!(read_changeset(&mut mcp, apply).await?.status, WorkspaceChangeSetStatus::Applied);
-    assert_eq!(fs::read_to_string(fixture.path().join("src/components/HelloWorld.vue"))?, new_hello);
+    assert_eq!(
+        read_changeset(&mut mcp, apply).await?.status,
+        WorkspaceChangeSetStatus::Applied
+    );
+    assert_eq!(
+        fs::read_to_string(fixture.path().join("src/components/HelloWorld.vue"))?,
+        new_hello
+    );
 
     // 原工程验证（node 门控）.
     if node_available() {
@@ -1831,6 +2039,7 @@ async fn e1_archetype_vue_refactor_component_and_restore() -> Result<()> {
                 checks: vec![WorkspaceValidationCheck {
                     kind: WorkspaceValidationKind::Build,
                     script: "build".to_owned(),
+                    root_index: None,
                 }],
                 timeout_ms: None,
             })
@@ -1841,10 +2050,21 @@ async fn e1_archetype_vue_refactor_component_and_restore() -> Result<()> {
 
     // 恢复.
     let restore = mcp
-        .send_workspace_source_changeset_restore_request(WorkspaceChangeSetRestoreParams { changeset_id: cs.id })
+        .send_workspace_source_changeset_restore_request(WorkspaceChangeSetRestoreParams {
+            changeset_id: cs.id,
+        })
         .await?;
-    assert_eq!(read_changeset(&mut mcp, restore).await?.status, WorkspaceChangeSetStatus::Restored);
-    assert_file_hash_via_index(&mut mcp, "e1-vue", "src/components/HelloWorld.vue", &hello_base).await?;
+    assert_eq!(
+        read_changeset(&mut mcp, restore).await?.status,
+        WorkspaceChangeSetStatus::Restored
+    );
+    assert_file_hash_via_index(
+        &mut mcp,
+        "e1-vue",
+        "src/components/HelloWorld.vue",
+        &hello_base,
+    )
+    .await?;
     Ok(())
 }
 
@@ -1870,9 +2090,15 @@ async fn e1_archetype_fullstack_two_roots_modify_page_and_backend() -> Result<()
         // index 的 file_path 是 root 相对路径；两个根都可能有 src/...，
         // 用 artifact 的 root_path 区分 backend 根的 ref.
         let index_id = mcp
-            .send_workspace_source_index_request(WorkspaceSourceIndexParams { project_id: "e1-fullstack".to_owned() })
+            .send_workspace_source_index_request(WorkspaceSourceIndexParams {
+                project_id: "e1-fullstack".to_owned(),
+            })
             .await?;
-        let message = timeout(DEFAULT_TIMEOUT, mcp.read_stream_until_response_message(RequestId::Integer(index_id))).await??;
+        let message = timeout(
+            DEFAULT_TIMEOUT,
+            mcp.read_stream_until_response_message(RequestId::Integer(index_id)),
+        )
+        .await??;
         let indexed: WorkspaceSourceIndexResponse = to_response(message)?;
         let backend_root = project.roots[1].path.clone();
         indexed
@@ -1912,11 +2138,16 @@ async fn e1_archetype_fullstack_two_roots_modify_page_and_backend() -> Result<()
     let cs = read_changeset(&mut mcp, create).await?;
     assert_eq!(cs.changes.len(), 2);
     let apply = mcp
-        .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams { changeset_id: cs.id.clone() })
+        .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
+            changeset_id: cs.id.clone(),
+        })
         .await?;
     let applied = read_changeset(&mut mcp, apply).await?;
     assert_eq!(applied.status, WorkspaceChangeSetStatus::Applied);
-    assert!(matches!(applied.checkpoint, WorkspaceChangeSetCheckpoint::Git { .. }));
+    assert!(matches!(
+        applied.checkpoint,
+        WorkspaceChangeSetCheckpoint::Git { .. }
+    ));
     assert!(fs::read_to_string(frontend.join("src/pages/HomePage.tsx"))?.contains("v2"));
     assert!(fs::read_to_string(backend.join("src/routes/handler.js"))?.contains("201"));
 
@@ -1930,6 +2161,7 @@ async fn e1_archetype_fullstack_two_roots_modify_page_and_backend() -> Result<()
                 checks: vec![WorkspaceValidationCheck {
                     kind: WorkspaceValidationKind::Build,
                     script: "build".to_owned(),
+                    root_index: None,
                 }],
                 timeout_ms: None,
             })
@@ -1940,15 +2172,27 @@ async fn e1_archetype_fullstack_two_roots_modify_page_and_backend() -> Result<()
 
     // 恢复双根.
     let restore = mcp
-        .send_workspace_source_changeset_restore_request(WorkspaceChangeSetRestoreParams { changeset_id: cs.id })
+        .send_workspace_source_changeset_restore_request(WorkspaceChangeSetRestoreParams {
+            changeset_id: cs.id,
+        })
         .await?;
-    assert_eq!(read_changeset(&mut mcp, restore).await?.status, WorkspaceChangeSetStatus::Restored);
-    assert_file_hash_via_index(&mut mcp, "e1-fullstack", "src/pages/HomePage.tsx", &fe_base).await?;
+    assert_eq!(
+        read_changeset(&mut mcp, restore).await?.status,
+        WorkspaceChangeSetStatus::Restored
+    );
+    assert_file_hash_via_index(&mut mcp, "e1-fullstack", "src/pages/HomePage.tsx", &fe_base)
+        .await?;
     // backend hash 校验：再取一次 index 按 root_path 过滤比对.
     let index_id = mcp
-        .send_workspace_source_index_request(WorkspaceSourceIndexParams { project_id: "e1-fullstack".to_owned() })
+        .send_workspace_source_index_request(WorkspaceSourceIndexParams {
+            project_id: "e1-fullstack".to_owned(),
+        })
         .await?;
-    let message = timeout(DEFAULT_TIMEOUT, mcp.read_stream_until_response_message(RequestId::Integer(index_id))).await??;
+    let message = timeout(
+        DEFAULT_TIMEOUT,
+        mcp.read_stream_until_response_message(RequestId::Integer(index_id)),
+    )
+    .await??;
     let indexed: WorkspaceSourceIndexResponse = to_response(message)?;
     let backend_root = project.roots[1].path.clone();
     let be_now = indexed
@@ -1968,7 +2212,10 @@ async fn e1_archetype_fullstack_two_roots_modify_page_and_backend() -> Result<()
     after.retain(|path, _| !path.components().any(|c| c.as_os_str() == ".git"));
     let mut before_no_git = outside;
     before_no_git.retain(|path, _| !path.components().any(|c| c.as_os_str() == ".git"));
-    assert_eq!(before_no_git, after, "restore leaves the workspace exactly as before (modulo checkpoint .git)");
+    assert_eq!(
+        before_no_git, after,
+        "restore leaves the workspace exactly as before (modulo checkpoint .git)"
+    );
     Ok(())
 }
 
@@ -1980,7 +2227,10 @@ async fn e1_user_can_reject_changeset_and_nothing_is_written() -> Result<()> {
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
     init_experimental(&mut mcp).await?;
     let bind_id = mcp
-        .send_workspace_project_bind_request(bind_params("e1-reject", vec![fixture.path().to_path_buf()]))
+        .send_workspace_project_bind_request(bind_params(
+            "e1-reject",
+            vec![fixture.path().to_path_buf()],
+        ))
         .await?;
     read_project(&mut mcp, bind_id).await?;
 
@@ -2001,16 +2251,27 @@ async fn e1_user_can_reject_changeset_and_nothing_is_written() -> Result<()> {
         .await?;
     let cs = read_changeset(&mut mcp, create).await?;
     let reject = mcp
-        .send_workspace_source_changeset_reject_request(WorkspaceChangeSetRejectParams { changeset_id: cs.id.clone() })
+        .send_workspace_source_changeset_reject_request(WorkspaceChangeSetRejectParams {
+            changeset_id: cs.id.clone(),
+        })
         .await?;
-    assert_eq!(read_changeset(&mut mcp, reject).await?.status, WorkspaceChangeSetStatus::Rejected);
+    assert_eq!(
+        read_changeset(&mut mcp, reject).await?.status,
+        WorkspaceChangeSetStatus::Rejected
+    );
 
     let apply_attempt = mcp
-        .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams { changeset_id: cs.id })
+        .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
+            changeset_id: cs.id,
+        })
         .await?;
     let message = read_changeset_error(&mut mcp, apply_attempt).await?;
     assert!(message.contains("Rejected"), "{message}");
-    assert_eq!(before, snapshot_tree(fixture.path())?, "reject + failed apply wrote nothing");
+    assert_eq!(
+        before,
+        snapshot_tree(fixture.path())?,
+        "reject + failed apply wrote nothing"
+    );
     Ok(())
 }
 
@@ -2021,12 +2282,16 @@ async fn e1_external_edit_blocks_apply_and_leaves_sibling_files_untouched() -> R
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
     init_experimental(&mut mcp).await?;
     let bind_id = mcp
-        .send_workspace_project_bind_request(bind_params("e1-conflict", vec![fixture.path().to_path_buf()]))
+        .send_workspace_project_bind_request(bind_params(
+            "e1-conflict",
+            vec![fixture.path().to_path_buf()],
+        ))
         .await?;
     read_project(&mut mcp, bind_id).await?;
 
     let home_base = file_hash_via_index(&mut mcp, "e1-conflict", "src/pages/HomePage.tsx").await?;
-    let button_base = file_hash_via_index(&mut mcp, "e1-conflict", "src/components/Button.tsx").await?;
+    let button_base =
+        file_hash_via_index(&mut mcp, "e1-conflict", "src/components/Button.tsx").await?;
     let create = mcp
         .send_workspace_source_changeset_create_request(WorkspaceChangeSetCreateParams {
             project_id: "e1-conflict".to_owned(),
@@ -2053,19 +2318,34 @@ async fn e1_external_edit_blocks_apply_and_leaves_sibling_files_untouched() -> R
     let cs = read_changeset(&mut mcp, create).await?;
 
     // 外部编辑（模拟 IDE 用户）只动 HomePage.tsx.
-    let external = "export default function HomePage() {\n  return <main>edited externally</main>;\n}\n";
+    let external =
+        "export default function HomePage() {\n  return <main>edited externally</main>;\n}\n";
     fs::write(fixture.path().join("src/pages/HomePage.tsx"), external)?;
 
     let apply_attempt = mcp
-        .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams { changeset_id: cs.id.clone() })
+        .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
+            changeset_id: cs.id.clone(),
+        })
         .await?;
     let message = read_changeset_error(&mut mcp, apply_attempt).await?;
     assert!(message.contains("changed on disk"), "{message}");
-    assert!(message.contains("re-index and recreate"), "diagnosable recovery hint");
+    assert!(
+        message.contains("re-index and recreate"),
+        "diagnosable recovery hint"
+    );
 
     // 冲突文件保持外部编辑内容；同 changeset 的另一个文件未被写入.
-    assert_eq!(fs::read_to_string(fixture.path().join("src/pages/HomePage.tsx"))?, external);
-    assert_file_hash_via_index(&mut mcp, "e1-conflict", "src/components/Button.tsx", &button_base).await?;
+    assert_eq!(
+        fs::read_to_string(fixture.path().join("src/pages/HomePage.tsx"))?,
+        external
+    );
+    assert_file_hash_via_index(
+        &mut mcp,
+        "e1-conflict",
+        "src/components/Button.tsx",
+        &button_base,
+    )
+    .await?;
     Ok(())
 }
 
@@ -2082,7 +2362,10 @@ async fn e1_full_lifecycle_never_writes_outside_bound_roots() -> Result<()> {
     let mut mcp = TestAppServer::new(ody_home.path()).await?;
     init_experimental(&mut mcp).await?;
     let bind_id = mcp
-        .send_workspace_project_bind_request(bind_params("e1-boundary", vec![fixture.path().to_path_buf()]))
+        .send_workspace_project_bind_request(bind_params(
+            "e1-boundary",
+            vec![fixture.path().to_path_buf()],
+        ))
         .await?;
     read_project(&mut mcp, bind_id).await?;
 
@@ -2096,28 +2379,50 @@ async fn e1_full_lifecycle_never_writes_outside_bound_roots() -> Result<()> {
                 path: "src/pages/HomePage.tsx".to_owned(),
                 kind: WorkspaceFileChangeKind::Update,
                 base_hash: Some(base_hash.clone()),
-                content: Some("export default function HomePage() { return <main>b</main>; }\n".to_owned()),
+                content: Some(
+                    "export default function HomePage() { return <main>b</main>; }\n".to_owned(),
+                ),
             }],
             idempotency_key: "e1-boundary-1".to_owned(),
         })
         .await?;
     let cs = read_changeset(&mut mcp, create).await?;
     let apply = mcp
-        .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams { changeset_id: cs.id.clone() })
+        .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
+            changeset_id: cs.id.clone(),
+        })
         .await?;
-    assert_eq!(read_changeset(&mut mcp, apply).await?.status, WorkspaceChangeSetStatus::Applied);
+    assert_eq!(
+        read_changeset(&mut mcp, apply).await?.status,
+        WorkspaceChangeSetStatus::Applied
+    );
     let restore = mcp
-        .send_workspace_source_changeset_restore_request(WorkspaceChangeSetRestoreParams { changeset_id: cs.id })
+        .send_workspace_source_changeset_restore_request(WorkspaceChangeSetRestoreParams {
+            changeset_id: cs.id,
+        })
         .await?;
-    assert_eq!(read_changeset(&mut mcp, restore).await?.status, WorkspaceChangeSetStatus::Restored);
+    assert_eq!(
+        read_changeset(&mut mcp, restore).await?.status,
+        WorkspaceChangeSetStatus::Restored
+    );
 
-    assert_file_hash_via_index(&mut mcp, "e1-boundary", "src/pages/HomePage.tsx", &base_hash).await?;
+    assert_file_hash_via_index(
+        &mut mcp,
+        "e1-boundary",
+        "src/pages/HomePage.tsx",
+        &base_hash,
+    )
+    .await?;
     let mut fixture_after = snapshot_tree(fixture.path())?;
     fixture_after.retain(|path, _| !path.components().any(|c| c.as_os_str() == ".git"));
     let mut fixture_before_no_git = fixture_before;
     fixture_before_no_git.retain(|path, _| !path.components().any(|c| c.as_os_str() == ".git"));
     assert_eq!(fixture_before_no_git, fixture_after);
-    assert_eq!(sibling_before, snapshot_tree(sibling.path())?, "nothing written outside the bound root");
+    assert_eq!(
+        sibling_before,
+        snapshot_tree(sibling.path())?,
+        "nothing written outside the bound root"
+    );
     Ok(())
 }
 
@@ -2144,16 +2449,28 @@ async fn e1_index_and_resolve_read_only_across_all_archetypes() -> Result<()> {
                 project_id: format!("e1-ro-{label}"),
             })
             .await?;
-        let message = timeout(DEFAULT_TIMEOUT, mcp.read_stream_until_response_message(RequestId::Integer(index_id))).await??;
+        let message = timeout(
+            DEFAULT_TIMEOUT,
+            mcp.read_stream_until_response_message(RequestId::Integer(index_id)),
+        )
+        .await??;
         let _: WorkspaceSourceIndexResponse = to_response(message)?;
         let diff_id = mcp
             .send_workspace_source_diff_request(WorkspaceSourceDiffParams {
                 project_id: format!("e1-ro-{label}"),
             })
             .await?;
-        let message = timeout(DEFAULT_TIMEOUT, mcp.read_stream_until_response_message(RequestId::Integer(diff_id))).await??;
+        let message = timeout(
+            DEFAULT_TIMEOUT,
+            mcp.read_stream_until_response_message(RequestId::Integer(diff_id)),
+        )
+        .await??;
         let _: WorkspaceSourceDiffResponse = to_response(message)?;
-        assert_eq!(before, snapshot_tree(fixture.path())?, "{label}: index/diff are read-only");
+        assert_eq!(
+            before,
+            snapshot_tree(fixture.path())?,
+            "{label}: index/diff are read-only"
+        );
     }
     Ok(())
 }

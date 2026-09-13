@@ -18192,6 +18192,119 @@
       ],
       "type": "object"
     },
+    "WorkspaceNetworkDiagnosis": {
+      "properties": {
+        "failure": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/WorkspaceObservedNetworkFailure"
+            }
+          ],
+          "description": "The failure this diagnosis answers (echoed)."
+        },
+        "health": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WorkspaceServiceHealth"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "On-demand health probe of the matched service."
+        },
+        "logExcerpt": {
+          "description": "Log lines mentioning any path segment of the failure URL.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "matchedService": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WorkspaceServiceRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Project service matched by loopback port: preferred non-terminal, else the most recent terminal record — a crashed backend is exactly what diagnosis must surface."
+        },
+        "notes": {
+          "description": "Human-readable correlation notes (non-loopback URL, no service match, index truncation, ...).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "sourceCandidates": {
+          "description": "Source candidates: route entries matching the path (and its prefix-stripped variants) plus file-name matches on the last path segment, from the on-demand workspace source index.",
+          "items": {
+            "$ref": "#/definitions/WorkspaceSourceRef"
+          },
+          "type": "array"
+        },
+        "stderrTail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stdoutTail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "failure",
+        "sourceCandidates"
+      ],
+      "type": "object"
+    },
+    "WorkspaceObservedNetworkFailure": {
+      "description": "A network failure observed by the caller's browser (renderer preview surface or agent tool result). E3 diagnose correlates these against managed services, their logs, and the workspace source index; the Runtime never opens a browser itself (narrow-protocol decision).",
+      "properties": {
+        "error": {
+          "description": "Browser-level error text (e.g. \"net::ERR_CONNECTION_REFUSED\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "method": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "occurredAtMs": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "status": {
+          "format": "uint16",
+          "minimum": 0.0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "url": {
+          "description": "Full request URL as observed.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    },
     "WorkspaceProjectRef": {
       "properties": {
         "createdAtMs": {
@@ -18322,6 +18435,24 @@
       ],
       "type": "object"
     },
+    "WorkspaceRootGitDiff": {
+      "description": "Whole-repo diff for one bound root (E3 cross-root aggregation).",
+      "properties": {
+        "git": {
+          "$ref": "#/definitions/WorkspaceGitDiff"
+        },
+        "rootIndex": {
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "git",
+        "rootIndex"
+      ],
+      "type": "object"
+    },
     "WorkspaceRootRole": {
       "enum": [
         "primary",
@@ -18396,6 +18527,36 @@
       "required": [
         "checkedAtMs",
         "ok"
+      ],
+      "type": "object"
+    },
+    "WorkspaceServiceHealthCheck": {
+      "description": "Health check definition attached to a service spec (E3): probed on the service's loopback origin and used as the orchestration gate between dependency levels.",
+      "properties": {
+        "expectStatus": {
+          "description": "Exact expected status; default 200. Stricter than the `list` probe's 2xx tolerance — a degraded 500 must fail the gate.",
+          "format": "uint16",
+          "minimum": 0.0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "path": {
+          "description": "HTTP path probed on the service's loopback origin, e.g. \"/api/health\".",
+          "type": "string"
+        },
+        "timeoutMs": {
+          "description": "Per-attempt timeout; default 2000 ms, clamped to [200, 10000].",
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "path"
       ],
       "type": "object"
     },
@@ -18490,6 +18651,91 @@
         "status",
         "updatedAtMs",
         "url"
+      ],
+      "type": "object"
+    },
+    "WorkspaceServiceSpec": {
+      "description": "Declarative, project-scoped service definition (E3). Single-root monorepo sub-packages use `cwd`; dual-root projects use per-spec `rootIndex`. Source authority stays in the user's directories.",
+      "properties": {
+        "createdAtMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "cwd": {
+          "description": "Root-relative working directory for the service process. Normalized and escape-checked at define time; the resolved cwd never leaves the bound root.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dependsOn": {
+          "description": "Names of other specs in the same project that must be Ready (and healthy when they define a health check) before this one starts.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "healthCheck": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WorkspaceServiceHealthCheck"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "description": "Server-generated `spec-{uuid}`.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Unique among the project's specs; 1-64 chars.",
+          "type": "string"
+        },
+        "port": {
+          "description": "Requested port; occupied -> structured error at start time. Omitted -> framework default probed, then a free port auto-selected.",
+          "format": "uint16",
+          "minimum": 0.0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "readyTimeoutMs": {
+          "description": "Readiness deadline per service; default 60s, clamp [5s, 300s].",
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "rootIndex": {
+          "description": "Index into the bound project's `roots`.",
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "script": {
+          "description": "package.json script name from the E0 scan; the Runtime never guesses.",
+          "type": "string"
+        },
+        "updatedAtMs": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "createdAtMs",
+        "id",
+        "name",
+        "projectId",
+        "rootIndex",
+        "script",
+        "updatedAtMs"
       ],
       "type": "object"
     },
@@ -18771,6 +19017,15 @@
         "kind": {
           "$ref": "#/definitions/WorkspaceValidationKind"
         },
+        "rootIndex": {
+          "description": "Root to run the check in; None = primary root (E1 behavior).",
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "script": {
           "description": "Script name from the root's package.json (E0 scan `scripts`). The runtime does not guess script mappings (narrow protocol).",
           "type": "string"
@@ -18831,6 +19086,15 @@
         },
         "kind": {
           "$ref": "#/definitions/WorkspaceValidationKind"
+        },
+        "rootIndex": {
+          "description": "Root the check ran in; None = primary root.",
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "script": {
           "type": "string"

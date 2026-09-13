@@ -4886,6 +4886,77 @@
       ],
       "type": "string"
     },
+    "WorkspaceObservedNetworkFailure": {
+      "description": "A network failure observed by the caller's browser (renderer preview surface or agent tool result). E3 diagnose correlates these against managed services, their logs, and the workspace source index; the Runtime never opens a browser itself (narrow-protocol decision).",
+      "properties": {
+        "error": {
+          "description": "Browser-level error text (e.g. \"net::ERR_CONNECTION_REFUSED\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "method": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "occurredAtMs": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "status": {
+          "format": "uint16",
+          "minimum": 0.0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "url": {
+          "description": "Full request URL as observed.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    },
+    "WorkspaceServiceHealthCheck": {
+      "description": "Health check definition attached to a service spec (E3): probed on the service's loopback origin and used as the orchestration gate between dependency levels.",
+      "properties": {
+        "expectStatus": {
+          "description": "Exact expected status; default 200. Stricter than the `list` probe's 2xx tolerance — a degraded 500 must fail the gate.",
+          "format": "uint16",
+          "minimum": 0.0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "path": {
+          "description": "HTTP path probed on the service's loopback origin, e.g. \"/api/health\".",
+          "type": "string"
+        },
+        "timeoutMs": {
+          "description": "Per-attempt timeout; default 2000 ms, clamped to [200, 10000].",
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
     "WorkspaceSourceQueryKind": {
       "enum": [
         "name",
@@ -4898,6 +4969,15 @@
       "properties": {
         "kind": {
           "$ref": "#/definitions/WorkspaceValidationKind"
+        },
+        "rootIndex": {
+          "description": "Root to run the check in; None = primary root (E1 behavior).",
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "script": {
           "description": "Script name from the root's package.json (E0 scan `scripts`). The runtime does not guess script mappings (narrow protocol).",

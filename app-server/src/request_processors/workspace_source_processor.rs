@@ -131,7 +131,9 @@ impl WorkspaceSourceRequestProcessor {
                 .and_then(|id| store.changesets.get(id))
                 .map(|stored| stored.change_set.clone()))
         })? {
-            return Ok(WorkspaceChangeSetCreateResponse { changeset: existing });
+            return Ok(WorkspaceChangeSetCreateResponse {
+                changeset: existing,
+            });
         }
         let project = self.project(&params.project_id)?;
         let title = params.title.trim();
@@ -246,7 +248,9 @@ impl WorkspaceSourceRequestProcessor {
                     let head = ody_git_utils::get_head_commit_hash(Path::new(root_path))
                         .await
                         .map(|sha| sha.0);
-                    checkpoint = WorkspaceChangeSetCheckpoint::Git { head_commit_hash: head };
+                    checkpoint = WorkspaceChangeSetCheckpoint::Git {
+                        head_commit_hash: head,
+                    };
                 }
                 None => {
                     ody_git_utils::ensure_git_baseline_repository(Path::new(root_path))
@@ -254,7 +258,9 @@ impl WorkspaceSourceRequestProcessor {
                         .map_err(|err| {
                             internal_error(format!("checkpoint failed for {root_path}: {err}"))
                         })?;
-                    checkpoint = WorkspaceChangeSetCheckpoint::Git { head_commit_hash: None };
+                    checkpoint = WorkspaceChangeSetCheckpoint::Git {
+                        head_commit_hash: None,
+                    };
                 }
             }
         }
@@ -311,7 +317,9 @@ impl WorkspaceSourceRequestProcessor {
                 .change_set
                 .clone())
         })?;
-        Ok(WorkspaceChangeSetApplyResponse { changeset: change_set })
+        Ok(WorkspaceChangeSetApplyResponse {
+            changeset: change_set,
+        })
     }
 
     pub(crate) async fn changeset_reject(
@@ -339,7 +347,9 @@ impl WorkspaceSourceRequestProcessor {
                 .change_set
                 .clone())
         })?;
-        Ok(WorkspaceChangeSetRejectResponse { changeset: change_set })
+        Ok(WorkspaceChangeSetRejectResponse {
+            changeset: change_set,
+        })
     }
 
     pub(crate) async fn changeset_restore(
@@ -401,7 +411,9 @@ impl WorkspaceSourceRequestProcessor {
                 .change_set
                 .clone())
         })?;
-        Ok(WorkspaceChangeSetRestoreResponse { changeset: change_set })
+        Ok(WorkspaceChangeSetRestoreResponse {
+            changeset: change_set,
+        })
     }
 
     pub(crate) async fn diff(
@@ -426,6 +438,7 @@ impl WorkspaceSourceRequestProcessor {
         Ok(WorkspaceSourceDiffResponse {
             changesets,
             git_diff,
+            root_git_diffs: Vec::new(),
         })
     }
 
@@ -461,7 +474,9 @@ impl WorkspaceSourceRequestProcessor {
                 })
             })?;
             if !found {
-                return Err(invalid_params(format!("unknown changeset id: {changeset_id}")));
+                return Err(invalid_params(format!(
+                    "unknown changeset id: {changeset_id}"
+                )));
             }
             if !belongs {
                 return Err(invalid_params(format!(
@@ -475,9 +490,12 @@ impl WorkspaceSourceRequestProcessor {
             .roots
             .first()
             .ok_or_else(|| invalid_params("project has no roots"))?;
-        let report =
-            crate::workspace_validation::run_checks(Path::new(&root.path), &params.checks, timeout_ms)
-                .await;
+        let report = crate::workspace_validation::run_checks(
+            Path::new(&root.path),
+            &params.checks,
+            timeout_ms,
+        )
+        .await;
         Ok(WorkspaceSourceValidateResponse {
             project_id: params.project_id,
             changeset_id: params.changeset_id,
@@ -573,7 +591,9 @@ impl WorkspaceSourceStore {
             internal_error(format!("failed to create workspace source store: {error}"))
         })?;
         let serialized = serde_json::to_vec_pretty(self).map_err(|error| {
-            internal_error(format!("failed to serialize workspace source store: {error}"))
+            internal_error(format!(
+                "failed to serialize workspace source store: {error}"
+            ))
         })?;
         let temporary = self
             .path
@@ -605,7 +625,8 @@ fn rebuild_prepared(
             .roots
             .get(change.root_index as usize)
             .ok_or_else(|| invalid_params(format!("unknown root index {}", change.root_index)))?;
-        let absolute = crate::workspace_changeset::resolve_target(Path::new(&root.path), &normalized)?;
+        let absolute =
+            crate::workspace_changeset::resolve_target(Path::new(&root.path), &normalized)?;
         let recorded = stored.targets.get(&key).map(String::as_str);
         if recorded != Some(absolute.to_string_lossy().as_ref()) {
             return Err(invalid_params(format!(
@@ -708,8 +729,11 @@ mod tests {
             .expect("canonicalize");
         let pages = root.join("src/pages");
         fs::create_dir_all(&pages).expect("create pages");
-        fs::write(pages.join("HomePage.tsx"), "export default function HomePage() {}\n")
-            .expect("write page");
+        fs::write(
+            pages.join("HomePage.tsx"),
+            "export default function HomePage() {}\n",
+        )
+        .expect("write page");
 
         let project = WorkspaceProjectRef {
             id: "ws-test".to_owned(),
@@ -776,7 +800,10 @@ mod tests {
         }
         let reloaded = WorkspaceSourceStore::load(store_path);
         let reloaded = reloaded.changesets.get(&id).expect("reloaded changeset");
-        assert_eq!(reloaded.change_set.status, WorkspaceChangeSetStatus::Pending);
+        assert_eq!(
+            reloaded.change_set.status,
+            WorkspaceChangeSetStatus::Pending
+        );
         assert_eq!(reloaded.base_contents.len(), 1);
         let target = reloaded.targets.values().next().expect("target");
         assert!(target.starts_with(root.to_string_lossy().as_ref()));

@@ -126,7 +126,6 @@ pub struct WorkspaceSourceResolveResponse {
     pub matches: Vec<WorkspaceSourceResolveMatch>,
 }
 
-
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
@@ -311,6 +310,16 @@ pub struct WorkspaceGitDiff {
     pub unified_diff: Option<String>,
 }
 
+/// Whole-repo diff for one bound root (E3 cross-root aggregation).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceRootGitDiff {
+    #[ts(type = "number")]
+    pub root_index: u32,
+    pub git: WorkspaceGitDiff,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
@@ -326,8 +335,12 @@ pub struct WorkspaceSourceDiffResponse {
     pub changesets: Vec<WorkspaceChangeSetDiffEntry>,
     /// Whole-repo diff when the primary root is inside a git repo.
     pub git_diff: Option<WorkspaceGitDiff>,
+    /// Whole-repo diff for every root that lies inside a git repository
+    /// (roots without a repo are omitted). The primary-root `gitDiff`
+    /// above is kept unchanged for backward compatibility.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub root_git_diffs: Vec<WorkspaceRootGitDiff>,
 }
-
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
@@ -347,6 +360,11 @@ pub struct WorkspaceValidationCheck {
     /// Script name from the root's package.json (E0 scan `scripts`).
     /// The runtime does not guess script mappings (narrow protocol).
     pub script: String,
+    /// Root to run the check in; None = primary root (E1 behavior).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    #[ts(type = "number")]
+    pub root_index: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
@@ -371,6 +389,11 @@ pub struct WorkspaceValidationRun {
     pub stdout_tail: String,
     /// Trailing stderr bytes, capped at 64 KiB.
     pub stderr_tail: String,
+    /// Root the check ran in; None = primary root.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    #[ts(type = "number")]
+    pub root_index: Option<u32>,
     #[ts(type = "number")]
     pub started_at_ms: i64,
     #[ts(type = "number")]
@@ -433,10 +456,12 @@ mod tests {
                     WorkspaceValidationCheck {
                         kind: WorkspaceValidationKind::Build,
                         script: "build".to_owned(),
+                        root_index: None,
                     },
                     WorkspaceValidationCheck {
                         kind: WorkspaceValidationKind::Typecheck,
                         script: "typecheck".to_owned(),
+                        root_index: None,
                     },
                 ],
                 timeout_ms: Some(60_000),
@@ -606,5 +631,51 @@ mod tests {
                 Some("workspace/source/v1")
             );
         }
+    }
+
+    #[test]
+    fn workspace_validation_check_root_index_is_additive_and_defaults_off_wire() {
+        let with_root = WorkspaceValidationCheck {
+            kind: WorkspaceValidationKind::Build,
+            script: "build".to_owned(),
+            root_index: Some(1),
+        };
+        let value = serde_json::to_value(&with_root).expect("serialize check");
+        assert_eq!(value["rootIndex"], 1);
+
+        let primary_default = WorkspaceValidationCheck {
+            kind: WorkspaceValidationKind::Build,
+            script: "build".to_owned(),
+            root_index: None,
+        };
+        let value = serde_json::to_value(&primary_default).expect("serialize check");
+        assert!(value.get("rootIndex").is_none() || value["rootIndex"].is_null());
+
+        // Back-compat: E1 wire JSON without rootIndex still deserializes.
+        let decoded: WorkspaceValidationCheck = serde_json::from_value(serde_json::json!({
+            "kind": "build", "script": "build"
+        }))
+        .expect("deserialize legacy check");
+        assert_eq!(decoded.root_index, None);
+    }
+
+    #[test]
+    fn workspace_source_diff_response_serializes_root_git_diffs() {
+        let response = WorkspaceSourceDiffResponse {
+            changesets: vec![],
+            git_diff: None,
+            root_git_diffs: vec![WorkspaceRootGitDiff {
+                root_index: 1,
+                git: WorkspaceGitDiff {
+                    repo_root: Some("/repo/backend".to_owned()),
+                    available: true,
+                    error: None,
+                    unified_diff: Some("diff --git a/x b/x\n".to_owned()),
+                },
+            }],
+        };
+        let value = serde_json::to_value(&response).expect("serialize diff response");
+        assert_eq!(value["rootGitDiffs"][0]["rootIndex"], 1);
+        assert_eq!(value["rootGitDiffs"][0]["git"]["available"], true);
     }
 }
