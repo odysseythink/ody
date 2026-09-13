@@ -347,13 +347,25 @@ pub(crate) fn verify_apply_state(
 pub(crate) fn verify_restore_state(change: &PreparedChange) -> Result<(), String> {
     match change.kind {
         WorkspaceFileChangeKind::Add => {
-            if change.absolute.exists() {
+            if !change.absolute.exists() {
+                return Err(format!(
+                    "added file {} is missing; cannot restore safely",
+                    change.key
+                ));
+            }
+            let current = fs::read(&change.absolute).map_err(|e| e.to_string())?;
+            let applied = change
+                .content
+                .as_deref()
+                .map(sha256_hex_of_str)
+                .unwrap_or_default();
+            if sha256_hex(&current) == applied {
+                Ok(())
+            } else {
                 Err(format!(
                     "added file {} was modified after apply",
                     change.key
                 ))
-            } else {
-                Ok(())
             }
         }
         WorkspaceFileChangeKind::Update | WorkspaceFileChangeKind::Delete => {
