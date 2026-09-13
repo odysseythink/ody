@@ -102,6 +102,10 @@ use ody_app_server_protocol::TurnInterruptParams;
 use ody_app_server_protocol::TurnStartParams;
 use ody_app_server_protocol::TurnSteerParams;
 use ody_app_server_protocol::WindowsSandboxSetupStartParams;
+use ody_app_server_protocol::WorkspaceProjectBindParams;
+use ody_app_server_protocol::WorkspaceProjectCloseParams;
+use ody_app_server_protocol::WorkspaceProjectGetParams;
+use ody_app_server_protocol::WorkspaceProjectListParams;
 use ody_client::default_client::ODY_INTERNAL_ORIGINATOR_OVERRIDE_ENV_VAR;
 use tokio::process::Command;
 
@@ -789,6 +793,42 @@ image_generation = true
     ) -> anyhow::Result<i64> {
         let params = Some(serde_json::to_value(params)?);
         self.send_request("mock/experimentalMethod", params).await
+    }
+
+    /// Send a `workspace/project/bind` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_project_bind_request(
+        &mut self,
+        params: WorkspaceProjectBindParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/project/bind", params).await
+    }
+
+    /// Send a `workspace/project/get` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_project_get_request(
+        &mut self,
+        params: WorkspaceProjectGetParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/project/get", params).await
+    }
+
+    /// Send a `workspace/project/list` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_project_list_request(
+        &mut self,
+        params: WorkspaceProjectListParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/project/list", params).await
+    }
+
+    /// Send a `workspace/project/close` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_project_close_request(
+        &mut self,
+        params: WorkspaceProjectCloseParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/project/close", params).await
     }
 
     /// Send a `thread/memoryMode/set` JSON-RPC request (v2, experimental).

@@ -23,8 +23,9 @@ mod review;
 mod thread;
 mod thread_data;
 mod turn;
-mod windows_sandbox;
 mod visual_workspace;
+mod windows_sandbox;
+mod workspace;
 
 pub use apps::*;
 pub use attestation::*;
@@ -50,8 +51,9 @@ pub use shared::*;
 pub use thread::*;
 pub use thread_data::*;
 pub use turn::*;
-pub use windows_sandbox::*;
 pub use visual_workspace::*;
+pub use windows_sandbox::*;
+pub use workspace::*;
 
 #[cfg(test)]
 mod tests;

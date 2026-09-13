@@ -38,6 +38,7 @@ use crate::request_processors::ThreadGoalRequestProcessor;
 use crate::request_processors::ThreadRequestProcessor;
 use crate::request_processors::TurnRequestProcessor;
 use crate::request_processors::VisualWorkspaceRequestProcessor;
+use crate::request_processors::WorkspaceProjectRequestProcessor;
 use crate::request_processors::WindowsSandboxRequestProcessor;
 use crate::request_serialization::QueuedInitializedRequest;
 use crate::request_serialization::RequestSerializationQueueKey;
@@ -122,6 +123,7 @@ pub(crate) struct MessageProcessor {
     turn_processor: TurnRequestProcessor,
     windows_sandbox_processor: WindowsSandboxRequestProcessor,
     visual_workspace_processor: VisualWorkspaceRequestProcessor,
+    workspace_project_processor: WorkspaceProjectRequestProcessor,
     request_serialization_queues: RequestSerializationQueues,
 }
 
@@ -446,6 +448,9 @@ impl MessageProcessor {
             config.ody_home.to_path_buf(),
             Arc::clone(&outgoing),
         );
+        let workspace_project_processor = WorkspaceProjectRequestProcessor::new(
+            config.ody_home.to_path_buf(),
+        );
 
         Self {
             outgoing,
@@ -471,6 +476,7 @@ impl MessageProcessor {
             turn_processor,
             windows_sandbox_processor,
             visual_workspace_processor,
+            workspace_project_processor,
             request_serialization_queues: RequestSerializationQueues::default(),
         }
     }
@@ -954,6 +960,26 @@ impl MessageProcessor {
             ClientRequest::VisualPreviewOpen { params, .. } => self
                 .visual_workspace_processor
                 .preview_open(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceProjectBind { params, .. } => self
+                .workspace_project_processor
+                .bind(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceProjectGet { params, .. } => self
+                .workspace_project_processor
+                .get(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceProjectList { params, .. } => self
+                .workspace_project_processor
+                .list(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceProjectClose { params, .. } => self
+                .workspace_project_processor
+                .close(params)
                 .await
                 .map(|response| Some(response.into())),
             ClientRequest::ModelProviderCapabilitiesRead { params: _, .. } => self

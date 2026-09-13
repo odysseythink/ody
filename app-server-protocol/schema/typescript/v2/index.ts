@@ -478,4 +478,7 @@ export type { WindowsSandboxSetupMode } from "./WindowsSandboxSetupMode";
 export type { WindowsSandboxSetupStartParams } from "./WindowsSandboxSetupStartParams";
 export type { WindowsSandboxSetupStartResponse } from "./WindowsSandboxSetupStartResponse";
 export type { WindowsWorldWritableWarningNotification } from "./WindowsWorldWritableWarningNotification";
+export type { WorkspaceProjectRef } from "./WorkspaceProjectRef";
+export type { WorkspaceRoot } from "./WorkspaceRoot";
+export type { WorkspaceRootRole } from "./WorkspaceRootRole";
 export type { WriteStatus } from "./WriteStatus";

@@ -785,6 +785,30 @@ client_request_definitions! {
         serialization: global_shared_read("visual-workspace"),
         response: v2::VisualPreviewOpenResponse,
     },
+    #[experimental("workspace/project/v1")]
+    WorkspaceProjectBind => "workspace/project/bind" {
+        params: v2::WorkspaceProjectBindParams,
+        serialization: global("workspace-project"),
+        response: v2::WorkspaceProjectBindResponse,
+    },
+    #[experimental("workspace/project/v1")]
+    WorkspaceProjectGet => "workspace/project/get" {
+        params: v2::WorkspaceProjectGetParams,
+        serialization: global_shared_read("workspace-project"),
+        response: v2::WorkspaceProjectGetResponse,
+    },
+    #[experimental("workspace/project/v1")]
+    WorkspaceProjectList => "workspace/project/list" {
+        params: v2::WorkspaceProjectListParams,
+        serialization: global_shared_read("workspace-project"),
+        response: v2::WorkspaceProjectListResponse,
+    },
+    #[experimental("workspace/project/v1")]
+    WorkspaceProjectClose => "workspace/project/close" {
+        params: v2::WorkspaceProjectCloseParams,
+        serialization: global("workspace-project"),
+        response: v2::WorkspaceProjectCloseResponse,
+    },
     SkillsConfigWrite => "skills/config/write" {
         params: v2::SkillsConfigWriteParams,
         serialization: global("config"),

@@ -20060,6 +20060,77 @@
         "title": "WindowsWorldWritableWarningNotification",
         "type": "object"
       },
+      "WorkspaceProjectRef": {
+        "properties": {
+          "createdAtMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "roots": {
+            "items": {
+              "$ref": "#/definitions/v2/WorkspaceRoot"
+            },
+            "type": "array"
+          },
+          "schemaVersion": {
+            "format": "uint32",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "updatedAtMs": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "createdAtMs",
+          "id",
+          "name",
+          "roots",
+          "schemaVersion",
+          "updatedAtMs"
+        ],
+        "type": "object"
+      },
+      "WorkspaceRoot": {
+        "properties": {
+          "authSource": {
+            "description": "Authorization provenance. E0 only supports `user_selected`.",
+            "type": "string"
+          },
+          "path": {
+            "description": "Canonicalized absolute path on the local filesystem.",
+            "type": "string"
+          },
+          "role": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/v2/WorkspaceRootRole"
+              }
+            ],
+            "description": "Derived from bind order: `roots[0]` is the primary (default cwd) root."
+          }
+        },
+        "required": [
+          "authSource",
+          "path",
+          "role"
+        ],
+        "type": "object"
+      },
+      "WorkspaceRootRole": {
+        "enum": [
+          "primary",
+          "secondary"
+        ],
+        "type": "string"
+      },
       "WriteStatus": {
         "enum": [
           "ok",
