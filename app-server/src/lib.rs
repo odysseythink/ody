@@ -96,6 +96,7 @@ mod workspace_discovery;
 mod workspace_changeset;
 mod workspace_source_index;
 mod workspace_validation;
+mod workspace_service;
 mod fuzzy_file_search;
 mod image_url;
 pub mod in_process;

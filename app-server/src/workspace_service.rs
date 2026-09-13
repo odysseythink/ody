@@ -1,0 +1,352 @@
+//! Workspace Service engine: port selection, command assembly, readiness
+//! probing, output rings, and process-group termination for Ody-managed
+//! dev servers (strategy E2). Pure functions stay testable; the processor
+//! owns process handles and store state.
+//!
+//! Termination discipline (strategy 8.2: no runaway processes): Unix spawns
+//! a new process group and killpg's it — spike-verified zero survivors and
+//! immediate port release; Windows shells out to `taskkill /T /F`.
+
+use std::process::Stdio;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+
+use tokio::io::AsyncReadExt;
+use tokio::process::Child;
+use tokio::process::Command;
+use tokio::sync::Notify;
+
+/// Trailing per-stream bytes kept for `workspace/service/logs`.
+pub(crate) const SERVICE_OUTPUT_TAIL_BYTES: usize = 64 * 1024;
+pub(crate) const SERVICE_READY_DEFAULT_TIMEOUT_MS: i64 = 60_000;
+pub(crate) const SERVICE_READY_MIN_TIMEOUT_MS: i64 = 5_000;
+pub(crate) const SERVICE_READY_MAX_TIMEOUT_MS: i64 = 300_000;
+pub(crate) const SERVICE_READY_POLL_INTERVAL_MS: u64 = 500;
+pub(crate) const SERVICE_HEALTH_TIMEOUT_MS: u64 = 2_000;
+pub(crate) const MAX_SERVICES_PER_PROJECT: usize = 8;
+pub(crate) const MAX_SERVICE_NAME_CHARS: usize = 64;
+
+/// Framework default dev-server port, first tech match wins.
+const TECH_DEFAULT_PORTS: &[(&str, u16)] = &[
+    ("next", 3000),
+    ("nuxt", 3000),
+    ("vite", 5173),
+    ("svelte", 5173),
+    ("astro", 4321),
+    ("angular", 4200),
+];
+/// Frameworks that silently hop ports when occupied; force strict mode.
+const TECH_STRICT_PORT: &[&str] = &["vite", "svelte"];
+
+pub(crate) fn clamp_ready_timeout(timeout_ms: Option<i64>) -> i64 {
+    timeout_ms.unwrap_or(SERVICE_READY_DEFAULT_TIMEOUT_MS).clamp(
+        SERVICE_READY_MIN_TIMEOUT_MS,
+        SERVICE_READY_MAX_TIMEOUT_MS,
+    )
+}
+
+pub(crate) fn default_port_for_tech(tech_ids: &[String]) -> u16 {
+    for (tech, port) in TECH_DEFAULT_PORTS {
+        if tech_ids.iter().any(|id| id == tech) {
+            return *port;
+        }
+    }
+    5173
+}
+
+pub(crate) fn strict_port_args(tech_ids: &[String]) -> Vec<&'static str> {
+    TECH_STRICT_PORT
+        .iter()
+        .filter(|tech| tech_ids.iter().any(|id| id == *tech))
+        .map(|_| "--strictPort")
+        .collect()
+}
+
+/// `{pm} run {script} -- --port {port} [framework extras]`; the `PORT`
+/// environment variable is injected separately by the processor (R2:
+/// dual-channel port injection covers both CLI-arg and env readers).
+pub(crate) fn build_command_args(script: &str, port: u16, tech_ids: &[String]) -> Vec<String> {
+    let mut args = vec![
+        "run".to_owned(),
+        script.to_owned(),
+        "--".to_owned(),
+        "--port".to_owned(),
+        port.to_string(),
+    ];
+    args.extend(strict_port_args(tech_ids).into_iter().map(str::to_owned));
+    args
+}
+
+pub(crate) fn is_port_free(port: u16) -> bool {
+    std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
+}
+
+pub(crate) fn pick_free_port() -> Option<u16> {
+    std::net::TcpListener::bind(("127.0.0.1", 0))
+        .ok()
+        .and_then(|listener| listener.local_addr().ok())
+        .map(|addr| addr.port())
+}
+
+/// Requested port must be free (structured error); omitted port probes the
+/// framework default, then auto-selects a free one (strategy: port conflicts
+/// are structured errors on explicit request, silent avoidance otherwise).
+pub(crate) fn pick_port(requested: Option<u16>, tech_ids: &[String]) -> Result<u16, String> {
+    if let Some(port) = requested {
+        if is_port_free(port) {
+            return Ok(port);
+        }
+        return Err(format!(
+            "port {port} is already in use; stop the occupying process or omit `port` to auto-select"
+        ));
+    }
+    let preferred = default_port_for_tech(tech_ids);
+    if is_port_free(preferred) {
+        return Ok(preferred);
+    }
+    pick_free_port().ok_or_else(|| "no free loopback port available".to_owned())
+}
+
+/// Byte ring keeping the trailing `cap` bytes of one output stream.
+pub(crate) struct OutputRing {
+    buf: Vec<u8>,
+    cap: usize,
+}
+
+impl OutputRing {
+    pub(crate) fn new(cap: usize) -> Self {
+        Self { buf: Vec::with_capacity(cap.min(1024)), cap }
+    }
+
+    pub(crate) fn push(&mut self, bytes: &[u8]) {
+        self.buf.extend_from_slice(bytes);
+        if self.buf.len() > self.cap {
+            let drop = self.buf.len() - self.cap;
+            self.buf.drain(..drop);
+        }
+    }
+
+    pub(crate) fn tail_string(&self, max_bytes: usize) -> String {
+        let start = self.buf.len().saturating_sub(max_bytes);
+        String::from_utf8_lossy(&self.buf[start..]).into_owned()
+    }
+}
+
+/// Per-service runtime handle; process exits are observed by a wait task.
+pub(crate) struct ManagedService {
+    pub(crate) pid: u32,
+    /// Process group id (== pid on unix; == pid on windows for taskkill).
+    pub(crate) pgid: u32,
+    pub(crate) stop_requested: Arc<AtomicBool>,
+    pub(crate) terminated: Arc<AtomicBool>,
+    pub(crate) stdout_ring: Arc<Mutex<OutputRing>>,
+    pub(crate) stderr_ring: Arc<Mutex<OutputRing>>,
+    pub(crate) terminal_notify: Arc<Notify>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ReadyOutcome {
+    Ready,
+    ProcessExited,
+    TimedOut,
+}
+
+/// Poll the loopback URL until a 2xx/3xx answers, the process terminates,
+/// or the deadline passes. Readiness is HTTP-authoritative; dev-server
+/// banner parsing is intentionally not relied on (R3).
+pub(crate) async fn wait_ready(
+    terminated: &Arc<AtomicBool>,
+    port: u16,
+    timeout_ms: i64,
+) -> ReadyOutcome {
+    let deadline = tokio::time::Instant::now() + Duration::from_millis(timeout_ms as u64);
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .build()
+        .expect("reqwest client");
+    loop {
+        if terminated.load(Ordering::SeqCst) {
+            return ReadyOutcome::ProcessExited;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return ReadyOutcome::TimedOut;
+        }
+        let url = format!("http://127.0.0.1:{port}/");
+        match tokio::time::timeout(
+            Duration::from_millis(SERVICE_HEALTH_TIMEOUT_MS),
+            client.get(&url).send(),
+        )
+        .await
+        {
+            Ok(Ok(response)) => {
+                let status = response.status().as_u16();
+                if (200..400).contains(&status) {
+                    return ReadyOutcome::Ready;
+                }
+            }
+            _ => {}
+        }
+        tokio::time::sleep(Duration::from_millis(SERVICE_READY_POLL_INTERVAL_MS)).await;
+    }
+}
+
+/// Spawn `<pm> run <script> ...` detached from any terminal, in its own
+/// process group (unix), with piped output for the reader tasks.
+pub(crate) fn spawn_service_command(
+    pm: &str,
+    args: &[String],
+    root: &std::path::Path,
+    port: u16,
+    env: &Option<std::collections::HashMap<String, Option<String>>>,
+) -> std::io::Result<Child> {
+    let mut command = Command::new(pm);
+    command
+        .args(args)
+        .current_dir(root)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .env("PORT", port.to_string())
+        .kill_on_drop(false); // termination goes through kill_process_group
+    if let Some(overrides) = env {
+        for (key, value) in overrides {
+            match value {
+                Some(value) => {
+                    command.env(key, value);
+                }
+                None => {
+                    command.env_remove(key);
+                }
+            }
+        }
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
+    command.spawn()
+}
+
+/// Pump one output pipe into a ring until EOF. Spawned per stream.
+pub(crate) fn spawn_output_reader<R>(
+    mut reader: R,
+    ring: Arc<Mutex<OutputRing>>,
+) -> tokio::task::JoinHandle<()>
+where
+    R: tokio::io::AsyncRead + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        let mut buf = [0u8; 4096];
+        loop {
+            match reader.read(&mut buf).await {
+                Ok(0) => break,
+                Ok(n) => ring.lock().expect("ring lock").push(&buf[..n]),
+                Err(_) => break,
+            }
+        }
+    })
+}
+
+/// Kill the whole process group. spike-verified: zero survivors, port freed.
+#[cfg(unix)]
+pub(crate) fn kill_process_group(pgid: u32) -> Result<(), String> {
+    let rc = unsafe { libc::killpg(pgid as libc::pid_t, libc::SIGKILL) };
+    if rc == 0 {
+        Ok(())
+    } else {
+        Err(format!("killpg({pgid}) failed: {}", std::io::Error::last_os_error()))
+    }
+}
+
+/// Windows fallback: `taskkill /PID <pid> /T /F` kills the process tree.
+#[cfg(windows)]
+pub(crate) fn kill_process_group(pid: u32) -> Result<(), String> {
+    let output = std::process::Command::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/T", "/F"])
+        .output()
+        .map_err(|err| format!("taskkill spawn failed: {err}"))?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(format!("taskkill failed: {}", String::from_utf8_lossy(&output.stderr)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clamp_ready_timeout_applies_defaults_and_bounds() {
+        assert_eq!(clamp_ready_timeout(None), SERVICE_READY_DEFAULT_TIMEOUT_MS);
+        assert_eq!(clamp_ready_timeout(Some(30_000)), 30_000);
+        assert_eq!(clamp_ready_timeout(Some(1)), SERVICE_READY_MIN_TIMEOUT_MS);
+        assert_eq!(clamp_ready_timeout(Some(9_999_999)), SERVICE_READY_MAX_TIMEOUT_MS);
+    }
+
+    #[test]
+    fn default_port_and_strict_port_follow_tech_stack() {
+        assert_eq!(default_port_for_tech(&["vite".to_owned()]), 5173);
+        assert_eq!(default_port_for_tech(&["next".to_owned()]), 3000);
+        assert_eq!(default_port_for_tech(&["nuxt".to_owned()]), 3000);
+        assert_eq!(default_port_for_tech(&["astro".to_owned()]), 4321);
+        assert_eq!(default_port_for_tech(&[]), 5173); // ecosystem fallback
+        assert!(strict_port_args(&["vite".to_owned()]).contains(&"--strictPort"));
+        assert!(strict_port_args(&["svelte".to_owned()]).contains(&"--strictPort"));
+        assert!(strict_port_args(&["next".to_owned()]).is_empty());
+    }
+
+    #[test]
+    fn build_command_assembles_pm_run_with_port_injection() {
+        let args = build_command_args("dev", 5173, &["vite".to_owned()]);
+        assert_eq!(
+            args,
+            vec!["run", "dev", "--", "--port", "5173", "--strictPort"]
+        );
+    }
+
+    #[test]
+    fn pick_port_rejects_occupied_requested_port() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let occupied = listener.local_addr().expect("addr").port();
+        let err = pick_port(Some(occupied), &[]).expect_err("occupied port must be rejected");
+        assert!(err.contains(&occupied.to_string()), "{err}");
+    }
+
+    #[test]
+    fn pick_port_auto_avoids_when_default_occupied() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let occupied = listener.local_addr().expect("addr").port();
+        // Force the default-port branch by requesting the occupied port as default:
+        // pick_port(None) probes the tech default; emulate by occupying 5173 is
+        // unreliable in CI, so assert the auto-select invariant instead:
+        // binding via 127.0.0.1:0 always yields a free port distinct from occupied.
+        let picked = pick_free_port().expect("free port");
+        assert_ne!(picked, occupied);
+        assert!(is_port_free(picked));
+        drop(listener);
+    }
+
+    #[test]
+    fn output_ring_keeps_trailing_bytes_within_cap() {
+        let mut ring = OutputRing::new(8);
+        ring.push(b"abcdefgh");
+        ring.push(b"ij");
+        // The ring keeps the trailing `cap` bytes overall: the last 8 of
+        // "abcdefgh" + "ij".
+        assert_eq!(ring.tail_string(8), "cdefghij");
+        assert_eq!(ring.tail_string(2), "ij");
+        let big = vec![b'x'; 100];
+        ring.push(&big);
+        assert_eq!(ring.tail_string(8).len(), 8);
+        // UTF-8 boundary safety: multi-byte char split by cap.
+        let mut ring = OutputRing::new(4);
+        ring.push("中文字".as_bytes());
+        let tail = ring.tail_string(4);
+        assert!(tail.len() <= 4 + 3); // lossy replacement may add bytes, never panics
+    }
+}

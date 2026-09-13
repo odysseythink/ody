@@ -39,6 +39,7 @@ use crate::request_processors::ThreadRequestProcessor;
 use crate::request_processors::TurnRequestProcessor;
 use crate::request_processors::VisualWorkspaceRequestProcessor;
 use crate::request_processors::WorkspaceProjectRequestProcessor;
+use crate::request_processors::WorkspaceServiceRequestProcessor;
 use crate::request_processors::WorkspaceSourceRequestProcessor;
 use crate::request_processors::WindowsSandboxRequestProcessor;
 use crate::request_serialization::QueuedInitializedRequest;
@@ -125,6 +126,7 @@ pub(crate) struct MessageProcessor {
     windows_sandbox_processor: WindowsSandboxRequestProcessor,
     visual_workspace_processor: VisualWorkspaceRequestProcessor,
     workspace_project_processor: WorkspaceProjectRequestProcessor,
+    workspace_service_processor: WorkspaceServiceRequestProcessor,
     workspace_source_processor: WorkspaceSourceRequestProcessor,
     request_serialization_queues: RequestSerializationQueues,
 }
@@ -459,6 +461,11 @@ impl MessageProcessor {
             workspace_project_processor.store_handle(),
         );
 
+        let workspace_service_processor = WorkspaceServiceRequestProcessor::new(
+            config.ody_home.to_path_buf(),
+            workspace_project_processor.store_handle(),
+        );
+
         Self {
             outgoing,
             models_refresh_worker,
@@ -484,6 +491,7 @@ impl MessageProcessor {
             windows_sandbox_processor,
             visual_workspace_processor,
             workspace_project_processor,
+            workspace_service_processor,
             workspace_source_processor,
             request_serialization_queues: RequestSerializationQueues::default(),
         }
@@ -1045,15 +1053,29 @@ impl MessageProcessor {
                 .validate(params)
                 .await
                 .map(|response| Some(response.into())),
-            // Typed shim (E2 T02): variants are registered and experimental-gated
-            // above; the real processor dispatch lands in E2 T03, which replaces
-            // this arm wholesale.
-            ClientRequest::WorkspaceServiceStart { .. }
-            | ClientRequest::WorkspaceServiceStop { .. }
-            | ClientRequest::WorkspaceServiceList { .. }
-            | ClientRequest::WorkspaceServiceLogs { .. }
-            | ClientRequest::WorkspacePreviewCheck { .. } => Err(invalid_request(
-                "workspace/service handler is not wired in this build",
+            ClientRequest::WorkspaceServiceStart { params, .. } => self
+                .workspace_service_processor
+                .start(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceServiceStop { params, .. } => self
+                .workspace_service_processor
+                .stop(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceServiceList { params, .. } => self
+                .workspace_service_processor
+                .list(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceServiceLogs { params, .. } => self
+                .workspace_service_processor
+                .logs(params)
+                .await
+                .map(|response| Some(response.into())),
+            // Typed shim (E2 T04): preview/check dispatch lands in T04.
+            ClientRequest::WorkspacePreviewCheck { .. } => Err(invalid_request(
+                "workspace/preview/check handler is not wired in this build",
             )),
             ClientRequest::ModelProviderCapabilitiesRead { params: _, .. } => self
                 .config_processor

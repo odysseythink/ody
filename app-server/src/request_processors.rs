@@ -455,6 +455,8 @@ pub(crate) use turn_processor::TurnRequestProcessor;
 pub(crate) use visual_workspace_processor::VisualWorkspaceRequestProcessor;
 pub(crate) use windows_sandbox_processor::WindowsSandboxRequestProcessor;
 pub(crate) use workspace_project_processor::WorkspaceProjectRequestProcessor;
+pub(crate) mod workspace_service_processor;
+pub(crate) use workspace_service_processor::WorkspaceServiceRequestProcessor;
 pub(crate) mod workspace_source_processor;
 pub(crate) use workspace_source_processor::WorkspaceSourceRequestProcessor;
 

@@ -6725,6 +6725,7 @@ dependencies = [
  "flate2",
  "futures",
  "hmac 0.12.1",
+ "libc",
  "ody-analytics",
  "ody-app-server-protocol",
  "ody-app-server-transport",

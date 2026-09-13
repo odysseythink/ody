@@ -364,7 +364,7 @@ fn route_path_from_pages(segments: &[String], stem: &str) -> String {
     }
 }
 
-fn inspect_package_json(root: &Path, discovery: &mut WorkspaceRootDiscovery) {
+pub(crate) fn inspect_package_json(root: &Path, discovery: &mut WorkspaceRootDiscovery) {
     let path = root.join("package.json");
     let Ok(metadata) = fs::metadata(&path) else {
         return; // no manifest: fine for backend or non-JS roots
