@@ -9,6 +9,7 @@
 //! guard interrupts the still-running sub-agent on the runtime (the drop
 //! path itself never awaits — see R6 in the M1 execution plan).
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -26,6 +27,8 @@ use ody_protocol::protocol::FlowStepCompletedEvent;
 use ody_protocol::protocol::Op;
 use ody_protocol::user_input::UserInput;
 use tokio::runtime::Handle;
+use tokio::sync::Mutex as AsyncMutex;
+use tokio::sync::OwnedSemaphorePermit;
 
 use crate::TurnContext;
 use crate::agent::control::AgentControl;
@@ -41,6 +44,8 @@ use crate::turn_timing::now_unix_timestamp_ms;
 use super::FlowAgentHost;
 use super::FlowHostError;
 use super::FlowProgress;
+use super::concurrency::PrefixStagger;
+use super::concurrency::RunConcurrency;
 
 /// Global counter for flow run / per-agent spawn call ids. Flow runs share
 /// the Collab spawn event rendering with multi_agents, so call ids must be
@@ -62,6 +67,15 @@ pub(crate) struct SessionFlowAgentHost {
     run_call_id: String,
     /// Disk checkpoint store for this run (M2.1); `None` means no caching.
     checkpoint_store: Option<Arc<crate::flow::CheckpointStore>>,
+    /// M4 per-run spawn gates: concurrency slot + total-spawn cap (Claude
+    /// Code `Behavior and limits`: 16 concurrent, 1,000 total per run).
+    concurrency: Arc<RunConcurrency>,
+    /// M4 fan-out prefix stagger hold (Claude Code `Prompt caching in a
+    /// fan-out`); the first agent's wait releases held spawns.
+    stagger: Arc<PrefixStagger>,
+    /// Concurrency slots held by in-flight agents, keyed by child thread;
+    /// removed (releasing the slot) when the agent reaches a final status.
+    inflight: Arc<AsyncMutex<HashMap<ThreadId, OwnedSemaphorePermit>>>,
 }
 
 impl SessionFlowAgentHost {
@@ -77,6 +91,9 @@ impl SessionFlowAgentHost {
             flow_name: flow_name.into(),
             run_call_id: format!("flow-run-{run_id}"),
             checkpoint_store: None,
+            concurrency: Arc::new(RunConcurrency::new()),
+            stagger: Arc::new(PrefixStagger::from_env()),
+            inflight: Arc::new(AsyncMutex::new(HashMap::new())),
         }
     }
 
@@ -149,6 +166,8 @@ impl SessionFlowAgentHost {
             /*task_name*/ None,
         )
         .map_err(|err| FlowHostError(err.to_string()))?;
+        self.stagger.gate().await;
+        let permit = self.concurrency.acquire().await?;
         let result = self
             .session
             .services
@@ -169,6 +188,18 @@ impl SessionFlowAgentHost {
                 },
             )
             .await;
+
+        // M4: the concurrency slot lives until the agent reaches a final
+        // status; a failed spawn releases it immediately.
+        match &result {
+            Ok(spawned_agent) => {
+                self.inflight
+                    .lock()
+                    .await
+                    .insert(spawned_agent.thread_id, permit);
+            }
+            Err(_) => drop(permit),
+        }
 
         let (new_thread_id, status) = match &result {
             Ok(spawned_agent) => (Some(spawned_agent.thread_id), spawned_agent.status.clone()),
@@ -219,7 +250,14 @@ impl SessionFlowAgentHost {
     /// Wait for a spawned flow sub-agent to reach a final status and return
     /// its final message. Non-completed finals map to [`FlowHostError`].
     pub(crate) async fn wait_agent(&self, thread_id: ThreadId) -> Result<String, FlowHostError> {
+        // M4 stagger: the first agent reaching its wait is the observable
+        // proxy for "its response has begun"; release held fan-out spawns
+        // so their first requests read the shared prompt prefix.
+        self.stagger.signal_response_began().await;
         let status = wait_for_final_status(&self.session.services.agent_control, thread_id).await;
+        // Releasing the slot before mapping the status keeps the
+        // concurrency gate accurate even for failed agents.
+        self.inflight.lock().await.remove(&thread_id);
         match status {
             AgentStatus::Completed(Some(message)) => Ok(message),
             AgentStatus::Completed(None) => Ok(String::new()),

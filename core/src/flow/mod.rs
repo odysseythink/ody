@@ -56,6 +56,7 @@ use ody_core_skills::FlowPlan;
 pub(crate) mod interp;
 
 mod checkpoint;
+mod concurrency;
 mod host;
 mod plan_summary;
 mod runner;
