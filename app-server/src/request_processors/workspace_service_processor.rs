@@ -299,6 +299,16 @@ impl WorkspaceServiceRequestProcessor {
             crate::workspace_service::clamp_ready_timeout(params.ready_timeout_ms),
         )
         .await;
+        if outcome == ReadyOutcome::ProcessExited {
+            // The wait task sets `terminated` before writing the terminal
+            // record; give it a brief window to publish, so we never hand
+            // the client a lingering Starting record.
+            let _ = tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                terminal_notify.notified(),
+            )
+            .await;
+        }
         {
             let mut store = self.store.lock().expect("store lock");
             let record = store
