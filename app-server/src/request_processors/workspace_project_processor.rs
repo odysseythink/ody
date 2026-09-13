@@ -9,6 +9,7 @@ use std::time::UNIX_EPOCH;
 
 use ody_app_server_protocol::JSONRPCErrorError;
 use ody_app_server_protocol::WORKSPACE_PROJECT_PROTOCOL_VERSION;
+use ody_app_server_protocol::WorkspaceDiscovery;
 use ody_app_server_protocol::WorkspaceProjectBindParams;
 use ody_app_server_protocol::WorkspaceProjectBindResponse;
 use ody_app_server_protocol::WorkspaceProjectCloseParams;
@@ -18,6 +19,8 @@ use ody_app_server_protocol::WorkspaceProjectGetResponse;
 use ody_app_server_protocol::WorkspaceProjectListParams;
 use ody_app_server_protocol::WorkspaceProjectListResponse;
 use ody_app_server_protocol::WorkspaceProjectRef;
+use ody_app_server_protocol::WorkspaceProjectScanParams;
+use ody_app_server_protocol::WorkspaceProjectScanResponse;
 use ody_app_server_protocol::WorkspaceRoot;
 use ody_app_server_protocol::WorkspaceRootRole;
 use ody_utils_absolute_path::AbsolutePathBuf;
@@ -103,6 +106,34 @@ impl WorkspaceProjectRequestProcessor {
             store.idempotency.retain(|_, id| id != &project.id);
             store.persist()?;
             Ok(WorkspaceProjectCloseResponse { project })
+        })
+    }
+
+    pub(crate) async fn scan(
+        &self,
+        params: WorkspaceProjectScanParams,
+    ) -> Result<WorkspaceProjectScanResponse, JSONRPCErrorError> {
+        let project = self.with_store(|store| {
+            store
+                .projects
+                .get(&params.project_id)
+                .cloned()
+                .ok_or_else(|| unknown_project(&params.project_id))
+        })?;
+        let mut roots = Vec::with_capacity(project.roots.len());
+        let mut truncated = false;
+        for root in &project.roots {
+            let discovery = crate::workspace_discovery::scan_root(&root.path).await;
+            truncated |= discovery.truncated;
+            roots.push(discovery);
+        }
+        Ok(WorkspaceProjectScanResponse {
+            discovery: WorkspaceDiscovery {
+                project_id: project.id,
+                roots,
+                truncated,
+                scanned_at_ms: now_ms(),
+            },
         })
     }
 
@@ -323,7 +354,7 @@ mod tests {
     fn temp_root() -> AbsolutePathBuf {
         let path = tempfile::tempdir()
             .expect("create root")
-            .into_path()
+            .keep()
             .canonicalize()
             .expect("canonicalize root");
         ody_utils_absolute_path::test_support::PathBufExt::abs(&path)

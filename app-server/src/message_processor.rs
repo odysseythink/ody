@@ -982,6 +982,11 @@ impl MessageProcessor {
                 .close(params)
                 .await
                 .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceProjectScan { params, .. } => self
+                .workspace_project_processor
+                .scan(params)
+                .await
+                .map(|response| Some(response.into())),
             ClientRequest::ModelProviderCapabilitiesRead { params: _, .. } => self
                 .config_processor
                 .model_provider_capabilities_read()

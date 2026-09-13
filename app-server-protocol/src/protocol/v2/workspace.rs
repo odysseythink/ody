@@ -109,6 +109,120 @@ pub struct WorkspaceProjectCloseResponse {
     pub project: WorkspaceProjectRef,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum WorkspaceSourceKind {
+    Page,
+    Component,
+    Route,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceTechEntry {
+    /// Framework or tool signal id, e.g. "react", "vite", "next", "vue",
+    /// "svelte", "angular", "express".
+    pub id: String,
+    /// Raw dependency declaration version when discovered from package.json.
+    pub version: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceScript {
+    pub name: String,
+    pub command: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceSourceEntry {
+    pub kind: WorkspaceSourceKind,
+    /// File stem (no extension).
+    pub name: String,
+    /// Path relative to the scanned root, `/`-separated.
+    pub path: String,
+    /// Route path when `kind` is `Route`, derived from directory conventions.
+    pub route_path: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceGitStatus {
+    /// True when a `.git` entry is found at or above the root (pure fs probe,
+    /// no git binary required).
+    pub is_repo: bool,
+    pub repo_root: Option<String>,
+    pub branch: Option<String>,
+    pub head_commit_hash: Option<String>,
+    pub has_changes: Option<bool>,
+    /// False when the git binary is unavailable, errors, or times out; `error`
+    /// carries the diagnosable reason and the rest of the scan is unaffected.
+    pub available: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceScanStats {
+    #[ts(type = "number")]
+    pub files_visited: u64,
+    #[ts(type = "number")]
+    pub dirs_visited: u64,
+    #[ts(type = "number")]
+    pub skipped_dirs: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceRootDiscovery {
+    /// Canonicalized root path from the binding record.
+    pub root_path: String,
+    pub package_name: Option<String>,
+    /// "pnpm" | "yarn" | "npm" | "bun" from lockfile priority.
+    pub package_manager: Option<String>,
+    pub tech_stack: Vec<WorkspaceTechEntry>,
+    pub scripts: Vec<WorkspaceScript>,
+    pub sources: Vec<WorkspaceSourceEntry>,
+    pub git: WorkspaceGitStatus,
+    pub stats: WorkspaceScanStats,
+    /// Per-root diagnosable problems; remaining roots still scan.
+    pub errors: Vec<String>,
+    pub truncated: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceDiscovery {
+    pub project_id: String,
+    pub roots: Vec<WorkspaceRootDiscovery>,
+    pub truncated: bool,
+    #[ts(type = "number")]
+    pub scanned_at_ms: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceProjectScanParams {
+    pub project_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceProjectScanResponse {
+    pub discovery: WorkspaceDiscovery,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -146,6 +260,22 @@ mod tests {
                     "idempotencyKey": "bind-1"
                 }
             })
+        );
+    }
+
+    #[test]
+    fn workspace_project_scan_has_stable_wire_name_and_is_experimental() {
+        let request = ClientRequest::WorkspaceProjectScan {
+            request_id: RequestId::Integer(12),
+            params: WorkspaceProjectScanParams {
+                project_id: "ws-1".to_owned(),
+            },
+        };
+
+        assert_eq!(request.method(), "workspace/project/scan");
+        assert_eq!(
+            crate::experimental_api::ExperimentalApi::experimental_reason(&request),
+            Some("workspace/project/v1")
         );
     }
 }

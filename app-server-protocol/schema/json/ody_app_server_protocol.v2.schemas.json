@@ -17917,6 +17917,80 @@
       "title": "WindowsWorldWritableWarningNotification",
       "type": "object"
     },
+    "WorkspaceDiscovery": {
+      "properties": {
+        "projectId": {
+          "type": "string"
+        },
+        "roots": {
+          "items": {
+            "$ref": "#/definitions/WorkspaceRootDiscovery"
+          },
+          "type": "array"
+        },
+        "scannedAtMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "projectId",
+        "roots",
+        "scannedAtMs",
+        "truncated"
+      ],
+      "type": "object"
+    },
+    "WorkspaceGitStatus": {
+      "properties": {
+        "available": {
+          "description": "False when the git binary is unavailable, errors, or times out; `error` carries the diagnosable reason and the rest of the scan is unaffected.",
+          "type": "boolean"
+        },
+        "branch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hasChanges": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "headCommitHash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "isRepo": {
+          "description": "True when a `.git` entry is found at or above the root (pure fs probe, no git binary required).",
+          "type": "boolean"
+        },
+        "repoRoot": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "available",
+        "isRepo"
+      ],
+      "type": "object"
+    },
     "WorkspaceProjectRef": {
       "properties": {
         "createdAtMs": {
@@ -17981,12 +18055,173 @@
       ],
       "type": "object"
     },
+    "WorkspaceRootDiscovery": {
+      "properties": {
+        "errors": {
+          "description": "Per-root diagnosable problems; remaining roots still scan.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "git": {
+          "$ref": "#/definitions/WorkspaceGitStatus"
+        },
+        "packageManager": {
+          "description": "\"pnpm\" | \"yarn\" | \"npm\" | \"bun\" from lockfile priority.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "packageName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rootPath": {
+          "description": "Canonicalized root path from the binding record.",
+          "type": "string"
+        },
+        "scripts": {
+          "items": {
+            "$ref": "#/definitions/WorkspaceScript"
+          },
+          "type": "array"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/definitions/WorkspaceSourceEntry"
+          },
+          "type": "array"
+        },
+        "stats": {
+          "$ref": "#/definitions/WorkspaceScanStats"
+        },
+        "techStack": {
+          "items": {
+            "$ref": "#/definitions/WorkspaceTechEntry"
+          },
+          "type": "array"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "errors",
+        "git",
+        "rootPath",
+        "scripts",
+        "sources",
+        "stats",
+        "techStack",
+        "truncated"
+      ],
+      "type": "object"
+    },
     "WorkspaceRootRole": {
       "enum": [
         "primary",
         "secondary"
       ],
       "type": "string"
+    },
+    "WorkspaceScanStats": {
+      "properties": {
+        "dirsVisited": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "filesVisited": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "skippedDirs": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "dirsVisited",
+        "filesVisited",
+        "skippedDirs"
+      ],
+      "type": "object"
+    },
+    "WorkspaceScript": {
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "name"
+      ],
+      "type": "object"
+    },
+    "WorkspaceSourceEntry": {
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/WorkspaceSourceKind"
+        },
+        "name": {
+          "description": "File stem (no extension).",
+          "type": "string"
+        },
+        "path": {
+          "description": "Path relative to the scanned root, `/`-separated.",
+          "type": "string"
+        },
+        "routePath": {
+          "description": "Route path when `kind` is `Route`, derived from directory conventions.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "name",
+        "path"
+      ],
+      "type": "object"
+    },
+    "WorkspaceSourceKind": {
+      "enum": [
+        "page",
+        "component",
+        "route"
+      ],
+      "type": "string"
+    },
+    "WorkspaceTechEntry": {
+      "properties": {
+        "id": {
+          "description": "Framework or tool signal id, e.g. \"react\", \"vite\", \"next\", \"vue\", \"svelte\", \"angular\", \"express\".",
+          "type": "string"
+        },
+        "version": {
+          "description": "Raw dependency declaration version when discovered from package.json.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
     },
     "WriteStatus": {
       "enum": [

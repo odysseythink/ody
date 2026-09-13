@@ -92,6 +92,7 @@ mod error_code;
 mod extensions;
 mod filters;
 mod fs_watch;
+mod workspace_discovery;
 mod fuzzy_file_search;
 mod image_url;
 pub mod in_process;

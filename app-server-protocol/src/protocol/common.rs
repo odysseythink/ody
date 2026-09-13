@@ -809,6 +809,12 @@ client_request_definitions! {
         serialization: global("workspace-project"),
         response: v2::WorkspaceProjectCloseResponse,
     },
+    #[experimental("workspace/project/v1")]
+    WorkspaceProjectScan => "workspace/project/scan" {
+        params: v2::WorkspaceProjectScanParams,
+        serialization: global_shared_read("workspace-project"),
+        response: v2::WorkspaceProjectScanResponse,
+    },
     SkillsConfigWrite => "skills/config/write" {
         params: v2::SkillsConfigWriteParams,
         serialization: global("config"),

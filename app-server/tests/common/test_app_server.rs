@@ -106,6 +106,7 @@ use ody_app_server_protocol::WorkspaceProjectBindParams;
 use ody_app_server_protocol::WorkspaceProjectCloseParams;
 use ody_app_server_protocol::WorkspaceProjectGetParams;
 use ody_app_server_protocol::WorkspaceProjectListParams;
+use ody_app_server_protocol::WorkspaceProjectScanParams;
 use ody_client::default_client::ODY_INTERNAL_ORIGINATOR_OVERRIDE_ENV_VAR;
 use tokio::process::Command;
 
@@ -829,6 +830,15 @@ image_generation = true
     ) -> anyhow::Result<i64> {
         let params = Some(serde_json::to_value(params)?);
         self.send_request("workspace/project/close", params).await
+    }
+
+    /// Send a `workspace/project/scan` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_project_scan_request(
+        &mut self,
+        params: WorkspaceProjectScanParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/project/scan", params).await
     }
 
     /// Send a `thread/memoryMode/set` JSON-RPC request (v2, experimental).

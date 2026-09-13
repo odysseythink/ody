@@ -15,6 +15,10 @@ use ody_app_server_protocol::WorkspaceProjectGetParams;
 use ody_app_server_protocol::WorkspaceProjectListParams;
 use ody_app_server_protocol::WorkspaceProjectListResponse;
 use ody_app_server_protocol::WorkspaceProjectRef;
+use ody_app_server_protocol::WorkspaceDiscovery;
+use ody_app_server_protocol::WorkspaceProjectScanParams;
+use ody_app_server_protocol::WorkspaceProjectScanResponse;
+use ody_app_server_protocol::WorkspaceSourceKind;
 use ody_utils_absolute_path::test_support::PathBufExt;
 use tempfile::TempDir;
 use tokio::time::timeout;
@@ -359,5 +363,189 @@ async fn bind_restart_recovers_project_bindings() -> Result<()> {
     let listed: WorkspaceProjectListResponse = to_response(response)?;
     assert_eq!(listed.projects.len(), 1);
     assert_eq!(listed.projects[0].id, "ws-1");
+    Ok(())
+}
+
+fn write_fixture(root: &std::path::Path, relative: &str, contents: &str) {
+    let path = root.join(relative);
+    std::fs::create_dir_all(path.parent().expect("parent dir")).expect("create parent");
+    std::fs::write(path, contents).expect("write fixture file");
+}
+
+async fn scan_project(
+    mcp: &mut TestAppServer,
+    project_id: &str,
+) -> Result<WorkspaceDiscovery> {
+    let request_id = mcp
+        .send_workspace_project_scan_request(WorkspaceProjectScanParams {
+            project_id: project_id.to_owned(),
+        })
+        .await?;
+    let message = timeout(
+        DEFAULT_TIMEOUT,
+        mcp.read_stream_until_response_message(RequestId::Integer(request_id)),
+    )
+    .await??;
+    let response = message;
+    let payload: WorkspaceProjectScanResponse = to_response(response)?;
+    Ok(payload.discovery)
+}
+
+#[tokio::test]
+async fn workspace_project_scan_discovers_bound_project() -> Result<()> {
+    let ody_home = TempDir::new()?;
+    let project_dir = TempDir::new()?;
+    write_fixture(
+        project_dir.path(),
+        "package.json",
+        r#"{
+            "name": "storefront",
+            "scripts": { "dev": "vite", "build": "vite build" },
+            "dependencies": { "react": "^18.2.0" },
+            "devDependencies": { "vite": "^5.0.0" }
+        }"#,
+    );
+    write_fixture(project_dir.path(), "pnpm-lock.yaml", "lockfileVersion: 9\n");
+    write_fixture(project_dir.path(), "src/pages/Home.tsx", "export {}");
+    write_fixture(project_dir.path(), "src/components/Button.tsx", "export {}");
+
+    let mut mcp = TestAppServer::new(ody_home.path()).await?;
+    init_experimental(&mut mcp).await?;
+    let bind_id = mcp
+        .send_workspace_project_bind_request(bind_params(
+            "ws-1",
+            vec![project_dir.path().to_path_buf()],
+        ))
+        .await?;
+    read_project(&mut mcp, bind_id).await?;
+
+    let discovery = scan_project(&mut mcp, "ws-1").await?;
+    assert_eq!(discovery.project_id, "ws-1");
+    assert!(!discovery.truncated);
+    assert_eq!(discovery.roots.len(), 1);
+    let root = &discovery.roots[0];
+    assert_eq!(root.package_name.as_deref(), Some("storefront"));
+    assert_eq!(root.package_manager.as_deref(), Some("pnpm"));
+    let tech: Vec<&str> = root.tech_stack.iter().map(|t| t.id.as_str()).collect();
+    assert!(tech.contains(&"react"));
+    assert!(tech.contains(&"vite"));
+    let pages: Vec<&str> = root
+        .sources
+        .iter()
+        .filter(|s| s.kind == WorkspaceSourceKind::Page)
+        .map(|s| s.path.as_str())
+        .collect();
+    assert_eq!(pages, vec!["src/pages/Home.tsx"]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn workspace_project_scan_scans_all_roots() -> Result<()> {
+    let ody_home = TempDir::new()?;
+    let frontend = TempDir::new()?;
+    let backend = TempDir::new()?;
+    write_fixture(
+        frontend.path(),
+        "package.json",
+        r#"{ "name": "web", "scripts": { "dev": "vite" },
+             "dependencies": { "vue": "^3.4.0" } }"#,
+    );
+    write_fixture(
+        frontend.path(),
+        "src/views/Home.vue",
+        "<template></template>",
+    );
+    write_fixture(
+        backend.path(),
+        "package.json",
+        r#"{ "name": "api", "scripts": { "start": "node server.js" },
+             "dependencies": { "express": "^4.19.0" } }"#,
+    );
+    write_fixture(backend.path(), "server.js", "console.log('ok')");
+
+    let mut mcp = TestAppServer::new(ody_home.path()).await?;
+    init_experimental(&mut mcp).await?;
+    let bind_id = mcp
+        .send_workspace_project_bind_request(bind_params(
+            "ws-fullstack",
+            vec![frontend.path().to_path_buf(), backend.path().to_path_buf()],
+        ))
+        .await?;
+    let project = read_project(&mut mcp, bind_id).await?;
+    assert_eq!(
+        project.roots[1].role,
+        ody_app_server_protocol::WorkspaceRootRole::Secondary
+    );
+
+    let discovery = scan_project(&mut mcp, "ws-fullstack").await?;
+    assert_eq!(discovery.roots.len(), 2);
+    let frontend_root = &discovery.roots[0];
+    let backend_root = &discovery.roots[1];
+    assert_eq!(frontend_root.package_name.as_deref(), Some("web"));
+    assert!(frontend_root
+        .sources
+        .iter()
+        .any(|s| s.path == "src/views/Home.vue"));
+    assert_eq!(backend_root.package_name.as_deref(), Some("api"));
+    let backend_tech: Vec<&str> =
+        backend_root.tech_stack.iter().map(|t| t.id.as_str()).collect();
+    assert!(backend_tech.contains(&"express"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn workspace_project_scan_reports_removed_root_without_failing() -> Result<()> {
+    let ody_home = TempDir::new()?;
+    let project_dir = TempDir::new()?;
+    write_fixture(project_dir.path(), "package.json", r#"{ "name": "gone" }"#);
+    let root_path = project_dir.path().to_path_buf();
+
+    let mut mcp = TestAppServer::new(ody_home.path()).await?;
+    init_experimental(&mut mcp).await?;
+    let bind_id = mcp
+        .send_workspace_project_bind_request(bind_params("ws-1", vec![root_path.clone()]))
+        .await?;
+    read_project(&mut mcp, bind_id).await?;
+
+    // The project moved or was deleted after binding.
+    std::fs::remove_dir_all(&root_path)?;
+
+    let discovery = scan_project(&mut mcp, "ws-1").await?;
+    assert_eq!(discovery.roots.len(), 1);
+    assert_eq!(discovery.roots[0].errors.len(), 1);
+    assert!(
+        discovery.roots[0]
+            .errors[0]
+            .contains(root_path.to_str().expect("utf8 path")),
+        "{}",
+        discovery.roots[0].errors[0]
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn workspace_project_scan_rejects_unknown_project() -> Result<()> {
+    let ody_home = TempDir::new()?;
+    let mut mcp = TestAppServer::new(ody_home.path()).await?;
+    init_experimental(&mut mcp).await?;
+    let request_id = mcp
+        .send_workspace_project_scan_request(WorkspaceProjectScanParams {
+            project_id: "nope".to_owned(),
+        })
+        .await?;
+    let error = timeout(
+        DEFAULT_TIMEOUT,
+        mcp.read_stream_until_error_message(RequestId::Integer(request_id)),
+    )
+    .await??;
+    assert_eq!(error.error.code, -32602);
+    assert!(
+        error
+            .error
+            .message
+            .contains("unknown workspace project id: nope"),
+        "{}",
+        error.error.message
+    );
     Ok(())
 }
