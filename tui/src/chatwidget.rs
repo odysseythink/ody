@@ -339,6 +339,8 @@ use self::goal_status::GoalStatusState;
 #[cfg(test)]
 use self::goal_status::goal_status_indicator_from_app_goal;
 mod goal_menu;
+mod flows;
+use self::flows::FlowRuns;
 mod input_queue;
 use self::input_queue::InputQueueState;
 mod input_flow;
@@ -583,6 +585,9 @@ pub(crate) struct ChatWidget {
     turn_lifecycle: TurnLifecycleState,
     task_complete_pending: bool,
     unified_exec_processes: Vec<UnifiedExecProcessSummary>,
+    /// M4 `/flows` view: per-session flow run registry fed by
+    /// FlowPhase/FlowLog thread items.
+    flow_runs: FlowRuns,
     /// Tracks per-server MCP startup state while startup is in progress.
     ///
     /// The map is `Some(_)` from the first startup status update until the
@@ -1484,6 +1489,20 @@ impl ChatWidget {
             })
             .collect();
         self.add_to_history(history_cell::new_unified_exec_processes_output(processes));
+    }
+
+    /// M4 `/flows`: render the per-session flow run registry (read-only).
+    pub(crate) fn add_flows_output(&mut self) {
+        if self.flow_runs.is_empty() {
+            self.add_info_message("No flow runs in this session.".to_string(), /*hint*/ None);
+            return;
+        }
+        let mut lines = vec![ratatui::text::Line::from(format!(
+            "Flow runs ({})",
+            self.flow_runs.0.len()
+        ))];
+        lines.extend(self.flow_runs.render_lines());
+        self.add_plain_history_lines(lines);
     }
 
     fn clean_background_terminals(&mut self) {

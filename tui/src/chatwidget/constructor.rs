@@ -151,6 +151,7 @@ impl ChatWidget {
             turn_lifecycle: TurnLifecycleState::new(prevent_idle_sleep),
             task_complete_pending: false,
             unified_exec_processes: Vec::new(),
+            flow_runs: FlowRuns::default(),
             mcp_startup_status: None,
             mcp_startup_expected_servers: None,
             mcp_startup_ignore_updates_until_next_start: false,

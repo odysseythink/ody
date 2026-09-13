@@ -176,6 +176,9 @@ fn web_search_chip_summary(content_items: &[DynamicToolCallOutputContentItem]) -
 
 fn fallback_transcript_cell(item: &ThreadItem) -> Option<PlainHistoryCell> {
     let lines = match item {
+        ThreadItem::FlowLog { message, .. } => {
+            vec![vec!["flow: ".dim(), message.clone().into()].into()]
+        }
         ThreadItem::HookPrompt { fragments, .. } => fragments
             .iter()
             .map(|fragment| {

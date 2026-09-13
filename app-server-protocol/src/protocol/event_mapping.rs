@@ -527,6 +527,20 @@ pub fn item_event_to_server_notification(
                 completed_at_ms: event.completed_at_ms,
             })
         }
+        EventMsg::FlowLog(event) => {
+            // Script-carrier progress line (M4): append-only, unique id.
+            let item = ThreadItem::FlowLog {
+                id: format!("{}:log-{}", event.call_id, event.occurred_at_ms),
+                flow_name: Some(event.flow_name),
+                message: event.message,
+            };
+            ServerNotification::ItemCompleted(ItemCompletedNotification {
+                thread_id,
+                turn_id,
+                item,
+                completed_at_ms: event.occurred_at_ms,
+            })
+        }
         _ => unreachable!("unsupported item event"),
     }
 }
@@ -769,6 +783,37 @@ mod tests {
                         total_steps: 2,
                         completed_steps: 1,
                         finished: true,
+                    }
+                );
+            }
+            other => panic!("expected ItemCompleted notification, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn flow_log_event_maps_to_append_only_flow_log_item() {
+        // M4: script-carrier progress lines reach v2 clients as unique-id
+        // FlowLog items (append-only), so /flows-style views can accumulate
+        // them per run.
+        let notification = item_event_to_server_notification(
+            EventMsg::FlowLog(ody_protocol::protocol::FlowLogEvent {
+                call_id: "flow-run-7".to_string(),
+                flow_name: "audit".to_string(),
+                message: "planning done".to_string(),
+                occurred_at_ms: 42,
+            }),
+            "thread-1",
+            "turn-1",
+        );
+        match notification {
+            ServerNotification::ItemCompleted(payload) => {
+                assert_eq!(payload.completed_at_ms, 42);
+                assert_eq!(
+                    payload.item,
+                    ThreadItem::FlowLog {
+                        id: "flow-run-7:log-42".to_string(),
+                        flow_name: Some("audit".to_string()),
+                        message: "planning done".to_string(),
                     }
                 );
             }

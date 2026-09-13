@@ -407,6 +407,19 @@ pub enum ThreadItem {
         completed_steps: u32,
         finished: bool,
     },
+    /// Flow skill progress (M4): one free-form progress line from a script
+    /// carrier (`flow.star` / `workflow.js` `phase()`/`log()`). Append-only:
+    /// arrives as `ItemCompleted` with a unique id, so clients accumulate
+    /// lines per run instead of updating a row.
+    #[serde(rename_all = "camelCase")]
+    #[ts(rename_all = "camelCase")]
+    FlowLog {
+        id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        flow_name: Option<String>,
+        message: String,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
@@ -446,7 +459,8 @@ impl ThreadItem {
             | ThreadItem::EnteredReviewMode { id, .. }
             | ThreadItem::ExitedReviewMode { id, .. }
             | ThreadItem::ContextCompaction { id, .. }
-            | ThreadItem::FlowPhase { id, .. } => id,
+            | ThreadItem::FlowPhase { id, .. }
+            | ThreadItem::FlowLog { id, .. } => id,
         }
     }
 }

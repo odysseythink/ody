@@ -1776,6 +1776,37 @@
           ],
           "title": "FlowPhaseThreadItem",
           "type": "object"
+        },
+        {
+          "description": "Flow skill progress (M4): one free-form progress line from a script carrier (`flow.star` / `workflow.js` `phase()`/`log()`). Append-only: arrives as `ItemCompleted` with a unique id, so clients accumulate lines per run instead of updating a row.",
+          "properties": {
+            "flowName": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "type": {
+              "enum": [
+                "flowLog"
+              ],
+              "title": "FlowLogThreadItemType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "message",
+            "type"
+          ],
+          "title": "FlowLogThreadItem",
+          "type": "object"
         }
       ]
     },

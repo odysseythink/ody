@@ -188,6 +188,9 @@ fn activity_summary(item: &ThreadItem) -> Option<String> {
                 "Flow phase '{phase_id}' · {completed_steps}/{total_steps} steps"
             ));
         }
+        ThreadItem::FlowLog { message, .. } => {
+            return bounded_summary(&format!("Flow: {message}"));
+        }
         ThreadItem::ImageView { path, .. } => {
             return bounded_summary(&format!("Viewed {}", path.display()));
         }

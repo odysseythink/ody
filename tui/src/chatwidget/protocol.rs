@@ -318,6 +318,7 @@ impl ChatWidget {
             }),
             item @ ThreadItem::SubAgentActivity { .. } => self.on_sub_agent_activity(item),
             item @ ThreadItem::FlowPhase { .. } => self.on_flow_phase_item(item),
+            item @ ThreadItem::FlowLog { .. } => self.on_flow_log_item(item),
             ThreadItem::EnteredReviewMode { review, .. } if !from_replay => {
                 self.enter_review_mode_with_hint(review, /*from_replay*/ false);
             }

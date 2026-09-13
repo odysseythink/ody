@@ -866,6 +866,7 @@ pub(crate) async fn apply_bespoke_event_handling(
         | EventMsg::FlowPhaseBegin(_)
         | EventMsg::FlowStepCompleted(_)
         | EventMsg::FlowPhaseEnd(_)
+        | EventMsg::FlowLog(_)
         | EventMsg::CollabAgentSpawnBegin(_)
         | EventMsg::CollabAgentSpawnEnd(_)
         | EventMsg::CollabAgentInteractionBegin(_)

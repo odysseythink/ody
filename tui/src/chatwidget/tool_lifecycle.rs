@@ -114,11 +114,22 @@ impl ChatWidget {
 
     pub(super) fn on_flow_phase_item(&mut self, item: ThreadItem) {
         self.record_visible_turn_activity();
+        // M4 /flows: keep the per-session run registry current even for
+        // intermediate step-count updates.
+        self.flow_runs.record_item(&item);
         // Intermediate step bumps render nothing (the count updates in the
         // agent status feed); only begin/end rows become history cells.
         if let Some(cell) = multi_agents::flow_phase_history_cell(&item) {
             self.on_collab_event(cell);
         }
+    }
+
+    /// M4: script-carrier progress line (`flow.star` / `workflow.js`
+    /// `phase()`/`log()`). Feeds the `/flows` registry only — no history
+    /// cell, matching the yaml carrier's intermediate-update behavior.
+    pub(super) fn on_flow_log_item(&mut self, item: ThreadItem) {
+        self.record_visible_turn_activity();
+        self.flow_runs.record_item(&item);
     }
 
     pub(crate) fn handle_file_change_completed_now(&mut self, item: ThreadItem) {
