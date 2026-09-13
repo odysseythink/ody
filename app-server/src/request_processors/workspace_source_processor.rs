@@ -27,6 +27,7 @@ use ody_app_server_protocol::WorkspaceChangeSetStatus;
 use ody_app_server_protocol::WorkspaceFileChangeKind;
 use ody_app_server_protocol::WorkspaceGitDiff;
 use ody_app_server_protocol::WorkspaceProjectRef;
+use ody_app_server_protocol::WorkspaceRootGitDiff;
 use ody_app_server_protocol::WorkspaceSourceDiffParams;
 use ody_app_server_protocol::WorkspaceSourceDiffResponse;
 use ody_app_server_protocol::WorkspaceSourceIndexParams;
@@ -37,6 +38,7 @@ use ody_app_server_protocol::WorkspaceSourceResolveParams;
 use ody_app_server_protocol::WorkspaceSourceResolveResponse;
 use ody_app_server_protocol::WorkspaceSourceValidateParams;
 use ody_app_server_protocol::WorkspaceSourceValidateResponse;
+use ody_app_server_protocol::WorkspaceValidationCheck;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -434,11 +436,25 @@ impl WorkspaceSourceRequestProcessor {
                 })
                 .collect::<Vec<_>>())
         })?;
-        let git_diff = project_git_diff(&project).await;
+        let mut root_git_diffs: Vec<WorkspaceRootGitDiff> = Vec::new();
+        for (index, root) in project.roots.iter().enumerate() {
+            if let Some(git) = root_git_diff(Path::new(&root.path)).await {
+                root_git_diffs.push(WorkspaceRootGitDiff {
+                    root_index: index as u32,
+                    git,
+                });
+            }
+        }
+        // Back-compat (ADR decision 9): the legacy field carries the
+        // primary root's diff exactly as E1 produced it.
+        let git_diff = root_git_diffs
+            .first()
+            .filter(|entry| entry.root_index == 0)
+            .map(|entry| entry.git.clone());
         Ok(WorkspaceSourceDiffResponse {
             changesets,
             git_diff,
-            root_git_diffs: Vec::new(),
+            root_git_diffs,
         })
     }
 
@@ -460,6 +476,15 @@ impl WorkspaceSourceRequestProcessor {
             if check.script.trim().is_empty() {
                 return Err(invalid_params("check script must not be empty"));
             }
+        }
+        // E3: resolve every check's root up front; an out-of-bounds index
+        // fails the whole request before anything spawns (ADR decision 8).
+        let mut checks_with_roots: Vec<(PathBuf, WorkspaceValidationCheck)> =
+            Vec::with_capacity(params.checks.len());
+        for check in &params.checks {
+            let root = crate::workspace_validation::resolve_check_root(&project, check.root_index)
+                .map_err(invalid_params)?;
+            checks_with_roots.push((PathBuf::from(&root.path), check.clone()));
         }
         let timeout_ms = params
             .timeout_ms
@@ -485,17 +510,7 @@ impl WorkspaceSourceRequestProcessor {
                 )));
             }
         }
-        // E1: checks run in the primary root. Cross-root aggregation is E3.
-        let root = project
-            .roots
-            .first()
-            .ok_or_else(|| invalid_params("project has no roots"))?;
-        let report = crate::workspace_validation::run_checks(
-            Path::new(&root.path),
-            &params.checks,
-            timeout_ms,
-        )
-        .await;
+        let report = crate::workspace_validation::run_checks(&checks_with_roots, timeout_ms).await;
         Ok(WorkspaceSourceValidateResponse {
             project_id: params.project_id,
             changeset_id: params.changeset_id,
@@ -649,9 +664,8 @@ fn rebuild_prepared(
     Ok(prepared)
 }
 
-async fn project_git_diff(project: &WorkspaceProjectRef) -> Option<WorkspaceGitDiff> {
-    let primary = project.roots.first()?;
-    let repo_root = ody_git_utils::get_git_repo_root(Path::new(&primary.path))?;
+async fn root_git_diff(root_path: &Path) -> Option<WorkspaceGitDiff> {
+    let repo_root = ody_git_utils::get_git_repo_root(root_path)?;
     let result = tokio::time::timeout(
         Duration::from_millis(GIT_DIFF_TIMEOUT_MS),
         tokio::process::Command::new("git")
@@ -810,5 +824,32 @@ mod tests {
         let rebuilt = rebuild_prepared(&project, reloaded).expect("rebuild prepared");
         assert_eq!(rebuilt.len(), 1);
         assert_eq!(rebuilt[0].base_content.as_deref(), Some(base.as_str()));
+    }
+
+    #[test]
+    fn diff_response_keeps_legacy_primary_git_diff_field() {
+        // Back-compat contract (ADR decision 9): the additive rootGitDiffs
+        // aggregation must not disturb the primary-root gitDiff field shape.
+        let response = WorkspaceSourceDiffResponse {
+            changesets: vec![],
+            git_diff: Some(WorkspaceGitDiff {
+                repo_root: Some("/repo/frontend".to_owned()),
+                available: true,
+                error: None,
+                unified_diff: Some("diff --git a/x b/x\n".to_owned()),
+            }),
+            root_git_diffs: vec![WorkspaceRootGitDiff {
+                root_index: 0,
+                git: WorkspaceGitDiff {
+                    repo_root: Some("/repo/frontend".to_owned()),
+                    available: true,
+                    error: None,
+                    unified_diff: Some("diff --git a/x b/x\n".to_owned()),
+                },
+            }],
+        };
+        assert!(response.git_diff.is_some());
+        assert_eq!(response.root_git_diffs.len(), 1);
+        assert_eq!(response.root_git_diffs[0].root_index, 0);
     }
 }
