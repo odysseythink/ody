@@ -4840,6 +4840,14 @@
         "mode"
       ],
       "type": "object"
+    },
+    "WorkspaceSourceQueryKind": {
+      "enum": [
+        "name",
+        "symbol",
+        "routePath"
+      ],
+      "type": "string"
     }
   },
   "description": "Request from the client to the server.",

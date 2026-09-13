@@ -23,7 +23,7 @@ pub(crate) const MAX_DEPTH: u32 = 12;
 pub(crate) const MAX_PACKAGE_JSON_BYTES: u64 = 1024 * 1024;
 pub(crate) const MAX_SOURCES_PER_KIND: usize = 500;
 
-const SKIP_DIRS: &[&str] = &[
+pub(crate) const SKIP_DIRS: &[&str] = &[
     "node_modules",
     ".git",
     "dist",
@@ -39,7 +39,7 @@ const SKIP_DIRS: &[&str] = &[
     "__pycache__",
 ];
 
-const SOURCE_EXTENSIONS: &[&str] = &["ts", "tsx", "js", "jsx", "vue", "svelte"];
+pub(crate) const SOURCE_EXTENSIONS: &[&str] = &["ts", "tsx", "js", "jsx", "vue", "svelte"];
 
 /// Lockfile name -> package manager id, in priority order.
 const PACKAGE_MANAGERS: &[(&str, &str)] = &[
@@ -197,10 +197,42 @@ fn push_source(state: &mut ScanState, source: WorkspaceSourceEntry) {
     state.sources.push(source);
 }
 
+/// UI framework signal ids considered for SourceArtifact.framework.
+const UI_FRAMEWORKS: &[&str] = &[
+    "next", "react", "vue", "svelte", "angular", "solid", "astro",
+];
+
+/// First UI framework signal declared by the root's package.json, if any.
+/// Used by the source index to tag artifacts; returns None for backend-only
+/// or vanilla roots.
+pub(crate) fn detect_framework(root: &Path) -> Option<String> {
+    let manifest = fs::read(root.join("package.json")).ok()?;
+    if manifest.len() as u64 > MAX_PACKAGE_JSON_BYTES {
+        return None;
+    }
+    let value: serde_json::Value = serde_json::from_slice(&manifest).ok()?;
+    // Flatten declared dependency names once, then match in UI_FRAMEWORKS order.
+    let mut declared: Vec<&str> = Vec::new();
+    for key in ["dependencies", "devDependencies"] {
+        if let Some(deps) = value.get(key).and_then(|d| d.as_object()) {
+            declared.extend(deps.keys().map(String::as_str));
+        }
+    }
+    for &fw in UI_FRAMEWORKS {
+        if TECH_SIGNALS
+            .iter()
+            .any(|(id, names)| id == &fw && names.iter().any(|n| declared.contains(n)))
+        {
+            return Some(fw.to_owned());
+        }
+    }
+    None
+}
+
 /// Classify one visited file (path relative to the scanned root) against
 /// directory conventions. Returns `None` for files that match no convention
 /// (most source files).
-fn classify_source(relative: &Path) -> Option<WorkspaceSourceEntry> {
+pub(crate) fn classify_source(relative: &Path) -> Option<WorkspaceSourceEntry> {
     let extension = relative.extension()?.to_string_lossy();
     if !SOURCE_EXTENSIONS.contains(&extension.as_ref()) {
         return None;

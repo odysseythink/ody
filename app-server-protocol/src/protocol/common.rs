@@ -815,6 +815,18 @@ client_request_definitions! {
         serialization: global_shared_read("workspace-project"),
         response: v2::WorkspaceProjectScanResponse,
     },
+    #[experimental("workspace/source/v1")]
+    WorkspaceSourceIndex => "workspace/source/index" {
+        params: v2::WorkspaceSourceIndexParams,
+        serialization: global_shared_read("workspace-source"),
+        response: v2::WorkspaceSourceIndexResponse,
+    },
+    #[experimental("workspace/source/v1")]
+    WorkspaceSourceResolve => "workspace/source/resolve" {
+        params: v2::WorkspaceSourceResolveParams,
+        serialization: global_shared_read("workspace-source"),
+        response: v2::WorkspaceSourceResolveResponse,
+    },
     SkillsConfigWrite => "skills/config/write" {
         params: v2::SkillsConfigWriteParams,
         serialization: global("config"),

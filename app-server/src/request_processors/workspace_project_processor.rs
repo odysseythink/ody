@@ -43,9 +43,9 @@ pub(crate) struct WorkspaceProjectRequestProcessor {
 }
 
 #[derive(Default, Serialize, Deserialize)]
-struct WorkspaceProjectStore {
+pub(crate) struct WorkspaceProjectStore {
     schema_version: u32,
-    projects: BTreeMap<String, WorkspaceProjectRef>,
+    pub(crate) projects: BTreeMap<String, WorkspaceProjectRef>,
     /// Namespaced idempotency key (`"bind:{key}"`) -> project id.
     idempotency: BTreeMap<String, String>,
     #[serde(skip)]
@@ -60,6 +60,12 @@ impl WorkspaceProjectRequestProcessor {
             ody_home,
             store: Arc::new(Mutex::new(store)),
         }
+    }
+
+    /// Shared handle so sibling processors (workspace/source) can read binding
+    /// records without a second store instance on the same file.
+    pub(crate) fn store_handle(&self) -> Arc<Mutex<WorkspaceProjectStore>> {
+        self.store.clone()
     }
 
     pub(crate) async fn bind(

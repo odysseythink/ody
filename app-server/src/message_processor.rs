@@ -39,6 +39,7 @@ use crate::request_processors::ThreadRequestProcessor;
 use crate::request_processors::TurnRequestProcessor;
 use crate::request_processors::VisualWorkspaceRequestProcessor;
 use crate::request_processors::WorkspaceProjectRequestProcessor;
+use crate::request_processors::WorkspaceSourceRequestProcessor;
 use crate::request_processors::WindowsSandboxRequestProcessor;
 use crate::request_serialization::QueuedInitializedRequest;
 use crate::request_serialization::RequestSerializationQueueKey;
@@ -124,6 +125,7 @@ pub(crate) struct MessageProcessor {
     windows_sandbox_processor: WindowsSandboxRequestProcessor,
     visual_workspace_processor: VisualWorkspaceRequestProcessor,
     workspace_project_processor: WorkspaceProjectRequestProcessor,
+    workspace_source_processor: WorkspaceSourceRequestProcessor,
     request_serialization_queues: RequestSerializationQueues,
 }
 
@@ -452,6 +454,9 @@ impl MessageProcessor {
             config.ody_home.to_path_buf(),
         );
 
+        let workspace_source_processor =
+            WorkspaceSourceRequestProcessor::new(workspace_project_processor.store_handle());
+
         Self {
             outgoing,
             models_refresh_worker,
@@ -477,6 +482,7 @@ impl MessageProcessor {
             windows_sandbox_processor,
             visual_workspace_processor,
             workspace_project_processor,
+            workspace_source_processor,
             request_serialization_queues: RequestSerializationQueues::default(),
         }
     }
@@ -985,6 +991,16 @@ impl MessageProcessor {
             ClientRequest::WorkspaceProjectScan { params, .. } => self
                 .workspace_project_processor
                 .scan(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceSourceIndex { params, .. } => self
+                .workspace_source_processor
+                .index(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceSourceResolve { params, .. } => self
+                .workspace_source_processor
+                .resolve(params)
                 .await
                 .map(|response| Some(response.into())),
             ClientRequest::ModelProviderCapabilitiesRead { params: _, .. } => self

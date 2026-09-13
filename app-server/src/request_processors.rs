@@ -432,7 +432,7 @@ mod token_usage_replay;
 mod turn_processor;
 mod visual_workspace_processor;
 mod windows_sandbox_processor;
-mod workspace_project_processor;
+pub(crate) mod workspace_project_processor;
 
 pub(crate) use apps_processor::AppsRequestProcessor;
 pub(crate) use catalog_processor::CatalogRequestProcessor;
@@ -455,6 +455,8 @@ pub(crate) use turn_processor::TurnRequestProcessor;
 pub(crate) use visual_workspace_processor::VisualWorkspaceRequestProcessor;
 pub(crate) use windows_sandbox_processor::WindowsSandboxRequestProcessor;
 pub(crate) use workspace_project_processor::WorkspaceProjectRequestProcessor;
+pub(crate) mod workspace_source_processor;
+pub(crate) use workspace_source_processor::WorkspaceSourceRequestProcessor;
 
 use crate::error_code::internal_error;
 use crate::error_code::invalid_request;

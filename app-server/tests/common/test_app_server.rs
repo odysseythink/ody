@@ -107,6 +107,8 @@ use ody_app_server_protocol::WorkspaceProjectCloseParams;
 use ody_app_server_protocol::WorkspaceProjectGetParams;
 use ody_app_server_protocol::WorkspaceProjectListParams;
 use ody_app_server_protocol::WorkspaceProjectScanParams;
+use ody_app_server_protocol::WorkspaceSourceIndexParams;
+use ody_app_server_protocol::WorkspaceSourceResolveParams;
 use ody_client::default_client::ODY_INTERNAL_ORIGINATOR_OVERRIDE_ENV_VAR;
 use tokio::process::Command;
 
@@ -839,6 +841,24 @@ image_generation = true
     ) -> anyhow::Result<i64> {
         let params = Some(serde_json::to_value(params)?);
         self.send_request("workspace/project/scan", params).await
+    }
+
+    /// Send a `workspace/source/index` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_source_index_request(
+        &mut self,
+        params: WorkspaceSourceIndexParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/source/index", params).await
+    }
+
+    /// Send a `workspace/source/resolve` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_source_resolve_request(
+        &mut self,
+        params: WorkspaceSourceResolveParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/source/resolve", params).await
     }
 
     /// Send a `thread/memoryMode/set` JSON-RPC request (v2, experimental).

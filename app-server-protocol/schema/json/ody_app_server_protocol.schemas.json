@@ -20311,6 +20311,44 @@
         ],
         "type": "object"
       },
+      "WorkspaceSourceArtifact": {
+        "properties": {
+          "framework": {
+            "description": "Framework signal id from discovery, e.g. \"react\", \"vue\", \"next\".",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "Stable id: \"{kind}:{root_index}:{path}\".",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/definitions/v2/WorkspaceSourceKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "description": "Path relative to the owning root, `/`-separated.",
+            "type": "string"
+          },
+          "routePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "path"
+        ],
+        "type": "object"
+      },
       "WorkspaceSourceEntry": {
         "properties": {
           "kind": {
@@ -20339,6 +20377,49 @@
         ],
         "type": "object"
       },
+      "WorkspaceSourceIndex": {
+        "properties": {
+          "artifacts": {
+            "description": "Artifacts and refs are parallel 1:1 vectors.",
+            "items": {
+              "$ref": "#/definitions/v2/WorkspaceSourceArtifact"
+            },
+            "type": "array"
+          },
+          "errors": {
+            "description": "Per-root diagnosable problems; remaining roots still index.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "indexedAtMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "refs": {
+            "items": {
+              "$ref": "#/definitions/v2/WorkspaceSourceRef"
+            },
+            "type": "array"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "artifacts",
+          "errors",
+          "indexedAtMs",
+          "projectId",
+          "refs",
+          "truncated"
+        ],
+        "type": "object"
+      },
       "WorkspaceSourceKind": {
         "enum": [
           "page",
@@ -20346,6 +20427,103 @@
           "route"
         ],
         "type": "string"
+      },
+      "WorkspaceSourceQueryKind": {
+        "enum": [
+          "name",
+          "symbol",
+          "routePath"
+        ],
+        "type": "string"
+      },
+      "WorkspaceSourceRange": {
+        "properties": {
+          "endLine": {
+            "description": "1-based inclusive end line of the symbol block.",
+            "format": "uint32",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "startLine": {
+            "description": "1-based inclusive start line of the symbol block.",
+            "format": "uint32",
+            "minimum": 0.0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "endLine",
+          "startLine"
+        ],
+        "type": "object"
+      },
+      "WorkspaceSourceRef": {
+        "properties": {
+          "artifactId": {
+            "type": "string"
+          },
+          "contentHash": {
+            "description": "sha256 hex of the ranged content (whole file when range is None).",
+            "type": "string"
+          },
+          "fileHash": {
+            "description": "sha256 hex of the whole file.",
+            "type": "string"
+          },
+          "filePath": {
+            "description": "Path relative to the owning root, `/`-separated.",
+            "type": "string"
+          },
+          "range": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/v2/WorkspaceSourceRange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "1-based inclusive line range of the symbol block; None = whole file."
+          },
+          "rootPath": {
+            "description": "Canonicalized owning root path from the binding record.",
+            "type": "string"
+          },
+          "routePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "symbol": {
+            "description": "Export symbol name; file stem when no export is found.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactId",
+          "contentHash",
+          "fileHash",
+          "filePath",
+          "rootPath",
+          "symbol"
+        ],
+        "type": "object"
+      },
+      "WorkspaceSourceResolveMatch": {
+        "properties": {
+          "artifact": {
+            "$ref": "#/definitions/v2/WorkspaceSourceArtifact"
+          },
+          "sourceRef": {
+            "$ref": "#/definitions/v2/WorkspaceSourceRef"
+          }
+        },
+        "required": [
+          "artifact",
+          "sourceRef"
+        ],
+        "type": "object"
       },
       "WorkspaceTechEntry": {
         "properties": {
