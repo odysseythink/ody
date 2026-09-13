@@ -328,11 +328,131 @@ pub struct WorkspaceSourceDiffResponse {
     pub git_diff: Option<WorkspaceGitDiff>,
 }
 
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum WorkspaceValidationKind {
+    Format,
+    Typecheck,
+    Build,
+    Test,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceValidationCheck {
+    pub kind: WorkspaceValidationKind,
+    /// Script name from the root's package.json (E0 scan `scripts`).
+    /// The runtime does not guess script mappings (narrow protocol).
+    pub script: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum WorkspaceValidationStatus {
+    Succeeded,
+    Failed,
+    TimedOut,
+    SpawnError,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceValidationRun {
+    pub kind: WorkspaceValidationKind,
+    pub script: String,
+    pub status: WorkspaceValidationStatus,
+    pub exit_code: Option<i32>,
+    /// Trailing stdout bytes, capped at 64 KiB.
+    pub stdout_tail: String,
+    /// Trailing stderr bytes, capped at 64 KiB.
+    pub stderr_tail: String,
+    #[ts(type = "number")]
+    pub started_at_ms: i64,
+    #[ts(type = "number")]
+    pub duration_ms: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum WorkspaceValidationOverall {
+    Succeeded,
+    Failed,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceValidationReport {
+    pub runs: Vec<WorkspaceValidationRun>,
+    pub overall: WorkspaceValidationOverall,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceSourceValidateParams {
+    pub project_id: String,
+    /// Optional changeset association; echoed in the response only. The
+    /// changeset must exist and belong to the project.
+    pub changeset_id: Option<String>,
+    pub checks: Vec<WorkspaceValidationCheck>,
+    /// Per-check timeout; defaults to 120s, clamped to [1s, 600s].
+    #[ts(optional = nullable)]
+    pub timeout_ms: Option<i64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceSourceValidateResponse {
+    pub project_id: String,
+    pub changeset_id: Option<String>,
+    pub report: WorkspaceValidationReport,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ClientRequest;
     use crate::RequestId;
+
+    #[test]
+    fn workspace_source_validate_has_stable_wire_name_and_is_experimental() {
+        let request = ClientRequest::WorkspaceSourceValidate {
+            request_id: RequestId::Integer(40),
+            params: WorkspaceSourceValidateParams {
+                project_id: "ws-1".to_owned(),
+                changeset_id: Some("cs-1".to_owned()),
+                checks: vec![
+                    WorkspaceValidationCheck {
+                        kind: WorkspaceValidationKind::Build,
+                        script: "build".to_owned(),
+                    },
+                    WorkspaceValidationCheck {
+                        kind: WorkspaceValidationKind::Typecheck,
+                        script: "typecheck".to_owned(),
+                    },
+                ],
+                timeout_ms: Some(60_000),
+            },
+        };
+
+        assert_eq!(request.method(), "workspace/source/validate");
+        assert_eq!(
+            crate::experimental_api::ExperimentalApi::experimental_reason(&request),
+            Some("workspace/source/v1")
+        );
+        let value = serde_json::to_value(request).expect("serialize validate");
+        assert_eq!(value["params"]["checks"][0]["kind"], "build");
+        assert_eq!(value["params"]["checks"][1]["script"], "typecheck");
+        assert_eq!(value["params"]["timeoutMs"], 60_000);
+    }
 
     #[test]
     fn workspace_source_index_has_stable_wire_name_and_is_experimental() {

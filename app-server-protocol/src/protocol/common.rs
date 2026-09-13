@@ -869,6 +869,12 @@ client_request_definitions! {
         serialization: global_shared_read("workspace-source"),
         response: v2::WorkspaceSourceDiffResponse,
     },
+    #[experimental("workspace/source/v1")]
+    WorkspaceSourceValidate => "workspace/source/validate" {
+        params: v2::WorkspaceSourceValidateParams,
+        serialization: global("workspace-source"),
+        response: v2::WorkspaceSourceValidateResponse,
+    },
     SkillsConfigWrite => "skills/config/write" {
         params: v2::SkillsConfigWriteParams,
         serialization: global("config"),

@@ -35,6 +35,8 @@ use ody_app_server_protocol::WorkspaceSourceQueryKind;
 use ody_app_server_protocol::WorkspaceSourceResolveMatch;
 use ody_app_server_protocol::WorkspaceSourceResolveParams;
 use ody_app_server_protocol::WorkspaceSourceResolveResponse;
+use ody_app_server_protocol::WorkspaceSourceValidateParams;
+use ody_app_server_protocol::WorkspaceSourceValidateResponse;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -424,6 +426,62 @@ impl WorkspaceSourceRequestProcessor {
         Ok(WorkspaceSourceDiffResponse {
             changesets,
             git_diff,
+        })
+    }
+
+    pub(crate) async fn validate(
+        &self,
+        params: WorkspaceSourceValidateParams,
+    ) -> Result<WorkspaceSourceValidateResponse, JSONRPCErrorError> {
+        let project = self.project(&params.project_id)?;
+        if params.checks.is_empty() {
+            return Err(invalid_params("validate requires at least one check"));
+        }
+        if params.checks.len() > crate::workspace_validation::MAX_VALIDATION_CHECKS {
+            return Err(invalid_params(format!(
+                "validate accepts at most {} checks",
+                crate::workspace_validation::MAX_VALIDATION_CHECKS
+            )));
+        }
+        for check in &params.checks {
+            if check.script.trim().is_empty() {
+                return Err(invalid_params("check script must not be empty"));
+            }
+        }
+        let timeout_ms = params
+            .timeout_ms
+            .unwrap_or(crate::workspace_validation::VALIDATE_DEFAULT_TIMEOUT_MS)
+            .clamp(1_000, crate::workspace_validation::VALIDATE_MAX_TIMEOUT_MS);
+        // changeset association is display-only but must be valid.
+        if let Some(changeset_id) = &params.changeset_id {
+            let (found, belongs) = self.with_store(|store| {
+                Ok(match store.changesets.get(changeset_id) {
+                    Some(stored) => (true, stored.change_set.project_id == params.project_id),
+                    None => (false, false),
+                })
+            })?;
+            if !found {
+                return Err(invalid_params(format!("unknown changeset id: {changeset_id}")));
+            }
+            if !belongs {
+                return Err(invalid_params(format!(
+                    "changeset {changeset_id} does not belong to project {}",
+                    params.project_id
+                )));
+            }
+        }
+        // E1: checks run in the primary root. Cross-root aggregation is E3.
+        let root = project
+            .roots
+            .first()
+            .ok_or_else(|| invalid_params("project has no roots"))?;
+        let report =
+            crate::workspace_validation::run_checks(Path::new(&root.path), &params.checks, timeout_ms)
+                .await;
+        Ok(WorkspaceSourceValidateResponse {
+            project_id: params.project_id,
+            changeset_id: params.changeset_id,
+            report,
         })
     }
 

@@ -18602,6 +18602,111 @@
       ],
       "type": "object"
     },
+    "WorkspaceValidationCheck": {
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/WorkspaceValidationKind"
+        },
+        "script": {
+          "description": "Script name from the root's package.json (E0 scan `scripts`). The runtime does not guess script mappings (narrow protocol).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "script"
+      ],
+      "type": "object"
+    },
+    "WorkspaceValidationKind": {
+      "enum": [
+        "format",
+        "typecheck",
+        "build",
+        "test"
+      ],
+      "type": "string"
+    },
+    "WorkspaceValidationOverall": {
+      "enum": [
+        "succeeded",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "WorkspaceValidationReport": {
+      "properties": {
+        "overall": {
+          "$ref": "#/definitions/WorkspaceValidationOverall"
+        },
+        "runs": {
+          "items": {
+            "$ref": "#/definitions/WorkspaceValidationRun"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "overall",
+        "runs"
+      ],
+      "type": "object"
+    },
+    "WorkspaceValidationRun": {
+      "properties": {
+        "durationMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "exitCode": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/definitions/WorkspaceValidationKind"
+        },
+        "script": {
+          "type": "string"
+        },
+        "startedAtMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/definitions/WorkspaceValidationStatus"
+        },
+        "stderrTail": {
+          "description": "Trailing stderr bytes, capped at 64 KiB.",
+          "type": "string"
+        },
+        "stdoutTail": {
+          "description": "Trailing stdout bytes, capped at 64 KiB.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "durationMs",
+        "kind",
+        "script",
+        "startedAtMs",
+        "status",
+        "stderrTail",
+        "stdoutTail"
+      ],
+      "type": "object"
+    },
+    "WorkspaceValidationStatus": {
+      "enum": [
+        "succeeded",
+        "failed",
+        "timedOut",
+        "spawnError"
+      ],
+      "type": "string"
+    },
     "WriteStatus": {
       "enum": [
         "ok",

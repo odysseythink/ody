@@ -30,6 +30,12 @@ use ody_app_server_protocol::WorkspaceSourceResolveParams;
 use ody_app_server_protocol::WorkspaceSourceDiffParams;
 use ody_app_server_protocol::WorkspaceSourceDiffResponse;
 use ody_app_server_protocol::WorkspaceSourceResolveResponse;
+use ody_app_server_protocol::WorkspaceSourceValidateParams;
+use ody_app_server_protocol::WorkspaceSourceValidateResponse;
+use ody_app_server_protocol::WorkspaceValidationCheck;
+use ody_app_server_protocol::WorkspaceValidationKind;
+use ody_app_server_protocol::WorkspaceValidationOverall;
+use ody_app_server_protocol::WorkspaceValidationStatus;
 use ody_utils_absolute_path::test_support::PathBufExt;
 use tempfile::TempDir;
 use tokio::time::timeout;
@@ -1178,5 +1184,297 @@ async fn changeset_list_scopes_to_project_and_orders_newest_first() -> Result<()
     .await??;
     let listed = to_response::<ListEnvelope>(message)?.changesets;
     assert!(listed.is_empty());
+    Ok(())
+}
+
+fn node_available() -> bool {
+    std::process::Command::new("node")
+        .arg("--version")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
+/// Fixture with node-based scripts that need no `npm install`.
+fn node_scripts_fixture() -> Result<TempDir> {
+    let dir = TempDir::new()?;
+    fs::write(
+        dir.path().join("package.json"),
+        serde_json::json!({
+            "name": "validate-fixture",
+            "scripts": {
+                "build": "node -e \"console.log('build ok')\"",
+                "test": "node -e \"console.log('tests ok'); process.exit(0)\"",
+                "typecheck": "node -e \"process.exit(3)\"",
+                "lint": "node --check src/index.js",
+                "slow": "node -e \"setTimeout(() => {}, 60000)\"",
+                "missing": "node -e \"process.exit(0)\""
+            }
+        })
+        .to_string(),
+    )?;
+    let src = dir.path().join("src");
+    fs::create_dir_all(&src)?;
+    fs::write(src.join("index.js"), "module.exports = 1;\n")?;
+    Ok(dir)
+}
+
+async fn read_validate(
+    mcp: &mut TestAppServer,
+    request_id: i64,
+) -> Result<WorkspaceSourceValidateResponse> {
+    let message = timeout(
+        DEFAULT_TIMEOUT,
+        mcp.read_stream_until_response_message(RequestId::Integer(request_id)),
+    )
+    .await??;
+    Ok(to_response::<WorkspaceSourceValidateResponse>(message)?)
+}
+
+async fn bind_validate_fixture(
+    mcp: &mut TestAppServer,
+    fixture: &TempDir,
+    project_id: &str,
+) -> Result<()> {
+    let bind_id = mcp
+        .send_workspace_project_bind_request(bind_params(
+            project_id,
+            vec![fixture.path().to_path_buf()],
+        ))
+        .await?;
+    read_project(mcp, bind_id).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn validate_runs_project_scripts_and_reports_structured_results() -> Result<()> {
+    if !node_available() {
+        eprintln!("skipping: node unavailable");
+        return Ok(());
+    }
+    let ody_home = TempDir::new()?;
+    let fixture = node_scripts_fixture()?;
+    let mut mcp = TestAppServer::new(ody_home.path()).await?;
+    init_experimental(&mut mcp).await?;
+    bind_validate_fixture(&mut mcp, &fixture, "ws-val-1").await?;
+
+    let validate_id = mcp
+        .send_workspace_source_validate_request(WorkspaceSourceValidateParams {
+            project_id: "ws-val-1".to_owned(),
+            changeset_id: None,
+            checks: vec![
+                WorkspaceValidationCheck {
+                    kind: WorkspaceValidationKind::Build,
+                    script: "build".to_owned(),
+                },
+                WorkspaceValidationCheck {
+                    kind: WorkspaceValidationKind::Test,
+                    script: "test".to_owned(),
+                },
+            ],
+            timeout_ms: None,
+        })
+        .await?;
+    let response = read_validate(&mut mcp, validate_id).await?;
+    assert_eq!(response.report.runs.len(), 2);
+    assert_eq!(response.report.overall, WorkspaceValidationOverall::Succeeded);
+    assert_eq!(response.report.runs[0].status, WorkspaceValidationStatus::Succeeded);
+    assert_eq!(response.report.runs[0].exit_code, Some(0));
+    assert!(response.report.runs[1].stdout_tail.contains("tests ok"));
+    assert!(response.report.runs[0].duration_ms >= 0);
+    Ok(())
+}
+
+#[tokio::test]
+async fn validate_reports_failed_exit_code_and_stderr_tail() -> Result<()> {
+    if !node_available() {
+        eprintln!("skipping: node unavailable");
+        return Ok(());
+    }
+    let ody_home = TempDir::new()?;
+    let fixture = node_scripts_fixture()?;
+    let mut mcp = TestAppServer::new(ody_home.path()).await?;
+    init_experimental(&mut mcp).await?;
+    bind_validate_fixture(&mut mcp, &fixture, "ws-val-2").await?;
+
+    // typecheck exits 3; lint (node --check) succeeds: overall Failed but
+    // per-run statuses differ — proving runs are independent.
+    let validate_id = mcp
+        .send_workspace_source_validate_request(WorkspaceSourceValidateParams {
+            project_id: "ws-val-2".to_owned(),
+            changeset_id: None,
+            checks: vec![
+                WorkspaceValidationCheck {
+                    kind: WorkspaceValidationKind::Typecheck,
+                    script: "typecheck".to_owned(),
+                },
+                WorkspaceValidationCheck {
+                    kind: WorkspaceValidationKind::Format,
+                    script: "lint".to_owned(),
+                },
+            ],
+            timeout_ms: None,
+        })
+        .await?;
+    let response = read_validate(&mut mcp, validate_id).await?;
+    assert_eq!(response.report.overall, WorkspaceValidationOverall::Failed);
+    assert_eq!(response.report.runs[0].status, WorkspaceValidationStatus::Failed);
+    assert_eq!(response.report.runs[0].exit_code, Some(3));
+    assert_eq!(response.report.runs[1].status, WorkspaceValidationStatus::Succeeded);
+    Ok(())
+}
+
+#[tokio::test]
+async fn validate_times_out_long_running_script() -> Result<()> {
+    if !node_available() {
+        eprintln!("skipping: node unavailable");
+        return Ok(());
+    }
+    let ody_home = TempDir::new()?;
+    let fixture = node_scripts_fixture()?;
+    let mut mcp = TestAppServer::new(ody_home.path()).await?;
+    init_experimental(&mut mcp).await?;
+    bind_validate_fixture(&mut mcp, &fixture, "ws-val-3").await?;
+
+    let validate_id = mcp
+        .send_workspace_source_validate_request(WorkspaceSourceValidateParams {
+            project_id: "ws-val-3".to_owned(),
+            changeset_id: None,
+            checks: vec![WorkspaceValidationCheck {
+                kind: WorkspaceValidationKind::Build,
+                script: "slow".to_owned(),
+            }],
+            timeout_ms: Some(1_000), // clamped minimum
+        })
+        .await?;
+    let response = read_validate(&mut mcp, validate_id).await?;
+    assert_eq!(response.report.runs[0].status, WorkspaceValidationStatus::TimedOut);
+    // The timed-out process must not outlive the request (strategy 8.2).
+    // kill_on_drop kills it; nothing to poll for a node child, so assert
+    // the structured status only.
+    Ok(())
+}
+
+#[tokio::test]
+async fn validate_spawn_error_when_no_package_json() -> Result<()> {
+    let ody_home = TempDir::new()?;
+    let empty = TempDir::new()?;
+    let mut mcp = TestAppServer::new(ody_home.path()).await?;
+    init_experimental(&mut mcp).await?;
+    bind_validate_fixture(&mut mcp, &empty, "ws-val-4").await?;
+
+    let validate_id = mcp
+        .send_workspace_source_validate_request(WorkspaceSourceValidateParams {
+            project_id: "ws-val-4".to_owned(),
+            changeset_id: None,
+            checks: vec![WorkspaceValidationCheck {
+                kind: WorkspaceValidationKind::Build,
+                script: "build".to_owned(),
+            }],
+            timeout_ms: None,
+        })
+        .await?;
+    let response = read_validate(&mut mcp, validate_id).await?;
+    assert_eq!(response.report.runs[0].status, WorkspaceValidationStatus::SpawnError);
+    assert!(response.report.runs[0].stderr_tail.contains("no package.json"));
+    // 不依赖 node——本用例无 node_available 门控。
+    Ok(())
+}
+
+#[tokio::test]
+async fn validate_unknown_script_fails_with_diagnosable_stderr() -> Result<()> {
+    if !node_available() {
+        eprintln!("skipping: node unavailable");
+        return Ok(());
+    }
+    let ody_home = TempDir::new()?;
+    let fixture = node_scripts_fixture()?;
+    let mut mcp = TestAppServer::new(ody_home.path()).await?;
+    init_experimental(&mut mcp).await?;
+    bind_validate_fixture(&mut mcp, &fixture, "ws-val-5").await?;
+
+    let validate_id = mcp
+        .send_workspace_source_validate_request(WorkspaceSourceValidateParams {
+            project_id: "ws-val-5".to_owned(),
+            changeset_id: None,
+            checks: vec![WorkspaceValidationCheck {
+                kind: WorkspaceValidationKind::Build,
+                script: "nosuchscript".to_owned(),
+            }],
+            timeout_ms: None,
+        })
+        .await?;
+    let response = read_validate(&mut mcp, validate_id).await?;
+    assert_eq!(response.report.runs[0].status, WorkspaceValidationStatus::Failed);
+    assert_ne!(response.report.runs[0].exit_code, Some(0));
+    assert!(!response.report.runs[0].stderr_tail.is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+async fn validate_rejects_unknown_project_and_mismatched_changeset() -> Result<()> {
+    let ody_home = TempDir::new()?;
+    let fixture = react_fixture()?;
+    let mut mcp = TestAppServer::new(ody_home.path()).await?;
+    init_experimental(&mut mcp).await?;
+    bind_validate_fixture(&mut mcp, &fixture, "ws-val-6").await?;
+
+    // unknown project
+    let bad = mcp
+        .send_workspace_source_validate_request(WorkspaceSourceValidateParams {
+            project_id: "nope".to_owned(),
+            changeset_id: None,
+            checks: vec![WorkspaceValidationCheck {
+                kind: WorkspaceValidationKind::Build,
+                script: "build".to_owned(),
+            }],
+            timeout_ms: None,
+        })
+        .await?;
+    let message = read_changeset_error(&mut mcp, bad).await?;
+    assert!(
+        message.contains("unknown workspace project id"),
+        "{message}"
+    );
+
+    // changeset from another project in the same store
+    let other_fixture = react_fixture()?;
+    let bind_id = mcp
+        .send_workspace_project_bind_request(bind_params(
+            "ws-other",
+            vec![other_fixture.path().to_path_buf()],
+        ))
+        .await?;
+    read_project(&mut mcp, bind_id).await?;
+    let base_hash = file_hash_via_index(&mut mcp, "ws-other", "src/pages/HomePage.tsx").await?;
+    let create_id = mcp
+        .send_workspace_source_changeset_create_request(WorkspaceChangeSetCreateParams {
+            project_id: "ws-other".to_owned(),
+            title: "cs".to_owned(),
+            changes: vec![WorkspaceFileChange {
+                root_index: 0,
+                path: "src/pages/HomePage.tsx".to_owned(),
+                kind: WorkspaceFileChangeKind::Update,
+                base_hash: Some(base_hash),
+                content: Some("export default function HomePage() { return null; }\n".to_owned()),
+            }],
+            idempotency_key: "cross-1".to_owned(),
+        })
+        .await?;
+    let changeset = read_changeset(&mut mcp, create_id).await?;
+
+    let mismatched = mcp
+        .send_workspace_source_validate_request(WorkspaceSourceValidateParams {
+            project_id: "ws-val-6".to_owned(),
+            changeset_id: Some(changeset.id),
+            checks: vec![WorkspaceValidationCheck {
+                kind: WorkspaceValidationKind::Build,
+                script: "build".to_owned(),
+            }],
+            timeout_ms: None,
+        })
+        .await?;
+    let message = read_changeset_error(&mut mcp, mismatched).await?;
+    assert!(message.contains("does not belong"), "{message}");
     Ok(())
 }

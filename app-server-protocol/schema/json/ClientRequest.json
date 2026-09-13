@@ -4893,6 +4893,31 @@
         "routePath"
       ],
       "type": "string"
+    },
+    "WorkspaceValidationCheck": {
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/WorkspaceValidationKind"
+        },
+        "script": {
+          "description": "Script name from the root's package.json (E0 scan `scripts`). The runtime does not guess script mappings (narrow protocol).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "script"
+      ],
+      "type": "object"
+    },
+    "WorkspaceValidationKind": {
+      "enum": [
+        "format",
+        "typecheck",
+        "build",
+        "test"
+      ],
+      "type": "string"
     }
   },
   "description": "Request from the client to the server.",

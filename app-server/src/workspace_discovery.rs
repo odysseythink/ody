@@ -42,7 +42,7 @@ pub(crate) const SKIP_DIRS: &[&str] = &[
 pub(crate) const SOURCE_EXTENSIONS: &[&str] = &["ts", "tsx", "js", "jsx", "vue", "svelte"];
 
 /// Lockfile name -> package manager id, in priority order.
-const PACKAGE_MANAGERS: &[(&str, &str)] = &[
+pub(crate) const PACKAGE_MANAGERS: &[(&str, &str)] = &[
     ("pnpm-lock.yaml", "pnpm"),
     ("yarn.lock", "yarn"),
     ("package-lock.json", "npm"),
@@ -427,7 +427,7 @@ fn inspect_package_json(root: &Path, discovery: &mut WorkspaceRootDiscovery) {
         .collect();
 }
 
-fn detect_package_manager(root: &Path) -> Option<String> {
+pub(crate) fn detect_package_manager(root: &Path) -> Option<String> {
     PACKAGE_MANAGERS
         .iter()
         .find(|(lockfile, _)| root.join(lockfile).is_file())

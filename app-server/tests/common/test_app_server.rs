@@ -116,6 +116,7 @@ use ody_app_server_protocol::WorkspaceChangeSetRestoreParams;
 use ody_app_server_protocol::WorkspaceSourceDiffParams;
 use ody_app_server_protocol::WorkspaceSourceIndexParams;
 use ody_app_server_protocol::WorkspaceSourceResolveParams;
+use ody_app_server_protocol::WorkspaceSourceValidateParams;
 use ody_client::default_client::ODY_INTERNAL_ORIGINATOR_OVERRIDE_ENV_VAR;
 use tokio::process::Command;
 
@@ -935,6 +936,15 @@ image_generation = true
     ) -> anyhow::Result<i64> {
         let params = Some(serde_json::to_value(params)?);
         self.send_request("workspace/source/diff", params).await
+    }
+
+    /// Send a `workspace/source/validate` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_source_validate_request(
+        &mut self,
+        params: WorkspaceSourceValidateParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/source/validate", params).await
     }
 
     /// Send a `thread/memoryMode/set` JSON-RPC request (v2, experimental).

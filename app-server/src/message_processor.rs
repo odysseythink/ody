@@ -1040,6 +1040,11 @@ impl MessageProcessor {
                 .diff(params)
                 .await
                 .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceSourceValidate { params, .. } => self
+                .workspace_source_processor
+                .validate(params)
+                .await
+                .map(|response| Some(response.into())),
             ClientRequest::ModelProviderCapabilitiesRead { params: _, .. } => self
                 .config_processor
                 .model_provider_capabilities_read()
