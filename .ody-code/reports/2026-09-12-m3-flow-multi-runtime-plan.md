@@ -2,8 +2,8 @@
 
 日期：2026-09-12
 上位文档：`2026-09-11-flow-skill-multi-runtime-report.md`（§6 M3 范围）
-状态：spike 已完成，待评审锁定
-Last Updated: 2026-09-12
+状态：M3 全部交付（M3.1 / M3.2 / M3.3，2026-09-13）
+Last Updated: 2026-09-13
 
 ---
 
@@ -147,11 +147,29 @@ spike 中踩平的 API 坑（0.14.2）：`starlark::Error` 不实现 `std::error
   cfg 从单 feature 放宽 `any(...)` 时需同一次 apply_patch 完成（edit_file
   多 hunk 坑再现）。
 
-### M3.3 [normal] 审批摘要泛化 + 文档收尾
+### M3.3 ✅ 审批摘要泛化 + 文档收尾
 
 - 内容：决策 8；`docs/` 或 AGENTS.md 的 flow 载体说明更新；父报告 M3 行打勾；
   真实 TUI 走查 starlark 载体（可选，视时间）。
 - 验收：flow + guardian 套件全绿；`cargo check --workspace --all-targets`。
+
+**实施记录（2026-09-13）**
+
+- **决策 8 已在 M3.1 提前落地**（starlark 触发需要审批摘要），本阶段补锚定测试：
+  `plan_summary.rs` 新增 4 个——`for_script` 40 行截断（41 行含省略号标记）/
+  短源码不加省略号（无 feature 门控），`for_plan` 的 starlark 臂（默认构建锚定）
+  与 v8 臂（`flow-v8` 锚定：carrier=`workflow.js`、phases 空、预览为源码全文）。
+- **文档**：根 `AGENTS.md` 新增 "Flow multi-runtime (M3)" 节（三载体发现、
+  feature 门控与触发期降级、宿主函数单一事实源、结果契约、确定性禁令、
+  checkpoint 一致性、conformance 防护）；此前仓库 docs/ 无 flow 文档，
+  M1/M2 亦未建，故采用 AGENTS.md 而非新建用户手册（保持 M3.3 最小范围）。
+- **父报告**：`2026-09-11-flow-skill-multi-runtime-report.md` §6 M3 行打勾
+  （✅ 2026-09-13），§7 "Starlark async 能力未验证" 风险标注已消解。
+- **真实 TUI 走查**：推迟——需交互式 TUI 环境，本阶段为可选项；guardian
+  审批链路（摘要生成 → `GuardianApprovalRequest::FlowRun`）已由
+  `for_plan` 锚定测试 + M2.2 guardian e2e 覆盖。
+- 验收：flow 套件默认 + `--features flow-v8` 双构建全绿；guardian 套件
+  无新增失败；`cargo check --workspace --all-targets` 0 错误。
 
 ---
 
