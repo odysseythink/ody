@@ -143,7 +143,7 @@ phases:
 | M1 | A 方案（flow.yaml）+ slash 触发 + phase/log 进度上报 + multi_agents 映射 | 默认构建可运行顺序 + fan-out Flow；`cargo nextest run -p ody-core-skills -p ody-skills-extension` |
 | M2 | checkpoint/replay 恢复；`flow__run` 模型工具；catalog 可见性拆分；运行前审批 | 中断后重跑不重跑已完成 agent；模型可触发 Flow |
 | M3 | B 方案（Starlark，前置 spike）+ C 方案（flow-v8）+ 降级报错 | 三载体在对应 feature 组合下均可执行；无 v8 构建对 workflow.js 报明确错误 |
-| M4 | 结构化输出 schema 校验、并发上限、提示缓存优化、TUI `/flows` 视图完善 | 与 Claude Code dynamic workflows 行为对齐项 checklist |
+| M4 ✅ 2026-09-13 | 结构化输出 schema 校验、并发上限、提示缓存优化、TUI `/flows` 视图完善 | 与 Claude Code dynamic workflows 行为对齐项 checklist（schema 跨三载体、16 并发/1000 run 上限/stagger 5000ms、`/flows` 只读视图，详见 `plans/2026-09-13-m4_alignment_concurrency_cache_tui.md`，commit 02147dc9/a64c237f/08b9aa82） |
 
 ## 7. 风险
 
