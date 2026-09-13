@@ -71,3 +71,14 @@
 - 全链路已加 `#[tracing::instrument]`，但日志字段只输出截断预览（URL/选择器 120 字节、表达式 200 字节）或长度/计数。
 - 修改后优先跑 `cargo test -p ody-browser-control --tests`；依赖真实 Chrome 的测试被 `#[ignore]`，仅在手动验证时运行。
 - 详细说明见 `docs/browser-control.md`。
+
+## Flow multi-runtime (M3)
+
+- Flow skills support three carriers; the loader discovers exactly one of `flow.yaml` (declarative), `flow.star` (Starlark script), `workflow.js` (V8 script) and errors when several are present.
+- `flow-starlark` is a default feature of `ody-core` (pure Rust). `flow-v8` is off by default (`flow-v8 = ["v8"]`, compiles/links V8); `ody-cli` forwards it, so release builds ship `workflow.js` support only with `--features flow-v8`.
+- Trigger-time degradation (locked decision 2): in a build without `flow-v8`, a `workflow.js` skill still loads fine and fails at trigger time with a clear "compiled without the `flow-v8` Cargo feature" error.
+- Host-function semantics are identical across carriers (the module docs of `core/src/flow/mod.rs` are the single source of truth): `agent(prompt)`, `pipeline(items, each)`, `parallel(fns)` (each/fns are pure prompt renderers), `phase(msg)`/`log(msg)`; a single fan-out batch is hard-capped at `FLOW_BATCH_LIMIT = 4096`.
+- Script-carrier result contract: a top-level `result` binding becomes `outputs["result"]` (`None` → empty outputs). For `workflow.js` any top-level declaration works — the engine appends a tail that mirrors the module-scope binding onto `globalThis`.
+- Determinism (workflow.js): the global `Date` is deleted and `Math.random` is replaced with a throwing function.
+- Checkpoint/replay (M2.1) applies uniformly to all three carriers (key = prompt SHA-256); run-before guardian approval uses `FlowPlanSummary::for_plan` (structured phases for yaml, bounded 40-line source preview for script carriers).
+- Conformance guard: `conformance_v8_matches_yaml_and_starlark_calls_and_outputs` (and the yaml×star pair) assert the same logical plan produces the same prompt multiset and outputs across carriers.
