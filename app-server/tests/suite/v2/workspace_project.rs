@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -546,6 +547,460 @@ async fn workspace_project_scan_rejects_unknown_project() -> Result<()> {
             .contains("unknown workspace project id: nope"),
         "{}",
         error.error.message
+    );
+    Ok(())
+}
+
+fn hash_tree(root: &std::path::Path) -> BTreeMap<String, u64> {
+    let mut snapshot = BTreeMap::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).expect("read dir").flatten() {
+            let path = entry.path();
+            let Ok(file_type) = entry.file_type() else { continue };
+            if file_type.is_dir() {
+                stack.push(path);
+            } else if file_type.is_file() {
+                let relative = path
+                    .strip_prefix(root)
+                    .expect("relative")
+                    .to_string_lossy()
+                    .into_owned();
+                let hash = std::fs::read(&path)
+                    .expect("read file")
+                    .iter()
+                    .fold(0xcbf29ce484222325u64, |acc, byte| {
+                        (acc ^ u64::from(*byte)).wrapping_mul(0x100000001b3)
+                    });
+                snapshot.insert(relative, hash);
+            }
+        }
+    }
+    snapshot
+}
+
+fn assert_open_invariants(discovery: &WorkspaceDiscovery, expected_roots: usize) {
+    assert_eq!(discovery.roots.len(), expected_roots);
+    assert!(
+        !discovery.truncated,
+        "fixture project must not truncate: {:?}",
+        discovery
+            .roots
+            .iter()
+            .map(|root| &root.stats)
+            .collect::<Vec<_>>()
+    );
+    for root in &discovery.roots {
+        assert!(
+            root.errors.is_empty(),
+            "root {} reported errors: {:?}",
+            root.root_path,
+            root.errors
+        );
+    }
+}
+
+#[tokio::test]
+async fn e0_archetype_react_vite_opens_cleanly() -> Result<()> {
+    let ody_home = TempDir::new()?;
+    let project_dir = TempDir::new()?;
+    write_fixture(
+        project_dir.path(),
+        "package.json",
+        r#"{
+            "name": "react-vite-app",
+            "scripts": { "dev": "vite", "build": "tsc && vite build", "test": "vitest" },
+            "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" },
+            "devDependencies": { "vite": "^5.4.0", "typescript": "^5.5.0" }
+        }"#,
+    );
+    write_fixture(project_dir.path(), "pnpm-lock.yaml", "lockfileVersion: 9\n");
+    write_fixture(
+        project_dir.path(),
+        "index.html",
+        "<html><body><div id=\"root\"></div></body></html>",
+    );
+    write_fixture(project_dir.path(), "src/main.tsx", "export {}");
+    write_fixture(project_dir.path(), "src/pages/Home.tsx", "export {}");
+    write_fixture(project_dir.path(), "src/pages/Checkout.tsx", "export {}");
+    write_fixture(project_dir.path(), "src/components/Button.tsx", "export {}");
+    write_fixture(project_dir.path(), "src/components/Price.tsx", "export {}");
+
+    let mut mcp = TestAppServer::new(ody_home.path()).await?;
+    init_experimental(&mut mcp).await?;
+    let bind_id = mcp
+        .send_workspace_project_bind_request(bind_params(
+            "ws-react-vite",
+            vec![project_dir.path().to_path_buf()],
+        ))
+        .await?;
+    read_project(&mut mcp, bind_id).await?;
+
+    let discovery = scan_project(&mut mcp, "ws-react-vite").await?;
+    assert_open_invariants(&discovery, 1);
+    let root = &discovery.roots[0];
+    assert_eq!(root.package_name.as_deref(), Some("react-vite-app"));
+    assert_eq!(root.package_manager.as_deref(), Some("pnpm"));
+    let tech: Vec<&str> = root.tech_stack.iter().map(|t| t.id.as_str()).collect();
+    assert!(tech.contains(&"react"));
+    assert!(tech.contains(&"vite"));
+    for script in ["dev", "build", "test"] {
+        assert!(
+            root.scripts.iter().any(|s| s.name == script),
+            "missing script {script}"
+        );
+    }
+    let count = |kind| {
+        root.sources
+            .iter()
+            .filter(|s| s.kind == kind)
+            .count()
+    };
+    assert_eq!(count(WorkspaceSourceKind::Page), 2);
+    assert_eq!(count(WorkspaceSourceKind::Component), 2);
+    assert!(!root.git.is_repo);
+    Ok(())
+}
+
+#[tokio::test]
+async fn e0_archetype_next_app_router_opens_cleanly() -> Result<()> {
+    let ody_home = TempDir::new()?;
+    let project_dir = TempDir::new()?;
+    write_fixture(
+        project_dir.path(),
+        "package.json",
+        r#"{
+            "name": "next-app",
+            "scripts": { "dev": "next dev", "build": "next build", "start": "next start" },
+            "dependencies": { "next": "14.2.5", "react": "^18.3.1", "react-dom": "^18.3.1" }
+        }"#,
+    );
+    write_fixture(project_dir.path(), "package-lock.json", "{}");
+    write_fixture(
+        project_dir.path(),
+        "next.config.mjs",
+        "export default {};",
+    );
+    write_fixture(
+        project_dir.path(),
+        "app/layout.tsx",
+        "export default function RootLayout() {}",
+    );
+    write_fixture(
+        project_dir.path(),
+        "app/page.tsx",
+        "export default function Page() {}",
+    );
+    write_fixture(
+        project_dir.path(),
+        "app/blog/[slug]/page.tsx",
+        "export default function Page() {}",
+    );
+    write_fixture(
+        project_dir.path(),
+        "app/(marketing)/pricing/page.tsx",
+        "export default function Page() {}",
+    );
+    write_fixture(project_dir.path(), "components/Card.tsx", "export {}");
+
+    let mut mcp = TestAppServer::new(ody_home.path()).await?;
+    init_experimental(&mut mcp).await?;
+    let bind_id = mcp
+        .send_workspace_project_bind_request(bind_params(
+            "ws-next",
+            vec![project_dir.path().to_path_buf()],
+        ))
+        .await?;
+    read_project(&mut mcp, bind_id).await?;
+
+    let discovery = scan_project(&mut mcp, "ws-next").await?;
+    assert_open_invariants(&discovery, 1);
+    let root = &discovery.roots[0];
+    assert_eq!(root.package_manager.as_deref(), Some("npm"));
+    let tech: Vec<&str> = root.tech_stack.iter().map(|t| t.id.as_str()).collect();
+    assert!(tech.contains(&"next"));
+    let routes: BTreeMap<String, String> = root
+        .sources
+        .iter()
+        .filter(|s| s.kind == WorkspaceSourceKind::Route)
+        .filter_map(|s| s.route_path.clone().map(|rp| (s.path.clone(), rp)))
+        .collect();
+    assert_eq!(routes.get("app/page.tsx").map(String::as_str), Some("/"));
+    assert_eq!(
+        routes.get("app/blog/[slug]/page.tsx").map(String::as_str),
+        Some("/blog/[slug]")
+    );
+    assert_eq!(
+        routes
+            .get("app/(marketing)/pricing/page.tsx")
+            .map(String::as_str),
+        Some("/pricing")
+    );
+    assert_eq!(
+        root.sources
+            .iter()
+            .filter(|s| s.kind == WorkspaceSourceKind::Component)
+            .count(),
+        1
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn e0_archetype_vue_opens_cleanly() -> Result<()> {
+    let ody_home = TempDir::new()?;
+    let project_dir = TempDir::new()?;
+    write_fixture(
+        project_dir.path(),
+        "package.json",
+        r#"{
+            "name": "vue-app",
+            "scripts": { "dev": "vite", "build": "vue-tsc && vite build" },
+            "dependencies": { "vue": "^3.4.0" },
+            "devDependencies": { "vite": "^5.4.0", "vue-tsc": "^2.0.0" }
+        }"#,
+    );
+    write_fixture(project_dir.path(), "yarn.lock", "# yarn lockfile v1\n");
+    write_fixture(
+        project_dir.path(),
+        "index.html",
+        "<html><body><div id=\"app\"></div></body></html>",
+    );
+    write_fixture(project_dir.path(), "src/main.ts", "export {}");
+    write_fixture(
+        project_dir.path(),
+        "src/views/Home.vue",
+        "<template></template>",
+    );
+    write_fixture(
+        project_dir.path(),
+        "src/views/Settings.vue",
+        "<template></template>",
+    );
+    write_fixture(
+        project_dir.path(),
+        "src/components/NavBar.vue",
+        "<template></template>",
+    );
+
+    let mut mcp = TestAppServer::new(ody_home.path()).await?;
+    init_experimental(&mut mcp).await?;
+    let bind_id = mcp
+        .send_workspace_project_bind_request(bind_params(
+            "ws-vue",
+            vec![project_dir.path().to_path_buf()],
+        ))
+        .await?;
+    read_project(&mut mcp, bind_id).await?;
+
+    let discovery = scan_project(&mut mcp, "ws-vue").await?;
+    assert_open_invariants(&discovery, 1);
+    let root = &discovery.roots[0];
+    assert_eq!(root.package_manager.as_deref(), Some("yarn"));
+    let tech: Vec<&str> = root.tech_stack.iter().map(|t| t.id.as_str()).collect();
+    assert!(tech.contains(&"vue"));
+    assert!(tech.contains(&"vite"));
+    let pages: Vec<&str> = root
+        .sources
+        .iter()
+        .filter(|s| s.kind == WorkspaceSourceKind::Page)
+        .map(|s| s.path.as_str())
+        .collect();
+    assert!(pages.contains(&"src/views/Home.vue"));
+    assert!(pages.contains(&"src/views/Settings.vue"));
+    assert_eq!(
+        root.sources
+            .iter()
+            .filter(|s| s.kind == WorkspaceSourceKind::Component)
+            .count(),
+        1
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn e0_archetype_fullstack_two_roots_opens_cleanly() -> Result<()> {
+    let ody_home = TempDir::new()?;
+    let frontend = TempDir::new()?;
+    let backend = TempDir::new()?;
+    write_fixture(
+        frontend.path(),
+        "package.json",
+        r#"{
+            "name": "storefront-web",
+            "scripts": { "dev": "vite" },
+            "dependencies": { "react": "^18.3.1" },
+            "devDependencies": { "vite": "^5.4.0" }
+        }"#,
+    );
+    write_fixture(
+        frontend.path(),
+        "src/pages/Home.tsx",
+        "export {}",
+    );
+    write_fixture(
+        backend.path(),
+        "package.json",
+        r#"{
+            "name": "storefront-api",
+            "scripts": { "dev": "node server.js", "test": "node --test" },
+            "dependencies": { "express": "^4.19.0" }
+        }"#,
+    );
+    write_fixture(backend.path(), "server.js", "console.log('ok')");
+    write_fixture(backend.path(), "routes/health.js", "export {}");
+
+    let mut mcp = TestAppServer::new(ody_home.path()).await?;
+    init_experimental(&mut mcp).await?;
+    let bind_id = mcp
+        .send_workspace_project_bind_request(bind_params(
+            "ws-fullstack",
+            vec![frontend.path().to_path_buf(), backend.path().to_path_buf()],
+        ))
+        .await?;
+    let project = read_project(&mut mcp, bind_id).await?;
+    assert_eq!(
+        project.roots[0].role,
+        ody_app_server_protocol::WorkspaceRootRole::Primary
+    );
+    assert_eq!(
+        project.roots[1].role,
+        ody_app_server_protocol::WorkspaceRootRole::Secondary
+    );
+
+    let discovery = scan_project(&mut mcp, "ws-fullstack").await?;
+    assert_open_invariants(&discovery, 2);
+
+    let frontend_root = &discovery.roots[0];
+    assert_eq!(frontend_root.package_name.as_deref(), Some("storefront-web"));
+    let frontend_tech: Vec<&str> =
+        frontend_root.tech_stack.iter().map(|t| t.id.as_str()).collect();
+    assert!(frontend_tech.contains(&"react"));
+
+    let backend_root = &discovery.roots[1];
+    assert_eq!(backend_root.package_name.as_deref(), Some("storefront-api"));
+    let backend_tech: Vec<&str> =
+        backend_root.tech_stack.iter().map(|t| t.id.as_str()).collect();
+    assert!(backend_tech.contains(&"express"));
+    assert!(
+        backend_root
+            .sources
+            .iter()
+            .any(|s| s.kind == WorkspaceSourceKind::Route && s.path == "routes/health.js")
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn rescan_returns_equivalent_discovery() -> Result<()> {
+    let ody_home = TempDir::new()?;
+    let project_dir = TempDir::new()?;
+    write_fixture(
+        project_dir.path(),
+        "package.json",
+        r#"{ "name": "stable", "scripts": { "dev": "vite" },
+             "dependencies": { "react": "18.3.1" } }"#,
+    );
+    write_fixture(project_dir.path(), "src/pages/Home.tsx", "export {}");
+
+    let mut mcp = TestAppServer::new(ody_home.path()).await?;
+    init_experimental(&mut mcp).await?;
+    let bind_id = mcp
+        .send_workspace_project_bind_request(bind_params(
+            "ws-stable",
+            vec![project_dir.path().to_path_buf()],
+        ))
+        .await?;
+    read_project(&mut mcp, bind_id).await?;
+
+    let first = scan_project(&mut mcp, "ws-stable").await?;
+    let second = scan_project(&mut mcp, "ws-stable").await?;
+    assert_eq!(first.roots, second.roots);
+    assert!(second.scanned_at_ms >= first.scanned_at_ms);
+    Ok(())
+}
+
+#[tokio::test]
+async fn e0_external_manifest_corruption_is_diagnosable() -> Result<()> {
+    let ody_home = TempDir::new()?;
+    let project_dir = TempDir::new()?;
+    write_fixture(project_dir.path(), "package.json", r#"{ "name": "ok" }"#);
+    write_fixture(project_dir.path(), "src/pages/Home.tsx", "export {}");
+
+    let mut mcp = TestAppServer::new(ody_home.path()).await?;
+    init_experimental(&mut mcp).await?;
+    let bind_id = mcp
+        .send_workspace_project_bind_request(bind_params(
+            "ws-corrupt",
+            vec![project_dir.path().to_path_buf()],
+        ))
+        .await?;
+    read_project(&mut mcp, bind_id).await?;
+
+    // External edit between bind and scan breaks the manifest.
+    write_fixture(project_dir.path(), "package.json", "{ not json");
+
+    let discovery = scan_project(&mut mcp, "ws-corrupt").await?;
+    assert!(
+        discovery.roots[0]
+            .errors
+            .iter()
+            .any(|error| error.contains("package.json")),
+        "expected diagnosable package.json error, got {:?}",
+        discovery.roots[0].errors
+    );
+    // The walk-derived data is unaffected by the manifest error.
+    assert!(
+        discovery.roots[0]
+            .sources
+            .iter()
+            .any(|s| s.path == "src/pages/Home.tsx")
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn scan_is_read_only_end_to_end() -> Result<()> {
+    let ody_home = TempDir::new()?;
+    let project_dir = TempDir::new()?;
+    write_fixture(
+        project_dir.path(),
+        "package.json",
+        r#"{ "name": "readonly", "scripts": { "dev": "vite" },
+             "dependencies": { "react": "18.3.1" } }"#,
+    );
+    write_fixture(project_dir.path(), "src/pages/Home.tsx", "export {}");
+    write_fixture(
+        project_dir.path(),
+        "src/components/Button.tsx",
+        "export {}",
+    );
+    write_fixture(
+        project_dir.path(),
+        "node_modules/decoy/index.js",
+        "module.exports = {}",
+    );
+    write_fixture(project_dir.path(), "README.md", "# fixture");
+    let before = hash_tree(project_dir.path());
+
+    let mut mcp = TestAppServer::new(ody_home.path()).await?;
+    init_experimental(&mut mcp).await?;
+    let bind_id = mcp
+        .send_workspace_project_bind_request(bind_params(
+            "ws-readonly",
+            vec![project_dir.path().to_path_buf()],
+        ))
+        .await?;
+    read_project(&mut mcp, bind_id).await?;
+
+    // Scan twice: the read-only guarantee must hold across repeat scans.
+    let _ = scan_project(&mut mcp, "ws-readonly").await?;
+    let _ = scan_project(&mut mcp, "ws-readonly").await?;
+
+    assert_eq!(
+        before,
+        hash_tree(project_dir.path()),
+        "scan must not create, modify, or delete any file under the bound root"
     );
     Ok(())
 }
