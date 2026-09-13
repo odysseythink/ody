@@ -41,6 +41,31 @@ cargo build -p ody-cli --features v8
 cargo build --release -p ody-cli
 ```
 
+### Flow skills (multi-carrier)
+
+Flow skills support three carriers; the loader discovers exactly one of `flow.yaml` (declarative), `flow.star` (Starlark script), or `workflow.js` (V8 script) per skill:
+
+| Carrier | Cargo feature | Default |
+|---|---|---|
+| `flow.yaml` | (always available) | on |
+| `flow.star` | `flow-starlark` (pure Rust) | on |
+| `workflow.js` | `flow-v8` (implies `v8`, compiles/links V8) | off |
+
+Release builds that need `workflow.js` support must enable it explicitly:
+
+```bash
+cargo build --release -p ody-cli --features flow-v8
+```
+
+Without the feature, a `workflow.js` skill still loads but fails at trigger time with a clear "compiled without the `flow-v8` Cargo feature" error. The script carriers run with no fs/shell access, and a single fan-out batch is hard-capped at 4096 agents.
+
+Run the flow test suite against the script-carrier feature combination with:
+
+```bash
+cargo nextest run -p ody-core -E 'test(flow_tests::)'
+cargo nextest run -p ody-core --no-default-features --features flow-starlark,flow-v8 -E 'test(flow_tests::)'
+```
+
 ### Output locations
 
 The main binary is named `ody` and is defined in `cli/Cargo.toml` by `[[bin]] name = "ody"`:
