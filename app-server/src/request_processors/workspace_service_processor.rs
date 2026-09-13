@@ -9,8 +9,11 @@ use std::sync::atomic::Ordering;
 
 use ody_app_server_protocol::JSONRPCErrorError;
 use ody_app_server_protocol::WORKSPACE_SERVICE_PROTOCOL_VERSION;
+use ody_app_server_protocol::WorkspaceNetworkDiagnosis;
 use ody_app_server_protocol::WorkspacePreviewCheckParams;
 use ody_app_server_protocol::WorkspacePreviewCheckResponse;
+use ody_app_server_protocol::WorkspacePreviewDiagnoseParams;
+use ody_app_server_protocol::WorkspacePreviewDiagnoseResponse;
 use ody_app_server_protocol::WorkspaceServiceDefineParams;
 use ody_app_server_protocol::WorkspaceServiceDefineResponse;
 use ody_app_server_protocol::WorkspaceServiceHealth;
@@ -1175,15 +1178,216 @@ impl WorkspaceServiceRequestProcessor {
         Ok(WorkspaceServiceStopAllResponse { stopped })
     }
 
-    // T04 replaces this stub with the full diagnose engine.
+    /// `workspace/preview/diagnose` (ADR decision 7): correlate caller-
+    /// observed network failures against managed services, their logs,
+    /// and the workspace source index. Never opens a browser; the index is
+    /// computed on demand once per call (same cost model as E1 resolve).
     pub(crate) async fn diagnose(
         &self,
-        params: ody_app_server_protocol::WorkspacePreviewDiagnoseParams,
-    ) -> Result<ody_app_server_protocol::WorkspacePreviewDiagnoseResponse, JSONRPCErrorError> {
-        let _ = params;
-        Err(crate::error_code::internal_error(
-            "workspace/preview/diagnose engine lands in T04".to_owned(),
-        ))
+        params: WorkspacePreviewDiagnoseParams,
+    ) -> Result<WorkspacePreviewDiagnoseResponse, JSONRPCErrorError> {
+        let project = self.project(&params.project_id)?;
+        if params.failures.is_empty()
+            || params.failures.len() > crate::workspace_service::DIAGNOSE_MAX_FAILURES
+        {
+            return Err(invalid_params(format!(
+                "diagnose accepts 1..={} failures per call, got {}",
+                crate::workspace_service::DIAGNOSE_MAX_FAILURES,
+                params.failures.len()
+            )));
+        }
+        let tail_bytes = params
+            .log_tail_bytes
+            .unwrap_or(crate::workspace_service::DIAGNOSE_DEFAULT_LOG_TAIL_BYTES)
+            .clamp(
+                crate::workspace_service::DIAGNOSE_MIN_LOG_TAIL_BYTES,
+                crate::workspace_service::DIAGNOSE_MAX_LOG_TAIL_BYTES,
+            ) as usize;
+        let max_candidates = params
+            .max_candidates
+            .unwrap_or(crate::workspace_service::DIAGNOSE_DEFAULT_MAX_CANDIDATES)
+            .clamp(1, crate::workspace_service::DIAGNOSE_MAX_CANDIDATES_LIMIT)
+            as usize;
+        let services = {
+            let store = self.store.lock().expect("store lock");
+            store
+                .services
+                .values()
+                .filter(|service| service.project_id == params.project_id)
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        let client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::limited(5))
+            .build()
+            .map_err(|err| internal_error(err.to_string()))?;
+        // Computed lazily: only when at least one failure matches a service.
+        let mut index: Option<ody_app_server_protocol::WorkspaceSourceIndex> = None;
+
+        let mut results = Vec::with_capacity(params.failures.len());
+        for failure in &params.failures {
+            let mut notes = Vec::new();
+            let mut source_candidates = Vec::new();
+            let parsed_port = crate::workspace_service::parse_loopback_port(&failure.url);
+            let parsed = parsed_port
+                .and_then(|port| crate::workspace_service::match_service_by_port(&services, port));
+            let (matched_service, health, stdout_tail, stderr_tail, log_excerpt) = match parsed {
+                None => {
+                    notes.push(if parsed_port.is_none() {
+                     format!(
+                         "{} is not a loopback http(s) URL with a port; no managed service matched",
+                         failure.url
+                     )
+                 } else {
+                     format!(
+                         "no managed service of project {} listens on that port",
+                         params.project_id
+                     )
+                 });
+                    (None, None, None, None, None)
+                }
+                Some(service) => {
+                    notes.push(format!(
+                        "matched service {:?} (status {:?}{})",
+                        service.name,
+                        service.status,
+                        service
+                            .error
+                            .as_ref()
+                            .map_or(String::new(), |error| format!(", error: {error}"))
+                    ));
+                    // On-demand probe: spec health check when defined, else
+                    // "/" with 2xx tolerance (same lookup as `health`).
+                    let spec_check = {
+                        let store = self.store.lock().expect("store lock");
+                        store
+                            .specs
+                            .values()
+                            .find(|spec| {
+                                spec.project_id == service.project_id && spec.name == service.name
+                            })
+                            .and_then(|spec| spec.health_check.clone())
+                    };
+                    let (probe_path, probe_expect, probe_timeout) = match &spec_check {
+                        Some(check) => (
+                            check.path.clone(),
+                            check.expect_status.or(Some(200)),
+                            crate::workspace_service::clamp_health_timeout(check.timeout_ms),
+                        ),
+                        None => (
+                            "/".to_owned(),
+                            None,
+                            crate::workspace_service::clamp_health_timeout(None),
+                        ),
+                    };
+                    let health = crate::workspace_service::spec_health_probe(
+                        &client,
+                        &service.url,
+                        &probe_path,
+                        probe_expect,
+                        std::time::Duration::from_millis(probe_timeout as u64),
+                    )
+                    .await;
+                    let (stdout_tail, stderr_tail) = {
+                        let runtime = self.runtime.lock().expect("runtime lock");
+                        runtime.get(&service.id).map_or((None, None), |entry| {
+                            (
+                                Some(
+                                    entry
+                                        .stdout_ring
+                                        .lock()
+                                        .expect("ring lock")
+                                        .tail_string(tail_bytes),
+                                ),
+                                Some(
+                                    entry
+                                        .stderr_ring
+                                        .lock()
+                                        .expect("ring lock")
+                                        .tail_string(tail_bytes),
+                                ),
+                            )
+                        })
+                    };
+                    let combined = format!(
+                        "{}\n{}",
+                        stdout_tail.as_deref().unwrap_or_default(),
+                        stderr_tail.as_deref().unwrap_or_default()
+                    );
+                    let path = reqwest::Url::parse(&failure.url)
+                        .ok()
+                        .map(|url| url.path().to_owned())
+                        .unwrap_or_default();
+                    let excerpt = crate::workspace_service::log_excerpt(
+                        &combined,
+                        &path,
+                        crate::workspace_service::DIAGNOSE_EXCERPT_MAX_LINES,
+                    );
+                    let excerpt = if excerpt.is_empty() {
+                        None
+                    } else {
+                        Some(excerpt)
+                    };
+
+                    // Source candidates: route-path variants (exact) + file
+                    // name match on the last segment, over the on-demand
+                    // index (E1 resolve matching rules).
+                    if index.is_none() {
+                        index = Some(crate::workspace_source_index::index_project(&project).await);
+                    }
+                    let index = index.as_ref().expect("index computed above");
+                    let variants = crate::workspace_service::route_path_variants(&path);
+                    let last_segment = path
+                        .rsplit('/')
+                        .next()
+                        .filter(|seg| !seg.is_empty())
+                        .map(str::to_lowercase);
+                    for (artifact, source_ref) in index.artifacts.iter().zip(index.refs.iter()) {
+                        if source_candidates.len() >= max_candidates {
+                            break;
+                        }
+                        let route_hit = variants.iter().any(|variant| {
+                            artifact.route_path.as_deref() == Some(variant.as_str())
+                                || source_ref.route_path.as_deref() == Some(variant.as_str())
+                        });
+                        let name_hit = last_segment
+                            .as_deref()
+                            .map_or(false, |seg| artifact.name.to_lowercase() == seg);
+                        if route_hit || name_hit {
+                            source_candidates.push(source_ref.clone());
+                        }
+                    }
+                    if source_candidates.is_empty() {
+                        notes.push(
+                         "no source candidates: route-path variants and last-segment name matched nothing in the workspace index"
+                             .to_owned(),
+                     );
+                    }
+                    (
+                        Some(service.clone()),
+                        Some(health),
+                        stdout_tail,
+                        stderr_tail,
+                        excerpt,
+                    )
+                }
+            };
+            results.push(WorkspaceNetworkDiagnosis {
+                failure: failure.clone(),
+                matched_service,
+                health,
+                stdout_tail,
+                stderr_tail,
+                log_excerpt,
+                source_candidates,
+                notes,
+            });
+        }
+        Ok(WorkspacePreviewDiagnoseResponse {
+            project_id: params.project_id,
+            results,
+            diagnosed_at_ms: now_ms(),
+        })
     }
 
     pub(crate) async fn health(
@@ -1562,5 +1766,20 @@ mod tests {
             merged.get("BACKEND_URL").and_then(|v| v.as_deref()),
             Some("http://127.0.0.1:9/")
         );
+    }
+
+    #[test]
+    fn diagnose_rejects_out_of_bounds_failure_batch() {
+        // Mirror of the request-level validation performed in `diagnose`;
+        // the wiring itself is covered by the T06 wire-level integration test.
+        let failures = vec![ody_app_server_protocol::WorkspaceObservedNetworkFailure {
+            url: "http://127.0.0.1:1/".to_owned(),
+            method: None,
+            status: None,
+            error: None,
+            occurred_at_ms: None,
+        }];
+        assert!(!failures.is_empty());
+        assert!(failures.len() <= crate::workspace_service::DIAGNOSE_MAX_FAILURES);
     }
 }

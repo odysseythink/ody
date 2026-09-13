@@ -14,6 +14,8 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+use ody_app_server_protocol::WorkspaceServiceRef;
+use ody_app_server_protocol::WorkspaceServiceStatus;
 use tokio::io::AsyncReadExt;
 use tokio::process::Child;
 use tokio::process::Command;
@@ -400,6 +402,98 @@ pub(crate) async fn spec_health_probe(
     }
 }
 
+/// Extract the port from a loopback http(s) URL (ADR decision 7:
+/// diagnosis only correlates loopback URLs). Same parser as
+/// `validate_check_url`; non-loopback, non-http, or port-less URLs
+/// yield None — never a panic.
+pub(crate) fn parse_loopback_port(url: &str) -> Option<u16> {
+    if url.contains('\\') {
+        return None;
+    }
+    let parsed = reqwest::Url::parse(url).ok()?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return None;
+    }
+    let host = parsed.host_str()?;
+    // host_str keeps IPv6 brackets ("[::1]"); strip before matching.
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    if !matches!(host, "127.0.0.1" | "localhost" | "::1") {
+        return None;
+    }
+    parsed.port()
+}
+
+/// Prefer a non-terminal service listening on `port`; else the most
+/// recently updated terminal record — a crashed backend is exactly
+/// what diagnosis must surface.
+pub(crate) fn match_service_by_port<'a>(
+    services: &'a [WorkspaceServiceRef],
+    port: u16,
+) -> Option<&'a WorkspaceServiceRef> {
+    services
+        .iter()
+        .filter(|service| service.port == port)
+        .filter(|service| !is_terminal_status(service.status))
+        .max_by_key(|service| service.updated_at_ms)
+        .or_else(|| {
+            services
+                .iter()
+                .filter(|service| service.port == port)
+                .max_by_key(|service| service.updated_at_ms)
+        })
+}
+
+fn is_terminal_status(status: WorkspaceServiceStatus) -> bool {
+    matches!(
+        status,
+        WorkspaceServiceStatus::Failed
+            | WorkspaceServiceStatus::Exited
+            | WorkspaceServiceStatus::Stopped
+    )
+}
+
+/// Route-path matching variants for a failure URL path: the full path,
+/// then prefix-stripped one segment at a time (backend routes often
+/// omit the "/api" prefix that the browser URL carries). Deduped,
+/// order-preserving; empty for "/" or empty input.
+pub(crate) fn route_path_variants(path: &str) -> Vec<String> {
+    let trimmed = path.trim_start_matches('/');
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+    let segments: Vec<&str> = trimmed.split('/').filter(|seg| !seg.is_empty()).collect();
+    let mut variants = Vec::new();
+    for start in 0..segments.len() {
+        let variant = format!("/{}", segments[start..].join("/"));
+        if !variants.contains(&variant) {
+            variants.push(variant);
+        }
+    }
+    variants
+}
+
+/// Log lines from `tail` mentioning the full request `path` (e.g. a
+/// request-log line "GET /api/miss 404" matches "/api/miss"). Full-path
+/// matching avoids false hits on sibling routes sharing a prefix segment
+/// ("/api/items" must not match a "/api/miss" diagnosis). Empty string when
+/// nothing matches (caller maps to None).
+pub(crate) fn log_excerpt(tail: &str, path: &str, max_lines: usize) -> String {
+    let needle = path.trim();
+    if needle.len() < 2 {
+        return String::new();
+    }
+    let mut lines = Vec::new();
+    for line in tail.lines() {
+        if line.contains(needle) {
+            lines.push(line);
+            if lines.len() >= max_lines {
+                break;
+            }
+        }
+    }
+    lines.join("\n")
+}
+
 /// Preview HTTP check deadline bounds.
 pub(crate) const PREVIEW_CHECK_DEFAULT_TIMEOUT_MS: i64 = 10_000;
 pub(crate) const PREVIEW_CHECK_MIN_TIMEOUT_MS: i64 = 1_000;
@@ -687,5 +781,99 @@ mod tests {
         server.await.expect("server task");
         assert!(!health.ok, "500 vs expect 200 must fail the gate");
         assert_eq!(health.status_code, Some(500));
+    }
+
+    #[test]
+    fn parse_loopback_port_accepts_only_loopback_http_urls() {
+        assert_eq!(
+            parse_loopback_port("http://127.0.0.1:8787/api/items"),
+            Some(8787)
+        );
+        assert_eq!(parse_loopback_port("http://localhost:3000/"), Some(3000));
+        assert_eq!(parse_loopback_port("http://[::1]:4321/x"), Some(4321));
+        // Non-loopback, wrong scheme, missing port, garbage: no match, never a panic.
+        assert_eq!(parse_loopback_port("http://192.168.1.10:8080/"), None);
+        assert_eq!(parse_loopback_port("https://example.com/"), None);
+        assert_eq!(parse_loopback_port("http://127.0.0.1/"), None);
+        assert_eq!(parse_loopback_port("not a url"), None);
+        assert_eq!(parse_loopback_port("file:///etc/passwd"), None);
+    }
+
+    #[test]
+    fn match_service_by_port_prefers_non_terminal_then_most_recent() {
+        let terminal = WorkspaceServiceRef {
+            id: "svc-old".to_owned(),
+            project_id: "ws-1".to_owned(),
+            name: "backend".to_owned(),
+            root_index: 0,
+            script: "dev".to_owned(),
+            command: "npm run dev".to_owned(),
+            port: 8787,
+            url: "http://127.0.0.1:8787/".to_owned(),
+            status: WorkspaceServiceStatus::Failed,
+            pid: None,
+            exit_code: Some(1),
+            health: None,
+            error: None,
+            created_at_ms: 0,
+            updated_at_ms: 100,
+        };
+        let live = WorkspaceServiceRef {
+            id: "svc-new".to_owned(),
+            status: WorkspaceServiceStatus::Ready,
+            updated_at_ms: 50,
+            ..terminal.clone()
+        };
+        // Non-terminal wins even when older.
+        assert_eq!(
+            match_service_by_port(&[terminal.clone(), live.clone()], 8787).map(|s| s.id.as_str()),
+            Some("svc-new")
+        );
+        // Without a live one, the most recent terminal record is returned
+        // (a crashed backend is exactly what diagnosis must surface).
+        let older = WorkspaceServiceRef {
+            id: "svc-older".to_owned(),
+            updated_at_ms: 10,
+            ..terminal.clone()
+        };
+        assert_eq!(
+            match_service_by_port(&[older, terminal.clone()], 8787).map(|s| s.id.as_str()),
+            Some("svc-old")
+        );
+        // Port mismatch -> None.
+        assert!(match_service_by_port(&[terminal], 9999).is_none());
+    }
+
+    #[test]
+    fn route_path_variants_strips_leading_segments_deduped() {
+        assert_eq!(
+            route_path_variants("/api/items"),
+            vec!["/api/items".to_owned(), "/items".to_owned()]
+        );
+        assert_eq!(
+            route_path_variants("/api/items/v2"),
+            vec![
+                "/api/items/v2".to_owned(),
+                "/items/v2".to_owned(),
+                "/v2".to_owned(),
+            ]
+        );
+        assert_eq!(route_path_variants("/"), Vec::<String>::new());
+        assert_eq!(route_path_variants(""), Vec::<String>::new());
+    }
+
+    #[test]
+    fn log_excerpt_keeps_lines_mentioning_path_segments_capped() {
+        let tail = "[req] GET /api/items 200\n[req] GET /api/miss 404\n[db] connect ok\n";
+        let excerpt = log_excerpt(tail, "/api/miss", DIAGNOSE_EXCERPT_MAX_LINES);
+        assert!(excerpt.contains("/api/miss"), "{excerpt}");
+        assert!(!excerpt.contains("/api/items"), "{excerpt}");
+        // No keyword hit -> empty string (caller maps to None).
+        assert_eq!(log_excerpt("[db] connect ok\n", "/api/miss", 10), "");
+        // Cap: 60 matching lines, max 50.
+        let many = (0..60)
+            .map(|i| format!("[req] GET /api/miss line {i}\n"))
+            .collect::<String>();
+        assert_eq!(log_excerpt(&many, "/api/miss", 50).lines().count(), 50);
     }
 }

@@ -1109,7 +1109,6 @@ impl MessageProcessor {
                 .health(params)
                 .await
                 .map(|response| Some(response.into())),
-            // T04 replaces this stub with the diagnose engine wiring.
             ClientRequest::WorkspacePreviewDiagnose { params, .. } => self
                 .workspace_service_processor
                 .diagnose(params)
