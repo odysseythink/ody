@@ -1,7 +1,11 @@
 # Ody / odyBox / Canvas 长期产品与技术战略
 
-**日期：** 2026-09-06  
-**状态：** 战略基线（供后续 Design / Plan 阶段拆解）  
+**首次制定：** 2026-09-06
+
+**最近整理：** 2026-09-13
+
+**状态：** 战略基线；S0–S4 已关闭，Engineering Workspace 为下一条产品主线
+
 **涉及代码库：**
 
 - Ody：`/Users/ranwei/workspace/rust_work/ody/`
@@ -12,541 +16,500 @@
 
 ## 1. 执行摘要
 
-长期战略采用“**一个运行时、两个主要产品界面、一个内嵌视觉工作区**”的边界：
+### 1.1 最终产品定义
+
+> **Ody 是统一的 Agent、工程执行与多服务联动 Runtime；odyBox 是同时承载 Chat、Work 和 Canvas 的图形化 AI 工作台。Canvas 既能创建独立视觉 Artifact，也能作为真实前端或全栈 Workspace 的可视化操作面。**
+
+产品不以“生成一个漂亮页面”为终点。对于工程任务，完成标准是：变更进入用户的真实工程，能够运行，经过构建、测试和浏览器验证，并形成可审核的 diff。
 
 ```text
-Ody Runtime（统一能力底座）
-├── Ody TUI                         面向开发者与终端编程
-└── odyBox                          面向桌面 AI 助手与知识工作
+Ody Runtime                         单一 Agent 与工程能力底座
+├── Ody TUI                         面向开发者的终端编程界面
+└── odyBox                          面向桌面用户的图形化 AI 工作台
     ├── Chat                        对话、写作、问答
-    ├── Work                        文件、工具、知识库、长任务
-    └── Canvas / Design Workspace   UI、网页与视觉产物的闭环创作
+    ├── Work                        文件、工具与多步工程任务
+    ├── Canvas                      视觉创建、选择、评论和比较
+    └── Services                    前端、后端与依赖服务状态
 ```
 
-核心决策如下：
+Canvas 不成为第三个安装包、品牌、账户体系或 Agent 平台。Chat、Work、Canvas 和 Services 是同一项目的不同操作面，不是四套能力孤岛。
 
-1. **不创建第三个独立 UI 生成桌面产品。** Canvas 是 odyBox 的工作区，不是新的安装包、品牌、账户体系或独立 Agent 平台。
-2. **Ody TUI 和 odyBox 保持不同产品定位。** 二者共享运行时，但不追求界面和交互能力完全相同。
-3. **Ody Runtime 成为 Agent 能力的长期单一事实来源。** 会话编排、工具调用、权限、Skills、Plugins、浏览器控制和工作区文件操作逐步由 Ody 承担。
-4. **odyBox 保留产品壳职责。** 它负责图形界面、导航、桌面/移动端集成、消费者级设置、产物呈现与视觉交互。
-5. **OpenDesign 作为参考实现和可选择移植的能力来源。** 不整体复制其 Web 应用；优先吸收设计知识、预览桥、元素检查、评论、截图、修改协议和质量检查机制。
-6. **迁移禁止“大爆炸重写”。** 先建立协议和适配层，逐项切流，达到质量门槛后再删除 odyBox 中的重复能力。
+### 1.2 当前状态
 
-这一路线的战略目的不是让两个客户端“功能完全一致”，而是让同一种 Agent 能力只建设一次，同时让每个客户端服务清晰、不同的人群。
+| 成熟度轴 | 当前状态 | 已解决 | 尚未解决 |
+|---|---|---|---|
+| Agent Runtime 统一 | S4 已关闭 | Work 的 thread/turn、工具、审批、Skills、MCP、恢复与发行 Runtime | 不再是当前主线 |
+| Canvas Artifact | S1–S3 工程闭环已建立 | 自包含 HTML 的生成、迭代、元素交互、版本、快照与交付 | 真实用户价值仍需持续观察 |
+| Engineering Workspace | 尚未产品化 | Ody 已有文件、命令、进程、多根目录和浏览器基础 | 真实目录项目模型、源码映射、框架预览和前后端联动 |
+
+“S4 已完成”和“仍不能完整重构已有工程”并不矛盾。S4 解决的是统一 Runtime；已有工程属于新的源码工作区产品面，不能再作为 S3/S4 的尾项描述。
+
+### 1.3 核心决策
+
+1. 不创建第三个独立 UI 生成产品；Canvas 始终是 odyBox 的工作区。
+2. Ody Runtime 是 Agent、工具、权限、Skills、Plugins、MCP、浏览器和工程执行的长期单一事实来源。
+3. odyBox 负责产品壳、项目入口、可视化交互、状态呈现和用户审批，不再建设第二套 Agent/文件/命令运行时。
+4. 同时保留 Artifact Project 和 Workspace Project；前者服务快速原型，后者服务真实源码。
+5. 已有项目绑定真实目录，不复制为 Canvas 私有快照，不以“导出副本”冒充工程写回。
+6. 前后端联动由 Ody Runtime 承担；odyBox 通过 Services、Canvas 和 diff UI 呈现过程与结果。
+7. OpenDesign 是参考实现和选择性能力来源，不整体复制其 Web 应用或 daemon 领域模型。
+8. 后续演进使用版本化窄协议和逐项切流，禁止大爆炸重写。
 
 ---
 
-## 2. 产品组合与定位
+## 2. 产品组合与用户入口
 
 ### 2.1 Ody TUI
 
-**核心用户：** 开发者、重度终端用户、需要在真实代码库内执行复杂任务的人。  
-**核心任务：** 从代码问题到经过验证的代码变更。  
-**产品承诺：** 在终端内安全、透明、可控地完成工程任务。
+**核心用户：** 开发者、终端用户和需要在真实代码库内完成复杂任务的人。
 
-Ody TUI 的差异化应集中在：
+**产品承诺：** 在终端内安全、透明、可控地完成经过验证的工程变更。
 
-- 代码库理解与跨文件修改；
-- 命令执行、沙箱、权限审批；
-- Design / Plan / Default 等结构化协作模式；
-- 长任务、工具编排、可追踪的执行过程；
-- Skills、Plugins、MCP 与浏览器控制；
-- 对键盘、终端和脚本工作流的高效率支持。
-
-Ody TUI 不需要承载完整的视觉画布。对于视觉任务，它可以创建、修改和验证项目，并输出可由 odyBox Canvas 打开的 Artifact 或深链。
+重点能力是代码库理解、跨文件修改、命令执行、沙箱、审批、协作模式、长任务、Skills、Plugins、MCP 和浏览器控制。Ody TUI 可以处理视觉任务，但不复制 odyBox 的完整图形画布。
 
 ### 2.2 odyBox
 
-**核心用户：** 不以终端为主要工作环境的知识工作者、创作者和轻技术用户。  
-**核心任务：** 从自然语言、文件与资料到可使用的答案和产物。  
-**产品承诺：** 在一个桌面工作台内完成对话、资料处理、任务执行和产物创作。
+**核心用户：** 不以终端为主要环境的知识工作者、创作者和轻技术用户。
 
-odyBox 不应继续只以“多模型聊天客户端”定义自己。更稳固的长期定位是：
+**产品承诺：** 在一个桌面工作台内完成对话、任务执行、视觉创作和工程交付。
 
-> **个人 AI 工作台：既能聊天，也能对用户的文件和产物采取行动。**
+odyBox 的长期定位是：
 
-为了避免功能臃肿，能力通过渐进式披露呈现：
+> **个人 AI 工作台：既能聊天，也能对用户的文件、产物和工程采取行动。**
 
-- 默认停留在 Chat，不暴露复杂工具；
-- 需要文件、代码执行、MCP 或多步任务时进入 Work；
-- 产生 UI、网页或视觉设计意图时打开 Canvas；
-- Canvas 初期从 Artifact 卡片进入，不急于成为一级导航；
-- 只有当真实使用证明其高频且独立时，才提升为一级工作区。
+能力采用渐进式披露：默认使用 Chat；需要文件、工具和多步任务时进入 Work；需要视觉操作时打开 Canvas；需要运行真实应用时显示 Services。
 
-### 2.3 Canvas / Design Workspace
+### 2.3 Canvas
 
-Canvas 的定位是 **odyBox 中针对视觉产物的专业交互面**，而不是另一个通用 AI 助手。
+Canvas 是 odyBox 中针对 UI、网页和视觉产物的专业交互面，负责：
 
-它必须解决完整闭环：
+- Preview、viewport、缩放和响应式检查；
+- 元素选择、hover、评论和 free-pin；
+- 视觉版本比较、截图和验收；
+- 将视觉意图映射为 Artifact patch 或真实源码变更；
+- 导出原型，或把通过验证的变更交付到真实工程。
 
-```text
-需求 → 设计方向 → 生成 → 实时预览 → 选择/评论 → 修改
-     → 截图与状态检查 → 比较版本 → 验收 → 导出/写回项目
-```
+Canvas 不拥有独立登录、模型供应商、会话、Skills、权限、文件系统或进程管理器。
 
-Canvas 不拥有独立的模型供应商、账户、Skills、权限、会话或文件系统实现；这些全部复用 Ody Runtime 与 odyBox 已有产品能力。
+### 2.4 两种项目对象
 
----
+#### Artifact Project
 
-## 3. 为什么不做第三个桌面产品
+面向快速原型、单页视觉探索和无需工程环境的交付物。
 
-一个独立 UI 产品会与 odyBox 在以下层面重复：
+- 内容权威可以位于 Artifact Store；
+- 核心对象是自包含 HTML、Revision、PatchSet、Comment 和 Snapshot；
+- 保留离线渲染、安全隔离、PNG/PDF/ZIP 导出；
+- 不宣称等价于 React/Vue/Next/Vite 源码工程。
 
-- Electron/Web 桌面壳、更新、签名和多端发布；
-- 模型配置、流式对话与消息历史；
-- Agent Mode、工具调用、审批和暂停恢复；
-- Skills、MCP、文件上传与知识库；
-- 项目、Artifact、HTML 预览和导出；
-- 用户教育、品牌传播、获客与付费关系。
+#### Workspace Project
 
-更严重的是，三个产品会迫使有限团队同时维护三套路线图和用户心智。视觉能力尚未证明拥有独立获客和留存曲线时，拆产品会先产生组织成本，而不是创造市场边界。
+面向新建或已有的真实代码工程。
 
-未来只有同时满足下列条件，才重新评估 Canvas 独立产品化：
+- 源码权威始终是用户授权的 filesystem roots；
+- 核心对象是源文件、页面、组件、路由、服务、测试和 Git diff；
+- 修改直接进入原工程；
+- Canvas Artifact 可以作为设计参考，但不能覆盖真实源码事实。
 
-1. 用户画像、购买者和获客渠道明显不同于 odyBox；
-2. 大多数核心工作流无需 Chat / Work 也能独立成立；
-3. Canvas 具有独立且稳定的留存和付费证据；
-4. 专业设计协作需求迫使其信息架构与 odyBox 明显分叉；
-5. 独立后获得的增长收益显著高于重复基础设施和品牌成本。
-
-在此之前，Canvas 始终作为 odyBox 的能力面存在。
-
----
-
-## 4. 当前基础与关键缺口
-
-### 4.1 Ody 已有的底座
-
-Ody 已具备成为统一 Runtime 的主要基础：
-
-- `app-server` 与独立的 protocol / client / transport crates；
-- 线程、Turn、事件、审批和配置协议；
-- Skills 发现、选择、注入与统一扩展面；
-- Plugins / MCP 扩展机制；
-- 文件编辑、命令执行、沙箱和权限体系；
-- Browser Control 的导航、截图、DOM、日志和 CDP 能力；
-- Design / Plan 协作模式及其文档交接机制。
-
-缺口不是“没有 Agent Runtime”，而是 app-server 协议尚未被定义为 odyBox 的正式长期后端，且缺少视觉 Artifact、Preview、Node Selection 和 Revision 等领域协议。
-
-### 4.2 odyBox 已经存在的视觉骨架
-
-odyBox 不是从零开始。当前源码已经包含：
-
-- Project / Artifact Schema，且注释明确标记为 OpenDesign native integration；
-- `/design/$projectId` 路由；
-- `design_generate_artifact` 模型工具；
-- UI / Graphic / Code / Webpage Artifact Renderer；
-- HTML 本地 preview server；
-- `frontend-design` 内置 Skill；
-- Electron、Web、iOS、Android 多端产品壳。
-
-但当前能力仍是 Phase 1 骨架：
-
-- 生成器只使用泛化的 `You are a UI generator` 提示；
-- 生成模型调用与完整会话、设计方向和审查流程脱节；
-- 仅支持自包含 HTML；
-- iframe 预览基本只读；
-- Artifact 卡片的“继续迭代”入口仍禁用；
-- Design 项目页只是 Artifact 网格，不是创作工作台；
-- 没有元素身份、源码映射、评论、可逆修改和视觉验收闭环。
-
-因此，战略上应当扩展现有骨架，而不是另起应用。
-
-### 4.3 当前最大的技术战略风险
-
-odyBox 已拥有独立的模型调用、Agent Mode、工具构建、Skills、MCP、文件系统和审批链路。若 Ody 与 odyBox 继续分别建设这些能力，长期成本会高于 Canvas 本身。
-
-统一 Runtime 必须成为主线目标，但不能直接删除 odyBox 的现有链路。正确路径是：
+### 2.5 三种入口
 
 ```text
-定义协议 → 接入单一能力 → 双路对比 → 默认切流 → 稳定观察 → 删除旧实现
+新建原型             → Artifact Project → Canvas
+新建前端工程         → Workspace Project → Work + Canvas
+打开已有/前后端工程  → Workspace Project → Work + Canvas + Services
 ```
+
+用户不需要选择“调用 Ody”或“调用 OpenDesign”。系统根据项目类型和任务意图路由能力。
 
 ---
 
-## 5. 长期目标架构
+## 3. 当前实现边界
 
-### 5.1 责任边界
+### 3.1 Ody 已有基础
 
-| 层 | 长期职责 | 不应拥有 |
+Ody 已具备 Engineering Workspace 所需的大部分底层能力：
+
+- app-server、版本化 protocol、client 和 transport；
+- thread、turn、事件、审批、恢复和配置；
+- 多个 `runtimeWorkspaceRoots` 与线程 cwd；
+- 文件读写、目录和 metadata 协议；
+- 命令、PTY、长进程和后台终端；
+- Git、沙箱和权限体系；
+- Browser 的导航、DOM、日志、截图和 CDP；
+- Skills、Plugins、MCP 与扩展机制。
+
+缺口不是重新建设 Agent Runtime，而是为真实项目、源码引用、服务和验证定义稳定的产品领域协议。
+
+### 3.2 odyBox Canvas 当前能力
+
+当前 Canvas 已形成 Artifact 闭环：
+
+```text
+需求 → 生成自包含 HTML → Preview → 元素选择/评论
+     → 迭代或样式 Patch → Revision/Snapshot → 对比 → 导出
+```
+
+但“导入项目”仍是受限快照：
+
+- 只读取白名单文件；
+- 最多 200 个文件、12 MiB；
+- 内容保存到 odyBox blob；
+- 静态资源被打包进自包含 HTML；
+- ES Modules 和外部资源不作为真实工程运行；
+- 导出创建新的 `canvas-*` 目录，不回写原工程。
+
+模型迭代接收的是上一版 HTML，而不是完整源码依赖图。因此当前 Canvas 适合原型，不适合可靠地重构框架组件、增加真实路由或维护前后端契约。
+
+### 3.3 Ody 当前在 Canvas 中的责任
+
+Ody 已经参与 Canvas，但范围有限：
+
+- Visual Workspace v1 保存 VisualProject、Artifact、Revision、style patch 和 Snapshot；
+- odyBox 将本地 Canvas 项目及版本同步给 Runtime；
+- Ody 另有完整 Work Mode Agent Runtime，可以在真实目录中读写和执行命令。
+
+当前仍由 odyBox 主导 Canvas 页面、Preview、元素交互、自包含 HTML 生成、本地 Artifact 编排和隔离渲染。
+
+两条能力线尚未打通：Canvas 提交没有作为源码工程 turn 交给 Ody；Visual Workspace v1 也没有 framework、filesystem root、route、service 或 AST/source mapping。
+
+### 3.4 当前不能宣称的能力
+
+- 不能宣称导入已有项目后会直接维护原工程；
+- 不能宣称 Canvas 已支持框架源码 round-trip；
+- 不能宣称前端和后端会被自动发现、启动和联调；
+- 不能把 powered/static preview 等价为真实 dev server；
+- 不能把 Artifact Revision 等价为 Git 或源码 checkpoint。
+
+---
+
+## 4. OpenDesign 参考结论
+
+### 4.1 做得更好的部分
+
+OpenDesign 0.20.1 对已有项目采用真实目录模式：`baseDir` 经 realpath 后写入项目 metadata，Agent 和文件工具直接在用户目录中工作，不创建影子副本。
+
+其代码迁移流水线是：
+
+```text
+code-import
+→ design-extract / token-map
+→ rewrite-plan
+→ patch-edit ↔ build-test
+→ diff-review
+→ handoff
+```
+
+因此它可以在已有前端工程内搜索和修改页面、组件、样式与路由，并以小步 patch、构建和测试验证结果。这是 Engineering Workspace 应优先吸收的模式。
+
+### 4.2 没有完整解决的部分
+
+OpenDesign 尚未把前后端联动做成一等产品能力：
+
+- 项目终端可以在 cwd 中运行命令，但不等于服务编排；
+- 自动发现和启动 Next/Vite 等 dev server 仍是 Draft RFC；
+- 自定义 proxy/rewrites 在该 RFC 中被列为 out of scope；
+- 没有完整的服务依赖、健康检查、日志关联和网络错误归因；
+- 单个 `baseDir` 不等价于正式的多根可写全栈项目模型。
+
+OpenDesign 提供了“真实目录 + 通用终端 + 工程修改闭环”，但没有完成“全栈服务联动产品”。
+
+### 4.3 吸收与隔离原则
+
+优先吸收：
+
+- 真实目录绑定与安全校验；
+- 先检查现有源码再修改的约束；
+- 小步 patch、build/test 和 diff review；
+- iframe bridge、稳定元素身份、inspect/comment/free-pin；
+- screenshot、视觉 lint、响应式和设计审查方法。
+
+不整体搬运：
+
+- `apps/web` 应用壳和 daemon API 客户端；
+- OpenDesign 专属项目、账户、插件和 sidecar 模型；
+- 与 odyBox 重复的会话、设置和模型系统；
+- 只有外观、没有闭环价值的组件。
+
+移植必须遵守 Apache-2.0 和 NOTICE，并单独核查字体、图片、模板与第三方依赖。
+
+---
+
+## 5. 目标工作流
+
+### 5.1 从零创建原型
+
+```text
+Brief → 设计方向 → 自包含 Artifact → Preview/评论
+      → Revision 与视觉验证 → 导出或转入 Workspace Project
+```
+
+该流程继续使用当前 Artifact Canvas，不要求安装依赖或理解工程结构。
+
+### 5.2 从零创建真实前端工程
+
+```text
+选择技术栈和目标目录
+→ Ody 创建工程骨架
+→ 安装依赖与建立 Git baseline
+→ 创建页面/组件/路由
+→ 启动 dev server
+→ Canvas 预览与视觉反馈
+→ build/typecheck/test
+→ diff review
+```
+
+项目创建后立即成为 Workspace Project，不先生成自包含 HTML 再尝试反向转换源码。
+
+### 5.3 打开并修改已有工程
+
+```text
+目录授权
+→ 只读识别技术栈、页面、组件、路由和脚本
+→ 建立 SourceRef 与 Git baseline
+→ 选择目标或描述任务
+→ Ody 小步修改真实源码
+→ build/test/browser 验证
+→ Canvas 展示结果和视觉差异
+→ 用户审核 diff
+```
+
+“当前页面”“这个组件”“增加设置页”等指令必须先解析到稳定 SourceRef，不能只把构建后的 DOM 或 HTML 交给模型重写。
+
+### 5.4 前后端分离项目联动
+
+Workspace Project 至少记录：
+
+- 一个或多个授权 `workspaceRoots`；
+- `frontendRoot`、`backendRoot` 和可选 package roots；
+- 每个服务的启动、停止、构建、测试和 health check；
+- 端口、URL、依赖顺序和非敏感环境变量引用；
+- Runtime thread、后台终端、Preview session 和 Git baseline。
+
+```text
+odyBox 授权前端/后端 roots
+  → Ody 识别 manifests、routes、API clients、命令与端口
+  → Ody 按依赖顺序启动 backend、frontend 和必要依赖
+  → health check 结果进入 Services 面板
+  → Browser 打开前端并执行页面操作
+  → 汇总 console、网络失败、后端日志、构建和测试
+  → Agent 修改前端或后端源码
+  → 重复验证
+  → 展示跨 roots 的 diff 与验收结果
+```
+
+如果前后端位于两个独立目录，必须分别授权并传给 Ody 的 `runtimeWorkspaceRoots`。第一个 root 只是默认 cwd，其他 root 不能降格成附件。未获授权的后端目录不得被暗中读取或修改。
+
+第一版优先支持本机开发闭环：一个前端服务、一个后端服务和可选数据库/依赖服务。远程集群、生产部署、复杂认证和任意容器编排后置。
+
+---
+
+## 6. 目标架构与职责边界
+
+### 6.1 职责矩阵
+
+| 领域 | odyBox / Canvas | Ody Runtime |
 |---|---|---|
-| Ody Runtime | 模型编排、线程/Turn、工具、权限、Skills、Plugins、MCP、Browser、文件与任务执行 | Electron 导航、React 组件、消费者 UI 状态 |
-| Ody TUI | 终端交互、代码任务呈现、审批、日志、Artifact 链接 | 独立 Agent 实现、完整视觉画布 |
-| odyBox Shell | 桌面/Web/移动 UI、账户与本地产品设置、导航、通知、输入和产物呈现 | 第二套 Agent/工具/权限事实来源 |
-| Canvas | Preview、Viewport、元素选择、评论、视觉对比、版本与导出 | 独立登录、模型供应商、Skills、文件权限 |
-| OpenDesign Adapter | 复用或翻译 OpenDesign 的设计和预览能力 | 侵入核心会话与权限模型 |
+| 项目入口 | 新建原型、新建工程、打开目录、多根授权 UI | 校验并持有 Runtime workspace 上下文 |
+| 可视化交互 | Preview、viewport、选择、批注、视觉比较 | DOM/SourceRef 数据、Agent 解释和变更执行 |
+| 源码工程 | 文件树、页面/组件/路由视图、diff 和确认界面 | 搜索、读取、patch、格式化、Git、构建和测试 |
+| 服务联动 | Services 面板、日志、启动/停止确认、健康状态 | 后台终端、进程生命周期、端口和 health check |
+| 浏览器验证 | 承载预览，展示错误、截图和验收结果 | 导航、DOM、console、网络诊断、截图和自动操作 |
+| Artifact | 呈现、评论、比较和导出 | Artifact/Revision/Snapshot 协议与持久化权威 |
+| 权限安全 | 解释目标和影响，呈现审批 | roots、沙箱、命令/文件审批和敏感数据边界 |
 
-### 5.2 状态所有权
+### 6.2 状态所有权
 
-长期必须明确状态权威，防止“双数据库、双真相”：
+- **Runtime 权威：** Thread、Turn、工具调用、审批、工作区绑定、服务状态、ChangeSet、验证结果、Artifact 元数据和 Revision 关系。
+- **用户工作区权威：** Workspace Project 的真实源码、工程配置和 Git 历史。
+- **Artifact Store 权威：** HTML、图片、bundle、截图等大对象，以稳定 ID 和内容 hash 引用。
+- **odyBox 权威：** 窗口、布局、主题、面板开关、设备设置和未提交 UI 草稿。
+- **Canvas 临时状态：** hover、当前选择、viewport 和缩放；评论、版本和验收结果必须持久化。
 
-- **Runtime 权威：** Thread、Turn、工具调用、审批、任务状态、工作区绑定、Artifact 元数据、Revision 关系。
-- **Artifact Store 权威：** HTML、图片、bundle、截图等大对象；以稳定 ID 和内容 hash 引用。
-- **odyBox 权威：** 窗口、布局、主题、面板开关、设备特有设置和未提交的本地 UI 草稿。
-- **Canvas 临时状态：** hover、当前选择、viewport、缩放；需要跨设备或审计的评论与版本必须写回 Runtime。
+迁移期间禁止无版本双写。兼容数据必须带 `schemaVersion`、idempotency key、base hash 和来源标识。
 
-迁移期间禁止无版本的双写。需要兼容时，应使用带 schemaVersion、idempotency key 和来源标识的同步事件。
+### 6.3 协议边界
 
-### 5.3 Visual Workspace 协议
+renderer 不应直接获得无边界的 `fs/writeFile` 或 `process/spawn` 通道。Ody 应提供面向产品语义的窄协议，在 Runtime 内执行权限、幂等、恢复和清理：
 
-在 app-server 之上新增独立、可演进的视觉领域协议。第一版至少覆盖：
-
-**核心实体：**
-
-- `VisualProject`
-- `Artifact`
-- `ArtifactRevision`
-- `PreviewSession`
-- `Viewport`
-- `ElementRef`
-- `SourceRef`
-- `Snapshot`
-- `Comment`
-- `PatchSet`
-- `ValidationResult`
-
-**核心能力：**
-
-- 创建/打开/关闭视觉项目；
-- 生成 Artifact 和增量 Revision；
-- 启动隔离预览并报告 ready/error；
-- 截图、DOM 摘要、computed style、bounds 与可访问性信息；
-- 通过稳定元素 ID 选择元素；
-- `ElementRef ↔ SourceRef` 映射；
-- 创建评论、将评论交给 Agent、应用 Patch；
-- 切换桌面/平板/移动 viewport 和交互状态；
-- 对比版本、撤销、重做、接受与导出；
-- 视觉 lint、运行错误和验收结果回传。
-
-协议应与 OpenDesign 的具体 React 组件和 daemon API 解耦，使 TUI、odyBox、测试工具和未来 Web 客户端都能消费同一状态。
+- `workspace/project/*`：绑定、读取、扫描、关闭；
+- `workspace/source/*`：索引、SourceRef、ChangeSet、diff；
+- `workspace/service/*`：发现、启动、停止、日志、health check；
+- `workspace/preview/*`：URL、viewport、浏览器状态和验证；
+- `visualWorkspace/*`：Artifact、Revision、Comment、Snapshot 和视觉 patch。
 
 ---
 
-## 6. OpenDesign 吸收策略
+## 7. 领域模型与 Visual Workspace 演进
 
-### 6.1 应优先吸收
+### 7.1 新增实体
 
-- 设计方向库、模板和 Design System 约束；
-- iframe 与宿主之间的消息桥；
-- 稳定元素 ID 注入和目标选择；
-- inspect、comment、free-pin、CSS override；
-- screenshot / snapshot 回传；
-- 视觉 lint、响应式检查和设计审查清单；
-- 适合当前用户群的预览工作台交互。
+- `WorkspaceProjectRef`：项目 ID、roots、权限、技术栈和 Git 状态；
+- `WorkspaceRoot`：路径、角色、读写权限和授权来源；
+- `SourceArtifact`：页面、组件或路由入口及框架信息；
+- `SourceRef`：文件、范围、symbol、route 和内容 hash；
+- `WorkspaceService`：命令、cwd、端口、依赖、health check 和进程状态；
+- `PreviewSession`：URL、依赖服务、viewport、console/network/runtime errors；
+- `ChangeSet`：跨文件 patch、base hash、验证结果和 Git diff；
+- `ValidationRun`：build、typecheck、lint、test、browser 和 API 检查。
 
-### 6.2 不应直接搬运
+### 7.2 Visual Workspace v1 的保留边界
 
-- 整个 `apps/web` 应用壳；
-- 与 OpenDesign daemon 强绑定的 API 客户端；
-- OpenDesign 专属的项目、插件和 sidecar 领域模型；
-- 与 odyBox 重复的登录、会话、设置、模型和消息系统；
-- 仅提供外观但没有闭环价值的组件复制。
+当前 v1 有意传输自包含 HTML。`VisualProject` 没有 roots、framework、entry、route 或 service；PatchSet 只支持按 `data-ody-id` 设置样式。
 
-### 6.3 复用方式
+它继续服务 Artifact Project，不直接扩张为含糊的“万能项目”。Workspace Project 应新增 source-backed 表达，再通过稳定引用与 Visual Artifact 关联。
 
-优先顺序如下：
+两种项目可以共享 Comment、Snapshot、视觉比较、Artifact 谱系和验收结果，但不能共享错误的存储假设：Artifact 内容可由 Artifact Store 持有，Workspace 源码始终以用户目录为准。
 
-1. **行为和协议复刻：** 按 Ody Visual Workspace 协议重新实现，边界最干净；
-2. **小模块移植：** 对隔离良好的 bridge、lint、模板模块进行移植；
-3. **适配器运行：** 短期将 OpenDesign 作为 sidecar 验证用户体验；
-4. **整站嵌入：** 仅用于内部原型，不作为长期架构。
+### 7.3 SourceRef 闭环
 
-OpenDesign 使用 Apache-2.0，但每次移植仍需保留许可证与 NOTICE、标记修改，并单独检查字体、图片、模板和第三方依赖授权。
+第一阶段不追求完整 IDE 级 AST 数据库，而是建立足够可靠的定位链：
+
+```text
+Canvas ElementRef
+↔ Preview DOM / source metadata
+↔ SourceRef(file, range, symbol, hash)
+↔ ChangeSet
+↔ ValidationRun
+```
+
+当内容 hash 或外部编辑导致定位失效时，必须重新索引或要求用户确认，不能在猜测位置静默写入。
 
 ---
 
-## 7. 分阶段路线图
-
-时间只表示战略顺序，不是未经团队容量估算的交付承诺。
-
-### 阶段 S0：冻结边界与建立基线（0–1 个月）— 已完成
-
-**完成记录：** [S0 完成审计](./2026-09-06-s0-completion-audit.md)。正式决策、权责矩阵、Canvas 基线和 OpenDesign 许可证台账均已落盘；odyBox Canvas 已显示 Preview 状态，并建立固定评测集与汇总命令。
-
-**目标：** 停止新增重复产品和运行时能力。
-
-行动：
-
-- 正式记录“不创建第三个桌面 UI 产品”的产品决策；
-- 将 Canvas 标记为 odyBox 实验性工作区；
-- 盘点 Ody 与 odyBox 的模型、会话、工具、权限、Skills、MCP、Artifact 重复矩阵；
-- 定义统一 Runtime 的 capability parity 表；
-- 为现有 `design_generate_artifact` 建立质量和成功率基线；
-- 建立 OpenDesign 代码、素材和依赖许可证清单。
-
-**退出条件：** 每项能力都有长期权威层、迁移状态和负责人；不再新增第三套实现。
-
-### 阶段 S1：让 odyBox 现有 Design 骨架形成最小闭环（1–3 个月）— 工程完成
-
-**完成记录：** [S1 完成审计](./2026-09-06-s1-canvas-minimum-loop-completion-audit.md)。生成上下文、`frontend-design` 注入、Artifact Revision、Chat + Preview 工作台、viewport、运行错误、截图、导出和隐私安全指标均已落地；真实用户指标进入观察期。
-
-**目标：** 在不等待 Runtime 全面统一的情况下，验证 Canvas 是否解决真实问题。
-
-行动：
-
-- 让内层生成器获得完整 brief、会话摘要、设计方向和用户约束；
-- 将 `frontend-design` 的选择结果真正注入 Artifact 生成链路；
-- 启用“继续迭代”，建立 Artifact Revision，而不是每次创建孤立文件；
-- 将项目页改为 Chat + Preview 的分栏工作区；
-- 增加 desktop/mobile viewport、刷新、运行错误和截图；
-- 保留 HTML 自包含限制，先不扩张到完整框架工程；
-- 采集失败类型、首个可用结果时间、迭代次数和导出行为。
-
-**退出条件：** 用户可以完成“生成 → 看到 → 提修改 → 得到新版本 → 导出”的闭环；失败可诊断；版本可回退。
-
-**停止条件：** 若真实用户没有稳定完成闭环，暂停重资产 Canvas 开发，先解决任务价值与入口问题。
-
-### 阶段 S2：双向视觉交互（3–6 个月）— 工程完成
-
-**完成记录：** [S2 完成审计](./2026-09-06-s2-bidirectional-visual-interaction-completion-audit.md)。稳定元素身份、选择/评论/free-pin、结构化 Agent 反馈、持久化 PatchSet、三视口检查、截图留档和跨 Revision 像素对比均已落地；真实浏览器与用户验收仍进入观察期。
-
-**目标：** 从“聊天旁边放 iframe”升级为真正的视觉工作台。
-
-行动：
-
-- 引入稳定元素 ID 和 ElementRef；
-- 支持点击选择、hover、bounds、computed styles；
-- 支持元素评论和 free-pin；
-- 将选择和评论结构化地发送给 Agent；
-- 建立 CSS override → PatchSet → 源文件修改的通道；
-- 加入截图回看、响应式矩阵、基本 a11y 与运行错误检查；
-- 对生成前后截图做可重复的视觉评测。
-
-**退出条件：** 用户不必用文字描述“左上角第二个按钮”，并且视觉修改能够可靠映射到持久化版本或源码。
-
-### 阶段 S3：Visual Workspace 协议进入 Ody app-server（4–8 个月，可与 S2 部分并行）— 工程基础完成，灰度观察期
-
-**完成记录：** [S3 Runtime 接入审计](./2026-09-06-s3-visual-workspace-runtime-completion-audit.md)。协议、持久化、事件、生成 TypeScript client 和 odyBox 的 runtime/legacy 切换已落地；默认切换与发行包内 Runtime 尚未开启。
-
-**目标：** 让视觉能力开始使用统一 Runtime，而不是继续加深 odyBox 私有编排。
-
-行动：
-
-- 在 app-server protocol 中定义版本化 Visual Project / Artifact / Revision / Preview 事件；
-- 生成或维护类型安全的 TypeScript client；
-- 先将截图、Browser、Artifact 生成和 Patch 应用路由到 Ody；
-- odyBox 使用 feature flag 在旧链路和 Ody Runtime 间切换；
-- 建立同一输入的行为对比和回归数据；
-- 明确进程生命周期、崩溃恢复、升级兼容和离线降级。
-
-**退出条件：** 至少一条完整视觉生成链路默认通过 Ody Runtime；协议错误、恢复能力和性能达到现有链路标准。
-
-### 阶段 S4：统一 Agent Runtime（6–12 个月）— ✅ 2026-09-11 关闭（8 项全清，见 17.2）
-
-**完成记录：** [S4 Agent Runtime 网关审计](./2026-09-06-s4-agent-runtime-gateway-completion-audit.md)。配置发行 Runtime 后，odyBox Work 回合自动通过类型化 Ody thread/turn 执行，支持流、工具卡片、审批、停止与跨启动恢复；普通 Chat 仍使用会话 provider。旧 Work 实现待真实稳定窗口后删除。
-
-**目标：** 消除 odyBox 中最昂贵的重复 Agent 基础设施。
-
-建议迁移顺序：
-
-1. Browser 与视觉验证；
-2. 文件系统、命令执行和审批；
-3. Skills / Plugins / MCP；
-4. Work Mode 的多步工具编排；
-5. 会话、流式事件、暂停与恢复；
-6. 普通 Chat 模式的模型调用与供应商配置。
-
-每一项都执行：适配 → 双路测试 → 小流量默认 → 全量默认 → 稳定窗口 → 删除旧实现。
-
-**退出条件：** odyBox 不再拥有第二套 Agent loop、工具权限和 Skills 注入事实来源；残留代码仅限 UI adapter 与设备集成。**2026-09-11 裁定：已满足**——Work 唯一 Runtime 路径（静默回退已删，`6e306eb6`）、审批/elicitation/requestUserInput 全走 Runtime 白名单、Skills 注入以 runtime `enabled` 为事实来源；legacy workflow/agent 死分支已物理删除（约 1.3 万行）；Chat 保留会话 provider 是正文既定产品设计（337 行），不构成第二套 Agent loop。
-
-
- 距离“S4 真正完成、ody 与 odyBox 只共享一套 Agent Runtime”，还剩以下工作，按优先级排序：
-
-  1. 完成真实 Work Runtime 验收
-
-  需要实际验证：
-
-  - 连续多轮对话与上下文保持
-  - 命令执行允许、拒绝和超时
-  - 文件修改允许、拒绝及结果展示
-  - MCP 调用与 elicitation
-  - Skills 注入
-  - Stop/Interrupt
-  - odyBox 重启后的 thread 恢复
-  - Runtime 崩溃后的恢复
-  - 多窗口与并发会话隔离
-
-  目前自动测试通过，但还不能代替真实模型和真实工具回合。
-
-  2. 补齐模型供应商适配
-
-  目前 DeepSeek、OpenAI、Anthropic、Gemini及多数 OpenAI-compatible provider 已有映射，但仍需处理：
-
-  - Azure OpenAI
-  - AWS Bedrock
-  - Chatbox AI
-  - 特殊 OAuth provider
-  - 自定义 Header、代理和企业 endpoint
-  - 会话切换模型后 Runtime thread 的迁移策略
-
-  不支持的供应商目前会明确报错，不会错误回退到 Chatbox AI。
-
-  3. 统一 Skills、Plugins、MCP 管理界面
-
-  当前 Work 执行时以 Ody 为准，但 odyBox 的部分设置页面还在操作旧系统。需要把：
-
-  - Skills 安装、删除、升级、启停
-  - Plugin 安装、卸载、配置
-  - MCP 添加、OAuth、启停、状态
-  - Skills 目录和额外根目录
-
-  全部改成调用 Ody app-server。否则仍然存在“界面配置了一份，Runtime 使用另一份”的双重事实来源。
-
-  4. 完善 Runtime 原生交互 UI
-
-  当前命令和文件审批已有 odyBox 弹窗，但 requestUserInput 暂时使用系统 window.prompt。还需要：
-
-  - 原生多问题表单
-  - 单选、多选、自由输入
-  - 密码字段
-  - MCP 表单和 URL elicitation
-  - 权限范围选择：单次、当前 Turn、当前 Session
-  - 审批等待状态及超时提示
-
-  这不影响运行时统一，但影响产品完成度。
-
-  5. 完善状态映射
-
-  需要把更多 Ody 事件映射到 odyBox UI：
-
-  - Plan 和进度状态
-  - Token usage
-  - Context compaction
-  - Guardian 审查过程
-  - Browser 操作与截图
-  - 后台终端
-  - 子 Agent 状态树
-  - Hook 执行
-  - 更完整的错误信息和重试入口
-
-  6. 消除兼容回退
-
-  当前仍保留：
-
-  - VITE_ODYBOX_AGENT_RUNTIME=legacy
-  - Runtime 未配置时的旧 Work Agent 回退
-  - odyBox 旧 workflow runner
-  - 旧工具构建和 Skills 注入链路
-  - 旧命令、文件审批实现
-
-  真实验证稳定后，需要让“Runtime 不可用”变成明确的启动/修复提示，而不是静默运行第二套 Agent。
-
-  7. 删除旧 Agent 基础设施
-
-  最后才能物理删除不再使用的：
-
-  - 旧 Agent loop
-  - Work Mode 模型工具循环
-  - declarative workflow 执行器
-  - 重复的 Skills loader/injector
-  - 重复的 MCP tool builder
-  - 重复的命令、文件和权限判断
-
-  普通 Chat 的纯模型调用、Canvas UI、Electron 集成可以保留，它们不属于第二套 Agent Runtime。
-
-  8. 完成发行闭环
-
-  虽然你已手动放置 Runtime，还需要正式产品化：
-
-  - Runtime 二进制随 odyBox 打包
-  - 不依赖用户设置环境变量
-  - 版本兼容检查
-  - 校验和与签名
-  - macOS/Windows/Linux 路径
-  - 自动升级的一致性
-  - Runtime 健康检查和诊断页面
-
-  结论：现在最先做的不是继续删代码，而是完成第 1 项真实验收；随后做第 3、4、6、7 项。完成这些后，才能客观地把 S4 标
-  为“完成”，届时 odyBox 和 Ody 才真正只有一套 Agent Runtime。
-
-### 阶段 S5：产品化与平台化（12 个月以后）
-
-**目标：** 在闭环和 Runtime 已稳定后扩大产品价值，而不是提前扩表面积。
-
-候选能力：
-
-- 品牌包、设计系统和组织模板；
-- 组件库感知与真实代码库 round-trip；
-- 多页面流程、状态机和交互录制；
-- 可分享预览与评论协作；
-- 自动视觉回归和质量评分；
-- Canvas 深链，可从 Ody TUI 打开同一 Artifact；
-- 面向插件的 Visual Workspace SDK。
-
-这些能力必须由留存、付费或生态证据排序，不作为前置承诺。
+## 8. 安全、版本与可靠性
+
+### 8.1 真实目录
+
+- 目录由用户通过可信选择器授权；
+- 保存前执行 realpath，拒绝文件系统根、应用数据目录和越界符号链接；
+- 多根项目分别记录权限，不因父会话存在而自动扩大范围；
+- 脏工作树默认保留用户改动，不自动 reset、覆盖或删除；
+- 修改前建立 Git baseline，修改后提供 diff；
+- 无 Git 项目使用显式 checkpoint/backup，不以 Artifact revision 代替源码恢复。
+
+### 8.2 命令与服务
+
+- 安装依赖、启动服务和高风险命令遵循 Ody 审批；
+- 环境变量使用受控引用，密钥不进入日志、Artifact、Snapshot 或模型上下文；
+- 后台服务必须可列出、停止、清理并在崩溃后恢复状态；
+- 端口冲突、启动超时和进程退出产生结构化错误；
+- 关闭项目或 Runtime 时不得留下失控进程。
+
+### 8.3 Preview
+
+- Artifact Preview 继续使用 CSP、sandbox、隔离 profile 和资源 allowlist；
+- Workspace Preview 使用真实 loopback dev server，但不因此获得 odyBox 应用权限；
+- Browser 的网络、日志和截图结果按敏感数据规则裁剪；
+- 远程 URL、登录态和生产环境操作需要单独授权策略。
 
 ---
 
-## 8. 产品体验原则
+## 9. 路线图
 
-### 8.1 不让用户理解内部架构
+时间表示战略顺序，不是未经容量评估的交付承诺。
 
-用户不应选择“调用 Ody”还是“调用 OpenDesign”。用户只选择任务：聊天、工作或创作。Runtime、Skill 和工具路由由系统完成。
+### 9.1 已完成阶段 S0–S4
 
-### 8.2 模式是界面，不是新的能力孤岛
+| 阶段 | 状态 | 结果 | 审计 |
+|---|---|---|---|
+| S0 边界与基线 | 已完成 | 产品 ADR、权责矩阵、Canvas 基线、许可证台账 | [S0 审计](./2026-09-06-s0-completion-audit.md) |
+| S1 Canvas 最小闭环 | 工程完成 | 生成、Preview、迭代、Revision、恢复和导出 | [S1 审计](./2026-09-06-s1-canvas-minimum-loop-completion-audit.md) |
+| S2 双向视觉交互 | 工程完成 | ElementRef、评论、free-pin、PatchSet、快照和比较 | [S2 审计](./2026-09-06-s2-bidirectional-visual-interaction-completion-audit.md) |
+| S3 Visual Workspace | 工程基础完成 | v1 协议、持久化、事件、TS client 和灰度切换 | [S3 审计](./2026-09-06-s3-visual-workspace-runtime-completion-audit.md) |
+| S4 统一 Agent Runtime | 2026-09-11 关闭 | Work 唯一 Runtime 路径、审批、Skills/MCP、恢复、诊断与发行 | [S4 审计](./2026-09-06-s4-agent-runtime-gateway-completion-audit.md) |
 
-Chat、Work、Canvas 共享同一会话身份、文件、记忆和权限语义。模式只改变工具暴露、界面密度和交互方式。
+供应商真实密钥首验和真实用户观察继续作为运营验证，不重新定义为 Runtime 架构缺口。
 
-### 8.3 Artifact 是跨界面的共同语言
+### 9.2 下一主线 E0–E4
 
-一次工作不应只留下聊天文本。代码、HTML、图片、报告和设计都以可版本化 Artifact 存在：
+#### E0：项目模型与只读发现
 
-- TUI 可以生成和修改；
-- odyBox 可以预览和继续；
-- Canvas 可以选择、评论和比较；
-- Runtime 可以验证、追踪来源和应用补丁。
+- 新增 Workspace Project，与 Artifact Project 显式区分；
+- 绑定并恢复一个或多个真实 roots；
+- 识别技术栈、包管理器、页面、组件、路由、脚本和 Git 状态；
+- 扫描阶段保持只读。
 
-### 8.4 视觉任务必须闭环
+**退出条件：** 安全打开典型 React/Vite、Next.js、Vue 和前后端分离项目；失败可诊断且不会误写文件。
 
-“模型输出 HTML”不等于完成设计。完成的最低定义是：已渲染、已检查关键 viewport、无阻断错误、用户能指向具体对象继续修改、结果可保存或导出。
+#### E1：源码级页面与组件变更
+
+- 重构已有页面和组件；
+- 在现有路由体系内增加页面；
+- 建立 ElementRef 到 SourceRef 的映射；
+- 使用小步 ChangeSet 和 Git diff；
+- 接入格式化、typecheck、build 和 test。
+
+**退出条件：** 固定工程集上的“修改页面、重构组件、增加路由”均通过原工程验证，用户可以拒绝或恢复变更。
+
+#### E2：真实框架 Preview
+
+- 识别工程已有 dev 脚本；
+- 由 Ody 管理 dev server；
+- 支持 HMR、端口冲突、启动失败、日志和生命周期清理；
+- Browser 对真实 URL 执行视觉与运行时验证。
+
+**退出条件：** Next/Vite/Vue 样本可从打开目录到 ready preview；失败原因可见；关闭项目不会遗留进程。
+
+#### E3：前后端联动
+
+- 支持单根 monorepo 和双根目录；
+- 管理服务依赖、health check、日志和启动/停止；
+- 将浏览器网络错误关联到后端日志和源码候选；
+- 分别执行前后端构建、测试并汇总跨根 diff。
+
+**退出条件：** 固定全栈样本能完成并验证“新增后端接口并在新页面调用”和“修复前后端契约不一致”。
+
+#### E4：可靠性与恢复
+
+- workspace watcher、内容 hash 和外部编辑冲突；
+- 多窗口、多会话并发约束；
+- Runtime 或服务崩溃后的恢复；
+- checkpoint、回滚、审计和敏感环境变量保护。
+
+**退出条件：** 外部 IDE 同时修改、Runtime 重启、服务崩溃和脏工作树场景不会静默丢失或覆盖代码。
+
+### 9.3 E0 之前不扩张
+
+- 模板商城和大型多人协作；
+- 生产部署和任意云环境编排；
+- 移动端完整源码编辑；
+- 全框架统一 AST；
+- Canvas 独立品牌或安装包；
+- 以更多生成模板替代真实工程闭环。
 
 ---
 
-## 9. 指标体系
+## 10. 指标体系
 
-### 9.1 产品指标
+### 10.1 Artifact Canvas
 
-- **首次价值时间：** 从请求到首个成功渲染且可交互的 Artifact；
-- **闭环完成率：** 开始视觉任务后完成生成、至少一次反馈并导出/接受的比例；
-- **指向式修改成功率：** 元素选择或评论后，修改正确落到目标的比例；
-- **版本接受率：** 用户保留而非立即废弃的 Revision 比例；
-- **周复用率：** 创建过 Canvas 项目的用户在后续周期再次使用的比例；
-- **跨界面延续率：** 在 TUI 创建、到 odyBox 继续，或反向延续的比例。
+- 首次成功渲染时间；
+- 生成—反馈—接受/导出的闭环完成率；
+- 指向式修改命中率和 Revision 接受率；
+- desktop/mobile 检查通过率；
+- Preview 启动和运行错误率；
+- 周复用率。
 
-### 9.2 质量指标
+### 10.2 Engineering Workspace
 
-- Preview 启动成功率和中位耗时；
-- 运行错误、空白页和资源加载失败率；
-- desktop/mobile 基础检查通过率；
-- ElementRef → SourceRef 定位准确率；
-- Patch 应用成功率与可回滚率；
-- 同一任务无效重试次数；
-- 人工视觉评审与自动评分的相关性。
+- 已有项目成功打开率和首次索引耗时；
+- 页面、组件、路由和 SourceRef 定位准确率；
+- 修改后 build/typecheck/test 通过率；
+- 用户接受的 diff 比例和人工返工量；
+- dev server 启动成功率与 ready 时间；
+- 前后端 health check 通过率；
+- 浏览器错误到服务/源码根因的关联准确率；
+- 外部编辑冲突、未受控进程和代码丢失事件数；
+- Artifact 原型转入真实 Workspace 并最终合入的比例。
 
-### 9.3 平台收敛指标
+### 10.3 Runtime 收敛
 
-- odyBox Agent/Work/Canvas turns 中经 Ody Runtime 执行的比例；
-- odyBox 私有 Agent 基础设施的剩余模块数；
-- 两端共享协议的兼容性失败率；
-- 重复工具和重复权限规则删除量；
-- Runtime 崩溃恢复和版本升级成功率。
+- Work/Canvas 工程任务经 Ody Runtime 执行的比例；
+- 重复工具、权限和进程实现的剩余数量；
+- 协议兼容、Runtime 恢复和升级成功率；
+- Runtime 与 UI 状态不一致事件数。
 
-禁止把“生成 Artifact 数量”作为主要成功指标；大量无人采用的生成只能说明调用量，不能说明产品价值。
-
----
-
-## 10. 商业与品牌边界
-
-在未验证定价前，不锁定具体收费方案，但应遵守以下原则：
-
-- Ody 的品牌锚点是“开发者 Agent / AI 编程”；
-- odyBox 的品牌锚点是“个人 AI 工作台”；
-- Canvas 使用 odyBox 子品牌，例如 `Canvas` 或 `Design Workspace`，不建立第三个主品牌；
-- 模型额度、云同步和高级工作区能力可以跨客户端共享权益；
-- Runtime 和协议的开放范围，与托管、协作、模板市场等商业服务分开决策；
-- 不用“支持更多模型”作为长期护城河，护城河应来自任务闭环、用户上下文、Artifact 图谱、验证数据和扩展生态。
+禁止把 Artifact 生成数量作为主要成功指标。大量未采用输出不代表产品价值。
 
 ---
 
@@ -554,176 +517,100 @@ Chat、Work、Canvas 共享同一会话身份、文件、记忆和权限语义�
 
 | 风险 | 表现 | 应对 |
 |---|---|---|
-| odyBox 定位失焦 | Chat、Work、Canvas 同时堆在首页 | 渐进式披露；Canvas 从 Artifact 进入；按任务自动建议模式 |
-| Runtime 统一变成多年重写 | 新旧两套长期并存 | 以能力为单位切流；每阶段必须删除已替代实现 |
-| Ody 协议被某个 UI 绑死 | app-server 字段直接映射 React 状态 | 协议描述领域事件，不描述组件；做 TUI/测试客户端验证 |
-| 只移植 OpenDesign 外观 | 页面变漂亮但无法反馈迭代 | 优先实现 ElementRef、Snapshot、Comment、Patch 和 Revision |
-| 生成 HTML 安全风险 | iframe 越权、网络泄漏、恶意脚本 | CSP、sandbox、隔离 profile、资源 allowlist、敏感操作审批 |
-| 视觉质量不可度量 | 靠主观演示推动开发 | 固定任务集、截图回归、人工盲评、用户接受行为结合 |
-| 多端能力拖累桌面主线 | 移动端被迫实现完整 Canvas | 桌面优先；移动端先只读预览与评论，编辑后置 |
-| OpenDesign 上游耦合/许可 | 升级困难、素材授权不明 | 适配层隔离；许可证台账；只吸收有明确收益的模块 |
-| Artifact 与真实代码脱节 | 设计能看但无法进入产品 | 中期建立 SourceRef 与 PatchSet；明确 prototype 和 code-backed 两种 Artifact |
+| odyBox 定位失焦 | 四个操作面同时堆在首页 | 按项目和任务渐进显示 |
+| Artifact 与源码混淆 | 看似修改成功，实际只改 HTML | 明确项目类型；Workspace 变更必须落到 SourceRef 和 diff |
+| Runtime 再次分叉 | renderer 新增通用文件或进程工具 | 只增加窄协议；工程执行留在 Ody |
+| 破坏用户代码 | 覆盖脏工作树或错误路径 | roots 授权、Git baseline、hash 冲突和可恢复 ChangeSet |
+| 服务可启动但不可诊断 | 多个终端存在，错误无法关联 | Service/Preview/Validation 结构化事件和统一时间线 |
+| 协议被 UI 绑死 | 字段直接映射 React 状态 | 描述领域实体，用 TUI/测试客户端交叉验证 |
+| 只复制 OpenDesign 外观 | 更像设计工具但没有工程闭环 | 优先目录、SourceRef、Patch、build/test 和 diff |
+| 多端拖累桌面主线 | 移动端被迫完整实现 | 桌面优先；移动端先只读 Preview、评论和审批 |
+| 安全边界扩大 | 命令、密钥或本地服务暴露 | Runtime 审批、密钥隔离、loopback 策略和日志脱敏 |
 
 ---
 
-## 12. 明确不做的事情
+## 12. 治理规则
 
-在 S0–S3 阶段内不做：
+以下变化必须写 ADR 或设计文档：
 
-- 第三个桌面安装包或独立账户体系；
-- 整体复制 OpenDesign `apps/web`；
-- 为追求“架构纯净”一次性重写 odyBox；
-- 在视觉闭环验证前建设模板商城或大型协作平台；
-- 桌面、Web、移动端同时达到功能对等；
-- 把 Design Mode 文档规划能力误当作视觉 Canvas；
-- 仅靠更长提示词宣称视觉质量问题已经解决；
-- 在没有行为数据时承诺 Canvas 独立商业化。
+- Runtime 与 odyBox 之间的状态所有权变化；
+- 新增或破坏性修改公共 app-server 协议；
+- Artifact、Workspace、SourceRef 或 ChangeSet schema 变化；
+- renderer 获得新的文件、命令、进程或网络能力；
+- 引入 OpenDesign 源码、素材或依赖；
+- Canvas 升级为一级导航或独立产品；
+- Workspace roots、Git 和恢复策略变化。
 
----
-
-## 13. 决策治理
-
-以下变更必须写 ADR 或设计文档：
-
-- Runtime 与 odyBox 之间状态所有权变化；
-- app-server 新增或破坏性修改公共协议；
-- Artifact/Revision schemaVersion 变化；
-- 将某项 odyBox 工具链切换为 Ody 权威；
-- 引入 OpenDesign 源码或资源；
-- Canvas 从上下文入口升级为一级导航；
-- Canvas 独立产品化。
-
-每项迁移必须同时回答：
+每项迁移必须回答：
 
 1. 谁是单一事实来源？
-2. 旧数据如何读取和迁移？
-3. 进程退出或版本不匹配如何降级？
+2. 旧数据和旧项目如何迁移？
+3. 进程退出、版本不匹配或外部编辑时如何恢复？
 4. 如何比较新旧链路行为？
 5. 在什么条件下删除旧实现？
 
----
-
-## 14. 接下来 30 天的建议动作
-
-按优先级排列：
-
-1. 建立 Ody × odyBox capability parity 矩阵，标记 `Ody authority / odyBox temporary / UI-only`；
-2. 为 Visual Workspace 写第一版领域协议草案，只定义实体、事件和所有权，不立即编码；
-3. 给 odyBox 当前设计生成链路建立 10–20 个固定任务与截图基线；
-4. 修复内层 Artifact 生成器的上下文断裂，使设计 Skill 和用户完整约束真正生效；
-5. 启用 Artifact 的继续迭代和 Revision 数据结构；
-6. 将现有 Design 项目页做成最小 Chat + Preview 分栏；
-7. 用独立 spike 验证 OpenDesign iframe bridge 能否映射到 odyBox UIRenderer；
-8. 确定 Ody app-server TypeScript client 的生成或维护方案；
-9. 对生成 HTML 的 CSP、iframe sandbox、文件访问和网络策略做安全审查；
-10. 设立月度战略复盘：闭环数据不足时缩小范围，不以新增功能掩盖核心失败。
+只有 Canvas 同时表现出独立用户画像、独立获客渠道、自足工作流、稳定留存/付费，并且独立收益高于重复基础设施成本时，才重新评估独立产品化。
 
 ---
 
-## 15. 战略结论
+## 13. 源码与审计依据
 
-最合理的长期结构不是三个相互竞争的应用，而是：
+### 13.1 Ody
 
-> **Ody 是统一的 Agent Runtime 与开发者 TUI；odyBox 是面向大众的图形化 AI 工作台；Canvas 是 odyBox 中由 Ody 驱动的视觉创作工作区；OpenDesign 是被选择性吸收的设计能力来源。**
+- `app-server-protocol/src/protocol/v2/thread.rs`：cwd 与 `runtimeWorkspaceRoots`；
+- `app-server-protocol/src/protocol/v2/fs.rs`：文件与目录协议；
+- `app-server-protocol/src/protocol/v2/process.rs`：长进程、PTY、输出和终止；
+- `app-server-protocol/src/protocol/v2/visual_workspace.rs`：v1 与自包含 HTML 边界；
+- `app-server/src/request_processors/visual_workspace_processor.rs`：视觉状态持久化；
+- `app-server/src/browser_extension.rs`：Browser 导航、DOM、日志、截图与 CDP；
+- `docs/chs/browser-control.md`：浏览器安全与审批；
+- `docs/en/design_mode.md`：Design Mode 不等同于 Canvas。
 
-这套边界同时避免两种错误：
+### 13.2 odyBox
 
-- 不会为了视觉能力再造一个与 odyBox 重叠的桌面产品；
-- 也不会把 Canvas 降格为几个提示词和一个只读 iframe。
+- `src/main/canvas-ipc.ts`：快照导入限制、导出目录和隔离渲染；
+- `src/renderer/services/canvas/CanvasProjectService.ts`：自包含 HTML bundling；
+- `src/renderer/components/canvas/CanvasWorkspace.tsx`：Canvas 生成和交互入口；
+- `src/renderer/services/canvas/CanvasSyncService.ts`：Canvas → Ody 同步；
+- `src/renderer/services/ody-runtime/work-generation.ts`：Work thread/turn 与多 roots；
+- `src/main/ody-runtime-policy.ts`：renderer 到 Runtime 的能力白名单；
+- `src/renderer/services/ody-runtime/background-terminals.ts`：后台终端 UI adapter。
 
-战略执行的关键不在于尽快补齐所有功能，而在于持续守住三个约束：
+### 13.3 OpenDesign 0.20.1
 
-1. 每项 Agent 基础能力最终只有一个权威实现；
-2. 每个产品界面服务清晰、不同的核心用户任务；
-3. 每个视觉任务都能形成可观察、可修改、可验证的闭环。
+- `packages/contracts/src/api/projects.ts`：已有文件夹直接读写契约；
+- `apps/daemon/src/import-export-routes.ts`：folder import、realpath 与安全检查；
+- `apps/daemon/src/server.ts`：项目 cwd 和现有文件扫描；
+- `apps/daemon/src/runtimes/chat-prompt-inputs.ts`：先检查工作区再修改；
+- `apps/daemon/src/routes/terminal.ts`：项目 cwd 中的 PTY；
+- `plugins/_official/scenarios/od-code-migration/open-design.json`：迁移流水线；
+- `plugins/_official/atoms/patch-edit/SKILL.md`：小步可审核修改；
+- `plugins/_official/atoms/build-test/SKILL.md`：构建与测试闭环；
+- `docs/rfc-drafts/dev-server-auto-detect.md`：dev server 草案及范围限制；
+- `LICENSE` 与 NOTICE：许可证治理依据。
 
----
+### 13.4 阶段文档
 
-## 16. 源码依据
-
-### Ody
-
-- `Cargo.toml`：app-server、protocol、client、skills、plugins、browser-control 等 workspace 边界；
-- `app-server/README.md`：app-server 通信与应用集成接口；
-- `app-server-protocol/src/protocol/`：线程、Turn、配置与审批协议；
-- `app-server/src/extensions.rs`：统一扩展和 SkillProvider 接入；
-- `docs/chs/browser-control.md`：浏览器控制、安全与审批；
-- `docs/en/design_mode.md`：Design Mode 的职责和只读边界；
-- `core-skills/`、`ext/skills/`、`skills/`：Skills 的加载、扩展和内置安装边界。
-
-### odyBox
-
-- `src/shared/types/design.ts`：Project、Artifact 和生成 schema；
-- `src/renderer/routes/design/$projectId.tsx`：当前 Design 项目页；
-- `src/renderer/packages/model-calls/toolsets/design.ts`：`design_generate_artifact`；
-- `src/renderer/packages/model-calls/design-generator.ts`：当前孤立 HTML 生成提示；
-- `src/renderer/components/artifacts/UIRenderer.tsx`：iframe UI 预览；
-- `src/renderer/components/artifacts/ArtifactCard.tsx`：Artifact 操作与禁用的继续迭代入口；
-- `docs/technical/code-execution.md`：Agent 工具构建、沙箱和 HTML preview server；
-- `docs/technical/agent-skills.md`：odyBox 当前独立 Skills 链路；
-- `src/main/skills/builtin/frontend-design.ts`：现有前端设计 Skill。
-
-### OpenDesign
-
-- `LICENSE`：Apache-2.0；
-- `apps/web/package.json`：Web 应用与内部 workspace 包的依赖；
-- `apps/web/next.config.ts`：对 daemon 的 API、Artifact 和 Frame 代理；
-- `apps/web/src/runtime/srcdoc.ts`：iframe bridge、元素身份、inspect/comment、CSS override 和 snapshot；
-- `apps/web/src/providers/daemon.ts`：Web UI 与 daemon 的耦合边界。
-
+- [S0 产品边界 ADR](./2026-09-06-s0-product-boundary-adr.md)
+- [S0 能力权责矩阵](./2026-09-06-s0-capability-ownership-matrix.md)
+- [S0 Canvas 基线](./2026-09-06-s0-canvas-baseline.md)
+- [S0 OpenDesign 许可证清单](./2026-09-06-s0-opendesign-license-inventory.md)
+- [S0 完成审计](./2026-09-06-s0-completion-audit.md)
+- [S1 完成审计](./2026-09-06-s1-canvas-minimum-loop-completion-audit.md)
+- [S2 完成审计](./2026-09-06-s2-bidirectional-visual-interaction-completion-audit.md)
+- [S3 完成审计](./2026-09-06-s3-visual-workspace-runtime-completion-audit.md)
+- [S4 完成审计](./2026-09-06-s4-agent-runtime-gateway-completion-audit.md)
 
 ---
 
-## 17. odyBox-base Runtime 接入现状核对（2026-09-07 代码级复核）
+## 14. 战略结论
 
-> 复核对象：`D:\workspace\go_work\odyBox-base`，commit `8b80c388`（chatbox 融合 Electron 版，即正文 S1–S4 审计所描述的产品）。
-> 注意：`E:\odyBox` 是另一代 design-product daemon 仓库，有自己的 P4/P5 路线，与本节无关。
-> 本节所有结论均以源码 `文件:行号` 为准，不依赖审计文档转述。
+长期结构是一个 Runtime、两个主要产品界面和一个内嵌视觉工作区：
 
-### 17.1 已就位
+- Ody 建设一次 Agent 与工程执行能力；
+- Ody TUI 提供高效率终端界面；
+- odyBox 提供 Chat、Work、Canvas 和 Services；
+- Canvas 同时服务快速 Artifact 原型和真实 Workspace 的可视化操作；
+- OpenDesign 只作为真实目录、设计交互和工程闭环的参考来源。
 
-| 能力 | 证据 |
-|---|---|
-| 生成 TS 类型 + 协议 client | `src/shared/generated/ody-runtime/`（84 个根类型 + 533 个 v2 类型）；`src/renderer/services/ody-runtime/` 共 7 个模块约 1400 行（agent-runtime-client、catalog-client、config-client、visual-workspace-client、web-search-sync、transport、work-generation） |
-| IPC 能力边界 | `src/main/ody-runtime-policy.ts:6-41` renderer→Runtime 显式方法白名单（thread/turn、skills、plugin、mcpServerStatus、model/list 等）；`:49-58` server request 白名单（审批、requestUserInput、elicitation），无 catch-all 隧道 |
-| Work Mode 走 Runtime | `work-generation.ts:434`：thread start/resume、steer、interrupt、流事件持久化为消息；`:337-343` Skills 按 `enabledSkillNames` 经 catalog-client 注入；`:404-417` MCP elicitation 有处理分支 |
-| 审批弹窗 | 命令/文件/权限审批走 NiceModal confirm（`work-generation.ts:353-399`），命令与文件审批已有原生弹窗与 legacy/新协议双格式应答 |
-| 供应商映射与显式报错 | `resolveRuntimeModelSelection`（`work-generation.ts:227-255`）：ChatboxAI / Azure / Bedrock 显式抛错、不静默回退；deepseek / anthropic / google-genai / kimi / glm / openai(_responses) 别名齐全；未知类型落 openai chat completions |
-| mid-turn 错误不静默降级 | `work-generation.ts:203-212`：Runtime 回合出错写入消息 error 并置 finishReason='error'，不回退 legacy 重跑 |
-| 第 1 项 真实验收 | 2026-09-09 人工验收通过：真实模型 + 真实工具回合（多轮上下文、审批、MCP elicitation、Stop、重启恢复、崩溃恢复、多窗口隔离），覆盖 17.2 原列全部验收点。**S4 关闭裁定**：09-09 后 work-generation 主路径 8 个 commit 均为增强/修复型（供应商适配、状态映射、消静默回退），逐一带测试；Azure/Bedrock/OAuth 真实密钥首验不可得，记为关闭后观察项，不作关闭阻塞 |
-| 第 8 项 发行闭环 | 二进制随应用分发已实现：`electron-builder.yml` extraResources 将 staging 的 `ody-app-server.exe` 打入 `resources/ody-runtime/`（c22aa8c1）；`ody-runtime-policy.ts` `resolveOdyRuntimeLaunch` 增加 bundled 路径 fallback、env 覆盖优先（dev/高级用户仍可覆盖）；`ody-runtime-visual.ts` 从 `process.resourcesPath` 探测内嵌可执行文件；spawn 统一走 `resolveOdyRuntimeLaunch` 修复安装版半激活（8f5abe31） |
-| 第 8 项-a 协议版本协商 | `src/main/ody-runtime-policy.ts`：`MIN_SUPPORTED_ODY_RUNTIME_VERSION='0.1.0-alpha.2'`、`parseOdyRuntimeUserAgentVersion`/`compareOdyRuntimeVersions`（含 prerelease 语义）/`isOdyRuntimeUserAgentCompatible`；`ody-runtime-visual.ts` ensureInitialized 校验 initialize 响应 userAgent，不兼容即 fail fast、缓存 `incompatibilityError` 并暴露 `serverInfo`；21 个 policy 测试 |
-| 第 8 项-b 健康检查/诊断页 | main `getDiagnostics()`（configured/serverInfo/incompatibilityError）+ IPC `ody-runtime:diagnostics`；renderer `src/renderer/routes/settings/runtime-diagnostics.tsx` 注册进 Settings 路由树与侧边栏（仅 desktop 显示）；4 个组件测试 |
-| 第 8 项-c 崩溃恢复 | `ody-runtime-policy.ts`：`nextOdyRuntimeRestartDelayMs`（1s 起指数退避、cap 30s）、`shouldRestartOdyRuntime`（默认最多 5 次自动重启，协议不兼容永不重启）；`ody-runtime-visual.ts`：exit/error 不再直接 stop 而是 `scheduleRestart()`，initialize 成功重置计数并清 timer；状态经 `'ody-runtime:status'` 广播（共享类型 `src/shared/ody-runtime-status.ts`），renderer `services/ody-runtime/status-toast.ts` 按 running/restarting/stopped 弹 toast（restarting 4s / stopped 8s）；5 个 visual 测试 |
-| 第 4 项 原生交互 UI | `window.prompt` 已删除：`services/ody-runtime/runtime-interactions.ts` 从 work-generation 提取（permissions 分支先于 confirm，decline 显式抛错 'User declined Runtime request'）；requestUserInput 走原生 modal `modals/RuntimeUserInput.tsx`（选项单选、isOther 自由文本、isSecret 密码框、freeText、autoResolutionMs 倒计时，结果 `{answers}\|null`）；权限审批 `modals/RuntimePermissionsApproval.tsx` 提供 Decline/单次/Turn/Session 范围选择；等待时长提示：ConfirmModal 新增 `startedAtMs` + `hooks/useElapsedSeconds.ts`；16 个接线/组件/hook 测试 |
-
-### 17.2 缺口（逐项映射 S4 剩余清单）
-
-> 状态更新（2026-09-11 最终）：**S4 关闭。** 第 1–8 项全部关闭：第 1 项真实验收 09-09 通过（全点位）；第 2、3、5、6、7、8 项 09-10/09-11 逐批关闭（见下）。关闭前终验：`src/main` 762 测试（16 失败全部为 copy-ripgrep/duckdb-xlsx/xlsx-metadata/sandbox-manager/store-node-migration/skills-discovery 等既有无关失败）、renderer services+hooks 182/182、components/chat 111（仅 Message.artifact 2 个 HEAD 既有失败）、settings 路由 13/13、tsc/biome 干净。
->
-> - **第 6、7 项**（09-10，`6e306eb6`/`4689bfde`/`11e2e46d`/`8b933da4`/`eb5f503f`）：静默 legacy 回退删除，Work 不可用时显式报错指向诊断页；workflow 引擎、agent 死分支、孤儿 toolsets/旧审批包物理删除（合计约 1.3 万行）。残留仅 Chat 作用域工具与审批，属允许保留边界。
-> - **第 5 项**（09-11）：① 后台终端全链路——main 白名单新增 `thread/backgroundTerminals/list|terminate|clean`、`background-terminals.ts` 服务模块、InputBox `BackgroundTerminals` 面板（仅 Work 会话，5s 轮询，terminate/clean 控件）；② browser 截图渲染——dynamicToolCall contentItems 拆分为 `{output, images}`，缩略图内嵌渲染（仅允许 `data:image/` 防远程 URL 泄露）、点击进图片查看器；③ 重试入口经核实已由既有 `MessageErrTips → regenerateInNewFork → runtime gate` 链路覆盖，无需改动。ody 侧 `backgroundTerminals`/`compact/start`/`rollback`/`extraRoots/set` 协议实现经 E:\ody-rs 源码核实存在且有测试。
-> - **第 2 项**（09-11）：逐项复核 odyBox 侧已无非缺口——Qwen Portal/MiniMax OAuth 走通用路径即正确（新增 3 个回归测试钉死 chat wire + base_url 行为）；自定义 Header 透传机制已通（odyBox 设置本无 LLM 供应商自定义 Header 字段）；企业 endpoint（apiHost→base_url）补特征测试；**代理确认为非缺口**（桌面端 useProxy 本就对 Chat 是空操作、双方都走系统代理，`ody:` 标记已改写为对齐结论）。**ody runtime 侧专项核实（E:\ody-rs）**：Azure/Bedrock/Anthropic 适配为 09-10/09-11 四个专门 commit（`4f7123a1`/`7f6998b2`/`26ea19a8`/`745cd6be`），`convert_ody_code_providers` 覆盖 odyBox 发出的全部 provider type，生产调用链 `normalized_providers()`（core/src/config/mod.rs:3647）实测存在非死代码；ody-config 236/236、ody-model-provider 80/80、ody-api 176/176、ody-app-server 225/225 全部实跑通过。**唯一遗留**：Azure/Bedrock/OAuth 真实密钥链路首验不可得，搁置至第 1 项真实验收（不阻塞代码侧关闭）。
-> - **第 8 项**（09-11，`f355cb0b`）：① 打包校验和——stage 脚本生成 `manifest.json`（sha256），`ody-runtime-bundle.ts` 在 spawn 前校验，不匹配 fail fast（manifest 缺失则跳过兼容旧安装）；② macOS/Linux——`bundledRuntimeBinaryName` 跨平台（win32→.exe）、stage 平台感知 + chmod 0o755、electron-builder filter 补 `ody-app-server`/`manifest.json`。新增 `ody-runtime-bundle` 模块及 6 测试。
-> - **第 3 项**（09-11，`68222294`）：Plugin 管理 UI 落地——main 白名单新增 `plugin/install`/`plugin/uninstall`（渲染层只给市场名/插件名，落地在 runtime $ODY_HOME/plugins）；新增 `services/ody-runtime/plugins.ts`（list/split/install/uninstall，`splitPlugins` 纯函数过滤 NOT_AVAILABLE 与 DISABLED_BY_ADMIN）；设置页新增 `/settings/plugins`（Installed 列表 uninstall + Available 列表 install，复用 runtime 可用性门控，无 enable/disable 因协议暂无该 RPC）；i18n en 补 9 键。protocol 层无 enable/disable 方法的结论与 17.3 产品决策一致。
->
-> 状态更新（2026-09-09）：第 1 项真实验收、第 8 项全部子项（发行闭环、a 协议版本协商、b 健康检查/诊断页、c 崩溃恢复）、第 4 项原生交互 UI 均已完成，证据见 17.1。第 3 项经复核 Skills/MCP 已覆盖、Plugin 无 UI 属产品决策项（见 17.3）。
-
-| S4 项 | 缺口 | 证据 |
-|---|---|---|
-| ~~第 5 项 状态映射~~ | ✅ 已关闭（09-11）：plan/tokenUsage/compaction/guardian/hook/子 Agent/命令直播输出/14 种 ThreadItem 映射完成（`6c35b3aa`/`4448f802`）；后台终端 UI、截图渲染补齐；重试入口既有链路覆盖 | 见上方状态更新 |
-| ~~第 6 项 兼容回退~~ | ✅ 已关闭（09-10）：`shouldUseOdyAgentRuntime`/`VITE_ODYBOX_AGENT_RUNTIME` 已删，`resolveWorkRuntimeGate` 显式报错 | `6e306eb6` |
-| ~~第 7 项 删除旧实现~~ | ✅ 已关闭（09-10）：workflow 引擎/agent 死分支/旧审批物理删除，约 1.3 万行 | `4689bfde` 等 4 commit |
-| ~~第 2 项 供应商适配~~ | ✅ 已关闭（09-11，odyBox + ody 双侧代码闭环）；真实密钥链路首验搁置至第 1 项 | 见上方状态更新 |
-| ~~第 8 项 发行闭环余量~~ | ✅ 已关闭（09-11）：校验和校验 + macOS/Linux 打包支持 | `f355cb0b` |
-| ~~第 3 项 Plugin 管理 UI~~ | ✅ 已关闭（09-11）：`/settings/plugins` 页 install/uninstall 走 runtime 白名单 | `68222294` |
-
-### 17.3 复核结论
-
-执行顺序维持正文 S4 节判断不变：**真实验收（第 1 项）→ 发行闭环（第 8 项，最先开工的工程项）→ 原生交互 UI（第 4 项）→ 统一管理界面（第 3 项）→ 消除回退与删旧（第 6、7 项殿后）**。
-
-相对 S4 审计文档，本次复核新增三处更精确的结论：
-
-1. **二进制解析支持两种形态**：`ODYBOX_ODY_APP_SERVER_COMMAND`（app-server 可执行文件直启）与 `ODYBOX_ODY_RUNTIME_COMMAND`（ody 主二进制 + `app-server` 子命令），发行闭环需同时覆盖两者或收敛为一种。
-2. **静默回退的边界比审计描述更窄**：仅发生在回合开始前的路径选择阶段（`shouldUseOdyAgentRuntime`）；一旦进入 Runtime 回合，错误显式 surfaced，不回退 legacy 重跑。
-3. **崩溃恢复是发行闭环的子项而非独立项**：进程退出即 reject 全部 pending 请求，用户看到的是回合报错而非自动恢复；随第 8 项一并解决（自动重启 + 重连 + 状态提示）；**2026-09-09 已完成**，见 17.1 第 8 项-c。
+下一阶段不应继续把重点放在增加更多独立 HTML 能力，而应推进 Engineering Workspace：先安全打开真实工程，再完成源码级页面与组件修改，然后接入真实框架 Preview，最后形成可验证的前后端联动闭环。
