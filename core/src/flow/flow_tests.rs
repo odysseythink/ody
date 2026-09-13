@@ -2575,6 +2575,61 @@ result = agent('step two using ' + first)
             .unwrap();
         assert!(outcome.outputs.is_empty());
     }
+
+    #[tokio::test]
+    async fn starlark_agent_schema_validates_and_retries_with_feedback() {
+        // M4.1: a schema-constrained agent shares the yaml M2.4 semantics.
+        // First reply is not the required JSON; the validation failure is
+        // fed back into the retry prompt and the second attempt passes.
+        let host = MockHost::with(vec![
+            Ok("not json at all".to_string()),
+            Ok(r#"{"name": "ody"}"#.to_string()),
+        ]);
+        let source = r#"
+reply = agent("name one", schema = {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]})
+result = reply
+"#;
+        let plan = star_validate(&StarlarkFlowRuntime, source);
+        let outcome = StarlarkFlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .unwrap();
+        assert_eq!(outcome.outputs["result"], json!(r#"{"name": "ody"}"#));
+        let prompts = host.prompts.lock().unwrap();
+        assert_eq!(prompts.len(), 2, "one failed attempt then one retry");
+        assert!(prompts[1].contains("failed validation"), "retry prompt: {}", prompts[1]);
+        assert!(prompts[0].contains("required"), "schema instruction injected: {}", prompts[0]);
+    }
+
+    #[tokio::test]
+    async fn starlark_agent_schema_exhaustion_fails_the_run() {
+        let host = MockHost::with(vec![
+            Ok("nope".to_string()),
+            Ok("still nope".to_string()),
+            Ok("final nope".to_string()),
+        ]);
+        let source = r#"result = agent("try", schema = {"type": "object"})"#;
+        let plan = star_validate(&StarlarkFlowRuntime, source);
+        let err = StarlarkFlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .expect_err("schema exhaustion must fail the run");
+        let msg = err.to_string();
+        assert!(msg.contains("schema validation failed"), "{msg}");
+        assert_eq!(host.prompts.lock().unwrap().len(), 3, "SCHEMA_MAX_ATTEMPTS tries");
+    }
+
+    #[tokio::test]
+    async fn starlark_agent_schema_rejects_non_dict() {
+        let host = MockHost::default();
+        let source = r#"result = agent("x", schema = ["not", "a", "dict"])"#;
+        let plan = star_validate(&StarlarkFlowRuntime, source);
+        let err = StarlarkFlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .expect_err("non-dict schema must fail");
+        assert!(err.to_string().contains("must be a dict"), "{err}");
+    }
 }
 
 #[cfg(feature = "flow-v8")]
@@ -2636,6 +2691,49 @@ var result = await agent("summarize " + first);
             .await
             .expect_err("agent failure must fail the run");
         assert!(err.to_string().contains("boom"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn js_agent_schema_option_validates_and_retries_with_feedback() {
+        // M4.1: `agent(prompt, {schema})` shares the yaml M2.4 semantics.
+        // "42" is valid JSON but not the required object; the validation
+        // reason is fed back and the retry passes.
+        let host = MockHost::with(vec![
+            Ok("42".to_string()),
+            Ok(r#"{"score": 7}"#.to_string()),
+        ]);
+        let source = r#"
+var reply = await agent("score it", {schema: {type: "object", properties: {score: {type: "integer"}}, required: ["score"]}});
+var result = reply;
+"#;
+        let plan = js_validate(&V8FlowRuntime, source);
+        let outcome = V8FlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .unwrap();
+        assert_eq!(outcome.outputs["result"], json!(r#"{"score": 7}"#));
+        let prompts = host.prompts.lock().unwrap();
+        assert_eq!(prompts.len(), 2, "one failed attempt then one retry");
+        assert!(prompts[1].contains("failed validation"), "retry prompt: {}", prompts[1]);
+        assert!(prompts[0].contains("required"), "schema instruction injected: {}", prompts[0]);
+    }
+
+    #[tokio::test]
+    async fn js_agent_schema_exhaustion_fails_the_run() {
+        let host = MockHost::with(vec![
+            Ok("nope".to_string()),
+            Ok("still nope".to_string()),
+            Ok("final nope".to_string()),
+        ]);
+        let source = r#"var result = await agent("try", {schema: {type: "object"}});"#;
+        let plan = js_validate(&V8FlowRuntime, source);
+        let err = V8FlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .expect_err("schema exhaustion must fail the run");
+        let msg = err.to_string();
+        assert!(msg.contains("schema validation failed"), "{msg}");
+        assert_eq!(host.prompts.lock().unwrap().len(), 3, "SCHEMA_MAX_ATTEMPTS tries");
     }
 
     #[tokio::test]

@@ -12,7 +12,9 @@
 //! await is supported (module evaluation returns a promise).
 //!
 //! Host functions (single source of truth: `core/src/flow/mod.rs` docs):
-//! - `agent(prompt)` — one sub-agent, returns a Promise of its final text.
+//! - `agent(prompt, options?)` — one sub-agent, returns a Promise of its
+//!   final text. `options.schema` (an object) requests a schema-constrained
+//!   JSON reply (M4.1); the engine passes it through to the host opaquely.
 //! - `pipeline(items, each)` / `parallel(fns)` — injected prelude shims
 //!   over the native `agent()` promise: render all prompts first (`each` /
 //!   `fns` are pure prompt renderers), enforce the batch cap as a hard
@@ -55,13 +57,17 @@ use super::value::v8_value_to_json;
 use super::value::value_to_error_text;
 
 /// Host capability injected by the caller (core maps this onto its
-/// `FlowAgentHost`; checkpoints live on that side, not here).
+/// `FlowAgentHost`; checkpoints and schema validation live on that side,
+/// not here — M4.1).
 pub trait WorkflowHost: Send + Sync {
-    /// Run one agent with the fully rendered prompt; Ok carries its final
-    /// text, Err carries a displayable failure reason.
+    /// Run one agent with the fully rendered prompt; `schema` is the
+    /// JSON-serialized schema object for schema-constrained calls
+    /// (`agent(prompt, {schema})`) and opaque to this crate; Ok carries
+    /// its final text, Err carries a displayable failure reason.
     fn run_agent(
         &self,
         prompt: String,
+        schema: Option<String>,
     ) -> impl std::future::Future<Output = Result<String, String>> + Send;
 
     /// Free-form progress line (`phase()` / `log()`).
@@ -86,7 +92,10 @@ pub struct WorkflowRunConfig {
 
 /// Request from the eval thread to the async driver.
 enum WorkflowRequest {
-    Agent { id: String, prompt: String },
+    /// `schema` carries the JSON-serialized schema object for
+    /// schema-constrained calls (`agent(prompt, {schema})`, M4.1); the
+    /// engine passes it through opaquely — validation lives on the host.
+    Agent { id: String, prompt: String, schema: Option<String> },
     Log { message: String },
 }
 
@@ -173,10 +182,10 @@ pub async fn run_workflow_script<H: WorkflowHost>(
                 let Some(request) = request else { break };
                 match request {
                     WorkflowRequest::Log { message } => host.report_progress(message).await,
-                    WorkflowRequest::Agent { id, prompt } => {
+                    WorkflowRequest::Agent { id, prompt, schema } => {
                         let response_tx = response_tx.clone();
                         in_flight.push(Box::pin(async move {
-                            let result = host.run_agent(prompt).await;
+                            let result = host.run_agent(prompt, schema).await;
                             let _ = response_tx.send(WorkflowResponse::Agent { id, result });
                         }));
                     }
@@ -428,6 +437,38 @@ fn agent_callback(
             return;
         }
     };
+    // Optional second argument: an options object `{ schema }` (M4.1,
+    // Claude Code `agent(prompt, {schema})` shape). The schema value is
+    // JSON-serialized and passed through opaquely to the host; validation
+    // and bounded retry live on the core side.
+    let schema = match args.get(1) {
+        options if options.is_undefined() || options.is_null() => None,
+        options => {
+            let Ok(object) = v8::Local::<v8::Object>::try_from(options) else {
+                throw_type_error(scope, "agent options must be an object");
+                return;
+            };
+            let key = match v8::String::new(scope, "schema") {
+                Some(key) => key,
+                None => {
+                    throw_type_error(scope, "failed to read agent options");
+                    return;
+                }
+            };
+            match object.get(scope, key.into()) {
+                Some(value) if !value.is_undefined() && !value.is_null() => {
+                    match v8::json::stringify(scope, value) {
+                        Some(serialized) => Some(serialized.to_rust_string_lossy(scope)),
+                        None => {
+                            throw_type_error(scope, "agent schema must be JSON-serializable");
+                            return;
+                        }
+                    }
+                }
+                _ => None,
+            }
+        }
+    };
 
     // Borrow discipline mirrors callbacks.rs::tool_callback: create the
     // resolver first, then take the state borrow.
@@ -449,7 +490,7 @@ fn agent_callback(
     };
 
     if request_tx
-        .send(WorkflowRequest::Agent { id: id.clone(), prompt })
+        .send(WorkflowRequest::Agent { id: id.clone(), prompt, schema })
         .is_err()
     {
         // Driver gone: throw so the awaiting module unwinds immediately.
@@ -552,14 +593,17 @@ mod tests {
     #[derive(Default)]
     struct MockWorkflowHost {
         prompts: Mutex<Vec<String>>,
+        /// One recorded `schema` argument per `run_agent` call (M4.1).
+        schemas: Mutex<Vec<Option<String>>>,
         responses: Mutex<VecDeque<Result<String, String>>>,
         progress: Mutex<Vec<String>>,
         invert_completion: bool,
     }
 
     impl WorkflowHost for MockWorkflowHost {
-        async fn run_agent(&self, prompt: String) -> Result<String, String> {
+        async fn run_agent(&self, prompt: String, schema: Option<String>) -> Result<String, String> {
             self.prompts.lock().unwrap().push(prompt.clone());
+            self.schemas.lock().unwrap().push(schema);
             if self.invert_completion {
                 let index: usize = prompt.strip_prefix("item ").unwrap().parse().unwrap();
                 for _ in 0..(3 - index) {
@@ -606,8 +650,53 @@ var result = { first, second: await agent("summarize " + first) };
     }
 
     #[tokio::test]
-    async fn pipeline_binds_results_in_item_order() {
-        let host = MockWorkflowHost { invert_completion: true, ..Default::default() };
+    async fn agent_options_schema_is_serialized_and_passed_through() {
+        // M4.1: `agent(prompt, {schema})` — the engine JSON-serializes the
+        // schema and passes it to the host opaquely (validation lives on
+        // the core side).
+        let host = MockWorkflowHost::default();
+        let outcome = run_workflow_script(
+            r#"var result = await agent("go", {schema: {type: "object", required: ["x"]}});"#,
+            &config(serde_json::json!({})),
+            &host,
+        )
+        .await
+        .unwrap();
+        assert_eq!(outcome, Some(serde_json::json!("done: go")));
+        assert_eq!(
+            host.schemas.lock().unwrap().as_slice(),
+            [Some(r#"{"type":"object","required":["x"]}"#.to_string())]
+        );
+    }
+
+    #[tokio::test]
+    async fn agent_without_options_passes_none_schema() {
+        let host = MockWorkflowHost::default();
+        run_workflow_script(
+            r#"var result = await agent("go");"#,
+            &config(serde_json::json!({})),
+            &host,
+        )
+        .await
+        .unwrap();
+        assert_eq!(host.schemas.lock().unwrap().as_slice(), [None]);
+    }
+
+    #[tokio::test]
+    async fn agent_non_object_options_throws() {
+        let host = MockWorkflowHost::default();
+        let err = run_workflow_script(
+            r#"var result = await agent("go", "not an object");"#,
+            &config(serde_json::json!({})),
+            &host,
+        )
+        .await
+        .expect_err("non-object options must throw");
+        assert!(err.contains("options must be an object"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn pipeline_binds_results_in_item_order() {        let host = MockWorkflowHost { invert_completion: true, ..Default::default() };
         let outcome = run_workflow_script(
             r#"var result = await pipeline(["1", "2", "3"], (i) => "item " + i);"#,
             &config(serde_json::json!({})),

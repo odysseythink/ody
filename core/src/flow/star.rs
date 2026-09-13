@@ -108,9 +108,12 @@ fn parse_star_module(source: &str) -> Result<AstModule, String> {
 
 /// One request from the eval thread to the async driver.
 enum BridgeRequest {
-    /// Run one agent; the reply channel delivers the final text.
+    /// Run one agent; `schema` carries the JSON-serialized schema object
+    /// for schema-constrained calls (M4.1); the reply channel delivers the
+    /// final text.
     Agent {
         prompt: String,
+        schema: Option<String>,
         reply: oneshot::Sender<Result<String, String>>,
     },
     /// Free-form progress line (`phase()` / `log()`).
@@ -131,6 +134,18 @@ fn bridge<'v, 'e>(eval: &Evaluator<'v, 'e, '_>) -> anyhow::Result<&'e Bridge> {
 
 fn err(msg: impl Into<String>) -> anyhow::Error {
     anyhow::anyhow!(msg.into())
+}
+
+/// Convert a starlark schema dict to its JSON string form for the bridge;
+/// core parses and validates it (M2.4 subset, single source of truth).
+fn schema_to_json(value: Value) -> anyhow::Result<String> {
+    let json = value
+        .to_json_value()
+        .map_err(|e| err(format!("agent schema must be convertible to JSON: {e}")))?;
+    let object = json
+        .as_object()
+        .ok_or_else(|| err("agent schema must be a dict (JSON object)"))?;
+    serde_json::to_string(object).map_err(|e| err(format!("agent schema encoding: {e}")))
 }
 
 /// Abort-aware send: once the driver is gone every blocked native call must
@@ -166,7 +181,7 @@ fn fan_out_via_bridge(
     let mut replies = Vec::with_capacity(prompts.len());
     for prompt in prompts {
         let (reply, rx) = oneshot::channel();
-        send_request(bridge, BridgeRequest::Agent { prompt, reply })?;
+        send_request(bridge, BridgeRequest::Agent { prompt, schema: None, reply })?;
         replies.push(rx);
     }
     replies.into_iter().map(await_reply).collect()
@@ -221,12 +236,19 @@ fn flow_json(builder: &mut GlobalsBuilder) {
 fn flow_builtins(builder: &mut GlobalsBuilder) {
     // NOTE: `json` (decode/encode) is registered as a namespace alongside
     // these builtins (see `flow_json`) — agent() returns text, and scripts
-    // parse JSON replies with json.decode (the yaml runtime auto-parses).
+    // parse JSON replies with json.decode. With `schema` (a dict, the M2.4
+    // JSON-schema subset) the reply must be JSON satisfying the schema;
+    // validation failures are retried with the reason fed back (M4.1).
     /// Run one sub-agent with the given prompt; returns its final text.
-    fn agent(prompt: &str, eval: &mut Evaluator) -> anyhow::Result<String> {
+    fn agent<'v>(
+        prompt: &str,
+        #[starlark(require = named)] schema: Option<Value<'v>>,
+        eval: &mut Evaluator<'v, '_, '_>,
+    ) -> anyhow::Result<String> {
         let bridge = bridge(eval)?;
+        let schema = schema.map(schema_to_json).transpose()?;
         let (reply, rx) = oneshot::channel();
-        send_request(bridge, BridgeRequest::Agent { prompt: prompt.to_string(), reply })?;
+        send_request(bridge, BridgeRequest::Agent { prompt: prompt.to_string(), schema, reply })?;
         await_reply(rx)
     }
 
@@ -374,9 +396,9 @@ async fn run_star<H: FlowAgentHost>(
                     BridgeRequest::Log { message } => {
                         host.report_progress(FlowProgress::Log { message }).await;
                     }
-                    BridgeRequest::Agent { prompt, reply } => {
+                    BridgeRequest::Agent { prompt, schema, reply } => {
                         in_flight.push(Box::pin(async move {
-                            let result = run_one_agent_checked(host, prompt).await;
+                            let result = run_one_agent_checked(host, prompt, schema).await;
                             let _ = reply.send(result);
                         }));
                     }
@@ -413,18 +435,25 @@ async fn run_star<H: FlowAgentHost>(
     Ok(FlowOutcome { outputs })
 }
 
-/// One agent call with checkpoint replay (M2.1 semantics, same as the yaml
-/// runtime): a cache hit skips the spawn; a miss runs and records.
+/// One agent call with checkpoint replay + schema retry (M2.1/M4.1
+/// semantics, same as the yaml runtime via the shared
+/// [`run_agent_text`](super::runtime::run_agent_text)): a cache hit skips
+/// the spawn; a miss runs and records.
 async fn run_one_agent_checked<H: FlowAgentHost>(
     host: &H,
     prompt: String,
+    schema_json: Option<String>,
 ) -> Result<String, String> {
-    if let Some(cached) = host.checkpoint_read(&prompt).await {
-        return Ok(cached);
-    }
-    let raw = host.run_agent(prompt.clone()).await.map_err(|e| e.0)?;
-    host.checkpoint_write(&prompt, &raw).await;
-    Ok(raw)
+    let schema = schema_json
+        .map(|raw| {
+            serde_json::from_str::<serde_json::Value>(&raw)
+                .map_err(|e| format!("agent schema is not valid JSON: {e}"))
+        })
+        .transpose()?
+        .and_then(|value| value.as_object().cloned());
+    super::runtime::run_agent_text(host, prompt, "agent", schema.as_ref())
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Evaluate one parsed module: bind `args`, install the bridge, run, and

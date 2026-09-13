@@ -15,9 +15,12 @@
 //!
 //! - `agent(prompt, { schema?, label? })` — run one sub-agent with the
 //!   rendered prompt and return its final result. The yaml surface exposes
-//!   `prompt` only (`agent: <template>`); `schema` (JSON validation +
-//!   retry) and `label` are reserved for script runtimes (M4). A failed
-//!   agent fails the whole plan immediately: in-flight siblings are
+//!   `prompt` only (`agent: <template>`); script carriers expose
+//!   `schema` (starlark named arg `agent(prompt, schema={..})`, v8 options
+//!   `agent(prompt, {schema})`, M4.1) — a JSON-schema subset (M2.4) whose
+//!   validation + bounded retry have a single implementation shared by all
+//!   carriers ([`runtime::run_agent_text`]). `label` remains reserved. A
+//!   failed agent fails the whole plan immediately: in-flight siblings are
 //!   cancelled, no further steps run, and the error is reported.
 //! - `pipeline(items, each)` — fan out one agent per item; all items of one
 //!   batch start concurrently; results bind in item order regardless of

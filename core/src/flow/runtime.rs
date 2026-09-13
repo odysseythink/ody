@@ -153,14 +153,10 @@ fn run_step<'a, H: FlowAgentHost>(
         match step {
         FlowStep::Agent { agent, output, schema } => {
             let rendered = render_template(agent, &TemplateContext { bindings, item: None }, label)?;
-            // M2.4: a schema-constrained agent gets its JSON requirements
-            // injected at the prompt tail; the schema participates in the
+            // M2.4/M4.1: schema instruction injection lives inside the
+            // shared run_agent_text; the schema participates in the
             // checkpoint key through the rendered prompt.
-            let prompt = match schema {
-                Some(schema) => append_schema_instruction(rendered, schema),
-                None => rendered,
-            };
-            let value = run_one_agent(host, prompt, label, schema.as_ref()).await?;
+            let value = run_one_agent(host, rendered, label, schema.as_ref()).await?;
             if let Some(name) = output {
                 bind_output(bindings, name, value.clone(), label)?;
             }
@@ -313,14 +309,29 @@ async fn run_agent_batch<H: FlowAgentHost>(
 /// plus retries after parse/validation failures.
 const SCHEMA_MAX_ATTEMPTS: usize = 3;
 
-async fn run_one_agent<H: FlowAgentHost>(
+/// Run one agent and return its final **text**. Shared by all carriers
+/// (M4.1): the yaml runtime parses the text afterwards, while the
+/// starlark/v8 script carriers hand the text back to the script unchanged.
+/// Schema-constrained runs (M2.4 semantics, the single source of truth for
+/// validation + bounded retry) inject the JSON requirements at the prompt
+/// tail and feed each validation failure back into the retry prompt. The
+/// schema participates in the prompt, so the M2.1 checkpoint key
+/// (prompt SHA-256) covers it without any key-format change.
+pub(crate) async fn run_agent_text<H: FlowAgentHost>(
     host: &H,
     prompt: String,
     label: &str,
     schema: Option<&serde_json::Map<String, Value>>,
-) -> Result<Value, FlowError> {
+) -> Result<String, FlowError> {
+    // M2.4/M4.1: a schema-constrained agent gets its JSON requirements
+    // injected at the prompt tail; the schema participates in the
+    // checkpoint key through the prompt.
+    let prompt = match schema {
+        Some(schema) => append_schema_instruction(prompt, schema),
+        None => prompt,
+    };
     if let Some(cached) = host.checkpoint_read(&prompt).await {
-        return Ok(parse_agent_output(&cached));
+        return Ok(cached);
     }
     // Without a schema the loop runs exactly once and behaves like the
     // pre-M2.4 path. With a schema, each validation failure feeds its
@@ -341,9 +352,9 @@ async fn run_one_agent<H: FlowAgentHost>(
                 source,
             })?;
         match validate_agent_output(&raw, schema) {
-            Ok(value) => {
+            Ok(_value) => {
                 host.checkpoint_write(&prompt, &raw).await;
-                return Ok(value);
+                return Ok(raw);
             }
             Err(reason) => last_reason = Some(reason),
         }
@@ -355,6 +366,16 @@ async fn run_one_agent<H: FlowAgentHost>(
             last_reason.expect("a reason is recorded after each failed attempt")
         )),
     })
+}
+
+async fn run_one_agent<H: FlowAgentHost>(
+    host: &H,
+    prompt: String,
+    label: &str,
+    schema: Option<&serde_json::Map<String, Value>>,
+) -> Result<Value, FlowError> {
+    let raw = run_agent_text(host, prompt, label, schema).await?;
+    Ok(parse_agent_output(&raw))
 }
 
 /// Schema-constrained replies must be valid JSON satisfying the schema

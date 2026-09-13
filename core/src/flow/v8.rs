@@ -91,13 +91,21 @@ struct FlowWorkflowHost<'h, H: FlowAgentHost> {
 }
 
 impl<H: FlowAgentHost> WorkflowHost for FlowWorkflowHost<'_, H> {
-    async fn run_agent(&self, prompt: String) -> Result<String, String> {
-        if let Some(cached) = self.host.checkpoint_read(&prompt).await {
-            return Ok(cached);
-        }
-        let raw = self.host.run_agent(prompt.clone()).await.map_err(|e| e.0)?;
-        self.host.checkpoint_write(&prompt, &raw).await;
-        Ok(raw)
+    /// Checkpoint replay + schema retry delegate to the shared
+    /// [`run_agent_text`](super::runtime::run_agent_text) (M2.1/M4.1, same
+    /// semantics as the yaml/star carriers); this impl only adapts the
+    /// `WorkflowHost` signature and parses the schema transport JSON.
+    async fn run_agent(&self, prompt: String, schema_json: Option<String>) -> Result<String, String> {
+        let schema = schema_json
+            .map(|raw| {
+                serde_json::from_str::<serde_json::Value>(&raw)
+                    .map_err(|e| format!("agent schema is not valid JSON: {e}"))
+            })
+            .transpose()?
+            .and_then(|value| value.as_object().cloned());
+        super::runtime::run_agent_text(self.host, prompt, "agent", schema.as_ref())
+            .await
+            .map_err(|e| e.to_string())
     }
 
     async fn report_progress(&self, message: String) {
