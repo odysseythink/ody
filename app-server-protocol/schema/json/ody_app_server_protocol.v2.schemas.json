@@ -17917,6 +17917,131 @@
       "title": "WindowsWorldWritableWarningNotification",
       "type": "object"
     },
+    "WorkspaceChangeSet": {
+      "properties": {
+        "appliedAtMs": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "changes": {
+          "items": {
+            "$ref": "#/definitions/WorkspaceFileChange"
+          },
+          "type": "array"
+        },
+        "checkpoint": {
+          "$ref": "#/definitions/WorkspaceChangeSetCheckpoint"
+        },
+        "createdAtMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "id": {
+          "description": "Server-generated `cs-{uuid}`.",
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "schemaVersion": {
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/definitions/WorkspaceChangeSetStatus"
+        },
+        "title": {
+          "type": "string"
+        },
+        "unifiedDiff": {
+          "description": "Unified diff (base -> proposed) computed at create time.",
+          "type": "string"
+        },
+        "updatedAtMs": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "changes",
+        "checkpoint",
+        "createdAtMs",
+        "id",
+        "projectId",
+        "schemaVersion",
+        "status",
+        "title",
+        "unifiedDiff",
+        "updatedAtMs"
+      ],
+      "type": "object"
+    },
+    "WorkspaceChangeSetCheckpoint": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "A usable git metadata set covers the root: an existing user repository (never modified) or a gix baseline initialized for a previously non-git root on first apply.",
+          "properties": {
+            "git": {
+              "properties": {
+                "head_commit_hash": {
+                  "description": "HEAD commit hash at apply time; None when unreadable.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "git"
+          ],
+          "title": "GitWorkspaceChangeSetCheckpoint",
+          "type": "object"
+        },
+        {
+          "description": "No checkpoint could be established.",
+          "enum": [
+            "none"
+          ],
+          "type": "string"
+        }
+      ]
+    },
+    "WorkspaceChangeSetDiffEntry": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/WorkspaceChangeSetStatus"
+        },
+        "unifiedDiff": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "unifiedDiff"
+      ],
+      "type": "object"
+    },
+    "WorkspaceChangeSetStatus": {
+      "enum": [
+        "pending",
+        "applied",
+        "rejected",
+        "restored"
+      ],
+      "type": "string"
+    },
     "WorkspaceDiscovery": {
       "properties": {
         "projectId": {
@@ -17941,6 +18066,82 @@
         "roots",
         "scannedAtMs",
         "truncated"
+      ],
+      "type": "object"
+    },
+    "WorkspaceFileChange": {
+      "properties": {
+        "baseHash": {
+          "description": "sha256 hex the change expects on disk. Required for Update/Delete.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content": {
+          "description": "Full new file content. Required for Add/Update.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/definitions/WorkspaceFileChangeKind"
+        },
+        "path": {
+          "description": "Root-relative `/`-separated path; normalized and escape-checked at create. The resolved absolute target is stored server-side.",
+          "type": "string"
+        },
+        "rootIndex": {
+          "description": "Index into the project binding's `roots` vector.",
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "path",
+        "rootIndex"
+      ],
+      "type": "object"
+    },
+    "WorkspaceFileChangeKind": {
+      "enum": [
+        "add",
+        "update",
+        "delete"
+      ],
+      "type": "string"
+    },
+    "WorkspaceGitDiff": {
+      "properties": {
+        "available": {
+          "description": "False when the git binary is unavailable, errors, or times out.",
+          "type": "boolean"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repoRoot": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "unifiedDiff": {
+          "description": "`git diff HEAD` output. Untracked files are not included (v1 limitation; per-changeset diffs cover them).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "available"
       ],
       "type": "object"
     },

@@ -827,6 +827,48 @@ client_request_definitions! {
         serialization: global_shared_read("workspace-source"),
         response: v2::WorkspaceSourceResolveResponse,
     },
+    #[experimental("workspace/source/v1")]
+    WorkspaceChangeSetCreate => "workspace/source/changeset/create" {
+        params: v2::WorkspaceChangeSetCreateParams,
+        serialization: global("workspace-source"),
+        response: v2::WorkspaceChangeSetCreateResponse,
+    },
+    #[experimental("workspace/source/v1")]
+    WorkspaceChangeSetGet => "workspace/source/changeset/get" {
+        params: v2::WorkspaceChangeSetGetParams,
+        serialization: global_shared_read("workspace-source"),
+        response: v2::WorkspaceChangeSetGetResponse,
+    },
+    #[experimental("workspace/source/v1")]
+    WorkspaceChangeSetList => "workspace/source/changeset/list" {
+        params: v2::WorkspaceChangeSetListParams,
+        serialization: global_shared_read("workspace-source"),
+        response: v2::WorkspaceChangeSetListResponse,
+    },
+    #[experimental("workspace/source/v1")]
+    WorkspaceChangeSetApply => "workspace/source/changeset/apply" {
+        params: v2::WorkspaceChangeSetApplyParams,
+        serialization: global("workspace-source"),
+        response: v2::WorkspaceChangeSetApplyResponse,
+    },
+    #[experimental("workspace/source/v1")]
+    WorkspaceChangeSetReject => "workspace/source/changeset/reject" {
+        params: v2::WorkspaceChangeSetRejectParams,
+        serialization: global("workspace-source"),
+        response: v2::WorkspaceChangeSetRejectResponse,
+    },
+    #[experimental("workspace/source/v1")]
+    WorkspaceChangeSetRestore => "workspace/source/changeset/restore" {
+        params: v2::WorkspaceChangeSetRestoreParams,
+        serialization: global("workspace-source"),
+        response: v2::WorkspaceChangeSetRestoreResponse,
+    },
+    #[experimental("workspace/source/v1")]
+    WorkspaceSourceDiff => "workspace/source/diff" {
+        params: v2::WorkspaceSourceDiffParams,
+        serialization: global_shared_read("workspace-source"),
+        response: v2::WorkspaceSourceDiffResponse,
+    },
     SkillsConfigWrite => "skills/config/write" {
         params: v2::SkillsConfigWriteParams,
         serialization: global("config"),

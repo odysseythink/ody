@@ -107,6 +107,13 @@ use ody_app_server_protocol::WorkspaceProjectCloseParams;
 use ody_app_server_protocol::WorkspaceProjectGetParams;
 use ody_app_server_protocol::WorkspaceProjectListParams;
 use ody_app_server_protocol::WorkspaceProjectScanParams;
+use ody_app_server_protocol::WorkspaceChangeSetApplyParams;
+use ody_app_server_protocol::WorkspaceChangeSetCreateParams;
+use ody_app_server_protocol::WorkspaceChangeSetGetParams;
+use ody_app_server_protocol::WorkspaceChangeSetListParams;
+use ody_app_server_protocol::WorkspaceChangeSetRejectParams;
+use ody_app_server_protocol::WorkspaceChangeSetRestoreParams;
+use ody_app_server_protocol::WorkspaceSourceDiffParams;
 use ody_app_server_protocol::WorkspaceSourceIndexParams;
 use ody_app_server_protocol::WorkspaceSourceResolveParams;
 use ody_client::default_client::ODY_INTERNAL_ORIGINATOR_OVERRIDE_ENV_VAR;
@@ -859,6 +866,75 @@ image_generation = true
     ) -> anyhow::Result<i64> {
         let params = Some(serde_json::to_value(params)?);
         self.send_request("workspace/source/resolve", params).await
+    }
+
+    /// Send a `workspace/source/changeset/create` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_source_changeset_create_request(
+        &mut self,
+        params: WorkspaceChangeSetCreateParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/source/changeset/create", params)
+            .await
+    }
+
+    /// Send a `workspace/source/changeset/get` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_source_changeset_get_request(
+        &mut self,
+        params: WorkspaceChangeSetGetParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/source/changeset/get", params)
+            .await
+    }
+
+    /// Send a `workspace/source/changeset/list` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_source_changeset_list_request(
+        &mut self,
+        params: WorkspaceChangeSetListParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/source/changeset/list", params)
+            .await
+    }
+
+    /// Send a `workspace/source/changeset/apply` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_source_changeset_apply_request(
+        &mut self,
+        params: WorkspaceChangeSetApplyParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/source/changeset/apply", params)
+            .await
+    }
+
+    /// Send a `workspace/source/changeset/reject` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_source_changeset_reject_request(
+        &mut self,
+        params: WorkspaceChangeSetRejectParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/source/changeset/reject", params)
+            .await
+    }
+
+    /// Send a `workspace/source/changeset/restore` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_source_changeset_restore_request(
+        &mut self,
+        params: WorkspaceChangeSetRestoreParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/source/changeset/restore", params)
+            .await
+    }
+
+    /// Send a `workspace/source/diff` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_source_diff_request(
+        &mut self,
+        params: WorkspaceSourceDiffParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/source/diff", params).await
     }
 
     /// Send a `thread/memoryMode/set` JSON-RPC request (v2, experimental).

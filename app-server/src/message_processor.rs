@@ -454,8 +454,10 @@ impl MessageProcessor {
             config.ody_home.to_path_buf(),
         );
 
-        let workspace_source_processor =
-            WorkspaceSourceRequestProcessor::new(workspace_project_processor.store_handle());
+        let workspace_source_processor = WorkspaceSourceRequestProcessor::new(
+            config.ody_home.to_path_buf(),
+            workspace_project_processor.store_handle(),
+        );
 
         Self {
             outgoing,
@@ -1001,6 +1003,41 @@ impl MessageProcessor {
             ClientRequest::WorkspaceSourceResolve { params, .. } => self
                 .workspace_source_processor
                 .resolve(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceChangeSetCreate { params, .. } => self
+                .workspace_source_processor
+                .changeset_create(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceChangeSetGet { params, .. } => self
+                .workspace_source_processor
+                .changeset_get(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceChangeSetList { params, .. } => self
+                .workspace_source_processor
+                .changeset_list(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceChangeSetApply { params, .. } => self
+                .workspace_source_processor
+                .changeset_apply(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceChangeSetReject { params, .. } => self
+                .workspace_source_processor
+                .changeset_reject(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceChangeSetRestore { params, .. } => self
+                .workspace_source_processor
+                .changeset_restore(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceSourceDiff { params, .. } => self
+                .workspace_source_processor
+                .diff(params)
                 .await
                 .map(|response| Some(response.into())),
             ClientRequest::ModelProviderCapabilitiesRead { params: _, .. } => self

@@ -4841,6 +4841,51 @@
       ],
       "type": "object"
     },
+    "WorkspaceFileChange": {
+      "properties": {
+        "baseHash": {
+          "description": "sha256 hex the change expects on disk. Required for Update/Delete.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content": {
+          "description": "Full new file content. Required for Add/Update.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/definitions/WorkspaceFileChangeKind"
+        },
+        "path": {
+          "description": "Root-relative `/`-separated path; normalized and escape-checked at create. The resolved absolute target is stored server-side.",
+          "type": "string"
+        },
+        "rootIndex": {
+          "description": "Index into the project binding's `roots` vector.",
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "path",
+        "rootIndex"
+      ],
+      "type": "object"
+    },
+    "WorkspaceFileChangeKind": {
+      "enum": [
+        "add",
+        "update",
+        "delete"
+      ],
+      "type": "string"
+    },
     "WorkspaceSourceQueryKind": {
       "enum": [
         "name",

@@ -126,6 +126,208 @@ pub struct WorkspaceSourceResolveResponse {
     pub matches: Vec<WorkspaceSourceResolveMatch>,
 }
 
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum WorkspaceFileChangeKind {
+    Add,
+    Update,
+    Delete,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceFileChange {
+    /// Index into the project binding's `roots` vector.
+    #[ts(type = "number")]
+    pub root_index: u32,
+    /// Root-relative `/`-separated path; normalized and escape-checked at
+    /// create. The resolved absolute target is stored server-side.
+    pub path: String,
+    pub kind: WorkspaceFileChangeKind,
+    /// sha256 hex the change expects on disk. Required for Update/Delete.
+    pub base_hash: Option<String>,
+    /// Full new file content. Required for Add/Update.
+    pub content: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum WorkspaceChangeSetStatus {
+    Pending,
+    Applied,
+    Rejected,
+    Restored,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum WorkspaceChangeSetCheckpoint {
+    /// A usable git metadata set covers the root: an existing user
+    /// repository (never modified) or a gix baseline initialized for a
+    /// previously non-git root on first apply.
+    Git {
+        /// HEAD commit hash at apply time; None when unreadable.
+        head_commit_hash: Option<String>,
+    },
+    /// No checkpoint could be established.
+    None,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceChangeSet {
+    /// Server-generated `cs-{uuid}`.
+    pub id: String,
+    pub project_id: String,
+    pub title: String,
+    pub schema_version: u32,
+    pub changes: Vec<WorkspaceFileChange>,
+    pub status: WorkspaceChangeSetStatus,
+    pub checkpoint: WorkspaceChangeSetCheckpoint,
+    /// Unified diff (base -> proposed) computed at create time.
+    pub unified_diff: String,
+    #[ts(type = "number")]
+    pub created_at_ms: i64,
+    #[ts(type = "number")]
+    pub updated_at_ms: i64,
+    #[ts(type = "number")]
+    pub applied_at_ms: Option<i64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceChangeSetCreateParams {
+    pub project_id: String,
+    pub title: String,
+    pub changes: Vec<WorkspaceFileChange>,
+    /// Client-generated key makes create retries idempotent.
+    pub idempotency_key: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceChangeSetCreateResponse {
+    pub changeset: WorkspaceChangeSet,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceChangeSetGetParams {
+    pub changeset_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceChangeSetGetResponse {
+    pub changeset: WorkspaceChangeSet,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceChangeSetListParams {
+    pub project_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceChangeSetListResponse {
+    /// Most recently created first.
+    pub changesets: Vec<WorkspaceChangeSet>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceChangeSetApplyParams {
+    pub changeset_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceChangeSetApplyResponse {
+    pub changeset: WorkspaceChangeSet,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceChangeSetRejectParams {
+    pub changeset_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceChangeSetRejectResponse {
+    pub changeset: WorkspaceChangeSet,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceChangeSetRestoreParams {
+    pub changeset_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceChangeSetRestoreResponse {
+    pub changeset: WorkspaceChangeSet,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceChangeSetDiffEntry {
+    pub id: String,
+    pub status: WorkspaceChangeSetStatus,
+    pub unified_diff: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceGitDiff {
+    pub repo_root: Option<String>,
+    /// False when the git binary is unavailable, errors, or times out.
+    pub available: bool,
+    pub error: Option<String>,
+    /// `git diff HEAD` output. Untracked files are not included (v1
+    /// limitation; per-changeset diffs cover them).
+    pub unified_diff: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceSourceDiffParams {
+    pub project_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceSourceDiffResponse {
+    /// Pending, Applied, and Restored changesets with their unified diffs.
+    pub changesets: Vec<WorkspaceChangeSetDiffEntry>,
+    /// Whole-repo diff when the primary root is inside a git repo.
+    pub git_diff: Option<WorkspaceGitDiff>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -186,5 +388,103 @@ mod tests {
                 }
             })
         );
+    }
+
+    #[test]
+    fn workspace_source_changeset_create_has_stable_wire_name_and_is_experimental() {
+        let request = ClientRequest::WorkspaceChangeSetCreate {
+            request_id: RequestId::Integer(30),
+            params: WorkspaceChangeSetCreateParams {
+                project_id: "ws-1".to_owned(),
+                title: "update homepage".to_owned(),
+                changes: vec![WorkspaceFileChange {
+                    root_index: 0,
+                    path: "src/pages/HomePage.tsx".to_owned(),
+                    kind: WorkspaceFileChangeKind::Update,
+                    base_hash: Some("aa".repeat(32)),
+                    content: Some("export default function HomePage() {}".to_owned()),
+                }],
+                idempotency_key: "cs-key-1".to_owned(),
+            },
+        };
+
+        assert_eq!(request.method(), "workspace/source/changeset/create");
+        assert_eq!(
+            crate::experimental_api::ExperimentalApi::experimental_reason(&request),
+            Some("workspace/source/v1")
+        );
+        let value = serde_json::to_value(request).expect("serialize changeset create");
+        assert_eq!(value["method"], "workspace/source/changeset/create");
+        assert_eq!(value["params"]["title"], "update homepage");
+        assert_eq!(value["params"]["changes"][0]["kind"], "update");
+        assert_eq!(value["params"]["changes"][0]["rootIndex"], 0);
+        assert_eq!(value["params"]["idempotencyKey"], "cs-key-1");
+    }
+
+    #[test]
+    fn workspace_source_changeset_lifecycle_methods_have_stable_wire_names() {
+        let cases: Vec<(ClientRequest, &str)> = vec![
+            (
+                ClientRequest::WorkspaceChangeSetGet {
+                    request_id: RequestId::Integer(31),
+                    params: WorkspaceChangeSetGetParams {
+                        changeset_id: "cs-1".to_owned(),
+                    },
+                },
+                "workspace/source/changeset/get",
+            ),
+            (
+                ClientRequest::WorkspaceChangeSetList {
+                    request_id: RequestId::Integer(32),
+                    params: WorkspaceChangeSetListParams {
+                        project_id: "ws-1".to_owned(),
+                    },
+                },
+                "workspace/source/changeset/list",
+            ),
+            (
+                ClientRequest::WorkspaceChangeSetApply {
+                    request_id: RequestId::Integer(33),
+                    params: WorkspaceChangeSetApplyParams {
+                        changeset_id: "cs-1".to_owned(),
+                    },
+                },
+                "workspace/source/changeset/apply",
+            ),
+            (
+                ClientRequest::WorkspaceChangeSetReject {
+                    request_id: RequestId::Integer(34),
+                    params: WorkspaceChangeSetRejectParams {
+                        changeset_id: "cs-1".to_owned(),
+                    },
+                },
+                "workspace/source/changeset/reject",
+            ),
+            (
+                ClientRequest::WorkspaceChangeSetRestore {
+                    request_id: RequestId::Integer(35),
+                    params: WorkspaceChangeSetRestoreParams {
+                        changeset_id: "cs-1".to_owned(),
+                    },
+                },
+                "workspace/source/changeset/restore",
+            ),
+            (
+                ClientRequest::WorkspaceSourceDiff {
+                    request_id: RequestId::Integer(36),
+                    params: WorkspaceSourceDiffParams {
+                        project_id: "ws-1".to_owned(),
+                    },
+                },
+                "workspace/source/diff",
+            ),
+        ];
+        for (request, expected) in cases {
+            assert_eq!(request.method(), expected);
+            assert_eq!(
+                crate::experimental_api::ExperimentalApi::experimental_reason(&request),
+                Some("workspace/source/v1")
+            );
+        }
     }
 }
