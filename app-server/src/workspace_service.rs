@@ -29,6 +29,21 @@ pub(crate) const SERVICE_HEALTH_TIMEOUT_MS: u64 = 2_000;
 pub(crate) const MAX_SERVICES_PER_PROJECT: usize = 8;
 pub(crate) const MAX_SERVICE_NAME_CHARS: usize = 64;
 
+/// E3: spec/orchestration/diagnose bounds (ADR §3.3).
+pub(crate) const MAX_SPECS_PER_PROJECT: usize = 16;
+pub(crate) const MAX_DEPENDS_ON_PER_SPEC: usize = 8;
+pub(crate) const MAX_ORCHESTRATION_RECORDS: usize = 64;
+pub(crate) const HEALTH_CHECK_DEFAULT_TIMEOUT_MS: i64 = 2_000;
+pub(crate) const HEALTH_CHECK_MIN_TIMEOUT_MS: i64 = 200;
+pub(crate) const HEALTH_CHECK_MAX_TIMEOUT_MS: i64 = 10_000;
+pub(crate) const DIAGNOSE_MAX_FAILURES: usize = 16;
+pub(crate) const DIAGNOSE_DEFAULT_LOG_TAIL_BYTES: u64 = 16 * 1024;
+pub(crate) const DIAGNOSE_MIN_LOG_TAIL_BYTES: u64 = 1024;
+pub(crate) const DIAGNOSE_MAX_LOG_TAIL_BYTES: u64 = 64 * 1024;
+pub(crate) const DIAGNOSE_EXCERPT_MAX_LINES: usize = 50;
+pub(crate) const DIAGNOSE_DEFAULT_MAX_CANDIDATES: u32 = 10;
+pub(crate) const DIAGNOSE_MAX_CANDIDATES_LIMIT: u32 = 50;
+
 /// Framework default dev-server port, first tech match wins.
 const TECH_DEFAULT_PORTS: &[(&str, u16)] = &[
     ("next", 3000),
@@ -42,10 +57,9 @@ const TECH_DEFAULT_PORTS: &[(&str, u16)] = &[
 const TECH_STRICT_PORT: &[&str] = &["vite", "svelte"];
 
 pub(crate) fn clamp_ready_timeout(timeout_ms: Option<i64>) -> i64 {
-    timeout_ms.unwrap_or(SERVICE_READY_DEFAULT_TIMEOUT_MS).clamp(
-        SERVICE_READY_MIN_TIMEOUT_MS,
-        SERVICE_READY_MAX_TIMEOUT_MS,
-    )
+    timeout_ms
+        .unwrap_or(SERVICE_READY_DEFAULT_TIMEOUT_MS)
+        .clamp(SERVICE_READY_MIN_TIMEOUT_MS, SERVICE_READY_MAX_TIMEOUT_MS)
 }
 
 pub(crate) fn default_port_for_tech(tech_ids: &[String]) -> u16 {
@@ -118,7 +132,10 @@ pub(crate) struct OutputRing {
 
 impl OutputRing {
     pub(crate) fn new(cap: usize) -> Self {
-        Self { buf: Vec::with_capacity(cap.min(1024)), cap }
+        Self {
+            buf: Vec::with_capacity(cap.min(1024)),
+            cap,
+        }
     }
 
     pub(crate) fn push(&mut self, bytes: &[u8]) {
@@ -258,7 +275,10 @@ pub(crate) fn kill_process_group(pgid: u32) -> Result<(), String> {
     if rc == 0 {
         Ok(())
     } else {
-        Err(format!("killpg({pgid}) failed: {}", std::io::Error::last_os_error()))
+        Err(format!(
+            "killpg({pgid}) failed: {}",
+            std::io::Error::last_os_error()
+        ))
     }
 }
 
@@ -272,7 +292,111 @@ pub(crate) fn kill_process_group(pid: u32) -> Result<(), String> {
     if output.status.success() {
         Ok(())
     } else {
-        Err(format!("taskkill failed: {}", String::from_utf8_lossy(&output.stderr)))
+        Err(format!(
+            "taskkill failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ))
+    }
+}
+
+/// Kahn's algorithm by levels over (name, depends_on) pairs. Levels are
+/// sorted by name for determinism. Errors name the unknown dependency or
+/// the specs caught in a cycle (ADR decision 3: request-level error).
+pub(crate) fn topo_levels(specs: &[(String, Vec<String>)]) -> Result<Vec<Vec<String>>, String> {
+    let mut edges: std::collections::BTreeMap<String, Vec<String>> =
+        std::collections::BTreeMap::new();
+    for (name, deps) in specs {
+        edges.entry(name.clone()).or_default();
+        for dep in deps {
+            if !specs.iter().any(|(other, _)| other == dep) {
+                return Err(format!("unknown dependency {dep:?} of spec {name:?}"));
+            }
+            edges.get_mut(name).expect("entry").push(dep.clone());
+        }
+    }
+    let mut levels = Vec::new();
+    let mut placed: std::collections::BTreeSet<String> = edges.keys().cloned().collect();
+    while !placed.is_empty() {
+        let level: Vec<String> = edges
+            .iter()
+            .filter(|(name, _)| placed.contains(*name))
+            .filter(|(_, deps)| deps.iter().all(|dep| !placed.contains(dep)))
+            .map(|(name, _)| name.clone())
+            .collect();
+        if level.is_empty() {
+            let remaining = placed.into_iter().collect::<Vec<_>>().join(", ");
+            return Err(format!("dependency cycle among specs: {remaining}"));
+        }
+        for name in &level {
+            placed.remove(name);
+        }
+        levels.push(level);
+    }
+    Ok(levels)
+}
+
+/// `api-server` -> `API_SERVER`: dependency connection env keys (ADR decision 4).
+pub(crate) fn env_key_for_service(name: &str) -> String {
+    name.chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                ch.to_ascii_uppercase()
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+pub(crate) fn clamp_health_timeout(timeout_ms: Option<i64>) -> i64 {
+    timeout_ms
+        .unwrap_or(HEALTH_CHECK_DEFAULT_TIMEOUT_MS)
+        .clamp(HEALTH_CHECK_MIN_TIMEOUT_MS, HEALTH_CHECK_MAX_TIMEOUT_MS)
+}
+
+/// Orchestration health gate (ADR decision 6): exact `expect` status when
+/// defined (default 200), else 2xx tolerance; one attempt with `timeout`.
+pub(crate) async fn spec_health_probe(
+    client: &reqwest::Client,
+    origin: &str,
+    path: &str,
+    expect_status: Option<u16>,
+    timeout: Duration,
+) -> ody_app_server_protocol::WorkspaceServiceHealth {
+    let checked_at_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .try_into()
+        .unwrap_or(i64::MAX);
+    let url = format!("{}{}", origin.trim_end_matches('/'), path);
+    match tokio::time::timeout(timeout, client.get(&url).send()).await {
+        Ok(Ok(response)) => {
+            let status = response.status().as_u16();
+            let ok = expect_status
+                .map_or_else(|| response.status().is_success(), |expect| status == expect);
+            ody_app_server_protocol::WorkspaceServiceHealth {
+                ok,
+                status_code: Some(status),
+                error: None,
+                checked_at_ms,
+            }
+        }
+        Ok(Err(err)) => ody_app_server_protocol::WorkspaceServiceHealth {
+            ok: false,
+            status_code: None,
+            error: Some(err.to_string()),
+            checked_at_ms,
+        },
+        Err(_) => ody_app_server_protocol::WorkspaceServiceHealth {
+            ok: false,
+            status_code: None,
+            error: Some(format!(
+                "health probe timed out after {} ms",
+                timeout.as_millis()
+            )),
+            checked_at_ms,
+        },
     }
 }
 
@@ -296,7 +420,9 @@ pub(crate) fn validate_check_url(
 ) -> Result<String, String> {
     let url = override_url.unwrap_or_else(|| service_url.to_owned());
     if url.contains('\\') {
-        return Err(format!("url {url:?} is not allowed for preview check: backslash"));
+        return Err(format!(
+            "url {url:?} is not allowed for preview check: backslash"
+        ));
     }
     let parsed = reqwest::Url::parse(&url).map_err(|err| format!("invalid url {url:?}: {err}"))?;
     match parsed.scheme() {
@@ -328,7 +454,10 @@ mod tests {
         assert_eq!(clamp_ready_timeout(None), SERVICE_READY_DEFAULT_TIMEOUT_MS);
         assert_eq!(clamp_ready_timeout(Some(30_000)), 30_000);
         assert_eq!(clamp_ready_timeout(Some(1)), SERVICE_READY_MIN_TIMEOUT_MS);
-        assert_eq!(clamp_ready_timeout(Some(9_999_999)), SERVICE_READY_MAX_TIMEOUT_MS);
+        assert_eq!(
+            clamp_ready_timeout(Some(9_999_999)),
+            SERVICE_READY_MAX_TIMEOUT_MS
+        );
     }
 
     #[test]
@@ -395,10 +524,16 @@ mod tests {
 
     #[test]
     fn clamp_preview_timeout_applies_defaults_and_bounds() {
-        assert_eq!(clamp_preview_timeout(None), PREVIEW_CHECK_DEFAULT_TIMEOUT_MS);
+        assert_eq!(
+            clamp_preview_timeout(None),
+            PREVIEW_CHECK_DEFAULT_TIMEOUT_MS
+        );
         assert_eq!(clamp_preview_timeout(Some(5_000)), 5_000);
         assert_eq!(clamp_preview_timeout(Some(0)), PREVIEW_CHECK_MIN_TIMEOUT_MS);
-        assert_eq!(clamp_preview_timeout(Some(999_999)), PREVIEW_CHECK_MAX_TIMEOUT_MS);
+        assert_eq!(
+            clamp_preview_timeout(Some(999_999)),
+            PREVIEW_CHECK_MAX_TIMEOUT_MS
+        );
     }
 
     #[test]
@@ -440,11 +575,13 @@ mod tests {
             Some("Upper".to_owned())
         );
         assert_eq!(
-            extract_title("<html><head>\n  <title>\n  Spaced\n</title>\n</head></html>")
-                .as_deref(),
+            extract_title("<html><head>\n  <title>\n  Spaced\n</title>\n</head></html>").as_deref(),
             Some("Spaced")
         );
-        assert_eq!(extract_title("<html><body>no head title</body></html>"), None);
+        assert_eq!(
+            extract_title("<html><body>no head title</body></html>"),
+            None
+        );
         assert_eq!(extract_title(""), None);
         assert_eq!(extract_title("<title>unclosed"), None); // malformed: no closing tag
     }
@@ -456,5 +593,99 @@ mod tests {
             crate::workspace_changeset::sha256_hex(b"abc"),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
+    }
+
+    #[test]
+    fn topo_levels_orders_by_dependency_and_detects_cycles() {
+        // Linear chain: web -> api -> db.
+        let levels = topo_levels(&[
+            ("web".to_owned(), vec!["api".to_owned()]),
+            ("api".to_owned(), vec!["db".to_owned()]),
+            ("db".to_owned(), vec![]),
+        ])
+        .expect("linear graph");
+        assert_eq!(
+            levels,
+            vec![
+                vec!["db".to_owned()],
+                vec!["api".to_owned()],
+                vec!["web".to_owned()],
+            ]
+        );
+
+        // Diamond: app depends on api and web; both depend on db.
+        let levels = topo_levels(&[
+            ("app".to_owned(), vec!["api".to_owned(), "web".to_owned()]),
+            ("api".to_owned(), vec!["db".to_owned()]),
+            ("web".to_owned(), vec!["db".to_owned()]),
+            ("db".to_owned(), vec![]),
+        ])
+        .expect("diamond graph");
+        assert_eq!(levels[0], vec!["db".to_owned()]);
+        assert_eq!(levels[1].len(), 2); // api + web, same level
+        assert_eq!(levels[2], vec!["app".to_owned()]);
+
+        // Unknown dependency names the offender.
+        let err =
+            topo_levels(&[("web".to_owned(), vec!["ghost".to_owned()])]).expect_err("unknown dep");
+        assert!(
+            err.contains("\"ghost\"") && err.contains("\"web\""),
+            "{err}"
+        );
+
+        // Cycle is rejected with the remaining nodes named.
+        let err = topo_levels(&[
+            ("a".to_owned(), vec!["b".to_owned()]),
+            ("b".to_owned(), vec!["a".to_owned()]),
+        ])
+        .expect_err("cycle");
+        assert!(err.contains("cycle"), "{err}");
+    }
+
+    #[test]
+    fn env_key_for_service_normalizes_to_upper_snake() {
+        assert_eq!(env_key_for_service("backend"), "BACKEND");
+        assert_eq!(env_key_for_service("api-server"), "API_SERVER");
+        assert_eq!(env_key_for_service("api server v2"), "API_SERVER_V2");
+        assert_eq!(env_key_for_service("数据库"), "___"); // each non-ascii-alnum char -> '_'
+    }
+
+    #[test]
+    fn clamp_health_timeout_applies_defaults_and_bounds() {
+        assert_eq!(clamp_health_timeout(None), HEALTH_CHECK_DEFAULT_TIMEOUT_MS);
+        assert_eq!(clamp_health_timeout(Some(500)), 500);
+        assert_eq!(clamp_health_timeout(Some(0)), HEALTH_CHECK_MIN_TIMEOUT_MS);
+        assert_eq!(
+            clamp_health_timeout(Some(999_999)),
+            HEALTH_CHECK_MAX_TIMEOUT_MS
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn spec_health_probe_matches_exact_expect_status() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("accept");
+            use tokio::io::AsyncWriteExt;
+            stream
+                .write_all(b"HTTP/1.1 500 Internal Server Error\r\ncontent-length: 0\r\n\r\n")
+                .await
+                .expect("write");
+        });
+        let client = reqwest::Client::new();
+        let health = spec_health_probe(
+            &client,
+            &format!("http://127.0.0.1:{port}"),
+            "/api/broken",
+            Some(200),
+            std::time::Duration::from_secs(2),
+        )
+        .await;
+        server.await.expect("server task");
+        assert!(!health.ok, "500 vs expect 200 must fail the gate");
+        assert_eq!(health.status_code, Some(500));
     }
 }

@@ -38,10 +38,10 @@ use crate::request_processors::ThreadGoalRequestProcessor;
 use crate::request_processors::ThreadRequestProcessor;
 use crate::request_processors::TurnRequestProcessor;
 use crate::request_processors::VisualWorkspaceRequestProcessor;
+use crate::request_processors::WindowsSandboxRequestProcessor;
 use crate::request_processors::WorkspaceProjectRequestProcessor;
 use crate::request_processors::WorkspaceServiceRequestProcessor;
 use crate::request_processors::WorkspaceSourceRequestProcessor;
-use crate::request_processors::WindowsSandboxRequestProcessor;
 use crate::request_serialization::QueuedInitializedRequest;
 use crate::request_serialization::RequestSerializationQueueKey;
 use crate::request_serialization::RequestSerializationQueues;
@@ -452,9 +452,8 @@ impl MessageProcessor {
             config.ody_home.to_path_buf(),
             Arc::clone(&outgoing),
         );
-        let workspace_project_processor = WorkspaceProjectRequestProcessor::new(
-            config.ody_home.to_path_buf(),
-        );
+        let workspace_project_processor =
+            WorkspaceProjectRequestProcessor::new(config.ody_home.to_path_buf());
 
         let workspace_source_processor = WorkspaceSourceRequestProcessor::new(
             config.ody_home.to_path_buf(),
@@ -1083,6 +1082,37 @@ impl MessageProcessor {
             ClientRequest::WorkspacePreviewCheck { params, .. } => self
                 .workspace_service_processor
                 .check(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceServiceDefine { params, .. } => self
+                .workspace_service_processor
+                .define(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceServiceSpecs { params, .. } => self
+                .workspace_service_processor
+                .specs(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceServiceStartAll { params, .. } => self
+                .workspace_service_processor
+                .start_all(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceServiceStopAll { params, .. } => self
+                .workspace_service_processor
+                .stop_all(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceServiceHealth { params, .. } => self
+                .workspace_service_processor
+                .health(params)
+                .await
+                .map(|response| Some(response.into())),
+            // T04 replaces this stub with the diagnose engine wiring.
+            ClientRequest::WorkspacePreviewDiagnose { params, .. } => self
+                .workspace_service_processor
+                .diagnose(params)
                 .await
                 .map(|response| Some(response.into())),
             ClientRequest::ModelProviderCapabilitiesRead { params: _, .. } => self
