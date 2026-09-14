@@ -597,6 +597,20 @@ impl WorkspaceServiceRequestProcessor {
             });
         }
 
+        #[cfg(windows)]
+        let job = {
+            use crate::workspace_service_windows::ServiceJob;
+            match ServiceJob::create().and_then(|job| {
+                job.assign_pid(pid)?;
+                Ok(job)
+            }) {
+                Ok(job) => Some(job),
+                Err(err) => {
+                    tracing::warn!("windows job object unavailable for service {service_id}: {err}; taskkill fallback");
+                    None
+                }
+            }
+        };
         let runtime_entry = ManagedService {
             pid,
             pgid: pid,
@@ -605,6 +619,8 @@ impl WorkspaceServiceRequestProcessor {
             stdout_ring,
             stderr_ring,
             terminal_notify: terminal_notify.clone(),
+            #[cfg(windows)]
+            job,
         };
         self.runtime
             .lock()
@@ -655,7 +671,12 @@ impl WorkspaceServiceRequestProcessor {
                         crate::workspace_service::clamp_ready_timeout(ready_timeout_ms),
                         self.stderr_tail_of(&service_id)
                     ));
-                    let _ = crate::workspace_service::kill_process_group(pid);
+                    {
+                        let runtime = self.runtime.lock().expect("runtime lock");
+                        if let Some(entry) = runtime.get(&service_id) {
+                            let _ = entry.kill_tree();
+                        }
+                    }
                 }
             }
             record.updated_at_ms = now_ms();
@@ -725,14 +746,14 @@ impl WorkspaceServiceRequestProcessor {
 
     async fn stop_one(&self, service_id: &str) -> Result<WorkspaceServiceRef, JSONRPCErrorError> {
         let runtime_entry = {
-            let mut runtime = self.runtime.lock().expect("runtime lock");
+            let runtime = self.runtime.lock().expect("runtime lock");
             runtime.get(service_id).map(|entry| ManagedServiceClone {
                 pgid: entry.pgid,
                 stop_requested: entry.stop_requested.clone(),
                 terminal_notify: entry.terminal_notify.clone(),
             })
         };
-        let (pgid, stop_requested, terminal_notify) = match runtime_entry {
+        let (_pgid, stop_requested, terminal_notify) = match runtime_entry {
             Some(entry) => (entry.pgid, entry.stop_requested, entry.terminal_notify),
             None => {
                 // Terminal or after-restart: just report the stored record.
@@ -740,8 +761,13 @@ impl WorkspaceServiceRequestProcessor {
             }
         };
         stop_requested.store(true, Ordering::SeqCst);
-        if let Err(err) = crate::workspace_service::kill_process_group(pgid) {
-            tracing::warn!(service = %service_id, error = %err, "kill_process_group failed");
+        {
+            let runtime = self.runtime.lock().expect("runtime lock");
+            if let Some(entry) = runtime.get(service_id) {
+                if let Err(err) = entry.kill_tree() {
+                    tracing::warn!(service = %service_id, error = %err, "kill_tree failed");
+                }
+            }
         }
         // Wait briefly for the wait task to publish the terminal state.
         let _ = tokio::time::timeout(

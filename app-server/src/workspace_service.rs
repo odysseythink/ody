@@ -164,6 +164,26 @@ pub(crate) struct ManagedService {
     pub(crate) stdout_ring: Arc<Mutex<OutputRing>>,
     pub(crate) stderr_ring: Arc<Mutex<OutputRing>>,
     pub(crate) terminal_notify: Arc<Notify>,
+    /// Windows: Job Object binding the spawned tree (E4). None when job
+    /// creation failed at start (taskkill /T fallback still active).
+    #[cfg(windows)]
+    pub(crate) job: Option<crate::workspace_service_windows::ServiceJob>,
+}
+
+impl ManagedService {
+    /// Kill the whole service tree. Unix: killpg. Windows: Job Object
+    /// TerminateJobObject, falling back to taskkill /T when the job is
+    /// unavailable.
+    pub(crate) fn kill_tree(&self) -> Result<(), String> {
+        #[cfg(windows)]
+        if let Some(job) = &self.job {
+            if job.kill().is_ok() {
+                return Ok(());
+            }
+            // fall through to taskkill
+        }
+        kill_process_group(self.pgid)
+    }
 }
 
 impl Drop for ManagedService {
@@ -175,7 +195,10 @@ impl Drop for ManagedService {
         // (package-manager wrappers killed by signal, OOM killer, ...), so
         // the drop kill is unconditional. Already-dead groups only cost one
         // ESRCH; errors never panic inside drop.
-        if let Err(err) = kill_process_group(self.pgid) {
+        // Windows: self.job drops after this (CloseHandle →
+        // KILL_ON_JOB_CLOSE double insurance); kill_tree prefers the job's
+        // TerminateJobObject so both paths converge on the Job Object.
+        if let Err(err) = self.kill_tree() {
             tracing::debug!(
                 pgid = self.pgid,
                 error = %err,
