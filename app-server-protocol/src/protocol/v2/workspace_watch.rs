@@ -73,4 +73,8 @@ pub struct WorkspaceChangedNotification {
     pub changes: Vec<WorkspaceFileEvent>,
     /// True when the debounce window held more events than the cap.
     pub overflow: bool,
+    /// Pending changesets whose base hashes were contradicted by this
+    /// event batch; clients should prompt re-index/re-create.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub invalidated_changesets: Vec<String>,
 }

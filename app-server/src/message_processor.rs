@@ -479,10 +479,19 @@ impl MessageProcessor {
             outgoing.clone(),
         );
 
+        let workspace_source_for_watch = workspace_source_processor.clone();
         let workspace_watch_manager = WorkspaceWatchManager::new(
             outgoing.clone(),
             fs_watch_manager.file_watcher(),
             workspace_project_processor.store_handle(),
+            Arc::new(move |project_id, events, overflow| {
+                let processor = workspace_source_for_watch.clone();
+                if overflow {
+                    processor.invalidate_all_pending(project_id)
+                } else {
+                    processor.invalidate_from_external_events(project_id, events)
+                }
+            }),
         );
 
         Self {

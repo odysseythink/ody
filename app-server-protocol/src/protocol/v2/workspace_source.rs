@@ -12,7 +12,7 @@ use ts_rs::TS;
 
 use super::workspace::WorkspaceSourceKind;
 
-pub const WORKSPACE_SOURCE_PROTOCOL_VERSION: u32 = 1;
+pub const WORKSPACE_SOURCE_PROTOCOL_VERSION: u32 = 2;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
@@ -197,6 +197,12 @@ pub struct WorkspaceChangeSet {
     pub updated_at_ms: i64,
     #[ts(type = "number")]
     pub applied_at_ms: Option<i64>,
+    /// E4: set when an external edit invalidated one or more base hashes
+    /// while the changeset was Pending. Presence blocks apply with a
+    /// structured conflict error. `None` = healthy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub invalidated_reason: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]

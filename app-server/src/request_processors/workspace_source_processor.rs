@@ -25,6 +25,8 @@ use ody_app_server_protocol::WorkspaceChangeSetRestoreParams;
 use ody_app_server_protocol::WorkspaceChangeSetRestoreResponse;
 use ody_app_server_protocol::WorkspaceChangeSetStatus;
 use ody_app_server_protocol::WorkspaceFileChangeKind;
+use ody_app_server_protocol::WorkspaceFileEvent;
+use ody_app_server_protocol::WorkspaceFileEventKind;
 use ody_app_server_protocol::WorkspaceGitDiff;
 use ody_app_server_protocol::WorkspaceProjectRef;
 use ody_app_server_protocol::WorkspaceRootGitDiff;
@@ -202,6 +204,7 @@ impl WorkspaceSourceRequestProcessor {
                 created_at_ms: now,
                 updated_at_ms: now,
                 applied_at_ms: None,
+                invalidated_reason: None,
             },
             base_contents: prepared
                 .iter()
@@ -293,6 +296,16 @@ impl WorkspaceSourceRequestProcessor {
             return Err(invalid_params(format!(
                 "changeset {} is {:?}; expected Pending for apply",
                 stored.change_set.id, stored.change_set.status
+            )));
+        }
+        // E4: an external edit already contradicted a base hash while the
+        // changeset was Pending — refuse before touching any file (the
+        // watcher marks this; apply is the enforcement point, so even a
+        // client that ignored `invalidatedChangesets` cannot be clobbered).
+        if let Some(reason) = &stored.change_set.invalidated_reason {
+            return Err(invalid_params(format!(
+                "changeset {} was invalidated: {reason}. Re-index and re-create the changeset; no files were written.",
+                stored.change_set.id
             )));
         }
         let prepared = rebuild_prepared(&project, &stored)?;
@@ -653,6 +666,104 @@ impl WorkspaceSourceRequestProcessor {
             .ok_or_else(|| unknown_project(project_id))
     }
 
+    /// E4: cross-reference an external-change batch against this project's
+    /// Pending changesets. Returns the changeset ids that became invalid.
+    /// Called by the workspace watcher (see workspace_watch.rs sink).
+    pub(crate) fn invalidate_from_external_events(
+        &self,
+        project_id: &str,
+        events: &[WorkspaceFileEvent],
+    ) -> Vec<String> {
+        if events.is_empty() {
+            return Vec::new();
+        }
+        let mut invalidated = Vec::new();
+        let mut touched = false;
+        {
+            let mut store = self.store.lock().expect("store lock");
+            for (id, stored) in store.changesets.iter_mut() {
+                if stored.change_set.project_id != project_id
+                    || stored.change_set.status != WorkspaceChangeSetStatus::Pending
+                {
+                    continue;
+                }
+                let conflicted = conflicted_change_keys(&stored.change_set.changes, events);
+                if !conflicted.is_empty() && stored.change_set.invalidated_reason.is_none() {
+                    stored.change_set.invalidated_reason = Some(format!(
+                        "external edit conflicted with base hashes: {}",
+                        conflicted.join(", ")
+                    ));
+                    stored.change_set.updated_at_ms = now_ms();
+                    touched = true;
+                    invalidated.push(id.clone());
+                }
+            }
+        }
+        if touched {
+            let _ = self.with_store(|store| store.persist());
+        }
+        invalidated
+    }
+
+    /// E4 overflow rescan: the watcher truncated its event batch, so
+    /// unobserved events may have missed a conflict. Re-verify every
+    /// Pending changeset of the project against the on-disk bytes
+    /// (fail-closed: unreadable files count as conflicts).
+    pub(crate) fn invalidate_all_pending(&self, project_id: &str) -> Vec<String> {
+        let mut invalidated = Vec::new();
+        let mut touched = false;
+        {
+            let mut store = self.store.lock().expect("store lock");
+            let pending: Vec<String> = store
+                .changesets
+                .values()
+                .filter(|stored| {
+                    stored.change_set.project_id == project_id
+                        && stored.change_set.status == WorkspaceChangeSetStatus::Pending
+                })
+                .map(|stored| stored.change_set.id.clone())
+                .collect();
+            for id in pending {
+                let Some(stored) = store.changesets.get(&id) else {
+                    continue;
+                };
+                let mut conflicted: Vec<String> = Vec::new();
+                for change in &stored.change_set.changes {
+                    let key = format!("{}:{}", change.root_index, change.path);
+                    let on_disk = stored.targets.get(&key).and_then(|target| {
+                        std::fs::read(target)
+                            .ok()
+                            .map(|bytes| crate::workspace_changeset::sha256_hex(&bytes))
+                    });
+                    let base_ok = match on_disk {
+                        Some(hash) => Some(hash.as_str()) == change.base_hash.as_deref(),
+                        // Unreadable = conflict (fail closed).
+                        None => false,
+                    };
+                    if !base_ok {
+                        conflicted.push(key);
+                    }
+                }
+                if !conflicted.is_empty() {
+                    let stored = store.changesets.get_mut(&id).expect("pending id collected");
+                    if stored.change_set.invalidated_reason.is_none() {
+                        stored.change_set.invalidated_reason = Some(format!(
+                            "external edit conflicted with base hashes: {}",
+                            conflicted.join(", ")
+                        ));
+                        stored.change_set.updated_at_ms = now_ms();
+                        touched = true;
+                        invalidated.push(id);
+                    }
+                }
+            }
+        }
+        if touched {
+            let _ = self.with_store(|store| store.persist());
+        }
+        invalidated
+    }
+
     fn stored_changeset(
         &self,
         changeset_id: &str,
@@ -708,9 +819,19 @@ impl WorkspaceSourceStore {
         for candidate in [&path, &backup] {
             if let Ok(raw) = fs::read(candidate)
                 && let Ok(mut state) = serde_json::from_slice::<Self>(&raw)
-                && state.schema_version == WORKSPACE_SOURCE_PROTOCOL_VERSION
+                && state.schema_version >= 1
+                && state.schema_version <= WORKSPACE_SOURCE_PROTOCOL_VERSION
             {
+                // Accept older versions (serde(default) fills new fields —
+                // same normalization the service store uses); stamp the
+                // current version and persist the upgrade so a v1 file's
+                // changesets survive the bump instead of vanishing.
+                let upgraded = state.schema_version != WORKSPACE_SOURCE_PROTOCOL_VERSION;
+                state.schema_version = WORKSPACE_SOURCE_PROTOCOL_VERSION;
                 state.path = path.clone();
+                if upgraded {
+                    let _ = state.persist();
+                }
                 return state;
             }
         }
@@ -830,6 +951,49 @@ fn unknown_project(id: &str) -> JSONRPCErrorError {
     invalid_params(format!("unknown workspace project id: {id}"))
 }
 
+/// E4: the change keys of a Pending changeset contradicted by an external
+/// event batch. Fail-closed rules: a `Removed` event invalidates an
+/// Update/Delete base (file gone); an unreadable file (None hash) counts as
+/// a conflict; an `Added` event colliding with an `Add` change is a
+/// conflict (apply would clobber an externally created file); an event
+/// whose hash equals the base hash (IDE round-trip save) is NOT a
+/// conflict.
+fn conflicted_change_keys(
+    changes: &[ody_app_server_protocol::WorkspaceFileChange],
+    events: &[WorkspaceFileEvent],
+) -> Vec<String> {
+    let mut conflicted = Vec::new();
+    for change in changes {
+        let key = format!("{}:{}", change.root_index, change.path);
+        let Some(event) = events
+            .iter()
+            .find(|event| event.root_index == change.root_index && event.path == change.path)
+        else {
+            continue;
+        };
+        match change.kind {
+            WorkspaceFileChangeKind::Add => {
+                if event.kind == WorkspaceFileEventKind::Added {
+                    conflicted.push(key);
+                }
+            }
+            WorkspaceFileChangeKind::Update | WorkspaceFileChangeKind::Delete => {
+                let base_ok = match event.kind {
+                    WorkspaceFileEventKind::Removed => false,
+                    _ => {
+                        event.content_hash.is_some()
+                            && event.content_hash.as_deref() == change.base_hash.as_deref()
+                    }
+                };
+                if !base_ok {
+                    conflicted.push(key);
+                }
+            }
+        }
+    }
+    conflicted
+}
+
 fn now_ms() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -918,6 +1082,7 @@ mod tests {
                 created_at_ms: 1,
                 updated_at_ms: 1,
                 applied_at_ms: None,
+                invalidated_reason: None,
             },
             base_contents: prepared
                 .iter()
@@ -948,6 +1113,251 @@ mod tests {
         let rebuilt = rebuild_prepared(&project, reloaded).expect("rebuild prepared");
         assert_eq!(rebuilt.len(), 1);
         assert_eq!(rebuilt[0].base_content.as_deref(), Some(base.as_str()));
+    }
+
+    // ---- E4 T02: external-edit conflict invalidation ----
+
+    #[test]
+    fn load_upgrades_version_1_store_without_dropping_changesets() {
+        let dir = tempfile::tempdir().expect("temp");
+        let path = dir.path().join("v1.json");
+        // Hand-written v1 payload: no invalidated_reason field anywhere.
+        // Store-level keys are snake_case (the store struct has no serde
+        // rename_all); the flattened changeset keeps protocol camelCase.
+        let v1 = serde_json::json!({
+            "schema_version": 1,
+            "changesets": {
+                "cs-1": {
+                    "id": "cs-1", "projectId": "p1", "title": "t",
+                    "schemaVersion": 1,
+                    "changes": [{
+                        "rootIndex": 0, "path": "src/a.ts",
+                        "kind": "update", "baseHash": "abc", "content": "x"
+                    }],
+                    "status": "pending",
+                    "checkpoint": "none",
+                    "unifiedDiff": "", "createdAtMs": 1, "updatedAtMs": 2,
+                    "appliedAtMs": null,
+                    "base_contents": {"0:src/a.ts": "old"},
+                    "applied_hashes": {},
+                    "targets": {"0:src/a.ts": "/tmp/src/a.ts"}
+                }
+            },
+            "idempotency": {}
+        });
+        fs::write(&path, serde_json::to_vec_pretty(&v1).unwrap()).unwrap();
+        let store = WorkspaceSourceStore::load(path);
+        assert_eq!(store.schema_version, WORKSPACE_SOURCE_PROTOCOL_VERSION);
+        let cs = store.changesets.get("cs-1").expect("v1 changeset must survive");
+        assert_eq!(cs.change_set.status, WorkspaceChangeSetStatus::Pending);
+        assert_eq!(cs.change_set.invalidated_reason, None);
+    }
+
+    /// Bind a one-root project and create a Pending changeset through the
+    /// real create path; returns the processor and the created changeset id.
+    async fn processor_with_project_and_pending_changeset(
+        ody_home: &Path,
+        project_id: &str,
+        root: &Path,
+        changes: Vec<WorkspaceFileChange>,
+    ) -> (WorkspaceSourceRequestProcessor, String) {
+        use crate::request_processors::workspace_project_processor::WorkspaceProjectStore;
+
+        let project_store = Arc::new(Mutex::new(WorkspaceProjectStore::default()));
+        project_store
+            .lock()
+            .expect("project store lock")
+            .projects
+            .insert(
+                project_id.to_owned(),
+                WorkspaceProjectRef {
+                    id: project_id.to_owned(),
+                    name: "fixture".to_owned(),
+                    schema_version: 1,
+                    roots: vec![WorkspaceRoot {
+                        path: root.to_string_lossy().into_owned(),
+                        role: WorkspaceRootRole::Primary,
+                        auth_source: "user_selected".to_owned(),
+                    }],
+                    created_at_ms: 0,
+                    updated_at_ms: 0,
+                },
+            );
+        let audit = Arc::new(crate::workspace_audit::WorkspaceAuditLog::new(
+            ody_home.join("workspace-audit").join("v1.jsonl"),
+        ));
+        let processor = WorkspaceSourceRequestProcessor::new(
+            ody_home.to_path_buf(),
+            project_store,
+            audit,
+        );
+        let response = processor
+            .changeset_create(WorkspaceChangeSetCreateParams {
+                project_id: project_id.to_owned(),
+                title: "t".to_owned(),
+                changes,
+                idempotency_key: "cs-key-1".to_owned(),
+            })
+            .await
+            .expect("create changeset");
+        (processor, response.changeset.id)
+    }
+
+    fn pending_update_change(base: &str) -> WorkspaceFileChange {
+        WorkspaceFileChange {
+            root_index: 0,
+            path: "src/a.ts".to_owned(),
+            kind: WorkspaceFileChangeKind::Update,
+            base_hash: Some(crate::workspace_changeset::sha256_hex(base.as_bytes())),
+            content: Some("new\n".to_owned()),
+        }
+    }
+
+    #[tokio::test]
+    async fn external_modified_event_invalidates_pending_changeset_on_hash_mismatch() {
+        let dir = tempfile::tempdir().expect("temp");
+        let root = dir.path().join("root");
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("src/a.ts"), "old\n").unwrap();
+        let root = fs::canonicalize(&root).unwrap();
+        let base = crate::workspace_changeset::sha256_hex(b"old\n");
+        let (processor, cs_id) = processor_with_project_and_pending_changeset(
+            &dir.path().join("ody"),
+            "p1",
+            &root,
+            vec![pending_update_change("old\n")],
+        )
+        .await;
+        assert_eq!(base.len(), 64);
+        // External IDE saves different content: hash differs from base.
+        let new_hash = crate::workspace_changeset::sha256_hex(b"ide edit\n");
+        let invalidated = processor.invalidate_from_external_events(
+            "p1",
+            &[WorkspaceFileEvent {
+                root_index: 0,
+                path: "src/a.ts".into(),
+                kind: WorkspaceFileEventKind::Modified,
+                content_hash: Some(new_hash),
+            }],
+        );
+        assert_eq!(invalidated, vec![cs_id.clone()]);
+        let cs = processor
+            .with_store(|store| {
+                store
+                    .changesets
+                    .get(&cs_id)
+                    .map(|stored| stored.change_set.clone())
+                    .ok_or_else(|| internal_error("missing"))
+            })
+            .expect("changeset");
+        assert!(cs.invalidated_reason.as_deref().unwrap().contains("src/a.ts"));
+    }
+
+    #[tokio::test]
+    async fn external_event_matching_base_hash_does_not_invalidate() {
+        let dir = tempfile::tempdir().expect("temp");
+        let root = dir.path().join("root");
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("src/a.ts"), "old\n").unwrap();
+        let root = fs::canonicalize(&root).unwrap();
+        let base = crate::workspace_changeset::sha256_hex(b"old\n");
+        let (processor, cs_id) = processor_with_project_and_pending_changeset(
+            &dir.path().join("ody"),
+            "p1",
+            &root,
+            vec![pending_update_change("old\n")],
+        )
+        .await;
+        // Event hash == base_hash (IDE saved identical bytes): no conflict.
+        let invalidated = processor.invalidate_from_external_events(
+            "p1",
+            &[WorkspaceFileEvent {
+                root_index: 0,
+                path: "src/a.ts".into(),
+                kind: WorkspaceFileEventKind::Modified,
+                content_hash: Some(base),
+            }],
+        );
+        assert!(invalidated.is_empty(), "{invalidated:?}");
+        let cs = processor
+            .with_store(|store| {
+                store
+                    .changesets
+                    .get(&cs_id)
+                    .map(|stored| stored.change_set.invalidated_reason.clone())
+                    .ok_or_else(|| internal_error("missing"))
+            })
+            .expect("changeset");
+        assert_eq!(cs, None);
+    }
+
+    #[tokio::test]
+    async fn apply_rejects_invalidated_changeset_before_file_verification() {
+        let dir = tempfile::tempdir().expect("temp");
+        let root = dir.path().join("root");
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("src/a.ts"), "old\n").unwrap();
+        let root = fs::canonicalize(&root).unwrap();
+        let (processor, cs_id) = processor_with_project_and_pending_changeset(
+            &dir.path().join("ody"),
+            "p1",
+            &root,
+            vec![pending_update_change("old\n")],
+        )
+        .await;
+        // Mark invalidated via a mismatched external event.
+        let new_hash = crate::workspace_changeset::sha256_hex(b"ide edit\n");
+        let invalidated = processor.invalidate_from_external_events(
+            "p1",
+            &[WorkspaceFileEvent {
+                root_index: 0,
+                path: "src/a.ts".into(),
+                kind: WorkspaceFileEventKind::Modified,
+                content_hash: Some(new_hash),
+            }],
+        );
+        assert_eq!(invalidated.len(), 1);
+        let err = processor
+            .changeset_apply(WorkspaceChangeSetApplyParams {
+                changeset_id: cs_id.clone(),
+            })
+            .await
+            .expect_err("invalidated changeset must not apply");
+        assert!(err.message.contains("invalidated"), "got: {}", err.message);
+        assert!(err.message.contains("src/a.ts"));
+        // And the on-disk file must be untouched.
+        assert_eq!(fs::read_to_string(root.join("src/a.ts")).unwrap(), "old\n");
+    }
+
+    #[tokio::test]
+    async fn overflow_rescan_invalidates_pending_changeset() {
+        let dir = tempfile::tempdir().expect("temp");
+        let root = dir.path().join("root");
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("src/a.ts"), "old\n").unwrap();
+        let root = fs::canonicalize(&root).unwrap();
+        let (processor, cs_id) = processor_with_project_and_pending_changeset(
+            &dir.path().join("ody"),
+            "p1",
+            &root,
+            vec![pending_update_change("old\n")],
+        )
+        .await;
+        // External edit lands without any watcher event (truncated batch):
+        // the full Pending rescan must still catch it from disk bytes.
+        fs::write(root.join("src/a.ts"), "ide edit\n").unwrap();
+        let invalidated = processor.invalidate_all_pending("p1");
+        assert_eq!(invalidated, vec![cs_id.clone()]);
+        let cs = processor
+            .with_store(|store| {
+                store
+                    .changesets
+                    .get(&cs_id)
+                    .map(|stored| stored.change_set.invalidated_reason.clone())
+                    .ok_or_else(|| internal_error("missing"))
+            })
+            .expect("changeset");
+        assert!(cs.as_deref().unwrap().contains("src/a.ts"));
     }
 
     #[test]

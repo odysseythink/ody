@@ -218,11 +218,19 @@ struct WatchState {
     entries: HashMap<WatchKey, WatchEntry>,
 }
 
+/// E4: watcher -> source-processor conflict hook. Receives the project id,
+/// the classified event batch, and the overflow flag (true when the batch
+/// was truncated at MAX_WATCH_EVENTS_PER_NOTIFICATION, in which case the
+/// callee should re-verify all Pending changesets on disk).
+pub(crate) type ExternalChangeSink =
+    Arc<dyn Fn(&str, &[WorkspaceFileEvent], bool) -> Vec<String> + Send + Sync>;
+
 #[derive(Clone)]
 pub(crate) struct WorkspaceWatchManager {
     outgoing: Arc<OutgoingMessageSender>,
     file_watcher: Arc<FileWatcher>,
     project_store: Arc<Mutex<WorkspaceProjectStore>>,
+    conflict_sink: ExternalChangeSink,
     state: Arc<AsyncMutex<WatchState>>,
 }
 
@@ -231,11 +239,13 @@ impl WorkspaceWatchManager {
         outgoing: Arc<OutgoingMessageSender>,
         file_watcher: Arc<FileWatcher>,
         project_store: Arc<Mutex<WorkspaceProjectStore>>,
+        conflict_sink: ExternalChangeSink,
     ) -> Self {
         Self {
             outgoing,
             file_watcher,
             project_store,
+            conflict_sink,
             state: Arc::new(AsyncMutex::new(WatchState::default())),
         }
     }
@@ -303,6 +313,7 @@ impl WorkspaceWatchManager {
         );
 
         let outgoing = self.outgoing.clone();
+        let conflict_sink = self.conflict_sink.clone();
         let project_id = params.project_id.clone();
         tokio::spawn(async move {
             let mut rx = DebouncedWatchReceiver::new(rx, WATCH_DEBOUNCE);
@@ -396,12 +407,19 @@ impl WorkspaceWatchManager {
                 if changes.is_empty() && !overflow {
                     continue;
                 }
+                // E4: cross-reference the batch against Pending changesets
+                // before broadcasting; invalidated ids ride the same
+                // notification so clients can prompt re-create. On overflow
+                // the sink re-verifies every Pending changeset on disk
+                // (the truncated batch cannot be trusted to be complete).
+                let invalidated = conflict_sink(&project_id, &changes, overflow);
                 outgoing
                     .send_server_notification(ServerNotification::WorkspaceChanged(
                         WorkspaceChangedNotification {
                             project_id: project_id.clone(),
                             changes,
                             overflow,
+                            invalidated_changesets: invalidated,
                         },
                     ))
                     .await;
@@ -597,7 +615,12 @@ mod tests {
         let (outgoing, mut rx) = test_outgoing();
         let file_watcher = Arc::new(FileWatcher::new().expect("watcher"));
         let project_store = project_store_with_root(dir.path()).await;
-        let manager = WorkspaceWatchManager::new(outgoing, file_watcher, project_store);
+        let manager = WorkspaceWatchManager::new(
+            outgoing,
+            file_watcher,
+            project_store,
+            Arc::new(|_, _, _| Vec::new()),
+        );
         manager
             .watch(
                 ConnectionId(1),
@@ -640,12 +663,74 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn sink_receives_batch_and_notification_carries_invalidated_ids() {
+        let dir = root_with_gitignore();
+        let (outgoing, mut rx) = test_outgoing();
+        let file_watcher = Arc::new(FileWatcher::new().expect("watcher"));
+        let project_store = project_store_with_root(dir.path()).await;
+        // Controlled stand-in for the source processor's conflict check:
+        // records the batch it received and reports one invalidated id.
+        let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen_for_sink = Arc::clone(&seen);
+        let manager = WorkspaceWatchManager::new(
+            outgoing,
+            file_watcher,
+            project_store,
+            Arc::new(move |project_id, events, overflow| {
+                seen_for_sink
+                    .lock()
+                    .expect("seen lock")
+                    .push((project_id.to_owned(), events.len(), overflow));
+                vec!["cs-fake".to_owned()]
+            }),
+        );
+        manager
+            .watch(
+                ConnectionId(1),
+                WorkspaceWatchParams {
+                    project_id: "p1".into(),
+                },
+            )
+            .await
+            .expect("watch");
+        std::fs::write(dir.path().join("src/app.ts"), "export const a = 3;\n").expect("edit");
+        let notification = tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                let envelope = rx.recv().await.expect("envelope");
+                let crate::outgoing_message::OutgoingEnvelope::Broadcast { message } = envelope
+                else {
+                    continue;
+                };
+                if let crate::outgoing_message::OutgoingMessage::AppServerNotification(
+                    ServerNotification::WorkspaceChanged(changed),
+                ) = message
+                {
+                    return changed;
+                }
+            }
+        })
+        .await
+        .expect("timed out waiting for workspace/changed");
+        assert_eq!(notification.invalidated_changesets, vec!["cs-fake"]);
+        let seen = seen.lock().expect("seen lock");
+        assert_eq!(seen.len(), 1, "sink invoked exactly once: {seen:?}");
+        assert_eq!(seen[0].0, "p1");
+        assert!(seen[0].1 > 0);
+        assert!(!seen[0].2, "no overflow for a single-file batch");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn external_create_and_remove_classify_via_snapshot() {
         let dir = root_with_gitignore();
         let (outgoing, mut rx) = test_outgoing();
         let file_watcher = Arc::new(FileWatcher::new().expect("watcher"));
         let project_store = project_store_with_root(dir.path()).await;
-        let manager = WorkspaceWatchManager::new(outgoing, file_watcher, project_store);
+        let manager = WorkspaceWatchManager::new(
+            outgoing,
+            file_watcher,
+            project_store,
+            Arc::new(|_, _, _| Vec::new()),
+        );
         manager
             .watch(
                 ConnectionId(1),
@@ -714,7 +799,12 @@ mod tests {
         let (outgoing, _rx) = test_outgoing();
         let file_watcher = Arc::new(FileWatcher::noop());
         let project_store = project_store_with_root(dir.path()).await;
-        let manager = WorkspaceWatchManager::new(outgoing, file_watcher, project_store);
+        let manager = WorkspaceWatchManager::new(
+            outgoing,
+            file_watcher,
+            project_store,
+            Arc::new(|_, _, _| Vec::new()),
+        );
         let err = manager
             .watch(
                 ConnectionId(1),
