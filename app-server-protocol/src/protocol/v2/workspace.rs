@@ -46,6 +46,13 @@ pub struct WorkspaceProjectRef {
     pub created_at_ms: i64,
     #[ts(type = "number")]
     pub updated_at_ms: i64,
+    /// E4: connection id (as integer) currently holding the write lock, if
+    /// any. Runtime-only: never persisted; `get`/`list` fill it from the
+    /// in-memory lock table on every response.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    #[ts(type = "number")]
+    pub locked_by: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
@@ -278,4 +285,32 @@ mod tests {
             Some("workspace/project/v1")
         );
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceProjectLockParams {
+    pub project_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceProjectLockResponse {
+    pub project_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceProjectUnlockParams {
+    pub project_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceProjectUnlockResponse {
+    pub project_id: String,
 }

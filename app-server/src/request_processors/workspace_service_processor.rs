@@ -48,6 +48,8 @@ use crate::outgoing_message::OutgoingMessageSender;
 use crate::error_code::invalid_params;
 use crate::workspace_audit::audit_event;
 use crate::workspace_audit::WorkspaceAuditLog;
+use crate::outgoing_message::ConnectionId;
+use crate::workspace_lock::WorkspaceWriteLock;
 use crate::request_processors::workspace_project_processor::WorkspaceProjectStore;
 use crate::workspace_service::ManagedService;
 use crate::workspace_service::OutputRing;
@@ -134,6 +136,7 @@ pub(crate) struct WorkspaceServiceRequestProcessor {
     /// Runtime-restart normalization notices, broadcast once after the
     /// first connection initializes (see `flush_startup_notifications`).
     startup_notifications: Arc<Mutex<Vec<WorkspaceServiceChangedNotification>>>,
+    write_lock: Arc<WorkspaceWriteLock>,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -169,6 +172,7 @@ impl WorkspaceServiceRequestProcessor {
         project_store: Arc<Mutex<WorkspaceProjectStore>>,
         audit: Arc<WorkspaceAuditLog>,
         outgoing: Arc<OutgoingMessageSender>,
+        write_lock: Arc<WorkspaceWriteLock>,
     ) -> Self {
         let path = ody_home.join(STORE_DIR).join(STORE_FILE);
         let mut store = WorkspaceServiceStore::load(path);
@@ -218,6 +222,7 @@ impl WorkspaceServiceRequestProcessor {
             audit,
             outgoing,
             startup_notifications: Arc::new(Mutex::new(startup_notifications)),
+            write_lock,
         }
     }
 
@@ -1156,7 +1161,9 @@ impl WorkspaceServiceRequestProcessor {
     pub(crate) async fn start_all(
         &self,
         params: WorkspaceServiceStartAllParams,
+        connection_id: ConnectionId,
     ) -> Result<WorkspaceServiceStartAllResponse, JSONRPCErrorError> {
+        self.write_lock.check(&params.project_id, connection_id)?;
         let result = self.start_all_inner(params).await;
         match &result {
             Ok(response) => self.audit.record(audit_event(
@@ -1495,7 +1502,9 @@ impl WorkspaceServiceRequestProcessor {
     pub(crate) async fn stop_all(
         &self,
         params: WorkspaceServiceStopAllParams,
+        connection_id: ConnectionId,
     ) -> Result<WorkspaceServiceStopAllResponse, JSONRPCErrorError> {
+        self.write_lock.check(&params.project_id, connection_id)?;
         let result = self.stop_all_inner(params).await;
         match &result {
             Ok(response) => self.audit.record(audit_event(
@@ -2167,6 +2176,7 @@ mod tests {
         let project_processor = WorkspaceProjectRequestProcessor::new(
             ody_home.path().to_path_buf(),
             Arc::clone(&audit),
+            Arc::new(crate::workspace_lock::WorkspaceWriteLock::default()),
         );
         let root = AbsolutePathBuf::try_from(root.to_path_buf()).expect("absolute root");
         project_processor
@@ -2184,6 +2194,7 @@ mod tests {
             project_processor.store_handle(),
             audit,
             outgoing,
+            Arc::new(crate::workspace_lock::WorkspaceWriteLock::default()),
         );
         (processor, rx)
     }
@@ -2318,6 +2329,7 @@ mod tests {
             project_store,
             audit,
             outgoing,
+            Arc::new(crate::workspace_lock::WorkspaceWriteLock::default()),
         );
         let store = processor.store.lock().expect("store lock");
         assert!(store.orchestrations.is_empty(), "stale orchestration dropped");

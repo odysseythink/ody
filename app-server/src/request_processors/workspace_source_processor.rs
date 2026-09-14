@@ -46,10 +46,12 @@ use serde::Serialize;
 
 use crate::error_code::internal_error;
 use crate::error_code::invalid_params;
+use crate::outgoing_message::ConnectionId;
 use crate::request_processors::workspace_project_processor::WorkspaceProjectStore;
 use crate::workspace_audit::audit_event;
 use crate::workspace_audit::error_detail;
 use crate::workspace_audit::WorkspaceAuditLog;
+use crate::workspace_lock::WorkspaceWriteLock;
 use crate::workspace_changeset::PreparedChange;
 
 const RESOLVE_DEFAULT_LIMIT: usize = 20;
@@ -66,6 +68,7 @@ pub(crate) struct WorkspaceSourceRequestProcessor {
     project_store: Arc<Mutex<WorkspaceProjectStore>>,
     store: Arc<Mutex<WorkspaceSourceStore>>,
     audit: Arc<WorkspaceAuditLog>,
+    write_lock: Arc<WorkspaceWriteLock>,
 }
 
 impl WorkspaceSourceRequestProcessor {
@@ -73,6 +76,7 @@ impl WorkspaceSourceRequestProcessor {
         ody_home: PathBuf,
         project_store: Arc<Mutex<WorkspaceProjectStore>>,
         audit: Arc<WorkspaceAuditLog>,
+        write_lock: Arc<WorkspaceWriteLock>,
     ) -> Self {
         let path = ody_home.join(STORE_DIR).join(STORE_FILE);
         let store = WorkspaceSourceStore::load(path);
@@ -80,6 +84,7 @@ impl WorkspaceSourceRequestProcessor {
             project_store,
             store: Arc::new(Mutex::new(store)),
             audit,
+            write_lock,
         }
     }
 
@@ -261,9 +266,10 @@ impl WorkspaceSourceRequestProcessor {
     pub(crate) async fn changeset_apply(
         &self,
         params: WorkspaceChangeSetApplyParams,
+        connection_id: ConnectionId,
     ) -> Result<WorkspaceChangeSetApplyResponse, JSONRPCErrorError> {
         let changeset_id = params.changeset_id.clone();
-        let result = self.changeset_apply_inner(params).await;
+        let result = self.changeset_apply_inner(params, connection_id).await;
         match &result {
             Ok(response) => self.audit.record(audit_event(
                 Some(&response.changeset.project_id),
@@ -290,8 +296,13 @@ impl WorkspaceSourceRequestProcessor {
     async fn changeset_apply_inner(
         &self,
         params: WorkspaceChangeSetApplyParams,
+        connection_id: ConnectionId,
     ) -> Result<WorkspaceChangeSetApplyResponse, JSONRPCErrorError> {
         let (project, mut stored) = self.stored_changeset(&params.changeset_id)?;
+        // E4 T05: cross-connection write guard runs *before* the T02
+        // invalidated check — a holder is always allowed in, and a foreign
+        // writer is rejected before any file verification happens.
+        self.write_lock.check(&project.id, connection_id)?;
         if stored.change_set.status != WorkspaceChangeSetStatus::Pending {
             return Err(invalid_params(format!(
                 "changeset {} is {:?}; expected Pending for apply",
@@ -468,9 +479,10 @@ impl WorkspaceSourceRequestProcessor {
     pub(crate) async fn changeset_restore(
         &self,
         params: WorkspaceChangeSetRestoreParams,
+        connection_id: ConnectionId,
     ) -> Result<WorkspaceChangeSetRestoreResponse, JSONRPCErrorError> {
         let changeset_id = params.changeset_id.clone();
-        let result = self.changeset_restore_inner(params).await;
+        let result = self.changeset_restore_inner(params, connection_id).await;
         match &result {
             Ok(response) => self.audit.record(audit_event(
                 Some(&response.changeset.project_id),
@@ -494,8 +506,10 @@ impl WorkspaceSourceRequestProcessor {
     async fn changeset_restore_inner(
         &self,
         params: WorkspaceChangeSetRestoreParams,
+        connection_id: ConnectionId,
     ) -> Result<WorkspaceChangeSetRestoreResponse, JSONRPCErrorError> {
         let (project, mut stored) = self.stored_changeset(&params.changeset_id)?;
+        self.write_lock.check(&project.id, connection_id)?;
         if stored.change_set.status != WorkspaceChangeSetStatus::Applied {
             return Err(invalid_params(format!(
                 "changeset {} is {:?}; expected Applied for restore",
@@ -1006,6 +1020,7 @@ fn now_ms() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use ody_app_server_protocol::WorkspaceFileChange;
     use ody_app_server_protocol::WorkspaceRoot;
     use ody_app_server_protocol::WorkspaceRootRole;
@@ -1048,6 +1063,7 @@ mod tests {
             }],
             created_at_ms: 0,
             updated_at_ms: 0,
+            locked_by: None,
         };
         let base = fs::read_to_string(pages.join("HomePage.tsx")).expect("read base");
         let prepared = crate::workspace_changeset::prepare_changes(
@@ -1160,7 +1176,11 @@ mod tests {
         project_id: &str,
         root: &Path,
         changes: Vec<WorkspaceFileChange>,
-    ) -> (WorkspaceSourceRequestProcessor, String) {
+    ) -> (
+        WorkspaceSourceRequestProcessor,
+        String,
+        Arc<WorkspaceWriteLock>,
+    ) {
         use crate::request_processors::workspace_project_processor::WorkspaceProjectStore;
 
         let project_store = Arc::new(Mutex::new(WorkspaceProjectStore::default()));
@@ -1181,15 +1201,18 @@ mod tests {
                     }],
                     created_at_ms: 0,
                     updated_at_ms: 0,
+                    locked_by: None,
                 },
             );
         let audit = Arc::new(crate::workspace_audit::WorkspaceAuditLog::new(
             ody_home.join("workspace-audit").join("v1.jsonl"),
         ));
+        let write_lock = Arc::new(WorkspaceWriteLock::default());
         let processor = WorkspaceSourceRequestProcessor::new(
             ody_home.to_path_buf(),
             project_store,
             audit,
+            Arc::clone(&write_lock),
         );
         let response = processor
             .changeset_create(WorkspaceChangeSetCreateParams {
@@ -1200,7 +1223,7 @@ mod tests {
             })
             .await
             .expect("create changeset");
-        (processor, response.changeset.id)
+        (processor, response.changeset.id, write_lock)
     }
 
     fn pending_update_change(base: &str) -> WorkspaceFileChange {
@@ -1221,7 +1244,7 @@ mod tests {
         fs::write(root.join("src/a.ts"), "old\n").unwrap();
         let root = fs::canonicalize(&root).unwrap();
         let base = crate::workspace_changeset::sha256_hex(b"old\n");
-        let (processor, cs_id) = processor_with_project_and_pending_changeset(
+        let (processor, cs_id, _write_lock) = processor_with_project_and_pending_changeset(
             &dir.path().join("ody"),
             "p1",
             &root,
@@ -1261,7 +1284,7 @@ mod tests {
         fs::write(root.join("src/a.ts"), "old\n").unwrap();
         let root = fs::canonicalize(&root).unwrap();
         let base = crate::workspace_changeset::sha256_hex(b"old\n");
-        let (processor, cs_id) = processor_with_project_and_pending_changeset(
+        let (processor, cs_id, _write_lock) = processor_with_project_and_pending_changeset(
             &dir.path().join("ody"),
             "p1",
             &root,
@@ -1292,13 +1315,68 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn apply_rejects_when_another_connection_holds_the_lock() {
+        let dir = tempfile::tempdir().expect("temp");
+        let root = dir.path().join("root");
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("src/a.ts"), "old\n").unwrap();
+        let root = fs::canonicalize(&root).unwrap();
+        let (processor, cs_id, write_lock) = processor_with_project_and_pending_changeset(
+            &dir.path().join("ody"),
+            "p1",
+            &root,
+            vec![pending_update_change("old\n")],
+        )
+        .await;
+        write_lock.acquire("p1", ConnectionId(7)).expect("foreign lock");
+        let err = processor
+            .changeset_apply(
+                WorkspaceChangeSetApplyParams {
+                    changeset_id: cs_id.clone(),
+                },
+                ConnectionId(8),
+            )
+            .await
+            .expect_err("locked project must reject foreign apply");
+        assert!(err.message.contains("locked by another session"), "got: {}", err.message);
+        assert_eq!(fs::read_to_string(root.join("src/a.ts")).unwrap(), "old\n");
+    }
+
+    #[tokio::test]
+    async fn apply_succeeds_while_same_connection_holds_the_lock() {
+        let dir = tempfile::tempdir().expect("temp");
+        let root = dir.path().join("root");
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("src/a.ts"), "old\n").unwrap();
+        let root = fs::canonicalize(&root).unwrap();
+        let (processor, cs_id, write_lock) = processor_with_project_and_pending_changeset(
+            &dir.path().join("ody"),
+            "p1",
+            &root,
+            vec![pending_update_change("old\n")],
+        )
+        .await;
+        write_lock.acquire("p1", ConnectionId(8)).expect("holder lock");
+        processor
+            .changeset_apply(
+                WorkspaceChangeSetApplyParams {
+                    changeset_id: cs_id.clone(),
+                },
+                ConnectionId(8),
+            )
+            .await
+            .expect("holder applies");
+        assert_eq!(fs::read_to_string(root.join("src/a.ts")).unwrap(), "new\n");
+    }
+
+    #[tokio::test]
     async fn apply_rejects_invalidated_changeset_before_file_verification() {
         let dir = tempfile::tempdir().expect("temp");
         let root = dir.path().join("root");
         fs::create_dir_all(root.join("src")).unwrap();
         fs::write(root.join("src/a.ts"), "old\n").unwrap();
         let root = fs::canonicalize(&root).unwrap();
-        let (processor, cs_id) = processor_with_project_and_pending_changeset(
+        let (processor, cs_id, _write_lock) = processor_with_project_and_pending_changeset(
             &dir.path().join("ody"),
             "p1",
             &root,
@@ -1318,9 +1396,12 @@ mod tests {
         );
         assert_eq!(invalidated.len(), 1);
         let err = processor
-            .changeset_apply(WorkspaceChangeSetApplyParams {
-                changeset_id: cs_id.clone(),
-            })
+            .changeset_apply(
+                WorkspaceChangeSetApplyParams {
+                    changeset_id: cs_id.clone(),
+                },
+                ConnectionId(8),
+            )
             .await
             .expect_err("invalidated changeset must not apply");
         assert!(err.message.contains("invalidated"), "got: {}", err.message);
@@ -1336,7 +1417,7 @@ mod tests {
         fs::create_dir_all(root.join("src")).unwrap();
         fs::write(root.join("src/a.ts"), "old\n").unwrap();
         let root = fs::canonicalize(&root).unwrap();
-        let (processor, cs_id) = processor_with_project_and_pending_changeset(
+        let (processor, cs_id, _write_lock) = processor_with_project_and_pending_changeset(
             &dir.path().join("ody"),
             "p1",
             &root,

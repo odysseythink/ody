@@ -18,6 +18,10 @@ use ody_app_server_protocol::WorkspaceProjectGetParams;
 use ody_app_server_protocol::WorkspaceProjectGetResponse;
 use ody_app_server_protocol::WorkspaceProjectListParams;
 use ody_app_server_protocol::WorkspaceProjectListResponse;
+use ody_app_server_protocol::WorkspaceProjectLockParams;
+use ody_app_server_protocol::WorkspaceProjectLockResponse;
+use ody_app_server_protocol::WorkspaceProjectUnlockParams;
+use ody_app_server_protocol::WorkspaceProjectUnlockResponse;
 use ody_app_server_protocol::WorkspaceProjectRef;
 use ody_app_server_protocol::WorkspaceProjectScanParams;
 use ody_app_server_protocol::WorkspaceProjectScanResponse;
@@ -29,6 +33,8 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::error_code::internal_error;
+use crate::outgoing_message::ConnectionId;
+use crate::workspace_lock::WorkspaceWriteLock;
 use crate::error_code::invalid_params;
 use crate::workspace_audit::audit_event;
 use crate::workspace_audit::error_detail;
@@ -44,6 +50,7 @@ pub(crate) struct WorkspaceProjectRequestProcessor {
     ody_home: PathBuf,
     store: Arc<Mutex<WorkspaceProjectStore>>,
     audit: Arc<WorkspaceAuditLog>,
+    write_lock: Arc<WorkspaceWriteLock>,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -57,13 +64,18 @@ pub(crate) struct WorkspaceProjectStore {
 }
 
 impl WorkspaceProjectRequestProcessor {
-    pub(crate) fn new(ody_home: PathBuf, audit: Arc<WorkspaceAuditLog>) -> Self {
+    pub(crate) fn new(
+        ody_home: PathBuf,
+        audit: Arc<WorkspaceAuditLog>,
+        write_lock: Arc<WorkspaceWriteLock>,
+    ) -> Self {
         let path = ody_home.join(STORE_DIR).join(STORE_FILE);
         let store = WorkspaceProjectStore::load(path);
         Self {
             ody_home,
             store: Arc::new(Mutex::new(store)),
             audit,
+            write_lock,
         }
     }
 
@@ -71,6 +83,36 @@ impl WorkspaceProjectRequestProcessor {
     /// records without a second store instance on the same file.
     pub(crate) fn store_handle(&self) -> Arc<Mutex<WorkspaceProjectStore>> {
         self.store.clone()
+    }
+
+    /// Shared write-intent lock table (see `workspace_lock`).
+    pub(crate) fn write_lock(&self) -> Arc<WorkspaceWriteLock> {
+        Arc::clone(&self.write_lock)
+    }
+
+    /// Explicit write-intent declaration. Idempotent for the current holder;
+    /// other connections are rejected with a diagnosable error.
+    pub(crate) async fn lock(
+        &self,
+        params: WorkspaceProjectLockParams,
+        connection_id: ConnectionId,
+    ) -> Result<WorkspaceProjectLockResponse, JSONRPCErrorError> {
+        self.write_lock.acquire(&params.project_id, connection_id)?;
+        Ok(WorkspaceProjectLockResponse {
+            project_id: params.project_id,
+        })
+    }
+
+    /// Owner-only release; a non-owner call is a no-op, never an error.
+    pub(crate) async fn unlock(
+        &self,
+        params: WorkspaceProjectUnlockParams,
+        connection_id: ConnectionId,
+    ) -> Result<WorkspaceProjectUnlockResponse, JSONRPCErrorError> {
+        self.write_lock.release(&params.project_id, connection_id);
+        Ok(WorkspaceProjectUnlockResponse {
+            project_id: params.project_id,
+        })
     }
 
     pub(crate) async fn bind(
@@ -108,7 +150,10 @@ impl WorkspaceProjectRequestProcessor {
                 .projects
                 .get(&params.project_id)
                 .cloned()
-                .map(|project| WorkspaceProjectGetResponse { project })
+                .map(|mut project| {
+                    project.locked_by = self.write_lock.holder(&project.id).map(|c| c.0);
+                    WorkspaceProjectGetResponse { project }
+                })
                 .ok_or_else(|| unknown_project(&params.project_id))
         })
     }
@@ -119,6 +164,9 @@ impl WorkspaceProjectRequestProcessor {
     ) -> Result<WorkspaceProjectListResponse, JSONRPCErrorError> {
         self.with_store(|store| {
             let mut projects = store.projects.values().cloned().collect::<Vec<_>>();
+            for project in &mut projects {
+                project.locked_by = self.write_lock.holder(&project.id).map(|c| c.0);
+            }
             projects.sort_by_key(|project| std::cmp::Reverse(project.updated_at_ms));
             Ok(WorkspaceProjectListResponse { projects })
         })
@@ -127,7 +175,11 @@ impl WorkspaceProjectRequestProcessor {
     pub(crate) async fn close(
         &self,
         params: WorkspaceProjectCloseParams,
+        connection_id: ConnectionId,
     ) -> Result<WorkspaceProjectCloseResponse, JSONRPCErrorError> {
+        // E4 T05: a foreign holder must not lose the project underneath its
+        // in-flight writes; the holder itself may close.
+        self.write_lock.check(&params.project_id, connection_id)?;
         let project_id = params.project_id.clone();
         let result = self.with_store(|store| {
             let project = store
@@ -138,6 +190,11 @@ impl WorkspaceProjectRequestProcessor {
             store.persist()?;
             Ok(WorkspaceProjectCloseResponse { project })
         });
+        if result.is_ok() {
+            // Closing releases the caller's own hold (if any) along with the
+            // project record.
+            self.write_lock.release(&project_id, connection_id);
+        }
         match &result {
             Ok(_) => self.audit.record(audit_event(
                 Some(&project_id),
@@ -254,6 +311,7 @@ impl WorkspaceProjectStore {
             roots,
             created_at_ms: now,
             updated_at_ms: now,
+            locked_by: None,
         };
         self.projects.insert(project.id.clone(), project.clone());
         self.idempotency.insert(idempotency_key, project.id.clone());

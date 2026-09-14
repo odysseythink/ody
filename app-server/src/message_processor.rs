@@ -132,6 +132,7 @@ pub(crate) struct MessageProcessor {
     workspace_source_processor: WorkspaceSourceRequestProcessor,
     workspace_watch_manager: WorkspaceWatchManager,
     workspace_audit: Arc<WorkspaceAuditLog>,
+    workspace_write_lock: Arc<crate::workspace_lock::WorkspaceWriteLock>,
     request_serialization_queues: RequestSerializationQueues,
 }
 
@@ -461,15 +462,18 @@ impl MessageProcessor {
             config.ody_home.join("workspace-audit").join("v1.jsonl").to_path_buf(),
         ));
 
+        let workspace_write_lock = Arc::new(crate::workspace_lock::WorkspaceWriteLock::default());
         let workspace_project_processor = WorkspaceProjectRequestProcessor::new(
             config.ody_home.to_path_buf(),
             Arc::clone(&workspace_audit),
+            Arc::clone(&workspace_write_lock),
         );
 
         let workspace_source_processor = WorkspaceSourceRequestProcessor::new(
             config.ody_home.to_path_buf(),
             workspace_project_processor.store_handle(),
             Arc::clone(&workspace_audit),
+            Arc::clone(&workspace_write_lock),
         );
 
         let workspace_service_processor = WorkspaceServiceRequestProcessor::new(
@@ -477,6 +481,7 @@ impl MessageProcessor {
             workspace_project_processor.store_handle(),
             Arc::clone(&workspace_audit),
             outgoing.clone(),
+            Arc::clone(&workspace_write_lock),
         );
 
         let workspace_source_for_watch = workspace_source_processor.clone();
@@ -523,6 +528,7 @@ impl MessageProcessor {
             workspace_source_processor,
             workspace_watch_manager,
             workspace_audit,
+            workspace_write_lock,
             request_serialization_queues: RequestSerializationQueues::default(),
         }
     }
@@ -751,6 +757,7 @@ impl MessageProcessor {
             .await;
         self.thread_processor.connection_closed(connection_id).await;
         self.workspace_watch_manager.connection_closed(connection_id).await;
+        self.workspace_write_lock.connection_closed(connection_id);
     }
 
     pub(crate) fn subscribe_running_assistant_turn_count(&self) -> watch::Receiver<usize> {
@@ -1045,7 +1052,10 @@ impl MessageProcessor {
                 .map(|response| Some(response.into())),
             ClientRequest::WorkspaceProjectClose { params, .. } => {
                 let project_id = params.project_id.clone();
-                let response = self.workspace_project_processor.close(params).await?;
+                let response = self
+                    .workspace_project_processor
+                    .close(params, connection_id)
+                    .await?;
                 let cleaned = self
                     .workspace_service_processor
                     .stop_all_for_project(&project_id)
@@ -1058,6 +1068,16 @@ impl MessageProcessor {
             ClientRequest::WorkspaceProjectScan { params, .. } => self
                 .workspace_project_processor
                 .scan(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceProjectLock { params, .. } => self
+                .workspace_project_processor
+                .lock(params, connection_id)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceProjectUnlock { params, .. } => self
+                .workspace_project_processor
+                .unlock(params, connection_id)
                 .await
                 .map(|response| Some(response.into())),
             ClientRequest::WorkspaceSourceIndex { params, .. } => self
@@ -1087,7 +1107,7 @@ impl MessageProcessor {
                 .map(|response| Some(response.into())),
             ClientRequest::WorkspaceChangeSetApply { params, .. } => self
                 .workspace_source_processor
-                .changeset_apply(params)
+                .changeset_apply(params, connection_id)
                 .await
                 .map(|response| Some(response.into())),
             ClientRequest::WorkspaceChangeSetReject { params, .. } => self
@@ -1097,7 +1117,7 @@ impl MessageProcessor {
                 .map(|response| Some(response.into())),
             ClientRequest::WorkspaceChangeSetRestore { params, .. } => self
                 .workspace_source_processor
-                .changeset_restore(params)
+                .changeset_restore(params, connection_id)
                 .await
                 .map(|response| Some(response.into())),
             ClientRequest::WorkspaceSourceDiff { params, .. } => self
@@ -1147,12 +1167,12 @@ impl MessageProcessor {
                 .map(|response| Some(response.into())),
             ClientRequest::WorkspaceServiceStartAll { params, .. } => self
                 .workspace_service_processor
-                .start_all(params)
+                .start_all(params, connection_id)
                 .await
                 .map(|response| Some(response.into())),
             ClientRequest::WorkspaceServiceStopAll { params, .. } => self
                 .workspace_service_processor
-                .stop_all(params)
+                .stop_all(params, connection_id)
                 .await
                 .map(|response| Some(response.into())),
             ClientRequest::WorkspaceServiceHealth { params, .. } => self

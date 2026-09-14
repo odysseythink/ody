@@ -110,6 +110,7 @@ mod thread_status;
 mod transport;
 mod workspace_audit;
 mod workspace_changeset;
+mod workspace_lock;
 mod workspace_discovery;
 mod workspace_service;
 mod workspace_source_index;

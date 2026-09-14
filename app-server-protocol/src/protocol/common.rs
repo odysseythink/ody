@@ -893,6 +893,18 @@ client_request_definitions! {
         serialization: global_shared_read("workspace-audit"),
         response: v2::WorkspaceAuditListResponse,
     },
+    #[experimental("workspace/project/v1")]
+    WorkspaceProjectLock => "workspace/project/lock" {
+        params: v2::WorkspaceProjectLockParams,
+        serialization: global("workspace-project"),
+        response: v2::WorkspaceProjectLockResponse,
+    },
+    #[experimental("workspace/project/v1")]
+    WorkspaceProjectUnlock => "workspace/project/unlock" {
+        params: v2::WorkspaceProjectUnlockParams,
+        serialization: global("workspace-project"),
+        response: v2::WorkspaceProjectUnlockResponse,
+    },
     #[experimental("workspace/service/v1")]
     WorkspaceServiceStart => "workspace/service/start" {
         params: v2::WorkspaceServiceStartParams,

@@ -248,6 +248,7 @@ mod tests {
             ],
             created_at_ms: 0,
             updated_at_ms: 0,
+    locked_by: None,
         };
         // None -> primary root.
         let root = resolve_check_root(&project, None).expect("primary default");

@@ -579,8 +579,11 @@ mod tests {
         let audit = Arc::new(crate::workspace_audit::WorkspaceAuditLog::new(
             ody_home.path().join("workspace-audit").join("v1.jsonl"),
         ));
-        let processor =
-            WorkspaceProjectRequestProcessor::new(ody_home.path().to_path_buf(), audit);
+        let processor = WorkspaceProjectRequestProcessor::new(
+            ody_home.path().to_path_buf(),
+            audit,
+            Arc::new(crate::workspace_lock::WorkspaceWriteLock::default()),
+        );
         let root =
             AbsolutePathBuf::try_from(path.to_path_buf()).expect("root should be absolute");
         processor
