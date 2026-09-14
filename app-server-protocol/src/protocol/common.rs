@@ -1782,6 +1782,8 @@ server_notification_definitions! {
     VisualWorkspaceChanged => "visualWorkspace/changed" (v2::VisualWorkspaceChangedNotification),
     #[experimental("workspace/watch/v1")]
     WorkspaceChanged => "workspace/changed" (v2::WorkspaceChangedNotification),
+    #[experimental("workspace/service/v1")]
+    WorkspaceServiceChanged => "workspace/service/changed" (v2::WorkspaceServiceChangedNotification),
 
 }
 

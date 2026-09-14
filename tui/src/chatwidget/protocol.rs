@@ -214,6 +214,7 @@ impl ChatWidget {
             | ServerNotification::FsChanged(_)
             | ServerNotification::VisualWorkspaceChanged(_)
             | ServerNotification::WorkspaceChanged(_)
+        | ServerNotification::WorkspaceServiceChanged(_)
             | ServerNotification::ModelSafetyBufferingUpdated(_)
             | ServerNotification::TurnModerationMetadata(_)
             | ServerNotification::FuzzyFileSearchSessionUpdated(_)

@@ -776,3 +776,31 @@ mod tests {
         assert!(value.get("readyTimeoutMs").is_none() || value["readyTimeoutMs"].is_null());
     }
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum WorkspaceServiceChangedReason {
+    /// A service reached Ready after start/startAll.
+    Started,
+    /// Service stopped by stop/stopAll/close (exit recorded, not a crash).
+    Stopped,
+    /// Process exited on its own with code 0.
+    Exited,
+    /// Process exited non-zero, readiness timed out, or start failed.
+    Failed,
+    /// Runtime restarted: previously non-terminal services were normalized
+    /// to Stopped; clients should re-issue startAll if desired.
+    RuntimeRestarted,
+}
+
+/// Broadcast service lifecycle change (E4: replaces client polling).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceServiceChangedNotification {
+    pub project_id: String,
+    pub reason: WorkspaceServiceChangedReason,
+    /// Affected services after the state transition.
+    pub services: Vec<WorkspaceServiceRef>,
+}

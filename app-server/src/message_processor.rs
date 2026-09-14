@@ -476,6 +476,7 @@ impl MessageProcessor {
             config.ody_home.to_path_buf(),
             workspace_project_processor.store_handle(),
             Arc::clone(&workspace_audit),
+            outgoing.clone(),
         );
 
         let workspace_watch_manager = WorkspaceWatchManager::new(
@@ -676,6 +677,11 @@ impl MessageProcessor {
                     request_attestation,
                 },
             )
+            .await;
+        // E4: deliver any Runtime-restart normalization notices once a live
+        // connection exists (no-op when nothing was normalized).
+        self.workspace_service_processor
+            .flush_startup_notifications()
             .await;
     }
 

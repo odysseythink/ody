@@ -153,6 +153,13 @@ impl TestAppServer {
         self.process.wait().await
     }
 
+    /// Kill the server process immediately (no graceful EOF shutdown),
+    /// simulating a Runtime crash. Leaves service child processes orphaned;
+    /// the caller is responsible for any cleanup it needs.
+    pub fn kill_hard(&mut self) -> std::io::Result<()> {
+        self.process.start_kill()
+    }
+
     pub async fn new(ody_home: &Path) -> anyhow::Result<Self> {
         Self::new_with_env_and_args(ody_home, &[], &[DISABLE_PLUGIN_STARTUP_TASKS_ARG]).await
     }

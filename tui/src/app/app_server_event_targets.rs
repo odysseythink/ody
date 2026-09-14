@@ -177,6 +177,7 @@ pub(super) fn server_notification_thread_target(
         | ServerNotification::FsChanged(_)
         | ServerNotification::VisualWorkspaceChanged(_)
         | ServerNotification::WorkspaceChanged(_)
+        | ServerNotification::WorkspaceServiceChanged(_)
         | ServerNotification::WindowsWorldWritableWarning(_)
         | ServerNotification::WindowsSandboxSetupCompleted(_) => None,
     };

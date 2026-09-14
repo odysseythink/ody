@@ -8,12 +8,15 @@ use std::sync::Mutex;
 use std::sync::atomic::Ordering;
 
 use ody_app_server_protocol::JSONRPCErrorError;
+use ody_app_server_protocol::ServerNotification;
 use ody_app_server_protocol::WORKSPACE_SERVICE_PROTOCOL_VERSION;
 use ody_app_server_protocol::WorkspaceNetworkDiagnosis;
 use ody_app_server_protocol::WorkspacePreviewCheckParams;
 use ody_app_server_protocol::WorkspacePreviewCheckResponse;
 use ody_app_server_protocol::WorkspacePreviewDiagnoseParams;
 use ody_app_server_protocol::WorkspacePreviewDiagnoseResponse;
+use ody_app_server_protocol::WorkspaceServiceChangedNotification;
+use ody_app_server_protocol::WorkspaceServiceChangedReason;
 use ody_app_server_protocol::WorkspaceServiceDefineParams;
 use ody_app_server_protocol::WorkspaceServiceDefineResponse;
 use ody_app_server_protocol::WorkspaceServiceHealth;
@@ -41,6 +44,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::error_code::internal_error;
+use crate::outgoing_message::OutgoingMessageSender;
 use crate::error_code::invalid_params;
 use crate::workspace_audit::audit_event;
 use crate::workspace_audit::WorkspaceAuditLog;
@@ -52,12 +56,20 @@ use crate::workspace_service::ReadyOutcome;
 const STORE_DIR: &str = "workspace-service";
 const STORE_FILE: &str = "v1.json";
 
+/// Load-normalization marker written when a Runtime restart leaves
+/// non-terminal services without live processes (E4).
+const RUNTIME_RESTARTED_ERROR: &str = "runtime restarted; process not running";
+
 #[derive(Clone)]
 pub(crate) struct WorkspaceServiceRequestProcessor {
     project_store: Arc<Mutex<WorkspaceProjectStore>>,
     store: Arc<Mutex<WorkspaceServiceStore>>,
     runtime: Arc<Mutex<HashMap<String, ManagedService>>>,
     audit: Arc<WorkspaceAuditLog>,
+    outgoing: Arc<OutgoingMessageSender>,
+    /// Runtime-restart normalization notices, broadcast once after the
+    /// first connection initializes (see `flush_startup_notifications`).
+    startup_notifications: Arc<Mutex<Vec<WorkspaceServiceChangedNotification>>>,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -92,15 +104,93 @@ impl WorkspaceServiceRequestProcessor {
         ody_home: PathBuf,
         project_store: Arc<Mutex<WorkspaceProjectStore>>,
         audit: Arc<WorkspaceAuditLog>,
+        outgoing: Arc<OutgoingMessageSender>,
     ) -> Self {
         let path = ody_home.join(STORE_DIR).join(STORE_FILE);
-        let store = WorkspaceServiceStore::load(path);
+        let mut store = WorkspaceServiceStore::load(path);
+        // E4: drop orchestration records whose project no longer exists
+        // (close 联动已删, 这里兜底 Runtime 崩溃与手工删 store 的场景),
+        // then queue a RuntimeRestarted notice per affected project.
+        let known: std::collections::BTreeSet<String> = project_store
+            .lock()
+            .expect("project store lock")
+            .projects
+            .keys()
+            .cloned()
+            .collect();
+        let stale: Vec<String> = store
+            .orchestrations
+            .iter()
+            .filter(|(_, record)| !known.contains(&record.project_id))
+            .map(|(key, _)| key.clone())
+            .collect();
+        for key in &stale {
+            store.orchestrations.remove(key);
+        }
+        let mut by_project: BTreeMap<String, Vec<WorkspaceServiceRef>> = BTreeMap::new();
+        for service in store.services.values() {
+            if service.error.as_deref() == Some(RUNTIME_RESTARTED_ERROR) {
+                by_project
+                    .entry(service.project_id.clone())
+                    .or_default()
+                    .push(service.clone());
+            }
+        }
+        if !stale.is_empty() || !by_project.is_empty() {
+            let _ = store.persist();
+        }
+        let startup_notifications = by_project
+            .into_iter()
+            .map(|(project_id, services)| WorkspaceServiceChangedNotification {
+                project_id,
+                reason: WorkspaceServiceChangedReason::RuntimeRestarted,
+                services,
+            })
+            .collect();
         Self {
             project_store,
             store: Arc::new(Mutex::new(store)),
             runtime: Arc::new(Mutex::new(HashMap::new())),
             audit,
+            outgoing,
+            startup_notifications: Arc::new(Mutex::new(startup_notifications)),
         }
+    }
+
+    /// Broadcast pending RuntimeRestarted notices (drained). Called by
+    /// message_processor after the first connection initializes so the
+    /// broadcast reaches a live client; with zero connections it is a no-op
+    /// and clients recover context via `workspace/service/list` + audit.
+    pub(crate) async fn flush_startup_notifications(&self) {
+        let notices = std::mem::take(&mut *self.startup_notifications.lock().expect("lock"));
+        for notice in notices {
+            self.outgoing
+                .send_server_notification(ServerNotification::WorkspaceServiceChanged(notice))
+                .await;
+        }
+    }
+
+    /// Test-visible peek at the queued startup notices (does not drain).
+    #[cfg(test)]
+    fn take_startup_notification(&self) -> Option<WorkspaceServiceChangedNotification> {
+        self.startup_notifications.lock().expect("lock").first().cloned()
+    }
+
+    async fn broadcast_changed(
+        &self,
+        project_id: &str,
+        reason: WorkspaceServiceChangedReason,
+        services: Vec<WorkspaceServiceRef>,
+    ) {
+        self.outgoing
+            .send_server_notification(ServerNotification::WorkspaceServiceChanged(
+                WorkspaceServiceChangedNotification {
+                    project_id: project_id.to_owned(),
+                    reason,
+                    services,
+                },
+            ))
+            .await;
     }
 
     pub(crate) async fn start(
@@ -369,28 +459,52 @@ impl WorkspaceServiceRequestProcessor {
             let stop_requested = stop_requested.clone();
             let terminated = terminated.clone();
             let terminal_notify = terminal_notify.clone();
+            let outgoing_for_task = self.outgoing.clone();
             tokio::spawn(async move {
                 let exit = child.wait().await;
                 terminated.store(true, Ordering::SeqCst);
                 let exit_code = exit.ok().and_then(|status| status.code());
-                let mut store = store.lock().expect("store lock");
-                if let Some(record) = store.services.get_mut(&service_id) {
-                    record.exit_code = exit_code;
-                    if stop_requested.load(Ordering::SeqCst) {
-                        record.status = WorkspaceServiceStatus::Stopped;
-                    } else if exit_code == Some(0) {
-                        record.status = WorkspaceServiceStatus::Exited;
-                    } else {
-                        record.status = WorkspaceServiceStatus::Failed;
-                        record.error = Some(format!(
-                            "process exited with code {}",
-                            exit_code.map_or("signal".to_owned(), |code| code.to_string())
-                        ));
+                // E4: broadcast the terminal transition (crash, clean exit,
+                // or stop) — this task is the single terminal write path.
+                let record = {
+                    let mut store = store.lock().expect("store lock");
+                    if let Some(record) = store.services.get_mut(&service_id) {
+                        record.exit_code = exit_code;
+                        if stop_requested.load(Ordering::SeqCst) {
+                            record.status = WorkspaceServiceStatus::Stopped;
+                        } else if exit_code == Some(0) {
+                            record.status = WorkspaceServiceStatus::Exited;
+                        } else {
+                            record.status = WorkspaceServiceStatus::Failed;
+                            record.error = Some(format!(
+                                "process exited with code {}",
+                                exit_code.map_or("signal".to_owned(), |code| code.to_string())
+                            ));
+                        }
+                        record.updated_at_ms = now_ms();
+                        let _ = store.persist();
                     }
-                    record.updated_at_ms = now_ms();
-                    let _ = store.persist();
-                }
+                    store.services.get(&service_id).cloned()
+                };
                 terminal_notify.notify_waiters();
+                if let Some(record) = record {
+                    let reason = match record.status {
+                        WorkspaceServiceStatus::Stopped => WorkspaceServiceChangedReason::Stopped,
+                        WorkspaceServiceStatus::Exited => WorkspaceServiceChangedReason::Exited,
+                        _ => WorkspaceServiceChangedReason::Failed,
+                    };
+                    outgoing_for_task
+                        .send_server_notification(
+                            ServerNotification::WorkspaceServiceChanged(
+                                WorkspaceServiceChangedNotification {
+                                    project_id: record.project_id.clone(),
+                                    reason,
+                                    services: vec![record],
+                                },
+                            ),
+                        )
+                        .await;
+                }
             });
         }
 
@@ -467,6 +581,15 @@ impl WorkspaceServiceRequestProcessor {
             .get(&service_id)
             .cloned()
             .expect("service record");
+        if outcome == ReadyOutcome::Ready {
+            // E4: readiness is a lifecycle event clients should not poll for.
+            self.broadcast_changed(
+                &service.project_id,
+                WorkspaceServiceChangedReason::Started,
+                vec![service.clone()],
+            )
+            .await;
+        }
         Ok(service)
     }
 
@@ -502,6 +625,12 @@ impl WorkspaceServiceRequestProcessor {
         params: WorkspaceServiceStopParams,
     ) -> Result<WorkspaceServiceStopResponse, JSONRPCErrorError> {
         let service = self.stop_one(&params.service_id).await?;
+        self.broadcast_changed(
+            &service.project_id,
+            WorkspaceServiceChangedReason::Stopped,
+            vec![service.clone()],
+        )
+        .await;
         Ok(WorkspaceServiceStopResponse { service })
     }
 
@@ -1349,6 +1478,15 @@ impl WorkspaceServiceRequestProcessor {
             }
         }
         stopped.sort_by(|a, b| a.name.cmp(&b.name));
+        if !stopped.is_empty() {
+            let project_id = stopped[0].project_id.clone();
+            self.broadcast_changed(
+                &project_id,
+                WorkspaceServiceChangedReason::Stopped,
+                stopped.clone(),
+            )
+            .await;
+        }
         Ok(WorkspaceServiceStopAllResponse { stopped })
     }
 
@@ -1759,7 +1897,7 @@ impl WorkspaceServiceStore {
             for service in store.services.values_mut() {
                 if !is_terminal(service.status) {
                     service.status = WorkspaceServiceStatus::Stopped;
-                    service.error = Some("runtime restarted; process not running".to_owned());
+                    service.error = Some(RUNTIME_RESTARTED_ERROR.to_owned());
                     service.updated_at_ms = now_ms();
                     normalized = true;
                 }
@@ -1894,6 +2032,203 @@ mod tests {
             service.error.as_deref(),
             Some("runtime restarted; process not running")
         );
+    }
+
+    fn test_outgoing() -> (
+        Arc<OutgoingMessageSender>,
+        tokio::sync::mpsc::Receiver<crate::outgoing_message::OutgoingEnvelope>,
+    ) {
+        let (tx, rx) = tokio::sync::mpsc::channel(64);
+        (
+            Arc::new(OutgoingMessageSender::new(
+                tx,
+                ody_analytics::AnalyticsEventsClient::disabled(),
+            )),
+            rx,
+        )
+    }
+
+    /// Bind a one-root project "p1" into a fresh ody_home and return the
+    /// shared project store handle plus the audit log.
+    async fn processor_fixture(
+        root: &Path,
+    ) -> (
+        WorkspaceServiceRequestProcessor,
+        tokio::sync::mpsc::Receiver<crate::outgoing_message::OutgoingEnvelope>,
+    ) {
+        use crate::request_processors::workspace_project_processor::WorkspaceProjectRequestProcessor;
+        use ody_utils_absolute_path::AbsolutePathBuf;
+
+        let ody_home = tempfile::tempdir().expect("ody home");
+        let audit = Arc::new(crate::workspace_audit::WorkspaceAuditLog::new(
+            ody_home.path().join("workspace-audit").join("v1.jsonl"),
+        ));
+        let project_processor = WorkspaceProjectRequestProcessor::new(
+            ody_home.path().to_path_buf(),
+            Arc::clone(&audit),
+        );
+        let root = AbsolutePathBuf::try_from(root.to_path_buf()).expect("absolute root");
+        project_processor
+            .bind(ody_app_server_protocol::WorkspaceProjectBindParams {
+                id: "p1".to_owned(),
+                name: "fixture".to_owned(),
+                roots: vec![root],
+                idempotency_key: "bind-1".to_owned(),
+            })
+            .await
+            .expect("bind project");
+        let (outgoing, rx) = test_outgoing();
+        let processor = WorkspaceServiceRequestProcessor::new(
+            ody_home.path().to_path_buf(),
+            project_processor.store_handle(),
+            audit,
+            outgoing,
+        );
+        (processor, rx)
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn crashed_service_broadcasts_failed_notification() {
+        // Real subprocess exit is the behavior under test; skip on hosts
+        // without node (CI images that lack it).
+        if tokio::process::Command::new("node")
+            .arg("--version")
+            .output()
+            .await
+            .is_err()
+        {
+            return;
+        }
+        let root = tempfile::tempdir().expect("root");
+        fs::write(
+            root.path().join("package.json"),
+            serde_json::json!({
+                "name": "crasher-fixture",
+                "scripts": { "crash": "node crasher.js" }
+            })
+            .to_string(),
+        )
+        .expect("package.json");
+        fs::write(
+            root.path().join("crasher.js"),
+            "setTimeout(() => process.exit(3), 100);\n",
+        )
+        .expect("crasher.js");
+        let (processor, mut rx) = processor_fixture(root.path()).await;
+        let response = processor
+            .start(WorkspaceServiceStartParams {
+                project_id: "p1".to_owned(),
+                name: "crasher".to_owned(),
+                root_index: 0,
+                script: "crash".to_owned(),
+                port: None,
+                ready_timeout_ms: Some(5_000),
+                env: None,
+                idempotency_key: "crash-1".to_owned(),
+            })
+            .await
+            .expect("start");
+        let notification = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+            loop {
+                let envelope = rx.recv().await.expect("notification");
+                let crate::outgoing_message::OutgoingEnvelope::Broadcast { message } = envelope
+                else {
+                    continue;
+                };
+                let ody_app_server_transport::OutgoingMessage::AppServerNotification(notification) = message
+                else {
+                    continue;
+                };
+                if let ServerNotification::WorkspaceServiceChanged(changed) = notification {
+                    if changed.reason == WorkspaceServiceChangedReason::Failed {
+                        return changed;
+                    }
+                }
+            }
+        })
+        .await
+        .expect("timed out waiting for service/changed");
+        assert_eq!(notification.project_id, "p1");
+        assert_eq!(notification.services.len(), 1);
+        assert_eq!(notification.services[0].id, response.service.id);
+        assert_eq!(notification.services[0].exit_code, Some(3));
+        assert_eq!(notification.services[0].status, WorkspaceServiceStatus::Failed);
+    }
+
+    #[test]
+    fn load_normalization_marks_orchestration_cleanup_and_restart_notice() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("workspace-service").join("v1.json");
+        fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
+        let mut store = WorkspaceServiceStore {
+            schema_version: WORKSPACE_SERVICE_PROTOCOL_VERSION,
+            services: BTreeMap::new(),
+            idempotency: BTreeMap::new(),
+            specs: BTreeMap::new(),
+            spec_idempotency: BTreeMap::new(),
+            orchestrations: BTreeMap::new(),
+            path: path.clone(),
+        };
+        store.services.insert(
+            "svc-1".to_owned(),
+            WorkspaceServiceRef {
+                id: "svc-1".to_owned(),
+                project_id: "gone-project".to_owned(),
+                name: "web".to_owned(),
+                root_index: 0,
+                script: "dev".to_owned(),
+                command: "npm run dev".to_owned(),
+                port: 5173,
+                url: String::new(),
+                status: WorkspaceServiceStatus::Ready, // lingering
+                pid: Some(1),
+                exit_code: None,
+                health: None,
+                error: None,
+                created_at_ms: 0,
+                updated_at_ms: 0,
+            },
+        );
+        store.orchestrations.insert(
+            "start_all:key-1".to_owned(),
+            StoredOrchestration {
+                project_id: "gone-project".to_owned(),
+                response: WorkspaceServiceStartAllResponse {
+                    services: Vec::new(),
+                    started: Vec::new(),
+                    reused: Vec::new(),
+                    failed: Vec::new(),
+                },
+                created_at_ms: 0,
+            },
+        );
+        store.persist().expect("persist");
+        drop(store);
+
+        // Project store with zero projects -> the orchestration record is stale.
+        let project_store = Arc::new(Mutex::new(WorkspaceProjectStore::default()));
+        let (outgoing, _rx) = test_outgoing();
+        let audit = Arc::new(crate::workspace_audit::WorkspaceAuditLog::new(
+            dir.path().join("workspace-audit").join("v1.jsonl"),
+        ));
+        let processor = WorkspaceServiceRequestProcessor::new(
+            dir.path().to_path_buf(),
+            project_store,
+            audit,
+            outgoing,
+        );
+        let store = processor.store.lock().expect("store lock");
+        assert!(store.orchestrations.is_empty(), "stale orchestration dropped");
+        let service = store.services.values().next().expect("service");
+        assert_eq!(service.status, WorkspaceServiceStatus::Stopped);
+        assert_eq!(service.error.as_deref(), Some(RUNTIME_RESTARTED_ERROR));
+        drop(store);
+        let notice = processor
+            .take_startup_notification()
+            .expect("restart notice");
+        assert_eq!(notice.reason, WorkspaceServiceChangedReason::RuntimeRestarted);
+        assert_eq!(notice.project_id, "gone-project");
+        assert_eq!(notice.services.len(), 1);
     }
 
     #[test]
