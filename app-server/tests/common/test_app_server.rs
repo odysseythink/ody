@@ -104,6 +104,7 @@ use ody_app_server_protocol::TurnSteerParams;
 use ody_app_server_protocol::WindowsSandboxSetupStartParams;
 use ody_app_server_protocol::WorkspaceChangeSetApplyParams;
 use ody_app_server_protocol::WorkspaceAuditListParams;
+use ody_app_server_protocol::WorkspaceWatchParams;
 use ody_app_server_protocol::WorkspaceChangeSetCreateParams;
 use ody_app_server_protocol::WorkspaceChangeSetGetParams;
 use ody_app_server_protocol::WorkspaceChangeSetListParams;
@@ -1009,6 +1010,15 @@ image_generation = true
     ) -> anyhow::Result<i64> {
         let params = Some(serde_json::to_value(params)?);
         self.send_request("workspace/preview/check", params).await
+    }
+
+    /// Send a `workspace/watch` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_watch_request(
+        &mut self,
+        params: WorkspaceWatchParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/watch", params).await
     }
 
     /// Send a `workspace/audit/list` JSON-RPC request (v2, experimental).

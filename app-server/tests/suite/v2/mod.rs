@@ -81,5 +81,7 @@ mod workspace_concurrency;
 mod workspace_env_refs;
 mod workspace_fullstack_smoke;
 mod workspace_project;
+mod workspace_reliability;
+mod workspace_reliability_smoke;
 mod workspace_service;
 mod workspace_source;
