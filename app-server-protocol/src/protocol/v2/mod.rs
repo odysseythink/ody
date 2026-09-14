@@ -28,6 +28,7 @@ mod windows_sandbox;
 mod workspace;
 mod workspace_service;
 mod workspace_source;
+mod workspace_watch;
 
 pub use apps::*;
 pub use attestation::*;
@@ -58,6 +59,6 @@ pub use windows_sandbox::*;
 pub use workspace::*;
 pub use workspace_service::*;
 pub use workspace_source::*;
-
+pub use workspace_watch::*;
 #[cfg(test)]
 mod tests;

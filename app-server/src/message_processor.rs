@@ -15,6 +15,7 @@ use crate::extensions::app_server_extension_event_sink;
 use crate::extensions::guardian_agent_spawner;
 use crate::extensions::thread_extensions;
 use crate::fs_watch::FsWatchManager;
+use crate::workspace_watch::WorkspaceWatchManager;
 use crate::outgoing_message::ConnectionId;
 use crate::outgoing_message::ConnectionRequestId;
 use crate::outgoing_message::OutgoingMessageSender;
@@ -128,6 +129,7 @@ pub(crate) struct MessageProcessor {
     workspace_project_processor: WorkspaceProjectRequestProcessor,
     workspace_service_processor: WorkspaceServiceRequestProcessor,
     workspace_source_processor: WorkspaceSourceRequestProcessor,
+    workspace_watch_manager: WorkspaceWatchManager,
     request_serialization_queues: RequestSerializationQueues,
 }
 
@@ -439,9 +441,10 @@ impl MessageProcessor {
         );
         let environment_processor =
             EnvironmentRequestProcessor::new(thread_manager.environment_manager());
+        let fs_watch_manager = FsWatchManager::new(outgoing.clone());
         let fs_processor = FsRequestProcessor::new(
             Arc::clone(&environment_manager_for_requests),
-            FsWatchManager::new(outgoing.clone()),
+            fs_watch_manager.clone(),
         );
         let windows_sandbox_processor = WindowsSandboxRequestProcessor::new(
             outgoing.clone(),
@@ -462,6 +465,12 @@ impl MessageProcessor {
 
         let workspace_service_processor = WorkspaceServiceRequestProcessor::new(
             config.ody_home.to_path_buf(),
+            workspace_project_processor.store_handle(),
+        );
+
+        let workspace_watch_manager = WorkspaceWatchManager::new(
+            outgoing.clone(),
+            fs_watch_manager.file_watcher(),
             workspace_project_processor.store_handle(),
         );
 
@@ -492,6 +501,7 @@ impl MessageProcessor {
             workspace_project_processor,
             workspace_service_processor,
             workspace_source_processor,
+            workspace_watch_manager,
             request_serialization_queues: RequestSerializationQueues::default(),
         }
     }
@@ -714,6 +724,7 @@ impl MessageProcessor {
             .connection_closed(connection_id)
             .await;
         self.thread_processor.connection_closed(connection_id).await;
+        self.workspace_watch_manager.connection_closed(connection_id).await;
     }
 
     pub(crate) fn subscribe_running_assistant_turn_count(&self) -> watch::Receiver<usize> {
@@ -939,6 +950,16 @@ impl MessageProcessor {
                 .map(|response| Some(response.into())),
             ClientRequest::FsUnwatch { params, .. } => self
                 .fs_processor
+                .unwatch(connection_id, params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceWatch { params, .. } => self
+                .workspace_watch_manager
+                .watch(connection_id, params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceUnwatch { params, .. } => self
+                .workspace_watch_manager
                 .unwatch(connection_id, params)
                 .await
                 .map(|response| Some(response.into())),

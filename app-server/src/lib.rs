@@ -112,6 +112,7 @@ mod workspace_changeset;
 mod workspace_discovery;
 mod workspace_service;
 mod workspace_source_index;
+mod workspace_watch;
 mod workspace_validation;
 
 pub use crate::error_code::INPUT_TOO_LARGE_ERROR_CODE;

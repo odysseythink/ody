@@ -73,6 +73,12 @@ impl FsWatchManager {
         }
     }
 
+    /// Shared notify instance so workspace watchers do not spawn a second
+    /// OS watcher.
+    pub(crate) fn file_watcher(&self) -> Arc<FileWatcher> {
+        Arc::clone(&self.file_watcher)
+    }
+
     pub(crate) async fn watch(
         &self,
         connection_id: ConnectionId,

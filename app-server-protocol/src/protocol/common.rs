@@ -875,6 +875,18 @@ client_request_definitions! {
         serialization: global("workspace-source"),
         response: v2::WorkspaceSourceValidateResponse,
     },
+    #[experimental("workspace/watch/v1")]
+    WorkspaceWatch => "workspace/watch" {
+        params: v2::WorkspaceWatchParams,
+        serialization: global("workspace-watch"),
+        response: v2::WorkspaceWatchResponse,
+    },
+    #[experimental("workspace/watch/v1")]
+    WorkspaceUnwatch => "workspace/unwatch" {
+        params: v2::WorkspaceUnwatchParams,
+        serialization: global("workspace-watch"),
+        response: v2::WorkspaceUnwatchResponse,
+    },
     #[experimental("workspace/service/v1")]
     WorkspaceServiceStart => "workspace/service/start" {
         params: v2::WorkspaceServiceStartParams,
@@ -1762,6 +1774,8 @@ server_notification_definitions! {
     WindowsSandboxSetupCompleted => "windowsSandbox/setupCompleted" (v2::WindowsSandboxSetupCompletedNotification),
     #[experimental("visualWorkspace/v1")]
     VisualWorkspaceChanged => "visualWorkspace/changed" (v2::VisualWorkspaceChangedNotification),
+    #[experimental("workspace/watch/v1")]
+    WorkspaceChanged => "workspace/changed" (v2::WorkspaceChangedNotification),
 
 }
 
