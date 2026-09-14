@@ -45,6 +45,9 @@ use serde::Serialize;
 use crate::error_code::internal_error;
 use crate::error_code::invalid_params;
 use crate::request_processors::workspace_project_processor::WorkspaceProjectStore;
+use crate::workspace_audit::audit_event;
+use crate::workspace_audit::error_detail;
+use crate::workspace_audit::WorkspaceAuditLog;
 use crate::workspace_changeset::PreparedChange;
 
 const RESOLVE_DEFAULT_LIMIT: usize = 20;
@@ -60,15 +63,21 @@ const GIT_DIFF_TIMEOUT_MS: u64 = 5_000;
 pub(crate) struct WorkspaceSourceRequestProcessor {
     project_store: Arc<Mutex<WorkspaceProjectStore>>,
     store: Arc<Mutex<WorkspaceSourceStore>>,
+    audit: Arc<WorkspaceAuditLog>,
 }
 
 impl WorkspaceSourceRequestProcessor {
-    pub(crate) fn new(ody_home: PathBuf, project_store: Arc<Mutex<WorkspaceProjectStore>>) -> Self {
+    pub(crate) fn new(
+        ody_home: PathBuf,
+        project_store: Arc<Mutex<WorkspaceProjectStore>>,
+        audit: Arc<WorkspaceAuditLog>,
+    ) -> Self {
         let path = ody_home.join(STORE_DIR).join(STORE_FILE);
         let store = WorkspaceSourceStore::load(path);
         Self {
             project_store,
             store: Arc::new(Mutex::new(store)),
+            audit,
         }
     }
 
@@ -121,6 +130,40 @@ impl WorkspaceSourceRequestProcessor {
     }
 
     pub(crate) async fn changeset_create(
+        &self,
+        params: WorkspaceChangeSetCreateParams,
+    ) -> Result<WorkspaceChangeSetCreateResponse, JSONRPCErrorError> {
+        let project_id = params.project_id.clone();
+        let result = self.changeset_create_inner(params).await;
+        match &result {
+            Ok(response) => {
+                let files: Vec<String> = response
+                    .changeset
+                    .changes
+                    .iter()
+                    .map(|change| format!("{}:{}", change.root_index, change.path))
+                    .collect();
+                self.audit.record(audit_event(
+                    Some(&response.changeset.project_id),
+                    "changeset.create",
+                    "ok",
+                    serde_json::json!({
+                        "changesetId": response.changeset.id,
+                        "files": files,
+                    }),
+                ));
+            }
+            Err(err) => self.audit.record(audit_event(
+                Some(&project_id),
+                "changeset.create",
+                "error",
+                error_detail("changeset.create", err),
+            )),
+        }
+        result
+    }
+
+    async fn changeset_create_inner(
         &self,
         params: WorkspaceChangeSetCreateParams,
     ) -> Result<WorkspaceChangeSetCreateResponse, JSONRPCErrorError> {
@@ -213,6 +256,35 @@ impl WorkspaceSourceRequestProcessor {
     }
 
     pub(crate) async fn changeset_apply(
+        &self,
+        params: WorkspaceChangeSetApplyParams,
+    ) -> Result<WorkspaceChangeSetApplyResponse, JSONRPCErrorError> {
+        let changeset_id = params.changeset_id.clone();
+        let result = self.changeset_apply_inner(params).await;
+        match &result {
+            Ok(response) => self.audit.record(audit_event(
+                Some(&response.changeset.project_id),
+                "changeset.apply",
+                "ok",
+                serde_json::json!({
+                    "changesetId": response.changeset.id,
+                    "outcome": "applied",
+                }),
+            )),
+            Err(err) => self.audit.record(audit_event(
+                None,
+                "changeset.apply",
+                "error",
+                serde_json::json!({
+                    "changesetId": changeset_id,
+                    "error": err.message.chars().take(200).collect::<String>(),
+                }),
+            )),
+        }
+        result
+    }
+
+    async fn changeset_apply_inner(
         &self,
         params: WorkspaceChangeSetApplyParams,
     ) -> Result<WorkspaceChangeSetApplyResponse, JSONRPCErrorError> {
@@ -328,6 +400,32 @@ impl WorkspaceSourceRequestProcessor {
         &self,
         params: WorkspaceChangeSetRejectParams,
     ) -> Result<WorkspaceChangeSetRejectResponse, JSONRPCErrorError> {
+        let changeset_id = params.changeset_id.clone();
+        let result = self.changeset_reject_inner(params).await;
+        match &result {
+            Ok(response) => self.audit.record(audit_event(
+                Some(&response.changeset.project_id),
+                "changeset.reject",
+                "ok",
+                serde_json::json!({"changesetId": response.changeset.id}),
+            )),
+            Err(err) => self.audit.record(audit_event(
+                None,
+                "changeset.reject",
+                "error",
+                serde_json::json!({
+                    "changesetId": changeset_id,
+                    "error": err.message.chars().take(200).collect::<String>(),
+                }),
+            )),
+        }
+        result
+    }
+
+    async fn changeset_reject_inner(
+        &self,
+        params: WorkspaceChangeSetRejectParams,
+    ) -> Result<WorkspaceChangeSetRejectResponse, JSONRPCErrorError> {
         let (_, mut stored) = self.stored_changeset(&params.changeset_id)?;
         if stored.change_set.status != WorkspaceChangeSetStatus::Pending {
             return Err(invalid_params(format!(
@@ -355,6 +453,32 @@ impl WorkspaceSourceRequestProcessor {
     }
 
     pub(crate) async fn changeset_restore(
+        &self,
+        params: WorkspaceChangeSetRestoreParams,
+    ) -> Result<WorkspaceChangeSetRestoreResponse, JSONRPCErrorError> {
+        let changeset_id = params.changeset_id.clone();
+        let result = self.changeset_restore_inner(params).await;
+        match &result {
+            Ok(response) => self.audit.record(audit_event(
+                Some(&response.changeset.project_id),
+                "changeset.restore",
+                "ok",
+                serde_json::json!({"changesetId": response.changeset.id}),
+            )),
+            Err(err) => self.audit.record(audit_event(
+                None,
+                "changeset.restore",
+                "error",
+                serde_json::json!({
+                    "changesetId": changeset_id,
+                    "error": err.message.chars().take(200).collect::<String>(),
+                }),
+            )),
+        }
+        result
+    }
+
+    async fn changeset_restore_inner(
         &self,
         params: WorkspaceChangeSetRestoreParams,
     ) -> Result<WorkspaceChangeSetRestoreResponse, JSONRPCErrorError> {

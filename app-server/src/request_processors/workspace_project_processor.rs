@@ -30,6 +30,9 @@ use uuid::Uuid;
 
 use crate::error_code::internal_error;
 use crate::error_code::invalid_params;
+use crate::workspace_audit::audit_event;
+use crate::workspace_audit::error_detail;
+use crate::workspace_audit::WorkspaceAuditLog;
 
 const STORE_DIR: &str = "workspace-project";
 const STORE_FILE: &str = "v1.json";
@@ -40,6 +43,7 @@ const AUTH_SOURCE_USER_SELECTED: &str = "user_selected";
 pub(crate) struct WorkspaceProjectRequestProcessor {
     ody_home: PathBuf,
     store: Arc<Mutex<WorkspaceProjectStore>>,
+    audit: Arc<WorkspaceAuditLog>,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -53,12 +57,13 @@ pub(crate) struct WorkspaceProjectStore {
 }
 
 impl WorkspaceProjectRequestProcessor {
-    pub(crate) fn new(ody_home: PathBuf) -> Self {
+    pub(crate) fn new(ody_home: PathBuf, audit: Arc<WorkspaceAuditLog>) -> Self {
         let path = ody_home.join(STORE_DIR).join(STORE_FILE);
         let store = WorkspaceProjectStore::load(path);
         Self {
             ody_home,
             store: Arc::new(Mutex::new(store)),
+            audit,
         }
     }
 
@@ -72,7 +77,26 @@ impl WorkspaceProjectRequestProcessor {
         &self,
         params: WorkspaceProjectBindParams,
     ) -> Result<WorkspaceProjectBindResponse, JSONRPCErrorError> {
-        self.with_store(|store| store.bind(&self.ody_home, params))
+        let project_id = params.id.clone();
+        let result = self.with_store(|store| store.bind(&self.ody_home, params));
+        match &result {
+            Ok(response) => self.audit.record(audit_event(
+                Some(&response.project.id),
+                "project.bind",
+                "ok",
+                serde_json::json!({
+                    "projectId": response.project.id,
+                    "roots": response.project.roots.len(),
+                }),
+            )),
+            Err(err) => self.audit.record(audit_event(
+                Some(&project_id),
+                "project.bind",
+                "error",
+                error_detail("project.bind", err),
+            )),
+        }
+        result
     }
 
     pub(crate) async fn get(
@@ -104,7 +128,8 @@ impl WorkspaceProjectRequestProcessor {
         &self,
         params: WorkspaceProjectCloseParams,
     ) -> Result<WorkspaceProjectCloseResponse, JSONRPCErrorError> {
-        self.with_store(|store| {
+        let project_id = params.project_id.clone();
+        let result = self.with_store(|store| {
             let project = store
                 .projects
                 .remove(&params.project_id)
@@ -112,7 +137,22 @@ impl WorkspaceProjectRequestProcessor {
             store.idempotency.retain(|_, id| id != &project.id);
             store.persist()?;
             Ok(WorkspaceProjectCloseResponse { project })
-        })
+        });
+        match &result {
+            Ok(_) => self.audit.record(audit_event(
+                Some(&project_id),
+                "project.close",
+                "ok",
+                serde_json::json!({"projectId": project_id}),
+            )),
+            Err(err) => self.audit.record(audit_event(
+                Some(&project_id),
+                "project.close",
+                "error",
+                error_detail("project.close", err),
+            )),
+        }
+        result
     }
 
     pub(crate) async fn scan(

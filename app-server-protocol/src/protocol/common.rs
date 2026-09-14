@@ -887,6 +887,12 @@ client_request_definitions! {
         serialization: global("workspace-watch"),
         response: v2::WorkspaceUnwatchResponse,
     },
+    #[experimental("workspace/audit/v1")]
+    WorkspaceAuditList => "workspace/audit/list" {
+        params: v2::WorkspaceAuditListParams,
+        serialization: global_shared_read("workspace-audit"),
+        response: v2::WorkspaceAuditListResponse,
+    },
     #[experimental("workspace/service/v1")]
     WorkspaceServiceStart => "workspace/service/start" {
         params: v2::WorkspaceServiceStartParams,

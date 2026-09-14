@@ -42,6 +42,8 @@ use uuid::Uuid;
 
 use crate::error_code::internal_error;
 use crate::error_code::invalid_params;
+use crate::workspace_audit::audit_event;
+use crate::workspace_audit::WorkspaceAuditLog;
 use crate::request_processors::workspace_project_processor::WorkspaceProjectStore;
 use crate::workspace_service::ManagedService;
 use crate::workspace_service::OutputRing;
@@ -55,6 +57,7 @@ pub(crate) struct WorkspaceServiceRequestProcessor {
     project_store: Arc<Mutex<WorkspaceProjectStore>>,
     store: Arc<Mutex<WorkspaceServiceStore>>,
     runtime: Arc<Mutex<HashMap<String, ManagedService>>>,
+    audit: Arc<WorkspaceAuditLog>,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -85,17 +88,49 @@ pub(crate) struct StoredOrchestration {
 }
 
 impl WorkspaceServiceRequestProcessor {
-    pub(crate) fn new(ody_home: PathBuf, project_store: Arc<Mutex<WorkspaceProjectStore>>) -> Self {
+    pub(crate) fn new(
+        ody_home: PathBuf,
+        project_store: Arc<Mutex<WorkspaceProjectStore>>,
+        audit: Arc<WorkspaceAuditLog>,
+    ) -> Self {
         let path = ody_home.join(STORE_DIR).join(STORE_FILE);
         let store = WorkspaceServiceStore::load(path);
         Self {
             project_store,
             store: Arc::new(Mutex::new(store)),
             runtime: Arc::new(Mutex::new(HashMap::new())),
+            audit,
         }
     }
 
     pub(crate) async fn start(
+        &self,
+        params: WorkspaceServiceStartParams,
+    ) -> Result<WorkspaceServiceStartResponse, JSONRPCErrorError> {
+        let result = self.start_inner(params).await;
+        match &result {
+            Ok(response) => self.audit.record(audit_event(
+                None,
+                "service.start",
+                "ok",
+                serde_json::json!({
+                    "serviceId": response.service.id,
+                    "name": response.service.name,
+                }),
+            )),
+            Err(err) => self.audit.record(audit_event(
+                None,
+                "service.start",
+                "error",
+                serde_json::json!({
+                    "error": err.message.chars().take(200).collect::<String>(),
+                }),
+            )),
+        }
+        result
+    }
+
+    async fn start_inner(
         &self,
         params: WorkspaceServiceStartParams,
     ) -> Result<WorkspaceServiceStartResponse, JSONRPCErrorError> {
@@ -439,6 +474,33 @@ impl WorkspaceServiceRequestProcessor {
         &self,
         params: WorkspaceServiceStopParams,
     ) -> Result<WorkspaceServiceStopResponse, JSONRPCErrorError> {
+        let result = self.stop_inner(params).await;
+        match &result {
+            Ok(response) => self.audit.record(audit_event(
+                None,
+                "service.stop",
+                "ok",
+                serde_json::json!({
+                    "serviceId": response.service.id,
+                    "name": response.service.name,
+                }),
+            )),
+            Err(err) => self.audit.record(audit_event(
+                None,
+                "service.stop",
+                "error",
+                serde_json::json!({
+                    "error": err.message.chars().take(200).collect::<String>(),
+                }),
+            )),
+        }
+        result
+    }
+
+    async fn stop_inner(
+        &self,
+        params: WorkspaceServiceStopParams,
+    ) -> Result<WorkspaceServiceStopResponse, JSONRPCErrorError> {
         let service = self.stop_one(&params.service_id).await?;
         Ok(WorkspaceServiceStopResponse { service })
     }
@@ -661,6 +723,33 @@ impl WorkspaceServiceRequestProcessor {
         &self,
         params: WorkspaceServiceDefineParams,
     ) -> Result<WorkspaceServiceDefineResponse, JSONRPCErrorError> {
+        let result = self.define_inner(params).await;
+        match &result {
+            Ok(response) => self.audit.record(audit_event(
+                None,
+                "service.define",
+                "ok",
+                serde_json::json!({
+                    "specId": response.spec.id,
+                    "name": response.spec.name,
+                }),
+            )),
+            Err(err) => self.audit.record(audit_event(
+                None,
+                "service.define",
+                "error",
+                serde_json::json!({
+                    "error": err.message.chars().take(200).collect::<String>(),
+                }),
+            )),
+        }
+        result
+    }
+
+    async fn define_inner(
+        &self,
+        params: WorkspaceServiceDefineParams,
+    ) -> Result<WorkspaceServiceDefineResponse, JSONRPCErrorError> {
         let project = self.project(&params.project_id)?;
         let idem_key = format!("define:{}", params.idempotency_key);
         {
@@ -848,6 +937,34 @@ impl WorkspaceServiceRequestProcessor {
     }
 
     pub(crate) async fn start_all(
+        &self,
+        params: WorkspaceServiceStartAllParams,
+    ) -> Result<WorkspaceServiceStartAllResponse, JSONRPCErrorError> {
+        let result = self.start_all_inner(params).await;
+        match &result {
+            Ok(response) => self.audit.record(audit_event(
+                None,
+                "service.start_all",
+                "ok",
+                serde_json::json!({
+                    "started": response.started.len(),
+                    "reused": response.reused.len(),
+                    "failed": response.failed.len(),
+                }),
+            )),
+            Err(err) => self.audit.record(audit_event(
+                None,
+                "service.start_all",
+                "error",
+                serde_json::json!({
+                    "error": err.message.chars().take(200).collect::<String>(),
+                }),
+            )),
+        }
+        result
+    }
+
+    async fn start_all_inner(
         &self,
         params: WorkspaceServiceStartAllParams,
     ) -> Result<WorkspaceServiceStartAllResponse, JSONRPCErrorError> {
@@ -1146,6 +1263,32 @@ impl WorkspaceServiceRequestProcessor {
     }
 
     pub(crate) async fn stop_all(
+        &self,
+        params: WorkspaceServiceStopAllParams,
+    ) -> Result<WorkspaceServiceStopAllResponse, JSONRPCErrorError> {
+        let result = self.stop_all_inner(params).await;
+        match &result {
+            Ok(response) => self.audit.record(audit_event(
+                None,
+                "service.stop_all",
+                "ok",
+                serde_json::json!({
+                    "stopped": response.stopped.len(),
+                }),
+            )),
+            Err(err) => self.audit.record(audit_event(
+                None,
+                "service.stop_all",
+                "error",
+                serde_json::json!({
+                    "error": err.message.chars().take(200).collect::<String>(),
+                }),
+            )),
+        }
+        result
+    }
+
+    async fn stop_all_inner(
         &self,
         params: WorkspaceServiceStopAllParams,
     ) -> Result<WorkspaceServiceStopAllResponse, JSONRPCErrorError> {

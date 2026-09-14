@@ -15,6 +15,7 @@ use crate::extensions::app_server_extension_event_sink;
 use crate::extensions::guardian_agent_spawner;
 use crate::extensions::thread_extensions;
 use crate::fs_watch::FsWatchManager;
+use crate::workspace_audit::WorkspaceAuditLog;
 use crate::workspace_watch::WorkspaceWatchManager;
 use crate::outgoing_message::ConnectionId;
 use crate::outgoing_message::ConnectionRequestId;
@@ -130,6 +131,7 @@ pub(crate) struct MessageProcessor {
     workspace_service_processor: WorkspaceServiceRequestProcessor,
     workspace_source_processor: WorkspaceSourceRequestProcessor,
     workspace_watch_manager: WorkspaceWatchManager,
+    workspace_audit: Arc<WorkspaceAuditLog>,
     request_serialization_queues: RequestSerializationQueues,
 }
 
@@ -455,17 +457,25 @@ impl MessageProcessor {
             config.ody_home.to_path_buf(),
             Arc::clone(&outgoing),
         );
-        let workspace_project_processor =
-            WorkspaceProjectRequestProcessor::new(config.ody_home.to_path_buf());
+        let workspace_audit = Arc::new(WorkspaceAuditLog::new(
+            config.ody_home.join("workspace-audit").join("v1.jsonl").to_path_buf(),
+        ));
+
+        let workspace_project_processor = WorkspaceProjectRequestProcessor::new(
+            config.ody_home.to_path_buf(),
+            Arc::clone(&workspace_audit),
+        );
 
         let workspace_source_processor = WorkspaceSourceRequestProcessor::new(
             config.ody_home.to_path_buf(),
             workspace_project_processor.store_handle(),
+            Arc::clone(&workspace_audit),
         );
 
         let workspace_service_processor = WorkspaceServiceRequestProcessor::new(
             config.ody_home.to_path_buf(),
             workspace_project_processor.store_handle(),
+            Arc::clone(&workspace_audit),
         );
 
         let workspace_watch_manager = WorkspaceWatchManager::new(
@@ -502,6 +512,7 @@ impl MessageProcessor {
             workspace_service_processor,
             workspace_source_processor,
             workspace_watch_manager,
+            workspace_audit,
             request_serialization_queues: RequestSerializationQueues::default(),
         }
     }
@@ -962,6 +973,10 @@ impl MessageProcessor {
                 .workspace_watch_manager
                 .unwatch(connection_id, params)
                 .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceAuditList { params, .. } => self
+                .workspace_audit
+                .list(params.project_id.as_deref(), params.limit)
                 .map(|response| Some(response.into())),
             ClientRequest::VisualProjectUpsert { params, .. } => self
                 .visual_workspace_processor
