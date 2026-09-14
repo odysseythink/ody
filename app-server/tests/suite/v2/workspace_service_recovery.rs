@@ -120,6 +120,7 @@ async fn start_service(
             port: None,
             ready_timeout_ms: Some(10_000),
             env: None,
+            secret_values: None,
             idempotency_key: idem.to_owned(),
         })
         .await?;

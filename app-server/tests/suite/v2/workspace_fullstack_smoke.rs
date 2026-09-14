@@ -496,6 +496,7 @@ async fn define(
                 timeout_ms: None,
             }),
             ready_timeout_ms: Some(120_000), // vite cold start + dep pre-bundle
+            env_refs: None,
             idempotency_key: idem.to_owned(),
         })
         .await?;
@@ -512,6 +513,7 @@ async fn start_all(
         .send_workspace_service_start_all_request(WorkspaceServiceStartAllParams {
             project_id: PROJECT.to_owned(),
             names: vec![],
+            secret_values: None,
             idempotency_key: idem.to_owned(),
         })
         .await?;

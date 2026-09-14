@@ -141,6 +141,7 @@ async fn start_service(
             port,
             ready_timeout_ms: Some(10_000),
             env: None,
+            secret_values: None,
             idempotency_key: idem.to_owned(),
         })
         .await?;
@@ -320,6 +321,7 @@ async fn service_port_conflict_returns_structured_error() -> Result<()> {
             port: Some(occupied),
             ready_timeout_ms: None,
             env: None,
+            secret_values: None,
             idempotency_key: "svc-3".to_owned(),
         })
         .await?;
@@ -391,6 +393,7 @@ async fn service_and_preview_errors_are_diagnosable() -> Result<()> {
             port: None,
             ready_timeout_ms: None,
             env: None,
+            secret_values: None,
             idempotency_key: "svc-5a".to_owned(),
         })
         .await?;
@@ -410,6 +413,7 @@ async fn service_and_preview_errors_are_diagnosable() -> Result<()> {
             port: None,
             ready_timeout_ms: None,
             env: None,
+            secret_values: None,
             idempotency_key: "svc-5b".to_owned(),
         })
         .await?;

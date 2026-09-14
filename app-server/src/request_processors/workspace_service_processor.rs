@@ -60,6 +60,70 @@ const STORE_FILE: &str = "v1.json";
 /// non-terminal services without live processes (E4).
 const RUNTIME_RESTARTED_ERROR: &str = "runtime restarted; process not running";
 
+/// E4: sensitive env ref validation (upper-snake, DNS-safe env keys).
+const MAX_ENV_REFS_PER_SPEC: usize = 16;
+const MAX_ENV_REF_CHARS: usize = 64;
+
+fn validate_env_refs(refs: &[String]) -> Result<Vec<String>, JSONRPCErrorError> {
+    if refs.len() > MAX_ENV_REFS_PER_SPEC {
+        return Err(invalid_params(format!(
+            "envRefs has {} entries; max is {MAX_ENV_REFS_PER_SPEC}",
+            refs.len()
+        )));
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    for name in refs {
+        let ok = !name.is_empty()
+            && name.len() <= MAX_ENV_REF_CHARS
+            && name.chars().enumerate().all(|(i, c)| {
+                c.is_ascii_uppercase() || c == '_' || (i > 0 && c.is_ascii_digit())
+            });
+        if !ok {
+            return Err(invalid_params(format!(
+                "envRefs entry {name:?} must be UPPER_SNAKE (A-Z, 0-9 after first char, _), ≤{MAX_ENV_REF_CHARS} chars, ASCII only"
+            )));
+        }
+        if !seen.insert(name.clone()) {
+            return Err(invalid_params(format!("duplicate envRefs entry {name:?}")));
+        }
+    }
+    Ok(refs.to_vec())
+}
+
+/// Resolve a spec's envRefs against request-scoped secretValues. Returned
+/// pairs are injected at the extra_env layer: after dependency-injected
+/// vars (so a secret overrides a same-named injected var — a same-named
+/// dep injection is a misconfiguration the secret wins) and before explicit
+/// user env (ADR decision 4: explicit user intent is always highest).
+/// Never log or persist the returned values.
+fn resolve_secret_env(
+    spec: &WorkspaceServiceSpec,
+    secret_values: &Option<BTreeMap<String, String>>,
+) -> Result<Vec<(String, String)>, JSONRPCErrorError> {
+    if spec.env_refs.is_empty() {
+        return Ok(Vec::new());
+    }
+    let provided = secret_values.as_ref().cloned().unwrap_or_default();
+    let missing: Vec<&str> = spec
+        .env_refs
+        .iter()
+        .filter(|name| !provided.contains_key(*name))
+        .map(String::as_str)
+        .collect();
+    if !missing.is_empty() {
+        return Err(invalid_params(format!(
+            "service {:?} requires envRefs missing from secretValues: {}",
+            spec.name,
+            missing.join(", ")
+        )));
+    }
+    Ok(spec
+        .env_refs
+        .iter()
+        .map(|name| (name.clone(), provided[name].clone()))
+        .collect())
+}
+
 #[derive(Clone)]
 pub(crate) struct WorkspaceServiceRequestProcessor {
     project_store: Arc<Mutex<WorkspaceProjectStore>>,
@@ -249,6 +313,20 @@ impl WorkspaceServiceRequestProcessor {
             }
         }
 
+        // Ad-hoc start may still reference a declared spec's envRefs; when
+        // no same-name spec exists, provided secretValues are ignored
+        // (values without a declared ref have nowhere vetted to go).
+        let secret_env = {
+            let store = self.store.lock().expect("store lock");
+            store
+                .specs
+                .values()
+                .find(|spec| spec.project_id == params.project_id && spec.name == name)
+                .cloned()
+        }
+        .map(|spec| resolve_secret_env(&spec, &params.secret_values))
+        .transpose()?
+        .unwrap_or_default();
         let service = self
             .start_one(
                 &project,
@@ -259,6 +337,7 @@ impl WorkspaceServiceRequestProcessor {
                 params.port,
                 params.ready_timeout_ms,
                 &[],
+                &secret_env,
                 &params.env,
                 Some(&idem_key),
                 true,
@@ -268,8 +347,9 @@ impl WorkspaceServiceRequestProcessor {
     }
 
     /// Shared spawn path for `start` and orchestration. `extra_env` carries
-    /// dependency connection vars (injected first; explicit user env wins by
-    /// overwrite order, ADR decision 4). `check_active_name` is true for the
+    /// dependency connection vars; `secret_env` carries resolved envRefs
+    /// values (secret overrides injected same-name keys; explicit user env
+    /// wins by overwrite order, ADR decision 4). `check_active_name` is true for the
     /// single-service protocol (duplicate active name is an error) and false
     /// for startAll (reuse is handled by the caller before reaching here).
     #[allow(clippy::too_many_arguments)]
@@ -283,6 +363,7 @@ impl WorkspaceServiceRequestProcessor {
         port: Option<u16>,
         ready_timeout_ms: Option<i64>,
         extra_env: &[(String, String)],
+        secret_env: &[(String, String)],
         user_env: &Option<HashMap<String, Option<String>>>,
         idem_key: Option<&str>,
         check_active_name: bool,
@@ -404,9 +485,12 @@ impl WorkspaceServiceRequestProcessor {
             updated_at_ms: now,
         };
 
-        // Dependency connection env first; explicit user env wins (ADR 4).
+        // Injection order = precedence order: dependency connection env,
+        // then secret envRefs values (a secret overrides a same-named
+        // injected var), then explicit user env wins (ADR 4).
         let mut merged_env: HashMap<String, Option<String>> = extra_env
             .iter()
+            .chain(secret_env.iter())
             .map(|(key, value)| (key.clone(), Some(value.clone())))
             .collect();
         if let Some(user) = user_env {
@@ -861,6 +945,8 @@ impl WorkspaceServiceRequestProcessor {
                 serde_json::json!({
                     "specId": response.spec.id,
                     "name": response.spec.name,
+                    // Ref NAMES only — values never reach the audit trail.
+                    "envRefs": response.spec.env_refs,
                 }),
             )),
             Err(err) => self.audit.record(audit_event(
@@ -923,6 +1009,7 @@ impl WorkspaceServiceRequestProcessor {
                 "spec {name:?} must not depend on itself"
             )));
         }
+        let env_refs = validate_env_refs(params.env_refs.as_deref().unwrap_or(&[]))?;
 
         let now = now_ms();
         let (spec_id, created_at_ms) = {
@@ -1035,6 +1122,7 @@ impl WorkspaceServiceRequestProcessor {
             depends_on: params.depends_on.clone(),
             health_check: params.health_check.clone(),
             ready_timeout_ms: params.ready_timeout_ms,
+            env_refs,
             created_at_ms,
             updated_at_ms: now,
         };
@@ -1200,6 +1288,17 @@ impl WorkspaceServiceRequestProcessor {
             }
         }
 
+        // E4: resolve every selected spec's envRefs up front (ADR decision
+        // 3 — request-level validation before anything spawns). One shared
+        // secretValues map across the orchestration; extra keys are ignored.
+        let secret_envs: BTreeMap<String, Vec<(String, String)>> = selected
+            .iter()
+            .map(|spec| {
+                resolve_secret_env(spec, &params.secret_values)
+                    .map(|pairs| (spec.name.clone(), pairs))
+            })
+            .collect::<Result<_, _>>()?;
+
         let client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::limited(5))
             .build()
@@ -1263,6 +1362,7 @@ impl WorkspaceServiceRequestProcessor {
                             extra_env.push((format!("{key}_URL"), dep_service.url.clone()));
                             extra_env.push((format!("{key}_PORT"), dep_service.port.to_string()));
                         }
+                        let secret_env = secret_envs.get(name).cloned().unwrap_or_default();
                         let record = self
                             .start_one(
                                 &project,
@@ -1273,6 +1373,7 @@ impl WorkspaceServiceRequestProcessor {
                                 spec.port,
                                 spec.ready_timeout_ms,
                                 &extra_env,
+                                &secret_env,
                                 &None,
                                 None,
                                 false,
@@ -2124,6 +2225,7 @@ mod tests {
                 port: None,
                 ready_timeout_ms: Some(5_000),
                 env: None,
+                secret_values: None,
                 idempotency_key: "crash-1".to_owned(),
             })
             .await
@@ -2277,6 +2379,244 @@ mod tests {
         assert!(store.specs.is_empty());
         assert!(store.orchestrations.is_empty());
         assert_eq!(store.schema_version, WORKSPACE_SERVICE_PROTOCOL_VERSION);
+    }
+
+    // ---- E4 T06: envRefs + secretValues helpers ----
+
+    /// Root fixture whose `dev` script is a real loopback HTTP server that
+    /// records `process.env.STRIPE_KEY` into `<root>/.env-capture` on boot,
+    /// so tests can observe the injected value from the child process.
+    async fn env_capture_fixture() -> (
+        tempfile::TempDir,
+        WorkspaceServiceRequestProcessor,
+        tokio::sync::mpsc::Receiver<crate::outgoing_message::OutgoingEnvelope>,
+    ) {
+        let root = tempfile::tempdir().expect("root");
+        fs::write(
+            root.path().join("package.json"),
+            serde_json::json!({
+                "name": "env-refs-fixture",
+                "scripts": { "dev": "node capture.js" }
+            })
+            .to_string(),
+        )
+        .expect("package.json");
+        fs::write(
+            root.path().join("capture.js"),
+            r#"const fs = require('fs');
+fs.writeFileSync('.env-capture', process.env.STRIPE_KEY || '');
+const http = require('http');
+const port = Number(process.env.PORT || 5173);
+http.createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end('ok');
+}).listen(port, '127.0.0.1');
+"#,
+        )
+        .expect("capture.js");
+        let (processor, rx) = processor_fixture(root.path()).await;
+        (root, processor, rx)
+    }
+
+    fn define_params(name: &str, env_refs: Option<Vec<String>>) -> WorkspaceServiceDefineParams {
+        WorkspaceServiceDefineParams {
+            project_id: "p1".to_owned(),
+            name: name.to_owned(),
+            root_index: 0,
+            script: "dev".to_owned(),
+            port: None,
+            cwd: None,
+            depends_on: Vec::new(),
+            health_check: None,
+            ready_timeout_ms: None,
+            env_refs,
+            idempotency_key: format!("define-{name}"),
+        }
+    }
+
+    /// Builder so tests can chain `.with_secrets(...)` / `.with_user_env(...)`
+    /// without listing every additive field at each call site.
+    struct StartBuilder(WorkspaceServiceStartParams);
+
+    fn start_params(project_id: &str, name: &str) -> StartBuilder {
+        StartBuilder(WorkspaceServiceStartParams {
+            project_id: project_id.to_owned(),
+            name: name.to_owned(),
+            root_index: 0,
+            script: "dev".to_owned(),
+            port: None,
+            ready_timeout_ms: None,
+            env: None,
+            secret_values: None,
+            idempotency_key: format!("start-{project_id}-{name}"),
+        })
+    }
+
+    impl StartBuilder {
+        fn with_secrets(mut self, secrets: BTreeMap<String, String>) -> Self {
+            self.0.secret_values = Some(secrets);
+            self
+        }
+        fn with_user_env(mut self, env: HashMap<String, Option<String>>) -> Self {
+            self.0.env = Some(env);
+            self
+        }
+    }
+
+    async fn wait_for_capture(path: &Path) -> String {
+        for _ in 0..100 {
+            if let Ok(content) = fs::read_to_string(path) {
+                if !content.is_empty() {
+                    return content;
+                }
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+        panic!("capture file never appeared at {}", path.display());
+    }
+
+    #[tokio::test]
+    async fn define_validates_env_refs_names_and_limits() {
+        let (_root, processor, _rx) = env_capture_fixture().await;
+        // 合法：upper-snake、下划线、首位之后的数字。
+        processor
+            .define(define_params(
+                "s1",
+                Some(vec!["STRIPE_KEY".into(), "API_V2_TOKEN".into()]),
+            ))
+            .await
+            .expect("valid envRefs accepted");
+        // 非法：小写（ref 必须 upper-snake，防 env key 混淆）。
+        let err = processor
+            .define(define_params("s2", Some(vec!["secret".into()])))
+            .await
+            .expect_err("lowercase ref rejected");
+        assert!(err.message.contains("UPPER_SNAKE"), "{}", err.message);
+        // 非法：非 ASCII。
+        let err = processor
+            .define(define_params("s3", Some(vec!["密钥".into()])))
+            .await
+            .expect_err("non-ascii ref rejected");
+        assert!(err.message.contains("envRefs"), "{}", err.message);
+        // 非法：重复。
+        let err = processor
+            .define(define_params("s4", Some(vec!["KEY".into(), "KEY".into()])))
+            .await
+            .expect_err("duplicate ref rejected");
+        assert!(err.message.contains("duplicate"), "{}", err.message);
+        // 非法：超 16 个。
+        let many: Vec<String> = (0..17).map(|i| format!("K{i:02}")).collect();
+        let err = processor
+            .define(define_params("s5", Some(many)))
+            .await
+            .expect_err("too many refs");
+        assert!(err.message.contains("16"), "{}", err.message);
+    }
+
+    #[tokio::test]
+    async fn start_rejects_missing_secret_and_never_persists_values() {
+        let (_root, processor, _rx) = env_capture_fixture().await;
+        processor
+            .define(define_params(
+                "api",
+                Some(vec!["STRIPE_KEY".into(), "DB_PASS".into()]),
+            ))
+            .await
+            .expect("define");
+        // 缺失 DB_PASS：结构化错误只列 ref 名，不回显任何值。
+        let err = processor
+            .start(
+                start_params("p1", "api")
+                    .with_secrets(BTreeMap::from([(
+                        "STRIPE_KEY".to_owned(),
+                        "sk-live-12345".to_owned(),
+                    )]))
+                    .0,
+            )
+            .await
+            .expect_err("missing secret must reject");
+        assert!(err.message.contains("DB_PASS"), "{}", err.message);
+        assert!(
+            !err.message.contains("sk-live-12345"),
+            "error must not echo values"
+        );
+        // 提供的密钥不得出现在 store 文件中（ref 名应持久化）。
+        let store_path = processor.store.lock().expect("store lock").path.clone();
+        let raw = fs::read_to_string(&store_path).expect("store file");
+        assert!(raw.contains("STRIPE_KEY"), "ref name persisted");
+        assert!(!raw.contains("sk-live-12345"), "secret value never persisted");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn start_injects_secret_env_and_user_env_overrides_it() {
+        // Real subprocess env is the behavior under test; skip on hosts
+        // without node (CI images that lack it).
+        if tokio::process::Command::new("node")
+            .arg("--version")
+            .output()
+            .await
+            .is_err()
+        {
+            return;
+        }
+        let (root, processor, _rx) = env_capture_fixture().await;
+        processor
+            .define(define_params("api", Some(vec!["STRIPE_KEY".into()])))
+            .await
+            .expect("define");
+        let first = processor
+            .start(
+                start_params("p1", "api")
+                    .with_secrets(BTreeMap::from([(
+                        "STRIPE_KEY".to_owned(),
+                        "from-secret".to_owned(),
+                    )]))
+                    .with_user_env(HashMap::from([(
+                        "STRIPE_KEY".to_owned(),
+                        Some("from-user".to_owned()),
+                    )]))
+                    .0,
+            )
+            .await
+            .expect("start");
+        let captured = wait_for_capture(&root.path().join(".env-capture")).await;
+        assert_eq!(
+            captured.trim(),
+            "from-user",
+            "explicit user env wins over secret (ADR 4 precedence)"
+        );
+
+        // 无 user override 时 secret 生效（第二个独立 fixture 实例）。
+        let (root2, processor2, _rx2) = env_capture_fixture().await;
+        processor2
+            .define(define_params("api", Some(vec!["STRIPE_KEY".into()])))
+            .await
+            .expect("define");
+        let second = processor2
+            .start(
+                start_params("p1", "api")
+                    .with_secrets(BTreeMap::from([(
+                        "STRIPE_KEY".to_owned(),
+                        "from-secret".to_owned(),
+                    )]))
+                    .0,
+            )
+            .await
+            .expect("start");
+        let captured2 = wait_for_capture(&root2.path().join(".env-capture")).await;
+        assert_eq!(captured2.trim(), "from-secret", "secret injected when no override");
+
+        // Leave no child processes behind.
+        for (processor, service_id) in
+            [
+                (&processor, first.service.id.clone()),
+                (&processor2, second.service.id.clone()),
+            ]
+        {
+            let _ = processor
+                .stop(ody_app_server_protocol::WorkspaceServiceStopParams { service_id })
+                .await;
+        }
     }
 
     #[test]

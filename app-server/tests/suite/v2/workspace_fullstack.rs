@@ -313,6 +313,7 @@ async fn define_spec(
                 timeout_ms: None,
             }),
             ready_timeout_ms: None,
+            env_refs: None,
             idempotency_key: idem.to_owned(),
         })
         .await?;
@@ -330,6 +331,7 @@ async fn start_all(
         .send_workspace_service_start_all_request(WorkspaceServiceStartAllParams {
             project_id: "ws-1".to_owned(),
             names: names.iter().map(|s| s.to_string()).collect(),
+            secret_values: None,
             idempotency_key: idem.to_owned(),
         })
         .await?;
@@ -413,6 +415,7 @@ async fn define_rejects_unknown_dep_cycle_and_out_of_bounds_root() -> Result<()>
             depends_on: vec![],
             health_check: None,
             ready_timeout_ms: None,
+            env_refs: None,
             idempotency_key: "bad-root".to_owned(),
         })
         .await?;
@@ -434,6 +437,7 @@ async fn define_rejects_unknown_dep_cycle_and_out_of_bounds_root() -> Result<()>
             depends_on: vec!["ghost".to_owned()],
             health_check: None,
             ready_timeout_ms: None,
+            env_refs: None,
             idempotency_key: "bad-dep".to_owned(),
         })
         .await?;
@@ -474,6 +478,7 @@ async fn define_rejects_unknown_dep_cycle_and_out_of_bounds_root() -> Result<()>
             depends_on: vec!["web".to_owned()],
             health_check: None,
             ready_timeout_ms: None,
+            env_refs: None,
             idempotency_key: "s-backend-cycle".to_owned(),
         })
         .await?;

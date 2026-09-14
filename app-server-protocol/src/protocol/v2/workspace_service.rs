@@ -6,6 +6,7 @@
 //! that back a real framework preview. Source authority stays in the user's
 //! directories; this protocol never transports root file contents.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use schemars::JsonSchema;
@@ -15,7 +16,7 @@ use ts_rs::TS;
 
 use super::workspace_source::WorkspaceSourceRef;
 
-pub const WORKSPACE_SERVICE_PROTOCOL_VERSION: u32 = 2;
+pub const WORKSPACE_SERVICE_PROTOCOL_VERSION: u32 = 3;
 
 /// Lifecycle status of a managed dev server. Terminal: Failed, Exited,
 /// Stopped. Runtime restart normalizes lingering Starting/Ready to Stopped.
@@ -108,6 +109,12 @@ pub struct WorkspaceServiceStartParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub env: Option<HashMap<String, Option<String>>>,
+    /// E4: resolved values for the matching spec's `envRefs` (or ad-hoc
+    /// names when no spec exists). Request-scoped only: never persisted,
+    /// never logged, never included in audit detail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub secret_values: Option<BTreeMap<String, String>>,
     /// Client-generated key makes reconnect retries idempotent.
     pub idempotency_key: String,
 }
@@ -268,6 +275,11 @@ pub struct WorkspaceServiceSpec {
     #[ts(optional = nullable)]
     #[ts(type = "number")]
     pub ready_timeout_ms: Option<i64>,
+    /// E4: names of environment variables the service expects at runtime
+    /// (e.g. ["STRIPE_KEY"]). Only reference NAMES are persisted here —
+    /// values are supplied per-request via `secretValues` and never stored.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub env_refs: Vec<String>,
     #[ts(type = "number")]
     pub created_at_ms: i64,
     #[ts(type = "number")]
@@ -300,6 +312,11 @@ pub struct WorkspaceServiceDefineParams {
     #[ts(optional = nullable)]
     #[ts(type = "number")]
     pub ready_timeout_ms: Option<i64>,
+    /// Optional sensitive env var names the service needs; validated
+    /// (upper-snake, ≤64 chars, ≤16 entries, no duplicates).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub env_refs: Option<Vec<String>>,
     /// Client-generated key makes define retries idempotent.
     pub idempotency_key: String,
 }
@@ -334,6 +351,12 @@ pub struct WorkspaceServiceStartAllParams {
     /// names are a request-level `invalid_params` error.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub names: Vec<String>,
+    /// E4: resolved values for every selected spec's `envRefs`; one map is
+    /// shared across the orchestration. Request-scoped only: never
+    /// persisted, never logged, never included in audit detail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub secret_values: Option<BTreeMap<String, String>>,
     /// Client-generated key: a recorded orchestration outcome is replayed
     /// verbatim, so client retries never respawn processes.
     pub idempotency_key: String,
@@ -507,6 +530,7 @@ mod tests {
                 port: Some(5173),
                 ready_timeout_ms: None,
                 env: None,
+                secret_values: None,
                 idempotency_key: "svc-1".to_owned(),
             },
         };
@@ -640,6 +664,7 @@ mod tests {
                     timeout_ms: None,
                 }),
                 ready_timeout_ms: None,
+                env_refs: None,
                 idempotency_key: "spec-1".to_owned(),
             },
         };
@@ -685,6 +710,7 @@ mod tests {
                     params: WorkspaceServiceStartAllParams {
                         project_id: "ws-1".to_owned(),
                         names: vec!["backend".to_owned(), "web".to_owned()],
+                        secret_values: None,
                         idempotency_key: "orch-1".to_owned(),
                     },
                 },
@@ -761,6 +787,7 @@ mod tests {
                 timeout_ms: None,
             }),
             ready_timeout_ms: None,
+            env_refs: Vec::new(),
             created_at_ms: 1_700_000_000_000,
             updated_at_ms: 1_700_000_000_000,
         };
