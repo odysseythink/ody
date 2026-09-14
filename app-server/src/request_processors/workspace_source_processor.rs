@@ -923,42 +923,130 @@ fn rebuild_prepared(
     Ok(prepared)
 }
 
-async fn root_git_diff(root_path: &Path) -> Option<WorkspaceGitDiff> {
-    let repo_root = ody_git_utils::get_git_repo_root(root_path)?;
+/// Cap for per-file untracked diffs: each entry costs one `git` fork, so an
+/// unbounded untracked list would blow the request budget. Excess files are
+/// reported in a trailing notice line instead of being silently dropped.
+const MAX_UNTRACKED_DIFF_FILES: usize = 50;
+
+/// Run one git command inside `repo_root` under the shared diff timeout.
+/// `None` = the binary could not be spawned; `Some(Err)` = non-zero exit or
+/// timeout (the message is caller-facing). `tolerate_exit_1` treats exit code
+/// 1 as success (`git diff --no-index` reports "differences found" that way).
+async fn run_git(
+    repo_root: &Path,
+    args: &[&str],
+    tolerate_exit_1: bool,
+) -> Option<Result<String, String>> {
     let result = tokio::time::timeout(
         Duration::from_millis(GIT_DIFF_TIMEOUT_MS),
         tokio::process::Command::new("git")
-            .args(["diff", "HEAD"])
-            .current_dir(&repo_root)
+            .args(args)
+            .current_dir(repo_root)
             .output(),
     )
     .await;
     match result {
-        Ok(Ok(output)) if output.status.success() => Some(WorkspaceGitDiff {
-            repo_root: Some(repo_root.to_string_lossy().into_owned()),
-            available: true,
-            error: None,
-            unified_diff: Some(String::from_utf8_lossy(&output.stdout).into_owned()),
-        }),
-        Ok(Ok(output)) => Some(WorkspaceGitDiff {
-            repo_root: Some(repo_root.to_string_lossy().into_owned()),
-            available: false,
-            error: Some(format!("git diff exited with {}", output.status)),
-            unified_diff: None,
-        }),
-        Ok(Err(err)) => Some(WorkspaceGitDiff {
-            repo_root: Some(repo_root.to_string_lossy().into_owned()),
-            available: false,
-            error: Some(format!("git diff failed to run: {err}")),
-            unified_diff: None,
-        }),
-        Err(_) => Some(WorkspaceGitDiff {
-            repo_root: Some(repo_root.to_string_lossy().into_owned()),
-            available: false,
-            error: Some(format!("git diff timed out after {GIT_DIFF_TIMEOUT_MS}ms")),
-            unified_diff: None,
-        }),
+        Ok(Ok(output))
+            if output.status.success() || (tolerate_exit_1 && output.status.code() == Some(1)) =>
+        {
+            Some(Ok(String::from_utf8_lossy(&output.stdout).into_owned()))
+        }
+        Ok(Ok(output)) => Some(Err(format!(
+            "git {} exited with {}",
+            args.join(" "),
+            output.status
+        ))),
+        Ok(Err(err)) => Some(Err(format!("git {} failed to run: {err}", args.join(" ")))),
+        Err(_) => Some(Err(format!(
+            "git {} timed out after {GIT_DIFF_TIMEOUT_MS}ms",
+            args.join(" ")
+        ))),
     }
+}
+
+async fn root_git_diff(root_path: &Path) -> Option<WorkspaceGitDiff> {
+    root_git_diff_limited(root_path, MAX_UNTRACKED_DIFF_FILES).await
+}
+
+async fn root_git_diff_limited(root_path: &Path, max_untracked: usize) -> Option<WorkspaceGitDiff> {
+    let repo_root = ody_git_utils::get_git_repo_root(root_path)?;
+    let repo_string = repo_root.to_string_lossy().into_owned();
+
+    // Tracked channel. Repos without a first commit (empty HEAD) fail here;
+    // that is tolerated because the untracked channel below still renders.
+    let tracked = run_git(&repo_root, &["diff", "HEAD"], false).await;
+    let tracked_diff = match &tracked {
+        Some(Ok(stdout)) => stdout.clone(),
+        _ => String::new(),
+    };
+
+    // Untracked channel: `ls-files --others --exclude-standard` respects
+    // .gitignore, then each file becomes a `/dev/null -> new file` diff via
+    // `git diff --no-index` (exit code 1 means "differences found").
+    let untracked_list = run_git(
+        &repo_root,
+        &["ls-files", "--others", "--exclude-standard"],
+        false,
+    )
+    .await;
+    let mut untracked_parts: Vec<String> = Vec::new();
+    let mut omitted = 0usize;
+    if let Some(Ok(list)) = &untracked_list {
+        for path in list.lines().map(str::trim).filter(|line| !line.is_empty()) {
+            if untracked_parts.len() >= max_untracked {
+                omitted += 1;
+                continue;
+            }
+            let Some(Ok(diff)) = run_git(
+                &repo_root,
+                &["diff", "--no-index", "--", "/dev/null", path],
+                true,
+            )
+            .await
+            else {
+                continue;
+            };
+            untracked_parts.push(diff);
+        }
+    }
+
+    let tracked_ok = matches!(tracked, Some(Ok(_)));
+    let untracked_ok = matches!(untracked_list, Some(Ok(_)));
+    if !tracked_ok && !untracked_ok {
+        // Both channels failed: git itself is unusable here.
+        let error = tracked
+            .and_then(|result| result.err())
+            .or_else(|| untracked_list.and_then(|result| result.err()))
+            .unwrap_or_else(|| "git unavailable".to_owned());
+        return Some(WorkspaceGitDiff {
+            repo_root: Some(repo_string),
+            available: false,
+            error: Some(error),
+            unified_diff: None,
+        });
+    }
+
+    let mut unified = tracked_diff;
+    if !untracked_parts.is_empty() {
+        if !unified.is_empty() {
+            unified.push('\n');
+        }
+        unified.push_str(&untracked_parts.join(""));
+    }
+    if omitted > 0 {
+        if !unified.is_empty() {
+            unified.push('\n');
+        }
+        unified.push_str(&format!(
+            "# {omitted} untracked files omitted (cap {max_untracked})\n"
+        ));
+    }
+    Some(WorkspaceGitDiff {
+        repo_root: Some(repo_string),
+        available: true,
+        error: None,
+        unified_diff: Some(unified),
+    })
 }
 
 fn unknown_project(id: &str) -> JSONRPCErrorError {
@@ -1466,5 +1554,125 @@ mod tests {
         assert!(response.git_diff.is_some());
         assert_eq!(response.root_git_diffs.len(), 1);
         assert_eq!(response.root_git_diffs[0].root_index, 0);
+    }
+
+    fn git_available() -> bool {
+        std::process::Command::new("git")
+            .arg("--version")
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false)
+    }
+
+    fn git(repo: &Path, args: &[&str]) {
+        let status = std::process::Command::new("git")
+            .args(args)
+            .current_dir(repo)
+            .status()
+            .expect("run git");
+        assert!(status.success(), "git {args:?} failed with {status}");
+    }
+
+    fn init_repo_with_commit(repo: &Path) {
+        git(repo, &["init", "-q", "."]);
+        git(repo, &["config", "user.email", "ody@test"]);
+        git(repo, &["config", "user.name", "ody test"]);
+        fs::write(repo.join("tracked.txt"), "tracked line\n").expect("write tracked");
+        git(repo, &["add", "tracked.txt"]);
+        git(repo, &["commit", "-q", "-m", "initial"]);
+    }
+
+    #[tokio::test]
+    async fn root_git_diff_includes_untracked_files_as_new_file_diffs() {
+        if !git_available() {
+            eprintln!("skipping: git binary unavailable");
+            return;
+        }
+        let repo = tempfile::tempdir().expect("create repo");
+        init_repo_with_commit(repo.path());
+        // Tracked modification (covered by `git diff HEAD`).
+        fs::write(repo.path().join("tracked.txt"), "tracked line changed\n")
+            .expect("modify tracked");
+        // Untracked additions (previously invisible in the whole-repo diff).
+        fs::create_dir_all(repo.path().join("src")).expect("create src");
+        fs::write(repo.path().join("src/new.ts"), "fresh untracked\n").expect("write untracked");
+        // Ignored files must stay out of the untracked list.
+        fs::write(repo.path().join(".gitignore"), "ignored.log\n").expect("write gitignore");
+        fs::write(repo.path().join("ignored.log"), "secret\n").expect("write ignored");
+
+        let diff = root_git_diff(repo.path()).await.expect("git repo detected");
+
+        assert_eq!(diff.available, true);
+        assert_eq!(diff.error, None);
+        let unified = diff.unified_diff.expect("unified diff");
+        assert!(
+            unified.contains("-tracked line\n+tracked line changed"),
+            "tracked diff: {unified}"
+        );
+        assert!(
+            unified.contains("diff --git a/src/new.ts b/src/new.ts"),
+            "untracked header: {unified}"
+        );
+        assert!(
+            unified.contains("new file mode"),
+            "new file marker: {unified}"
+        );
+        assert!(
+            unified.contains("+fresh untracked"),
+            "untracked body: {unified}"
+        );
+        assert!(
+            !unified.contains("diff --git a/ignored.log"),
+            "ignored leak: {unified}"
+        );
+    }
+
+    #[tokio::test]
+    async fn root_git_diff_serves_untracked_only_in_empty_repo_without_head() {
+        if !git_available() {
+            eprintln!("skipping: git binary unavailable");
+            return;
+        }
+        let repo = tempfile::tempdir().expect("create repo");
+        git(repo.path(), &["init", "-q", "."]);
+        fs::write(repo.path().join("seed.ts"), "seed\n").expect("write untracked");
+
+        let diff = root_git_diff(repo.path()).await.expect("git repo detected");
+
+        assert_eq!(diff.available, true);
+        let unified = diff.unified_diff.expect("unified diff");
+        assert!(
+            unified.contains("diff --git a/seed.ts b/seed.ts"),
+            "{unified}"
+        );
+        assert!(unified.contains("+seed"), "{unified}");
+    }
+
+    #[tokio::test]
+    async fn root_git_diff_caps_untracked_files_with_a_notice() {
+        if !git_available() {
+            eprintln!("skipping: git binary unavailable");
+            return;
+        }
+        let repo = tempfile::tempdir().expect("create repo");
+        init_repo_with_commit(repo.path());
+        for index in 0..4 {
+            fs::write(repo.path().join(format!("file{index}.ts")), "x\n").expect("write untracked");
+        }
+
+        let diff = root_git_diff_limited(repo.path(), 2)
+            .await
+            .expect("git repo detected");
+
+        let unified = diff.unified_diff.expect("unified diff");
+        let rendered = unified.matches("new file mode").count();
+        assert!(
+            rendered <= 2,
+            "expected at most 2 untracked diffs: {unified}"
+        );
+        assert!(
+            unified.contains("untracked files omitted"),
+            "truncation notice: {unified}"
+        );
     }
 }

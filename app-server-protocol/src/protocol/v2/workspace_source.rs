@@ -311,8 +311,9 @@ pub struct WorkspaceGitDiff {
     /// False when the git binary is unavailable, errors, or times out.
     pub available: bool,
     pub error: Option<String>,
-    /// `git diff HEAD` output. Untracked files are not included (v1
-    /// limitation; per-changeset diffs cover them).
+    /// `git diff HEAD` output, extended with `/dev/null -> new file` diffs
+    /// for untracked files (capped per request; excess is reported in a
+    /// trailing `# N untracked files omitted` line). Ignored files stay out.
     pub unified_diff: Option<String>,
 }
 
