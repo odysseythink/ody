@@ -1,11 +1,11 @@
 use super::*;
 use ody_app_server_protocol::ServerNotification;
 use ody_app_server_protocol::SkillsChangedNotification;
+use ody_app_server_protocol::SkillsDeleteParams;
+use ody_app_server_protocol::SkillsDeleteResponse;
 use ody_app_server_protocol::SkillsMarketplaceEntry;
 use ody_app_server_protocol::SkillsMarketplaceInstallParams;
 use ody_app_server_protocol::SkillsMarketplaceInstallResponse;
-use ody_app_server_protocol::SkillsDeleteParams;
-use ody_app_server_protocol::SkillsDeleteResponse;
 use ody_app_server_protocol::SkillsMarketplaceSearchParams;
 use ody_app_server_protocol::SkillsMarketplaceSearchResponse;
 use ody_app_server_protocol::SkillsUpgradeParams;
@@ -55,7 +55,10 @@ impl SkillsMarketplaceRequestProcessor {
         let limit_string = limit.to_string();
         let response = client
             .get(SKILLS_SEARCH_API_URL)
-            .query(&[("q", params.query.as_str()), ("limit", limit_string.as_str())])
+            .query(&[
+                ("q", params.query.as_str()),
+                ("limit", limit_string.as_str()),
+            ])
             .send()
             .await
             .map_err(|err| internal_error(format!("skills marketplace search failed: {err}")))?;
@@ -65,10 +68,9 @@ impl SkillsMarketplaceRequestProcessor {
                 "skills marketplace search returned status {status}"
             )));
         }
-        let body: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|err| internal_error(format!("failed to parse marketplace response: {err}")))?;
+        let body: serde_json::Value = response.json().await.map_err(|err| {
+            internal_error(format!("failed to parse marketplace response: {err}"))
+        })?;
         let skills = body
             .get("skills")
             .and_then(serde_json::Value::as_array)
@@ -90,7 +92,9 @@ impl SkillsMarketplaceRequestProcessor {
             let source = params.source.clone();
             let name = params.name.clone();
             let path = params.path.clone();
-            move || install_skill_from_github(&skills_root, &source, name.as_deref(), path.as_deref())
+            move || {
+                install_skill_from_github(&skills_root, &source, name.as_deref(), path.as_deref())
+            }
         })
         .await
         .map_err(|err| internal_error(format!("skill install task failed: {err}")))?;
@@ -290,7 +294,8 @@ fn upgrade_skill_from_github(
     // Same-filesystem rename cannot fail once staging succeeded; the old
     // directory is only removed after the replacement is complete on disk.
     std::fs::remove_dir_all(&target).map_err(|err| format!("failed to remove old skill: {err}"))?;
-    std::fs::rename(&staged, &target).map_err(|err| format!("failed to swap in new skill: {err}"))?;
+    std::fs::rename(&staged, &target)
+        .map_err(|err| format!("failed to swap in new skill: {err}"))?;
     write_skill_source(&target, &repo_slug, path.as_deref())?;
 
     let path = AbsolutePathBuf::from_absolute_path(&target)
@@ -337,7 +342,8 @@ fn write_skill_source(
     if let Some(skill_path) = skill_path.map(str::trim).filter(|value| !value.is_empty()) {
         value["skillPath"] = serde_json::json!(skill_path);
     }
-    let body = serde_json::to_string_pretty(&value).map_err(|err| format!("invalid source: {err}"))?;
+    let body =
+        serde_json::to_string_pretty(&value).map_err(|err| format!("invalid source: {err}"))?;
     std::fs::write(skill_dir.join("source.json"), body)
         .map_err(|err| format!("failed to record skill source: {err}"))
 }
@@ -438,12 +444,17 @@ fn locate_skill_dir(
             return Ok(dir);
         }
     }
-    Err(format!("no SKILL.md found for skill '{name}' in {}", repo.display()))
+    Err(format!(
+        "no SKILL.md found for skill '{name}' in {}",
+        repo.display()
+    ))
 }
 
 fn copy_skill_dir(from: &std::path::Path, to: &std::path::Path) -> Result<(), String> {
     std::fs::create_dir_all(to).map_err(|err| format!("failed to create skill dir: {err}"))?;
-    for entry in std::fs::read_dir(from).map_err(|err| format!("failed to read skill dir: {err}"))? {
+    for entry in
+        std::fs::read_dir(from).map_err(|err| format!("failed to read skill dir: {err}"))?
+    {
         let entry = entry.map_err(|err| format!("failed to read skill dir entry: {err}"))?;
         let file_name = entry.file_name();
         // Never copy nested VCS metadata into the installed skill.

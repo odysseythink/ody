@@ -25,7 +25,9 @@ struct DatabaseConnectionsHandle {
 pub struct DatabaseExtension;
 
 impl DatabaseExtension {
-    fn create_handle(services: &ody_web_search::config::ServicesConfig) -> Option<DatabaseConnectionsHandle> {
+    fn create_handle(
+        services: &ody_web_search::config::ServicesConfig,
+    ) -> Option<DatabaseConnectionsHandle> {
         let database_config = services.database.as_ref()?;
         let registry = DatabaseProviderRegistry::new();
         let connections = match registry.create_all(database_config) {
@@ -161,8 +163,8 @@ mod tests {
     fn tools_returns_database_query_when_handle_present() {
         let session_store = ExtensionData::new("session");
         let thread_store = ExtensionData::new_with_init("thread", ExtensionDataInit::new());
-        let provider = DatabaseExtension::create_handle(&services_config())
-            .expect("should create handle");
+        let provider =
+            DatabaseExtension::create_handle(&services_config()).expect("should create handle");
         thread_store.insert(provider);
         let extension = DatabaseExtension;
         let tools = extension.tools(&session_store, &thread_store);

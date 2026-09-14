@@ -189,9 +189,7 @@ impl WorkspaceProjectStore {
         let idempotency_key = idempotency_key("bind", &params.idempotency_key);
         if let Some(existing_id) = self.idempotency.get(&idempotency_key) {
             let project = self.projects.get(existing_id).cloned().ok_or_else(|| {
-                internal_error(
-                    "workspace project idempotency record references a missing project",
-                )
+                internal_error("workspace project idempotency record references a missing project")
             })?;
             if project.id != params.id {
                 return Err(invalid_params(format!(
@@ -232,7 +230,9 @@ impl WorkspaceProjectStore {
             internal_error(format!("failed to create workspace project store: {error}"))
         })?;
         let serialized = serde_json::to_vec_pretty(self).map_err(|error| {
-            internal_error(format!("failed to serialize workspace project store: {error}"))
+            internal_error(format!(
+                "failed to serialize workspace project store: {error}"
+            ))
         })?;
         let temporary = self
             .path
@@ -371,11 +371,8 @@ mod tests {
         let ody_home = tempfile::tempdir().expect("create ody home");
         let store_path = ody_home.path().join(STORE_FILE);
         fs::write(&store_path, b"{ not json").expect("write corrupt store");
-        fs::write(
-            store_path.with_extension("json.bak"),
-            b"{ also not json",
-        )
-        .expect("write corrupt backup");
+        fs::write(store_path.with_extension("json.bak"), b"{ also not json")
+            .expect("write corrupt backup");
         let store = WorkspaceProjectStore::load(store_path);
         assert!(store.projects.is_empty());
         assert_eq!(store.schema_version, WORKSPACE_PROJECT_PROTOCOL_VERSION);
@@ -439,11 +436,9 @@ mod tests {
                 WorkspaceProjectBindParams {
                     id: "ws-1".to_owned(),
                     name: "fixture".to_owned(),
-                    roots: vec![
-                        ody_utils_absolute_path::test_support::PathBufExt::abs(
-                            &ody_home.path().to_path_buf(),
-                        ),
-                    ],
+                    roots: vec![ody_utils_absolute_path::test_support::PathBufExt::abs(
+                        &ody_home.path().to_path_buf(),
+                    )],
                     idempotency_key: "key-1".to_owned(),
                 },
             )
@@ -462,11 +457,9 @@ mod tests {
                     WorkspaceProjectBindParams {
                         id: "ws-2".to_owned(),
                         name: "fixture".to_owned(),
-                        roots: vec![
-                            ody_utils_absolute_path::test_support::PathBufExt::abs(
-                                &PathBuf::from("/"),
-                            ),
-                        ],
+                        roots: vec![ody_utils_absolute_path::test_support::PathBufExt::abs(
+                            &PathBuf::from("/"),
+                        )],
                         idempotency_key: "key-2".to_owned(),
                     },
                 )

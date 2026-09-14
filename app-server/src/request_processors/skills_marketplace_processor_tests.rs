@@ -10,7 +10,8 @@ fn skills_root() -> (tempfile::TempDir, std::path::PathBuf) {
 fn install_fake_skill(root: &std::path::Path, name: &str) -> std::path::PathBuf {
     let dir = root.join(name);
     std::fs::create_dir_all(&dir).expect("create skill dir");
-    std::fs::write(dir.join("SKILL.md"), "---\nname: x\ndescription: y\n---\n").expect("write SKILL.md");
+    std::fs::write(dir.join("SKILL.md"), "---\nname: x\ndescription: y\n---\n")
+        .expect("write SKILL.md");
     dir
 }
 
@@ -84,8 +85,9 @@ fn resolve_upgrade_source_prefers_params_over_recorded_source() {
     let (_temp, root) = skills_root();
     let dir = install_fake_skill(&root, "my-skill");
     write_skill_source(&dir, "owner/recorded", None).expect("write source");
-    let resolved = resolve_upgrade_source(Some("https://github.com/owner/params".to_string()), &dir)
-        .expect("resolve params source");
+    let resolved =
+        resolve_upgrade_source(Some("https://github.com/owner/params".to_string()), &dir)
+            .expect("resolve params source");
     assert_eq!(resolved, "https://github.com/owner/params");
     let resolved = resolve_upgrade_source(None, &dir).expect("resolve recorded source");
     assert_eq!(resolved, "https://github.com/owner/recorded");

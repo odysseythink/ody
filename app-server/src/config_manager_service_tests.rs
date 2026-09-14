@@ -996,8 +996,14 @@ async fn batch_write_web_search_duckduckgo_provider_config() -> Result<()> {
         .expect("batch write duckduckgo web search config succeeds");
 
     let contents = std::fs::read_to_string(&path)?;
-    assert!(contents.contains("primary = \"duckduckgo\""), "contents: {contents}");
-    assert!(contents.contains("provider = \"duckduckgo\""), "contents: {contents}");
+    assert!(
+        contents.contains("primary = \"duckduckgo\""),
+        "contents: {contents}"
+    );
+    assert!(
+        contents.contains("provider = \"duckduckgo\""),
+        "contents: {contents}"
+    );
     assert!(!contents.contains("api_key"), "contents: {contents}");
     assert!(!contents.contains("timeout_ms"), "contents: {contents}");
     assert!(!contents.contains("options"), "contents: {contents}");
@@ -1005,8 +1011,14 @@ async fn batch_write_web_search_duckduckgo_provider_config() -> Result<()> {
     // Verify the written TOML round-trips through the canonical config parser.
     let parsed: ConfigToml = toml::from_str(&contents)?;
     let web_search = parsed.services.unwrap().web_search.unwrap();
-    assert_eq!(web_search.primary, ody_web_search::config::WebSearchProviderName::Duckduckgo);
-    let preset = web_search.providers.get(&web_search.primary).expect("duckduckgo preset");
+    assert_eq!(
+        web_search.primary,
+        ody_web_search::config::WebSearchProviderName::Duckduckgo
+    );
+    let preset = web_search
+        .providers
+        .get(&web_search.primary)
+        .expect("duckduckgo preset");
     assert_eq!(preset.api_key, None);
     assert_eq!(preset.timeout_ms, None);
     assert!(preset.options.is_empty());
@@ -1028,8 +1040,14 @@ primary = { provider = "bing", api_key = "legacy-key", timeout_ms = 15000 }
 
     let parsed: ConfigToml = toml::from_str(&std::fs::read_to_string(&path)?)?;
     let web_search = parsed.services.unwrap().web_search.unwrap();
-    assert_eq!(web_search.primary, ody_web_search::config::WebSearchProviderName::Bing);
-    let preset = web_search.providers.get(&web_search.primary).expect("bing preset");
+    assert_eq!(
+        web_search.primary,
+        ody_web_search::config::WebSearchProviderName::Bing
+    );
+    let preset = web_search
+        .providers
+        .get(&web_search.primary)
+        .expect("bing preset");
     assert_eq!(preset.api_key.as_deref(), Some("legacy-key"));
     assert_eq!(preset.timeout_ms, Some(15000));
 

@@ -421,7 +421,8 @@ timeout = 5
     )
     .await??;
     let HooksListResponse { data } = to_response(response)?;
-    let project_config_path = AbsolutePathBuf::try_from(workspace.path().join(".ody-code/config.toml"))?;
+    let project_config_path =
+        AbsolutePathBuf::try_from(workspace.path().join(".ody-code/config.toml"))?;
     assert_eq!(
         data,
         vec![

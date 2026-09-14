@@ -139,8 +139,10 @@ impl RemoteSkillFetcher for HttpRemoteSkillFetcher {
         let Some(text) = self.get_text(&url).await? else {
             return Ok(None);
         };
-        let envelope: DataEnvelope<RemoteSkillDetail> = serde_json::from_str(&text)
-            .map_err(|err| RemoteSyncError::Fetch(format!("detail parse failed for {name}: {err}")))?;
+        let envelope: DataEnvelope<RemoteSkillDetail> =
+            serde_json::from_str(&text).map_err(|err| {
+                RemoteSyncError::Fetch(format!("detail parse failed for {name}: {err}"))
+            })?;
         Ok(Some(envelope.data))
     }
 }

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use ody_browser_control::{all_tools, BrowserThreadState};
+use ody_browser_control::{BrowserThreadState, all_tools};
 use ody_core::config::Config;
 use ody_extension_api::{
     ConfigContributor, ExtensionData, ExtensionFuture, ExtensionRegistryBuilder,
@@ -191,7 +191,11 @@ mod tests {
         }
     }
 
-    fn make_handle(browser_use: bool, computer_use: bool, full_cdp_access: bool) -> BrowserControlHandle {
+    fn make_handle(
+        browser_use: bool,
+        computer_use: bool,
+        full_cdp_access: bool,
+    ) -> BrowserControlHandle {
         BrowserControlHandle {
             state: uninitialized_state(),
             full_cdp_access,
@@ -353,10 +357,7 @@ mod tests {
         thread_store.insert(make_handle(false, true, false));
         let extension = BrowserControlExtension;
         let tools = extension.tools(&session_store, &thread_store);
-        let names: Vec<String> = tools
-            .iter()
-            .map(|t| t.tool_name().name.clone())
-            .collect();
+        let names: Vec<String> = tools.iter().map(|t| t.tool_name().name.clone()).collect();
         assert!(names.contains(&"click".to_string()));
         assert!(names.contains(&"type".to_string()));
         assert!(names.contains(&"screenshot".to_string()));
@@ -372,10 +373,7 @@ mod tests {
         thread_store.insert(make_handle(true, false, false));
         let extension = BrowserControlExtension;
         let tools = extension.tools(&session_store, &thread_store);
-        let names: Vec<String> = tools
-            .iter()
-            .map(|t| t.tool_name().name.clone())
-            .collect();
+        let names: Vec<String> = tools.iter().map(|t| t.tool_name().name.clone()).collect();
         assert!(names.contains(&"navigate".to_string()));
         assert!(names.contains(&"evaluate".to_string()));
         assert!(names.contains(&"screenshot".to_string()));

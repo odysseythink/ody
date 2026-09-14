@@ -10,13 +10,13 @@ use ody_app_server_protocol::ClientInfo;
 use ody_app_server_protocol::InitializeCapabilities;
 use ody_app_server_protocol::JSONRPCMessage;
 use ody_app_server_protocol::RequestId;
+use ody_app_server_protocol::WorkspaceDiscovery;
 use ody_app_server_protocol::WorkspaceProjectBindParams;
 use ody_app_server_protocol::WorkspaceProjectCloseParams;
 use ody_app_server_protocol::WorkspaceProjectGetParams;
 use ody_app_server_protocol::WorkspaceProjectListParams;
 use ody_app_server_protocol::WorkspaceProjectListResponse;
 use ody_app_server_protocol::WorkspaceProjectRef;
-use ody_app_server_protocol::WorkspaceDiscovery;
 use ody_app_server_protocol::WorkspaceProjectScanParams;
 use ody_app_server_protocol::WorkspaceProjectScanResponse;
 use ody_app_server_protocol::WorkspaceSourceKind;
@@ -161,7 +161,9 @@ async fn workspace_project_bind_is_idempotent_per_key() -> Result<()> {
     init_experimental(&mut mcp).await?;
     let params = bind_params("ws-1", vec![project_dir.path().to_path_buf()]);
 
-    let first = mcp.send_workspace_project_bind_request(params.clone()).await?;
+    let first = mcp
+        .send_workspace_project_bind_request(params.clone())
+        .await?;
     let project = read_project(&mut mcp, first).await?;
     let second = mcp.send_workspace_project_bind_request(params).await?;
     let retried = read_project(&mut mcp, second).await?;
@@ -178,12 +180,16 @@ async fn workspace_project_bind_rejects_key_reuse_with_different_project() -> Re
     init_experimental(&mut mcp).await?;
     let mut first_params = bind_params("ws-1", vec![project_dir.path().to_path_buf()]);
     first_params.idempotency_key = "shared-key".to_owned();
-    let first = mcp.send_workspace_project_bind_request(first_params).await?;
+    let first = mcp
+        .send_workspace_project_bind_request(first_params)
+        .await?;
     read_project(&mut mcp, first).await?;
 
     let mut conflict_params = bind_params("ws-2", vec![project_dir.path().to_path_buf()]);
     conflict_params.idempotency_key = "shared-key".to_owned();
-    let conflict = mcp.send_workspace_project_bind_request(conflict_params).await?;
+    let conflict = mcp
+        .send_workspace_project_bind_request(conflict_params)
+        .await?;
     let error = timeout(
         DEFAULT_TIMEOUT,
         mcp.read_stream_until_error_message(RequestId::Integer(conflict)),
@@ -263,10 +269,7 @@ async fn workspace_project_bind_rejects_ody_home_root() -> Result<()> {
     .await??;
     assert_eq!(error.error.code, -32602);
     assert!(
-        error
-            .error
-            .message
-            .contains("application data directory"),
+        error.error.message.contains("application data directory"),
         "{}",
         error.error.message
     );
@@ -373,10 +376,7 @@ fn write_fixture(root: &std::path::Path, relative: &str, contents: &str) {
     std::fs::write(path, contents).expect("write fixture file");
 }
 
-async fn scan_project(
-    mcp: &mut TestAppServer,
-    project_id: &str,
-) -> Result<WorkspaceDiscovery> {
+async fn scan_project(mcp: &mut TestAppServer, project_id: &str) -> Result<WorkspaceDiscovery> {
     let request_id = mcp
         .send_workspace_project_scan_request(WorkspaceProjectScanParams {
             project_id: project_id.to_owned(),
@@ -483,13 +483,18 @@ async fn workspace_project_scan_scans_all_roots() -> Result<()> {
     let frontend_root = &discovery.roots[0];
     let backend_root = &discovery.roots[1];
     assert_eq!(frontend_root.package_name.as_deref(), Some("web"));
-    assert!(frontend_root
-        .sources
-        .iter()
-        .any(|s| s.path == "src/views/Home.vue"));
+    assert!(
+        frontend_root
+            .sources
+            .iter()
+            .any(|s| s.path == "src/views/Home.vue")
+    );
     assert_eq!(backend_root.package_name.as_deref(), Some("api"));
-    let backend_tech: Vec<&str> =
-        backend_root.tech_stack.iter().map(|t| t.id.as_str()).collect();
+    let backend_tech: Vec<&str> = backend_root
+        .tech_stack
+        .iter()
+        .map(|t| t.id.as_str())
+        .collect();
     assert!(backend_tech.contains(&"express"));
     Ok(())
 }
@@ -515,9 +520,7 @@ async fn workspace_project_scan_reports_removed_root_without_failing() -> Result
     assert_eq!(discovery.roots.len(), 1);
     assert_eq!(discovery.roots[0].errors.len(), 1);
     assert!(
-        discovery.roots[0]
-            .errors[0]
-            .contains(root_path.to_str().expect("utf8 path")),
+        discovery.roots[0].errors[0].contains(root_path.to_str().expect("utf8 path")),
         "{}",
         discovery.roots[0].errors[0]
     );
@@ -557,7 +560,9 @@ fn hash_tree(root: &std::path::Path) -> BTreeMap<String, u64> {
     while let Some(dir) = stack.pop() {
         for entry in std::fs::read_dir(&dir).expect("read dir").flatten() {
             let path = entry.path();
-            let Ok(file_type) = entry.file_type() else { continue };
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
             if file_type.is_dir() {
                 stack.push(path);
             } else if file_type.is_file() {
@@ -650,12 +655,7 @@ async fn e0_archetype_react_vite_opens_cleanly() -> Result<()> {
             "missing script {script}"
         );
     }
-    let count = |kind| {
-        root.sources
-            .iter()
-            .filter(|s| s.kind == kind)
-            .count()
-    };
+    let count = |kind| root.sources.iter().filter(|s| s.kind == kind).count();
     assert_eq!(count(WorkspaceSourceKind::Page), 2);
     assert_eq!(count(WorkspaceSourceKind::Component), 2);
     assert!(!root.git.is_repo);
@@ -676,11 +676,7 @@ async fn e0_archetype_next_app_router_opens_cleanly() -> Result<()> {
         }"#,
     );
     write_fixture(project_dir.path(), "package-lock.json", "{}");
-    write_fixture(
-        project_dir.path(),
-        "next.config.mjs",
-        "export default {};",
-    );
+    write_fixture(project_dir.path(), "next.config.mjs", "export default {};");
     write_fixture(
         project_dir.path(),
         "app/layout.tsx",
@@ -833,11 +829,7 @@ async fn e0_archetype_fullstack_two_roots_opens_cleanly() -> Result<()> {
             "devDependencies": { "vite": "^5.4.0" }
         }"#,
     );
-    write_fixture(
-        frontend.path(),
-        "src/pages/Home.tsx",
-        "export {}",
-    );
+    write_fixture(frontend.path(), "src/pages/Home.tsx", "export {}");
     write_fixture(
         backend.path(),
         "package.json",
@@ -872,15 +864,24 @@ async fn e0_archetype_fullstack_two_roots_opens_cleanly() -> Result<()> {
     assert_open_invariants(&discovery, 2);
 
     let frontend_root = &discovery.roots[0];
-    assert_eq!(frontend_root.package_name.as_deref(), Some("storefront-web"));
-    let frontend_tech: Vec<&str> =
-        frontend_root.tech_stack.iter().map(|t| t.id.as_str()).collect();
+    assert_eq!(
+        frontend_root.package_name.as_deref(),
+        Some("storefront-web")
+    );
+    let frontend_tech: Vec<&str> = frontend_root
+        .tech_stack
+        .iter()
+        .map(|t| t.id.as_str())
+        .collect();
     assert!(frontend_tech.contains(&"react"));
 
     let backend_root = &discovery.roots[1];
     assert_eq!(backend_root.package_name.as_deref(), Some("storefront-api"));
-    let backend_tech: Vec<&str> =
-        backend_root.tech_stack.iter().map(|t| t.id.as_str()).collect();
+    let backend_tech: Vec<&str> = backend_root
+        .tech_stack
+        .iter()
+        .map(|t| t.id.as_str())
+        .collect();
     assert!(backend_tech.contains(&"express"));
     assert!(
         backend_root
@@ -970,11 +971,7 @@ async fn scan_is_read_only_end_to_end() -> Result<()> {
              "dependencies": { "react": "18.3.1" } }"#,
     );
     write_fixture(project_dir.path(), "src/pages/Home.tsx", "export {}");
-    write_fixture(
-        project_dir.path(),
-        "src/components/Button.tsx",
-        "export {}",
-    );
+    write_fixture(project_dir.path(), "src/components/Button.tsx", "export {}");
     write_fixture(
         project_dir.path(),
         "node_modules/decoy/index.js",

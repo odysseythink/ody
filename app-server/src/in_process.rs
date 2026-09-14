@@ -1019,15 +1019,13 @@ mod tests {
             })
         ));
         assert!(server_notification_requires_delivery(
-            &ServerNotification::ReasoningSummaryTextDelta(
-                ReasoningSummaryTextDeltaNotification {
-                    thread_id: "thread-1".to_string(),
-                    turn_id: "turn-1".to_string(),
-                    item_id: "item-1".to_string(),
-                    delta: "summary".to_string(),
-                    summary_index: 0,
-                },
-            )
+            &ServerNotification::ReasoningSummaryTextDelta(ReasoningSummaryTextDeltaNotification {
+                thread_id: "thread-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                item_id: "item-1".to_string(),
+                delta: "summary".to_string(),
+                summary_index: 0,
+            },)
         ));
         // Cosmetic notifications remain best-effort.
         assert!(!server_notification_requires_delivery(

@@ -67,7 +67,7 @@ pub(crate) fn normalize_relative(path: &str) -> Result<String, JSONRPCErrorError
             ".." => {
                 return Err(invalid_params(format!(
                     "change path {path:?} must not escape the workspace root"
-                )))
+                )));
             }
             other => segments.push(other),
         }
@@ -84,10 +84,7 @@ pub(crate) fn normalize_relative(path: &str) -> Result<String, JSONRPCErrorError
 /// inside `root` (itself canonicalized at bind time). Canonicalizes the
 /// deepest existing ancestor; any symlink traversal that escapes the root
 /// is rejected. Existing symlink targets are never written through.
-pub(crate) fn resolve_target(
-    root: &Path,
-    normalized: &str,
-) -> Result<PathBuf, JSONRPCErrorError> {
+pub(crate) fn resolve_target(root: &Path, normalized: &str) -> Result<PathBuf, JSONRPCErrorError> {
     if !root.is_dir() {
         return Err(invalid_params(format!(
             "root {} is not a readable directory",
@@ -127,7 +124,7 @@ pub(crate) fn resolve_target(
                         return Err(invalid_params(format!(
                             "change path {normalized:?} cannot be resolved under root {}",
                             root.display()
-                        )))
+                        )));
                     }
                 }
                 probe = match probe.parent() {
@@ -136,14 +133,14 @@ pub(crate) fn resolve_target(
                         return Err(invalid_params(format!(
                             "change path {normalized:?} cannot be resolved under root {}",
                             root.display()
-                        )))
+                        )));
                     }
                 };
             }
             Err(err) => {
                 return Err(invalid_params(format!(
                     "change path {normalized:?} cannot be canonicalized: {err}"
-                )))
+                )));
             }
         }
     }
@@ -180,9 +177,10 @@ pub(crate) fn prepare_changes(
         let absolute = resolve_target(Path::new(&root.path), &normalized)?;
         match change.kind {
             WorkspaceFileChangeKind::Add => {
-                let content = change.content.clone().ok_or_else(|| {
-                    invalid_params(format!("add change {key} requires content"))
-                })?;
+                let content = change
+                    .content
+                    .clone()
+                    .ok_or_else(|| invalid_params(format!("add change {key} requires content")))?;
                 if content.len() as u64 > MAX_CHANGE_FILE_BYTES {
                     return Err(invalid_params(format!(
                         "change {key} content exceeds {MAX_CHANGE_FILE_BYTES} bytes"
@@ -280,12 +278,7 @@ pub(crate) fn render_file_diff(relative: &str, base: Option<&str>, new: Option<&
         }
     }
     let diff = similar::TextDiff::from_lines(old_text, new_text);
-    out.push_str(
-        &diff
-            .unified_diff()
-            .context_radius(3)
-            .to_string(),
-    );
+    out.push_str(&diff.unified_diff().context_radius(3).to_string());
     out
 }
 

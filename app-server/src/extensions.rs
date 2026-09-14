@@ -27,10 +27,10 @@ use crate::outgoing_message::OutgoingMessageSender;
 use crate::thread_state::ThreadListenerCommand;
 use crate::thread_state::ThreadStateManager;
 
-#[path = "database_extension.rs"]
-mod database_extension;
 #[path = "browser_extension.rs"]
 mod browser_extension;
+#[path = "database_extension.rs"]
+mod database_extension;
 #[path = "web_search_extension.rs"]
 mod web_search_extension;
 

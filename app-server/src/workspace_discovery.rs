@@ -168,7 +168,12 @@ fn walk(dir: &Path, relative_dir: &Path, depth: u32, state: &mut ScanState) {
                 state.skipped_dirs += 1;
                 continue;
             }
-            walk(&entry.path(), &relative_dir.join(name.as_ref()), depth + 1, state);
+            walk(
+                &entry.path(),
+                &relative_dir.join(name.as_ref()),
+                depth + 1,
+                state,
+            );
         } else if file_type.is_file() {
             state.files_visited += 1;
             if state.files_visited > MAX_FILES_VISITED {
@@ -265,17 +270,13 @@ pub(crate) fn classify_source(relative: &Path) -> Option<WorkspaceSourceEntry> {
     // `index.*` or lowercase stems (Next convention); PascalCase files are
     // page-level components and fall through to the generic Page bucket.
     if let Some(pages_index) = find_convention(dirs, &["pages", "src/pages"])
-        && (stem == "index"
-            || stem.chars().next().is_some_and(|c| c.is_lowercase()))
+        && (stem == "index" || stem.chars().next().is_some_and(|c| c.is_lowercase()))
     {
         return Some(WorkspaceSourceEntry {
             kind: WorkspaceSourceKind::Route,
             name: stem.clone(),
             path: rel_path.clone(),
-            route_path: Some(route_path_from_pages(
-                &dirs[pages_index + 1..],
-                &stem,
-            )),
+            route_path: Some(route_path_from_pages(&dirs[pages_index + 1..], &stem)),
         });
     }
 
@@ -334,9 +335,7 @@ fn find_convention(dirs: &[String], conventions: &[&str]) -> Option<usize> {
 fn route_path_from_app_dirs(segments: &[String]) -> String {
     let mut route = String::new();
     for segment in segments {
-        if (segment.starts_with('(') && segment.ends_with(')'))
-            || segment.starts_with('_')
-        {
+        if (segment.starts_with('(') && segment.ends_with(')')) || segment.starts_with('_') {
             continue;
         }
         route.push('/');
@@ -379,9 +378,10 @@ pub(crate) fn inspect_package_json(root: &Path, discovery: &mut WorkspaceRootDis
         return;
     }
     let Ok(raw) = fs::read_to_string(&path) else {
-        discovery
-            .errors
-            .push(format!("package.json at {} is not readable", path.display()));
+        discovery.errors.push(format!(
+            "package.json at {} is not readable",
+            path.display()
+        ));
         return;
     };
     let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) else {
@@ -500,7 +500,9 @@ mod tests {
         while let Some(dir) = stack.pop() {
             for entry in fs::read_dir(&dir).expect("read dir").flatten() {
                 let path = entry.path();
-                let Ok(file_type) = entry.file_type() else { continue };
+                let Ok(file_type) = entry.file_type() else {
+                    continue;
+                };
                 if file_type.is_dir() {
                     stack.push(path);
                 } else if file_type.is_file() {
@@ -558,10 +560,12 @@ mod tests {
             .iter()
             .map(|entry| (entry.id.clone(), entry.version.clone()))
             .collect();
-        assert_eq!(tech.get("react").and_then(|v| v.as_deref()), Some("^18.2.0"));
+        assert_eq!(
+            tech.get("react").and_then(|v| v.as_deref()),
+            Some("^18.2.0")
+        );
         assert!(tech.contains_key("vite"));
-        let script_names: Vec<&str> =
-            discovery.scripts.iter().map(|s| s.name.as_str()).collect();
+        let script_names: Vec<&str> = discovery.scripts.iter().map(|s| s.name.as_str()).collect();
         assert!(script_names.contains(&"dev"));
         assert!(script_names.contains(&"build"));
         assert!(script_names.contains(&"test"));
@@ -641,8 +645,7 @@ mod tests {
                 .map(String::as_str),
             Some("/about")
         );
-        let tech: Vec<&str> =
-            discovery.tech_stack.iter().map(|t| t.id.as_str()).collect();
+        let tech: Vec<&str> = discovery.tech_stack.iter().map(|t| t.id.as_str()).collect();
         assert!(tech.contains(&"next"));
         assert!(tech.contains(&"react"));
     }
@@ -657,8 +660,16 @@ mod tests {
         );
         write(&root.path(), "src/pages/index.tsx", "export {}");
         write(&root.path(), "src/pages/about.tsx", "export {}");
-        write(&root.path(), "src/views/Dashboard.vue", "<template></template>");
-        write(&root.path(), "src/components/Nav.vue", "<template></template>");
+        write(
+            &root.path(),
+            "src/views/Dashboard.vue",
+            "<template></template>",
+        );
+        write(
+            &root.path(),
+            "src/components/Nav.vue",
+            "<template></template>",
+        );
 
         let discovery = scan_root(&root.path().to_string_lossy()).await;
 
@@ -683,8 +694,7 @@ mod tests {
             .map(|s| s.path.as_str())
             .collect();
         assert_eq!(pages, vec!["src/views/Dashboard.vue"]);
-        let tech: Vec<&str> =
-            discovery.tech_stack.iter().map(|t| t.id.as_str()).collect();
+        let tech: Vec<&str> = discovery.tech_stack.iter().map(|t| t.id.as_str()).collect();
         assert!(tech.contains(&"vue"));
     }
 
@@ -708,8 +718,7 @@ mod tests {
 
         assert!(discovery.errors.is_empty(), "{:?}", discovery.errors);
         assert_eq!(discovery.package_manager.as_deref(), Some("npm"));
-        let tech: Vec<&str> =
-            discovery.tech_stack.iter().map(|t| t.id.as_str()).collect();
+        let tech: Vec<&str> = discovery.tech_stack.iter().map(|t| t.id.as_str()).collect();
         assert!(tech.contains(&"express"));
         assert!(discovery.sources.is_empty());
     }
@@ -717,7 +726,11 @@ mod tests {
     #[tokio::test]
     async fn truncates_when_source_cap_exceeded() {
         let root = fixture_root();
-        write(&root.path(), "package.json", &package_json("big", "", "", ""));
+        write(
+            &root.path(),
+            "package.json",
+            &package_json("big", "", "", ""),
+        );
         for index in 0..600 {
             write(
                 &root.path(),
@@ -743,7 +756,11 @@ mod tests {
         let root = fixture_root();
         let outside = fixture_root();
         write(&outside.path(), "secret.ts", "export {}");
-        write(&root.path(), "package.json", &package_json("links", "", "", ""));
+        write(
+            &root.path(),
+            "package.json",
+            &package_json("links", "", "", ""),
+        );
         std::os::unix::fs::symlink(outside.path(), root.path().join("linked-outside"))
             .expect("create symlink");
 
@@ -756,16 +773,18 @@ mod tests {
     #[tokio::test]
     async fn honors_depth_limit() {
         let root = fixture_root();
-        let deep = (0..20)
-            .map(|_| "deep")
-            .collect::<Vec<_>>()
-            .join("/");
+        let deep = (0..20).map(|_| "deep").collect::<Vec<_>>().join("/");
         write(&root.path(), &format!("{deep}/bottom.ts"), "export {}");
 
         let discovery = scan_root(&root.path().to_string_lossy()).await;
 
         assert!(discovery.truncated);
-        assert!(!discovery.sources.iter().any(|s| s.path.contains("bottom.ts")));
+        assert!(
+            !discovery
+                .sources
+                .iter()
+                .any(|s| s.path.contains("bottom.ts"))
+        );
     }
 
     #[tokio::test]
@@ -794,17 +813,18 @@ mod tests {
     #[tokio::test]
     async fn fake_git_dir_detected_without_git_binary() {
         let root = fixture_root();
-        write(&root.path(), "package.json", &package_json("repo", "", "", ""));
+        write(
+            &root.path(),
+            "package.json",
+            &package_json("repo", "", "", ""),
+        );
         fs::create_dir(root.path().join(".git")).expect("create fake .git");
 
         let discovery = scan_root(&root.path().to_string_lossy()).await;
 
         assert!(discovery.git.is_repo);
         let canonical_root = root.path().canonicalize().expect("canonical");
-        assert_eq!(
-            discovery.git.repo_root.as_deref(),
-            canonical_root.to_str()
-        );
+        assert_eq!(discovery.git.repo_root.as_deref(), canonical_root.to_str());
         // A fake .git makes git commands fail even when the binary exists.
         assert!(!discovery.git.available);
         assert!(discovery.git.error.is_some());
@@ -822,7 +842,11 @@ mod tests {
             return;
         }
         let root = fixture_root();
-        write(&root.path(), "package.json", &package_json("repo", "", "", ""));
+        write(
+            &root.path(),
+            "package.json",
+            &package_json("repo", "", "", ""),
+        );
         let run_git = |args: &[&str]| {
             std::process::Command::new("git")
                 .args(args)
@@ -868,12 +892,7 @@ mod tests {
         write(
             &root.path(),
             "package.json",
-            &package_json(
-                "readonly",
-                r#""react": "18.2.0""#,
-                "",
-                r#""dev": "vite""#,
-            ),
+            &package_json("readonly", r#""react": "18.2.0""#, "", r#""dev": "vite""#),
         );
         write(&root.path(), "src/pages/Home.tsx", "export {}");
         write(&root.path(), "src/components/Button.tsx", "export {}");

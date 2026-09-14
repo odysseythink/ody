@@ -19,12 +19,12 @@ use ody_app_server_protocol::WorkspaceSourceRef;
 use sha2::Digest;
 use sha2::Sha256;
 
-use crate::workspace_discovery::classify_source;
-use crate::workspace_discovery::detect_framework;
 use crate::workspace_discovery::MAX_DEPTH;
 use crate::workspace_discovery::MAX_FILES_VISITED;
 use crate::workspace_discovery::MAX_SOURCES_PER_KIND;
 use crate::workspace_discovery::SKIP_DIRS;
+use crate::workspace_discovery::classify_source;
+use crate::workspace_discovery::detect_framework;
 
 /// Source files larger than this are skipped with a diagnosable error entry.
 const MAX_SOURCE_FILE_BYTES: u64 = 1024 * 1024;
@@ -91,7 +91,9 @@ fn index_root(
         for entry in entries.flatten() {
             // DirEntry::file_type does not follow symlinks: escaping
             // symlinks are never traversed or read.
-            let Ok(file_type) = entry.file_type() else { continue };
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
             let name = entry.file_name();
             let name = name.to_string_lossy();
             if file_type.is_symlink() {
@@ -320,7 +322,8 @@ fn now_ms() -> i64 {
 mod tests {
     use super::*;
 
-    const HOME_PAGE: &str = "export default function HomePage() {\n  return <main>home</main>;\n}\n";
+    const HOME_PAGE: &str =
+        "export default function HomePage() {\n  return <main>home</main>;\n}\n";
 
     #[test]
     fn extracts_default_function_symbol_and_range() {

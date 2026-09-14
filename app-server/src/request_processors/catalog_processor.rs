@@ -716,7 +716,6 @@ impl CatalogRequestProcessor {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -737,6 +736,9 @@ mod tests {
         let mut inline = ody_core::skills::SkillMetadata::default();
         inline.skill_type = ody_core::skills::model::SkillType::Inline;
         let info = skills_to_info(&[inline], &HashSet::new());
-        assert_eq!(info[0].skill_type, ody_app_server_protocol::SkillType::Inline);
+        assert_eq!(
+            info[0].skill_type,
+            ody_app_server_protocol::SkillType::Inline
+        );
     }
 }

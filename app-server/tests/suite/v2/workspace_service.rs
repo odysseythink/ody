@@ -6,6 +6,7 @@ use std::time::Duration;
 use anyhow::Result;
 use app_test_support::DEFAULT_CLIENT_NAME;
 use app_test_support::TestAppServer;
+use app_test_support::next_test_port;
 use app_test_support::to_response;
 use ody_app_server_protocol::ClientInfo;
 use ody_app_server_protocol::InitializeCapabilities;
@@ -113,10 +114,7 @@ fn bind_params(id: &str, roots: Vec<PathBuf>) -> WorkspaceProjectBindParams {
 
 async fn bind_fixture_project(mcp: &mut TestAppServer, root: &TempDir) -> Result<()> {
     let request_id = mcp
-        .send_workspace_project_bind_request(bind_params(
-            "ws-1",
-            vec![root.path().to_path_buf()],
-        ))
+        .send_workspace_project_bind_request(bind_params("ws-1", vec![root.path().to_path_buf()]))
         .await?;
     let message = timeout(
         DEFAULT_TIMEOUT,
@@ -175,7 +173,7 @@ async fn service_start_stop_lifecycle_leaves_no_process() -> Result<()> {
     init_experimental(&mut mcp).await?;
     bind_fixture_project(&mut mcp, &fixture).await?;
 
-    let service = start_service(&mut mcp, "web", "dev", None, "svc-1").await?;
+    let service = start_service(&mut mcp, "web", "dev", Some(next_test_port()), "svc-1").await?;
     assert_eq!(service.status, WorkspaceServiceStatus::Ready);
     assert_eq!(service.script, "dev");
     assert!(service.command.contains("run dev -- --port"));
@@ -350,7 +348,10 @@ async fn service_auto_port_avoidance_when_default_occupied() -> Result<()> {
     let service = start_service(&mut mcp, "web", "dev", None, "svc-4").await?;
     assert_eq!(service.status, WorkspaceServiceStatus::Ready);
     if holder.is_some() {
-        assert_ne!(service.port, 5173, "auto avoidance must skip occupied default");
+        assert_ne!(
+            service.port, 5173,
+            "auto avoidance must skip occupied default"
+        );
     }
     assert!(
         TcpListener::bind(("127.0.0.1", service.port)).is_err(),
@@ -394,7 +395,10 @@ async fn service_and_preview_errors_are_diagnosable() -> Result<()> {
         })
         .await?;
     let message = read_error_message(&mut mcp, request_id).await?;
-    assert!(message.contains("unknown project id ws-missing"), "{message}");
+    assert!(
+        message.contains("unknown project id ws-missing"),
+        "{message}"
+    );
 
     // Unknown script: the error must list what is available (E0 scan scripts).
     let request_id = mcp
@@ -411,7 +415,10 @@ async fn service_and_preview_errors_are_diagnosable() -> Result<()> {
         .await?;
     let message = read_error_message(&mut mcp, request_id).await?;
     assert!(message.contains("\"nope\""), "{message}");
-    assert!(message.contains("dev") && message.contains("devfail"), "{message}");
+    assert!(
+        message.contains("dev") && message.contains("devfail"),
+        "{message}"
+    );
 
     // Preview check on a service that was never started.
     let request_id = mcp
@@ -422,7 +429,10 @@ async fn service_and_preview_errors_are_diagnosable() -> Result<()> {
         })
         .await?;
     let message = read_error_message(&mut mcp, request_id).await?;
-    assert!(message.contains("unknown service id svc-never"), "{message}");
+    assert!(
+        message.contains("unknown service id svc-never"),
+        "{message}"
+    );
 
     // Scheme smuggling is rejected before any fetch — but service lookup
     // precedes url validation, so the unknown-service error wins here.
@@ -456,7 +466,7 @@ async fn preview_check_reports_unreachable_service_as_result_not_error() -> Resu
     // Start then kill the process behind the Runtime's back: the store may
     // briefly still say Ready, and check must degrade to a diagnostic
     // result (reachable:false), never a transport-level panic.
-    let service = start_service(&mut mcp, "web", "dev", None, "svc-6").await?;
+    let service = start_service(&mut mcp, "web", "dev", Some(next_test_port()), "svc-6").await?;
     #[cfg(unix)]
     {
         let pid = service.pid.expect("pid");
@@ -523,8 +533,8 @@ async fn project_close_stops_services_and_clears_records() -> Result<()> {
     init_experimental(&mut mcp).await?;
     bind_fixture_project(&mut mcp, &fixture).await?;
 
-    let first = start_service(&mut mcp, "web", "dev", None, "svc-7a").await?;
-    let second = start_service(&mut mcp, "web2", "dev", None, "svc-7b").await?;
+    let first = start_service(&mut mcp, "web", "dev", Some(next_test_port()), "svc-7a").await?;
+    let second = start_service(&mut mcp, "web2", "dev", Some(next_test_port()), "svc-7b").await?;
     assert_eq!(first.status, WorkspaceServiceStatus::Ready);
     assert_eq!(second.status, WorkspaceServiceStatus::Ready);
 
@@ -575,7 +585,8 @@ async fn runtime_restart_normalizes_lingering_services_to_stopped() -> Result<()
         let mut mcp = TestAppServer::new(ody_home.path()).await?;
         init_experimental(&mut mcp).await?;
         bind_fixture_project(&mut mcp, &fixture).await?;
-        let service = start_service(&mut mcp, "web", "dev", None, "svc-8").await?;
+        let service =
+            start_service(&mut mcp, "web", "dev", Some(next_test_port()), "svc-8").await?;
         assert_eq!(service.status, WorkspaceServiceStatus::Ready);
         // Drop the server without stop: the child process dies with the
         // runtime (kill_on_drop is false — the dev server may briefly

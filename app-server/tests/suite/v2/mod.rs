@@ -74,6 +74,8 @@ mod turn_start;
 mod turn_start_zsh_fork;
 mod turn_steer;
 mod windows_sandbox_setup;
+mod workspace_fullstack;
+mod workspace_fullstack_smoke;
 mod workspace_project;
 mod workspace_service;
 mod workspace_source;

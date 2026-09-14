@@ -374,7 +374,7 @@ impl WorkspaceServiceRequestProcessor {
             .insert(service_id.clone(), runtime_entry);
 
         // Synchronous readiness wait inside the start request.
-        let outcome = crate::workspace_service::wait_ready(
+        let (outcome, ready_origin) = crate::workspace_service::wait_ready(
             &terminated,
             port,
             crate::workspace_service::clamp_ready_timeout(ready_timeout_ms),
@@ -399,6 +399,13 @@ impl WorkspaceServiceRequestProcessor {
             match outcome {
                 ReadyOutcome::Ready => {
                     record.status = WorkspaceServiceStatus::Ready;
+                    if let Some(origin) = ready_origin {
+                        // Record the origin that actually answered (an
+                        // IPv6-only binder is reached via [::1], not
+                        // 127.0.0.1): env injection, health probes, preview
+                        // checks, and diagnosis all consume `url`.
+                        record.url = origin;
+                    }
                 }
                 ReadyOutcome::ProcessExited => {
                     // Wait task already wrote Failed/Exited with exit code.
@@ -849,7 +856,31 @@ impl WorkspaceServiceRequestProcessor {
         {
             let store = self.store.lock().expect("store lock");
             if let Some(record) = store.orchestrations.get(&idem_key) {
-                return Ok(record.response.clone());
+                // Idempotent replay (R2): spawn nothing again; report the
+                // current records, folding still-active originally-started
+                // services into `reused` so the response honestly says "no
+                // new process".
+                let original = record.response.clone();
+                let services = original
+                    .services
+                    .iter()
+                    .filter_map(|service| store.services.get(&service.id).cloned())
+                    .collect::<Vec<_>>();
+                let mut reused = original.reused.clone();
+                for id in &original.started {
+                    if services
+                        .iter()
+                        .any(|service| service.id == *id && !is_terminal(service.status))
+                    {
+                        reused.push(id.clone());
+                    }
+                }
+                return Ok(WorkspaceServiceStartAllResponse {
+                    services,
+                    started: Vec::new(),
+                    reused,
+                    failed: original.failed.clone(),
+                });
             }
         }
 
@@ -1355,6 +1386,27 @@ impl WorkspaceServiceRequestProcessor {
                             .map_or(false, |seg| artifact.name.to_lowercase() == seg);
                         if route_hit || name_hit {
                             source_candidates.push(source_ref.clone());
+                        }
+                    }
+                    if source_candidates.is_empty() {
+                        // No exact hit (typical for a 404 on a not-yet-written
+                        // route): surface the indexed route files as
+                        // candidates — they are where the missing endpoint
+                        // belongs (ADR decision 7 fallback).
+                        for (artifact, source_ref) in index.artifacts.iter().zip(index.refs.iter())
+                        {
+                            if source_candidates.len() >= max_candidates {
+                                break;
+                            }
+                            if artifact.route_path.is_some() {
+                                source_candidates.push(source_ref.clone());
+                            }
+                        }
+                        if !source_candidates.is_empty() {
+                            notes.push(
+                                "no exact route match; showing indexed route files as candidates"
+                                    .to_owned(),
+                            );
                         }
                     }
                     if source_candidates.is_empty() {

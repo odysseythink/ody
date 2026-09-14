@@ -166,6 +166,25 @@ pub(crate) struct ManagedService {
     pub(crate) terminal_notify: Arc<Notify>,
 }
 
+impl Drop for ManagedService {
+    fn drop(&mut self) {
+        // Strategy 8.2 (no runaway processes): the Runtime exiting — or the
+        // runtime handle map otherwise being torn down — must not leave the
+        // spawned dev-server group behind. `terminated` only records that
+        // the direct child exited: grandchildren in the group can survive
+        // (package-manager wrappers killed by signal, OOM killer, ...), so
+        // the drop kill is unconditional. Already-dead groups only cost one
+        // ESRCH; errors never panic inside drop.
+        if let Err(err) = kill_process_group(self.pgid) {
+            tracing::debug!(
+                pgid = self.pgid,
+                error = %err,
+                "managed service process group kill on handle drop"
+            );
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ReadyOutcome {
     Ready,
@@ -176,37 +195,49 @@ pub(crate) enum ReadyOutcome {
 /// Poll the loopback URL until a 2xx/3xx answers, the process terminates,
 /// or the deadline passes. Readiness is HTTP-authoritative; dev-server
 /// banner parsing is intentionally not relied on (R3).
+///
+/// Both loopback families are probed every round: dev servers that bind
+/// `localhost` verbatim (Vite's default under Node's DNS resolution) end up
+/// IPv6-only on `[::1]`, and a 127.0.0.1-only probe would never see them.
+/// On success the origin that actually answers is returned, so the service
+/// URL handed to downstream env injection and preview checks is reachable.
 pub(crate) async fn wait_ready(
     terminated: &Arc<AtomicBool>,
     port: u16,
     timeout_ms: i64,
-) -> ReadyOutcome {
+) -> (ReadyOutcome, Option<String>) {
     let deadline = tokio::time::Instant::now() + Duration::from_millis(timeout_ms as u64);
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::limited(5))
         .build()
         .expect("reqwest client");
+    let origins = [
+        format!("http://127.0.0.1:{port}"),
+        format!("http://[::1]:{port}"),
+    ];
     loop {
         if terminated.load(Ordering::SeqCst) {
-            return ReadyOutcome::ProcessExited;
+            return (ReadyOutcome::ProcessExited, None);
         }
         if tokio::time::Instant::now() >= deadline {
-            return ReadyOutcome::TimedOut;
+            return (ReadyOutcome::TimedOut, None);
         }
-        let url = format!("http://127.0.0.1:{port}/");
-        match tokio::time::timeout(
-            Duration::from_millis(SERVICE_HEALTH_TIMEOUT_MS),
-            client.get(&url).send(),
-        )
-        .await
-        {
-            Ok(Ok(response)) => {
-                let status = response.status().as_u16();
-                if (200..400).contains(&status) {
-                    return ReadyOutcome::Ready;
+        for origin in &origins {
+            let url = format!("{origin}/");
+            match tokio::time::timeout(
+                Duration::from_millis(SERVICE_HEALTH_TIMEOUT_MS),
+                client.get(&url).send(),
+            )
+            .await
+            {
+                Ok(Ok(response)) => {
+                    let status = response.status().as_u16();
+                    if (200..400).contains(&status) {
+                        return (ReadyOutcome::Ready, Some(format!("{origin}/")));
+                    }
                 }
+                _ => {}
             }
-            _ => {}
         }
         tokio::time::sleep(Duration::from_millis(SERVICE_READY_POLL_INTERVAL_MS)).await;
     }
@@ -783,6 +814,61 @@ mod tests {
         assert_eq!(health.status_code, Some(500));
     }
 
+    #[tokio::test(flavor = "current_thread")]
+    async fn wait_ready_reaches_ipv6_only_binder_and_reports_its_origin() {
+        // Vite's default `localhost` bind is IPv6-only under Node's DNS
+        // resolution; a 127.0.0.1-only readiness probe would time out.
+        let listener = match tokio::net::TcpListener::bind("[::1]:0").await {
+            Ok(listener) => listener,
+            Err(_) => {
+                eprintln!("skipping: IPv6 loopback is not available");
+                return;
+            }
+        };
+        let port = listener.local_addr().expect("addr").port();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("accept");
+            use tokio::io::AsyncWriteExt;
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nok")
+                .await
+                .expect("write");
+        });
+        let terminated = Arc::new(AtomicBool::new(false));
+        let (outcome, origin) = wait_ready(&terminated, port, 10_000).await;
+        server.await.expect("server task");
+        assert_eq!(outcome, ReadyOutcome::Ready);
+        assert_eq!(
+            origin.as_deref(),
+            Some(format!("http://[::1]:{port}/").as_str()),
+            "the origin that answered must be reported"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn wait_ready_prefers_ipv4_origin_when_it_answers() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("accept");
+            use tokio::io::AsyncWriteExt;
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nok")
+                .await
+                .expect("write");
+        });
+        let terminated = Arc::new(AtomicBool::new(false));
+        let (outcome, origin) = wait_ready(&terminated, port, 10_000).await;
+        server.await.expect("server task");
+        assert_eq!(outcome, ReadyOutcome::Ready);
+        assert_eq!(
+            origin.as_deref(),
+            Some(format!("http://127.0.0.1:{port}/").as_str())
+        );
+    }
+
     #[test]
     fn parse_loopback_port_accepts_only_loopback_http_urls() {
         assert_eq!(
@@ -875,5 +961,46 @@ mod tests {
             .map(|i| format!("[req] GET /api/miss line {i}\n"))
             .collect::<String>();
         assert_eq!(log_excerpt(&many, "/api/miss", 50).lines().count(), 50);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn managed_service_drop_kills_unterminated_process_group() {
+        use std::os::unix::process::CommandExt;
+        // A long-lived child in its own process group, as spawn_service_command
+        // produces; the handle is dropped without any explicit stop — the
+        // Runtime-exit path. Strategy 8.2: no survivor.
+        let mut child = std::process::Command::new("sleep")
+            .arg("60")
+            .process_group(0)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn sleep");
+        let pgid = child.id();
+        let entry = ManagedService {
+            pid: pgid,
+            pgid,
+            stop_requested: Arc::new(AtomicBool::new(false)),
+            terminated: Arc::new(AtomicBool::new(false)),
+            stdout_ring: Arc::new(Mutex::new(OutputRing::new(SERVICE_OUTPUT_TAIL_BYTES))),
+            stderr_ring: Arc::new(Mutex::new(OutputRing::new(SERVICE_OUTPUT_TAIL_BYTES))),
+            terminal_notify: Arc::new(Notify::new()),
+        };
+        drop(entry);
+        // killpg(pgid, 0) probes for group existence: ESRCH once reaped.
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let gone = unsafe { libc::killpg(pgid as libc::pid_t, 0) } != 0;
+            if gone {
+                child.wait().expect("reap probe child");
+                return;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "process group {pgid} survived ManagedService drop"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
     }
 }

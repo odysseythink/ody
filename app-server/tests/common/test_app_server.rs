@@ -102,11 +102,6 @@ use ody_app_server_protocol::TurnInterruptParams;
 use ody_app_server_protocol::TurnStartParams;
 use ody_app_server_protocol::TurnSteerParams;
 use ody_app_server_protocol::WindowsSandboxSetupStartParams;
-use ody_app_server_protocol::WorkspaceProjectBindParams;
-use ody_app_server_protocol::WorkspaceProjectCloseParams;
-use ody_app_server_protocol::WorkspaceProjectGetParams;
-use ody_app_server_protocol::WorkspaceProjectListParams;
-use ody_app_server_protocol::WorkspaceProjectScanParams;
 use ody_app_server_protocol::WorkspaceChangeSetApplyParams;
 use ody_app_server_protocol::WorkspaceChangeSetCreateParams;
 use ody_app_server_protocol::WorkspaceChangeSetGetParams;
@@ -114,9 +109,20 @@ use ody_app_server_protocol::WorkspaceChangeSetListParams;
 use ody_app_server_protocol::WorkspaceChangeSetRejectParams;
 use ody_app_server_protocol::WorkspaceChangeSetRestoreParams;
 use ody_app_server_protocol::WorkspacePreviewCheckParams;
+use ody_app_server_protocol::WorkspacePreviewDiagnoseParams;
+use ody_app_server_protocol::WorkspaceProjectBindParams;
+use ody_app_server_protocol::WorkspaceProjectCloseParams;
+use ody_app_server_protocol::WorkspaceProjectGetParams;
+use ody_app_server_protocol::WorkspaceProjectListParams;
+use ody_app_server_protocol::WorkspaceProjectScanParams;
+use ody_app_server_protocol::WorkspaceServiceDefineParams;
+use ody_app_server_protocol::WorkspaceServiceHealthParams;
 use ody_app_server_protocol::WorkspaceServiceListParams;
 use ody_app_server_protocol::WorkspaceServiceLogsParams;
+use ody_app_server_protocol::WorkspaceServiceSpecsParams;
+use ody_app_server_protocol::WorkspaceServiceStartAllParams;
 use ody_app_server_protocol::WorkspaceServiceStartParams;
+use ody_app_server_protocol::WorkspaceServiceStopAllParams;
 use ody_app_server_protocol::WorkspaceServiceStopParams;
 use ody_app_server_protocol::WorkspaceSourceDiffParams;
 use ody_app_server_protocol::WorkspaceSourceIndexParams;
@@ -995,6 +1001,62 @@ image_generation = true
     ) -> anyhow::Result<i64> {
         let params = Some(serde_json::to_value(params)?);
         self.send_request("workspace/preview/check", params).await
+    }
+
+    /// Send a `workspace/service/define` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_service_define_request(
+        &mut self,
+        params: WorkspaceServiceDefineParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/service/define", params).await
+    }
+
+    /// Send a `workspace/service/specs` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_service_specs_request(
+        &mut self,
+        params: WorkspaceServiceSpecsParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/service/specs", params).await
+    }
+
+    /// Send a `workspace/service/startAll` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_service_start_all_request(
+        &mut self,
+        params: WorkspaceServiceStartAllParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/service/startAll", params)
+            .await
+    }
+
+    /// Send a `workspace/service/stopAll` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_service_stop_all_request(
+        &mut self,
+        params: WorkspaceServiceStopAllParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/service/stopAll", params).await
+    }
+
+    /// Send a `workspace/service/health` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_service_health_request(
+        &mut self,
+        params: WorkspaceServiceHealthParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/service/health", params).await
+    }
+
+    /// Send a `workspace/preview/diagnose` JSON-RPC request (v2, experimental).
+    pub async fn send_workspace_preview_diagnose_request(
+        &mut self,
+        params: WorkspacePreviewDiagnoseParams,
+    ) -> anyhow::Result<i64> {
+        let params = Some(serde_json::to_value(params)?);
+        self.send_request("workspace/preview/diagnose", params)
+            .await
     }
 
     /// Send a `thread/memoryMode/set` JSON-RPC request (v2, experimental).

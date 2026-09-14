@@ -43,6 +43,17 @@ pub use test_app_server::DEFAULT_CLIENT_NAME;
 pub use test_app_server::DISABLE_PLUGIN_STARTUP_TASKS_ARG;
 pub use test_app_server::TestAppServer;
 
+/// Process-wide unique loopback port for tests that spawn real servers.
+///
+/// Parallel tests that both rely on the same framework-default port (e.g.
+/// vite's 5173) race between the Runtime's free-port probe and the child
+/// process's bind. Handing every spawned service an explicit port from this
+/// allocator removes the race across test files sharing the test binary.
+pub fn next_test_port() -> u16 {
+    static NEXT_PORT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(23000);
+    NEXT_PORT.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+}
+
 pub fn to_response<T: DeserializeOwned>(response: JSONRPCResponse) -> anyhow::Result<T> {
     let value = serde_json::to_value(response.result)?;
     let ody_response = serde_json::from_value(value)?;
