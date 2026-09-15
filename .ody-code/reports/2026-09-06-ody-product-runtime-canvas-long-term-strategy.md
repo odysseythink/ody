@@ -2,9 +2,9 @@
 
 **首次制定：** 2026-09-06
 
-**最近整理：** 2026-09-13
+**最近整理：** 2026-09-15
 
-**状态：** 战略基线；S0–S4 已关闭，Engineering Workspace 为下一条产品主线
+**状态：** 战略基线；S0–S4 与 E0–E4 已关闭；Engineering Workspace 呈现端产品化（P1–P7）已于 2026-09-15 全部交付
 
 **涉及代码库：**
 
@@ -40,7 +40,7 @@ Canvas 不成为第三个安装包、品牌、账户体系或 Agent 平台。Cha
 |---|---|---|---|
 | Agent Runtime 统一 | S4 已关闭 | Work 的 thread/turn、工具、审批、Skills、MCP、恢复与发行 Runtime | 不再是当前主线 |
 | Canvas Artifact | S1–S3 工程闭环已建立 | 自包含 HTML 的生成、迭代、元素交互、版本、快照与交付 | 真实用户价值仍需持续观察 |
-| Engineering Workspace | Runtime 主线已完成（2026-09-14 关闭），产品化未开始 | E0–E4 已交付：真实目录项目模型与只读发现（E0）、SourceRef/ChangeSet/diff 源码变更（E1）、真实框架服务编排（E2）、前后端联动与诊断（E3）、watcher/冲突/审计/并发锁/崩溃恢复（E4） | odyBox 消费端 UI（项目入口、diff 确认、Services 面板）、§10.2 指标采集、真实用户观察 |
+| Engineering Workspace | Runtime 主线已完成（2026-09-14 关闭）；odyBox 呈现端六面板已落地（2026-09-15 核对），产品化 P1–P7 已交付 | E0–E4 已交付：真实目录项目模型与只读发现（E0）、SourceRef/ChangeSet/diff 源码变更（E1）、真实框架服务编排（E2）、前后端联动与诊断（E3）、watcher/冲突/审计/并发锁/崩溃恢复（E4）；odyBox 已交付项目列表与打开目录、Services/Validation/Preview/ChangeSets/Diff/Audit 六面板、watch feed、写锁 badge、冲突失效横幅 | 呈现端产品化 P1–P7（见 §9.2.1） |
 
 “S4 已完成”和“仍不能完整重构已有工程”并不矛盾。S4 解决的是统一 Runtime；已有工程属于新的源码工作区产品面，不能再作为 S3/S4 的尾项描述。
 
@@ -478,6 +478,44 @@ Canvas ElementRef
 **退出条件：** 外部 IDE 同时修改、Runtime 重启、服务崩溃和脏工作树场景不会静默丢失或覆盖代码。
 
 **主线之后（2026-09-14 裁定）：** E0–E4 全部交付在 Ody Runtime 侧，`workspace/*` 窄协议已具备可验证能力，但尚无产品消费端。下一阶段为 Engineering Workspace 产品化：odyBox 按 §6.1 职责矩阵建设呈现端——项目入口（打开目录、多根授权）、文件树与页面/组件/路由视图、ChangeSet diff 与确认界面、Services 面板（日志、启停、健康状态）以及外部编辑冲突与写锁占用 UX；并行启动 §10.2 指标采集与真实用户观察。§9.3 不扩张清单继续有效。
+
+### 9.2.1 呈现端产品化清单（2026-09-15 源码核对）
+
+对 odyBox 与 Ody 源码逐项核对后的剩余工作，按依赖顺序执行：
+
+| # | 事项 | 来源 | 状态 |
+|---|---|---|---|
+| P1 | 多根授权 UI：bind 支持多 roots 选择/移除，项目卡片补 close/unbind 入口 | §5.4 双根授权；runtime 已支持多 roots 并拒绝嵌套，UI 只传单根 | ✅ 已交付 `0bc3acbb` |
+| P2 | 文件树与页面/组件/路由视图：scan 已返回 `sources`（kind/name/routePath）但 UI 零呈现；补目录树读取 | §6.1 项目入口与源码工程职责 | ✅ 已交付 `c0fbe28c`；文件树协议缺口已补：runtime `6431cb40`（`workspace/project/tree`，experimental `workspace/project/v1`）+ odyBox `ea7e85af`（惰性文件树面板） |
+| P3 | 任务闭环：项目页发起 Agent turn（roots 绑定项目），agent 产出的 ChangeSet 进入确认面板 | §5.3 工作流核心断点：Work 线程 roots 与 WorkspaceProjectRef 无关联 | ✅ 已交付 `7c2dd5f9`（复用 chat 链路，不内嵌 turn UI） |
+| P4 | Canvas ↔ Workspace 联动：ElementRef→SourceRef 映射呈现、Artifact 转入 Workspace | §5.1/§7.3；Canvas 零 sourceRef 集成 | ✅ 已交付 `21d2b358`（SourceRef resolve 面板 = join 呈现）；Artifact 转入协议缺口已补：runtime `ac889b02`（`workspace/artifact/bridge`，Add-only v1，走完整 review/conflict 管线）+ odyBox `d68757f9`（Canvas Bridge 区块） |
+| P5 | 冲突/写锁确认交互：changeset 失效横幅需用户确认/重扫动作，写锁需区分本会话与他会话 | §7.3 "必须重新索引或要求用户确认" | ✅ 已交付 `cadfa4fd`（横幅 Refresh/Dismiss）；写锁归属缺口已补：runtime `d31aff2b`（get/list 暴露 caller_connection_id，runtime-only 不持久化）+ odyBox `c3620f6b`（本会话绿/他会话黄 badge） |
+| P6 | §10.2 指标采集：两仓库均无 metrics 实现（ody analytics endpoint 已废弃置空） | §10.2 共 9 项指标 | ✅ 已交付 `a6a10797`（本地 JSONL 事件 + hooks 埋点，覆盖 7 类事件）；services/preview 与 `artifact_bridged` 指标缺口已补：odyBox `df902e36`（`service_started`/`preview_diagnosed`/`artifact_bridged` 三类事件，文档 `docs/product/workspace-metrics.md`） |
+| P7 | 真实用户观察：随 P6 采集启动，供应商真实密钥首验延续 S4 运营验证 | §10.2、S4 遗留 | ✅ 已交付 `ea250255`（schema + 观察协议文档；真实密钥首验为运营动作，按文档清单执行） |
+
+**2026-09-15 收尾状态：P1–P7 全部交付**（odyBox main，commit 见上表）。呈现端产品化第一阶段完成。
+2026-09-15 补齐记录（按缺口清单逐项交付，未另写 ADR，直接实现最小协议）：文件树协议
+`workspace/project/tree`（`6431cb40`/`ea7e85af`）、Artifact 转入协议 `workspace/artifact/bridge`
+（`ac889b02`/`d68757f9`）、写锁 connection id（`d31aff2b`/`c3620f6b`）、services/preview 指标与
+`artifact_bridged` 事件（`df902e36`）。唯一剩余为供应商真实密钥首验，属运营动作，按 P7 文档清单执行。
+
+**2026-09-15 验证与基线修复（收尾发现）：**
+- 双仓库全量验证：ody `cargo test -p ody-app-server --lib` 337 过 / 0 失败（skip 1 个
+  既有挂起测试 `wait_ready_reaches_ipv6_only_binder_and_reports_its_origin`，自 `89c1712f`
+  起在本机挂起，属 E4 遗留、与本轮无关）；`ody-app-server-protocol` 250 + 2 全绿。
+  odyBox `tsc --noEmit` 通过、vitest 4959 过 / 0 失败、本轮改动文件 biome 零错误。
+- 修复 E3 遗留协议基线失败（`63410a4b`）：非 Params 类型上 `#[ts(optional = nullable)]`
+  生成禁用的 `?: T | null`，自 `2d373998` 起使 `generated_ts_optional_nullable_fields_only_in_params`
+  失败；相关字段 serde 均为 skip-none（永不输出 null），统一改回 `#[ts(optional)]`，并用
+  `write_schema_fixtures`（新增 `examples/write_fixtures.rs` 入口）全量重写 fixture，
+  一次性补齐此前多个 workspace commit 的 fixture 漂移。odyBox 同步 generated 类型
+  （`8f1bb639` + `e86f61aa`）。
+- 登记的既有问题（未修）：① 上述 ipv6 挂起测试（`wait_ready` 未尊重超时）；
+  ② odyBox biome 全量报错均为上游 merge/boilerplate 遗留（src/main/adapters、dataset 测试等）；
+  ③ odyBox generated 目录约 117 文件与 ody fixture 存在历史风格/版本漂移（含 --experimental
+  差异与未 prettier 文件），不属本轮范围。
+
+已核实完成度较高的部分：Services 面板（启停/健康/日志 tail）、diff 确认界面（按行着色 + 长 diff 折叠）、审计面板、watch feed、13 locale 翻译。
 
 ### 9.3 E0 之前不扩张
 
