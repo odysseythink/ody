@@ -40,7 +40,7 @@ Canvas 不成为第三个安装包、品牌、账户体系或 Agent 平台。Cha
 |---|---|---|---|
 | Agent Runtime 统一 | S4 已关闭 | Work 的 thread/turn、工具、审批、Skills、MCP、恢复与发行 Runtime | 不再是当前主线 |
 | Canvas Artifact | S1–S3 工程闭环已建立 | 自包含 HTML 的生成、迭代、元素交互、版本、快照与交付 | 真实用户价值仍需持续观察 |
-| Engineering Workspace | 尚未产品化 | Ody 已有文件、命令、进程、多根目录和浏览器基础 | 真实目录项目模型、源码映射、框架预览和前后端联动 |
+| Engineering Workspace | Runtime 主线已完成（2026-09-14 关闭），产品化未开始 | E0–E4 已交付：真实目录项目模型与只读发现（E0）、SourceRef/ChangeSet/diff 源码变更（E1）、真实框架服务编排（E2）、前后端联动与诊断（E3）、watcher/冲突/审计/并发锁/崩溃恢复（E4） | odyBox 消费端 UI（项目入口、diff 确认、Services 面板）、§10.2 指标采集、真实用户观察 |
 
 “S4 已完成”和“仍不能完整重构已有工程”并不矛盾。S4 解决的是统一 Runtime；已有工程属于新的源码工作区产品面，不能再作为 S3/S4 的尾项描述。
 
@@ -420,7 +420,16 @@ Canvas ElementRef
 
 供应商真实密钥首验和真实用户观察继续作为运营验证，不重新定义为 Runtime 架构缺口。
 
-### 9.2 下一主线 E0–E4
+### 9.2 主线 E0–E4（已完成，2026-09-14 关闭）
+
+| 阶段 | 状态 | 结果 | 审计/ADR |
+|---|---|---|---|
+| E0 项目模型与只读发现 | 已完成 | `workspace/project/*`：多 roots 绑定与恢复、技术栈/包管理器/页面/组件/路由/脚本/Git 状态扫描，扫描只读 | [E0 ADR](./2026-09-13-e0-workspace-project-adr.md) |
+| E1 源码级页面与组件变更 | 已完成 | `workspace/source/*`：SourceRef 定位、ChangeSet 生命周期、diff、apply/restore、外部编辑 hash 校验 | [E1 ADR](./2026-09-13-e1-workspace-source-adr.md) |
+| E2 真实框架 Preview | 已完成 | 服务 spec 与 store、依赖编排、health check、真实 dev server 生命周期 | [E2 ADR](./2026-09-13-e2-workspace-service-adr.md) |
+| E3 前后端联动 | 已完成 | `workspace/preview/diagnose` 浏览器错误到服务/源码根因关联、跨 root 验证、崩溃恢复清理 | [E3 审计](./2026-09-14-e3-completion-audit.md) |
+| E4 可靠性与恢复 | 已完成 | project watcher + 外部编辑冲突失效、append-only 审计日志、多窗口写锁、服务状态推送、envRefs/secretValues、Windows Job Object；四场景验收 + 手工 smoke 通过 | [E4 审计](./2026-09-14-e4-completion-audit.md) |
+
 
 #### E0：项目模型与只读发现
 
@@ -467,6 +476,8 @@ Canvas ElementRef
 - checkpoint、回滚、审计和敏感环境变量保护。
 
 **退出条件：** 外部 IDE 同时修改、Runtime 重启、服务崩溃和脏工作树场景不会静默丢失或覆盖代码。
+
+**主线之后（2026-09-14 裁定）：** E0–E4 全部交付在 Ody Runtime 侧，`workspace/*` 窄协议已具备可验证能力，但尚无产品消费端。下一阶段为 Engineering Workspace 产品化：odyBox 按 §6.1 职责矩阵建设呈现端——项目入口（打开目录、多根授权）、文件树与页面/组件/路由视图、ChangeSet diff 与确认界面、Services 面板（日志、启停、健康状态）以及外部编辑冲突与写锁占用 UX；并行启动 §10.2 指标采集与真实用户观察。§9.3 不扩张清单继续有效。
 
 ### 9.3 E0 之前不扩张
 
