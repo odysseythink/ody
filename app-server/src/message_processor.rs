@@ -1095,6 +1095,16 @@ impl MessageProcessor {
                 .resolve(params)
                 .await
                 .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceArtifactBridge { params, .. } => self
+                .workspace_source_processor
+                .artifact_bridge(params)
+                .await
+                .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceArtifactBridgeList { params, .. } => self
+                .workspace_source_processor
+                .artifact_bridge_list(params)
+                .await
+                .map(|response| Some(response.into())),
             ClientRequest::WorkspaceChangeSetCreate { params, .. } => self
                 .workspace_source_processor
                 .changeset_create(params)

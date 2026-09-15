@@ -833,6 +833,18 @@ client_request_definitions! {
         serialization: global_shared_read("workspace-source"),
         response: v2::WorkspaceSourceResolveResponse,
     },
+    #[experimental("workspace/artifact/v1")]
+    WorkspaceArtifactBridge => "workspace/artifact/bridge" {
+        params: v2::WorkspaceArtifactBridgeParams,
+        serialization: global("workspace-source"),
+        response: v2::WorkspaceArtifactBridgeResponse,
+    },
+    #[experimental("workspace/artifact/v1")]
+    WorkspaceArtifactBridgeList => "workspace/artifact/bridge/list" {
+        params: v2::WorkspaceArtifactBridgeListParams,
+        serialization: global_shared_read("workspace-source"),
+        response: v2::WorkspaceArtifactBridgeListResponse,
+    },
     #[experimental("workspace/source/v1")]
     WorkspaceChangeSetCreate => "workspace/source/changeset/create" {
         params: v2::WorkspaceChangeSetCreateParams,

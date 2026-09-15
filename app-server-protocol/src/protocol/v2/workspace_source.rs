@@ -686,3 +686,88 @@ mod tests {
         assert_eq!(value["rootGitDiffs"][0]["git"]["available"], true);
     }
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum WorkspaceArtifactBridgeStatus {
+    /// The paired changeset is still Pending review.
+    Pending,
+    /// The paired changeset was applied: the artifact now lives in the root.
+    Applied,
+    /// The paired changeset was rejected.
+    Rejected,
+}
+
+/// Provenance record for importing a Visual Artifact's standalone source
+/// into a bound workspace root. The import itself always lands as a Pending
+/// changeset (single Add change), so it flows through the normal review and
+/// conflict-detection machinery; this record tracks artifact lineage so the
+/// "prototype merged into a real workspace" ratio (§10.2) is computable
+/// runtime-side.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceArtifactBridge {
+    /// Server-generated `ab-{uuid}`.
+    pub id: String,
+    pub project_id: String,
+    /// Provenance: the Visual Artifact id being imported, when known.
+    pub artifact_id: Option<String>,
+    /// Root-relative `/`-separated target file the artifact source lands in.
+    pub target_path: String,
+    /// The Pending changeset carrying the import; status mirrors its lifecycle.
+    pub changeset_id: String,
+    /// Client-generated key makes bridge retries idempotent.
+    pub idempotency_key: String,
+    pub status: WorkspaceArtifactBridgeStatus,
+    #[ts(type = "number")]
+    pub created_at_ms: i64,
+    #[ts(type = "number")]
+    pub updated_at_ms: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceArtifactBridgeParams {
+    pub project_id: String,
+    /// Index into the project binding's `roots` vector. Defaults to 0.
+    #[serde(default)]
+    #[ts(optional)]
+    pub root_index: Option<u32>,
+    /// Provenance: the Visual Artifact id being imported, when known.
+    #[serde(default)]
+    #[ts(optional)]
+    pub artifact_id: Option<String>,
+    /// Root-relative `/`-separated target file. Must not exist yet
+    /// (Add-only v1; overwriting goes through the changeset panel).
+    pub target_path: String,
+    /// Full artifact source (standalone HTML today). Size-capped server-side.
+    pub content: String,
+    /// Client-generated key makes bridge retries idempotent.
+    pub idempotency_key: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceArtifactBridgeResponse {
+    pub bridge: WorkspaceArtifactBridge,
+    pub changeset: WorkspaceChangeSet,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceArtifactBridgeListParams {
+    pub project_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceArtifactBridgeListResponse {
+    /// Most recently created first.
+    pub bridges: Vec<WorkspaceArtifactBridge>,
+}

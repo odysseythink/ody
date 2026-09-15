@@ -8,6 +8,12 @@ use std::time::Duration;
 
 use ody_app_server_protocol::JSONRPCErrorError;
 use ody_app_server_protocol::WORKSPACE_SOURCE_PROTOCOL_VERSION;
+use ody_app_server_protocol::WorkspaceArtifactBridge;
+use ody_app_server_protocol::WorkspaceArtifactBridgeListParams;
+use ody_app_server_protocol::WorkspaceArtifactBridgeListResponse;
+use ody_app_server_protocol::WorkspaceArtifactBridgeParams;
+use ody_app_server_protocol::WorkspaceArtifactBridgeResponse;
+use ody_app_server_protocol::WorkspaceArtifactBridgeStatus;
 use ody_app_server_protocol::WorkspaceChangeSet;
 use ody_app_server_protocol::WorkspaceChangeSetApplyParams;
 use ody_app_server_protocol::WorkspaceChangeSetApplyResponse;
@@ -24,6 +30,7 @@ use ody_app_server_protocol::WorkspaceChangeSetRejectResponse;
 use ody_app_server_protocol::WorkspaceChangeSetRestoreParams;
 use ody_app_server_protocol::WorkspaceChangeSetRestoreResponse;
 use ody_app_server_protocol::WorkspaceChangeSetStatus;
+use ody_app_server_protocol::WorkspaceFileChange;
 use ody_app_server_protocol::WorkspaceFileChangeKind;
 use ody_app_server_protocol::WorkspaceFileEvent;
 use ody_app_server_protocol::WorkspaceFileEventKind;
@@ -59,6 +66,10 @@ const RESOLVE_MAX_LIMIT: usize = 100;
 
 const STORE_DIR: &str = "workspace-source";
 const STORE_FILE: &str = "v1.json";
+
+/// Standalone artifact sources (self-contained HTML today) are bounded so a
+/// bridge call stays a protocol message, not a bulk transfer channel.
+const MAX_ARTIFACT_BRIDGE_CONTENT_BYTES: usize = 2 * 1024 * 1024;
 
 /// `git diff HEAD` timeout for the whole-repo diff channel.
 const GIT_DIFF_TIMEOUT_MS: u64 = 5_000;
@@ -134,6 +145,132 @@ impl WorkspaceSourceRequestProcessor {
             }
         }
         Ok(WorkspaceSourceResolveResponse { matches })
+    }
+
+    /// Import a Visual Artifact's standalone source into a bound root as a
+    /// Pending changeset (single Add change), recording provenance so the
+    /// prototype-to-workspace merge ratio stays computable runtime-side.
+    /// The import itself reuses the changeset pipeline: base-hash checks,
+    /// conflict detection, checkpoint capture, and the review UI all apply.
+    pub(crate) async fn artifact_bridge(
+        &self,
+        params: WorkspaceArtifactBridgeParams,
+    ) -> Result<WorkspaceArtifactBridgeResponse, JSONRPCErrorError> {
+        let project_id = params.project_id.clone();
+        let result = self.artifact_bridge_inner(params).await;
+        match &result {
+            Ok(response) => self.audit.record(audit_event(
+                Some(&response.bridge.project_id),
+                "artifact.bridge",
+                "ok",
+                serde_json::json!({
+                    "bridgeId": response.bridge.id,
+                    "changesetId": response.bridge.changeset_id,
+                    "artifactId": response.bridge.artifact_id,
+                    "targetPath": response.bridge.target_path,
+                }),
+            )),
+            Err(err) => self.audit.record(audit_event(
+                Some(&project_id),
+                "artifact.bridge",
+                "error",
+                error_detail("artifact.bridge", err),
+            )),
+        }
+        result
+    }
+
+    async fn artifact_bridge_inner(
+        &self,
+        params: WorkspaceArtifactBridgeParams,
+    ) -> Result<WorkspaceArtifactBridgeResponse, JSONRPCErrorError> {
+        // Idempotent retry: return the existing record before any validation.
+        if let Some(existing) = self.with_store(|store| {
+            Ok(store
+                .bridges
+                .values()
+                .find(|bridge| bridge.idempotency_key == params.idempotency_key)
+                .cloned())
+        })? {
+            let changeset = self.stored_changeset(&existing.changeset_id)?.1.change_set;
+            return Ok(WorkspaceArtifactBridgeResponse {
+                bridge: existing,
+                changeset,
+            });
+        }
+        if params.content.len() > MAX_ARTIFACT_BRIDGE_CONTENT_BYTES {
+            return Err(invalid_params(format!(
+                "artifact bridge content exceeds {} bytes",
+                MAX_ARTIFACT_BRIDGE_CONTENT_BYTES
+            )));
+        }
+        let project = self.project(&params.project_id)?;
+        let root_index = params.root_index.unwrap_or(0);
+        let root = project
+            .roots
+            .get(root_index as usize)
+            .ok_or_else(|| invalid_params(format!("root_index {root_index} out of range")))?;
+        let normalized =
+            crate::workspace_changeset::normalize_relative(&params.target_path)?;
+        let absolute = Path::new(&root.path).join(&normalized);
+        if absolute.exists() {
+            return Err(invalid_params(format!(
+                "artifact bridge target {normalized:?} already exists; overwrite via a changeset"
+            )));
+        }
+        let target = normalized.clone();
+        let response = self
+            .changeset_create_inner(WorkspaceChangeSetCreateParams {
+                project_id: params.project_id.clone(),
+                title: format!("Import artifact into {target}").chars().take(200).collect(),
+                changes: vec![WorkspaceFileChange {
+                    root_index,
+                    path: normalized,
+                    kind: WorkspaceFileChangeKind::Add,
+                    base_hash: None,
+                    content: Some(params.content),
+                }],
+                idempotency_key: format!("artifact-bridge:{}", params.idempotency_key),
+            })
+            .await?;
+        let now = now_ms();
+        let bridge = WorkspaceArtifactBridge {
+            id: format!("ab-{}", uuid::Uuid::new_v4()),
+            project_id: params.project_id,
+            artifact_id: params.artifact_id,
+            target_path: target,
+            changeset_id: response.changeset.id.clone(),
+            idempotency_key: params.idempotency_key,
+            status: WorkspaceArtifactBridgeStatus::Pending,
+            created_at_ms: now,
+            updated_at_ms: now,
+        };
+        self.with_store(|store| {
+            store.bridges.insert(bridge.id.clone(), bridge.clone());
+            store.persist()?;
+            Ok(())
+        })?;
+        Ok(WorkspaceArtifactBridgeResponse {
+            bridge,
+            changeset: response.changeset,
+        })
+    }
+
+    pub(crate) async fn artifact_bridge_list(
+        &self,
+        params: WorkspaceArtifactBridgeListParams,
+    ) -> Result<WorkspaceArtifactBridgeListResponse, JSONRPCErrorError> {
+        let project = self.project(&params.project_id)?;
+        let mut bridges = self.with_store(|store| {
+            Ok(store
+                .bridges
+                .values()
+                .filter(|bridge| bridge.project_id == project.id)
+                .cloned()
+                .collect::<Vec<_>>())
+        })?;
+        bridges.sort_by(|a, b| b.created_at_ms.cmp(&a.created_at_ms));
+        Ok(WorkspaceArtifactBridgeListResponse { bridges })
     }
 
     pub(crate) async fn changeset_create(
@@ -407,6 +544,7 @@ impl WorkspaceSourceRequestProcessor {
             store
                 .changesets
                 .insert(stored.change_set.id.clone(), stored);
+            sync_bridge_status(store, &params.changeset_id, WorkspaceArtifactBridgeStatus::Applied);
             store.persist()?;
             Ok(store
                 .changesets
@@ -459,10 +597,12 @@ impl WorkspaceSourceRequestProcessor {
         }
         stored.change_set.status = WorkspaceChangeSetStatus::Rejected;
         stored.change_set.updated_at_ms = now_ms();
+        let changeset_id = stored.change_set.id.clone();
         let change_set = self.with_store(|store| {
             store
                 .changesets
-                .insert(stored.change_set.id.clone(), stored);
+                .insert(changeset_id.clone(), stored);
+            sync_bridge_status(store, &changeset_id, WorkspaceArtifactBridgeStatus::Rejected);
             store.persist()?;
             Ok(store
                 .changesets
@@ -552,10 +692,12 @@ impl WorkspaceSourceRequestProcessor {
         }
         stored.change_set.status = WorkspaceChangeSetStatus::Restored;
         stored.change_set.updated_at_ms = now_ms();
+        let changeset_id = stored.change_set.id.clone();
         let change_set = self.with_store(|store| {
             store
                 .changesets
-                .insert(stored.change_set.id.clone(), stored);
+                .insert(changeset_id.clone(), stored);
+            sync_bridge_status(store, &changeset_id, WorkspaceArtifactBridgeStatus::Pending);
             store.persist()?;
             Ok(store
                 .changesets
@@ -821,6 +963,10 @@ pub(crate) struct StoredChangeSet {
 pub(crate) struct WorkspaceSourceStore {
     schema_version: u32,
     changesets: BTreeMap<String, StoredChangeSet>,
+    /// Artifact import provenance records; status mirrors the paired
+    /// changeset lifecycle (serde(default) upgrades v1/v2 store files).
+    #[serde(default)]
+    bridges: BTreeMap<String, WorkspaceArtifactBridge>,
     /// Namespaced idempotency key ("changeset:{key}") -> changeset id.
     idempotency: BTreeMap<String, String>,
     #[serde(skip)]
@@ -1096,6 +1242,22 @@ fn conflicted_change_keys(
     conflicted
 }
 
+/// Mirror a changeset lifecycle transition onto its artifact bridge record
+/// (a bridge is always paired 1:1 with the changeset that carries it).
+fn sync_bridge_status(
+    store: &mut WorkspaceSourceStore,
+    changeset_id: &str,
+    status: WorkspaceArtifactBridgeStatus,
+) {
+    let now = now_ms();
+    for bridge in store.bridges.values_mut() {
+        if bridge.changeset_id == changeset_id && bridge.status != status {
+            bridge.status = status;
+            bridge.updated_at_ms = now;
+        }
+    }
+}
+
 fn now_ms() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -1322,6 +1484,214 @@ mod tests {
             base_hash: Some(crate::workspace_changeset::sha256_hex(base.as_bytes())),
             content: Some("new\n".to_owned()),
         }
+    }
+
+    async fn processor_with_project(
+        ody_home: &Path,
+        project_id: &str,
+        root: &Path,
+    ) -> WorkspaceSourceRequestProcessor {
+        use crate::request_processors::workspace_project_processor::WorkspaceProjectStore;
+
+        let project_store = Arc::new(Mutex::new(WorkspaceProjectStore::default()));
+        project_store
+            .lock()
+            .expect("project store lock")
+            .projects
+            .insert(
+                project_id.to_owned(),
+                WorkspaceProjectRef {
+                    id: project_id.to_owned(),
+                    name: "fixture".to_owned(),
+                    schema_version: 1,
+                    roots: vec![WorkspaceRoot {
+                        path: root.to_string_lossy().into_owned(),
+                        role: WorkspaceRootRole::Primary,
+                        auth_source: "user_selected".to_owned(),
+                    }],
+                    created_at_ms: 0,
+                    updated_at_ms: 0,
+                    locked_by: None,
+                },
+            );
+        let audit = Arc::new(crate::workspace_audit::WorkspaceAuditLog::new(
+            ody_home.join("workspace-audit").join("v1.jsonl"),
+        ));
+        WorkspaceSourceRequestProcessor::new(
+            ody_home.to_path_buf(),
+            project_store,
+            audit,
+            Arc::new(WorkspaceWriteLock::default()),
+        )
+    }
+
+    fn bridge_params(project_id: &str, target: &str, key: &str) -> WorkspaceArtifactBridgeParams {
+        WorkspaceArtifactBridgeParams {
+            project_id: project_id.to_owned(),
+            root_index: None,
+            artifact_id: Some("artifact-1".to_owned()),
+            target_path: target.to_owned(),
+            content: "<html><body>hello</body></html>".to_owned(),
+            idempotency_key: key.to_owned(),
+        }
+    }
+
+    #[tokio::test]
+    async fn artifact_bridge_creates_pending_pair_and_is_idempotent() {
+        let dir = tempfile::tempdir().expect("temp");
+        let root = dir.path().join("root");
+        fs::create_dir_all(&root).unwrap();
+        let root = fs::canonicalize(&root).unwrap();
+        let processor = processor_with_project(&dir.path().join("ody"), "p1", &root).await;
+
+        let response = processor
+            .artifact_bridge(bridge_params("p1", "src/Hello.html", "bridge-1"))
+            .await
+            .expect("bridge");
+        assert_eq!(response.bridge.status, WorkspaceArtifactBridgeStatus::Pending);
+        assert_eq!(response.changeset.status, WorkspaceChangeSetStatus::Pending);
+        assert_eq!(response.changeset.changes.len(), 1);
+        assert!(response.bridge.id.starts_with("ab-"));
+
+        // Idempotent retry returns the same pair without a second record.
+        let retry = processor
+            .artifact_bridge(bridge_params("p1", "src/Hello.html", "bridge-1"))
+            .await
+            .expect("bridge retry");
+        assert_eq!(retry.bridge.id, response.bridge.id);
+
+        let listed = processor
+            .artifact_bridge_list(WorkspaceArtifactBridgeListParams {
+                project_id: "p1".to_owned(),
+            })
+            .await
+            .expect("list bridges");
+        assert_eq!(listed.bridges.len(), 1);
+        assert_eq!(listed.bridges[0].artifact_id.as_deref(), Some("artifact-1"));
+    }
+
+    #[tokio::test]
+    async fn artifact_bridge_rejects_existing_target_escaping_path_and_oversize() {
+        let dir = tempfile::tempdir().expect("temp");
+        let root = dir.path().join("root");
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("src/Hello.html"), "existing").unwrap();
+        let root = fs::canonicalize(&root).unwrap();
+        let processor = processor_with_project(&dir.path().join("ody"), "p1", &root).await;
+
+        let existing = processor
+            .artifact_bridge(bridge_params("p1", "src/Hello.html", "b-existing"))
+            .await
+            .expect_err("existing target must be rejected for Add-only v1");
+        assert!(existing.message.contains("already exists"), "{}", existing.message);
+
+        let escaping = processor
+            .artifact_bridge(bridge_params("p1", "../out.html", "b-escape"))
+            .await
+            .expect_err("escaping path must be rejected");
+        assert!(escaping.message.contains("escape"), "{}", escaping.message);
+
+        let oversize = processor
+            .artifact_bridge(WorkspaceArtifactBridgeParams {
+                content: "x".repeat(MAX_ARTIFACT_BRIDGE_CONTENT_BYTES + 1),
+                ..bridge_params("p1", "big.html", "b-big")
+            })
+            .await
+            .expect_err("oversize content must be rejected");
+        assert!(oversize.message.contains("exceeds"), "{}", oversize.message);
+    }
+
+    #[tokio::test]
+    async fn artifact_bridge_status_mirrors_changeset_lifecycle() {
+        let dir = tempfile::tempdir().expect("temp");
+        let root = dir.path().join("root");
+        fs::create_dir_all(&root).unwrap();
+        let root = fs::canonicalize(&root).unwrap();
+        let processor = processor_with_project(&dir.path().join("ody"), "p1", &root).await;
+
+        let bridged = processor
+            .artifact_bridge(bridge_params("p1", "Hello.html", "bridge-life"))
+            .await
+            .expect("bridge");
+        let bridge_id = bridged.bridge.id.clone();
+        let changeset_id = bridged.changeset.id.clone();
+
+        processor
+            .changeset_apply(
+                WorkspaceChangeSetApplyParams {
+                    changeset_id: changeset_id.clone(),
+                },
+                ConnectionId(1),
+            )
+            .await
+            .expect("apply");
+        let applied = processor
+            .artifact_bridge_list(WorkspaceArtifactBridgeListParams {
+                project_id: "p1".to_owned(),
+            })
+            .await
+            .expect("list");
+        let bridge = applied
+            .bridges
+            .iter()
+            .find(|bridge| bridge.id == bridge_id)
+            .expect("bridge record");
+        assert_eq!(bridge.status, WorkspaceArtifactBridgeStatus::Applied);
+        assert_eq!(
+            fs::read_to_string(root.join("Hello.html")).expect("imported file"),
+            "<html><body>hello</body></html>"
+        );
+
+        // Restore rolls the changeset and the bridge back together.
+        processor
+            .changeset_restore(
+                WorkspaceChangeSetRestoreParams {
+                    changeset_id: changeset_id.clone(),
+                },
+                ConnectionId(1),
+            )
+            .await
+            .expect("restore");
+        let restored = processor
+            .artifact_bridge_list(WorkspaceArtifactBridgeListParams {
+                project_id: "p1".to_owned(),
+            })
+            .await
+            .expect("list");
+        assert_eq!(
+            restored.bridges[0].status,
+            WorkspaceArtifactBridgeStatus::Pending
+        );
+    }
+
+    #[tokio::test]
+    async fn artifact_bridge_reject_marks_bridge_rejected() {
+        let dir = tempfile::tempdir().expect("temp");
+        let root = dir.path().join("root");
+        fs::create_dir_all(&root).unwrap();
+        let root = fs::canonicalize(&root).unwrap();
+        let processor = processor_with_project(&dir.path().join("ody"), "p1", &root).await;
+
+        let bridged = processor
+            .artifact_bridge(bridge_params("p1", "Hello.html", "bridge-reject"))
+            .await
+            .expect("bridge");
+        processor
+            .changeset_reject(WorkspaceChangeSetRejectParams {
+                changeset_id: bridged.changeset.id,
+            })
+            .await
+            .expect("reject");
+        let listed = processor
+            .artifact_bridge_list(WorkspaceArtifactBridgeListParams {
+                project_id: "p1".to_owned(),
+            })
+            .await
+            .expect("list");
+        assert_eq!(
+            listed.bridges[0].status,
+            WorkspaceArtifactBridgeStatus::Rejected
+        );
     }
 
     #[tokio::test]
