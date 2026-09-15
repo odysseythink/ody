@@ -15,6 +15,11 @@ use ody_app_server_protocol::WorkspaceScript;
 use ody_app_server_protocol::WorkspaceSourceEntry;
 use ody_app_server_protocol::WorkspaceSourceKind;
 use ody_app_server_protocol::WorkspaceTechEntry;
+use ody_app_server_protocol::WorkspaceTreeEntry;
+use ody_app_server_protocol::WorkspaceTreeEntryKind;
+
+use crate::error_code::invalid_params;
+use ody_app_server_protocol::JSONRPCErrorError;
 
 /// Hard caps keep scans bounded on large trees. Exceeding a cap sets
 /// `truncated` on the affected root instead of failing the scan.
@@ -40,6 +45,93 @@ pub(crate) const SKIP_DIRS: &[&str] = &[
 ];
 
 pub(crate) const SOURCE_EXTENSIONS: &[&str] = &["ts", "tsx", "js", "jsx", "vue", "svelte"];
+
+/// Hard caps for the on-demand tree listing (`workspace/project/tree`).
+/// Exceeding a cap sets `truncated` instead of failing the listing.
+pub(crate) const MAX_TREE_ENTRIES: usize = 2_000;
+pub(crate) const MAX_TREE_REQUEST_DEPTH: u32 = 4;
+
+pub(crate) struct TreeListing {
+    pub entries: Vec<WorkspaceTreeEntry>,
+    pub truncated: bool,
+}
+
+/// List `dir` (an absolute path inside a bound root, already normalized and
+/// escape-checked by the caller) down to `depth` levels. Shares the scan's
+/// skip-dir policy and never follows symlinks, so a listed directory can
+/// never escape the root. Entries are sorted by name at every level.
+pub(crate) fn read_tree(
+    dir: &Path,
+    relative: &str,
+    depth: u32,
+) -> Result<TreeListing, JSONRPCErrorError> {
+    let mut listing = TreeListing {
+        entries: Vec::new(),
+        truncated: false,
+    };
+    if !dir.is_dir() {
+        return Err(invalid_params(format!(
+            "tree path {relative:?} is not a directory under the workspace root"
+        )));
+    }
+    fill_tree_entries(dir, relative, depth.clamp(1, MAX_TREE_REQUEST_DEPTH), &mut listing);
+    Ok(listing)
+}
+
+fn fill_tree_entries(dir: &Path, relative: &str, depth: u32, listing: &mut TreeListing) {
+    if listing.truncated {
+        return;
+    }
+    let read_dir = match fs::read_dir(dir) {
+        Ok(read_dir) => read_dir,
+        // Unreadable directories list as empty, mirroring the scan walk.
+        Err(_) => return,
+    };
+    let mut children: Vec<(String, WorkspaceTreeEntryKind)> = Vec::new();
+    for entry in read_dir.flatten() {
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        // `DirEntry::file_type` is symlink_metadata-based: symlinks are
+        // neither followed nor listed, so a link can never escape the root.
+        let kind = if file_type.is_dir() {
+            if SKIP_DIRS.contains(&entry.file_name().to_string_lossy().as_ref()) {
+                continue;
+            }
+            WorkspaceTreeEntryKind::Dir
+        } else if file_type.is_file() {
+            WorkspaceTreeEntryKind::File
+        } else {
+            continue;
+        };
+        children.push((entry.file_name().to_string_lossy().into_owned(), kind));
+    }
+    children.sort_by(|a, b| a.0.cmp(&b.0));
+    for (name, kind) in children {
+        if listing.entries.len() >= MAX_TREE_ENTRIES {
+            listing.truncated = true;
+            return;
+        }
+        let child_relative = if relative.is_empty() {
+            name.clone()
+        } else {
+            format!("{relative}/{name}")
+        };
+        // Push the parent before descending so a flattened depth>1 listing
+        // reads parent-first, which is what a tree UI renders.
+        listing.entries.push(WorkspaceTreeEntry {
+            name: name.clone(),
+            path: child_relative.clone(),
+            kind,
+        });
+        if kind == WorkspaceTreeEntryKind::Dir && depth > 1 {
+            fill_tree_entries(&dir.join(&name), &child_relative, depth - 1, listing);
+            if listing.truncated {
+                return;
+            }
+        }
+    }
+}
 
 /// Lockfile name -> package manager id, in priority order.
 pub(crate) const PACKAGE_MANAGERS: &[(&str, &str)] = &[

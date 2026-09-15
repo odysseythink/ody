@@ -815,6 +815,12 @@ client_request_definitions! {
         serialization: global_shared_read("workspace-project"),
         response: v2::WorkspaceProjectScanResponse,
     },
+    #[experimental("workspace/project/v1")]
+    WorkspaceProjectTree => "workspace/project/tree" {
+        params: v2::WorkspaceProjectTreeParams,
+        serialization: global_shared_read("workspace-project"),
+        response: v2::WorkspaceProjectTreeResponse,
+    },
     #[experimental("workspace/source/v1")]
     WorkspaceSourceIndex => "workspace/source/index" {
         params: v2::WorkspaceSourceIndexParams,

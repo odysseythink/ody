@@ -295,6 +295,60 @@ mod tests {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum WorkspaceTreeEntryKind {
+    Dir,
+    File,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceTreeEntry {
+    /// File name within the parent directory.
+    pub name: String,
+    /// Root-relative `/`-separated path of the entry.
+    pub path: String,
+    pub kind: WorkspaceTreeEntryKind,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceProjectTreeParams {
+    pub project_id: String,
+    /// Index into the project binding's `roots` vector. Defaults to 0.
+    #[serde(default)]
+    #[ts(optional)]
+    pub root_index: Option<u32>,
+    /// Root-relative `/`-separated directory to list; `None` or empty lists
+    /// the root itself. Normalized and escape-checked like changeset paths.
+    #[serde(default)]
+    #[ts(optional)]
+    pub path: Option<String>,
+    /// Expansion depth below `path`. Defaults to 1 (direct children only),
+    /// capped at 4.
+    #[serde(default)]
+    #[ts(optional)]
+    pub depth: Option<u32>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceProjectTreeResponse {
+    /// Canonicalized root path that owns the listed entries.
+    pub root_path: String,
+    /// The `path` that was listed (empty string for the root itself).
+    pub path: String,
+    /// Direct children of `path`, sorted by name.
+    pub entries: Vec<WorkspaceTreeEntry>,
+    /// True when an entry cap or depth cap cut the listing short.
+    pub truncated: bool,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]

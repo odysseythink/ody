@@ -1070,6 +1070,11 @@ impl MessageProcessor {
                 .scan(params)
                 .await
                 .map(|response| Some(response.into())),
+            ClientRequest::WorkspaceProjectTree { params, .. } => self
+                .workspace_project_processor
+                .tree(params)
+                .await
+                .map(|response| Some(response.into())),
             ClientRequest::WorkspaceProjectLock { params, .. } => self
                 .workspace_project_processor
                 .lock(params, connection_id)

@@ -25,6 +25,8 @@ use ody_app_server_protocol::WorkspaceProjectUnlockResponse;
 use ody_app_server_protocol::WorkspaceProjectRef;
 use ody_app_server_protocol::WorkspaceProjectScanParams;
 use ody_app_server_protocol::WorkspaceProjectScanResponse;
+use ody_app_server_protocol::WorkspaceProjectTreeParams;
+use ody_app_server_protocol::WorkspaceProjectTreeResponse;
 use ody_app_server_protocol::WorkspaceRoot;
 use ody_app_server_protocol::WorkspaceRootRole;
 use ody_utils_absolute_path::AbsolutePathBuf;
@@ -177,6 +179,39 @@ impl WorkspaceProjectRequestProcessor {
                 projects,
                 caller_connection_id: connection_id.0,
             })
+        })
+    }
+
+    /// On-demand directory listing for the file-tree view. Read-only; shares
+    /// the scan's skip-dir policy and never follows symlinks.
+    pub(crate) async fn tree(
+        &self,
+        params: WorkspaceProjectTreeParams,
+    ) -> Result<WorkspaceProjectTreeResponse, JSONRPCErrorError> {
+        let project = self.with_store(|store| {
+            store
+                .projects
+                .get(&params.project_id)
+                .cloned()
+                .ok_or_else(|| unknown_project(&params.project_id))
+        })?;
+        let root_index = params.root_index.unwrap_or(0) as usize;
+        let root = project
+            .roots
+            .get(root_index)
+            .ok_or_else(|| invalid_params(format!("root_index {} out of range", root_index)))?;
+        let relative = match params.path.as_deref() {
+            None | Some("") => String::new(),
+            Some(path) => crate::workspace_changeset::normalize_relative(path)?,
+        };
+        let depth = params.depth.unwrap_or(1);
+        let target = Path::new(&root.path).join(&relative);
+        let listing = crate::workspace_discovery::read_tree(&target, &relative, depth)?;
+        Ok(WorkspaceProjectTreeResponse {
+            root_path: root.path.clone(),
+            path: relative,
+            entries: listing.entries,
+            truncated: listing.truncated,
         })
     }
 
@@ -509,6 +544,101 @@ mod tests {
             .get("ws-1")
             .expect("project survives reload");
         assert_eq!(project.roots[0].path, root.to_string_lossy());
+    }
+
+    #[tokio::test]
+    async fn tree_lists_directories_without_following_symlinks() {
+        let root_dir = tempfile::tempdir().expect("create root");
+        let root_path = root_dir.path().canonicalize().expect("canonicalize");
+        fs::create_dir_all(root_path.join("src/components")).expect("create dirs");
+        fs::create_dir_all(root_path.join("node_modules/lib")).expect("create skip dir");
+        fs::write(root_path.join("src/App.tsx"), "export default function App() {}")
+            .expect("write file");
+        fs::write(root_path.join("src/components/Button.tsx"), "export const Button = 1")
+            .expect("write file");
+        fs::write(root_path.join("package.json"), "{}").expect("write file");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(root_path.join("src"), root_path.join("src-link"))
+            .expect("create symlink");
+
+        let ody_home = tempfile::tempdir().expect("create ody home");
+        let audit = Arc::new(crate::workspace_audit::WorkspaceAuditLog::new(
+            ody_home.path().join("workspace-audit").join("v1.jsonl"),
+        ));
+        let processor = WorkspaceProjectRequestProcessor::new(
+            ody_home.path().to_path_buf(),
+            audit,
+            Arc::new(crate::workspace_lock::WorkspaceWriteLock::default()),
+        );
+        processor
+            .bind(WorkspaceProjectBindParams {
+                id: "ws-1".to_owned(),
+                name: "fixture".to_owned(),
+                roots: vec![
+                    ody_utils_absolute_path::test_support::PathBufExt::abs(&root_path),
+                ],
+                idempotency_key: "key-1".to_owned(),
+            })
+            .await
+            .expect("bind project");
+
+        let params = WorkspaceProjectTreeParams {
+            project_id: "ws-1".to_owned(),
+            root_index: None,
+            path: None,
+            depth: Some(2),
+        };
+        let top = processor.tree(params.clone()).await.expect("list root");
+        assert_eq!(top.path, "");
+        // depth=2 from the root: parent-first flattening, sorted per level,
+        // and node_modules is skipped per scan policy.
+        let names: Vec<&str> = top.entries.iter().map(|entry| entry.path.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["package.json", "src", "src/App.tsx", "src/components"]
+        );
+        #[cfg(unix)]
+        assert!(!names.contains(&"src-link"), "symlink must not be listed");
+
+        let nested = processor
+            .tree(WorkspaceProjectTreeParams {
+                path: Some("src".to_owned()),
+                ..params.clone()
+            })
+            .await
+            .expect("list src");
+        let nested_paths: Vec<&str> = nested
+            .entries
+            .iter()
+            .map(|entry| entry.path.as_str())
+            .collect();
+        // depth=2 from src descends one more level into src/components.
+        assert_eq!(
+            nested_paths,
+            vec!["src/App.tsx", "src/components", "src/components/Button.tsx"]
+        );
+
+        let escape = processor
+            .tree(WorkspaceProjectTreeParams {
+                path: Some("../outside".to_owned()),
+                ..params.clone()
+            })
+            .await
+            .expect_err("escaping paths must be rejected");
+        assert!(escape.message.contains("escape"), "{}", escape.message);
+
+        let out_of_range = processor
+            .tree(WorkspaceProjectTreeParams {
+                root_index: Some(9),
+                ..params
+            })
+            .await
+            .expect_err("unknown root index must be rejected");
+        assert!(
+            out_of_range.message.contains("root_index"),
+            "{}",
+            out_of_range.message
+        );
     }
 
     #[tokio::test]
