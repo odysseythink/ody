@@ -109,6 +109,7 @@ mod thread_state;
 mod thread_status;
 mod transport;
 mod workspace_audit;
+mod workspace_canvas;
 mod workspace_changeset;
 mod workspace_lock;
 mod workspace_discovery;

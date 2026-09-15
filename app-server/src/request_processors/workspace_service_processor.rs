@@ -465,8 +465,18 @@ impl WorkspaceServiceRequestProcessor {
         let pm = crate::workspace_discovery::detect_package_manager(&cwd_path)
             .unwrap_or_else(|| "npm".to_owned());
         let port = crate::workspace_service::pick_port(port, &tech_ids).map_err(invalid_params)?;
-        let args =
+        let mut args =
             crate::workspace_service::build_command_args(&script_entry.name, port, &tech_ids);
+        // Canvas inject (proposal §12 slice 2/3): Vite projects get the ody
+        // id/bridge plugins through a generated wrapper config; user files
+        // untouched, any failure degrades to plain `dev` (picking disabled).
+        if let Some(extra_args) = crate::workspace_canvas::prepare_canvas_inject(
+            &cwd_path,
+            &tech_ids,
+            &script_entry.command,
+        ) {
+            args.extend(extra_args);
+        }
         let command_display = format!("{pm} {}", args.join(" "));
         let now = now_ms();
         let service_id = Uuid::new_v4().to_string();
