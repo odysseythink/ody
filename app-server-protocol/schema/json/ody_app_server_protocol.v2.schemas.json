@@ -13010,6 +13010,46 @@
           ],
           "title": "VisualWorkspace/changedNotification",
           "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "enum": [
+                "workspace/changed"
+              ],
+              "title": "Workspace/changedNotificationMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/WorkspaceChangedNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "title": "Workspace/changedNotification",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "enum": [
+                "workspace/service/changed"
+              ],
+              "title": "Workspace/service/changedNotificationMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/WorkspaceServiceChangedNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "title": "Workspace/service/changedNotification",
+          "type": "object"
         }
       ],
       "title": "ServerNotification"
@@ -17917,6 +17957,123 @@
       "title": "WindowsWorldWritableWarningNotification",
       "type": "object"
     },
+    "WorkspaceArtifactBridge": {
+      "description": "Provenance record for importing a Visual Artifact's standalone source into a bound workspace root. The import itself always lands as a Pending changeset (single Add change), so it flows through the normal review and conflict-detection machinery; this record tracks artifact lineage so the \"prototype merged into a real workspace\" ratio (§10.2) is computable runtime-side.",
+      "properties": {
+        "artifactId": {
+          "description": "Provenance: the Visual Artifact id being imported, when known.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "changesetId": {
+          "description": "The Pending changeset carrying the import; status mirrors its lifecycle.",
+          "type": "string"
+        },
+        "createdAtMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "id": {
+          "description": "Server-generated `ab-{uuid}`.",
+          "type": "string"
+        },
+        "idempotencyKey": {
+          "description": "Client-generated key makes bridge retries idempotent.",
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/WorkspaceArtifactBridgeStatus"
+        },
+        "targetPath": {
+          "description": "Root-relative `/`-separated target file the artifact source lands in.",
+          "type": "string"
+        },
+        "updatedAtMs": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "changesetId",
+        "createdAtMs",
+        "id",
+        "idempotencyKey",
+        "projectId",
+        "status",
+        "targetPath",
+        "updatedAtMs"
+      ],
+      "type": "object"
+    },
+    "WorkspaceArtifactBridgeStatus": {
+      "oneOf": [
+        {
+          "description": "The paired changeset is still Pending review.",
+          "enum": [
+            "pending"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "The paired changeset was applied: the artifact now lives in the root.",
+          "enum": [
+            "applied"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "The paired changeset was rejected.",
+          "enum": [
+            "rejected"
+          ],
+          "type": "string"
+        }
+      ]
+    },
+    "WorkspaceAuditEvent": {
+      "description": "One append-only audit record. `detail` is a whitelist-built summary: paths, names, counts, ids, hashes — never file content, never env/secret values (strategy 8.2 key discipline).",
+      "properties": {
+        "detail": {
+          "description": "Whitelisted structured summary (object), e.g. {\"changesetId\":\"cs-1\", \"files\":[\"0:src/a.ts\"]} or {\"error\":\"baseHash mismatch\"}."
+        },
+        "operation": {
+          "description": "Dotted operation id, e.g. \"changeset.apply\", \"service.startAll\".",
+          "type": "string"
+        },
+        "outcome": {
+          "description": "\"ok\" | \"error\".",
+          "type": "string"
+        },
+        "projectId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "seq": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "timestampMs": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "detail",
+        "operation",
+        "outcome",
+        "seq",
+        "timestampMs"
+      ],
+      "type": "object"
+    },
     "WorkspaceChangeSet": {
       "properties": {
         "appliedAtMs": {
@@ -17942,6 +18099,13 @@
         "id": {
           "description": "Server-generated `cs-{uuid}`.",
           "type": "string"
+        },
+        "invalidatedReason": {
+          "description": "E4: set when an external edit invalidated one or more base hashes while the changeset was Pending. Presence blocks apply with a structured conflict error. `None` = healthy.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "projectId": {
           "type": "string"
@@ -18042,6 +18206,40 @@
       ],
       "type": "string"
     },
+    "WorkspaceChangedNotification": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "Broadcast to all connections; one per debounce window per project.",
+      "properties": {
+        "changes": {
+          "description": "Capped at MAX_WATCH_EVENTS_PER_NOTIFICATION; see `overflow`.",
+          "items": {
+            "$ref": "#/definitions/WorkspaceFileEvent"
+          },
+          "type": "array"
+        },
+        "invalidatedChangesets": {
+          "description": "Pending changesets whose base hashes were contradicted by this event batch; clients should prompt re-index/re-create.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "overflow": {
+          "description": "True when the debounce window held more events than the cap.",
+          "type": "boolean"
+        },
+        "projectId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "changes",
+        "overflow",
+        "projectId"
+      ],
+      "title": "WorkspaceChangedNotification",
+      "type": "object"
+    },
     "WorkspaceDiscovery": {
       "properties": {
         "projectId": {
@@ -18114,6 +18312,44 @@
       ],
       "type": "string"
     },
+    "WorkspaceFileEvent": {
+      "description": "One debounced external file change under a project root.",
+      "properties": {
+        "contentHash": {
+          "description": "sha256 of the file content after the change; None for removals or unreadable/racing reads (best-effort, never blocks notification).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/definitions/WorkspaceFileEventKind"
+        },
+        "path": {
+          "description": "Root-relative `/`-joined path.",
+          "type": "string"
+        },
+        "rootIndex": {
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "path",
+        "rootIndex"
+      ],
+      "type": "object"
+    },
+    "WorkspaceFileEventKind": {
+      "enum": [
+        "added",
+        "modified",
+        "removed"
+      ],
+      "type": "string"
+    },
     "WorkspaceGitDiff": {
       "properties": {
         "available": {
@@ -18133,7 +18369,7 @@
           ]
         },
         "unifiedDiff": {
-          "description": "`git diff HEAD` output. Untracked files are not included (v1 limitation; per-changeset diffs cover them).",
+          "description": "`git diff HEAD` output, extended with `/dev/null -> new file` diffs for untracked files (capped per request; excess is reported in a trailing `# N untracked files omitted` line). Ignored files stay out.",
           "type": [
             "string",
             "null"
@@ -18313,6 +18549,15 @@
         },
         "id": {
           "type": "string"
+        },
+        "lockedBy": {
+          "description": "E4: connection id (as integer) currently holding the write lock, if any. Runtime-only: never persisted; `get`/`list` fill it from the in-memory lock table on every response.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "name": {
           "type": "string"
@@ -18500,6 +18745,71 @@
       ],
       "type": "object"
     },
+    "WorkspaceServiceChangedNotification": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "Broadcast service lifecycle change (E4: replaces client polling).",
+      "properties": {
+        "projectId": {
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/definitions/WorkspaceServiceChangedReason"
+        },
+        "services": {
+          "description": "Affected services after the state transition.",
+          "items": {
+            "$ref": "#/definitions/WorkspaceServiceRef"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "projectId",
+        "reason",
+        "services"
+      ],
+      "title": "WorkspaceServiceChangedNotification",
+      "type": "object"
+    },
+    "WorkspaceServiceChangedReason": {
+      "oneOf": [
+        {
+          "description": "A service reached Ready after start/startAll.",
+          "enum": [
+            "started"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Service stopped by stop/stopAll/close (exit recorded, not a crash).",
+          "enum": [
+            "stopped"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Process exited on its own with code 0.",
+          "enum": [
+            "exited"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Process exited non-zero, readiness timed out, or start failed.",
+          "enum": [
+            "failed"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Runtime restarted: previously non-terminal services were normalized to Stopped; clients should re-issue startAll if desired.",
+          "enum": [
+            "runtimeRestarted"
+          ],
+          "type": "string"
+        }
+      ]
+    },
     "WorkspaceServiceHealth": {
       "properties": {
         "checkedAtMs": {
@@ -18670,6 +18980,13 @@
         },
         "dependsOn": {
           "description": "Names of other specs in the same project that must be Ready (and healthy when they define a health check) before this one starts.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "envRefs": {
+          "description": "E4: names of environment variables the service expects at runtime (e.g. [\"STRIPE_KEY\"]). Only reference NAMES are persisted here — values are supplied per-request via `secretValues` and never stored.",
           "items": {
             "type": "string"
           },
@@ -19011,6 +19328,34 @@
         "id"
       ],
       "type": "object"
+    },
+    "WorkspaceTreeEntry": {
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/WorkspaceTreeEntryKind"
+        },
+        "name": {
+          "description": "File name within the parent directory.",
+          "type": "string"
+        },
+        "path": {
+          "description": "Root-relative `/`-separated path of the entry.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "name",
+        "path"
+      ],
+      "type": "object"
+    },
+    "WorkspaceTreeEntryKind": {
+      "enum": [
+        "dir",
+        "file"
+      ],
+      "type": "string"
     },
     "WorkspaceValidationCheck": {
       "properties": {

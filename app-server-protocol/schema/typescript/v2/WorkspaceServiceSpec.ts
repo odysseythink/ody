@@ -35,13 +35,19 @@ port?: number,
  * and escape-checked at define time; the resolved cwd never leaves
  * the bound root.
  */
-cwd?: string | null,
+cwd?: string,
 /**
  * Names of other specs in the same project that must be Ready (and
  * healthy when they define a health check) before this one starts.
  */
-dependsOn?: Array<string>, healthCheck?: WorkspaceServiceHealthCheck | null,
+dependsOn?: Array<string>, healthCheck?: WorkspaceServiceHealthCheck,
 /**
  * Readiness deadline per service; default 60s, clamp [5s, 300s].
  */
-readyTimeoutMs?: number, createdAtMs: number, updatedAtMs: number, };
+readyTimeoutMs?: number,
+/**
+ * E4: names of environment variables the service expects at runtime
+ * (e.g. ["STRIPE_KEY"]). Only reference NAMES are persisted here —
+ * values are supplied per-request via `secretValues` and never stored.
+ */
+envRefs?: Array<string>, createdAtMs: number, updatedAtMs: number, };

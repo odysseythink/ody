@@ -853,7 +853,7 @@ pub struct SkillsMarketplaceEntry {
     pub name: String,
     pub installs: u64,
     pub source: String,
-    #[ts(optional = nullable)]
+    #[ts(optional)]
     pub description: Option<String>,
 }
 

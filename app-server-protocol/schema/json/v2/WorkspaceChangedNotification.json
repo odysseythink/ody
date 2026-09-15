@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "WorkspaceFileEvent": {
+      "description": "One debounced external file change under a project root.",
+      "properties": {
+        "contentHash": {
+          "description": "sha256 of the file content after the change; None for removals or unreadable/racing reads (best-effort, never blocks notification).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/definitions/WorkspaceFileEventKind"
+        },
+        "path": {
+          "description": "Root-relative `/`-joined path.",
+          "type": "string"
+        },
+        "rootIndex": {
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "path",
+        "rootIndex"
+      ],
+      "type": "object"
+    },
+    "WorkspaceFileEventKind": {
+      "enum": [
+        "added",
+        "modified",
+        "removed"
+      ],
+      "type": "string"
+    }
+  },
+  "description": "Broadcast to all connections; one per debounce window per project.",
+  "properties": {
+    "changes": {
+      "description": "Capped at MAX_WATCH_EVENTS_PER_NOTIFICATION; see `overflow`.",
+      "items": {
+        "$ref": "#/definitions/WorkspaceFileEvent"
+      },
+      "type": "array"
+    },
+    "invalidatedChangesets": {
+      "description": "Pending changesets whose base hashes were contradicted by this event batch; clients should prompt re-index/re-create.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "overflow": {
+      "description": "True when the debounce window held more events than the cap.",
+      "type": "boolean"
+    },
+    "projectId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "changes",
+    "overflow",
+    "projectId"
+  ],
+  "title": "WorkspaceChangedNotification",
+  "type": "object"
+}

@@ -5560,6 +5560,303 @@
         "samplePaths"
       ],
       "type": "object"
+    },
+    "WorkspaceChangedNotification": {
+      "description": "Broadcast to all connections; one per debounce window per project.",
+      "properties": {
+        "changes": {
+          "description": "Capped at MAX_WATCH_EVENTS_PER_NOTIFICATION; see `overflow`.",
+          "items": {
+            "$ref": "#/definitions/WorkspaceFileEvent"
+          },
+          "type": "array"
+        },
+        "invalidatedChangesets": {
+          "description": "Pending changesets whose base hashes were contradicted by this event batch; clients should prompt re-index/re-create.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "overflow": {
+          "description": "True when the debounce window held more events than the cap.",
+          "type": "boolean"
+        },
+        "projectId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "changes",
+        "overflow",
+        "projectId"
+      ],
+      "type": "object"
+    },
+    "WorkspaceFileEvent": {
+      "description": "One debounced external file change under a project root.",
+      "properties": {
+        "contentHash": {
+          "description": "sha256 of the file content after the change; None for removals or unreadable/racing reads (best-effort, never blocks notification).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/definitions/WorkspaceFileEventKind"
+        },
+        "path": {
+          "description": "Root-relative `/`-joined path.",
+          "type": "string"
+        },
+        "rootIndex": {
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "path",
+        "rootIndex"
+      ],
+      "type": "object"
+    },
+    "WorkspaceFileEventKind": {
+      "enum": [
+        "added",
+        "modified",
+        "removed"
+      ],
+      "type": "string"
+    },
+    "WorkspaceServiceChangedNotification": {
+      "description": "Broadcast service lifecycle change (E4: replaces client polling).",
+      "properties": {
+        "projectId": {
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/definitions/WorkspaceServiceChangedReason"
+        },
+        "services": {
+          "description": "Affected services after the state transition.",
+          "items": {
+            "$ref": "#/definitions/WorkspaceServiceRef"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "projectId",
+        "reason",
+        "services"
+      ],
+      "type": "object"
+    },
+    "WorkspaceServiceChangedReason": {
+      "oneOf": [
+        {
+          "description": "A service reached Ready after start/startAll.",
+          "enum": [
+            "started"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Service stopped by stop/stopAll/close (exit recorded, not a crash).",
+          "enum": [
+            "stopped"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Process exited on its own with code 0.",
+          "enum": [
+            "exited"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Process exited non-zero, readiness timed out, or start failed.",
+          "enum": [
+            "failed"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Runtime restarted: previously non-terminal services were normalized to Stopped; clients should re-issue startAll if desired.",
+          "enum": [
+            "runtimeRestarted"
+          ],
+          "type": "string"
+        }
+      ]
+    },
+    "WorkspaceServiceHealth": {
+      "properties": {
+        "checkedAtMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "statusCode": {
+          "format": "uint16",
+          "minimum": 0.0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "checkedAtMs",
+        "ok"
+      ],
+      "type": "object"
+    },
+    "WorkspaceServiceRef": {
+      "properties": {
+        "command": {
+          "description": "Fully resolved command line actually spawned (`<pm> run <script> -- ...`).",
+          "type": "string"
+        },
+        "createdAtMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "error": {
+          "description": "Diagnosable terminal reason (startup failure, restart normalization).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exitCode": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "health": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WorkspaceServiceHealth"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Last on-demand health probe result (`list` only; never mutates status)."
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "pid": {
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "port": {
+          "format": "uint16",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "rootIndex": {
+          "description": "Index into the bound project's `roots`; cwd of the dev server.",
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "script": {
+          "description": "package.json script name chosen by the client from the E0 scan.",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/WorkspaceServiceStatus"
+        },
+        "updatedAtMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "url": {
+          "description": "Loopback URL of the managed dev server.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "createdAtMs",
+        "id",
+        "name",
+        "port",
+        "projectId",
+        "rootIndex",
+        "script",
+        "status",
+        "updatedAtMs",
+        "url"
+      ],
+      "type": "object"
+    },
+    "WorkspaceServiceStatus": {
+      "description": "Lifecycle status of a managed dev server. Terminal: Failed, Exited, Stopped. Runtime restart normalizes lingering Starting/Ready to Stopped.",
+      "oneOf": [
+        {
+          "description": "Spawned; readiness probe in flight.",
+          "enum": [
+            "starting"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Readiness probe succeeded; HTTP server answering on `url`.",
+          "enum": [
+            "ready"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Spawn error, readiness timeout (process group killed), or non-zero exit. `error`/`exitCode` carry the diagnosable reason.",
+          "enum": [
+            "failed"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Process exited with code zero while managed.",
+          "enum": [
+            "exited"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Stopped by user or normalized after a Runtime restart.",
+          "enum": [
+            "stopped"
+          ],
+          "type": "string"
+        }
+      ]
     }
   },
   "description": "Notification sent from the server to the client.",
@@ -6911,6 +7208,46 @@
         "params"
       ],
       "title": "VisualWorkspace/changedNotification",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "workspace/changed"
+          ],
+          "title": "Workspace/changedNotificationMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/WorkspaceChangedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "title": "Workspace/changedNotification",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "enum": [
+            "workspace/service/changed"
+          ],
+          "title": "Workspace/service/changedNotificationMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/WorkspaceServiceChangedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "title": "Workspace/service/changedNotification",
       "type": "object"
     }
   ],

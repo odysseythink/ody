@@ -16,15 +16,15 @@ failure: WorkspaceObservedNetworkFailure,
  * else the most recent terminal record — a crashed backend is
  * exactly what diagnosis must surface.
  */
-matchedService?: WorkspaceServiceRef | null,
+matchedService?: WorkspaceServiceRef,
 /**
  * On-demand health probe of the matched service.
  */
-health?: WorkspaceServiceHealth | null, stdoutTail?: string | null, stderrTail?: string | null,
+health?: WorkspaceServiceHealth, stdoutTail?: string, stderrTail?: string,
 /**
  * Log lines mentioning any path segment of the failure URL.
  */
-logExcerpt?: string | null,
+logExcerpt?: string,
 /**
  * Source candidates: route entries matching the path (and its
  * prefix-stripped variants) plus file-name matches on the last

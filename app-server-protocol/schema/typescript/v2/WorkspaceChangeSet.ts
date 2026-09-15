@@ -13,4 +13,10 @@ id: string, projectId: string, title: string, schemaVersion: number, changes: Ar
 /**
  * Unified diff (base -> proposed) computed at create time.
  */
-unifiedDiff: string, createdAtMs: number, updatedAtMs: number, appliedAtMs: number, };
+unifiedDiff: string, createdAtMs: number, updatedAtMs: number, appliedAtMs: number,
+/**
+ * E4: set when an external edit invalidated one or more base hashes
+ * while the changeset was Pending. Presence blocks apply with a
+ * structured conflict error. `None` = healthy.
+ */
+invalidatedReason?: string, };

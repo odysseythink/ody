@@ -8,7 +8,8 @@ export type WorkspaceGitDiff = { repoRoot: string | null,
  */
 available: boolean, error: string | null,
 /**
- * `git diff HEAD` output. Untracked files are not included (v1
- * limitation; per-changeset diffs cover them).
+ * `git diff HEAD` output, extended with `/dev/null -> new file` diffs
+ * for untracked files (capped per request; excess is reported in a
+ * trailing `# N untracked files omitted` line). Ignored files stay out.
  */
 unifiedDiff: string | null, };

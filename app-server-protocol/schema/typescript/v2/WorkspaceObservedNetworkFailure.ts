@@ -12,8 +12,8 @@ export type WorkspaceObservedNetworkFailure = {
 /**
  * Full request URL as observed.
  */
-url: string, method?: string | null, status?: number,
+url: string, method?: string, status?: number,
 /**
  * Browser-level error text (e.g. "net::ERR_CONNECTION_REFUSED").
  */
-error?: string | null, occurredAtMs?: number, };
+error?: string, occurredAtMs?: number, };

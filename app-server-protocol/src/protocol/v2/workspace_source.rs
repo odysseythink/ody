@@ -201,7 +201,7 @@ pub struct WorkspaceChangeSet {
     /// while the changeset was Pending. Presence blocks apply with a
     /// structured conflict error. `None` = healthy.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
+    #[ts(optional)]
     pub invalidated_reason: Option<String>,
 }
 

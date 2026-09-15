@@ -254,25 +254,25 @@ pub struct WorkspaceServiceSpec {
     /// Requested port; occupied -> structured error at start time. Omitted
     /// -> framework default probed, then a free port auto-selected.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
+    #[ts(optional)]
     #[ts(type = "number")]
     pub port: Option<u16>,
     /// Root-relative working directory for the service process. Normalized
     /// and escape-checked at define time; the resolved cwd never leaves
     /// the bound root.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
+    #[ts(optional)]
     pub cwd: Option<String>,
     /// Names of other specs in the same project that must be Ready (and
     /// healthy when they define a health check) before this one starts.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub depends_on: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
+    #[ts(optional)]
     pub health_check: Option<WorkspaceServiceHealthCheck>,
     /// Readiness deadline per service; default 60s, clamp [5s, 300s].
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
+    #[ts(optional)]
     #[ts(type = "number")]
     pub ready_timeout_ms: Option<i64>,
     /// E4: names of environment variables the service expects at runtime
@@ -431,18 +431,18 @@ pub struct WorkspaceObservedNetworkFailure {
     /// Full request URL as observed.
     pub url: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
+    #[ts(optional)]
     pub method: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
+    #[ts(optional)]
     #[ts(type = "number")]
     pub status: Option<u16>,
     /// Browser-level error text (e.g. "net::ERR_CONNECTION_REFUSED").
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
+    #[ts(optional)]
     pub error: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
+    #[ts(optional)]
     #[ts(type = "number")]
     pub occurred_at_ms: Option<i64>,
 }
@@ -457,21 +457,21 @@ pub struct WorkspaceNetworkDiagnosis {
     /// else the most recent terminal record — a crashed backend is
     /// exactly what diagnosis must surface.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
+    #[ts(optional)]
     pub matched_service: Option<WorkspaceServiceRef>,
     /// On-demand health probe of the matched service.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
+    #[ts(optional)]
     pub health: Option<WorkspaceServiceHealth>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
+    #[ts(optional)]
     pub stdout_tail: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
+    #[ts(optional)]
     pub stderr_tail: Option<String>,
     /// Log lines mentioning any path segment of the failure URL.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional = nullable)]
+    #[ts(optional)]
     pub log_excerpt: Option<String>,
     /// Source candidates: route entries matching the path (and its
     /// prefix-stripped variants) plus file-name matches on the last
