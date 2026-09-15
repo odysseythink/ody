@@ -1042,12 +1042,12 @@ impl MessageProcessor {
                 .map(|response| Some(response.into())),
             ClientRequest::WorkspaceProjectGet { params, .. } => self
                 .workspace_project_processor
-                .get(params)
+                .get(params, connection_id)
                 .await
                 .map(|response| Some(response.into())),
             ClientRequest::WorkspaceProjectList { params, .. } => self
                 .workspace_project_processor
-                .list(params)
+                .list(params, connection_id)
                 .await
                 .map(|response| Some(response.into())),
             ClientRequest::WorkspaceProjectClose { params, .. } => {

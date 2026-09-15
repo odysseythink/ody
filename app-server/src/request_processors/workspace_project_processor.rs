@@ -144,6 +144,7 @@ impl WorkspaceProjectRequestProcessor {
     pub(crate) async fn get(
         &self,
         params: WorkspaceProjectGetParams,
+        connection_id: ConnectionId,
     ) -> Result<WorkspaceProjectGetResponse, JSONRPCErrorError> {
         self.with_store(|store| {
             store
@@ -152,7 +153,10 @@ impl WorkspaceProjectRequestProcessor {
                 .cloned()
                 .map(|mut project| {
                     project.locked_by = self.write_lock.holder(&project.id).map(|c| c.0);
-                    WorkspaceProjectGetResponse { project }
+                    WorkspaceProjectGetResponse {
+                        project,
+                        caller_connection_id: connection_id.0,
+                    }
                 })
                 .ok_or_else(|| unknown_project(&params.project_id))
         })
@@ -161,6 +165,7 @@ impl WorkspaceProjectRequestProcessor {
     pub(crate) async fn list(
         &self,
         _params: WorkspaceProjectListParams,
+        connection_id: ConnectionId,
     ) -> Result<WorkspaceProjectListResponse, JSONRPCErrorError> {
         self.with_store(|store| {
             let mut projects = store.projects.values().cloned().collect::<Vec<_>>();
@@ -168,7 +173,10 @@ impl WorkspaceProjectRequestProcessor {
                 project.locked_by = self.write_lock.holder(&project.id).map(|c| c.0);
             }
             projects.sort_by_key(|project| std::cmp::Reverse(project.updated_at_ms));
-            Ok(WorkspaceProjectListResponse { projects })
+            Ok(WorkspaceProjectListResponse {
+                projects,
+                caller_connection_id: connection_id.0,
+            })
         })
     }
 
@@ -501,6 +509,74 @@ mod tests {
             .get("ws-1")
             .expect("project survives reload");
         assert_eq!(project.roots[0].path, root.to_string_lossy());
+    }
+
+    #[tokio::test]
+    async fn get_and_list_report_caller_connection_id() {
+        let ody_home = tempfile::tempdir().expect("create ody home");
+        let audit = Arc::new(crate::workspace_audit::WorkspaceAuditLog::new(
+            ody_home.path().join("workspace-audit").join("v1.jsonl"),
+        ));
+        let write_lock = Arc::new(crate::workspace_lock::WorkspaceWriteLock::default());
+        let processor = WorkspaceProjectRequestProcessor::new(
+            ody_home.path().to_path_buf(),
+            audit,
+            write_lock.clone(),
+        );
+        processor
+            .bind(WorkspaceProjectBindParams {
+                id: "ws-1".to_owned(),
+                name: "fixture".to_owned(),
+                roots: vec![temp_root()],
+                idempotency_key: "key-1".to_owned(),
+            })
+            .await
+            .expect("bind project");
+
+        let caller = ConnectionId(7);
+        let got = processor
+            .get(
+                WorkspaceProjectGetParams {
+                    project_id: "ws-1".to_owned(),
+                },
+                caller,
+            )
+            .await
+            .expect("get project");
+        assert_eq!(got.caller_connection_id, 7);
+        assert_eq!(got.project.locked_by, None);
+
+        // Same caller takes the write lock: it must recognize itself as the
+        // holder; a foreign caller must see the same `locked_by` but can
+        // still compare it against its own `caller_connection_id`.
+        processor
+            .lock(
+                WorkspaceProjectLockParams {
+                    project_id: "ws-1".to_owned(),
+                },
+                caller,
+            )
+            .await
+            .expect("lock project");
+        let own = processor
+            .get(
+                WorkspaceProjectGetParams {
+                    project_id: "ws-1".to_owned(),
+                },
+                caller,
+            )
+            .await
+            .expect("get project");
+        assert_eq!(own.project.locked_by, Some(caller.0));
+        let foreign = processor
+            .list(WorkspaceProjectListParams {}, ConnectionId(99))
+            .await
+            .expect("list projects");
+        assert_eq!(foreign.caller_connection_id, 99);
+        let listed = &foreign.projects[0];
+        assert_eq!(listed.locked_by, Some(caller.0));
+        assert_ne!(listed.locked_by.unwrap(), foreign.caller_connection_id);
+        drop(write_lock);
     }
 
     #[test]

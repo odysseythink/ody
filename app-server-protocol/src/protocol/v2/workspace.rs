@@ -87,6 +87,11 @@ pub struct WorkspaceProjectGetParams {
 #[ts(export_to = "v2/")]
 pub struct WorkspaceProjectGetResponse {
     pub project: WorkspaceProjectRef,
+    /// Connection id of the caller, so a client can tell whether a
+    /// `locked_by` holder is itself (same connection) or another session.
+    /// Runtime-only: filled per request, never persisted.
+    #[ts(type = "number")]
+    pub caller_connection_id: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
@@ -99,6 +104,9 @@ pub struct WorkspaceProjectListParams {}
 #[ts(export_to = "v2/")]
 pub struct WorkspaceProjectListResponse {
     pub projects: Vec<WorkspaceProjectRef>,
+    /// See `WorkspaceProjectGetResponse::caller_connection_id`.
+    #[ts(type = "number")]
+    pub caller_connection_id: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
