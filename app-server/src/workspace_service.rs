@@ -222,6 +222,22 @@ pub(crate) enum ReadyOutcome {
 /// Both loopback families are probed every round: dev servers that bind
 /// `localhost` verbatim (Vite's default under Node's DNS resolution) end up
 /// IPv6-only on `[::1]`, and a 127.0.0.1-only probe would never see them.
+/// reqwest client for loopback dev-service probes (readiness, health,
+/// preview check, diagnose). Never honors system/env HTTP proxies: the
+/// targets are the user's own dev servers on 127.0.0.1/[::1], and a system
+/// proxy that answers for loopback breaks every probe — observed on macOS
+/// with a system proxy at 127.0.0.1:12001 returning 502 for both loopback
+/// origins (curl, which ignores system proxy settings, worked fine against
+/// the same server; the macOS exceptions list is stored as one comma-joined
+/// string that the proxy matcher never splits into entries).
+pub(crate) fn loopback_probe_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .no_proxy()
+        .build()
+        .expect("reqwest client")
+}
+
 /// On success the origin that actually answers is returned, so the service
 /// URL handed to downstream env injection and preview checks is reachable.
 pub(crate) async fn wait_ready(
@@ -230,10 +246,7 @@ pub(crate) async fn wait_ready(
     timeout_ms: i64,
 ) -> (ReadyOutcome, Option<String>) {
     let deadline = tokio::time::Instant::now() + Duration::from_millis(timeout_ms as u64);
-    let client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::limited(5))
-        .build()
-        .expect("reqwest client");
+    let client = loopback_probe_client();
     let origins = [
         format!("http://127.0.0.1:{port}"),
         format!("http://[::1]:{port}"),

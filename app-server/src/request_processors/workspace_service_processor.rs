@@ -816,10 +816,7 @@ impl WorkspaceServiceRequestProcessor {
             .cloned()
             .collect::<Vec<_>>();
         services.sort_by_key(|service| std::cmp::Reverse(service.updated_at_ms));
-        let client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::limited(5))
-            .build()
-            .map_err(|err| internal_error(err.to_string()))?;
+        let client = crate::workspace_service::loopback_probe_client();
         for service in &mut services {
             if service.status != WorkspaceServiceStatus::Ready {
                 continue;
@@ -912,10 +909,7 @@ impl WorkspaceServiceRequestProcessor {
             .map_err(invalid_params)?;
         let timeout_ms = crate::workspace_service::clamp_preview_timeout(params.timeout_ms);
         let checked_at_ms = now_ms();
-        let client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::limited(5))
-            .build()
-            .map_err(|err| internal_error(err.to_string()))?;
+        let client = crate::workspace_service::loopback_probe_client();
 
         let outcome = tokio::time::timeout(
             std::time::Duration::from_millis(timeout_ms as u64),
@@ -1342,10 +1336,7 @@ impl WorkspaceServiceRequestProcessor {
             })
             .collect::<Result<_, _>>()?;
 
-        let client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::limited(5))
-            .build()
-            .map_err(|err| internal_error(err.to_string()))?;
+        let client = crate::workspace_service::loopback_probe_client();
         let mut started = Vec::new();
         let mut reused = Vec::new();
         let mut failed = Vec::new();
@@ -1675,10 +1666,7 @@ impl WorkspaceServiceRequestProcessor {
                 .cloned()
                 .collect::<Vec<_>>()
         };
-        let client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::limited(5))
-            .build()
-            .map_err(|err| internal_error(err.to_string()))?;
+        let client = crate::workspace_service::loopback_probe_client();
         // Computed lazily: only when at least one failure matches a service.
         let mut index: Option<ody_app_server_protocol::WorkspaceSourceIndex> = None;
 
@@ -1901,10 +1889,7 @@ impl WorkspaceServiceRequestProcessor {
                 crate::workspace_service::clamp_health_timeout(None),
             ),
         };
-        let client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::limited(5))
-            .build()
-            .map_err(|err| internal_error(err.to_string()))?;
+        let client = crate::workspace_service::loopback_probe_client();
         let health = crate::workspace_service::spec_health_probe(
             &client,
             &service.url,
