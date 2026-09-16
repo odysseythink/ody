@@ -117,6 +117,7 @@ mod workspace_service;
 #[cfg(windows)]
 mod workspace_service_windows;
 mod workspace_source_index;
+mod workspace_staging;
 mod workspace_watch;
 mod workspace_validation;
 

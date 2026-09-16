@@ -572,6 +572,7 @@ async fn changeset_create_apply_restore_roundtrip() -> Result<()> {
     let apply_id = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: changeset.id.clone(),
+            commit_message: None,
         })
         .await?;
     let applied = read_changeset(&mut mcp, apply_id).await?;
@@ -640,6 +641,7 @@ async fn apply_rejects_stale_base_hash_without_writing() -> Result<()> {
     let apply_id = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: changeset.id.clone(),
+            commit_message: None,
         })
         .await?;
     let message = read_changeset_error(&mut mcp, apply_id).await?;
@@ -800,6 +802,7 @@ async fn reject_blocks_apply_and_double_apply_fails() -> Result<()> {
     let apply_id = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: changeset.id.clone(),
+            commit_message: None,
         })
         .await?;
     let message = read_changeset_error(&mut mcp, apply_id).await?;
@@ -818,6 +821,7 @@ async fn reject_blocks_apply_and_double_apply_fails() -> Result<()> {
     let apply_id = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: changeset.id.clone(),
+            commit_message: None,
         })
         .await?;
     let applied = read_changeset(&mut mcp, apply_id).await?;
@@ -825,6 +829,7 @@ async fn reject_blocks_apply_and_double_apply_fails() -> Result<()> {
     let apply_again = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: changeset.id.clone(),
+            commit_message: None,
         })
         .await?;
     let message = read_changeset_error(&mut mcp, apply_again).await?;
@@ -868,6 +873,7 @@ async fn restore_rejects_external_modification_after_apply() -> Result<()> {
     let apply_id = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: changeset.id.clone(),
+            commit_message: None,
         })
         .await?;
     let applied = read_changeset(&mut mcp, apply_id).await?;
@@ -929,6 +935,7 @@ async fn apply_adds_page_and_diff_reports_unified_and_git_diff() -> Result<()> {
     let apply_id = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: changeset.id.clone(),
+            commit_message: None,
         })
         .await?;
     let applied = read_changeset(&mut mcp, apply_id).await?;
@@ -1056,6 +1063,7 @@ async fn apply_records_head_checkpoint_for_git_repo_without_new_commits() -> Res
     let apply_id = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: changeset.id.clone(),
+            commit_message: None,
         })
         .await?;
     let applied = read_changeset(&mut mcp, apply_id).await?;
@@ -1125,6 +1133,7 @@ async fn changeset_never_writes_outside_root() -> Result<()> {
     let apply_id = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: changeset.id.clone(),
+            commit_message: None,
         })
         .await?;
     let _ = read_changeset(&mut mcp, apply_id).await?;
@@ -1679,6 +1688,7 @@ async fn e1_archetype_react_vite_modify_page_refactor_component_add_page() -> Re
     let apply1 = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: cs1.id.clone(),
+            commit_message: None,
         })
         .await?;
     assert_eq!(
@@ -1716,6 +1726,7 @@ async fn e1_archetype_react_vite_modify_page_refactor_component_add_page() -> Re
     let apply2 = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: cs2.id.clone(),
+            commit_message: None,
         })
         .await?;
     assert_eq!(
@@ -1765,6 +1776,7 @@ async fn e1_archetype_react_vite_modify_page_refactor_component_add_page() -> Re
     let apply3 = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: cs3.id.clone(),
+            commit_message: None,
         })
         .await?;
     assert_eq!(
@@ -1927,6 +1939,7 @@ async fn e1_archetype_next_app_router_add_route() -> Result<()> {
     let apply = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: cs.id.clone(),
+            commit_message: None,
         })
         .await?;
     assert_eq!(
@@ -2019,6 +2032,7 @@ async fn e1_archetype_vue_refactor_component_and_restore() -> Result<()> {
     let apply = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: cs.id.clone(),
+            commit_message: None,
         })
         .await?;
     assert_eq!(
@@ -2140,6 +2154,7 @@ async fn e1_archetype_fullstack_two_roots_modify_page_and_backend() -> Result<()
     let apply = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: cs.id.clone(),
+            commit_message: None,
         })
         .await?;
     let applied = read_changeset(&mut mcp, apply).await?;
@@ -2263,6 +2278,7 @@ async fn e1_user_can_reject_changeset_and_nothing_is_written() -> Result<()> {
     let apply_attempt = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: cs.id,
+            commit_message: None,
         })
         .await?;
     let message = read_changeset_error(&mut mcp, apply_attempt).await?;
@@ -2325,6 +2341,7 @@ async fn e1_external_edit_blocks_apply_and_leaves_sibling_files_untouched() -> R
     let apply_attempt = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: cs.id.clone(),
+            commit_message: None,
         })
         .await?;
     let message = read_changeset_error(&mut mcp, apply_attempt).await?;
@@ -2390,6 +2407,7 @@ async fn e1_full_lifecycle_never_writes_outside_bound_roots() -> Result<()> {
     let apply = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: cs.id.clone(),
+            commit_message: None,
         })
         .await?;
     assert_eq!(

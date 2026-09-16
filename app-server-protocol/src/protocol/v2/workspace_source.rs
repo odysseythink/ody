@@ -257,6 +257,11 @@ pub struct WorkspaceChangeSetListResponse {
 #[ts(export_to = "v2/")]
 pub struct WorkspaceChangeSetApplyParams {
     pub changeset_id: String,
+    /// Optional commit message: after a successful apply, stage this
+    /// changeset's files and commit them in each affected git root
+    /// (best-effort per root; outcomes are reported per root).
+    #[ts(optional = nullable)]
+    pub commit_message: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
@@ -264,6 +269,32 @@ pub struct WorkspaceChangeSetApplyParams {
 #[ts(export_to = "v2/")]
 pub struct WorkspaceChangeSetApplyResponse {
     pub changeset: WorkspaceChangeSet,
+    /// Per-root commit outcomes; `None` when no commit was requested.
+    #[ts(optional = nullable)]
+    pub commit: Option<Vec<WorkspaceChangeSetCommitReport>>,
+}
+
+/// Git commit outcome for one project root after changeset apply.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct WorkspaceChangeSetCommitReport {
+    pub root_path: String,
+    pub outcome: WorkspaceChangeSetCommitOutcome,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(tag = "type", rename_all = "snake_case")]
+#[ts(tag = "type", export_to = "v2/")]
+pub enum WorkspaceChangeSetCommitOutcome {
+    /// Commit created; carries the new HEAD sha.
+    Committed { commit_hash: String },
+    /// Working tree had nothing to commit for this changeset's paths.
+    NothingToCommit,
+    /// The root is not inside a git repository.
+    NotAGitRepo,
+    /// `git` failed; carries a short error excerpt.
+    Failed { error: String },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
@@ -599,6 +630,7 @@ mod tests {
                     request_id: RequestId::Integer(33),
                     params: WorkspaceChangeSetApplyParams {
                         changeset_id: "cs-1".to_owned(),
+                        commit_message: None,
                     },
                 },
                 "workspace/source/changeset/apply",

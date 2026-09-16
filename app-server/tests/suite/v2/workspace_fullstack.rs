@@ -825,6 +825,7 @@ async fn contract_mismatch_fix_loop_diagnose_changeset_verify() -> Result<()> {
     let request_id = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: create.changeset.id,
+            commit_message: None,
         })
         .await?;
     let _: ody_app_server_protocol::WorkspaceChangeSetApplyResponse =
@@ -896,6 +897,7 @@ async fn new_endpoint_new_page_cross_root_validation() -> Result<()> {
     let request_id = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: create.changeset.id.clone(),
+            commit_message: None,
         })
         .await?;
     let _: ody_app_server_protocol::WorkspaceChangeSetApplyResponse =

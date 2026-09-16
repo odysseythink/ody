@@ -124,6 +124,7 @@ async fn bind_create_apply_produces_ordered_audit_trail() -> Result<()> {
     let apply_id = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: changeset.id.clone(),
+            commit_message: None,
         })
         .await?;
     let applied = read_changeset(&mut mcp, apply_id).await?;

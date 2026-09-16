@@ -18,6 +18,8 @@ use ody_app_server_protocol::WorkspaceChangeSet;
 use ody_app_server_protocol::WorkspaceChangeSetApplyParams;
 use ody_app_server_protocol::WorkspaceChangeSetApplyResponse;
 use ody_app_server_protocol::WorkspaceChangeSetCheckpoint;
+use ody_app_server_protocol::WorkspaceChangeSetCommitOutcome;
+use ody_app_server_protocol::WorkspaceChangeSetCommitReport;
 use ody_app_server_protocol::WorkspaceChangeSetCreateParams;
 use ody_app_server_protocol::WorkspaceChangeSetCreateResponse;
 use ody_app_server_protocol::WorkspaceChangeSetDiffEntry;
@@ -80,6 +82,9 @@ pub(crate) struct WorkspaceSourceRequestProcessor {
     store: Arc<Mutex<WorkspaceSourceStore>>,
     audit: Arc<WorkspaceAuditLog>,
     write_lock: Arc<WorkspaceWriteLock>,
+    /// P1 切片1 暂存收集器：core 写通知 -> 可逆 changeset；同时供外部
+    /// watcher 冲突检测排除暂存写盘自身（recent_staged）。
+    staging: Arc<crate::workspace_staging::WorkspaceStagingCollector>,
 }
 
 impl WorkspaceSourceRequestProcessor {
@@ -90,13 +95,31 @@ impl WorkspaceSourceRequestProcessor {
         write_lock: Arc<WorkspaceWriteLock>,
     ) -> Self {
         let path = ody_home.join(STORE_DIR).join(STORE_FILE);
-        let store = WorkspaceSourceStore::load(path);
+        let store = Arc::new(Mutex::new(WorkspaceSourceStore::load(path)));
+        let staging = Arc::new(crate::workspace_staging::WorkspaceStagingCollector::new(
+            Arc::clone(&project_store),
+            Arc::clone(&store),
+            Arc::clone(&audit),
+        ));
         Self {
             project_store,
-            store: Arc::new(Mutex::new(store)),
+            store,
             audit,
             write_lock,
+            staging,
         }
+    }
+
+    /// 暂存收集器句柄：app 启动接线时注入 core thread（见 message_processor）。
+    pub(crate) fn staging_handle(&self) -> Arc<crate::workspace_staging::WorkspaceStagingCollector> {
+        Arc::clone(&self.staging)
+    }
+
+    /// 以暂存收集器作为 core sink（`Arc<dyn StagedWriteSink>`）。
+    pub(crate) fn staged_write_sink(
+        &self,
+    ) -> Arc<dyn ody_core::StagedWriteSink> {
+        self.staging.clone()
     }
 
     pub(crate) async fn index(
@@ -553,8 +576,34 @@ impl WorkspaceSourceRequestProcessor {
                 .change_set
                 .clone())
         })?;
+        // P1 切片1：确认写回闭环——apply 成功后按 root 分别 git commit
+        // （best-effort，单 root 失败不影响 apply 结果本身）。
+        let commit = match params.commit_message.as_deref().map(str::trim) {
+            Some(message) if !message.is_empty() => {
+                let mut files_by_root: BTreeMap<usize, Vec<String>> = BTreeMap::new();
+                for change in &prepared {
+                    files_by_root
+                        .entry(change.root_index)
+                        .or_default()
+                        .push(change.relative.clone());
+                }
+                let mut reports = Vec::new();
+                for (root_index, files) in files_by_root {
+                    let root_path = project
+                        .roots
+                        .get(root_index)
+                        .map(|root| root.path.clone())
+                        .unwrap_or_default();
+                    let outcome = commit_changeset_in_root(&root_path, &files, message).await;
+                    reports.push(WorkspaceChangeSetCommitReport { root_path, outcome });
+                }
+                Some(reports)
+            }
+            _ => None,
+        };
         Ok(WorkspaceChangeSetApplyResponse {
             changeset: change_set,
+            commit,
         })
     }
 
@@ -588,12 +637,43 @@ impl WorkspaceSourceRequestProcessor {
         &self,
         params: WorkspaceChangeSetRejectParams,
     ) -> Result<WorkspaceChangeSetRejectResponse, JSONRPCErrorError> {
-        let (_, mut stored) = self.stored_changeset(&params.changeset_id)?;
+        let (project, mut stored) = self.stored_changeset(&params.changeset_id)?;
         if stored.change_set.status != WorkspaceChangeSetStatus::Pending {
             return Err(invalid_params(format!(
                 "changeset {} is {:?}; expected Pending for reject",
                 stored.change_set.id, stored.change_set.status
             )));
+        }
+        // P1 切片1（可逆写盘）：reject 同时把已落盘的暂存内容还原回 base。
+        // 仅当磁盘仍与暂存内容一致（agent 写盘落地、未被用户再改）；不一致
+        // 的文件视为用户工作，绝不动。artifact 时代的 changeset 文件未写盘，
+        // 磁盘 == base ≠ staged，自然跳过，语义无损。
+        {
+            let prepared = rebuild_prepared(&project, &stored)?;
+            for change in &prepared {
+                let on_disk_matches_staged = match change.kind {
+                    WorkspaceFileChangeKind::Add | WorkspaceFileChangeKind::Update => {
+                        change.absolute.exists()
+                            && fs::read(&change.absolute).ok().as_deref()
+                                == change.content.as_deref().map(str::as_bytes)
+                    }
+                    WorkspaceFileChangeKind::Delete => !change.absolute.exists(),
+                };
+                if !on_disk_matches_staged {
+                    continue;
+                }
+                match change.kind {
+                    WorkspaceFileChangeKind::Add => {
+                        let _ = fs::remove_file(&change.absolute);
+                    }
+                    WorkspaceFileChangeKind::Update | WorkspaceFileChangeKind::Delete => {
+                        if let Some(base) = stored.base_contents.get(&change.key) {
+                            let _ =
+                                crate::workspace_changeset::atomic_write(&change.absolute, base);
+                        }
+                    }
+                }
+            }
         }
         stored.change_set.status = WorkspaceChangeSetStatus::Rejected;
         stored.change_set.updated_at_ms = now_ms();
@@ -843,7 +923,22 @@ impl WorkspaceSourceRequestProcessor {
                 {
                     continue;
                 }
-                let conflicted = conflicted_change_keys(&stored.change_set.changes, events);
+                let conflicted: Vec<String> =
+                    conflicted_change_keys(&stored.change_set.changes, events)
+                        .into_iter()
+                        .filter(|key| {
+                            // 可逆写盘的中间代内容：watcher 批量事件可能携带
+                            // 既不是 base 也不是最终 staged 的代际；只要它出
+                            // 现在本会话最近暂存写盘记录里，就不是外部冲突。
+                            let event = events
+                                .iter()
+                                .find(|event| format!("{}:{}", event.root_index, event.path) == *key);
+                            match event.and_then(|event| event.content_hash.as_ref()) {
+                                Some(hash) => !self.staging.is_recent_staged(key, hash),
+                                None => true,
+                            }
+                        })
+                        .collect();
                 if !conflicted.is_empty() && stored.change_set.invalidated_reason.is_none() {
                     stored.change_set.invalidated_reason = Some(format!(
                         "external edit conflicted with base hashes: {}",
@@ -962,7 +1057,7 @@ pub(crate) struct StoredChangeSet {
 #[derive(Default, Serialize, Deserialize)]
 pub(crate) struct WorkspaceSourceStore {
     schema_version: u32,
-    changesets: BTreeMap<String, StoredChangeSet>,
+    pub(crate) changesets: BTreeMap<String, StoredChangeSet>,
     /// Artifact import provenance records; status mirrors the paired
     /// changeset lifecycle (serde(default) upgrades v1/v2 store files).
     #[serde(default)]
@@ -974,7 +1069,7 @@ pub(crate) struct WorkspaceSourceStore {
 }
 
 impl WorkspaceSourceStore {
-    fn load(path: PathBuf) -> Self {
+    pub(crate) fn load(path: PathBuf) -> Self {
         let backup = path.with_extension("json.bak");
         for candidate in [&path, &backup] {
             if let Ok(raw) = fs::read(candidate)
@@ -1002,7 +1097,7 @@ impl WorkspaceSourceStore {
         }
     }
 
-    fn persist(&self) -> Result<(), JSONRPCErrorError> {
+    pub(crate) fn persist(&self) -> Result<(), JSONRPCErrorError> {
         let directory = self
             .path
             .parent()
@@ -1199,6 +1294,88 @@ fn unknown_project(id: &str) -> JSONRPCErrorError {
     invalid_params(format!("unknown workspace project id: {id}"))
 }
 
+/// 在 root 内运行一条 git 命令，尾部附加本 changeset 的文件路径。
+async fn run_git_for_paths(
+    root: &Path,
+    files: &[String],
+    args: &[&str],
+) -> std::io::Result<std::process::Output> {
+    let mut command = tokio::process::Command::new("git");
+    command.args(args).current_dir(root);
+    for file in files {
+        command.arg(file);
+    }
+    command.output().await
+}
+
+/// P1 切片1：apply 成功后在一个 root 内提交本 changeset 的文件。
+/// 只 add/commit 这些路径，不碰用户其他暂存。
+async fn commit_changeset_in_root(
+    root_path: &str,
+    files: &[String],
+    message: &str,
+) -> WorkspaceChangeSetCommitOutcome {
+    let root = Path::new(root_path);
+    if ody_git_utils::get_git_repo_root(root).is_none() {
+        return WorkspaceChangeSetCommitOutcome::NotAGitRepo;
+    }
+    match run_git_for_paths(root, files, &["add", "-A", "--"]).await {
+        Err(err) => {
+            return WorkspaceChangeSetCommitOutcome::Failed {
+                error: format!("git add: {err}"),
+            }
+        }
+        Ok(output) if !output.status.success() => {
+            return WorkspaceChangeSetCommitOutcome::Failed {
+                error: String::from_utf8_lossy(&output.stderr).chars().take(200).collect(),
+            }
+        }
+        Ok(_) => {}
+    }
+    match run_git_for_paths(root, files, &["commit", "-m", message, "--"]).await {
+        Err(err) => WorkspaceChangeSetCommitOutcome::Failed {
+            error: format!("git commit: {err}"),
+        },
+        Ok(output) if output.status.success() => {
+            let hash = tokio::process::Command::new("git")
+                .args(["rev-parse", "HEAD"])
+                .current_dir(root)
+                .output()
+                .await
+                .ok()
+                .filter(|output| output.status.success())
+                .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+                .unwrap_or_default();
+            WorkspaceChangeSetCommitOutcome::Committed { commit_hash: hash }
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            // 非 git 工程的 apply 会先把当前磁盘快照成 baseline 仓库
+            // （Phase 2 checkpoint），此时 changeset 内容已在 baseline
+            // commit 里，工作区对这些路径是干净的——属于 NothingToCommit，
+            // 不是失败。
+            let nothing_staged = tokio::process::Command::new("git")
+                .args(["status", "--porcelain", "--"])
+                .current_dir(root)
+                .args(files)
+                .output()
+                .await
+                .map(|status| {
+                    status.status.success()
+                        && String::from_utf8_lossy(&status.stdout).trim().is_empty()
+                })
+                .unwrap_or(false);
+            if nothing_staged {
+                WorkspaceChangeSetCommitOutcome::NothingToCommit
+            } else {
+                WorkspaceChangeSetCommitOutcome::Failed {
+                    error: stderr.chars().take(200).collect(),
+                }
+            }
+        }
+    }
+}
+
 /// E4: the change keys of a Pending changeset contradicted by an external
 /// event batch. Fail-closed rules: a `Removed` event invalidates an
 /// Update/Delete base (file gone); an unreadable file (None hash) counts as
@@ -1221,11 +1398,18 @@ fn conflicted_change_keys(
         };
         match change.kind {
             WorkspaceFileChangeKind::Add => {
-                if event.kind == WorkspaceFileEventKind::Added {
+                // 暂存写盘落地（Added 且内容 == staged）不是冲突。
+                let staged_landed = event.kind == WorkspaceFileEventKind::Added
+                    && staged_content_matches(change, event);
+                if event.kind == WorkspaceFileEventKind::Added && !staged_landed {
                     conflicted.push(key);
                 }
             }
-            WorkspaceFileChangeKind::Update | WorkspaceFileChangeKind::Delete => {
+            WorkspaceFileChangeKind::Update => {
+                // 可逆写盘：磁盘内容 == staged 内容即 agent 自己的写盘落地。
+                if staged_content_matches(change, event) {
+                    continue;
+                }
                 let base_ok = match event.kind {
                     WorkspaceFileEventKind::Removed => false,
                     _ => {
@@ -1237,9 +1421,36 @@ fn conflicted_change_keys(
                     conflicted.push(key);
                 }
             }
+            WorkspaceFileChangeKind::Delete => {
+                // 暂存的删除已落盘（文件已不存在）；reject 可还原 base，
+                // 两种成因下还原都是正确行为，不构成冲突。
+                if event.kind == WorkspaceFileEventKind::Removed {
+                    continue;
+                }
+                let base_ok = event.content_hash.is_some()
+                    && event.content_hash.as_deref() == change.base_hash.as_deref();
+                if !base_ok {
+                    conflicted.push(key);
+                }
+            }
         }
     }
     conflicted
+}
+
+/// 事件携带的内容 hash 是否等于 changeset 的 staged（新）内容 hash。
+/// P1 切片1 可逆写盘：agent 写盘会触发 watcher 事件，落地内容与新内容
+/// 一致时必须视为「自己的写盘」而非外部编辑。
+fn staged_content_matches(
+    change: &ody_app_server_protocol::WorkspaceFileChange,
+    event: &WorkspaceFileEvent,
+) -> bool {
+    match (&change.content, &event.content_hash) {
+        (Some(content), Some(hash)) => {
+            crate::workspace_changeset::sha256_hex(content.as_bytes()) == *hash
+        }
+        _ => false,
+    }
 }
 
 /// Mirror a changeset lifecycle transition onto its artifact bridge record
@@ -1620,6 +1831,7 @@ mod tests {
             .changeset_apply(
                 WorkspaceChangeSetApplyParams {
                     changeset_id: changeset_id.clone(),
+                    commit_message: None,
                 },
                 ConnectionId(1),
             )
@@ -1791,6 +2003,7 @@ mod tests {
             .changeset_apply(
                 WorkspaceChangeSetApplyParams {
                     changeset_id: cs_id.clone(),
+                    commit_message: None,
                 },
                 ConnectionId(8),
             )
@@ -1819,6 +2032,7 @@ mod tests {
             .changeset_apply(
                 WorkspaceChangeSetApplyParams {
                     changeset_id: cs_id.clone(),
+                    commit_message: None,
                 },
                 ConnectionId(8),
             )
@@ -1857,6 +2071,7 @@ mod tests {
             .changeset_apply(
                 WorkspaceChangeSetApplyParams {
                     changeset_id: cs_id.clone(),
+                    commit_message: None,
                 },
                 ConnectionId(8),
             )
@@ -2043,6 +2258,289 @@ mod tests {
         assert!(
             unified.contains("untracked files omitted"),
             "truncation notice: {unified}"
+        );
+    }
+    // ---- P1 切片1（暂存写回闭环）：reject 还原 / apply commit / 自失效防护 ----
+
+    fn conflict_fixture_change() -> WorkspaceFileChange {
+        WorkspaceFileChange {
+            root_index: 0,
+            path: "src/a.ts".to_owned(),
+            kind: WorkspaceFileChangeKind::Update,
+            base_hash: Some(crate::workspace_changeset::sha256_hex(b"base\n")),
+            content: Some("staged\n".to_owned()),
+        }
+    }
+
+    #[test]
+    fn conflicted_keys_ignore_event_matching_staged_content() {
+        let change = conflict_fixture_change();
+        let staged_hash = crate::workspace_changeset::sha256_hex(b"staged\n");
+        let events = vec![WorkspaceFileEvent {
+            root_index: 0,
+            path: "src/a.ts".to_owned(),
+            kind: WorkspaceFileEventKind::Modified,
+            content_hash: Some(staged_hash),
+        }];
+        // 暂存写盘落地（hash == staged）不是外部冲突
+        assert!(conflicted_change_keys(&[change], &events).is_empty());
+    }
+
+    #[test]
+    fn conflicted_keys_ignore_added_event_matching_staged_add() {
+        let change = WorkspaceFileChange {
+            root_index: 0,
+            path: "src/new.ts".to_owned(),
+            kind: WorkspaceFileChangeKind::Add,
+            base_hash: None,
+            content: Some("staged\n".to_owned()),
+        };
+        let events = vec![WorkspaceFileEvent {
+            root_index: 0,
+            path: "src/new.ts".to_owned(),
+            kind: WorkspaceFileEventKind::Added,
+            content_hash: Some(crate::workspace_changeset::sha256_hex(b"staged\n")),
+        }];
+        assert!(conflicted_change_keys(&[change], &events).is_empty());
+    }
+
+    #[test]
+    fn conflicted_keys_still_flag_user_edit_different_from_staged() {
+        let change = conflict_fixture_change();
+        let events = vec![WorkspaceFileEvent {
+            root_index: 0,
+            path: "src/a.ts".to_owned(),
+            kind: WorkspaceFileEventKind::Modified,
+            content_hash: Some(crate::workspace_changeset::sha256_hex(b"user edit\n")),
+        }];
+        assert_eq!(conflicted_change_keys(&[change], &events).len(), 1);
+    }
+
+    /// 造一个磁盘已是新内容（可逆写盘）的 pending changeset。
+    async fn processor_with_disk_backed_changeset(
+        project_id: &str,
+        root: &Path,
+        change: WorkspaceFileChange,
+    ) -> WorkspaceSourceRequestProcessor {
+        let ody_home = tempfile::tempdir().expect("ody home");
+        let processor = processor_with_project(ody_home.path(), project_id, root).await;
+        processor
+            .changeset_create(WorkspaceChangeSetCreateParams {
+                project_id: project_id.to_owned(),
+                title: "disk backed".to_owned(),
+                changes: vec![change],
+                idempotency_key: format!("disk-backed-{}", uuid::Uuid::new_v4()),
+            })
+            .await
+            .expect("create changeset");
+        processor
+    }
+
+    fn update_change(base: &str, new: &str, path: &str) -> WorkspaceFileChange {
+        WorkspaceFileChange {
+            root_index: 0,
+            path: path.to_owned(),
+            kind: WorkspaceFileChangeKind::Update,
+            base_hash: Some(crate::workspace_changeset::sha256_hex(base.as_bytes())),
+            content: Some(new.to_owned()),
+        }
+    }
+
+    fn only_changeset_id(processor: &WorkspaceSourceRequestProcessor) -> String {
+        processor
+            .store
+            .lock()
+            .expect("store lock")
+            .changesets
+            .keys()
+            .next()
+            .expect("id")
+            .clone()
+    }
+
+    #[tokio::test]
+    async fn reject_reverts_disk_content_back_to_base() {
+        let root = tempfile::tempdir().expect("root");
+        fs::create_dir_all(root.path().join("src")).expect("mkdir");
+        fs::write(root.path().join("src/a.ts"), "base\n").expect("seed");
+        let processor = processor_with_disk_backed_changeset(
+            "ws-1",
+            root.path(),
+            update_change("base\n", "staged\n", "src/a.ts"),
+        )
+        .await;
+        // 模拟 agent 已写盘（热更新生效中）
+        fs::write(root.path().join("src/a.ts"), "staged\n").expect("agent write");
+        let changeset_id = only_changeset_id(&processor);
+
+        processor
+            .changeset_reject(WorkspaceChangeSetRejectParams {
+                changeset_id: changeset_id.clone(),
+            })
+            .await
+            .expect("reject");
+
+        assert_eq!(
+            fs::read_to_string(root.path().join("src/a.ts")).expect("read"),
+            "base\n",
+            "reject 必须把磁盘还原回 base"
+        );
+        let store = processor.store.lock().expect("store lock");
+        assert_eq!(
+            store.changesets.get(&changeset_id).expect("stored").change_set.status,
+            WorkspaceChangeSetStatus::Rejected
+        );
+    }
+
+    #[tokio::test]
+    async fn reject_leaves_further_modified_file_untouched() {
+        let root = tempfile::tempdir().expect("root");
+        fs::create_dir_all(root.path().join("src")).expect("mkdir");
+        fs::write(root.path().join("src/a.ts"), "base\n").expect("seed");
+        let processor = processor_with_disk_backed_changeset(
+            "ws-1",
+            root.path(),
+            update_change("base\n", "staged\n", "src/a.ts"),
+        )
+        .await;
+        // 用户在暂存之上又手动改了（≠ staged）：reject 不得覆盖用户工作
+        fs::write(root.path().join("src/a.ts"), "user edit\n").expect("user edit");
+        let changeset_id = only_changeset_id(&processor);
+
+        processor
+            .changeset_reject(WorkspaceChangeSetRejectParams { changeset_id })
+            .await
+            .expect("reject");
+
+        assert_eq!(
+            fs::read_to_string(root.path().join("src/a.ts")).expect("read"),
+            "user edit\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn reject_removes_added_file_matching_staged_content() {
+        let root = tempfile::tempdir().expect("root");
+        fs::create_dir_all(root.path().join("src")).expect("mkdir");
+        let processor = processor_with_disk_backed_changeset(
+            "ws-1",
+            root.path(),
+            WorkspaceFileChange {
+                root_index: 0,
+                path: "src/new.ts".to_owned(),
+                kind: WorkspaceFileChangeKind::Add,
+                base_hash: None,
+                content: Some("added\n".to_owned()),
+            },
+        )
+        .await;
+        fs::write(root.path().join("src/new.ts"), "added\n").expect("agent add");
+        let changeset_id = only_changeset_id(&processor);
+
+        processor
+            .changeset_reject(WorkspaceChangeSetRejectParams { changeset_id })
+            .await
+            .expect("reject");
+
+        assert!(
+            !root.path().join("src/new.ts").exists(),
+            "reject 删除新增文件"
+        );
+    }
+
+    #[tokio::test]
+    async fn apply_with_commit_message_commits_changeset_files() {
+        if !git_available() {
+            eprintln!("skipping: git binary unavailable");
+            return;
+        }
+        let repo = tempfile::tempdir().expect("repo");
+        init_repo_with_commit(repo.path());
+        fs::create_dir_all(repo.path().join("src")).expect("mkdir");
+        fs::write(repo.path().join("src/a.ts"), "base\n").expect("seed");
+        git(repo.path(), &["add", "src/a.ts"]);
+        git(repo.path(), &["commit", "-q", "-m", "seed a"]);
+        let processor = processor_with_disk_backed_changeset(
+            "ws-1",
+            repo.path(),
+            update_change("base\n", "staged\n", "src/a.ts"),
+        )
+        .await;
+        fs::write(repo.path().join("src/a.ts"), "staged\n").expect("agent write");
+        let changeset_id = only_changeset_id(&processor);
+
+        let response = processor
+            .changeset_apply(
+                WorkspaceChangeSetApplyParams {
+                    changeset_id,
+                    commit_message: Some("feat: apply staged change".to_owned()),
+                },
+                ConnectionId(1),
+            )
+            .await
+            .expect("apply with commit");
+
+        let commits = response.commit.expect("commit report");
+        assert_eq!(commits.len(), 1);
+        assert_eq!(commits[0].root_path, repo.path().to_string_lossy());
+        match &commits[0].outcome {
+            WorkspaceChangeSetCommitOutcome::Committed { commit_hash } => {
+                assert!(!commit_hash.is_empty());
+            }
+            other => panic!("expected Committed, got {other:?}"),
+        }
+        let log = std::process::Command::new("git")
+            .args(["log", "--oneline", "-1"])
+            .current_dir(repo.path())
+            .output()
+            .expect("git log");
+        assert!(
+            String::from_utf8_lossy(&log.stdout).contains("apply staged change"),
+            "HEAD must be the apply commit"
+        );
+        let status = std::process::Command::new("git")
+            .args(["status", "--porcelain", "--", "src/a.ts"])
+            .current_dir(repo.path())
+            .output()
+            .expect("git status");
+        assert!(
+            String::from_utf8_lossy(&status.stdout).trim().is_empty(),
+            "changeset paths must be clean after commit"
+        );
+    }
+
+    #[tokio::test]
+    async fn apply_commit_reports_nothing_to_commit_after_baseline_snapshot() {
+        let root = tempfile::tempdir().expect("root");
+        fs::create_dir_all(root.path().join("src")).expect("mkdir");
+        fs::write(root.path().join("src/a.ts"), "base\n").expect("seed");
+        let processor = processor_with_disk_backed_changeset(
+            "ws-1",
+            root.path(),
+            update_change("base\n", "staged\n", "src/a.ts"),
+        )
+        .await;
+        fs::write(root.path().join("src/a.ts"), "staged\n").expect("agent write");
+        let changeset_id = only_changeset_id(&processor);
+
+        let response = processor
+            .changeset_apply(
+                WorkspaceChangeSetApplyParams {
+                    changeset_id,
+                    commit_message: Some("feat: x".to_owned()),
+                },
+                ConnectionId(1),
+            )
+            .await
+            .expect("apply with commit");
+
+        let commits = response.commit.expect("commit report");
+        assert_eq!(commits.len(), 1);
+        // 非 git 工程 apply 时已把含暂存内容的磁盘快照成 baseline 仓库，
+        // 对这些路径而言没有新增可提交内容。
+        assert_eq!(
+            commits[0].outcome,
+            WorkspaceChangeSetCommitOutcome::NothingToCommit
         );
     }
 }

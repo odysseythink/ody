@@ -376,6 +376,7 @@ async fn apply_changeset(mcp: &mut TestAppServer, changeset_id: &str) -> Result<
     let request_id = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: changeset_id.to_owned(),
+            commit_message: None,
         })
         .await?;
     read_response::<serde::de::IgnoredAny>(mcp, request_id).await?;

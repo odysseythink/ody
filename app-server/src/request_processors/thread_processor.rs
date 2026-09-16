@@ -360,6 +360,11 @@ pub(crate) struct ThreadRequestProcessor {
     pub(super) log_db: Option<LogDbLayer>,
     pub(super) background_tasks: TaskTracker,
     pub(super) skills_watcher: Arc<SkillsWatcher>,
+    /// P1 切片1：workspace 暂存 sink；workspace task 线程创建时注入
+    /// thread_extension_init，core 文件写工具据此通知暂存收集器。
+    pub(super) staged_write_sink: std::sync::Arc<
+        std::sync::Mutex<Option<std::sync::Arc<dyn ody_core::StagedWriteSink>>>,
+    >,
 }
 
 /// Outcome of trying to satisfy a resume request from an already loaded thread.
@@ -407,7 +412,19 @@ impl ThreadRequestProcessor {
             log_db,
             background_tasks: TaskTracker::new(),
             skills_watcher,
+            staged_write_sink: std::sync::Arc::new(std::sync::Mutex::new(None)),
         }
+    }
+
+    /// 安装 workspace 暂存 sink（app 启动接线，见 message_processor）。
+    pub(crate) fn set_staged_write_sink(
+        &self,
+        sink: std::sync::Arc<dyn ody_core::StagedWriteSink>,
+    ) {
+        *self
+            .staged_write_sink
+            .lock()
+            .expect("staged write sink lock") = Some(sink);
     }
 
     pub(crate) async fn thread_start(
@@ -942,6 +959,11 @@ impl ThreadRequestProcessor {
             skills_watcher: Arc::clone(&self.skills_watcher),
         };
         let request_trace = request_context.request_trace();
+        let staged_write_sink = self
+            .staged_write_sink
+            .lock()
+            .expect("staged write sink lock")
+            .clone();
         let config_manager = self.config_manager.clone();
         let outgoing = Arc::clone(&listener_task_context.outgoing);
         let error_request_id = request_id.clone();
@@ -963,6 +985,7 @@ impl ThreadRequestProcessor {
                 service_name,
                 experimental_raw_events,
                 request_trace,
+                staged_write_sink,
             )
             .await
             {
@@ -1037,8 +1060,14 @@ impl ThreadRequestProcessor {
         service_name: Option<String>,
         experimental_raw_events: bool,
         request_trace: Option<W3cTraceContext>,
+        staged_write_sink: Option<std::sync::Arc<dyn ody_core::StagedWriteSink>>,
     ) -> Result<(), JSONRPCErrorError> {
         let thread_start_started_at = std::time::Instant::now();
+        // P1 切片1：是否 workspace task 线程（有 runtime workspace roots 才挂暂存 sink）。
+        let has_workspace_roots = typesafe_overrides
+            .workspace_roots
+            .as_ref()
+            .is_some_and(|roots| !roots.is_empty());
         let requested_cwd = typesafe_overrides.cwd.clone();
         let mut config = config_manager
             .load_with_overrides(config_overrides.clone(), typesafe_overrides.clone())
@@ -1128,6 +1157,13 @@ impl ThreadRequestProcessor {
             })
             .sum();
         let mut thread_extension_init = ExtensionDataInit::new();
+        if has_workspace_roots {
+            // P1 切片1：workspace task 线程挂暂存 sink；core 写文件时累积
+            // 可逆 changeset（可逆写盘语义，确认前不动 git、reject 可还原）。
+            if let Some(sink) = staged_write_sink {
+                thread_extension_init.insert(sink);
+            }
+        }
         if !selected_capability_roots.is_empty() {
             thread_extension_init.insert(selected_capability_roots);
             ody_mcp_extension::initialize_executor_plugin_thread_data(&mut thread_extension_init);

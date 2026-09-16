@@ -180,6 +180,7 @@ async fn apply_changeset(
     let request_id = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: changeset_id.to_owned(),
+            commit_message: None,
         })
         .await?;
     Ok(read_response::<WorkspaceChangeSetGetResponse>(mcp, request_id)
@@ -236,6 +237,7 @@ async fn external_ide_edit_invalidates_changeset_without_overwriting() -> Result
     let request_id = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: cs.id.clone(),
+            commit_message: None,
         })
         .await?;
     let err = read_error(&mut mcp, request_id).await?;

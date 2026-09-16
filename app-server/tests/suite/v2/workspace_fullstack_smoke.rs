@@ -585,6 +585,7 @@ async fn changeset_create_apply(
     let request_id = mcp
         .send_workspace_source_changeset_apply_request(WorkspaceChangeSetApplyParams {
             changeset_id: create.changeset.id,
+            commit_message: None,
         })
         .await?;
     let _: ody_app_server_protocol::WorkspaceChangeSetApplyResponse =

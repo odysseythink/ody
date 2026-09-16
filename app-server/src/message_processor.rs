@@ -476,6 +476,8 @@ impl MessageProcessor {
             Arc::clone(&workspace_write_lock),
         );
 
+        thread_processor.set_staged_write_sink(workspace_source_processor.staged_write_sink());
+
         let workspace_service_processor = WorkspaceServiceRequestProcessor::new(
             config.ody_home.to_path_buf(),
             workspace_project_processor.store_handle(),
