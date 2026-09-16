@@ -141,6 +141,26 @@ fn collect_resume_override_mismatches(
     mismatch_details
 }
 
+/// P1 切片2：workspace task 线程告知 agent 暂存模式。不注入的话 agent 会自行
+/// `git commit`，用户 reject 时磁盘已非暂存内容，回滚语义被破坏。
+fn apply_workspace_staging_instructions(config: &mut ody_core::config::Config) {
+    let has_roots = !config.workspace_roots.is_empty();
+    config.developer_instructions =
+        workspace_staging_note(has_roots, config.developer_instructions.take());
+}
+
+/// 有 workspace roots 时把暂存说明拼进 developer instructions（纯函数，单测友好）。
+fn workspace_staging_note(has_workspace_roots: bool, existing: Option<String>) -> Option<String> {
+    if !has_workspace_roots {
+        return existing;
+    }
+    const NOTE: &str = "<workspace_staging>\n这个工程处于暂存模式：你的文件写入（write_file/edit_file/apply_patch）会自动进入暂存区，由用户审阅后才统一写回并提交。不要运行 git add / git commit / git restore 等改变 git 状态的命令；完成修改后简要说明改了哪些文件，等待用户确认。用户 reject 时磁盘会回滚到修改前。\n</workspace_staging>";
+    Some(match existing {
+        Some(text) if !text.trim().is_empty() => format!("{text}\n\n{NOTE}"),
+        _ => NOTE.to_owned(),
+    })
+}
+
 fn merge_persisted_resume_metadata(
     request_overrides: &mut Option<HashMap<String, serde_json::Value>>,
     typesafe_overrides: &mut ConfigOverrides,
@@ -1138,6 +1158,9 @@ impl ThreadRequestProcessor {
                 .await
                 .map_err(|err| config_load_error(&err))?;
         }
+
+        // 必须在上方 trust reload 之后注入，否则 reload 会冲掉暂存说明。
+        apply_workspace_staging_instructions(&mut config);
 
         let environments = environments.unwrap_or_else(|| {
             listener_task_context
@@ -2687,7 +2710,7 @@ impl ThreadRequestProcessor {
         .await;
 
         // Derive a Config using the same logic as new conversation, honoring overrides if provided.
-        let config = match self
+        let mut config = match self
             .config_manager
             .load_for_cwd(request_overrides, typesafe_overrides, history_cwd)
             .await
@@ -2699,6 +2722,7 @@ impl ThreadRequestProcessor {
                 return Ok(());
             }
         };
+        apply_workspace_staging_instructions(&mut config);
 
         let response_history = thread_history.clone();
 

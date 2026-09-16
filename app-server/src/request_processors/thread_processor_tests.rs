@@ -1505,3 +1505,40 @@ mod thread_processor_behavior_tests {
         Ok(())
     }
 }
+
+mod workspace_staging_instructions_tests {
+    use super::super::workspace_staging_note;
+
+    #[test]
+    fn no_roots_keeps_existing_instructions() {
+        let existing = Some("Be terse".to_owned());
+        assert_eq!(
+            workspace_staging_note(false, existing.clone()),
+            existing
+        );
+    }
+
+    #[test]
+    fn roots_without_existing_instructions_use_note_alone() {
+        let result = workspace_staging_note(true, None).expect("note injected");
+        assert!(result.contains("<workspace_staging>"));
+        assert!(!result.contains("Be terse"));
+    }
+
+    #[test]
+    fn roots_append_note_to_existing_instructions() {
+        let result = workspace_staging_note(true, Some("Be terse".to_owned())).expect("note injected");
+        assert!(result.starts_with("Be terse"));
+        assert!(result.contains("<workspace_staging>"));
+        // 保留原指令全文，只追加
+        assert!(result.contains("Be terse
+
+<workspace_staging>"));
+    }
+
+    #[test]
+    fn roots_replace_blank_instructions_with_note() {
+        let result = workspace_staging_note(true, Some("   ".to_owned())).expect("note injected");
+        assert!(result.starts_with("<workspace_staging>"));
+    }
+}
