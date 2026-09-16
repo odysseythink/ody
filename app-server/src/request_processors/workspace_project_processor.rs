@@ -123,6 +123,21 @@ impl WorkspaceProjectRequestProcessor {
     ) -> Result<WorkspaceProjectBindResponse, JSONRPCErrorError> {
         let project_id = params.id.clone();
         let result = self.with_store(|store| store.bind(&self.ody_home, params));
+        if let Ok(response) = &result {
+            // P1 切片2：baseline 必须在绑定时建——此时磁盘还是用户原始
+            // 状态。拖到 apply 才建会把 agent 已写盘的暂存内容混进基线
+            // （commit 变 NothingToCommit，git 历史失去「确认前」锚点）。
+            // best-effort：失败不阻断绑定，apply Phase 2 保留兜底。
+            for root in &response.project.roots {
+                let root_path = Path::new(&root.path);
+                if ody_git_utils::get_git_repo_root(root_path).is_none()
+                    && let Err(err) =
+                        ody_git_utils::ensure_git_baseline_repository(root_path).await
+                {
+                    tracing::warn!("workspace git baseline init failed for {}: {err}", root.path);
+                }
+            }
+        }
         match &result {
             Ok(response) => self.audit.record(audit_event(
                 Some(&response.project.id),
@@ -544,6 +559,118 @@ mod tests {
             .get("ws-1")
             .expect("project survives reload");
         assert_eq!(project.roots[0].path, root.to_string_lossy());
+    }
+
+    #[tokio::test]
+    async fn bind_initializes_git_baseline_for_non_git_root() {
+        // 基线必须在绑定时建：磁盘还是用户原始状态，baseline 快照的
+        // 是确认前的世界。拖到 apply 才建会把 agent 已写盘的暂存内容
+        // 混进基线（commit 变 NothingToCommit）。
+        let root_dir = tempfile::tempdir().expect("create root");
+        let root_path = root_dir.path().canonicalize().expect("canonicalize");
+        fs::write(root_path.join("note.txt"), "v1\n").expect("write file");
+        assert!(
+            ody_git_utils::get_git_repo_root(&root_path).is_none(),
+            "fixture root must not be a git repo yet"
+        );
+
+        let ody_home = tempfile::tempdir().expect("create ody home");
+        let audit = Arc::new(crate::workspace_audit::WorkspaceAuditLog::new(
+            ody_home.path().join("workspace-audit").join("v1.jsonl"),
+        ));
+        let processor = WorkspaceProjectRequestProcessor::new(
+            ody_home.path().to_path_buf(),
+            audit,
+            Arc::new(crate::workspace_lock::WorkspaceWriteLock::default()),
+        );
+        processor
+            .bind(WorkspaceProjectBindParams {
+                id: "ws-1".to_owned(),
+                name: "fixture".to_owned(),
+                roots: vec![ody_utils_absolute_path::test_support::PathBufExt::abs(&root_path)],
+                idempotency_key: "key-1".to_owned(),
+            })
+            .await
+            .expect("bind project");
+
+        assert!(
+            ody_git_utils::get_git_repo_root(&root_path).is_some(),
+            "bind must initialize the baseline git repository"
+        );
+        let output = std::process::Command::new("git")
+            .args([
+                "-C",
+                root_path.to_str().expect("utf8 root"),
+                "show",
+                "--name-only",
+                "--pretty=",
+                "HEAD",
+            ])
+            .output()
+            .expect("git show");
+        assert!(output.status.success(), "git show failed");
+        let names = String::from_utf8(output.stdout).expect("utf8");
+        assert!(
+            names.contains("note.txt"),
+            "baseline commit must snapshot the original file: {names}"
+        );
+        // baseline 只含原始内容一行，不含后续写入
+        let show_output = std::process::Command::new("git")
+            .args(["-C", root_path.to_str().expect("utf8 root"), "show", "HEAD"])
+            .output()
+            .expect("git show");
+        let diff = String::from_utf8(show_output.stdout).expect("utf8");
+        assert!(diff.contains("+v1"), "baseline must carry original content: {diff}");
+    }
+
+    #[tokio::test]
+    async fn bind_leaves_existing_git_repo_history_untouched() {
+        let root_dir = tempfile::tempdir().expect("create root");
+        let root_path = root_dir.path().canonicalize().expect("canonicalize");
+        fs::write(root_path.join("note.txt"), "v1\n").expect("write file");
+        for args in [
+            vec!["init", "-q"],
+            vec!["config", "user.email", "t@t.local"],
+            vec!["config", "user.name", "t"],
+            vec!["add", "-A"],
+            vec!["commit", "-qm", "user init"],
+        ] {
+            let status = std::process::Command::new("git")
+                .args(args)
+                .current_dir(&root_path)
+                .status()
+                .expect("git setup");
+            assert!(status.success(), "git setup step failed");
+        }
+
+        let ody_home = tempfile::tempdir().expect("create ody home");
+        let audit = Arc::new(crate::workspace_audit::WorkspaceAuditLog::new(
+            ody_home.path().join("workspace-audit").join("v1.jsonl"),
+        ));
+        let processor = WorkspaceProjectRequestProcessor::new(
+            ody_home.path().to_path_buf(),
+            audit,
+            Arc::new(crate::workspace_lock::WorkspaceWriteLock::default()),
+        );
+        processor
+            .bind(WorkspaceProjectBindParams {
+                id: "ws-1".to_owned(),
+                name: "fixture".to_owned(),
+                roots: vec![ody_utils_absolute_path::test_support::PathBufExt::abs(&root_path)],
+                idempotency_key: "key-1".to_owned(),
+            })
+            .await
+            .expect("bind project");
+
+        let subject = std::process::Command::new("git")
+            .args(["-C", root_path.to_str().expect("utf8 root"), "log", "-1", "--pretty=%s"])
+            .output()
+            .expect("git log");
+        assert_eq!(
+            String::from_utf8(subject.stdout).expect("utf8").trim(),
+            "user init",
+            "existing git history must stay untouched by bind"
+        );
     }
 
     #[tokio::test]
