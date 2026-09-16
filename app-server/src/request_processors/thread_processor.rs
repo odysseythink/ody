@@ -1,5 +1,6 @@
 use super::*;
 use crate::error_code::method_not_found;
+use std::fs;
 use ody_app_server_protocol::InfoMessageNotification;
 use ody_app_server_protocol::SelectedCapabilityRoot;
 use ody_extension_api::ExtensionDataInit;
@@ -144,9 +145,228 @@ fn collect_resume_override_mismatches(
 /// P1 切片2：workspace task 线程告知 agent 暂存模式。不注入的话 agent 会自行
 /// `git commit`，用户 reject 时磁盘已非暂存内容，回滚语义被破坏。
 fn apply_workspace_staging_instructions(config: &mut ody_core::config::Config) {
-    let has_roots = !config.workspace_roots.is_empty();
+    if config.workspace_roots.is_empty() {
+        return;
+    }
+    // P2 起步：先注入工程规范快照，再注入暂存说明（conventions 在前，
+    // agent 先看到「按什么规范写」再看到「写入进暂存区」）。
+    let roots: Vec<PathBuf> = config
+        .workspace_roots
+        .iter()
+        .map(|root| root.as_path().to_path_buf())
+        .collect();
     config.developer_instructions =
-        workspace_staging_note(has_roots, config.developer_instructions.take());
+        workspace_conventions_note(&roots, config.developer_instructions.take());
+    config.developer_instructions =
+        workspace_staging_note(true, config.developer_instructions.take());
+}
+
+/// P2 起步：工程规范快照的数据面（每 root 一份）。全部探测失败即为 empty，
+/// 该 root 不注入，避免给 agent 一段无信息噪音。
+#[derive(Default)]
+struct WorkspaceConventions {
+    package_name: Option<String>,
+    /// package.json 依赖信号（框架/构建/路由/CSS/测试/质量工具），固定顺序去重。
+    signals: Vec<String>,
+    /// src 一级子目录（目录约定）。
+    src_layout: Vec<String>,
+    /// root 层配置文件存在性（eslint/prettier/biome/tsconfig/tailwind/vite/vitest）。
+    config_files: Vec<String>,
+    /// src/pages、src/views 下一层现有页面/视图文件。
+    existing_pages: Vec<String>,
+}
+
+impl WorkspaceConventions {
+    fn is_empty(&self) -> bool {
+        self.package_name.is_none()
+            && self.signals.is_empty()
+            && self.src_layout.is_empty()
+            && self.config_files.is_empty()
+            && self.existing_pages.is_empty()
+    }
+}
+
+/// 依赖信号探测表：按类别排序，命中即列入，帮助 agent「按工程规范生成」时
+/// 知道该用什么框架写、哪些库已在工程里（新增场景不重复造轮子、不引入异构 UI 库）。
+const CONVENTION_SIGNAL_PATTERNS: &[&str] = &[
+    // 框架
+    "react",
+    "react-dom",
+    "vue",
+    "svelte",
+    "@angular/core",
+    "next",
+    "nuxt",
+    "solid-js",
+    // 构建
+    "vite",
+    "webpack",
+    "rollup",
+    "esbuild",
+    // 路由
+    "react-router-dom",
+    "react-router",
+    "vue-router",
+    // CSS / UI 库
+    "tailwindcss",
+    "styled-components",
+    "@emotion/react",
+    "sass",
+    "less",
+    "@mui/material",
+    "antd",
+    "@chakra-ui/react",
+    // 测试
+    "vitest",
+    "jest",
+    "@playwright/test",
+    "cypress",
+    // 质量工具
+    "typescript",
+    "eslint",
+    "prettier",
+    "@biomejs/biome",
+];
+
+/// root 层配置文件候选（存在即列入；按此固定顺序输出，结果确定性）。
+const CONVENTION_CONFIG_CANDIDATES: &[&str] = &[
+    "eslint.config.js",
+    "eslint.config.mjs",
+    "eslint.config.ts",
+    ".eslintrc.js",
+    ".eslintrc.cjs",
+    ".eslintrc.json",
+    ".prettierrc",
+    ".prettierrc.json",
+    ".prettierrc.js",
+    "biome.json",
+    "tsconfig.json",
+    "tailwind.config.js",
+    "tailwind.config.ts",
+    "vite.config.ts",
+    "vite.config.js",
+    "vitest.config.ts",
+    "vitest.config.js",
+];
+
+const CONVENTION_PAGE_EXTENSIONS: &[&str] = &["tsx", "jsx", "ts", "js", "vue", "svelte"];
+
+fn scan_workspace_conventions(root: &Path) -> WorkspaceConventions {
+    let mut conventions = WorkspaceConventions::default();
+
+    if let Ok(contents) = fs::read_to_string(root.join("package.json"))
+        && let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&contents)
+    {
+        conventions.package_name = package_json
+            .get("name")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned);
+        let mut dep_keys: Vec<String> = Vec::new();
+        for field in ["dependencies", "devDependencies"] {
+            if let Some(deps) = package_json.get(field).and_then(serde_json::Value::as_object) {
+                dep_keys.extend(deps.keys().cloned());
+            }
+        }
+        conventions.signals = CONVENTION_SIGNAL_PATTERNS
+            .iter()
+            .filter(|pattern| dep_keys.iter().any(|key| key == *pattern))
+            .map(|pattern| (*pattern).to_owned())
+            .collect();
+    }
+
+    conventions.src_layout = list_child_dirs(&root.join("src"), 10);
+
+    conventions.config_files = CONVENTION_CONFIG_CANDIDATES
+        .iter()
+        .filter(|name| root.join(name).is_file())
+        .map(|name| (*name).to_owned())
+        .collect();
+
+    for sub in ["pages", "views"] {
+        let dir = root.join("src").join(sub);
+        if let Ok(entries) = fs::read_dir(&dir) {
+            let mut files: Vec<String> = entries
+                .filter_map(Result::ok)
+                .filter_map(|entry| {
+                    let name = entry.file_name().to_string_lossy().into_owned();
+                    let is_page = entry.path().is_file()
+                        && CONVENTION_PAGE_EXTENSIONS
+                            .iter()
+                            .any(|ext| name.ends_with(&format!(".{ext}")) && name.len() > ext.len() + 1);
+                    is_page.then(|| format!("{sub}/{name}"))
+                })
+                .collect();
+            files.sort();
+            conventions.existing_pages.extend(files.into_iter().take(10));
+        }
+    }
+
+    conventions
+}
+
+/// 列出一级子目录名（非点开头），排序后截断，输出确定性。
+fn list_child_dirs(dir: &Path, limit: usize) -> Vec<String> {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut names: Vec<String> = entries
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().is_dir())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| !name.starts_with('.'))
+        .collect();
+    names.sort();
+    names.truncate(limit);
+    names
+}
+
+/// 有 workspace roots 时把工程规范快照拼进 developer instructions（best-effort：
+/// 单个 root 探测全部为空则跳过该 root，所有 root 都为空则不注入）。
+fn workspace_conventions_note(roots: &[PathBuf], existing: Option<String>) -> Option<String> {
+    if roots.is_empty() {
+        return existing;
+    }
+    let sections: Vec<String> = roots
+        .iter()
+        .map(|root| (root, scan_workspace_conventions(root)))
+        .filter(|(_, conventions)| !conventions.is_empty())
+        .map(|(root, conventions)| {
+            let mut lines = vec![format!("[{}]", root.display())];
+            if let Some(name) = &conventions.package_name {
+                lines.push(format!("包名：{name}"));
+            }
+            if !conventions.signals.is_empty() {
+                lines.push(format!("框架信号：{}", conventions.signals.join("、")));
+            }
+            if !conventions.src_layout.is_empty() {
+                let dirs = conventions
+                    .src_layout
+                    .iter()
+                    .map(|name| format!("src/{name}"))
+                    .collect::<Vec<_>>()
+                    .join("、");
+                lines.push(format!("目录约定：{dirs}"));
+            }
+            if !conventions.config_files.is_empty() {
+                lines.push(format!("配置文件：{}", conventions.config_files.join("、")));
+            }
+            if !conventions.existing_pages.is_empty() {
+                lines.push(format!("现有页面：{}", conventions.existing_pages.join("、")));
+            }
+            lines.join("\n")
+        })
+        .collect();
+    if sections.is_empty() {
+        return existing;
+    }
+    let note = format!(
+        "<workspace_conventions>\n工程规范快照（写新代码前遵循这些约定；需要细节可自行读取下列文件）：\n\n{}\n</workspace_conventions>",
+        sections.join("\n\n")
+    );
+    Some(match existing {
+        Some(text) if !text.trim().is_empty() => format!("{text}\n\n{note}"),
+        _ => note,
+    })
 }
 
 /// 有 workspace roots 时把暂存说明拼进 developer instructions（纯函数，单测友好）。

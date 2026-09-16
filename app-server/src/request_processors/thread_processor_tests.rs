@@ -1542,3 +1542,94 @@ mod workspace_staging_instructions_tests {
         assert!(result.starts_with("<workspace_staging>"));
     }
 }
+
+mod workspace_conventions_tests {
+    use super::super::workspace_conventions_note;
+    use std::fs;
+    use std::path::Path;
+
+    fn write_package_json(root: &Path, extra_deps: &str) {
+        let json = format!(
+            r#"{{
+              "name": "demo-app",
+              "dependencies": {{
+                "react": "^18.0.0",
+                "react-dom": "^18.0.0"{extra_deps}
+              }}
+            }}"#
+        );
+        fs::write(root.join("package.json"), json).expect("write package.json");
+    }
+
+    #[test]
+    fn empty_roots_keep_existing_instructions() {
+        let existing = Some("Be terse".to_owned());
+        assert_eq!(workspace_conventions_note(&[], existing.clone()), existing);
+    }
+
+    #[test]
+    fn scans_package_json_src_layout_configs_and_pages() {
+        let temp = tempfile::tempdir().expect("root tempdir");
+        let root = temp.path();
+        write_package_json(
+            root,
+            r#",
+                "react-router-dom": "^6.0.0",
+                "tailwindcss": "^3.0.0""#,
+        );
+        fs::create_dir_all(root.join("src/components")).expect("mkdir components");
+        fs::create_dir_all(root.join("src/pages")).expect("mkdir pages");
+        fs::write(root.join("eslint.config.js"), "export default []").expect("write eslint config");
+        fs::write(root.join("tsconfig.json"), "{}").expect("write tsconfig");
+        fs::write(root.join("src/pages/Home.tsx"), "export const Home = 1").expect("write page");
+        fs::write(root.join("src/pages/About.tsx"), "export const About = 1").expect("write page");
+
+        let note = workspace_conventions_note(&[root.to_path_buf()], None).expect("note injected");
+        assert!(note.contains("<workspace_conventions>"));
+        assert!(note.contains(&root.display().to_string()));
+        // package.json 依赖信号（dependencies 与 devDependencies 合并探测）
+        assert!(note.contains("react"), "note: {note}");
+        assert!(note.contains("react-router-dom"), "note: {note}");
+        assert!(note.contains("tailwindcss"), "note: {note}");
+        // src 一级目录约定
+        assert!(note.contains("src/components"), "note: {note}");
+        assert!(note.contains("src/pages"), "note: {note}");
+        // 配置文件存在性
+        assert!(note.contains("eslint.config.js"), "note: {note}");
+        assert!(note.contains("tsconfig.json"), "note: {note}");
+        // 现有页面清单
+        assert!(note.contains("Home.tsx"), "note: {note}");
+        assert!(note.contains("About.tsx"), "note: {note}");
+    }
+
+    #[test]
+    fn appends_conventions_to_existing_instructions() {
+        let temp = tempfile::tempdir().expect("root tempdir");
+        write_package_json(temp.path(), "");
+        let note = workspace_conventions_note(&[temp.path().to_path_buf()], Some("Be terse".to_owned()))
+            .expect("note injected");
+        assert!(note.starts_with("Be terse"));
+        assert!(note.contains("<workspace_conventions>"));
+    }
+
+    #[test]
+    fn skips_roots_without_any_conventions() {
+        let temp = tempfile::tempdir().expect("empty root tempdir");
+        let existing = Some("Be terse".to_owned());
+        assert_eq!(
+            workspace_conventions_note(&[temp.path().to_path_buf()], existing.clone()),
+            existing
+        );
+    }
+
+    #[test]
+    fn tolerates_missing_package_json_but_existing_src() {
+        let temp = tempfile::tempdir().expect("root tempdir");
+        fs::create_dir_all(temp.path().join("src/views")).expect("mkdir views");
+        fs::write(temp.path().join("src/views/Panel.vue"), "<template/>").expect("write view");
+        let note = workspace_conventions_note(&[temp.path().to_path_buf()], None).expect("note injected");
+        assert!(note.contains("src/views"), "note: {note}");
+        assert!(note.contains("Panel.vue"), "note: {note}");
+        assert!(!note.contains("框架信号"), "note: {note}");
+    }
+}
