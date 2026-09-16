@@ -139,6 +139,45 @@ fn stage_write_creates_pending_changeset_with_base_and_content() {
 }
 
 #[test]
+#[cfg(unix)]
+fn stage_write_resolves_symlinked_parent_against_canonical_roots() {
+    // bind 落库的 root 是 canonical 形式；写路径来自 core 的 cwd 拼接，
+    // 可能带符号链接分量（macOS /tmp -> /private/tmp 同源问题），
+    // 必须仍能归属。文件不存在（删除写入）时走父目录解析分支。
+    let dir = tempfile::tempdir().expect("real root tempdir");
+    let real_root = dir.path().canonicalize().expect("canonical root");
+    let link = dir
+        .path()
+        .parent()
+        .expect("parent")
+        .join(format!("staging-link-{}", std::process::id()));
+    let _ = std::fs::remove_file(&link);
+    std::os::unix::fs::symlink(&real_root, &link).expect("symlink");
+    let (project_store, store, audit, _home) = fixture_stores(&real_root);
+    let collector = WorkspaceStagingCollector::new(project_store, store.clone(), audit);
+    std::fs::create_dir_all(real_root.join("src")).expect("mkdir");
+    let path_via_link = link.join("src").join("a.ts");
+
+    collector.stage_write(
+        "thread-1",
+        write(Some("old\n"), Some("new\n"), path_via_link),
+    );
+
+    let store = store.lock().expect("store lock");
+    assert_eq!(store.changesets.len(), 1);
+    let change = &store
+        .changesets
+        .values()
+        .next()
+        .expect("one changeset")
+        .change_set
+        .changes[0];
+    assert_eq!(change.path, "src/a.ts");
+    assert_eq!(change.kind, WorkspaceFileChangeKind::Update);
+    let _ = std::fs::remove_file(&link);
+}
+
+#[test]
 fn stage_write_ignores_paths_outside_project_roots() {
     let dir = tempfile::tempdir().expect("root tempdir");
     let (project_store, store, audit, _home) = fixture_stores(dir.path());

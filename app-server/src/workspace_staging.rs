@@ -35,6 +35,21 @@ pub(crate) const STAGING_TITLE_PREFIX: &str = "Task staging";
 const RECENT_STAGED_CAP: usize = 128;
 
 /// 把一个绝对路径归属到某个 project root，返回 (project, root_index, relative)。
+/// 宽松 canonicalize：解析父目录的符号链接后拼回文件名。
+/// 与 `Path::canonicalize` 不同，目标文件不存在（删除写入）也能工作。
+pub(crate) fn canonicalize_loose(path: &std::path::Path) -> std::path::PathBuf {
+    let Some(parent) = path.parent() else {
+        return path.to_path_buf();
+    };
+    let Ok(dir) = std::fs::canonicalize(parent) else {
+        return path.to_path_buf();
+    };
+    match path.file_name() {
+        Some(name) => dir.join(name),
+        None => dir,
+    }
+}
+
 pub(crate) fn find_project_for_path<'a>(
     projects: impl IntoIterator<Item = &'a WorkspaceProjectRef>,
     path: &Path,
@@ -189,15 +204,20 @@ impl WorkspaceStagingCollector {
     /// Sink 入口：core 每次文件写成功都会调用。必须便宜：store 为内存
     /// Mutex，persist 是小 JSON 原子写。
     pub(crate) fn stage_write(&self, session_id: &str, write: StagedWrite) {
+        // bind 时 roots 经 canonicalize 落库，而写路径来自 core 的
+        // cwd 拼接（可能带符号链接分量，如 macOS /tmp -> /private/tmp），
+        // 先做宽松 canonicalize 再归属，否则前缀匹配必失败。
+        let path = canonicalize_loose(&write.path);
         let projects = {
             let store = self.project_store.lock().expect("project store lock");
             store.projects.values().cloned().collect::<Vec<_>>()
         };
         let Some((project, root_index, relative)) =
-            find_project_for_path(&projects, &write.path)
+            find_project_for_path(&projects, &path)
         else {
             return;
         };
+        let write = StagedWrite { path, ..write };
         let key = format!("{root_index}:{relative}");
         let new_hash = write
             .new_content
