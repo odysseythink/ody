@@ -259,6 +259,13 @@ impl ToolExecutor<ToolInvocation> for WriteFileHandler {
 
             atomic_write(&abs_path, new_content.as_bytes()).await?;
 
+            crate::tools::staged_write::notify_staged_write(
+                &session,
+                abs_path.as_path().to_path_buf(),
+                old_content.clone(),
+                Some(new_content.clone()),
+            );
+
             let change =
                 file_change_for_write(abs_path.as_path(), old_content.as_deref(), &new_content);
             let unified_diff = if let FileChange::Update { unified_diff, .. } = &change {
@@ -395,6 +402,84 @@ mod tests {
             content,
             "hello
 "
+        );
+    }
+
+    struct RecordingSink {
+        writes: std::sync::Mutex<Vec<crate::tools::staged_write::StagedWrite>>,
+    }
+
+    impl RecordingSink {
+        fn new() -> Self {
+            Self {
+                writes: std::sync::Mutex::new(Vec::new()),
+            }
+        }
+
+        fn recorded(&self) -> Vec<crate::tools::staged_write::StagedWrite> {
+            self.writes.lock().expect("lock").clone()
+        }
+    }
+
+    impl crate::tools::staged_write::StagedWriteSink for RecordingSink {
+        fn staged_write(
+            &self,
+            _session_id: &str,
+            write: crate::tools::staged_write::StagedWrite,
+        ) {
+            self.writes.lock().expect("lock").push(write);
+        }
+    }
+
+    #[tokio::test]
+    async fn write_file_notifies_staged_write_sink_with_old_and_new_content() {
+        let (session, mut turn, _rx) = make_session_and_context_with_rx().await;
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("foo.txt"), "old\n").unwrap();
+        set_cwd_to_temp(&mut turn, dir.path());
+        let sink = std::sync::Arc::new(RecordingSink::new());
+        session
+            .services
+            .session_extension_data
+            .insert::<std::sync::Arc<dyn crate::tools::staged_write::StagedWriteSink>>(
+                sink.clone(),
+            );
+
+        let invocation = invocation_for_write(
+            session,
+            turn,
+            "write-staged-1",
+            json!({ "path": "foo.txt", "content": "new\n" }),
+        )
+        .await;
+        let handler = WriteFileHandler::new(FileToolOptions::default());
+        handler.handle(invocation).await.expect("write succeeds");
+
+        let recorded = sink.recorded();
+        assert_eq!(recorded.len(), 1, "write_file must notify the sink once");
+        assert_eq!(recorded[0].old_content.as_deref(), Some("old\n"));
+        assert_eq!(recorded[0].new_content.as_deref(), Some("new\n"));
+        assert_eq!(recorded[0].path, dir.path().join("foo.txt"));
+    }
+
+    #[tokio::test]
+    async fn write_file_without_sink_still_succeeds() {
+        let (session, mut turn, _rx) = make_session_and_context_with_rx().await;
+        let dir = tempfile::tempdir().expect("tempdir");
+        set_cwd_to_temp(&mut turn, dir.path());
+
+        let invocation = invocation_for_write(
+            session,
+            turn,
+            "write-no-sink-1",
+            json!({ "path": "plain.txt", "content": "data\n" }),
+        )
+        .await;
+        let handler = WriteFileHandler::new(FileToolOptions::default());
+        handler.handle(invocation).await.expect("write succeeds");
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("plain.txt")).expect("read"),
+            "data\n"
         );
     }
 

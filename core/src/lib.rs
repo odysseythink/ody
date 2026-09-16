@@ -152,6 +152,9 @@ pub use state_db_bridge::StateDbHandle;
 pub use state_db_bridge::init_state_db;
 mod thread_rollout_truncation;
 mod tools;
+
+pub use tools::staged_write::StagedWrite;
+pub use tools::staged_write::StagedWriteSink;
 pub(crate) mod turn_diff_tracker;
 mod turn_metadata;
 mod turn_timing;

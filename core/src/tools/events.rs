@@ -263,6 +263,12 @@ impl ToolEmitter {
                 } else {
                     PatchApplyStatus::Failed
                 };
+                if let Some(delta) = applied_patch_delta {
+                    crate::tools::staged_write::notify_staged_writes_from_changes(
+                        ctx.session,
+                        delta.changes(),
+                    );
+                }
                 let tracker_update = applied_patch_delta
                     .map(|delta| tracker_update_for_known_delta(environment_id.as_deref(), delta))
                     .unwrap_or(TurnDiffTrackerUpdate::Invalidate);
@@ -327,6 +333,12 @@ impl ToolEmitter {
                     applied_patch_delta,
                 }),
             ) => {
+                if let Some(delta) = applied_patch_delta {
+                    crate::tools::staged_write::notify_staged_writes_from_changes(
+                        ctx.session,
+                        delta.changes(),
+                    );
+                }
                 emit_patch_end(
                     ctx,
                     changes.clone(),
