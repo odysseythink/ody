@@ -410,6 +410,23 @@ pub(crate) fn classify_source(relative: &Path) -> Option<WorkspaceSourceEntry> {
         });
     }
 
+    // Vite/standard templates keep the root component directly under src/
+    // (`src/App.tsx`) with no components/ wrapper. Only PascalCase stems
+    // without dots: lowercase entry files (`src/main.tsx`) and test files
+    // (`src/App.test.tsx`) resolve as symbol noise, not pick targets.
+    if dirs.len() == 1
+        && dirs[0] == "src"
+        && !stem.contains('.')
+        && stem.chars().next().is_some_and(|c| c.is_uppercase())
+    {
+        return Some(WorkspaceSourceEntry {
+            kind: WorkspaceSourceKind::Page,
+            name: stem,
+            path: rel_path,
+            route_path: None,
+        });
+    }
+
     None
 }
 
@@ -788,6 +805,37 @@ mod tests {
         assert_eq!(pages, vec!["src/views/Dashboard.vue"]);
         let tech: Vec<&str> = discovery.tech_stack.iter().map(|t| t.id.as_str()).collect();
         assert!(tech.contains(&"vue"));
+    }
+
+    #[tokio::test]
+    async fn classifies_pascalcase_src_root_files_as_pages() {
+        // Vite/standard templates keep the root component at `src/App.tsx`
+        // (no components/ wrapper); without this convention the most
+        // picked element of such projects cannot be symbol-resolved.
+        let root = fixture_root();
+        write(
+            &root.path(),
+            "package.json",
+            &package_json(
+                "vite-template",
+                r#""react": "^18.3.0", "react-dom": "^18.3.0""#,
+                r#""vite": "^5.0.0""#,
+                r#""dev": "vite""#,
+            ),
+        );
+        write(&root.path(), "src/main.tsx", "export {}");
+        write(&root.path(), "src/App.tsx", "export {}");
+        write(&root.path(), "src/App.test.tsx", "export {}");
+
+        let discovery = scan_root(&root.path().to_string_lossy()).await;
+
+        let pages: Vec<&str> = discovery
+            .sources
+            .iter()
+            .filter(|s| s.kind == WorkspaceSourceKind::Page)
+            .map(|s| s.path.as_str())
+            .collect();
+        assert_eq!(pages, vec!["src/App.tsx"]);
     }
 
     #[tokio::test]
