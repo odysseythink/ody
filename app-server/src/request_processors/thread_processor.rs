@@ -2944,15 +2944,29 @@ impl ThreadRequestProcessor {
         };
         apply_workspace_staging_instructions(&mut config);
 
+        // C1-fix3：resume 重建线程同样挂暂存 sink。此前只有 start 路径挂
+        // sink，统一会话的后续消息走 resume → 写盘直通磁盘、确认卡片恒空。
+        let mut thread_extension_init = ExtensionDataInit::new();
+        if !config.workspace_roots.is_empty()
+            && let Some(sink) = self
+                .staged_write_sink
+                .lock()
+                .expect("staged write sink lock")
+                .clone()
+        {
+            thread_extension_init.insert(sink);
+        }
+
         let response_history = thread_history.clone();
 
         match self
             .thread_manager
-            .resume_thread_with_history(
+            .resume_thread_with_history_with_extensions(
                 config,
                 thread_history,
                 self.request_trace_context(&request_id).await,
                 supports_form_elicitation,
+                thread_extension_init,
             )
             .await
         {

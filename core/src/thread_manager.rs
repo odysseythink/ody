@@ -760,6 +760,29 @@ impl ThreadManager {
         parent_trace: Option<W3cTraceContext>,
         supports_form_elicitation: bool,
     ) -> OdyResult<NewThread> {
+        self.resume_thread_with_history_with_extensions(
+            config,
+            initial_history,
+            parent_trace,
+            supports_form_elicitation,
+            ExtensionDataInit::default(),
+        )
+        .await
+    }
+
+    /// `resume_thread_with_history` 的扩展变体：允许宿主在 resume 重建
+    /// 线程时注入 extension 数据（与 `start_thread_with_options` 对齐）。
+    /// app-server 的 workspace 暂存依赖它——resume 不挂 staged-write sink
+    /// 会让 agent 写盘直通磁盘、确认卡片恒空（odyBox 工程模式 C1-fix3
+    /// 验收实证）。
+    pub async fn resume_thread_with_history_with_extensions(
+        &self,
+        config: Config,
+        initial_history: InitialHistory,
+        parent_trace: Option<W3cTraceContext>,
+        supports_form_elicitation: bool,
+        thread_extension_init: ExtensionDataInit,
+    ) -> OdyResult<NewThread> {
         let agent_control = self.agent_control_for_config(&config);
         let environments = default_thread_environment_selections(
             self.state.environment_manager.as_ref(),
@@ -782,7 +805,7 @@ impl ThreadManager {
             /*inherited_exec_policy*/ None,
             parent_trace,
             environments,
-            /*thread_extension_init*/ ExtensionDataInit::default(),
+            thread_extension_init,
             supports_form_elicitation,
             /*user_shell_override*/ None,
         ))
