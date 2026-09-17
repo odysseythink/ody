@@ -104,6 +104,7 @@ mod remote_skills_fetcher;
 mod request_processors;
 mod request_serialization;
 mod server_request_error;
+mod single_instance;
 mod skills_watcher;
 mod thread_state;
 mod thread_status;
@@ -468,6 +469,9 @@ pub async fn run_main_with_transport_options(
         )
     })?;
     let ody_home = find_ody_home()?;
+    // 单实例守卫（takeover 语义）：同一 ODY_HOME 只存活一个 app-server，
+    // 杜绝多进程全量 persist 互写 store 的静默损坏（见 single_instance）。
+    let _single_instance_guard = single_instance::SingleInstanceGuard::acquire(&ody_home)?;
     let local_runtime_paths = ExecServerRuntimePaths::from_optional_paths(
         arg0_paths.ody_self_exe.clone(),
         arg0_paths.ody_linux_sandbox_exe.clone(),

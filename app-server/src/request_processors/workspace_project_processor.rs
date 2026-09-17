@@ -311,7 +311,7 @@ impl WorkspaceProjectRequestProcessor {
 }
 
 impl WorkspaceProjectStore {
-    fn load(path: PathBuf) -> Self {
+    pub(crate) fn load(path: PathBuf) -> Self {
         let backup = path.with_extension("json.bak");
         for candidate in [&path, &backup] {
             if let Ok(raw) = fs::read(candidate)
@@ -327,6 +327,26 @@ impl WorkspaceProjectStore {
             path,
             ..Default::default()
         }
+    }
+
+    /// 从磁盘重新加载（解析失败或版本不符时保留内存现状）。
+    /// 暂存归属（workspace_staging::stage_write）在每次写盘前调用：
+    /// 进程长期运行时内存快照可能落后于磁盘（外部修复、接管重启窗口、
+    /// bind 走了兄弟路径等），归属必须以磁盘为准——曾因此把暂存
+    /// changeset 挂到 renderer 已看不见的工程副本 id 下，确认卡片
+    /// 恒空（odyBox 工程模式 C1-fix2 验收实证）。
+    pub(crate) fn reload_from_disk(&mut self) {
+        let Ok(raw) = fs::read(&self.path) else {
+            return;
+        };
+        let Ok(mut fresh) = serde_json::from_slice::<Self>(&raw) else {
+            return;
+        };
+        if fresh.schema_version != WORKSPACE_PROJECT_PROTOCOL_VERSION {
+            return;
+        }
+        fresh.path = self.path.clone();
+        *self = fresh;
     }
 
     fn bind(

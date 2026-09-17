@@ -208,8 +208,11 @@ impl WorkspaceStagingCollector {
         // cwd 拼接（可能带符号链接分量，如 macOS /tmp -> /private/tmp），
         // 先做宽松 canonicalize 再归属，否则前缀匹配必失败。
         let path = canonicalize_loose(&write.path);
+        // 归属以磁盘为准：内存快照可能落后于磁盘（接管重启窗口、外部
+        // 修复），挂错工程 id 会让 renderer 的确认卡片恒空。
         let projects = {
-            let store = self.project_store.lock().expect("project store lock");
+            let mut store = self.project_store.lock().expect("project store lock");
+            store.reload_from_disk();
             store.projects.values().cloned().collect::<Vec<_>>()
         };
         let Some((project, root_index, relative)) =

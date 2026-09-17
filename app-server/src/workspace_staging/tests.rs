@@ -300,3 +300,85 @@ fn is_recent_staged_tracks_staged_hashes_within_cap() {
     assert!(!collector.is_recent_staged("0:file_0.ts", &evicted_hash));
     assert!(!collector.is_recent_staged("0:file_137.ts", &evicted_hash));
 }
+
+#[test]
+fn stage_write_attributes_to_project_added_to_disk_after_load() {
+    // C1-fix2 回归：归属必须以磁盘为准，不能信内存快照。磁盘在 load 之后
+    // 新增了 ws-2(rootB)（外部进程/接管窗口写入），写 rootB 下的文件必须
+    // 归属 ws-2——内存快照只有 ws-1(rootA) 时若无 reload 会归属失败、
+    // renderer 确认卡片恒空。
+    let root_a = tempfile::tempdir().expect("root a");
+    let root_b = tempfile::tempdir().expect("root b");
+    let ody_home = tempfile::tempdir().expect("ody home");
+    let project_path = ody_home.path().join("workspace-project").join("v1.json");
+    std::fs::create_dir_all(project_path.parent().expect("parent")).expect("mkdir");
+    let project_json = |extra: &str| {
+        format!(
+            r#"{{
+  "schema_version": 1,
+  "projects": {{
+    "ws-1": {{
+      "id": "ws-1",
+      "name": "a",
+      "schemaVersion": 1,
+      "roots": [{{
+        "path": {:?},
+        "role": "primary",
+        "authSource": "user_selected"
+      }}],
+      "createdAtMs": 0,
+      "updatedAtMs": 0
+    }}{extra}
+  }},
+  "idempotency": {{}}
+}}"#,
+            root_a.path().display()
+        )
+    };
+    std::fs::write(&project_path, project_json("")).expect("initial store");
+    let project_store = Arc::new(Mutex::new(WorkspaceProjectStore::load(project_path.clone())));
+    let store = Arc::new(Mutex::new(WorkspaceSourceStore::load(
+        ody_home.path().join("workspace-source").join("v1.json"),
+    )));
+    let audit = Arc::new(WorkspaceAuditLog::new(
+        ody_home.path().join("workspace-audit").join("v1.jsonl"),
+    ));
+    let collector = WorkspaceStagingCollector::new(project_store, store, audit);
+
+    // 外部视角：磁盘加 ws-2(rootB)，内存快照不知情。
+    let ws2 = format!(
+        r#",
+    "ws-2": {{
+      "id": "ws-2",
+      "name": "b",
+      "schemaVersion": 1,
+      "roots": [{{
+        "path": {:?},
+        "role": "primary",
+        "authSource": "user_selected"
+      }}],
+      "createdAtMs": 0,
+      "updatedAtMs": 0
+    }}"#,
+        root_b.path().display()
+    );
+    std::fs::write(&project_path, project_json(&ws2)).expect("external store update");
+
+    collector.stage_write(
+        "sess-1",
+        write(
+            None,
+            Some("hello"),
+            root_b.path().join("note.txt"),
+        ),
+    );
+
+    let store = collector.store.lock().expect("store lock");
+    let staged = store
+        .changesets
+        .values()
+        .filter(|stored| stored.change_set.title.starts_with(STAGING_TITLE_PREFIX))
+        .collect::<Vec<_>>();
+    assert_eq!(staged.len(), 1, "exactly one staging changeset expected");
+    assert_eq!(staged[0].change_set.project_id, "ws-2");
+}
