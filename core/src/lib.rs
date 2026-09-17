@@ -21,6 +21,7 @@ pub use runtime_model_state::RuntimeModelState;
 pub use runtime_model_state::resolve_runtime_model_state;
 pub use session::SteerInputError;
 pub use turn_metadata::detached_memory_responses_metadata;
+mod compact_model_fallback;
 mod compact_remote;
 mod compact_remote_v2;
 mod config_lock;

@@ -576,6 +576,7 @@ pub(crate) async fn run_turn(
                     if let Err(err) = run_auto_compact(
                         &sess,
                         &turn_context,
+                        /*fallback_turn_context*/ None,
                         &mut client_session,
                         InitialContextInjection::BeforeLastUserMessage,
                         CompactionReason::ContextLimit,
@@ -1317,6 +1318,7 @@ async fn run_pre_sampling_compact(
         run_auto_compact(
             sess,
             turn_context,
+            /*fallback_turn_context*/ None,
             client_session,
             InitialContextInjection::DoNotInject,
             CompactionReason::ContextLimit,
@@ -1404,6 +1406,7 @@ async fn run_task_checkpoint(
     run_auto_compact(
         sess,
         turn_context,
+        /*fallback_turn_context*/ None,
         client_session,
         InitialContextInjection::BeforeLastUserMessage,
         CompactionReason::TaskCheckpoint,
@@ -1494,11 +1497,21 @@ async fn maybe_run_previous_model_inline_compact(
             )
             .await,
     );
+    // If compaction against the previous model fails with a model-specific error, retry
+    // once against the current model.
+    let fallback_turn_context = if previous_model_turn_context.model_info.slug
+        != turn_context.model_info.slug
+    {
+        Some(Arc::clone(turn_context))
+    } else {
+        None
+    };
 
     if should_compact_for_comp_hash_change {
         run_auto_compact(
             sess,
             &previous_model_turn_context,
+            fallback_turn_context,
             client_session,
             InitialContextInjection::DoNotInject,
             CompactionReason::CompHashChanged,
@@ -1536,6 +1549,7 @@ async fn maybe_run_previous_model_inline_compact(
         run_auto_compact(
             sess,
             &previous_model_turn_context,
+            fallback_turn_context,
             client_session,
             InitialContextInjection::DoNotInject,
             CompactionReason::ModelDownshift,
@@ -1554,6 +1568,7 @@ async fn maybe_run_previous_model_inline_compact(
 async fn run_auto_compact(
     sess: &Arc<Session>,
     turn_context: &Arc<TurnContext>,
+    fallback_turn_context: Option<Arc<TurnContext>>,
     client_session: &mut ModelClientSession,
     initial_context_injection: InitialContextInjection,
     reason: CompactionReason,
@@ -1573,6 +1588,7 @@ async fn run_auto_compact(
             run_inline_remote_auto_compact_task_v2(
                 Arc::clone(sess),
                 Arc::clone(turn_context),
+                fallback_turn_context,
                 client_session,
                 initial_context_injection,
                 reason,
@@ -1589,6 +1605,7 @@ async fn run_auto_compact(
         run_inline_remote_auto_compact_task(
             Arc::clone(sess),
             Arc::clone(turn_context),
+            fallback_turn_context,
             client_session.turn_state(),
             initial_context_injection,
             reason,
@@ -1726,6 +1743,7 @@ async fn run_session_mode_after_turn(
                     match run_auto_compact(
                         sess,
                         turn_context,
+                        /*fallback_turn_context*/ None,
                         client_session,
                         InitialContextInjection::BeforeLastUserMessage,
                         CompactionReason::PlanSplitCheckpoint,
