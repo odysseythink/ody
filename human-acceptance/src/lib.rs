@@ -81,6 +81,29 @@ pub enum Outcome {
     Passed,
     Failed,
     Blocked,
+    NotRun,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StepFeedback {
+    /// One-based index in the immutable case plan.
+    pub step_index: usize,
+    pub outcome: Outcome,
+    pub actual: String,
+    pub evidence: String,
+}
+
+pub fn aggregate_steps(steps: &[StepFeedback]) -> Outcome {
+    if steps.iter().any(|s| s.outcome == Outcome::Failed) {
+        Outcome::Failed
+    } else if steps.iter().any(|s| s.outcome == Outcome::Blocked) {
+        Outcome::Blocked
+    } else if steps.is_empty() || steps.iter().any(|s| s.outcome == Outcome::NotRun) {
+        Outcome::NotRun
+    } else {
+        Outcome::Passed
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -91,10 +114,14 @@ pub struct Feedback {
     pub actual: String,
     /// Human-entered evidence references; never opened or executed by the server.
     pub evidence: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub steps: Option<Vec<StepFeedback>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Run {
+    #[serde(default = "legacy_feedback_version")]
+    pub feedback_version: u8,
     pub id: Uuid,
     pub thread_id: String,
     pub plan: Plan,
@@ -103,6 +130,10 @@ pub struct Run {
     pub revision: u64,
     #[serde(default)]
     pub notification: NotificationStatus,
+}
+
+fn legacy_feedback_version() -> u8 {
+    1
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -133,7 +164,7 @@ struct Update {
 }
 
 impl Run {
-    fn update(&mut self, update: Update) -> Result<()> {
+    fn update(&mut self, mut update: Update) -> Result<()> {
         if self.submitted {
             bail!("submitted runs are immutable; create a linked retest");
         }
@@ -141,12 +172,45 @@ impl Run {
             bail!("stale revision; reload before saving");
         }
         let mut ids = std::collections::HashSet::new();
-        for item in &update.feedback {
+        for item in &mut update.feedback {
             if !ids.insert(&item.case_id) || !self.plan.cases.iter().any(|c| c.id == item.case_id) {
                 bail!("unknown or duplicate case ID");
             }
-            if item.outcome != Outcome::Passed && item.actual.trim().is_empty() {
-                bail!("failed/blocked cases require an explanation");
+            let case = self
+                .plan
+                .cases
+                .iter()
+                .find(|c| c.id == item.case_id)
+                .ok_or_else(|| anyhow::anyhow!("unknown case ID"))?;
+            if let Some(steps) = &item.steps {
+                if steps.len() != case.steps.len()
+                    || steps.iter().enumerate().any(|(i, s)| s.step_index != i + 1)
+                {
+                    bail!("step feedback must cover every plan step exactly once in order");
+                }
+                for step in steps {
+                    if matches!(step.outcome, Outcome::Failed | Outcome::Blocked)
+                        && step.actual.trim().is_empty()
+                    {
+                        bail!("failed/blocked steps require an explanation");
+                    }
+                    if step.actual.len() + step.evidence.len() > 8 * 1024 {
+                        bail!("step feedback too large");
+                    }
+                }
+                item.outcome = aggregate_steps(steps);
+                if update.submit && item.outcome == Outcome::NotRun {
+                    bail!("unfinished cases cannot be submitted without a failed/blocked step");
+                }
+            } else {
+                if self.feedback_version >= 2 || update.submit {
+                    bail!("step feedback required; legacy observations are not step results");
+                }
+                if matches!(item.outcome, Outcome::Failed | Outcome::Blocked)
+                    && item.actual.trim().is_empty()
+                {
+                    bail!("failed/blocked cases require an explanation");
+                }
             }
             if item.actual.len() + item.evidence.len() > 8 * 1024 {
                 bail!("feedback too large");
@@ -161,6 +225,7 @@ impl Run {
         Ok(())
     }
 }
+
 
 /// Discover the twenty most recently modified pending runs, without plans/feedback.
 pub async fn pending_runs(root: &Path, thread: &str) -> Result<Vec<Uuid>> {
@@ -236,6 +301,7 @@ pub async fn create(root: &Path, thread: String, plan: Plan) -> Result<Run> {
         load(root, previous, &thread).await?;
     }
     let run = Run {
+        feedback_version: 2,
         id: Uuid::new_v4(),
         thread_id: thread,
         plan,
@@ -416,4 +482,108 @@ pub async fn serve_with_notifier(
         let _ = axum::serve(listener, app).await;
     });
     Ok(Server { url, task, active })
+}
+
+#[cfg(test)]
+mod step_feedback_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn run() -> Result<Run> {
+        Ok(serde_json::from_value(json!({
+            "id":Uuid::new_v4(), "thread_id":"t", "feedback_version":2,
+            "submitted":false,"revision":0,"feedback":[],
+            "plan":{"title":"test","cases":[{"id":"c","title":"case","reason":"visual","prerequisites":"",
+                "steps":[{"action":"one","expected":"one"},{"action":"two","expected":"two"}]}]}
+        }))?)
+    }
+
+    fn update(states: &[(&str, &str)], submit: bool) -> Result<Update> {
+        Ok(serde_json::from_value(
+            json!({"revision":0,"submit":submit,"feedback":[{
+                "case_id":"c","outcome":"passed","actual":"optional note","evidence":"",
+                "steps":states.iter().enumerate().map(|(i,(outcome,actual))| json!({"step_index":i+1,"outcome":outcome,"actual":actual,"evidence":"link"})).collect::<Vec<_>>()
+            }]}),
+        )?)
+    }
+
+    #[test]
+    fn aggregation_is_server_owned_and_not_run_is_never_passed() -> Result<()> {
+        for (states, expected, can_submit) in [
+            (vec![("passed", ""), ("passed", "")], Outcome::Passed, true),
+            (
+                vec![("passed", ""), ("not_run", "")],
+                Outcome::NotRun,
+                false,
+            ),
+            (
+                vec![("blocked", "no device"), ("not_run", "")],
+                Outcome::Blocked,
+                true,
+            ),
+            (
+                vec![("failed", "bad UI"), ("blocked", "no device")],
+                Outcome::Failed,
+                true,
+            ),
+        ] {
+            let mut draft = run()?;
+            draft.update(update(&states, false)?)?;
+            assert_eq!(draft.feedback[0].outcome, expected);
+            assert_eq!(run()?.update(update(&states, true)?).is_ok(), can_submit);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn validates_step_coverage_explanations_and_size() -> Result<()> {
+        for states in [
+            vec![("passed", "")],
+            vec![("failed", ""), ("passed", "")],
+            vec![("blocked", ""), ("passed", "")],
+        ] {
+            assert!(run()?.update(update(&states, false)?).is_err());
+        }
+        for index in [0, 1, 3] {
+            let mut input = update(&[("passed", ""), ("passed", "")], false)?;
+            input.feedback[0]
+                .steps
+                .as_mut()
+                .ok_or_else(|| anyhow::anyhow!("steps"))?[1]
+                .step_index = index;
+            assert!(run()?.update(input).is_err());
+        }
+        let oversized = "x".repeat(8193);
+        assert!(
+            run()?
+                .update(update(&[("failed", &oversized), ("passed", "")], false)?)
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn legacy_feedback_is_preserved_but_cannot_be_submitted_as_steps() -> Result<()> {
+        let mut value = serde_json::to_value(run()?)?;
+        value
+            .as_object_mut()
+            .ok_or_else(|| anyhow::anyhow!("object"))?
+            .remove("feedback_version");
+        value["feedback"] = json!([{"case_id":"c","outcome":"failed","actual":"old observation","evidence":"old link"}]);
+        let mut legacy: Run = serde_json::from_value(value)?;
+        assert_eq!(legacy.feedback_version, 1);
+        assert!(legacy.feedback[0].steps.is_none());
+        let saved = json!({"revision":0,"feedback":legacy.feedback,"submit":false});
+        legacy.update(serde_json::from_value(saved.clone())?)?;
+        assert_eq!(legacy.feedback[0].actual, "old observation");
+        let mut submission = saved;
+        submission["revision"] = json!(1);
+        submission["submit"] = json!(true);
+        assert!(legacy.update(serde_json::from_value(submission.clone())?).is_err());
+        let mut new_run = run()?;
+        submission["revision"] = json!(0);
+        submission["submit"] = json!(false);
+        assert!(new_run.update(serde_json::from_value(submission)?).is_err());
+        Ok(())
+    }
 }

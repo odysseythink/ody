@@ -82,7 +82,7 @@ async fn notifications_are_after_commit_idempotent_and_retryable() -> anyhow::Re
         409
     );
     assert_eq!(count.load(Ordering::SeqCst), 0);
-    let submitted = json!({"revision":1,"feedback":[{"case_id":"ui","outcome":"failed","actual":"bad layout","evidence":""}],"submit":true});
+    let submitted = json!({"revision":1,"feedback":[{"case_id":"ui","outcome":"failed","actual":"","evidence":"","steps":[{"step_index":1,"outcome":"failed","actual":"bad layout","evidence":""}]}],"submit":true});
     let saved: Run = client
         .post(&url.api)
         .bearer_auth(&url.token)
@@ -135,7 +135,7 @@ async fn reopening_a_pending_run_recovers_notification() -> anyhow::Result<()> {
     let server = serve_with_notifier(root.path().into(), run.clone(), Some(failed)).await?;
     let url = url::Parts::from_url(&server.url);
     let client = reqwest::Client::builder().no_proxy().build()?;
-    let submitted = json!({"revision":0,"feedback":[{"case_id":"ui","outcome":"passed","actual":"","evidence":""}],"submit":true});
+    let submitted = json!({"revision":0,"feedback":[{"case_id":"ui","outcome":"passed","actual":"","evidence":"","steps":[{"step_index":1,"outcome":"passed","actual":"","evidence":""}]}],"submit":true});
     client
         .post(&url.api)
         .bearer_auth(&url.token)

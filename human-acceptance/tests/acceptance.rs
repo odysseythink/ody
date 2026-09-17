@@ -173,7 +173,7 @@ async fn api_auth_drafts_submission_and_immutability() -> anyhow::Result<()> {
             .status(),
         409
     );
-    let draft = json!({"revision":0,"feedback":[{"case_id":"save","outcome":"failed","actual":"","evidence":""}],"submit":false});
+    let draft = json!({"revision":0,"feedback":[{"case_id":"save","outcome":"failed","actual":"","evidence":"","steps":[{"step_index":1,"outcome":"failed","actual":"","evidence":""}]}],"submit":false});
     assert_eq!(
         client
             .post(&api)
@@ -185,7 +185,7 @@ async fn api_auth_drafts_submission_and_immutability() -> anyhow::Result<()> {
         409
     );
     for case_id in ["unknown", "save"] {
-        let draft = json!({"revision":0,"feedback":[{"case_id":case_id,"outcome":"blocked","actual":"没有设备","evidence":""}],"submit":false});
+        let draft = json!({"revision":0,"feedback":[{"case_id":case_id,"outcome":"passed","actual":"","evidence":"","steps":[{"step_index":1,"outcome":"blocked","actual":"没有设备","evidence":""}]}],"submit":false});
         let response = client
             .post(&api)
             .bearer_auth(token)
@@ -196,6 +196,10 @@ async fn api_auth_drafts_submission_and_immutability() -> anyhow::Result<()> {
     }
     let saved = load(root.path(), run.id, "thread").await?;
     assert_eq!(saved.revision, 1);
+    assert_eq!(
+        saved.feedback[0].outcome,
+        ody_human_acceptance::Outcome::Blocked
+    );
     assert!(!saved.submitted);
     let stale = json!({"revision":0,"feedback":saved.feedback,"submit":true});
     assert_eq!(
