@@ -2,6 +2,8 @@ use crate::extensions::seed_extension_instructions;
 use crate::memory_root;
 use crate::phase1;
 use crate::phase2;
+use crate::storage::rebuild_raw_memories_file_from_memories;
+use crate::storage::sync_rollout_summaries_from_memories;
 use crate::runtime::MemoryStartupContext;
 use crate::start_memories_startup_task;
 use core_test_support::responses::ResponseMock;
@@ -10,7 +12,9 @@ use core_test_support::responses::ev_assistant_message;
 use core_test_support::responses::ev_completed;
 use core_test_support::responses::ev_response_created;
 use core_test_support::responses::mount_sse_once;
+use core_test_support::responses::mount_sse_once_match;
 use core_test_support::responses::sse;
+use core_test_support::responses::sse_failed;
 use core_test_support::responses::start_mock_server;
 use core_test_support::test_ody::TestOdy;
 use core_test_support::test_ody::test_ody;
@@ -32,6 +36,7 @@ use ody_protocol::model_metadata::ReasoningEffort;
 use ody_protocol::models::ContentItem;
 use ody_protocol::models::ResponseItem;
 use ody_protocol::protocol::EventMsg;
+use ody_state::Phase2JobClaimOutcome;
 use ody_protocol::protocol::Op;
 use ody_protocol::protocol::RolloutItem;
 use ody_protocol::protocol::RolloutLine;
@@ -54,6 +59,163 @@ async fn memories_startup_creates_memory_root() -> anyhow::Result<()> {
     assert!(!memory_root.exists());
     trigger_memories_startup(&test).await;
     wait_for_dir(&memory_root).await?;
+
+    shutdown_test_ody(&test).await?;
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn memories_startup_removes_symlinked_extensions_before_seeding() -> anyhow::Result<()> {
+    let server = start_mock_server().await;
+    let home = Arc::new(TempDir::new()?);
+    let memory_root = home.path().join("memories");
+    let outside = home.path().join("outside");
+    tokio::fs::create_dir_all(&memory_root).await?;
+    tokio::fs::create_dir_all(&outside).await?;
+    std::os::unix::fs::symlink(&outside, memory_root.join("extensions"))?;
+
+    let test = build_test_ody(&server, home).await?;
+    trigger_memories_startup(&test).await;
+    wait_for_dir(&memory_root.join("extensions/ad_hoc")).await?;
+
+    assert!(
+        tokio::fs::symlink_metadata(memory_root.join("extensions"))
+            .await?
+            .is_dir()
+    );
+    assert!(
+        !outside.join("ad_hoc").exists(),
+        "extension seeding must not create directories through the removed symbolic link"
+    );
+
+    shutdown_test_ody(&test).await?;
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn memories_startup_fails_consolidation_when_worker_creates_extension_symlink()
+-> anyhow::Result<()> {
+    let responses = [
+        sse(vec![
+            ev_response_created("resp-phase2-complete"),
+            ev_assistant_message("msg-phase2-complete", "phase2 complete"),
+            ev_completed("resp-phase2-complete"),
+        ]),
+        sse_failed("resp-phase2-failed", "server_error", "worker failed"),
+    ];
+
+    for response in responses {
+        let server = start_mock_server().await;
+        let home = Arc::new(TempDir::new()?);
+        let db = init_state_db(&home).await?;
+        let root = home.path().join("memories");
+        seed_stage1_output(
+            db.as_ref(),
+            home.path(),
+            chrono::Utc::now(),
+            "raw memory",
+            "rollout summary",
+            "worker-symlink",
+        )
+        .await?;
+        seed_required_memory_artifacts(&root).await?;
+        ody_git_utils::reset_git_repository(&root).await?;
+
+        let target = home.path().join("outside.md");
+        tokio::fs::write(&target, "outside content").await?;
+        let link = root.join("extensions/external_agent_import/instructions.md");
+        let worker_target = target.clone();
+        let worker_link = link.clone();
+        let phase2 = mount_sse_once_match(
+            &server,
+            move |_request: &wiremock::Request| {
+                std::fs::create_dir_all(worker_link.parent().expect("extension directory"))
+                    .expect("create extension directory");
+                std::os::unix::fs::symlink(&worker_target, &worker_link)
+                    .expect("create worker symbolic link");
+                true
+            },
+            response,
+        )
+        .await;
+        let test = build_test_ody(&server, home).await?;
+
+        trigger_memories_startup(&test).await;
+        wait_for_single_request(&phase2).await;
+
+        assert_eq!(
+            wait_for_phase2_job_to_finish(db.as_ref()).await?,
+            Phase2JobClaimOutcome::SkippedRetryUnavailable
+        );
+        assert_eq!(tokio::fs::read_to_string(&target).await?, "outside content");
+        assert_eq!(
+            tokio::fs::symlink_metadata(&link)
+                .await
+                .expect_err("worker-created symbolic link should be removed")
+                .kind(),
+            std::io::ErrorKind::NotFound
+        );
+        assert!(
+            root.join("phase2_workspace_diff.md").exists(),
+            "a rejected consolidation result must not reset the trusted baseline"
+        );
+
+        shutdown_test_ody(&test).await?;
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn phase2_retries_when_clean_workspace_is_missing_artifacts() -> anyhow::Result<()> {
+    let server = start_mock_server().await;
+    let home = Arc::new(TempDir::new()?);
+    let db = init_state_db(&home).await?;
+    let memory_root = home.path().join("memories");
+    seed_stage1_output(
+        db.as_ref(),
+        home.path(),
+        chrono::Utc::now(),
+        "raw memory",
+        "rollout summary",
+        "missing-artifacts",
+    )
+    .await?;
+    let raw_memories = db
+        .memories()
+        .get_phase2_input_selection(/*n*/ 1, /*max_unused_days*/ 1)
+        .await?;
+    sync_rollout_summaries_from_memories(&memory_root, &raw_memories, raw_memories.len()).await?;
+    rebuild_raw_memories_file_from_memories(&memory_root, &raw_memories, raw_memories.len())
+        .await?;
+    seed_extension_instructions(&memory_root).await?;
+    ody_git_utils::reset_git_repository(&memory_root).await?;
+    let phase2 = mount_sse_once(
+        &server,
+        sse(vec![
+            ev_response_created("resp-phase2-missing-artifacts"),
+            ev_assistant_message("msg-phase2-missing-artifacts", "phase2 complete"),
+            ev_completed("resp-phase2-missing-artifacts"),
+        ]),
+    )
+    .await;
+    let test = build_test_ody(&server, home.clone()).await?;
+
+    trigger_memories_startup(&test).await;
+    wait_for_single_request(&phase2).await;
+
+    assert_eq!(
+        wait_for_phase2_job_to_finish(db.as_ref()).await?,
+        Phase2JobClaimOutcome::SkippedRetryUnavailable
+    );
+    assert!(!memory_root.join("MEMORY.md").exists());
+    assert!(!memory_root.join("memory_summary.md").exists());
+    assert_eq!(
+        tokio::fs::read_to_string(memory_root.join("phase2_workspace_diff.md")).await?,
+        "# Memory Workspace Diff\n\nGenerated by Ody before Phase 2 memory consolidation. Read this file first and do not edit it.\n\n## Status\n- none\n"
+    );
 
     shutdown_test_ody(&test).await?;
     Ok(())
@@ -485,7 +647,12 @@ async fn run_memory_phase_two_model_request_test(
     let root = memory_root(&config.ody_home);
     tokio::fs::create_dir_all(&root).await?;
     seed_extension_instructions(&root).await?;
-    phase2::run(context, config).await;
+    phase2::run(
+        context,
+        config,
+        test.config.permissions.permission_profile().clone(),
+    )
+    .await;
     let request = wait_for_single_request(&response).await;
     wait_for_phase2_workspace_reset(&home.path().join("memories")).await?;
     shutdown_test_ody(&test).await?;
@@ -544,6 +711,7 @@ async fn trigger_memories_startup(test: &TestOdy) {
         test.session_configured.thread_id,
         Arc::clone(&test.ody),
         Arc::new(config),
+        config_snapshot.permission_profile,
         &config_snapshot.session_source,
     );
 }
@@ -826,6 +994,33 @@ async fn seed_stage1_output_for_existing_thread(
         "stage-1 success should enqueue global consolidation"
     );
 
+    Ok(())
+}
+
+async fn wait_for_phase2_job_to_finish(
+    db: &ody_state::StateRuntime,
+) -> anyhow::Result<Phase2JobClaimOutcome> {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let outcome = db
+            .memories()
+            .try_claim_global_phase2_job(ThreadId::new(), /*lease_seconds*/ 3_600)
+            .await?;
+        if outcome != Phase2JobClaimOutcome::SkippedRunning {
+            return Ok(outcome);
+        }
+        anyhow::ensure!(
+            Instant::now() < deadline,
+            "timed out waiting for phase-2 job to finish"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+async fn seed_required_memory_artifacts(root: &Path) -> anyhow::Result<()> {
+    tokio::fs::create_dir_all(root).await?;
+    tokio::fs::write(root.join("MEMORY.md"), "memory\n").await?;
+    tokio::fs::write(root.join("memory_summary.md"), "v1\n\nsummary\n").await?;
     Ok(())
 }
 

@@ -543,6 +543,7 @@ impl TurnRequestProcessor {
                 thread_id,
                 Arc::clone(&thread),
                 thread.config().await,
+                config_snapshot.permission_profile,
                 &config_snapshot.session_source,
             );
         }

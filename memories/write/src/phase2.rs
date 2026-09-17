@@ -11,13 +11,16 @@ use crate::runtime::SpawnedConsolidationAgent;
 use crate::sync_rollout_summaries_from_memories;
 use crate::workspace::memory_workspace_diff;
 use crate::workspace::prepare_memory_workspace;
+use crate::workspace::remove_memory_symlinks;
 use crate::workspace::reset_memory_workspace_baseline;
+use crate::workspace::validate_consolidation_artifacts;
 use crate::workspace::write_workspace_diff;
 use ody_config::Constrained;
 use ody_core::config::Config;
 use ody_features::Feature;
 use ody_model_provider::ModelProvider;
 use ody_protocol::ThreadId;
+use ody_protocol::models::PermissionProfile;
 use ody_protocol::protocol::AgentStatus;
 use ody_protocol::protocol::AskForApproval;
 use ody_protocol::protocol::SandboxPolicy;
@@ -43,7 +46,11 @@ struct Counters {
 
 /// Runs memory phase 2 (aka consolidation) in strict order. The method represents the linear
 /// flow of the consolidation phase.
-pub async fn run(context: Arc<MemoryStartupContext>, config: Arc<Config>) {
+pub async fn run(
+    context: Arc<MemoryStartupContext>,
+    config: Arc<Config>,
+    parent_permission_profile: PermissionProfile,
+) {
     let phase_two_e2e_timer = context.start_timer(MEMORY_PHASE_TWO_E2E_MS);
 
     let Some(db) = context.state_db() else {
@@ -77,7 +84,11 @@ pub async fn run(context: Arc<MemoryStartupContext>, config: Arc<Config>) {
     }
 
     // 3. Build the locked-down config used by the consolidation agent.
-    let Some(agent_config) = agent::get_config(config.as_ref(), context.provider()) else {
+    let Some(agent_config) = agent::get_config(
+        config.as_ref(),
+        parent_permission_profile,
+        context.provider(),
+    ) else {
         // If we can't get the config, we can't consolidate.
         tracing::error!("failed to get agent config");
         job::failed(
@@ -140,7 +151,7 @@ pub async fn run(context: Arc<MemoryStartupContext>, config: Arc<Config>) {
             return;
         }
     };
-    if !workspace_diff.has_changes() {
+    if !workspace_diff.has_changes() && validate_consolidation_artifacts(&root).await.is_ok() {
         tracing::error!("Phase 2 no changes");
         // We check only after sync of the file system.
         job::succeed(
@@ -298,7 +309,11 @@ mod agent {
     use super::*;
     use tracing::warn;
 
-    pub(super) fn get_config(config: &Config, provider: &dyn ModelProvider) -> Option<Config> {
+    pub(super) fn get_config(
+        config: &Config,
+        parent_permission_profile: PermissionProfile,
+        provider: &dyn ModelProvider,
+    ) -> Option<Config> {
         let root = memory_root(&config.ody_home);
         let mut agent_config = config.clone();
 
@@ -307,6 +322,8 @@ mod agent {
         agent_config.ephemeral = true;
         agent_config.memories.generate_memories = false;
         agent_config.memories.use_memories = false;
+        // Background memory work must not send user-facing completion notifications.
+        agent_config.notify = None;
         agent_config.include_apps_instructions = false;
         agent_config.mcp_servers = Constrained::allow_only(HashMap::new());
         // Approval policy
@@ -322,18 +339,27 @@ mod agent {
             .disable(Feature::SkillMcpDependencyInstall);
 
         // Sandbox policy
-        let writable_roots = vec![root];
-        // The consolidation agent only needs local memory-root write access and no network.
-        let consolidation_sandbox_policy = SandboxPolicy::WorkspaceWrite {
-            writable_roots,
-            network_access: false,
-            exclude_tmpdir_env_var: true,
-            exclude_slash_tmp: true,
-        };
-        agent_config
-            .permissions
-            .set_legacy_sandbox_policy(consolidation_sandbox_policy, agent_config.cwd.as_path())
-            .ok()?;
+        // Preserve the parent's explicit choice to skip Ody-managed sandboxing.
+        match parent_permission_profile {
+            PermissionProfile::Disabled => agent_config
+                .permissions
+                .set_permission_profile(PermissionProfile::Disabled),
+            PermissionProfile::External { network } => agent_config
+                .permissions
+                .set_permission_profile(PermissionProfile::External { network }),
+            PermissionProfile::Managed { .. } => {
+                // The consolidation agent only needs local memory-root write access and no network.
+                let writable_roots = vec![root];
+                let consolidation_sandbox_policy = SandboxPolicy::WorkspaceWrite {
+                    writable_roots,
+                    network_access: false,
+                    exclude_tmpdir_env_var: true,
+                    exclude_slash_tmp: true,
+                };
+                agent_config.set_legacy_sandbox_policy(consolidation_sandbox_policy)
+            }
+        }
+        .ok()?;
 
         agent_config.model = Some(
             config
@@ -378,14 +404,41 @@ mod agent {
             let final_status =
                 loop_agent(db.clone(), claim.token.clone(), thread_id, &thread).await;
 
-            if matches!(final_status, AgentStatus::Completed(_)) {
-                if let Some(token_usage) = thread
+            let agent_completed = matches!(final_status, AgentStatus::Completed(_));
+            if agent_completed
+                && let Some(token_usage) = thread
                     .token_usage_info()
                     .await
                     .map(|info| info.total_token_usage)
-                {
-                    emit_token_usage_metrics(context.as_ref(), &token_usage);
+            {
+                emit_token_usage_metrics(context.as_ref(), &token_usage);
+            }
+
+            if let Err(err) = context
+                .shutdown_consolidation_agent(SpawnedConsolidationAgent { thread_id, thread })
+                .await
+            {
+                warn!("failed to auto-close global memory consolidation agent {thread_id}: {err}");
+                // Keep the existing lease until it expires so another worker cannot race a
+                // consolidation agent whose shutdown has not completed.
+                return;
+            }
+
+            let artifacts_valid = if agent_completed {
+                match validate_consolidation_artifacts(&memory_root).await {
+                    Ok(()) => true,
+                    Err(err) => {
+                        tracing::error!("memory consolidation artifacts are invalid: {err}");
+                        job::failed(context.as_ref(), &db, &claim, "failed_invalid_artifacts")
+                            .await;
+                        false
+                    }
                 }
+            } else {
+                false
+            };
+
+            if agent_completed && artifacts_valid {
                 // Do not reset the workspace baseline if we lost the lock.
                 let still_owns_lock = match db
                     .memories()
@@ -431,21 +484,12 @@ mod agent {
                         );
                     }
                 }
-            } else {
+            } else if !agent_completed {
+                if let Err(err) = remove_memory_symlinks(&memory_root).await {
+                    tracing::error!("failed removing memory workspace symbolic links: {err}");
+                }
                 job::failed(context.as_ref(), &db, &claim, "failed_agent").await;
             }
-
-            let cleanup_context = Arc::clone(&context);
-            tokio::spawn(async move {
-                if let Err(err) = cleanup_context
-                    .shutdown_consolidation_agent(SpawnedConsolidationAgent { thread_id, thread })
-                    .await
-                {
-                    warn!(
-                        "failed to auto-close global memory consolidation agent {thread_id}: {err}"
-                    );
-                }
-            });
         });
     }
 
@@ -516,6 +560,13 @@ mod agent {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "phase2_sandbox_tests.rs"]
+mod sandbox_tests;
+#[cfg(test)]
+#[path = "phase2_workspace_roots_tests.rs"]
+mod workspace_roots_tests;
 
 pub(super) fn get_watermark(
     claimed_watermark: i64,

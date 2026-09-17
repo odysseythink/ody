@@ -1,3 +1,4 @@
+use crate::ensure_layout;
 use crate::extensions::seed_extension_instructions;
 use crate::memory_root;
 use crate::phase1;
@@ -8,6 +9,7 @@ use ody_core::ThreadManager;
 use ody_core::config::Config;
 use ody_features::Feature;
 use ody_protocol::ThreadId;
+use ody_protocol::models::PermissionProfile;
 use ody_protocol::protocol::SessionSource;
 use std::sync::Arc;
 use tracing::warn;
@@ -21,6 +23,7 @@ pub fn start_memories_startup_task(
     thread_id: ThreadId,
     thread: Arc<OdyThread>,
     config: Arc<Config>,
+    parent_permission_profile: PermissionProfile,
     source: &SessionSource,
 ) {
     if config.ephemeral
@@ -45,8 +48,8 @@ pub fn start_memories_startup_task(
 
     tokio::spawn(async move {
         let root = memory_root(&config.ody_home);
-        if let Err(err) = tokio::fs::create_dir_all(&root).await {
-            warn!("failed creating memories root: {err}");
+        if let Err(err) = ensure_layout(&root).await {
+            warn!("failed preparing memories root: {err}");
             return;
         }
         if let Err(err) = seed_extension_instructions(&root).await {
@@ -60,6 +63,6 @@ pub fn start_memories_startup_task(
         // Run phase 1.
         phase1::run(Arc::clone(&context), Arc::clone(&config)).await;
         // Run phase 2.
-        phase2::run(context, config).await;
+        phase2::run(context, config, parent_permission_profile).await;
     });
 }
