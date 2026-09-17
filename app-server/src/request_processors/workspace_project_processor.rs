@@ -311,6 +311,11 @@ impl WorkspaceProjectRequestProcessor {
 }
 
 impl WorkspaceProjectStore {
+    /// 观测/诊断用：store 文件路径（其祖父目录即 ody_home 由调用方推导）。
+    pub(crate) fn store_file_path(&self) -> &std::path::Path {
+        &self.path
+    }
+
     pub(crate) fn load(path: PathBuf) -> Self {
         let backup = path.with_extension("json.bak");
         for candidate in [&path, &backup] {

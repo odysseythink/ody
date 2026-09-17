@@ -31,6 +31,59 @@ use crate::workspace_audit::WorkspaceAuditLog;
 /// 「Task staging」标题前缀：暂存 changeset 的人工可识别标记。
 pub(crate) const STAGING_TITLE_PREFIX: &str = "Task staging";
 
+/// 临时观测日志（C1-fix3 归因排查，排查完成后移除）：每次暂存写入的归属
+/// 判定落一行 JSONL——成功/失败都记，失败时附当时的工程列表，用于拿到
+/// 真实写入路径形态。写入失败静默忽略（观测不得影响主流程）。
+fn log_attribution(
+    store_path: &std::path::Path,
+    session_id: &str,
+    raw_path: &std::path::Path,
+    canonical_path: &std::path::Path,
+    outcome: &str,
+    projects: &[WorkspaceProjectRef],
+) {
+    let Some(store_dir) = store_path.parent() else { return };
+    let log_path = store_dir.join("attribution-debug.jsonl");
+    let projects_summary: Vec<String> = projects
+        .iter()
+        .map(|p| {
+            format!(
+                "{} roots=[{}]",
+                p.id,
+                p.roots.iter().map(|r| r.path.as_str()).collect::<Vec<_>>().join(", ")
+            )
+        })
+        .collect();
+    let line = format!(
+        "{{\"ts\":{},\"sessionId\":{},\"rawPath\":{},\"canonicalPath\":{},\"outcome\":{},\"projects\":[{}]}}\n",
+        now_ms(),
+        json_str(session_id),
+        json_str(&raw_path.to_string_lossy()),
+        json_str(&canonical_path.to_string_lossy()),
+        json_str(outcome),
+        projects_summary.iter().map(|s| json_str(s)).collect::<Vec<_>>().join(",")
+    );
+    use std::io::Write as _;
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(log_path) {
+        let _ = file.write_all(line.as_bytes());
+    }
+}
+
+/// 临时观测日志辅助（随 log_attribution 一并移除）：JSON 字符串转义。
+fn json_str(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() + 2);
+    out.push('"');
+    for ch in value.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            _ => out.push(ch),
+        }
+    }
+    out.push('"');
+    out
+}
+
 /// 防自失效环形缓冲容量：覆盖 watcher 事件滞后/乱序的窗口。
 const RECENT_STAGED_CAP: usize = 128;
 
@@ -210,16 +263,21 @@ impl WorkspaceStagingCollector {
         let path = canonicalize_loose(&write.path);
         // 归属以磁盘为准：内存快照可能落后于磁盘（接管重启窗口、外部
         // 修复），挂错工程 id 会让 renderer 的确认卡片恒空。
-        let projects = {
+        let (projects, store_path) = {
             let mut store = self.project_store.lock().expect("project store lock");
             store.reload_from_disk();
-            store.projects.values().cloned().collect::<Vec<_>>()
+            (
+                store.projects.values().cloned().collect::<Vec<_>>(),
+                store.store_file_path().to_path_buf(),
+            )
         };
         let Some((project, root_index, relative)) =
             find_project_for_path(&projects, &path)
         else {
+            log_attribution(&store_path, session_id, &write.path, &path, "miss", &projects);
             return;
         };
+        log_attribution(&store_path, session_id, &write.path, &path, "hit", &projects);
         let write = StagedWrite { path, ..write };
         let key = format!("{root_index}:{relative}");
         let new_hash = write
