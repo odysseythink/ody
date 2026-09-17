@@ -517,7 +517,29 @@ Canvas ElementRef
 
 已核实完成度较高的部分：Services 面板（启停/健康/日志 tail）、diff 确认界面（按行着色 + 长 diff 折叠）、审计面板、watch feed、13 locale 翻译。
 
+**2026-09-17 人工验收修复轮（D0–E5 验收反馈逐项闭环）：**
+- runtime 原型预览引导注入（`549a73c9`）：`prototype_preview_note` 无条件注入
+  developer instructions（start/resume 共用注入点），引导 agent 以 html 代码块回复
+  原型而非写文件——修复 D0「产物区为空」（agent 把原型落成文件，见证区无物可渲染）。
+- odyBox Artifact 本地 srcdoc 渲染（暂存已确认，提交后补记 hash）：rebrand 遗留——
+  iframe 指向的 `artifact-preview.app.odybox.ai` DNS 不存在（上游 chatboxai 域名的机械
+  改名），聊天/见证区预览恒空白；改为 `srcDoc` 本地渲染并删除 postMessage 推送机制。
+- odyBox 见证区产物区 `PrototypeArtifactPreview`（同批暂存）：内联渲染最近 assistant
+  的 html 代码块，空态给引导文案（验收 B 项）。
+- odyBox 确认卡片轮次退出（同批暂存）：`WorkspaceStagingReview` 新增 `turnAnchor`，
+  新 user 轮次清空「已应用」记录——修复卡片跨轮悬挂（验收 C6）。
+- odyBox U5 绑定幂等键修复（同批暂存）：`prototype-handoff` 的 idempotencyKey 由目录
+  原始路径改为 `handoff-{stableId}`（URL-safe），修复绑定接口 400（验收 D1）。
+- odyBox vitest 崩溃根因（同批暂存）：`vitest.config.ts` 移除 `TanStackRouterVite`
+  插件——其每次跑测试无条件重写 `routeTree.gen.ts`，触发 dev watcher 整页 reload
+  （用户验收期间的「崩溃重启」实锤为此，主进程日志 double initializeApp 佐证）。
+- 验证：ody 新增 3 测试过、debug 构建部署 ody-app-server；odyBox 相关套件 30+ 用例全
+  绿、tsc 无新错误（遗留 8 个均为并行的 auth-login 开发，与本轮无关）。
+- 遗留：runtime `workspace_staging.rs` 临时观测日志（`aed722e0` 声明排查后移除）仍待
+  移除；E0–E5 全链路验收下一轮执行（用例须显式写明「打开 Canvas 开关」步骤）。
+
 ### 9.3 E0 之前不扩张
+
 
 - 模板商城和大型多人协作；
 - 生产部署和任意云环境编排；
