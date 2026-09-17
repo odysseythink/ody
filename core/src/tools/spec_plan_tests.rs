@@ -383,6 +383,28 @@ async fn request_user_input_tool_respects_experimental_config_gate() {
 }
 
 #[tokio::test]
+async fn human_acceptance_is_only_exposed_to_default_root_threads() {
+    let enabled = probe(|turn| turn.collaboration_mode.mode = ModeKind::Default).await;
+    enabled.assert_visible_contains(&["human_acceptance"]);
+    enabled.assert_registered_contains(&["human_acceptance"]);
+    for mode in [ModeKind::Plan, ModeKind::Design, ModeKind::Product] {
+        let disabled = probe(|turn| turn.collaboration_mode.mode = mode).await;
+        disabled.assert_visible_lacks(&["human_acceptance"]);
+        disabled.assert_registered_lacks(&["human_acceptance"]);
+    }
+    let child = probe(|turn| {
+        turn.session_source = SessionSource::SubAgent(SubAgentSource::Other("test".to_string()));
+    })
+    .await;
+    child.assert_registered_lacks(&["human_acceptance"]);
+    let no_environment = probe(|turn| {
+        turn.environments.turn_environments.clear();
+    })
+    .await;
+    no_environment.assert_registered_lacks(&["human_acceptance"]);
+}
+
+#[tokio::test]
 async fn request_user_input_stays_direct_in_code_mode_only() {
     let plan = probe(|turn| {
         set_features(turn, &[Feature::CodeMode, Feature::CodeModeOnly]);

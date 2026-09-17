@@ -7297,6 +7297,7 @@ dependencies = [
  "ody-git-utils",
  "ody-home",
  "ody-hooks",
+ "ody-human-acceptance",
  "ody-install-context",
  "ody-mcp",
  "ody-memories-read",
@@ -7370,6 +7371,7 @@ dependencies = [
  "url",
  "uuid",
  "walkdir",
+ "webbrowser",
  "which 8.0.4",
  "whoami 1.6.1",
  "wiremock",
@@ -7796,6 +7798,20 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "ody-human-acceptance"
+version = "0.1.0-alpha.2"
+dependencies = [
+ "anyhow",
+ "axum",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
  "uuid",
 ]
 

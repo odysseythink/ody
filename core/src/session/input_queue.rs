@@ -4,6 +4,7 @@ use crate::state::TurnState;
 use ody_protocol::models::ResponseItem;
 use ody_protocol::protocol::InterAgentCommunication;
 use ody_protocol::user_input::UserInput;
+use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -35,6 +36,14 @@ pub(crate) struct TurnInputQueue {
 pub(crate) struct InputQueue {
     activity_tx: watch::Sender<InputQueueActivity>,
     mailbox_pending_mails: Mutex<VecDeque<InterAgentCommunication>>,
+    host_notifications: Mutex<HostNotifications>,
+}
+
+#[derive(Default)]
+struct HostNotifications {
+    pending: VecDeque<ResponseItem>,
+    seen: HashSet<String>,
+    closed: bool,
 }
 
 impl InputQueue {
@@ -43,6 +52,7 @@ impl InputQueue {
         Self {
             activity_tx,
             mailbox_pending_mails: Mutex::new(VecDeque::new()),
+            host_notifications: Mutex::new(HostNotifications::default()),
         }
     }
 
@@ -81,7 +91,34 @@ impl InputQueue {
     }
 
     pub(crate) async fn has_pending_mailbox_items(&self) -> bool {
-        !self.mailbox_pending_mails.lock().await.is_empty()
+        let mailbox_pending = !self.mailbox_pending_mails.lock().await.is_empty();
+        mailbox_pending || self.has_pending_host_notifications().await
+    }
+
+    /// Session-local idempotency also protects retries after an acknowledgement
+    /// write failed. Host signals are not forged inter-agent communications.
+    pub(crate) async fn enqueue_host_notification(&self, key: String, item: ResponseItem) -> bool {
+        let mut notifications = self.host_notifications.lock().await;
+        if notifications.closed {
+            return false;
+        }
+        if notifications.seen.insert(key) {
+            notifications.pending.push_back(item);
+        }
+        drop(notifications);
+        self.activity_tx.send_replace(InputQueueActivity::Mailbox);
+        true
+    }
+
+    pub(crate) async fn has_pending_host_notifications(&self) -> bool {
+        let notifications = self.host_notifications.lock().await;
+        !notifications.closed && !notifications.pending.is_empty()
+    }
+
+    pub(crate) async fn close_host_notifications(&self) {
+        let mut notifications = self.host_notifications.lock().await;
+        notifications.closed = true;
+        notifications.pending.clear();
     }
 
     pub(crate) async fn has_trigger_turn_mailbox_items(&self) -> bool {
@@ -92,13 +129,27 @@ impl InputQueue {
             .any(|mail| mail.trigger_turn)
     }
 
+    pub(crate) async fn has_trigger_turn_items(&self) -> bool {
+        self.has_trigger_turn_mailbox_items().await || self.has_pending_host_notifications().await
+    }
+
     pub(crate) async fn drain_mailbox_input_items(&self) -> Vec<TurnInput> {
-        self.mailbox_pending_mails
+        let mut items: Vec<TurnInput> = self
+            .mailbox_pending_mails
             .lock()
             .await
             .drain(..)
             .map(TurnInput::InterAgentCommunication)
-            .collect()
+            .collect();
+        items.extend(
+            self.host_notifications
+                .lock()
+                .await
+                .pending
+                .drain(..)
+                .map(TurnInput::ResponseItem),
+        );
+        items
     }
 
     pub(crate) async fn turn_state_for_sub_id(
@@ -265,6 +316,50 @@ mod tests {
     use super::*;
     use ody_protocol::AgentPath;
     use pretty_assertions::assert_eq;
+
+    #[tokio::test]
+    async fn host_notifications_are_deduplicated_and_closed_on_shutdown() {
+        let queue = InputQueue::new();
+        let item = ResponseItem::Message {
+            id: None,
+            role: "user".into(),
+            content: Vec::new(),
+            phase: None,
+            internal_chat_message_metadata_passthrough: None,
+        };
+        let (mut activity, _) = queue.subscribe_activity(None).await;
+        assert!(
+            queue
+                .enqueue_host_notification("run".into(), item.clone())
+                .await
+        );
+        assert!(
+            queue
+                .enqueue_host_notification("run".into(), item.clone())
+                .await
+        );
+        activity.changed().await.expect("notification activity");
+        assert!(queue.has_pending_host_notifications().await);
+        assert_eq!(
+            queue.drain_mailbox_input_items().await,
+            vec![TurnInput::ResponseItem(item.clone())]
+        );
+        assert!(
+            queue
+                .enqueue_host_notification("run".into(), item.clone())
+                .await
+        );
+        assert!(!queue.has_pending_host_notifications().await);
+        assert!(
+            queue
+                .enqueue_host_notification("other".into(), item.clone())
+                .await
+        );
+        queue.close_host_notifications().await;
+        assert!(!queue.has_pending_host_notifications().await);
+        assert!(!queue.enqueue_host_notification("closed".into(), item).await);
+        assert!(queue.drain_mailbox_input_items().await.is_empty());
+    }
 
     fn make_mail(
         author: AgentPath,

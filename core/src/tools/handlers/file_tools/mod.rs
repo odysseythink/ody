@@ -21,7 +21,7 @@ mod grep;
 mod jq;
 mod read;
 mod write;
-mod write_edit;
+pub(crate) mod write_edit;
 
 #[cfg(test)]
 mod tests;

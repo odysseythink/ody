@@ -29,6 +29,7 @@ pub enum SlashCommand {
     Hooks,
     Preferences,
     Review,
+    Acceptance,
     Rename,
     New,
     Archive,
@@ -94,6 +95,7 @@ impl SlashCommand {
             SlashCommand::Init => "create an AGENTS.md file with instructions for Ody",
             SlashCommand::Compact => "summarize conversation to prevent hitting the context limit",
             SlashCommand::Review => "review my current changes and find issues",
+            SlashCommand::Acceptance => "open manual acceptance for the current task",
             SlashCommand::Rename => "rename the current thread",
             SlashCommand::Resume => "resume a saved chat",
             SlashCommand::Archive => "archive this session and exit",
@@ -215,6 +217,7 @@ impl SlashCommand {
             | SlashCommand::Import
             | SlashCommand::Preferences
             | SlashCommand::Review
+            | SlashCommand::Acceptance
             | SlashCommand::Plan
             | SlashCommand::Design
             | SlashCommand::WritingPlan

@@ -2,10 +2,60 @@ use super::*;
 use pretty_assertions::assert_eq;
 use serial_test::serial;
 
+#[tokio::test]
+async fn acceptance_shortcut_submits_scoped_workbench_request() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual(None).await;
+    chat.thread_id = Some(ThreadId::new());
+    chat.dispatch_command(SlashCommand::Acceptance);
+    match next_submit_op(&mut op_rx) {
+        Op::UserTurn { items, .. } => assert_eq!(
+            items,
+            vec![UserInput::Text {
+                text: include_str!("../../../prompt_for_acceptance_command.md").to_string(),
+                text_elements: Vec::new(),
+            }]
+        ),
+        other => panic!("expected acceptance user turn, got {other:?}"),
+    }
+    assert!(!SlashCommand::Acceptance.available_during_task());
+    assert!(!SlashCommand::Acceptance.available_in_side_conversation());
+    assert!(!SlashCommand::Acceptance.supports_inline_args());
+    assert_eq!(SlashCommand::Acceptance.command(), "acceptance");
+}
+
 fn force_pet_image_support(chat: &mut ChatWidget) {
     chat.set_pet_image_support_for_tests(crate::pets::PetImageSupport::Supported(
         crate::pets::ImageProtocol::Kitty,
     ));
+}
+
+#[tokio::test]
+async fn acceptance_shortcut_does_not_switch_read_only_mode() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(None).await;
+    chat.set_collaboration_mask(
+        collaboration_modes::plan_mask(chat.model_catalog.as_ref()).expect("plan mode"),
+    );
+    chat.dispatch_command(SlashCommand::Acceptance);
+    assert_eq!(chat.active_mode_kind(), ModeKind::Plan);
+    assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
+    let rendered = drain_insert_history(&mut rx)
+        .iter()
+        .map(|lines| lines_to_single_string(lines))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(rendered.contains("requires Default mode"));
+}
+
+#[tokio::test]
+async fn acceptance_shortcut_parses_and_recalls_original_command() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(None).await;
+    submit_composer_text(&mut chat, "/acceptance");
+    assert_eq!(chat.input_queue.queued_user_messages.len(), 1);
+    assert_eq!(
+        chat.input_queue.queued_user_messages.front().unwrap().text,
+        include_str!("../../../prompt_for_acceptance_command.md")
+    );
+    assert_eq!(recall_latest_after_clearing(&mut chat), "/acceptance");
 }
 
 fn force_tmux_pet_image_unsupported(chat: &mut ChatWidget) {

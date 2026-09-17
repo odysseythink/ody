@@ -28,6 +28,7 @@ members = [
     "shell-escalation",
     "skills",
     "core",
+    "human-acceptance",
     "core-api",
     "core-plugins",
     "core-skills",
@@ -143,6 +144,7 @@ ody-config = { path = "config" }
 ody-connectors = { path = "connectors" }
 ody-context-fragments = { path = "context-fragments" }
 ody-core = { path = "core" }
+ody-human-acceptance = { path = "human-acceptance" }
 ody-core-api = { path = "core-api" }
 ody-core-plugins = { path = "core-plugins" }
 ody-core-skills = { path = "core-skills" }

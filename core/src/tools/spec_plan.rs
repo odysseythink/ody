@@ -14,6 +14,7 @@ use crate::tools::handlers::ExecCommandHandlerOptions;
 use crate::tools::handlers::GetContextRemainingHandler;
 use crate::tools::handlers::GlobHandler;
 use crate::tools::handlers::GrepHandler;
+use crate::tools::handlers::HumanAcceptanceHandler;
 use crate::tools::handlers::ListAvailablePluginsToInstallHandler;
 use crate::tools::handlers::ListMcpResourceTemplatesHandler;
 use crate::tools::handlers::ListMcpResourcesHandler;
@@ -773,6 +774,16 @@ fn add_core_utility_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut
 
     if features.enabled(Feature::CurrentTimeReminder) {
         planned_tools.add(CurrentTimeHandler);
+    }
+
+    if turn_context.collaboration_mode.mode == ModeKind::Default
+        && !turn_context.session_source.is_non_root_agent()
+        && turn_context
+            .environments
+            .primary()
+            .is_some_and(|environment| !environment.environment.is_remote())
+    {
+        planned_tools.add(HumanAcceptanceHandler);
     }
 
     if features.enabled(Feature::SleepTool) {

@@ -322,6 +322,20 @@ impl ChatWidget {
             SlashCommand::Review => {
                 self.open_review_popup();
             }
+            SlashCommand::Acceptance => {
+                if self.active_mode_kind() != ModeKind::Default {
+                    self.add_error_message(
+                        "/acceptance requires Default mode; switch modes explicitly first."
+                            .to_string(),
+                    );
+                    return;
+                }
+                self.submit_user_message(
+                    include_str!("../../prompt_for_acceptance_command.md")
+                        .to_string()
+                        .into(),
+                );
+            }
             SlashCommand::Rename => {
                 self.session_telemetry
                     .counter("ody.thread.rename", /*inc*/ 1, &[]);
@@ -1239,6 +1253,7 @@ impl ChatWidget {
             | SlashCommand::Init
             | SlashCommand::Compact
             | SlashCommand::Review
+            | SlashCommand::Acceptance
             | SlashCommand::Model
             | SlashCommand::Personality
             | SlashCommand::Plan
