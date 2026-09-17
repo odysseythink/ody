@@ -145,6 +145,10 @@ fn collect_resume_override_mismatches(
 /// P1 切片2：workspace task 线程告知 agent 暂存模式。不注入的话 agent 会自行
 /// `git commit`，用户 reject 时磁盘已非暂存内容，回滚语义被破坏。
 fn apply_workspace_staging_instructions(config: &mut ody_core::config::Config) {
+    // D0：原型预览引导无条件注入（含无 workspace roots 的会话——恰恰是
+    // 原型演示的常见场景）；staging 说明仍要求有 roots。
+    config.developer_instructions =
+        prototype_preview_note(config.developer_instructions.take());
     if config.workspace_roots.is_empty() {
         return;
     }
@@ -380,6 +384,19 @@ fn workspace_staging_note(has_workspace_roots: bool, existing: Option<String>) -
         _ => NOTE.to_owned(),
     })
 }
+
+/// D0：原型预览引导（纯函数，单测友好）。见证区的产品物区直接渲染 assistant
+/// 回复里的 html 代码块；agent 若把原型写进文件，用户就看不到预览。因此无条
+/// 件注入：用户要 HTML 原型/落地页/界面 demo 时，以 html 代码块直接回复完整
+/// 代码，仅用户明确要求落盘时才写文件。不影响常规编码任务。
+fn prototype_preview_note(existing: Option<String>) -> Option<String> {
+    const NOTE: &str = "<prototype_preview>\n原型预览引导：用户要求生成 HTML 原型、落地页或界面 demo 时，把完整 HTML 以 html 代码块的形式直接回复在消息里，不要写入文件——回复中的 html 代码块会自动渲染为可交互预览。仅当用户明确要求保存到磁盘或工程里时才写文件。\n</prototype_preview>";
+    Some(match existing {
+        Some(text) if !text.trim().is_empty() => format!("{text}\n\n{NOTE}"),
+        _ => NOTE.to_owned(),
+    })
+}
+
 
 fn merge_persisted_resume_metadata(
     request_overrides: &mut Option<HashMap<String, serde_json::Value>>,

@@ -1542,6 +1542,31 @@ mod workspace_staging_instructions_tests {
         assert!(result.starts_with("<workspace_staging>"));
     }
 }
+mod prototype_preview_note_tests {
+    use super::super::prototype_preview_note;
+
+    #[test]
+    fn injects_without_existing_instructions() {
+        let result = prototype_preview_note(None).expect("note injected");
+        assert!(result.contains("<prototype_preview>"));
+        assert!(result.contains("html 代码块"));
+    }
+
+    #[test]
+    fn appends_to_existing_instructions() {
+        let result =
+            prototype_preview_note(Some("Be terse".to_owned())).expect("note injected");
+        assert!(result.starts_with("Be terse"));
+        assert!(result.contains("Be terse\n\n<prototype_preview>"));
+    }
+
+    #[test]
+    fn replaces_blank_instructions_with_note() {
+        let result = prototype_preview_note(Some("   ".to_owned())).expect("note injected");
+        assert!(result.starts_with("<prototype_preview>"));
+    }
+}
+
 
 mod workspace_conventions_tests {
     use super::super::workspace_conventions_note;
