@@ -52,7 +52,9 @@ use crate::outgoing_message::ConnectionId;
 use crate::workspace_lock::WorkspaceWriteLock;
 use crate::request_processors::workspace_project_processor::WorkspaceProjectStore;
 use crate::workspace_service::ManagedService;
+use crate::workspace_service::OrphanReapOutcome;
 use crate::workspace_service::OutputRing;
+use crate::workspace_service::reap_orphan_service_process;
 use crate::workspace_service::ReadyOutcome;
 
 const STORE_DIR: &str = "workspace-service";
@@ -198,12 +200,38 @@ impl WorkspaceServiceRequestProcessor {
         let mut by_project: BTreeMap<String, Vec<WorkspaceServiceRef>> = BTreeMap::new();
         for service in store.services.values() {
             if service.error.as_deref() == Some(RUNTIME_RESTARTED_ERROR) {
+                // E0 验收缺陷 D2：硬杀 app-server 时 Drop 不执行，dev server
+                // 进程组会以孤儿身份继续占用端口（实测占着 [::1]:5173）。
+                // 这里按记录的 pid 回收，回收前核对命令行身份（防 pid 复用）。
+                if let Some(pid) = service.pid
+                    && pid > 0
+                {
+                    match reap_orphan_service_process(pid, service.port, &service.script) {
+                        OrphanReapOutcome::Reaped => {
+                            tracing::info!(
+                                service = %service.name,
+                                pid,
+                                port = service.port,
+                                "reaped orphaned dev server process group after runtime restart"
+                            );
+                        }
+                        OrphanReapOutcome::NotRunning => {}
+                        OrphanReapOutcome::Skipped(reason) => {
+                            tracing::warn!(
+                                service = %service.name,
+                                pid,
+                                "left orphaned service process alone: {reason}"
+                            );
+                        }
+                    }
+                }
                 by_project
                     .entry(service.project_id.clone())
                     .or_default()
                     .push(service.clone());
             }
         }
+
         if !stale.is_empty() || !by_project.is_empty() {
             let _ = store.persist();
         }

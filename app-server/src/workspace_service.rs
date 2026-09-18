@@ -96,15 +96,97 @@ pub(crate) fn build_command_args(script: &str, port: u16, tech_ids: &[String]) -
     args
 }
 
+/// 单个回环地址族的占用探测。`AddrNotAvailable`/`Unsupported` 表示本机没有
+/// 该地址族（例如没有 IPv6 的机器），这不叫「被占用」。
+fn loopback_family_free(host: &str, port: u16) -> bool {
+    match std::net::TcpListener::bind((host, port)) {
+        Ok(_) => true,
+        Err(err) => matches!(
+            err.kind(),
+            std::io::ErrorKind::AddrNotAvailable | std::io::ErrorKind::Unsupported
+        ),
+    }
+}
+
+/// E0 验收缺陷 D1：探测必须覆盖两个回环地址族。Vite 在 Node 的 DNS 解析下
+/// 绑 `[::1]`（IPv6-only，`list` 返回的 url 也是 `http://[::1]:port/`），只看
+/// 127.0.0.1 会把被占用的端口判成空闲 → `--strictPort` 启动立刻
+/// `EADDRINUSE` 退出。
 pub(crate) fn is_port_free(port: u16) -> bool {
-    std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
+    loopback_family_free("127.0.0.1", port) && loopback_family_free("::1", port)
 }
 
 pub(crate) fn pick_free_port() -> Option<u16> {
-    std::net::TcpListener::bind(("127.0.0.1", 0))
-        .ok()
-        .and_then(|listener| listener.local_addr().ok())
-        .map(|addr| addr.port())
+    // 系统分配的空闲端口只保证单地址族；两个族都能绑才算真正可用。
+    for _ in 0..32 {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).ok()?;
+        let port = listener.local_addr().ok()?.port();
+        drop(listener);
+        if is_port_free(port) {
+            return Some(port);
+        }
+    }
+    None
+}
+
+/// 重启恢复的孤儿回收结果。
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum OrphanReapOutcome {
+    /// 身份核对通过，整个进程组已回收。
+    Reaped,
+    /// pid 上已无进程（正常退出或已被回收）。
+    NotRunning,
+    /// pid 被复用或命令行不匹配：不动它，只记录原因。
+    Skipped(String),
+}
+
+/// E0 验收缺陷 D2：app-server 被硬杀（崩溃 / SIGKILL）时 `ManagedService`
+/// 的 Drop 来不及执行，dev server 进程组会变成孤儿继续占用端口，而 store
+/// 只把记录标成 stopped——用户以为没有服务在跑，实际后台跑着旧代码。实测：
+/// 孤儿占着 `[::1]:5173`，下一次 `--strictPort` 启动 244ms 就 exit 1。
+///
+/// 回收前必须核对进程身份：pid 会被复用，只按 pid 杀可能误伤无关进程。判据
+/// 是记录里的 `--port {port}` 与脚本名同时出现在命令行里（npm 会改写自己的
+/// 进程标题，因此无法逐字比对记录的命令行）。启动用 `process_group(0)` 让
+/// 子进程自成进程组，所以记录的 pid 就是 pgid，`kill_process_group(pid)`
+/// 正好覆盖 `npm → node(vite)` 整棵树。
+///
+/// Windows 由 Job Object 的 KILL_ON_JOB_CLOSE 在父进程死亡时兜底，不存在
+/// 同类孤儿，因此只实现 unix 侧。
+#[cfg(unix)]
+pub(crate) fn reap_orphan_service_process(pid: u32, port: u16, script: &str) -> OrphanReapOutcome {
+    let output = std::process::Command::new("ps")
+        .args(["-o", "command=", "-p", &pid.to_string()])
+        .output();
+    let cmdline = match output {
+        Ok(output) if output.status.success() => {
+            String::from_utf8_lossy(&output.stdout).trim().to_owned()
+        }
+        _ => return OrphanReapOutcome::NotRunning,
+    };
+    if cmdline.is_empty() {
+        return OrphanReapOutcome::NotRunning;
+    }
+    if !cmdline.contains(&format!("--port {port}")) || !cmdline.contains(script) {
+        return OrphanReapOutcome::Skipped(format!(
+            "pid {pid} does not match the recorded dev server (--port {port}, script {script}): {cmdline}"
+        ));
+    }
+    match kill_process_group(pid) {
+        Ok(()) => OrphanReapOutcome::Reaped,
+        Err(err) => OrphanReapOutcome::Skipped(err),
+    }
+}
+
+#[cfg(not(unix))]
+pub(crate) fn reap_orphan_service_process(
+    _pid: u32,
+    _port: u16,
+    _script: &str,
+) -> OrphanReapOutcome {
+    OrphanReapOutcome::Skipped(
+        "orphan reaping is unix-only; Windows relies on the Job Object".to_owned(),
+    )
 }
 
 /// Requested port must be free (structured error); omitted port probes the
@@ -651,17 +733,121 @@ mod tests {
     }
 
     #[test]
+    #[test]
     fn pick_port_auto_avoids_when_default_occupied() {
+        // 占用端口保持存活，`pick_port(None)` 必须绕过它。断言只落在「不等于
+        // 被占端口」这个确定性性质上：临时端口在并行测试间会被重新分配，
+        // 任何「返回值此刻仍空闲」的断言都是 TOCTOU 竞态。
         let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
         let occupied = listener.local_addr().expect("addr").port();
-        // Force the default-port branch by requesting the occupied port as default:
-        // pick_port(None) probes the tech default; emulate by occupying 5173 is
-        // unreliable in CI, so assert the auto-select invariant instead:
-        // binding via 127.0.0.1:0 always yields a free port distinct from occupied.
-        let picked = pick_free_port().expect("free port");
+        let picked = pick_port(None, &[]).expect("auto-selected port");
         assert_ne!(picked, occupied);
-        assert!(is_port_free(picked));
         drop(listener);
+    }
+
+    fn is_port_free_sees_ipv6_only_loopback_listeners() {
+        // E0 验收缺陷 D1：runtime 自己起的 vite 是 IPv6-only（[::1]），而
+        // 探测只看 127.0.0.1 → 探测判「空闲」、--strictPort 启动立刻撞车。
+        let listener = match std::net::TcpListener::bind("[::1]:0") {
+            Ok(listener) => listener,
+            Err(_) => return, // 本机无 IPv6：跳过
+        };
+        let occupied = listener.local_addr().expect("addr").port();
+        assert!(
+            !is_port_free(occupied),
+            "IPv6-only listener on [::1]:{occupied} must count as occupied"
+        );
+        drop(listener);
+        // 不再断言「drop 后立刻空闲」：临时端口可能被并行测试或系统重新占住，
+        // 与被测行为无关。
+    }
+
+    #[test]
+    fn pick_port_rejects_explicit_port_held_by_ipv6_only_listener() {
+        let listener = match std::net::TcpListener::bind("[::1]:0") {
+            Ok(listener) => listener,
+            Err(_) => return,
+        };
+        let occupied = listener.local_addr().expect("addr").port();
+        let err = pick_port(Some(occupied), &[]).expect_err("port held on ::1 must be rejected");
+        assert!(err.contains(&occupied.to_string()), "{err}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reap_orphan_service_process_kills_matching_group() {
+        use std::os::unix::process::CommandExt;
+        // E0 验收缺陷 D2：硬杀 app-server 后 ManagedService 的 Drop 不执行，
+        // dev server 进程组成为孤儿并占着端口；重启恢复要按记录回收。
+        // 命令行里带上记录过的 `--port` 与脚本名（npm 会改写进程标题，
+        // 无法逐字比对记录的命令行）。
+        let mut child = std::process::Command::new("sh")
+            .args(["-c", "while true; do sleep 1; done", "--port", "5199", "dev"])
+            .process_group(0)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn sh");
+        let pgid = child.id();
+        assert_eq!(
+            reap_orphan_service_process(pgid, 5199, "dev"),
+            OrphanReapOutcome::Reaped
+        );
+        let _ = child.wait();
+        // 组已消失：killpg 探测返回 ESRCH。
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let gone = unsafe { libc::killpg(pgid as libc::pid_t, 0) } != 0;
+            if gone {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "orphan process group {pgid} survived reaping"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reap_orphan_service_process_never_kills_a_reused_pid() {
+        use std::os::unix::process::CommandExt;
+        // pid 复用防线：命令行与记录不符时只记录、不动手。
+        let mut child = std::process::Command::new("sh")
+            .args(["-c", "while true; do sleep 1; done"])
+            .process_group(0)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn sh");
+        let pgid = child.id();
+        assert!(matches!(
+            reap_orphan_service_process(pgid, 5199, "dev"),
+            OrphanReapOutcome::Skipped(_)
+        ));
+        let alive = unsafe { libc::kill(pgid as libc::pid_t, 0) } == 0;
+        assert!(alive, "unrelated process must survive the orphan reaper");
+        unsafe { libc::killpg(pgid as libc::pid_t, libc::SIGKILL) };
+        let _ = child.wait();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reap_orphan_service_process_reports_missing_process() {
+        use std::os::unix::process::CommandExt;
+        // 已退出的 pid：不 panic、不误报 Reaped。
+        let mut child = std::process::Command::new("sh")
+            .args(["-c", "exit 0", "--port", "5199", "dev"])
+            .process_group(0)
+            .spawn()
+            .expect("spawn sh");
+        let pgid = child.id();
+        let _ = child.wait();
+        assert_eq!(
+            reap_orphan_service_process(pgid, 5199, "dev"),
+            OrphanReapOutcome::NotRunning
+        );
     }
 
     #[test]
