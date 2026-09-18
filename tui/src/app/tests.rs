@@ -1,5 +1,7 @@
 //! App-level orchestration tests for the TUI.
 
+mod buffered_replay;
+mod drain_deadline;
 mod model_catalog;
 mod plugin_catalog;
 mod session_summary;

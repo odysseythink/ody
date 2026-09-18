@@ -306,9 +306,35 @@ impl ChatWidget {
             }
         }
         let parsed = parse_assistant_markdown(&message, self.config.cwd.as_path());
-        self.finalize_completed_assistant_message(
-            (!parsed.visible_markdown.is_empty()).then_some(parsed.visible_markdown.as_str()),
-        );
+        if from_replay && self.stream_controller.is_none() && !parsed.visible_markdown.is_empty() {
+            // Replay fast path: insert the final markdown cell directly instead of
+            // pushing the completed text through the streaming machinery. This
+            // avoids reconstructing a stream (commit animation + consolidation)
+            // for messages whose deltas were omitted from the replay snapshot.
+            self.flush_unified_exec_wait_streak();
+            self.flush_active_cell();
+            // Mirror the separator handling from `process_stream_delta` so replayed
+            // transcripts match the live layout between work cells and messages.
+            if self.transcript.needs_final_message_separator && self.transcript.had_work_activity {
+                self.add_to_history(history_cell::FinalMessageSeparator::new(
+                    /*elapsed_seconds*/ None, /*runtime_metrics*/ None,
+                ));
+                self.transcript.needs_final_message_separator = false;
+            } else if self.transcript.needs_final_message_separator {
+                // Reset the flag even if we don't show separator (no work was done)
+                self.transcript.needs_final_message_separator = false;
+            }
+            self.add_to_history(history_cell::AgentMarkdownCell::new(
+                parsed.visible_markdown.clone(),
+                self.config.cwd.as_path(),
+            ));
+            self.handle_stream_finished();
+            self.request_redraw();
+        } else {
+            self.finalize_completed_assistant_message(
+                (!parsed.visible_markdown.is_empty()).then_some(parsed.visible_markdown.as_str()),
+            );
+        }
         if matches!(item.phase, Some(MessagePhase::FinalAnswer) | None)
             && !parsed.visible_markdown.is_empty()
         {
