@@ -361,10 +361,10 @@ pub fn refresh_curated_plugin_cache(
 
 /// Local on-disk location for the curated plugin marketplace, if present.
 ///
-/// This directory was historically populated by syncing a remote (legacy externally-hosted) curated
-/// plugins repository at startup. That remote sync has been removed; this path is kept purely
-/// as the well-known local location plugin listing/discovery checks for curated marketplace
-/// content, which may still be present from a prior sync or seeded by other means.
+/// Populated by the git-only startup sync in `crate::curated_sync`, which
+/// mirrors https://github.com/openai/plugins into this directory. Plugin
+/// listing/discovery checks this well-known location to surface the curated
+/// marketplace without requiring manual marketplace configuration.
 pub fn curated_plugins_repo_path(ody_home: &Path) -> PathBuf {
     ody_home.join(".tmp/plugins")
 }

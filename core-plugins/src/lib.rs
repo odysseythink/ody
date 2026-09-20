@@ -1,4 +1,5 @@
 mod app_mcp_routing;
+mod curated_sync;
 mod discoverable;
 pub mod installed_marketplaces;
 pub mod loader;
@@ -19,9 +20,33 @@ pub const OPENAI_CURATED_MARKETPLACE_NAME: &str = "odysseythink-curated";
 pub const OPENAI_API_CURATED_MARKETPLACE_NAME: &str = "odysseythink-api-curated";
 pub const OPENAI_BUNDLED_MARKETPLACE_NAME: &str = "odysseythink-bundled";
 
+/// Marketplace name declared by the upstream openai/plugins repository's
+/// `.agents/plugins/marketplace.json`. The local sync in `curated_sync` mirrors that repo
+/// verbatim, so its marketplace surfaces under this name.
+pub const UPSTREAM_CURATED_MARKETPLACE_NAME: &str = "openai-curated";
+
 pub fn is_odysseythink_curated_marketplace_name(marketplace_name: &str) -> bool {
     marketplace_name == OPENAI_CURATED_MARKETPLACE_NAME
         || marketplace_name == OPENAI_API_CURATED_MARKETPLACE_NAME
+        || marketplace_name == UPSTREAM_CURATED_MARKETPLACE_NAME
+}
+
+#[cfg(test)]
+mod tests {
+    use super::UPSTREAM_CURATED_MARKETPLACE_NAME;
+    use super::is_odysseythink_curated_marketplace_name;
+
+    #[test]
+    fn upstream_curated_marketplace_name_is_recognized_as_curated() {
+        assert!(is_odysseythink_curated_marketplace_name(
+            UPSTREAM_CURATED_MARKETPLACE_NAME
+        ));
+        assert!(is_odysseythink_curated_marketplace_name("odysseythink-curated"));
+        assert!(is_odysseythink_curated_marketplace_name(
+            "odysseythink-api-curated"
+        ));
+        assert!(!is_odysseythink_curated_marketplace_name("some-other-marketplace"));
+    }
 }
 
 pub type LoadedPlugin = ody_plugin::LoadedPlugin<ody_config::McpServerConfig>;

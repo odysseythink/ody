@@ -444,6 +444,17 @@ impl PluginsManager {
         }
     }
 
+    /// Spawn a background thread that syncs the curated plugins repo snapshot
+    /// (see `curated_sync`) so the curated marketplace is available for listing
+    /// and discovery without manual setup. Runs at most once per process.
+    fn start_curated_repo_sync(self: &Arc<Self>) {
+        let manager = Arc::clone(self);
+        crate::curated_sync::spawn_curated_repo_sync_with_hook(
+            self.ody_home.clone(),
+            Some(Arc::new(move || manager.clear_cache())),
+        );
+    }
+
     /// Load plugins for a config layer stack without touching the plugins cache.
     pub async fn plugins_for_layer_stack(
         &self,
@@ -1150,6 +1161,7 @@ impl PluginsManager {
         _on_effective_plugins_changed: Option<Arc<dyn Fn() + Send + Sync + 'static>>,
     ) {
         if config.plugins_enabled {
+            self.start_curated_repo_sync();
             let should_spawn_marketplace_auto_upgrade = {
                 let mut state = match self.configured_marketplace_upgrade_state.write() {
                     Ok(state) => state,
