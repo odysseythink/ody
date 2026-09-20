@@ -1658,3 +1658,91 @@ mod workspace_conventions_tests {
         assert!(!note.contains("框架信号"), "note: {note}");
     }
 }
+
+mod debug_resume_initial_page_tests {
+    use super::super::build_thread_resume_initial_turns_page;
+    use ody_app_server_protocol::{SortDirection, ThreadStatus, TurnItemsView};
+    use ody_protocol::protocol::{
+        AgentMessageEvent, EventMsg, RolloutItem, RolloutLine, SessionMeta, SessionMetaLine,
+        TurnContextItem, UserMessageEvent,
+    };
+    use ody_utils_absolute_path::test_support::test_path_buf;
+    use ody_utils_absolute_path::test_support::PathBufExt;
+
+    fn synthetic_items(turn_count: usize) -> Vec<RolloutItem> {
+        let mut items = vec![RolloutItem::SessionMeta(SessionMetaLine {
+            meta: SessionMeta {
+                id: ody_protocol::ThreadId::new(),
+                timestamp: "2025-01-01T00-00-00".to_string(),
+                cwd: std::path::PathBuf::from("/tmp"),
+                originator: "test".to_string(),
+                cli_version: "test".to_string(),
+                source: ody_protocol::protocol::SessionSource::Cli,
+                ..Default::default()
+            },
+            git: None,
+        })];
+        for index in 0..turn_count {
+            items.push(RolloutItem::TurnContext(TurnContextItem {
+                turn_id: Some(format!("turn-{index:03}")),
+                cwd: test_path_buf("/tmp").abs(),
+                workspace_roots: None,
+                current_date: None,
+                timezone: None,
+                approval_policy: ody_protocol::protocol::AskForApproval::Never,
+                sandbox_policy: ody_protocol::protocol::SandboxPolicy::new_read_only_policy(),
+                permission_profile: None,
+                network: None,
+                file_system_sandbox_policy: None,
+                model: "test-model".to_string(),
+                comp_hash: None,
+                personality: None,
+                collaboration_mode: None,
+                multi_agent_version: None,
+                multi_agent_mode: None,
+                realtime_active: Some(false),
+                effort: None,
+                summary: Default::default(),
+            }));
+            items.push(RolloutItem::EventMsg(EventMsg::UserMessage(UserMessageEvent {
+                client_id: None,
+                message: format!("user message {index}"),
+                images: None,
+                text_elements: Vec::new(),
+                local_images: Vec::new(),
+                ..Default::default()
+            })));
+            items.push(RolloutItem::EventMsg(EventMsg::AgentMessage(AgentMessageEvent {
+                message: format!("agent reply {index}"),
+                phase: None,
+                memory_citation: None,
+            })));
+        }
+        items
+    }
+
+    #[test]
+    fn debug_resume_initial_page_over_multi_turn_items() {
+        let items = synthetic_items(7);
+        let page = build_thread_resume_initial_turns_page(
+            &items,
+            ThreadStatus::Idle,
+            /*has_live_running_thread*/ false,
+            /*active_turn*/ None,
+            &ody_app_server_protocol::ThreadResumeInitialTurnsPageParams {
+                limit: Some(5),
+                sort_direction: Some(SortDirection::Desc),
+                items_view: Some(TurnItemsView::Full),
+            },
+        )
+        .expect("page");
+        eprintln!(
+            "DEBUG server page: len={} next={:?} ids={:?}",
+            page.data.len(),
+            page.next_cursor,
+            page.data.iter().map(|t| t.id.as_str()).collect::<Vec<_>>()
+        );
+        assert_eq!(page.data.len(), 5);
+        assert!(page.next_cursor.is_some(), "older turns must page");
+    }
+}

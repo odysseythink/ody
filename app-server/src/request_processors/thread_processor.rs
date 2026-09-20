@@ -4186,6 +4186,9 @@ pub(super) fn build_thread_resume_initial_turns_page(
     active_turn: Option<Turn>,
     params: &ThreadResumeInitialTurnsPageParams,
 ) -> Result<ody_app_server_protocol::TurnsPage, JSONRPCErrorError> {
+    eprintln!("DEBUG build_resume_page: items={} status={:?} live={} active={:?} limit={:?}",
+        items.len(), loaded_status, has_live_running_thread,
+        active_turn.as_ref().map(|t| t.id.as_str()), params.limit);
     build_thread_turns_page_response(
         items,
         loaded_status,

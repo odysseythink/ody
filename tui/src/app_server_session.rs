@@ -4,6 +4,7 @@
 //! request/response plumbing out of `App` and `ChatWidget`.
 
 mod fs;
+mod history;
 
 use crate::bottom_pane::FeedbackAudience;
 use crate::legacy_core::config::Config;
@@ -15,6 +16,11 @@ use crate::terminal_visualization_instructions::with_terminal_visualization_inst
 use color_eyre::eyre::ContextCompat;
 use color_eyre::eyre::Result;
 use color_eyre::eyre::WrapErr;
+use history::ThreadHistoryPagination;
+use history::seed_history_pagination;
+pub(crate) use history::INITIAL_HISTORY_TURN_LIMIT;
+#[cfg(test)]
+pub(crate) use history::history_test_support;
 use ody_app_server_client::AppServerClient;
 use ody_app_server_client::AppServerEvent;
 use ody_app_server_client::AppServerPath;
@@ -40,6 +46,7 @@ use ody_app_server_protocol::ReviewStartParams;
 use ody_app_server_protocol::ReviewStartResponse;
 use ody_app_server_protocol::ReviewTarget;
 use ody_app_server_protocol::SkillsListParams;
+use ody_app_server_protocol::SortDirection;
 use ody_app_server_protocol::SkillsListResponse;
 use ody_app_server_protocol::Thread;
 use ody_app_server_protocol::ThreadApproveGuardianDeniedActionParams;
@@ -75,6 +82,7 @@ use ody_app_server_protocol::ThreadMetadataUpdateParams;
 use ody_app_server_protocol::ThreadMetadataUpdateResponse;
 use ody_app_server_protocol::ThreadReadParams;
 use ody_app_server_protocol::ThreadReadResponse;
+use ody_app_server_protocol::ThreadResumeInitialTurnsPageParams;
 use ody_app_server_protocol::ThreadResumeParams;
 use ody_app_server_protocol::ThreadResumeResponse;
 use ody_app_server_protocol::ThreadRollbackParams;
@@ -95,6 +103,7 @@ use ody_app_server_protocol::ThreadUnsubscribeParams;
 use ody_app_server_protocol::ThreadUnsubscribeResponse;
 use ody_app_server_protocol::Turn;
 use ody_app_server_protocol::TurnInterruptParams;
+use ody_app_server_protocol::TurnItemsView;
 use ody_app_server_protocol::TurnInterruptResponse;
 use ody_app_server_protocol::TurnStartParams;
 use ody_app_server_protocol::TurnStartResponse;
@@ -122,6 +131,7 @@ use std::time::Duration;
 use std::time::Instant;
 use uuid::Uuid;
 
+const JSONRPC_INVALID_PARAMS: i64 = -32602;
 const JSONRPC_INVALID_REQUEST: i64 = -32600;
 const JSONRPC_METHOD_NOT_FOUND: i64 = -32601;
 pub(crate) const EXTERNAL_AGENT_CONFIG_IMPORT_IN_PROGRESS_MESSAGE: &str =
@@ -136,6 +146,25 @@ fn is_thread_settings_update_unsupported(source: &JSONRPCErrorError) -> bool {
     source.code == JSONRPC_METHOD_NOT_FOUND
         || (source.code == JSONRPC_INVALID_REQUEST
             && source.message.contains(THREAD_SETTINGS_UPDATE_METHOD))
+}
+
+/// Whether a `thread/resume` failure means the server predates history
+/// pagination (method missing or experimental params rejected), in which
+/// case the caller can retry once without the pagination params.
+fn is_history_pagination_unsupported(source: &JSONRPCErrorError) -> bool {
+    if source.code == JSONRPC_METHOD_NOT_FOUND {
+        return true;
+    }
+    if !matches!(
+        source.code,
+        JSONRPC_INVALID_REQUEST | JSONRPC_INVALID_PARAMS
+    ) {
+        return false;
+    }
+    let message = source.message.to_ascii_lowercase();
+    ["excludeturns", "initialturnspage", "requires experimental"]
+        .iter()
+        .any(|hint| message.contains(hint))
 }
 
 /// Data collected during the TUI bootstrap phase that the main event loop
@@ -161,6 +190,7 @@ pub(crate) struct AppServerSession {
     default_model: Option<String>,
     available_models: Vec<ModelPreset>,
     external_agent_config_import_completion_pending: AtomicBool,
+    pub(crate) history_pagination: HashMap<ThreadId, ThreadHistoryPagination>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -205,7 +235,14 @@ impl AppServerSession {
             default_model: None,
             available_models: Vec::new(),
             external_agent_config_import_completion_pending: AtomicBool::new(false),
+            history_pagination: HashMap::new(),
         }
+    }
+
+    pub(crate) fn has_older_history(&self, thread_id: ThreadId) -> bool {
+        self.history_pagination
+            .get(&thread_id)
+            .is_some_and(ThreadHistoryPagination::has_older)
     }
 
     pub(crate) fn with_remote_cwd_override(mut self, remote_cwd_override: Option<PathBuf>) -> Self {
@@ -420,6 +457,31 @@ impl AppServerSession {
         let mut started =
             started_thread_from_resume_response(response, &config, self.thread_params_mode())
                 .await?;
+        let visibility = if config.show_raw_agent_reasoning {
+            crate::thread_transcript::RawReasoningVisibility::Visible
+        } else {
+            crate::thread_transcript::RawReasoningVisibility::Hidden
+        };
+        let render_mode = if config.tui_raw_output_mode {
+            crate::history_cell::HistoryRenderMode::Raw
+        } else {
+            crate::history_cell::HistoryRenderMode::Rich
+        };
+        let width = crossterm::terminal::size()
+            .map(|(width, _)| width.max(/*other*/ 1))
+            .unwrap_or(/*default*/ 80);
+        let row_budget =
+            crate::resize_reflow_cap::resize_reflow_max_rows(config.terminal_resize_reflow);
+        self.hydrate_initial_turns_window(
+            thread_id,
+            &mut started.turns,
+            started.session.cwd.as_path(),
+            visibility,
+            render_mode,
+            width,
+            row_budget,
+        )
+        .await?;
         started.session.fork_parent_title = fork_parent_title;
         Ok(started)
     }
@@ -1070,6 +1132,10 @@ impl AppServerSession {
         self.next_request_id += 1;
         RequestId::Integer(request_id)
     }
+
+    pub(crate) fn next_request_id_pub(&mut self) -> RequestId {
+        self.next_request_id()
+    }
 }
 
 pub(crate) async fn start_thread_with_request_handle(
@@ -1350,6 +1416,12 @@ fn thread_resume_params_from_config(
         developer_instructions: with_terminal_visualization_instructions(
             &config, /*control_instructions*/ None,
         ),
+        exclude_turns: true,
+        initial_turns_page: Some(ThreadResumeInitialTurnsPageParams {
+            limit: Some(history::INITIAL_HISTORY_TURN_LIMIT),
+            sort_direction: Some(SortDirection::Desc),
+            items_view: Some(TurnItemsView::Full),
+        }),
         ..ThreadResumeParams::default()
     }
 }
@@ -1426,14 +1498,18 @@ async fn started_thread_from_resume_response(
     config: &Config,
     thread_params_mode: ThreadParamsMode,
 ) -> Result<AppServerStartedThread> {
+    let initial_turns_page = response.initial_turns_page.clone();
     let session =
         thread_session_state_from_thread_resume_response(&response, config, thread_params_mode)
             .await
             .map_err(color_eyre::eyre::Report::msg)?;
-    Ok(AppServerStartedThread {
-        session,
-        turns: response.thread.turns,
-    })
+    // The initial page arrives in descending order; the transcript replays in
+    // chronological order. A `None` page means a legacy full-history response.
+    let turns = match initial_turns_page {
+        Some(page) => page.data.into_iter().rev().collect(),
+        None => response.thread.turns,
+    };
+    Ok(AppServerStartedThread { session, turns })
 }
 
 async fn started_thread_from_fork_response(
@@ -2402,5 +2478,177 @@ mod tests {
         .expect("session should map");
 
         assert_eq!(session.forked_from_id, Some(forked_from_id));
+    }
+
+    #[tokio::test]
+    async fn resume_params_request_paginated_initial_turns() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let config = build_config(&temp_dir).await;
+        let thread_id = ThreadId::new();
+        let params = thread_resume_params_from_config(
+            config,
+            thread_id,
+            ThreadParamsMode::Embedded,
+            /*remote_cwd_override*/ None,
+        );
+        assert!(params.exclude_turns);
+        let page = params
+            .initial_turns_page
+            .expect("resume must request an initial turns page");
+        assert_eq!(page.limit, Some(history::INITIAL_HISTORY_TURN_LIMIT));
+        assert_eq!(page.limit, Some(5));
+        assert_eq!(
+            page.sort_direction,
+            Some(ody_app_server_protocol::SortDirection::Desc)
+        );
+        assert_eq!(
+            page.items_view,
+            Some(ody_app_server_protocol::TurnItemsView::Full)
+        );
+    }
+
+    #[test]
+    fn history_pagination_unsupported_detects_legacy_servers() {
+        let cases = [
+            (
+                JSONRPC_METHOD_NOT_FOUND,
+                "method not found",
+                true,
+            ),
+            (
+                JSONRPC_INVALID_PARAMS,
+                "thread/resume.excludeTurns requires experimentalApi capability",
+                true,
+            ),
+            (
+                JSONRPC_INVALID_PARAMS,
+                "unknown field `initialTurnsPage`",
+                true,
+            ),
+            (
+                JSONRPC_INVALID_REQUEST,
+                "thread/resume requires experimentalApi capability",
+                true,
+            ),
+            (JSONRPC_INVALID_PARAMS, "invalid thread id", false),
+        ];
+
+        for (code, message, expected) in cases {
+            let source = JSONRPCErrorError {
+                code,
+                data: None,
+                message: message.to_string(),
+            };
+            assert_eq!(
+                is_history_pagination_unsupported(&source),
+                expected,
+                "{message}"
+            );
+        }
+    }
+
+    #[test]
+    fn seed_history_pagination_tracks_initial_page_and_clears_legacy() {
+        let thread_id = ThreadId::new();
+        let mut map = HashMap::new();
+        let page = ody_app_server_protocol::TurnsPage {
+            data: Vec::new(),
+            next_cursor: Some("cursor-1".to_string()),
+            backwards_cursor: None,
+        };
+        seed_history_pagination(&mut map, thread_id, Some(&page));
+        assert!(map.contains_key(&thread_id));
+        assert_eq!(
+            map.get(&thread_id)
+                .and_then(|p| p.next_turn_cursor.as_deref()),
+            Some("cursor-1")
+        );
+
+        seed_history_pagination(&mut map, thread_id, None);
+        assert!(!map.contains_key(&thread_id));
+    }
+
+    #[tokio::test]
+    async fn started_thread_prefers_initial_turns_page_desc_reversed() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let config = build_config(&temp_dir).await;
+        let thread_id = ThreadId::new();
+        let turn = |id: &str| Turn {
+            id: id.to_string(),
+            items_view: ody_app_server_protocol::TurnItemsView::Full,
+            items: vec![ody_app_server_protocol::ThreadItem::AgentMessage {
+                id: format!("{id}-item"),
+                text: format!("reply {id}"),
+                phase: None,
+                memory_citation: None,
+            }],
+            status: TurnStatus::Completed,
+            error: None,
+            started_at: None,
+            completed_at: None,
+            duration_ms: None,
+        };
+        let mut response = ThreadResumeResponse {
+            thread: ody_app_server_protocol::Thread {
+                id: thread_id.to_string(),
+                session_id: ThreadId::new().to_string(),
+                forked_from_id: None,
+                parent_thread_id: None,
+                preview: String::new(),
+                ephemeral: false,
+                model_provider: "kimi".to_string(),
+                created_at: 1,
+                updated_at: 2,
+                recency_at: Some(2),
+                status: ThreadStatus::Idle,
+                path: None,
+                cwd: test_path_buf("/tmp/project").abs(),
+                cli_version: "0.0.0".to_string(),
+                source: ody_app_server_protocol::SessionSource::Cli,
+                thread_source: None,
+                agent_nickname: None,
+                agent_role: None,
+                git_info: None,
+                name: None,
+                turns: vec![turn("turn-full")],
+            },
+            model: "k3".to_string(),
+            model_provider: "kimi".to_string(),
+            service_tier: None,
+            cwd: test_path_buf("/tmp/project").abs(),
+            runtime_workspace_roots: Vec::new(),
+            instruction_sources: Vec::new(),
+            approval_policy: ody_app_server_protocol::AskForApproval::Never,
+            approvals_reviewer: ody_app_server_protocol::ApprovalsReviewer::User,
+            sandbox: PermissionProfile::read_only()
+                .to_legacy_sandbox_policy(test_path_buf("/tmp/project").as_path())
+                .expect("read-only profile must be legacy-compatible")
+                .into(),
+            active_permission_profile: None,
+            reasoning_effort: None,
+            multi_agent_mode: Default::default(),
+            initial_turns_page: Some(ody_app_server_protocol::TurnsPage {
+                data: vec![turn("turn-new"), turn("turn-old")],
+                next_cursor: None,
+                backwards_cursor: None,
+            }),
+        };
+
+        let started = started_thread_from_resume_response(
+            response.clone(),
+            &config,
+            ThreadParamsMode::Remote,
+        )
+        .await
+        .expect("resume response should map");
+        let ids: Vec<&str> = started.turns.iter().map(|turn| turn.id.as_str()).collect();
+        assert_eq!(ids, vec!["turn-old", "turn-new"]);
+
+        response.initial_turns_page = None;
+        let started = started_thread_from_resume_response(response, &config, ThreadParamsMode::Remote)
+            .await
+            .expect("legacy resume response should map");
+        let ids: Vec<&str> = started.turns.iter().map(|turn| turn.id.as_str()).collect();
+        assert_eq!(ids, vec!["turn-full"]);
     }
 }

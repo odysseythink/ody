@@ -28,6 +28,7 @@ use ody_app_server_protocol::ThreadGoalStatus;
 use ody_file_search::FileMatch;
 use ody_model_provider::login::LoginModelInfo;
 use ody_model_provider_info::BuiltInApiKeyProvider;
+use ody_app_server_protocol::ThreadTurnsListResponse;
 use ody_protocol::ThreadId;
 use ody_protocol::model_metadata::ModelPreset;
 use ody_utils_absolute_path::AbsolutePathBuf;
@@ -648,6 +649,19 @@ pub(crate) enum AppEvent {
 
     /// Finish buffering initial resume replay after all replay events have been queued.
     EndInitialHistoryReplayBuffer,
+
+    /// Ask the app server for one older page of thread history to refill
+    /// underfilled terminal scrollback.
+    RequestOlderScrollbackHistory {
+        thread_id: ThreadId,
+    },
+
+    /// Result of a `thread/turns/list` page request issued for scrollback refill.
+    OlderThreadHistoryLoaded {
+        thread_id: ThreadId,
+        cursor: String,
+        result: Result<ThreadTurnsListResponse, String>,
+    },
 
     /// Replace the contiguous run of streaming `AgentMessageCell`s at the end of
     /// the transcript with a single `AgentMarkdownCell` that stores the raw

@@ -3,6 +3,7 @@
 mod buffered_replay;
 mod drain_deadline;
 mod model_catalog;
+mod paginated_resume;
 mod plugin_catalog;
 mod session_summary;
 mod startup;
@@ -4143,6 +4144,7 @@ async fn make_test_app() -> App {
         has_emitted_history_lines: false,
         transcript_reflow: TranscriptReflowState::default(),
         initial_history_replay_buffer: None,
+        scrollback_has_older_history: false,
         enhanced_keys_supported: false,
         keymap: crate::keymap::RuntimeKeymap::defaults(),
         commit_anim_running: Arc::new(AtomicBool::new(false)),
@@ -4208,6 +4210,7 @@ async fn make_test_app_with_channels() -> (
             has_emitted_history_lines: false,
             transcript_reflow: TranscriptReflowState::default(),
             initial_history_replay_buffer: None,
+            scrollback_has_older_history: false,
             enhanced_keys_supported: false,
             keymap: crate::keymap::RuntimeKeymap::defaults(),
             commit_anim_running: Arc::new(AtomicBool::new(false)),
@@ -6314,4 +6317,63 @@ async fn side_backtrack_rejection_reports_unavailable_message_snapshot() {
 }
 async fn start_config_write_test_app_server(app: &App) -> Result<AppServerSession> {
     Box::pin(crate::start_embedded_app_server_for_picker(&app.config)).await
+}
+
+#[tokio::test]
+async fn end_initial_replay_sets_scrollback_flag_from_pagination_state() -> Result<()> {
+    let (mut app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
+    while app_event_rx.try_recv().is_ok() {}
+    let mut app_server = Box::pin(crate::start_embedded_app_server_for_picker(
+        app.chat_widget.config_ref(),
+    ))
+    .await?;
+    let thread_id =
+        ThreadId::from_string("00000000-0000-0000-0000-0000000000a1").expect("valid thread");
+    app.chat_widget
+        .handle_thread_session(test_thread_session(thread_id, test_path_buf("/tmp/main")));
+    let mut tui = crate::tui::test_support::make_test_tui()?;
+    // 无分页状态 → 标志 false
+    Box::pin(
+        app.handle_event(&mut tui, &mut app_server, AppEvent::EndInitialHistoryReplayBuffer),
+    )
+    .await?;
+    assert!(!app.scrollback_has_older_history);
+    // 有游标 → 标志 true
+    app_server.history_pagination.insert(
+        thread_id,
+        crate::app_server_session::history_test_support::pagination_with_cursor("c1"),
+    );
+    Box::pin(
+        app.handle_event(&mut tui, &mut app_server, AppEvent::EndInitialHistoryReplayBuffer),
+    )
+    .await?;
+    assert!(app.scrollback_has_older_history);
+    Ok(())
+}
+
+#[tokio::test]
+async fn older_history_page_error_clears_loading_guard() -> Result<()> {
+    let (mut app, mut app_event_rx, _op_rx) = make_test_app_with_channels().await;
+    while app_event_rx.try_recv().is_ok() {}
+    let mut app_server = Box::pin(crate::start_embedded_app_server_for_picker(
+        app.chat_widget.config_ref(),
+    ))
+    .await?;
+    let thread_id =
+        ThreadId::from_string("00000000-0000-0000-0000-0000000000a2").expect("valid thread");
+    app.chat_widget
+        .handle_thread_session(test_thread_session(thread_id, test_path_buf("/tmp/main")));
+    app_server.history_pagination.insert(
+        thread_id,
+        crate::app_server_session::history_test_support::pagination_with_cursor("bogus-cursor"),
+    );
+    assert!(app.request_older_history_page(&mut app_server, thread_id));
+    let event = tokio::time::timeout(Duration::from_secs(5), app_event_rx.recv())
+        .await?
+        .ok_or_else(|| color_eyre::eyre::eyre!("event channel closed"))?;
+    let mut tui = crate::tui::test_support::make_test_tui()?;
+    Box::pin(app.handle_event(&mut tui, &mut app_server, event)).await?;
+    // 无论成功失败，loading 守卫必须复位：第二次请求要么发新页要么返回 false。
+    let _ = app.request_older_history_page(&mut app_server, thread_id);
+    Ok(())
 }

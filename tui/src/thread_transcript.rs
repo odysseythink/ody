@@ -12,6 +12,7 @@ use crate::history_cell::UserHistoryCell;
 use crate::multi_agents::sub_agent_activity_summary;
 use ody_app_server_protocol::DynamicToolCallOutputContentItem;
 use ody_app_server_protocol::Thread;
+use ody_app_server_protocol::Turn;
 use ody_app_server_protocol::ThreadItem;
 use ody_protocol::ThreadId;
 use ody_protocol::items::UserMessageItem;
@@ -45,9 +46,29 @@ pub(crate) fn thread_to_transcript_cells(
     thread: &Thread,
     raw_reasoning_visibility: RawReasoningVisibility,
 ) -> TranscriptCells {
-    let cwd = thread.cwd.as_path();
+    let cells = turns_to_transcript_cells(
+        thread.cwd.as_path(),
+        &thread.turns,
+        raw_reasoning_visibility,
+    );
+    if cells.is_empty() {
+        cells_fallback()
+    } else {
+        cells
+    }
+}
+
+/// Render a slice of turns (chronological order) into history cells.
+///
+/// Shared by resume hydration row budgeting and scrollback top-up prepend so
+/// both paths measure and render rows identically.
+pub(crate) fn turns_to_transcript_cells(
+    cwd: &std::path::Path,
+    turns: &[Turn],
+    raw_reasoning_visibility: RawReasoningVisibility,
+) -> TranscriptCells {
     let mut cells: TranscriptCells = Vec::new();
-    for item in thread.turns.iter().flat_map(|turn| turn.items.iter()) {
+    for item in turns.iter().flat_map(|turn| turn.items.iter()) {
         match item {
             ThreadItem::UserMessage {
                 id,
@@ -118,12 +139,13 @@ pub(crate) fn thread_to_transcript_cells(
             }
         }
     }
-    if cells.is_empty() {
-        cells.push(Arc::new(PlainHistoryCell::new(vec![
-            "No transcript content available".italic().dim().into(),
-        ])));
-    }
     cells
+}
+
+fn cells_fallback() -> TranscriptCells {
+    vec![Arc::new(PlainHistoryCell::new(vec![
+        "No transcript content available".italic().dim().into(),
+    ]))]
 }
 
 /// Build a short chip summary for a `WebSearch` dynamic tool call, matching the

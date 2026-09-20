@@ -290,7 +290,31 @@ impl App {
                 }
             }
             AppEvent::EndInitialHistoryReplayBuffer => {
+                self.scrollback_has_older_history = self
+                    .chat_widget
+                    .thread_id()
+                    .is_some_and(|thread_id| app_server.has_older_history(thread_id));
                 self.finish_initial_history_replay_buffer(tui);
+            }
+            AppEvent::RequestOlderScrollbackHistory { thread_id } => {
+                if self.chat_widget.thread_id() == Some(thread_id)
+                    && self.overlay.is_none()
+                    && self.scrollback_has_older_history
+                {
+                    self.request_older_history_page(app_server, thread_id);
+                }
+            }
+            AppEvent::OlderThreadHistoryLoaded {
+                thread_id,
+                cursor,
+                result,
+            } => {
+                if let Err(err) = self
+                    .handle_older_history_page(tui, app_server, thread_id, &cursor, result)
+                    .await
+                {
+                    tracing::warn!(%err, "failed to apply older thread history page");
+                }
             }
             AppEvent::ConsolidateAgentMessage {
                 source,

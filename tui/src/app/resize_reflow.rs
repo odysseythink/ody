@@ -154,15 +154,19 @@ impl App {
                         self.history_line_wrap_policy(),
                     );
                 }
+            } else {
+                self.request_scrollback_history_top_up(/*rendered_rows*/ 0);
             }
             return;
         }
 
+        let retained_rows = buffer.retained_lines.len();
         let retained_lines = buffer.retained_lines.into_iter().collect::<Vec<_>>();
         tui.insert_history_hyperlink_lines_with_wrap_policy(
             retained_lines,
             self.history_line_wrap_policy(),
         );
+        self.request_scrollback_history_top_up(retained_rows);
     }
 
     pub(super) fn insert_history_cell_lines_with_initial_replay_buffer(
@@ -232,6 +236,30 @@ impl App {
         crate::resize_reflow_cap::resize_reflow_max_rows(self.config.terminal_resize_reflow)
     }
 
+    /// Whether older paginated source can fill unused configured scrollback rows.
+    pub(super) fn scrollback_history_needs_top_up(&self, rendered_rows: usize) -> bool {
+        self.overlay.is_none()
+            && self.scrollback_has_older_history
+            && self
+                .resize_reflow_max_rows()
+                .is_some_and(|max_rows| rendered_rows < max_rows)
+    }
+
+    fn request_scrollback_history_top_up(&self, rendered_rows: usize) {
+        if self.scrollback_history_needs_top_up(rendered_rows)
+            && let Some(thread_id) = self.chat_widget.thread_id()
+        {
+            tracing::debug!(
+                %thread_id,
+                rendered_rows,
+                max_rows = self.resize_reflow_max_rows(),
+                "refilling underfilled terminal scrollback from paginated history"
+            );
+            self.app_event_tx
+                .send(crate::app_event::AppEvent::RequestOlderScrollbackHistory { thread_id });
+        }
+    }
+
     fn clear_terminal_for_resize_replay(&mut self, tui: &mut tui::Tui) -> Result<()> {
         if tui.is_alt_screen_active() {
             tui.terminal.clear_visible_screen()?;
@@ -263,7 +291,7 @@ impl App {
         Ok(())
     }
 
-    fn schedule_immediate_resize_reflow(&mut self, tui: &mut tui::Tui) {
+    pub(super) fn schedule_immediate_resize_reflow(&mut self, tui: &mut tui::Tui) {
         self.transcript_reflow.schedule_immediate();
         tui.frame_requester().schedule_frame();
     }
@@ -413,6 +441,7 @@ impl App {
         self.clear_terminal_for_resize_replay(tui)?;
 
         self.deferred_history_lines.clear();
+        let reflowed_row_count = reflowed_lines.len();
         if !reflowed_lines.is_empty() {
             tui.insert_history_hyperlink_lines_with_wrap_policy(
                 reflowed_lines,
@@ -420,6 +449,7 @@ impl App {
             );
         }
 
+        self.request_scrollback_history_top_up(reflowed_row_count);
         Ok(terminal_width)
     }
 
