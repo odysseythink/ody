@@ -77,6 +77,7 @@ where
     }
     ody_guardian::install(&mut builder, guardian_agent_spawner);
     ody_memories_extension::install(&mut builder, ody_otel::global());
+    ody_odybox_memories::install(&mut builder);
     ody_mcp_extension::install(&mut builder);
     ody_mcp_extension::install_executor_plugins(&mut builder, environment_manager);
     let skill_providers = ody_skills_extension::SkillProviders::new()

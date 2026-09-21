@@ -70,6 +70,7 @@ ody-client = { workspace = true }
 
 ody-memories-extension = { workspace = true }
 ody-memories-write = { workspace = true }
+ody-odybox-memories = { workspace = true }
 ody-mcp = { workspace = true }
 ody-mcp-extension = { workspace = true }
 ody-model-provider = { workspace = true }

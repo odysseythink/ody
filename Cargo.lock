@@ -6755,6 +6755,7 @@ dependencies = [
  "ody-model-provider",
  "ody-model-provider-info",
  "ody-models-manager",
+ "ody-odybox-memories",
  "ody-otel",
  "ody-plugin",
  "ody-protocol",
@@ -8134,6 +8135,24 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "ody-odybox-memories"
+version = "0.1.0-alpha.2"
+dependencies = [
+ "ody-core",
+ "ody-extension-api",
+ "ody-protocol",
+ "ody-tools",
+ "ody-utils-absolute-path",
+ "pretty_assertions",
+ "schemars 0.8.22",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]

@@ -44,6 +44,7 @@ members = [
     "ext/guardian",
     "ext/memories",
     "ext/mcp",
+    "ext/odybox-memories",
     "ext/skills",
     "keyring-store",
     "file-search",
@@ -175,6 +176,7 @@ ody-mcp-server = { path = "mcp-server" }
 ody-model-provider-info = { path = "model-provider-info" }
 ody-models-manager = { path = "models-manager" }
 ody-network-proxy = { path = "network-proxy" }
+ody-odybox-memories = { path = "ext/odybox-memories" }
 ody-otel = { path = "otel" }
 ody-plugin = { path = "plugin" }
 ody-model-provider = { path = "model-provider" }
