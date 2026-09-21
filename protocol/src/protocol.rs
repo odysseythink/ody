@@ -3601,6 +3601,9 @@ pub struct RealtimeConversationListVoicesResponseEvent {
 #[ts(rename_all = "lowercase")]
 pub enum Product {
     #[serde(alias = "ODY")]
+    // The openai/plugins curated marketplace still gates some plugins to the historical
+    // "CODEX" product name; map it onto Ody so those manifests parse and stay visible.
+    #[serde(alias = "CODEX", alias = "codex")]
     Ody,
     #[serde(alias = "ATLAS")]
     Atlas,
@@ -4620,6 +4623,18 @@ mod tests {
                 .matches_product_restriction(&[Product::Atlas])
         );
         assert!(SessionSource::Custom("atlas-dev".to_string()).matches_product_restriction(&[]));
+    }
+
+    #[test]
+    fn product_deserializes_codex_alias_to_ody() {
+        // The openai/plugins curated marketplace gates some plugins to `products: ["CODEX"]`;
+        // ody maps that historical product name onto itself so those manifests still parse.
+        for raw in ["\"CODEX\"", "\"codex\""] {
+            let product: Product = serde_json::from_str(raw).unwrap_or_else(|err| {
+                panic!("failed to deserialize {raw} as Product: {err}")
+            });
+            assert_eq!(product, Product::Ody);
+        }
     }
 
     fn sandbox_policy_probe_paths(policy: &SandboxPolicy, cwd: &Path) -> Vec<PathBuf> {

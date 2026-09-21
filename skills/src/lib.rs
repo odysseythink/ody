@@ -234,9 +234,12 @@ mod tests {
 
     #[tokio::test]
     async fn embedded_flow_sample_loads_as_flow_skill() {
-        // M1.5: the bundled game-create sample is the reference `type: flow`
-        // skill; the loader must classify it as Flow, validate flow.yaml
-        // eagerly, and record the artifact path for the runtime re-read.
+        // M1.5 (anchor migrated 2026-09-21): the bundled /game sample is the
+        // reference `type: flow` skill (flow.star carrier); the loader must
+        // classify it as Flow and record the artifact path for the runtime
+        // re-read. (The yaml carrier's eager validation anchor left with the
+        // retired game-create sample; yaml parsing itself is covered by the
+        // ody-core flow tests.)
         let temp_dir = tempfile::tempdir().unwrap();
         let ody_home = ody_utils_absolute_path::AbsolutePathBuf::try_from(temp_dir.path())
             .expect("absolute temp dir");
@@ -260,37 +263,33 @@ mod tests {
         let skill = outcome
             .skills
             .iter()
-            .find(|skill| skill.name == "game-create")
-            .expect("game-create should be discovered");
+            .find(|skill| skill.name == "game")
+            .expect("game should be discovered");
         assert!(
             matches!(skill.skill_type, ody_core_skills::model::SkillType::Flow),
-            "game-create should load as a flow skill, got {:?}",
+            "game should load as a flow skill, got {:?}",
             skill.skill_type
         );
         let artifact = skill
             .flow_artifact
             .as_ref()
-            .expect("flow skill should record its flow.yaml");
-        assert!(artifact.as_path().ends_with("flow.yaml"));
-        let plan = ody_core_skills::flow::parse_flow_plan(
-            &std::fs::read_to_string(artifact.as_path()).expect("flow.yaml should be readable"),
-        )
-        .expect("flow.yaml should parse");
-        assert_eq!(plan.phases.len(), 5);
-        assert_eq!(plan.phases[0].id, "concept");
-        assert_eq!(plan.phases[1].id, "gdd");
-        assert_eq!(plan.phases[2].id, "tech-select");
-        assert_eq!(plan.phases[3].id, "implement");
-        assert_eq!(plan.phases[4].id, "playtest");
+            .expect("flow skill should record its flow.star");
+        assert!(artifact.as_path().ends_with("flow.star"));
+        assert!(
+            std::fs::read_to_string(artifact.as_path())
+                .expect("flow.star should be readable")
+                .contains("phase"),
+            "flow.star should be the real script artifact"
+        );
     }
 
     #[tokio::test]
-    async fn game_create_declares_motion_design_dependency() {
-        // P2 (2026-09-13): game-create declares motion-design in
-        // agents/odysseythink.yaml (the SkillMetadataFile), so the extension
-        // selection path auto-pulls it in via expand_selected_with_dependencies.
-        // This test locks the wiring: both skills load, and the declared
-        // dependency resolves by base name.
+    async fn game_declares_motion_design_dependency() {
+        // P2 (2026-09-13, anchor migrated 2026-09-21): /game declares
+        // motion-design in agents/odysseythink.yaml (the SkillMetadataFile),
+        // so the extension selection path auto-pulls it in via
+        // expand_selected_with_dependencies. This test locks the wiring:
+        // both skills load, and the declared dependency resolves by base name.
         let temp_dir = tempfile::tempdir().unwrap();
         let ody_home = ody_utils_absolute_path::AbsolutePathBuf::try_from(temp_dir.path())
             .expect("absolute temp dir");
@@ -311,24 +310,24 @@ mod tests {
         .await;
 
         assert!(outcome.errors.is_empty(), "errors: {:?}", outcome.errors);
-        let game_create = outcome
+        let game = outcome
             .skills
             .iter()
-            .find(|skill| skill.name == "game-create")
-            .expect("game-create should be discovered");
+            .find(|skill| skill.name == "game")
+            .expect("game should be discovered");
         let motion_design = outcome
             .skills
             .iter()
             .find(|skill| skill.name == "motion-design")
             .expect("motion-design should be discovered");
-        let declared = game_create
+        let declared = game
             .dependencies
             .as_ref()
             .and_then(|dependencies| dependencies.skills.first())
-            .expect("game-create should declare a skill dependency");
+            .expect("game should declare a skill dependency");
         assert_eq!(declared.name, "motion-design");
         assert_ne!(
-            game_create.path_to_skills_md, motion_design.path_to_skills_md,
+            game.path_to_skills_md, motion_design.path_to_skills_md,
             "dependency must resolve to a different skill"
         );
     }
@@ -364,7 +363,7 @@ mod tests {
 
         let ody_only = [
             "debt-ledger",
-            "game-create",
+            "game",
             "dispatching-parallel-agents",
             "executing-plans",
             "finishing-a-development-branch",

@@ -1996,3 +1996,50 @@ fn find_installable_marketplace_plugin_rejects_explicit_empty_products() {
         "plugin `disabled-plugin` is not available for install in marketplace `ody-curated`"
     );
 }
+
+#[test]
+fn find_installable_marketplace_plugin_accepts_upstream_codex_product_entry() {
+    // Mirrors an entry shape from the openai/plugins curated marketplace: the historical
+    // "CODEX" product gate must parse (mapped onto Product::Ody) and stay installable.
+    let tmp = tempdir().unwrap();
+    let repo_root = tmp.path().join("repo");
+    fs::create_dir_all(repo_root.join(".git")).unwrap();
+    fs::create_dir_all(repo_root.join(".agents/plugins")).unwrap();
+    fs::write(
+        repo_root.join(".agents/plugins/marketplace.json"),
+        r#"{
+  "name": "openai-curated",
+  "interface": {
+    "displayName": "Codex official"
+  },
+  "plugins": [
+    {
+      "name": "game-studio",
+      "source": {
+        "source": "local",
+        "path": "./plugins/game-studio"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL",
+        "products": [
+          "CODEX"
+        ]
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}"#,
+    )
+    .unwrap();
+
+    let resolved = find_installable_marketplace_plugin(
+        &AbsolutePathBuf::try_from(repo_root.join(".agents/plugins/marketplace.json")).unwrap(),
+        "game-studio",
+        Some(Product::Ody),
+    )
+    .unwrap();
+
+    assert_eq!(resolved.plugin_id.plugin_name, "game-studio");
+    assert_eq!(resolved.policy.products, Some(vec![Product::Ody]));
+}

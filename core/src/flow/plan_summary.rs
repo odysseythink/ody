@@ -14,12 +14,73 @@ const PROMPT_PREVIEW_CHARS: usize = 200;
 /// Script-carrier source preview cap, in lines (M3).
 const SOURCE_PREVIEW_LINES: usize = 40;
 
+/// Extract static `phase("...")` / `phase('...')` title literals from a
+/// script carrier source, in order of first appearance, deduplicated.
+///
+/// Deliberately a hand-rolled scanner (no regex): only statically knowable
+/// calls are extracted — `phase(title)` with a variable or an f-string is
+/// skipped (the call still shows up in the source preview). Matches require
+/// an identifier boundary before `phase(`, so `myphase("x")` is not a hit.
+fn extract_phase_literals(source: &str) -> Vec<String> {
+    let mut phases: Vec<String> = Vec::new();
+    for line in source.lines() {
+        let mut rest = line;
+        while let Some(pos) = rest.find("phase(") {
+            // Identifier boundary: the char before `phase` must not be an
+            // identifier or member-access character (covers `myphase(` and
+            // `x.phase(`).
+            let boundary_ok = pos == 0
+                || !rest[..pos]
+                    .chars()
+                    .last()
+                    .map(|c| c.is_alphanumeric() || c == '_' || c == '.')
+                    .unwrap_or(false);
+            let after = &rest[pos + "phase(".len()..];
+            if boundary_ok {
+                if let Some(literal) = parse_string_literal(after.trim_start()) {
+                    if !phases.contains(&literal) {
+                        phases.push(literal);
+                    }
+                }
+            }
+            rest = &rest[pos + 1..];
+        }
+    }
+    phases
+}
+
+/// Parse a leading `"..."` / `'...'` string literal (with backslash escape
+/// handling); `None` for anything else (variables, f-strings, numbers).
+fn parse_string_literal(text: &str) -> Option<String> {
+    let mut chars = text.chars();
+    let quote = match chars.next() {
+        Some('"') | Some('\'') => text.chars().next().unwrap(),
+        _ => return None,
+    };
+    let mut literal = String::new();
+    let mut escaped = false;
+    for c in chars {
+        if escaped {
+            literal.push(c);
+            escaped = false;
+        } else if c == '\\' {
+            escaped = true;
+        } else if c == quote {
+            return Some(literal);
+        } else {
+            literal.push(c);
+        }
+    }
+    None
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct FlowPlanSummary {
     pub(crate) flow_name: String,
     /// Carrier artifact (`flow.yaml` / `flow.star` / `workflow.js`).
     pub(crate) carrier: &'static str,
-    /// Structured phase/step projection; empty for script carriers.
+    /// Structured phase/step projection. For script carriers this is the
+    /// extracted `phase("...")` title checklist (no steps).
     pub(crate) phases: Vec<PhaseSummary>,
     /// Head of the script source for script carriers; `None` for yaml.
     pub(crate) source_preview: Option<String>,
@@ -81,10 +142,16 @@ impl FlowPlanSummary {
         } else {
             head.join("\n")
         };
+        // Guardian preview upgrade: static `phase("...")` literals become a
+        // phase title checklist on top of the bounded source preview.
+        let phases = extract_phase_literals(source)
+            .into_iter()
+            .map(|id| PhaseSummary { id, steps: Vec::new() })
+            .collect();
         Self {
             flow_name: flow_name.into(),
             carrier,
-            phases: Vec::new(),
+            phases,
             source_preview: Some(preview),
         }
     }
@@ -198,13 +265,16 @@ mod tests {
         let plan = FlowPlanSource::Starlark("phase('x')\n".to_string());
         let summary = FlowPlanSummary::for_plan("demo", &plan);
         assert_eq!(summary.carrier, "flow.star");
-        assert!(summary.phases.is_empty());
+        // Static phase literals surface as a title checklist (2026-09-21).
+        assert_eq!(summary.phases.len(), 1);
+        assert_eq!(summary.phases[0].id, "x");
+        assert!(summary.phases[0].steps.is_empty());
         assert_eq!(summary.source_preview.as_deref(), Some("phase('x')"));
     }
 
     /// V8 arm of the decision-8 dispatch (M3.3 anchor): a validated
-    /// `workflow.js` plan projects to a script summary, never structured
-    /// phases.
+    /// `workflow.js` plan projects to a script summary; static `phase()`
+    /// literals become the title checklist here too.
     #[cfg(feature = "flow-v8")]
     #[test]
     fn for_plan_marks_v8_carrier() {
@@ -213,5 +283,70 @@ mod tests {
         assert_eq!(summary.carrier, "workflow.js");
         assert!(summary.phases.is_empty());
         assert_eq!(summary.source_preview.as_deref(), Some("var result = 1;"));
+    }
+
+    // ---- Static phase literal extraction (2026-09-21) ----
+
+    #[test]
+    fn extract_phase_literals_keeps_order_and_dedupes() {
+        let source = r#"
+phase("first")
+phase('second')
+phase("first")
+phase(title)
+phase(f"dynamic {title}")
+myphase("not a phase call")
+x.phase("method call is not a hit")
+"#;
+        assert_eq!(
+            extract_phase_literals(source),
+            vec!["first".to_string(), "second".to_string()]
+        );
+    }
+
+    #[test]
+    fn extract_phase_literals_handles_escapes_and_empty() {
+        assert_eq!(
+            extract_phase_literals(r#"phase("say \"hi\"")"#),
+            vec!["say \"hi\"".to_string()]
+        );
+        // Unterminated / non-string arguments are skipped.
+        assert!(extract_phase_literals("phase(\n").is_empty());
+        assert!(extract_phase_literals("phase(42)").is_empty());
+    }
+
+    #[test]
+    fn script_summary_without_literals_keeps_preview_only() {
+        let source = "result = agent('plain')\n";
+        let summary = FlowPlanSummary::for_script("demo", "flow.star", source);
+        assert!(summary.phases.is_empty());
+        assert_eq!(summary.source_preview.as_deref(), Some(source.trim_end()));
+    }
+
+    /// The shipped `/game` flow.star must project its full phase title
+    /// checklist for the run-before guardian approval.
+    #[test]
+    fn game_flow_script_summary_lists_all_phase_titles() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../skills/src/assets/embedded/game/flow.star");
+        let source = std::fs::read_to_string(&path)
+            .unwrap_or_else(|err| panic!("embedded game flow.star should be readable: {err}"));
+        let summary = FlowPlanSummary::for_script("game", "flow.star", &source);
+        let titles: Vec<&str> = summary.phases.iter().map(|phase| phase.id.as_str()).collect();
+        let expected = [
+            "triage · 意图识别",
+            "A1 · 概念收敛",
+            "A2 · GDD",
+            "A3 · 技术选型",
+            "A4 · 按机制并行实现",
+            "A5 · 试玩与审查",
+            "B1 · 项目定位",
+            "B2 · 商业 GDD",
+            "B3 · 架构选型",
+            "C · 实施辅助",
+        ];
+        assert_eq!(titles, expected, "guardian phase checklist drifted");
+        // The source preview is still present alongside the checklist.
+        assert!(summary.source_preview.is_some());
     }
 }
