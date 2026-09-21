@@ -28,23 +28,45 @@
 //!
 //! ## Status
 //!
-//! The gate, the storage root and the mounting point are in place and
-//! contract-tested, and the read / search / add-note tool set is mounted on
-//! odyBox threads only. Extraction and consolidation (the equivalent of Ody's
-//! Phase 1 / Phase 2 write pipeline) are not implemented yet.
+//! Read path: `read` / `search` / `add_note` tools, mounted on odyBox threads
+//! only. Write path: a filesystem-only extraction pipeline that lists rollout
+//! files, extracts unprocessed odyBox sessions, and records them in the
+//! assistant memory root. Cross-session consolidation is not implemented yet.
 
 mod backend;
 mod extension;
+mod extract;
+mod extractor_model;
 mod gate;
+mod ledger;
+mod pipeline;
+mod prompts;
+mod scan;
 mod store;
 mod tools;
 
 pub use extension::AssistantMemoryConfig;
 pub use extension::AssistantMemoryExtension;
 pub use extension::install;
+pub use extract::ExtractError;
+pub use extract::ExtractFuture;
+pub use extract::ExtractedMemory;
+pub use extract::MemoryExtractor;
+pub use extract::NoopExtractor;
+pub use extract::parse_extracted_memory;
+pub use extractor_model::ModelMemoryExtractor;
 pub use gate::assistant_memory_enabled;
 pub use gate::assistant_memory_enabled_for_source;
 pub use gate::product_for_source;
+pub use ledger::EXTRACTED_SUBDIR;
+pub use ledger::ExtractionLedger;
+pub use pipeline::DEFAULT_SESSION_BUDGET;
+pub use pipeline::PipelineReport;
+pub use pipeline::SessionOutcome;
+pub use pipeline::process_transcript;
+pub use pipeline::run_once;
+pub use scan::odybox_session_source;
+pub use scan::odybox_sessions;
 pub use store::ASSISTANT_MEMORY_DIR;
 pub use store::ODY_MEMORY_DIR;
 pub use store::assistant_memory_root;

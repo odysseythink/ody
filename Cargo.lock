@@ -8141,9 +8141,19 @@ dependencies = [
 name = "ody-odybox-memories"
 version = "0.1.0-alpha.2"
 dependencies = [
+ "anyhow",
+ "chrono",
+ "futures",
+ "ody-client",
  "ody-core",
  "ody-extension-api",
+ "ody-features",
+ "ody-model-provider",
+ "ody-otel",
  "ody-protocol",
+ "ody-rollout",
+ "ody-rollout-trace",
+ "ody-terminal-detection",
  "ody-tools",
  "ody-utils-absolute-path",
  "pretty_assertions",
@@ -8153,6 +8163,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

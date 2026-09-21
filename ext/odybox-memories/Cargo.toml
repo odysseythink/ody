@@ -13,9 +13,19 @@ doctest = false
 workspace = true
 
 [dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+futures = { workspace = true }
+ody-client = { workspace = true }
 ody-core = { workspace = true }
 ody-extension-api = { workspace = true }
+ody-features = { workspace = true }
+ody-model-provider = { workspace = true }
+ody-otel = { workspace = true }
 ody-protocol = { workspace = true }
+ody-rollout = { workspace = true }
+ody-rollout-trace = { workspace = true }
+ody-terminal-detection = { workspace = true }
 ody-tools = { workspace = true }
 ody-utils-absolute-path = { workspace = true }
 schemars = { workspace = true }
@@ -23,6 +33,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
+tracing = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

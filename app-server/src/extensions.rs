@@ -64,6 +64,8 @@ where
         thread_store: _thread_store,
     } = dependencies;
     let mut builder = ExtensionRegistryBuilder::<Config>::with_event_sink(event_sink);
+    // Cloned before the goal extension consumes `thread_manager`.
+    let odybox_thread_manager = thread_manager.clone();
     if let Some(state_db) = state_db {
         ody_goal_extension::install_with_backend(
             &mut builder,
@@ -77,7 +79,7 @@ where
     }
     ody_guardian::install(&mut builder, guardian_agent_spawner);
     ody_memories_extension::install(&mut builder, ody_otel::global());
-    ody_odybox_memories::install(&mut builder);
+    ody_odybox_memories::install(&mut builder, odybox_thread_manager);
     ody_mcp_extension::install(&mut builder);
     ody_mcp_extension::install_executor_plugins(&mut builder, environment_manager);
     let skill_providers = ody_skills_extension::SkillProviders::new()

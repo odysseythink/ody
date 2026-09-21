@@ -40,12 +40,76 @@ Two practical reasons this matters here:
 
 ## Status
 
-Skeleton. The gate, the storage root, and the mounting point are in place and
-contract-tested. The assistant-facing tool set plugs into
-`AssistantMemoryExtension`'s `ToolContributor` impl (see `src/extension.rs`).
+Both paths are in place:
+
+- **Read** — `read` / `search` / `add_note` tools in the `odybox_memories`
+  namespace, scoped to the assistant memory root.
+- **Write** — a filesystem-only extraction pipeline: list rollout files filtered
+  by `SessionSource` *by value* (`scan.rs`), skip sessions already recorded
+  (`ledger.rs`), run one model call per session (`extractor_model.rs`), and write
+  the record into the assistant memory root (`pipeline.rs`).
+
+Not yet implemented: cross-session consolidation (the equivalent of Ody's
+Phase 2). Session records are written independently and never merged.
+
+### When it runs
+
+The pipeline is triggered from thread lifecycle callbacks on odyBox threads:
+
+- **New thread** (`on_thread_start`) — the main path. It carries `Config` and
+  `SessionSource`, so the product gate and the storage root are derived directly.
+- **Resumed thread** (`on_thread_resume`) — reuses the context captured at start
+  in the same process. `ThreadResumeInput` carries neither `Config` nor
+  `SessionSource`, so a resume **after a restart** finds an empty thread store and
+  does nothing.
+
+That gap is not a correctness hole: every pass scans *all* unprocessed sessions,
+and the ledger marks what has been handled. Content from a resume-only session is
+therefore still extracted on the next new thread, just later. The resume path
+only improves latency.
+
+### Required configuration on third-party gateways
+
+`model-provider` hardcodes the extraction model default:
+
+```rust
+pub const DEFAULT_MEMORY_EXTRACTION_PREFERRED_MODEL: &str = "glm-4.5";
+pub const DEFAULT_MEMORY_CONSOLIDATION_PREFERRED_MODEL: &str = "k3";
+```
+
+A custom OpenAI-compatible gateway almost certainly does not serve those names,
+and extraction then fails silently. Set the model explicitly in
+`$ODY_HOME/config.toml`:
+
+```toml
+[memories]
+extract_model = "<a model your provider actually serves>"
+```
+
+Two field notes from bringing this up on a real gateway:
+
+- The model must be routable **under the same API key** the runtime uses. Some
+  gateways partition models by key group, so a model visible in the UI may still
+  return `model_not_found`.
+- When that happens the runtime reports *"Selected model is at capacity. Please
+  try a different model."*, which is misleading — the gateway actually answered
+  `model_not_found`. Verify providers with a direct HTTP call before trusting
+  the runtime's error text.
+
+### What is deliberately absent
+
+- No state DB and no shared job table. Discovery reads rollout files and the
+  ledger is the filesystem, so extraction never touches `state` or the Ody
+  memory tables. The cost is a single-process assumption (odyBox ships a
+  single-instance guard), with no lease to coordinate two racing processes.
+- No Phase 1 / Phase 2 split. Sessions are processed independently and at most
+  once each; there is no consolidation agent.
 
 ## Mounting point
 
-`app-server/src/extensions.rs` calls `ody_odybox_memories::install(&mut builder)`
-next to `ody_memories_extension::install(...)`. Installing is unconditional and
-safe: every contributor is a no-op unless the thread is an odyBox thread.
+`app-server/src/extensions.rs` calls
+`ody_odybox_memories::install(&mut builder, odybox_thread_manager)` next to
+`ody_memories_extension::install(...)`. Installing is unconditional and safe:
+every contributor is a no-op unless the thread is an odyBox thread. The write
+pipeline is triggered from `on_thread_start` on odyBox threads only, as a
+best-effort background task — it can never affect thread startup.
