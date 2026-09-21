@@ -61,33 +61,70 @@ impl FlowRuntime for V8FlowRuntime {
                 reason: "v8 runtime received a non-v8 plan".to_string(),
             });
         };
+        let workflow_host = FlowWorkflowHost {
+            host,
+            open_phase: std::sync::Mutex::new(None),
+        };
         let result = run_workflow_script(
             &source,
             &WorkflowRunConfig {
                 args: serde_json::Value::Object(ctx.args),
                 batch_limit: FLOW_BATCH_LIMIT,
             },
-            &FlowWorkflowHost { host },
+            &workflow_host,
         )
-        .await
-        .map_err(|message| FlowError::Agent {
-            step: "workflow.js".to_string(),
-            source: FlowHostError(message),
-        })?;
+        .await;
 
-        let mut outputs = serde_json::Map::new();
-        if let Some(value) = result {
-            outputs.insert("result".to_string(), value);
+        match result {
+            Ok(result) => {
+                // Run succeeded: close the final phase as completed (1/1).
+                workflow_host.close_open_phase(1).await;
+                let mut outputs = serde_json::Map::new();
+                if let Some(value) = result {
+                    outputs.insert("result".to_string(), value);
+                }
+                Ok(FlowOutcome { outputs })
+            }
+            Err(message) => {
+                // Failure path mirrors the yaml/star runtimes: the open
+                // phase (if any) closes with completed < total.
+                workflow_host.close_open_phase(0).await;
+                Err(FlowError::Agent {
+                    step: "workflow.js".to_string(),
+                    source: FlowHostError(message),
+                })
+            }
         }
-        Ok(FlowOutcome { outputs })
     }
 }
 
 /// `WorkflowHost` bridge over `FlowAgentHost`: checkpoint first (M2.1
-/// read→miss→run→write, same as the yaml/star runtimes), progress lines
-/// map onto `FlowProgress::Log`.
+/// read→miss→run→write, same as the yaml/star runtimes), `phase(title)`
+/// calls map onto structured `FlowProgress::PhaseBegin`/`PhaseEnd` pairs
+/// (same open/close semantics as the starlark runtime), `log(msg)` stays a
+/// free-form `FlowProgress::Log` line.
 struct FlowWorkflowHost<'h, H: FlowAgentHost> {
     host: &'h H,
+    /// Title of the currently open phase, if any. The eval thread drives
+    /// callbacks sequentially, so a plain Mutex is sufficient.
+    open_phase: std::sync::Mutex<Option<String>>,
+}
+
+impl<H: FlowAgentHost> FlowWorkflowHost<'_, H> {
+    /// Close the currently open phase (if any) with the given completed
+    /// count; called by the runtime at run teardown.
+    async fn close_open_phase(&self, completed_steps: u32) {
+        let open = self.open_phase.lock().unwrap().take();
+        if let Some(phase_id) = open {
+            self.host
+                .report_progress(FlowProgress::PhaseEnd {
+                    phase_id,
+                    completed_steps,
+                    total_steps: 1,
+                })
+                .await;
+        }
+    }
 }
 
 impl<H: FlowAgentHost> WorkflowHost for FlowWorkflowHost<'_, H> {
@@ -106,6 +143,23 @@ impl<H: FlowAgentHost> WorkflowHost for FlowWorkflowHost<'_, H> {
         super::runtime::run_agent_text(self.host, prompt, "agent", schema.as_ref())
             .await
             .map_err(|e| e.to_string())
+    }
+
+    async fn report_phase(&self, title: String) {
+        // Close the previous phase (1/1) before opening the new one.
+        let previous = self.open_phase.lock().unwrap().replace(title.clone());
+        if let Some(phase_id) = previous {
+            self.host
+                .report_progress(FlowProgress::PhaseEnd {
+                    phase_id,
+                    completed_steps: 1,
+                    total_steps: 1,
+                })
+                .await;
+        }
+        self.host
+            .report_progress(FlowProgress::PhaseBegin { phase_id: title, total_steps: 1 })
+            .await;
     }
 
     async fn report_progress(&self, message: String) {

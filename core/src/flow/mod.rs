@@ -35,8 +35,14 @@
 //!   results in declaration order. Same [`FLOW_BATCH_LIMIT`] cap.
 //! - `phase(title)` / `log(msg)` — progress reporting only. Yaml phases
 //!   are structural (the `phases:` list); phase begin/end progress events
-//!   are wired in M1.4. No ordering side effects beyond sequential
-//!   execution.
+//!   are wired in M1.4. Script carriers (`flow.star`, `workflow.js`) treat
+//!   `phase(title)` as a **phase boundary**: each call closes the previously
+//!   open phase and opens a new one. Script phases have no static step
+//!   concept (`total_steps = 1`); the last phase is closed at run teardown —
+//!   completed on success, `completed < total` on failure (same semantics
+//!   as the yaml failure path). `phase_id` is the title verbatim; a repeated
+//!   title closes and reopens the same id. `log(msg)` stays a free-form
+//!   progress line. No ordering side effects beyond sequential execution.
 //! - `args` — trigger inputs, pre-bound as a context root and addressable
 //!   as `${{ args.key }}`.
 //!
@@ -205,8 +211,8 @@ pub(crate) enum FlowProgress {
     /// A phase ended; on failure `completed_steps` < `total_steps`.
     PhaseEnd { phase_id: String, completed_steps: u32, total_steps: u32 },
     /// Free-form progress line from a script runtime (M3: `flow.star`
-    /// `phase()`/`log()`; `workflow.js` in M3.2). Script carriers have no
-    /// structured phases/steps, so their progress surfaces as log lines.
+    /// `log()`; `workflow.js` in M3.2). Script `phase(title)` calls surface
+    /// as `PhaseBegin`/`PhaseEnd` pairs instead (see the module docs).
     Log { message: String },
 }
 

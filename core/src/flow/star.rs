@@ -116,7 +116,10 @@ enum BridgeRequest {
         schema: Option<String>,
         reply: oneshot::Sender<Result<String, String>>,
     },
-    /// Free-form progress line (`phase()` / `log()`).
+    /// Structured phase boundary (`phase(title)`): closes any open phase and
+    /// opens a new one (1/1 steps).
+    Phase { title: String },
+    /// Free-form progress line (`log()`).
     Log { message: String },
 }
 
@@ -283,22 +286,22 @@ fn flow_builtins(builder: &mut GlobalsBuilder) {
         fan_out_via_bridge(bridge, prompts, "parallel")
     }
 
-    /// Free-form progress line.
-    fn phase(msg: &str, eval: &mut Evaluator) -> anyhow::Result<NoneType> {
-        log_impl(msg, eval)
+    /// Structured phase boundary: closes the previous phase and opens a new
+    /// one (see the module docs of `core/src/flow/mod.rs`).
+    fn phase(title: &str, eval: &mut Evaluator) -> anyhow::Result<NoneType> {
+        let bridge = bridge(eval)?;
+        // Fire-and-forget; a closed bridge means the run was aborted.
+        let _ = bridge.tx.send(BridgeRequest::Phase { title: title.to_string() });
+        Ok(NoneType)
     }
 
     /// Free-form progress line.
     fn log(msg: &str, eval: &mut Evaluator) -> anyhow::Result<NoneType> {
-        log_impl(msg, eval)
+        let bridge = bridge(eval)?;
+        // Fire-and-forget; a closed bridge means the run was aborted.
+        let _ = bridge.tx.send(BridgeRequest::Log { message: msg.to_string() });
+        Ok(NoneType)
     }
-}
-
-fn log_impl(msg: &str, eval: &mut Evaluator) -> anyhow::Result<NoneType> {
-    let bridge = bridge(eval)?;
-    // Fire-and-forget; a closed bridge means the run was aborted.
-    let _ = bridge.tx.send(BridgeRequest::Log { message: msg.to_string() });
-    Ok(NoneType)
 }
 
 // ---------------------------------------------------------------------------
@@ -388,11 +391,29 @@ async fn run_star<H: FlowAgentHost>(
     // Dropping the run future drops them all, closing every pending reply
     // channel, which unwinds the eval thread's blocked native calls.
     let mut in_flight: FuturesUnordered<BoxFuture<'_, ()>> = FuturesUnordered::new();
+    // Structured phase bookkeeping: `phase(title)` closes the previous open
+    // phase and opens a new one; the last phase is closed during run teardown
+    // (1/1 on success, 0/1 on failure).
+    let mut open_phase: Option<String> = None;
     loop {
         tokio::select! {
             request = async_rx.recv() => {
                 let Some(request) = request else { break };
                 match request {
+                    BridgeRequest::Phase { title } => {
+                        if let Some(prev) = open_phase.take() {
+                            host.report_progress(FlowProgress::PhaseEnd {
+                                phase_id: prev,
+                                completed_steps: 1,
+                                total_steps: 1,
+                            }).await;
+                        }
+                        open_phase = Some(title.clone());
+                        host.report_progress(FlowProgress::PhaseBegin {
+                            phase_id: title,
+                            total_steps: 1,
+                        }).await;
+                    }
                     BridgeRequest::Log { message } => {
                         host.report_progress(FlowProgress::Log { message }).await;
                     }
@@ -413,7 +434,7 @@ async fn run_star<H: FlowAgentHost>(
     while in_flight.next().await.is_some() {}
     let _ = pump.await;
 
-    let result = tokio::task::spawn_blocking(move || eval_thread.join())
+    let eval_result = tokio::task::spawn_blocking(move || eval_thread.join())
         .await
         .map_err(|e| FlowError::Agent {
             step: "flow.star".to_string(),
@@ -426,13 +447,40 @@ async fn run_star<H: FlowAgentHost>(
         .map_err(|message| FlowError::Agent {
             step: "flow.star".to_string(),
             source: FlowHostError(message),
-        })?;
+        });
 
-    let mut outputs = serde_json::Map::new();
-    if let Some(value) = result {
-        outputs.insert("result".to_string(), value);
+    match eval_result {
+        Ok(result) => {
+            close_open_phase(host, &mut open_phase, 1).await;
+            let mut outputs = serde_json::Map::new();
+            if let Some(value) = result {
+                outputs.insert("result".to_string(), value);
+            }
+            Ok(FlowOutcome { outputs })
+        }
+        Err(err) => {
+            // Failure path: the run aborted mid-phase, so the open phase (if
+            // any) closes with completed < total, mirroring the yaml runtime.
+            close_open_phase(host, &mut open_phase, 0).await;
+            Err(err)
+        }
     }
-    Ok(FlowOutcome { outputs })
+}
+
+/// Close the currently open phase (if any) with the given completed count.
+async fn close_open_phase<H: FlowAgentHost>(
+    host: &H,
+    open_phase: &mut Option<String>,
+    completed_steps: u32,
+) {
+    if let Some(phase_id) = open_phase.take() {
+        host.report_progress(FlowProgress::PhaseEnd {
+            phase_id,
+            completed_steps,
+            total_steps: 1,
+        })
+        .await;
+    }
 }
 
 /// One agent call with checkpoint replay + schema retry (M2.1/M4.1

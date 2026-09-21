@@ -2630,6 +2630,122 @@ result = reply
             .expect_err("non-dict schema must fail");
         assert!(err.to_string().contains("must be a dict"), "{err}");
     }
+
+    // ---- Script-carrier structured phase progress (2026-09-21) ----
+
+    #[tokio::test]
+    async fn starlark_phase_calls_emit_structured_phase_events() {
+        let host = RecordingHost::default();
+        let source = r#"
+phase("one")
+a = agent("A")
+phase("two")
+b = agent("B")
+result = [a, b]
+"#;
+        let plan = star_validate(&StarlarkFlowRuntime, source);
+        let outcome = StarlarkFlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .unwrap();
+        assert_eq!(outcome.outputs["result"], json!(["done: A", "done: B"]));
+        assert_eq!(
+            *host.progress.lock().unwrap(),
+            vec![
+                FlowProgress::PhaseBegin { phase_id: "one".to_string(), total_steps: 1 },
+                FlowProgress::PhaseEnd {
+                    phase_id: "one".to_string(),
+                    completed_steps: 1,
+                    total_steps: 1,
+                },
+                FlowProgress::PhaseBegin { phase_id: "two".to_string(), total_steps: 1 },
+                FlowProgress::PhaseEnd {
+                    phase_id: "two".to_string(),
+                    completed_steps: 1,
+                    total_steps: 1,
+                },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn starlark_log_stays_a_free_form_progress_line() {
+        let host = RecordingHost::default();
+        let source = "log(\"hello\")\nlog(\"world\")\n";
+        let plan = star_validate(&StarlarkFlowRuntime, source);
+        StarlarkFlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .unwrap();
+        assert_eq!(
+            *host.progress.lock().unwrap(),
+            vec![
+                FlowProgress::Log { message: "hello".to_string() },
+                FlowProgress::Log { message: "world".to_string() },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn starlark_failure_closes_open_phase_with_partial_completion() {
+        let host = RecordingHost {
+            inner: MockHost::with(vec![Ok("done: A".to_string()), Err("boom".to_string())]),
+            ..RecordingHost::default()
+        };
+        let source = r#"
+phase("one")
+a = agent("A")
+phase("two")
+b = agent("B")
+result = [a, b]
+"#;
+        let plan = star_validate(&StarlarkFlowRuntime, source);
+        let err = StarlarkFlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .expect_err("agent failure must fail the run");
+        assert!(err.to_string().contains("boom"), "{err}");
+        // "one" completed (1/1); "two" opened before agent B failed and
+        // must close with completed < total on the failure path.
+        assert_eq!(
+            *host.progress.lock().unwrap(),
+            vec![
+                FlowProgress::PhaseBegin { phase_id: "one".to_string(), total_steps: 1 },
+                FlowProgress::PhaseEnd {
+                    phase_id: "one".to_string(),
+                    completed_steps: 1,
+                    total_steps: 1,
+                },
+                FlowProgress::PhaseBegin { phase_id: "two".to_string(), total_steps: 1 },
+                FlowProgress::PhaseEnd {
+                    phase_id: "two".to_string(),
+                    completed_steps: 0,
+                    total_steps: 1,
+                },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn starlark_script_without_phase_calls_emits_no_phase_events() {
+        let host = RecordingHost::default();
+        let source = "result = agent('plain')\n";
+        let plan = star_validate(&StarlarkFlowRuntime, source);
+        let outcome = StarlarkFlowRuntime
+            .run(plan, FlowContext::default(), &host)
+            .await
+            .unwrap();
+        assert_eq!(outcome.outputs["result"], json!("done: plain"));
+        assert!(
+            host
+                .progress
+                .lock()
+                .unwrap()
+                .iter()
+                .all(|event| !matches!(event, FlowProgress::PhaseBegin { .. } | FlowProgress::PhaseEnd { .. })),
+            "no phase events without phase() calls"
+        );
+    }
 }
 
 #[cfg(feature = "flow-v8")]
@@ -2762,9 +2878,18 @@ var result = await parallel([() => "Review", () => "Test"]);
             .await
             .unwrap();
         assert_eq!(outcome.outputs["result"], json!(["done: Review", "done: Test"]));
+        // Script `phase()` surfaces as structured begin/end events, not a
+        // log line (2026-09-21 script-carrier observability work).
         assert_eq!(
             *host.progress.lock().unwrap(),
-            vec![FlowProgress::Log { message: "verify".to_string() }]
+            vec![
+                FlowProgress::PhaseBegin { phase_id: "verify".to_string(), total_steps: 1 },
+                FlowProgress::PhaseEnd {
+                    phase_id: "verify".to_string(),
+                    completed_steps: 1,
+                    total_steps: 1,
+                },
+            ]
         );
     }
 
@@ -3132,4 +3257,205 @@ async fn embedded_game_create_flow_executes_end_to_end() {
         prompts[6..8].iter().any(|prompt| prompt.contains("边界情况")),
         "one playtest agent must get the code-review brief"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Embedded `/game` flow.star forward tests (2026-09-21). The loader only
+// syntax-checks script carriers at trigger time, so these tests are the
+// guard that the shipped single-entry game skill stays runnable: they
+// execute the vendored artifact through the real Starlark kernel with a
+// scripted host (no model) and cover all three triage routes plus the
+// empty-input guard.
+#[cfg(feature = "flow-starlark")]
+mod embedded_game_flow {
+    use super::*;
+
+    fn game_flow_source() -> String {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../skills/src/assets/embedded/game/flow.star");
+        std::fs::read_to_string(&path)
+            .unwrap_or_else(|err| panic!("embedded game flow.star should be readable: {err}"))
+    }
+
+    /// Prompt-keyed host: fan-out agents are keyed by prompt content (their
+    /// spawn order is not guaranteed); the sequential schema phases (triage /
+    /// concept / gdd / tech-select) consume canned replies in FIFO order.
+    #[derive(Default)]
+    struct GameFlowHost {
+        prompts: Mutex<Vec<String>>,
+        canned: Mutex<VecDeque<Result<String, String>>>,
+    }
+
+    impl GameFlowHost {
+        fn with(canned: Vec<Result<String, String>>) -> Self {
+            Self { canned: Mutex::new(canned.into()), ..Self::default() }
+        }
+    }
+
+    impl FlowAgentHost for GameFlowHost {
+        async fn run_agent(&self, prompt: String) -> Result<String, FlowHostError> {
+            self.prompts.lock().unwrap().push(prompt.clone());
+            if prompt.contains("实现游戏机制「") {
+                return Ok("implemented: files updated, manual verify steps listed".to_string());
+            }
+            if prompt.contains("browser-control") {
+                return Ok("通过：渲染正常、输入响应、无控制台报错".to_string());
+            }
+            if prompt.contains("边界情况") {
+                return Ok("无阻塞问题；建议补充连击反馈".to_string());
+            }
+            if prompt.contains("你是游戏技术总监") {
+                return Ok("# 选型报告\n1. topology: T1\n7. 待确认决策点: 引擎拍板".to_string());
+            }
+            if prompt.contains("游戏开发专家助手") {
+                return Ok("answer: routed via gamedev-router to godot save-systems".to_string());
+            }
+            match self.canned.lock().unwrap().pop_front() {
+                Some(Ok(text)) => Ok(text),
+                Some(Err(reason)) => Err(FlowHostError(reason)),
+                None => Ok(format!("done: {prompt}")),
+            }
+        }
+    }
+
+    fn args_context(text: &str) -> FlowContext {
+        FlowContext { args: json!({ "text": text }).as_object().unwrap().clone() }
+    }
+
+    const CONCEPT_A: &str = r#"{"pitch":"打砖块","coreLoop":"接球反弹消砖","input":"左右方向键","winLose":"清空所有砖块获胜，三条命用完失败","fun":"一击多砖的连锁爽感"}"#;
+    const GDD_A: &str = r#"{"mechanics":[
+            {"name":"paddle","spec":"挡板左右移动，边界钳制"},
+            {"name":"ball","spec":"反弹物理，碰撞后速度递增"}],
+        "constraints":["单 index.html","无外部素材","Canvas 2D","60fps"],
+        "feedback":["击中砖块：粒子","漏球：生命闪烁"]}"#;
+    const PLAN_A: &str =
+        r#"{"stack":"Canvas 2D（单文件无依赖）","files":["index.html"],"run":"python3 -m http.server 8000"}"#;
+
+    #[tokio::test]
+    async fn track_a_runs_end_to_end() {
+        let host = GameFlowHost::with(vec![
+            Ok(r#"{"track":"A","brief":"打砖块小游戏","reason":"一句话点子默认 A"}"#.to_string()),
+            Ok(CONCEPT_A.to_string()),
+            Ok(GDD_A.to_string()),
+            Ok(PLAN_A.to_string()),
+        ]);
+        let plan = StarlarkFlowRuntime
+            .validate(&game_flow_source())
+            .expect("embedded game flow.star should validate");
+        let outcome = StarlarkFlowRuntime
+            .run(plan, args_context("做个打砖块小游戏"), &host)
+            .await
+            .unwrap();
+
+        let result = &outcome.outputs["result"];
+        assert_eq!(result["track"], json!("A"));
+        assert_eq!(result["implementations"].as_array().unwrap().len(), 2);
+        assert_eq!(result["review"].as_array().unwrap().len(), 2);
+        let next_steps = result["nextSteps"].as_array().expect("track A must give next steps");
+        assert_eq!(next_steps.len(), 3);
+        assert!(
+            next_steps[0].as_str().unwrap().contains("python3 -m http.server 8000"),
+            "first next step should tell the user how to play: {next_steps:?}"
+        );
+
+        let prompts = host.prompts.lock().unwrap();
+        assert_eq!(prompts.len(), 8, "triage + concept + gdd + plan + 2 implement + 2 review");
+        assert!(prompts[0].contains("意图分类器"), "triage runs first: {}", prompts[0]);
+        assert!(
+            prompts.iter().any(|prompt| prompt.contains("实现游戏机制「paddle」")),
+            "per-mechanic fan-out must render item.name"
+        );
+        let browser_prompt = prompts
+            .iter()
+            .find(|prompt| prompt.contains("browser-control"))
+            .expect("one playtest agent must get the browser brief");
+        assert!(
+            browser_prompt.contains("python3 -m http.server 8000"),
+            "plan.run must interpolate into the playtest prompt: {browser_prompt}"
+        );
+    }
+
+    #[tokio::test]
+    async fn track_b_stops_with_arch_report_and_next_steps() {
+        let host = GameFlowHost::with(vec![
+            Ok(r#"{"track":"B","brief":"做个商业化卡牌手游","reason":"提到商业化"}"#.to_string()),
+            Ok(r#"{"pitch":"千门题材卡牌构筑","coreLoop":"组牌-对局-成长","audience":"卡牌玩家",
+                   "platforms":["iOS","Android"],"monetization":"IAP 内购","scope":"medium",
+                   "fun":"设局与反制"}"#
+                .to_string()),
+            Ok(r#"{"mechanics":[{"name":"deck","spec":"组牌规则与费用曲线"}],
+                   "systems":[{"name":"economy","spec":"金币与卡包产出消耗"}],
+                   "contentScope":"第一期 60 张牌","constraints":["包体 < 200MB","需要版号"]}"#
+                .to_string()),
+        ]);
+        let plan = StarlarkFlowRuntime
+            .validate(&game_flow_source())
+            .expect("embedded game flow.star should validate");
+        let outcome = StarlarkFlowRuntime
+            .run(plan, args_context("我想认真做个卡牌手游赚钱"), &host)
+            .await
+            .unwrap();
+
+        let result = &outcome.outputs["result"];
+        assert_eq!(result["track"], json!("B"));
+        assert!(
+            result["archReport"].as_str().unwrap().contains("选型报告"),
+            "arch report must be captured: {:?}",
+            result["archReport"]
+        );
+        let next_steps = result["nextSteps"].as_array().expect("track B must give next steps");
+        assert!(
+            next_steps.iter().any(|step| step.as_str().unwrap().contains("确认")),
+            "track B stops for user confirmation: {next_steps:?}"
+        );
+
+        let prompts = host.prompts.lock().unwrap();
+        assert_eq!(prompts.len(), 4, "triage + concept + gdd + arch only; no implementation");
+        assert!(
+            !prompts.iter().any(|prompt| prompt.contains("实现游戏机制")),
+            "track B must never fan out implementation agents"
+        );
+    }
+
+    #[tokio::test]
+    async fn track_c_answers_via_router_brief() {
+        let host = GameFlowHost::with(vec![Ok(
+            r#"{"track":"C","brief":"Godot 项目怎么做存档","reason":"已有项目具体问题"}"#.to_string(),
+        )]);
+        let plan = StarlarkFlowRuntime
+            .validate(&game_flow_source())
+            .expect("embedded game flow.star should validate");
+        let outcome = StarlarkFlowRuntime
+            .run(plan, args_context("我的 Godot 项目怎么做存档"), &host)
+            .await
+            .unwrap();
+
+        let result = &outcome.outputs["result"];
+        assert_eq!(result["track"], json!("C"));
+        assert!(result["answer"].as_str().unwrap().contains("gamedev-router"));
+        let prompts = host.prompts.lock().unwrap();
+        assert_eq!(prompts.len(), 2, "triage + single answer agent");
+        assert!(
+            prompts[1].contains("gamedev-router"),
+            "track C agent must be told to route via gamedev-router: {}",
+            prompts[1]
+        );
+    }
+
+    #[tokio::test]
+    async fn empty_input_returns_usage_without_agent_calls() {
+        let host = GameFlowHost::default();
+        let plan = StarlarkFlowRuntime
+            .validate(&game_flow_source())
+            .expect("embedded game flow.star should validate");
+        let outcome = StarlarkFlowRuntime.run(plan, FlowContext::default(), &host).await.unwrap();
+
+        let result = &outcome.outputs["result"];
+        assert_eq!(result["error"], json!("缺少输入"));
+        assert!(
+            result["nextSteps"].as_array().unwrap()[0].as_str().unwrap().contains("/game"),
+            "usage hint must mention the entry command"
+        );
+        assert!(host.prompts.lock().unwrap().is_empty(), "no agent may run without input");
+    }
 }

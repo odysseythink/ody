@@ -20,7 +20,9 @@
 //!   `fns` are pure prompt renderers), enforce the batch cap as a hard
 //!   error, then fan out concurrently with results bound in item order
 //!   by `Promise.all`. Same cap semantics as the yaml/star runtimes.
-//! - `phase(msg)` / `log(msg)` — progress lines (fire-and-forget).
+//! - `phase(msg)` — structured phase boundary (fire-and-forget); surfaced
+//!   via [`WorkflowHost::report_phase`]. `log(msg)` — free-form progress
+//!   line via [`WorkflowHost::report_progress`].
 //!
 //! Determinism: the global `Date` is deleted and `Math.random` is
 //! replaced with a throwing function; wall-clock time and randomness are
@@ -70,7 +72,19 @@ pub trait WorkflowHost: Send + Sync {
         schema: Option<String>,
     ) -> impl std::future::Future<Output = Result<String, String>> + Send;
 
-    /// Free-form progress line (`phase()` / `log()`).
+    /// Structured phase boundary (`phase(title)`). The engine is a thin
+    /// transport: it reports each title verbatim, in script order, and the
+    /// caller owns open/close bookkeeping (core maps this onto
+    /// `FlowProgress::PhaseBegin`/`PhaseEnd` with the same semantics as the
+    /// yaml/star runtimes).
+    fn report_phase(
+        &self,
+        _title: String,
+    ) -> impl std::future::Future<Output = ()> + Send {
+        async {}
+    }
+
+    /// Free-form progress line (`log()`).
     fn report_progress(
         &self,
         _message: String,
@@ -96,6 +110,9 @@ enum WorkflowRequest {
     /// schema-constrained calls (`agent(prompt, {schema})`, M4.1); the
     /// engine passes it through opaquely — validation lives on the host.
     Agent { id: String, prompt: String, schema: Option<String> },
+    /// Structured phase boundary (`phase(title)`); distinct from free-form
+    /// `Log` so hosts can map it onto structured phase progress.
+    Phase { title: String },
     Log { message: String },
 }
 
@@ -181,6 +198,7 @@ pub async fn run_workflow_script<H: WorkflowHost>(
             request = async_rx.recv() => {
                 let Some(request) = request else { break };
                 match request {
+                    WorkflowRequest::Phase { title } => host.report_phase(title).await,
                     WorkflowRequest::Log { message } => host.report_progress(message).await,
                     WorkflowRequest::Agent { id, prompt, schema } => {
                         let response_tx = response_tx.clone();
@@ -330,7 +348,7 @@ fn install_workflow_globals(
 
     let agent = helper_function(scope, "agent", agent_callback)?;
     set_global(scope, global, "agent", agent.into())?;
-    let phase = helper_function(scope, "phase", log_callback)?;
+    let phase = helper_function(scope, "phase", phase_callback)?;
     set_global(scope, global, "phase", phase.into())?;
     let log = helper_function(scope, "log", log_callback)?;
     set_global(scope, global, "log", log.into())?;
@@ -501,6 +519,25 @@ fn agent_callback(
         return;
     }
     retval.set(promise.into());
+}
+
+fn phase_callback(
+    scope: &mut v8::PinScope<'_, '_>,
+    args: v8::FunctionCallbackArguments,
+    mut retval: v8::ReturnValue<v8::Value>,
+) {
+    let title = match args.get(0).to_string(scope) {
+        Some(title) => title.to_rust_string_lossy(scope),
+        None => {
+            throw_type_error(scope, "phase title must be a string");
+            return;
+        }
+    };
+    if let Some(state) = scope.get_slot::<WorkflowState>() {
+        // Fire-and-forget; a closed bridge means the run was aborted.
+        let _ = state.request_tx.send(WorkflowRequest::Phase { title });
+    }
+    retval.set(v8::undefined(scope).into());
 }
 
 fn log_callback(
