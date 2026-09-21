@@ -105,7 +105,7 @@ def render_mechanic(item):
         "- 入场起始 scale(0.92)+opacity 0，禁止 scale(0)",
         "- 高频操作（每帧移动、连续输入）零装饰动画；按下即响应（100ms 内反馈）",
         "- 命中反馈：缩放脉冲 scale(0.95)→1 用 120ms；弹簧 {type:\"spring\",duration:0.5,bounce:0}，",
-        "  仅投掷/拖拽类交互可用 bounce 0.2；预设见 game-create 技能 references/motion-presets.md",
+        "  仅投掷/拖拽类交互可用 bounce 0.2；预设见本技能 references/motion-presets.md",
         "输出实现摘要：改了哪些文件、该机制如何手动验证。",
     ])
 
@@ -163,7 +163,7 @@ def track_a(brief):
         "  真 3D → Three.js。原型默认选最简单的可行项。",
         "- files：文件清单（默认单 index.html，复杂时拆 main.js / style.css）",
         "- run：本地运行方式（如 python3 -m http.server 或 npx serve）",
-        "完整决策表见 game-create 技能的 references/tech-selection.md",
+        "完整决策表见本技能 references/tech-selection.md",
         "（系统技能目录内，可用文件读取工具查看）。",
     ])
     plan = json.decode(agent(plan_prompt, schema = PLAN_SCHEMA))

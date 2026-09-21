@@ -17,5 +17,5 @@ type: flow
 ## 边界
 
 - 编辑器实操（Unity/UE/Cocos/Godot 工程的真实改动）需要对应引擎的 MCP server，不在本技能范围内；未配置时轨道 B 止步于选型报告与执行计划。
-- 轨道 A 是 game-create 的上层入口（提示词同源）；直接 `/game-create` 仍可用。
+- 轨道 A 是快速原型的唯一实现（提示词继承自已下线的 game-create，references/ 下的 motion-presets.md、tech-selection.md 为其依赖资料）；不存在 /game-create 入口。
 - 动效手感规范来自 `motion-design`（技能依赖，见 `agents/odysseythink.yaml`）；玩法级 juice 的引擎中立做法见 vendored `game-feel` 技能。

@@ -1025,7 +1025,8 @@ async fn run_flow_skills_in_turn_emits_progress_events_on_the_turn_stream() {
 }
 
 
-// ---- M1.5 end-to-end fan-out test (mirrors the bundled game-create sample) ----
+// ---- M1.5 end-to-end fan-out test (mirrors the bundled game-create sample,
+// removed 2026-09-21 when /game subsumed it; the fixture is self-contained) ----
 
 /// Poll for a freshly spawned child of `parent` not yet in `driven`. Unlike
 /// `pending_child_thread_id` (first child wins), this skips threads that were
@@ -1066,7 +1067,7 @@ async fn parallel_children_inherit_snapshot_without_rebinding_it() {
 
 #[tokio::test]
 async fn flow_fanout_end_to_end_spawns_progresses_and_records_outputs() {
-    // Same phase shape as the bundled game-create sample (M1.5): one design
+    // Same phase shape as the historical game-create sample (M1.5): one design
     // agent, a pipeline fan-out over the GDD mechanics, then a parallel
     // verify group. Drives five real child threads through the session host.
     let dir = tempfile::tempdir().expect("create flow dir");
@@ -3113,149 +3114,6 @@ var result = { gdd, impls, checks };
     assert_eq!(
         js_outcome.outputs["result"],
         serde_json::Value::Object(yaml_outcome.outputs.clone())
-    );
-}
-
-/// Scripted host for the embedded game-create forward test. Pipeline and
-/// parallel agents are keyed by prompt content (their call order is not
-/// guaranteed to match item order — concurrent spawn scheduling); the three
-/// sequential schema phases (concept/gdd/tech-select) consume canned
-/// responses from a FIFO in deterministic phase order.
-#[derive(Default)]
-struct GameCreateHost {
-    prompts: Mutex<Vec<String>>,
-    canned: Mutex<VecDeque<Result<String, String>>>,
-}
-
-impl GameCreateHost {
-    fn with(canned: Vec<Result<String, String>>) -> Self {
-        Self { canned: Mutex::new(canned.into()), ..Self::default() }
-    }
-}
-
-impl FlowAgentHost for GameCreateHost {
-    async fn run_agent(&self, prompt: String) -> Result<String, FlowHostError> {
-        self.prompts.lock().unwrap().push(prompt.clone());
-        for name in ["paddle", "ball", "bricks"] {
-            if prompt.contains(&format!("「{name}」")) {
-                return Ok(format!("implemented {name}"));
-            }
-        }
-        if prompt.contains("browser-control") {
-            return Ok("通过：渲染正常、输入响应、无控制台报错".to_string());
-        }
-        if prompt.contains("边界情况") {
-            return Ok("无阻塞问题；建议补充连击反馈".to_string());
-        }
-        match self.canned.lock().unwrap().pop_front() {
-            Some(Ok(text)) => Ok(text),
-            Some(Err(reason)) => Err(FlowHostError(reason)),
-            None => Ok(format!("done: {prompt}")),
-        }
-    }
-}
-
-#[tokio::test]
-async fn embedded_game_create_flow_executes_end_to_end() {
-    // P3 forward-test (2026-09-13): execute the *shipped* game-create
-    // flow.yaml (the ody-skills embedded artifact) through the real yaml
-    // kernel with a scripted host — no model. Verifies phase order, template
-    // interpolation (${{ bindings }} and ${item.*}), schema-validated
-    // structured outputs, per-mechanic fan-out with item-order binding, and
-    // the parallel playtest group.
-    let flow_yaml_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../skills/src/assets/embedded/game-create/flow.yaml");
-    let source = std::fs::read_to_string(&flow_yaml_path)
-        .unwrap_or_else(|err| panic!("embedded game-create flow.yaml should be readable: {err}"));
-
-    let host = GameCreateHost::with(vec![
-        // concept (schema: pitch/coreLoop/input/winLose/fun, all strings)
-        Ok(r#"{"pitch":"打砖块","coreLoop":"接球反弹消砖","input":"左右方向键","winLose":"清空所有砖块获胜，三条命用完失败","fun":"一击多砖的连锁爽感"}"#.to_string()),
-        // gdd (schema: mechanics[{name,spec}]/constraints/feedback)
-        Ok(r#"{"mechanics":[
-                {"name":"paddle","spec":"挡板左右移动，边界钳制"},
-                {"name":"ball","spec":"反弹物理，碰撞后速度递增"},
-                {"name":"bricks","spec":"砖块网格，击中消失并计分"}],
-            "constraints":["单 index.html","无外部素材","Canvas 2D","60fps"],
-            "feedback":["击中砖块：粒子","漏球：生命闪烁","通关：庆祝动画"]}"#.to_string()),
-        // tech-select (schema: stack/files/run)
-        Ok(r#"{"stack":"Canvas 2D（单文件无依赖）","files":["index.html"],"run":"python3 -m http.server 8000"}"#.to_string()),
-    ]);
-    let plan = YamlFlowRuntime
-        .validate(&source)
-        .expect("embedded game-create flow.yaml should validate");
-
-    let mut args = serde_json::Map::new();
-    args.insert("text".to_string(), json!("打砖块：一击多砖连锁"));
-    let outcome = YamlFlowRuntime
-        .run(plan, FlowContext { args }, &host)
-        .await
-        .expect("embedded game-create flow should execute end to end");
-
-    // All five phase outputs bound.
-    for key in ["concept", "gdd", "plan", "implementations", "review"] {
-        assert!(
-            outcome.outputs.contains_key(key),
-            "missing output binding: {key}"
-        );
-    }
-    // Structured outputs parsed; fan-out bound in item order.
-    assert_eq!(outcome.outputs["concept"]["pitch"], json!("打砖块"));
-    assert_eq!(
-        outcome.outputs["gdd"]["mechanics"].as_array().map(Vec::len),
-        Some(3)
-    );
-    assert_eq!(
-        outcome.outputs["implementations"],
-        json!(["implemented paddle", "implemented ball", "implemented bricks"])
-    );
-
-    // Prompt stream: 1 concept + 1 gdd + 1 tech-select (sequential phases,
-    // deterministic) + 3 implement + 2 playtest (intra-phase order free).
-    let prompts = host.prompts.lock().unwrap();
-    assert_eq!(prompts.len(), 8, "expected 8 agent calls, got {}", prompts.len());
-    assert!(
-        prompts[0].contains("打砖块：一击多砖连锁"),
-        "args.text must interpolate into the concept prompt: {}",
-        prompts[0]
-    );
-    assert!(
-        prompts[1].contains("打砖块"),
-        "concept.pitch must interpolate into the gdd prompt: {}",
-        prompts[1]
-    );
-    assert!(
-        prompts[2].contains("单 index.html"),
-        "gdd.constraints must interpolate into the tech-select prompt: {}",
-        prompts[2]
-    );
-    for name in ["paddle", "ball", "bricks"] {
-        assert!(
-            prompts[3..6].iter().any(|prompt| prompt.contains(&format!("「{name}」"))),
-            "item.name must interpolate into one of the implement prompts, missing: {name}"
-        );
-    }
-    for prompt in &prompts[3..6] {
-        assert!(
-            prompt.contains("Canvas 2D（单文件无依赖）"),
-            "plan.stack must interpolate into every implement prompt: {prompt}"
-        );
-    }
-    assert!(
-        prompts[6..8].iter().any(|prompt| prompt.contains("browser-control")),
-        "one playtest agent must get the browser playtest brief"
-    );
-    let browser_prompt = prompts[6..8]
-        .iter()
-        .find(|prompt| prompt.contains("browser-control"))
-        .expect("browser playtest brief should exist");
-    assert!(
-        browser_prompt.contains("python3 -m http.server 8000"),
-        "plan.run must interpolate into the browser playtest prompt: {browser_prompt}"
-    );
-    assert!(
-        prompts[6..8].iter().any(|prompt| prompt.contains("边界情况")),
-        "one playtest agent must get the code-review brief"
     );
 }
 
