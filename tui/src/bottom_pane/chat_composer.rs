@@ -2952,6 +2952,11 @@ impl ChatComposer {
         let cmd = match command {
             SlashCommandItem::Builtin(cmd) => cmd,
             SlashCommandItem::Skill(command) => {
+                // Mirror the bare-command dispatch: once the skill command with
+                // args is handed to ChatWidget, the draft is consumed and must
+                // not linger in the composer.
+                self.draft.textarea.set_text_clearing_elements("");
+                self.draft.is_bash_mode = false;
                 return Some(InputResult::SkillCommand(
                     command,
                     trimmed_rest.to_string(),
@@ -7914,6 +7919,11 @@ mod tests {
         };
         assert_eq!(command.name, "game-forge");
         assert_eq!(args, "make a deck-building game");
+        assert!(
+            composer.draft.textarea.text().is_empty(),
+            "composer must be cleared after a skill command with args is dispatched, got {:?}",
+            composer.draft.textarea.text(),
+        );
     }
 
     #[test]
