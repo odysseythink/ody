@@ -31,6 +31,7 @@ use ody_protocol::models::ResponseInputItem;
 use ody_protocol::models::ResponseItem;
 use ody_rollout::state_db;
 use ody_tools::ToolName;
+use ody_tools::ToolPayload;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use ody_utils_stream_parser::strip_proposed_plan_blocks;
 use tracing::debug;
@@ -302,8 +303,17 @@ async fn record_stage1_output_usage_for_memory_citation(
 /// Handle a completed output item from the model stream, recording it and
 /// queuing any tool execution futures. This records items immediately so
 /// history and rollout stay in sync even if the turn is later cancelled.
-pub(crate) type InFlightFuture<'f> =
-    Pin<Box<dyn Future<Output = Result<ResponseInputItem>> + Send + 'f>>;
+///
+/// The future also carries the call's identity: `handle_tool_call` consumes the
+/// call, so without it a failed future (a `Fatal` tool error) could not be
+/// written back as a tool output, leaving the call in the history unanswered.
+pub(crate) struct InFlightToolResult {
+    pub call_id: String,
+    pub payload: ToolPayload,
+    pub result: Result<ResponseInputItem>,
+}
+
+pub(crate) type InFlightFuture<'f> = Pin<Box<dyn Future<Output = InFlightToolResult> + Send + 'f>>;
 
 #[derive(Default)]
 pub(crate) struct OutputItemResult {
@@ -438,11 +448,17 @@ pub(crate) async fn handle_output_item_done(
                 .await;
 
             let cancellation_token = ctx.cancellation_token.child_token();
-            let tool_future: InFlightFuture<'static> = Box::pin(
-                ctx.tool_runtime
-                    .clone()
-                    .handle_tool_call(call, cancellation_token),
-            );
+            let runtime = ctx.tool_runtime.clone();
+            let call_id = call.call_id.clone();
+            let payload = call.payload.clone();
+            let tool_future: InFlightFuture<'static> = Box::pin(async move {
+                let result = runtime.handle_tool_call(call, cancellation_token).await;
+                InFlightToolResult {
+                    call_id,
+                    payload,
+                    result,
+                }
+            });
 
             output.is_request_user_input_call = is_request_user_input;
             output.is_submit_plan_call = is_submit_plan;

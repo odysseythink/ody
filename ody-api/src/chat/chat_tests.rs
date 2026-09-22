@@ -650,3 +650,81 @@ fn reasoning_survives_assistant_message_merging() {
         assistants[0]
     );
 }
+
+fn function_call_output(call_id: &str) -> ResponseItem {
+    ResponseItem::FunctionCallOutput {
+        id: None,
+        call_id: call_id.to_string(),
+        output: FunctionCallOutputPayload::from_text("done".to_string()),
+        internal_chat_message_metadata_passthrough: None,
+    }
+}
+
+/// Regression guard for the wire shape a parallel batch of tool calls must have
+/// when only some of them were answered (session
+/// `01a0c217-b6ce-79a3-a10f-b892b117ac69`: one assistant turn emitted three tool
+/// calls and only two of them ever produced an output).
+///
+/// `to_wire` merges only *adjacent* assistant messages into the single message
+/// carrying a batch's `tool_calls`, so the synthetic output backfilling the
+/// missing answer has to sit *after* the whole run of calls. With it wedged in
+/// the middle of the run the server rejects the request with:
+///
+/// `An assistant message with 'tool_calls' must be followed by tool messages
+/// responding to each 'tool_call_id'. (insufficient tool messages following
+/// tool_calls message)`
+#[test]
+fn tool_call_batch_with_synthetic_output_keeps_pairing_valid() {
+    let mut request = base_request(ChatVendor::Generic);
+    request.input = vec![
+        function_call("WebFetch", "call_0_first"),
+        function_call("WebFetch", "call_1_missing"),
+        function_call("shell_command", "call_2_third"),
+        // Backfill for the unanswered call, appended after the whole run.
+        function_call_output("call_1_missing"),
+        function_call_output("call_0_first"),
+        function_call_output("call_2_third"),
+    ];
+
+    let messages = messages_of(&request);
+    println!("wire messages: {messages:#?}");
+
+    // system + assistant(3 tool_calls) + tool x3
+    assert_eq!(messages.len(), 5, "wire messages: {messages:#?}");
+    assert_eq!(messages[1]["role"], "assistant");
+    let ids: Vec<&str> = messages[1]["tool_calls"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|call| call["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, vec!["call_0_first", "call_1_missing", "call_2_third"]);
+    assert_eq!(messages[2]["role"], "tool");
+    assert_eq!(messages[2]["tool_call_id"], "call_1_missing");
+    assert_eq!(messages[3]["tool_call_id"], "call_0_first");
+    assert_eq!(messages[4]["tool_call_id"], "call_2_third");
+
+    // Validate the sequence the way the server does: every assistant message
+    // carrying tool_calls must be immediately followed by tool messages covering
+    // each of its ids.
+    for (idx, message) in messages.iter().enumerate() {
+        let Some(tool_calls) = message.get("tool_calls").and_then(Value::as_array) else {
+            continue;
+        };
+        let expected: Vec<&str> = tool_calls
+            .iter()
+            .map(|t| t["id"].as_str().unwrap())
+            .collect();
+        let followed: Vec<&str> = messages[idx + 1..]
+            .iter()
+            .take_while(|m| m["role"] == "tool")
+            .map(|m| m["tool_call_id"].as_str().unwrap())
+            .collect();
+        println!("assistant#{idx} tool_calls={expected:?} immediately_followed_by={followed:?}");
+        assert_eq!(
+            expected.len(),
+            followed.len(),
+            "assistant#{idx} declares {expected:?} but is followed by {followed:?}"
+        );
+    }
+}

@@ -25,6 +25,8 @@ use crate::tools::router::ToolCall;
 use crate::tools::router::ToolCallSource;
 use crate::tools::router::ToolRouter;
 use ody_protocol::error::OdyErr;
+use ody_protocol::models::FunctionCallOutputBody;
+use ody_protocol::models::FunctionCallOutputPayload;
 use ody_protocol::models::ResponseInputItem;
 
 #[derive(Clone)]
@@ -186,7 +188,6 @@ impl ToolCallRuntime {
     fn tool_task_join_error(err: JoinError) -> FunctionCallError {
         FunctionCallError::Fatal(format!("tool task failed to receive: {err:?}"))
     }
-
     fn failure_response(call: ToolCall, err: FunctionCallError) -> ResponseInputItem {
         let message = err.to_string();
         match call.payload {
@@ -236,6 +237,40 @@ impl ToolCallRuntime {
         } else {
             format!("aborted by user after {secs:.1}s")
         }
+    }
+}
+
+/// Builds the model-visible failure output for a tool call whose in-flight
+/// future failed after the turn stopped collecting results (see
+/// `drain_in_flight`). `handle_tool_call` consumes the call, so a `Fatal` error
+/// would otherwise leave the call in the history with no output at all — which
+/// the Chat Completions API rejects with "insufficient tool messages following
+/// tool_calls message".
+pub(crate) fn failed_tool_output(
+    call_id: &str,
+    payload: &ToolPayload,
+    error: &OdyErr,
+) -> ResponseInputItem {
+    let output = || FunctionCallOutputPayload {
+        body: FunctionCallOutputBody::Text(error.to_string()),
+        success: Some(false),
+    };
+    match payload {
+        ToolPayload::ToolSearch { .. } => ResponseInputItem::ToolSearchOutput {
+            call_id: call_id.to_string(),
+            status: "completed".to_string(),
+            execution: "client".to_string(),
+            tools: Vec::new(),
+        },
+        ToolPayload::Custom { .. } => ResponseInputItem::CustomToolCallOutput {
+            call_id: call_id.to_string(),
+            name: None,
+            output: output(),
+        },
+        ToolPayload::Function { .. } => ResponseInputItem::FunctionCallOutput {
+            call_id: call_id.to_string(),
+            output: output(),
+        },
     }
 }
 
@@ -543,6 +578,123 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(vec![ToolCallOutcome::Aborted], actual);
 
+        Ok(())
+    }
+
+    /// Errors a tool can raise, split by what `handle_tool_call` does with them.
+    #[derive(Clone, Copy)]
+    enum ErrorKind {
+        /// What `ody-web-search` raises for every failure it can hit: connection
+        /// failures, non-2xx responses, non-textual content, bad redirects.
+        Fatal,
+        /// The one variant that is turned into a model-visible tool output.
+        RespondToModel,
+    }
+
+    struct ErroringHandler {
+        tool_name: ody_tools::ToolName,
+        kind: ErrorKind,
+    }
+
+    impl ToolExecutor<ToolInvocation> for ErroringHandler {
+        fn tool_name(&self) -> ody_tools::ToolName {
+            self.tool_name.clone()
+        }
+
+        fn spec(&self) -> ody_tools::ToolSpec {
+            ody_tools::ToolSpec::Function(ody_tools::ResponsesApiTool {
+                name: self.tool_name.name.clone(),
+                description: "Always fails.".to_string(),
+                strict: false,
+                defer_loading: None,
+                parameters: ody_tools::JsonSchema::default(),
+                output_schema: None,
+            })
+        }
+
+        fn handle(&self, _invocation: ToolInvocation) -> ody_tools::ToolExecutorFuture<'_> {
+            let error = match self.kind {
+                ErrorKind::Fatal => FunctionCallError::Fatal(
+                    "WebFetch request failed: connection reset by peer".to_string(),
+                ),
+                ErrorKind::RespondToModel => {
+                    FunctionCallError::RespondToModel("invalid WebFetch input".to_string())
+                }
+            };
+            Box::pin(async move { Err(error) })
+        }
+    }
+
+    impl CoreToolRuntime for ErroringHandler {}
+
+    async fn run_erroring_tool(kind: ErrorKind) -> Result<ResponseInputItem, OdyErr> {
+        let (session, turn_context) = crate::session::tests::make_session_and_context().await;
+        let tool_name = ody_tools::ToolName::plain("WebFetch");
+        let handler = Arc::new(ErroringHandler {
+            tool_name: tool_name.clone(),
+            kind,
+        }) as Arc<dyn CoreToolRuntime>;
+        let router = Arc::new(ToolRouter::from_parts(
+            ToolRegistry::from_tools([handler]),
+            Vec::new(),
+        ));
+        let tracker = Arc::new(tokio::sync::Mutex::new(TurnDiffTracker::new()));
+        let runtime =
+            ToolCallRuntime::new(router, Arc::new(session), Arc::new(turn_context), tracker);
+        let call = ToolCall {
+            tool_name,
+            call_id: "call-1".to_string(),
+            payload: ToolPayload::Function {
+                arguments: r#"{"url":"https://raw.githubusercontent.com/o/r/main/README.md"}"#
+                    .to_string(),
+            },
+        };
+
+        runtime
+            .handle_tool_call(call, CancellationToken::new())
+            .await
+    }
+
+    /// Every failure `WebFetch` can raise is `FunctionCallError::Fatal`
+    /// (`ody-web-search/src/fetch.rs`: request failed, redirected too often,
+    /// invalid redirect, non-2xx status, non-textual content, read error).
+    ///
+    /// `handle_tool_call` turns `Fatal` into `Err(OdyErr::Fatal)` instead of a
+    /// tool output, and `drain_in_flight` (session/turn.rs) only logs on `Err` —
+    /// it never records a conversation item. So the call is left in the history
+    /// with no output at all, which is what later trips the server's
+    /// "insufficient tool messages following tool_calls message" check.
+    #[tokio::test]
+    async fn fatal_tool_error_yields_no_tool_output() -> anyhow::Result<()> {
+        let result = run_erroring_tool(ErrorKind::Fatal).await;
+
+        assert!(
+            matches!(result, Err(OdyErr::Fatal(_))),
+            "a Fatal tool error must not become a tool output: {result:?}"
+        );
+        Ok(())
+    }
+
+    /// Control case: the `RespondToModel` path *does* produce a tool output, so
+    /// the missing-output behaviour is specific to the `Fatal`/`Retryable`/
+    /// `NeedsApproval` variants rather than to tool errors in general.
+    #[tokio::test]
+    async fn respond_to_model_error_becomes_a_tool_output() -> anyhow::Result<()> {
+        let result = run_erroring_tool(ErrorKind::RespondToModel).await;
+
+        match result {
+            Ok(ResponseInputItem::FunctionCallOutput { call_id, output }) => {
+                assert_eq!(call_id, "call-1");
+                let FunctionCallOutputBody::Text(text) = output.body else {
+                    anyhow::bail!("expected a text tool output, got {output:?}");
+                };
+                assert!(
+                    text.contains("invalid WebFetch input"),
+                    "unexpected tool output: {text}"
+                );
+            }
+            other => anyhow::bail!("expected a tool output, got {other:?}"),
+        }
         Ok(())
     }
 }

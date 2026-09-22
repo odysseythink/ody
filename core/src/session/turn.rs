@@ -55,6 +55,8 @@ use crate::session::session::Session;
 use crate::session::step_context::StepContext;
 use crate::session::turn_context::TurnContext;
 use crate::stream_events_utils::HandleOutputCtx;
+use crate::stream_events_utils::InFlightFuture;
+use crate::stream_events_utils::InFlightToolResult;
 use crate::stream_events_utils::TurnItemContributorPolicy;
 use crate::stream_events_utils::finalize_non_tool_response_item;
 use crate::stream_events_utils::handle_non_tool_response_item;
@@ -67,6 +69,7 @@ use crate::tasks::emit_compact_metric;
 use crate::tools::ToolRouter;
 use crate::tools::context::SharedTurnDiffTracker;
 use crate::tools::parallel::ToolCallRuntime;
+use crate::tools::parallel::failed_tool_output;
 use crate::tools::registry::ToolArgumentDiffConsumer;
 use crate::tools::router::ToolRouterParams;
 use crate::tools::router::ToolSuggestCandidates;
@@ -2558,29 +2561,37 @@ async fn handle_assistant_item_done_in_plan_mode(
 
 #[instrument(level = "trace", skip_all)]
 async fn drain_in_flight(
-    in_flight: &mut FuturesOrdered<BoxFuture<'static, OdyResult<ResponseInputItem>>>,
+    in_flight: &mut FuturesOrdered<InFlightFuture<'static>>,
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
 ) -> OdyResult<()> {
     while let Some(res) = in_flight.next().await {
-        match res {
-            Ok(response_input) => {
-                let response_item = response_input.into();
-                sess.record_conversation_items(&turn_context, std::slice::from_ref(&response_item))
-                    .await;
-                mark_thread_memory_mode_polluted_if_external_context(
-                    sess.as_ref(),
-                    turn_context.as_ref(),
-                    &response_item,
-                )
-                .await;
-            }
+        let InFlightToolResult {
+            call_id,
+            payload,
+            result,
+        } = res;
+        let response_item: ResponseItem = match result {
+            Ok(response_input) => response_input.into(),
             Err(err) => {
-                // Tool futures fail for model-driven reasons (bad arguments, a
-                // rejected call). Draining must not panic the process on them.
+                // A tool future can fail after its call was already recorded —
+                // a `Fatal` tool error, e.g. a `WebFetch` whose request failed.
+                // Answer the call anyway: leaving it unanswered puts the history
+                // in a shape the Chat Completions API rejects with "An assistant
+                // message with 'tool_calls' must be followed by tool messages
+                // responding to each 'tool_call_id'".
                 error!("in-flight tool future failed during drain: {err}");
+                failed_tool_output(&call_id, &payload, &err).into()
             }
-        }
+        };
+        sess.record_conversation_items(&turn_context, std::slice::from_ref(&response_item))
+            .await;
+        mark_thread_memory_mode_polluted_if_external_context(
+            sess.as_ref(),
+            turn_context.as_ref(),
+            &response_item,
+        )
+        .await;
     }
     Ok(())
 }
@@ -2632,8 +2643,7 @@ async fn try_run_sampling_request(
         .instrument(trace_span!("stream_request"))
         .or_cancel(&cancellation_token)
         .await??;
-    let mut in_flight: FuturesOrdered<BoxFuture<'static, OdyResult<ResponseInputItem>>> =
-        FuturesOrdered::new();
+    let mut in_flight: FuturesOrdered<InFlightFuture<'static>> = FuturesOrdered::new();
     let mut needs_follow_up = false;
     let mut last_agent_message: Option<String> = None;
     let mut has_submit_plan_call = false;

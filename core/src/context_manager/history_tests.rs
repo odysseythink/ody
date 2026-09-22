@@ -2295,3 +2295,190 @@ fn repro_history_to_chat_messages_emits_logs() {
     assert_eq!(messages[3]["role"], "tool");
     assert_eq!(messages[3]["tool_call_id"], "call_1");
 }
+
+/// A parallel batch of tool calls in which one call never produced an output
+/// (session `01a0c217-b6ce-79a3-a10f-b892b117ac69`: an assistant turn emitted
+/// three tool calls and only two of them were ever answered).
+///
+/// The synthetic output that backfills the missing answer must land after the
+/// whole run of adjacent calls. Inserting it right after its own call splits the
+/// run, and `to_wire` — which merges only *adjacent* assistant messages — then
+/// emits an assistant message declaring two `tool_calls` followed by a single
+/// tool message, which the server rejects with:
+///
+/// `An assistant message with 'tool_calls' must be followed by tool messages
+/// responding to each 'tool_call_id'. (insufficient tool messages following
+/// tool_calls message)`
+#[test]
+fn normalize_keeps_parallel_tool_calls_pairable_for_chat_completions() {
+    fn call(id: &str) -> ResponseItem {
+        ResponseItem::FunctionCall {
+            id: None,
+            name: "WebFetch".to_string(),
+            namespace: None,
+            arguments: "{}".to_string(),
+            call_id: id.to_string(),
+            internal_chat_message_metadata_passthrough: None,
+        }
+    }
+
+    fn output(id: &str) -> ResponseItem {
+        ResponseItem::FunctionCallOutput {
+            id: None,
+            call_id: id.to_string(),
+            output: FunctionCallOutputPayload::from_text("done".to_string()),
+            internal_chat_message_metadata_passthrough: None,
+        }
+    }
+
+    // Three parallel calls; the middle one was never answered.
+    let items = vec![
+        call("call_0_first"),
+        call("call_1_missing"),
+        call("call_2_third"),
+        output("call_0_first"),
+        output("call_2_third"),
+    ];
+
+    let mut history = ContextManager::new();
+    history.record_items(&items, TruncationPolicy::Tokens(10_000));
+    let prompt = history.for_prompt(&default_input_modalities());
+
+    // The synthetic output for `call_1_missing` is appended after the run, not
+    // wedged between `call_1_missing` and `call_2_third`.
+    let shape: Vec<String> = prompt
+        .iter()
+        .map(|item| match item {
+            ResponseItem::FunctionCall { call_id, .. } => format!("call:{call_id}"),
+            ResponseItem::FunctionCallOutput { call_id, .. } => format!("output:{call_id}"),
+            _ => "other".to_string(),
+        })
+        .collect();
+    assert_eq!(
+        shape,
+        vec![
+            "call:call_0_first",
+            "call:call_1_missing",
+            "call:call_2_third",
+            "output:call_1_missing",
+            "output:call_0_first",
+            "output:call_2_third",
+        ]
+    );
+
+    let request = ChatCompletionsRequest {
+        model: "test-model".to_string(),
+        input_modalities: vec![InputModality::Text],
+        instructions: "be helpful".to_string(),
+        input: prompt,
+        tools: Vec::new(),
+        parallel_tool_calls: true,
+        reasoning_effort: None,
+        max_completion_tokens: None,
+        temperature: None,
+        top_p: None,
+        stop: Vec::new(),
+        vendor: ChatVendor::Generic,
+    };
+
+    let body = request.to_wire();
+    let messages = body["messages"].as_array().unwrap();
+
+    // Validate the wire exactly the way the server does: every assistant message
+    // carrying tool_calls must be immediately followed by tool messages covering
+    // each of its ids.
+    for (idx, message) in messages.iter().enumerate() {
+        let Some(tool_calls) = message
+            .get("tool_calls")
+            .and_then(serde_json::Value::as_array)
+        else {
+            continue;
+        };
+        let expected: Vec<&str> = tool_calls
+            .iter()
+            .map(|call| call["id"].as_str().unwrap())
+            .collect();
+        let followed: Vec<&str> = messages[idx + 1..]
+            .iter()
+            .take_while(|message| message["role"] == "tool")
+            .map(|message| message["tool_call_id"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            expected.len(),
+            followed.len(),
+            "assistant#{idx} declares {expected:?} but is followed by {followed:?}: {messages:?}"
+        );
+    }
+}
+
+/// Prompt normalization runs on every prompt projection without persisting its
+/// synthetic items, so the IDs it assigns must be *stable*: an unstable (or
+/// absent) ID would churn model-visible IDs and invalidate prompt caches.
+#[test]
+fn for_prompt_assigns_stable_id_to_synthetic_output() {
+    let items = vec![
+        ResponseItem::FunctionCall {
+            id: Some("fc_existing".to_string()),
+            name: "do_it".to_string(),
+            namespace: None,
+            arguments: "{}".to_string(),
+            call_id: "call-x".to_string(),
+            internal_chat_message_metadata_passthrough: None,
+        },
+        ResponseItem::Message {
+            id: Some("msg_later".to_string()),
+            role: "user".to_string(),
+            content: vec![ContentItem::InputText {
+                text: "later turn".to_string(),
+            }],
+            phase: None,
+            internal_chat_message_metadata_passthrough: None,
+        },
+    ];
+
+    let first = create_history_with_items(items.clone()).for_prompt(&default_input_modalities());
+    let second = create_history_with_items(items).for_prompt(&default_input_modalities());
+
+    assert_eq!(
+        first, second,
+        "repeated prompt projections must assign the same ID to the synthetic output"
+    );
+
+    let [
+        ResponseItem::FunctionCall { .. },
+        ResponseItem::FunctionCallOutput { id: Some(id), .. },
+        ResponseItem::Message { .. },
+    ] = first.as_slice()
+    else {
+        panic!("expected the synthetic output between its call and the later message: {first:?}");
+    };
+    assert!(
+        id.starts_with("fco_"),
+        "synthetic outputs use the Responses API output ID prefix: {id}"
+    );
+}
+
+/// A source call without an item ID keeps the legacy behaviour (no synthetic ID)
+/// so that older histories are not rewritten on every projection.
+#[test]
+fn for_prompt_leaves_synthetic_output_id_empty_without_source_id() {
+    let items = vec![ResponseItem::FunctionCall {
+        id: None,
+        name: "do_it".to_string(),
+        namespace: None,
+        arguments: "{}".to_string(),
+        call_id: "call-x".to_string(),
+        internal_chat_message_metadata_passthrough: None,
+    }];
+
+    let prompt = create_history_with_items(items).for_prompt(&default_input_modalities());
+
+    let [
+        ResponseItem::FunctionCall { .. },
+        ResponseItem::FunctionCallOutput { id, .. },
+    ] = prompt.as_slice()
+    else {
+        panic!("expected the call followed by its synthetic output: {prompt:?}");
+    };
+    assert_eq!(*id, None);
+}

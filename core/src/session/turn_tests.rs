@@ -449,3 +449,63 @@ Select one."
     assert!(!design_mode_text_contains_closed_choice("No options here."));
     assert!(!design_mode_text_contains_closed_choice(""));
 }
+
+/// A tool future can fail *after* its call was already recorded: `Fatal` tool
+/// errors (every `WebFetch` failure is one, see `ody-web-search/src/fetch.rs`)
+/// become `Err(OdyErr::Fatal)` in `handle_tool_call` instead of a tool output.
+/// Draining used to only log them, which left the call unanswered in the
+/// history — and a call without its output is exactly what the Chat Completions
+/// API rejects with "insufficient tool messages following tool_calls message".
+#[tokio::test]
+async fn drain_records_a_failure_output_for_a_failed_tool_future() -> anyhow::Result<()> {
+    let (session, turn_context) = crate::session::tests::make_session_and_context().await;
+    let session = Arc::new(session);
+    let turn_context = Arc::new(turn_context);
+
+    let mut in_flight: FuturesOrdered<InFlightFuture<'static>> = FuturesOrdered::new();
+    in_flight.push_back(Box::pin(async {
+        InFlightToolResult {
+            call_id: "call-1".to_string(),
+            payload: ody_tools::ToolPayload::Function {
+                arguments: "{}".to_string(),
+            },
+            result: Err(OdyErr::Fatal(
+                "WebFetch request failed: connection reset by peer".to_string(),
+            )),
+        }
+    }));
+
+    drain_in_flight(
+        &mut in_flight,
+        Arc::clone(&session),
+        Arc::clone(&turn_context),
+    )
+    .await?;
+
+    let history = session.clone_history().await;
+    let outputs: Vec<_> = history
+        .raw_items()
+        .iter()
+        .filter_map(|item| match item {
+            ResponseItem::FunctionCallOutput {
+                call_id, output, ..
+            } if call_id == "call-1" => Some(output.clone()),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(
+        outputs.len(),
+        1,
+        "a failed tool future must still answer its call: {:?}",
+        history.raw_items()
+    );
+    assert_eq!(outputs[0].success, Some(false));
+    assert!(
+        matches!(&outputs[0].body, ody_protocol::models::FunctionCallOutputBody::Text(text)
+            if text.contains("connection reset by peer")),
+        "unexpected failure output: {:?}",
+        outputs[0]
+    );
+    Ok(())
+}

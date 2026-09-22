@@ -4,9 +4,15 @@ use ody_protocol::models::FunctionCallOutputContentItem;
 use ody_protocol::models::FunctionCallOutputPayload;
 use ody_protocol::models::ResponseItem;
 use std::collections::HashSet;
+use uuid::Uuid;
 
 use crate::util::error_or_panic;
 use tracing::info;
+
+/// Namespace for the stable IDs given to prompt-only synthetic outputs.
+/// Changing this value would change model-visible IDs and invalidate prompt
+/// caches.
+const SYNTHETIC_OUTPUT_ID_NAMESPACE: Uuid = Uuid::from_u128(0x90d38d3e_6a5b_4d52_bfe2_2f1e634bfac4);
 
 const IMAGE_CONTENT_OMITTED_PLACEHOLDER: &str =
     "image content omitted because you do not support image input";
@@ -37,21 +43,33 @@ pub(crate) fn ensure_call_outputs_present(items: &mut Vec<ResponseItem>) {
         }
     }
 
-    // Collect synthetic outputs to insert immediately after their calls.
-    // Store the insertion position (index of call) alongside the item so
-    // we can insert in reverse order and avoid index shifting.
+    // Collect synthetic outputs to insert after the run of calls they belong to.
+    // Store the insertion position (index of the *last* call of that run)
+    // alongside the item so we can insert in reverse order and avoid index
+    // shifting.
     let mut missing_outputs_to_insert: Vec<(usize, ResponseItem)> = Vec::new();
 
     for (idx, item) in items.iter().enumerate() {
+        // A single assistant turn can carry several parallel tool calls, and it
+        // is recorded as several *adjacent* call items (their outputs are
+        // appended later, in completion order). The synthetic output therefore
+        // has to follow the whole run: inserting it right after its own call
+        // would split the run, and `ody-api`'s `to_wire` — which merges only
+        // *adjacent* assistant messages into the single message that carries all
+        // of them — would then emit an assistant message declaring more
+        // `tool_calls` than the tool messages immediately following it. Chat
+        // Completions rejects that with "insufficient tool messages following
+        // tool_calls message".
+        let insert_at = call_run_end(items, idx);
         match item {
-            ResponseItem::FunctionCall { call_id, .. }
+            ResponseItem::FunctionCall { id, call_id, .. }
                 if !function_output_ids.contains(call_id.as_str()) =>
             {
                 info!("Function call output is missing for call id: {call_id}");
                 missing_outputs_to_insert.push((
-                    idx,
+                    insert_at,
                     ResponseItem::FunctionCallOutput {
-                        id: None,
+                        id: synthetic_output_id("fco", id.as_deref()),
                         call_id: call_id.clone(),
                         output: FunctionCallOutputPayload::from_text("aborted".to_string()),
                         internal_chat_message_metadata_passthrough: None,
@@ -59,14 +77,15 @@ pub(crate) fn ensure_call_outputs_present(items: &mut Vec<ResponseItem>) {
                 ));
             }
             ResponseItem::ToolSearchCall {
+                id,
                 call_id: Some(call_id),
                 ..
             } if !tool_search_output_ids.contains(call_id.as_str()) => {
                 info!("Tool search output is missing for call id: {call_id}");
                 missing_outputs_to_insert.push((
-                    idx,
+                    insert_at,
                     ResponseItem::ToolSearchOutput {
-                        id: None,
+                        id: synthetic_output_id("tso", id.as_deref()),
                         call_id: Some(call_id.clone()),
                         status: "completed".to_string(),
                         execution: "client".to_string(),
@@ -75,16 +94,16 @@ pub(crate) fn ensure_call_outputs_present(items: &mut Vec<ResponseItem>) {
                     },
                 ));
             }
-            ResponseItem::CustomToolCall { call_id, .. }
+            ResponseItem::CustomToolCall { id, call_id, .. }
                 if !custom_tool_output_ids.contains(call_id.as_str()) =>
             {
                 error_or_panic(format!(
                     "Custom tool call output is missing for call id: {call_id}"
                 ));
                 missing_outputs_to_insert.push((
-                    idx,
+                    insert_at,
                     ResponseItem::CustomToolCallOutput {
-                        id: None,
+                        id: synthetic_output_id("ctco", id.as_deref()),
                         call_id: call_id.clone(),
                         name: None,
                         output: FunctionCallOutputPayload::from_text("aborted".to_string()),
@@ -94,6 +113,7 @@ pub(crate) fn ensure_call_outputs_present(items: &mut Vec<ResponseItem>) {
             }
             // LocalShellCall is represented in upstream streams by a FunctionCallOutput
             ResponseItem::LocalShellCall {
+                id,
                 call_id: Some(call_id),
                 ..
             } if !function_output_ids.contains(call_id.as_str()) => {
@@ -101,9 +121,9 @@ pub(crate) fn ensure_call_outputs_present(items: &mut Vec<ResponseItem>) {
                     "Local shell call output is missing for call id: {call_id}"
                 ));
                 missing_outputs_to_insert.push((
-                    idx,
+                    insert_at,
                     ResponseItem::FunctionCallOutput {
-                        id: None,
+                        id: synthetic_output_id("fco", id.as_deref()),
                         call_id: call_id.clone(),
                         output: FunctionCallOutputPayload::from_text("aborted".to_string()),
                         internal_chat_message_metadata_passthrough: None,
@@ -130,6 +150,47 @@ pub(crate) fn ensure_call_outputs_present(items: &mut Vec<ResponseItem>) {
             "normalize::ensure_call_outputs_present inserted synthetic outputs"
         );
     }
+}
+
+/// Derives a stable ID for a prompt-only output from its source call's item ID.
+///
+/// Prompt normalization can run repeatedly without persisting its synthetic
+/// outputs, so the namespace and name format must remain stable across retries
+/// and resumes to preserve prompt-cache reuse. Returning `None` when the source
+/// call has no ID preserves the legacy behavior for older history items.
+fn synthetic_output_id(prefix: &str, item_id: Option<&str>) -> Option<String> {
+    let source_id = item_id.filter(|id| !id.is_empty())?;
+    let name = format!("{prefix}:{source_id}");
+    Some(format!(
+        "{prefix}_{}",
+        Uuid::new_v5(&SYNTHETIC_OUTPUT_ID_NAMESPACE, name.as_bytes())
+    ))
+}
+
+/// Last index of the run of consecutive call items that starts at `idx`.
+///
+/// Parallel tool calls from one assistant turn are recorded as adjacent call
+/// items, and `ody-api`'s `to_wire` merges only *adjacent* assistant messages
+/// into the single assistant message carrying all of them. A synthetic output
+/// must therefore be appended after the whole run, otherwise the merge stops
+/// early and the emitted assistant message declares more `tool_calls` than the
+/// tool messages immediately following it.
+///
+/// `Reasoning` items do not break the run because `to_wire` never emits a chat
+/// message for them.
+fn call_run_end(items: &[ResponseItem], idx: usize) -> usize {
+    let mut end = idx;
+    while let Some(next) = items.get(end + 1) {
+        match next {
+            ResponseItem::FunctionCall { .. }
+            | ResponseItem::CustomToolCall { .. }
+            | ResponseItem::LocalShellCall { .. }
+            | ResponseItem::ToolSearchCall { .. }
+            | ResponseItem::Reasoning { .. } => end += 1,
+            _ => break,
+        }
+    }
+    end
 }
 
 pub(crate) fn remove_orphan_outputs(items: &mut Vec<ResponseItem>) {
