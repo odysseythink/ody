@@ -349,6 +349,158 @@
       },
       "type": "object"
     },
+    "BrowserControlConfig": {
+      "description": "Configuration for the browser control layer.",
+      "properties": {
+        "allow_local_network": {
+          "default": false,
+          "description": "Whether to allow navigation to local/private network targets.",
+          "type": "boolean"
+        },
+        "browser_permit_acquire_timeout_ms": {
+          "default": 30000,
+          "description": "Maximum time to wait for a browser concurrency permit before failing.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "chrome_executable": {
+          "default": null,
+          "description": "Explicit path to the Chrome/Chromium executable. When omitted, the process-lifecycle layer discovers it.",
+          "type": "string"
+        },
+        "command_timeout_ms": {
+          "default": 30000,
+          "description": "Default timeout for CDP commands, in milliseconds.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "connect_timeout_ms": {
+          "default": 10000,
+          "description": "WebSocket connection timeout for external browsers, in milliseconds.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "connect_url": {
+          "description": "External browser debug WebSocket URL (used when `mode == External`).",
+          "type": "string"
+        },
+        "disable_extensions": {
+          "default": true,
+          "description": "Disable browser extensions and prevent loading them.",
+          "type": "boolean"
+        },
+        "external_browser_allow_sensitive": {
+          "default": false,
+          "description": "In external mode, whether to allow sensitive operations (click, type, evaluate).",
+          "type": "boolean"
+        },
+        "extra_args": {
+          "default": [],
+          "description": "Additional arguments passed to Chrome on launch. Dangerous arguments are filtered by [`BrowserControlConfig::sanitize_args`].",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "headless": {
+          "default": true,
+          "description": "Run Chrome in headless mode.",
+          "type": "boolean"
+        },
+        "launch_timeout_ms": {
+          "default": 20000,
+          "description": "Timeout for launching a local Chrome process, in milliseconds.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "max_concurrent_browsers": {
+          "default": 4,
+          "description": "Maximum number of concurrent Chrome processes across the whole process.",
+          "format": "uint",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "max_console_message_bytes": {
+          "default": 4096,
+          "description": "Maximum size of a single console message stored in the event buffer.",
+          "format": "uint",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "max_event_buffer_bytes": {
+          "default": 1048576,
+          "description": "Maximum total bytes retained in the event buffer.",
+          "format": "uint",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "max_event_entries": {
+          "default": 1000,
+          "description": "Maximum number of entries retained in the event buffer.",
+          "format": "uint",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "mode": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/BrowserControlMode"
+            }
+          ],
+          "default": "local",
+          "description": "Local launch or external debug connection."
+        },
+        "navigation_timeout_ms": {
+          "default": 60000,
+          "description": "Navigation timeout, in milliseconds.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "sandbox": {
+          "default": true,
+          "description": "Run Chrome with the OS sandbox enabled.",
+          "type": "boolean"
+        },
+        "viewport": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ViewportConfig"
+            }
+          ],
+          "default": {
+            "device_scale_factor": null,
+            "height": 720,
+            "width": 1280
+          },
+          "description": "Viewport used when launching the browser."
+        }
+      },
+      "type": "object"
+    },
+    "BrowserControlMode": {
+      "description": "Browser control mode.",
+      "oneOf": [
+        {
+          "description": "Launch a local Chrome process per thread with a temporary profile.",
+          "enum": [
+            "local"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Connect to an externally managed Chrome debug endpoint.",
+          "enum": [
+            "external"
+          ],
+          "type": "string"
+        }
+      ]
+    },
     "BundledSkillsConfig": {
       "additionalProperties": false,
       "properties": {
@@ -648,6 +800,9 @@
             "secret_auth_storage": {
               "type": "boolean"
             },
+            "session_report_gate": {
+              "type": "boolean"
+            },
             "shell_snapshot": {
               "type": "boolean"
             },
@@ -838,6 +993,90 @@
       ],
       "type": "string"
     },
+    "DatabaseConfig": {
+      "additionalProperties": false,
+      "description": "Top-level `[services.database]` table in `config.toml`.",
+      "properties": {
+        "connections": {
+          "additionalProperties": {
+            "$ref": "#/definitions/DatabaseConnectionConfig"
+          },
+          "description": "Per-connection presets. The active connection's config is resolved from this map, falling back to an empty default if no preset has been saved.",
+          "type": "object"
+        },
+        "primary": {
+          "description": "The currently active primary connection preset.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "primary"
+      ],
+      "type": "object"
+    },
+    "DatabaseConnectionConfig": {
+      "additionalProperties": false,
+      "description": "Per-connection configuration stored under `[services.database.connections.<name>]``.",
+      "properties": {
+        "connection": {
+          "description": "The connection preset name. Must match the table key it is stored under.",
+          "type": "string"
+        },
+        "database": {
+          "description": "Database/schema name to connect to. For `sqlite` this is ignored.",
+          "type": "string"
+        },
+        "host": {
+          "description": "Hostname or IP address of the database server. For `sqlite` this is the path to the database file.",
+          "type": "string"
+        },
+        "options": {
+          "additionalProperties": true,
+          "description": "Additional provider-specific options such as `sslmode` or `socket`.",
+          "type": "object"
+        },
+        "password": {
+          "description": "Optional password for authentication. If omitted, the provider may fall back to an environment variable or OS keyring.",
+          "type": "string"
+        },
+        "port": {
+          "description": "Port the database server listens on. For `sqlite` this is ignored.",
+          "format": "uint16",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "provider": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/DatabaseProviderName"
+            }
+          ],
+          "description": "Database engine to connect to."
+        },
+        "username": {
+          "description": "Username for authentication. For `sqlite` this is ignored.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "connection",
+        "database",
+        "host",
+        "port",
+        "provider",
+        "username"
+      ],
+      "type": "object"
+    },
+    "DatabaseProviderName": {
+      "description": "Supported database engines for Ody's built-in query tool.",
+      "enum": [
+        "postgres",
+        "mysql",
+        "sqlite"
+      ],
+      "type": "string"
+    },
     "DebugConfigLockToml": {
       "additionalProperties": false,
       "properties": {
@@ -910,6 +1149,11 @@
         "advocate_model": {
           "description": "Per-seat model overrides. Each falls back to `[design_review].review_model`, then the legacy flat `design_review_model`, then `review_model`. Recommended: cheap Advocate, capable adversarial Skeptic, strongest Judge (the Judge is the highest-leverage seat — it emits the findings).",
           "type": "string"
+        },
+        "auto_redesign_high_risk": {
+          "default": false,
+          "description": "When `true`, a non-speculative Critical or High finding from the completed debate automatically returns the design to Design mode for revision. Such findings are not presented for user sign-off; Medium/Low findings retain the normal level-driven sign-off flow. Defaults to `false`.",
+          "type": "boolean"
         },
         "contest_critic": {
           "default": false,
@@ -1634,6 +1878,30 @@
       ],
       "type": "object"
     },
+    "ModelProviderAwsConfig": {
+      "additionalProperties": false,
+      "description": "AWS credentials and region for SigV4 request signing (AWS Bedrock).",
+      "properties": {
+        "access_key_id": {
+          "type": "string"
+        },
+        "region": {
+          "type": "string"
+        },
+        "secret_access_key": {
+          "type": "string"
+        },
+        "session_token": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "access_key_id",
+        "region",
+        "secret_access_key"
+      ],
+      "type": "object"
+    },
     "ModelProviderInfo": {
       "additionalProperties": false,
       "description": "Serializable representation of a provider definition.",
@@ -1645,6 +1913,14 @@
             }
           ],
           "description": "Command-backed bearer-token configuration for this provider."
+        },
+        "aws": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ModelProviderAwsConfig"
+            }
+          ],
+          "description": "AWS credentials and region used to SigV4-sign requests (Bedrock). When set, the runtime signs every request instead of attaching a Bearer token."
         },
         "base_url": {
           "description": "Base URL for the provider's OpenAI-compatible API.",
@@ -2164,6 +2440,30 @@
         }
       ]
     },
+    "OdyCodeAwsConfig": {
+      "additionalProperties": false,
+      "description": "AWS credentials and region for SigV4 request signing (AWS Bedrock).",
+      "properties": {
+        "access_key_id": {
+          "type": "string"
+        },
+        "region": {
+          "type": "string"
+        },
+        "secret_access_key": {
+          "type": "string"
+        },
+        "session_token": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "access_key_id",
+        "region",
+        "secret_access_key"
+      ],
+      "type": "object"
+    },
     "OdyCodeModelConfig": {
       "additionalProperties": false,
       "description": "Ody-code compatible model configuration.\n\nKeyed in `ConfigToml::models` by `provider_id/model_name`. Declares the metadata the static catalog and the provider's `/models` endpoint cannot supply for custom/self-hosted models.",
@@ -2225,6 +2525,14 @@
         "api_key": {
           "type": "string"
         },
+        "aws": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/OdyCodeAwsConfig"
+            }
+          ],
+          "description": "AWS credentials and region for SigV4 request signing (AWS Bedrock)."
+        },
         "base_url": {
           "type": "string"
         },
@@ -2247,6 +2555,14 @@
         },
         "oauth": {
           "$ref": "#/definitions/OdyCodeOAuthRef"
+        },
+        "query_params": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "description": "Extra query parameters appended to every request URL (e.g. Azure's `api-version`).",
+          "type": "object"
         },
         "type": {
           "type": "string"
@@ -3091,8 +3407,14 @@
     },
     "ServicesConfig": {
       "additionalProperties": false,
-      "description": "Top-level `[services]` table in `config.toml`. Currently carries only the web search provider configuration.",
+      "description": "Top-level `[services]` table in `config.toml`.",
       "properties": {
+        "browser": {
+          "$ref": "#/definitions/BrowserControlConfig"
+        },
+        "database": {
+          "$ref": "#/definitions/DatabaseConfig"
+        },
         "webSearch": {
           "$ref": "#/definitions/WebSearchConfig"
         }
@@ -4875,14 +5197,61 @@
       ],
       "type": "string"
     },
+    "ViewportConfig": {
+      "description": "Viewport configuration passed to Chrome on launch.",
+      "properties": {
+        "device_scale_factor": {
+          "default": null,
+          "description": "Optional device scale factor (e.g. 2.0 for retina-like emulation).",
+          "format": "double",
+          "type": "number"
+        },
+        "height": {
+          "default": 720,
+          "description": "Viewport height in CSS pixels.",
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "width": {
+          "default": 1280,
+          "description": "Viewport width in CSS pixels.",
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
     "WebSearchConfig": {
       "additionalProperties": false,
       "properties": {
+        "enabled": {
+          "description": "Explicit on/off switch. Absent means enabled (backwards compatible). A per-thread config override can set this to `false` to prevent the runtime from registering web search tools for that thread.",
+          "type": "boolean"
+        },
         "primary": {
-          "$ref": "#/definitions/WebSearchProviderConfig"
+          "allOf": [
+            {
+              "$ref": "#/definitions/WebSearchProviderName"
+            }
+          ],
+          "description": "The currently active primary search provider."
+        },
+        "providers": {
+          "additionalProperties": {
+            "$ref": "#/definitions/WebSearchProviderConfig"
+          },
+          "description": "Per-provider presets. The active provider's config is resolved from this map, falling back to an empty default if no preset has been saved.",
+          "type": "object"
         },
         "secondary": {
-          "$ref": "#/definitions/WebSearchProviderConfig"
+          "allOf": [
+            {
+              "$ref": "#/definitions/WebSearchProviderConfig"
+            }
+          ],
+          "description": "Optional fallback provider used when the primary fails."
         }
       },
       "required": [
@@ -4898,7 +5267,6 @@
         },
         "options": {
           "additionalProperties": true,
-          "default": {},
           "type": "object"
         },
         "provider": {
@@ -4919,6 +5287,10 @@
       "enum": [
         "duckduckgo",
         "bing",
+        "bing-html",
+        "bing-news",
+        "bocha",
+        "querit",
         "serpapi",
         "searchapi",
         "serper",
@@ -5135,6 +5507,14 @@
     "disable_paste_burst": {
       "description": "When true, disables burst-paste detection for typed input entirely. All characters are inserted as they are received, and no buffering or placeholder replacement will occur for fast keypress bursts.",
       "type": "boolean"
+    },
+    "disabled_builtin_mcp_servers": {
+      "default": null,
+      "description": "Names of built-in MCP servers the user has disabled. Built-in servers (see `ody_mcp::builtin`) are enabled by default; listing a name here keeps it out of the resolved MCP catalog unless a config `mcp_servers` entry with the same name overrides it.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
     },
     "experimental_compact_prompt_file": {
       "$ref": "#/definitions/AbsolutePathBuf"
@@ -5415,6 +5795,9 @@
         "secret_auth_storage": {
           "type": "boolean"
         },
+        "session_report_gate": {
+          "type": "boolean"
+        },
         "shell_snapshot": {
           "type": "boolean"
         },
@@ -5664,6 +6047,11 @@
         }
       ],
       "description": "Optional path to a file containing model instructions that will override the built-in instructions for the selected model. Users are STRONGLY DISCOURAGED from using this field, as deviating from the instructions sanctioned by Ody will likely degrade model performance."
+    },
+    "model_max_output_tokens": {
+      "description": "Maximum number of output tokens the model may generate in one turn (sent as `max_tokens` on the request). Unset keeps the provider default.",
+      "format": "int64",
+      "type": "integer"
     },
     "model_provider": {
       "description": "Provider to use from the model_providers map.",

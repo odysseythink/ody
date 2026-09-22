@@ -124,6 +124,14 @@ pub fn with_config_overrides(mut model: ModelInfo, config: &ModelsManagerConfig)
         model.auto_compact_token_limit = Some(auto_compact_token_limit);
         model.capabilities.auto_compact_token_limit = model.auto_compact_token_limit;
     }
+    // Callers (e.g. odyBox) may know the real output ceiling of a model the
+    // bundled catalog does not describe; a non-positive value is treated as
+    // "unset" rather than clamping generation to zero tokens.
+    if let Some(max_output_tokens) = config.model_max_output_tokens
+        && max_output_tokens > 0
+    {
+        model.capabilities.max_output_tokens = Some(max_output_tokens);
+    }
     if let Some(token_limit) = config.tool_output_token_limit {
         model.truncation_policy = match model.truncation_policy.mode {
             TruncationMode::Bytes => {

@@ -76,6 +76,37 @@ fn model_context_window_uses_model_value_without_override() {
     assert_eq!(updated, model);
 }
 
+#[test]
+fn model_max_output_tokens_override_replaces_capability() {
+    let mut model = model_info_from_slug("unknown-model");
+    model.capabilities.max_output_tokens = Some(4_096);
+    let config = ModelsManagerConfig {
+        model_max_output_tokens: Some(32_768),
+        ..Default::default()
+    };
+
+    let updated = with_config_overrides(model.clone(), &config);
+    let mut expected = model;
+    expected.capabilities.max_output_tokens = Some(32_768);
+
+    assert_eq!(updated, expected);
+}
+
+#[test]
+fn model_max_output_tokens_non_positive_is_ignored() {
+    // A zero ceiling would clamp generation to nothing; treat it as "unset".
+    let mut model = model_info_from_slug("unknown-model");
+    model.capabilities.max_output_tokens = Some(4_096);
+    let config = ModelsManagerConfig {
+        model_max_output_tokens: Some(0),
+        ..Default::default()
+    };
+
+    let updated = with_config_overrides(model.clone(), &config);
+
+    assert_eq!(updated, model);
+}
+
 mod capability_tests {
     use super::ModelCapabilities;
     use super::WireApi;

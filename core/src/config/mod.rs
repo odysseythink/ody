@@ -731,6 +731,10 @@ pub struct Config {
     /// Size of the context window for the model, in tokens.
     pub model_context_window: Option<i64>,
 
+    /// Maximum number of output tokens the model may generate in one turn.
+    /// Mirrors `ModelCapabilities::max_output_tokens` for the model catalog.
+    pub model_max_output_tokens: Option<i64>,
+
     /// Token usage threshold triggering auto-compaction of conversation history.
     pub model_auto_compact_token_limit: Option<i64>,
 
@@ -1629,6 +1633,7 @@ impl Config {
     pub fn to_models_manager_config(&self) -> ModelsManagerConfig {
         ModelsManagerConfig {
             model_context_window: self.model_context_window,
+            model_max_output_tokens: self.model_max_output_tokens,
             model_auto_compact_token_limit: self.model_auto_compact_token_limit,
             tool_output_token_limit: self.tool_output_token_limit,
             base_instructions: self.base_instructions.clone(),
@@ -4108,6 +4113,7 @@ impl Config {
             test_review_model,
             test_review_enabled,
             model_context_window: cfg.model_context_window,
+            model_max_output_tokens: cfg.model_max_output_tokens,
             model_auto_compact_token_limit: cfg.model_auto_compact_token_limit,
             model_auto_compact_token_limit_scope: cfg
                 .model_auto_compact_token_limit_scope
