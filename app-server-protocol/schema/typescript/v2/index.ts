@@ -483,6 +483,8 @@ export type { WorkspaceArtifactBridgeStatus } from "./WorkspaceArtifactBridgeSta
 export type { WorkspaceAuditEvent } from "./WorkspaceAuditEvent";
 export type { WorkspaceChangeSet } from "./WorkspaceChangeSet";
 export type { WorkspaceChangeSetCheckpoint } from "./WorkspaceChangeSetCheckpoint";
+export type { WorkspaceChangeSetCommitOutcome } from "./WorkspaceChangeSetCommitOutcome";
+export type { WorkspaceChangeSetCommitReport } from "./WorkspaceChangeSetCommitReport";
 export type { WorkspaceChangeSetDiffEntry } from "./WorkspaceChangeSetDiffEntry";
 export type { WorkspaceChangeSetStatus } from "./WorkspaceChangeSetStatus";
 export type { WorkspaceChangedNotification } from "./WorkspaceChangedNotification";

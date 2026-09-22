@@ -18178,6 +18178,102 @@
         }
       ]
     },
+    "WorkspaceChangeSetCommitOutcome": {
+      "oneOf": [
+        {
+          "description": "Commit created; carries the new HEAD sha.",
+          "properties": {
+            "commit_hash": {
+              "type": "string"
+            },
+            "type": {
+              "enum": [
+                "committed"
+              ],
+              "title": "CommittedWorkspaceChangeSetCommitOutcomeType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "commit_hash",
+            "type"
+          ],
+          "title": "CommittedWorkspaceChangeSetCommitOutcome",
+          "type": "object"
+        },
+        {
+          "description": "Working tree had nothing to commit for this changeset's paths.",
+          "properties": {
+            "type": {
+              "enum": [
+                "nothing_to_commit"
+              ],
+              "title": "NothingToCommitWorkspaceChangeSetCommitOutcomeType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "NothingToCommitWorkspaceChangeSetCommitOutcome",
+          "type": "object"
+        },
+        {
+          "description": "The root is not inside a git repository.",
+          "properties": {
+            "type": {
+              "enum": [
+                "not_a_git_repo"
+              ],
+              "title": "NotAGitRepoWorkspaceChangeSetCommitOutcomeType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "NotAGitRepoWorkspaceChangeSetCommitOutcome",
+          "type": "object"
+        },
+        {
+          "description": "`git` failed; carries a short error excerpt.",
+          "properties": {
+            "error": {
+              "type": "string"
+            },
+            "type": {
+              "enum": [
+                "failed"
+              ],
+              "title": "FailedWorkspaceChangeSetCommitOutcomeType",
+              "type": "string"
+            }
+          },
+          "required": [
+            "error",
+            "type"
+          ],
+          "title": "FailedWorkspaceChangeSetCommitOutcome",
+          "type": "object"
+        }
+      ]
+    },
+    "WorkspaceChangeSetCommitReport": {
+      "description": "Git commit outcome for one project root after changeset apply.",
+      "properties": {
+        "outcome": {
+          "$ref": "#/definitions/WorkspaceChangeSetCommitOutcome"
+        },
+        "rootPath": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "outcome",
+        "rootPath"
+      ],
+      "type": "object"
+    },
     "WorkspaceChangeSetDiffEntry": {
       "properties": {
         "id": {
