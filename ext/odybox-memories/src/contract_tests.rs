@@ -4,12 +4,15 @@
 //! avoid constructing a full `ody_core::config::Config` so they stay cheap and
 //! cannot break because of unrelated config changes.
 
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use ody_extension_api::ContextContributor;
 use ody_extension_api::ExtensionData;
 use ody_extension_api::ExtensionDataInit;
+use ody_extension_api::PromptSlot;
 use ody_extension_api::ThreadLifecycleContributor;
 use ody_extension_api::ThreadResumeInput;
 use ody_extension_api::ToolContributor;
@@ -26,11 +29,20 @@ use crate::ADD_NOTE_TOOL_NAME;
 use crate::ASSISTANT_MEMORY_DIR;
 use crate::AssistantMemoryConfig;
 use crate::AssistantMemoryExtension;
+use crate::ClaimDraft;
+use crate::ClaimKind;
+use crate::Confidence;
+use crate::ConservativeJudge;
+use crate::EvidenceDraft;
+use crate::EvidenceKind;
 use crate::ExtractError;
 use crate::ExtractFuture;
-use crate::ExtractedMemory;
 use crate::ExtractionLedger;
+use crate::ExtractionResult;
+use crate::MemoryDb;
 use crate::MemoryExtractor;
+use crate::NewClaim;
+use crate::NewEvidence;
 use crate::ODY_MEMORY_DIR;
 use crate::READ_TOOL_NAME;
 use crate::SEARCH_TOOL_NAME;
@@ -43,9 +55,10 @@ use crate::backend::AssistantMemoryStore;
 use crate::ody_memory_root;
 use crate::odybox_session_source;
 use crate::odybox_sessions;
-use crate::parse_extracted_memory;
+use crate::opted_in_with;
 use crate::process_transcript;
 use crate::product_for_source;
+use crate::prompts::Transcript;
 use crate::prompts::transcript_from_rollout;
 
 /// Session sources that must keep the existing Ody memory behaviour, i.e. must
@@ -173,6 +186,7 @@ fn gated_thread_store(memory_root: PathBuf) -> ExtensionData {
     thread_store.insert(AssistantMemoryConfig {
         product: Product::OdyBox,
         memory_root,
+        opted_in: true,
     });
     thread_store
 }
@@ -288,11 +302,11 @@ async fn assistant_notes_are_written_under_the_assistant_root() {
 /// Records every transcript it is asked to extract.
 struct RecordingExtractor {
     calls: Arc<Mutex<Vec<String>>>,
-    result: ExtractedMemory,
+    result: ExtractionResult,
 }
 
 impl RecordingExtractor {
-    fn new(result: ExtractedMemory) -> Self {
+    fn new(result: ExtractionResult) -> Self {
         Self {
             calls: Arc::new(Mutex::new(Vec::new())),
             result,
@@ -305,12 +319,12 @@ impl RecordingExtractor {
 }
 
 impl MemoryExtractor for RecordingExtractor {
-    fn extract<'a>(&'a self, transcript: &'a str) -> ExtractFuture<'a> {
+    fn extract<'a>(&'a self, transcript: &'a Transcript) -> ExtractFuture<'a> {
         Box::pin(async move {
             self.calls
                 .lock()
                 .expect("calls lock")
-                .push(transcript.to_string());
+                .push(transcript.text.clone());
             Ok(self.result.clone())
         })
     }
@@ -320,7 +334,7 @@ impl MemoryExtractor for RecordingExtractor {
 struct FailingExtractor;
 
 impl MemoryExtractor for FailingExtractor {
-    fn extract<'a>(&'a self, _transcript: &'a str) -> ExtractFuture<'a> {
+    fn extract<'a>(&'a self, _transcript: &'a Transcript) -> ExtractFuture<'a> {
         Box::pin(async { Err(ExtractError::Model("boom".to_string())) })
     }
 }
@@ -354,25 +368,43 @@ async fn long_session_is_extracted_and_recorded() {
     let dir = tempfile::tempdir().expect("temp dir");
     let root = dir.path().join(ASSISTANT_MEMORY_DIR);
     let ledger = ExtractionLedger::new(&root);
+    let db = MemoryDb::open_in_memory().await.expect("store");
     let thread_id = ThreadId::default();
 
-    let extractor = RecordingExtractor::new(ExtractedMemory {
+    let extractor = RecordingExtractor::new(ExtractionResult {
         summary: "user prefers short answers".to_string(),
-        raw_memory: "## User preferences
-- Prefers short answers."
-            .to_string(),
+        claims: vec![ClaimDraft {
+            kind: "preference".to_string(),
+            subject: "user".to_string(),
+            statement: "Prefers short answers.".to_string(),
+            confidence: "high".to_string(),
+            scope: None,
+            decision_implication: None,
+            review_in_days: None,
+            supersedes: None,
+            evidence: vec![EvidenceDraft {
+                item: 1,
+                quote: "please keep it short".to_string(),
+            }],
+        }],
     });
 
     let outcome = process_transcript(
         &extractor,
+        &ConservativeJudge,
+        &db,
         &ledger,
         &thread_id,
-        "USER: please keep it short",
+        &Transcript {
+            text: "[item:1] USER: please keep it short".to_string(),
+            items: BTreeSet::from([1]),
+            known_claims: Vec::new(),
+        },
         "2026-09-21T00:00:00+00:00",
     )
     .await;
 
-    assert_eq!(SessionOutcome::Extracted, outcome);
+    assert_eq!(SessionOutcome::Extracted, outcome.outcome);
     assert_eq!(1, extractor.call_count());
     assert!(ledger.is_extracted(&thread_id).await);
 
@@ -381,6 +413,16 @@ async fn long_session_is_extracted_and_recorded() {
     assert!(body.contains("Prefers short answers."));
     assert!(body.contains(&thread_id.to_string()));
     assert!(body.contains("2026-09-21T00:00:00+00:00"));
+
+    // The record is the human-readable trace; the store is what the assistant
+    // will actually be handed next time.
+    let stored = db.active_claims(10).await.expect("claims");
+    assert_eq!(
+        1,
+        stored.len(),
+        "the extracted claim has to reach the store, not only the record"
+    );
+    assert_eq!("Prefers short answers.", stored[0].statement);
 }
 
 /// Contract: an empty transcript costs no model call and is left for next time.
@@ -388,19 +430,29 @@ async fn long_session_is_extracted_and_recorded() {
 async fn empty_transcript_skips_the_model_and_stays_pending() {
     let dir = tempfile::tempdir().expect("temp dir");
     let ledger = ExtractionLedger::new(dir.path().join(ASSISTANT_MEMORY_DIR));
+    let db = MemoryDb::open_in_memory().await.expect("store");
     let thread_id = ThreadId::default();
-    let extractor = RecordingExtractor::new(ExtractedMemory {
+    let extractor = RecordingExtractor::new(ExtractionResult {
         summary: "unused".to_string(),
-        raw_memory: "unused".to_string(),
+        claims: Vec::new(),
     });
 
     let outcome = process_transcript(
-        &extractor, &ledger, &thread_id, "   
-  ", "now",
+        &extractor,
+        &ConservativeJudge,
+        &db,
+        &ledger,
+        &thread_id,
+        &Transcript {
+            text: "   ".to_string(),
+            items: BTreeSet::new(),
+            known_claims: Vec::new(),
+        },
+        "now",
     )
     .await;
 
-    assert_eq!(SessionOutcome::Empty, outcome);
+    assert_eq!(SessionOutcome::Empty, outcome.outcome);
     assert_eq!(
         0,
         extractor.call_count(),
@@ -418,22 +470,29 @@ async fn empty_transcript_skips_the_model_and_stays_pending() {
 async fn nothing_worth_keeping_is_recorded_and_not_retried() {
     let dir = tempfile::tempdir().expect("temp dir");
     let ledger = ExtractionLedger::new(dir.path().join(ASSISTANT_MEMORY_DIR));
+    let db = MemoryDb::open_in_memory().await.expect("store");
     let thread_id = ThreadId::default();
-    let extractor = RecordingExtractor::new(ExtractedMemory {
+    let extractor = RecordingExtractor::new(ExtractionResult {
         summary: String::new(),
-        raw_memory: String::new(),
+        claims: Vec::new(),
     });
 
     let outcome = process_transcript(
         &extractor,
+        &ConservativeJudge,
+        &db,
         &ledger,
         &thread_id,
-        "USER: what time is it",
+        &Transcript {
+            text: "[item:1] USER: what time is it".to_string(),
+            items: BTreeSet::from([1]),
+            known_claims: Vec::new(),
+        },
         "now",
     )
     .await;
 
-    assert_eq!(SessionOutcome::Empty, outcome);
+    assert_eq!(SessionOutcome::Empty, outcome.outcome);
     assert_eq!(1, extractor.call_count());
     assert!(
         ledger.is_extracted(&thread_id).await,
@@ -446,18 +505,25 @@ async fn nothing_worth_keeping_is_recorded_and_not_retried() {
 async fn failed_extraction_is_not_recorded_so_it_retries() {
     let dir = tempfile::tempdir().expect("temp dir");
     let ledger = ExtractionLedger::new(dir.path().join(ASSISTANT_MEMORY_DIR));
+    let db = MemoryDb::open_in_memory().await.expect("store");
     let thread_id = ThreadId::default();
 
     let outcome = process_transcript(
         &FailingExtractor,
+        &ConservativeJudge,
+        &db,
         &ledger,
         &thread_id,
-        "USER: something durable",
+        &Transcript {
+            text: "[item:1] USER: something durable".to_string(),
+            items: BTreeSet::from([1]),
+            known_claims: Vec::new(),
+        },
         "now",
     )
     .await;
 
-    assert_eq!(SessionOutcome::Failed, outcome);
+    assert_eq!(SessionOutcome::Failed, outcome.outcome);
     assert!(
         !ledger.is_extracted(&thread_id).await,
         "a failed session must stay pending so a later run can retry it"
@@ -496,80 +562,6 @@ async fn diagnose_discovery_against_a_real_ody_home() {
         }
         Err(err) => println!("discovery failed: {err}"),
     }
-}
-
-// ---------------------------------------------------------------------------
-// Extraction output parsing
-// ---------------------------------------------------------------------------
-
-/// Contract: parsing tolerates the shapes a chat-completions provider returns.
-///
-/// This is the failure that broke the first end-to-end run: `output_schema` is
-/// a Responses-API feature, so a `wire_api = "chat"` provider ignores it and
-/// answers with fenced or prose-wrapped JSON.
-#[test]
-fn extraction_parsing_tolerates_wrapped_json() {
-    let bare = r#"{"summary":"s","raw_memory":"m"}"#;
-
-    let cases = [
-        ("bare", bare.to_string()),
-        (
-            "fenced_json",
-            format!(
-                "```json
-{bare}
-```"
-            ),
-        ),
-        (
-            "fenced_bare",
-            format!(
-                "```
-{bare}
-```"
-            ),
-        ),
-        (
-            "prose_around",
-            format!(
-                "Here is the memory:
-{bare}
-Hope that helps."
-            ),
-        ),
-        (
-            "padded",
-            format!(
-                "
-
-  {bare}  
-
-"
-            ),
-        ),
-    ];
-
-    for (label, raw) in cases {
-        let parsed = parse_extracted_memory(&raw)
-            .unwrap_or_else(|err| panic!("case '{label}' should parse but failed: {err}"));
-        assert_eq!("s", parsed.summary, "case '{label}'");
-        assert_eq!("m", parsed.raw_memory, "case '{label}'");
-    }
-
-    let err = parse_extracted_memory("I could not find anything worth remembering.")
-        .expect_err("prose with no JSON must be a parse error");
-    assert!(
-        matches!(err, ExtractError::Parse(_)),
-        "expected a Parse error, got {err:?}"
-    );
-}
-
-/// Contract: a verdict of "nothing worth keeping" parses cleanly.
-#[test]
-fn extraction_parsing_accepts_the_empty_verdict() {
-    let parsed = parse_extracted_memory(r#"{"summary":"","raw_memory":""}"#)
-        .expect("the empty verdict must parse");
-    assert!(parsed.is_empty());
 }
 
 // ---------------------------------------------------------------------------
@@ -621,7 +613,7 @@ sandbox_mode is danger-full-access
         message("developer", "you are a coding agent"),
     ];
 
-    let transcript = transcript_from_rollout(&items);
+    let transcript = transcript_from_rollout(&items).text;
 
     assert!(
         transcript.contains("帮我把这个接口的鉴权重构一下"),
@@ -659,7 +651,7 @@ x
         ),
         message("developer", "harness boilerplate"),
     ];
-    assert!(transcript_from_rollout(&items).trim().is_empty());
+    assert!(transcript_from_rollout(&items).text.trim().is_empty());
 }
 
 /// Contract: resuming a thread that never captured pipeline context is a no-op.
@@ -705,4 +697,116 @@ async fn resume_with_unrelated_state_is_a_noop() {
         .await;
 
     assert_eq!(None, thread_store.get::<AssistantMemoryConfig>());
+}
+
+/// Contract 2d: a closed gate injects nothing, so an Ody thread never sees
+/// assistant-memory text.
+#[tokio::test]
+async fn closed_gate_injects_no_memory_block() {
+    let session_store = ExtensionData::new("session");
+    let thread_store = ExtensionData::new_with_init("thread", ExtensionDataInit::new());
+
+    let extension = AssistantMemoryExtension::default();
+    let fragments = extension
+        .contribute_thread_context(&session_store, &thread_store)
+        .await;
+
+    assert_eq!(fragments.len(), 0);
+}
+
+/// Contract 2e: an open gate injects what the user kept, as developer policy.
+#[tokio::test]
+async fn open_gate_injects_stored_claims() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let root = dir.path().join(ASSISTANT_MEMORY_DIR);
+    let db = MemoryDb::open(&root).await.expect("memory store");
+    db.insert_claim(
+        NewClaim {
+            kind: ClaimKind::Preference,
+            subject: "user".to_string(),
+            statement: "user prefers short replies".to_string(),
+            confidence: Confidence::High,
+            scope: None,
+            decision_implication: None,
+            review_due: None,
+            valid_from: None,
+        },
+        vec![NewEvidence {
+            kind: EvidenceKind::Fact,
+            occurred_at: chrono::Utc::now(),
+            source_thread: "t-1".to_string(),
+            source_locator: "item:1".to_string(),
+            excerpt: "原话".to_string(),
+        }],
+    )
+    .await
+    .expect("claim");
+
+    let session_store = ExtensionData::new("session");
+    let thread_store = gated_thread_store(root);
+    let extension = AssistantMemoryExtension::default();
+
+    let fragments = extension
+        .contribute_thread_context(&session_store, &thread_store)
+        .await;
+
+    assert_eq!(fragments.len(), 1);
+    assert_eq!(fragments[0].slot(), PromptSlot::DeveloperPolicy);
+    assert!(fragments[0].text().contains("user prefers short replies"));
+}
+
+/// Contract: memory is opt-in. Anything but an explicit yes stays off, so a
+/// missing flag, a typo, or a stale config can never start collecting.
+#[test]
+fn opt_in_requires_an_explicit_yes() {
+    assert!(!opted_in_with(None));
+    assert!(!opted_in_with(Some("")));
+    assert!(!opted_in_with(Some("true")));
+    assert!(!opted_in_with(Some("0")));
+    assert!(opted_in_with(Some("1")));
+}
+
+/// Contract: a thread that is an odyBox thread but has not opted in injects
+/// nothing, even when claims exist on disk.
+#[tokio::test]
+async fn opted_out_thread_injects_no_memory_block() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let root = dir.path().join(ASSISTANT_MEMORY_DIR);
+    let db = MemoryDb::open(&root).await.expect("store");
+    db.insert_claim(
+        NewClaim {
+            kind: ClaimKind::Preference,
+            subject: "user".to_string(),
+            statement: "user prefers short replies".to_string(),
+            confidence: Confidence::High,
+            scope: None,
+            decision_implication: None,
+            review_due: None,
+            valid_from: None,
+        },
+        vec![NewEvidence {
+            kind: EvidenceKind::Fact,
+            occurred_at: chrono::Utc::now(),
+            source_thread: "t-1".to_string(),
+            source_locator: "item:1".to_string(),
+            excerpt: "原话".to_string(),
+        }],
+    )
+    .await
+    .expect("claim");
+
+    let thread_store = ExtensionData::new_with_init("thread", ExtensionDataInit::new());
+    thread_store.insert(AssistantMemoryConfig {
+        product: Product::OdyBox,
+        memory_root: root,
+        opted_in: false,
+    });
+    let session_store = ExtensionData::new("session");
+    let extension = AssistantMemoryExtension::default();
+
+    let fragments = extension
+        .contribute_thread_context(&session_store, &thread_store)
+        .await;
+
+    assert_eq!(0, fragments.len());
 }

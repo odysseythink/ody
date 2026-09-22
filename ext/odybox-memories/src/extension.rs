@@ -11,12 +11,17 @@ use std::sync::Arc;
 use std::sync::Weak;
 
 use chrono::Utc;
+
+use crate::ConservativeJudge;
+use crate::MemoryDb;
 use ody_core::ThreadManager;
 use ody_core::config::Config;
 use ody_extension_api::ConfigContributor;
+use ody_extension_api::ContextContributor;
 use ody_extension_api::ExtensionData;
 use ody_extension_api::ExtensionFuture;
 use ody_extension_api::ExtensionRegistryBuilder;
+use ody_extension_api::PromptFragment;
 use ody_extension_api::ThreadLifecycleContributor;
 use ody_extension_api::ThreadResumeInput;
 use ody_extension_api::ThreadStartInput;
@@ -29,6 +34,7 @@ use ody_tools::ToolExecutor;
 use crate::backend::AssistantMemoryStore;
 use crate::extractor_model::ModelMemoryExtractor;
 use crate::gate::assistant_memory_enabled;
+use crate::gate::opted_in;
 use crate::gate::product_for_source;
 use crate::ledger::ExtractionLedger;
 use crate::pipeline;
@@ -45,13 +51,17 @@ pub struct AssistantMemoryConfig {
     pub product: Product,
     /// Root directory for assistant memory artifacts.
     pub memory_root: PathBuf,
+    /// Whether the user switched memory on. Without it nothing is mounted, so
+    /// no contributor can observe assistant-memory state.
+    pub opted_in: bool,
 }
 
 impl AssistantMemoryConfig {
-    fn new(config: &Config, product: Product) -> Self {
+    fn new(config: &Config, product: Product, opted_in: bool) -> Self {
         Self {
             product,
             memory_root: assistant_memory_root(&config.ody_home),
+            opted_in,
         }
     }
 
@@ -59,6 +69,7 @@ impl AssistantMemoryConfig {
         Self {
             product: self.product,
             memory_root: assistant_memory_root(&config.ody_home),
+            opted_in: self.opted_in,
         }
     }
 }
@@ -111,7 +122,13 @@ impl ThreadLifecycleContributor<Config> for AssistantMemoryExtension {
             let Some(product) = product else {
                 return;
             };
-            let assistant_config = AssistantMemoryConfig::new(input.config, product);
+            if !opted_in() {
+                // Opt-in only: without the user's switch nothing is mounted, so
+                // no contributor can even observe assistant-memory state.
+                tracing::debug!("assistant memory: user has not opted in");
+                return;
+            }
+            let assistant_config = AssistantMemoryConfig::new(input.config, product, true);
             let memory_root = assistant_config.memory_root.clone();
             input.thread_store.insert(assistant_config);
 
@@ -180,6 +197,38 @@ impl ConfigContributor<Config> for AssistantMemoryExtension {
     }
 }
 
+impl ContextContributor for AssistantMemoryExtension {
+    fn contribute_thread_context<'a>(
+        &'a self,
+        _session_store: &'a ExtensionData,
+        thread_store: &'a ExtensionData,
+    ) -> ExtensionFuture<'a, Vec<PromptFragment>> {
+        Box::pin(async move {
+            // The absent thread-store entry *is* the closed gate: nothing about
+            // assistant memory reaches a thread that is not an odyBox thread.
+            let Some(config) = thread_store.get::<AssistantMemoryConfig>() else {
+                return Vec::new();
+            };
+            if !config.opted_in {
+                // Belt and braces: even if a config reached the store, memory
+                // the user did not ask for is never injected.
+                return Vec::new();
+            }
+
+            match crate::memory_block(&config.memory_root, Utc::now()).await {
+                Ok(Some(block)) => vec![PromptFragment::developer_policy(block)],
+                Ok(None) => Vec::new(),
+                Err(err) => {
+                    // Injection is best effort: a broken store must never cost
+                    // the user a turn.
+                    tracing::warn!(error = %err, "assistant memory: could not build the memory block");
+                    Vec::new()
+                }
+            }
+        })
+    }
+}
+
 impl ToolContributor for AssistantMemoryExtension {
     fn tools(
         &self,
@@ -190,6 +239,9 @@ impl ToolContributor for AssistantMemoryExtension {
             // Gate closed (or thread not started yet): expose nothing.
             return Vec::new();
         };
+        if !gate.opted_in {
+            return Vec::new();
+        }
 
         // Bound to the assistant memory root, never to the Ody memory
         // workspace, so these tools cannot read or write Ody memory files.
@@ -209,6 +261,7 @@ pub fn install(
     let extension = Arc::new(AssistantMemoryExtension::new(thread_manager));
     registry.thread_lifecycle_contributor(extension.clone());
     registry.config_contributor(extension.clone());
+    registry.prompt_contributor(extension.clone());
     registry.tool_contributor(extension);
 }
 
@@ -238,20 +291,32 @@ fn spawn_write_pipeline(
                 }
             };
 
+        let db = match MemoryDb::open(&memory_root).await {
+            Ok(db) => db,
+            Err(err) => {
+                tracing::warn!(error = %err, "assistant memory: could not open the memory store");
+                return;
+            }
+        };
+        let judge = ConservativeJudge;
         let ledger = ExtractionLedger::new(memory_root);
         let ody_home = config.ody_home.to_path_buf();
         let recorded_at = Utc::now().to_rfc3339();
 
         // `get_threads` only consults `default_provider` for provider filtering,
         // which this pipeline does not enable (model_providers = None).
-        match pipeline::run_once(
-            &extractor,
-            &ledger,
-            &ody_home,
-            /*default_provider*/ "",
-            pipeline::DEFAULT_SESSION_BUDGET,
-            &recorded_at,
-        )
+        match pipeline::run_once(pipeline::PipelineInput {
+            extractor: &extractor,
+            judge: &judge,
+            db: &db,
+            ledger: &ledger,
+            ody_home: &ody_home,
+            // `get_threads` only consults `default_provider` for provider
+            // filtering, which this pipeline does not enable.
+            default_provider: "",
+            budget: pipeline::DEFAULT_SESSION_BUDGET,
+            recorded_at: &recorded_at,
+        })
         .await
         {
             Ok(report) => {

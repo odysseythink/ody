@@ -111,7 +111,7 @@ fn parse_args<T: for<'de> Deserialize<'de>>(call: &ToolCall) -> Result<T, Functi
     let value = if arguments.trim().is_empty() {
         Value::Object(Map::new())
     } else {
-        serde_json::from_str(&arguments)
+        serde_json::from_str(arguments)
             .map_err(|err| FunctionCallError::RespondToModel(err.to_string()))?
     };
     serde_json::from_value(value).map_err(|err| FunctionCallError::RespondToModel(err.to_string()))

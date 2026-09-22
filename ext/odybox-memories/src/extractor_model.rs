@@ -37,9 +37,9 @@ use serde_json::json;
 
 use crate::extract::ExtractError;
 use crate::extract::ExtractFuture;
-use crate::extract::ExtractedMemory;
 use crate::extract::MemoryExtractor;
 use crate::prompts;
+use crate::prompts::Transcript;
 
 /// Reasoning effort for extraction. Low: this is a summarisation task.
 const EXTRACTION_REASONING_EFFORT: ReasoningEffort = ReasoningEffort::Low;
@@ -97,7 +97,7 @@ impl ModelMemoryExtractor {
 }
 
 impl MemoryExtractor for ModelMemoryExtractor {
-    fn extract<'a>(&'a self, transcript: &'a str) -> ExtractFuture<'a> {
+    fn extract<'a>(&'a self, transcript: &'a Transcript) -> ExtractFuture<'a> {
         Box::pin(async move {
             let raw = self
                 .stream_extraction(transcript)
@@ -108,7 +108,7 @@ impl MemoryExtractor for ModelMemoryExtractor {
                     "model returned an empty response".to_string(),
                 ));
             }
-            crate::extract::parse_extracted_memory(&raw)
+            crate::extract::parse_extraction_result(&raw)
         })
     }
 }
@@ -119,14 +119,46 @@ impl ModelMemoryExtractor {
             "type": "object",
             "properties": {
                 "summary": { "type": "string" },
-                "raw_memory": { "type": "string" }
+                "claims": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "kind": {
+                                "type": "string",
+                                "enum": ["preference", "user_profile", "entity", "task", "domain_fact", "procedure", "correction"]
+                            },
+                            "subject": { "type": "string" },
+                            "statement": { "type": "string" },
+                            "confidence": { "type": "string", "enum": ["low", "medium", "high"] },
+                            "scope": { "type": ["string", "null"] },
+                            "decision_implication": { "type": ["string", "null"] },
+                            "review_in_days": { "type": ["integer", "null"] },
+                            "supersedes": { "type": ["string", "null"] },
+                            "evidence": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "item": { "type": "integer" },
+                                        "quote": { "type": "string" }
+                                    },
+                                    "required": ["item", "quote"],
+                                    "additionalProperties": false
+                                }
+                            }
+                        },
+                        "required": ["kind", "subject", "statement", "confidence", "evidence"],
+                        "additionalProperties": false
+                    }
+                }
             },
-            "required": ["summary", "raw_memory"],
+            "required": ["summary", "claims"],
             "additionalProperties": false
         })
     }
 
-    async fn stream_extraction(&self, transcript: &str) -> anyhow::Result<String> {
+    async fn stream_extraction(&self, transcript: &Transcript) -> anyhow::Result<String> {
         let thread_id = ThreadId::default();
         let installation_id = resolve_installation_id(&self.config.ody_home).await?;
 
