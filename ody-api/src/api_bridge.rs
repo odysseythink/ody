@@ -72,6 +72,8 @@ pub fn map_api_error(err: ApiError) -> OdyErr {
                         .contains("The image data you provided does not represent a valid image")
                     {
                         OdyErr::InvalidImageRequest()
+                    } else if body_text.contains("maximum context length") {
+                        OdyErr::ContextWindowExceeded
                     } else {
                         OdyErr::InvalidRequest(body_text)
                     }

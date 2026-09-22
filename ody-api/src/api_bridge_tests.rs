@@ -131,6 +131,30 @@ fn map_api_error_uses_cyber_policy_fallback_for_missing_message() {
 }
 
 #[test]
+fn map_api_error_maps_maximum_context_length_400_to_context_window_exceeded() {
+    let body = serde_json::json!({
+        "error": {
+            "message": "This model's maximum context length is 131072 tokens. However, you requested 8096 output tokens and your prompt contains at least 122977 input tokens, for a total of at least 131073 tokens. Please reduce the length of the input prompt or the number of requested output tokens. (parameter=input_tokens, value=122977)",
+            "type": "BadRequestError",
+            "param": "input_tokens",
+            "code": 400
+        }
+    })
+    .to_string();
+    let err = map_api_error(ApiError::Transport(TransportError::Http {
+        status: http::StatusCode::BAD_REQUEST,
+        url: Some("http://example.com/v1/chat/completions".to_string()),
+        headers: None,
+        body: Some(body),
+    }));
+
+    assert!(
+        matches!(err, OdyErr::ContextWindowExceeded),
+        "expected OdyErr::ContextWindowExceeded, got {err:?}"
+    );
+}
+
+#[test]
 fn map_api_error_keeps_unknown_400_errors_generic() {
     let body = serde_json::json!({
         "error": {

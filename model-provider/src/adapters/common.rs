@@ -304,6 +304,17 @@ fn http_error_to_provider_error(status: StatusCode, body: String) -> ChatProvide
                 message,
             };
         }
+        // OpenAI-compatible gateways (and proxies like one-api/new-api that
+        // pass the body through) report context overflow as a plain 400 whose
+        // message mentions the model's maximum context length. Recognize it so
+        // `to_ody_err` surfaces `OdyErr::ContextWindowExceeded` and callers
+        // (e.g. compaction trimming) can recover instead of retrying blindly.
+        if body.contains("maximum context length") {
+            return ChatProviderError::Provider {
+                code: "context_window_exceeded".into(),
+                message: body,
+            };
+        }
         return ChatProviderError::Provider {
             code: "invalid_request".into(),
             message: body,
@@ -340,6 +351,42 @@ fn http_error_to_provider_error(status: StatusCode, body: String) -> ChatProvide
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn http_400_maximum_context_length_maps_to_context_window_exceeded() {
+        let body = serde_json::json!({
+            "error": {
+                "message": "This model's maximum context length is 131072 tokens. However, you requested 8096 output tokens and your prompt contains at least 122977 input tokens, for a total of at least 131073 tokens. Please reduce the length of the input prompt or the number of requested output tokens. (parameter=input_tokens, value=122977)",
+                "type": "BadRequestError",
+                "param": "input_tokens",
+                "code": 400
+            }
+        })
+        .to_string();
+        let err = http_error_to_provider_error(StatusCode::BAD_REQUEST, body);
+        let ChatProviderError::Provider { code, message } = err else {
+            panic!("expected provider error, got {err:?}");
+        };
+        assert_eq!(code, "context_window_exceeded");
+        assert!(message.contains("maximum context length"));
+    }
+
+    #[test]
+    fn http_400_without_context_length_stays_invalid_request() {
+        let body = serde_json::json!({
+            "error": {
+                "message": "Some other bad request.",
+                "code": "some_other_policy"
+            }
+        })
+        .to_string();
+        let err = http_error_to_provider_error(StatusCode::BAD_REQUEST, body.clone());
+        let ChatProviderError::Provider { code, message } = err else {
+            panic!("expected provider error, got {err:?}");
+        };
+        assert_eq!(code, "invalid_request");
+        assert_eq!(message, body);
+    }
 
     #[test]
     fn tool_call_input_delta_emits_raw_frame() {
