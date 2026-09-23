@@ -956,7 +956,11 @@ impl Session {
     }
 
     pub(crate) async fn maybe_emit_model_warnings_for_turn(&self, tc: &TurnContext) {
-        if tc.model_info.used_fallback_model_metadata {
+        // The warning's concerns (auto-compaction never triggering, zero
+        // truncation budget) only apply while the context window is unknown.
+        // An explicit `model_context_window` — e.g. projected per-thread by a
+        // desktop client — already covers them, so stay quiet.
+        if tc.model_info.used_fallback_model_metadata && tc.model_context_window().is_none() {
             self.send_event(
                 tc,
                 EventMsg::Warning(WarningEvent {

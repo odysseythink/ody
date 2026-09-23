@@ -10595,3 +10595,36 @@ async fn missing_artifact_is_incomplete_fail_safe() {
 // `design_handoff::tests::render_includes_selected_label_when_some` (Task 3).
 #[allow(dead_code)]
 fn render_handoff_reminder_selected_label_some_cross_reference() {}
+
+#[tokio::test]
+async fn fallback_metadata_warning_only_when_context_window_missing() {
+    let (session, turn_context, rx) = make_session_and_context_with_rx().await;
+    let mut turn_context = Arc::into_inner(turn_context).expect("sole thread settings owner");
+    turn_context.model_info.used_fallback_model_metadata = true;
+    turn_context.model_info.context_window = None;
+    turn_context.model_info.max_context_window = None;
+    let turn_context = Arc::new(turn_context);
+
+    // Window unknown -> the fallback-metadata warning fires.
+    session.maybe_emit_model_warnings_for_turn(&turn_context).await;
+    let event = timeout(Duration::from_secs(1), rx.recv())
+        .await
+        .expect("warning should arrive")
+        .expect("warning should be readable");
+    let EventMsg::Warning(WarningEvent { message }) = &event.msg else {
+        panic!("unexpected event: {:?}", event.msg);
+    };
+    assert!(message.contains("Model metadata"), "unexpected warning: {message}");
+
+    // Window configured (e.g. projected per-thread by odyBox) -> suppressed:
+    // the warning's concerns (compaction never triggers, zero truncation
+    // budget) are already covered by the explicit window.
+    let mut turn_context = Arc::into_inner(turn_context).expect("sole thread settings owner");
+    turn_context.model_info.context_window = Some(131072);
+    let turn_context = Arc::new(turn_context);
+    session.maybe_emit_model_warnings_for_turn(&turn_context).await;
+    assert!(
+        timeout(Duration::from_millis(200), rx.recv()).await.is_err(),
+        "no warning expected when the context window is configured"
+    );
+}
