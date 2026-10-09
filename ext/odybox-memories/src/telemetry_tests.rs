@@ -34,13 +34,21 @@ async fn each_pass_appends_one_parseable_line() {
 async fn the_summary_accumulates_across_passes() {
     let dir = tempfile::tempdir().unwrap();
 
-    update_summary(dir.path(), &event(2, 0), 2).await.unwrap();
-    let summary = update_summary(dir.path(), &event(1, 3), 4).await.unwrap();
+    update_summary(dir.path(), &event(2, 0), 2, 0)
+        .await
+        .unwrap();
+    let summary = update_summary(dir.path(), &event(1, 3), 4, 2)
+        .await
+        .unwrap();
 
     assert_eq!(2, summary.passes);
     assert_eq!(3, summary.claims_added);
     assert_eq!(3, summary.claims_superseded);
     assert_eq!(4, summary.claims_in_store);
+    assert_eq!(
+        2, summary.claims_awaiting_review,
+        "claims waiting on the user are visible to the panel"
+    );
     assert_eq!(
         Some("2026-09-22T10:00:00+00:00".to_string()),
         summary.last_pass_at
@@ -65,7 +73,9 @@ async fn a_damaged_summary_does_not_break_the_next_pass() {
         .await
         .unwrap();
 
-    let summary = update_summary(dir.path(), &event(1, 0), 1).await.unwrap();
+    let summary = update_summary(dir.path(), &event(1, 0), 1, 0)
+        .await
+        .unwrap();
 
     assert_eq!(
         1, summary.passes,
@@ -83,7 +93,7 @@ async fn dropped_candidates_and_store_failures_are_counted() {
     pass.failed = 1;
     pass.injected_claims = 3;
 
-    let summary = update_summary(dir.path(), &pass, 7).await.unwrap();
+    let summary = update_summary(dir.path(), &pass, 7, 0).await.unwrap();
 
     assert_eq!(5, summary.claims_dropped_ungrounded);
     assert_eq!(3, summary.store_failures);

@@ -34,6 +34,19 @@ a coding agent navigate a repository.
 - Speculation, brainstorming, or assistant proposals the user never adopted.
 - Anything time-bound that will be stale next week (prices, live metrics, today's date).
 
+### Statement rules
+
+- A `statement` must be supported by the `quote` you cite. Do not add a claim the
+  quote does not carry, and do not drop a negation, a quantity, or a condition it
+  does contain: "不要用套话" must not come back as "用套话", and "只在周五发版" must
+  not come back as "发版". A claim that drops a "not" records the opposite of what
+  the user said, and reads entirely plausible while doing it.
+- One assertion per claim, at most 240 characters. Split a compound sentence into
+  two claims instead of writing a long one.
+- Write it so it stands on its own a month from now: name the person or system
+  instead of using a bare pronoun, and prefer a concrete fact over "recently" or
+  "this week".
+
 ### Output
 
 Return **JSON only**, no markdown wrapper, no prose around it:

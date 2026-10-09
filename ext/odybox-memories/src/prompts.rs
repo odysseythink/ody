@@ -35,6 +35,10 @@ pub struct KnownClaim {
     pub id: String,
     pub subject: String,
     pub statement: String,
+    /// Whether this claim is past its review date. The extraction pass is the
+    /// only place that can notice a belief no longer holds, so an overdue claim
+    /// is shown with that fact attached rather than silently withheld.
+    pub review_due_passed: bool,
 }
 
 impl Transcript {
@@ -133,6 +137,26 @@ pub fn build_extraction_input(transcript: &Transcript, truncated: bool) -> Strin
     message.push_str("=== TRANSCRIPT BEGINS ===\n");
     message.push_str(&transcript.text);
     message.push_str("\n=== TRANSCRIPT ENDS ===\n");
+    if !transcript.known_claims.is_empty() {
+        message.push_str("\n=== CLAIMS YOU ALREADY HOLD ===\n");
+        message.push_str(
+            "Use one of these ids in `supersedes` when the transcript shows the claim is no \
+             longer true. Leave the rest alone; do not restate them.\n",
+        );
+        for claim in &transcript.known_claims {
+            message.push_str(&format!(
+                "- id={} subject={} statement={}{}\n",
+                claim.id,
+                claim.subject,
+                claim.statement,
+                if claim.review_due_passed {
+                    " [due for review: supersede it if it no longer holds]"
+                } else {
+                    ""
+                }
+            ));
+        }
+    }
     message
 }
 
@@ -162,3 +186,7 @@ fn item_is_contextual_fragment(item: &ContentItem) -> bool {
         .iter()
         .any(|marker| trimmed.starts_with(marker))
 }
+
+#[cfg(test)]
+#[path = "prompts_tests.rs"]
+mod tests;

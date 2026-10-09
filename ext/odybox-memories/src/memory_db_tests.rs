@@ -281,3 +281,395 @@ async fn a_subsumed_claim_can_be_closed_without_storing_a_new_one() {
     assert_eq!(Some(at(9)), closed.valid_to);
     assert_eq!(Some(covering), closed.superseded_by);
 }
+
+// ---------------------------------------------------------------------------
+// Full-text index invariants
+// ---------------------------------------------------------------------------
+
+async fn fts_row_count(db: &MemoryDb) -> i64 {
+    sqlx::query_scalar("SELECT COUNT(*) FROM claims_fts")
+        .fetch_one(&db.pool)
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn the_full_text_index_keeps_one_row_per_claim() {
+    let db = db().await;
+    let first = db
+        .insert_claim(claim("one"), vec![evidence("t-1", "item:1")])
+        .await
+        .unwrap();
+    let second = db
+        .insert_claim(claim("two"), vec![evidence("t-1", "item:2")])
+        .await
+        .unwrap();
+
+    assert_eq!(2, fts_row_count(&db).await);
+
+    // Closing a validity window must not add a second index row, and must not
+    // drop the historical one either: search filters by validity, not by index.
+    db.mark_superseded_by(&first, &second, at(9)).await.unwrap();
+    assert_eq!(2, fts_row_count(&db).await);
+    assert_eq!(
+        0,
+        db.search("one", 10).await.unwrap().len(),
+        "a closed claim leaves retrieval even though its index row stays"
+    );
+    assert_eq!(1, db.search("two", 10).await.unwrap().len());
+}
+
+#[tokio::test]
+async fn a_drifted_index_is_rebuilt_when_the_store_is_reopened() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    let db = MemoryDb::open(root).await.unwrap();
+    db.insert_claim(claim("alpha"), vec![evidence("t-1", "item:1")])
+        .await
+        .unwrap();
+    assert_eq!(1, fts_row_count(&db).await);
+
+    // Simulate a store written before the triggers existed: the claim row is
+    // there, the index row is gone.
+    sqlx::query("DELETE FROM claims_fts")
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(0, fts_row_count(&db).await);
+    drop(db);
+
+    let reopened = MemoryDb::open(root).await.unwrap();
+    assert_eq!(
+        1,
+        fts_row_count(&reopened).await,
+        "opening the store must restore the index"
+    );
+    assert_eq!(1, reopened.search("alpha", 10).await.unwrap().len());
+}
+
+// ---------------------------------------------------------------------------
+// Recall terms
+// ---------------------------------------------------------------------------
+
+#[test]
+fn recall_terms_split_chinese_into_bigrams_and_keep_latin_words_whole() {
+    let terms = recall_terms("偏好 concise replies");
+
+    assert!(terms.contains(&"偏好".to_string()));
+    assert!(terms.contains(&"concise".to_string()));
+    assert!(terms.contains(&"replies".to_string()));
+    assert!(
+        !terms.contains(&"c".to_string()),
+        "one letter would match nearly everything"
+    );
+}
+
+#[test]
+fn recall_terms_cover_a_long_message_instead_of_only_its_opening() {
+    // 200 distinct characters: 199 distinct bigrams, which is more than the cap.
+    let message: String = (0x4E00u32..0x4E00 + 200)
+        .filter_map(char::from_u32)
+        .collect();
+    let terms = recall_terms(&message);
+
+    assert_eq!(MAX_RECALL_TERMS, terms.len());
+    let first = terms.first().unwrap().chars().next().unwrap();
+    let last = terms.last().unwrap().chars().next().unwrap();
+    assert_eq!(
+        0x4E00, first as u32,
+        "the first term comes from the opening"
+    );
+    assert!(
+        (last as u32) > 0x4E00 + 150,
+        "sampling must reach the end of a long message, not stop at the start"
+    );
+}
+
+#[test]
+fn recall_terms_of_punctuation_only_are_empty() {
+    assert!(recall_terms("   ,.!?  ").is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// Subject canonicalization
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn subjects_are_stored_in_one_canonical_spelling() {
+    let db = db().await;
+    let spaced = db
+        .insert_claim(
+            NewClaim {
+                subject: "  User ".to_string(),
+                ..claim("prefers short replies")
+            },
+            vec![evidence("t-1", "item:1")],
+        )
+        .await
+        .unwrap();
+    let plain = db
+        .insert_claim(
+            NewClaim {
+                subject: "user".to_string(),
+                ..claim("prefers no section headings")
+            },
+            vec![evidence("t-2", "item:2")],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!("user", db.load_claim(&spaced).await.unwrap().subject);
+    assert_eq!(
+        2,
+        db.active_claims_for_subject("user").await.unwrap().len(),
+        "both claims must be found under one spelling"
+    );
+    assert_eq!(2, db.active_claims_for_subject("USER").await.unwrap().len());
+    let _ = plain;
+}
+
+#[tokio::test]
+async fn a_store_written_before_normalization_is_rewritten_on_open() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    let db = MemoryDb::open(root).await.unwrap();
+    let id = db
+        .insert_claim(
+            claim("prefers short replies"),
+            vec![evidence("t-1", "item:1")],
+        )
+        .await
+        .unwrap();
+    // Simulate a row written by an older build.
+    sqlx::query("UPDATE claims SET subject = 'User  Name' WHERE id = ?")
+        .bind(&id)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    drop(db);
+
+    let reopened = MemoryDb::open(root).await.unwrap();
+    assert_eq!(
+        "user name",
+        reopened.load_claim(&id).await.unwrap().subject,
+        "opening the store must canonicalize existing subjects"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Health check
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn the_doctor_reports_a_healthy_store() {
+    let db = db().await;
+    db.insert_claim(claim("first"), vec![evidence("t-1", "item:1")])
+        .await
+        .unwrap();
+    db.insert_claim(claim("second"), vec![evidence("t-1", "item:2")])
+        .await
+        .unwrap();
+
+    let report = db.doctor().await.unwrap();
+
+    assert_eq!(2, report.claims_total);
+    assert_eq!(2, report.active);
+    assert_eq!(0, report.superseded);
+    assert_eq!(0, report.orphan_evidence);
+    assert_eq!(0, report.invalid_windows);
+    assert!(report.index_in_sync);
+    assert!(report.integrity_ok);
+    assert!(!report.needs_attention());
+}
+
+#[tokio::test]
+async fn the_doctor_notices_an_index_that_lost_a_row() {
+    let db = db().await;
+    db.insert_claim(claim("first"), vec![evidence("t-1", "item:1")])
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM claims_fts")
+        .execute(&db.pool)
+        .await
+        .unwrap();
+
+    let report = db.doctor().await.unwrap();
+
+    assert!(!report.index_in_sync);
+    assert!(report.needs_attention());
+}
+
+#[tokio::test]
+async fn the_doctor_treats_an_overdue_claim_as_attention_not_damage() {
+    let db = db().await;
+    db.insert_claim(
+        NewClaim {
+            review_due: Some(at(1)),
+            ..claim("prefers short replies")
+        },
+        vec![evidence("t-1", "item:1")],
+    )
+    .await
+    .unwrap();
+
+    let report = db.doctor().await.unwrap();
+
+    assert_eq!(1, report.overdue);
+    assert!(
+        !report.needs_attention(),
+        "a claim awaiting review is a prompt, not a broken row"
+    );
+}
+
+#[tokio::test]
+async fn the_doctor_notices_evidence_whose_claim_is_gone() {
+    let db = db().await;
+    let id = db
+        .insert_claim(claim("first"), vec![evidence("t-1", "item:1")])
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM claims WHERE id = ?")
+        .bind(&id)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+
+    let report = db.doctor().await.unwrap();
+
+    assert_eq!(1, report.orphan_evidence);
+    assert!(report.needs_attention());
+}
+
+// ---------------------------------------------------------------------------
+// Claims awaiting the user's decision
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn a_claim_under_review_is_stored_but_kept_out_of_retrieval() {
+    let db = db().await;
+    let held = db
+        .insert_claim(claim("回复要简短"), vec![evidence("t-1", "item:1")])
+        .await
+        .unwrap();
+    let disputed = db
+        .insert_conflicting(
+            claim("回复不要简短"),
+            vec![evidence("t-2", "item:2")],
+            &held,
+        )
+        .await
+        .unwrap();
+
+    // Stored: the newest thing the user said is never silently dropped.
+    let stored = db.load_claim(&disputed).await.unwrap();
+    assert_eq!(Some(held.clone()), stored.conflict_with);
+
+    // But not retrieved, so the model is never handed both statements at once.
+    let injected = db.injection_candidates(10, at(22)).await.unwrap();
+    assert_eq!(1, injected.len());
+    assert_eq!(held, injected[0].id);
+
+    let recalled = db.recall_candidates("回复", 10, at(22)).await.unwrap();
+    assert_eq!(1, recalled.hits.len());
+    assert_eq!(held, recalled.hits[0].claim.id);
+}
+
+#[tokio::test]
+async fn keeping_a_claim_closes_the_statement_it_contradicted() {
+    let db = db().await;
+    let held = db
+        .insert_claim(claim("回复要简短"), vec![evidence("t-1", "item:1")])
+        .await
+        .unwrap();
+    let disputed = db
+        .insert_conflicting(
+            claim("回复不要简短"),
+            vec![evidence("t-2", "item:2")],
+            &held,
+        )
+        .await
+        .unwrap();
+
+    db.keep_claim(&disputed).await.unwrap();
+
+    let confirmed = db.load_claim(&disputed).await.unwrap();
+    assert_eq!(None, confirmed.conflict_with);
+    let closed = db.load_claim(&held).await.unwrap();
+    assert!(closed.valid_to.is_some(), "the older belief is closed");
+    assert_eq!(Some(disputed.clone()), closed.superseded_by);
+    assert_eq!(
+        1,
+        db.active_claims_for_subject("user").await.unwrap().len(),
+        "one belief per subject survives a ruling"
+    );
+}
+
+#[tokio::test]
+async fn keeping_a_settled_claim_leaves_other_claims_alone() {
+    let db = db().await;
+    let first = db
+        .insert_claim(claim("first"), vec![evidence("t-1", "item:1")])
+        .await
+        .unwrap();
+    let second = db
+        .insert_claim(claim("second"), vec![evidence("t-1", "item:2")])
+        .await
+        .unwrap();
+
+    db.keep_claim(&first).await.unwrap();
+
+    assert!(
+        db.load_claim(&second).await.unwrap().valid_to.is_none(),
+        "confirming one memory must not close an unrelated one"
+    );
+}
+
+#[tokio::test]
+async fn the_doctor_reports_claims_awaiting_review() {
+    let db = db().await;
+    let held = db
+        .insert_claim(claim("回复要简短"), vec![evidence("t-1", "item:1")])
+        .await
+        .unwrap();
+    db.insert_conflicting(
+        claim("回复不要简短"),
+        vec![evidence("t-2", "item:2")],
+        &held,
+    )
+    .await
+    .unwrap();
+
+    let report = db.doctor().await.unwrap();
+
+    assert_eq!(1, report.awaiting_review);
+    assert_eq!(2, report.active, "both claims are still on disk");
+    assert!(
+        !report.needs_attention(),
+        "a pending decision is a prompt for the user, not damage"
+    );
+}
+
+#[tokio::test]
+async fn past_due_claims_are_listed_for_reconsideration() {
+    let db = db().await;
+    let due = db
+        .insert_claim(
+            NewClaim {
+                review_due: Some(at(1)),
+                ..claim("试用账号下月到期")
+            },
+            vec![evidence("t-1", "item:1")],
+        )
+        .await
+        .unwrap();
+    db.insert_claim(claim("回复要简短"), vec![evidence("t-1", "item:2")])
+        .await
+        .unwrap();
+
+    let listed = db.review_due_claims(10, at(22)).await.unwrap();
+
+    assert_eq!(1, listed.len());
+    assert_eq!(due, listed[0].id);
+}

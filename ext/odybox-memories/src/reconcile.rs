@@ -24,6 +24,9 @@ pub enum ReconcileAction {
     SkipDuplicate,
     /// Store it and close the claim it replaces.
     Supersede { replaced: String },
+    /// Store it, but hold it out of retrieval until the user settles which of two
+    /// contradicting statements holds.
+    NeedsReview { conflicts_with: String },
 }
 
 /// One candidate claim, plus how it relates to what is already known.
@@ -43,6 +46,8 @@ pub struct ReconcileOutcome {
     pub added: usize,
     pub skipped: usize,
     pub superseded: usize,
+    /// Claims stored but held back because they contradict something current.
+    pub needs_review: usize,
     pub failed: usize,
 }
 
@@ -66,7 +71,7 @@ impl ReconcileJudge for ConservativeJudge {
     fn decide<'a>(&'a self, candidate: &'a NewClaim, existing: &'a [Claim]) -> ReconcileFuture<'a> {
         Box::pin(async move {
             let duplicate = existing.iter().any(|claim| {
-                claim.subject == candidate.subject
+                normalize(&claim.subject) == normalize(&candidate.subject)
                     && is_same_statement(&claim.statement, &candidate.statement)
             });
             if duplicate {
@@ -92,6 +97,9 @@ pub async fn apply_claims(
             evidence,
             supersedes,
         } = candidate;
+        // The store keys on the canonical spelling; a candidate still carrying
+        // `User` rather than `user` would otherwise miss its own history.
+        let claim = claim.normalized();
         let existing = db.active_claims_for_subject(&claim.subject).await?;
 
         // A model-declared replacement is honoured only against a claim that is
@@ -114,6 +122,21 @@ pub async fn apply_claims(
                 }
             },
             ReconcileAction::SkipDuplicate => outcome.skipped += 1,
+            ReconcileAction::NeedsReview { conflicts_with } => {
+                match db
+                    .insert_conflicting(claim, evidence, &conflicts_with)
+                    .await
+                {
+                    Ok(_) => outcome.needs_review += 1,
+                    Err(err) => {
+                        tracing::warn!(
+                            error = %err,
+                            "assistant memory: could not store a claim awaiting review"
+                        );
+                        outcome.failed += 1;
+                    }
+                }
+            }
             ReconcileAction::Supersede { replaced } => {
                 let observed_at = claim.valid_from.unwrap_or_else(chrono::Utc::now);
                 match db.supersede(&replaced, claim, evidence, observed_at).await {
@@ -135,12 +158,102 @@ pub fn is_same_statement(left: &str, right: &str) -> bool {
     normalize(left) == normalize(right)
 }
 
+/// Words that flip the meaning of a statement.
+const NEGATIONS_CJK: &[&str] = &["不", "别", "勿", "没", "非"];
+const NEGATIONS_WORD: &[&str] = &["no", "not", "never", "dont", "don't", "avoid", "without"];
+/// Auxiliaries that negation leaves behind: "do not use tabs" has to look like
+/// "use tabs" once the negation is gone, or the comparison fails on `do`.
+const AUXILIARIES_WORD: &[&str] = &["do", "does", "did", "be", "is", "are", "was", "were", "am"];
+
+/// Whether two statements about one subject contradict each other.
+///
+/// The rule is deliberately narrow: strip the negations from both sides and the
+/// remaining wording must be *identical*, while exactly one side was negated.
+/// That catches "reply briefly" against "do not reply briefly" without guessing
+/// at looser paraphrases, where a wrong call would hide a true memory behind a
+/// review the user never asked for.
+pub fn is_contradiction(left: &str, right: &str) -> bool {
+    let (left_negated, left_core) = polarity(left);
+    let (right_negated, right_core) = polarity(right);
+    left_negated != right_negated && !left_core.trim().is_empty() && left_core == right_core
+}
+
+/// Whether the text contains a negation.
+///
+/// Used by extraction to reject a claim that drops a `not` the user actually
+/// said — the one paraphrase that silently inverts a memory.
+pub(crate) fn has_negation(text: &str) -> bool {
+    polarity(text).0
+}
+
+/// Returns whether the text is negated, plus the text with negations removed.
+fn polarity(text: &str) -> (bool, String) {
+    let normalized = normalize(text);
+    let mut negated = false;
+    for token in NEGATIONS_CJK {
+        if normalized.contains(token) {
+            negated = true;
+        }
+    }
+    let stripped = NEGATIONS_CJK
+        .iter()
+        .fold(normalized, |acc, token| acc.replace(token, ""));
+
+    let mut core = String::with_capacity(stripped.len());
+    for word in stripped.split_whitespace() {
+        let bare = word.trim_matches(|ch: char| !ch.is_alphanumeric());
+        if NEGATIONS_WORD.contains(&bare) {
+            negated = true;
+            continue;
+        }
+        // Dropped from both sides equally, so the comparison stays symmetric while
+        // "do not use tabs" and "use tabs" line up.
+        if AUXILIARIES_WORD.contains(&bare) {
+            continue;
+        }
+        if !core.is_empty() {
+            core.push(' ');
+        }
+        core.push_str(word);
+    }
+    (negated, core)
+}
+
+/// The default judge: adds, skips what is already held, and flags contradictions.
+///
+/// It cannot *resolve* a contradiction — deciding which of two opposite
+/// statements is true needs the user, or a model reading both sides — so the
+/// claim is stored with the conflict recorded and held out of retrieval until
+/// the user confirms it or removes it.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ContradictionJudge;
+
+impl ReconcileJudge for ContradictionJudge {
+    fn decide<'a>(&'a self, candidate: &'a NewClaim, existing: &'a [Claim]) -> ReconcileFuture<'a> {
+        Box::pin(async move {
+            let subject = normalize(&candidate.subject);
+            if existing.iter().any(|claim| {
+                normalize(&claim.subject) == subject
+                    && is_same_statement(&claim.statement, &candidate.statement)
+            }) {
+                return ReconcileAction::SkipDuplicate;
+            }
+
+            match existing.iter().find(|claim| {
+                normalize(&claim.subject) == subject
+                    && is_contradiction(&claim.statement, &candidate.statement)
+            }) {
+                Some(claim) => ReconcileAction::NeedsReview {
+                    conflicts_with: claim.id.clone(),
+                },
+                None => ReconcileAction::Add,
+            }
+        })
+    }
+}
+
 pub(crate) fn normalize(statement: &str) -> String {
-    statement
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase()
+    crate::memory_db::normalize_key(statement)
 }
 
 #[cfg(test)]

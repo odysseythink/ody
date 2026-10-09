@@ -25,6 +25,12 @@ use crate::memory_db::claim_kind_from;
 use crate::memory_db::confidence_from;
 use crate::prompts::Transcript;
 use crate::reconcile::ReconcileCandidate;
+use crate::reconcile::has_negation;
+
+/// Longest statement kept. The prompt asks for 240; this is the backstop for a
+/// model that ignores it, because one runaway statement would eat a turn's whole
+/// recall budget.
+pub const MAX_STATEMENT_CHARS: usize = 400;
 
 /// One observation the model attributes to a transcript line.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -89,6 +95,36 @@ impl ExtractionResult {
                 .retain(|evidence| valid_items.contains(&evidence.item));
         }
         self.claims.retain(|claim| !claim.evidence.is_empty());
+    }
+
+    /// Drops claims that say the opposite of the quote they cite.
+    ///
+    /// The prompt tells the model to keep the user's wording, and the store will
+    /// hold whatever survives. This is the one distortion worth a rule: a memory
+    /// that reads differently is one the user can correct, but a memory that
+    /// dropped a "not" records the opposite of what they said and looks entirely
+    /// plausible doing it.
+    pub fn retain_faithful(&mut self) {
+        self.claims.retain(|claim| {
+            let quoted_negated = claim
+                .evidence
+                .iter()
+                .any(|evidence| has_negation(&evidence.quote));
+            !quoted_negated || has_negation(&claim.statement)
+        });
+    }
+
+    /// Truncates statements past [`MAX_STATEMENT_CHARS`].
+    pub fn clamp_statements(&mut self) {
+        for claim in &mut self.claims {
+            if claim.statement.chars().count() > MAX_STATEMENT_CHARS {
+                claim.statement = claim
+                    .statement
+                    .chars()
+                    .take(MAX_STATEMENT_CHARS)
+                    .collect::<String>();
+            }
+        }
     }
 
     /// Converts grounded claims into store rows, with their source attached.

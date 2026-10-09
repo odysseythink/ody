@@ -276,3 +276,99 @@ async fn a_declared_supersede_naming_an_unknown_claim_falls_back_to_the_judge() 
     );
     assert_eq!(0, outcome.superseded);
 }
+
+// ---------------------------------------------------------------------------
+// Contradictions
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_negation_flips_the_meaning_of_otherwise_identical_wording() {
+    assert!(is_contradiction("回复要简短", "回复不要简短"));
+    assert!(is_contradiction("reply briefly", "never reply briefly"));
+    assert!(is_contradiction("use tabs", "do not use tabs"));
+}
+
+#[test]
+fn different_wording_is_not_treated_as_contradiction() {
+    // A conflicting belief usually *is* a contradiction, but calling two different
+    // sentences a contradiction would hide a real memory behind a review the user
+    // never asked for.
+    assert!(!is_contradiction("回复要简短", "回复要简洁"));
+    assert!(!is_contradiction("reply briefly", "reply concisely"));
+    // Same words, same polarity: a restatement, not a conflict.
+    assert!(!is_contradiction("回复要简短", "回复要简短"));
+    assert!(!is_contradiction(
+        "never reply briefly",
+        "do not reply briefly"
+    ));
+}
+
+#[tokio::test]
+async fn a_negated_restatement_is_held_for_review() {
+    let db = MemoryDb::open_in_memory().await.unwrap();
+    let held = db
+        .insert_claim(candidate("user", "回复要简短"), vec![evidence("t-1")])
+        .await
+        .unwrap();
+
+    let outcome = apply_claims(
+        &db,
+        &ContradictionJudge,
+        vec![pair(
+            candidate("user", "回复不要简短"),
+            vec![evidence("t-2")],
+        )],
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(1, outcome.needs_review);
+    assert_eq!(0, outcome.added);
+    let stored = db.active_claims(10).await.unwrap();
+    let disputed = stored
+        .iter()
+        .find(|claim| claim.statement == "回复不要简短")
+        .expect("the newest statement is kept, not dropped");
+    assert_eq!(Some(held), disputed.conflict_with);
+}
+
+#[tokio::test]
+async fn a_contradiction_about_another_subject_is_a_new_memory() {
+    let db = MemoryDb::open_in_memory().await.unwrap();
+    db.insert_claim(candidate("expo", "回复要简短"), vec![evidence("t-1")])
+        .await
+        .unwrap();
+
+    let outcome = apply_claims(
+        &db,
+        &ContradictionJudge,
+        vec![pair(
+            candidate("astro", "回复不要简短"),
+            vec![evidence("t-2")],
+        )],
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(1, outcome.added);
+    assert_eq!(0, outcome.needs_review);
+}
+
+#[tokio::test]
+async fn an_identical_claim_still_skips_before_the_conflict_check() {
+    let db = MemoryDb::open_in_memory().await.unwrap();
+    db.insert_claim(candidate("user", "回复要简短"), vec![evidence("t-1")])
+        .await
+        .unwrap();
+
+    let outcome = apply_claims(
+        &db,
+        &ContradictionJudge,
+        vec![pair(candidate("user", "回复要简短"), vec![evidence("t-2")])],
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(1, outcome.skipped);
+    assert_eq!(0, outcome.needs_review);
+}

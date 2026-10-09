@@ -28,6 +28,9 @@ pub enum UserOpKind {
     Pin,
     /// Stop favouring this claim.
     Unpin,
+    /// Confirm this claim. If it was waiting on a contradiction, it becomes
+    /// current and the statement it contradicted is closed.
+    Keep,
 }
 
 /// One pending request, as written by odyBox.
@@ -86,6 +89,7 @@ pub async fn apply_pending(
             UserOpKind::Delete => db.delete_claim(&op.claim_id).await,
             UserOpKind::Pin => db.set_pinned(&op.claim_id, true).await,
             UserOpKind::Unpin => db.set_pinned(&op.claim_id, false).await,
+            UserOpKind::Keep => db.keep_claim(&op.claim_id).await,
         };
 
         match applied {

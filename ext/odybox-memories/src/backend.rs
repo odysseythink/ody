@@ -354,7 +354,7 @@ impl AssistantMemoryStore {
             return Err(StoreError::EmptyNote);
         }
 
-        let notes_dir = self.root.join("extensions").join("ad_hoc").join("notes");
+        let notes_dir = crate::store::ad_hoc_notes_dir(&self.root);
         tokio::fs::create_dir_all(&notes_dir).await?;
         let path = notes_dir.join(filename);
 

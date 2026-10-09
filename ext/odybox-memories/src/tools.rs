@@ -26,12 +26,17 @@ use serde_json::Map;
 use serde_json::Value;
 use serde_json::json;
 
+use crate::MemoryDb;
 use crate::backend::AssistantMemoryStore;
 use crate::backend::DEFAULT_READ_MAX_CHARS;
 use crate::backend::DEFAULT_SEARCH_MAX_RESULTS;
 use crate::backend::ReadResponse;
 use crate::backend::SearchResponse;
 use crate::backend::StoreError;
+use crate::budget_tokens_for_window;
+use crate::memory_db::claim_kind_str;
+use crate::memory_db::confidence_str;
+use crate::recall::recall_for_query;
 
 /// Tool namespace. Deliberately distinct from the Ody memory namespace so the
 /// two tool sets can never collide, even if both are mounted on one thread.
@@ -40,6 +45,13 @@ pub const TOOLS_NAMESPACE: &str = "odybox_memories";
 pub const READ_TOOL_NAME: &str = "read";
 pub const SEARCH_TOOL_NAME: &str = "search";
 pub const ADD_NOTE_TOOL_NAME: &str = "add_note";
+pub const RECALL_TOOL_NAME: &str = "recall";
+
+/// Memories one recall call may return. Higher than the injected block: the model
+/// asked a direct question, so a longer answer is worth the space.
+pub const DEFAULT_RECALL_TOOL_RESULTS: usize = 12;
+/// Characters of each supporting quote returned with a memory.
+const RECALL_EXCERPT_CHARS: usize = 200;
 
 /// Empty payload for write-only tools.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
@@ -300,11 +312,156 @@ impl ToolExecutor<ToolCall> for AddNoteTool {
     }
 }
 
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct RecallArgs {
+    /// What to look for, in the user's own words.
+    query: String,
+    /// Maximum number of memories to return.
+    #[schemars(range(min = 1))]
+    max_results: Option<usize>,
+}
+
+/// One memory returned by `recall`.
+#[derive(Serialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+struct RecallMemory {
+    id: String,
+    kind: String,
+    subject: String,
+    statement: String,
+    confidence: String,
+    scope: Option<String>,
+    /// Date the memory became true.
+    valid_from: String,
+    /// Quotes from the conversations it was learned from.
+    evidence: Vec<RecallEvidence>,
+}
+
+/// One supporting quote behind a memory.
+#[derive(Serialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+struct RecallEvidence {
+    source_thread: String,
+    source_locator: String,
+    excerpt: String,
+}
+
+#[derive(Serialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+struct RecallResponse {
+    query: String,
+    memories: Vec<RecallMemory>,
+    /// Whether the store held more matches than were returned.
+    truncated: bool,
+}
+
+/// Searches what the assistant remembers about this user, with the quotes behind
+/// each memory.
+///
+/// This is the way to answer questions about the user from memory rather than
+/// from the current conversation.
+#[derive(Clone)]
+pub struct RecallTool {
+    store: AssistantMemoryStore,
+}
+
+impl RecallTool {
+    pub fn new(store: AssistantMemoryStore) -> Self {
+        Self { store }
+    }
+
+    async fn handle_call(
+        &self,
+        call: ToolCall,
+    ) -> Result<Box<dyn ody_extension_api::ToolOutput>, FunctionCallError> {
+        let args: RecallArgs = parse_args(&call)?;
+        let limit = args
+            .max_results
+            .unwrap_or(DEFAULT_RECALL_TOOL_RESULTS)
+            .max(1);
+        let response = recall_response(&self.store, &args.query, limit)
+            .await
+            .map_err(FunctionCallError::RespondToModel)?;
+        Ok(Box::new(JsonToolOutput::new(json!(response))))
+    }
+}
+
+fn truncate_excerpt(text: &str) -> String {
+    text.chars().take(RECALL_EXCERPT_CHARS).collect()
+}
+
+/// Answers one recall call from the store under `store`'s root.
+async fn recall_response(
+    store: &AssistantMemoryStore,
+    query: &str,
+    limit: usize,
+) -> Result<RecallResponse, String> {
+    let db = MemoryDb::open(store.root())
+        .await
+        .map_err(|err| err.to_string())?;
+    let outcome = recall_for_query(&db, query, limit, budget_tokens_for_window(None))
+        .await
+        .map_err(|err| err.to_string())?;
+
+    let mut memories = Vec::with_capacity(outcome.claims.len());
+    for claim in &outcome.claims {
+        // Evidence is what makes a memory checkable, so a failure to read it
+        // degrades the answer rather than failing the call.
+        let evidence = db.evidence_for(&claim.id).await.unwrap_or_default();
+        memories.push(RecallMemory {
+            id: claim.id.clone(),
+            kind: claim_kind_str(claim.kind).to_string(),
+            subject: claim.subject.clone(),
+            statement: claim.statement.clone(),
+            confidence: confidence_str(claim.confidence).to_string(),
+            scope: claim.scope.clone(),
+            valid_from: claim.valid_from.format("%Y-%m-%d").to_string(),
+            evidence: evidence
+                .into_iter()
+                .map(|item| RecallEvidence {
+                    source_thread: item.source_thread,
+                    source_locator: item.source_locator,
+                    excerpt: truncate_excerpt(&item.excerpt),
+                })
+                .collect(),
+        });
+    }
+
+    Ok(RecallResponse {
+        query: query.to_string(),
+        truncated: outcome.candidates > memories.len(),
+        memories,
+    })
+}
+
+impl ToolExecutor<ToolCall> for RecallTool {
+    fn tool_name(&self) -> ToolName {
+        tool_name(RECALL_TOOL_NAME)
+    }
+
+    fn spec(&self) -> ToolSpec {
+        function_tool::<RecallArgs, RecallResponse>(
+            RECALL_TOOL_NAME,
+            "Search the assistant memory for what is remembered about this user, and return each memory with the quotes it came from. Use it when an answer depends on something the user told you in an earlier conversation: a preference, a past decision, a correction, or an ongoing project.",
+        )
+    }
+
+    fn handle(&self, call: ToolCall) -> ToolExecutorFuture<'_> {
+        Box::pin(self.handle_call(call))
+    }
+}
+
 /// Builds the assistant memory tool set bound to `store`.
 pub fn assistant_memory_tools(store: AssistantMemoryStore) -> Vec<Arc<dyn ToolExecutor<ToolCall>>> {
     vec![
         Arc::new(AddNoteTool::new(store.clone())),
+        Arc::new(RecallTool::new(store.clone())),
         Arc::new(ReadTool::new(store.clone())),
         Arc::new(SearchTool::new(store)),
     ]
 }
+
+#[cfg(test)]
+#[path = "tools_tests.rs"]
+mod tests;

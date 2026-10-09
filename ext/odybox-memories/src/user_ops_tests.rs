@@ -155,3 +155,49 @@ async fn an_unreadable_request_is_reported_and_cleared() {
     assert_eq!(1, outcome.failed);
     assert_eq!(0, pending_files(dir.path()).await);
 }
+
+#[tokio::test]
+async fn a_keep_request_settles_a_contradiction() {
+    let db = MemoryDb::open_in_memory().await.unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let held = insert_claim(&db, "user", "回复要简短").await;
+    let disputed = db
+        .insert_conflicting(
+            NewClaim {
+                kind: ClaimKind::Entity,
+                subject: "user".to_string(),
+                statement: "回复不要简短".to_string(),
+                confidence: Confidence::High,
+                scope: None,
+                decision_implication: None,
+                review_due: None,
+                valid_from: Some(at(9)),
+            },
+            vec![NewEvidence {
+                kind: EvidenceKind::Fact,
+                occurred_at: at(9),
+                source_thread: "t-2".to_string(),
+                source_locator: "item:3".to_string(),
+                excerpt: "原话".to_string(),
+            }],
+            &held,
+        )
+        .await
+        .unwrap();
+    write_op(dir.path(), "001", &op_body("keep", &disputed)).await;
+
+    let outcome = apply_pending(&db, dir.path()).await.unwrap();
+
+    assert_eq!(1, outcome.applied);
+    let confirmed = db.load_claim(&disputed).await.unwrap();
+    assert_eq!(None, confirmed.conflict_with, "the confirmation clears it");
+    let older = db.load_claim(&held).await.unwrap();
+    assert!(
+        older.valid_to.is_some(),
+        "the belief it contradicted is closed, not deleted"
+    );
+    assert_eq!(Some(disputed.clone()), older.superseded_by);
+    let active = db.active_claims(10).await.unwrap();
+    assert_eq!(1, active.len());
+    assert_eq!(disputed, active[0].id);
+}

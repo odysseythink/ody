@@ -157,3 +157,61 @@ fn a_declared_supersede_travels_with_the_candidate() {
 
     assert_eq!(Some("claim-old".to_string()), candidates[0].supersedes);
 }
+
+// ---------------------------------------------------------------------------
+// Faithfulness to the quote
+// ---------------------------------------------------------------------------
+
+/// A claim whose statement keeps the negation the user spoke.
+const KEEPS_NEGATION: &str = concat!(
+    r#"{"summary":"s","claims":[{"kind":"preference","subject":"user","#,
+    r#""statement":"回复不要用套话","confidence":"high","#,
+    r#""evidence":[{"item":1,"quote":"回复不要用套话"}]}]}"#
+);
+
+/// The same conversation, with the negation lost on the way out.
+const DROPS_NEGATION: &str = concat!(
+    r#"{"summary":"s","claims":[{"kind":"preference","subject":"user","#,
+    r#""statement":"回复用套话","confidence":"high","#,
+    r#""evidence":[{"item":1,"quote":"回复不要用套话"}]}]}"#
+);
+
+#[test]
+fn a_statement_that_keeps_the_users_negation_survives() {
+    let mut result = parse_extraction_result(KEEPS_NEGATION).expect("parses");
+    result.retain_grounded(&items(&[1]));
+
+    result.retain_faithful();
+
+    assert_eq!(1, result.claims.len());
+}
+
+#[test]
+fn a_statement_that_drops_the_users_negation_is_dropped() {
+    let mut result = parse_extraction_result(DROPS_NEGATION).expect("parses");
+    result.retain_grounded(&items(&[1]));
+
+    result.retain_faithful();
+
+    assert!(
+        result.is_empty(),
+        "a memory that says the opposite of the quote must not be stored"
+    );
+}
+
+#[test]
+fn a_long_statement_is_clamped_to_the_budget() {
+    let long = "字".repeat(MAX_STATEMENT_CHARS + 120);
+    let raw = format!(
+        r#"{{"summary":"s","claims":[{{"kind":"preference","subject":"user","statement":"{long}","confidence":"high","evidence":[{{"item":1,"quote":"原话"}}]}}]}}"#
+    );
+    let mut result = parse_extraction_result(&raw).expect("parses");
+    result.retain_grounded(&items(&[1]));
+
+    result.clamp_statements();
+
+    assert_eq!(
+        MAX_STATEMENT_CHARS,
+        result.claims[0].statement.chars().count()
+    );
+}

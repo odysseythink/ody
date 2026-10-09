@@ -12,7 +12,12 @@ use std::path::Path;
 use ody_protocol::ThreadId;
 use ody_rollout::RolloutRecorder;
 
+use crate::ClaimKind;
+use crate::Confidence;
+use crate::EvidenceKind;
 use crate::MemoryDb;
+use crate::NewClaim;
+use crate::NewEvidence;
 use crate::extract::MemoryExtractor;
 use crate::ledger::ExtractionLedger;
 use crate::memory_db::VIEW_FILENAME;
@@ -26,6 +31,11 @@ use crate::store::ASSISTANT_MEMORY_DIR;
 /// replaces. Bounded because the block is resident in every extraction prompt.
 pub const KNOWN_CLAIMS_LIMIT: usize = 40;
 
+/// Characters of a note kept as the claim's supporting quote.
+const NOTE_EXCERPT_CHARS: usize = 200;
+/// Notes are about the user unless the note itself says otherwise.
+const NOTE_SUBJECT: &str = "user";
+
 /// Sessions extracted per pipeline run, bounding model spend per start.
 pub const DEFAULT_SESSION_BUDGET: usize = 3;
 /// Sessions pulled from the rollout listing before budget filtering.
@@ -38,9 +48,15 @@ pub struct SessionStats {
     pub candidates: usize,
     /// Claims thrown away for citing no line, or a line that is not there.
     pub dropped_ungrounded: usize,
+    /// Claims thrown away for contradicting the quote they cited — in practice,
+    /// for dropping a negation the user actually said.
+    pub dropped_unfaithful: usize,
     pub added: usize,
     pub skipped: usize,
     pub superseded: usize,
+    /// Claims stored but held out of retrieval because they contradict a current
+    /// belief. The user decides which one holds.
+    pub needs_review: usize,
     pub store_failed: usize,
     /// Claims already in the store that the model was shown.
     pub known_claims_shown: usize,
@@ -50,9 +66,11 @@ impl SessionStats {
     fn absorb(&mut self, other: &SessionStats) {
         self.candidates += other.candidates;
         self.dropped_ungrounded += other.dropped_ungrounded;
+        self.dropped_unfaithful += other.dropped_unfaithful;
         self.added += other.added;
         self.skipped += other.skipped;
         self.superseded += other.superseded;
+        self.needs_review += other.needs_review;
         self.store_failed += other.store_failed;
         self.known_claims_shown = self.known_claims_shown.max(other.known_claims_shown);
     }
@@ -98,6 +116,84 @@ pub struct PipelineReport {
     pub failed: usize,
 }
 
+/// Turns ad-hoc notes into claims, so "remember this" actually survives.
+///
+/// A note is a file written by the `add_note` tool. Without this step it is only
+/// visible to the file tools: it never becomes a memory, is never recalled, and
+/// is never reconciled against what the assistant already believes.
+///
+/// There is no model in this path on purpose. The note is already the wording
+/// somebody wanted remembered, so it is stored as the claim's statement verbatim,
+/// with the note file recorded as its evidence. Absorbing a note twice is
+/// impossible: the evidence row is the marker.
+pub(crate) async fn absorb_notes(db: &MemoryDb, memory_root: &Path) -> usize {
+    let dir = crate::store::ad_hoc_notes_dir(memory_root);
+    let mut reader = match tokio::fs::read_dir(&dir).await {
+        Ok(reader) => reader,
+        Err(_) => return 0,
+    };
+
+    let mut absorbed = 0;
+    while let Ok(Some(entry)) = reader.next_entry().await {
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("md") {
+            continue;
+        }
+        let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let Ok(content) = tokio::fs::read_to_string(&path).await else {
+            continue;
+        };
+        let statement = content.trim();
+        if statement.is_empty() {
+            continue;
+        }
+        match db.has_note_claim(filename).await {
+            Ok(true) => continue,
+            Ok(false) => {}
+            Err(err) => {
+                tracing::warn!(note = filename, error = %err, "assistant memory: could not check a note");
+                continue;
+            }
+        }
+
+        let statement = statement
+            .chars()
+            .take(crate::extract::MAX_STATEMENT_CHARS)
+            .collect::<String>();
+        let excerpt = statement
+            .chars()
+            .take(NOTE_EXCERPT_CHARS)
+            .collect::<String>();
+        let claim = NewClaim {
+            kind: ClaimKind::Note,
+            subject: NOTE_SUBJECT.to_string(),
+            statement,
+            confidence: Confidence::High,
+            scope: None,
+            decision_implication: None,
+            review_due: None,
+            valid_from: None,
+        };
+        let evidence = NewEvidence {
+            kind: EvidenceKind::Fact,
+            occurred_at: chrono::Utc::now(),
+            source_thread: crate::memory_db::NOTE_SOURCE_THREAD.to_string(),
+            source_locator: filename.to_string(),
+            excerpt,
+        };
+
+        match db.insert_claim(claim, vec![evidence]).await {
+            Ok(_) => absorbed += 1,
+            Err(err) => {
+                tracing::warn!(note = filename, error = %err, "assistant memory: could not store a note");
+            }
+        }
+    }
+    absorbed
+}
+
 /// Processes a single session transcript through extraction and recording.
 ///
 /// Separated from discovery so it can be exercised without fabricating rollout
@@ -117,17 +213,37 @@ pub async fn process_transcript(
 
     let (mut transcript, _truncated) = transcript.truncated();
     // Shown to the extraction model so a new statement can replace an old one
-    // instead of accumulating beside it. A failure here must not cost the user
-    // their extraction, so it degrades to "nothing known yet".
-    transcript.known_claims = db
+    // instead of accumulating beside it, and so a claim that is past its review
+    // date can be closed if the transcript shows it no longer holds.
+    //
+    // A failure here must not cost the user their extraction, so it degrades to
+    // "nothing known yet".
+    let now = chrono::Utc::now();
+    let mut known = db
         .active_claims(KNOWN_CLAIMS_LIMIT)
         .await
+        .unwrap_or_default();
+    // Overdue claims are appended even when the newest ones filled the list, since
+    // nothing else will ever revisit them.
+    for claim in db
+        .review_due_claims(KNOWN_CLAIMS_LIMIT, now)
+        .await
         .unwrap_or_default()
+    {
+        if !known.iter().any(|existing| existing.id == claim.id) {
+            known.push(claim);
+        }
+    }
+    transcript.known_claims = known
         .into_iter()
-        .map(|claim| prompts::KnownClaim {
-            id: claim.id,
-            subject: claim.subject,
-            statement: claim.statement,
+        .map(|claim| {
+            let review_due_passed = claim.review_due.is_some_and(|due| due <= now);
+            prompts::KnownClaim {
+                id: claim.id,
+                subject: claim.subject,
+                statement: claim.statement,
+                review_due_passed,
+            }
         })
         .collect();
     let mut memory = match extractor.extract(&transcript).await {
@@ -145,9 +261,14 @@ pub async fn process_transcript(
 
     let proposed = memory.claims.len();
     memory.retain_grounded(&transcript.items);
+    let grounded = memory.claims.len();
+    memory.retain_faithful();
+    let faithful = memory.claims.len();
+    memory.clamp_statements();
     let mut stats = SessionStats {
         candidates: proposed,
-        dropped_ungrounded: proposed - memory.claims.len(),
+        dropped_ungrounded: proposed - grounded,
+        dropped_unfaithful: grounded - faithful,
         known_claims_shown: transcript.known_claims.len(),
         ..SessionStats::default()
     };
@@ -179,6 +300,7 @@ pub async fn process_transcript(
     stats.added = outcome.added;
     stats.skipped = outcome.skipped;
     stats.superseded = outcome.superseded;
+    stats.needs_review = outcome.needs_review;
     stats.store_failed = outcome.failed;
     tracing::info!(
         thread_id = %thread_id,
@@ -186,6 +308,7 @@ pub async fn process_transcript(
         added = outcome.added,
         skipped = outcome.skipped,
         superseded = outcome.superseded,
+        needs_review = outcome.needs_review,
         failed = outcome.failed,
         "assistant memory: reconciled session claims"
     );
@@ -254,6 +377,10 @@ pub async fn run_once(input: PipelineInput<'_>) -> std::io::Result<PipelineRepor
                 (0, 0)
             }
         };
+
+    // Notes are absorbed before the session pass, so a note written in this
+    // session is already recallable in the next one.
+    let notes_absorbed = absorb_notes(input.db, &memory_root).await;
 
     let started = std::time::Instant::now();
     let sessions =
@@ -353,15 +480,18 @@ pub async fn run_once(input: PipelineInput<'_>) -> std::io::Result<PipelineRepor
         failed: report.failed,
         candidates: totals.candidates,
         dropped_ungrounded: totals.dropped_ungrounded,
+        dropped_unfaithful: totals.dropped_unfaithful,
         added: totals.added,
         skipped: totals.skipped,
         superseded: totals.superseded,
+        needs_review: totals.needs_review,
         store_failed: totals.store_failed,
         consolidated_subjects,
         subsumed,
         ops_applied,
         ops_failed,
         known_claims_shown: totals.known_claims_shown,
+        notes_absorbed,
         injected_claims,
     };
     if let Err(err) = crate::append_event(&memory_root, &event).await {
@@ -373,7 +503,15 @@ pub async fn run_once(input: PipelineInput<'_>) -> std::io::Result<PipelineRepor
         .await
         .map(|claims| claims.len() as u64)
         .unwrap_or(0);
-    if let Err(err) = crate::update_summary(&memory_root, &event, claims_in_store).await {
+    let awaiting_review = input
+        .db
+        .awaiting_review_count()
+        .await
+        .map(|count| u64::try_from(count).unwrap_or(0))
+        .unwrap_or(0);
+    if let Err(err) =
+        crate::update_summary(&memory_root, &event, claims_in_store, awaiting_review).await
+    {
         tracing::warn!(error = %err, "assistant memory: could not update the run summary");
     }
 

@@ -16,9 +16,12 @@ use ody_extension_api::PromptSlot;
 use ody_extension_api::ThreadLifecycleContributor;
 use ody_extension_api::ThreadResumeInput;
 use ody_extension_api::ToolContributor;
+use ody_extension_api::TurnInputContext;
+use ody_extension_api::TurnInputContributor;
 use ody_protocol::protocol::InternalSessionSource;
 use ody_protocol::protocol::Product;
 use ody_protocol::protocol::SessionSource;
+use ody_protocol::user_input::UserInput;
 use ody_utils_absolute_path::AbsolutePathBuf;
 use pretty_assertions::assert_eq;
 
@@ -45,6 +48,7 @@ use crate::NewClaim;
 use crate::NewEvidence;
 use crate::ODY_MEMORY_DIR;
 use crate::READ_TOOL_NAME;
+use crate::RECALL_TOOL_NAME;
 use crate::SEARCH_TOOL_NAME;
 use crate::SessionOutcome;
 use crate::TOOLS_NAMESPACE;
@@ -205,6 +209,7 @@ fn open_gate_exposes_the_assistant_tool_set() {
     let mut expected = vec![
         ToolName::namespaced(TOOLS_NAMESPACE, ADD_NOTE_TOOL_NAME),
         ToolName::namespaced(TOOLS_NAMESPACE, READ_TOOL_NAME),
+        ToolName::namespaced(TOOLS_NAMESPACE, RECALL_TOOL_NAME),
         ToolName::namespaced(TOOLS_NAMESPACE, SEARCH_TOOL_NAME),
     ];
     expected.sort();
@@ -809,4 +814,191 @@ async fn opted_out_thread_injects_no_memory_block() {
         .await;
 
     assert_eq!(0, fragments.len());
+}
+
+// ---------------------------------------------------------------------------
+// Turn-scoped injection
+// ---------------------------------------------------------------------------
+
+fn turn_input(text: &str) -> TurnInputContext {
+    TurnInputContext {
+        turn_id: "turn-1".to_string(),
+        user_input: vec![UserInput::Text {
+            text: text.to_string(),
+            text_elements: Vec::new(),
+        }],
+        environments: Vec::new(),
+        model_context_window: Some(128_000),
+    }
+}
+
+async fn store_claim(root: &std::path::Path, statement: &str) {
+    let db = MemoryDb::open(root).await.expect("memory store");
+    db.insert_claim(
+        NewClaim {
+            kind: ClaimKind::Preference,
+            subject: "user".to_string(),
+            statement: statement.to_string(),
+            confidence: Confidence::High,
+            scope: None,
+            decision_implication: None,
+            review_due: None,
+            valid_from: None,
+        },
+        vec![NewEvidence {
+            kind: EvidenceKind::Fact,
+            occurred_at: chrono::Utc::now(),
+            source_thread: "t-1".to_string(),
+            source_locator: "item:1".to_string(),
+            excerpt: "原话".to_string(),
+        }],
+    )
+    .await
+    .expect("claim");
+}
+
+/// Contract 2f: the turn-scoped path stays behind the same gate as the
+/// thread-scoped one, so an Ody thread never sees assistant-memory text.
+#[tokio::test]
+async fn closed_gate_contributes_no_turn_memory() {
+    let session_store = ExtensionData::new("session");
+    let thread_store = ExtensionData::new_with_init("thread", ExtensionDataInit::new());
+    let turn_store = ExtensionData::new_with_init("turn", ExtensionDataInit::new());
+    let extension = AssistantMemoryExtension::default();
+
+    let fragments = extension
+        .contribute(
+            turn_input("回复要简短"),
+            &session_store,
+            &thread_store,
+            &turn_store,
+        )
+        .await;
+
+    assert_eq!(0, fragments.len());
+}
+
+/// Contract 2g: an open gate hands the model the memory that bears on this
+/// message, as contextual user input rather than developer policy — it is
+/// context about the user, not an instruction to follow.
+#[tokio::test]
+async fn open_gate_contributes_turn_memory_for_a_relevant_message() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let root = dir.path().join(ASSISTANT_MEMORY_DIR);
+    store_claim(&root, "用户偏好简短回复").await;
+
+    let session_store = ExtensionData::new("session");
+    let thread_store = gated_thread_store(root);
+    let turn_store = ExtensionData::new_with_init("turn", ExtensionDataInit::new());
+    let extension = AssistantMemoryExtension::default();
+
+    let fragments = extension
+        .contribute(
+            turn_input("帮我写个介绍，回复简短点"),
+            &session_store,
+            &thread_store,
+            &turn_store,
+        )
+        .await;
+
+    assert_eq!(1, fragments.len());
+    assert_eq!("user", fragments[0].role());
+    assert!(fragments[0].render().contains("简短回复"));
+}
+
+/// Contract 2h: a message the store has nothing to say about costs no prompt
+/// space at all.
+#[tokio::test]
+async fn a_turn_without_relevant_memory_contributes_nothing() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let root = dir.path().join(ASSISTANT_MEMORY_DIR);
+    store_claim(&root, "用户偏好简短回复").await;
+
+    let session_store = ExtensionData::new("session");
+    let thread_store = gated_thread_store(root);
+    let turn_store = ExtensionData::new_with_init("turn", ExtensionDataInit::new());
+    let extension = AssistantMemoryExtension::default();
+
+    let fragments = extension
+        .contribute(
+            turn_input("3 加到 5 等于多少"),
+            &session_store,
+            &thread_store,
+            &turn_store,
+        )
+        .await;
+
+    assert_eq!(0, fragments.len());
+}
+
+// ---------------------------------------------------------------------------
+// Notes reach recall
+// ---------------------------------------------------------------------------
+
+/// Contract: a note is memory the user asked for by name, so it must end up
+/// somewhere recall can find it — not only in a file the model may never read.
+#[tokio::test]
+async fn a_note_becomes_a_recallable_memory() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let root = dir.path().join(ASSISTANT_MEMORY_DIR);
+    let store = AssistantMemoryStore::new(&root);
+    store
+        .add_note(
+            "2026-09-22T10-00-00-reply-style.md",
+            "回复不要用套话，也不要加小标题。",
+        )
+        .await
+        .expect("note");
+
+    let db = MemoryDb::open(&root).await.expect("store");
+    let absorbed = crate::pipeline::absorb_notes(&db, &root).await;
+    assert_eq!(1, absorbed);
+
+    let recalled = crate::recall_for_turn(&db, "帮我写个回复", 400)
+        .await
+        .expect("recall");
+    assert_eq!(1, recalled.claims.len());
+    assert!(recalled.rendered.contains("不要用套话"));
+    assert_eq!(crate::ClaimKind::Note, recalled.claims[0].kind);
+
+    // The note file itself is untouched: the user can still read and edit it.
+    assert!(
+        crate::store::ad_hoc_notes_dir(&root)
+            .join("2026-09-22T10-00-00-reply-style.md")
+            .exists()
+    );
+}
+
+/// Contract: the notes folder is scanned on every pass, so absorbing has to be
+/// idempotent or a note would pile up a new claim per pass.
+#[tokio::test]
+async fn absorbing_the_same_note_twice_stores_it_once() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let root = dir.path().join(ASSISTANT_MEMORY_DIR);
+    let store = AssistantMemoryStore::new(&root);
+    store
+        .add_note("2026-09-22T10-00-00-pref.md", "用户偏好简短回复")
+        .await
+        .expect("note");
+    let db = MemoryDb::open(&root).await.expect("store");
+
+    assert_eq!(1, crate::pipeline::absorb_notes(&db, &root).await);
+    assert_eq!(0, crate::pipeline::absorb_notes(&db, &root).await);
+    assert_eq!(1, db.active_claims(10).await.expect("claims").len());
+}
+
+/// Contract: an empty note is not a memory.
+#[tokio::test]
+async fn a_note_without_text_stores_nothing() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let root = dir.path().join(ASSISTANT_MEMORY_DIR);
+    // Written directly: `add_note` refuses an empty body, but a note file can
+    // still end up blank on disk (a hand edit, a failed write).
+    let notes = crate::store::ad_hoc_notes_dir(&root);
+    std::fs::create_dir_all(&notes).expect("notes dir");
+    std::fs::write(notes.join("2026-09-22T10-00-00-blank.md"), "   \n  ").expect("blank note");
+    let db = MemoryDb::open(&root).await.expect("store");
+
+    assert_eq!(0, crate::pipeline::absorb_notes(&db, &root).await);
+    assert!(db.active_claims(10).await.expect("claims").is_empty());
 }

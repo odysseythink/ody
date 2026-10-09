@@ -12,12 +12,13 @@ use std::sync::Weak;
 
 use chrono::Utc;
 
-use crate::ConservativeJudge;
+use crate::ContradictionJudge;
 use crate::MemoryDb;
 use ody_core::ThreadManager;
 use ody_core::config::Config;
 use ody_extension_api::ConfigContributor;
 use ody_extension_api::ContextContributor;
+use ody_extension_api::ContextualUserFragment;
 use ody_extension_api::ExtensionData;
 use ody_extension_api::ExtensionFuture;
 use ody_extension_api::ExtensionRegistryBuilder;
@@ -27,6 +28,8 @@ use ody_extension_api::ThreadResumeInput;
 use ody_extension_api::ThreadStartInput;
 use ody_extension_api::ToolCall;
 use ody_extension_api::ToolContributor;
+use ody_extension_api::TurnInputContext;
+use ody_extension_api::TurnInputContributor;
 use ody_protocol::protocol::Product;
 use ody_protocol::protocol::SessionSource;
 use ody_tools::ToolExecutor;
@@ -249,6 +252,44 @@ impl ToolContributor for AssistantMemoryExtension {
     }
 }
 
+impl TurnInputContributor for AssistantMemoryExtension {
+    /// Injects the memory that bears on the message being answered.
+    ///
+    /// This is the path that makes memory useful mid-conversation: the
+    /// thread-level block is a snapshot taken when the thread started, while this
+    /// one is recalled against the current message and so also sees anything
+    /// learned since.
+    fn contribute<'a>(
+        &'a self,
+        input: TurnInputContext,
+        _session_store: &'a ExtensionData,
+        thread_store: &'a ExtensionData,
+        _turn_store: &'a ExtensionData,
+    ) -> ExtensionFuture<'a, Vec<Box<dyn ContextualUserFragment + Send>>> {
+        Box::pin(async move {
+            let Some(config) = thread_store.get::<AssistantMemoryConfig>() else {
+                return Vec::new();
+            };
+            if !config.opted_in {
+                return Vec::new();
+            }
+
+            match crate::turn_injection::turn_memory_fragment(
+                &config.memory_root,
+                &input.user_input,
+                input.model_context_window,
+            )
+            .await
+            {
+                Some(fragment) => {
+                    vec![Box::new(fragment) as Box<dyn ContextualUserFragment + Send>]
+                }
+                None => Vec::new(),
+            }
+        })
+    }
+}
+
 /// Installs the assistant-memory contributors into the extension registry.
 ///
 /// Safe to install unconditionally: every contributor is a no-op unless the
@@ -262,6 +303,7 @@ pub fn install(
     registry.thread_lifecycle_contributor(extension.clone());
     registry.config_contributor(extension.clone());
     registry.prompt_contributor(extension.clone());
+    registry.turn_input_contributor(extension.clone());
     registry.tool_contributor(extension);
 }
 
@@ -298,7 +340,7 @@ fn spawn_write_pipeline(
                 return;
             }
         };
-        let judge = ConservativeJudge;
+        let judge = ContradictionJudge;
         let ledger = ExtractionLedger::new(memory_root);
         let ody_home = config.ody_home.to_path_buf();
         let recorded_at = Utc::now().to_rfc3339();

@@ -40,9 +40,13 @@ pub struct PassEvent {
     /// Claims thrown away because they cited no transcript line, or a line that
     /// is not in that transcript. A high number points at the prompt or model.
     pub dropped_ungrounded: usize,
+    /// Claims thrown away because they contradicted the quote they cited.
+    pub dropped_unfaithful: usize,
     pub added: usize,
     pub skipped: usize,
     pub superseded: usize,
+    /// Claims stored but held out of retrieval pending the user's decision.
+    pub needs_review: usize,
     pub store_failed: usize,
     pub consolidated_subjects: usize,
     pub subsumed: usize,
@@ -50,6 +54,8 @@ pub struct PassEvent {
     pub ops_failed: usize,
     /// Claims shown to the model as "what you already hold".
     pub known_claims_shown: usize,
+    /// Notes turned into claims during this pass.
+    pub notes_absorbed: usize,
     /// Claims in the injected memory block.
     pub injected_claims: usize,
 }
@@ -63,8 +69,13 @@ pub struct MemorySummary {
     pub claims_added: u64,
     pub claims_superseded: u64,
     pub claims_dropped_ungrounded: u64,
+    pub claims_dropped_unfaithful: u64,
+    /// Notes absorbed into memory, cumulatively.
+    pub notes_absorbed_total: u64,
     pub store_failures: u64,
     pub claims_in_store: u64,
+    /// Claims waiting on the user to settle a contradiction.
+    pub claims_awaiting_review: u64,
     pub last_injected_claims: usize,
 }
 
@@ -96,6 +107,7 @@ pub async fn update_summary(
     memory_root: &Path,
     event: &PassEvent,
     claims_in_store: u64,
+    claims_awaiting_review: u64,
 ) -> std::io::Result<MemorySummary> {
     let mut summary = read_summary(memory_root).await;
     summary.passes += 1;
@@ -104,8 +116,11 @@ pub async fn update_summary(
     summary.claims_added += event.added as u64;
     summary.claims_superseded += (event.superseded + event.subsumed) as u64;
     summary.claims_dropped_ungrounded += event.dropped_ungrounded as u64;
+    summary.claims_dropped_unfaithful += event.dropped_unfaithful as u64;
     summary.store_failures += (event.store_failed + event.failed) as u64;
     summary.claims_in_store = claims_in_store;
+    summary.claims_awaiting_review = claims_awaiting_review;
+    summary.notes_absorbed_total += event.notes_absorbed as u64;
     summary.last_injected_claims = event.injected_claims;
 
     tokio::fs::create_dir_all(memory_root).await?;
