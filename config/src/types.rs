@@ -704,6 +704,12 @@ pub struct Tui {
     #[serde(default)]
     pub raw_output_mode: bool,
 
+    /// Mouse wheel speed multiplier for transcript scrolling, based on one row per event.
+    /// Defaults to `1.0`. Positive fractional values slow scrolling; values above `1.0` speed it up.
+    #[serde(default, deserialize_with = "crate::tui_mouse_scroll::deserialize")]
+    #[schemars(schema_with = "crate::tui_mouse_scroll::schema")]
+    pub mouse_scroll_speed: Option<f64>,
+
     /// Controls whether the TUI uses the terminal's alternate screen buffer.
     ///
     /// - `auto` (default): Use alternate screen.

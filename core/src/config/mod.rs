@@ -897,6 +897,10 @@ pub struct Config {
     /// Start the TUI in raw scrollback mode for copy-friendly transcript output.
     pub tui_raw_output_mode: bool,
 
+    /// Mouse wheel speed multiplier for transcript scrolling, based on one row per event.
+    /// `None` means the default of `1.0`.
+    pub tui_mouse_scroll_speed: Option<f64>,
+
     /// Start the TUI in the specified collaboration mode (plan/default).
 
     /// Controls whether the TUI uses the terminal's alternate screen buffer.
@@ -4322,6 +4326,7 @@ impl Config {
                 .as_ref()
                 .map(|t| t.raw_output_mode)
                 .unwrap_or(false),
+            tui_mouse_scroll_speed: cfg.tui.as_ref().and_then(|t| t.mouse_scroll_speed),
             tui_alternate_screen: cfg
                 .tui
                 .as_ref()
