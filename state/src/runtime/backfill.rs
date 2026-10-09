@@ -110,11 +110,12 @@ WHERE id = 1
 #[cfg(test)]
 mod tests {
     use super::StateRuntime;
-    use super::base_sqlite_options;
     use super::test_support::unique_temp_dir;
     use chrono::Utc;
     use pretty_assertions::assert_eq;
+    use sqlx::ConnectOptions;
     use sqlx::Connection;
+    use sqlx::sqlite::SqliteConnectOptions;
 
     #[tokio::test]
     async fn backfill_state_persists_progress_and_completion() {
@@ -175,9 +176,12 @@ mod tests {
         let runtime = StateRuntime::init(ody_home.clone(), "test-provider".to_string())
             .await
             .expect("initialize runtime");
-        let mut write_connection = sqlx::SqliteConnection::connect_with(&base_sqlite_options(
-            &crate::state_db_path(ody_home.as_path()),
-        ))
+        let mut write_connection = sqlx::SqliteConnection::connect_with(
+            &SqliteConnectOptions::new()
+                .filename(crate::state_db_path(ody_home.as_path()))
+                .busy_timeout(std::time::Duration::from_secs(5))
+                .log_statements(log::LevelFilter::Off),
+        )
         .await
         .expect("open write connection");
         let write_transaction = write_connection

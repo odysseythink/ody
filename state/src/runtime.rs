@@ -29,6 +29,8 @@ use crate::model::datetime_to_epoch_millis;
 use crate::model::datetime_to_epoch_seconds;
 use crate::model::epoch_millis_to_datetime;
 use crate::paths::file_modified_time_utc;
+use crate::sqlite_validation::QuickCheckOutcome;
+use crate::sqlite_validation::SqliteQuickCheckManager;
 use crate::telemetry::DbKind;
 use crate::telemetry::DbTelemetry;
 use chrono::DateTime;
@@ -44,9 +46,7 @@ use sqlx::Sqlite;
 use sqlx::SqliteConnection;
 use sqlx::SqlitePool;
 use sqlx::migrate::Migrator;
-use sqlx::sqlite::SqliteAutoVacuum;
 use sqlx::sqlite::SqliteConnectOptions;
-use sqlx::sqlite::SqliteJournalMode;
 use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::sqlite::SqliteSynchronous;
 use std::collections::BTreeSet;
@@ -352,16 +352,6 @@ async fn close_sqlite_pools(pools: &[&SqlitePool]) {
     }
 }
 
-fn base_sqlite_options(path: &Path) -> SqliteConnectOptions {
-    SqliteConnectOptions::new()
-        .filename(path)
-        .create_if_missing(true)
-        .journal_mode(SqliteJournalMode::Wal)
-        .synchronous(SqliteSynchronous::Normal)
-        .busy_timeout(Duration::from_secs(5))
-        .log_statements(LevelFilter::Off)
-}
-
 async fn open_state_sqlite(
     path: &Path,
     migrator: &Migrator,
@@ -403,22 +393,42 @@ async fn open_sqlite(
     spec: RuntimeDbSpec,
     telemetry_override: Option<&dyn DbTelemetry>,
 ) -> anyhow::Result<SqlitePool> {
-    let options = base_sqlite_options(path).auto_vacuum(SqliteAutoVacuum::Incremental);
-    let started = Instant::now();
-    let pool_result = SqlitePoolOptions::new()
-        .max_connections(5)
-        .connect_with(options)
-        .await
-        .map_err(anyhow::Error::from);
-    crate::telemetry::record_init_result(
-        telemetry_override,
-        spec.kind,
-        spec.open_phase,
-        started.elapsed(),
-        &pool_result,
-    );
-    let pool = pool_result
-        .map_err(|source| recovery::RuntimeDbInitError::new(spec.label, "open", path, source))?;
+    let pool = connect_sqlite_pool(path, spec, telemetry_override).await?;
+
+    // Proactively detect silent corruption before migrating: a database can
+    // open successfully while containing corruption that only surfaces on
+    // later reads. Each open scans once with a bounded startup budget; all
+    // Ody runtime databases are rebuilt from saved data when corruption is
+    // confirmed (upstream keeps report-only databases such as thread history,
+    // which Ody does not have).
+    let quick_checks = SqliteQuickCheckManager::new();
+    let validation_result = quick_checks
+        .quick_check_once(&pool, path, QUICK_CHECK_STARTUP_BUDGET)
+        .await;
+    let outcome = match validation_result {
+        Ok(outcome) => outcome,
+        Err(err) => {
+            pool.close().await;
+            return Err(err);
+        }
+    };
+    let pool = if outcome == QuickCheckOutcome::CorruptedNeedsFixed {
+        tracing::error!(database = %path.display(), "SQLite quick check detected corruption");
+        crate::telemetry::record_corruption(telemetry_override, spec.kind);
+        pool.close().await;
+        let backups = recovery::backup_runtime_db_for_fresh_start(path).await?;
+        for backup in &backups {
+            warn!(
+                database = %backup.original_path.display(),
+                backup = %backup.backup_path.display(),
+                "Preserved corrupt SQLite database before rebuilding"
+            );
+        }
+        connect_sqlite_pool(path, spec, telemetry_override).await?
+    } else {
+        pool
+    };
+
     let started = Instant::now();
     let migrate_result = async {
         if matches!(spec.kind, DbKind::State) {
@@ -438,6 +448,85 @@ async fn open_sqlite(
         pool.close().await;
         return Err(recovery::RuntimeDbInitError::new(spec.label, "migrate", path, source).into());
     }
+    Ok(pool)
+}
+
+/// Limit startup validation to 100 ms per database file.
+const QUICK_CHECK_STARTUP_BUDGET: Duration = Duration::from_millis(100);
+
+async fn connect_sqlite_pool(
+    path: &Path,
+    spec: RuntimeDbSpec,
+    telemetry_override: Option<&dyn DbTelemetry>,
+) -> anyhow::Result<SqlitePool> {
+    let options = SqliteConnectOptions::new()
+        .filename(path)
+        .create_if_missing(true)
+        .synchronous(SqliteSynchronous::Normal)
+        .busy_timeout(Duration::from_secs(5))
+        .log_statements(LevelFilter::Off);
+    // SQLx retries after_connect errors, eventually replacing them with
+    // PoolTimedOut. Return the first initialization error directly while
+    // opening this pool.
+    let (init_error_tx, mut init_error_rx) = tokio::sync::mpsc::channel(/*buffer*/ 1);
+    let pool_options =
+        SqlitePoolOptions::new()
+            .max_connections(5)
+            .after_connect(move |connection, _metadata| {
+                let init_error_tx = init_error_tx.clone();
+                Box::pin(async move {
+                    let result = async {
+                        let mode: i64 = sqlx::query_scalar("PRAGMA auto_vacuum")
+                            .fetch_one(&mut *connection)
+                            .await?;
+                        // The setter takes the writer lock even when the mode is
+                        // unchanged. Initialize before WAL creates the first
+                        // database page; preserve existing modes, including FULL,
+                        // without taking the writer lock.
+                        let empty = if mode == 0 {
+                            sqlx::query_scalar::<_, bool>(
+                                "SELECT NOT EXISTS (SELECT 1 FROM sqlite_schema)",
+                            )
+                            .fetch_one(&mut *connection)
+                            .await?
+                        } else {
+                            false
+                        };
+                        if empty {
+                            sqlx::query("PRAGMA auto_vacuum = INCREMENTAL")
+                                .execute(&mut *connection)
+                                .await?;
+                        }
+                        sqlx::query("PRAGMA journal_mode = WAL")
+                            .execute(connection)
+                            .await?;
+                        Ok(())
+                    }
+                    .await;
+                    result.map_err(|error| match init_error_tx.try_send(error) {
+                        // The opener owns the original error and cancels connection retries.
+                        Ok(()) => sqlx::Error::PoolClosed,
+                        // After opening, lazy connections retain SQLx's normal error handling.
+                        Err(error) => error.into_inner(),
+                    })
+                })
+            });
+    let started = Instant::now();
+    let pool_result = tokio::select! {
+        biased;
+        Some(error) = init_error_rx.recv() => Err(error),
+        result = pool_options.connect_with(options) => result,
+    }
+    .map_err(anyhow::Error::from);
+    crate::telemetry::record_init_result(
+        telemetry_override,
+        spec.kind,
+        spec.open_phase,
+        started.elapsed(),
+        &pool_result,
+    );
+    let pool = pool_result
+        .map_err(|source| recovery::RuntimeDbInitError::new(spec.label, "open", path, source))?;
     Ok(pool)
 }
 
@@ -528,6 +617,10 @@ pub async fn sqlite_integrity_check(path: &Path) -> anyhow::Result<Vec<String>> 
     pool.close().await;
     Ok(rows)
 }
+
+#[cfg(test)]
+#[path = "runtime_sqlite_tests.rs"]
+mod sqlite_open_tests;
 
 #[cfg(test)]
 mod tests {

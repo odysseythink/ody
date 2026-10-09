@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::Duration;
 
+use crate::DB_CORRUPTION_METRIC;
 use crate::DB_FALLBACK_METRIC;
 use crate::DB_INIT_DURATION_METRIC;
 use crate::DB_INIT_METRIC;
@@ -52,6 +53,10 @@ impl DbKind {
             Self::Memories => "memories",
         }
     }
+}
+
+pub(crate) fn record_corruption(telemetry: Option<&dyn DbTelemetry>, db: DbKind) {
+    record_counter(telemetry, DB_CORRUPTION_METRIC, &[("db", db.as_str())]);
 }
 
 pub(crate) fn record_init_result<T>(

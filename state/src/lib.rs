@@ -16,6 +16,7 @@ mod migrations;
 mod model;
 mod paths;
 mod runtime;
+mod sqlite_validation;
 mod telemetry;
 
 pub use model::LogEntry;
@@ -106,6 +107,8 @@ pub const DB_METRIC_BACKFILL: &str = "ody.db.backfill";
 pub const DB_METRIC_BACKFILL_DURATION_MS: &str = "ody.db.backfill.duration_ms";
 /// SQLite initialization attempts. Tags: [status, phase, db, error]
 pub const DB_INIT_METRIC: &str = "ody.sqlite.init.count";
+/// Confirmed SQLite corruption detections. Tags: [db]
+pub const DB_CORRUPTION_METRIC: &str = "ody.sqlite.corruption.count";
 /// SQLite initialization latency. Tags: [status, phase, db, error]
 pub const DB_INIT_DURATION_METRIC: &str = "ody.sqlite.init.duration_ms";
 /// Rollout fallback attempts. Tags: [caller, reason]
