@@ -3,11 +3,13 @@ use crate::common::ResponseStream;
 use crate::common::SafetyBuffering;
 use crate::common::SafetyBufferingTreatment;
 use crate::error::ApiError;
+use crate::responses_headers::json_headers_to_http_headers;
 use crate::safety_buffering::treatment_from_headers;
 use crate::telemetry::SseTelemetry;
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use ody_client::ByteStream;
+use ody_client::RetryAfter;
 use ody_client::StreamResponse;
 use ody_protocol::models::ResponseItem;
 use ody_protocol::protocol::ModelVerification;
@@ -360,8 +362,23 @@ pub fn process_responses_event(
         }
         "response.failed" => {
             if let Some(resp_val) = event.response {
-                let mut response_error = ApiError::Stream("response.failed event received".into());
-                if let Some(error) = resp_val.get("error")
+                let error_value = resp_val.get("error");
+                // Server advice embedded in the error payload's headers is captured once,
+                // at receipt, so intermediate handling does not restart the wait.
+                let retry_after_header = error_value
+                    .and_then(|error| error.get("headers"))
+                    .and_then(Value::as_object)
+                    .and_then(|headers| {
+                        RetryAfter::from_headers(&json_headers_to_http_headers(headers))
+                    });
+                let mut response_error = match retry_after_header {
+                    Some(retry_after) => ApiError::Retryable {
+                        message: "response.failed event received".to_string(),
+                        retry_after: Some(retry_after),
+                    },
+                    None => ApiError::Stream("response.failed event received".into()),
+                };
+                if let Some(error) = error_value
                     && let Ok(error) = serde_json::from_value::<Error>(error.clone())
                 {
                     if is_context_window_error(&error) {
@@ -381,9 +398,14 @@ pub fn process_responses_event(
                     } else if is_server_overloaded_error(&error) {
                         response_error = ApiError::ServerOverloaded;
                     } else {
-                        let delay = try_parse_retry_after(&error);
+                        let retry_after = retry_after_header.or_else(|| {
+                            try_parse_retry_after(&error).and_then(RetryAfter::from_delay)
+                        });
                         let message = error.message.unwrap_or_default();
-                        response_error = ApiError::Retryable { message, delay };
+                        response_error = ApiError::Retryable {
+                            message,
+                            retry_after,
+                        };
                     }
                 }
                 return Err(ResponsesEventError::Api(response_error));
@@ -940,12 +962,22 @@ mod tests {
         assert_eq!(events.len(), 1);
 
         match &events[0] {
-            Err(ApiError::Retryable { message, delay }) => {
+            Err(ApiError::Retryable {
+                message,
+                retry_after,
+            }) => {
                 assert_eq!(
                     message,
                     "Rate limit reached for k3 in organization org-AAA on tokens per min (TPM): Limit 30000, Used 22999, Requested 12528. Please try again in 11.054s. Visit https://platform.odysseythink.com/account/rate-limits to learn more."
                 );
-                assert_eq!(*delay, Some(Duration::from_secs_f64(11.054)));
+                let remaining = retry_after
+                    .expect("expected message-derived retry advice")
+                    .remaining_delay();
+                assert!(
+                    (Duration::from_secs(10)..=Duration::from_secs_f64(11.054))
+                        .contains(&remaining),
+                    "remaining delay was {remaining:?}"
+                );
             }
             other => panic!("unexpected second event: {other:?}"),
         }
@@ -1525,6 +1557,135 @@ mod tests {
         };
         let delay = try_parse_retry_after(&err);
         assert_eq!(delay, Some(Duration::from_secs(35)));
+    }
+
+    /// Server `Retry-After` advice embedded in the failed response's error headers wins
+    /// over any delay parsed from the message text.
+    #[tokio::test]
+    async fn rate_limit_error_prefers_retry_after_header_over_message_delay() {
+        let raw_error = json!({
+            "type": "response.failed",
+            "response": {"error": {
+                "code": "rate_limit_exceeded",
+                "message": "Rate limit reached. Please try again in 5s.",
+                "headers": {"Retry-After": "30"}
+            }}
+        });
+        let sse = format!("event: response.failed\ndata: {raw_error}\n\n");
+
+        let events = collect_events(&[sse.as_bytes()]).await;
+
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            Err(ApiError::Retryable { retry_after, .. }) => {
+                let remaining = retry_after
+                    .expect("expected server retry advice")
+                    .remaining_delay();
+                assert!(
+                    (Duration::from_secs(29)..=Duration::from_secs(30)).contains(&remaining),
+                    "remaining delay was {remaining:?}"
+                );
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+    }
+
+    /// `Retry-After` advice applies to unrecognized error codes too, not just rate limits.
+    #[tokio::test]
+    async fn failed_response_retry_after_header_applies_to_unknown_codes() {
+        let raw_error = json!({
+            "type": "response.failed",
+            "response": {"error": {
+                "code": "temporarily_unavailable",
+                "message": "backend is restarting",
+                "headers": {"retry-after": "12"}
+            }}
+        });
+        let sse = format!("event: response.failed\ndata: {raw_error}\n\n");
+
+        let events = collect_events(&[sse.as_bytes()]).await;
+
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            Err(ApiError::Retryable {
+                message,
+                retry_after,
+            }) => {
+                assert_eq!(message, "backend is restarting");
+                let remaining = retry_after
+                    .expect("expected server retry advice")
+                    .remaining_delay();
+                assert!(
+                    (Duration::from_secs(11)..=Duration::from_secs(12)).contains(&remaining),
+                    "remaining delay was {remaining:?}"
+                );
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+    }
+
+    /// A failed response whose error payload does not parse still surfaces server advice
+    /// as a retryable error instead of an opaque stream failure.
+    #[tokio::test]
+    async fn malformed_failed_response_with_retry_after_header_is_retryable() {
+        let raw_error = json!({
+            "type": "response.failed",
+            "response": {"error": {
+                "code": 123,
+                "headers": {"retry-after": "4"}
+            }}
+        });
+        let sse = format!("event: response.failed\ndata: {raw_error}\n\n");
+
+        let events = collect_events(&[sse.as_bytes()]).await;
+
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            Err(ApiError::Retryable {
+                message,
+                retry_after,
+            }) => {
+                assert_eq!(message, "response.failed event received");
+                let remaining = retry_after
+                    .expect("expected server retry advice")
+                    .remaining_delay();
+                assert!(
+                    (Duration::from_secs(3)..=Duration::from_secs(4)).contains(&remaining),
+                    "remaining delay was {remaining:?}"
+                );
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+    }
+
+    /// Without header advice the message-text delay is still honored.
+    #[tokio::test]
+    async fn rate_limit_error_falls_back_to_message_delay() {
+        let raw_error = json!({
+            "type": "response.failed",
+            "response": {"error": {
+                "code": "rate_limit_exceeded",
+                "message": "Rate limit reached. Please try again in 2.5s."
+            }}
+        });
+        let sse = format!("event: response.failed\ndata: {raw_error}\n\n");
+
+        let events = collect_events(&[sse.as_bytes()]).await;
+
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            Err(ApiError::Retryable { retry_after, .. }) => {
+                let remaining = retry_after
+                    .expect("expected server retry advice")
+                    .remaining_delay();
+                assert!(
+                    (Duration::from_millis(2000)..=Duration::from_millis(2500))
+                        .contains(&remaining),
+                    "remaining delay was {remaining:?}"
+                );
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
     }
 
     const CYBER_RESTRICTED_MODEL_FOR_TESTS: &str = "k3-ody";

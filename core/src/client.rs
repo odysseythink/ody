@@ -1600,6 +1600,7 @@ impl ModelClientSession {
                     body: Some(String::new()),
                     headers: None,
                     url: None,
+                    retry_after: None,
                 });
                 inference_trace_attempt.record_failed(&err, None, /*output_items*/ &[]);
                 return Err(self.client.state.provider.load().map_api_error(err));

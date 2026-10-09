@@ -21,6 +21,7 @@ fn map_api_error_maps_server_overloaded_from_503_body() {
         url: Some("http://example.com/v1/responses".to_string()),
         headers: None,
         body: Some(body),
+        retry_after: None,
     }));
 
     assert!(matches!(err, OdyErr::ServerOverloaded));
@@ -37,6 +38,7 @@ fn map_api_error_maps_cloudflare_blocked_response_to_user_message() {
         body: Some(
             "<html><body>Cloudflare error: Sorry, you have been blocked</body></html>".to_string(),
         ),
+        retry_after: None,
     }));
 
     let OdyErr::UnexpectedStatus(err) = err else {
@@ -70,6 +72,7 @@ fn map_api_error_maps_cyber_policy_from_400_body() {
         url: Some("http://example.com/v1/responses".to_string()),
         headers: None,
         body: Some(body),
+        retry_after: None,
     }));
 
     let OdyErr::CyberPolicy { message } = err else {
@@ -98,6 +101,7 @@ fn map_api_error_maps_wrapped_websocket_cyber_policy_from_400_body() {
         url: Some("ws://example.com/v1/responses".to_string()),
         headers: None,
         body: Some(body),
+        retry_after: None,
     }));
 
     let OdyErr::CyberPolicy { message } = err else {
@@ -119,6 +123,7 @@ fn map_api_error_uses_cyber_policy_fallback_for_missing_message() {
         url: Some("http://example.com/v1/responses".to_string()),
         headers: None,
         body: Some(body),
+        retry_after: None,
     }));
 
     let OdyErr::CyberPolicy { message } = err else {
@@ -146,6 +151,7 @@ fn map_api_error_maps_maximum_context_length_400_to_context_window_exceeded() {
         url: Some("http://example.com/v1/chat/completions".to_string()),
         headers: None,
         body: Some(body),
+        retry_after: None,
     }));
 
     assert!(
@@ -168,6 +174,7 @@ fn map_api_error_keeps_unknown_400_errors_generic() {
         url: Some("http://example.com/v1/responses".to_string()),
         headers: None,
         body: Some(body.clone()),
+        retry_after: None,
     }));
 
     let OdyErr::InvalidRequest(message) = err else {
@@ -197,6 +204,7 @@ fn map_api_error_extracts_identity_auth_details_from_headers() {
         url: Some("https://api.odysseythink.com/v1/models".to_string()),
         headers: Some(headers),
         body: Some(r#"{"detail":"Unauthorized"}"#.to_string()),
+        retry_after: None,
     }));
 
     let OdyErr::UnexpectedStatus(err) = err else {

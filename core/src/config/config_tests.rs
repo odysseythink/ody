@@ -360,7 +360,10 @@ enabled = false
     assert_eq!(
         cfg.skills,
         Some(SkillsConfig {
-            bundled: Some(BundledSkillsConfig { enabled: false }),
+            bundled: Some(BundledSkillsConfig {
+                enabled: false,
+                game: None
+            }),
             include_instructions: Some(false),
             config: Vec::new(),
             knowledge_microagents_enabled: None,
@@ -377,7 +380,10 @@ enabled = false
 fn skills_config_roundtrip() {
     let original = ConfigToml {
         skills: Some(SkillsConfig {
-            bundled: Some(BundledSkillsConfig { enabled: false }),
+            bundled: Some(BundledSkillsConfig {
+                enabled: false,
+                game: None,
+            }),
             include_instructions: Some(false),
             config: vec![SkillConfig {
                 path: None,
@@ -11458,7 +11464,11 @@ async fn to_mcp_config_registers_builtin_servers_by_default() -> std::io::Result
             "built-in server {} must keep its Builtin source",
             builtin.name
         );
-        assert!(server.config().enabled, "{} must be enabled by default", builtin.name);
+        assert!(
+            server.config().enabled,
+            "{} must be enabled by default",
+            builtin.name
+        );
     }
     Ok(())
 }
@@ -11531,7 +11541,8 @@ url = "https://fetch.example/mcp"
         matches!(server.source(), ody_mcp::McpServerSource::Config),
         "config mcp_servers entry must override the built-in server"
     );
-    let ody_config::McpServerTransportConfig::StreamableHttp { url, .. } = &server.config().transport
+    let ody_config::McpServerTransportConfig::StreamableHttp { url, .. } =
+        &server.config().transport
     else {
         panic!("fetch must use streamable-http transport");
     };

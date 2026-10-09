@@ -1,6 +1,6 @@
 use http::StatusCode;
+use ody_client::RetryAfter;
 use ody_client::TransportError;
-use std::time::Duration;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -20,7 +20,7 @@ pub enum ApiError {
     #[error("retryable error: {message}")]
     Retryable {
         message: String,
-        delay: Option<Duration>,
+        retry_after: Option<RetryAfter>,
     },
     #[error("invalid request: {message}")]
     InvalidRequest { message: String },

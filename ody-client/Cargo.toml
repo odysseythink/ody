@@ -11,6 +11,7 @@ futures = { workspace = true }
 http = { workspace = true }
 opentelemetry = { workspace = true }
 ody-terminal-detection = { workspace = true }
+ody-protocol = { workspace = true }
 os_info = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true, features = ["json", "rustls-tls-native-roots", "stream"] }
@@ -47,7 +48,9 @@ opentelemetry_sdk = { workspace = true }
 pretty_assertions = { workspace = true }
 rcgen = { workspace = true }
 tempfile = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
 tracing-subscriber = { workspace = true }
+wiremock = { workspace = true }
 
 [lib]
 doctest = false

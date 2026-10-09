@@ -6,10 +6,7 @@ use crate::network_policy::NetworkPolicyDecisionPayload;
 use crate::protocol::ErrorEvent;
 use crate::protocol::OdyErrorInfo;
 use crate::protocol::TruncationPolicy;
-use chrono::DateTime;
-use chrono::Datelike;
-use chrono::Local;
-use chrono::Utc;
+use crate::retry_after::RetryAfter;
 use ody_async_utils::CancelErr;
 use ody_utils_string::truncate_middle_chars;
 use ody_utils_string::truncate_middle_with_token_budget;
@@ -70,9 +67,10 @@ pub enum OdyErr {
     ///
     /// The Session loop treats this as a transient error and will automatically retry the turn.
     ///
-    /// Optionally includes the requested delay before retrying the turn.
+    /// Optionally carries server retry advice captured at receipt; consumers sleep until its
+    /// deadline so intermediate work does not extend the server-advised wait.
     #[error("stream disconnected before completion: {0}")]
-    Stream(String, Option<Duration>),
+    Stream(String, Option<RetryAfter>),
     #[error(
         "Ody ran out of room in the model's context window. Start a new thread or clear earlier history before retrying."
     )]
@@ -165,6 +163,20 @@ impl From<CancelErr> for OdyErr {
 }
 
 impl OdyErr {
+    /// Returns the original server-advised deadline for callers that pass the error on.
+    pub fn retry_after(&self) -> Option<RetryAfter> {
+        match self {
+            OdyErr::Stream(_, retry_after) => *retry_after,
+            _ => None,
+        }
+    }
+
+    /// Returns the remaining server-advised delay without applying local retry policy.
+    /// Expired advice stays present as zero instead of falling back to a local delay.
+    pub fn server_retry_delay(&self) -> Option<Duration> {
+        self.retry_after().map(RetryAfter::remaining_delay)
+    }
+
     pub fn is_retryable(&self) -> bool {
         match self {
             OdyErr::TurnAborted
@@ -445,12 +457,6 @@ impl std::fmt::Display for UsageLimitReachedError {
 
         write!(f, "{message}")
     }
-}
-
-#[cfg(test)]
-thread_local! {
-    static NOW_OVERRIDE: std::cell::RefCell<Option<DateTime<Utc>>> =
-        const { std::cell::RefCell::new(None) };
 }
 
 #[derive(Debug)]

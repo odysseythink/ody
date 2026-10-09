@@ -63,3 +63,4 @@ pub use crate::transport::ByteStream;
 pub use crate::transport::HttpTransport;
 pub use crate::transport::ReqwestTransport;
 pub use crate::transport::StreamResponse;
+pub use ody_protocol::retry_after::RetryAfter;

@@ -15,7 +15,10 @@ pub fn map_api_error(err: ApiError) -> OdyErr {
         ApiError::ContextWindowExceeded => OdyErr::ContextWindowExceeded,
         ApiError::QuotaExceeded => OdyErr::QuotaExceeded,
         ApiError::UsageNotIncluded => OdyErr::UsageNotIncluded,
-        ApiError::Retryable { message, delay } => OdyErr::Stream(message, delay),
+        ApiError::Retryable {
+            message,
+            retry_after,
+        } => OdyErr::Stream(message, retry_after),
         ApiError::Stream(msg) => OdyErr::Stream(msg, None),
         ApiError::ServerOverloaded => OdyErr::ServerOverloaded,
         ApiError::Api { status, message } => {
@@ -39,6 +42,7 @@ pub fn map_api_error(err: ApiError) -> OdyErr {
                 url,
                 headers,
                 body,
+                retry_after: _,
             } => {
                 let body_text = body.unwrap_or_default();
 

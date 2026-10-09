@@ -117,6 +117,7 @@ mod tests {
             url: Some("https://api.odysseythink.com/v1/models".to_string()),
             headers: Some(headers),
             body: Some(r#"{"error":{"message":"plain text error"},"status":401}"#.to_string()),
+            retry_after: None,
         });
 
         assert_eq!(
@@ -137,6 +138,7 @@ mod tests {
             url: Some("https://api.odysseythink.com/v1/responses".to_string()),
             headers: None,
             body: Some(r#"{"error":{"message":"secret token leaked"}}"#.to_string()),
+            retry_after: None,
         };
 
         assert_eq!(telemetry_transport_error_message(&transport), "http 401");

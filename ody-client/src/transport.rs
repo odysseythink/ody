@@ -109,6 +109,8 @@ impl HttpTransport for ReqwestTransport {
         let resp = builder.send().await.map_err(Self::map_error)?;
         let status = resp.status();
         let headers = resp.headers().clone();
+        // Capture server advice at header receipt, before the body read adds delay.
+        let retry_after = crate::RetryAfter::from_headers(&headers);
         let bytes = resp.bytes().await.map_err(Self::map_error)?;
         if !status.is_success() {
             let body = String::from_utf8(bytes.to_vec()).ok();
@@ -117,6 +119,7 @@ impl HttpTransport for ReqwestTransport {
                 url: Some(url),
                 headers: Some(headers),
                 body,
+                retry_after,
             });
         }
         Ok(Response {
@@ -142,12 +145,14 @@ impl HttpTransport for ReqwestTransport {
         let status = resp.status();
         let headers = resp.headers().clone();
         if !status.is_success() {
+            let retry_after = crate::RetryAfter::from_headers(&headers);
             let body = resp.text().await.ok();
             return Err(TransportError::Http {
                 status,
                 url: Some(url),
                 headers: Some(headers),
                 body,
+                retry_after,
             });
         }
         let stream = resp
@@ -160,3 +165,7 @@ impl HttpTransport for ReqwestTransport {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "transport_retry_after_tests.rs"]
+mod retry_after_tests;

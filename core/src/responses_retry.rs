@@ -28,12 +28,17 @@ pub(crate) async fn handle_retryable_response_stream_error(
     turn_context: &TurnContext,
     request: ResponsesStreamRequest,
 ) -> Result<(), OdyErr> {
+    let retry_after = err.retry_after();
     if *retries >= max_retries
         && client_session.try_switch_fallback_transport(
             &turn_context.session_telemetry,
             &turn_context.model_info,
         )
     {
+        // Changing transport must not bypass the server's retry deadline.
+        if let Some(retry_after) = retry_after {
+            tokio::time::sleep_until(retry_after.deadline()).await;
+        }
         sess.send_event(
             turn_context,
             EventMsg::Warning(WarningEvent {
@@ -48,12 +53,12 @@ pub(crate) async fn handle_retryable_response_stream_error(
     if *retries < max_retries {
         *retries += 1;
         let retry_count = *retries;
-        let delay = match &err {
-            OdyErr::Stream(_, requested_delay) => {
-                requested_delay.unwrap_or_else(|| backoff(retry_count))
-            }
-            _ => backoff(retry_count),
-        };
+        // Server advice pins an absolute deadline captured at receipt; local backoff
+        // applies only when the server gave no advice.
+        let retry_at = retry_after
+            .map(|advice| advice.deadline())
+            .unwrap_or_else(|| tokio::time::Instant::now() + backoff(retry_count));
+        let delay = retry_at.saturating_duration_since(tokio::time::Instant::now());
         log_retry(request, turn_context, &err, retry_count, max_retries, delay);
 
         // In release builds, hide the first websocket retry notification to reduce noisy
@@ -71,7 +76,7 @@ pub(crate) async fn handle_retryable_response_stream_error(
             )
             .await;
         }
-        tokio::time::sleep(delay).await;
+        tokio::time::sleep_until(retry_at).await;
         return Ok(());
     }
 
@@ -103,3 +108,7 @@ fn log_retry(
         }
     }
 }
+
+#[cfg(test)]
+#[path = "responses_retry_tests.rs"]
+mod tests;

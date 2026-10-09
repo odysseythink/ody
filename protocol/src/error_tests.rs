@@ -1,24 +1,11 @@
 use super::*;
 use crate::exec_output::StreamOutput;
-use chrono::DateTime;
-use chrono::Duration as ChronoDuration;
-use chrono::TimeZone;
-use chrono::Utc;
 use http::Response as HttpResponse;
 use pretty_assertions::assert_eq;
 use reqwest::Response;
 use reqwest::ResponseBuilderExt;
 use reqwest::StatusCode;
 use reqwest::Url;
-
-fn with_now_override<T>(now: DateTime<Utc>, f: impl FnOnce() -> T) -> T {
-    NOW_OVERRIDE.with(|cell| {
-        *cell.borrow_mut() = Some(now);
-        let result = f();
-        *cell.borrow_mut() = None;
-        result
-    })
-}
 
 #[test]
 fn server_overloaded_maps_to_protocol() {

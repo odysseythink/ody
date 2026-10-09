@@ -64,10 +64,21 @@ where
                     .retry_on
                     .should_retry(&err, attempt, policy.max_attempts) =>
             {
-                sleep(backoff(policy.base_delay, attempt + 1)).await;
+                // Server advice is captured at receipt, so sleep until its
+                // deadline instead of restarting a fresh local backoff.
+                match err.retry_after() {
+                    Some(retry_after) => {
+                        tokio::time::sleep_until(retry_after.deadline()).await;
+                    }
+                    None => sleep(backoff(policy.base_delay, attempt + 1)).await,
+                }
             }
             Err(err) => return Err(err),
         }
     }
     Err(TransportError::RetryLimit)
 }
+
+#[cfg(test)]
+#[path = "retry_tests.rs"]
+mod tests;

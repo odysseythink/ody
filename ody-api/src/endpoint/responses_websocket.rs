@@ -5,6 +5,7 @@ use crate::common::ResponsesWsRequest;
 use crate::common::SafetyBufferingTreatment;
 use crate::error::ApiError;
 use crate::provider::Provider;
+use crate::responses_headers::json_headers_to_http_headers;
 use crate::safety_buffering::treatment_from_headers;
 use crate::sse::ResponsesStreamEvent;
 use crate::sse::process_responses_event;
@@ -12,9 +13,8 @@ use crate::telemetry::WebsocketTelemetry;
 use futures::SinkExt;
 use futures::StreamExt;
 use http::HeaderMap;
-use http::HeaderName;
-use http::HeaderValue;
 use http::StatusCode;
+use ody_client::RetryAfter;
 use ody_client::TransportError;
 use ody_client::maybe_build_rustls_client_config_with_custom_ca;
 use ody_utils_rustls_provider::ensure_rustls_crypto_provider;
@@ -159,6 +159,9 @@ const X_REASONING_INCLUDED_HEADER: &str = "x-reasoning-included";
 const OPENAI_MODEL_HEADER: &str = "odysseythink-model";
 const WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE: &str = "websocket_connection_limit_reached";
 const WEBSOCKET_CONNECTION_LIMIT_REACHED_MESSAGE: &str = "Responses websocket connection limit reached (60 minutes). Create a new websocket connection to continue.";
+const PREVIOUS_RESPONSE_NOT_FOUND_CODE: &str = "previous_response_not_found";
+const PREVIOUS_RESPONSE_NOT_FOUND_MESSAGE: &str =
+    "Previous response was not found. Retrying the full request.";
 
 pub struct ResponsesWebsocketConnection {
     stream: Arc<Mutex<Option<WsStream>>>,
@@ -519,6 +522,7 @@ fn map_ws_error(err: WsError, url: &Url) -> ApiError {
         WsError::Http(response) => {
             let status = response.status();
             let headers = response.headers().clone();
+            let retry_after = RetryAfter::from_headers(&headers);
             let body = response
                 .body()
                 .as_ref()
@@ -528,6 +532,7 @@ fn map_ws_error(err: WsError, url: &Url) -> ApiError {
                 url: Some(url.to_string()),
                 headers: Some(headers),
                 body,
+                retry_after,
             })
         }
         WsError::ConnectionClosed | WsError::AlreadyClosed => {
@@ -542,6 +547,8 @@ fn map_ws_error(err: WsError, url: &Url) -> ApiError {
 struct WrappedWebsocketError {
     code: Option<String>,
     message: Option<String>,
+    #[serde(default)]
+    headers: Option<Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -574,17 +581,33 @@ fn map_wrapped_websocket_error_event(
         headers,
         ..
     } = event;
+    let retry_after = [
+        error
+            .as_ref()
+            .and_then(|error| error.headers.as_ref())
+            .and_then(Value::as_object),
+        headers.as_ref(),
+    ]
+    .into_iter()
+    .flatten()
+    .find_map(|headers| RetryAfter::from_headers(&json_headers_to_http_headers(headers)));
 
     if let Some(error) = error.as_ref()
         && let Some(code) = error.code.as_deref()
-        && code == WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE
+        && let Some(fallback_message) = match code {
+            WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE => {
+                Some(WEBSOCKET_CONNECTION_LIMIT_REACHED_MESSAGE)
+            }
+            PREVIOUS_RESPONSE_NOT_FOUND_CODE => Some(PREVIOUS_RESPONSE_NOT_FOUND_MESSAGE),
+            _ => None,
+        }
     {
         return Some(ApiError::Retryable {
             message: error
                 .message
                 .clone()
-                .unwrap_or_else(|| WEBSOCKET_CONNECTION_LIMIT_REACHED_MESSAGE.to_string()),
-            delay: None,
+                .unwrap_or_else(|| fallback_message.to_string()),
+            retry_after,
         });
     }
 
@@ -598,31 +621,8 @@ fn map_wrapped_websocket_error_event(
         url: None,
         headers: headers.as_ref().map(json_headers_to_http_headers),
         body: Some(original_payload),
+        retry_after,
     }))
-}
-
-fn json_headers_to_http_headers(headers: &JsonMap<String, Value>) -> HeaderMap {
-    let mut mapped = HeaderMap::new();
-    for (name, value) in headers {
-        let Ok(header_name) = HeaderName::from_bytes(name.as_bytes()) else {
-            continue;
-        };
-        let Some(header_value) = json_header_value(value) else {
-            continue;
-        };
-        mapped.insert(header_name, header_value);
-    }
-    mapped
-}
-
-fn json_header_value(value: &Value) -> Option<HeaderValue> {
-    let value = match value {
-        Value::String(value) => value.clone(),
-        Value::Number(value) => value.to_string(),
-        Value::Bool(value) => value.to_string(),
-        _ => return None,
-    };
-    HeaderValue::from_str(&value).ok()
 }
 
 async fn run_websocket_response_stream(
@@ -810,6 +810,8 @@ fn serialize_websocket_request(request: &ResponsesWsRequest) -> Result<String, A
 mod tests {
     use super::*;
     use crate::common::ResponseCreateWsRequest;
+    use http::HeaderName;
+    use http::HeaderValue;
     use ody_protocol::models::ContentItem;
     use ody_protocol::models::ResponseItem;
     use pretty_assertions::assert_eq;
@@ -975,11 +977,149 @@ mod tests {
             .expect("expected websocket error payload to be parsed");
         let api_error = map_wrapped_websocket_error_event(wrapped_error, payload)
             .expect("expected websocket error payload to map to ApiError");
-        let ApiError::Retryable { message, delay } = api_error else {
+        let ApiError::Retryable {
+            message,
+            retry_after,
+        } = api_error
+        else {
             panic!("expected ApiError::Retryable");
         };
         assert_eq!(message, WEBSOCKET_CONNECTION_LIMIT_REACHED_MESSAGE);
-        assert_eq!(delay, None);
+        assert_eq!(retry_after, None);
+    }
+
+    /// Wrapped error headers go through HTTP header validation; invalid values fall back
+    /// to the event-level headers, and duplicate names resolve to the last value.
+    #[test]
+    fn wrapped_websocket_retry_after_uses_http_header_validation() {
+        for (error_headers, expected_seconds) in [
+            (json!({"retry-after": "\n5\n"}), 12),
+            (json!({"retry-after": "\t5\t"}), 5),
+            (json!({"Retry-After": "5", "retry-after": "30"}), 30),
+        ] {
+            let payload = json!({
+                "type": "error",
+                "status": 429,
+                "error": {
+                    "type": "rate_limit_error",
+                    "code": "rate_limit_exceeded",
+                    "headers": error_headers,
+                },
+                "headers": {"retry-after": "12"}
+            })
+            .to_string();
+
+            let wrapped_error = parse_wrapped_websocket_error_event(&payload)
+                .expect("expected websocket error payload to be parsed");
+            let api_error = map_wrapped_websocket_error_event(wrapped_error, payload)
+                .expect("expected websocket error payload to map to ApiError");
+            let Some(ApiError::Transport(TransportError::Http { retry_after, .. })) =
+                Some(api_error)
+            else {
+                panic!("expected ApiError::Transport(TransportError::Http)");
+            };
+            let remaining = retry_after
+                .expect("expected server retry advice")
+                .remaining_delay();
+            let expected = Duration::from_secs(expected_seconds);
+            assert!(
+                (expected - Duration::from_secs(1)..=expected).contains(&remaining),
+                "remaining delay was {remaining:?}, expected {expected:?}"
+            );
+        }
+    }
+
+    /// The connection-limit retryable error carries server advice when present.
+    #[test]
+    fn connection_limit_retryable_carries_wrapped_retry_after() {
+        let payload = json!({
+            "type": "error",
+            "status": 400,
+            "error": {
+                "type": "invalid_request_error",
+                "code": "websocket_connection_limit_reached",
+                "headers": {"retry-after": "60"}
+            }
+        })
+        .to_string();
+
+        let wrapped_error = parse_wrapped_websocket_error_event(&payload)
+            .expect("expected websocket error payload to be parsed");
+        let api_error = map_wrapped_websocket_error_event(wrapped_error, payload)
+            .expect("expected websocket error payload to map to ApiError");
+        let ApiError::Retryable {
+            message,
+            retry_after,
+        } = api_error
+        else {
+            panic!("expected ApiError::Retryable");
+        };
+        assert_eq!(message, WEBSOCKET_CONNECTION_LIMIT_REACHED_MESSAGE);
+        let remaining = retry_after
+            .expect("expected server retry advice")
+            .remaining_delay();
+        assert!(
+            (Duration::from_secs(59)..=Duration::from_secs(60)).contains(&remaining),
+            "remaining delay was {remaining:?}"
+        );
+    }
+
+    /// A stale continuation handle is retryable so the full request can be retried.
+    #[test]
+    fn previous_response_not_found_maps_retryable() {
+        let payload = json!({
+            "type": "error",
+            "status": 400,
+            "error": {
+                "type": "invalid_request_error",
+                "code": "previous_response_not_found"
+            }
+        })
+        .to_string();
+
+        let wrapped_error = parse_wrapped_websocket_error_event(&payload)
+            .expect("expected websocket error payload to be parsed");
+        let api_error = map_wrapped_websocket_error_event(wrapped_error, payload)
+            .expect("expected websocket error payload to map to ApiError");
+        let ApiError::Retryable {
+            message,
+            retry_after,
+        } = api_error
+        else {
+            panic!("expected ApiError::Retryable");
+        };
+        assert_eq!(message, PREVIOUS_RESPONSE_NOT_FOUND_MESSAGE);
+        assert_eq!(retry_after, None);
+    }
+
+    /// A rejected websocket handshake preserves the server's `Retry-After` advice.
+    #[test]
+    fn handshake_http_error_captures_retry_after() {
+        let response = http::Response::builder()
+            .status(StatusCode::TOO_MANY_REQUESTS)
+            .header("retry-after", "9")
+            .body(Some(b"slow down".to_vec()))
+            .expect("response builds");
+        let url = Url::parse("wss://example.com/backend-api/responses").expect("url parses");
+
+        let api_error = map_ws_error(WsError::Http(Box::new(response)), &url);
+
+        let ApiError::Transport(TransportError::Http {
+            status,
+            retry_after,
+            ..
+        }) = api_error
+        else {
+            panic!("expected ApiError::Transport(TransportError::Http)");
+        };
+        assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+        let remaining = retry_after
+            .expect("expected server retry advice")
+            .remaining_delay();
+        assert!(
+            (Duration::from_secs(8)..=Duration::from_secs(9)).contains(&remaining),
+            "remaining delay was {remaining:?}"
+        );
     }
 
     #[test]

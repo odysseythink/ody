@@ -24,6 +24,8 @@ ody-utils-path-uri = { workspace = true }
 ody-utils-string = { workspace = true }
 encoding_rs = { workspace = true }
 globset = { workspace = true }
+http = { workspace = true }
+httpdate = { workspace = true }
 icu_decimal = { workspace = true }
 icu_locale_core = { workspace = true }
 icu_provider = { workspace = true, features = ["sync"] }
@@ -37,7 +39,7 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 sys-locale = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
 tracing = { workspace = true }
 ts-rs = { workspace = true, features = [
     "uuid-impl",
@@ -56,6 +58,7 @@ anyhow = { workspace = true }
 http = { workspace = true }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
 
 [package.metadata.cargo-shear]
 # Required because:

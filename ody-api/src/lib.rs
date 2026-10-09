@@ -11,6 +11,7 @@ pub(crate) mod files;
 pub(crate) mod images;
 pub(crate) mod provider;
 pub(crate) mod requests;
+pub(crate) mod responses_headers;
 pub(crate) mod safety_buffering;
 pub(crate) mod sse;
 pub(crate) mod telemetry;
