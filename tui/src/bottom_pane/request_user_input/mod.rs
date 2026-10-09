@@ -36,6 +36,8 @@ use crate::key_hint::KeyBindingListExt;
 use crate::keymap::ListKeymap;
 use crate::keymap::RuntimeKeymap;
 use crate::render::renderable::Renderable;
+use crate::terminal_hyperlinks::HyperlinkLine;
+use crate::terminal_hyperlinks::wrap_prompt_hyperlink_lines;
 
 #[cfg(test)]
 use crate::app_command::AppCommand as Op;
@@ -399,14 +401,9 @@ impl RequestUserInputOverlay {
             .is_some_and(|answer| answer.notes_visible || self.notes_has_content(idx))
     }
 
-    pub(super) fn wrapped_question_lines(&self, width: u16) -> Vec<String> {
+    pub(super) fn wrapped_question_lines(&self, width: u16) -> Vec<HyperlinkLine> {
         self.current_question()
-            .map(|q| {
-                textwrap::wrap(&q.question, width.max(1) as usize)
-                    .into_iter()
-                    .map(|line| line.to_string())
-                    .collect::<Vec<_>>()
-            })
+            .map(|q| wrap_prompt_hyperlink_lines(&q.question, width))
             .unwrap_or_default()
     }
 
@@ -1727,6 +1724,35 @@ mod tests {
         let mut buf = Buffer::empty(area);
         overlay.render_ui_at(area, &mut buf, now);
         snapshot_buffer(&buf)
+    }
+
+    #[test]
+    fn question_urls_render_as_clickable_hyperlinks() {
+        let (tx, _rx) = test_sender();
+        let mut question = question_without_options("q1", "Link");
+        question.question = "Docs at https://example.com/guide.".to_string();
+        let overlay = RequestUserInputOverlay::new(
+            request_event("turn-1", vec![question]),
+            tx,
+            /*has_input_focus*/ true,
+            /*enhanced_keys_supported*/ false,
+            /*disable_paste_burst*/ false,
+        );
+        let area = Rect::new(0, 0, 60, 14);
+        let mut buf = Buffer::empty(area);
+        overlay.render_ui_at(area, &mut buf, Instant::now());
+
+        let osc8 = "\x1b]8;;https://example.com/guide\x07";
+        let linked_text = (0..area.height)
+            .flat_map(|y| (0..area.width).map(move |x| (x, y)))
+            .filter_map(|position| {
+                let symbol = buf[position].symbol();
+                symbol
+                    .contains(osc8)
+                    .then(|| crate::terminal_hyperlinks::strip_osc8(symbol))
+            })
+            .collect::<String>();
+        assert_eq!(linked_text, "https://example.com/guide");
     }
 
     #[test]

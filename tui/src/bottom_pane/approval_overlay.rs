@@ -38,6 +38,7 @@ use crate::keymap::primary_binding;
 use crate::render::highlight::highlight_bash_to_lines;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::Renderable;
+use crate::terminal_hyperlinks::HyperlinkText;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -719,7 +720,7 @@ fn build_header(request: &ApprovalRequest) -> Box<dyn Renderable> {
             if network_approval_context.is_none() {
                 header.extend(full_cmd_lines);
             }
-            Box::new(Paragraph::new(header).wrap(Wrap { trim: false }))
+            Box::new(HyperlinkText::new(header))
         }
         ApprovalRequest::Permissions {
             thread_label,
@@ -753,7 +754,7 @@ fn build_header(request: &ApprovalRequest) -> Box<dyn Renderable> {
                     rule_line.cyan(),
                 ]));
             }
-            Box::new(Paragraph::new(header).wrap(Wrap { trim: false }))
+            Box::new(HyperlinkText::new(header))
         }
         ApprovalRequest::ApplyPatch {
             thread_label,
@@ -802,8 +803,7 @@ fn build_header(request: &ApprovalRequest) -> Box<dyn Renderable> {
                 Line::from(""),
                 Line::from(message.clone()),
             ]);
-            let header = Paragraph::new(lines).wrap(Wrap { trim: false });
-            Box::new(header)
+            Box::new(HyperlinkText::new(lines))
         }
     }
 }
@@ -1268,6 +1268,36 @@ mod tests {
             request_id: RequestId::String("request-1".to_string()),
             message: "Need more information".to_string(),
         }
+    }
+
+    #[test]
+    fn exec_reason_urls_render_as_clickable_hyperlinks() {
+        let (tx, _rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx);
+        let mut request = make_exec_request();
+        let ApprovalRequest::Exec { reason, .. } = &mut request else {
+            unreachable!("exec request");
+        };
+        *reason = Some("see https://example.com/policy".to_string());
+        let view = make_overlay(request, tx, Features::with_defaults());
+
+        let width = 60u16;
+        let height = view.desired_height(width);
+        let area = Rect::new(0, 0, width, height);
+        let mut buf = Buffer::empty(area);
+        view.render(area, &mut buf);
+
+        let osc8 = "\x1b]8;;https://example.com/policy\x07";
+        let linked_text = (0..area.height)
+            .flat_map(|y| (0..area.width).map(move |x| (x, y)))
+            .filter_map(|position| {
+                let symbol = buf[position].symbol();
+                symbol
+                    .contains(osc8)
+                    .then(|| crate::terminal_hyperlinks::strip_osc8(symbol))
+            })
+            .collect::<String>();
+        assert_eq!(linked_text, "https://example.com/policy");
     }
 
     #[test]

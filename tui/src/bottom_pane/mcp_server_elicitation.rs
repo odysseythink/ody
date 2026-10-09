@@ -52,6 +52,8 @@ use crate::bottom_pane::selection_popup_common::render_rows;
 use crate::key_hint::KeyBindingListExt;
 use crate::keymap::ListKeymap;
 use crate::render::renderable::Renderable;
+use crate::terminal_hyperlinks::HyperlinkLine;
+use crate::terminal_hyperlinks::wrap_prompt_hyperlink_lines;
 use crate::text_formatting::format_json_compact;
 use crate::text_formatting::truncate_text;
 
@@ -945,11 +947,8 @@ impl McpServerElicitationOverlay {
             .collect()
     }
 
-    fn wrapped_prompt_lines(&self, width: u16) -> Vec<String> {
-        textwrap::wrap(&self.current_prompt_text(), width.max(1) as usize)
-            .into_iter()
-            .map(|line| line.to_string())
-            .collect()
+    fn wrapped_prompt_lines(&self, width: u16) -> Vec<HyperlinkLine> {
+        wrap_prompt_hyperlink_lines(&self.current_prompt_text(), width)
     }
 
     fn current_prompt_text(&self) -> String {
@@ -1292,20 +1291,19 @@ impl McpServerElicitationOverlay {
             if y >= area.y + area.height {
                 break;
             }
-            let line = if answered {
-                Line::from(line.clone())
+            let visible = if answered {
+                line.line.clone()
             } else {
-                Line::from(line.clone()).cyan()
+                line.line.clone().cyan()
             };
-            Paragraph::new(line).render(
-                Rect {
-                    x: area.x,
-                    y,
-                    width: area.width,
-                    height: 1,
-                },
-                buf,
-            );
+            let row_area = Rect {
+                x: area.x,
+                y,
+                width: area.width,
+                height: 1,
+            };
+            Paragraph::new(visible).render(row_area, buf);
+            crate::terminal_hyperlinks::mark_row_hyperlinks(buf, row_area, line);
         }
     }
 
@@ -1847,6 +1845,48 @@ mod tests {
         let mut buf = Buffer::empty(area);
         overlay.render(area, &mut buf);
         snapshot_buffer(&buf)
+    }
+
+    #[test]
+    fn prompt_urls_render_as_clickable_hyperlinks() {
+        let (tx, _rx) = test_sender();
+        let request = from_form_request(
+            ThreadId::default(),
+            form_request(
+                "Review https://example.com/policy before answering.",
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "confirmed": {
+                            "type": "boolean",
+                            "title": "Confirm",
+                        }
+                    },
+                    "required": ["confirmed"],
+                }),
+                /*meta*/ None,
+            ),
+        )
+        .expect("expected supported form");
+        let overlay = McpServerElicitationOverlay::new(
+            request, tx, /*has_input_focus*/ true, /*enhanced_keys_supported*/ false,
+            /*disable_paste_burst*/ false,
+        );
+        let area = Rect::new(0, 0, 60, 16);
+        let mut buf = Buffer::empty(area);
+        overlay.render(area, &mut buf);
+
+        let osc8 = "\x1b]8;;https://example.com/policy\x07";
+        let linked_text = (0..area.height)
+            .flat_map(|y| (0..area.width).map(move |x| (x, y)))
+            .filter_map(|position| {
+                let symbol = buf[position].symbol();
+                symbol
+                    .contains(osc8)
+                    .then(|| crate::terminal_hyperlinks::strip_osc8(symbol))
+            })
+            .collect::<String>();
+        assert_eq!(linked_text, "https://example.com/policy");
     }
 
     #[test]

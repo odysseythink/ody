@@ -285,19 +285,18 @@ impl RequestUserInputOverlay {
                 break;
             }
             let question_line = if answered {
-                Line::from(line.clone())
+                line.line.clone()
             } else {
-                Line::from(line.clone()).cyan()
+                line.line.clone().cyan()
             };
-            Paragraph::new(question_line).render(
-                Rect {
-                    x: sections.question_area.x,
-                    y: question_y.saturating_add(offset as u16),
-                    width: sections.question_area.width,
-                    height: 1,
-                },
-                buf,
-            );
+            let row_area = Rect {
+                x: sections.question_area.x,
+                y: question_y.saturating_add(offset as u16),
+                width: sections.question_area.width,
+                height: 1,
+            };
+            Paragraph::new(question_line).render(row_area, buf);
+            crate::terminal_hyperlinks::mark_row_hyperlinks(buf, row_area, line);
         }
 
         // Build rows with selection markers for the shared selection renderer.

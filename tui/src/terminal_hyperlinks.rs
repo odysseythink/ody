@@ -20,6 +20,7 @@ use unicode_width::UnicodeWidthStr;
 use url::Url;
 
 use crate::render::line_utils::line_to_static;
+use crate::render::renderable::Renderable;
 use crate::wrapping::RtOptions;
 use crate::wrapping::adaptive_wrap_line;
 
@@ -87,6 +88,51 @@ impl From<String> for HyperlinkLine {
 
 pub(crate) fn visible_lines(lines: Vec<HyperlinkLine>) -> Vec<Line<'static>> {
     lines.into_iter().map(|line| line.line).collect()
+}
+
+pub(crate) fn visible_lines_ref(lines: &[HyperlinkLine]) -> Vec<Line<'static>> {
+    lines.iter().map(|line| line.line.clone()).collect()
+}
+
+/// Owns a word-wrapped paragraph whose web destinations survive wrapping, so
+/// approval headers and similar prompts render clickable links. Ported from
+/// upstream Codex 0.162.0 (`terminal_hyperlinks/paragraph.rs`).
+pub(crate) struct HyperlinkText(Vec<HyperlinkLine>);
+
+impl HyperlinkText {
+    pub(crate) fn new(lines: Vec<Line<'static>>) -> Self {
+        Self(annotate_web_urls(lines))
+    }
+
+    fn paragraph(&self) -> Paragraph<'static> {
+        Paragraph::new(Text::from(visible_lines_ref(&self.0))).wrap(Wrap { trim: false })
+    }
+}
+
+impl Renderable for HyperlinkText {
+    fn render(&self, area: Rect, buf: &mut Buffer) {
+        self.paragraph().render(area, buf);
+        mark_buffer_hyperlinks(buf, area, &self.0, /*scroll_rows*/ 0);
+    }
+
+    fn desired_height(&self, width: u16) -> u16 {
+        self.paragraph().line_count(width) as u16
+    }
+}
+
+/// Word-wraps plain prompt text and re-attaches web hyperlink ranges, for
+/// bottom-pane prompts that render pre-wrapped rows one at a time.
+pub(crate) fn wrap_prompt_hyperlink_lines(text: &str, width: u16) -> Vec<HyperlinkLine> {
+    text.split('\n')
+        .flat_map(|segment| {
+            let source = annotate_web_urls_in_line(Line::from(segment.to_string()));
+            let wrapped = textwrap::wrap(segment, usize::from(width.max(1)))
+                .into_iter()
+                .map(|line| Line::from(line.into_owned()))
+                .collect();
+            remap_wrapped_line(&source, wrapped)
+        })
+        .collect()
 }
 
 pub(crate) fn plain_hyperlink_lines(lines: Vec<Line<'static>>) -> Vec<HyperlinkLine> {
@@ -424,6 +470,30 @@ fn append_to_last_span(out: &mut [Span<'static>], content: &str) {
     }
 }
 
+/// Applies OSC 8 sequences to a single pre-wrapped row that has already been
+/// rendered into `buf` at `area`, so links in bottom-pane prompts that render
+/// row-by-row stay clickable.
+pub(crate) fn mark_row_hyperlinks(buf: &mut Buffer, area: Rect, line: &HyperlinkLine) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+    for link in &line.hyperlinks {
+        let Some(destination) = web_destination(&link.destination) else {
+            continue;
+        };
+        let start = link.columns.start.min(usize::from(area.width));
+        let end = link.columns.end.min(usize::from(area.width));
+        for column in start..end {
+            let cell = &mut buf[(area.x + column as u16, area.y)];
+            if cell.skip || cell.symbol().trim().is_empty() {
+                continue;
+            }
+            let symbol = osc8_hyperlink(&destination, cell.symbol());
+            cell.set_symbol(&symbol);
+        }
+    }
+}
+
 pub(crate) fn mark_buffer_hyperlinks(
     buf: &mut Buffer,
     area: Rect,
@@ -623,5 +693,105 @@ mod tests {
             })
             .collect::<String>();
         assert_eq!(linked_text, destination);
+    }
+
+    #[test]
+    fn mark_row_hyperlinks_annotates_pre_wrapped_row() {
+        let destination = "https://example.com/docs";
+        let text = format!("See {destination} for details");
+        let mut line = HyperlinkLine::new(Line::from(text));
+        line.hyperlinks.push(TerminalHyperlink {
+            columns: 4..4 + destination.width(),
+            destination: destination.to_string(),
+        });
+        let area = Rect::new(
+            /*x*/ 0, /*y*/ 0, /*width*/ 40, /*height*/ 1,
+        );
+        let mut buf = Buffer::empty(area);
+        Paragraph::new(Text::from(line.line.clone())).render(area, &mut buf);
+
+        mark_row_hyperlinks(&mut buf, area, &line);
+
+        let linked_text = area
+            .positions()
+            .filter_map(|position| {
+                let symbol = buf[position].symbol();
+                symbol
+                    .contains(&format!("\x1b]8;;{destination}\x07"))
+                    .then(|| strip_osc8(symbol))
+            })
+            .collect::<String>();
+        assert_eq!(linked_text, destination);
+        // Text outside the link range is left untouched.
+        assert_eq!(buf[(0, 0)].symbol(), "S");
+    }
+
+    #[test]
+    fn wrap_prompt_hyperlink_lines_preserves_blank_lines_and_link_columns() {
+        let destination = "https://example.com";
+        let lines = wrap_prompt_hyperlink_lines(&format!("alpha\n\nsee {destination}"), 80);
+
+        assert_eq!(lines.len(), 3);
+        assert_eq!(line_text(&lines[0].line), "alpha");
+        assert_eq!(line_text(&lines[1].line), "");
+        assert_eq!(
+            lines[2].hyperlinks,
+            vec![TerminalHyperlink {
+                columns: 4..4 + destination.width(),
+                destination: destination.to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn wrap_prompt_hyperlink_lines_keeps_destination_when_url_wraps() {
+        let destination = "https://example.com/some/long/path";
+        let lines = wrap_prompt_hyperlink_lines(&format!("go {destination} now"), 12);
+
+        assert!(lines.len() > 2, "expected the URL to wrap across rows");
+        let linked_rows = lines
+            .iter()
+            .filter(|line| !line.hyperlinks.is_empty())
+            .collect::<Vec<_>>();
+        assert!(
+            linked_rows.len() >= 2,
+            "expected the link to annotate multiple wrapped rows"
+        );
+        for line in linked_rows {
+            assert!(
+                line.hyperlinks
+                    .iter()
+                    .all(|link| link.destination == destination)
+            );
+        }
+    }
+
+    #[test]
+    fn hyperlink_text_renderable_marks_wrapped_urls() {
+        use crate::render::renderable::Renderable;
+
+        let destination = "https://example.com/path";
+        let text = HyperlinkText::new(vec![Line::from(format!("See {destination} now"))]);
+        let area = Rect::new(
+            /*x*/ 0, /*y*/ 0, /*width*/ 18, /*height*/ 4,
+        );
+        let mut buf = Buffer::empty(area);
+
+        text.render(area, &mut buf);
+
+        let linked_text = area
+            .positions()
+            .filter_map(|position| {
+                let symbol = buf[position].symbol();
+                symbol
+                    .contains(&format!("\x1b]8;;{destination}\x07"))
+                    .then(|| strip_osc8(symbol))
+            })
+            .collect::<String>();
+        assert_eq!(linked_text, destination);
+        let expected_height = Paragraph::new(Text::from(format!("See {destination} now")))
+            .wrap(Wrap { trim: false })
+            .line_count(18) as u16;
+        assert_eq!(text.desired_height(18), expected_height);
     }
 }
