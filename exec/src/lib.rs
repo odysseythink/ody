@@ -251,6 +251,7 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
         config_overrides,
     } = cli;
     let shared = shared.into_inner();
+    let implied_config_overrides = shared.implied_config_overrides();
     let SharedCliOptions {
         images,
         model: model_cli_arg,
@@ -260,6 +261,7 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
         bypass_hook_trust,
         cwd,
         add_dir,
+        game: _,
     } = shared;
 
     let (_stdout_with_ansi, stderr_with_ansi) = match color {
@@ -284,7 +286,7 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
     };
 
     // Parse `-c` overrides from the CLI.
-    let cli_kv_overrides = match config_overrides.parse_overrides() {
+    let mut cli_kv_overrides = match config_overrides.parse_overrides() {
         Ok(v) => v,
         #[allow(clippy::print_stderr)]
         Err(e) => {
@@ -292,6 +294,9 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
             std::process::exit(1);
         }
     };
+    // Dedicated flags that imply config overrides (e.g. `--game`) join the
+    // `-c` overrides here so downstream config loading sees them.
+    cli_kv_overrides.extend(implied_config_overrides);
 
     let resolved_cwd = cwd.clone();
     let config_cwd = match resolved_cwd.as_deref() {

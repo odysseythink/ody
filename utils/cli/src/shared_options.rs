@@ -51,9 +51,31 @@ pub struct SharedCliOptions {
     /// Additional directories that should be writable alongside the primary workspace.
     #[arg(long = "add-dir", value_name = "DIR", value_hint = clap::ValueHint::DirPath)]
     pub add_dir: Vec<PathBuf>,
+
+    /// Enable the bundled game-development skills (the `/game` command and the
+    /// vendored gamedev skill set) for this invocation. Off by default to keep
+    /// the skills context budget small.
+    #[arg(long = "game", default_value_t = false)]
+    pub game: bool,
 }
 
 impl SharedCliOptions {
+    /// Extra `-c`-style config overrides implied by dedicated flags, in
+    /// addition to the user's own `-c key=value` overrides. The [`--game`]
+    /// flag layers `skills.bundled.game = true` onto the config stack.
+    ///
+    /// [`--game`]: Self::game
+    pub fn implied_config_overrides(&self) -> Vec<(String, toml::Value)> {
+        let mut overrides = Vec::new();
+        if self.game {
+            overrides.push((
+                "skills.bundled.game".to_string(),
+                toml::Value::Boolean(true),
+            ));
+        }
+        overrides
+    }
+
     pub fn inherit_exec_root_options(&mut self, root: &Self) {
         let self_selected_sandbox_mode =
             self.sandbox_mode.is_some() || self.dangerously_bypass_approvals_and_sandbox;
@@ -66,6 +88,7 @@ impl SharedCliOptions {
             bypass_hook_trust,
             cwd,
             add_dir,
+            game,
         } = self;
         let Self {
             images: root_images,
@@ -76,6 +99,7 @@ impl SharedCliOptions {
             bypass_hook_trust: root_bypass_hook_trust,
             cwd: root_cwd,
             add_dir: root_add_dir,
+            game: root_game,
         } = root;
 
         if model.is_none() {
@@ -107,6 +131,9 @@ impl SharedCliOptions {
             merged_add_dir.append(add_dir);
             *add_dir = merged_add_dir;
         }
+        if !*game {
+            *game = *root_game;
+        }
     }
 
     pub fn apply_subcommand_overrides(&mut self, subcommand: Self) {
@@ -121,6 +148,7 @@ impl SharedCliOptions {
             bypass_hook_trust,
             cwd,
             add_dir,
+            game,
         } = subcommand;
 
         if let Some(model) = model {
@@ -146,5 +174,69 @@ impl SharedCliOptions {
         if !add_dir.is_empty() {
             self.add_dir.extend(add_dir);
         }
+        if game {
+            self.game = true;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[derive(Parser)]
+    struct TestCli {
+        #[clap(flatten)]
+        shared: SharedCliOptions,
+    }
+
+    #[test]
+    fn game_flag_defaults_to_off() {
+        let cli = TestCli::try_parse_from(["test"]).expect("parse");
+        assert!(!cli.shared.game);
+        assert!(cli.shared.implied_config_overrides().is_empty());
+    }
+
+    #[test]
+    fn game_flag_generates_skills_config_override() {
+        let cli = TestCli::try_parse_from(["test", "--game"]).expect("parse");
+        assert!(cli.shared.game);
+        assert_eq!(
+            cli.shared.implied_config_overrides(),
+            vec![(
+                "skills.bundled.game".to_string(),
+                toml::Value::Boolean(true),
+            )]
+        );
+    }
+
+    #[test]
+    fn inherit_exec_root_options_merges_game_flag() {
+        let mut child = SharedCliOptions::default();
+        let root = SharedCliOptions {
+            game: true,
+            ..Default::default()
+        };
+        child.inherit_exec_root_options(&root);
+        assert!(child.game);
+
+        // An explicit child selection is never clobbered by the root.
+        let mut child = SharedCliOptions {
+            game: true,
+            ..Default::default()
+        };
+        child.inherit_exec_root_options(&SharedCliOptions::default());
+        assert!(child.game);
+    }
+
+    #[test]
+    fn apply_subcommand_overrides_merges_game_flag() {
+        let mut root = SharedCliOptions::default();
+        root.apply_subcommand_overrides(SharedCliOptions {
+            game: true,
+            ..Default::default()
+        });
+        assert!(root.game);
     }
 }

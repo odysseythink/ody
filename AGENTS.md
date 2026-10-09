@@ -4,6 +4,12 @@
 - `ody-skills-extension` — unified integration surface (`SkillProvider`, catalog, selection, injection, model tools).
 - `ody-skills` / `skills` — builtin system-skill installer; writes embedded samples to `$ODY_HOME/skills/.system`, which `ody-core-skills` discovers as a system-scope root.
 
+### Game-development skill gate (`--game`)
+
+- The embedded game-development bundle (the `/game` flow skill plus the vendored gamedev skill set, listed in `ody-skills::EMBEDDED_GAME_SKILL_NAMES`) is hidden by default to keep the skills context budget small. It becomes visible only when the session config stack has `skills.bundled.game = true`; the `ody --game` / `ody exec --game` CLI flag layers exactly that override (`SharedCliOptions::implied_config_overrides`).
+- The filter runs in `SkillsService::build_skill_outcome` via `filter_skill_load_outcome_for_game` and only removes System-scope skills whose names are on the embedded game list — user- or repo-installed skills with the same name are unaffected.
+- `ody-skills::tests::game_skill_classification_partitions_embedded_skills` enforces that every embedded skill is classified as game or non-game; update the lists when adding embedded skills.
+
 ### Migration note
 
 `legacy_host_skill_injection` defaults to `true` in T3.1.1. When the unified extension is fully validated, it will default to `false` in T3.1.2 and be removed in T3.1.3.
