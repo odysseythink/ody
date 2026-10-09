@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<title>ody remote</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 -apple-system, system-ui, sans-serif; background: #111; color: #e5e5e5; }
+  header { position: sticky; top: 0; background: #1a1a1a; padding: 12px 16px; display: flex; gap: 10px; align-items: center; border-bottom: 1px solid #2a2a2a; }
+  header h1 { font-size: 16px; margin: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  button { font: inherit; color: inherit; background: #2a2a2a; border: 0; border-radius: 8px; padding: 8px 14px; }
+  main { padding: 12px 16px; }
+  .card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; display: block; width: 100%; text-align: left; }
+  .card .sub { color: #888; font-size: 12px; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: #666; }
+  .dot.on { background: #4ade80; }
+  form { display: grid; gap: 10px; max-width: 320px; margin: 15vh auto 0; }
+  input { font: inherit; padding: 10px 12px; border-radius: 8px; border: 1px solid #2a2a2a; background: #1a1a1a; color: inherit; }
+  .err { color: #f87171; font-size: 13px; }
+  .msg { margin-bottom: 10px; }
+  .msg .who { font-size: 11px; color: #888; margin-bottom: 2px; }
+  .msg pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: 13px/1.5 ui-monospace, monospace; background: #161616; border-radius: 8px; padding: 10px 12px; }
+  .msg.user pre { background: #1e293b; }
+  .msg.cmd pre { background: #1c1917; }
+  .status-line { color: #4ade80; font-size: 12px; padding: 4px 0; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <button id="back" class="hidden" aria-label="返回">‹</button>
+  <h1 id="title">ody remote</h1>
+  <button id="logout" class="hidden">退出</button>
+</header>
+<main>
+  <form id="view-login">
+    <input id="username" autocomplete="username" placeholder="用户名" required>
+    <input id="password" type="password" autocomplete="current-password" placeholder="密码" required>
+    <button type="submit">登录</button>
+    <div id="login-err" class="err"></div>
+  </form>
+  <div id="view-instances" class="hidden"></div>
+  <div id="view-threads" class="hidden"></div>
+  <div id="view-thread" class="hidden"></div>
+</main>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const views = ['login', 'instances', 'threads', 'thread'];
+const state = { view: 'login', instance: null, threadId: null, ws: null, rpcId: 0, pending: new Map(), bubbles: new Map() };
+
+function show(view, title) {
+  state.view = view;
+  for (const v of views) $('view-' + v).classList.toggle('hidden', v !== view);
+  $('title').textContent = title || 'ody remote';
+  $('back').classList.toggle('hidden', view === 'login' || view === 'instances');
+  $('logout').classList.toggle('hidden', view === 'login');
+}
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+async function api(path, opts) {
+  const resp = await fetch(path, opts);
+  if (resp.status === 401 && state.view !== 'login') show('login');
+  return resp;
+}
+
+// --- websocket + rpc -------------------------------------------------------
+function connectWs() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws`);
+  state.ws = ws;
+  ws.onmessage = (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+    if (msg.type === 'rpcResponse') {
+      const entry = state.pending.get(msg.id);
+      if (entry) { state.pending.delete(msg.id); entry(msg); }
+    } else if (msg.type === 'instances') {
+      renderInstances(msg.list);
+    } else if (msg.type === 'event') {
+      onInstanceEvent(msg.instance, msg.payload);
+    }
+  };
+  ws.onclose = () => {
+    for (const [, resolve] of state.pending) resolve({ outcome: { status: 'err', message: 'disconnected' } });
+    state.pending.clear();
+    if (state.view !== 'login') setTimeout(connectWs, 2000);
+  };
+}
+
+function rpc(instance, method, params) {
+  return new Promise((resolve) => {
+    const id = ++state.rpcId;
+    state.pending.set(id, resolve);
+    state.ws.send(JSON.stringify({ type: 'rpc', id, instance, method, params }));
+  });
+}
+
+// --- views -----------------------------------------------------------------
+function renderInstances(list) {
+  if (state.view === 'login') return;
+  const root = $('view-instances');
+  root.replaceChildren();
+  for (const inst of list) {
+    const card = el('button', 'card');
+    const name = el('div');
+    name.append(el('span', 'dot' + (inst.online ? ' on' : '')), el('span', null, inst.name));
+    card.append(name, el('div', 'sub', inst.machine + ' · ' + inst.id));
+    card.onclick = () => openInstance(inst);
+    root.append(card);
+  }
+  if (!list.length) root.append(el('div', 'sub', '暂无实例在线'));
+}
+
+async function openInstance(inst) {
+  state.instance = inst;
+  show('threads', inst.name);
+  const root = $('view-threads');
+  root.replaceChildren(el('div', 'sub', '加载中…'));
+  const resp = await rpc(inst.id, 'thread/list', { limit: 20 });
+  root.replaceChildren();
+  if (resp.outcome.status !== 'ok') { root.append(el('div', 'err', resp.outcome.message)); return; }
+  const threads = (resp.outcome.value.threads) || [];
+  for (const t of threads) {
+    const card = el('button', 'card');
+    const status = typeof t.status === 'string' ? t.status : (t.status && t.status.type) || '';
+    card.append(
+      el('div', null, t.preview || t.id),
+      el('div', 'sub', status + ' · ' + new Date(t.updatedAt * 1000).toLocaleString()),
+    );
+    card.onclick = () => openThread(inst.id, t.id);
+    root.append(card);
+  }
+  if (!threads.length) root.append(el('div', 'sub', '无会话'));
+}
+
+function addBubble(kind, who, text) {
+  const root = $('view-thread');
+  const msg = el('div', 'msg ' + kind);
+  msg.append(el('div', 'who', who));
+  const pre = el('pre', null, text);
+  msg.append(pre);
+  root.append(msg);
+  pre.scrollIntoView({ block: 'end' });
+  return pre;
+}
+
+function renderHistoryItem(item) {
+  if (!item || typeof item !== 'object') return;
+  switch (item.type) {
+    case 'userMessage': {
+      const text = (item.content || []).map((c) => c.text || '').filter(Boolean).join('\n');
+      if (text) addBubble('user', '你', text);
+      break;
+    }
+    case 'agentMessage': addBubble('agent', 'ody', item.text || ''); break;
+    case 'plan': addBubble('agent', '计划', item.text || ''); break;
+    case 'reasoning': {
+      const text = [...(item.summary || []), ...(item.content || [])].join('\n');
+      if (text) addBubble('agent', '思考', text);
+      break;
+    }
+    case 'commandExecution': {
+      const out = [item.command, item.aggregatedOutput || ''].filter(Boolean).join('\n');
+      addBubble('cmd', '命令 ' + (item.status || ''), out);
+      break;
+    }
+    default: break;
+  }
+}
+
+async function openThread(instanceId, threadId) {
+  state.threadId = threadId;
+  state.bubbles.clear();
+  show('thread', threadId.slice(0, 8));
+  const root = $('view-thread');
+  root.replaceChildren(el('div', 'sub', '加载历史…'));
+  const resp = await rpc(instanceId, 'thread/read', { threadId, includeTurns: true });
+  root.replaceChildren();
+  if (resp.outcome.status !== 'ok') { root.append(el('div', 'err', resp.outcome.message)); return; }
+  for (const turn of (resp.outcome.value.thread.turns || [])) {
+    for (const item of (turn.items || [])) renderHistoryItem(item);
+  }
+  // Attach to live events for this thread.
+  rpc(instanceId, 'thread/resume', { threadId });
+}
+
+function onInstanceEvent(instance, payload) {
+  if (state.view !== 'thread' || instance !== state.instance.id) return;
+  const params = payload.params || {};
+  if (params.threadId && params.threadId !== state.threadId) return;
+  switch (payload.method) {
+    case 'item/agentMessage/delta': {
+      let pre = state.bubbles.get(params.itemId);
+      if (!pre) { pre = addBubble('agent', 'ody', ''); state.bubbles.set(params.itemId, pre); }
+      pre.textContent += params.delta || '';
+      pre.scrollIntoView({ block: 'end' });
+      break;
+    }
+    case 'item/completed': {
+      const item = params.item || {};
+      if (state.bubbles.has(item.id)) { state.bubbles.delete(item.id); renderHistoryItem(item); }
+      else if (item.type !== 'agentMessage') renderHistoryItem(item);
+      break;
+    }
+    case 'turn/started': addBubble('status', '', '▶ turn 开始').className = 'status-line'; break;
+    case 'turn/completed': addBubble('status', '', '■ turn 完成').className = 'status-line'; break;
+    default: break;
+  }
+}
+
+// --- wiring ----------------------------------------------------------------
+$('view-login').onsubmit = async (ev) => {
+  ev.preventDefault();
+  $('login-err').textContent = '';
+  const resp = await fetch('/api/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username: $('username').value, password: $('password').value }),
+  });
+  if (!resp.ok) { $('login-err').textContent = resp.status === 429 ? '失败次数过多，稍后再试' : '用户名或密码错误'; return; }
+  connectWs();
+  show('instances');
+  renderInstances((await (await api('/api/instances')).json()));
+};
+
+$('back').onclick = () => {
+  if (state.view === 'thread') openInstance(state.instance);
+  else if (state.view === 'threads') show('instances');
+};
+
+$('logout').onclick = async () => {
+  await fetch('/api/logout', { method: 'POST' });
+  location.reload();
+};
+
+// Returning visitor with a live session: skip the login form.
+(async () => {
+  const resp = await fetch('/api/instances');
+  if (resp.ok) {
+    connectWs();
+    show('instances');
+    renderInstances(await resp.json());
+  }
+})();
+</script>
+</body>
+</html>

@@ -61,6 +61,7 @@ members = [
     "process-hardening",
     "protocol",
     "prompts",
+    "remote",
     "rollout",
     "rollout-trace",
     "rmcp-client",
@@ -183,6 +184,7 @@ ody-model-provider = { path = "model-provider" }
 ody-process-hardening = { path = "process-hardening" }
 ody-protocol = { path = "protocol" }
 ody-prompts = { path = "prompts" }
+ody-remote = { path = "remote" }
 ody-response-debug-context = { path = "response-debug-context" }
 ody-rmcp-client = { path = "rmcp-client" }
 ody-rollout = { path = "rollout" }
@@ -233,6 +235,7 @@ age = "0.11.1"
 allocative = "0.3.3"
 ansi-to-tui = "7.0.0"
 anyhow = "1"
+argon2 = "0.5"
 async-trait = "0.1"
 arboard = { version = "3", features = ["wayland-data-control"] }
 arc-swap = "1.9.0"
@@ -343,6 +346,9 @@ ratatui-macros = "0.6.0"
 rcgen = { version = "0.14.7", default-features = false, features = [
     "aws_lc_rs",
     "pem",
+] }
+tokio-rustls = { version = "0.26", default-features = false, features = [
+    "aws_lc_rs",
 ] }
 regex = "1.12.3"
 regex-lite = "0.1.8"
